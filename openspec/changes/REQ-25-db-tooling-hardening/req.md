@@ -2,6 +2,7 @@
 
 **Estado:** activo
 **Creado:** 2026-06-07
+**Fase:** F1, F4
 
 ## Descripción
 

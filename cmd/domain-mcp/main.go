@@ -30,6 +30,7 @@ import (
 	llmopenai "nunezlagos/domain/internal/llm/openai"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -116,9 +117,11 @@ func main() {
 		factory.SetDefault(def, def)
 	}
 
+	skillRunnerInst := skillrunner.New()
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: factory,
 		Agents: agents, Skills: skills, Billing: billingSvc,
+		SkillRunner: skillRunnerInst,
 	}
 
 	srv := mcpserver.New(mcpserver.Deps{

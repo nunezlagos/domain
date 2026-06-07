@@ -30,6 +30,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
+	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -53,12 +54,13 @@ const (
 
 // Runner orquesta ejecución de agents.
 type Runner struct {
-	Pool     *pgxpool.Pool
-	Audit    audit.Recorder
-	Factory  *llm.Factory
-	Agents   *agentsvc.Service
-	Skills   *skillsvc.Service
-	Billing  *billing.Service
+	Pool         *pgxpool.Pool
+	Audit        audit.Recorder
+	Factory      *llm.Factory
+	Agents       *agentsvc.Service
+	Skills       *skillsvc.Service
+	Billing      *billing.Service
+	SkillRunner  *skillrunner.Runner // si nil, se crea uno default por Run()
 }
 
 type RunInput struct {
@@ -246,29 +248,19 @@ func (r *Runner) loadSkillTools(ctx context.Context, agent *agentsvc.Agent) ([]l
 	return out, bySlug, nil
 }
 
-// executeTool ejecuta un skill. Soporta:
-//   - prompt: devuelve content del skill con variables sustituidas (best effort)
-//   - code/api/mcp_tool: pending HU-05.5 — por ahora devuelve descripción
+// executeTool delega al SkillRunner (HU-05.5).
 func (r *Runner) executeTool(ctx context.Context, sk *skillsvc.Skill, args map[string]any) (string, error) {
 	if sk == nil {
 		return "", errors.New("skill not loaded")
 	}
-	// Validate input
 	if err := r.Skills.ValidateInput(ctx, sk.ID, args); err != nil {
 		return "", fmt.Errorf("invalid input: %w", err)
 	}
-	switch sk.SkillType {
-	case skillsvc.TypePrompt:
-		// Sustitución básica {{var}} → value
-		return substituteVars(sk.Content, args), nil
-	case skillsvc.TypeCode, skillsvc.TypeAPI, skillsvc.TypeMCPTool:
-		// Stub: devuelve el contenido del skill como respuesta. HU-05.5 implementará
-		// runtime real (sandboxed code exec, HTTP call, MCP forward).
-		return fmt.Sprintf("(skill %s tipo %s ejecutado con args: %v) — runtime pending HU-05.5",
-			sk.Slug, sk.SkillType, args), nil
-	default:
-		return "", fmt.Errorf("unknown skill_type: %s", sk.SkillType)
+	sr := r.SkillRunner
+	if sr == nil {
+		sr = skillrunner.New()
 	}
+	return sr.Execute(ctx, sk, args)
 }
 
 // failedRun crea un agent_run con status=failed sin invocar LLM.
@@ -294,61 +286,7 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, re
 	}, err
 }
 
-// substituteVars hace replace simple {{name}} → value en el template.
-func substituteVars(tpl string, args map[string]any) string {
-	out := tpl
-	for k, v := range args {
-		placeholder := "{{" + k + "}}"
-		out = replaceAll(out, placeholder, fmt.Sprint(v))
-	}
-	return out
-}
-
-func replaceAll(s, old, new string) string {
-	// stdlib strings.Replace evitamos para mantener footprint local
-	return stringsReplace(s, old, new, -1)
-}
-
-// Importamos strings.Replace via wrapper para no agregar otra import.
-// (En Go stdlib esto sería trivial; aquí mantengo un re-export controlado.)
-var stringsReplace = func() func(s, old, new string, n int) string {
-	return _stringsReplace
-}()
-
-func _stringsReplace(s, old, new string, n int) string {
-	// minimal impl idéntica a strings.Replace pero local.
-	if old == "" || s == "" {
-		return s
-	}
-	var b []byte
-	i := 0
-	for {
-		j := indexOf(s[i:], old)
-		if j < 0 || n == 0 {
-			b = append(b, s[i:]...)
-			break
-		}
-		b = append(b, s[i:i+j]...)
-		b = append(b, new...)
-		i += j + len(old)
-		if n > 0 {
-			n--
-		}
-	}
-	return string(b)
-}
-
-func indexOf(s, sub string) int {
-	if len(sub) == 0 {
-		return 0
-	}
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
+// Helpers de templating quedaron en internal/runner/skill (HU-05.5).
 
 func nullStr(s string) any {
 	if s == "" {

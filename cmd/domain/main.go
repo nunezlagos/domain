@@ -29,6 +29,7 @@ import (
 	llmopenai "nunezlagos/domain/internal/llm/openai"
 	"nunezlagos/domain/internal/llm/ollama"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/invite"
@@ -212,9 +213,11 @@ func runServer() {
 		llmFactory.SetDefault(def, def)
 	}
 
+	skillRunnerInst := skillrunner.New()
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,
+		SkillRunner: skillRunnerInst,
 	}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{

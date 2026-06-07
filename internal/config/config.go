@@ -23,7 +23,9 @@ type Config struct {
 	HTTPWriteTimeoutSeconds int
 
 	// Database
-	DatabaseURL string
+	DatabaseURL     string // app_user pool — runtime queries (RLS enforced)
+	DatabaseAuthURL string // app_admin pool — auth/audit lookups (BYPASSRLS).
+	// Si DatabaseAuthURL vacío, dev-fallback al pool de DatabaseURL con warning.
 
 	// S3 (storage HU-04.6, GDPR export HU-23.3)
 	S3Endpoint     string
@@ -73,7 +75,8 @@ func Load() (*Config, error) {
 		HTTPReadTimeoutSeconds:  getEnvInt("DOMAIN_HTTP_READ_TIMEOUT_SECONDS", 30),
 		HTTPWriteTimeoutSeconds: getEnvInt("DOMAIN_HTTP_WRITE_TIMEOUT_SECONDS", 30),
 
-		DatabaseURL: getEnv("DOMAIN_DATABASE_URL", ""),
+		DatabaseURL:     getEnv("DOMAIN_DATABASE_URL", ""),
+		DatabaseAuthURL: getEnv("DOMAIN_DATABASE_AUTH_URL", ""),
 
 		S3Endpoint:     getEnv("DOMAIN_S3_ENDPOINT", ""),
 		S3Region:       getEnv("DOMAIN_S3_REGION", "us-east-1"),

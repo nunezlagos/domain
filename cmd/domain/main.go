@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,11 +14,21 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/saargo/domain/internal/api/handler"
+	"github.com/saargo/domain/internal/audit"
+	"github.com/saargo/domain/internal/auth/apikey"
+	"github.com/saargo/domain/internal/auth/otp"
 	"github.com/saargo/domain/internal/config"
+	"github.com/saargo/domain/internal/db"
 	"github.com/saargo/domain/internal/httpserver"
+	"github.com/saargo/domain/internal/llm"
 	"github.com/saargo/domain/internal/logging"
 	"github.com/saargo/domain/internal/metrics"
 	dmigrate "github.com/saargo/domain/internal/migrate"
+	"github.com/saargo/domain/internal/service/invite"
+	"github.com/saargo/domain/internal/service/observation"
+	orgsvc "github.com/saargo/domain/internal/service/org"
+	projsvc "github.com/saargo/domain/internal/service/project"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -139,11 +150,50 @@ func runServer() {
 		}()
 	}
 
+	// Pools (app_user para runtime, app_admin para auth/audit).
+	ctx := context.Background()
+	pools, err := db.OpenProduction(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL)
+	if err != nil {
+		logger.Error("pools open failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+	defer pools.Close()
+	if cfg.DatabaseAuthURL == "" && cfg.Env != "dev" {
+		logger.Warn("DOMAIN_DATABASE_AUTH_URL not set — auth pool reuses runtime user (NOT recommended outside dev)")
+	}
+
+	// Services: dependency wiring explícito.
+	recorder := &audit.PGRecorder{Pool: pools.Auth}
+	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
+	projectService := &projsvc.Service{Pool: pools.App, Audit: recorder}
+	obsService := &observation.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	inviteService := &invite.Service{
+		Pool: pools.App, Audit: recorder, Mailer: invite.NopMailer{},
+		AcceptURL: "https://app.domain.sh/accept",
+	}
+	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
+	otpService := &otp.Service{
+		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
+	}
+
+	api := &handler.API{
+		OrgService:     orgService,
+		ProjectService: projectService,
+		ObsService:     obsService,
+		InviteService:  inviteService,
+		OTPService:     otpService,
+		APIKeys:        apiKeyStore,
+	}
+
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
 	mux := http.NewServeMux()
 	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
-	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: nil})
+	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
+
+	// API REST montada bajo /api/v1/* con auth middleware aplicada selectivamente.
+	authMW := &apikey.Middleware{Resolver: apiKeyStore, Allowlist: handler.AuthAllowlist()}
+	mux.Handle("/api/", authMW.Wrap(api.Router()))
 
 	// Aplica metrics middleware al mux principal (todos los handlers se cuentan)
 	handler := metricsReg.HTTPMiddleware(mux)

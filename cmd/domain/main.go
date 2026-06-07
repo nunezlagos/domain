@@ -30,6 +30,7 @@ import (
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
+	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
@@ -177,6 +178,7 @@ func runServer() {
 	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
+	searchService := &searchsvc.Service{Pool: pools.App}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -190,6 +192,7 @@ func runServer() {
 		SessionService:  sessionService,
 		PromptService:   promptService,
 		TimelineService: timelineService,
+		SearchService:   searchService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

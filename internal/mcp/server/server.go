@@ -25,6 +25,7 @@ import (
 	obssvc "github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
+	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
@@ -36,6 +37,7 @@ type Deps struct {
 	Sessions     *sesssvc.Service
 	Prompts      *promptsvc.Service
 	Timeline     *timelinesvc.Service
+	Search       *searchsvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -57,6 +59,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolPromptSearch(), Handler: deps.handlePromptSearch},
 		{Tool: toolContext(), Handler: deps.handleContext},
 		{Tool: toolTimeline(), Handler: deps.handleTimeline},
+		{Tool: toolGlobalSearch(), Handler: deps.handleGlobalSearch},
 	}
 }
 
@@ -209,6 +212,27 @@ func toolTimeline() mcp.Tool {
 		),
 		mcp.WithNumber("after",
 			mcp.Description("Entradas posteriores (default 3, max 50)"),
+		),
+	)
+}
+
+func toolGlobalSearch() mcp.Tool {
+	return mcp.NewTool("domain_search_global",
+		mcp.WithDescription("Búsqueda global cross-entity (observations + prompts + sessions) scoped por org del principal. Filtros opcionales."),
+		mcp.WithString("query",
+			mcp.Description("Texto a buscar"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Máximo resultados (default 20, max 200)"),
+		),
+		mcp.WithArray("entity_types",
+			mcp.Description("Filtrar a tipos específicos: observation, prompt, session"),
+			mcp.Items(map[string]any{"type": "string"}),
+		),
+		mcp.WithArray("tags",
+			mcp.Description("Tags requeridos (AND)"),
+			mcp.Items(map[string]any{"type": "string"}),
 		),
 	)
 }
@@ -542,6 +566,45 @@ func (d *Deps) handleTimeline(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("timeline: %v", err)), nil
 	}
 	return toolResultJSON(entries)
+}
+
+func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Search == nil {
+		return mcp.NewToolResultError("search service no configurado"), nil
+	}
+	args := req.GetArguments()
+	query, _ := args["query"].(string)
+	if query == "" {
+		return mcp.NewToolResultError("query requerido"), nil
+	}
+	limit := 20
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	filter := searchsvc.Filter{}
+	if et, ok := args["entity_types"].([]any); ok {
+		for _, t := range et {
+			if s, ok := t.(string); ok {
+				filter.EntityTypes = append(filter.EntityTypes, searchsvc.EntityType(s))
+			}
+		}
+	}
+	if tg, ok := args["tags"].([]any); ok {
+		for _, t := range tg {
+			if s, ok := t.(string); ok {
+				filter.Tags = append(filter.Tags, s)
+			}
+		}
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	results, err := d.Search.Search(ctx, orgID, query, limit, filter)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"results": results,
+		"count":   len(results),
+	})
 }
 
 func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

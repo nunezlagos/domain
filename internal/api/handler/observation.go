@@ -4,10 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/saargo/domain/internal/service/observation"
+	searchsvc "github.com/saargo/domain/internal/service/search"
 )
 
 type saveObsBody struct {
@@ -154,6 +157,9 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, list)
 }
 
+// GET /api/v1/search — búsqueda global cross-entity (HU-03.7).
+// Parámetros: q, limit, entity_type (csv: observation,prompt,session),
+// project_slug (csv), tags (csv), date_from, date_to (ISO 8601).
 func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -167,7 +173,39 @@ func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	results, err := a.ObsService.SearchHybrid(r.Context(), orgID, q, limit)
+
+	filter := searchsvc.Filter{}
+	if et := r.URL.Query().Get("entity_type"); et != "" {
+		for _, t := range strings.Split(et, ",") {
+			filter.EntityTypes = append(filter.EntityTypes, searchsvc.EntityType(strings.TrimSpace(t)))
+		}
+	}
+	if slugs := r.URL.Query().Get("project_slug"); slugs != "" {
+		for _, slug := range strings.Split(slugs, ",") {
+			proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, strings.TrimSpace(slug))
+			if err != nil {
+				continue // slug inválido: ignorar
+			}
+			filter.ProjectIDs = append(filter.ProjectIDs, proj.ID)
+		}
+	}
+	if tags := r.URL.Query().Get("tags"); tags != "" {
+		for _, t := range strings.Split(tags, ",") {
+			filter.Tags = append(filter.Tags, strings.TrimSpace(t))
+		}
+	}
+	if df := r.URL.Query().Get("date_from"); df != "" {
+		if t, err := time.Parse(time.RFC3339, df); err == nil {
+			filter.DateFrom = &t
+		}
+	}
+	if dt := r.URL.Query().Get("date_to"); dt != "" {
+		if t, err := time.Parse(time.RFC3339, dt); err == nil {
+			filter.DateTo = &t
+		}
+	}
+
+	results, err := a.SearchService.Search(r.Context(), orgID, q, limit, filter)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search", err.Error())
 		return

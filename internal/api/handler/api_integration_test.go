@@ -25,6 +25,7 @@ import (
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	searchsvc "github.com/saargo/domain/internal/service/search"
 )
 
 func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
@@ -71,11 +72,13 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	// prefix (no conoce org_id aún) y necesita atravesar RLS.
 	keys := &apikey.PGStore{Pool: authPool}
 
+	searchS := &searchsvc.Service{Pool: pool}
 	api := &handler.API{
 		OrgService:     orgS,
 		ProjectService: projS,
 		ObsService:     obsS,
 		InviteService:  invS,
+		SearchService:  searchS,
 		APIKeys:        keys,
 	}
 

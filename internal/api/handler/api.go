@@ -20,6 +20,7 @@ import (
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
+	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
@@ -33,6 +34,7 @@ type API struct {
 	SessionService  *sesssvc.Service
 	PromptService   *promptsvc.Service
 	TimelineService *timelinesvc.Service
+	SearchService   *searchsvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }

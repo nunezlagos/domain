@@ -1,3 +1,31 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-06
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/mail/smtp.Mailer usando net/smtp stdlib.
+
+  API:
+  - Mailer.Send(ctx, to, subject, body) → invite.Mailer interface
+  - Mailer.SendOTP(ctx, to, code, expiresIn) → otp.Mailer interface
+  - Config: Host, Port, Auth (none|plain), User, Password, UseTLS (STARTTLS),
+    From, Timeout
+
+  Soporta plain (Mailpit dev) + STARTTLS + plain auth (SES/Mailgun prod).
+  DialContext con timeout configurable.
+
+  Tests unit (4 escenarios + 1 sabotaje) con mockSMTPServer in-process.
+
+  Wiring cmd/domain server:
+  - Si DOMAIN_SMTP_HOST → smtpmail.New con cfg de env vars
+  - inviteService.Mailer + otpService.Mail asignados al mailer real
+  - Sin DOMAIN_SMTP_HOST: NopMailer + warn log (dev only)
+
+  Env vars en internal/config: DOMAIN_SMTP_HOST/PORT/AUTH/USER/PASSWORD/TLS/FROM
+
+  Pending:
+  - HTML body opcional (multipart/alternative)
+  - Templates por tipo en BD (email_templates managed por seeders)
+  - Retry backoff en errores transient
+  - Bounce handling
+  - DKIM/SPF — depende de infra

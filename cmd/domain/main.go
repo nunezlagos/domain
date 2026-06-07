@@ -29,6 +29,7 @@ import (
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
+	smtpmail "nunezlagos/domain/internal/mail/smtp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -181,8 +182,25 @@ func runServer() {
 	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
 	projectService := &projsvc.Service{Pool: pools.App, Audit: recorder}
 	obsService := &observation.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop
+	var inviteMailer invite.Mailer = invite.NopMailer{}
+	var otpMailer otp.Mailer
+	if cfg.SMTPHost != "" {
+		realMailer := smtpmail.New(smtpmail.Config{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
+			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
+			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
+		})
+		inviteMailer = realMailer
+		otpMailer = realMailer
+		logger.Info("SMTP mailer configured", slog.String("host", cfg.SMTPHost))
+	} else {
+		logger.Warn("SMTP not configured — invitations/OTP no enviarán mails reales (DOMAIN_SMTP_HOST missing)")
+	}
+	_ = otpMailer
+
 	inviteService := &invite.Service{
-		Pool: pools.App, Audit: recorder, Mailer: invite.NopMailer{},
+		Pool: pools.App, Audit: recorder, Mailer: inviteMailer,
 		AcceptURL: "https://app.domain.sh/accept",
 	}
 	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
@@ -224,6 +242,7 @@ func runServer() {
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
+		Mail: otpMailer,
 	}
 
 	api := &handler.API{

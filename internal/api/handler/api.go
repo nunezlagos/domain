@@ -16,7 +16,9 @@ import (
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/otp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -45,6 +47,8 @@ type API struct {
 	SkillService     *skillsvc.Service
 	AgentService     *agentsvc.Service
 	AgentRunner      *agentrunner.Runner
+	FlowService      *flow.Service
+	FlowRunner       *flowrunner.Runner
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -100,6 +104,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/agents/{id}", a.updateAgent)
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
 	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
+
+	// Flows
+	mux.HandleFunc("POST /api/v1/flows", a.createFlow)
+	mux.HandleFunc("GET /api/v1/flows", a.listFlows)
+	mux.HandleFunc("GET /api/v1/flows/{id}", a.getFlow)
+	mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow)
+	mux.HandleFunc("POST /api/v1/flows/{id}/run", a.runFlow)
 
 	// Skills
 	mux.HandleFunc("POST /api/v1/skills", a.createSkill)

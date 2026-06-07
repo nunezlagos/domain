@@ -31,9 +31,11 @@ import (
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	smtpmail "nunezlagos/domain/internal/mail/smtp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -210,6 +212,7 @@ func runServer() {
 	searchService := &searchsvc.Service{Pool: pools.App}
 	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
+	flowService := &flow.Service{Pool: pools.App, Audit: recorder}
 	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agentService := &agentsvc.Service{Pool: pools.App, Audit: recorder}
 	billingService := &billing.Service{Pool: pools.App}
@@ -241,6 +244,11 @@ func runServer() {
 		Agents: agentService, Skills: skillService, Billing: billingService,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
 	}
+	flowRunnerInst := &flowrunner.Runner{
+		Pool: pools.App, Audit: recorder, Flows: flowService,
+		Agents: agentService, Skills: skillService, Observations: obsService,
+		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
+	}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -261,6 +269,8 @@ func runServer() {
 		SkillService:     skillService,
 		AgentService:     agentService,
 		AgentRunner:      agentRunnerInst,
+		FlowService:      flowService,
+		FlowRunner:       flowRunnerInst,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

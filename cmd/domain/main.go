@@ -16,6 +16,7 @@ import (
 	"github.com/saargo/domain/internal/config"
 	"github.com/saargo/domain/internal/httpserver"
 	"github.com/saargo/domain/internal/logging"
+	"github.com/saargo/domain/internal/metrics"
 	dmigrate "github.com/saargo/domain/internal/migrate"
 )
 
@@ -126,19 +127,36 @@ func runServer() {
 		Output:    cfg.LogOutput,
 		AddSource: cfg.LogAddSource,
 	})
+	// Métricas Prometheus (HU-17.1)
+	metricsReg := metrics.New()
+	if cfg.MetricsEnabled {
+		metricsAddr := fmt.Sprintf("%s:%d", cfg.MetricsBind, cfg.MetricsPort)
+		go func() {
+			logger.Info("metrics endpoint starting", slog.String("addr", metricsAddr))
+			if err := metricsReg.Serve(metricsAddr, "", ""); err != nil && err != http.ErrServerClosed {
+				logger.Error("metrics server failed", slog.Any("err", err))
+			}
+		}()
+	}
+
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
 	mux := http.NewServeMux()
 	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
 	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: nil})
+
+	// Aplica metrics middleware al mux principal (todos los handlers se cuentan)
+	handler := metricsReg.HTTPMiddleware(mux)
+
 	logger.Info("domain server starting",
 		slog.String("version", Version),
 		slog.String("addr", addr),
 		slog.String("env", cfg.Env),
+		slog.Bool("metrics_enabled", cfg.MetricsEnabled),
 	)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
 	}

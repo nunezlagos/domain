@@ -1,0 +1,9 @@
+status: active
+created: 2026-06-07
+archived: ~
+hus:
+  08.1-agent-definitions: proposed
+  08.2-agent-execution: proposed
+  08.3-agent-runs-logs: proposed
+  08.4-multi-agent-orch: proposed
+  08.5-agent-templates: proposed

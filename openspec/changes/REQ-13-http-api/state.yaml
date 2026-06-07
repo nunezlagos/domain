@@ -1,0 +1,7 @@
+status: active
+created: 2026-06-07
+archived: ~
+hus:
+  13.1-http-crud-endpoints: proposed
+  13.2-http-auth-middleware: proposed
+  13.3-http-pagination-filters: proposed

@@ -1,0 +1,9 @@
+status: active
+created: 2026-06-07
+archived: ~
+hus:
+  05.1-skill-definitions: proposed
+  05.2-skill-registry-search: proposed
+  05.3-skill-versioning: proposed
+  05.4-auto-skill-engine: proposed
+  05.5-skill-execution: proposed

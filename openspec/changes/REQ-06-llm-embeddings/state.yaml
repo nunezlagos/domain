@@ -1,0 +1,10 @@
+status: active
+created: 2026-06-07
+archived: ~
+hus:
+  06.1-llm-provider-factory: proposed
+  06.2-llm-runners: proposed
+  06.3-ollama-runner: proposed
+  06.4-model-registry-cost: proposed
+  06.5-embedding-pgvector: proposed
+  06.6-token-count-stream: proposed

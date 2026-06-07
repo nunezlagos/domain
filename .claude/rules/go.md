@@ -1,0 +1,8 @@
+- Usá pgx v5 para Postgres, nada de database/sql
+- Interfaces en el store, consumo desde services
+- Errores con `fmt.Errorf("context: %w", err)` siempre
+- Log con `slog`, niveles: Debug, Info, Warn, Error
+- Nombres de tools MCP con prefijo `domain_`
+- Env vars con prefijo `DOMAIN_`
+- Tests de integración con testcontainers para Postgres
+- Migraciones con golang-migrate, SQL plano

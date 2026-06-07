@@ -1,0 +1,102 @@
+# Binaries
+/bin/
+/dist/
+/domain
+/domain-mcp
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build / Cache
+/tmp/
+/build/
+*.test
+*.out
+coverage.out
+coverage.html
+profile.out
+
+# Env / secrets — NUNCA committeable
+.env
+.env.local
+.env.*.local
+*.local
+*.pem
+*.key
+*.crt
+secrets/
+!secrets/.gitkeep
+
+# IDE / Editor
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Go specific
+vendor/
+*.test
+go.work
+go.work.sum
+
+# Docker / Compose runtime
+.docker-data/
+.minio-data/
+.postgres-data/
+
+# Logs
+*.log
+logs/
+
+# Coverage / Benchmark outputs
+coverage/
+benchmark-results/*.txt
+!benchmark-results/main.txt
+!benchmark-results/.gitkeep
+
+# Terraform (cuando exista deploy/terraform/)
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+
+# Helm
+deploy/helm/*/charts/
+deploy/helm/*/Chart.lock
+
+# pgBackRest / DB backups
+*.backup
+*.dump
+backups/
+
+# OS generated
+.DS_Store
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Worktrees Claude Code
+.claude/worktrees/
+
+# Jobs Claude Code
+.claude/jobs/
+
+# Memoria local (NO committear conversaciones privadas con LLMs)
+.claude/projects/*/memory/
+!.claude/projects/.gitkeep
+
+# Settings locales (override por dev)
+.claude/settings.local.json
+
+# Schema lint baseline (commit explícitamente cuando se baseline)
+# .schema-lint-baseline
+
+# Anonymization dumps
+anonymized-dumps/
+*.anonymized.sql.gz

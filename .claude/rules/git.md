@@ -1,5 +1,24 @@
 # Git & Versioning Conventions — Domain
 
+## Repo es LOCAL-ONLY hasta orden explícita
+
+**Estado actual: NO hay remote. Branch `main` solo en `.git/` local.**
+
+Reglas inmediatas (vigentes hasta que el usuario diga lo contrario):
+
+- ❌ **NO ejecutar** `git push`, `git push --set-upstream`, ni equivalentes
+- ❌ **NO crear remotes** con `git remote add`
+- ❌ **NO crear repos** GitHub/GitLab/Bitbucket con `gh repo create` u equivalentes
+- ❌ **NO subir tags** con `git push --tags`
+- ✅ Sí permitido: `git commit`, `git log`, `git status`, `git diff`, branches locales, tags locales
+
+El agente NO debe sugerir push/remote en cada commit. Cuando el usuario decida abrir
+remote, dará instrucción explícita literal (ej. "crea repo en github" o "haz push").
+Hasta entonces, asumir local-only es el estado correcto y no preguntar repetidamente.
+
+Si una herramienta o flujo necesita remote para funcionar (ej. webhook delivery
+con repo público), notificar al usuario el bloqueo y esperar respuesta.
+
 ## Branching
 
 - `main` — única branch protegida; siempre deployable

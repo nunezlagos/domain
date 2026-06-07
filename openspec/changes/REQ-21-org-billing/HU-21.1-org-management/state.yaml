@@ -1,3 +1,41 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-06
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/service/org.Service expone API de aplicación:
+  - Create(name, slug, ownerEmail, ownerName): tx atómica que inserta
+    organizations + users(role=owner). slug validado con regex (lowercase,
+    digits, dashes, no leading/trailing dash). Slug taken → ErrSlugTaken.
+    Audit log "organization.created" registrado al commit.
+  - GetByID: lectura incluyendo soft-deleted (caller decide qué filtrar).
+  - UpdateSettings(id, actor, settings map): UPDATE jsonb + audit "updated"
+    con diff old/new. Falla si org deleted.
+  - ListMembers: devuelve users activos (deleted_at IS NULL) ordenados por
+    created_at, incluye id/email/name/role/joined_at.
+  - TransferOwnership(orgID, from, to): tx. from debe ser owner, to debe
+    ser admin/maintainer. from→admin, to→owner. Audit registrado.
+    Errores: ErrNotOwner, ErrTargetNotMember, ErrUserNotFound.
+  - SoftDelete(orgID, actor, confirmSlug): exige confirmSlug==org.Slug
+    (anti-fat-finger). UPDATE deleted_at = NOW(). Idempotente: segunda
+    llamada no-op sin error. Audit "organization.deleted".
+
+  Tests integration (11 escenarios + 2 sabotaje):
+  - Create + owner + audit log emitido
+  - Slug taken detectado via heurística string (no estricta unique error)
+  - Slug inválido (uppercase, espacios, leading/trailing dash) rechazados
+  - UpdateSettings persists + audit con diff
+  - ListMembers incluye owner + invited, ordenados
+  - TransferOwnership swap correcto, no se permite from!=owner ni to=viewer
+  - SoftDelete confirm correcto / incorrecto / idempotente
+  - sabotaje atomicidad: si Create falla por slug, owner user no persiste
+  - GetByID NotFound
+
+  Pending:
+  - Cascade soft-delete a entidades hijas (projects, observations, etc.)
+    via job programado HU-23.2 purge a 30d
+  - Re-auth requirement en TransferOwnership (UI guard, no service)
+  - HTTP handlers + routing /api/v1/organizations/* (HU separada o futuro
+    refactor cuando se monten todos los handlers REST)
+  - isUniqueViolation actualmente usa string match heurístico; refactor
+    para parsear pgconn.PgError.Code = "23505" cuando se centralice err handling

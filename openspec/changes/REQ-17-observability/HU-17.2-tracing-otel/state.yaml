@@ -1,3 +1,21 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-06
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/tracing package:
+  - Setup(ctx, Config) configura OTLP gRPC exporter, ParentBased(TraceIDRatioBased)
+    sampler, batch processor 5s/512 spans, resource con service.name/version/env
+  - Si !Enabled retorna noop provider (development-friendly)
+  - SafeAttr whitelist explícita 16 keys permitidas; key fuera de whitelist retorna
+    KeyValue empty (OTel skip). 6 categorías: HTTP/DB/LLM/Domain identifiers
+  - HTTPMiddleware crea span "HTTP {METHOD} {route}" con attrs http.method/route/
+    status_code, propagación W3C TraceContext incoming + outgoing
+  - normalizeRoute UUID→:id, numeric→:n (anti-cardinality)
+  - W3C TraceContext + Baggage propagators
+  - Shutdown function ordered con timeout
+  Tests: 8 unit + 2 sabotaje (SafeAttr filtra todos prohibidos incluyendo
+  user.email/password/observation.content/db.statement; whitelist no contiene
+  email/password/secret/rut/content; excepción "llm.*_tokens" como unidades).
+  Pending: instrumentación pgx (otelpgx package), wire en cmd/domain server
+  con DOMAIN_OTEL_* env vars, integration test contra Jaeger en docker compose dev.

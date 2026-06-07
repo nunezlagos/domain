@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -51,32 +52,50 @@ type Deps struct {
 	ServerVer    string
 }
 
+// defaultBudget rate limit conservador para todas las tools (HU-12.6).
+// Sobreescribe per-tool en producción según necesidad.
+var defaultBudget = ToolBudget{
+	CallsPerMinute: 120,
+	MaxRetries:     1,
+	RetryBackoff:   100 * time.Millisecond,
+}
+
 // Tools construye la lista de mcpgo.ServerTool del proyecto (todos prefijo
 // domain_*). Útil para tests in-process que reciben []ServerTool en
 // mcptest.NewServer. Producción usa New() que internamente reusa Tools().
+// Cada handler queda wrapped con ResilientWrapper (rate limit + retry).
 func Tools(deps Deps) []mcpgo.ServerTool {
+	wrap := NewResilientWrapper(defaultBudget)
+	// Tools que escriben (mutation): tope más bajo (60/min)
+	for _, mutTool := range []string{
+		"domain_mem_save", "domain_knowledge_save",
+		"domain_session_start", "domain_session_end",
+		"domain_agent_run",
+	} {
+		wrap.SetBudget(mutTool, ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: 100 * time.Millisecond})
+	}
 	return []mcpgo.ServerTool{
-		{Tool: toolMemSave(), Handler: deps.handleMemSave},
-		{Tool: toolMemSearch(), Handler: deps.handleMemSearch},
-		{Tool: toolMemContext(), Handler: deps.handleMemContext},
-		{Tool: toolMemGetObservation(), Handler: deps.handleMemGetObservation},
-		{Tool: toolSessionStart(), Handler: deps.handleSessionStart},
-		{Tool: toolSessionEnd(), Handler: deps.handleSessionEnd},
-		{Tool: toolSessionActive(), Handler: deps.handleSessionActive},
-		{Tool: toolPromptGet(), Handler: deps.handlePromptGet},
-		{Tool: toolPromptSearch(), Handler: deps.handlePromptSearch},
-		{Tool: toolContext(), Handler: deps.handleContext},
-		{Tool: toolTimeline(), Handler: deps.handleTimeline},
-		{Tool: toolGlobalSearch(), Handler: deps.handleGlobalSearch},
-		{Tool: toolKnowledgeSave(), Handler: deps.handleKnowledgeSave},
-		{Tool: toolKnowledgeSearch(), Handler: deps.handleKnowledgeSearch},
-		{Tool: toolKnowledgeGet(), Handler: deps.handleKnowledgeGet},
-		{Tool: toolSkillList(), Handler: deps.handleSkillList},
-		{Tool: toolSkillSearch(), Handler: deps.handleSkillSearch},
-		{Tool: toolSkillGet(), Handler: deps.handleSkillGet},
-		{Tool: toolAgentList(), Handler: deps.handleAgentList},
-		{Tool: toolAgentGet(), Handler: deps.handleAgentGet},
-		{Tool: toolAgentRun(), Handler: deps.handleAgentRun},
+		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", deps.handleMemSave)},
+		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", deps.handleMemSearch)},
+		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", deps.handleMemContext)},
+		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", deps.handleMemGetObservation)},
+		{Tool: toolSessionStart(), Handler: wrap.Wrap("domain_session_start", deps.handleSessionStart)},
+		{Tool: toolSessionEnd(), Handler: wrap.Wrap("domain_session_end", deps.handleSessionEnd)},
+		{Tool: toolSessionActive(), Handler: wrap.Wrap("domain_session_active", deps.handleSessionActive)},
+		{Tool: toolPromptGet(), Handler: wrap.Wrap("domain_prompt_get", deps.handlePromptGet)},
+		{Tool: toolPromptSearch(), Handler: wrap.Wrap("domain_prompt_search", deps.handlePromptSearch)},
+		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", deps.handleContext)},
+		{Tool: toolTimeline(), Handler: wrap.Wrap("domain_timeline", deps.handleTimeline)},
+		{Tool: toolGlobalSearch(), Handler: wrap.Wrap("domain_search_global", deps.handleGlobalSearch)},
+		{Tool: toolKnowledgeSave(), Handler: wrap.Wrap("domain_knowledge_save", deps.handleKnowledgeSave)},
+		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", deps.handleKnowledgeSearch)},
+		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", deps.handleKnowledgeGet)},
+		{Tool: toolSkillList(), Handler: wrap.Wrap("domain_skill_list", deps.handleSkillList)},
+		{Tool: toolSkillSearch(), Handler: wrap.Wrap("domain_skill_search", deps.handleSkillSearch)},
+		{Tool: toolSkillGet(), Handler: wrap.Wrap("domain_skill_get", deps.handleSkillGet)},
+		{Tool: toolAgentList(), Handler: wrap.Wrap("domain_agent_list", deps.handleAgentList)},
+		{Tool: toolAgentGet(), Handler: wrap.Wrap("domain_agent_get", deps.handleAgentGet)},
+		{Tool: toolAgentRun(), Handler: wrap.Wrap("domain_agent_run", deps.handleAgentRun)},
 	}
 }
 

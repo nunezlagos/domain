@@ -42,12 +42,14 @@ dev-psql: ## Conecta a Postgres con psql
 dev-mc: ## Shell en container minio-init para mc commands
 	docker compose run --rm --entrypoint=/bin/sh minio-init
 
-dev-migrate: ## Aplica migraciones DB (HU-01.1, requiere golang-migrate)
-	@echo "TODO: HU-01.1 db-schema-migrations no implementado todavía."
-	@echo "Cuando esté: migrate -path migrations -database \"\$$DOMAIN_DATABASE_URL\" up"
+dev-migrate: build ## Aplica migraciones DB (HU-01.1)
+	@. ./.env && export $$(grep -v '^#' .env | xargs) && ./bin/domain migrate up
 
-dev-migrate-down: ## Rollback migraciones DB (HU-01.1)
-	@echo "TODO: HU-01.1 db-schema-migrations no implementado todavía."
+dev-migrate-down: build ## Rollback 1 migración (use N=N para más)
+	@. ./.env && export $$(grep -v '^#' .env | xargs) && ./bin/domain migrate down $(or $(N),1)
+
+dev-migrate-version: build ## Muestra version actual del schema
+	@. ./.env && export $$(grep -v '^#' .env | xargs) && ./bin/domain migrate version
 
 # ============================================================
 # Go development (placeholders, implementación viene en Fase 1)
@@ -63,13 +65,21 @@ test: ## Tests unitarios
 test-integration: ## Tests integration con testcontainers
 	go test -race -tags=integration -timeout=10m ./...
 
-build: ## Build binario domain
-	mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/domain ./cmd/domain
+VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
+COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS    := -s -w \
+  -X main.Version=$(VERSION) \
+  -X main.Commit=$(COMMIT) \
+  -X main.BuildTime=$(BUILD_TIME)
 
-build-mcp: ## Build binario domain-mcp
-	mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/domain-mcp ./cmd/domain-mcp
+build: ## Build binario domain con version inject
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o bin/domain ./cmd/domain
+
+build-mcp: ## Build binario domain-mcp con version inject
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o bin/domain-mcp ./cmd/domain-mcp
 
 clean: ## Limpia binarios y caches
 	rm -rf bin/ tmp/ coverage.out

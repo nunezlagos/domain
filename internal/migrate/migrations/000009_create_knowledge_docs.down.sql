@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS knowledge_chunks CASCADE;
+DROP TABLE IF EXISTS knowledge_docs CASCADE;

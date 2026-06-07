@@ -31,6 +31,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/registry"
+	"nunezlagos/domain/internal/llm/tokens"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
@@ -92,14 +93,16 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		return nil, fmt.Errorf("get agent: %w", err)
 	}
 
-	// Pre-flight: quota check
+	// Pre-flight: estimate tokens del input + system prompt y verificar quota
 	if r.Billing != nil {
-		state, qerr := r.Billing.CheckTokens(ctx, agent.OrganizationID, 0)
+		estimated := tokens.EstimateMessages(agent.SystemPrompt,
+			[]llm.Message{{Role: "user", Content: in.UserPrompt}})
+		state, qerr := r.Billing.CheckTokens(ctx, agent.OrganizationID, int64(estimated))
 		if qerr != nil {
 			return r.failedRun(ctx, agent.OrganizationID, in, "quota_exceeded",
-				fmt.Errorf("%w: %v", ErrQuotaExceeded, qerr))
+				fmt.Errorf("%w: estimated %d tokens would exceed (state: used=%d, limit=%d): %v",
+					ErrQuotaExceeded, estimated, state.Used, state.Limit, qerr))
 		}
-		_ = state
 	}
 
 	provider, err := r.Factory.Get(agent.Provider)

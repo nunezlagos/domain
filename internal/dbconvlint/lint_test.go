@@ -179,6 +179,71 @@ CREATE TABLE foos (
 	require.NotContains(t, issueRules(Lint("000099_foo.up.sql", src)), "prefer-jsonb")
 }
 
+// HU-25.3 Migration Safety rules ----------------------------------------
+
+func TestSafety_CreateIndexConcurrent(t *testing.T) {
+	src := validHeader + `CREATE INDEX foos_name_idx ON foos(name);`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "require-concurrent-index")
+}
+
+func TestSafety_CreateIndexConcurrent_OK(t *testing.T) {
+	src := validHeader + `CREATE INDEX CONCURRENTLY foos_name_idx ON foos(name);`
+	require.NotContains(t, issueRules(Lint("000099_x.up.sql", src)), "require-concurrent-index")
+}
+
+func TestSafety_AddColumnNotNullSinDefault(t *testing.T) {
+	src := validHeader + `ALTER TABLE users ADD COLUMN status TEXT NOT NULL;`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "require-default-for-not-null")
+}
+
+func TestSafety_AddColumnNotNullConDefault_OK(t *testing.T) {
+	src := validHeader + `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';`
+	require.NotContains(t, issueRules(Lint("000099_x.up.sql", src)), "require-default-for-not-null")
+}
+
+func TestSafety_DropTableSinIfExists(t *testing.T) {
+	src := validHeader + `DROP TABLE old_data;`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "require-if-exists-drop")
+}
+
+func TestSafety_DropTableConIfExists_OK(t *testing.T) {
+	src := validHeader + `DROP TABLE IF EXISTS old_data;`
+	require.NotContains(t, issueRules(Lint("000099_x.up.sql", src)), "require-if-exists-drop")
+}
+
+func TestSafety_VacuumFull(t *testing.T) {
+	src := validHeader + `VACUUM FULL bloated_table;`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "no-vacuum-full")
+}
+
+func TestSafety_LockTable(t *testing.T) {
+	src := validHeader + `LOCK TABLE users IN EXCLUSIVE MODE;`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "no-explicit-lock-table")
+}
+
+func TestSafety_AddFKSinNotValid(t *testing.T) {
+	src := validHeader + `ALTER TABLE memberships ADD CONSTRAINT m_org_fk FOREIGN KEY (org_id) REFERENCES organizations(id);`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "require-not-valid-fk")
+}
+
+func TestSafety_AddFKConNotValid_OK(t *testing.T) {
+	src := validHeader + `ALTER TABLE memberships ADD CONSTRAINT m_org_fk FOREIGN KEY (org_id) REFERENCES organizations(id) NOT VALID;`
+	require.NotContains(t, issueRules(Lint("000099_x.up.sql", src)), "require-not-valid-fk")
+}
+
+func TestSafety_Override(t *testing.T) {
+	src := validHeader + `-- domain-lint-ignore-next: require-concurrent-index
+CREATE INDEX foos_name_idx ON foos(name);`
+	require.NotContains(t, issueRules(Lint("000099_x.up.sql", src)), "require-concurrent-index")
+}
+
+// Sabotaje: si pretendemos pasar regla con comment falso, no bypassea.
+func TestSafetySabotage_NonOverrideCommentDoesNotBypass(t *testing.T) {
+	src := validHeader + `-- TODO: agregar CONCURRENTLY
+CREATE INDEX foos_name_idx ON foos(name);`
+	require.Contains(t, issueRules(Lint("000099_x.up.sql", src)), "require-concurrent-index")
+}
+
 // Issue.String() es útil para output CI.
 func TestIssue_String(t *testing.T) {
 	is := Issue{File: "000099_x.up.sql", Line: 42, Rule: "prefer-jsonb", Message: "use JSONB"}

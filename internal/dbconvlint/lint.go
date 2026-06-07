@@ -51,6 +51,7 @@ func Lint(file, src string) []Issue {
 	checkProhibitedTypes(lines, add)
 	checkFKNaming(lines, add)
 	checkCreateTableConventions(src, lines, add)
+	checkMigrationSafety(src, lines, add)
 
 	sort.SliceStable(issues, func(i, j int) bool {
 		if issues[i].Line != issues[j].Line {
@@ -324,4 +325,95 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// === Migration Safety (HU-25.3) ===
+//
+// Reglas que detectan patrones peligrosos para producción:
+//   * CREATE INDEX sin CONCURRENTLY → bloquea writes en tablas grandes
+//   * ALTER TABLE ADD COLUMN NOT NULL sin DEFAULT → rewrite full table
+//   * DROP TABLE/COLUMN sin IF EXISTS → fail si already removed (bloquea deploy)
+//   * VACUUM FULL → exclusive lock, downtime
+//   * LOCK TABLE explícito → uso disciplinado solamente, requiere override
+//   * ALTER TABLE ADD FOREIGN KEY sin NOT VALID → table-wide lock durante validación
+
+var (
+	reCreateIndex     = regexp.MustCompile(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX\s`)
+	// reCreateIndexStmt captura el statement completo CREATE INDEX ... ON table
+	// (multilínea, hasta ;) — el grupo capturado es el nombre de la tabla.
+	reCreateIndexStmt = regexp.MustCompile(`(?is)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*)[^;]*;`)
+	reConcurrently    = regexp.MustCompile(`(?i)\bCONCURRENTLY\b`)
+	reAddColumnNotNull = regexp.MustCompile(`(?i)\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?[a-z_]+\s+[a-zA-Z_(),0-9]+(?:\s+[a-zA-Z_(),0-9 ]+?)?\s+NOT\s+NULL\b`)
+	reDefaultClause   = regexp.MustCompile(`(?i)\bDEFAULT\b`)
+	reDropTable       = regexp.MustCompile(`(?i)^\s*DROP\s+TABLE\s`)
+	reDropColumn      = regexp.MustCompile(`(?i)\bDROP\s+COLUMN\s`)
+	reIfExists        = regexp.MustCompile(`(?i)\bIF\s+EXISTS\b`)
+	reVacuumFull      = regexp.MustCompile(`(?i)^\s*VACUUM\s+FULL\b`)
+	reLockTable       = regexp.MustCompile(`(?i)^\s*LOCK\s+(TABLE\s+)?`)
+	reAddFK           = regexp.MustCompile(`(?i)\bADD\s+(CONSTRAINT\s+\S+\s+)?FOREIGN\s+KEY\b`)
+	reNotValid        = regexp.MustCompile(`(?i)\bNOT\s+VALID\b`)
+)
+
+func checkMigrationSafety(src string, lines []string, add func(int, string, string)) {
+	// Tablas creadas en este mismo archivo: sus indices iniciales NO requieren
+	// CONCURRENTLY (tabla está vacía durante la creación).
+	tablesInFile := map[string]bool{}
+	for _, t := range extractCreateTables(src) {
+		tablesInFile[strings.ToLower(t.Name)] = true
+	}
+
+	// Multiline scan: CREATE INDEX puede estar split en varias líneas.
+	// Buscamos statements completos sobre src y mapeamos a línea inicial.
+	indexStmts := reCreateIndexStmt.FindAllStringSubmatchIndex(src, -1)
+	for _, m := range indexStmts {
+		stmt := src[m[0]:m[1]]
+		tableName := strings.ToLower(src[m[2]:m[3]])
+		if reConcurrently.MatchString(stmt) {
+			continue
+		}
+		if tablesInFile[tableName] {
+			continue
+		}
+		line := lineOf(src, m[0])
+		add(line, "require-concurrent-index",
+			"CREATE INDEX on existing table must use CONCURRENTLY (override allowed via -- domain-lint-ignore-next: require-concurrent-index)")
+	}
+
+	for i, l := range lines {
+		if isCommentLine(l) {
+			continue
+		}
+		stripped := stripInlineComment(l)
+		// ADD COLUMN NOT NULL sin DEFAULT
+		if reAddColumnNotNull.MatchString(stripped) && !reDefaultClause.MatchString(stripped) {
+			add(i+1, "require-default-for-not-null",
+				"ADD COLUMN ... NOT NULL must have DEFAULT (else rewrites whole table; use backfill + ALTER COLUMN SET NOT NULL pattern instead)")
+		}
+		// DROP TABLE sin IF EXISTS
+		if reDropTable.MatchString(stripped) && !reIfExists.MatchString(stripped) {
+			add(i+1, "require-if-exists-drop",
+				"DROP TABLE should use IF EXISTS for idempotent down migrations")
+		}
+		// DROP COLUMN sin IF EXISTS
+		if reDropColumn.MatchString(stripped) && !reIfExists.MatchString(stripped) {
+			add(i+1, "require-if-exists-drop",
+				"DROP COLUMN should use IF EXISTS")
+		}
+		// VACUUM FULL — error
+		if reVacuumFull.MatchString(stripped) {
+			add(i+1, "no-vacuum-full",
+				"VACUUM FULL takes exclusive lock; use pg_repack or routine VACUUM instead")
+		}
+		// LOCK TABLE explícito
+		if reLockTable.MatchString(stripped) {
+			add(i+1, "no-explicit-lock-table",
+				"explicit LOCK TABLE is rarely safe in migrations; statement_timeout (HU-25.8) protects against runaways")
+		}
+		// ADD FOREIGN KEY sin NOT VALID
+		if reAddFK.MatchString(stripped) && !reNotValid.MatchString(stripped) {
+			add(i+1, "require-not-valid-fk",
+				"ALTER TABLE ADD FOREIGN KEY should use NOT VALID + separate VALIDATE CONSTRAINT to avoid full table scan lock")
+		}
+	}
+	_ = src
 }

@@ -11,6 +11,9 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS last_organization_id UUID REFERENCES organizations(id),
   ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 
+-- domain-lint-ignore-next: require-concurrent-index
+-- reason: index sobre columna recién agregada en el mismo deploy; tabla users
+-- tiene datos pero la columna rut es nullable nueva (mayoría NULL) → lock breve.
 CREATE INDEX IF NOT EXISTS users_rut_active_idx
   ON users (rut) WHERE rut IS NOT NULL AND deleted_at IS NULL;
 

@@ -1,3 +1,53 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/llm: Provider interface (Complete + CompleteStream) + Embedder
+  interface (ya existía) + thread-safe Factory.
+
+  Provider interface unifica:
+  - Name() string
+  - Complete(ctx, opts) (*Response, error)
+  - CompleteStream(ctx, opts) (<-chan StreamChunk, error)
+
+  CompletionOptions: Messages (con tool_calls + tool_call_id), SystemPrompt,
+  Temperature, MaxTokens, StopSequences, Tools (ToolDef con Name +
+  Description + JSON Schema).
+
+  Response: Content + ToolCalls (modelo pidió ejecutar tools) +
+  FinishReason normalizado (stop|length|tool_use) + Usage.
+
+  Provider implementations:
+  - internal/llm/anthropic: /v1/messages REST. Soporta tool_use con content
+    blocks (text/tool_use/tool_result). SSE stream parsing. Voyage AI
+    embedder (voyage-3 = 1024 dims padding a 1536).
+  - internal/llm/openai: /v1/chat/completions con tools (function calling) +
+    SSE stream. Embedder text-embedding-3-small nativo 1536.
+  - internal/llm/ollama: /api/chat local (no API key) + /api/embeddings con
+    nomic-embed-text padded a 1536.
+
+  Factory thread-safe (sync.RWMutex). Embedder registry separado del Provider
+  registry (mismo factory).
+
+  Casos de uso aclarados con el usuario:
+  - Embedder: USADO YA por observations/knowledge/skills (mem_save genera
+    embedding para búsqueda híbrida)
+  - Provider Complete/Stream: para HU-08.2 agent execution server-side
+    (cliente envía mensaje → Domain orquesta agent + skills + memoria + LLM
+    internamente + persiste agent_run). Cliente NO duplica LLM call.
+
+  Tests:
+  - Factory unit (Register/Get, default, thread-safe 50 goroutines, list)
+  - Anthropic httptest (HappyPath, ToolUse, ErrorResponse, BuildRequest
+    message+tool_result, normalizeStopReason, Voyage no-APIKey sabotaje)
+  - OpenAI httptest (HappyPath, ToolCalls, ErrorResponse, Embedder dims +
+    happy path, sin APIKey sabotaje)
+
+  Pending:
+  - HU-06.2 LLM runners (registry de modelos por provider con cost/context)
+  - HU-06.4 model_registry table con costos por modelo (HU-01.1 schema?)
+  - HU-06.5 pgvector + 1536 dim conventión
+  - HU-06.6 token counter local (tiktoken cl100k_base)
+  - Config wiring: cmd/domain reads DOMAIN_LLM_* env vars y arma el factory
+  - Cost accounting hook (HU-21.3 IncrementTokens al completar Complete)

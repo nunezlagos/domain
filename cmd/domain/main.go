@@ -26,6 +26,7 @@ import (
 	"github.com/saargo/domain/internal/metrics"
 	dmigrate "github.com/saargo/domain/internal/migrate"
 	"github.com/saargo/domain/internal/service/invite"
+	"github.com/saargo/domain/internal/service/knowledge"
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
@@ -179,6 +180,7 @@ func runServer() {
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
+	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -191,8 +193,9 @@ func runServer() {
 		InviteService:  inviteService,
 		SessionService:  sessionService,
 		PromptService:   promptService,
-		TimelineService: timelineService,
-		SearchService:   searchService,
+		TimelineService:  timelineService,
+		SearchService:    searchService,
+		KnowledgeService: knowledgeService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

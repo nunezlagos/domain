@@ -16,6 +16,7 @@ import (
 	"github.com/saargo/domain/internal/auth/apikey"
 	"github.com/saargo/domain/internal/auth/otp"
 	"github.com/saargo/domain/internal/service/invite"
+	"github.com/saargo/domain/internal/service/knowledge"
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
@@ -33,8 +34,9 @@ type API struct {
 	InviteService  *invite.Service
 	SessionService  *sesssvc.Service
 	PromptService   *promptsvc.Service
-	TimelineService *timelinesvc.Service
-	SearchService   *searchsvc.Service
+	TimelineService  *timelinesvc.Service
+	SearchService    *searchsvc.Service
+	KnowledgeService *knowledge.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -82,6 +84,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+
+	// Knowledge documents
+	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)
+	mux.HandleFunc("GET /api/v1/knowledge", a.listKnowledge)        // ?project_slug=
+	mux.HandleFunc("GET /api/v1/knowledge/search", a.searchKnowledge) // ?q=
+	mux.HandleFunc("GET /api/v1/knowledge/{id}", a.getKnowledge)
+	mux.HandleFunc("DELETE /api/v1/knowledge/{id}", a.deleteKnowledge)
 
 	// Context + Timeline (cross-entity feeds)
 	mux.HandleFunc("GET /api/v1/context", a.getContext)                          // ?project_slug=

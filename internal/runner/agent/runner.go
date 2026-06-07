@@ -159,13 +159,24 @@ LOOP:
 			}
 		}
 
+		callStart := time.Now()
 		resp, err := provider.Complete(ctx, opts)
+		latencyMS := int(time.Since(callStart).Milliseconds())
 		if err != nil {
+			r.appendLog(ctx, runID, iterations, "error",
+				map[string]any{"stage": "llm_call", "error": err.Error()},
+				0, 0, latencyMS)
 			finalErr = fmt.Errorf("complete iter=%d: %w", iterations, err)
 			break LOOP
 		}
 		totalIn += resp.Usage.PromptTokens
 		totalOut += resp.Usage.CompletionTokens
+		r.appendLog(ctx, runID, iterations, "llm_call", map[string]any{
+			"model":         agent.Model,
+			"content":       resp.Content,
+			"finish_reason": resp.FinishReason,
+			"tool_calls":    resp.ToolCalls,
+		}, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, latencyMS)
 
 		// Si no hay tool calls, terminamos
 		if len(resp.ToolCalls) == 0 {
@@ -178,9 +189,21 @@ LOOP:
 			Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls,
 		})
 		for _, tc := range resp.ToolCalls {
+			toolStart := time.Now()
+			r.appendLog(ctx, runID, iterations, "tool_call",
+				map[string]any{"tool_name": tc.Name, "arguments": tc.Arguments},
+				0, 0, 0)
 			result, terr := r.executeTool(ctx, skillBySlug[tc.Name], tc.Arguments)
+			toolLatency := int(time.Since(toolStart).Milliseconds())
 			if terr != nil {
 				result = fmt.Sprintf("tool error: %v", terr)
+				r.appendLog(ctx, runID, iterations, "error",
+					map[string]any{"stage": "tool_execute", "tool_name": tc.Name, "error": terr.Error()},
+					0, 0, toolLatency)
+			} else {
+				r.appendLog(ctx, runID, iterations, "tool_result",
+					map[string]any{"tool_name": tc.Name, "result_preview": truncate(result, 500)},
+					0, 0, toolLatency)
 			}
 			messages = append(messages, llm.Message{
 				Role: "tool", ToolCallID: tc.ID, Content: result,
@@ -218,6 +241,14 @@ LOOP:
 		 WHERE id = $9`,
 		status, outputJSON, nullStr(errStr), totalIn, totalOut, costUSD,
 		iterations, finishedAt, runID)
+
+	// Log final entry con resumen
+	r.appendLog(ctx, runID, iterations, "final", map[string]any{
+		"status":  status,
+		"output":  finalText,
+		"error":   errStr,
+		"cost_usd": costUSD,
+	}, totalIn, totalOut, 0)
 
 	if r.Billing != nil && totalIn+totalOut > 0 {
 		_, _ = r.Billing.IncrementTokens(ctx, agent.OrganizationID, int64(totalIn+totalOut))
@@ -304,6 +335,28 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, re
 }
 
 // Helpers de templating quedaron en internal/runner/skill (HU-05.5).
+
+// appendLog persiste una entry en agent_run_logs (HU-08.3). Best-effort:
+// errores de logging NO interrumpen el run principal.
+func (r *Runner) appendLog(ctx context.Context, runID uuid.UUID, iteration int,
+	eventType string, payload map[string]any, tokensIn, tokensOut, latencyMS int) {
+	if r.Pool == nil {
+		return
+	}
+	raw, _ := json.Marshal(payload)
+	_, _ = r.Pool.Exec(ctx,
+		`INSERT INTO agent_run_logs (agent_run_id, iteration, event_type, payload,
+		    tokens_input, tokens_output, latency_ms)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		runID, iteration, eventType, raw, tokensIn, tokensOut, latencyMS)
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
 
 func nullStr(s string) any {
 	if s == "" {

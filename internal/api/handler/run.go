@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -76,4 +77,72 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 		"started_at":    res.StartedAt,
 		"finished_at":   res.FinishedAt,
 	})
+}
+
+// GET /api/v1/agent-runs/{id}/logs — devuelve agent_run_logs ordenados por iteration.
+func (a *API) getAgentRunLogs(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	var orgID uuid.UUID
+	err = a.AgentService.Pool.QueryRow(r.Context(),
+		`SELECT organization_id FROM agent_runs WHERE id = $1`, id).Scan(&orgID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if orgID.String() != p.OrganizationID {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+
+	rows, err := a.AgentService.Pool.Query(r.Context(),
+		`SELECT id, iteration, event_type, payload, tokens_input, tokens_output,
+		        latency_ms, occurred_at
+		 FROM agent_run_logs WHERE agent_run_id = $1
+		 ORDER BY iteration ASC, occurred_at ASC LIMIT 1000`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list_logs", err.Error())
+		return
+	}
+	defer rows.Close()
+	var out []map[string]any
+	for rows.Next() {
+		var (
+			logID      int64
+			iteration  int
+			eventType  string
+			payloadRaw []byte
+			tokensIn   int
+			tokensOut  int
+			latencyMS  int
+			occurredAt any
+		)
+		if err := rows.Scan(&logID, &iteration, &eventType, &payloadRaw,
+			&tokensIn, &tokensOut, &latencyMS, &occurredAt); err != nil {
+			continue
+		}
+		var payload any
+		if len(payloadRaw) > 0 {
+			_ = json.Unmarshal(payloadRaw, &payload)
+		}
+		out = append(out, map[string]any{
+			"id":            logID,
+			"iteration":     iteration,
+			"event_type":    eventType,
+			"payload":       payload,
+			"tokens_input":  tokensIn,
+			"tokens_output": tokensOut,
+			"latency_ms":    latencyMS,
+			"occurred_at":   occurredAt,
+		})
+	}
+	writeData(w, http.StatusOK, out)
 }

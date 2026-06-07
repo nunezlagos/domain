@@ -236,6 +236,12 @@ var commonNonPluralAllowed = map[string]bool{
 	"feature_flags":     true,
 }
 
+// Sufijos que ya implican colectivo (no requieren pluralización terminal en s).
+var pluralEquivalentSuffixes = []string{
+	"_log", "_history", "_data", "_metadata", "_status", "_config",
+	"_settings", "_audit",
+}
+
 func checkCreateTableConventions(src string, lines []string, add func(int, string, string)) {
 	for _, t := range extractCreateTables(src) {
 		name := t.Name
@@ -298,11 +304,13 @@ func isSnakeCase(s string) bool {
 }
 
 func looksPlural(s string) bool {
-	switch {
-	case strings.HasSuffix(s, "s"):
+	if strings.HasSuffix(s, "s") {
 		return true
-	case strings.HasSuffix(s, "_data"):
-		return true
+	}
+	for _, suf := range pluralEquivalentSuffixes {
+		if strings.HasSuffix(s, suf) {
+			return true
+		}
 	}
 	return false
 }

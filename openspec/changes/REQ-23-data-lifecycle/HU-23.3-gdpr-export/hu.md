@@ -1,6 +1,7 @@
 # HU-23.3-gdpr-export
 
 **Origen:** `REQ-23-data-lifecycle`
+**Persona:** org-member, auditor
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

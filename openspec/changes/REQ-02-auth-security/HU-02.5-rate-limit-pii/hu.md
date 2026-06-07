@@ -1,6 +1,7 @@
 # HU-02.5-rate-limit-pii
 
 **Origen:** `REQ-02-auth-security`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

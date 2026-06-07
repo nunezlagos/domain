@@ -1,6 +1,7 @@
 # HU-09.9-saga-compensation
 
 **Origen:** `REQ-09-flow-system`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

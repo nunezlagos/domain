@@ -1,6 +1,7 @@
 # HU-22.1-sdk-python
 
 **Origen:** `REQ-22-sdk-clients`
+**Persona:** integrator, data-scientist
 **Prioridad tentativa:** media
 **Tipo:** feature
 

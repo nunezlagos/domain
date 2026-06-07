@@ -1,6 +1,7 @@
 # HU-12.6-mcp-tool-resilience
 
 **Origen:** `REQ-12-mcp-server`
+**Persona:** platform-engineer, dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature + hardening
 

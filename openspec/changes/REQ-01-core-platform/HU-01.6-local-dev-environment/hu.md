@@ -1,6 +1,7 @@
 # HU-01.6-local-dev-environment
 
 **Origen:** `REQ-01-core-platform`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

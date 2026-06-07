@@ -1,6 +1,7 @@
 # HU-25.8-resource-limits-timeouts
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** hardening
 

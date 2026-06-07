@@ -1,6 +1,7 @@
 # HU-27.3-hot-reload-config
 
 **Origen:** `REQ-27-vertical-performance`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

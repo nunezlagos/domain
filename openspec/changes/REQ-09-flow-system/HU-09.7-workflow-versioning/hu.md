@@ -1,6 +1,7 @@
 # HU-09.7-workflow-versioning
 
 **Origen:** `REQ-09-flow-system`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

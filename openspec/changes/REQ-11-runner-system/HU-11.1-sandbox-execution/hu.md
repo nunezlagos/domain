@@ -1,6 +1,7 @@
 # HU-11.1-sandbox-execution
 
 **Origen:** `REQ-11-runner-system`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

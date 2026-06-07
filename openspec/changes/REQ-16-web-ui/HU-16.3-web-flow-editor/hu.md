@@ -1,6 +1,7 @@
 # HU-16.3-web-flow-editor
 
 **Origen:** `REQ-16-web-ui`
+**Persona:** org-member, org-admin
 **Prioridad tentativa:** media
 **Tipo:** feature
 

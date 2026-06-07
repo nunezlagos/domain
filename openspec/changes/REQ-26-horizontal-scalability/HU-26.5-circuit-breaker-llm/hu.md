@@ -1,6 +1,7 @@
 # HU-26.5-circuit-breaker-llm
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** hardening
 

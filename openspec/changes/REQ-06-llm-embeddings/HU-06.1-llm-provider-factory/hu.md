@@ -1,6 +1,7 @@
 # HU-06.1-llm-provider-factory
 
 **Origen:** `REQ-06-llm-embeddings`
+**Persona:** dx-engineer, platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

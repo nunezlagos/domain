@@ -1,6 +1,7 @@
 # HU-26.7-cache-invalidation-patterns
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** dx-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

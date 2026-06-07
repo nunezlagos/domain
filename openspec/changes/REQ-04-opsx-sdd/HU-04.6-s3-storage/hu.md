@@ -1,6 +1,7 @@
 # HU-04.6-s3-storage
 
 **Origen:** `REQ-04-opsx-sdd`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

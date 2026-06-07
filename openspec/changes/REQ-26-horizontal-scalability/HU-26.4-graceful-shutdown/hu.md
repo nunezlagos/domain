@@ -1,6 +1,7 @@
 # HU-26.4-graceful-shutdown
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** hardening
 

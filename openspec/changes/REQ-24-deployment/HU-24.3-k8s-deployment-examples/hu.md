@@ -1,6 +1,7 @@
 # HU-24.3-k8s-deployment-examples
 
 **Origen:** `REQ-24-deployment`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** docs + examples
 

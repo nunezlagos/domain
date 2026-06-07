@@ -1,6 +1,7 @@
 # HU-02.8-custom-roles-permissions
 
 **Origen:** `REQ-02-auth-security`
+**Persona:** security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

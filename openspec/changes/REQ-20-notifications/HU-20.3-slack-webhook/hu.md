@@ -1,6 +1,7 @@
 # HU-20.3-slack-webhook
 
 **Origen:** `REQ-20-notifications`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

@@ -1,6 +1,7 @@
 # HU-13.1-http-crud-endpoints
 
 **Origen:** `REQ-13-http-api`
+**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

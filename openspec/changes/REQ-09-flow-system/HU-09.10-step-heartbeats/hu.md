@@ -1,6 +1,7 @@
 # HU-09.10-step-heartbeats
 
 **Origen:** `REQ-09-flow-system`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

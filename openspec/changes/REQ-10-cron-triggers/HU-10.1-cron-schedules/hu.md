@@ -1,6 +1,7 @@
 # HU-10.1-cron-schedules
 
 **Origen:** `REQ-10-cron-triggers`
+**Persona:** platform-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

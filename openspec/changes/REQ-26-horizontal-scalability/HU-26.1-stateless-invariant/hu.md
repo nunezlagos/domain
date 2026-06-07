@@ -1,6 +1,7 @@
 # HU-26.1-stateless-invariant
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** hardening + tooling
 

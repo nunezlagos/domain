@@ -1,6 +1,7 @@
 # HU-03.1-observations-crud-fts
 
 **Origen:** `REQ-03-memory-system`
+**Persona:** dx-engineer, org-member
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

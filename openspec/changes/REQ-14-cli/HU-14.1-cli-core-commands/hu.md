@@ -1,6 +1,7 @@
 # HU-14.1-cli-core-commands
 
 **Origen:** `REQ-14-cli`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

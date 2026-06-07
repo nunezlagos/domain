@@ -1,6 +1,7 @@
 # HU-06.3-ollama-runner
 
 **Origen:** `REQ-06-llm-embeddings`
+**Persona:** dx-engineer, platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

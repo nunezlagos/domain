@@ -1,6 +1,7 @@
 # HU-22.3-sdk-go
 
 **Origen:** `REQ-22-sdk-clients`
+**Persona:** integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

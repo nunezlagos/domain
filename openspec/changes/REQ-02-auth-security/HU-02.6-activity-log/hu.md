@@ -1,6 +1,7 @@
 # HU-02.6-activity-log
 
 **Origen:** `REQ-02-auth-security`
+**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

@@ -1,6 +1,7 @@
 # HU-09.8-external-signals
 
 **Origen:** `REQ-09-flow-system`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

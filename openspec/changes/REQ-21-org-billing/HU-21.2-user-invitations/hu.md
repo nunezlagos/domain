@@ -1,6 +1,7 @@
 # HU-21.2-user-invitations
 
 **Origen:** `REQ-21-org-billing`
+**Persona:** org-admin
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

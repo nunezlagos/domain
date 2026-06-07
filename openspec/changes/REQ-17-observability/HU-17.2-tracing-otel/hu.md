@@ -1,6 +1,7 @@
 # HU-17.2-tracing-otel
 
 **Origen:** `REQ-17-observability`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

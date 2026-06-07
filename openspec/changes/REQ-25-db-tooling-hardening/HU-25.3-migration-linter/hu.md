@@ -1,6 +1,7 @@
 # HU-25.3-migration-linter
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

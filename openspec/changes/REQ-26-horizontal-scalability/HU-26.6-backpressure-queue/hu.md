@@ -1,6 +1,7 @@
 # HU-26.6-backpressure-queue
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** hardening
 

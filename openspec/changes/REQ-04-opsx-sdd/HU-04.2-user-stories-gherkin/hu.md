@@ -1,6 +1,7 @@
 # HU-04.2-user-stories-gherkin
 
 **Origen:** `REQ-04-opsx-sdd`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

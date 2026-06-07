@@ -1,6 +1,7 @@
 # HU-14.2-cli-output-formats
 
 **Origen:** `REQ-14-cli`
+**Persona:** dx-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

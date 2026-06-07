@@ -1,6 +1,7 @@
 # HU-05.6-agent-skill-contract
 
 **Origen:** `REQ-05-skill-system`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

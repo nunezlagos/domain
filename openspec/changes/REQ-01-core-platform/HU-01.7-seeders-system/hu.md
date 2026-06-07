@@ -1,6 +1,7 @@
 # HU-01.7-seeders-system
 
 **Origen:** `REQ-01-core-platform`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

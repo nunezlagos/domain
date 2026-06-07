@@ -1,6 +1,7 @@
 # HU-25.2-pg-stat-statements
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

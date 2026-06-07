@@ -1,6 +1,7 @@
 # HU-12.2-mcp-memory-tools
 
 **Origen:** `REQ-12-mcp-server`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

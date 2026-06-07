@@ -1,6 +1,7 @@
 # HU-13.6-cursor-pagination
 
 **Origen:** `REQ-13-http-api`
+**Persona:** integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

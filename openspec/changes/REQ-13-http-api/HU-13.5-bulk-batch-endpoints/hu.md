@@ -1,6 +1,7 @@
 # HU-13.5-bulk-batch-endpoints
 
 **Origen:** `REQ-13-http-api`
+**Persona:** integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

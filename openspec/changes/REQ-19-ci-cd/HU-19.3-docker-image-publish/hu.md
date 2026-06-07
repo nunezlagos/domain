@@ -1,6 +1,7 @@
 # HU-19.3-docker-image-publish
 
 **Origen:** `REQ-19-ci-cd`
+**Persona:** platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** infrastructure
 

@@ -1,6 +1,7 @@
 # HU-18.3-restore-runbook
 
 **Origen:** `REQ-18-backup-dr`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** runbook
 

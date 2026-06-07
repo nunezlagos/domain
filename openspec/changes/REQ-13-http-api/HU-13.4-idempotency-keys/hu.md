@@ -1,6 +1,7 @@
 # HU-13.4-idempotency-keys
 
 **Origen:** `REQ-13-http-api`
+**Persona:** integrator, dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

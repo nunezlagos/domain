@@ -1,6 +1,7 @@
 # HU-26.3-distributed-locks
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** dx-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

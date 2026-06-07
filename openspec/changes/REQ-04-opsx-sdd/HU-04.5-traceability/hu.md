@@ -1,6 +1,7 @@
 # HU-04.5-traceability
 
 **Origen:** `REQ-04-opsx-sdd`
+**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

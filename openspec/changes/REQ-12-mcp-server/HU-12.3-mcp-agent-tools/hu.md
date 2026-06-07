@@ -1,6 +1,7 @@
 # HU-12.3-mcp-agent-tools
 
 **Origen:** `REQ-12-mcp-server`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

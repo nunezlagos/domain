@@ -1,6 +1,7 @@
 # HU-25.6-least-privilege-roles
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** hardening
 

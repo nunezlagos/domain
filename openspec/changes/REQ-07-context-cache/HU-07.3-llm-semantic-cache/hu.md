@@ -1,6 +1,7 @@
 # HU-07.3-llm-semantic-cache
 
 **Origen:** `REQ-07-context-cache`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

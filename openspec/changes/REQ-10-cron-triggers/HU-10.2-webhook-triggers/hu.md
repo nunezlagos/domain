@@ -1,6 +1,7 @@
 # HU-10.2-webhook-triggers
 
 **Origen:** `REQ-10-cron-triggers`
+**Persona:** platform-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

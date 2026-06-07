@@ -1,6 +1,7 @@
 # HU-08.1-agent-definitions
 
 **Origen:** `REQ-08-agent-system`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

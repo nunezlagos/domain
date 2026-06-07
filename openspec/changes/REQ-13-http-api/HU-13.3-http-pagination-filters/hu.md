@@ -1,6 +1,7 @@
 # HU-13.3-http-pagination-filters
 
 **Origen:** `REQ-13-http-api`
+**Persona:** dx-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

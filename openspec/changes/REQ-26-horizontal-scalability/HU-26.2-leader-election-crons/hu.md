@@ -1,6 +1,7 @@
 # HU-26.2-leader-election-crons
 
 **Origen:** `REQ-26-horizontal-scalability`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

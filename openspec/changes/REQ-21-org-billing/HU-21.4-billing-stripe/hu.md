@@ -1,6 +1,7 @@
 # HU-21.4-billing-stripe
 
 **Origen:** `REQ-21-org-billing`
+**Persona:** org-owner
 **Prioridad tentativa:** baja
 **Tipo:** feature
 

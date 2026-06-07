@@ -1,6 +1,7 @@
 # HU-25.11-anonymization-staging
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** security-officer
 **Prioridad tentativa:** media
 **Tipo:** tooling
 

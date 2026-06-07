@@ -1,6 +1,7 @@
 # HU-02.2-rbac
 
 **Origen:** `REQ-02-auth-security`
+**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

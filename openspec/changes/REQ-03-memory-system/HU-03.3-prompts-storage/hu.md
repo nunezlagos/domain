@@ -1,6 +1,7 @@
 # HU-03.3-prompts-storage
 
 **Origen:** `REQ-03-memory-system`
+**Persona:** dx-engineer, org-member
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

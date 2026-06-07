@@ -1,6 +1,7 @@
 # HU-19.1-ci-lint-test
 
 **Origen:** `REQ-19-ci-cd`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

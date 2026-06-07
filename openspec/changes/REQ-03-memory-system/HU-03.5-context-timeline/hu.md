@@ -1,6 +1,7 @@
 # HU-03.5-context-timeline
 
 **Origen:** `REQ-03-memory-system`
+**Persona:** dx-engineer, org-member
 **Prioridad tentativa:** media
 **Tipo:** feature
 

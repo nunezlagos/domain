@@ -1,6 +1,7 @@
 # HU-23.1-legacy-import
 
 **Origen:** `REQ-23-data-lifecycle`
+**Persona:** org-admin, org-member
 **Prioridad tentativa:** media
 **Tipo:** feature
 

@@ -1,6 +1,7 @@
 # HU-18.1-postgres-backups
 
 **Origen:** `REQ-18-backup-dr`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

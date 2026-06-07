@@ -1,6 +1,7 @@
 # HU-08.3-agent-runs-logs
 
 **Origen:** `REQ-08-agent-system`
+**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

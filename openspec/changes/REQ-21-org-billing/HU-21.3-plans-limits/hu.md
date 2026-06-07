@@ -1,6 +1,7 @@
 # HU-21.3-plans-limits
 
 **Origen:** `REQ-21-org-billing`
+**Persona:** org-owner, platform-admin
 **Prioridad tentativa:** media
 **Tipo:** feature
 

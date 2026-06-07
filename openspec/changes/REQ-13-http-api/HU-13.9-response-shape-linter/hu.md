@@ -1,6 +1,7 @@
 # HU-13.9-response-shape-linter
 
 **Origen:** `REQ-13-http-api`
+**Persona:** integrator, platform-admin
 **Prioridad tentativa:** media
 **Tipo:** tooling
 

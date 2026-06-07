@@ -1,6 +1,7 @@
 # HU-25.10-db-secrets-rotation
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** hardening
 

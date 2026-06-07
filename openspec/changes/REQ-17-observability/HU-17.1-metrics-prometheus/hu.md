@@ -1,6 +1,7 @@
 # HU-17.1-metrics-prometheus
 
 **Origen:** `REQ-17-observability`
+**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

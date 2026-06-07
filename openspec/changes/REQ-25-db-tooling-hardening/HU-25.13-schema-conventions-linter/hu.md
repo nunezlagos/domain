@@ -1,6 +1,7 @@
 # HU-25.13-schema-conventions-linter
 
 **Origen:** `REQ-25-db-tooling-hardening`
+**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** tooling
 

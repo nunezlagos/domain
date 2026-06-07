@@ -8,7 +8,14 @@ Commits siguen [Conventional Commits](https://www.conventionalcommits.org/) seg�
 
 ## [Unreleased]
 
+### Implemented (Fase 0 + parte Fase 1)
+- HU-01.6 local-dev-environment — docker-compose con Postgres+pgvector, MinIO, Adminer, Mailpit
+- HU-01.1 db-schema-migrations — 23 migraciones SQL con golang-migrate embebido + 7 tests integration testcontainers
+- HU-01.2 config-system — load env DOMAIN_* + Validate strict + unit tests
+- HU-01.3 health-version — HTTP /health + /health/ready + ldflags version inject + unit tests
+
 ### Added
+- docs/testing-workflow.md — flujo TDD obligatorio per HU
 - Spec inicial: 27 REQs, 148 HUs en `openspec/changes/`
 - 5 RFCs de boundaries arquitectónicas en `docs/rfc/`
 - 9 reglas de conventions en `.claude/rules/`

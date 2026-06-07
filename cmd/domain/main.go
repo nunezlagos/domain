@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/saargo/domain/internal/config"
+	"github.com/saargo/domain/internal/httpserver"
 	dmigrate "github.com/saargo/domain/internal/migrate"
 )
 
@@ -119,17 +120,9 @@ func runServer() {
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
 	mux := http.NewServeMux()
-	startedAt := time.Now()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		uptime := time.Since(startedAt).Round(time.Second).String()
-		fmt.Fprintf(w, `{"status":"ok","version":"%s","commit":"%s","built":"%s","uptime":"%s"}`,
-			Version, Commit, BuildTime, uptime)
-	})
-	mux.HandleFunc("/health/ready", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		fmt.Fprintf(w, `{"ready":true}`)
-	})
+	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
+	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
+	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: nil}) // pool wire en HU posterior
 	fmt.Printf("domain %s server listening on %s\n", Version, addr)
 	srv := &http.Server{
 		Addr:         addr,

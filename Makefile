@@ -62,8 +62,15 @@ lint: ## Corre golangci-lint (HU-19.1)
 test: ## Tests unitarios
 	go test -race -short ./...
 
-test-integration: ## Tests integration con testcontainers
+test-integration: ## Tests integration con testcontainers (Docker requerido)
 	go test -race -tags=integration -timeout=10m ./...
+
+test-all: test test-integration ## Unit + integration
+
+coverage: ## Tests con cobertura + reporte HTML
+	go test -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Reporte: coverage.html"
 
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")

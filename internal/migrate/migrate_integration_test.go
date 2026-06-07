@@ -204,7 +204,7 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	require.NoError(t, dmigrate.Down(dsn, -1))
 	require.NoError(t, dmigrate.Up(dsn))
 	v, _, _ := dmigrate.Version(dsn)
-	require.Equal(t, uint(25), v)
+	require.Equal(t, uint(29), v)
 }
 
 // Sabotaje: violación FK debe fallar (constraint enforce).

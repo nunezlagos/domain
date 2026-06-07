@@ -19,6 +19,7 @@ import (
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
@@ -29,6 +30,7 @@ type API struct {
 	ObsService     *observation.Service
 	InviteService  *invite.Service
 	SessionService *sesssvc.Service
+	PromptService  *promptsvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -76,6 +78,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+
+	// Prompts (templates versionados)
+	mux.HandleFunc("POST /api/v1/prompts", a.createPrompt)
+	mux.HandleFunc("GET /api/v1/prompts/{id}", a.getPrompt)
+	mux.HandleFunc("POST /api/v1/prompts/{id}/activate", a.setActivePrompt)
+	mux.HandleFunc("DELETE /api/v1/prompts/{id}", a.deletePrompt)
+	mux.HandleFunc("GET /api/v1/prompts/by-slug/{slug}/versions", a.listPromptVersions)
+	mux.HandleFunc("GET /api/v1/prompts/search", a.searchPrompts)
 
 	return mux
 }

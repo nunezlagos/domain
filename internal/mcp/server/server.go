@@ -24,6 +24,7 @@ import (
 	"github.com/saargo/domain/internal/auth/apikey"
 	obssvc "github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
@@ -32,6 +33,7 @@ type Deps struct {
 	Observations *obssvc.Service
 	Projects     *projsvc.Service
 	Sessions     *sesssvc.Service
+	Prompts      *promptsvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -49,6 +51,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolSessionStart(), Handler: deps.handleSessionStart},
 		{Tool: toolSessionEnd(), Handler: deps.handleSessionEnd},
 		{Tool: toolSessionActive(), Handler: deps.handleSessionActive},
+		{Tool: toolPromptGet(), Handler: deps.handlePromptGet},
+		{Tool: toolPromptSearch(), Handler: deps.handlePromptSearch},
 	}
 }
 
@@ -150,6 +154,32 @@ func toolSessionActive() mcp.Tool {
 		mcp.WithDescription("Devuelve la session activa del user actual (opcional: filtrar por project)."),
 		mcp.WithString("project_slug",
 			mcp.Description("Filtrar por project (opcional)"),
+		),
+	)
+}
+
+func toolPromptGet() mcp.Tool {
+	return mcp.NewTool("domain_prompt_get",
+		mcp.WithDescription("Obtiene la versión ACTIVA de un prompt template por slug. Útil para inyectar prompts en runs."),
+		mcp.WithString("slug",
+			mcp.Description("Slug del prompt template"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project (opcional; si vacío usa prompts globales de la org)"),
+		),
+	)
+}
+
+func toolPromptSearch() mcp.Tool {
+	return mcp.NewTool("domain_prompt_search",
+		mcp.WithDescription("Busca prompts por contenido (full-text en español) con headline destacado."),
+		mcp.WithString("query",
+			mcp.Description("Texto a buscar en el body del prompt"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Máximo resultados (default 20)"),
 		),
 	)
 }
@@ -386,6 +416,55 @@ func (d *Deps) handleSessionActive(ctx context.Context, req mcp.CallToolRequest)
 		return toolResultJSON(nil)
 	}
 	return toolResultJSON(sess)
+}
+
+func (d *Deps) handlePromptGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Prompts == nil {
+		return mcp.NewToolResultError("prompt service no configurado"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return mcp.NewToolResultError("slug requerido"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	var projectID *uuid.UUID
+	if ps, _ := args["project_slug"].(string); ps != "" {
+		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
+		}
+		projectID = &proj.ID
+	}
+	p, err := d.Prompts.GetActive(ctx, orgID, projectID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("get_active: %v", err)), nil
+	}
+	return toolResultJSON(p)
+}
+
+func (d *Deps) handlePromptSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Prompts == nil {
+		return mcp.NewToolResultError("prompt service no configurado"), nil
+	}
+	args := req.GetArguments()
+	query, _ := args["query"].(string)
+	if query == "" {
+		return mcp.NewToolResultError("query requerido"), nil
+	}
+	limit := 20
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	results, err := d.Prompts.Search(ctx, orgID, query, limit)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"results": results,
+		"count":   len(results),
+	})
 }
 
 func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

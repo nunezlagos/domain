@@ -29,6 +29,7 @@ import (
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
@@ -173,6 +174,7 @@ func runServer() {
 		AcceptURL: "https://app.domain.sh/accept",
 	}
 	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
+	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -184,6 +186,7 @@ func runServer() {
 		ObsService:     obsService,
 		InviteService:  inviteService,
 		SessionService: sessionService,
+		PromptService:  promptService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

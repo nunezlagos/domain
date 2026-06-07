@@ -28,6 +28,7 @@ import (
 	mcpserver "github.com/saargo/domain/internal/mcp/server"
 	"github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
@@ -80,11 +81,13 @@ func main() {
 		Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{},
 	}
 	sessions := &sesssvc.Service{Pool: pools.App, Audit: recorder}
+	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
 		Projects:     projects,
 		Sessions:     sessions,
+		Prompts:      prompts,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

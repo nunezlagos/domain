@@ -180,6 +180,98 @@ func TestObservation_SearchHybrid_EmptyQuery(t *testing.T) {
 	require.Nil(t, results)
 }
 
+// HU-03.6: dedup detecta duplicado exacto.
+func TestObservation_Save_DedupRejectsDuplicate(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "Fix login bug",
+	})
+	require.NoError(t, err)
+	_, err = f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "Fix login bug",
+	})
+	require.ErrorIs(t, err, obssvc.ErrDuplicate)
+}
+
+// HU-03.6: normalización detecta duplicado con whitespace/caso distinto.
+func TestObservation_Save_DedupNormalizes(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "Fix Login",
+	})
+	require.NoError(t, err)
+	_, err = f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "fix  login",
+	})
+	require.ErrorIs(t, err, obssvc.ErrDuplicate,
+		"variantes de caso/whitespace deben detectarse como duplicados")
+}
+
+// HU-03.6: distinto observation_type permite mismo content.
+func TestObservation_Save_DedupScopedByType(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "Mismo contenido", ObservationType: "note",
+	})
+	require.NoError(t, err)
+	_, err = f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "Mismo contenido", ObservationType: "decision",
+	})
+	require.NoError(t, err, "distinto type → distinto hash → permitido")
+}
+
+// HU-03.6: privacy stripping remueve bloques <private>.
+func TestObservation_Save_StripsPrivateBlocks(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	o, err := f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "antes <private>SECRETO</private> después",
+	})
+	require.NoError(t, err)
+	require.NotContains(t, o.Content, "SECRETO",
+		"contenido privado NO debe persistir")
+	require.NotContains(t, o.Content, "<private>")
+	// metadata.privacy_redacted_blocks debe estar
+	require.EqualValues(t, 1, o.Metadata["privacy_redacted_blocks"])
+}
+
+// Sabotaje DB-level: el UNIQUE PARTIAL atrapa duplicados aunque la app bypass.
+func TestSabotage_Dedup_DBConstraintEnforces(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	o, err := f.svc.Save(ctx, obssvc.SaveInput{
+		OrganizationID: f.orgID, ProjectID: f.projectID,
+		Content: "unico",
+	})
+	require.NoError(t, err)
+
+	// Intentar INSERT directo con mismo content_hash → DB rechaza
+	var hash []byte
+	require.NoError(t, f.svc.Pool.QueryRow(ctx,
+		`SELECT content_hash FROM observations WHERE id = $1`, o.ID).Scan(&hash))
+
+	_, err = f.svc.Pool.Exec(ctx,
+		`INSERT INTO observations (organization_id, project_id, content, observation_type, content_hash)
+		 VALUES ($1, $2, 'bypass-app', 'note', $3)`,
+		f.orgID, f.projectID, hash)
+	require.Error(t, err, "DB UNIQUE PARTIAL debe rechazar duplicado aunque la app lo permita")
+}
+
 // Sabotaje: cross-org search no leaks (filtro organization_id en la query).
 func TestSabotage_SearchHybrid_OrgIsolation(t *testing.T) {
 	f, cleanup := setup(t)

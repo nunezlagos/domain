@@ -23,12 +23,15 @@ import (
 
 	"github.com/saargo/domain/internal/audit"
 	"github.com/saargo/domain/internal/llm"
+	"github.com/saargo/domain/internal/memory/dedup"
+	"github.com/saargo/domain/internal/memory/privacy"
 )
 
 var (
 	ErrNotFound          = errors.New("observation not found")
 	ErrContentRequired   = errors.New("content required")
 	ErrProjectMismatch   = errors.New("project does not belong to organization")
+	ErrDuplicate         = errors.New("duplicate observation (content_hash already exists)")
 )
 
 type Observation struct {
@@ -70,6 +73,8 @@ type Service struct {
 }
 
 // Save crea observation con embedding generado en línea.
+// Aplica privacy stripping (<private>...</private>) y dedup hash check
+// (UNIQUE constraint en DB = defense in depth contra bypass de la app).
 func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) {
 	if strings.TrimSpace(in.Content) == "" {
 		return nil, ErrContentRequired
@@ -83,36 +88,55 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 	if in.Metadata == nil {
 		in.Metadata = map[string]any{}
 	}
+
+	// HU-03.6 privacy: stripping de bloques <private>...</private>
+	cleanContent, redactedCount := privacy.Strip(in.Content)
+	if redactedCount > 0 {
+		in.Metadata["privacy_redacted_blocks"] = redactedCount
+	}
+	if strings.TrimSpace(cleanContent) == "" {
+		return nil, ErrContentRequired
+	}
+
 	metaJSON, _ := json.Marshal(in.Metadata)
 
-	// Generar embedding (puede ser zero vector si NopEmbedder)
-	vec, err := s.Embedder.Embed(ctx, in.Content)
+	// HU-03.6 dedup: hash normalizado del fingerprint
+	hash := dedup.Hash(dedup.FingerprintInput{
+		ProjectID:       in.ProjectID,
+		ObservationType: in.ObservationType,
+		Title:           "",
+		Content:         cleanContent,
+	})
+
+	// Generar embedding sobre contenido limpio
+	vec, err := s.Embedder.Embed(ctx, cleanContent)
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
 	embedLit := vectorLiteral(vec)
-	dim := s.Embedder.Dimensions()
 
 	var o Observation
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO observations
 		   (organization_id, project_id, created_by, session_id, content,
-		    embedding, observation_type, tags, metadata)
-		 VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)
+		    embedding, observation_type, tags, metadata, content_hash)
+		 VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10)
 		 RETURNING id, organization_id, project_id, created_by, session_id,
 		           content, observation_type, tags, metadata, created_at, updated_at`,
-		in.OrganizationID, in.ProjectID, in.CreatedBy, in.SessionID, in.Content,
-		embedLit, in.ObservationType, in.Tags, metaJSON,
+		in.OrganizationID, in.ProjectID, in.CreatedBy, in.SessionID, cleanContent,
+		embedLit, in.ObservationType, in.Tags, metaJSON, hash,
 	).Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
+		if strings.Contains(err.Error(), "observations_dedup_hash_uniq") {
+			return nil, ErrDuplicate
+		}
 		if strings.Contains(err.Error(), "violates foreign key constraint") &&
 			strings.Contains(err.Error(), "project") {
 			return nil, ErrProjectMismatch
 		}
 		return nil, fmt.Errorf("insert observation: %w", err)
 	}
-	_ = dim
 	if s.Audit != nil {
 		_ = s.Audit.Record(ctx, audit.Event{
 			OrganizationID: &in.OrganizationID,
@@ -121,6 +145,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 			Action:         "observation.saved",
 			EntityType:     "observation",
 			EntityID:       &o.ID,
+			NewValues:      map[string]any{"redacted": redactedCount},
 		})
 	}
 	return &o, nil

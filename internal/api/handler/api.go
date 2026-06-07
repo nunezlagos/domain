@@ -13,19 +13,20 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/saargo/domain/internal/auth/apikey"
-	"github.com/saargo/domain/internal/auth/otp"
-	agentsvc "github.com/saargo/domain/internal/service/agent"
-	"github.com/saargo/domain/internal/service/invite"
-	"github.com/saargo/domain/internal/service/knowledge"
-	"github.com/saargo/domain/internal/service/observation"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	promptsvc "github.com/saargo/domain/internal/service/prompt"
-	searchsvc "github.com/saargo/domain/internal/service/search"
-	sesssvc "github.com/saargo/domain/internal/service/session"
-	skillsvc "github.com/saargo/domain/internal/service/skill"
-	timelinesvc "github.com/saargo/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/otp"
+	agentrunner "nunezlagos/domain/internal/runner/agent"
+	agentsvc "nunezlagos/domain/internal/service/agent"
+	"nunezlagos/domain/internal/service/invite"
+	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/observation"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	searchsvc "nunezlagos/domain/internal/service/search"
+	sesssvc "nunezlagos/domain/internal/service/session"
+	skillsvc "nunezlagos/domain/internal/service/skill"
+	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
@@ -41,6 +42,7 @@ type API struct {
 	KnowledgeService *knowledge.Service
 	SkillService     *skillsvc.Service
 	AgentService     *agentsvc.Service
+	AgentRunner      *agentrunner.Runner
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -95,6 +97,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents/{id}", a.getAgent)
 	mux.HandleFunc("PATCH /api/v1/agents/{id}", a.updateAgent)
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
+	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
 
 	// Skills
 	mux.HandleFunc("POST /api/v1/skills", a.createSkill)

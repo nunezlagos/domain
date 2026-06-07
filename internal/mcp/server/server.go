@@ -21,16 +21,17 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
-	"github.com/saargo/domain/internal/auth/apikey"
-	agentsvc "github.com/saargo/domain/internal/service/agent"
-	knowsvc "github.com/saargo/domain/internal/service/knowledge"
-	obssvc "github.com/saargo/domain/internal/service/observation"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	promptsvc "github.com/saargo/domain/internal/service/prompt"
-	searchsvc "github.com/saargo/domain/internal/service/search"
-	sesssvc "github.com/saargo/domain/internal/service/session"
-	skillsvc "github.com/saargo/domain/internal/service/skill"
-	timelinesvc "github.com/saargo/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/auth/apikey"
+	agentrunner "nunezlagos/domain/internal/runner/agent"
+	agentsvc "nunezlagos/domain/internal/service/agent"
+	knowsvc "nunezlagos/domain/internal/service/knowledge"
+	obssvc "nunezlagos/domain/internal/service/observation"
+	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	searchsvc "nunezlagos/domain/internal/service/search"
+	sesssvc "nunezlagos/domain/internal/service/session"
+	skillsvc "nunezlagos/domain/internal/service/skill"
+	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 // Deps colecciona las dependencias del servidor MCP.
@@ -44,6 +45,7 @@ type Deps struct {
 	Knowledge    *knowsvc.Service
 	Skills       *skillsvc.Service
 	Agents       *agentsvc.Service
+	AgentRunner  *agentrunner.Runner
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -74,6 +76,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolSkillGet(), Handler: deps.handleSkillGet},
 		{Tool: toolAgentList(), Handler: deps.handleAgentList},
 		{Tool: toolAgentGet(), Handler: deps.handleAgentGet},
+		{Tool: toolAgentRun(), Handler: deps.handleAgentRun},
 	}
 }
 
@@ -247,6 +250,23 @@ func toolGlobalSearch() mcp.Tool {
 		mcp.WithArray("tags",
 			mcp.Description("Tags requeridos (AND)"),
 			mcp.Items(map[string]any{"type": "string"}),
+		),
+	)
+}
+
+func toolAgentRun() mcp.Tool {
+	return mcp.NewTool("domain_agent_run",
+		mcp.WithDescription("Ejecuta un agent server-side: el agent llama al LLM configurado, usa sus skills como tools, y devuelve la respuesta. Domain orquesta todo el loop."),
+		mcp.WithString("agent_slug",
+			mcp.Description("Slug del agent a ejecutar"),
+			mcp.Required(),
+		),
+		mcp.WithString("input",
+			mcp.Description("Mensaje del usuario al agent"),
+			mcp.Required(),
+		),
+		mcp.WithObject("variables",
+			mcp.Description("Variables opcionales contextuales"),
 		),
 	)
 }
@@ -730,6 +750,44 @@ func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) 
 	return toolResultJSON(map[string]any{
 		"results": results,
 		"count":   len(results),
+	})
+}
+
+func (d *Deps) handleAgentRun(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Agents == nil || d.AgentRunner == nil {
+		return mcp.NewToolResultError("agent runner no configurado (LLM provider missing?)"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["agent_slug"].(string)
+	input, _ := args["input"].(string)
+	if slug == "" || input == "" {
+		return mcp.NewToolResultError("agent_slug e input son requeridos"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	ag, err := d.Agents.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("agent '%s' not found", slug)), nil
+	}
+	var vars map[string]any
+	if v, ok := args["variables"].(map[string]any); ok {
+		vars = v
+	}
+	res, runErr := d.AgentRunner.Run(ctx, agentrunner.RunInput{
+		AgentID: ag.ID, UserID: &userID, UserPrompt: input, Variables: vars,
+	})
+	if res == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("run failed: %v", runErr)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"run_id":     res.RunID.String(),
+		"status":     res.Status,
+		"output":     res.Output,
+		"error":      res.Error,
+		"iterations": res.Iterations,
+		"tokens": map[string]int{
+			"input": res.TokensInput, "output": res.TokensOutput,
+		},
 	})
 }
 

@@ -20,21 +20,26 @@ import (
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/auth/apikey"
-	"github.com/saargo/domain/internal/config"
-	"github.com/saargo/domain/internal/db"
-	"github.com/saargo/domain/internal/llm"
-	mcpserver "github.com/saargo/domain/internal/mcp/server"
-	agentsvc "github.com/saargo/domain/internal/service/agent"
-	"github.com/saargo/domain/internal/service/knowledge"
-	"github.com/saargo/domain/internal/service/observation"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	promptsvc "github.com/saargo/domain/internal/service/prompt"
-	searchsvc "github.com/saargo/domain/internal/service/search"
-	sesssvc "github.com/saargo/domain/internal/service/session"
-	skillsvc "github.com/saargo/domain/internal/service/skill"
-	timelinesvc "github.com/saargo/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/config"
+	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/anthropic"
+	"nunezlagos/domain/internal/llm/ollama"
+	llmopenai "nunezlagos/domain/internal/llm/openai"
+	mcpserver "nunezlagos/domain/internal/mcp/server"
+	agentrunner "nunezlagos/domain/internal/runner/agent"
+	agentsvc "nunezlagos/domain/internal/service/agent"
+	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/observation"
+	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	searchsvc "nunezlagos/domain/internal/service/search"
+	sesssvc "nunezlagos/domain/internal/service/session"
+	skillsvc "nunezlagos/domain/internal/service/skill"
+	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 var (
@@ -92,6 +97,29 @@ func main() {
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agents := &agentsvc.Service{Pool: pools.App, Audit: recorder}
+	billingSvc := &billing.Service{Pool: pools.App}
+
+	// LLM factory: providers según env vars DOMAIN_*_KEY.
+	factory := llm.NewFactory()
+	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
+		factory.Register("anthropic", anthropic.New(k))
+	}
+	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
+		factory.Register("openai", llmopenai.New(k))
+	}
+	op := ollama.New()
+	if h := os.Getenv("DOMAIN_OLLAMA_HOST"); h != "" {
+		op.BaseURL = h
+	}
+	factory.Register("ollama", op)
+	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
+		factory.SetDefault(def, def)
+	}
+
+	agentRunnerInst := &agentrunner.Runner{
+		Pool: pools.App, Audit: recorder, Factory: factory,
+		Agents: agents, Skills: skills, Billing: billingSvc,
+	}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
@@ -103,6 +131,7 @@ func main() {
 		Knowledge:    knowledgeSvc,
 		Skills:       skills,
 		Agents:       agents,
+		AgentRunner:  agentRunnerInst,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

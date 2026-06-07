@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/session"
+	"nunezlagos/domain/internal/service/session"
 )
 
 type startSessionBody struct {

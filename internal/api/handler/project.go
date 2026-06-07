@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	projsvc "github.com/saargo/domain/internal/service/project"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
 type createProjectBody struct {

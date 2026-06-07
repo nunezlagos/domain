@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/knowledge"
 )
 
 type saveKnowledgeBody struct {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/prompt"
+	"nunezlagos/domain/internal/service/prompt"
 )
 
 type createPromptBody struct {

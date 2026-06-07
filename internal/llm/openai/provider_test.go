@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/saargo/domain/internal/llm"
+	"nunezlagos/domain/internal/llm"
 )
 
 func TestProvider_Complete_HappyPath(t *testing.T) {

@@ -15,17 +15,17 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/api/handler"
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/auth/apikey"
-	"github.com/saargo/domain/internal/db"
-	"github.com/saargo/domain/internal/llm"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	"github.com/saargo/domain/internal/service/invite"
-	"github.com/saargo/domain/internal/service/observation"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	searchsvc "github.com/saargo/domain/internal/service/search"
+	"nunezlagos/domain/internal/api/handler"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/llm"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/service/invite"
+	"nunezlagos/domain/internal/service/observation"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
+	searchsvc "nunezlagos/domain/internal/service/search"
 )
 
 func setupAPI(t *testing.T) (*httptest.Server, string, func()) {

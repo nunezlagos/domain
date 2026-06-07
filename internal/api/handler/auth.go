@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/auth/otp"
+	"nunezlagos/domain/internal/auth/otp"
 )
 
 type requestOTPBody struct {

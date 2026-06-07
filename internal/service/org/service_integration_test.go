@@ -15,9 +15,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	orgsvc "github.com/saargo/domain/internal/service/org"
+	"nunezlagos/domain/internal/audit"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 func setupOrgSvc(t *testing.T) (*orgsvc.Service, func()) {

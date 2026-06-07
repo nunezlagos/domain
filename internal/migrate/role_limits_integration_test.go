@@ -15,7 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	dmigrate "github.com/saargo/domain/internal/migrate"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 func setupLimits(t *testing.T) (*pgxpool.Pool, func()) {

@@ -12,12 +12,12 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/db"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	sesssvc "github.com/saargo/domain/internal/service/session"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/db"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
+	sesssvc "nunezlagos/domain/internal/service/session"
 )
 
 type fix struct {

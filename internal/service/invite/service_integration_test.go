@@ -16,10 +16,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	"github.com/saargo/domain/internal/service/invite"
-	orgsvc "github.com/saargo/domain/internal/service/org"
+	"nunezlagos/domain/internal/audit"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/service/invite"
+	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 type capturedMail struct {

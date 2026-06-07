@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/invite"
+	"nunezlagos/domain/internal/service/invite"
 )
 
 type createInviteBody struct {

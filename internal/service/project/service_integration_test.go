@@ -13,10 +13,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
+	"nunezlagos/domain/internal/audit"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
 func setupProj(t *testing.T) (*projsvc.Service, uuid.UUID, uuid.UUID, func()) {

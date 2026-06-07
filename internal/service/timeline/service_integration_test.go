@@ -13,16 +13,16 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/db"
-	"github.com/saargo/domain/internal/llm"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	"github.com/saargo/domain/internal/service/observation"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	promptsvc "github.com/saargo/domain/internal/service/prompt"
-	sesssvc "github.com/saargo/domain/internal/service/session"
-	timelinesvc "github.com/saargo/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/llm"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/service/observation"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	sesssvc "nunezlagos/domain/internal/service/session"
+	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 type fix struct {

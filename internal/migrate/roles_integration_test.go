@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
-	dmigrate "github.com/saargo/domain/internal/migrate"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 // helper: setea password a un role para poder loguearse en tests.

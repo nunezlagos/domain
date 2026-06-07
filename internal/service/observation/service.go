@@ -21,10 +21,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/llm"
-	"github.com/saargo/domain/internal/memory/dedup"
-	"github.com/saargo/domain/internal/memory/privacy"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/memory/dedup"
+	"nunezlagos/domain/internal/memory/privacy"
 )
 
 var (

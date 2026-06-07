@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/observation"
-	searchsvc "github.com/saargo/domain/internal/service/search"
+	"nunezlagos/domain/internal/service/observation"
+	searchsvc "nunezlagos/domain/internal/service/search"
 )
 
 type saveObsBody struct {

@@ -16,8 +16,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/activity"
-	dmigrate "github.com/saargo/domain/internal/migrate"
+	"nunezlagos/domain/internal/activity"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 func setupDB(t *testing.T) (*pgxpool.Pool, func()) {

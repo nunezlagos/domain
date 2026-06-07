@@ -13,12 +13,12 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/llm"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	obssvc "github.com/saargo/domain/internal/service/observation"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/llm"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	obssvc "nunezlagos/domain/internal/service/observation"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
 type fixture struct {

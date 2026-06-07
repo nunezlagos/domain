@@ -14,28 +14,33 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/saargo/domain/internal/api/handler"
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/auth/apikey"
-	"github.com/saargo/domain/internal/auth/otp"
-	"github.com/saargo/domain/internal/config"
-	"github.com/saargo/domain/internal/db"
-	"github.com/saargo/domain/internal/httpserver"
-	"github.com/saargo/domain/internal/llm"
-	"github.com/saargo/domain/internal/logging"
-	"github.com/saargo/domain/internal/metrics"
-	dmigrate "github.com/saargo/domain/internal/migrate"
-	agentsvc "github.com/saargo/domain/internal/service/agent"
-	"github.com/saargo/domain/internal/service/invite"
-	"github.com/saargo/domain/internal/service/knowledge"
-	"github.com/saargo/domain/internal/service/observation"
-	orgsvc "github.com/saargo/domain/internal/service/org"
-	projsvc "github.com/saargo/domain/internal/service/project"
-	promptsvc "github.com/saargo/domain/internal/service/prompt"
-	searchsvc "github.com/saargo/domain/internal/service/search"
-	sesssvc "github.com/saargo/domain/internal/service/session"
-	skillsvc "github.com/saargo/domain/internal/service/skill"
-	timelinesvc "github.com/saargo/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/api/handler"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/otp"
+	"nunezlagos/domain/internal/config"
+	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/httpserver"
+	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/logging"
+	"nunezlagos/domain/internal/metrics"
+	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/llm/anthropic"
+	llmopenai "nunezlagos/domain/internal/llm/openai"
+	"nunezlagos/domain/internal/llm/ollama"
+	agentrunner "nunezlagos/domain/internal/runner/agent"
+	agentsvc "nunezlagos/domain/internal/service/agent"
+	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/invite"
+	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/observation"
+	orgsvc "nunezlagos/domain/internal/service/org"
+	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	searchsvc "nunezlagos/domain/internal/service/search"
+	sesssvc "nunezlagos/domain/internal/service/session"
+	skillsvc "nunezlagos/domain/internal/service/skill"
+	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -185,6 +190,32 @@ func runServer() {
 	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agentService := &agentsvc.Service{Pool: pools.App, Audit: recorder}
+	billingService := &billing.Service{Pool: pools.App}
+
+	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
+	// Si no hay ninguna key, el runner devuelve runner_disabled al primer Run.
+	llmFactory := llm.NewFactory()
+	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
+		llmFactory.Register("anthropic", anthropic.New(k))
+	}
+	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
+		llmFactory.Register("openai", llmopenai.New(k))
+	}
+	if k := os.Getenv("DOMAIN_OLLAMA_HOST"); k != "" || true {
+		p := ollama.New()
+		if k != "" {
+			p.BaseURL = k
+		}
+		llmFactory.Register("ollama", p)
+	}
+	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
+		llmFactory.SetDefault(def, def)
+	}
+
+	agentRunnerInst := &agentrunner.Runner{
+		Pool: pools.App, Audit: recorder, Factory: llmFactory,
+		Agents: agentService, Skills: skillService, Billing: billingService,
+	}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -202,6 +233,7 @@ func runServer() {
 		KnowledgeService: knowledgeService,
 		SkillService:     skillService,
 		AgentService:     agentService,
+		AgentRunner:      agentRunnerInst,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

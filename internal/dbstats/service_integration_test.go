@@ -13,8 +13,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/saargo/domain/internal/dbstats"
-	dmigrate "github.com/saargo/domain/internal/migrate"
+	"nunezlagos/domain/internal/dbstats"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 // setupWithExtension arranca postgres con shared_preload_libraries para

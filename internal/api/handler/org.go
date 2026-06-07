@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/auth/apikey"
-	orgsvc "github.com/saargo/domain/internal/service/org"
+	"nunezlagos/domain/internal/auth/apikey"
+	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 func principal(r *http.Request) (*apikey.Principal, bool) {

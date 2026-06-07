@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/saargo/domain/internal/service/skill"
+	"nunezlagos/domain/internal/service/skill"
 )
 
 type createSkillBody struct {

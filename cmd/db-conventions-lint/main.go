@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/saargo/domain/internal/dbconvlint"
+	"nunezlagos/domain/internal/dbconvlint"
 )
 
 func main() {

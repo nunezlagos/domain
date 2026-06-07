@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/saargo/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/apikey"
 )
 
 func TestIsBuiltin(t *testing.T) {

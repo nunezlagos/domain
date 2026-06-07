@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/saargo/domain/internal/audit"
+	"nunezlagos/domain/internal/audit"
 )
 
 var (

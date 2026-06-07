@@ -25,8 +25,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/saargo/domain/internal/audit"
-	"github.com/saargo/domain/internal/llm"
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/llm"
 )
 
 const (

@@ -24,12 +24,14 @@ import (
 	"github.com/saargo/domain/internal/auth/apikey"
 	obssvc "github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
 // Deps colecciona las dependencias del servidor MCP.
 type Deps struct {
 	Observations *obssvc.Service
 	Projects     *projsvc.Service
+	Sessions     *sesssvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -44,6 +46,9 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolMemSearch(), Handler: deps.handleMemSearch},
 		{Tool: toolMemContext(), Handler: deps.handleMemContext},
 		{Tool: toolMemGetObservation(), Handler: deps.handleMemGetObservation},
+		{Tool: toolSessionStart(), Handler: deps.handleSessionStart},
+		{Tool: toolSessionEnd(), Handler: deps.handleSessionEnd},
+		{Tool: toolSessionActive(), Handler: deps.handleSessionActive},
 	}
 }
 
@@ -106,6 +111,45 @@ func toolMemContext() mcp.Tool {
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("Máximo resultados (default 20, max 200)"),
+		),
+	)
+}
+
+func toolSessionStart() mcp.Tool {
+	return mcp.NewTool("domain_session_start",
+		mcp.WithDescription("Inicia una nueva session (agrupador de observations) opcionalmente scoped a un project."),
+		mcp.WithString("title",
+			mcp.Description("Título descriptivo de la sesión"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project (opcional)"),
+		),
+		mcp.WithArray("tags",
+			mcp.Description("Tags opcionales"),
+			mcp.Items(map[string]any{"type": "string"}),
+		),
+	)
+}
+
+func toolSessionEnd() mcp.Tool {
+	return mcp.NewTool("domain_session_end",
+		mcp.WithDescription("Finaliza una session activa con un resumen opcional."),
+		mcp.WithString("session_id",
+			mcp.Description("UUID de la session"),
+			mcp.Required(),
+		),
+		mcp.WithString("summary",
+			mcp.Description("Resumen de lo realizado en la sesión"),
+		),
+	)
+}
+
+func toolSessionActive() mcp.Tool {
+	return mcp.NewTool("domain_session_active",
+		mcp.WithDescription("Devuelve la session activa del user actual (opcional: filtrar por project)."),
+		mcp.WithString("project_slug",
+			mcp.Description("Filtrar por project (opcional)"),
 		),
 	)
 }
@@ -255,6 +299,93 @@ func (d *Deps) handleMemContext(ctx context.Context, req mcp.CallToolRequest) (*
 		"results":      out,
 		"count":        len(out),
 	})
+}
+
+func (d *Deps) handleSessionStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Sessions == nil {
+		return mcp.NewToolResultError("session service no configurado"), nil
+	}
+	args := req.GetArguments()
+	title, _ := args["title"].(string)
+	if title == "" {
+		return mcp.NewToolResultError("title requerido"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+
+	var projectID *uuid.UUID
+	if slug, _ := args["project_slug"].(string); slug != "" {
+		proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+		}
+		projectID = &proj.ID
+	}
+	var tags []string
+	if v, ok := args["tags"].([]any); ok {
+		for _, t := range v {
+			if s, ok := t.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	}
+	sess, err := d.Sessions.Start(ctx, sesssvc.StartInput{
+		OrganizationID: orgID, UserID: userID, ProjectID: projectID, Title: title, Tags: tags,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("start: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"id":         sess.ID.String(),
+		"started_at": sess.StartedAt,
+		"status":     sess.Status(),
+	})
+}
+
+func (d *Deps) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Sessions == nil {
+		return mcp.NewToolResultError("session service no configurado"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["session_id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("session_id inválido (UUID requerido)"), nil
+	}
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	summary, _ := args["summary"].(string)
+	sess, err := d.Sessions.End(ctx, id, userID, summary)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("end: %v", err)), nil
+	}
+	if sess.OrganizationID.String() != d.Principal.OrganizationID {
+		return mcp.NewToolResultError("not found"), nil
+	}
+	return toolResultJSON(sess)
+}
+
+func (d *Deps) handleSessionActive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Sessions == nil {
+		return mcp.NewToolResultError("session service no configurado"), nil
+	}
+	args := req.GetArguments()
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+
+	var projectID uuid.UUID
+	if slug, _ := args["project_slug"].(string); slug != "" {
+		proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+		}
+		projectID = proj.ID
+	}
+	sess, err := d.Sessions.GetActive(ctx, userID, projectID)
+	if err != nil {
+		// No hay sesión activa: devolvemos null en lugar de error
+		return toolResultJSON(nil)
+	}
+	return toolResultJSON(sess)
 }
 
 func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

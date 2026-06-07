@@ -19,6 +19,7 @@ import (
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
@@ -27,6 +28,7 @@ type API struct {
 	ProjectService *projsvc.Service
 	ObsService     *observation.Service
 	InviteService  *invite.Service
+	SessionService *sesssvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -67,6 +69,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/observations/{id}", a.deleteObservation)
 	mux.HandleFunc("GET /api/v1/observations", a.listObservations) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/search", a.searchObservations)     // ?q=
+
+	// Sessions
+	mux.HandleFunc("POST /api/v1/sessions", a.startSession)
+	mux.HandleFunc("GET /api/v1/sessions", a.listSessions)
+	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
+	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
+	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
 
 	return mux
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/saargo/domain/internal/service/observation"
 	orgsvc "github.com/saargo/domain/internal/service/org"
 	projsvc "github.com/saargo/domain/internal/service/project"
+	sesssvc "github.com/saargo/domain/internal/service/session"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -171,6 +172,7 @@ func runServer() {
 		Pool: pools.App, Audit: recorder, Mailer: invite.NopMailer{},
 		AcceptURL: "https://app.domain.sh/accept",
 	}
+	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -181,6 +183,7 @@ func runServer() {
 		ProjectService: projectService,
 		ObsService:     obsService,
 		InviteService:  inviteService,
+		SessionService: sessionService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

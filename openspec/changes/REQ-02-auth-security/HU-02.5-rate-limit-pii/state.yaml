@@ -1,3 +1,17 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/auth/ratelimit: token bucket per key con refill rate configurable,
+  Allow/AllowN/Tokens/RetryAfter/Cleanup/Size. Thread-safe (mu.Lock). Clock
+  inyectable para tests determinísticos. Bucket map en memoria; cross-pod
+  futuro vía Postgres-backed (HU-26 horizontal-scalability).
+  internal/security/pii: regex-based redactor para email/rut/api_key/bearer/
+  phone Chile/credit-card. Redact/ContainsPII/RedactMap/RedactHeader con
+  whitelist headers sensibles (Authorization, Cookie, X-Api-Key, etc.).
+  Regex RUT strict: requiere guión obligatorio para evitar matchear UUIDs.
+  Tests: 11 unit ratelimit + 2 sabotaje (NoFreeTokens, ConcurrencySafety),
+  14 unit pii + 2 sabotaje (EmailWithPlusTag detecta, NoFalsePositives UUIDs/timestamps).
+  Pending: middleware HTTP rate-limit integration, wire en handlers OTP/auth
+  con keys por (identifier, IP), persistencia cross-pod via DB.

@@ -15,6 +15,7 @@ import (
 
 	"github.com/saargo/domain/internal/auth/apikey"
 	"github.com/saargo/domain/internal/auth/otp"
+	agentsvc "github.com/saargo/domain/internal/service/agent"
 	"github.com/saargo/domain/internal/service/invite"
 	"github.com/saargo/domain/internal/service/knowledge"
 	"github.com/saargo/domain/internal/service/observation"
@@ -39,6 +40,7 @@ type API struct {
 	SearchService    *searchsvc.Service
 	KnowledgeService *knowledge.Service
 	SkillService     *skillsvc.Service
+	AgentService     *agentsvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -86,6 +88,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+
+	// Agents
+	mux.HandleFunc("POST /api/v1/agents", a.createAgent)
+	mux.HandleFunc("GET /api/v1/agents", a.listAgents)
+	mux.HandleFunc("GET /api/v1/agents/{id}", a.getAgent)
+	mux.HandleFunc("PATCH /api/v1/agents/{id}", a.updateAgent)
+	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
 
 	// Skills
 	mux.HandleFunc("POST /api/v1/skills", a.createSkill)

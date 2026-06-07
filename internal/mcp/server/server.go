@@ -22,6 +22,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"github.com/saargo/domain/internal/auth/apikey"
+	agentsvc "github.com/saargo/domain/internal/service/agent"
 	knowsvc "github.com/saargo/domain/internal/service/knowledge"
 	obssvc "github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
@@ -42,6 +43,7 @@ type Deps struct {
 	Search       *searchsvc.Service
 	Knowledge    *knowsvc.Service
 	Skills       *skillsvc.Service
+	Agents       *agentsvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -70,6 +72,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolSkillList(), Handler: deps.handleSkillList},
 		{Tool: toolSkillSearch(), Handler: deps.handleSkillSearch},
 		{Tool: toolSkillGet(), Handler: deps.handleSkillGet},
+		{Tool: toolAgentList(), Handler: deps.handleAgentList},
+		{Tool: toolAgentGet(), Handler: deps.handleAgentGet},
 	}
 }
 
@@ -243,6 +247,27 @@ func toolGlobalSearch() mcp.Tool {
 		mcp.WithArray("tags",
 			mcp.Description("Tags requeridos (AND)"),
 			mcp.Items(map[string]any{"type": "string"}),
+		),
+	)
+}
+
+func toolAgentList() mcp.Tool {
+	return mcp.NewTool("domain_agent_list",
+		mcp.WithDescription("Lista los agents disponibles en la org."),
+		mcp.WithNumber("limit",
+			mcp.Description("Máximo resultados (default 50)"),
+		),
+	)
+}
+
+func toolAgentGet() mcp.Tool {
+	return mcp.NewTool("domain_agent_get",
+		mcp.WithDescription("Recupera detalle de un agent por id o slug."),
+		mcp.WithString("id",
+			mcp.Description("UUID del agent (opcional si se pasa slug)"),
+		),
+		mcp.WithString("slug",
+			mcp.Description("Slug del agent (opcional si se pasa id)"),
 		),
 	)
 }
@@ -706,6 +731,54 @@ func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) 
 		"results": results,
 		"count":   len(results),
 	})
+}
+
+func (d *Deps) handleAgentList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Agents == nil {
+		return mcp.NewToolResultError("agent service no configurado"), nil
+	}
+	args := req.GetArguments()
+	limit := 50
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	out, err := d.Agents.List(ctx, orgID, limit)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+}
+
+func (d *Deps) handleAgentGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Agents == nil {
+		return mcp.NewToolResultError("agent service no configurado"), nil
+	}
+	args := req.GetArguments()
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	if idStr, _ := args["id"].(string); idStr != "" {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return mcp.NewToolResultError("id inválido"), nil
+		}
+		ag, err := d.Agents.GetByID(ctx, id)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
+		}
+		if ag.OrganizationID != orgID {
+			return mcp.NewToolResultError("not found"), nil
+		}
+		return toolResultJSON(ag)
+	}
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return mcp.NewToolResultError("id o slug requerido"), nil
+	}
+	ag, err := d.Agents.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
+	}
+	return toolResultJSON(ag)
 }
 
 func (d *Deps) handleSkillList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

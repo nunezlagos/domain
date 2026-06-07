@@ -1,0 +1,214 @@
+//go:build integration
+
+package agent_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/saargo/domain/internal/audit"
+	"github.com/saargo/domain/internal/db"
+	"github.com/saargo/domain/internal/llm"
+	dmigrate "github.com/saargo/domain/internal/migrate"
+	"github.com/saargo/domain/internal/service/agent"
+	orgsvc "github.com/saargo/domain/internal/service/org"
+	"github.com/saargo/domain/internal/service/skill"
+)
+
+type fix struct {
+	svc    *agent.Service
+	skills *skill.Service
+	orgID  uuid.UUID
+	userID uuid.UUID
+}
+
+func setup(t *testing.T) (*fix, func()) {
+	t.Helper()
+	ctx := context.Background()
+	pgC, err := postgres.Run(ctx,
+		"pgvector/pgvector:pg16",
+		postgres.WithDatabase("test"),
+		postgres.WithUsername("test"),
+		postgres.WithPassword("test"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2),
+		),
+	)
+	require.NoError(t, err)
+	dsn, _ := pgC.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, dmigrate.Up(dsn))
+
+	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
+	require.NoError(t, err)
+
+	rec := &audit.PGRecorder{Pool: pools.Auth}
+	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
+	org, owner, _ := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+
+	svc := &agent.Service{Pool: pools.App, Audit: rec}
+	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	return &fix{svc: svc, skills: skillSvc, orgID: org.ID, userID: owner.UserID}, func() {
+		pools.Close()
+		_ = pgC.Terminate(ctx)
+	}
+}
+
+func TestAgent_Create(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, err := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID,
+		Slug:           "code-reviewer",
+		Name:           "Code Reviewer",
+		Description:    "revisa código y sugiere mejoras",
+		Provider:       "anthropic",
+		Model:          "claude-sonnet-4-6",
+		SystemPrompt:   "Eres un revisor de código senior.",
+		ActorID:        f.userID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "code-reviewer", a.Slug)
+	require.Equal(t, "anthropic", a.Provider)
+	require.Equal(t, 20, a.MaxIterations)
+}
+
+func TestAgent_Create_InvalidProvider(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	_, err := f.svc.Create(context.Background(), agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "x", Name: "x", Provider: "fake_provider",
+		Model: "x", ActorID: f.userID,
+	})
+	require.ErrorIs(t, err, agent.ErrProviderInvalid)
+}
+
+func TestAgent_Create_WithValidSkills(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Crear skill primero
+	_, err := f.skills.Create(ctx, skill.CreateInput{
+		OrganizationID: f.orgID, Slug: "review-code",
+		Name: "review", Description: "rev", SkillType: skill.TypePrompt,
+		Content: "x", ActorID: f.userID,
+	})
+	require.NoError(t, err)
+
+	a, err := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "agent-with-skills",
+		Name: "X", Provider: "anthropic", Model: "claude-sonnet-4-6",
+		SkillsSlugs: []string{"review-code"}, ActorID: f.userID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"review-code"}, a.SkillsSlugs)
+}
+
+func TestAgent_Create_RejectsUnknownSkills(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	_, err := f.svc.Create(context.Background(), agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "x", Name: "x",
+		Provider: "anthropic", Model: "claude-sonnet-4-6",
+		SkillsSlugs: []string{"no-existe"}, ActorID: f.userID,
+	})
+	require.ErrorIs(t, err, agent.ErrSkillNotFound)
+}
+
+func TestAgent_Create_SlugTaken(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "dup", Name: "X",
+		Provider: "anthropic", Model: "m", ActorID: f.userID,
+	})
+	require.NoError(t, err)
+	_, err = f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "dup", Name: "Y",
+		Provider: "openai", Model: "m2", ActorID: f.userID,
+	})
+	require.ErrorIs(t, err, agent.ErrSlugTaken)
+}
+
+func TestAgent_GetBySlug(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, _ := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "get", Name: "X",
+		Provider: "anthropic", Model: "m", ActorID: f.userID,
+	})
+	got, err := f.svc.GetBySlug(ctx, f.orgID, "get")
+	require.NoError(t, err)
+	require.Equal(t, a.ID, got.ID)
+}
+
+func TestAgent_Update_Model(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, _ := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "u", Name: "X",
+		Provider: "anthropic", Model: "claude-sonnet-4-6", ActorID: f.userID,
+	})
+	newModel := "claude-opus-4-7"
+	upd, err := f.svc.Update(ctx, a.ID, agent.UpdateInput{
+		Model: &newModel, ActorID: f.userID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "claude-opus-4-7", upd.Model)
+}
+
+func TestAgent_List(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, _ = f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "a", Name: "X",
+		Provider: "anthropic", Model: "m", ActorID: f.userID,
+	})
+	_, _ = f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "b", Name: "Y",
+		Provider: "openai", Model: "m2", ActorID: f.userID,
+	})
+	list, err := f.svc.List(ctx, f.orgID, 10)
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+}
+
+func TestAgent_SoftDelete(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, _ := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "del", Name: "X",
+		Provider: "anthropic", Model: "m", ActorID: f.userID,
+	})
+	require.NoError(t, f.svc.SoftDelete(ctx, a.ID, f.userID))
+	_, err := f.svc.GetByID(ctx, a.ID)
+	require.ErrorIs(t, err, agent.ErrNotFound)
+}
+
+// Sabotaje: actualizar agente para asignar skill no existente debe fallar
+// (validación de skills al Update también).
+func TestSabotage_Agent_UpdateRejectsBadSkill(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, _ := f.svc.Create(ctx, agent.CreateInput{
+		OrganizationID: f.orgID, Slug: "s", Name: "X",
+		Provider: "anthropic", Model: "m", ActorID: f.userID,
+	})
+	_, err := f.svc.Update(ctx, a.ID, agent.UpdateInput{
+		SkillsSlugs: []string{"fantasma"}, ActorID: f.userID,
+	})
+	require.ErrorIs(t, err, agent.ErrSkillNotFound)
+}

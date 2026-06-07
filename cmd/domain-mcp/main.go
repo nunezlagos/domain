@@ -26,6 +26,7 @@ import (
 	"github.com/saargo/domain/internal/db"
 	"github.com/saargo/domain/internal/llm"
 	mcpserver "github.com/saargo/domain/internal/mcp/server"
+	agentsvc "github.com/saargo/domain/internal/service/agent"
 	"github.com/saargo/domain/internal/service/knowledge"
 	"github.com/saargo/domain/internal/service/observation"
 	projsvc "github.com/saargo/domain/internal/service/project"
@@ -90,6 +91,7 @@ func main() {
 	search := &searchsvc.Service{Pool: pools.App}
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	agents := &agentsvc.Service{Pool: pools.App, Audit: recorder}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
@@ -100,6 +102,7 @@ func main() {
 		Search:       search,
 		Knowledge:    knowledgeSvc,
 		Skills:       skills,
+		Agents:       agents,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

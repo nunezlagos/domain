@@ -1,3 +1,43 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/service/agent.Service CRUD sobre tabla agents (migration 000012):
+  - Create: valida slug, name, model required, provider en whitelist
+    (anthropic/openai/google/ollama), valida que TODOS los skills_slugs
+    referenciados existan en la org (defense in depth — la tabla no tiene
+    FK array para skills, validamos en service).
+  - Update: re-valida skills si se modifican; provider si se cambia.
+    Marca is_user_modified si era seed_managed.
+  - GetByID, GetBySlug, List, SoftDelete con audit log.
+
+  HTTP handlers:
+  - POST   /api/v1/agents
+  - GET    /api/v1/agents       ?limit=
+  - GET    /api/v1/agents/{id}
+  - PATCH  /api/v1/agents/{id}
+  - DELETE /api/v1/agents/{id}
+
+  MCP tools:
+  - domain_agent_list(limit?)
+  - domain_agent_get(id?, slug?)
+
+  Tests integration (10 escenarios + 1 sabotaje):
+  - Create básico (provider anthropic, model claude-sonnet-4-6)
+  - InvalidProvider rechazado
+  - Create con skill referenciado válido
+  - RejectsUnknownSkills cuando slug no existe en org
+  - SlugTaken
+  - GetBySlug
+  - Update model
+  - List
+  - SoftDelete
+  - sabotaje Update con skill_slug fantasma → ErrSkillNotFound
+
+  Pending (futuras HUs REQ-08):
+  - HU-08.2 agent execution runtime
+  - HU-08.3 agent_runs + logs (tabla migration 15 lista)
+  - HU-08.4+ multi-agent orchestration (supervisor/handoff/parallel/hierarchical)
+  - HU-08.5 agent_templates + agent_personalities (sustituye HU-01.9 deprecada)
+  - HU-12.3 MCP tools de agente (domain_agent_run, domain_agent_skills, etc.)

@@ -1,0 +1,28 @@
+apiVersion: v2
+name: domain
+description: |
+  Domain — plataforma de memoria + orquestación de agents IA.
+  Postgres-only (pgvector) + MCP server stdio + HTTP API.
+type: application
+version: 0.1.0           # chart SemVer (independiente de app)
+appVersion: "0.0.0-dev"   # se actualiza por release CI
+
+home: https://github.com/nunezlagos/domain
+sources:
+  - https://github.com/nunezlagos/domain
+
+keywords:
+  - ai
+  - memory
+  - agents
+  - mcp
+  - rag
+  - postgres
+
+maintainers:
+  - name: Domain Team
+    email: mnunez@saargo.com
+
+annotations:
+  category: AI/Memory
+  licenses: proprietary

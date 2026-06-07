@@ -35,7 +35,9 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
+	cronsched "nunezlagos/domain/internal/scheduler/cron"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
@@ -251,6 +253,17 @@ func runServer() {
 		Agents: agentService, Skills: skillService, Observations: obsService,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
+
+	// Cron scheduler (HU-10.1): poll cada 30s
+	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
+	scheduler := &cronsched.Scheduler{
+		Crons: cronService, Agents: agentRunnerInst, Flows: flowRunnerInst,
+		SkillRunner: skillRunnerInst, Skills: skillService,
+		Audit: recorder, Logger: logger,
+	}
+	schedCtx, schedCancel := context.WithCancel(context.Background())
+	go scheduler.Run(schedCtx)
+	defer schedCancel()
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)

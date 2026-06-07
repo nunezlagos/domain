@@ -1,3 +1,12 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Migration 000025 crea 4 roles (app_user NOBYPASSRLS, app_admin BYPASSRLS,
+  app_migrator DDL, app_readonly SELECT) con grants per-tabla y DEFAULT
+  PRIVILEGES sobre futuras tablas. REVOKE CREATE ON SCHEMA public FROM PUBLIC.
+  7 integration tests TDD verificando matrix permisos + sabotaje TRUNCATE.
+  Passwords se setean post-deploy (no en migration por seguridad).
+  Pending: connection routing apps por rol vía DSN per-role + secret rotation
+  (parte HU-25.10).

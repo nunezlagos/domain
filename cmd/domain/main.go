@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"nunezlagos/domain/internal/api/handler"
+	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/otp"
@@ -296,9 +297,11 @@ func runServer() {
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
 	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
 
-	// API REST montada bajo /api/v1/* con auth middleware aplicada selectivamente.
+	// API REST montada bajo /api/v1/*.
+	// Middleware order: auth → idempotency → handler.
 	authMW := &apikey.Middleware{Resolver: apiKeyStore, Allowlist: handler.AuthAllowlist()}
-	mux.Handle("/api/", authMW.Wrap(api.Router()))
+	idempMW := &middleware.Idempotency{Pool: pools.App}
+	mux.Handle("/api/", authMW.Wrap(idempMW.Wrap(api.Router())))
 
 	// Aplica metrics middleware al mux principal (todos los handlers se cuentan)
 	handler := metricsReg.HTTPMiddleware(mux)

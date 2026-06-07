@@ -1,3 +1,16 @@
-status: proposed
-created: 2026-06-06
+status: partially_implemented
+created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/auth/otp + internal/auth/rut completos.
+  Migration 000026 otp_codes + users.rut/last_login_at/last_organization_id.
+  Service.Request: anti-enumeration (ErrUserNotFound interno, response 200 fake al
+  cliente), genera código 6 dígitos crypto/rand, bcrypt cost 10, persiste con TTL
+  configurable (default 10min), envía via Mailer interface (HU-20.2 plug).
+  Service.Verify: SELECT FOR UPDATE tx, max_attempts enforcement, expired check,
+  attempts increment en wrong code, mark used_at + update last_login_at en éxito.
+  RUT lookup via UserLookup.ByRUT + email lookup via ByEmail.
+  Tests: 6 unit + 8 integration + 1 sabotaje brute-force blocked.
+  Pending: HTTP handlers /auth/request-otp + /auth/verify-otp (cuando se monten),
+  wire al Mailer real (HU-20.2 email-smtp), rate-limit per identifier/IP (HU-02.5).

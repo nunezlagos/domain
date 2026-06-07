@@ -26,6 +26,7 @@ import (
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
 // Deps colecciona las dependencias del servidor MCP.
@@ -34,6 +35,7 @@ type Deps struct {
 	Projects     *projsvc.Service
 	Sessions     *sesssvc.Service
 	Prompts      *promptsvc.Service
+	Timeline     *timelinesvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -53,6 +55,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolSessionActive(), Handler: deps.handleSessionActive},
 		{Tool: toolPromptGet(), Handler: deps.handlePromptGet},
 		{Tool: toolPromptSearch(), Handler: deps.handlePromptSearch},
+		{Tool: toolContext(), Handler: deps.handleContext},
+		{Tool: toolTimeline(), Handler: deps.handleTimeline},
 	}
 }
 
@@ -180,6 +184,31 @@ func toolPromptSearch() mcp.Tool {
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("Máximo resultados (default 20)"),
+		),
+	)
+}
+
+func toolContext() mcp.Tool {
+	return mcp.NewTool("domain_context_snapshot",
+		mcp.WithDescription("Devuelve snapshot del contexto: active_session + recientes (sessions, observations, prompts) para un project."),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project (opcional; vacío = scope org-wide)"),
+		),
+	)
+}
+
+func toolTimeline() mcp.Tool {
+	return mcp.NewTool("domain_timeline",
+		mcp.WithDescription("Vecindario cronológico de una observation: N entradas antes y después incluyendo observations + prompts del mismo project."),
+		mcp.WithString("observation_id",
+			mcp.Description("UUID de la observation ancla"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("before",
+			mcp.Description("Entradas anteriores (default 3, max 50)"),
+		),
+		mcp.WithNumber("after",
+			mcp.Description("Entradas posteriores (default 3, max 50)"),
 		),
 	)
 }
@@ -465,6 +494,54 @@ func (d *Deps) handlePromptSearch(ctx context.Context, req mcp.CallToolRequest) 
 		"results": results,
 		"count":   len(results),
 	})
+}
+
+func (d *Deps) handleContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Timeline == nil {
+		return mcp.NewToolResultError("timeline service no configurado"), nil
+	}
+	args := req.GetArguments()
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	var projectID uuid.UUID
+	if ps, _ := args["project_slug"].(string); ps != "" {
+		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
+		}
+		projectID = proj.ID
+	}
+	snap, err := d.Timeline.Context(ctx, orgID, userID, projectID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("context: %v", err)), nil
+	}
+	return toolResultJSON(snap)
+}
+
+func (d *Deps) handleTimeline(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Timeline == nil {
+		return mcp.NewToolResultError("timeline service no configurado"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["observation_id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("observation_id inválido"), nil
+	}
+	before := 3
+	after := 3
+	if v, ok := args["before"].(float64); ok {
+		before = int(v)
+	}
+	if v, ok := args["after"].(float64); ok {
+		after = int(v)
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	entries, err := d.Timeline.Timeline(ctx, orgID, id, before, after)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("timeline: %v", err)), nil
+	}
+	return toolResultJSON(entries)
 }
 
 func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

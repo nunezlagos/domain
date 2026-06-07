@@ -1,3 +1,48 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/service/timeline.Service combina sessions + observations + prompts
+  en respuestas estructuradas para que un agente pueda recuperar contexto
+  sin múltiples roundtrips.
+
+  Context(orgID, userID, projectID) → Snapshot:
+  - ActiveSession: la sesión activa del user (filtrada por project si != Nil)
+  - RecentSessions: últimas 5 sesiones COMPLETED
+  - RecentObservations: últimas 10
+  - RecentPrompts: últimos 5 activos
+  Si projectID == uuid.Nil: scope org-wide cross-project.
+
+  Timeline(orgID, observationID, before, after) → []Entry:
+  - Lookup del anchor (con cross-org guard: si orgID no coincide → NotFound)
+  - SQL UNION ALL de observations + prompts del mismo project
+  - Filtrado WHERE created_at < (o >) anchor.created_at + LIMIT por dirección
+  - Sort cronológico ASC con anchor included en orden
+  - Caps: before/after entre 0..50
+
+  Entry tiene Kind (session|observation|prompt), ID, Title, Preview (truncado
+  a 200 chars), CreatedAt, ProjectID, UserID.
+
+  HTTP handlers:
+  - GET /api/v1/context                              ?project_slug=
+  - GET /api/v1/observations/{id}/timeline           ?before= &after=
+
+  MCP tools (prefix domain_*):
+  - domain_context_snapshot(project_slug?)
+  - domain_timeline(observation_id, before?, after?)
+
+  Tests integration (5 escenarios + 1 sabotaje):
+  - Snapshot vacío inicial
+  - Snapshot populated con active session + obs + prompt
+  - Timeline anchor mid-stream: 2 before + anchor + 2 after = 5 entries
+  - Timeline anchor at start: 0 before + anchor + 1 after = 2 entries
+  - Anchor not found → ErrObservationNotFound
+  - sabotaje cross-org anchor lookup: orgID distinto → ErrObservationNotFound
+
+  Pending:
+  - Scope filter (project | personal | global) — model conceptual no claro
+    en schema actual; pending diseño
+  - Headline/snippets de búsqueda full-text con query optional
+  - Formato "estructurado para consumo de agente" (Markdown rendering)
+    pending HU específica

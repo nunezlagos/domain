@@ -31,6 +31,7 @@ import (
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -175,6 +176,7 @@ func runServer() {
 	}
 	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
+	timelineService := &timelinesvc.Service{Pool: pools.App}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -185,8 +187,9 @@ func runServer() {
 		ProjectService: projectService,
 		ObsService:     obsService,
 		InviteService:  inviteService,
-		SessionService: sessionService,
-		PromptService:  promptService,
+		SessionService:  sessionService,
+		PromptService:   promptService,
+		TimelineService: timelineService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

@@ -30,6 +30,7 @@ import (
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
 var (
@@ -82,12 +83,14 @@ func main() {
 	}
 	sessions := &sesssvc.Service{Pool: pools.App, Audit: recorder}
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
+	timeline := &timelinesvc.Service{Pool: pools.App}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
 		Projects:     projects,
 		Sessions:     sessions,
 		Prompts:      prompts,
+		Timeline:     timeline,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

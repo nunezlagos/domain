@@ -21,6 +21,7 @@ import (
 	projsvc "github.com/saargo/domain/internal/service/project"
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
@@ -29,8 +30,9 @@ type API struct {
 	ProjectService *projsvc.Service
 	ObsService     *observation.Service
 	InviteService  *invite.Service
-	SessionService *sesssvc.Service
-	PromptService  *promptsvc.Service
+	SessionService  *sesssvc.Service
+	PromptService   *promptsvc.Service
+	TimelineService *timelinesvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -78,6 +80,10 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+
+	// Context + Timeline (cross-entity feeds)
+	mux.HandleFunc("GET /api/v1/context", a.getContext)                          // ?project_slug=
+	mux.HandleFunc("GET /api/v1/observations/{id}/timeline", a.getTimeline)      // ?before= &after=
 
 	// Prompts (templates versionados)
 	mux.HandleFunc("POST /api/v1/prompts", a.createPrompt)

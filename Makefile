@@ -13,7 +13,9 @@ env: ## Copia .env.example a .env si no existe
 	@if [ ! -f .env ]; then cp .env.example .env && echo "Created .env from .env.example. Adjust as needed."; else echo ".env ya existe; no se sobrescribe."; fi
 
 dev-up: env ## Levanta stack dev (Postgres + MinIO + Adminer + Mailpit)
-	docker compose up -d --wait
+	docker compose up -d
+	@echo "Esperando servicios long-running healthy (timeout 90s)..."
+	@docker compose up -d --wait --wait-timeout 90 postgres minio adminer mailpit
 	@echo ""
 	@echo "Stack ready:"
 	@echo "  Postgres:       127.0.0.1:5432"

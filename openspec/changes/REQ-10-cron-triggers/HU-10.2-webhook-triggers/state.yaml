@@ -1,3 +1,44 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/service/webhook.Service usando schema migration 17.
+
+  Features:
+  - Create webhook: valida slug + source_type whitelist
+    (generic|github|gitlab|bitbucket) + target_type whitelist
+    (flow|agent|skill). Cifra secret con crypto.Cipher AES-GCM at-rest.
+  - ResolveBySlug(slug): lookup + descifra secret
+  - VerifyHMAC(secret, body, sig): hmac.Equal compare (constant-time)
+  - RecordDelivery: persiste cada delivery en webhook_deliveries
+    (audit completo: payload + headers + source_ip + status + triggered_run_id)
+
+  HTTP handler POST /api/v1/webhooks/{slug}/receive:
+  - Endpoint público (AuthAllowlist con prefix /api/v1/webhooks/*)
+  - Verify HMAC según source_type:
+    * github: X-Hub-Signature-256 sha256=hex
+    * gitlab: X-Gitlab-Token comparison
+    * bitbucket: pending (no firma por default)
+    * generic: X-Domain-Signature sha256=hex
+  - Si firma inválida → 401 + status=signature_invalid en webhook_deliveries
+  - Si OK: 202 Accepted + dispatch en goroutine (no bloquea cliente)
+  - Body cap 5MB (LimitReader)
+
+  Inputs mapping JSONPath simple ($.field.path):
+  - inputs_mapping config {"input": "$.pull_request.title", ...}
+  - extrae values del payload JSON al construir inputs del target
+
+  Allowlist middleware extendido para soportar prefix "/*"
+  (e.g. "/api/v1/webhooks/*" salta auth Bearer).
+
+  Wire en cmd/domain server: pending. El servicio require crypto.Cipher con
+  master key (HU-02.3). Cuando se configure DOMAIN_MASTER_KEY env var,
+  agregar a API.WebhookService.
+
+  Pending:
+  - HU-10.4 outbound webhooks (notificar URL al completar agent_run/flow_run)
+  - Tests E2E con mock HMAC signature
+  - Replay protection con nonces (defense contra captura+resend)
+  - Allowlist IPs por source_type (e.g. GitHub IP ranges)
+  - HTTP CRUD endpoints /api/v1/webhooks (admin UI)

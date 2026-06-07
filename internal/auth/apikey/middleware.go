@@ -46,9 +46,15 @@ type Middleware struct {
 // ServeHTTP wraps next con check de auth.
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allowlist
+		// Allowlist: match exacto o prefix con trailing "/*"
 		for _, p := range m.Allowlist {
-			if r.URL.Path == p {
+			if strings.HasSuffix(p, "/*") {
+				prefix := strings.TrimSuffix(p, "/*")
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			} else if r.URL.Path == p {
 				next.ServeHTTP(w, r)
 				return
 			}

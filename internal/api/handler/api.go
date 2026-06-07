@@ -30,6 +30,7 @@ import (
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	webhooksvc "nunezlagos/domain/internal/service/webhook"
 )
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
@@ -49,6 +50,7 @@ type API struct {
 	AgentRunner      *agentrunner.Runner
 	FlowService      *flow.Service
 	FlowRunner       *flowrunner.Runner
+	WebhookService   *webhooksvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -113,6 +115,9 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow)
 	mux.HandleFunc("POST /api/v1/flows/{id}/run", a.runFlow)
 
+	// Webhooks inbound (público, HMAC auth — slug + secret en config)
+	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
+
 	// Skills
 	mux.HandleFunc("POST /api/v1/skills", a.createSkill)
 	mux.HandleFunc("GET /api/v1/skills", a.listSkills)       // ?type= &tag= &limit=
@@ -148,6 +153,7 @@ func (a *API) Router() http.Handler {
 }
 
 // Allowlist paths que skipean auth (definida en uno solo lugar para evitar drift).
+// Sufijo "/*" hace prefix match (e.g. webhooks autenticados por HMAC).
 func AuthAllowlist() []string {
 	return []string{
 		"/health",
@@ -155,6 +161,7 @@ func AuthAllowlist() []string {
 		"/health/startup",
 		"/api/v1/auth/request-otp",
 		"/api/v1/auth/verify-otp",
+		"/api/v1/webhooks/*", // webhooks usan HMAC, no Bearer
 		"/metrics",
 	}
 }

@@ -36,6 +36,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -208,6 +209,7 @@ func runServer() {
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
 	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
 	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agentService := &agentsvc.Service{Pool: pools.App, Audit: recorder}
 	billingService := &billing.Service{Pool: pools.App}
@@ -255,6 +257,7 @@ func runServer() {
 		TimelineService:  timelineService,
 		SearchService:    searchService,
 		KnowledgeService: knowledgeService,
+		LifecycleService: lifecycleService,
 		SkillService:     skillService,
 		AgentService:     agentService,
 		AgentRunner:      agentRunnerInst,

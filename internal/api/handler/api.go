@@ -19,6 +19,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -40,6 +41,7 @@ type API struct {
 	TimelineService  *timelinesvc.Service
 	SearchService    *searchsvc.Service
 	KnowledgeService *knowledge.Service
+	LifecycleService *lifecycle.Service
 	SkillService     *skillsvc.Service
 	AgentService     *agentsvc.Service
 	AgentRunner      *agentrunner.Runner
@@ -106,6 +108,10 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/skills/{id}", a.getSkill)
 	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", a.deleteSkill)
+
+	// Lifecycle (HU-23.2 restore + HU-23.3 GDPR export)
+	mux.HandleFunc("POST /api/v1/restore", a.restoreEntity)
+	mux.HandleFunc("GET /api/v1/me/export", a.exportMyData)
 
 	// Knowledge documents
 	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)

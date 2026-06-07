@@ -11,7 +11,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"nunezlagos/domain/internal/api/handler"
@@ -300,6 +302,23 @@ func runServer() {
 		ReadTimeout:  time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
 	}
+
+	// Graceful shutdown (HU-26.4): trap SIGINT/SIGTERM, drain in-flight
+	// requests con timeout 30s. K8s envía SIGTERM antes del kill -9 (default 30s).
+	shutdownCh := make(chan os.Signal, 1)
+	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-shutdownCh
+		logger.Info("shutdown signal received, draining...", slog.String("signal", sig.String()))
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("forced shutdown after timeout", slog.Any("err", err))
+		} else {
+			logger.Info("graceful shutdown complete")
+		}
+	}()
+
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("server failed", slog.Any("err", err))
 		os.Exit(1)

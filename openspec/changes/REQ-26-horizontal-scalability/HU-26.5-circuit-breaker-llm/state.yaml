@@ -1,3 +1,31 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/llm/circuitbreaker.Breaker wraps llm.Provider.
+
+  3 estados: Closed | Open | HalfOpen
+  - Closed: requests pasan, contador failures incrementa
+  - Open: requests rechazadas (ErrCircuitOpen). Espera RecoveryTimeout
+    (default 30s) → HalfOpen
+  - HalfOpen: 1 request probe; OK → Closed; Fail → Open
+
+  Config:
+  - FailureThreshold: 5 consecutivos por default
+  - RecoveryTimeout: 30s default
+
+  IMPORTANTE: success en cualquier momento resetea counter (no abre con
+  failures intermitentes intercalados con éxitos).
+
+  Tests unit (5 escenarios + 1 sabotaje):
+  - StaysClosedOnSuccess
+  - OpensAfterThreshold + no invoca provider mientras Open
+  - RecoversThroughHalfOpen tras RecoveryTimeout
+  - HalfOpenFailureReopens
+  - sabotaje: intermitencias NO abren breaker (necesita N consecutivos)
+
+  Pending wire en cmd/domain:
+  - Wrap llmFactory providers con circuitbreaker.New() al boot
+  - Métricas Prometheus: domain_llm_breaker_state{provider="anthropic"}
+  - Alert cuando Open dura > N min

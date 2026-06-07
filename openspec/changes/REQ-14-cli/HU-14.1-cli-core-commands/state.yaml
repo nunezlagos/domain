@@ -1,3 +1,37 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  CLI commands extendidos en internal/cli/{client,commands,output}/.
+
+  Estructura: domain <resource> <action> [args] [flags]
+
+  Recursos implementados:
+  - projects: ls, get <slug>, create <slug> <name>
+  - observations (alias obs): ls --project, save --project <content>
+  - agents: ls, get <id>, run <id> <input>
+  - flows: ls, run <id>
+  - skills: ls [--type X] [--tag Y]
+  - search: <query> [--limit N] [--type csv]
+  - context: [--project <slug>]
+  - completion: bash|zsh|fish (genera shell completion script)
+
+  Output formats:
+  - --format json: JSON indented
+  - --format table (default): tabwriter con columnas priorizadas
+    (id, slug, name, status, *_at)
+  - Trunca celdas > 50 chars con "..."
+
+  Cliente HTTP minimalista (internal/cli/client) usando net/http stdlib.
+  Lee DOMAIN_API_KEY + DOMAIN_BASE_URL del env. Traduce HTTP errors a
+  mensajes con code + message.
+
+  CLI integrado en cmd/domain main.go switch case (delega a
+  clicommands.Dispatch). printUsage actualizado con todos los comandos.
+
+  Pending:
+  - HU-14.2 output yaml + --quiet flag
+  - HU-14.3 autocomplete con sugerencias dinámicas (no solo static script)
+  - --config flag para apuntar a archivo de credenciales (ej ~/.domain/config.yaml)
+  - Tests E2E del CLI invocando binario contra mock server

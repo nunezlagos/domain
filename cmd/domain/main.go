@@ -19,6 +19,7 @@ import (
 	"nunezlagos/domain/internal/api/handler"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/audit"
+	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/config"
@@ -78,6 +79,9 @@ func main() {
 		runServer()
 	case "healthcheck":
 		runHealthcheckProbe()
+	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion":
+		// Delegar a CLI commands (REQ-14)
+		os.Exit(clicommands.Dispatch(os.Args[1:]))
 	default:
 		fmt.Fprintf(os.Stderr, "comando no implementado: %s\n", os.Args[1])
 		printUsage()
@@ -91,16 +95,33 @@ func printUsage() {
 Uso:
   domain <comando> [args]
 
-Comandos:
-  version             Muestra version + commit + build time
-  help                Muestra esta ayuda
-  migrate up          Aplica todas las migraciones DB pendientes
-  migrate down [N]    Rollback N migraciones (default 1)
-  migrate version     Muestra version actual del schema + dirty flag
-  server              Inicia servidor HTTP (HU-01.3 /health)
+Server:
+  server              Inicia servidor HTTP + scheduler
   healthcheck         Probe interno para Dockerfile HEALTHCHECK
 
-Más comandos vienen en Fase 2+ (ver openspec/INDEX.md y docs/roadmap.md).`)
+Migrations:
+  migrate up          Aplica migraciones pendientes
+  migrate down [N]    Rollback N migraciones (default 1)
+  migrate version     Schema version + dirty flag
+
+CLI cliente (requiere DOMAIN_API_KEY):
+  projects ls|get|create
+  observations ls|save  (alias: obs)
+  agents ls|get|run
+  flows ls|run
+  skills ls
+  search <query>
+  context [--project <slug>]
+  completion bash|zsh|fish
+
+Common:
+  version             Version + commit + build time
+  help                Esta ayuda
+
+Env:
+  DOMAIN_API_KEY      requerido para CLI cliente
+  DOMAIN_BASE_URL     default http://localhost:8000
+  DOMAIN_DATABASE_URL requerido para server/migrate`)
 }
 
 func runMigrate(args []string) {

@@ -1,3 +1,22 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  `domain completion bash|zsh|fish` genera el script de autocompletado.
+
+  Bash: _domain_complete con compgen sobre lista estática de resources +
+  case por previous word (projects/agents/flows → ls/get/run, etc.).
+
+  Zsh: #compdef domain + _describe arrays.
+
+  Fish: complete -c domain -n "__fish_use_subcommand" -a "..." -d "...".
+
+  Install:
+    domain completion bash > /etc/bash_completion.d/domain
+    domain completion zsh > ~/.zsh/completion/_domain
+    domain completion fish > ~/.config/fish/completions/domain.fish
+
+  Pending:
+  - Dynamic completion (sugiere slugs reales desde la API)
+  - PowerShell completion

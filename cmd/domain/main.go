@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/saargo/domain/internal/config"
 	"github.com/saargo/domain/internal/httpserver"
+	"github.com/saargo/domain/internal/logging"
 	dmigrate "github.com/saargo/domain/internal/migrate"
 )
 
@@ -118,12 +120,22 @@ func runServer() {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
+	logger := logging.Setup(logging.Config{
+		Level:     cfg.LogLevel,
+		Format:    cfg.LogFormat,
+		Output:    cfg.LogOutput,
+		AddSource: cfg.LogAddSource,
+	})
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
 	mux := http.NewServeMux()
 	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
-	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: nil}) // pool wire en HU posterior
-	fmt.Printf("domain %s server listening on %s\n", Version, addr)
+	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: nil})
+	logger.Info("domain server starting",
+		slog.String("version", Version),
+		slog.String("addr", addr),
+		slog.String("env", cfg.Env),
+	)
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      mux,
@@ -131,7 +143,7 @@ func runServer() {
 		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
 	}
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "server: %v\n", err)
+		logger.Error("server failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 }

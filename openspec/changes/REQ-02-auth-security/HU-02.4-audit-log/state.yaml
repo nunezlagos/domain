@@ -1,3 +1,12 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/audit: Recorder interface + PGRecorder con pgxpool + NopRecorder
+  para tests. Event con OldValues/NewValues JSONB diff, actor_type enum,
+  ip/ua/request_id/trace_id opcionales (NULL si vacío).
+  Tests: 3 unit + 4 integration + sabotaje app_user UPDATE/DELETE denied
+  (cubre HU-25.6 REVOKE inmutabilidad).
+  Inmutabilidad enforced por DB grants (HU-25.6) + futuro pgaudit (HU-25.7).
+  Pending: middleware HTTP audit-on-mutation + retention purge cron 90d.

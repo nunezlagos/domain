@@ -1,3 +1,18 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Retry semantics implementadas en internal/runner/flow.Runner.
+
+  Por step:
+  - step.Retries: int, default 0 (sin retry)
+  - Total attempts = retries + 1
+  - Backoff exponencial: 200ms → 400ms → 800ms → ...
+  - Respeta ctx cancel (timeout step.TimeoutS o shutdown global)
+  - Si todos los retries fallan, aplica step.OnError (fail|continue|<step_id>)
+
+  Pending:
+  - HU-09.4.1 max_backoff cap configurable
+  - Retry por error class (transient vs non-transient)
+  - Métricas Prometheus: domain_flow_step_retries_total

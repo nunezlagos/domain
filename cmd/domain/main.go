@@ -269,6 +269,12 @@ func runServer() {
 	}
 	schedCtx, schedCancel := context.WithCancel(context.Background())
 	go leaderElection.RunAsLeader(schedCtx, func(leaderCtx context.Context) {
+		// El pod leader corre todos los workers single-instance:
+		// - cron scheduler (HU-10.1)
+		// - flow recovery (HU-09.6) marca stale flow_runs como failed
+		go flowRunnerInst.RunRecovery(leaderCtx, flowrunner.RecoveryConfig{
+			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
+		})
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()

@@ -142,7 +142,26 @@ LOOP:
 			defer cancel()
 		}
 
-		out, stepErr := r.executeStep(ctxStep, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
+		// HU-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
+		var out any
+		var stepErr error
+		backoff := 200 * time.Millisecond
+		maxAttempts := step.Retries + 1 // 0 retries = 1 attempt
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			out, stepErr = r.executeStep(ctxStep, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
+			if stepErr == nil {
+				break
+			}
+			if attempt < maxAttempts {
+				select {
+				case <-ctxStep.Done():
+					stepErr = ctxStep.Err()
+					break
+				case <-time.After(backoff):
+				}
+				backoff *= 2
+			}
+		}
 		if stepErr != nil {
 			switch step.OnError {
 			case "continue":

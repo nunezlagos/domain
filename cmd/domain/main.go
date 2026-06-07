@@ -37,6 +37,7 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	cronsched "nunezlagos/domain/internal/scheduler/cron"
+	"nunezlagos/domain/internal/scheduler/leader"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/billing"
@@ -255,15 +256,21 @@ func runServer() {
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
 
-	// Cron scheduler (HU-10.1): poll cada 30s
+	// Cron scheduler (HU-10.1): solo corre en el pod leader (HU-26.2)
 	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
 	scheduler := &cronsched.Scheduler{
 		Crons: cronService, Agents: agentRunnerInst, Flows: flowRunnerInst,
 		SkillRunner: skillRunnerInst, Skills: skillService,
 		Audit: recorder, Logger: logger,
 	}
+	leaderElection := &leader.Election{
+		Pool: pools.App, LockKey: leader.LockKeyCronScheduler,
+		PollPeriod: 10 * time.Second, Logger: logger,
+	}
 	schedCtx, schedCancel := context.WithCancel(context.Background())
-	go scheduler.Run(schedCtx)
+	go leaderElection.RunAsLeader(schedCtx, func(leaderCtx context.Context) {
+		scheduler.Run(leaderCtx)
+	})
 	defer schedCancel()
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{

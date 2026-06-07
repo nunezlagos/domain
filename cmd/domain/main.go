@@ -33,6 +33,7 @@ import (
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	skillsvc "github.com/saargo/domain/internal/service/skill"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
@@ -181,6 +182,7 @@ func runServer() {
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
 	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
@@ -196,6 +198,7 @@ func runServer() {
 		TimelineService:  timelineService,
 		SearchService:    searchService,
 		KnowledgeService: knowledgeService,
+		SkillService:     skillService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

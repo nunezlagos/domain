@@ -28,6 +28,7 @@ import (
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	skillsvc "github.com/saargo/domain/internal/service/skill"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
@@ -40,6 +41,7 @@ type Deps struct {
 	Timeline     *timelinesvc.Service
 	Search       *searchsvc.Service
 	Knowledge    *knowsvc.Service
+	Skills       *skillsvc.Service
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -65,6 +67,9 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolKnowledgeSave(), Handler: deps.handleKnowledgeSave},
 		{Tool: toolKnowledgeSearch(), Handler: deps.handleKnowledgeSearch},
 		{Tool: toolKnowledgeGet(), Handler: deps.handleKnowledgeGet},
+		{Tool: toolSkillList(), Handler: deps.handleSkillList},
+		{Tool: toolSkillSearch(), Handler: deps.handleSkillSearch},
+		{Tool: toolSkillGet(), Handler: deps.handleSkillGet},
 	}
 }
 
@@ -238,6 +243,46 @@ func toolGlobalSearch() mcp.Tool {
 		mcp.WithArray("tags",
 			mcp.Description("Tags requeridos (AND)"),
 			mcp.Items(map[string]any{"type": "string"}),
+		),
+	)
+}
+
+func toolSkillList() mcp.Tool {
+	return mcp.NewTool("domain_skill_list",
+		mcp.WithDescription("Lista los skills disponibles en la org. Filtros opcionales por type/tag."),
+		mcp.WithString("type",
+			mcp.Description("Filtrar por tipo: prompt | code | api | mcp_tool"),
+		),
+		mcp.WithString("tag",
+			mcp.Description("Filtrar por tag específico"),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Máximo resultados (default 50)"),
+		),
+	)
+}
+
+func toolSkillSearch() mcp.Tool {
+	return mcp.NewTool("domain_skill_search",
+		mcp.WithDescription("Busca skills por similitud semántica + BM25 sobre name+description."),
+		mcp.WithString("query",
+			mcp.Description("Texto descriptivo del capability buscado"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Máximo resultados (default 20)"),
+		),
+	)
+}
+
+func toolSkillGet() mcp.Tool {
+	return mcp.NewTool("domain_skill_get",
+		mcp.WithDescription("Recupera detalle completo de un skill por id o slug."),
+		mcp.WithString("id",
+			mcp.Description("UUID del skill (opcional si se pasa slug)"),
+		),
+		mcp.WithString("slug",
+			mcp.Description("Slug del skill (opcional si se pasa id)"),
 		),
 	)
 }
@@ -661,6 +706,81 @@ func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) 
 		"results": results,
 		"count":   len(results),
 	})
+}
+
+func (d *Deps) handleSkillList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Skills == nil {
+		return mcp.NewToolResultError("skill service no configurado"), nil
+	}
+	args := req.GetArguments()
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	f := skillsvc.ListFilter{}
+	if v, _ := args["type"].(string); v != "" {
+		f.SkillType = v
+	}
+	if v, _ := args["tag"].(string); v != "" {
+		f.Tag = v
+	}
+	if v, ok := args["limit"].(float64); ok {
+		f.Limit = int(v)
+	}
+	out, err := d.Skills.List(ctx, orgID, f)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+}
+
+func (d *Deps) handleSkillSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Skills == nil {
+		return mcp.NewToolResultError("skill service no configurado"), nil
+	}
+	args := req.GetArguments()
+	query, _ := args["query"].(string)
+	if query == "" {
+		return mcp.NewToolResultError("query requerido"), nil
+	}
+	limit := 20
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	results, err := d.Skills.SearchHybrid(ctx, orgID, query, limit)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"results": results, "count": len(results)})
+}
+
+func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Skills == nil {
+		return mcp.NewToolResultError("skill service no configurado"), nil
+	}
+	args := req.GetArguments()
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	if idStr, _ := args["id"].(string); idStr != "" {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return mcp.NewToolResultError("id inválido"), nil
+		}
+		sk, err := d.Skills.GetByID(ctx, id)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
+		}
+		if sk.OrganizationID != orgID {
+			return mcp.NewToolResultError("not found"), nil
+		}
+		return toolResultJSON(sk)
+	}
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return mcp.NewToolResultError("id o slug requerido"), nil
+	}
+	sk, err := d.Skills.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
+	}
+	return toolResultJSON(sk)
 }
 
 func (d *Deps) handleKnowledgeSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

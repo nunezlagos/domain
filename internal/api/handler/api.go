@@ -23,6 +23,7 @@ import (
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	skillsvc "github.com/saargo/domain/internal/service/skill"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
@@ -37,6 +38,7 @@ type API struct {
 	TimelineService  *timelinesvc.Service
 	SearchService    *searchsvc.Service
 	KnowledgeService *knowledge.Service
+	SkillService     *skillsvc.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -84,6 +86,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+
+	// Skills
+	mux.HandleFunc("POST /api/v1/skills", a.createSkill)
+	mux.HandleFunc("GET /api/v1/skills", a.listSkills)       // ?type= &tag= &limit=
+	mux.HandleFunc("GET /api/v1/skills/search", a.searchSkills) // ?q=
+	mux.HandleFunc("GET /api/v1/skills/{id}", a.getSkill)
+	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
+	mux.HandleFunc("DELETE /api/v1/skills/{id}", a.deleteSkill)
 
 	// Knowledge documents
 	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)

@@ -32,6 +32,7 @@ import (
 	promptsvc "github.com/saargo/domain/internal/service/prompt"
 	searchsvc "github.com/saargo/domain/internal/service/search"
 	sesssvc "github.com/saargo/domain/internal/service/session"
+	skillsvc "github.com/saargo/domain/internal/service/skill"
 	timelinesvc "github.com/saargo/domain/internal/service/timeline"
 )
 
@@ -88,6 +89,7 @@ func main() {
 	timeline := &timelinesvc.Service{Pool: pools.App}
 	search := &searchsvc.Service{Pool: pools.App}
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
@@ -97,6 +99,7 @@ func main() {
 		Timeline:     timeline,
 		Search:       search,
 		Knowledge:    knowledgeSvc,
+		Skills:       skills,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

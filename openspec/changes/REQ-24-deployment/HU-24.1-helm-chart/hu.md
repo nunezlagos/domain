@@ -1,7 +1,6 @@
 # HU-24.1-helm-chart
 
 **Origen:** `REQ-24-deployment`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

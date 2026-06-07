@@ -1,7 +1,6 @@
 # HU-08.7-agent-handoff
 
 **Origen:** `REQ-08-agent-system`
-**Persona:** dx-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

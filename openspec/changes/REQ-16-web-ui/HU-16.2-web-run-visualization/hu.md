@@ -1,7 +1,6 @@
 # HU-16.2-web-run-visualization
 
 **Origen:** `REQ-16-web-ui`
-**Persona:** org-member, org-admin
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

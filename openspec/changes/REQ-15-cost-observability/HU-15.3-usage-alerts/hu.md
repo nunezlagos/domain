@@ -1,7 +1,6 @@
 # HU-15.3-usage-alerts
 
 **Origen:** `REQ-15-cost-observability`
-**Persona:** org-owner, org-admin
 **Prioridad tentativa:** baja
 **Tipo:** feature
 

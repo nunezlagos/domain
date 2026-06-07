@@ -1,7 +1,6 @@
 # HU-11.2-selfhosted-runner
 
 **Origen:** `REQ-11-runner-system`
-**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

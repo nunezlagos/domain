@@ -14,13 +14,12 @@
 # HU-XX.Y-slug-name
 
 **Origen:** `REQ-XX-req-slug`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta | media | baja
 **Tipo:** feature | infrastructure | hardening | tooling | docs | runbook
 
 ## Historia de usuario
 
-**Como** <persona en lenguaje natural>
+**Como** <rol natural-language>
 **Quiero** <capacidad>
 **Para** <beneficio>
 
@@ -42,19 +41,10 @@ Entonces ...
 - Esfuerzo tentativo: S | M | L
 ```
 
-### Field `**Persona:**` — reglas
-
-- Obligatorio en HUs nuevas (HU-01.9 enforce)
-- Uno o más slugs separados por coma: `**Persona:** dx-engineer, integrator`
-- Slugs válidos viven en tabla `personas` (catálogo HU-01.9, ver `docs/personas.md`)
-- Linter HU-25.13 valida slug existe + es canonical (no aliases)
-- HUs en `.personas-baseline.json` (retrofit legacy) tienen warning solo, no error
-
-### Personas disponibles (v1)
-
-`dx-engineer`, `platform-engineer`, `security-officer`, `org-owner`, `org-admin`, `org-member`, `platform-admin`, `auditor`, `integrator`, `data-scientist`.
-
-Ver `docs/personas.md` para detalle de cada una.
+> NOTA: el concepto previo de `**Persona:**` field (catálogo de 10 user-types)
+> fue deprecado. Ver HU-01.9 archivada. El equivalente correcto vive en
+> `agent_personalities` (HU-08.5 agent-templates) para describir cómo se
+> comporta el AGENTE IA — no a quién va dirigida la HU.
 
 ## TDD strict workflow
 

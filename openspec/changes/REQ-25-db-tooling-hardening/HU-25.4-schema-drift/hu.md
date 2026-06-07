@@ -1,7 +1,6 @@
 # HU-25.4-schema-drift
 
 **Origen:** `REQ-25-db-tooling-hardening`
-**Persona:** platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** infrastructure
 

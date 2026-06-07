@@ -1,7 +1,6 @@
 # HU-01.2-config-system
 
 **Origen:** `REQ-01-core-platform`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

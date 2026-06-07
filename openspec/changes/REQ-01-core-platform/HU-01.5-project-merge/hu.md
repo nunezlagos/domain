@@ -1,7 +1,6 @@
 # HU-01.5-project-merge
 
 **Origen:** `REQ-01-core-platform`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

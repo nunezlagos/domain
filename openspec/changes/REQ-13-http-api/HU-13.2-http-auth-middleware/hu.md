@@ -1,7 +1,6 @@
 # HU-13.2-http-auth-middleware
 
 **Origen:** `REQ-13-http-api`
-**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

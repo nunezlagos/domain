@@ -1,7 +1,6 @@
 # HU-21.1-org-management
 
 **Origen:** `REQ-21-org-billing`
-**Persona:** org-owner, org-admin
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

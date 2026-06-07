@@ -1,7 +1,6 @@
 # HU-13.8-api-versioning-policy
 
 **Origen:** `REQ-13-http-api`
-**Persona:** integrator
 **Prioridad tentativa:** media
 **Tipo:** policy + feature
 

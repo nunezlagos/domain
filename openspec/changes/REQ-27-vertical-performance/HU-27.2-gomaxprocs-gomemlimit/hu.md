@@ -1,7 +1,6 @@
 # HU-27.2-gomaxprocs-gomemlimit
 
 **Origen:** `REQ-27-vertical-performance`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** hardening
 

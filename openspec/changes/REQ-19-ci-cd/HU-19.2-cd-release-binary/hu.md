@@ -1,7 +1,6 @@
 # HU-19.2-cd-release-binary
 
 **Origen:** `REQ-19-ci-cd`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** infrastructure
 

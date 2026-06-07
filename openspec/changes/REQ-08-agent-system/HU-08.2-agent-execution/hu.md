@@ -1,7 +1,6 @@
 # HU-08.2-agent-execution
 
 **Origen:** `REQ-08-agent-system`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

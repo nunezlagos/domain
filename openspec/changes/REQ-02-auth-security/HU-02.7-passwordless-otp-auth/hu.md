@@ -1,7 +1,6 @@
 # HU-02.7-passwordless-otp-auth
 
 **Origen:** `REQ-02-auth-security`
-**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

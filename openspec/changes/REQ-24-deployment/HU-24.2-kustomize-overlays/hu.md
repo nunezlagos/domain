@@ -1,7 +1,6 @@
 # HU-24.2-kustomize-overlays
 
 **Origen:** `REQ-24-deployment`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** infrastructure
 

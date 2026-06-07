@@ -1,7 +1,6 @@
 # HU-22.2-sdk-typescript
 
 **Origen:** `REQ-22-sdk-clients`
-**Persona:** integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

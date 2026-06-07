@@ -1,7 +1,6 @@
 # HU-23.2-soft-delete-restore
 
 **Origen:** `REQ-23-data-lifecycle`
-**Persona:** org-member, org-admin
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

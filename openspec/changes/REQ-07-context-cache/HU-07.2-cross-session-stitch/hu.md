@@ -1,7 +1,6 @@
 # HU-07.2-cross-session-stitch
 
 **Origen:** `REQ-07-context-cache`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

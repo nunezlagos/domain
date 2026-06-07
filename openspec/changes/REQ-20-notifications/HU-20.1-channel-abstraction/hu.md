@@ -1,7 +1,6 @@
 # HU-20.1-channel-abstraction
 
 **Origen:** `REQ-20-notifications`
-**Persona:** platform-engineer, dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

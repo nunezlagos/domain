@@ -1,7 +1,6 @@
 # HU-05.3-skill-versioning
 
 **Origen:** `REQ-05-skill-system`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

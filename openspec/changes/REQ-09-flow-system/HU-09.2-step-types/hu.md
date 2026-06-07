@@ -1,7 +1,6 @@
 # HU-09.2-step-types
 
 **Origen:** `REQ-09-flow-system`
-**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

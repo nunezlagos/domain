@@ -1,7 +1,6 @@
 # HU-10.4-outbound-webhooks
 
 **Origen:** `REQ-10-cron-triggers`
-**Persona:** platform-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

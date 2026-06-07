@@ -1,7 +1,6 @@
 # HU-25.12-locks-vacuum-monitoring
 
 **Origen:** `REQ-25-db-tooling-hardening`
-**Persona:** platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** tooling
 

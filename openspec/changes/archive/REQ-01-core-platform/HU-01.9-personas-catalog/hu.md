@@ -1,7 +1,6 @@
 # HU-01.9-personas-catalog
 
 **Origen:** `REQ-01-core-platform`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

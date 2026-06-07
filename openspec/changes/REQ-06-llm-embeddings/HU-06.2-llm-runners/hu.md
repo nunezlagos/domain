@@ -1,7 +1,6 @@
 # HU-06.2-llm-runners
 
 **Origen:** `REQ-06-llm-embeddings`
-**Persona:** dx-engineer, platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

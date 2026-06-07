@@ -1,7 +1,6 @@
 # HU-16.5-web-admin-memories
 
 **Origen:** `REQ-16-web-ui`
-**Persona:** org-member, org-admin
 **Prioridad tentativa:** media
 **Tipo:** feature
 

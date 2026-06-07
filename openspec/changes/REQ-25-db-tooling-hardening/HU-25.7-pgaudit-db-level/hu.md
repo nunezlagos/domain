@@ -1,7 +1,6 @@
 # HU-25.7-pgaudit-db-level
 
 **Origen:** `REQ-25-db-tooling-hardening`
-**Persona:** security-officer
 **Prioridad tentativa:** media
 **Tipo:** hardening
 

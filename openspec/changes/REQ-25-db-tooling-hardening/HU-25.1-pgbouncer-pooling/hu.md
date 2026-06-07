@@ -1,7 +1,6 @@
 # HU-25.1-pgbouncer-pooling
 
 **Origen:** `REQ-25-db-tooling-hardening`
-**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

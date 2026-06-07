@@ -1,7 +1,6 @@
 # HU-01.8-platform-policies
 
 **Origen:** `REQ-01-core-platform`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

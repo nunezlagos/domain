@@ -1,7 +1,6 @@
 # HU-20.2-email-smtp
 
 **Origen:** `REQ-20-notifications`
-**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

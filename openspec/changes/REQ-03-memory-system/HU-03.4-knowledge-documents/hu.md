@@ -1,7 +1,6 @@
 # HU-03.4-knowledge-documents
 
 **Origen:** `REQ-03-memory-system`
-**Persona:** dx-engineer, org-member
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

@@ -1,7 +1,6 @@
 # HU-04.3-specs-designs
 
 **Origen:** `REQ-04-opsx-sdd`
-**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

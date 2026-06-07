@@ -1,7 +1,6 @@
 # HU-15.1-token-tracking
 
 **Origen:** `REQ-15-cost-observability`
-**Persona:** org-owner, org-admin
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

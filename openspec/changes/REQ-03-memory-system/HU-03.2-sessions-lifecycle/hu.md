@@ -1,7 +1,6 @@
 # HU-03.2-sessions-lifecycle
 
 **Origen:** `REQ-03-memory-system`
-**Persona:** dx-engineer, org-member
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

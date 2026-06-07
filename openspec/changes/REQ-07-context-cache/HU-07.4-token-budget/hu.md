@@ -1,7 +1,6 @@
 # HU-07.4-token-budget
 
 **Origen:** `REQ-07-context-cache`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

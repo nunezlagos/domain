@@ -1,7 +1,6 @@
 # HU-15.2-cost-analytics
 
 **Origen:** `REQ-15-cost-observability`
-**Persona:** org-owner, org-admin
 **Prioridad tentativa:** media
 **Tipo:** feature
 

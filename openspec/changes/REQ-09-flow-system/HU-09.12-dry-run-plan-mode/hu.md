@@ -1,7 +1,6 @@
 # HU-09.12-dry-run-plan-mode
 
 **Origen:** `REQ-09-flow-system`
-**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** baja
 **Tipo:** feature
 

@@ -1,7 +1,6 @@
 # HU-12.4-mcp-bidirectional
 
 **Origen:** `REQ-12-mcp-server`
-**Persona:** dx-engineer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

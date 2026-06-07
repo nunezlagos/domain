@@ -1,7 +1,6 @@
 # HU-14.3-cli-autocomplete-help
 
 **Origen:** `REQ-14-cli`
-**Persona:** dx-engineer
 **Prioridad tentativa:** baja
 **Tipo:** feature
 

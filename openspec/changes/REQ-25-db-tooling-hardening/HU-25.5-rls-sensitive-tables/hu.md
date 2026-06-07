@@ -1,7 +1,6 @@
 # HU-25.5-rls-sensitive-tables
 
 **Origen:** `REQ-25-db-tooling-hardening`
-**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature + hardening
 

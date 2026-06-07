@@ -1,7 +1,6 @@
 # HU-01.4-project-templates
 
 **Origen:** `REQ-01-core-platform`
-**Persona:** security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

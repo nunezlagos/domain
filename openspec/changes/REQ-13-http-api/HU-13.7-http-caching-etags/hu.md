@@ -1,7 +1,6 @@
 # HU-13.7-http-caching-etags
 
 **Origen:** `REQ-13-http-api`
-**Persona:** integrator
 **Prioridad tentativa:** baja
 **Tipo:** feature
 

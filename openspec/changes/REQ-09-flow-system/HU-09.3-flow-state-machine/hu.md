@@ -1,7 +1,6 @@
 # HU-09.3-flow-state-machine
 
 **Origen:** `REQ-09-flow-system`
-**Persona:** dx-engineer, integrator
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

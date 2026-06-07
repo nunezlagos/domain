@@ -1,7 +1,6 @@
 # HU-18.2-s3-replication
 
 **Origen:** `REQ-18-backup-dr`
-**Persona:** platform-engineer
 **Prioridad tentativa:** alta
 **Tipo:** infrastructure
 

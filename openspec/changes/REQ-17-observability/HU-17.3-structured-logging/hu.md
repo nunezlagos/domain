@@ -1,7 +1,6 @@
 # HU-17.3-structured-logging
 
 **Origen:** `REQ-17-observability`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

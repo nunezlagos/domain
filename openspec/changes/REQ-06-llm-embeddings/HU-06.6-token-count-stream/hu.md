@@ -1,7 +1,6 @@
 # HU-06.6-token-count-stream
 
 **Origen:** `REQ-06-llm-embeddings`
-**Persona:** dx-engineer, platform-engineer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

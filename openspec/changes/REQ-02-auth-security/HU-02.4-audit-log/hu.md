@@ -1,7 +1,6 @@
 # HU-02.4-audit-log
 
 **Origen:** `REQ-02-auth-security`
-**Persona:** security-officer
 **Prioridad tentativa:** media
 **Tipo:** feature
 

@@ -1,7 +1,6 @@
 # HU-02.1-api-key-auth
 
 **Origen:** `REQ-02-auth-security`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** alta
 **Tipo:** feature
 

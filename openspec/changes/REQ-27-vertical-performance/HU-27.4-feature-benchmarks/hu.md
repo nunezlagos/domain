@@ -1,7 +1,6 @@
 # HU-27.4-feature-benchmarks
 
 **Origen:** `REQ-27-vertical-performance`
-**Persona:** security-officer
 **Prioridad tentativa:** baja
 **Tipo:** tooling
 

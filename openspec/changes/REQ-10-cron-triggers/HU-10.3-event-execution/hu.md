@@ -1,7 +1,6 @@
 # HU-10.3-event-execution
 
 **Origen:** `REQ-10-cron-triggers`
-**Persona:** platform-engineer, integrator
 **Prioridad tentativa:** media
 **Tipo:** feature
 

@@ -1,7 +1,6 @@
 # HU-27.1-pprof-debug-endpoints
 
 **Origen:** `REQ-27-vertical-performance`
-**Persona:** platform-engineer, security-officer
 **Prioridad tentativa:** media
 **Tipo:** tooling
 

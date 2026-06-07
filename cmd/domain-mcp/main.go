@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
+	llmregistry "nunezlagos/domain/internal/llm/registry"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
@@ -118,10 +119,11 @@ func main() {
 	}
 
 	skillRunnerInst := skillrunner.New()
+	modelRegistry := &llmregistry.Registry{Pool: pools.App}
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: factory,
 		Agents: agents, Skills: skills, Billing: billingSvc,
-		SkillRunner: skillRunnerInst,
+		SkillRunner: skillRunnerInst, Models: modelRegistry,
 	}
 
 	srv := mcpserver.New(mcpserver.Deps{

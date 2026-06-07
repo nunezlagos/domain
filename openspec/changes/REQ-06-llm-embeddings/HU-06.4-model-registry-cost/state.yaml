@@ -1,3 +1,50 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Migration 000034_create_model_registry + internal/llm/registry.
+
+  Tabla model_registry:
+  - provider CHECK (anthropic/openai/google/ollama/voyage)
+  - model + UNIQUE(provider, model)
+  - modality CHECK (completion/embedding/image/audio)
+  - context_size, input_per_million, output_per_million (USD/1M tokens)
+  - embedding_dimensions (solo modality=embedding)
+  - is_active + deprecated_at + notes
+  - GRANTs SELECT a app_user/app_readonly, ALL a app_admin
+
+  Seed con precios oficiales:
+  - anthropic: opus-4-7 (15/75), sonnet-4-6 (3/15), haiku-4-5 (0.80/4)
+  - openai: gpt-4o (2.50/10), gpt-4o-mini (0.15/0.60),
+    embedding-3-small (0.02), embedding-3-large (0.13)
+  - voyage: voyage-3 (0.06)
+  - ollama: llama3.1, nomic-embed-text (0 local)
+
+  internal/llm/registry.Registry:
+  - Get(provider, model): cache TTL 5min (sync.RWMutex)
+  - CostUSD(usage llm.Usage): input + output prorateado /1M
+  - List() todos los activos
+  - Refresh() invalida cache
+
+  Wiring agent runner:
+  - Runner.Models inyectado
+  - Tras completar run: CostUSD calculado y persistido en agent_runs.cost_usd
+  - Si Models nil o modelo no en registry, cost=0 (no falla)
+  - cmd/domain + cmd/domain-mcp crean instance
+
+  Tests integration (7 escenarios + 1 sabotaje):
+  - Seeds correctos
+  - CostUSD claude-sonnet: 1M input + 100K output = 4.50 USD
+  - Ollama local = 0 USD
+  - NotFound → ErrModelNotFound
+  - List >= 8 entries
+  - Embedding solo input
+  - sabotaje: Refresh() actualiza cache tras admin UPDATE
+
+  Linter ajustado: model_registry en allowlist naming-plural (colectivo).
+
+  Pending:
+  - HTTP GET /api/v1/models endpoint público
+  - Cron sincronización precios desde provider APIs
+  - Cost daily aggregation (HU-15.2)

@@ -30,6 +30,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/registry"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
@@ -61,6 +62,7 @@ type Runner struct {
 	Skills       *skillsvc.Service
 	Billing      *billing.Service
 	SkillRunner  *skillrunner.Runner // si nil, se crea uno default por Run()
+	Models       *registry.Registry  // si nil, costo siempre 0
 }
 
 type RunInput struct {
@@ -196,11 +198,23 @@ LOOP:
 	finishedAt := time.Now().UTC()
 	outputJSON, _ := json.Marshal(map[string]any{"text": finalText})
 
+	// CostUSD calc opcional (si registry disponible y model registrado)
+	var costUSD float64
+	if r.Models != nil {
+		if c, cerr := r.Models.CostUSD(ctx, agent.Provider, agent.Model, llm.Usage{
+			PromptTokens: totalIn, CompletionTokens: totalOut,
+		}); cerr == nil {
+			costUSD = c
+		}
+	}
+
 	_, _ = r.Pool.Exec(ctx,
 		`UPDATE agent_runs SET status = $1, outputs = $2, error = $3,
-		    tokens_input = $4, tokens_output = $5, iterations = $6, finished_at = $7
-		 WHERE id = $8`,
-		status, outputJSON, nullStr(errStr), totalIn, totalOut, iterations, finishedAt, runID)
+		    tokens_input = $4, tokens_output = $5, cost_usd = $6,
+		    iterations = $7, finished_at = $8
+		 WHERE id = $9`,
+		status, outputJSON, nullStr(errStr), totalIn, totalOut, costUSD,
+		iterations, finishedAt, runID)
 
 	if r.Billing != nil && totalIn+totalOut > 0 {
 		_, _ = r.Billing.IncrementTokens(ctx, agent.OrganizationID, int64(totalIn+totalOut))

@@ -26,8 +26,9 @@ import (
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/llm/anthropic"
-	llmopenai "nunezlagos/domain/internal/llm/openai"
 	"nunezlagos/domain/internal/llm/ollama"
+	llmopenai "nunezlagos/domain/internal/llm/openai"
+	llmregistry "nunezlagos/domain/internal/llm/registry"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -214,10 +215,11 @@ func runServer() {
 	}
 
 	skillRunnerInst := skillrunner.New()
+	modelRegistry := &llmregistry.Registry{Pool: pools.App}
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,
-		SkillRunner: skillRunnerInst,
+		SkillRunner: skillRunnerInst, Models: modelRegistry,
 	}
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
 	otpService := &otp.Service{

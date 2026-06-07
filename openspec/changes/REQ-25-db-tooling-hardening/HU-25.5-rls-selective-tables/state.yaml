@@ -1,0 +1,34 @@
+status: partially_implemented
+created: 2026-06-06
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Migration 000028_create_rls_sensitive aplica RLS + FORCE en 5 tablas
+  sensibles: secrets, audit_log, otp_codes, activity_log, api_keys.
+
+  - current_org_id() / current_user_id(): funciones STABLE que leen
+    app.current_org_id / app.current_user_id de session settings.
+  - Políticas FOR ALL TO PUBLIC con USING + WITH CHECK contra
+    organization_id = current_org_id() (o user_id para otp_codes).
+  - audit_log: SELECT con org filter, INSERT unrestricted (append-only system).
+  - FORCE ROW LEVEL SECURITY → aplica RLS incluso al owner (defense in depth).
+  - Re-grants explícitos a app_user/app_admin sobre las 5 tablas (default
+    privileges de migration 25 solo aplican a tablas creadas por app_migrator).
+
+  Helper internal/store/txctx con WithOrgTx / WithUserTx / WithOrgUserTx:
+  ejecuta SELECT set_config('app.current_org_id', $1, true) dentro de la tx.
+  Rechaza uuid.Nil. SET LOCAL muere al COMMIT (seguro para pgbouncer
+  transaction-pool).
+
+  Tests integration con testcontainers (9 escenarios + 3 sabotaje):
+  - Pool de tests conecta con SET ROLE app_user via AfterConnect para que
+    RLS aplique (test user es DB owner y bypassea sin SET ROLE).
+  - org-isolation en secrets, activity_log, api_keys.
+  - Sabotaje "sin SET LOCAL → 0 rows" (defense-in-depth contra bugs RBAC).
+  - Sabotaje "cross-org SELECT por id explícito → 0 rows".
+  - Sabotaje "INSERT con organization_id de otra org → rechazado por WITH CHECK".
+  - SET LOCAL scoped a tx (post-commit sin SET LOCAL → 0 rows).
+
+  Pending: extender RLS a observations, messages, sessions, audit_diffs,
+  api_key_scopes y demás tablas de Tier-1 sensible cuando se creen; wire
+  WithOrgTx en HTTP middleware/handlers para que cada request use contexto.

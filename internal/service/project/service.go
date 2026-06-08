@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/projecttemplate"
 )
 
 var (
@@ -54,14 +55,34 @@ type CreateInput struct {
 }
 
 type Service struct {
-	Pool  *pgxpool.Pool
-	Audit audit.Recorder
+	Pool         *pgxpool.Pool
+	Audit        audit.Recorder
+	TemplateSvc  *projecttemplate.Service // opcional — HU-01.4 apply template on create
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) {
 	in.Slug = strings.TrimSpace(in.Slug)
 	if !reSlug.MatchString(in.Slug) {
 		return nil, ErrSlugInvalid
+	}
+	// HU-01.4: si se pasa template_id, mergear settings del template con override del request.
+	if in.TemplateID != nil && s.TemplateSvc != nil {
+		tpl, err := s.TemplateSvc.Get(ctx, in.OrganizationID, *in.TemplateID)
+		if err == nil && tpl != nil {
+			tplSettings := map[string]any{}
+			if len(tpl.Settings) > 0 {
+				_ = json.Unmarshal(tpl.Settings, &tplSettings)
+			}
+			// Template settings como base, request settings como override
+			merged := make(map[string]any, len(tplSettings)+len(in.Settings))
+			for k, v := range tplSettings {
+				merged[k] = v
+			}
+			for k, v := range in.Settings {
+				merged[k] = v
+			}
+			in.Settings = merged
+		}
 	}
 	if in.Settings == nil {
 		in.Settings = map[string]any{}

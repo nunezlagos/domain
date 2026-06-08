@@ -15,6 +15,7 @@ type createProjectBody struct {
 	Slug          string         `json:"slug"`
 	Description   string         `json:"description,omitempty"`
 	RepositoryURL string         `json:"repository_url,omitempty"`
+	TemplateID    *uuid.UUID     `json:"template_id,omitempty"`
 	Settings      map[string]any `json:"settings,omitempty"`
 }
 
@@ -45,6 +46,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		Slug:           b.Slug,
 		Description:    b.Description,
 		RepositoryURL:  b.RepositoryURL,
+		TemplateID:     b.TemplateID,
 		Settings:       b.Settings,
 		ActorID:        actorID,
 	})

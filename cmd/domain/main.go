@@ -22,12 +22,15 @@ import (
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/api/versioning"
+	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/crypto"
+	"nunezlagos/domain/internal/dbstats"
 	debugpkg "nunezlagos/domain/internal/debug"
 	"nunezlagos/domain/internal/auth/otp"
+	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/httpserver"
@@ -35,6 +38,8 @@ import (
 	"nunezlagos/domain/internal/llm/circuitbreaker"
 	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/secrets"
+	"nunezlagos/domain/internal/seeds"
+	"nunezlagos/domain/internal/tracing"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
 	"strings"
 
@@ -100,9 +105,11 @@ func main() {
 		runHealthcheckProbe()
 	case "rotate-db-password":
 		runRotateDBPassword(os.Args[2:])
+	case "audit":
+		runAuditPrune(os.Args[2:])
 	case "setup":
 		runSetup(os.Args[2:])
-	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion":
+	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
 	default:
@@ -135,6 +142,7 @@ CLI cliente (requiere DOMAIN_API_KEY):
   skills ls
   search <query>
   context [--project <slug>]
+  policies import-md|export-md [options]
   completion bash|zsh|fish
 
 Common:
@@ -221,23 +229,6 @@ func runServer() {
 	// Runtime tuning (HU-27.2)
 	debugpkg.TuneRuntime(logger)
 
-	// Debug pprof endpoints (HU-27.1) en puerto separado con basic auth
-	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
-		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
-		go func() {
-			err := debugpkg.Serve(debugpkg.Config{
-				Enabled:  true,
-				Bind:     os.Getenv("DOMAIN_DEBUG_BIND"),
-				Port:     port,
-				AuthUser: os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
-				AuthPass: os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
-			}, logger)
-			if err != nil && err != http.ErrServerClosed {
-				logger.Error("debug server failed", slog.Any("err", err))
-			}
-		}()
-	}
-
 	// Pools (app_user para runtime, app_admin para auth/audit).
 	ctx := context.Background()
 	pools, err := db.OpenProductionWithReplica(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL, cfg.DatabaseReadOnlyURL)
@@ -246,6 +237,7 @@ func runServer() {
 		os.Exit(1)
 	}
 	defer pools.Close()
+	metrics.RunPoolStatsReporter(ctx, metricsReg, pools.App, pools.Auth, pools.ReadOnly, logger)
 	if cfg.DatabaseAuthURL == "" && cfg.Env != "dev" {
 		logger.Warn("DOMAIN_DATABASE_AUTH_URL not set — auth pool reuses runtime user (NOT recommended outside dev)")
 	}
@@ -253,15 +245,42 @@ func runServer() {
 		pools.LagMonitor = &db.LagMonitor{
 			Pool: pools.ReadOnly, PollInterval: 30 * time.Second,
 			ThresholdSecs: 10.0, Logger: logger,
+			MetricsCB: func(lag float64) {
+				metricsReg.ReplicationLagSeconds.Set(lag)
+				if lag > 10.0 {
+					metricsReg.ReplicaFallbackTotal.Inc()
+				}
+			},
 		}
 		go pools.LagMonitor.Run(ctx)
 		logger.Info("read replica configured with lag monitor",
 			slog.Float64("threshold_secs", 10.0))
+	} else {
+		logger.Info("no read replica configured — all reads go to primary")
 	}
 
 	// Services: dependency wiring explícito.
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
 	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
+
+	// Debug pprof endpoints (HU-27.1) en puerto separado con basic auth
+	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
+		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
+		go func() {
+			err := debugpkg.Serve(debugpkg.Config{
+				Enabled:        true,
+				Bind:           os.Getenv("DOMAIN_DEBUG_BIND"),
+				Port:           port,
+				AuthUser:       os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
+				AuthPass:       os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
+				AuditRecorder:  recorder,
+				Metrics:        metricsReg,
+			}, logger)
+			if err != nil && err != http.ErrServerClosed {
+				logger.Error("debug server failed", slog.Any("err", err))
+			}
+		}()
+	}
 	projectService := &projsvc.Service{Pool: pools.App, Audit: recorder}
 	obsService := &observation.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop
@@ -304,6 +323,38 @@ func runServer() {
 			slog.String("error", err.Error()))
 	}
 	go rtCfgRegistry.RunPolling(ctx, 30*time.Second)
+
+	// OpenTelemetry tracing (HU-17.2) — usa sample ratio del runtime config.
+	otelShutdown, oTelErr := tracing.Setup(context.Background(), tracing.Config{
+		Enabled:      os.Getenv("DOMAIN_OTEL_ENABLED") == "true",
+		OTLPEndpoint: envOr("DOMAIN_OTEL_ENDPOINT", "localhost:4317"),
+		ServiceName:  "domain",
+		Version:      Version,
+		Environment:  cfg.Env,
+		SampleRatio:  rtCfgRegistry.Current().OTELSampleRatio,
+		Insecure:     envOr("DOMAIN_OTEL_INSECURE", "true") == "true",
+	})
+	if oTelErr != nil {
+		logger.Error("tracing setup failed", slog.Any("err", oTelErr))
+		os.Exit(1)
+	}
+	defer otelShutdown(context.Background())
+
+	// Seeders (HU-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
+	seedRegistry := seeds.NewRegistry()
+	seedRegistry.Register(&seeds.PlansSeeder{})
+	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
+	if seedErr != nil {
+		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
+	}
+	for name, rep := range results {
+		logger.Info("seed completed",
+			slog.String("seeder", name),
+			slog.Int("created", rep.Created),
+			slog.Int("updated", rep.Updated),
+			slog.Int("skipped", rep.Skipped),
+		)
+	}
 
 	// Cipher opcional para outbound webhook secrets at-rest (HU-02.3 + HU-10.4).
 	var masterCipher *crypto.Cipher
@@ -355,6 +406,7 @@ func runServer() {
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 	policyService := &policy.Service{Pool: pools.App}
+	dbStatsService := &dbstats.Service{Pool: pools.App}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
 		Dispatcher:  outboundDispatcher,
@@ -395,6 +447,10 @@ func runServer() {
 			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
 		})
 		go runOutboundDispatcher(leaderCtx, outboundDispatcher, logger)
+		go runDBStatsAnalyzer(leaderCtx, dbStatsService, metricsReg, logger)
+		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
+		go runSessionAutoClose(leaderCtx, sessionService, logger)
+		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()
@@ -403,6 +459,20 @@ func runServer() {
 		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
 		Mail: otpMailer,
 	}
+
+	activityStore := &activity.PGStore{Pool: pools.App}
+
+	// Rate limiter (HU-02.5)
+	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
+	refillRate := float64(cfg.RateLimitRequests) / windowDur.Seconds()
+	rateLimiter := ratelimit.New(cfg.RateLimitRequests, refillRate)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			rateLimiter.Cleanup(10 * time.Minute)
+		}
+	}()
 
 	api := &handler.API{
 		OrgService:     orgService,
@@ -431,6 +501,11 @@ func runServer() {
 		MCPServerService:          mcpServerService,
 		ProjectTemplateService:    projectTemplateService,
 		PolicyService:             policyService,
+		RuntimeConfigRegistry:    rtCfgRegistry,
+		DBStatsService:           dbStatsService,
+		Audit:          recorder,
+		ActivityRecorder: activityStore,
+		ActivityQuerier:  activityStore,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}
@@ -447,13 +522,18 @@ func runServer() {
 	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
 
 	// API REST montada bajo /api/v1/*.
-	// Middleware order: versioning → auth → idempotency → handler.
+	// Middleware order: versioning → auth → rate-limit → audit → idempotency → handler.
 	authMW := &apikey.Middleware{Resolver: apiKeyStore, Allowlist: handler.AuthAllowlist()}
+	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
+	auditMW := middleware.AuditMiddleware
 	idempMW := &middleware.Idempotency{Pool: pools.App}
-	mux.Handle("/api/", versionCatalog.Middleware(authMW.Wrap(idempMW.Wrap(api.Router()))))
+	mux.Handle("/api/", versionCatalog.Middleware(
+		authMW.Wrap(
+			rateLimitMW.Wrap(
+				auditMW(idempMW.Wrap(api.Router()))))))
 
-	// Aplica metrics middleware al mux principal (todos los handlers se cuentan)
-	handler := metricsReg.HTTPMiddleware(mux)
+	// Aplica tracing + metrics middleware al mux principal
+	handler := metricsReg.HTTPMiddleware(tracing.HTTPMiddleware("domain")(mux))
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),
@@ -559,6 +639,240 @@ func runOutboundDispatcher(ctx context.Context, d *outboundwebhook.Dispatcher, l
 	}
 }
 
+// runDBMonitor corre tickers para métricas de HU-25.12 (locks-vacuum).
+// Ticker 30s: connection states + lock waits + dead tuples.
+// Solo en el pod leader.
+func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry, logger *slog.Logger) {
+	stateTicker := time.NewTicker(30 * time.Second)
+	defer stateTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stateTicker.C:
+			var active, idle, idleInTx int
+			var longestSeconds float64
+			err := app.QueryRow(ctx, `
+				SELECT
+					COUNT(*) FILTER (WHERE state = 'active') AS active,
+					COUNT(*) FILTER (WHERE state = 'idle') AS idle,
+					COUNT(*) FILTER (WHERE state = 'idle in transaction') AS idle_in_tx,
+				COALESCE(MAX(EXTRACT(EPOCH FROM (now() - query_start)))
+					FILTER (WHERE state = 'active'), 0)
+				FROM pg_stat_activity
+				WHERE backend_type = 'client backend'
+			`).Scan(&active, &idle, &idleInTx, &longestSeconds)
+			if err != nil {
+				logger.Warn("dbmon pg_stat_activity query failed", slog.String("error", err.Error()))
+			} else {
+				reg.DBConnectionsActive.Set(float64(active))
+				reg.DBConnectionsIdle.Set(float64(idle))
+				reg.DBConnectionsIdleInTransaction.Set(float64(idleInTx))
+				reg.DBLongestQuerySeconds.Set(longestSeconds)
+			}
+
+			// Lock waits
+			lockRows, err := app.Query(ctx, `
+				SELECT pg_locks.mode, COALESCE(pg_class.relname, 'unknown')
+				FROM pg_locks
+				JOIN pg_stat_activity AS sa ON pg_locks.pid = sa.pid
+				LEFT JOIN pg_class ON pg_locks.relation = pg_class.oid
+				WHERE sa.state = 'active'
+				  AND pg_locks.granted = false
+			`)
+			if err != nil {
+				logger.Warn("dbmon pg_locks query failed", slog.String("error", err.Error()))
+			} else {
+				for lockRows.Next() {
+					var mode, tbl string
+					if err := lockRows.Scan(&mode, &tbl); err != nil {
+						continue
+					}
+					reg.DBLockWaitsTotal.WithLabelValues(mode, tbl).Inc()
+				}
+				lockRows.Close()
+			}
+
+			// Dead tuples top 20
+			tupRows, err := app.Query(ctx, `
+				SELECT relname, n_dead_tup
+				FROM pg_stat_user_tables
+				WHERE n_dead_tup > 0
+				ORDER BY n_dead_tup DESC
+				LIMIT 20
+			`)
+			if err != nil {
+				logger.Warn("dbmon dead tuples query failed", slog.String("error", err.Error()))
+			} else {
+				for tupRows.Next() {
+					var tbl string
+					var dead int64
+					if err := tupRows.Scan(&tbl, &dead); err != nil {
+						continue
+					}
+					reg.DBTableDeadTuples.WithLabelValues(tbl).Set(float64(dead))
+				}
+				tupRows.Close()
+			}
+			logger.Debug("dbmon tick complete")
+		}
+	}
+}
+
+// runSoftDeletePurge purga rows soft-deleted fuera de retention (HU-23.2).
+func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slog.Logger) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := svc.PurgeExpiredSoftDeleted(ctx)
+			if err != nil {
+				logger.Warn("soft delete purge failed", slog.String("error", err.Error()))
+				continue
+			}
+			if n > 0 {
+				logger.Info("purged soft-deleted rows", slog.Int64("count", n))
+			}
+		}
+	}
+}
+
+// runSessionAutoClose cierra sesiones inactivas >24h (HU-03.2).
+func runSessionAutoClose(ctx context.Context, svc *sesssvc.Service, logger *slog.Logger) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ids, err := svc.CloseInactive(ctx, 24*time.Hour)
+			if err != nil {
+				logger.Warn("session auto-close failed", slog.String("error", err.Error()))
+				continue
+			}
+			if len(ids) > 0 {
+				logger.Info("auto-closed inactive sessions", slog.Int("count", len(ids)))
+			}
+		}
+	}
+}
+
+// runDBStatsAnalyzer corre cada 5min: slow queries → métricas + snapshot weekly.
+// Solo en el pod leader (HU-26.2 + HU-25.2).
+func runDBStatsAnalyzer(ctx context.Context, svc *dbstats.Service, reg *metrics.Registry, logger *slog.Logger) {
+	slowTicker := time.NewTicker(5 * time.Minute)
+	snapTicker := time.NewTicker(7 * 24 * time.Hour)
+	defer slowTicker.Stop()
+	defer snapTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-slowTicker.C:
+			queries, err := svc.SlowQueries(ctx, 100, 50)
+			if err != nil {
+				logger.Warn("dbstats slow queries failed", slog.String("error", err.Error()))
+				continue
+			}
+			if len(queries) > 0 && reg != nil {
+				reg.SlowQueriesTotal.WithLabelValues("100").Add(float64(len(queries)))
+			}
+			logger.Debug("dbstats slow queries analyzed", slog.Int("count", len(queries)))
+		case <-snapTicker.C:
+			snap, err := svc.Snapshot(ctx)
+			if err != nil {
+				logger.Warn("dbstats snapshot failed", slog.String("error", err.Error()))
+				continue
+			}
+			logger.Info("dbstats weekly snapshot", slog.Int("rows", snap.Inserted))
+			if err := svc.Reset(ctx); err != nil {
+				logger.Warn("dbstats reset failed", slog.String("error", err.Error()))
+			}
+		}
+	}
+}
+
+// runAuditPrune CLI: domain audit prune [--retention N] [--dry-run]
+// Borra entradas de audit_log anteriores a N días (default 90).
+func runAuditPrune(args []string) {
+	dryRun := false
+	retentionDays := 90
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "prune":
+			continue
+		case "--retention":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "missing value for --retention")
+				os.Exit(2)
+			}
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil || n < 1 {
+				fmt.Fprintln(os.Stderr, "invalid retention days")
+				os.Exit(2)
+			}
+			retentionDays = n
+			i++
+		case "--dry-run":
+			dryRun = true
+		case "--help", "-h":
+			fmt.Println("Usage: domain audit prune [--retention N] [--dry-run]")
+			fmt.Println("  Default retention: 90 days")
+			fmt.Println("  Requires DOMAIN_DATABASE_AUTH_URL")
+			os.Exit(0)
+		default:
+			fmt.Fprintf(os.Stderr, "unknown flag: %s\n", args[i])
+			os.Exit(2)
+		}
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
+	adminDSN := cfg.DatabaseAuthURL
+	if adminDSN == "" {
+		adminDSN = cfg.DatabaseURL
+	}
+	ctx := context.Background()
+	pool, err := pgxpoolNew(ctx, adminDSN)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pool: %v\n", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	recorder := &audit.PGRecorder{Pool: pool}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+
+	if dryRun {
+		// Count only
+		var count int64
+		err = pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM audit_log WHERE occurred_at < $1`, cutoff).Scan(&count)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "count: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("dry-run: %d entries to delete (before %s)\n", count, cutoff.Format("2006-01-02"))
+		return
+	}
+
+	deleted, err := recorder.Prune(ctx, cutoff)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "prune: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("pruned %d audit log entries (before %s)\n", deleted, cutoff.Format("2006-01-02"))
+}
+
 // HU-25.10 rotate-db-password — genera nuevo password + ALTER ROLE.
 // Usage: domain rotate-db-password --role app_user
 // Imprime el nuevo password en stdout (operator lo copia al Secret Manager).
@@ -611,6 +925,14 @@ func runRotateDBPassword(args []string) {
 // pgxpoolNew wrapper para evitar import alias en main.
 func pgxpoolNew(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pgxpool.New(ctx, dsn)
+}
+
+// envOr retorna env var o default si está vacía.
+func envOr(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
 
 // HU-12.5 setup — wizard CLI para configurar agentes externos.

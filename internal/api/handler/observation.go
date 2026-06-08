@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/cursor"
 	"nunezlagos/domain/internal/api/etag"
 	"nunezlagos/domain/internal/service/observation"
 	searchsvc "nunezlagos/domain/internal/service/search"
@@ -155,12 +156,72 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := a.ObsService.List(r.Context(), proj.ID, limit)
+
+	// HU-13.6 cursor pagination
+	sortDir, err := cursor.NormalizeSort(r.URL.Query().Get("sort"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_sort", "sort must be asc|desc")
+		return
+	}
+	filtersHash := cursor.HashFilters(map[string]string{
+		"project_slug": slug,
+		"org":          p.OrganizationID,
+	})
+	in := observation.ListPageInput{
+		ProjectID: proj.ID,
+		Limit:     limit,
+		SortDesc:  sortDir == "desc",
+	}
+	if rawCursor := r.URL.Query().Get("cursor"); rawCursor != "" {
+		c, err := cursor.Decode(rawCursor, filtersHash, sortDir)
+		if err != nil {
+			switch {
+			case errors.Is(err, cursor.ErrFiltersMismatch):
+				writeError(w, http.StatusBadRequest, "cursor_filters_mismatch",
+					"el cursor no aplica a los filtros actuales")
+			case errors.Is(err, cursor.ErrSortMismatch):
+				writeError(w, http.StatusBadRequest, "cursor_sort_mismatch",
+					"el cursor no aplica al sort actual")
+			default:
+				writeError(w, http.StatusBadRequest, "invalid_cursor", "")
+			}
+			return
+		}
+		t := c.LastSortValue
+		id, _ := uuid.Parse(c.LastID)
+		in.CursorTime = &t
+		in.CursorID = &id
+	}
+	// Legacy offset deprecated (HU-13.6 escenario 6)
+	if offStr := r.URL.Query().Get("offset"); offStr != "" {
+		w.Header().Set("Deprecation", "true")
+		w.Header().Set("Sunset", "2026-12-31")
+		off, _ := strconv.Atoi(offStr)
+		if off > cursor.MaxLegacyOffset {
+			writeError(w, http.StatusBadRequest, "offset_too_large",
+				"offset legacy capado a 10000; usar cursor")
+			return
+		}
+	}
+
+	list, hasMore, err := a.ObsService.ListPaginated(r.Context(), in)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
 	}
-	writeData(w, http.StatusOK, list)
+
+	pageMeta := cursor.PageMeta{HasMore: hasMore, Limit: len(list)}
+	if hasMore && len(list) > 0 {
+		last := list[len(list)-1]
+		next := cursor.Cursor{
+			LastID:        last.ID.String(),
+			LastSortValue: last.CreatedAt,
+			FiltersHash:   filtersHash,
+			SortDir:       sortDir,
+		}
+		pageMeta.NextCursor = next.Encode()
+	}
+	writeDataWithMeta(w, http.StatusOK, list, map[string]any{"pagination": pageMeta})
 }
 
 // GET /api/v1/search — búsqueda global cross-entity (HU-03.7).

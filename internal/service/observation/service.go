@@ -195,6 +195,65 @@ func (s *Service) List(ctx context.Context, projectID uuid.UUID, limit int) ([]O
 	return out, rows.Err()
 }
 
+// ListPageInput describe filtros + paginación cursor-based (HU-13.6).
+type ListPageInput struct {
+	ProjectID      uuid.UUID
+	Limit          int
+	SortDesc       bool       // true = DESC (default), false = ASC
+	CursorTime     *time.Time // si != nil, paginar desde este punto
+	CursorID       *uuid.UUID // tie-breaker para estabilidad
+}
+
+// ListPaginated implementa keyset pagination estable por (created_at, id).
+// Devuelve hasta limit+1 rows internamente para detectar has_more sin extra query.
+func (s *Service) ListPaginated(ctx context.Context, in ListPageInput) ([]Observation, bool, error) {
+	limit := in.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	dir := "DESC"
+	cmp := "<"
+	if !in.SortDesc {
+		dir = "ASC"
+		cmp = ">"
+	}
+
+	args := []any{in.ProjectID}
+	q := `SELECT id, organization_id, project_id, created_by, session_id,
+	            content, observation_type, tags, metadata, created_at, updated_at
+	      FROM observations
+	      WHERE project_id = $1 AND deleted_at IS NULL`
+	if in.CursorTime != nil && in.CursorID != nil {
+		args = append(args, *in.CursorTime, *in.CursorID)
+		q += fmt.Sprintf(" AND (created_at, id) %s ($2, $3)", cmp)
+	}
+	args = append(args, limit+1)
+	q += fmt.Sprintf(" ORDER BY created_at %s, id %s LIMIT $%d", dir, dir, len(args))
+
+	rows, err := s.Pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, false, fmt.Errorf("list paginated: %w", err)
+	}
+	defer rows.Close()
+	var out []Observation
+	for rows.Next() {
+		var o Observation
+		if err := rows.Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+			&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt); err != nil {
+			return nil, false, err
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
+}
+
 // SoftDelete marca deleted_at.
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx,

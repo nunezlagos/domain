@@ -203,6 +203,19 @@ func writeData(w http.ResponseWriter, status int, data any) {
 	writeJSON(w, status, map[string]any{"data": data})
 }
 
+// writeDataWithMeta envía {data, ...extra} para responses con pagination/warnings/etc.
+// Las keys de extra NO deben colisionar con "data".
+func writeDataWithMeta(w http.ResponseWriter, status int, data any, extra map[string]any) {
+	body := map[string]any{"data": data}
+	for k, v := range extra {
+		if k == "data" {
+			continue
+		}
+		body[k] = v
+	}
+	writeJSON(w, status, body)
+}
+
 func decodeJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

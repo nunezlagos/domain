@@ -1,3 +1,37 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/api/cursor/ package:
+  - Cursor struct: LastID, LastSortValue, FiltersHash, SortDir
+  - Encode → base64url(JSON) sin padding
+  - Decode + validate FiltersHash + validate SortDir → ErrFiltersMismatch / ErrSortMismatch
+  - HashFilters genera hash determinístico sorted-keys → detecta reuso de cursor con filtros distintos
+  - NormalizeSort acepta "asc" | "desc" | "" (→desc default)
+  - PageMeta shape estándar {next_cursor, has_more, limit}
+
+  Server-side keyset pagination en observation.ListPaginated:
+  - WHERE (created_at, id) < ($2, $3) — tie-breaker estable
+  - LIMIT $N+1 detecta has_more sin extra count query
+  - ORDER BY created_at DESC, id DESC (default) o ASC ambos
+
+  Handler GET /api/v1/observations:
+  - Param ?cursor= decodifica + valida filters_hash + sort
+  - Param ?sort=asc|desc (default desc)
+  - Param ?offset= legacy → header Deprecation + Sunset 2026-12-31
+  - offset > 10000 → 400
+  - Response shape: {data:[...], pagination:{next_cursor, has_more, limit}}
+
+  Tests cursor_test.go cubren 5 escenarios de la HU:
+  - Encode/Decode roundtrip
+  - Tampered → ErrInvalid
+  - Filters mismatch → ErrFiltersMismatch
+  - Sort mismatch → ErrSortMismatch
+  - HashFilters stable + distinct on change
+
+  Pending:
+  - Aplicar cursor a GET /api/v1/knowledge, /skills, /agents, /flows, /prompts
+  - Métricas Prometheus: domain_pagination_cursor_decoded_total + _mismatch_total
+  - Cursor versioning si futuro schema change rompe LastSortValue type
+  - SDK Python + TS expose helper iterate_all() que consume next_cursor automáticamente

@@ -39,6 +39,7 @@ import (
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	reqsvc "nunezlagos/domain/internal/service/requirement"
 	rolesvc "nunezlagos/domain/internal/service/role"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
@@ -84,6 +85,7 @@ type API struct {
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 	RoleService    *rolesvc.Service
+	ReqService     *reqsvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -112,6 +114,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/organizations/{id}", a.deleteOrg)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
+
+	// Requirements (HU-04.1) — SDD dogfood
+	mux.HandleFunc("POST /api/v1/requirements", a.createRequirement)
+	mux.HandleFunc("GET /api/v1/requirements", a.listRequirements)
+	mux.HandleFunc("GET /api/v1/requirements/{slug}", a.getRequirement)
+	mux.HandleFunc("PATCH /api/v1/requirements/{slug}", a.updateRequirement)
+	mux.HandleFunc("POST /api/v1/requirements/{slug}/archive", a.archiveRequirement)
+	mux.HandleFunc("GET /api/v1/requirements/{slug}/tree", a.getRequirementTree)
 
 	// Custom roles (HU-02.8)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/roles", a.listRoles)

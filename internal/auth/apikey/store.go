@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -40,6 +41,44 @@ func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env 
 		return "", uuid.Nil, fmt.Errorf("insert api_key: %w", err)
 	}
 	return plaintext, keyID, nil
+}
+
+// APIKeyInfo representación pública de una API key (sin hash ni plaintext).
+type APIKeyInfo struct {
+	ID          uuid.UUID  `json:"id"`
+	OrgID       uuid.UUID  `json:"organization_id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Name        string     `json:"name"`
+	Prefix      string     `json:"prefix"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// List retorna keys activas de una org (no revoked).
+func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, organization_id, user_id, name, key_prefix,
+		       last_used_at, expires_at, revoked_at, created_at
+		FROM api_keys
+		WHERE organization_id = $1 AND revoked_at IS NULL
+		ORDER BY created_at DESC
+	`, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("list api keys: %w", err)
+	}
+	defer rows.Close()
+	var keys []APIKeyInfo
+	for rows.Next() {
+		var k APIKeyInfo
+		if err := rows.Scan(&k.ID, &k.OrgID, &k.UserID, &k.Name, &k.Prefix,
+			&k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt, &k.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan api key: %w", err)
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
 }
 
 // Revoke marca soft-delete sobre la key.

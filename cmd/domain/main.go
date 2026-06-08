@@ -42,6 +42,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -243,6 +244,7 @@ func runServer() {
 	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agentService := &agentsvc.Service{Pool: pools.App, Audit: recorder}
 	billingService := &billing.Service{Pool: pools.App}
+	costService := &cost.Service{Pool: pools.App}
 
 	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
 	// Si no hay ninguna key, el runner devuelve runner_disabled al primer Run.
@@ -321,6 +323,8 @@ func runServer() {
 		AgentRunner:      agentRunnerInst,
 		FlowService:      flowService,
 		FlowRunner:       flowRunnerInst,
+		CostService:      costService,
+		BillingService:   billingService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

@@ -1,3 +1,25 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Schema base ya disponible en agent_runs (tokens_input, tokens_output, cost_usd, finished_at, started_at).
+  Agent runner persiste estos campos al completar cada run (internal/runner/agent/runner.go).
+
+  Migration 000037 crea vistas agregadas para queries rápidas:
+  - domain_cost_daily_by_org (per día por organización)
+  - domain_cost_daily_by_agent (per día por agente)
+
+  internal/service/cost/service.go expone DailyByOrg/DailyByAgent
+  consumiendo las vistas. Filtros por rango de días (1-365, default 30).
+
+  HTTP: GET /api/v1/cost/daily?days=N&group_by=org|agent
+  - Devuelve cost agregado por día
+  - Auth Bearer obligatorio, scoped al org del principal
+
+  Pending:
+  - Métricas Prometheus domain_llm_tokens_total + domain_cost_usd_total
+    (counter por provider/model/org)
+  - Vistas con índice si el query plan lo requiere a escala
+  - Window functions para "diff vs período previo"
+  - HU-15.3 usage alerts (notification al cruzar soft/hard limit)

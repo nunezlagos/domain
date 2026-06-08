@@ -18,6 +18,8 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -51,6 +53,8 @@ type API struct {
 	FlowService      *flow.Service
 	FlowRunner       *flowrunner.Runner
 	WebhookService   *webhooksvc.Service
+	CostService      *cost.Service
+	BillingService   *billing.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -148,6 +152,10 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/prompts/{id}", a.deletePrompt)
 	mux.HandleFunc("GET /api/v1/prompts/by-slug/{slug}/versions", a.listPromptVersions)
 	mux.HandleFunc("GET /api/v1/prompts/search", a.searchPrompts)
+
+	// Cost analytics (HU-15.1 + HU-15.2)
+	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
+	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // HU-21.3 plan usage actual
 
 	return mux
 }

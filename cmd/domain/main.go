@@ -23,6 +23,7 @@ import (
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/crypto"
+	debugpkg "nunezlagos/domain/internal/debug"
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
@@ -196,6 +197,26 @@ func runServer() {
 			logger.Info("metrics endpoint starting", slog.String("addr", metricsAddr))
 			if err := metricsReg.Serve(metricsAddr, "", ""); err != nil && err != http.ErrServerClosed {
 				logger.Error("metrics server failed", slog.Any("err", err))
+			}
+		}()
+	}
+
+	// Runtime tuning (HU-27.2)
+	debugpkg.TuneRuntime(logger)
+
+	// Debug pprof endpoints (HU-27.1) en puerto separado con basic auth
+	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
+		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
+		go func() {
+			err := debugpkg.Serve(debugpkg.Config{
+				Enabled:  true,
+				Bind:     os.Getenv("DOMAIN_DEBUG_BIND"),
+				Port:     port,
+				AuthUser: os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
+				AuthPass: os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
+			}, logger)
+			if err != nil && err != http.ErrServerClosed {
+				logger.Error("debug server failed", slog.Any("err", err))
 			}
 		}()
 	}

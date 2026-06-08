@@ -1,3 +1,73 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Domain ahora es bidireccional: además de exponer su propio MCP server
+  (HU-12.1, ya implementado), CONSUME servidores MCP externos como github-mcp,
+  filesystem-mcp, etc.
+
+  migration 000042:
+  - mcp_servers (config): id, org_id, name, transport (stdio|http|sse),
+    command, args, env_cipher, url, enabled, status (pending|connected|
+    disconnected|failed), last_connected_at, last_error, retry_count
+  - mcp_server_tools (cache discovery): server_id, tool_name, description,
+    input_schema, enabled, discovered_at
+  - UNIQUE constraint (org, name) + (server_id, tool_name)
+  - CHECK constraint stdio→command obligatorio, http/sse→url obligatorio
+
+  internal/mcp/client/stdio.go:
+  - StdioClient spawnea proceso via exec.Cmd + comunica via JSON-RPC 2.0 sobre
+    stdin/stdout siguiendo spec MCP 2024-11-05
+  - Initialize() hace handshake: initialize + notifications/initialized
+  - ListTools() llama tools/list y decodifica
+  - CallTool(name, args) llama tools/call retornando CallResult{content, isError}
+  - readLoop goroutine rutea responses por ID a waiters
+  - Close() idempotente con grace 2s + kill
+
+  internal/service/mcpserver/service.go:
+  - Service CRUD: Create/Get/ListByOrg/Delete
+  - Env vars cifradas at-rest con crypto.Cipher (AES-256-GCM)
+  - SyncTools(ctx, org, id):
+    * decrypt env
+    * spawn cliente stdio
+    * initialize + tools/list
+    * upsert tools en mcp_server_tools (ON CONFLICT UPDATE)
+    * marca status=connected o failed con last_error
+  - InvokeTool(ctx, org, server, tool, args):
+    * versión simple 1-shot: spawn + initialize + call + close
+    * defer cli.Close() garantiza cleanup
+
+  HTTP /api/v1/mcp-servers:
+  - POST create
+  - GET list / GET/{id}
+  - DELETE /{id}
+  - POST /{id}/sync-tools (descubre tools, retorna cache actualizado)
+  - GET /{id}/tools (tools cached del último sync)
+  - POST /{id}/invoke (body {tool_name, arguments}, retorna CallResult)
+
+  Tests cubren:
+  - stdio_test.go: handshake JSON shapes + Close idempotente + call after close
+  - service_test.go: validación transport + stdio command required + http url required
+
+  Cobertura HU-12.4 vs Gherkin:
+  - Escenario 1 (register externo): ✓
+  - Escenario 2 (tools como skills): ⚠ parcial — tools persisten en mcp_server_tools
+    pero NO se crean skills automáticamente. Llamar InvokeTool directo.
+  - Escenario 3 (ejecutar tool externa): ✓ via InvokeTool
+  - Escenario 4 (Domain tools para MCP externos): ✓ (HU-12.1 ya hace esto)
+  - Escenario 5 (heartbeat + reconnect): ✗ no implementado — InvokeTool spawns
+    proceso por invocación (1-shot). Long-lived process pool para futura iteración.
+  - Escenario 6 (discovery periódico): ✗ — sync manual via POST /sync-tools
+  - Escenario 7 (error propagation): ✓ — CallTool retorna error MCP + 502 Bad Gateway
+
+  Pending (mejoras):
+  - Pool de conexiones long-lived (1 proceso vivo por server registrado)
+  - Reconnect automático con exponential backoff hasta 5 intentos (escenario 5)
+  - Cron periódico (5min) de sync-tools por servidor enabled (escenario 6)
+  - Materialización automática como skills tipo "mcp" en skill registry (escenario 2)
+  - Agent runner integration: tools de MCP externos disponibles para LLM tool_calling
+  - Transport http+sse implementation
+  - Sandbox del proceso spawnado (seccomp + namespaces)
+  - Validación schema del input antes de CallTool
+  - Tests integration con servidor MCP mock real

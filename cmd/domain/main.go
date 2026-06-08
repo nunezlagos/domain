@@ -54,6 +54,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/flow"
+	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/invite"
@@ -344,6 +345,7 @@ func runServer() {
 	skillRunnerInst := skillrunner.New()
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
 	usageAlertsService := &usagealerts.Service{Pool: pools.App}
+	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
 		Dispatcher:  outboundDispatcher,
@@ -417,6 +419,7 @@ func runServer() {
 		Backpressure:              &backpressure.Limiter{Pool: pools.App},
 		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
 		UsageAlertsService:        usageAlertsService,
+		MCPServerService:          mcpServerService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

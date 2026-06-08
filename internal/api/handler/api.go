@@ -27,6 +27,7 @@ import (
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/usagealerts"
+	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
@@ -65,6 +66,7 @@ type API struct {
 	Backpressure               *backpressure.Limiter
 	DBMonCollector             *dbmon.Collector
 	UsageAlertsService         *usagealerts.Service
+	MCPServerService           *mcpserver.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -175,6 +177,15 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
 	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
+
+	// MCP servers externos (HU-12.4)
+	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)
+	mux.HandleFunc("GET /api/v1/mcp-servers", a.listMCPServers)
+	mux.HandleFunc("GET /api/v1/mcp-servers/{id}", a.getMCPServer)
+	mux.HandleFunc("DELETE /api/v1/mcp-servers/{id}", a.deleteMCPServer)
+	mux.HandleFunc("POST /api/v1/mcp-servers/{id}/sync-tools", a.syncMCPTools)
+	mux.HandleFunc("GET /api/v1/mcp-servers/{id}/tools", a.listMCPTools)
+	mux.HandleFunc("POST /api/v1/mcp-servers/{id}/invoke", a.invokeMCPTool)
 
 	// Outbound webhooks (HU-10.4)
 	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)

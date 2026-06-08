@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -34,6 +35,8 @@ import (
 	"nunezlagos/domain/internal/llm/circuitbreaker"
 	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/secrets"
+	setuppkg "nunezlagos/domain/internal/cli/setup"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"nunezlagos/domain/internal/logging"
@@ -95,6 +98,8 @@ func main() {
 		runHealthcheckProbe()
 	case "rotate-db-password":
 		runRotateDBPassword(os.Args[2:])
+	case "setup":
+		runSetup(os.Args[2:])
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -600,4 +605,75 @@ func runRotateDBPassword(args []string) {
 // pgxpoolNew wrapper para evitar import alias en main.
 func pgxpoolNew(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pgxpool.New(ctx, dsn)
+}
+
+// HU-12.5 setup — wizard CLI para configurar agentes externos.
+//
+// Usage:
+//   domain setup claude-code
+//   domain setup --mcp-binary /usr/local/bin/domain-mcp --api-key sk_...
+func runSetup(args []string) {
+	agent := "claude-code"
+	mcpBinary := ""
+	apiKey := os.Getenv("DOMAIN_API_KEY")
+	baseURL := os.Getenv("DOMAIN_BASE_URL")
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "claude-code", "claude":
+			agent = "claude-code"
+		case "--mcp-binary":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "missing value for --mcp-binary")
+				os.Exit(2)
+			}
+			mcpBinary = args[i+1]
+			i++
+		case "--api-key":
+			if i+1 < len(args) {
+				apiKey = args[i+1]
+				i++
+			}
+		case "--base-url":
+			if i+1 < len(args) {
+				baseURL = args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			fmt.Println("Usage: domain setup [claude-code] [--mcp-binary PATH] [--api-key KEY] [--base-url URL]")
+			fmt.Println("Configura un agente externo (Claude Desktop) para usar domain-mcp.")
+			os.Exit(0)
+		}
+	}
+	if mcpBinary == "" {
+		// Default: asumir que domain-mcp está en el mismo dir que domain.
+		ex, err := os.Executable()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "no pude detectar el binario actual; pasá --mcp-binary")
+			os.Exit(1)
+		}
+		mcpBinary = strings.Replace(ex, "/domain", "/domain-mcp", 1)
+	}
+
+	switch agent {
+	case "claude-code":
+		path, err := setuppkg.SetupClaudeDesktop(mcpBinary, apiKey, baseURL)
+		if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
+			fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
+			os.Exit(0)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "setup falló: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ Domain MCP agregado a %s\n", path)
+		if cwd, err := os.Getwd(); err == nil {
+			if dp, err := setuppkg.CreateAIDirectives(cwd); err == nil {
+				fmt.Printf("✓ Directivas creadas en %s\n", dp)
+			}
+		}
+		fmt.Println("\nReinicia Claude Desktop para activar Domain.")
+	default:
+		fmt.Fprintf(os.Stderr, "agente no soportado aún: %s\n", agent)
+		os.Exit(2)
+	}
 }

@@ -1,3 +1,49 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/cli/setup/setup.go:
+  - ClaudeDesktopConfigPath() resuelve path per OS (darwin/linux/windows)
+  - SetupClaudeDesktop(mcpBinary, apiKey, baseURL):
+    * Lee config existente (no destruye otros servers)
+    * Si "domain" ya registrado → ErrAlreadyConfigured (idempotente)
+    * Backup automático con timestamp (config.json.backup-YYYYMMDDTHHMMSSZ)
+    * Inserta server "domain" con command + env DOMAIN_API_KEY/BASE_URL
+    * Write back con permisos 0600
+  - CreateAIDirectives(cwd):
+    * Crea .ai/directives.md con instrucciones para uso de tools domain_*
+    * No sobrescribe si ya existe (preserva customizaciones)
+    * Lista de archivos sensibles que el agente NO debe tocar
+      (.env, .git/, *.pem, *.key, credentials.*)
+
+  Subcomando CLI: domain setup [claude-code] [flags]
+  - --mcp-binary PATH (default: detecta del binario actual)
+  - --api-key KEY (fallback DOMAIN_API_KEY env)
+  - --base-url URL (fallback DOMAIN_BASE_URL env)
+  - Imprime path config + ruta directives + recordatorio restart
+
+  Tests setup_test.go (5):
+  - ClaudeDesktopConfigPath OS-dependent
+  - SetupClaudeDesktop crea config nuevo válido
+  - ErrAlreadyConfigured cuando server "domain" ya está
+  - Preserva otros mcpServers existentes (no destruye github-mcp etc.)
+  - CreateAIDirectives NO sobrescribe contenido manual
+
+  Cobertura HU-12.5 escenarios:
+  - 1 detección automática del agente: ✗ — solo claude-code por ahora
+  - 2 configurar Claude Code: ✓
+  - 3 configurar OpenCode: ✗ pendiente (similar pattern, .opencode/mcp.json)
+  - 4 backup config previo: ✓ (timestamp suffix)
+  - 5 NO toca archivos sensibles: ✓ (lista en directives.md + setup solo
+    modifica claude_desktop_config.json)
+  - 6 .ai/directives.md: ✓
+
+  Pending:
+  - Agent detection automático (cuál tiene Claude Code o OpenCode instalado)
+  - Soporte OpenCode (.opencode/mcp.json)
+  - Soporte Codex / Cline / otros agentes MCP-aware
+  - Modo interactivo con prompts (--interactive)
+  - Subcomando setup verify que valida que Domain MCP responde correctamente
+  - Subcomando setup remove que limpia el registro (rollback)
+  - Detección de mcp_binary via PATH lookup automático

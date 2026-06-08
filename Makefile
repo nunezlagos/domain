@@ -72,6 +72,10 @@ coverage: ## Tests con cobertura + reporte HTML
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Reporte: coverage.html"
 
+bench: ## Benchmarks (5 runs, baseline comparativo)
+	@mkdir -p benchmark-results
+	go test -bench=. -benchmem -count=5 ./... 2>&1 | tee benchmark-results/$(or $(BENCH_OUT),bench).txt
+
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")

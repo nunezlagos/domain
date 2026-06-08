@@ -32,6 +32,7 @@ import (
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
+	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/secrets"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -288,6 +289,14 @@ func runServer() {
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
 
+	// Runtime config registry (HU-27.3) — refresca al boot + cada 30s + SIGHUP.
+	rtCfgRegistry := &runtimeconfig.Registry{Pool: pools.App, Logger: logger}
+	if err := rtCfgRegistry.Refresh(ctx); err != nil {
+		logger.Warn("initial runtime config refresh failed (defaults used)",
+			slog.String("error", err.Error()))
+	}
+	go rtCfgRegistry.RunPolling(ctx, 30*time.Second)
+
 	// Cipher opcional para outbound webhook secrets at-rest (HU-02.3 + HU-10.4).
 	var masterCipher *crypto.Cipher
 	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
@@ -447,6 +456,19 @@ func runServer() {
 
 	// Graceful shutdown (HU-26.4): trap SIGINT/SIGTERM, drain sequenced
 	// con budget total ~28s (K8s terminationGracePeriodSeconds=30 default).
+	// HU-27.3 hot-reload SIGHUP handler.
+	hupCh := make(chan os.Signal, 1)
+	signal.Notify(hupCh, syscall.SIGHUP)
+	go func() {
+		for range hupCh {
+			if err := rtCfgRegistry.Refresh(context.Background()); err != nil {
+				logger.Warn("SIGHUP refresh failed", slog.Any("err", err))
+			} else {
+				logger.Info("config reloaded via SIGHUP")
+			}
+		}
+	}()
+
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {

@@ -1,3 +1,33 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  migration 000041 con tabla runtime_configs (key, value JSONB,
+  description, is_hot_reloadable, updated_at, updated_by). Seed inicial
+  con 5 configs hot-reloadables.
+
+  internal/runtimeconfig/registry.go:
+  - HotReloadable whitelist con 6 keys (log_level, timeouts, sample ratios,
+    batch size, metrics_enabled)
+  - Registry mantiene atomic.Pointer[Snapshot] (acceso lock-free)
+  - Refresh(ctx) consulta DB + valida cada value + atomic store
+  - RunPolling(ctx, 30s) fallback continuo al SIGHUP
+  - applyValue valida ranges (log_level enum, timeouts 1-600, ratio 0-1)
+
+  Integraciones cmd/domain runServer:
+  - Boot: Refresh sync, fallback a Defaults() si DB falla
+  - go RunPolling cada 30s
+  - SIGHUP handler refresca sync + log "config reloaded"
+
+  Tests (7) cubren Defaults + applyValue valid/invalid/out-of-range +
+  HotReloadable catalog + Current() nil fallback.
+
+  Pending:
+  - HTTP admin endpoints POST/GET /api/v1/admin/runtime-configs/{key}
+  - is_hot_reloadable=false → 409 si admin intenta cambiar
+  - Validation feedback con error code específico por key
+  - LISTEN/NOTIFY push real-time (incompatible con PgBouncer transaction-pool)
+  - Aplicar dynamic a slog level / HTTP timeouts (actualmente requiere Current()
+    en cada call site)
+  - Audit log entry tras cada cambio

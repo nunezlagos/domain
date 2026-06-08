@@ -32,6 +32,9 @@ import (
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
+	"nunezlagos/domain/internal/secrets"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 	"nunezlagos/domain/internal/logging"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
@@ -88,6 +91,8 @@ func main() {
 		runServer()
 	case "healthcheck":
 		runHealthcheckProbe()
+	case "rotate-db-password":
+		runRotateDBPassword(os.Args[2:])
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -516,4 +521,58 @@ func runOutboundDispatcher(ctx context.Context, d *outboundwebhook.Dispatcher, l
 			}
 		}
 	}
+}
+
+// HU-25.10 rotate-db-password — genera nuevo password + ALTER ROLE.
+// Usage: domain rotate-db-password --role app_user
+// Imprime el nuevo password en stdout (operator lo copia al Secret Manager).
+func runRotateDBPassword(args []string) {
+	role := "app_user"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--role", "-r":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "missing value for --role")
+				os.Exit(2)
+			}
+			role = args[i+1]
+			i++
+		case "--help", "-h":
+			fmt.Println("Usage: domain rotate-db-password [--role <name>]")
+			fmt.Println("  Default role: app_user")
+			fmt.Println("  Requires DOMAIN_DATABASE_AUTH_URL (user with ALTER ROLE perm).")
+			os.Exit(0)
+		}
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
+	adminDSN := cfg.DatabaseAuthURL
+	if adminDSN == "" {
+		adminDSN = cfg.DatabaseURL
+	}
+	ctx := context.Background()
+	pool, err := pgxpoolNew(ctx, adminDSN)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pool: %v\n", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	rot := &secrets.Rotator{AdminPool: pool}
+	newPass, err := rot.RotateRole(ctx, role)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rotate: %v\n", err)
+		os.Exit(1)
+	}
+	// El password va a stdout para pipe-friendly:
+	//   domain rotate-db-password --role app_user > /tmp/new_pwd
+	fmt.Println(newPass)
+	fmt.Fprintf(os.Stderr, "rotated role=%s — update Secret Manager + rolling deploy app pods.\n", role)
+}
+
+// pgxpoolNew wrapper para evitar import alias en main.
+func pgxpoolNew(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	return pgxpool.New(ctx, dsn)
 }

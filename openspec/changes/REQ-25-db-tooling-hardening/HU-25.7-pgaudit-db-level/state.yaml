@@ -1,3 +1,31 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  deploy/postgres/pgaudit.conf config server-level:
+  - pgaudit.log = 'ddl, role, write' (no read blanket — usar log_object)
+  - pgaudit.log_relation = on (incluye nombre de relación)
+  - pgaudit.log_catalog = off (no logea operaciones pg_catalog)
+  - pgaudit.log_parameter = off (evita PII leak vía parameters)
+  - pgaudit.log_statement_once = on (reduce volumen multi-stmt)
+  - pgaudit.log_level = log
+
+  Migration 000039_enable_pgaudit.up.sql:
+  - CREATE EXTENSION IF NOT EXISTS pgaudit (idempotent)
+  - SECURITY LABEL FOR pgaudit ON TABLE {audit_log,api_keys,plan_assignments}
+    IS 'READ,WRITE' — object-level audit en tablas críticas
+  - Wrapped en DO $$ ... IF EXISTS pg_extension $$ para tolerar dev local
+    sin pgaudit loaded
+
+  deploy/postgres/README.md documenta:
+  - Cómo aplicar config en docker-compose / CloudNativePG / postgres-operator
+  - Verificación post-deploy (SHOW shared_preload_libraries + test DDL)
+  - Filtrado promtail/filebeat para shipping a índice "audit" con retention 7y
+  - Overhead esperado: 5-10% con WRITE/DDL, hasta 20% con read blanket
+
+  Pending:
+  - Helm chart values.yaml pre-baked con shared_preload_libraries incluido
+  - Promtail/filebeat pipeline ejemplo en deploy/loki/ o deploy/promtail/
+  - Tabla en docs/security.md con qué se logea + retention
+  - Sabotaje test: ejecutar DDL en CI y verificar que aparece en log con prefix AUDIT

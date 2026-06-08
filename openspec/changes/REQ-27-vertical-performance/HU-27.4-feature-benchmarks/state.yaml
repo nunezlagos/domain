@@ -1,3 +1,25 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  *_bench_test.go suite agregada en 4 paquetes hot-path:
+  - internal/api/cursor: Encode (~857ns), Decode (~1.8µs), HashFilters (~534ns)
+  - internal/api/etag: Compute (~402ns), LastModified (~208ns)
+  - internal/dlock: HashKey (~114ns)
+  - internal/anonymizer: FakerRUT (~221ns), FakerEmail (~153ns),
+    RedactJSON small (~2.6µs) / nested (~5.1µs)
+
+  docs/benchmarks/README.md documenta:
+  - Cómo correr suite + comparar con benchstat
+  - Áreas cubiertas con baseline en AMD Ryzen 7 3700X
+  - Áreas pendientes (search, agent_run E2E, flow_run, pgx, RLS)
+
+  Pending:
+  - Benchmarks heavy con testcontainers (search FTS+vector, agent_run con
+    mock LLM, flow_run 5-step). Estos van en CI weekly, no en cada PR.
+  - CI step que ejecuta benchmarks + sube resultados a artifact + compara con
+    baseline (main branch). benchstat comparativo en PR comment automático.
+  - benchmark-results/ dir con baselines pre-generados
+  - Profile collection: pprof CPU/heap durante bench critical path
+  - Métrica Prometheus de regresiones detectadas

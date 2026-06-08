@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"nunezlagos/domain/internal/activity"
+	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/otp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
@@ -28,6 +30,8 @@ import (
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/mcpserver"
+	"nunezlagos/domain/internal/dbstats"
+	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/service/policy"
 	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/observation"
@@ -71,6 +75,11 @@ type API struct {
 	MCPServerService           *mcpserver.Service
 	ProjectTemplateService     *projecttemplate.Service
 	PolicyService              *policy.Service
+	RuntimeConfigRegistry     *runtimeconfig.Registry
+	DBStatsService            *dbstats.Service
+	Audit          *audit.PGRecorder
+	ActivityRecorder activity.Recorder
+	ActivityQuerier  activity.Querier
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -82,6 +91,17 @@ func (a *API) Router() http.Handler {
 	// Auth (sin Bearer requerido)
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
+
+	// Audit logs (HU-02.4, requiere auth)
+	mux.HandleFunc("GET /api/v1/audit-logs", a.listAuditLogs)
+
+	// API keys CRUD (HU-02.1)
+	mux.HandleFunc("GET /api/v1/api-keys", a.listAPIKeys)
+	mux.HandleFunc("POST /api/v1/api-keys", a.createAPIKey)
+	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", a.revokeAPIKey)
+
+	// Activity logs (HU-02.6)
+	mux.HandleFunc("GET /api/v1/activity-logs", a.listActivityLogs)
 
 	// Organizaciones (require auth)
 	mux.HandleFunc("POST /api/v1/organizations", a.createOrg)
@@ -177,6 +197,13 @@ func (a *API) Router() http.Handler {
 
 	// Admin DB stats (HU-25.12)
 	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
+
+	// Runtime configs (HU-27.3)
+	mux.HandleFunc("GET /api/v1/admin/runtime-configs/{key}", a.getRuntimeConfig)
+	mux.HandleFunc("POST /api/v1/admin/runtime-configs/{key}", a.updateRuntimeConfig)
+
+	// Slow queries (HU-25.2)
+	mux.HandleFunc("GET /api/v1/admin/db/slow-queries", a.getSlowQueries)
 
 	// Usage alerts (HU-15.3)
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)

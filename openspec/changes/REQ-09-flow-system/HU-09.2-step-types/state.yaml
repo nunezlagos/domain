@@ -9,14 +9,20 @@ notes: |
   - mem_save     : Save observation en project
   - condition    : evalúa op (==|!=) sobre {{inputs.x}}/{{outputs.id.field}}
 
+  Step types también implementados:
+  - sub_flow     : HU-09.5 con detección circular + depth max 10
+  - parallel     : branches concurrentes con cancel-on-first-error
+                   (max 32 branches), output {results,errors}
+
   Stub explícito ErrStepTypeStub:
   - http_request : extraer impl del skill api
-  - parallel     : HU-08.8 paralelización
   - wait_signal  : HU-09.8 external signals
 
   Pending:
   - http_request standalone (reuse skill api code path)
-  - parallel sync.WaitGroup + outputs merge
   - wait_signal con status=paused_awaiting_signal en BD
   - HU-09.4 retry semantics (step.retries + backoff)
   - HU-09.9 saga compensation con on_failure forward direction
+  - code_exec (HU-11 sandbox)
+  - human_input (UI integration pending)
+  - transform (JSONata/JMESPath evaluator)

@@ -249,7 +249,9 @@ func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outpu
 		return r.execCondition(step, inputs, outputs)
 	case flow.StepTypeSubFlow:
 		return r.execSubFlow(ctx, step, orgID, userID)
-	case flow.StepTypeHTTPRequest, flow.StepTypeParallel, flow.StepTypeWaitSignal:
+	case flow.StepTypeParallel:
+		return r.execParallel(ctx, step, inputs, outputs, orgID, userID)
+	case flow.StepTypeHTTPRequest, flow.StepTypeWaitSignal:
 		return nil, fmt.Errorf("%w: %s (HU-09 future)", ErrStepTypeStub, step.Type)
 	}
 	return nil, fmt.Errorf("unknown step type: %s", step.Type)
@@ -319,6 +321,92 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 		"status":      res.Status,
 		"outputs":     res.Outputs,
 	}, nil
+}
+
+// execParallel ejecuta N branches concurrentemente, espera a todos, retorna
+// el array de resultados (en el orden declarado, no de completion).
+//
+// Config esperado:
+//
+//	{"branches": [<step1>, <step2>, ...]}
+//
+// Si CUALQUIER branch falla, el step parallel falla con el primer error
+// y los demás branches reciben ctx cancel.
+//
+// Output: {"results": [...], "errors": [...]} ambos arrays paralelos a branches.
+func (r *Runner) execParallel(parentCtx context.Context, step *flow.Step,
+	inputs, outputs map[string]any, orgID uuid.UUID, userID *uuid.UUID) (any, error) {
+
+	branchesRaw, ok := step.Config["branches"].([]any)
+	if !ok || len(branchesRaw) == 0 {
+		return nil, fmt.Errorf("parallel: branches[] requerido")
+	}
+	maxBranches := 32
+	if len(branchesRaw) > maxBranches {
+		return nil, fmt.Errorf("parallel: max %d branches, got %d", maxBranches, len(branchesRaw))
+	}
+
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+
+	type result struct {
+		idx int
+		val any
+		err error
+	}
+	resCh := make(chan result, len(branchesRaw))
+
+	for i, b := range branchesRaw {
+		branchMap, ok := b.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("parallel branch[%d]: must be object", i)
+		}
+		branchStep := mapToStep(branchMap)
+		go func(idx int, st *flow.Step) {
+			val, err := r.executeStep(ctx, st, inputs, outputs, orgID, userID)
+			resCh <- result{idx: idx, val: val, err: err}
+		}(i, branchStep)
+	}
+
+	results := make([]any, len(branchesRaw))
+	errs := make([]string, len(branchesRaw))
+	var firstErr error
+	for i := 0; i < len(branchesRaw); i++ {
+		r := <-resCh
+		results[r.idx] = r.val
+		if r.err != nil {
+			errs[r.idx] = r.err.Error()
+			if firstErr == nil {
+				firstErr = r.err
+				cancel() // cancela el resto al primer error
+			}
+		}
+	}
+
+	out := map[string]any{"results": results, "errors": errs}
+	if firstErr != nil {
+		return out, fmt.Errorf("parallel: branch failed: %w", firstErr)
+	}
+	return out, nil
+}
+
+// mapToStep convierte un map (de Config branches) a un flow.Step.
+func mapToStep(m map[string]any) *flow.Step {
+	step := &flow.Step{
+		Config: map[string]any{},
+	}
+	if v, ok := m["id"].(string); ok {
+		step.ID = v
+	}
+	if v, ok := m["type"].(string); ok {
+		step.Type = v
+	}
+	if v, ok := m["config"].(map[string]any); ok {
+		step.Config = v
+	} else if v, ok := m["params"].(map[string]any); ok {
+		step.Config = v
+	}
+	return step
 }
 
 func formatChain(slugs []string) string {

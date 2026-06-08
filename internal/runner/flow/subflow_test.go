@@ -44,3 +44,35 @@ func TestSubflowDepthLimit_Constante(t *testing.T) {
 		t.Fatalf("maxSubflowDepth out of reasonable range: %d", maxSubflowDepth)
 	}
 }
+
+func TestMapToStep_ParseaCampos(t *testing.T) {
+	m := map[string]any{
+		"id":   "s1",
+		"type": "sub_flow",
+		"params": map[string]any{
+			"flow_slug": "child",
+			"input":     map[string]any{"k": "v"},
+		},
+	}
+	st := mapToStep(m)
+	if st.ID != "s1" {
+		t.Fatalf("id: %s", st.ID)
+	}
+	if st.Type != "sub_flow" {
+		t.Fatalf("type: %s", st.Type)
+	}
+	if st.Config["flow_slug"] != "child" {
+		t.Fatalf("config flow_slug: %v", st.Config["flow_slug"])
+	}
+}
+
+func TestMapToStep_AceptaConfigOParams(t *testing.T) {
+	cfg := map[string]any{"id": "x", "type": "skill_run", "config": map[string]any{"a": 1}}
+	if mapToStep(cfg).Config["a"] != 1 {
+		t.Fatal("config key not propagated")
+	}
+	par := map[string]any{"id": "x", "type": "skill_run", "params": map[string]any{"b": 2}}
+	if mapToStep(par).Config["b"] != 2 {
+		t.Fatal("params key not propagated")
+	}
+}

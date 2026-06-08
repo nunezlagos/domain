@@ -224,7 +224,7 @@ func runServer() {
 
 	// Pools (app_user para runtime, app_admin para auth/audit).
 	ctx := context.Background()
-	pools, err := db.OpenProduction(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL)
+	pools, err := db.OpenProductionWithReplica(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL, cfg.DatabaseReadOnlyURL)
 	if err != nil {
 		logger.Error("pools open failed", slog.Any("err", err))
 		os.Exit(1)
@@ -232,6 +232,15 @@ func runServer() {
 	defer pools.Close()
 	if cfg.DatabaseAuthURL == "" && cfg.Env != "dev" {
 		logger.Warn("DOMAIN_DATABASE_AUTH_URL not set — auth pool reuses runtime user (NOT recommended outside dev)")
+	}
+	if pools.ReadOnly != nil {
+		pools.LagMonitor = &db.LagMonitor{
+			Pool: pools.ReadOnly, PollInterval: 30 * time.Second,
+			ThresholdSecs: 10.0, Logger: logger,
+		}
+		go pools.LagMonitor.Run(ctx)
+		logger.Info("read replica configured with lag monitor",
+			slog.Float64("threshold_secs", 10.0))
 	}
 
 	// Services: dependency wiring explícito.

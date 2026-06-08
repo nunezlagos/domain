@@ -33,13 +33,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Pools agrupa los dos pools del proceso.
+// Pools agrupa los pools del proceso.
+//
+// - App: primary read-write, user app_user (NOBYPASSRLS).
+// - Auth: primary read-write, user app_admin (BYPASSRLS) para auth+audit.
+// - ReadOnly: opcional, apunta a read replica para queries pesadas tolerantes
+//   de stale-read (HU-25.9). Si es nil, Read() fallback a App.
 type Pools struct {
-	App  *pgxpool.Pool
-	Auth *pgxpool.Pool
+	App        *pgxpool.Pool
+	Auth       *pgxpool.Pool
+	ReadOnly   *pgxpool.Pool
+	LagMonitor *LagMonitor
 }
 
-// Close cierra ambos pools de forma ordenada.
+// Close cierra los pools de forma ordenada.
 func (p *Pools) Close() {
 	if p.App != nil {
 		p.App.Close()
@@ -47,6 +54,24 @@ func (p *Pools) Close() {
 	if p.Auth != nil && p.Auth != p.App {
 		p.Auth.Close()
 	}
+	if p.ReadOnly != nil && p.ReadOnly != p.App {
+		p.ReadOnly.Close()
+	}
+}
+
+// Read retorna el pool preferido para queries SELECT pesadas.
+// Si hay ReadOnly disponible y el LagMonitor no marca degraded, usa ReadOnly.
+// Sino, fallback transparente a App. Las queries deben tolerar stale-read <2s.
+func (p *Pools) Read() *pgxpool.Pool {
+	if p.ReadOnly != nil && (p.LagMonitor == nil || !p.LagMonitor.IsDegraded()) {
+		return p.ReadOnly
+	}
+	return p.App
+}
+
+// ReadFresh siempre retorna App (primary). Para queries que NO toleran stale-read.
+func (p *Pools) ReadFresh() *pgxpool.Pool {
+	return p.App
 }
 
 // OpenProduction abre dos pools desde DSNs separadas. En prod los DSN tienen
@@ -71,6 +96,26 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 		return nil, fmt.Errorf("open auth pool: %w", err)
 	}
 	return &Pools{App: app, Auth: auth}, nil
+}
+
+// OpenProductionWithReplica extiende OpenProduction abriendo además un pool
+// read-only contra la replica (HU-25.9). Si readDSN está vacío, ReadOnly=nil
+// y Read() fallback a App.
+func OpenProductionWithReplica(ctx context.Context, appDSN, authDSN, readDSN string) (*Pools, error) {
+	pools, err := OpenProduction(ctx, appDSN, authDSN)
+	if err != nil {
+		return nil, err
+	}
+	if readDSN == "" {
+		return pools, nil
+	}
+	ro, err := pgxpool.New(ctx, readDSN)
+	if err != nil {
+		pools.Close()
+		return nil, fmt.Errorf("open readonly pool: %w", err)
+	}
+	pools.ReadOnly = ro
+	return pools, nil
 }
 
 // OpenWithRoleOverride es el helper para tests: un solo container, dos pools

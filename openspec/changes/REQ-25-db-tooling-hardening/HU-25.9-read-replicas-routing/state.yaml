@@ -1,3 +1,39 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/db/pools.go extendido con ReadOnly pool opcional:
+  - Pools{App, Auth, ReadOnly, LagMonitor}
+  - OpenProductionWithReplica(ctx, appDSN, authDSN, readDSN) construye los 3
+  - Pools.Read() routea a ReadOnly si available y NO degraded (lag <= threshold).
+    Sino fallback transparente a App.
+  - Pools.ReadFresh() siempre retorna App (sin tolerancia stale-read).
+
+  internal/db/lag_monitor.go:
+  - LagMonitor.Run(ctx) consulta cada PollInterval (default 30s)
+    SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp()))
+  - LagSeconds() atomic.Uint64 + math.Float64bits acceso lock-free
+  - IsDegraded() true si lag > ThresholdSecs (default 10s)
+  - Log warn cuando excede threshold
+
+  Config: DOMAIN_DATABASE_READONLY_URL env var (opcional, vacía = ReadOnly=nil).
+
+  Wireado en cmd/domain runServer:
+  - OpenProductionWithReplica reemplaza OpenProduction
+  - Si ReadOnly disponible → arranca LagMonitor goroutine en ctx principal
+
+  Tests lag_monitor_test.go (5):
+  - floatBitsRoundtrip
+  - LagSeconds default 0
+  - setLag + LagSeconds roundtrip
+  - IsDegraded threshold logic
+  - Pools.Read y ReadFresh fallback a App cuando ReadOnly=nil
+
+  Pending:
+  - Métricas Prometheus: domain_db_replication_lag_seconds gauge,
+    domain_db_replica_queries_total counter, _fallback_total cuando degrade
+  - Migrar callers heavy-read (search HU-03.7, knowledge.Search, observation.List
+    con limit grande) para usar pools.Read()
+  - Alertmanager rule: lag > 5s sostenido 2min
+  - Doc: stale-read tolerance contract <2s

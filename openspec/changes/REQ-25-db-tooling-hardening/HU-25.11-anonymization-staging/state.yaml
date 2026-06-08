@@ -1,3 +1,48 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/anonymizer/ package:
+  - types.go: Rule enum (passthrough/faker_email/faker_name/faker_rut/
+    faker_phone/redact_content/nullify/json_redact), Config{Seed,Tables,
+    SensitiveJSONKeys}, TableConfig{Skip,Columns}, DefaultConfig() con
+    políticas para todas las tablas PII identificadas en security.md.
+  - fakers.go: FakerEmail/Name/OrgName/Phone/RUT determinísticos por seed+idx
+    + lookup tables (20 nombres, 15 apellidos, 15 palabras org).
+    rutDV(n) computa DV módulo 11 correctamente.
+  - jsonredact.go: RedactJSON walk recursivo con keys exactas o sufijos
+    sensibles (_email, _rut, _phone, _password, _secret, _token, _apikey).
+    Invalid JSON → passthrough.
+  - anonymizer.go: Anonymizer{Src,Dst,Cfg,Logger}.Run(ctx) que enumera
+    columnas via information_schema, SELECT * en src, transforma según
+    Rules, INSERT en dst con ON CONFLICT DO NOTHING (idempotente).
+
+  cmd/anonymize/main.go CLI:
+    anonymize -src <DSN> -dst <DSN> [-seed N]
+
+  Tabla policy DefaultConfig:
+  - users → email/rut/name/phone fakers
+  - organizations → name faker
+  - observations → content redact (preserva hash)
+  - audit_log → diff/new_values/old_values JSON redact
+  - api_keys, otp_codes → Skip entera
+  - outbound_webhook_subscriptions → secret_cipher = NULL
+
+  Tests anonymizer_test.go (9):
+  - FakerEmail determinístico + distinct seeds
+  - FakerName formato "First Last"
+  - FakerRUT DV módulo 11 válido (50 iteraciones)
+  - RedactJSON enmascara nested + respeta no-sensibles
+  - RedactJSON detecta sufijos _email/_token
+  - RedactJSON pass-through con JSON inválido
+  - RedactContentTag determinístico con prefix
+  - DefaultConfig tiene policy para tablas PII + Skip de api_keys/otp_codes
+
+  Pending:
+  - Modo "streaming" con cursor por batch (50k rows) para tablas grandes
+  - Detección automática de tablas no listadas en Cfg (warning)
+  - Compatibilidad con pg_dump pipeline directo (sin pool dest)
+  - Anonimización de embedding vector si contiene info de origen
+  - Test integration con testcontainers (src real → dst real)
+  - Validación schema match entre src y dst antes de Run

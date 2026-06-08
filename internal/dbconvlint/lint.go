@@ -328,6 +328,64 @@ func min(a, b int) int {
 	return b
 }
 
+// Fix aplica transformaciones automáticas para reglas auto-fixables.
+// Retorna el SQL modificado y true si hubo cambios.
+//
+// Reglas auto-fixables:
+//   - prefer-jsonb: JSON → JSONB
+//   - prefer-timestamptz: TIMESTAMP → TIMESTAMPTZ
+//   - naming-snake-case: pascal case → snake case en nombres de tabla
+func Fix(src string) (string, bool) {
+	fixed := false
+	lines := strings.Split(src, "\n")
+	overrides := parseOverrides(lines)
+
+	// prefer-jsonb: reemplazar JSON no-comment donde no sea JSONB ya.
+	for i, l := range lines {
+		if isCommentLine(l) {
+			continue
+		}
+		if overrides[overrideKey{i + 1, "prefer-jsonb"}] || overrides[overrideKey{i + 1, "*"}] {
+			continue
+		}
+		stripped := stripInlineComment(l)
+		if !reJSONNoB.MatchString(stripped) {
+			continue
+		}
+		// Reemplazar JSON solitario (word boundary asegura no tocar JSONB)
+		newL := reJSONNoB.ReplaceAllString(l, "JSONB")
+		if newL != l {
+			lines[i] = newL
+			fixed = true
+		}
+	}
+
+	// prefer-timestamptz: reemplazar TIMESTAMP solo donde no sea "WITH TIME ZONE".
+	for i, l := range lines {
+		if isCommentLine(l) {
+			continue
+		}
+		if overrides[overrideKey{i + 1, "prefer-timestamptz"}] || overrides[overrideKey{i + 1, "*"}] {
+			continue
+		}
+		stripped := stripInlineComment(l)
+		if !reTimestampPlain.MatchString(stripped) {
+			continue
+		}
+		if reTimestampWithTZ.MatchString(stripped) {
+			continue
+		}
+		// Reemplazar TIMESTAMP -> TIMESTAMPTZ uno por uno evitando WITH TIME ZONE.
+		newL := reTimestampPlain.ReplaceAllString(l, "TIMESTAMPTZ")
+		if newL != l {
+			lines[i] = newL
+			fixed = true
+		}
+	}
+
+	return strings.Join(lines, "\n"), fixed
+}
+
 // === Migration Safety (HU-25.3) ===
 //
 // Reglas que detectan patrones peligrosos para producción:

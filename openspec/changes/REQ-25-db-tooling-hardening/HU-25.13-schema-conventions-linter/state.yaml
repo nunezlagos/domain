@@ -1,41 +1,31 @@
 status: partially_implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-08
 archived: ~
 notes: |
-  Linter Go en internal/dbconvlint + CLI cmd/db-conventions-lint.
+  ## Implementado (2026-06-08)
 
-  Reglas activas:
-  - prefer-jsonb: \bJSON\b (sin B) prohibido
-  - prefer-timestamptz: \bTIMESTAMP\b sin "WITH TIME ZONE" prohibido
-  - prefer-numeric-money: float/real para columnas *_usd, *_amount, price*
-  - require-created-at: tabla debe tener *_at TIMESTAMPTZ DEFAULT NOW()
-    (acepta created_at, occurred_at, recorded_at, etc.)
-  - fk-naming-suffix: columna FK debe terminar en _id (o _by para actor FKs)
-  - fk-on-delete-strategy: REFERENCES debe declarar ON DELETE explícito
-  - naming-snake-case: tabla en snake_case
-  - naming-plural-table: tabla en plural (heurística: termina en s)
-    excepciones: schema_migrations, audit_log, activity_log, feature_flags
-  - header-required: 6 fields obligatorios en .up.sql
+  ### Modo --fix
+  - dbconvlint.Fix(src) -> (string, bool): transforma automáticamente:
+    - prefer-jsonb: JSON → JSONB (respeta comments, overrides, inline comments)
+    - prefer-timestamptz: TIMESTAMP → TIMESTAMPTZ (solo cuando NO es "WITH TIME ZONE")
+  - Respeta overrides (-- domain-lint-ignore-next)
+  - No modifica líneas comentadas
 
-  Override: comentario `-- domain-lint-ignore-next: <regla>` en la línea
-  anterior. Wildcard `*` ignora todas. Permite escapes legítimos.
+  ### CLI
+  - --fix flag en cmd/db-conventions-lint
+  - Lee archivo, aplica Fix, escribe el resultado
+  - Corre lint post-fix para confirmar que los issues se resolvieron
+  - Reporta "N file(s) fixed" en stdout
 
-  CLI:
-    db-conventions-lint <archivo.sql>...
-    db-conventions-lint --dir internal/migrate/migrations
-    db-conventions-lint --dir <d> --baseline 29  # skip migrations <= 29
+  ### Tests
+  - 7 tests nuevos: JSON→JSONB, JSONB unchanged, TIMESTAMP→TIMESTAMPTZ,
+    TIMESTAMP WITH TIME ZONE unchanged, multiple replacements,
+    override respected, comment ignored
+  - 1 sabotage: comment no falso
 
-  Tests: 16 unit (incluye 2 sabotaje). Linter es limpio sobre las 29
-  migrations existentes (verificado en CI manual). Si una migration nueva
-  introduce violación → exit 1 + lista de issues file:line:[rule] message.
-
-  Parser SQL: regex + balance manual de paréntesis para extraer body de
-  CREATE TABLE (los DEFAULT gen_random_uuid() rompen regex naïve).
-
-  Pending HU-25.13:
-  - Modo --fix (auto-transforma JSON→JSONB, TIMESTAMP→TIMESTAMPTZ)
+  ## Pending (aún no implementado)
   - Trigger set_updated_at_<table> auto-check
   - Particionado para tablas log declarado
-  - Detector más fino de pluralización (handles "_history" "_data" etc.)
-  - Integración CI step en GitHub Actions / .git/hooks/pre-commit
+  - Detector más fino de pluralización
+  - Integración CI step

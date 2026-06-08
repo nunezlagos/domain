@@ -168,6 +168,66 @@ func TestSabotage_OverrideRemoved_RuleFiresAgain(t *testing.T) {
 		"sin override, prefer-jsonb DEBE saltar")
 }
 
+// --- Fix mode tests ---
+
+func TestFix_JSONtoJSONB(t *testing.T) {
+	src := `CREATE TABLE foos (data JSON);`
+	got, changed := Fix(src)
+	require.True(t, changed)
+	require.Equal(t, `CREATE TABLE foos (data JSONB);`, got)
+}
+
+func TestFix_JSONBUnchanged(t *testing.T) {
+	src := `CREATE TABLE foos (data JSONB);`
+	got, changed := Fix(src)
+	require.False(t, changed)
+	require.Equal(t, src, got)
+}
+
+func TestFix_TIMESTAMPtoTIMESTAMPTZ(t *testing.T) {
+	src := `CREATE TABLE foos (ts TIMESTAMP);`
+	got, changed := Fix(src)
+	require.True(t, changed)
+	require.Equal(t, `CREATE TABLE foos (ts TIMESTAMPTZ);`, got)
+}
+
+func TestFix_TIMESTAMPWithTZUnchanged(t *testing.T) {
+	src := `CREATE TABLE foos (ts TIMESTAMP WITH TIME ZONE);`
+	got, changed := Fix(src)
+	require.False(t, changed)
+	require.Equal(t, src, got)
+}
+
+func TestFix_MultipleReplacements(t *testing.T) {
+	src := `CREATE TABLE foos (
+  data JSON,
+  ts TIMESTAMP,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`
+	got, changed := Fix(src)
+	require.True(t, changed)
+	require.Contains(t, got, "JSONB")
+	require.Contains(t, got, "TIMESTAMPTZ")
+	require.NotContains(t, got, "\n  data JSON,")
+	require.NotContains(t, got, "ts TIMESTAMP,")
+}
+
+func TestFix_OverrideRespected(t *testing.T) {
+	src := `-- domain-lint-ignore-next: prefer-jsonb
+data JSON,`
+	got, changed := Fix(src)
+	require.False(t, changed)
+	require.Equal(t, src, got)
+}
+
+func TestFix_CommentIgnored(t *testing.T) {
+	src := `-- usa JSON en este comment
+CREATE TABLE foos (data JSONB);`
+	got, changed := Fix(src)
+	require.False(t, changed)
+	require.Equal(t, src, got)
+}
+
 // Sabotaje: JSON dentro de comment NO debe disparar.
 func TestSabotage_JSONInComment_Ignored(t *testing.T) {
 	src := validHeader + `-- usar JSON aquí está OK porque es comment

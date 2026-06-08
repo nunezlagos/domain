@@ -25,6 +25,7 @@ import (
 func main() {
 	dir := flag.String("dir", "", "directorio de migrations (recursivo no, solo *.up.sql)")
 	baseline := flag.Int("baseline", 0, "ignora migrations cuyo número sea <= baseline (default 0 = sin baseline)")
+	fix := flag.Bool("fix", false, "aplica fix automático (JSON→JSONB, TIMESTAMP→TIMESTAMPTZ)")
 	flag.Parse()
 
 	files := flag.Args()
@@ -45,6 +46,7 @@ func main() {
 
 	reMigrationNum := regexp.MustCompile(`^(\d{6})`)
 	allIssues := 0
+	fixedCount := 0
 	for _, f := range files {
 		name := filepath.Base(f)
 		if *baseline > 0 {
@@ -59,11 +61,30 @@ func main() {
 			fmt.Fprintf(os.Stderr, "read %s: %v\n", f, err)
 			os.Exit(2)
 		}
-		issues := dbconvlint.Lint(f, string(data))
+		content := string(data)
+
+		// Fix mode: aplica auto-fix + lint
+		if *fix {
+			fixed, changed := dbconvlint.Fix(content)
+			if changed {
+				if err := os.WriteFile(f, []byte(fixed), 0644); err != nil {
+					fmt.Fprintf(os.Stderr, "write %s: %v\n", f, err)
+					os.Exit(2)
+				}
+				fmt.Printf("fixed: %s\n", f)
+				fixedCount++
+				content = fixed
+			}
+		}
+
+		issues := dbconvlint.Lint(f, content)
 		for _, is := range issues {
 			fmt.Println(is.String())
 		}
 		allIssues += len(issues)
+	}
+	if fixedCount > 0 {
+		fmt.Printf("\n%d file(s) fixed\n", fixedCount)
 	}
 	if allIssues > 0 {
 		fmt.Fprintf(os.Stderr, "\n%d issue(s) found\n", allIssues)

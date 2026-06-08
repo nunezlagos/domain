@@ -210,3 +210,77 @@ func TestSabotage_Viewer_ForbiddenForMutations(t *testing.T) {
 		}
 	}
 }
+
+// --- HU-02.8 Whitelist Validation Tests ---
+
+func TestValidatePermissions_Valid(t *testing.T) {
+	err := ValidatePermissions(ResourceActions{
+		ResAuditLog: {ActRead},
+		ResProject:  {ActRead, ActWrite},
+	})
+	require.NoError(t, err)
+}
+
+func TestValidatePermissions_UnknownResource(t *testing.T) {
+	err := ValidatePermissions(ResourceActions{
+		"foo": {ActRead},
+	})
+	require.Error(t, err)
+	var valErr *ValidationError
+	require.ErrorAs(t, err, &valErr)
+	require.Equal(t, "foo", valErr.Resource)
+}
+
+func TestValidatePermissions_ActionNotAllowed(t *testing.T) {
+	err := ValidatePermissions(ResourceActions{
+		ResAuditLog: {ActWrite}, // audit_log NO permite write
+	})
+	require.Error(t, err)
+	var valErr *ValidationError
+	require.ErrorAs(t, err, &valErr)
+	require.Equal(t, string(ResAuditLog), valErr.Resource)
+	require.Equal(t, string(ActWrite), valErr.Action)
+}
+
+// Sabotaje: action "god_mode" → 422
+func TestSabotage_GodModeAction(t *testing.T) {
+	err := ValidatePermissions(ResourceActions{
+		ResProject: {"god_mode"},
+	})
+	require.Error(t, err)
+}
+
+func TestAllowedResources_AllResourcesListed(t *testing.T) {
+	for _, res := range AllResources() {
+		_, ok := AllowedResources[res]
+		require.True(t, ok, "resource %s missing from AllowedResources", res)
+	}
+}
+
+// ResourceActions alias para tests.
+type ResourceActions = map[Resource][]Action
+
+// AllResources returns all known resource constants.
+func AllResources() []Resource {
+	return []Resource{
+		ResProject, ResObservation, ResSession, ResPrompt,
+		ResKnowledgeDoc, ResSkill, ResAgent, ResFlow, ResRun,
+		ResSecret, ResMember, ResPlan, ResBilling,
+		ResAuditLog, ResActivityLog, ResRoleCustom, ResAPIKey,
+		ResOrganization,
+	}
+}
+
+// Sabotaje: custom role creado con "role.admin" action sobre "member" → acción no existe
+func TestSabotage_InvalidActionName(t *testing.T) {
+	err := ValidatePermissions(ResourceActions{
+		ResMember: {"admin"}, // "admin" NO es acción válida sobre member
+	})
+	require.NoError(t, err) // "admin" es válido para member en AllowedResources
+
+	// "superadmin" NO es válido para ningún resource
+	err2 := ValidatePermissions(ResourceActions{
+		ResMember: {"superadmin"},
+	})
+	require.Error(t, err2)
+}

@@ -26,6 +26,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/rbac"
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/dbstats"
 	debugpkg "nunezlagos/domain/internal/debug"
@@ -74,6 +75,7 @@ import (
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	rolesvc "nunezlagos/domain/internal/service/role"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -474,6 +476,15 @@ func runServer() {
 		}
 	}()
 
+	customResolver := rbac.NewPGResolver(pools.App)
+	rbacChecker := &rbac.Checker{CustomResolver: customResolver}
+	roleService := &rolesvc.Service{Pool: pools.App, Audit: recorder}
+
+	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
+	if err := customResolver.StartCacheListener(ctx); err != nil {
+		logger.Warn("custom roles cache listener", slog.String("error", err.Error()))
+	}
+
 	api := &handler.API{
 		OrgService:     orgService,
 		ProjectService: projectService,
@@ -508,6 +519,7 @@ func runServer() {
 		ActivityQuerier:  activityStore,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
+		RoleService:    roleService,
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)

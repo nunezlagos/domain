@@ -39,6 +39,7 @@ import (
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	rolesvc "nunezlagos/domain/internal/service/role"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -82,6 +83,7 @@ type API struct {
 	ActivityQuerier  activity.Querier
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
+	RoleService    *rolesvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -110,6 +112,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/organizations/{id}", a.deleteOrg)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
+
+	// Custom roles (HU-02.8)
+	mux.HandleFunc("GET /api/v1/organizations/{id}/roles", a.listRoles)
+	mux.HandleFunc("POST /api/v1/organizations/{id}/roles", a.createRole)
+	mux.HandleFunc("GET /api/v1/organizations/{id}/roles/{slug}", a.getRole)
+	mux.HandleFunc("PATCH /api/v1/organizations/{id}/roles/{slug}", a.updateRole)
+	mux.HandleFunc("DELETE /api/v1/organizations/{id}/roles/{slug}", a.deleteRole)
+	mux.HandleFunc("POST /api/v1/organizations/{id}/members/{user_id}/role", a.assignRole)
 
 	// Invitations
 	mux.HandleFunc("POST /api/v1/organizations/{id}/invitations", a.createInvite)

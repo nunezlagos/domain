@@ -3,26 +3,29 @@ created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
 notes: |
-  cmd/domain runServer ahora traps SIGINT/SIGTERM y llama srv.Shutdown con
-  timeout 30s. Permite drain de in-flight requests antes del kill.
+  cmd/domain runServer ejecuta shutdown sequenced al recibir SIGTERM/SIGINT,
+  budget total 28s (dentro del terminationGracePeriodSeconds=30 default).
 
-  Flow:
-  1. K8s envía SIGTERM al pod
-  2. Goroutine de shutdown detecta señal, log "draining..."
-  3. srv.Shutdown(ctx 30s):
-     - net/http deja de aceptar nuevas conexiones
-     - in-flight requests siguen hasta completar o timeout
-  4. ListenAndServe retorna ErrServerClosed → exit clean
-  5. Si timeout 30s vence → forced shutdown logged
+  Fases (con timing):
+  1. Flip httpserver.ShuttingDown=true → readiness probe responde 503 (ELB drain)
+  2. Sleep 5s grace para que ELB note el unhealthy y deje de rutear
+  3. srv.Shutdown(20s ctx) → in-flight HTTP requests completan o timeout
+  4. schedCancel() → leader workers (cron + flow recovery + outbound dispatcher) reciben ctx.Done()
+  5. defer pools.Close() drena DB pools al return
 
-  K8s terminationGracePeriodSeconds default 30s coincide con nuestro timeout.
+  internal/httpserver/health.go:
+  - ShuttingDown atomic.Bool global flag
+  - ReadyHandler responde 503 con reason="shutting_down" si flag activo
+  - HealthHandler liveness sigue 200 mientras el process vive (escenario 5)
 
-  Pending HU-26.* completo:
-  - HU-26.1 stateless invariant lint: detectar package-level state mutable
-    en código (regla custom o build tag)
-  - HU-26.2 leader election crons (HU-10.1): elegir 1 pod para correr crons
-    via Postgres advisory lock o K8s lease
-  - HU-26.3 distributed locks (advisory locks Postgres)
-  - HU-26.5 circuit breaker LLM ✅ (commit pending)
-  - HU-26.6 backpressure queue (Postgres LISTEN/NOTIFY o channel buffered)
-  - HU-26.7 cache invalidation pattern
+  Test health_test.go cubre escenario 5:
+  - TestReady_ShuttingDown_Returns503 valida el flip
+
+  Pending:
+  - Métricas Prometheus: domain_shutdown_duration_seconds histogram +
+    domain_shutdown_in_flight_at_start counter + domain_shutdown_forced_total
+  - Worker mid-iteration checkpoint (escenario 2): el flow runner ya tiene
+    heartbeat + recovery (HU-09.6), pero falta SAVE incremental por step para
+    que si el worker recibe SIGTERM termine el step pero el run pueda resumir
+    en otro pod sin re-ejecutar steps idempotentes
+  - Sleep 5s es burdo; idealmente leer DOMAIN_SHUTDOWN_GRACE_SECONDS env var

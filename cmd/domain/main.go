@@ -388,20 +388,37 @@ func runServer() {
 		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
 	}
 
-	// Graceful shutdown (HU-26.4): trap SIGINT/SIGTERM, drain in-flight
-	// requests con timeout 30s. K8s envía SIGTERM antes del kill -9 (default 30s).
+	// Graceful shutdown (HU-26.4): trap SIGINT/SIGTERM, drain sequenced
+	// con budget total ~28s (K8s terminationGracePeriodSeconds=30 default).
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-shutdownCh
-		logger.Info("shutdown signal received, draining...", slog.String("signal", sig.String()))
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			logger.Error("forced shutdown after timeout", slog.Any("err", err))
-		} else {
-			logger.Info("graceful shutdown complete")
+		shutdownStart := time.Now()
+		logger.Info("shutdown signal received", slog.String("signal", sig.String()))
+
+		// Paso 1: flip readiness → ELB deja de rutear nuevos requests (5s grace)
+		httpserver.ShuttingDown.Store(true)
+		logger.Info("readiness flipped → unhealthy; waiting ELB drain (5s)")
+		time.Sleep(5 * time.Second)
+
+		// Paso 2: HTTP server Shutdown (espera in-flight) — budget 20s
+		httpCtx, httpCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer httpCancel()
+		forced := false
+		if err := srv.Shutdown(httpCtx); err != nil {
+			logger.Warn("http shutdown forced after timeout", slog.Any("err", err))
+			forced = true
 		}
+
+		// Paso 3: cancel leader workers (scheduler + recovery + dispatcher)
+		schedCancel()
+
+		// Paso 4: cerrar pools — defer pools.Close() lo hace al return de runServer
+		duration := time.Since(shutdownStart).Seconds()
+		logger.Info("graceful shutdown complete",
+			slog.Float64("duration_s", duration),
+			slog.Bool("forced", forced))
 	}()
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -46,6 +46,20 @@ func TestReady_NoPool_ReturnsOK(t *testing.T) {
 	require.Equal(t, "skipped", body["db"])
 }
 
+func TestReady_ShuttingDown_Returns503(t *testing.T) {
+	ShuttingDown.Store(true)
+	defer ShuttingDown.Store(false)
+	h := &ReadyHandler{Pool: nil}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+	require.False(t, body["ready"].(bool))
+	require.Equal(t, "shutting_down", body["reason"])
+}
+
 // Sabotaje: response shape verifica que el Content-Type sea correcto y JSON parseable.
 func TestSabotage_Health_AlwaysValidJSON(t *testing.T) {
 	h := &HealthHandler{Info: VersionInfo{Version: "x"}, StartedAt: time.Now()}

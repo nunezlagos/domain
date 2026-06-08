@@ -6,10 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ShuttingDown es un flag global que se setea en true al recibir SIGTERM.
+// Una vez true, ReadyHandler responde 503 para que ELB/K8s deje de rutear
+// nuevos requests (HU-26.4 escenario 5).
+var ShuttingDown atomic.Bool
 
 // VersionInfo build-time metadata.
 type VersionInfo struct {
@@ -44,9 +50,14 @@ type ReadyHandler struct {
 	Pool *pgxpool.Pool
 }
 
-// ServeHTTP — 200 si pool nil o ping OK; 503 si ping falla.
+// ServeHTTP — 200 si pool nil o ping OK; 503 si ping falla o ShuttingDown=true.
 func (h *ReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if ShuttingDown.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ready": false, "reason": "shutting_down"})
+		return
+	}
 	if h.Pool == nil {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{"ready": true, "db": "skipped"})

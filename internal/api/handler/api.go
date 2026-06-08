@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/mcpserver"
+	"nunezlagos/domain/internal/service/policy"
 	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
@@ -69,6 +70,7 @@ type API struct {
 	UsageAlertsService         *usagealerts.Service
 	MCPServerService           *mcpserver.Service
 	ProjectTemplateService     *projecttemplate.Service
+	PolicyService              *policy.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -180,6 +182,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
 	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
+
+	// Platform policies (HU-01.8)
+	mux.HandleFunc("POST /api/v1/platform/policies", a.createPolicy)
+	mux.HandleFunc("GET /api/v1/platform/policies", a.listPolicies)
+	mux.HandleFunc("GET /api/v1/platform/policies/{slug}", a.getPolicyBySlug)
+	mux.HandleFunc("PATCH /api/v1/platform/policies/{id}", a.updatePolicy)
+	mux.HandleFunc("DELETE /api/v1/platform/policies/{id}", a.deletePolicy)
 
 	// Project templates (HU-01.4)
 	mux.HandleFunc("POST /api/v1/project-templates", a.createProjectTemplate)

@@ -59,6 +59,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
+	"nunezlagos/domain/internal/service/policy"
 	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/invite"
@@ -353,6 +354,7 @@ func runServer() {
 	usageAlertsService := &usagealerts.Service{Pool: pools.App}
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
+	policyService := &policy.Service{Pool: pools.App}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
 		Dispatcher:  outboundDispatcher,
@@ -428,6 +430,7 @@ func runServer() {
 		UsageAlertsService:        usageAlertsService,
 		MCPServerService:          mcpServerService,
 		ProjectTemplateService:    projectTemplateService,
+		PolicyService:             policyService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

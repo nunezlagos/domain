@@ -1,3 +1,34 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  migration 000045 con platform_policies (slug, name, kind enum, body_md,
+  body_structured JSONB, version, is_active, source_file) + platform_policy_versions
+  (history). UNIQUE (slug, is_active) — solo una activa por slug.
+
+  internal/service/policy/ package:
+  - 7 kinds: convention, security_rule, architecture, sdd_workflow,
+    observability, migration_rule, linter_config
+  - Create/GetBySlug/List/Update/Delete
+  - Update transaccional: archiva versión actual + bump + UPDATE (atómico)
+  - Delete = soft-delete (is_active=FALSE)
+  - GetBySlug retorna solo is_active=TRUE
+
+  HTTP /api/v1/platform/policies:
+  - POST create
+  - GET list (?kind= filtro opcional)
+  - GET /{slug}
+  - PATCH /{id} con ChangedBy del principal
+  - DELETE /{id} (soft)
+
+  Tests cubren validKinds + reSlug + invalid slug/kind + sentinel.
+
+  Pending:
+  - CLI domain policies import-md (leer .claude/rules/*.md → bulk INSERT)
+  - CLI domain policies export-md (regenerar files desde BD)
+  - MCP tool domain_policy_get(slug) para agents
+  - Seeders built-in policies desde .claude/rules/
+  - GET /policies/{slug}/versions history
+  - RBAC platform_admin only para mutations
+  - Markdown-aware diff entre versiones

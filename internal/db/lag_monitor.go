@@ -20,6 +20,9 @@ type LagMonitor struct {
 	ThresholdSecs float64       // default 10.0 (sobre esto → fallback a primary)
 	Logger        *slog.Logger
 
+	// MetricsCB se invoca en cada tick con el lag medido (HU-25.9 métricas).
+	MetricsCB func(lag float64)
+
 	// lagSeconds es el último valor medido. atomic para acceso lock-free.
 	lagSeconds atomic.Uint64 // float64 bits
 }
@@ -60,6 +63,9 @@ func (m *LagMonitor) tick(ctx context.Context) {
 		return
 	}
 	m.setLag(lag)
+	if m.MetricsCB != nil {
+		m.MetricsCB(lag)
+	}
 	if m.Logger != nil && lag > m.ThresholdSecs {
 		m.Logger.WarnContext(ctx, "replica lag exceeded threshold",
 			slog.Float64("lag_seconds", lag),

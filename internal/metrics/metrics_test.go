@@ -19,6 +19,11 @@ func TestNew_RegistersStandardCollectors(t *testing.T) {
 	// Forzamos increment para confirmar registration.
 	r.HTTPRequestsTotal.WithLabelValues("GET", "/x", "200").Inc()
 	r.AgentRunsTotal.WithLabelValues("chat", "ok").Inc()
+	// GaugeVec requieren un Set para aparecer en output
+	r.DBPoolInUse.WithLabelValues("app").Set(1)
+	r.DBPoolIdle.WithLabelValues("app").Set(2)
+	r.DBPoolTotal.WithLabelValues("app").Set(5)
+	r.ReplicationLagSeconds.Set(0)
 	rec := httptest.NewRecorder()
 	r.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
 	body := rec.Body.String()
@@ -27,7 +32,10 @@ func TestNew_RegistersStandardCollectors(t *testing.T) {
 	require.Contains(t, body, "go_memstats_alloc_bytes")
 	// Custom registered
 	require.Contains(t, body, "domain_http_requests_total")
-	require.Contains(t, body, "domain_db_pool_in_use") // gauge always
+	require.Contains(t, body, `domain_db_pool_in_use{pool="app"} 1`)
+	require.Contains(t, body, `domain_db_pool_idle{pool="app"} 2`)
+	require.Contains(t, body, `domain_db_pool_total{pool="app"} 5`)
+	require.Contains(t, body, "domain_db_replication_lag_seconds 0")
 	require.Contains(t, body, "domain_agent_runs_total")
 }
 

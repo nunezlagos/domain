@@ -25,9 +25,24 @@ type Registry struct {
 	HTTPRequestDuration *prometheus.HistogramVec
 
 	// DB pool
-	DBPoolInUse      prometheus.Gauge
+	DBPoolInUse      *prometheus.GaugeVec
+	DBPoolIdle       *prometheus.GaugeVec
+	DBPoolTotal      *prometheus.GaugeVec
 	DBPoolAcquired   prometheus.Counter
 	DBQueryDuration  *prometheus.HistogramVec
+
+	// Replicación (HU-25.9)
+	ReplicationLagSeconds prometheus.Gauge
+	ReplicaQueriesTotal   prometheus.Counter
+	ReplicaFallbackTotal  prometheus.Counter
+
+	// DB monitoring (HU-25.12)
+	DBConnectionsActive            prometheus.Gauge
+	DBConnectionsIdle              prometheus.Gauge
+	DBConnectionsIdleInTransaction prometheus.Gauge
+	DBLongestQuerySeconds          prometheus.Gauge
+	DBLockWaitsTotal               *prometheus.CounterVec
+	DBTableDeadTuples              *prometheus.GaugeVec
 
 	// Dominio
 	AgentRunsTotal    *prometheus.CounterVec
@@ -35,6 +50,8 @@ type Registry struct {
 	LLMTokensTotal    *prometheus.CounterVec
 	CostUSDTotal      *prometheus.CounterVec
 	SkillExecsTotal   *prometheus.CounterVec
+	PprofAccessTotal  prometheus.Counter
+	SlowQueriesTotal  *prometheus.CounterVec
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -64,10 +81,18 @@ func New() *Registry {
 		[]string{"method", "path"},
 	)
 
-	r.DBPoolInUse = prometheus.NewGauge(prometheus.GaugeOpts{
+	r.DBPoolInUse = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "domain_db_pool_in_use",
 		Help: "Conexiones pgx en uso",
-	})
+	}, []string{"pool"})
+	r.DBPoolIdle = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "domain_db_pool_idle",
+		Help: "Conexiones pgx idle",
+	}, []string{"pool"})
+	r.DBPoolTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "domain_db_pool_total",
+		Help: "Conexiones pgx totales (max)",
+	}, []string{"pool"})
 	r.DBPoolAcquired = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "domain_db_pool_acquired_total",
 		Help: "Total conn acquires",
@@ -117,18 +142,88 @@ func New() *Registry {
 		},
 		[]string{"skill_slug", "status"},
 	)
+	r.PprofAccessTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "domain_debug_pprof_accessed_total",
+		Help: "Total accesos a /debug/pprof/*",
+	})
+	r.SlowQueriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_db_slow_queries_total",
+			Help: "Slow queries detectadas por threshold",
+		},
+		[]string{"threshold_ms"},
+	)
+
+	// HU-25.9 read-replicas
+	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_db_replication_lag_seconds",
+		Help: "Replication lag en segundos (0 si no hay replica)",
+	})
+	r.ReplicaQueriesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "domain_db_replica_queries_total",
+		Help: "Queries ruteadas a replica",
+	})
+	r.ReplicaFallbackTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "domain_db_replica_fallback_total",
+		Help: "Fallbacks a primary por replica degradada",
+	})
+
+	// HU-25.12 locks-vacuum
+	r.DBConnectionsActive = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_db_connections_active",
+		Help: "Conexiones activas en pg_stat_activity",
+	})
+	r.DBConnectionsIdle = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_db_connections_idle",
+		Help: "Conexiones idle en pg_stat_activity",
+	})
+	r.DBConnectionsIdleInTransaction = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_db_connections_idle_in_transaction",
+		Help: "Conexiones idle in transaction",
+	})
+	r.DBLongestQuerySeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_db_longest_query_seconds",
+		Help: "Duracion de la query activa mas larga",
+	})
+	r.DBLockWaitsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_db_lock_waits_total",
+			Help: "Lock waits detectados por wait type y tabla",
+		},
+		[]string{"wait_type", "table"},
+	)
+	r.DBTableDeadTuples = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "domain_db_table_dead_tuples",
+			Help: "Dead tuples por tabla",
+		},
+		[]string{"table"},
+	)
 
 	reg.MustRegister(
 		r.HTTPRequestsTotal,
 		r.HTTPRequestDuration,
 		r.DBPoolInUse,
+		r.DBPoolIdle,
+		r.DBPoolTotal,
 		r.DBPoolAcquired,
 		r.DBQueryDuration,
+		r.ReplicationLagSeconds,
+		r.ReplicaQueriesTotal,
+		r.ReplicaFallbackTotal,
+		r.DBConnectionsActive,
+		r.DBConnectionsIdle,
+		r.DBConnectionsIdleInTransaction,
+		r.DBLongestQuerySeconds,
+		r.DBLockWaitsTotal,
+		r.DBTableDeadTuples,
 		r.AgentRunsTotal,
 		r.AgentRunDuration,
 		r.LLMTokensTotal,
 		r.CostUSDTotal,
 		r.SkillExecsTotal,
+		r.PprofAccessTotal,
+		r.SlowQueriesTotal,
 	)
 	return r
 }

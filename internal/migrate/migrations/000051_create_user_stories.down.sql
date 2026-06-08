@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS gherkin_scenarios CASCADE;
+DROP TABLE IF EXISTS user_stories CASCADE;

@@ -77,6 +77,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	rolesvc "nunezlagos/domain/internal/service/role"
+	usvc "nunezlagos/domain/internal/service/userstory"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -481,6 +482,7 @@ func runServer() {
 	rbacChecker := &rbac.Checker{CustomResolver: customResolver}
 	roleService := &rolesvc.Service{Pool: pools.App, Audit: recorder}
 	requirementService := &reqsvc.Service{Pool: pools.App, Audit: recorder}
+	huService := &usvc.Service{Pool: pools.App, Audit: recorder}
 
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 	if err := customResolver.StartCacheListener(ctx); err != nil {
@@ -523,6 +525,7 @@ func runServer() {
 		APIKeys:        apiKeyStore,
 		RoleService:    roleService,
 		ReqService:     requirementService,
+		HUService:      huService,
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)

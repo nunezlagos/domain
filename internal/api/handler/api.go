@@ -41,6 +41,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	rolesvc "nunezlagos/domain/internal/service/role"
+	usvc "nunezlagos/domain/internal/service/userstory"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -86,6 +87,7 @@ type API struct {
 	APIKeys        *apikey.PGStore
 	RoleService    *rolesvc.Service
 	ReqService     *reqsvc.Service
+	HUService      *usvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -122,6 +124,15 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/requirements/{slug}", a.updateRequirement)
 	mux.HandleFunc("POST /api/v1/requirements/{slug}/archive", a.archiveRequirement)
 	mux.HandleFunc("GET /api/v1/requirements/{slug}/tree", a.getRequirementTree)
+
+	// User stories (HU-04.2)
+	mux.HandleFunc("POST /api/v1/user-stories", a.createUserStory)
+	mux.HandleFunc("GET /api/v1/user-stories", a.listUserStories)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}", a.getUserStory)
+	mux.HandleFunc("PATCH /api/v1/user-stories/{slug}", a.updateUserStory)
+	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}", a.deleteUserStory)
+	mux.HandleFunc("POST /api/v1/user-stories/{slug}/scenarios", a.addScenario)
+	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}/scenarios/{id}", a.removeScenario)
 
 	// Custom roles (HU-02.8)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/roles", a.listRoles)

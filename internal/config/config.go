@@ -65,6 +65,10 @@ type Config struct {
 
 	// Seeders (HU-01.7)
 	SeedOnBoot bool
+
+	// Rate limiting (HU-02.5)
+	RateLimitRequests  int
+	RateLimitWindow    string // e.g. "60s"
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -111,6 +115,9 @@ func Load() (*Config, error) {
 		OTelServiceName:     getEnv("DOMAIN_OTEL_SERVICE_NAME", "domain-mcp"),
 
 		SeedOnBoot: getEnvBool("DOMAIN_SEED_ON_BOOT", true),
+
+		RateLimitRequests: getEnvInt("DOMAIN_RATE_LIMIT_REQUESTS", 100),
+		RateLimitWindow:   getEnv("DOMAIN_RATE_LIMIT_WINDOW", "60s"),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

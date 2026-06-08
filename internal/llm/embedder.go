@@ -21,6 +21,7 @@ import (
 // implementación (no se cambia after-the-fact, las migrations dependen de él).
 type Embedder interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
+	EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
 	Dimensions() int
 }
 
@@ -40,6 +41,15 @@ func (n NopEmbedder) Dimensions() int {
 
 func (n NopEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	return make([]float32, n.Dimensions()), nil
+}
+
+func (n NopEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	dim := n.Dimensions()
+	for i := range out {
+		out[i] = make([]float32, dim)
+	}
+	return out, nil
 }
 
 // FakeEmbedder genera un vector determinístico desde sha256(text). Útil para
@@ -78,6 +88,47 @@ func (f FakeEmbedder) Embed(ctx context.Context, text string) ([]float32, error)
 		}
 	}
 	return out, nil
+}
+
+func (f FakeEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i, t := range texts {
+		v, err := f.Embed(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
+// TruncateText limita el texto a maxTokens tokens aproximados.
+// Cuenta tokens como palabras (~4 chars/token para texto en español/inglés).
+// Útil para controlar costos antes de enviar a Embed (HU-06.5).
+func TruncateText(text string, maxTokens int) string {
+	if maxTokens <= 0 {
+		return ""
+	}
+	// Estimación rough: ~4 chars por token
+	maxChars := maxTokens * 4
+	if len(text) <= maxChars {
+		return text
+	}
+	// Truncar en límite de palabra para no cortar a mitad
+	truncated := text[:maxChars]
+	if idx := lastSpace(truncated); idx > maxChars/2 {
+		truncated = truncated[:idx]
+	}
+	return truncated
+}
+
+func lastSpace(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == ' ' {
+			return i
+		}
+	}
+	return -1
 }
 
 // IsZero retorna true si el vector es todo cero (NopEmbedder fingerprint).

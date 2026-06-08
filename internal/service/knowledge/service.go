@@ -113,13 +113,9 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	if len(rawChunks) == 0 {
 		return nil, nil, ErrBodyRequired
 	}
-	embeds := make([][]float32, len(rawChunks))
-	for i, c := range rawChunks {
-		v, err := s.Embedder.Embed(ctx, c)
-		if err != nil {
-			return nil, nil, fmt.Errorf("embed chunk %d: %w", i, err)
-		}
-		embeds[i] = v
+	embeds, err := s.Embedder.EmbedBatch(ctx, rawChunks)
+	if err != nil {
+		return nil, nil, fmt.Errorf("embed chunks: %w", err)
 	}
 
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})

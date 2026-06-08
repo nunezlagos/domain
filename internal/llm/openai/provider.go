@@ -307,7 +307,22 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	if e.cfg.APIKey == "" {
 		return nil, errors.New("openai api key not configured")
 	}
-	body := embedRequest{Model: e.cfg.Model, Input: []string{text}}
+	all, err := e.embed(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return all[0], nil
+}
+
+func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if e.cfg.APIKey == "" {
+		return nil, errors.New("openai api key not configured")
+	}
+	return e.embed(ctx, texts)
+}
+
+func (e *Embedder) embed(ctx context.Context, inputs []string) ([][]float32, error) {
+	body := embedRequest{Model: e.cfg.Model, Input: inputs}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		e.cfg.BaseURL+"/v1/embeddings", bytes.NewReader(raw))
@@ -332,10 +347,13 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	if len(er.Data) == 0 {
 		return nil, errors.New("empty embedding response")
 	}
-	src := er.Data[0].Embedding
-	out := make([]float32, len(src))
-	for i, f := range src {
-		out[i] = float32(f)
+	out := make([][]float32, len(er.Data))
+	for i, d := range er.Data {
+		vec := make([]float32, len(d.Embedding))
+		for j, f := range d.Embedding {
+			vec[j] = float32(f)
+		}
+		out[i] = vec
 	}
 	return out, nil
 }

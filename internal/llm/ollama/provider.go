@@ -202,6 +202,22 @@ type embedResp struct {
 }
 
 func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	return e.embed(ctx, text)
+}
+
+func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i, t := range texts {
+		v, err := e.embed(ctx, t)
+		if err != nil {
+			return nil, fmt.Errorf("ollama embed batch %d: %w", i, err)
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
+func (e *Embedder) embed(ctx context.Context, text string) ([]float32, error) {
 	body := embedReq{Model: e.Model, Prompt: text}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,

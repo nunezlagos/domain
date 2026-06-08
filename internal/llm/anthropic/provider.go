@@ -356,10 +356,18 @@ type voyageResponse struct {
 }
 
 func (v *VoyageEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	all, err := v.EmbedBatch(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return all[0], nil
+}
+
+func (v *VoyageEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	if v.cfg.APIKey == "" {
 		return nil, errors.New("voyage api key not configured")
 	}
-	body := voyageRequest{Model: v.cfg.Model, Input: []string{text}}
+	body := voyageRequest{Model: v.cfg.Model, Input: texts}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		v.cfg.BaseURL+"/v1/embeddings", bytes.NewReader(raw))
@@ -381,16 +389,20 @@ func (v *VoyageEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	if err := json.NewDecoder(resp.Body).Decode(&vr); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
-	if len(vr.Data) == 0 || len(vr.Data[0].Embedding) == 0 {
+	if len(vr.Data) == 0 {
 		return nil, errors.New("empty embedding response")
 	}
-	src := vr.Data[0].Embedding
-	out := make([]float32, v.Dimensions())
-	for i, f := range src {
-		if i >= len(out) {
-			break
+	out := make([][]float32, len(vr.Data))
+	dim := v.Dimensions()
+	for i, d := range vr.Data {
+		vec := make([]float32, dim)
+		for j, f := range d.Embedding {
+			if j >= dim {
+				break
+			}
+			vec[j] = float32(f)
 		}
-		out[i] = float32(f)
+		out[i] = vec
 	}
 	return out, nil
 }

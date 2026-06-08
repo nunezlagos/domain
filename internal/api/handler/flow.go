@@ -194,3 +194,39 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		"finished_at": res.FinishedAt,
 	})
 }
+
+// POST /api/v1/flows/{id}/dry-run — HU-09.12
+func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	if a.FlowRunner == nil {
+		writeError(w, http.StatusServiceUnavailable, "runner_disabled", "")
+		return
+	}
+	// Cross-org guard
+	f, err := a.FlowService.GetByID(r.Context(), id)
+	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	var b runFlowBody
+	_ = decodeJSON(r, &b)
+	plan, err := a.FlowRunner.DryRun(r.Context(), id, b.Inputs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "dryrun", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, plan)
+}

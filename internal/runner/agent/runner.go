@@ -54,9 +54,9 @@ const (
 	StatusCancelled = "cancelled"
 )
 
-// EventEmitter dispara eventos de dominio post-run (HU-10.4 outbound webhooks).
+// EventEmitter dispara eventos de dominio post-run (HU-10.4 outbound webhooks + HU-15.3 alerts).
 type EventEmitter interface {
-	EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64)
+	EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64, tokensTotal int64)
 }
 
 // Runner orquesta ejecución de agents.
@@ -262,7 +262,7 @@ LOOP:
 	}
 
 	if r.Emitter != nil {
-		r.Emitter.EmitAgentRunFinished(ctx, agent.OrganizationID, runID, agent.Slug, status, costUSD)
+		r.Emitter.EmitAgentRunFinished(ctx, agent.OrganizationID, runID, agent.Slug, status, costUSD, int64(totalIn+totalOut))
 	}
 
 	if r.Audit != nil {

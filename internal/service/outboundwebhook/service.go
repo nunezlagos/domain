@@ -38,6 +38,7 @@ var AllowedEvents = map[string]bool{
 	"observation.created":  true,
 	"invitation.accepted":  true,
 	"webhook.test_ping":    true,
+	"usage.alert_fired":    true,
 }
 
 type Subscription struct {

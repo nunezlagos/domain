@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS usage_alert_fires CASCADE;
+DROP TABLE IF EXISTS usage_alerts CASCADE;

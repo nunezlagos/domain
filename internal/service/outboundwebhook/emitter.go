@@ -9,14 +9,33 @@ import (
 	"github.com/google/uuid"
 )
 
+// UsageAlerter es invocado tras cada agent_run completion para evaluar alerts
+// configuradas (HU-15.3). Implementaciones: usagealerts.Service.
+type UsageAlerter interface {
+	EvaluateRunEvent(ctx context.Context, orgID uuid.UUID, costUSD float64, tokensTotal int64) ([]AlertFired, error)
+}
+
+// AlertFired info mínima de una alert que disparó.
+type AlertFired struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	Metric     string    `json:"metric"`
+	Threshold  float64   `json:"threshold"`
+	Observed   float64   `json:"observed"`
+	Channel    string    `json:"channel"`
+	Recipients []string  `json:"recipients,omitempty"`
+}
+
 // RunnerEmitter implementa runner/agent.EventEmitter + runner/flow.EventEmitter
 // usando un Dispatcher. Es el bridge entre los runners y las subscriptions outbound.
 type RunnerEmitter struct {
 	Dispatcher *Dispatcher
 	Logger     *slog.Logger
+	// UsageAlerts (opcional) evalúa alerts post-run y emite eventos usage.alert.fired.
+	UsageAlerts UsageAlerter
 }
 
-func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64) {
+func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64, tokensTotal int64) {
 	eventType := "agent_run.completed"
 	if status != "completed" {
 		eventType = "agent_run.failed"
@@ -37,6 +56,33 @@ func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUI
 		e.Logger.WarnContext(ctx, "agent_run event emit failed",
 			slog.String("run_id", runID.String()),
 			slog.String("error", err.Error()))
+	}
+
+	// HU-15.3: evaluar alerts y emitir evento usage.alert.fired por cada match.
+	if e.UsageAlerts != nil {
+		fired, err := e.UsageAlerts.EvaluateRunEvent(ctx, orgID, costUSD, tokensTotal)
+		if err != nil && e.Logger != nil {
+			e.Logger.WarnContext(ctx, "usage_alerts evaluate failed",
+				slog.String("error", err.Error()))
+		}
+		for _, a := range fired {
+			alertData, _ := json.Marshal(map[string]any{
+				"alert_id":  a.ID,
+				"name":      a.Name,
+				"metric":    a.Metric,
+				"threshold": a.Threshold,
+				"observed":  a.Observed,
+				"channel":   a.Channel,
+				"run_id":    runID,
+			})
+			alertEv := Event{
+				ID:         uuid.New(),
+				Type:       "usage.alert_fired",
+				OccurredAt: time.Now().UTC(),
+				Data:       alertData,
+			}
+			_ = e.Dispatcher.Emit(ctx, orgID, alertEv)
+		}
 	}
 }
 

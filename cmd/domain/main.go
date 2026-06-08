@@ -51,6 +51,7 @@ import (
 	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/outboundwebhook"
+	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -328,8 +329,12 @@ func runServer() {
 
 	skillRunnerInst := skillrunner.New()
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
+	usageAlertsService := &usagealerts.Service{Pool: pools.App}
+
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
-		Dispatcher: outboundDispatcher, Logger: logger,
+		Dispatcher:  outboundDispatcher,
+		Logger:      logger,
+		UsageAlerts: usageAlertsService.AsUsageAlerter(),
 	}
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
@@ -397,6 +402,7 @@ func runServer() {
 		OutboundWebhookRequireTLS: outboundRequireTLS,
 		Backpressure:              &backpressure.Limiter{Pool: pools.App},
 		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
+		UsageAlertsService:        usageAlertsService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

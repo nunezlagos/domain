@@ -26,6 +26,7 @@ import (
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
+	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
@@ -63,6 +64,7 @@ type API struct {
 	OutboundWebhookRequireTLS  bool
 	Backpressure               *backpressure.Limiter
 	DBMonCollector             *dbmon.Collector
+	UsageAlertsService         *usagealerts.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -168,6 +170,11 @@ func (a *API) Router() http.Handler {
 
 	// Admin DB stats (HU-25.12)
 	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
+
+	// Usage alerts (HU-15.3)
+	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
+	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
+	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
 
 	// Outbound webhooks (HU-10.4)
 	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)

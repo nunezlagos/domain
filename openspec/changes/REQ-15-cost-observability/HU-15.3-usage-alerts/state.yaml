@@ -1,3 +1,43 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  migration 000040 con tablas usage_alerts + usage_alert_fires.
+
+  internal/service/usagealerts/ package:
+  - Métricas soportadas: cost_per_run, cost_per_day, cost_per_month,
+    tokens_per_run, tokens_per_day
+  - Conditions: greater_than, less_than, equals
+  - Channels: webhook, email, log_only
+  - Cooldown configurable (default 3600s) previene spam
+  - CRUD: Create/ListByOrg/Get/Delete/SetActive
+  - EvaluateRunEvent(ctx, orgID, costUSD, tokensTotal) → []Alert disparadas
+    + insert en usage_alert_fires + actualiza last_fired_at + fire_count
+  - inCooldown(a) skip si LastFiredAt + Cooldown > NOW
+
+  Integración con outbound webhooks (HU-10.4):
+  - RunnerEmitter.UsageAlerts = service.AsUsageAlerter()
+  - Tras cada agent_run completed, evalúa alerts + emite evento "usage.alert_fired"
+    con payload {alert_id, name, metric, threshold, observed, channel, run_id}
+  - Subscriptions outbound pueden suscribirse a "usage.alert_fired"
+  - usage.alert_fired agregado al catálogo AllowedEvents
+
+  HTTP:
+  - POST /api/v1/usage-alerts (create)
+  - GET /api/v1/usage-alerts (list)
+  - DELETE /api/v1/usage-alerts/{id}
+
+  Tests service_test.go (3):
+  - CompareThreshold con 8 cases (GT/LT/EQ + edge)
+  - validMetrics catalog
+  - validConditions catalog
+
+  Pending:
+  - Cron periódico para métricas agregadas (cost_per_day/month, tokens_per_day):
+    job que cada minuto consulta agent_runs aggregated y evalúa
+  - Channel email handler real (reusa internal/mail/smtp ya existente)
+  - Endpoint PATCH para actualizar threshold + recipients
+  - HTTP GET /api/v1/usage-alerts/{id}/fires (history de disparos)
+  - SDK Python/TS/Go: agregar resource UsageAlerts
+  - Sabotaje test: cooldown debe prevenir re-fire en < cooldown_secs

@@ -247,10 +247,89 @@ func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outpu
 		return r.execMemSave(ctx, step, orgID, userID)
 	case flow.StepTypeCondition:
 		return r.execCondition(step, inputs, outputs)
+	case flow.StepTypeSubFlow:
+		return r.execSubFlow(ctx, step, orgID, userID)
 	case flow.StepTypeHTTPRequest, flow.StepTypeParallel, flow.StepTypeWaitSignal:
 		return nil, fmt.Errorf("%w: %s (HU-09 future)", ErrStepTypeStub, step.Type)
 	}
 	return nil, fmt.Errorf("unknown step type: %s", step.Type)
+}
+
+// subflowCtxKey rastrea la cadena de slugs ancestrales para detectar
+// referencias circulares (HU-09.5 escenario 6).
+type subflowCtxKey struct{}
+
+const maxSubflowDepth = 10
+
+// execSubFlow ejecuta un flow anidado como step.
+//
+// Config esperado:
+//
+//	{"flow_slug": "email-notifier", "input": {...}}
+//
+// Output: {"flow_run_id": "...", "status": "completed", "outputs": {...}}.
+// Si el sub-flow falla, retorna error con el mensaje (parent aplica on_error policy).
+func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UUID, userID *uuid.UUID) (any, error) {
+	flowSlug, _ := step.Config["flow_slug"].(string)
+	if flowSlug == "" {
+		return nil, fmt.Errorf("sub_flow: flow_slug required")
+	}
+	inputs, _ := step.Config["input"].(map[string]any)
+	if inputs == nil {
+		inputs = map[string]any{}
+	}
+
+	// Detección circular vía ctx chain.
+	chain, _ := ctx.Value(subflowCtxKey{}).([]string)
+	for _, s := range chain {
+		if s == flowSlug {
+			return nil, fmt.Errorf("circular sub-flow reference detected: %s",
+				formatChain(append(chain, flowSlug)))
+		}
+	}
+	if len(chain) >= maxSubflowDepth {
+		return nil, fmt.Errorf("sub-flow depth exceeded (%d): %s", maxSubflowDepth, formatChain(chain))
+	}
+	childCtx := context.WithValue(ctx, subflowCtxKey{}, append(chain, flowSlug))
+
+	// Lookup del flow hijo por slug.
+	childFlow, err := r.Flows.GetBySlug(ctx, orgID, flowSlug)
+	if err != nil {
+		return nil, fmt.Errorf("sub-flow %q not found", flowSlug)
+	}
+
+	res, err := r.Run(childCtx, RunInput{
+		FlowID:      childFlow.ID,
+		TriggeredBy: userID,
+		TriggerType: "subflow",
+		Inputs:      inputs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sub-flow %q failed to start: %w", flowSlug, err)
+	}
+	if res.Status != StatusCompleted {
+		return map[string]any{
+			"flow_run_id": res.RunID,
+			"status":      res.Status,
+			"error":       res.Error,
+		}, fmt.Errorf("sub-flow %q ended with status %s: %s", flowSlug, res.Status, res.Error)
+	}
+	return map[string]any{
+		"flow_run_id": res.RunID,
+		"status":      res.Status,
+		"outputs":     res.Outputs,
+	}, nil
+}
+
+func formatChain(slugs []string) string {
+	if len(slugs) == 0 {
+		return ""
+	}
+	out := slugs[0]
+	for _, s := range slugs[1:] {
+		out += " → " + s
+	}
+	return out
 }
 
 func (r *Runner) execAgentRun(ctx context.Context, step *flow.Step, orgID uuid.UUID, userID *uuid.UUID) (any, error) {

@@ -47,12 +47,13 @@ const (
 	StepTypeCondition   = "condition"
 	StepTypeParallel    = "parallel"
 	StepTypeWaitSignal  = "wait_signal"
+	StepTypeSubFlow     = "sub_flow"
 )
 
 var validStepTypes = map[string]bool{
 	StepTypeAgentRun: true, StepTypeSkillRun: true, StepTypeHTTPRequest: true,
 	StepTypeMemSave: true, StepTypeCondition: true, StepTypeParallel: true,
-	StepTypeWaitSignal: true,
+	StepTypeWaitSignal: true, StepTypeSubFlow: true,
 }
 
 // Step en el DAG del flow.

@@ -1,0 +1,9 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+func (a *API) deleteThing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}

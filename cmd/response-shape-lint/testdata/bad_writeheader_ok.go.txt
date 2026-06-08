@@ -1,0 +1,9 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+func (a *API) wrongStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}

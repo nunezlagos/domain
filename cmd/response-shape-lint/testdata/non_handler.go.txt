@@ -1,0 +1,22 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+// helperUtil no recibe (w, r) y no se considera handler.
+func (a *API) helperUtil() string {
+	return "x"
+}
+
+// freeFunction tampoco (no receiver API).
+func freeFunction(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("free"))
+}
+
+// otherReceiver tiene receiver no-API.
+type Other struct{}
+
+func (o *Other) leaks(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("other"))
+}

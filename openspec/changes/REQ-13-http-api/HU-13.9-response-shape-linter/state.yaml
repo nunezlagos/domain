@@ -1,3 +1,42 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
 archived: ~
+notes: |
+  Implementado linter AST estático en cmd/response-shape-lint que detecta usos
+  crudos del ResponseWriter dentro de handlers `func (a *API) X(w, r)` en
+  internal/api/handler/*.go. Cubre:
+    - w.Write(...) directo
+    - json.NewEncoder(w).Encode(...) directo
+    - fmt.Fprintf/Fprintln/Fprint(w, ...) directo
+    - io.WriteString(w, ...) / io.Copy(w, ...) directo
+    - w.WriteHeader(<status>) con status distinto a StatusNoContent / StatusNotModified
+  Acepta como happy-path: writeData, writeDataWithMeta, writeError, y
+  w.WriteHeader(StatusNoContent | StatusNotModified) standalone.
+
+  Tests en cmd/response-shape-lint/main_test.go con fixtures testdata/*.go.txt
+  (8 fixtures, 9 casos test: OK writeData, OK 204, OK 304, BAD raw Write,
+  BAD json.NewEncoder, BAD WriteHeader(StatusOK), BAD fmt.Fprintf,
+  non-handler skip, negative apiHandlerWriterName).
+  Todos passing.
+
+  Lo que queda PENDIENTE para considerar implemented:
+    - Runtime/integration linter que ejecute tests E2E contra handlers reales
+      y verifique shape JSON ({data}, {data, pagination}, {error: {...}}).
+    - Snapshot test de error codes (testdata/error_codes_snapshot.json) — HU
+      escenario 6.
+    - Validación de status codes por método HTTP (POST→201, DELETE→204) basada
+      en parseo de las rutas registradas en Router().
+    - Header X-Request-Id obligatorio: requiere observar response real, no AST.
+    - Location header en 201 Created: idem, runtime.
+    - URLs kebab-case scan de routes registered (parse strings literales en
+      Router()).
+    - Target Makefile + step CI que corra `response-shape-lint -dir
+      internal/api/handler` y bloquee merge si exit != 0.
+
+  Violations encontradas al correr el linter contra el código actual:
+    - internal/api/handler/webhook.go:63 receiveWebhook usa
+      w.WriteHeader(http.StatusAccepted) raw.
+    - internal/api/handler/webhook.go:64 receiveWebhook usa
+      json.NewEncoder(w).Encode(...) raw.
+  No arregladas en esta HU (scope = linter), reportadas para fix posterior
+  bajo HU separada o tarea de cleanup en REQ-13.

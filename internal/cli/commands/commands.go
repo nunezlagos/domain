@@ -43,6 +43,8 @@ func Dispatch(args []string) int {
 		return contextCmd(rest)
 	case "completion":
 		return completion(rest)
+	case "policies":
+		return policies(rest)
 	case "help", "-h", "--help":
 		printUsage()
 		return 0
@@ -67,6 +69,8 @@ Recursos:
   skills        ls [--type X] [--tag Y]
   search        <query> [--limit N] [--type csv]
   context       [--project <slug>]
+  policies      import-md <dir> | export-md [dir]
+  audit         prune [--retention N] [--dry-run]
   completion    bash|zsh|fish
 
 Flags globales:

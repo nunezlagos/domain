@@ -24,6 +24,7 @@ import (
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
+	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
@@ -59,6 +60,7 @@ type API struct {
 	OutboundWebhookService     *outboundwebhook.Service
 	OutboundWebhookDispatcher  *outboundwebhook.Dispatcher
 	OutboundWebhookRequireTLS  bool
+	Backpressure               *backpressure.Limiter
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }

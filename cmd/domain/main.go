@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/audit"
@@ -356,6 +357,7 @@ func runServer() {
 		OutboundWebhookService:    outboundWebhookService,
 		OutboundWebhookDispatcher: outboundDispatcher,
 		OutboundWebhookRequireTLS: outboundRequireTLS,
+		Backpressure:              &backpressure.Limiter{Pool: pools.App},
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

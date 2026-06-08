@@ -2,11 +2,13 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/backpressure"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	"nunezlagos/domain/internal/service/flow"
 )
@@ -151,6 +153,24 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, _ := uuid.Parse(p.UserID)
+	// HU-26.6 backpressure
+	if a.Backpressure != nil {
+		orgID, _ := uuid.Parse(p.OrganizationID)
+		if err := a.Backpressure.CheckQueue(r.Context(),
+			backpressure.PredefinedQueues["flow_runs"], orgID); err != nil {
+			if errors.Is(err, backpressure.ErrQueueFull) || errors.Is(err, backpressure.ErrOrgQuotaExceeded) {
+				retry := backpressure.RetryAfterSeconds(err)
+				w.Header().Set("Retry-After", strconv.Itoa(retry))
+				code := "queue_full"
+				if errors.Is(err, backpressure.ErrOrgQuotaExceeded) {
+					code = "org_queue_limit_exceeded"
+				}
+				writeError(w, http.StatusTooManyRequests, code,
+					fmt.Sprintf("retry after %d seconds", retry))
+				return
+			}
+		}
+	}
 	var b runFlowBody
 	_ = decodeJSON(r, &b)
 	res, runErr := a.FlowRunner.Run(r.Context(), flowrunner.RunInput{

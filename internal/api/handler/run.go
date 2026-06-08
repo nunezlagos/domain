@@ -3,10 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/backpressure"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	"nunezlagos/domain/internal/service/agent"
 )
@@ -53,6 +56,24 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 	if b.Input == "" {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "input requerido")
 		return
+	}
+	// HU-26.6 backpressure: rechazar si queue agent_runs saturada
+	if a.Backpressure != nil {
+		orgID, _ := uuid.Parse(p.OrganizationID)
+		if err := a.Backpressure.CheckQueue(r.Context(),
+			backpressure.PredefinedQueues["agent_runs"], orgID); err != nil {
+			if errors.Is(err, backpressure.ErrQueueFull) || errors.Is(err, backpressure.ErrOrgQuotaExceeded) {
+				retry := backpressure.RetryAfterSeconds(err)
+				w.Header().Set("Retry-After", strconv.Itoa(retry))
+				code := "queue_full"
+				if errors.Is(err, backpressure.ErrOrgQuotaExceeded) {
+					code = "org_queue_limit_exceeded"
+				}
+				writeError(w, http.StatusTooManyRequests, code,
+					fmt.Sprintf("retry after %d seconds", retry))
+				return
+			}
+		}
 	}
 	userID, _ := uuid.Parse(p.UserID)
 	res, runErr := a.AgentRunner.Run(r.Context(), agentrunner.RunInput{

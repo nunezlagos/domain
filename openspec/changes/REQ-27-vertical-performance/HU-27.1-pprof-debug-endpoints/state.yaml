@@ -1,29 +1,22 @@
 status: partially_implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-08
 archived: ~
 notes: |
-  internal/debug/pprof.go con servidor opcional en puerto separado:
-  - DOMAIN_DEBUG_ENABLED=true habilita el server
-  - DOMAIN_DEBUG_BIND default 127.0.0.1 (bind interno, no expone públicamente)
-  - DOMAIN_DEBUG_PORT default 6060
-  - DOMAIN_DEBUG_AUTH_USER + DOMAIN_DEBUG_AUTH_PASSWORD obligatorios para auth
-  - Sin auth configurada → warning log + server SIN auth (acepta solo si bind 127.0.0.1)
+  ## Implementado (2026-06-08)
 
-  Endpoints expuestos (net/http/pprof stdlib):
-  - /debug/pprof/ (Index)
-  - /debug/pprof/cmdline, /heap, /goroutine, /profile?seconds=30
-  - /debug/pprof/allocs, /mutex, /block, /symbol, /trace
+  ### Audit + Metrics
+  - Config.AuditRecorder opcional — registra "debug.pprof.accessed" via audit.Recorder
+  - Config.Metrics opcional — expone domain_debug_pprof_accessed_total counter
+  - instrumentPPROF wrapper que mete audit + metrics en todos los endpoints pprof
+  - PprofAccessTotal counter agregado a metrics.Registry
+  - Wire en cmd/domain/main.go: pasa recorder + metricsReg al debug config
 
-  Basic auth con subtle.ConstantTimeCompare → timing-safe.
-  401 con WWW-Authenticate: Basic realm="debug" si auth falla.
+  ### Tests
+  - TestInstrumentPPROF_CallsNextHandler — verifica que el handler next se ejecuta
+  - TestInstrumentPPROF_NopRecorderDoesNotPanic — verifica que nil audit no paniquea
+  - Tests existentes de basic auth + defaults siguen pasando
 
-  Log de acceso: warn cuando 401, info cuando OK (path + user + remote).
-
-  Pending:
-  - HU-27.1 escenario 5: audit_log "debug.pprof.accessed" — pegar al audit.Recorder
-    cuando se accede. Por ahora solo log slog.
-  - Métricas Prometheus: domain_debug_pprof_accessed_total{endpoint,user}
-  - Helm chart: añadir Service interno (ClusterIP) en puerto 6060 SOLO si
-    DOMAIN_DEBUG_ENABLED=true, con NetworkPolicy restringiendo source.
-  - Test unit con httptest validando auth 401/200 + endpoints registrados
+  ## Pending (aún no implementado)
+  - Helm chart: Service interno ClusterIP en puerto 6060 (Fase 9)
+  - Audit y metrics se registran pero no hay label por endpoint específico

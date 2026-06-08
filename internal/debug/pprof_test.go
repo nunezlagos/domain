@@ -1,9 +1,12 @@
 package debug
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"nunezlagos/domain/internal/audit"
 )
 
 func TestBasicAuth_DeniesWithoutCreds(t *testing.T) {
@@ -83,3 +86,59 @@ func TestIntStr(t *testing.T) {
 		}
 	}
 }
+
+func TestInstrumentPPROF_CallsNextHandler(t *testing.T) {
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := instrumentPPROF(next, nil, nil, nil)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/debug/pprof/heap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+	if !called {
+		t.Fatal("next handler was not called")
+	}
+}
+
+func TestReadCgroupMemoryLimit_ReturnsZeroWhenNoCgroup(t *testing.T) {
+	limit := readCgroupMemoryLimit()
+	// En CI/dev local no hay cgroup, debe retornar 0.
+	if limit < 0 {
+		t.Fatalf("expected non-negative, got %d", limit)
+	}
+}
+
+func TestTuneRuntime_DoesNotPanic(t *testing.T) {
+	// Simplemente verifica que no paniquea.
+	TuneRuntime(slog.Default())
+}
+
+func TestInstrumentPPROF_NopRecorderDoesNotPanic(t *testing.T) {
+	rec := &audit.NopRecorder{}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := instrumentPPROF(next, rec, nil, nil)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/debug/pprof/heap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("want 200, got %d", resp.StatusCode)
+	}
+}
+

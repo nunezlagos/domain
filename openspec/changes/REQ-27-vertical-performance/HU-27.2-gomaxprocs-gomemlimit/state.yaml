@@ -1,25 +1,18 @@
 status: partially_implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-08
 archived: ~
 notes: |
-  internal/debug.TuneRuntime(logger) log inicial con GOMAXPROCS + NumCPU.
+  ## Implementado (2026-06-08)
 
-  Go 1.22+ detecta automáticamente cgroup CPU quota → GOMAXPROCS se ajusta
-  al límite del container sin intervención. Go 1.25 (versión actual) mantiene
-  ese comportamiento.
+  ### Auto-set GOMEMLIMIT 80%
+  - readCgroupMemoryLimit() helper propio (sin dep externa):
+    - cgroup v2: /sys/fs/cgroup/memory.max (respeta "max" = sin límite)
+    - cgroup v1: /sys/fs/cgroup/memory/memory.limit_in_bytes
+  - TuneRuntime() setea GOMEMLIMIT env var a 80% del cgroup limit si no
+    está configurado explícitamente
+  - Safe en local sin cgroup → warn log + no setea nada
 
-  GOMEMLIMIT vía env var (Go runtime nativo) si DOMAIN_GOMEMLIMIT seteado
-  (no se setea en código — el runtime lo lee del env directamente).
-
-  Helm chart values.yaml recomendado:
-    env:
-      GOMEMLIMIT: "{{ .Values.resources.limits.memory }}"
-      GOMAXPROCS: ""  # vacío = auto-detect cgroup
-
-  Pending:
-  - Set GOMEMLIMIT a 80% del cgroup limit automáticamente vía uber-go/automaxprocs
-    style helper (mejor: tener nuestro propio sin dep adicional)
+  ## Pending (aún no implementado)
   - Métricas Prometheus: go_gomaxprocs gauge + go_memlimit_bytes
-  - Hot-reload runtime tuning si env vars cambian (probablemente no necesario)
   - Documentar trade-offs CPU quota vs cores reservados

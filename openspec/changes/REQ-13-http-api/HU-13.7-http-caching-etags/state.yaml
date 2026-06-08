@@ -1,3 +1,27 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/api/etag/ package con:
+  - Compute(id, updated_at) = `"<sha256_16>"` cheap (no body serialization)
+  - SetHeaders(w, id, updated_at, cacheControl) escribe ETag + Last-Modified + Cache-Control
+  - IsNotModified(r, etag, updated_at) chequea If-None-Match + If-Modified-Since → true=304
+  - MatchesIfMatch(r, currentETag) → (has, matched) para optimistic concurrency
+
+  Aplicado a:
+  - GET /api/v1/observations/{id} → ETag + Cache-Control: private, max-age=30
+  - GET /api/v1/projects/{slug}   → ETag + Cache-Control: private, max-age=60
+
+  Tests etag_test.go cubren los 6 escenarios de la HU:
+  - Compute stable + cambia con updated_at
+  - If-None-Match hit/miss
+  - If-Modified-Since hit
+  - If-Match has/matched/wildcard
+
+  Pending:
+  - Aplicar a GET agents/{id}, flows/{id}, skills/{id}, prompts/{id}, knowledge/{id}
+  - If-Match optimistic concurrency en PATCH observations/{id} y PATCH projects/{slug}
+    (cuando alguien más modificó → 412 Precondition Failed)
+  - Cache-Control: no-store en endpoints con datos in-progress (runs/{id})
+  - Test integration HTTP con httptest validando 304/412 end-to-end

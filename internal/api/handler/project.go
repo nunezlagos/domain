@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/etag"
 	projsvc "nunezlagos/domain/internal/service/project"
 )
 
@@ -91,6 +92,11 @@ func (a *API) getProject(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
+		return
+	}
+	tag := etag.SetHeaders(w, proj.ID.String(), proj.UpdatedAt, "private, max-age=60")
+	if etag.IsNotModified(r, tag, proj.UpdatedAt) {
+		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	writeData(w, http.StatusOK, proj)

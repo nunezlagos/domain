@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/etag"
 	"nunezlagos/domain/internal/service/observation"
 	searchsvc "nunezlagos/domain/internal/service/search"
 )
@@ -98,6 +99,11 @@ func (a *API) getObservation(w http.ResponseWriter, r *http.Request) {
 	// Cross-org leak guard
 	if o.OrganizationID.String() != p.OrganizationID {
 		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	tag := etag.SetHeaders(w, o.ID.String(), o.UpdatedAt, "private, max-age=30")
+	if etag.IsNotModified(r, tag, o.UpdatedAt) {
+		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	writeData(w, http.StatusOK, o)

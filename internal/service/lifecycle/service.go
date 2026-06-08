@@ -295,6 +295,30 @@ func normalizeValue(v any) any {
 	}
 }
 
+// PurgeExpiredSoftDeleted elimina rows soft-deleted fuera de la retention window.
+// Retorna total de rows purgadas. Solo en el pod leader (HU-23.2.1).
+func (s *Service) PurgeExpiredSoftDeleted(ctx context.Context) (int64, error) {
+	cutoff := time.Now().Add(-time.Duration(s.retentionDays()) * 24 * time.Hour)
+	var total int64
+	for entityType, table := range restorableEntities {
+		tag, err := s.Pool.Exec(ctx,
+			fmt.Sprintf(`DELETE FROM %s WHERE deleted_at IS NOT NULL AND deleted_at < $1`, table), cutoff)
+		if err != nil {
+			return total, fmt.Errorf("purge %s: %w", entityType, err)
+		}
+		total += tag.RowsAffected()
+	}
+	if total > 0 && s.Audit != nil {
+		_ = s.Audit.Record(ctx, audit.Event{
+			ActorType:  audit.ActorSystem,
+			Action:     "lifecycle.purge-soft-deleted",
+			EntityType: "lifecycle",
+			NewValues:  map[string]any{"rows": total, "retention_days": s.retentionDays()},
+		})
+	}
+	return total, nil
+}
+
 func isJSON(b []byte) bool {
 	t := strings.TrimSpace(string(b))
 	return strings.HasPrefix(t, "{") || strings.HasPrefix(t, "[")

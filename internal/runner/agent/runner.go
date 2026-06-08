@@ -54,6 +54,11 @@ const (
 	StatusCancelled = "cancelled"
 )
 
+// EventEmitter dispara eventos de dominio post-run (HU-10.4 outbound webhooks).
+type EventEmitter interface {
+	EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64)
+}
+
 // Runner orquesta ejecución de agents.
 type Runner struct {
 	Pool         *pgxpool.Pool
@@ -64,6 +69,7 @@ type Runner struct {
 	Billing      *billing.Service
 	SkillRunner  *skillrunner.Runner // si nil, se crea uno default por Run()
 	Models       *registry.Registry  // si nil, costo siempre 0
+	Emitter      EventEmitter        // si nil, no emite eventos outbound
 }
 
 type RunInput struct {
@@ -253,6 +259,10 @@ LOOP:
 	if r.Billing != nil && totalIn+totalOut > 0 {
 		_, _ = r.Billing.IncrementTokens(ctx, agent.OrganizationID, int64(totalIn+totalOut))
 		_, _ = r.Billing.IncrementRuns(ctx, agent.OrganizationID)
+	}
+
+	if r.Emitter != nil {
+		r.Emitter.EmitAgentRunFinished(ctx, agent.OrganizationID, runID, agent.Slug, status, costUSD)
 	}
 
 	if r.Audit != nil {

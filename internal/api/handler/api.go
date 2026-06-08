@@ -25,6 +25,7 @@ import (
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
+	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
@@ -55,6 +56,9 @@ type API struct {
 	WebhookService   *webhooksvc.Service
 	CostService      *cost.Service
 	BillingService   *billing.Service
+	OutboundWebhookService     *outboundwebhook.Service
+	OutboundWebhookDispatcher  *outboundwebhook.Dispatcher
+	OutboundWebhookRequireTLS  bool
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -156,6 +160,13 @@ func (a *API) Router() http.Handler {
 	// Cost analytics (HU-15.1 + HU-15.2)
 	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
 	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // HU-21.3 plan usage actual
+
+	// Outbound webhooks (HU-10.4)
+	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)
+	mux.HandleFunc("GET /api/v1/outbound-webhooks", a.listOutboundWebhooks)
+	mux.HandleFunc("GET /api/v1/outbound-webhooks/{id}", a.getOutboundWebhook)
+	mux.HandleFunc("DELETE /api/v1/outbound-webhooks/{id}", a.deleteOutboundWebhook)
+	mux.HandleFunc("POST /api/v1/outbound-webhooks/{id}/test", a.testOutboundWebhook)
 
 	return mux
 }

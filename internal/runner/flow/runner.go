@@ -59,6 +59,11 @@ var (
 	ErrUnknownStepRef = errors.New("on_error references unknown step")
 )
 
+// EventEmitter dispara eventos de dominio post-run.
+type EventEmitter interface {
+	EmitFlowRunFinished(ctx context.Context, orgID, runID uuid.UUID, flowSlug, status string)
+}
+
 type Runner struct {
 	Pool        *pgxpool.Pool
 	Audit       audit.Recorder
@@ -68,6 +73,7 @@ type Runner struct {
 	Observations *observation.Service
 	AgentRunner *agentrunner.Runner
 	SkillRunner *skillrunner.Runner
+	Emitter     EventEmitter
 }
 
 type RunInput struct {
@@ -203,6 +209,10 @@ LOOP:
 	_, _ = r.Pool.Exec(ctx,
 		`UPDATE flow_runs SET status = $1, outputs = $2, error = $3, finished_at = $4
 		 WHERE id = $5`, status, outputsJSON, nullStr(finalErr), finishedAt, runID)
+
+	if r.Emitter != nil {
+		r.Emitter.EmitFlowRunFinished(ctx, f.OrganizationID, runID, f.Slug, status)
+	}
 
 	if r.Audit != nil {
 		_ = r.Audit.Record(ctx, audit.Event{

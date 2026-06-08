@@ -21,6 +21,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
@@ -44,6 +45,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/flow"
+	"nunezlagos/domain/internal/service/outboundwebhook"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -246,6 +248,25 @@ func runServer() {
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
 
+	// Cipher opcional para outbound webhook secrets at-rest (HU-02.3 + HU-10.4).
+	var masterCipher *crypto.Cipher
+	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
+		c, err := crypto.LoadFromBase64(mk)
+		if err != nil {
+			logger.Warn("DOMAIN_MASTER_KEY invalid; outbound webhook secrets will fail",
+				slog.String("error", err.Error()))
+		} else {
+			masterCipher = c
+		}
+	}
+	outboundWebhookService := &outboundwebhook.Service{Pool: pools.App, Cipher: masterCipher}
+	outboundDispatcher := &outboundwebhook.Dispatcher{
+		Pool: pools.App, Svc: outboundWebhookService,
+		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Logger:     logger,
+	}
+	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
+
 	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
 	// Si no hay ninguna key, el runner devuelve runner_disabled al primer Run.
 	llmFactory := llm.NewFactory()
@@ -268,15 +289,20 @@ func runServer() {
 
 	skillRunnerInst := skillrunner.New()
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
+	outboundEmitter := &outboundwebhook.RunnerEmitter{
+		Dispatcher: outboundDispatcher, Logger: logger,
+	}
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
+		Emitter: outboundEmitter,
 	}
 	flowRunnerInst := &flowrunner.Runner{
 		Pool: pools.App, Audit: recorder, Flows: flowService,
 		Agents: agentService, Skills: skillService, Observations: obsService,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
+		Emitter: outboundEmitter,
 	}
 
 	// Cron scheduler (HU-10.1): solo corre en el pod leader (HU-26.2)
@@ -295,9 +321,11 @@ func runServer() {
 		// El pod leader corre todos los workers single-instance:
 		// - cron scheduler (HU-10.1)
 		// - flow recovery (HU-09.6) marca stale flow_runs como failed
+		// - outbound webhook dispatcher (HU-10.4) procesa cola de deliveries
 		go flowRunnerInst.RunRecovery(leaderCtx, flowrunner.RecoveryConfig{
 			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
 		})
+		go runOutboundDispatcher(leaderCtx, outboundDispatcher, logger)
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()
@@ -325,6 +353,9 @@ func runServer() {
 		FlowRunner:       flowRunnerInst,
 		CostService:      costService,
 		BillingService:   billingService,
+		OutboundWebhookService:    outboundWebhookService,
+		OutboundWebhookDispatcher: outboundDispatcher,
+		OutboundWebhookRequireTLS: outboundRequireTLS,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}
@@ -395,4 +426,25 @@ func runHealthcheckProbe() {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+// runOutboundDispatcher procesa la cola de deliveries pendientes cada 5s.
+// Single-leader (HU-10.4 + HU-26.2): se invoca solo en el pod leader.
+func runOutboundDispatcher(ctx context.Context, d *outboundwebhook.Dispatcher, logger *slog.Logger) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := d.ProcessPending(ctx, 50)
+			if err != nil && logger != nil {
+				logger.Warn("outbound dispatcher pending failed", slog.String("error", err.Error()))
+			}
+			if n > 0 && logger != nil {
+				logger.Debug("outbound dispatcher processed", slog.Int("count", n))
+			}
+		}
+	}
 }

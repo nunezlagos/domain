@@ -1,3 +1,25 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-06
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/notifications/slack.go con SlackChannel implementando
+  notifications.Channel interface.
+
+  Send:
+  - Valida que recipient empieza con https://hooks.slack.com/
+  - Compone payload {text: "*{subject}*\n{body}"} si hay subject,
+    o {text: body} si no
+  - POST JSON al webhook URL
+  - 2xx → DeliveryResult{Status:"sent", ResponseCode}
+  - Otro → Status:"failed" + error_message con HTTP code
+
+  HTTPClient configurable (timeout 10s default).
+
+  Tests cubren slug + URL validation + payload format.
+
+  Pending:
+  - Retry específico para 429 Slack rate limit (Retry-After header)
+  - Blocks API (rich formatting) en lugar de text plain
+  - Bot token-based delivery (api.slack.com/chat.postMessage) además del webhook
+  - Per-channel attachments + threading

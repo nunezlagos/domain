@@ -1,3 +1,32 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-06
+implemented: 2026-06-07
 archived: ~
+notes: |
+  SDK Go en sdks/go/ (module nunezlagos/domain-sdk-go, Go 1.25, stdlib-only).
+
+  Client.New(opts...) con WithBaseURL/APIKey/HTTPClient/Timeout/UserAgent.
+  Fallback DOMAIN_API_KEY + DOMAIN_BASE_URL env vars.
+
+  do() central:
+  - Bearer auth + Accept + Content-Type + UA
+  - Decodifica envelope {data, pagination}
+  - APIError con Unwrap → sentinels (ErrUnauthorized/NotFound/Conflict/
+    RateLimited/Validation/Quota)
+  - Retry-After parse en 429
+
+  9 resources matcheando SDK Python: organizations, projects, observations,
+  sessions, search, skills, agents, flows, knowledge.
+
+  Iterator[T] genérico con Next(ctx) (T, bool, error) expuesto en observations.
+
+  Tests client_test.go (12) con httptest: auth header, content-type, UA,
+  ctx cancel, 204 no-content, cursor pagination roundtrip + Iter, mapping
+  401/404/409/422/429 con Retry-After + details 422.
+
+  Pending:
+  - Resources sessions/skills/agents/flows usan map[string]any para create/update
+    porque DTOs server-side aún en flujo. Tipar cuando estabilice.
+  - Helper iterate_all() en todos los List endpoints (no solo observations)
+  - SDK release versioning + go.sum / publish a un proxy (depende decisión open-source)
+  - Examples dir con uso end-to-end

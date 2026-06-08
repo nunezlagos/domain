@@ -48,7 +48,7 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 
 	v, dirty, err := dmigrate.Version(dsn)
 	require.NoError(t, err)
-	require.Equal(t, uint(43), v, "must end at latest migration (current = 43)")
+	require.Equal(t, uint(44), v, "must end at latest migration (current = 44)")
 	require.False(t, dirty)
 
 	// Lista tablas
@@ -204,7 +204,7 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	require.NoError(t, dmigrate.Down(dsn, -1))
 	require.NoError(t, dmigrate.Up(dsn))
 	v, _, _ := dmigrate.Version(dsn)
-	require.Equal(t, uint(43), v)
+	require.Equal(t, uint(44), v)
 }
 
 // Sabotaje: violación FK debe fallar (constraint enforce).

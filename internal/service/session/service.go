@@ -211,6 +211,40 @@ func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Ses
 	return &sess, nil
 }
 
+// CloseInactive cierra sesiones activas que no tuvieron actividad en >idle.
+// Retorna IDs de sesiones cerradas. Usado por cron leader (HU-03.2).
+func (s *Service) CloseInactive(ctx context.Context, idle time.Duration) ([]uuid.UUID, error) {
+	cutoff := time.Now().UTC().Add(-idle)
+	rows, err := s.Pool.Query(ctx, `
+		UPDATE sessions SET ended_at = $2
+		WHERE ended_at IS NULL
+		  AND deleted_at IS NULL
+		  AND updated_at < $2
+		RETURNING id
+	`, cutoff, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("close inactive: %w", err)
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) > 0 && s.Audit != nil {
+		_ = s.Audit.Record(ctx, audit.Event{
+			ActorType:  audit.ActorSystem,
+			Action:     "session.auto-closed",
+			EntityType: "session",
+			NewValues:  map[string]any{"count": len(ids), "idle_hours": idle.Hours()},
+		})
+	}
+	return ids, nil
+}
+
 func nullStr(s string) any {
 	if s == "" {
 		return nil

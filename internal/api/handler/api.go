@@ -25,6 +25,7 @@ import (
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/api/backpressure"
+	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
@@ -61,6 +62,7 @@ type API struct {
 	OutboundWebhookDispatcher  *outboundwebhook.Dispatcher
 	OutboundWebhookRequireTLS  bool
 	Backpressure               *backpressure.Limiter
+	DBMonCollector             *dbmon.Collector
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -163,6 +165,9 @@ func (a *API) Router() http.Handler {
 	// Cost analytics (HU-15.1 + HU-15.2)
 	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
 	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // HU-21.3 plan usage actual
+
+	// Admin DB stats (HU-25.12)
+	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
 
 	// Outbound webhooks (HU-10.4)
 	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)

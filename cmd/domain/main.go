@@ -18,6 +18,7 @@ import (
 
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
+	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/audit"
@@ -395,6 +396,7 @@ func runServer() {
 		OutboundWebhookDispatcher: outboundDispatcher,
 		OutboundWebhookRequireTLS: outboundRequireTLS,
 		Backpressure:              &backpressure.Limiter{Pool: pools.App},
+		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

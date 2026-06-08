@@ -11,10 +11,73 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// Context keys para metadata de audit (HU-02.4). El AuditMiddleware las inyecta.
+type ctxKey string
+
+const (
+	ctxKeyIP     ctxKey = "audit_ip"
+	ctxKeyUA     ctxKey = "audit_ua"
+	ctxKeyReqID  ctxKey = "audit_reqid"
+)
+
+// WithAuditMetadata inyecta IP/UA/ReqID en el context para audit.Record.
+// Usado por el audit middleware.
+func WithAuditMetadata(ctx context.Context, ip, ua, reqID string) context.Context {
+	ctx = context.WithValue(ctx, ctxKeyIP, ip)
+	ctx = context.WithValue(ctx, ctxKeyUA, ua)
+	ctx = context.WithValue(ctx, ctxKeyReqID, reqID)
+	return ctx
+}
+
+func auditIP(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyIP).(string)
+	return v
+}
+
+func auditUA(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyUA).(string)
+	return v
+}
+
+func auditReqID(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyReqID).(string)
+	return v
+}
+
+// AuditEntry representa una fila de audit_log para queries.
+type AuditEntry struct {
+	ID             int64      `json:"id"`
+	OrganizationID *uuid.UUID `json:"organization_id,omitempty"`
+	ActorID        *uuid.UUID `json:"actor_id,omitempty"`
+	ActorType      string     `json:"actor_type"`
+	Action         string     `json:"action"`
+	EntityType     string     `json:"entity_type"`
+	EntityID       *uuid.UUID `json:"entity_id,omitempty"`
+	OldValues      json.RawMessage `json:"old_values,omitempty"`
+	NewValues      json.RawMessage `json:"new_values,omitempty"`
+	IPAddress      string     `json:"ip_address,omitempty"`
+	UserAgent      string     `json:"user_agent,omitempty"`
+	RequestID      string     `json:"request_id,omitempty"`
+	TraceID        string     `json:"trace_id,omitempty"`
+	OccurredAt     time.Time  `json:"occurred_at"`
+}
+
+// AuditFilter filtros opcionales para Query.
+type AuditFilter struct {
+	OrganizationID *uuid.UUID
+	ActorID        *uuid.UUID
+	Action         string
+	EntityType     string
+	EntityID       *uuid.UUID
+	Limit          int
+	Cursor         int64 // last ID for cursor pagination
+}
 
 // ActorType quién ejecutó la acción.
 type ActorType string
@@ -54,6 +117,8 @@ type PGRecorder struct {
 
 // Record persiste el evento. Errores se devuelven al caller para que decida
 // (no swallow): un audit miss en operaciones críticas debe loggear loud.
+// IPAddress, UserAgent y RequestID se completan automáticamente desde el
+// context si el AuditMiddleware está en la cadena (HU-02.4).
 func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 	if e.Action == "" {
 		return fmt.Errorf("audit: action required")
@@ -63,6 +128,15 @@ func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 	}
 	if e.ActorType == "" {
 		e.ActorType = ActorSystem
+	}
+	if e.IPAddress == "" {
+		e.IPAddress = auditIP(ctx)
+	}
+	if e.UserAgent == "" {
+		e.UserAgent = auditUA(ctx)
+	}
+	if e.RequestID == "" {
+		e.RequestID = auditReqID(ctx)
 	}
 
 	var oldJSON, newJSON []byte
@@ -97,6 +171,80 @@ func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 		return fmt.Errorf("audit insert: %w", err)
 	}
 	return nil
+}
+
+// Query retorna entries con filtros opcionales + cursor pagination.
+func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntry, error) {
+	where := "TRUE"
+	args := []any{}
+	argN := 0
+
+	addArg := func(v any) string {
+		argN++
+		args = append(args, v)
+		return fmt.Sprintf("$%d", argN)
+	}
+
+	if filter.OrganizationID != nil {
+		where += " AND organization_id = " + addArg(*filter.OrganizationID)
+	}
+	if filter.ActorID != nil {
+		where += " AND actor_id = " + addArg(*filter.ActorID)
+	}
+	if filter.Action != "" {
+		where += " AND action = " + addArg(filter.Action)
+	}
+	if filter.EntityType != "" {
+		where += " AND entity_type = " + addArg(filter.EntityType)
+	}
+	if filter.EntityID != nil {
+		where += " AND entity_id = " + addArg(*filter.EntityID)
+	}
+	if filter.Cursor > 0 {
+		where += " AND id < " + addArg(filter.Cursor)
+	}
+
+	limit := 50
+	if filter.Limit > 0 && filter.Limit <= 500 {
+		limit = filter.Limit
+	}
+
+	rows, err := r.Pool.Query(ctx, fmt.Sprintf(`
+		SELECT id, organization_id, actor_id, actor_type, action,
+		       entity_type, entity_id, old_values, new_values,
+		       ip_address, user_agent, request_id, trace_id, occurred_at
+		FROM audit_log
+		WHERE %s
+		ORDER BY id DESC
+		LIMIT %d
+	`, where, limit), args...)
+	if err != nil {
+		return nil, fmt.Errorf("audit query: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(
+			&e.ID, &e.OrganizationID, &e.ActorID, &e.ActorType, &e.Action,
+			&e.EntityType, &e.EntityID, &e.OldValues, &e.NewValues,
+			&e.IPAddress, &e.UserAgent, &e.RequestID, &e.TraceID, &e.OccurredAt,
+		); err != nil {
+			return nil, fmt.Errorf("audit scan: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+// Prune borra entries anteriores a `before`.
+func (r *PGRecorder) Prune(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := r.Pool.Exec(ctx, `DELETE FROM audit_log WHERE occurred_at < $1`, before)
+	if err != nil {
+		return 0, fmt.Errorf("audit prune: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // nullIfEmpty retorna nil si el string es vacío (para escribir NULL en lugar de '').

@@ -31,9 +31,11 @@ import (
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -126,6 +128,13 @@ func main() {
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
 	}
 
+	flowService := &flowsvc.Service{Pool: pools.App, Audit: recorder}
+	flowRunnerInst := &flowrunner.Runner{
+		Pool: pools.App, Audit: recorder, Flows: flowService,
+		Agents: agents, Skills: skills, Observations: observations,
+		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
+	}
+
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
 		Projects:     projects,
@@ -137,6 +146,9 @@ func main() {
 		Skills:       skills,
 		Agents:       agents,
 		AgentRunner:  agentRunnerInst,
+		Flows:        flowService,
+		FlowRunner:   flowRunnerInst,
+		Pool:         pools.App,
 		Principal:    principal,
 		ServerName:   "domain-mcp",
 		ServerVer:    Version,

@@ -1,3 +1,40 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  MCP tools de memoria implementados (HU-12.1 + HU-12.2 extendidos):
+
+  Memory:
+  - domain_mem_save (HU-12.1)
+  - domain_mem_search
+  - domain_mem_context
+  - domain_mem_get_observation
+
+  Sessions:
+  - domain_session_start
+  - domain_session_end
+  - domain_session_active
+
+  Prompts:
+  - domain_prompt_get (versión activa)
+  - domain_prompt_search (FTS sobre body)
+  - domain_prompt_render (NEW HU-12.2): obtiene + interpola {{vars}}
+
+  Context + timeline:
+  - domain_context_snapshot
+  - domain_timeline (vecindario cronológico)
+
+  Search global:
+  - domain_search_global cross-entity
+
+  Knowledge docs:
+  - domain_knowledge_save (chunking + embedding)
+  - domain_knowledge_search (BM25 + cosine RRF)
+  - domain_knowledge_get (doc completo)
+
+  Pending:
+  - domain_session_summary auto (genera summary con LLM)
+  - domain_mem_update (modify observation)
+  - domain_mem_delete (soft delete via MCP)
+  - domain_obs_tag/untag (tag operations)

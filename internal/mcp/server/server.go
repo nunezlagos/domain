@@ -22,9 +22,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"nunezlagos/domain/internal/auth/apikey"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
+	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	flowsvc "nunezlagos/domain/internal/service/flow"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -47,6 +51,9 @@ type Deps struct {
 	Skills       *skillsvc.Service
 	Agents       *agentsvc.Service
 	AgentRunner  *agentrunner.Runner
+	Flows        *flowsvc.Service
+	FlowRunner   *flowrunner.Runner
+	Pool         *pgxpool.Pool // para queries de agent_run_logs
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
@@ -96,6 +103,10 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolAgentList(), Handler: wrap.Wrap("domain_agent_list", deps.handleAgentList)},
 		{Tool: toolAgentGet(), Handler: wrap.Wrap("domain_agent_get", deps.handleAgentGet)},
 		{Tool: toolAgentRun(), Handler: wrap.Wrap("domain_agent_run", deps.handleAgentRun)},
+		{Tool: toolAgentRunLogs(), Handler: wrap.Wrap("domain_agent_run_logs", deps.handleAgentRunLogs)},
+		{Tool: toolFlowList(), Handler: wrap.Wrap("domain_flow_list", deps.handleFlowList)},
+		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.handleFlowRun)},
+		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
 }
 
@@ -269,6 +280,52 @@ func toolGlobalSearch() mcp.Tool {
 		mcp.WithArray("tags",
 			mcp.Description("Tags requeridos (AND)"),
 			mcp.Items(map[string]any{"type": "string"}),
+		),
+	)
+}
+
+func toolAgentRunLogs() mcp.Tool {
+	return mcp.NewTool("domain_agent_run_logs",
+		mcp.WithDescription("Recupera los logs detallados (llm_call/tool_call/tool_result/error/final) de un agent_run."),
+		mcp.WithString("run_id",
+			mcp.Description("UUID del agent_run"),
+			mcp.Required(),
+		),
+	)
+}
+
+func toolFlowList() mcp.Tool {
+	return mcp.NewTool("domain_flow_list",
+		mcp.WithDescription("Lista los flows definidos en la org."),
+		mcp.WithNumber("limit", mcp.Description("Máximo 200 (default 50)")),
+	)
+}
+
+func toolFlowRun() mcp.Tool {
+	return mcp.NewTool("domain_flow_run",
+		mcp.WithDescription("Ejecuta un flow por id con inputs opcionales. Retorna run_id + status + outputs por step."),
+		mcp.WithString("flow_id",
+			mcp.Description("UUID del flow"),
+			mcp.Required(),
+		),
+		mcp.WithObject("inputs",
+			mcp.Description("Variables que se pasan a los steps (template {{inputs.x}})"),
+		),
+	)
+}
+
+func toolPromptRender() mcp.Tool {
+	return mcp.NewTool("domain_prompt_render",
+		mcp.WithDescription("Obtiene un prompt activo por slug y renderiza variables {{name}} con args."),
+		mcp.WithString("slug",
+			mcp.Description("Slug del prompt"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Project (opcional, default org-level)"),
+		),
+		mcp.WithObject("variables",
+			mcp.Description("Variables {{name}} → value"),
 		),
 	)
 }
@@ -808,6 +865,175 @@ func (d *Deps) handleAgentRun(ctx context.Context, req mcp.CallToolRequest) (*mc
 			"input": res.TokensInput, "output": res.TokensOutput,
 		},
 	})
+}
+
+func (d *Deps) handleAgentRunLogs(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Pool == nil {
+		return mcp.NewToolResultError("pool no configurado"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["run_id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("run_id inválido"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+
+	// Cross-org guard
+	var runOrgID uuid.UUID
+	err = d.Pool.QueryRow(ctx,
+		`SELECT organization_id FROM agent_runs WHERE id = $1`, id).Scan(&runOrgID)
+	if err != nil || runOrgID != orgID {
+		return mcp.NewToolResultError("not found"), nil
+	}
+
+	rows, err := d.Pool.Query(ctx,
+		`SELECT id, iteration, event_type, payload, tokens_input, tokens_output,
+		        latency_ms, occurred_at
+		 FROM agent_run_logs WHERE agent_run_id = $1
+		 ORDER BY iteration ASC, occurred_at ASC LIMIT 500`, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("query: %v", err)), nil
+	}
+	defer rows.Close()
+	var out []map[string]any
+	for rows.Next() {
+		var (
+			logID      int64
+			iteration  int
+			eventType  string
+			payloadRaw []byte
+			tokensIn   int
+			tokensOut  int
+			latencyMS  int
+			occurredAt any
+		)
+		if err := rows.Scan(&logID, &iteration, &eventType, &payloadRaw,
+			&tokensIn, &tokensOut, &latencyMS, &occurredAt); err != nil {
+			continue
+		}
+		var payload any
+		if len(payloadRaw) > 0 {
+			_ = json.Unmarshal(payloadRaw, &payload)
+		}
+		out = append(out, map[string]any{
+			"id":            logID,
+			"iteration":     iteration,
+			"event_type":    eventType,
+			"payload":       payload,
+			"tokens_input":  tokensIn,
+			"tokens_output": tokensOut,
+			"latency_ms":    latencyMS,
+			"occurred_at":   occurredAt,
+		})
+	}
+	return toolResultJSON(map[string]any{"logs": out, "count": len(out)})
+}
+
+func (d *Deps) handleFlowList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Flows == nil {
+		return mcp.NewToolResultError("flow service no configurado"), nil
+	}
+	args := req.GetArguments()
+	limit := 50
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	out, err := d.Flows.List(ctx, orgID, limit)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+}
+
+func (d *Deps) handleFlowRun(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.FlowRunner == nil {
+		return mcp.NewToolResultError("flow runner no configurado"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["flow_id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("flow_id inválido"), nil
+	}
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	var inputs map[string]any
+	if v, ok := args["inputs"].(map[string]any); ok {
+		inputs = v
+	}
+	res, runErr := d.FlowRunner.Run(ctx, flowrunner.RunInput{
+		FlowID: id, TriggeredBy: &userID, TriggerType: "mcp", Inputs: inputs,
+	})
+	if res == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("flow run: %v", runErr)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"run_id":  res.RunID.String(),
+		"status":  res.Status,
+		"error":   res.Error,
+		"outputs": res.Outputs,
+	})
+}
+
+func (d *Deps) handlePromptRender(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Prompts == nil {
+		return mcp.NewToolResultError("prompt service no configurado"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return mcp.NewToolResultError("slug requerido"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	var projectID *uuid.UUID
+	if ps, _ := args["project_slug"].(string); ps != "" {
+		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
+		}
+		projectID = &proj.ID
+	}
+	p, err := d.Prompts.GetActive(ctx, orgID, projectID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("get_active: %v", err)), nil
+	}
+	body := p.Body
+	vars, _ := args["variables"].(map[string]any)
+	for k, v := range vars {
+		body = stringsReplaceAll(body, "{{"+k+"}}", fmt.Sprint(v))
+	}
+	return toolResultJSON(map[string]any{
+		"slug":    p.Slug,
+		"version": p.Version,
+		"body":    body,
+	})
+}
+
+// stringsReplaceAll wrapper para evitar import al package strings desde server.go
+// (ya existe en otros files, dejo wrapper local).
+func stringsReplaceAll(s, old, new string) string {
+	out := ""
+	for {
+		i := indexOf(s, old)
+		if i < 0 {
+			return out + s
+		}
+		out += s[:i] + new
+		s = s[i+len(old):]
+	}
+}
+
+func indexOf(s, sub string) int {
+	if len(sub) == 0 {
+		return 0
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }
 
 func (d *Deps) handleAgentList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

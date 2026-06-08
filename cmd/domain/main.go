@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/circuitbreaker"
 	"nunezlagos/domain/internal/logging"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
@@ -269,20 +270,25 @@ func runServer() {
 	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
 
 	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
-	// Si no hay ninguna key, el runner devuelve runner_disabled al primer Run.
+	// Cada provider se envuelve con circuit breaker (HU-26.5) para shed-load
+	// cuando hay errores sostenidos del provider externo.
 	llmFactory := llm.NewFactory()
+	cbCfg := circuitbreaker.Config{
+		FailureThreshold: 5,
+		RecoveryTimeout:  30 * time.Second,
+	}
 	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
-		llmFactory.Register("anthropic", anthropic.New(k))
+		llmFactory.Register("anthropic", circuitbreaker.New(anthropic.New(k), cbCfg))
 	}
 	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
-		llmFactory.Register("openai", llmopenai.New(k))
+		llmFactory.Register("openai", circuitbreaker.New(llmopenai.New(k), cbCfg))
 	}
 	if k := os.Getenv("DOMAIN_OLLAMA_HOST"); k != "" || true {
 		p := ollama.New()
 		if k != "" {
 			p.BaseURL = k
 		}
-		llmFactory.Register("ollama", p)
+		llmFactory.Register("ollama", circuitbreaker.New(p, cbCfg))
 	}
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		llmFactory.SetDefault(def, def)

@@ -25,7 +25,14 @@ notes: |
   - HalfOpenFailureReopens
   - sabotaje: intermitencias NO abren breaker (necesita N consecutivos)
 
-  Pending wire en cmd/domain:
-  - Wrap llmFactory providers con circuitbreaker.New() al boot
-  - Métricas Prometheus: domain_llm_breaker_state{provider="anthropic"}
-  - Alert cuando Open dura > N min
+  Wireado en cmd/domain runServer:
+  - Cada provider registrado (anthropic, openai, ollama) se envuelve
+    con circuitbreaker.New(provider, {FailureThreshold:5, RecoveryTimeout:30s})
+    antes de Register en llmFactory.
+  - El runner ve el wrapper como Provider transparente.
+
+  Pending:
+  - Métricas Prometheus: domain_llm_breaker_state{provider} gauge (0=closed,1=open,2=half-open)
+  - Counter domain_llm_breaker_trips_total{provider} cuando pasa a Open
+  - Alert cuando Open dura > 5min
+  - Configurar threshold/timeout via env DOMAIN_LLM_CB_* en lugar de hardcoded

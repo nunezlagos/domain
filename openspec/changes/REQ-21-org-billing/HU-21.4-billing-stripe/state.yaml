@@ -1,3 +1,10 @@
-status: proposed
+status: archived
 created: 2026-06-06
-archived: ~
+archived: 2026-06-07
+notes: |
+  Archivada por decisión del owner (2026-06-07): Domain será open-source sin
+  cobro. HU-21.3 plans-limits queda con Free/Pro/Enterprise como quotas/RBAC
+  internos del despliegue, no como tiers comerciales.
+
+  Si en el futuro alguien forkea para SaaS comercial, este spec sirve como
+  base — re-activar moviendo a status: proposed.

@@ -59,6 +59,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
+	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -351,6 +352,7 @@ func runServer() {
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
 	usageAlertsService := &usagealerts.Service{Pool: pools.App}
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
+	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
 		Dispatcher:  outboundDispatcher,
@@ -425,6 +427,7 @@ func runServer() {
 		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
 		UsageAlertsService:        usageAlertsService,
 		MCPServerService:          mcpServerService,
+		ProjectTemplateService:    projectTemplateService,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
 	}

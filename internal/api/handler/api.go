@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/mcpserver"
+	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	orgsvc "nunezlagos/domain/internal/service/org"
@@ -67,6 +68,7 @@ type API struct {
 	DBMonCollector             *dbmon.Collector
 	UsageAlertsService         *usagealerts.Service
 	MCPServerService           *mcpserver.Service
+	ProjectTemplateService     *projecttemplate.Service
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
 }
@@ -178,6 +180,12 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
 	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
+
+	// Project templates (HU-01.4)
+	mux.HandleFunc("POST /api/v1/project-templates", a.createProjectTemplate)
+	mux.HandleFunc("GET /api/v1/project-templates", a.listProjectTemplates)
+	mux.HandleFunc("GET /api/v1/project-templates/{id}", a.getProjectTemplate)
+	mux.HandleFunc("DELETE /api/v1/project-templates/{id}", a.deleteProjectTemplate)
 
 	// MCP servers externos (HU-12.4)
 	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)

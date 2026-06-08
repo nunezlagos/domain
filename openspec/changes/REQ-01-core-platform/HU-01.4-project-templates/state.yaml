@@ -1,3 +1,31 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Tabla project_templates (migration 000021) ya existía con organization_id
+  nullable + slug + settings JSONB + default_skills/agents/flows TEXT[]
+  + is_public/is_default flags + FK projects.template_id.
+
+  internal/service/projecttemplate/ package:
+  - Service CRUD: Create/Get/GetBySlug/ListByOrg/Delete
+  - Slug validation regex strict
+  - Get acepta orgID propio OR is_public=TRUE (templates compartidos)
+  - ListByOrg ORDER BY is_default DESC, name
+
+  HTTP /api/v1/project-templates:
+  - POST create (scoped a org del principal)
+  - GET list (incluye públicos)
+  - GET/{id}, DELETE/{id}
+
+  Tests cubren reSlug regex + Create slug inválido + sentinel.
+
+  Pending (escenario 2 completo):
+  - projectsvc.Create con template_id debe:
+    * Aplicar settings del template (merge con override)
+    * Auto-asignar default_skills (insertar en project_skills)
+    * Crear/asignar default_agents si no existen
+    * Crear/asignar default_flows
+  - Seeders built-in templates ("Go Backend", "Python Data", etc.)
+  - Versionado de template
+  - Detectar drift settings → is_user_modified=TRUE

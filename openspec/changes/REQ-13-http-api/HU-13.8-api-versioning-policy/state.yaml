@@ -1,3 +1,34 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/api/versioning/ package con catálogo + middleware + endpoint:
+  - Catalog{versions, current} con NewCatalog(current, Version...)
+  - Version{Slug, State, DeprecatedAt, SunsetAt, MigrationDocsURL}
+  - State enum: active | deprecated | sunset
+  - Middleware enriquece responses:
+    * Active: sin headers extra
+    * Deprecated: Deprecation @<unix> + Sunset RFC1123 + Link rel="deprecation"
+    * Sunset (state o fecha pasada): 410 Gone con body JSON + Link
+
+  Endpoint GET /api/version retorna catálogo serializable:
+    {"current": "v1", "versions": [{"slug","state","deprecated_at","sunset_at"}]}
+
+  Wireado en cmd/domain runServer:
+    mux.HandleFunc("/api/version", catalog.VersionInfoHandler)
+    mux.Handle("/api/", catalog.Middleware(...))
+  Solo v1 active actualmente.
+
+  Tests versioning_test.go (5):
+  - extractVersionSlug parsing
+  - Active no incluye headers Deprecation
+  - Deprecated incluye Deprecation+Sunset+Link
+  - Sunset (fecha pasada) → 410 + next NO se invoca
+  - VersionInfoHandler retorna JSON {current, versions[]}
+
+  Pending:
+  - docs/api/support-matrix.md con tabla de versiones
+  - docs/api/changelog.md público
+  - SDK Python/TS/Go auto-warn al detectar Deprecation header en response
+  - v2 cuando aparezca: nuevo paquete handlers /api/v2/* en paralelo

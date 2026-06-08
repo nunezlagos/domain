@@ -19,6 +19,7 @@ import (
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
 	"nunezlagos/domain/internal/api/middleware"
+	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/audit"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
@@ -395,11 +396,16 @@ func runServer() {
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
 	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
 
+	// Versioning catalog (HU-13.8). Por ahora solo v1 active.
+	versionCatalog := versioning.NewCatalog("v1",
+		versioning.Version{Slug: "v1", State: versioning.StateActive})
+	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
+
 	// API REST montada bajo /api/v1/*.
-	// Middleware order: auth → idempotency → handler.
+	// Middleware order: versioning → auth → idempotency → handler.
 	authMW := &apikey.Middleware{Resolver: apiKeyStore, Allowlist: handler.AuthAllowlist()}
 	idempMW := &middleware.Idempotency{Pool: pools.App}
-	mux.Handle("/api/", authMW.Wrap(idempMW.Wrap(api.Router())))
+	mux.Handle("/api/", versionCatalog.Middleware(authMW.Wrap(idempMW.Wrap(api.Router()))))
 
 	// Aplica metrics middleware al mux principal (todos los handlers se cuentan)
 	handler := metricsReg.HTTPMiddleware(mux)

@@ -24,9 +24,10 @@ import (
 type EntityType string
 
 const (
-	EntityObservation EntityType = "observation"
-	EntityPrompt      EntityType = "prompt"
-	EntitySession     EntityType = "session"
+	EntityObservation  EntityType = "observation"
+	EntityPrompt       EntityType = "prompt"
+	EntitySession      EntityType = "session"
+	EntityKnowledgeDoc EntityType = "knowledge_doc"
 )
 
 // Result entrada del feed de resultados unificada.
@@ -70,7 +71,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		limit = 50
 	}
 
-	wantObs, wantPrompt, wantSession := entitySelection(f.EntityTypes)
+	wantObs, wantPrompt, wantSession, wantKnowledge := entitySelection(f.EntityTypes)
 
 	var all []Result
 	if wantObs {
@@ -94,6 +95,13 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		}
 		all = append(all, r...)
 	}
+	if wantKnowledge {
+		r, err := s.searchKnowledgeDocs(ctx, orgID, query, limit, f)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge_docs: %w", err)
+		}
+		all = append(all, r...)
+	}
 
 	// Sort por score DESC, truncar a limit
 	mergeSortByScore(all)
@@ -103,9 +111,9 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 	return all, nil
 }
 
-func entitySelection(types []EntityType) (obs, prompt, session bool) {
+func entitySelection(types []EntityType) (obs, prompt, session, knowledge bool) {
 	if len(types) == 0 {
-		return true, true, true
+		return true, true, true, true
 	}
 	for _, t := range types {
 		switch t {
@@ -115,6 +123,8 @@ func entitySelection(types []EntityType) (obs, prompt, session bool) {
 			prompt = true
 		case EntitySession:
 			session = true
+		case EntityKnowledgeDoc:
+			knowledge = true
 		}
 	}
 	return
@@ -250,6 +260,50 @@ WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.summary_tsv @@ qry
 			return nil, err
 		}
 		r.Snippet = truncate(summary, 200)
+		r.ProjectID = projectID
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (s *Service) searchKnowledgeDocs(ctx context.Context, orgID uuid.UUID, query string, limit int, f Filter) ([]Result, error) {
+	q := `
+SELECT kd.id, kd.title, kd.body, kd.project_id, kd.created_at,
+       ts_rank(kd.body_tsv, qry)::float8 AS score
+FROM knowledge_docs kd, plainto_tsquery('spanish', $2) AS qry
+WHERE kd.organization_id = $1 AND kd.deleted_at IS NULL AND kd.body_tsv @@ qry
+`
+	args := []any{orgID, query}
+	if len(f.ProjectIDs) > 0 {
+		q += fmt.Sprintf(" AND kd.project_id = ANY($%d)", len(args)+1)
+		args = append(args, f.ProjectIDs)
+	}
+	if f.DateFrom != nil {
+		q += fmt.Sprintf(" AND kd.created_at >= $%d", len(args)+1)
+		args = append(args, *f.DateFrom)
+	}
+	if f.DateTo != nil {
+		q += fmt.Sprintf(" AND kd.created_at < $%d", len(args)+1)
+		args = append(args, *f.DateTo)
+	}
+	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
+	args = append(args, limit)
+
+	rows, err := s.Pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Result
+	for rows.Next() {
+		var r Result
+		r.EntityType = EntityKnowledgeDoc
+		var body string
+		var projectID *uuid.UUID
+		if err := rows.Scan(&r.ID, &r.Title, &body, &projectID, &r.CreatedAt, &r.Score); err != nil {
+			return nil, err
+		}
+		r.Snippet = truncate(body, 200)
 		r.ProjectID = projectID
 		out = append(out, r)
 	}

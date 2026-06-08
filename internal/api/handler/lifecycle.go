@@ -65,3 +65,45 @@ func (a *API) exportMyData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="domain-user-export.json"`)
 	writeData(w, http.StatusOK, exp)
 }
+
+type eraseMyDataBody struct {
+	Confirmation string `json:"confirmation"`
+	Reason       string `json:"reason,omitempty"`
+}
+
+// POST /api/v1/me/erase — HU-23.4 GDPR Art. 17 right to erasure.
+// Irreversible. Requiere confirmation="DELETE_ME" en body.
+func (a *API) eraseMyData(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	var b eraseMyDataBody
+	if err := decodeJSON(r, &b); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	if b.Confirmation != "DELETE_ME" {
+		writeError(w, http.StatusUnprocessableEntity, "confirmation_required",
+			"Send {confirmation: 'DELETE_ME'} to confirm irreversible erase")
+		return
+	}
+	userID, _ := uuid.Parse(p.UserID)
+	res, err := a.LifecycleService.EraseUser(r.Context(), userID, userID, b.Reason)
+	if err != nil {
+		switch {
+		case errors.Is(err, lifecycle.ErrAlreadyErased):
+			writeError(w, http.StatusConflict, "already_erased", "")
+		case errors.Is(err, lifecycle.ErrTransferOwnershipFirst):
+			writeError(w, http.StatusConflict, "transfer_ownership_first",
+				"Transfer ownership of org(s) before erasing your account")
+		case errors.Is(err, lifecycle.ErrUserNotFound):
+			writeError(w, http.StatusNotFound, "not_found", "")
+		default:
+			writeError(w, http.StatusInternalServerError, "erase", err.Error())
+		}
+		return
+	}
+	writeData(w, http.StatusOK, res)
+}

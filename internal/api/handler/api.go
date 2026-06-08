@@ -146,6 +146,7 @@ func (a *API) Router() http.Handler {
 	// Lifecycle (HU-23.2 restore + HU-23.3 GDPR export)
 	mux.HandleFunc("POST /api/v1/restore", a.restoreEntity)
 	mux.HandleFunc("GET /api/v1/me/export", a.exportMyData)
+	mux.HandleFunc("POST /api/v1/me/erase", a.eraseMyData)
 
 	// Knowledge documents
 	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)

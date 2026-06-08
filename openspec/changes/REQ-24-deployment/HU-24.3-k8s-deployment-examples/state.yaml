@@ -1,3 +1,30 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  deploy/k8s-examples/ con 6 manifiestos K8s puros + README.
+
+  Manifests:
+  - 01-namespace.yaml: Namespace + PSS restricted enforce
+  - 02-secrets.yaml: 2 Secrets (DB DSNs + master key + SMTP) con placeholders
+  - 03-deployment.yaml: Deployment 3 réplicas con:
+    * securityContext hardened (nonRoot 65532, readOnlyRootFS, dropAll caps,
+      RuntimeDefault seccomp, allowPrivilegeEscalation=false)
+    * GOMEMLIMIT 1800Mi (90% del memory limit 2Gi)
+    * liveness via /domain healthcheck binary probe
+    * readiness via /health/ready HTTP
+    * terminationGracePeriodSeconds=30 (alineado con HU-26.4)
+    * Strategy RollingUpdate maxUnavailable=0 maxSurge=1
+  - 04-service-hpa.yaml: ClusterIP Service + HPA 3-12 CPU 70%/mem 75%
+  - 05-networkpolicy.yaml: default-deny + ingress + egress allowlist
+  - 06-migrations-job.yaml: Job pre-deploy migrate up
+
+  README.md cubre orden de apply, pre-reqs, hardening, ingress sample,
+  ServiceMonitor sample, diferencias vs Helm, validación pre-apply.
+
+  Pending:
+  - Kustomize overlays (HU-24.2 separate)
+  - PodDisruptionBudget con minAvailable: 2
+  - Ingress yaml dedicado
+  - Bench con kind cluster local en CI

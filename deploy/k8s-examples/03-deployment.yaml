@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: domain-server
+  namespace: domain
+  labels:
+    app: domain-server
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: domain-server
+  template:
+    metadata:
+      labels:
+        app: domain-server
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: domain
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: server
+        image: ghcr.io/nunezlagos/domain:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/domain", "server"]
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: DOMAIN_ENV
+          value: "prod"
+        - name: DOMAIN_HTTP_BIND
+          value: "0.0.0.0"
+        - name: DOMAIN_HTTP_PORT
+          value: "8000"
+        - name: DOMAIN_METRICS_ENABLED
+          value: "true"
+        - name: DOMAIN_METRICS_BIND
+          value: "0.0.0.0"
+        - name: DOMAIN_METRICS_PORT
+          value: "9090"
+        - name: DOMAIN_LOG_FORMAT
+          value: "json"
+        - name: GOMEMLIMIT
+          value: "1800MiB"  # 90% del memory limit
+        envFrom:
+        - secretRef:
+            name: domain-db
+        - secretRef:
+            name: domain-app
+        livenessProbe:
+          exec:
+            command: ["/domain", "healthcheck"]
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "2"
+            memory: "2Gi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: "1Gi"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: domain
+  namespace: domain

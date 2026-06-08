@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: domain
+  labels:
+    app.kubernetes.io/name: domain
+    pod-security.kubernetes.io/enforce: restricted

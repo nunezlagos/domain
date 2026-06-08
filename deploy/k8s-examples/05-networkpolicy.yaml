@@ -1,0 +1,81 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: domain-server-default-deny
+  namespace: domain
+spec:
+  podSelector:
+    matchLabels:
+      app: domain-server
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: domain-server-allow-ingress
+  namespace: domain
+spec:
+  podSelector:
+    matchLabels:
+      app: domain-server
+  policyTypes:
+  - Ingress
+  ingress:
+  # HTTP API desde el ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    ports:
+    - port: 8000
+  # Métricas Prometheus desde monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: domain-server-allow-egress
+  namespace: domain
+spec:
+  podSelector:
+    matchLabels:
+      app: domain-server
+  policyTypes:
+  - Egress
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - port: 53
+      protocol: UDP
+  # Postgres
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: postgres
+    ports:
+    - port: 5432
+  # SMTP + LLM providers externos (anthropic, openai, ollama remote)
+  # Restringir por CIDR si se conocen los rangos del provider.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 169.254.0.0/16
+    ports:
+    - port: 443
+    - port: 587  # SMTP TLS

@@ -48,6 +48,39 @@ type Registry struct {
 	snap   atomic.Pointer[Snapshot]
 }
 
+// Update persiste un valor en la tabla y refresca el snapshot en memoria.
+func (r *Registry) Update(ctx context.Context, key string, value json.RawMessage) error {
+	tag, err := r.Pool.Exec(ctx,
+		`UPDATE runtime_configs SET value = $2, updated_at = NOW() WHERE key = $1`, key, value)
+	if err != nil {
+		return fmt.Errorf("update runtime_config %s: %w", key, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("key %q not found", key)
+	}
+	return nil
+}
+
+// ValueJSON retorna el valor de una key como tipo json-friendly.
+func ValueJSON(s *Snapshot, key string) (any, error) {
+	switch key {
+	case "log_level":
+		return s.LogLevel, nil
+	case "http_request_timeout_seconds":
+		return s.HTTPRequestTimeoutSeconds, nil
+	case "llm_default_timeout_seconds":
+		return s.LLMDefaultTimeoutSeconds, nil
+	case "otel_sample_ratio":
+		return s.OTELSampleRatio, nil
+	case "outbound_dispatcher_batch_size":
+		return s.OutboundDispatcherBatchSize, nil
+	case "metrics_enabled":
+		return s.MetricsEnabled, nil
+	default:
+		return nil, fmt.Errorf("unknown key: %s", key)
+	}
+}
+
 // Defaults retorna un snapshot con valores por defecto (si la DB falla).
 func Defaults() *Snapshot {
 	return &Snapshot{
@@ -86,7 +119,7 @@ func (r *Registry) Refresh(ctx context.Context) error {
 		if err := rows.Scan(&key, &raw); err != nil {
 			return err
 		}
-		if err := applyValue(&new, key, raw); err != nil && r.Logger != nil {
+		if err := ApplyValue(&new, key, raw); err != nil && r.Logger != nil {
 			r.Logger.WarnContext(ctx, "runtime_config invalid value",
 				slog.String("key", key), slog.String("error", err.Error()))
 		}
@@ -103,8 +136,8 @@ func (r *Registry) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// applyValue aplica un valor a la struct según el key.
-func applyValue(s *Snapshot, key string, raw []byte) error {
+// ApplyValue aplica un valor a la struct según el key.
+func ApplyValue(s *Snapshot, key string, raw []byte) error {
 	switch key {
 	case "log_level":
 		var v string

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS intake_attachments CASCADE;
+DROP TABLE IF EXISTS intake_payloads CASCADE;

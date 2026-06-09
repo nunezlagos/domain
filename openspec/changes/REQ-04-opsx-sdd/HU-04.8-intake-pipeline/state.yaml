@@ -1,0 +1,12 @@
+status: in_progress
+created: 2026-06-09
+started: 2026-06-09
+archived: ~
+notes: |
+  MVP: tablas intake_payloads + intake_attachments con CHECK constraints,
+  state machine completa (received → classifying → classified → deduping →
+  structuring → pending_review → approved | rejected → committed | failed),
+  Service con Submit, UpdateClassification, MarkPendingReview, Approve,
+  Reject, LinkCommitted, Get, ListPending. Audit hooks integrados.
+  Pendiente futuras HUs: workers async, LLM classify skill, pgvector dedup,
+  adapters email/webhook/slack/sheet, MCP tool domain_intake_submit.

@@ -1,3 +1,18 @@
-status: proposed
+status: active
 created: 2026-06-07
 archived: ~
+hus:
+  25.10-db-secrets-rotation: partially_implemented
+  25.11-anonymization-staging: implemented
+  25.12-locks-vacuum-monitoring: partially_implemented
+  25.13-schema-conventions-linter: partially_implemented
+  25.1-pgbouncer-pooling: partially_implemented
+  25.2-pg-stat-statements: partially_implemented
+  25.3-migration-linter: partially_implemented
+  25.4-schema-drift: proposed
+  25.5-rls-selective-tables: partially_implemented
+  25.5-rls-sensitive-tables: proposed
+  25.6-least-privilege-roles: partially_implemented
+  25.7-pgaudit-db-level: partially_implemented
+  25.8-resource-limits-timeouts: partially_implemented
+  25.9-read-replicas-routing: partially_implemented

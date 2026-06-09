@@ -2,8 +2,12 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  08.1-agent-definitions: proposed
-  08.2-agent-execution: proposed
-  08.3-agent-runs-logs: proposed
+  08.1-agent-definitions: implemented
+  08.2-agent-execution: implemented
+  08.3-agent-runs-logs: implemented
   08.4-multi-agent-orch: proposed
   08.5-agent-templates: proposed
+  08.6-multi-agent-supervisor: proposed
+  08.7-agent-handoff: proposed
+  08.8-agent-parallel-fanout: proposed
+  08.9-agent-hierarchical-context: proposed

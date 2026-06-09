@@ -1,3 +1,8 @@
-status: proposed
+status: active
 created: 2026-06-07
 archived: ~
+hus:
+  27.1-pprof-debug-endpoints: implemented
+  27.2-gomaxprocs-gomemlimit: implemented
+  27.3-hot-reload-config: implemented
+  27.4-feature-benchmarks: partially_implemented

@@ -2,6 +2,7 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  10.1-cron-schedules: proposed
-  10.2-webhook-triggers: proposed
+  10.1-cron-schedules: partially_implemented
+  10.2-webhook-triggers: partially_implemented
   10.3-event-execution: proposed
+  10.4-outbound-webhooks: partially_implemented

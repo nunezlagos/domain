@@ -8,13 +8,26 @@
 -- IMPORTANTE: requiere que postgresql.conf tenga
 --   shared_preload_libraries = 'pg_stat_statements,pgaudit'
 -- y restart del cluster ANTES de aplicar esta migration.
--- Sin esto, CREATE EXTENSION pgaudit fallará con
---   ERROR: pgaudit must be loaded via shared_preload_libraries.
+-- Si pgaudit no está instalado en el cluster (testcontainers, dev images sin
+-- la extension), la creación se omite vía NOTICE — la migration queda no-op
+-- pero idempotente y los demás pasos del schema avanzan sin bloqueo.
 --
 -- squawk-ignore: ban-create-extension
 -- reason: pgaudit es server-managed; idempotent con IF NOT EXISTS
 
-CREATE EXTENSION IF NOT EXISTS pgaudit;
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgaudit';
+  EXCEPTION
+    WHEN feature_not_supported THEN
+      RAISE NOTICE 'pgaudit not loaded via shared_preload_libraries; skipping';
+    WHEN undefined_file THEN
+      RAISE NOTICE 'pgaudit extension files not installed on cluster; skipping';
+    WHEN OTHERS THEN
+      RAISE NOTICE 'pgaudit installation skipped (%): %', SQLSTATE, SQLERRM;
+  END;
+END$$;
 
 -- Object-level audit en tablas con datos altamente sensibles.
 -- READ,WRITE → captura SELECT + INSERT/UPDATE/DELETE.

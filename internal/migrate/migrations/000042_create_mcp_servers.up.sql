@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT mcp_servers_org_name_unique UNIQUE (organization_id, name),
-  CONSTRAINT mcp_servers_transport_check CHECK (
+  CONSTRAINT mcp_servers_transport_endpoint_check CHECK (
     (transport = 'stdio' AND command IS NOT NULL) OR
     (transport IN ('http','sse') AND url IS NOT NULL)
   )

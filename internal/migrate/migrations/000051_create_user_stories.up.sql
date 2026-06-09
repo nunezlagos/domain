@@ -26,3 +26,6 @@ CREATE TABLE gherkin_scenarios (
 );
 
 CREATE INDEX gherkin_hu_id_idx ON gherkin_scenarios (hu_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_stories TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON gherkin_scenarios TO app_user;

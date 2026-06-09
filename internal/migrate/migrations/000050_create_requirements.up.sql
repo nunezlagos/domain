@@ -14,3 +14,5 @@ CREATE UNIQUE INDEX requirements_slug_idx ON requirements (slug);
 CREATE INDEX requirements_status_idx ON requirements (status);
 CREATE INDEX requirements_priority_idx ON requirements (priority);
 CREATE INDEX requirements_parent_id_idx ON requirements (parent_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON requirements TO app_user;

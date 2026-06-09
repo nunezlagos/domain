@@ -1,3 +1,9 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Cursor pagination (internal/api/cursor/) con encode/decode, filters hash validation,
+  sort direction. Usado en observations list.
+  Pending: QueryParser genérico, whitelist campos por entidad,
+  range filters ([gte]), FTS (?q=) en todas las entidades (solo search endpoint tiene FTS).

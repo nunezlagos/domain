@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -9,4 +9,5 @@ notes: |
   Middlewares RequireRole(min) y RequirePermission(checker, res, act).
   Anti-enumeration: 403 body uniforme.
   Tests: 13 unit + 3 sabotaje (matrix coverage, viewer read-only, viewer forbidden mutations).
-  Pending: PG resolver custom roles + endpoint /admin/roles (HU-02.8).
+  PGResolver con LISTEN/NOTIFY cache implementado en resolver.go.
+  Middleware RequirePermission con custom resolver integrado.

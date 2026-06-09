@@ -1,3 +1,10 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  OpenAI Runner (Complete + Stream) en internal/llm/openai/provider.go.
+  Anthropic Runner (Complete + Stream) en internal/llm/anthropic/provider.go.
+  Tests con httptest para ambos providers.
+  Pending: Google/Gemini runner, retry policy (exponential backoff),
+  rate limiter (semaphore-based).

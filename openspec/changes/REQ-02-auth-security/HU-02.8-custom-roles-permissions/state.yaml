@@ -1,3 +1,12 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  internal/auth/rbac/resolver.go: PGResolver con cache in-memory + LISTEN/NOTIFY invalidation.
+  internal/auth/rbac/whitelist.go: AllowedResources + ValidatePermissions con ValidationError (422).
+  internal/service/role/service.go: CRUD completo (CreateRole, ListRoles, GetRoleBySlug, UpdateRole, DeleteRole, AssignRole). Validación de permisos, evita built-in slugs, ErrHasMembers en Delete. Audit recording en mutaciones.
+  internal/api/handler/role.go: REST handlers (list, create, get, update, delete, assignRole).
+  Routes: GET/POST /organizations/{id}/roles, GET/PATCH/DELETE /organizations/{id}/roles/{slug}, POST /organizations/{id}/members/{user_id}/role.
+  Migration 000049: custom_roles table + LISTEN/NOTIFY trigger cache invalidation.
+  Tests: 6 tests validation + sabotage en rbac_test.go.

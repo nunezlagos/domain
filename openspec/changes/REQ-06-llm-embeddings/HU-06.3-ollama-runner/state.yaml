@@ -1,3 +1,10 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  Ollama Provider (Complete + Stream) en internal/llm/ollama/provider.go.
+  Embedder (nomic-embed-text) con padding a 1536 dims.
+  URL configurable via env.
+  Streaming via NDJSON.
+  Pending: unit tests, auto-pull de modelo on missing.

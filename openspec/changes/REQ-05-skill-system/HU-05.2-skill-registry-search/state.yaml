@@ -1,3 +1,11 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  SearchHybrid con BM25 + pgvector cosine + RRF implementado en service.
+  tsvector column + GIN index en migration.
+  GET /api/v1/skills/search?q= handler.
+  Tests: TestSkill_SearchHybrid.
+  Pending: POST /search con mode selector (fts/semantic/hybrid), weights configurables,
+  threshold filtering, tag filter en search, pagination metadata.

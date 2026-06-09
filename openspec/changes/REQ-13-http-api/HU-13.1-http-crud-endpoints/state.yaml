@@ -1,3 +1,10 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  ~80 rutas REST registradas para 20+ entidades en internal/api/handler/api.go.
+  Response envelope consistente ({data}, {error}).
+  Handlers específicos por entidad en internal/api/handler/.
+  Pending: CRUD factory genérico (Entity interface), validación schemas
+  con go-playground/validator, generación OpenAPI.

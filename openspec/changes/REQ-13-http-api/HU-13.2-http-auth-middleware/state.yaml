@@ -1,3 +1,10 @@
-status: proposed
+status: partially_implemented
 created: 2026-06-07
+implemented: 2026-06-07
 archived: ~
+notes: |
+  API key auth via internal/auth/apikey/middleware.go (Middleware.Wrap).
+  RBAC via internal/auth/rbac/resolver.go (RequireRole, RequirePermission).
+  Rate limiter via internal/api/middleware/ratelimit.go (token bucket).
+  Auth allowlist en api.go para health y webhooks.
+  Pending: request logging middleware, CORS middleware, cache API keys con TTL.

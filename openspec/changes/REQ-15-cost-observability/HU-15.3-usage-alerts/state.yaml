@@ -53,7 +53,12 @@ notes: |
     SUM + COALESCE. Leader worker runUsageAlertEvaluator cada 5min (main.go).
   - Permite que métricas agregadas disparen alerts igual que las per-run.
 
+  Email channel handler (completado):
+  - EmailSender interface + sendEmailAlertAsync goroutine en EvaluateRunEvent
+    y EvaluateAggregates. smtpSender adapter multi-to via SMTPMailer interface.
+  - NewSMTPEmailSender() constructor. Wireado en main.go con cfg.SMTPHost.
+  - Async (goroutine con 30s timeout) para no bloquear el evaluador.
+
   Pending:
-  - Channel email handler real (reusa internal/mail/smtp ya existente)
   - SDK Python/TS/Go: agregar resource UsageAlerts
   - Sabotaje test: cooldown debe prevenir re-fire en < cooldown_secs

@@ -68,6 +68,9 @@ func (s *Service) EvaluateAggregates(ctx context.Context) (int, error) {
 				"observed": observed,
 				"evaluated_at": time.Now().UTC().Format(time.RFC3339),
 			})
+			if a.Channel == ChannelEmail && len(a.Recipients) > 0 && s.EmailSender != nil {
+				s.sendEmailAlertAsync(a, observed)
+			}
 			fired++
 		}
 	}

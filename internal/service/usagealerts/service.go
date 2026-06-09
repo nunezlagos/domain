@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -59,6 +60,11 @@ const (
 	ChannelEmail   = "email"
 	ChannelLogOnly = "log_only"
 )
+
+// EmailSender envía alertas por email (HU-15.3 channel email handler).
+type EmailSender interface {
+	SendAlertEmail(ctx context.Context, to []string, subject, body string) error
+}
 
 // Alert es la config de una regla.
 type Alert struct {
@@ -113,7 +119,9 @@ type AlertFire struct {
 
 // Service operaciones CRUD + evaluate.
 type Service struct {
-	Pool *pgxpool.Pool
+	Pool        *pgxpool.Pool
+	EmailSender EmailSender
+	Logger      *slog.Logger
 }
 
 func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (*Alert, error) {
@@ -349,6 +357,9 @@ func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 			_ = s.recordFire(ctx, &a, observed, map[string]any{
 				"cost_usd": costUSD, "tokens_total": tokensTotal,
 			})
+			if a.Channel == ChannelEmail && len(a.Recipients) > 0 && s.EmailSender != nil {
+				s.sendEmailAlertAsync(a, observed)
+			}
 		}
 	}
 	return alerts, rows.Err()
@@ -396,4 +407,26 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Alert, error) 
 		return nil, err
 	}
 	return &a, nil
+}
+
+func (s *Service) sendEmailAlertAsync(a Alert, observed float64) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		subject := fmt.Sprintf("Usage Alert: %s exceeded threshold", a.Name)
+		body := fmt.Sprintf(
+			"Alert: %s\nMetric: %s\nThreshold: %.4f\nObserved: %.4f\nChannel: %s\n\nThis is an automated alert from Domain.",
+			a.Name, a.Metric, a.Threshold, observed, a.Channel,
+		)
+
+		if err := s.EmailSender.SendAlertEmail(ctx, a.Recipients, subject, body); err != nil {
+			if s.Logger != nil {
+				s.Logger.Warn("failed to send alert email",
+					slog.String("alert_id", a.ID.String()),
+					slog.String("error", err.Error()),
+				)
+			}
+		}
+	}()
 }

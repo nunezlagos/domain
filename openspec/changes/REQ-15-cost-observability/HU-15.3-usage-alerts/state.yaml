@@ -33,11 +33,15 @@ notes: |
   - validMetrics catalog
   - validConditions catalog
 
+  Aggregate evaluator (cron-driven):
+  - EvaluateAggregates(ctx) evalua cost_per_day, cost_per_month, tokens_per_day
+    para TODAS las orgs con alertas activas. Consulta agent_runs aggregated via
+    SUM + COALESCE. Leader worker runUsageAlertEvaluator cada 5min (main.go).
+  - Permite que métricas agregadas disparen alerts igual que las per-run.
+
   Pending:
-  - Cron periódico para métricas agregadas (cost_per_day/month, tokens_per_day):
-    job que cada minuto consulta agent_runs aggregated y evalúa
   - Channel email handler real (reusa internal/mail/smtp ya existente)
-  - Endpoint PATCH para actualizar threshold + recipients
+  - Endpoint PATCH /api/v1/usage-alerts/{id} para update threshold + recipients
   - HTTP GET /api/v1/usage-alerts/{id}/fires (history de disparos)
   - SDK Python/TS/Go: agregar resource UsageAlerts
   - Sabotaje test: cooldown debe prevenir re-fire en < cooldown_secs

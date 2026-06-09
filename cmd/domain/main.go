@@ -459,6 +459,7 @@ func runServer() {
 		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
 		go runSessionAutoClose(leaderCtx, sessionService, logger)
 		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
+		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()
@@ -769,6 +770,27 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 				tupRows.Close()
 			}
 			logger.Debug("dbmon tick complete")
+		}
+	}
+}
+
+// runUsageAlertEvaluator evalua métricas agregadas cada 5min (HU-15.3).
+func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logger *slog.Logger) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fired, err := svc.EvaluateAggregates(ctx)
+			if err != nil {
+				logger.Warn("usage alert evaluator failed", slog.String("error", err.Error()))
+				continue
+			}
+			if fired > 0 {
+				logger.Info("usage alerts fired", slog.Int("count", fired))
+			}
 		}
 	}
 }

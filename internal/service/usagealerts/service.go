@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -86,6 +87,28 @@ type CreateInput struct {
 	Channel      string
 	Recipients   []string
 	CooldownSecs int
+}
+
+// UpdateInput para PATCH — punteros para detectar campos a actualizar.
+type UpdateInput struct {
+	Name         *string
+	Metric       *string
+	Threshold    *float64
+	Condition    *string
+	Channel      *string
+	Recipients   []string // nil = no update, empty slice = clear
+	CooldownSecs *int
+}
+
+// AlertFire representa un disparo registrado de una alerta.
+type AlertFire struct {
+	ID            uuid.UUID `json:"id"`
+	AlertID       uuid.UUID `json:"alert_id"`
+	Metric        string    `json:"metric"`
+	Threshold     float64   `json:"threshold"`
+	ObservedValue float64   `json:"observed_value"`
+	Payload       map[string]any `json:"payload,omitempty"`
+	FiredAt       time.Time `json:"fired_at"`
 }
 
 // Service operaciones CRUD + evaluate.
@@ -178,6 +201,101 @@ func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active boo
 		return ErrUnknown
 	}
 	return nil
+}
+
+// Update actualiza campos del alert. Solo envía campos no-nil.
+func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput) (*Alert, error) {
+	// Build dynamic SET
+	sets := []string{}
+	args := []any{id, orgID}
+	idx := 3
+	if in.Name != nil {
+		sets = append(sets, fmt.Sprintf("name=$%d", idx))
+		args = append(args, *in.Name)
+		idx++
+	}
+	if in.Metric != nil {
+		sets = append(sets, fmt.Sprintf("metric=$%d", idx))
+		args = append(args, *in.Metric)
+		idx++
+	}
+	if in.Threshold != nil {
+		sets = append(sets, fmt.Sprintf("threshold=$%d", idx))
+		args = append(args, *in.Threshold)
+		idx++
+	}
+	if in.Condition != nil {
+		sets = append(sets, fmt.Sprintf("condition=$%d", idx))
+		args = append(args, *in.Condition)
+		idx++
+	}
+	if in.Channel != nil {
+		sets = append(sets, fmt.Sprintf("channel=$%d", idx))
+		args = append(args, *in.Channel)
+		idx++
+	}
+	if in.Recipients != nil {
+		sets = append(sets, fmt.Sprintf("recipients=$%d", idx))
+		args = append(args, in.Recipients)
+		idx++
+	}
+	if in.CooldownSecs != nil {
+		sets = append(sets, fmt.Sprintf("cooldown_secs=$%d", idx))
+		args = append(args, *in.CooldownSecs)
+		idx++
+	}
+	if len(sets) == 0 {
+		return s.Get(ctx, orgID, id)
+	}
+	sets = append(sets, "updated_at=NOW()")
+
+	q := fmt.Sprintf(
+		`UPDATE usage_alerts SET %s WHERE id=$1 AND organization_id=$2
+		 RETURNING id, organization_id, name, metric, threshold, condition, channel,
+		           recipients, cooldown_secs, active, last_fired_at, fire_count,
+		           created_at, updated_at`,
+		strings.Join(sets, ", "))
+	var a Alert
+	err := s.Pool.QueryRow(ctx, q, args...).Scan(
+		&a.ID, &a.OrganizationID, &a.Name, &a.Metric, &a.Threshold, &a.Condition,
+		&a.Channel, &a.Recipients, &a.CooldownSecs, &a.Active, &a.LastFiredAt,
+		&a.FireCount, &a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("update: %w", err)
+	}
+	return &a, nil
+}
+
+// ListFires devuelve el historial de disparos de una alerta.
+func (s *Service) ListFires(ctx context.Context, orgID, alertID uuid.UUID, limit int) ([]AlertFire, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.Pool.Query(ctx,
+		`SELECT f.id, f.alert_id, f.metric, f.threshold, f.observed_value, f.payload, f.fired_at
+		 FROM usage_alert_fires f
+		 JOIN usage_alerts a ON a.id = f.alert_id
+		 WHERE f.alert_id = $1 AND a.organization_id = $2
+		 ORDER BY f.fired_at DESC LIMIT $3`,
+		alertID, orgID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AlertFire
+	for rows.Next() {
+		var f AlertFire
+		var payloadRaw []byte
+		if err := rows.Scan(&f.ID, &f.AlertID, &f.Metric, &f.Threshold,
+			&f.ObservedValue, &payloadRaw, &f.FiredAt); err != nil {
+			return nil, err
+		}
+		if len(payloadRaw) > 0 {
+			_ = json.Unmarshal(payloadRaw, &f.Payload)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }
 
 // CompareThreshold evalúa la condición. true → debe disparar.

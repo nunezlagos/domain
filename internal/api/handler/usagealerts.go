@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -71,6 +72,74 @@ func (a *API) listUsageAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, alerts)
+}
+
+type updateUsageAlertBody struct {
+	Name         *string  `json:"name,omitempty"`
+	Metric       *string  `json:"metric,omitempty"`
+	Threshold    *float64 `json:"threshold,omitempty"`
+	Condition    *string  `json:"condition,omitempty"`
+	Channel      *string  `json:"channel,omitempty"`
+	Recipients   []string `json:"recipients,omitempty"`
+	CooldownSecs *int     `json:"cooldown_secs,omitempty"`
+}
+
+// PATCH /api/v1/usage-alerts/{id}
+func (a *API) updateUsageAlert(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	var in updateUsageAlertBody
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	alert, err := a.UsageAlertsService.Update(r.Context(), orgID, id,
+		usagealerts.UpdateInput{
+			Name: in.Name, Metric: in.Metric, Threshold: in.Threshold,
+			Condition: in.Condition, Channel: in.Channel,
+			Recipients: in.Recipients, CooldownSecs: in.CooldownSecs,
+		})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "update", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, alert)
+}
+
+// GET /api/v1/usage-alerts/{id}/fires
+func (a *API) listUsageAlertFires(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	fires, err := a.UsageAlertsService.ListFires(r.Context(), orgID, id, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list_fires", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, fires)
 }
 
 // DELETE /api/v1/usage-alerts/{id}

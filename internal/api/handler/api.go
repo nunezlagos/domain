@@ -285,6 +285,8 @@ func (a *API) Router() http.Handler {
 	// Usage alerts (HU-15.3)
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
+	mux.HandleFunc("PATCH /api/v1/usage-alerts/{id}", a.updateUsageAlert)
+	mux.HandleFunc("GET /api/v1/usage-alerts/{id}/fires", a.listUsageAlertFires)
 	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
 
 	// Platform policies (HU-01.8)

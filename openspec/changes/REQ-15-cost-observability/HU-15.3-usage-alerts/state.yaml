@@ -39,9 +39,21 @@ notes: |
     SUM + COALESCE. Leader worker runUsageAlertEvaluator cada 5min (main.go).
   - Permite que métricas agregadas disparen alerts igual que las per-run.
 
+  HTTP endpoints (completos):
+  - PATCH /api/v1/usage-alerts/{id} → updateUsageAlert: actualiza campos
+    individuales (name, metric, threshold, condition, channel, recipients,
+    cooldown_secs) mediante UpdateInput con punteros (solo campos no-nil)
+  - GET /api/v1/usage-alerts/{id}/fires → listUsageAlertFires: historial
+    de disparos ordenado DESC con limit (default 50, max 200)
+  - Ambos con cross-org guard via JOIN usage_alerts.organization_id
+
+  Aggregate evaluator (cron-driven):
+  - EvaluateAggregates(ctx) evalua cost_per_day, cost_per_month, tokens_per_day
+    para TODAS las orgs con alertas activas. Consulta agent_runs aggregated via
+    SUM + COALESCE. Leader worker runUsageAlertEvaluator cada 5min (main.go).
+  - Permite que métricas agregadas disparen alerts igual que las per-run.
+
   Pending:
   - Channel email handler real (reusa internal/mail/smtp ya existente)
-  - Endpoint PATCH /api/v1/usage-alerts/{id} para update threshold + recipients
-  - HTTP GET /api/v1/usage-alerts/{id}/fires (history de disparos)
   - SDK Python/TS/Go: agregar resource UsageAlerts
   - Sabotaje test: cooldown debe prevenir re-fire en < cooldown_secs

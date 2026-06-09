@@ -25,8 +25,8 @@ profile.out
 *.pem
 *.key
 *.crt
-secrets/
-!secrets/.gitkeep
+/secrets/
+!/secrets/.gitkeep
 
 # IDE / Editor
 .idea/

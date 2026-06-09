@@ -10,4 +10,5 @@ notes: |
   paths + anti-enumeration body uniforme + Principal propagado via context.
   Tests: 11 unit apikey + 6 unit middleware + 2 sabotaje (bcrypt cost min,
   1000 keys uniqueness, 401 body uniforme).
-  Pending: PG resolver impl (store/pg/apikey) + endpoints CRUD admin.
+  PGStore con Issue/List/Revoke/Resolve + middleware Middleware{Resolver}.
+  CRUD endpoints: GET /api/v1/api-keys (list), POST (create), DELETE /{id} (revoke).

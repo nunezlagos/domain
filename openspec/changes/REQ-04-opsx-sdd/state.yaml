@@ -9,6 +9,6 @@ hus:
   04.4-tasks-verification: implemented
   04.5-traceability: implemented
   04.6-s3-storage: implemented
-  04.7-interactive-hu-builder: in_progress
+   04.7-interactive-hu-builder: partially_implemented
   04.8-intake-pipeline: in_progress
   04.9-external-provider-sync: in_progress

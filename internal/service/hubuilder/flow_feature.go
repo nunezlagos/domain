@@ -20,16 +20,26 @@ type step struct {
 }
 
 // flowsByMode registra las secuencias de steps por mode.
-// Por ahora solo feature está implementado.
 var flowsByMode = map[string][]step{
 	ModeFeature:  featureFlow,
-	ModeBugFix:   nil, // futura HU
-	ModeRefactor: nil,
-	ModeDoc:      nil,
-	ModeRFC:      nil,
+	ModeBugFix:   bugFixFlow,
+	ModeRefactor: refactorFlow,
+	ModeDoc:      docFlow,
+	ModeRFC:      rfcFlow,
 }
 
 var slugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
+
+var slugValidator = func(a any) error {
+	s, ok := a.(string)
+	if !ok || s == "" {
+		return fmt.Errorf("string required")
+	}
+	if !slugRegex.MatchString(s) {
+		return fmt.Errorf("must match ^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+	}
+	return nil
+}
 
 var featureFlow = []step{
 	{

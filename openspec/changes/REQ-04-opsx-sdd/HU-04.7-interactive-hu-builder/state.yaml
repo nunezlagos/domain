@@ -7,5 +7,12 @@ notes: |
   Commit/Abandon/List/Get. Tabla hu_drafts + hu_draft_steps_log.
   MCP tools: domain_hu_create_{start,answer,preview,commit,abandon},
   domain_hu_drafts_list — todas registradas en MCP server y wireadas en
-  domain-mcp. Pendiente: modes bug-fix/refactor/doc/rfc, HTTP endpoints,
-  audience dinámico desde agent_personalities (HU-08.5), cron purge.
+  domain-mcp.
+  Modos completos: flow_bugfix.go (8 steps: severity/component/root_cause/
+  has_repro/expected/actual/slug/summary), flow_refactor.go (8 steps: scope/
+  reason/current_state/target_state/migration/backward_compat/slug/summary),
+  flow_doc.go (6 steps: doc_type/audience/topic/existing/slug/summary),
+  flow_rfc.go (8 steps: adr_status/context/decision/consequences/alternatives/
+  related/slug/summary). Todos wireados en flowsByMode.
+  Pendiente: HTTP endpoints, audience dinámico desde agent_personalities
+  (HU-08.5), cron purge, tests para nuevos modos.

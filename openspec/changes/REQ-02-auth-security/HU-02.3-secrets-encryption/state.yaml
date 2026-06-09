@@ -6,6 +6,7 @@ notes: |
   internal/crypto package: AES-256-GCM envelope encryption con keyring multi-version
   para rotation. Layout [version|nonce|cipher+gcm_tag]. 11 unit tests + 3 sabotaje
   (tampered cipher, tampered nonce, wrong key). LoadFromBase64 helper para boot
-  desde env DOMAIN_MASTER_KEY. Pending: wire en internal/secrets store + tabla
-  secrets (ya creada en migration 000019). Rotation worker para re-encrypt all
-  con AddKey (HU-25.10).
+  desde env DOMAIN_MASTER_KEY.
+  internal/secrets/store.go: PGStore con Create/GetByID/GetValue/ListByOrg/GetByOrgAndSlug/Update/Delete.
+  encrypted_value se cifra con crypto.Cipher antes de INSERT y descifra en GetValue.
+  Wired en cmd/domain/main.go + handler.API.SecretsStore. Rotation: HU-25.10.

@@ -410,7 +410,19 @@ func runServer() {
 
 	skillRunnerInst := skillrunner.New()
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
-	usageAlertsService := &usagealerts.Service{Pool: pools.App}
+	var alertEmailSender usagealerts.EmailSender
+	if cfg.SMTPHost != "" {
+		alertEmailSender = usagealerts.NewSMTPEmailSender(smtpmail.New(smtpmail.Config{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
+			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
+			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
+		}))
+	}
+	usageAlertsService := &usagealerts.Service{
+		Pool:        pools.App,
+		EmailSender: alertEmailSender,
+		Logger:      logger,
+	}
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 	policyService := &policy.Service{Pool: pools.App}
@@ -470,6 +482,7 @@ func runServer() {
 	}
 
 	activityStore := &activity.PGStore{Pool: pools.App}
+	secretsStore := &secrets.PGStore{Pool: pools.App, Cipher: masterCipher}
 
 	// Rate limiter (HU-02.5)
 	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
@@ -555,6 +568,7 @@ func runServer() {
 		ActivityQuerier:  activityStore,
 		OTPService:     otpService,
 		APIKeys:        apiKeyStore,
+		SecretsStore:   secretsStore,
 		RoleService:    roleService,
 		ReqService:     requirementService,
 		HUService:      huService,

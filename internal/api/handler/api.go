@@ -21,6 +21,7 @@ import (
 	tracesvc "nunezlagos/domain/internal/service/traceability"
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/auth/otp"
+	"nunezlagos/domain/internal/secrets"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -89,6 +90,7 @@ type API struct {
 	ActivityQuerier  activity.Querier
 	OTPService     *otp.Service
 	APIKeys        *apikey.PGStore
+	SecretsStore   *secrets.PGStore
 	RoleService    *rolesvc.Service
 	ReqService     *reqsvc.Service
 	HUService      *usvc.Service

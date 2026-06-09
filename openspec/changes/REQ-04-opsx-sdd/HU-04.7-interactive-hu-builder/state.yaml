@@ -1,3 +1,9 @@
-status: proposed
+status: in_progress
 created: 2026-06-07
+started: 2026-06-09
 archived: ~
+notes: |
+  Partial: implementado solo mode=feature con flow 8-step + Start/Answer/
+  BuildPreview/Commit/Abandon/List/Get. Tabla hu_drafts + hu_draft_steps_log.
+  Pendiente: modes bug-fix/refactor/doc/rfc, MCP tools domain_hu_*,
+  HTTP endpoints, audience dinámico desde agent_personalities (HU-08.5).

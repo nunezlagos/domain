@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS hu_draft_steps_log CASCADE;
+DROP TABLE IF EXISTS hu_drafts CASCADE;

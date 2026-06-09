@@ -2,4 +2,11 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  02.6-activity-log: proposed
+  02.1-api-key-auth: partially_implemented
+  02.2-rbac: implemented
+  02.3-secrets-encryption: partially_implemented
+  02.4-audit-log: partially_implemented
+  02.5-rate-limit-pii: partially_implemented
+  02.6-activity-log: partially_implemented
+  02.7-passwordless-otp-auth: partially_implemented
+  02.8-custom-roles-permissions: implemented

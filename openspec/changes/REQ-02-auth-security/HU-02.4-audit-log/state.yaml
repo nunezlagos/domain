@@ -9,4 +9,7 @@ notes: |
   Tests: 3 unit + 4 integration + sabotaje app_user UPDATE/DELETE denied
   (cubre HU-25.6 REVOKE inmutabilidad).
   Inmutabilidad enforced por DB grants (HU-25.6) + futuro pgaudit (HU-25.7).
-  Pending: middleware HTTP audit-on-mutation + retention purge cron 90d.
+  AuditMiddleware HTTP inyecta IP/UA/RequestID en context para PGRecorder.
+  CLI: domain audit prune con --retention (default 90d) y --dry-run.
+  Pending: middleware HTTP audit-on-mutation (auto-record en mutaciones HTTP),
+  retention purge cron 90d automático en scheduler leader.

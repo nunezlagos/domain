@@ -307,7 +307,6 @@ func runServer() {
 	} else {
 		logger.Warn("SMTP not configured — invitations/OTP no enviarán mails reales (DOMAIN_SMTP_HOST missing)")
 	}
-	_ = otpMailer
 
 	inviteService := &invite.Service{
 		Pool: pools.App, Audit: recorder, Mailer: inviteMailer,

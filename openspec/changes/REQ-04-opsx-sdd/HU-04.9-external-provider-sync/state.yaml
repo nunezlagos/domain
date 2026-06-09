@@ -3,12 +3,15 @@ created: 2026-06-09
 started: 2026-06-09
 archived: ~
 notes: |
-  MVP: tablas external_providers (multi-tenant, multi-provider) +
+  Implementado: tablas external_providers (multi-tenant, multi-provider) +
   external_sync_state (mirror state per entity) + external_sync_events
   (audit immutable). Service con RegisterProvider (upsert), RegisterPush,
   MarkDrift, MarkResolved, MarkPartial, Get, GetByEntity, ListConflicts.
   Tests cubren happy path + drift cycle + sabotage UNIQUE(provider_id,
   external_key).
-  Pendiente futuras HUs: driver Jira HTTP client + ADF renderer, driver
-  GitHub Issues, webhooks pull con HMAC, workers async push/pull,
-  status mapping bidireccional, MCP tool domain_sync_push.
+  MCP tools: domain_sync_{register_provider,register_push,mark_drift,
+  mark_resolved,list_conflicts,get_state} — registradas en MCP server y
+  wireadas en domain-mcp.
+  Pendiente: driver Jira HTTP client + ADF renderer, driver GitHub Issues,
+  webhooks pull con HMAC, workers async push/pull, status mapping
+  bidireccional, HTTP endpoints.

@@ -35,7 +35,10 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	"nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
+	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -135,6 +138,10 @@ func main() {
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
 
+	hubuilderSvc := &hubuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
+	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
+	extsyncSvc := &extsync.Service{Pool: pools.App}
+
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
 		Projects:     projects,
@@ -148,6 +155,9 @@ func main() {
 		AgentRunner:  agentRunnerInst,
 		Flows:        flowService,
 		FlowRunner:   flowRunnerInst,
+		Hubuilder:    hubuilderSvc,
+		Intake:       intakeSvc,
+		ExtSync:      extsyncSvc,
 		Pool:         pools.App,
 		Principal:    principal,
 		ServerName:   "domain-mcp",

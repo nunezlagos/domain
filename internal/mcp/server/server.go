@@ -29,6 +29,8 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	flowsvc "nunezlagos/domain/internal/service/flow"
+	husvc "nunezlagos/domain/internal/service/hubuilder"
+	intakesvc "nunezlagos/domain/internal/service/intake"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -36,6 +38,7 @@ import (
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	syncsvc "nunezlagos/domain/internal/service/extsync"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
@@ -53,6 +56,9 @@ type Deps struct {
 	AgentRunner  *agentrunner.Runner
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
+	Hubuilder    *husvc.Service // HU-04.7 interactive HU wizard
+	Intake       *intakesvc.Service // HU-04.8 intake pipeline
+	ExtSync      *syncsvc.Service   // HU-04.9 external provider sync
 	Pool         *pgxpool.Pool // para queries de agent_run_logs
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
@@ -78,10 +84,15 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		"domain_mem_save", "domain_knowledge_save",
 		"domain_session_start", "domain_session_end",
 		"domain_agent_run",
+		"domain_hu_create_start", "domain_hu_create_answer",
+		"domain_hu_create_preview", "domain_hu_create_commit", "domain_hu_create_abandon",
+		"domain_intake_submit", "domain_intake_approve", "domain_intake_reject",
+		"domain_sync_register_provider", "domain_sync_register_push",
+		"domain_sync_mark_drift", "domain_sync_mark_resolved",
 	} {
 		wrap.SetBudget(mutTool, ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: 100 * time.Millisecond})
 	}
-	return []mcpgo.ServerTool{
+	tools := []mcpgo.ServerTool{
 		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", deps.handleMemSave)},
 		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", deps.handleMemSearch)},
 		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", deps.handleMemContext)},
@@ -108,6 +119,10 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.handleFlowRun)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
+	tools = append(tools, registerHUTools(wrap, deps)...)
+	tools = append(tools, registerIntakeTools(wrap, deps)...)
+	tools = append(tools, registerSyncTools(wrap, deps)...)
+	return tools
 }
 
 // New monta el servidor MCP con los tools del prefijo `domain_*`.

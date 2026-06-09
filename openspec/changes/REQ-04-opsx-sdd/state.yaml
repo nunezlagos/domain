@@ -2,4 +2,13 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  04.6-s3-storage: proposed
+  04.1-requirements-crud: implemented
+  04.2-user-stories-gherkin: implemented
+  04.3-specs-designs: implemented
+  04.4-tasks-verification: implemented
+  04.5-traceability: implemented
+  04.6-s3-storage: implemented
+  04.7-interactive-hu-builder: in_progress
+  04.8-intake-pipeline: in_progress
+  04.9-external-provider-sync: in_progress
+  04.10-lifecycle-state-tracking: implemented

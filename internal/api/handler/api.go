@@ -16,6 +16,10 @@ import (
 	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tsvc "nunezlagos/domain/internal/service/task"
+	tracesvc "nunezlagos/domain/internal/service/traceability"
+	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/auth/otp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
@@ -88,6 +92,10 @@ type API struct {
 	RoleService    *rolesvc.Service
 	ReqService     *reqsvc.Service
 	HUService      *usvc.Service
+	SpecService    *specsvc.Service
+	TaskService    *tsvc.Service
+	TraceService        *tracesvc.Service
+	AttachmentService   *attSvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -133,6 +141,44 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}", a.deleteUserStory)
 	mux.HandleFunc("POST /api/v1/user-stories/{slug}/scenarios", a.addScenario)
 	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}/scenarios/{id}", a.removeScenario)
+
+	// Proposals & Designs (HU-04.3)
+	mux.HandleFunc("POST /api/v1/user-stories/{slug}/proposals", a.createProposal)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals", a.listProposalVersions)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals/latest", a.getLatestProposal)
+	mux.HandleFunc("PATCH /api/v1/proposals/{id}/status", a.changeProposalStatus)
+	mux.HandleFunc("POST /api/v1/user-stories/{slug}/designs", a.createDesign)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/designs", a.listDesigns)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/designs/latest", a.getLatestDesign)
+	mux.HandleFunc("PATCH /api/v1/designs/{id}/status", a.changeDesignStatus)
+
+	// Tasks (HU-04.4)
+	mux.HandleFunc("POST /api/v1/user-stories/{slug}/tasks", a.createTasks)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/tasks", a.listTasks)
+	mux.HandleFunc("GET /api/v1/tasks/{id}", a.getTask)
+	mux.HandleFunc("PATCH /api/v1/tasks/{id}/status", a.updateTaskStatus)
+	mux.HandleFunc("POST /api/v1/tasks/{id}/verification", a.createVerification)
+	mux.HandleFunc("POST /api/v1/tasks/{id}/sabotage", a.createSabotage)
+	mux.HandleFunc("GET /api/v1/user-stories/{slug}/progress", a.getProgress)
+
+	// Traceability (HU-04.5)
+	mux.HandleFunc("GET /api/v1/traceability/req/{slug}", a.getRequirementTrace)
+	mux.HandleFunc("GET /api/v1/traceability/code", a.getCodeTrace)
+	mux.HandleFunc("GET /api/v1/traceability/coverage", a.getCoverageDashboard)
+	mux.HandleFunc("GET /api/v1/traceability/progress", a.getProgressReport)
+	mux.HandleFunc("GET /api/v1/traceability/consolidated", a.getConsolidatedReport)
+	mux.HandleFunc("GET /api/v1/traceability/gaps/no-proposal", a.getHUsWithoutProposals)
+	mux.HandleFunc("GET /api/v1/traceability/gaps/no-design", a.getHUsWithoutDesigns)
+	mux.HandleFunc("GET /api/v1/traceability/gaps/incomplete-tasks", a.getHUsWithIncompleteTasks)
+	mux.HandleFunc("POST /api/v1/traceability/code-refs", a.addCodeReference)
+	mux.HandleFunc("DELETE /api/v1/traceability/code-refs/{id}", a.removeCodeReference)
+
+	// Attachments / S3 (HU-04.6)
+	mux.HandleFunc("POST /api/v1/attachments", a.initUpload)
+	mux.HandleFunc("POST /api/v1/attachments/{id}/confirm", a.confirmUpload)
+	mux.HandleFunc("GET /api/v1/attachments/{id}/download", a.getAttachmentDownload)
+	mux.HandleFunc("GET /api/v1/attachments", a.listAttachments)
+	mux.HandleFunc("DELETE /api/v1/attachments/{id}", a.deleteAttachment)
 
 	// Custom roles (HU-02.8)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/roles", a.listRoles)

@@ -40,6 +40,7 @@ import (
 	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/seeds"
+	s3client "nunezlagos/domain/internal/storage/s3"
 	"nunezlagos/domain/internal/tracing"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
 	"strings"
@@ -80,6 +81,10 @@ import (
 	usvc "nunezlagos/domain/internal/service/userstory"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tsvc "nunezlagos/domain/internal/service/task"
+	tracesvc "nunezlagos/domain/internal/service/traceability"
+	attSvc "nunezlagos/domain/internal/service/attachment"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
@@ -484,6 +489,33 @@ func runServer() {
 	requirementService := &reqsvc.Service{Pool: pools.App, Audit: recorder}
 	huService := &usvc.Service{Pool: pools.App, Audit: recorder}
 
+	specService := &specsvc.Service{Pool: pools.App, Audit: recorder}
+	taskService := &tsvc.Service{Pool: pools.App, Audit: recorder}
+	traceService := &tracesvc.Service{Pool: pools.App}
+
+	// S3 client (HU-04.6) — opcional; nil si no configurado
+	var attachmentService *attSvc.Service
+	if cfg.S3Bucket != "" {
+		s3Client, err := s3client.New(s3client.Config{
+			Endpoint: cfg.S3Endpoint,
+			Region:   cfg.S3Region,
+			Bucket:   cfg.S3Bucket,
+			Key:      cfg.S3AccessKey,
+			Secret:   cfg.S3SecretKey,
+		})
+		if err != nil {
+			logger.Warn("s3 client init failed; attachments disabled", slog.Any("err", err))
+		} else {
+			attachmentService = &attSvc.Service{Pool: pools.App, S3: s3Client, Audit: recorder}
+			logger.Info("s3 storage configured",
+				slog.String("bucket", cfg.S3Bucket),
+				slog.String("endpoint", cfg.S3Endpoint),
+			)
+		}
+	} else {
+		logger.Warn("DOMAIN_S3_BUCKET not set; file attachments disabled")
+	}
+
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 	if err := customResolver.StartCacheListener(ctx); err != nil {
 		logger.Warn("custom roles cache listener", slog.String("error", err.Error()))
@@ -526,6 +558,10 @@ func runServer() {
 		RoleService:    roleService,
 		ReqService:     requirementService,
 		HUService:      huService,
+		SpecService:    specService,
+		TaskService:         taskService,
+		TraceService:        traceService,
+		AttachmentService:   attachmentService,
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)

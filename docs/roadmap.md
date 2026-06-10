@@ -31,9 +31,9 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 **Objetivo:** poder correr código localmente con stack completo, sin tocar features de producto.
 
 **HUs:**
-- **HU-01.6** local-dev-environment (docker-compose con pg+minio+adminer+mailpit)
-- **HU-01.2** config-system (env vars DOMAIN_*, validation al boot)
-- **HU-01.3** health-version (CLI + endpoint /health)
+- **issue-01.6** local-dev-environment (docker-compose con pg+minio+adminer+mailpit)
+- **issue-01.2** config-system (env vars DOMAIN_*, validation al boot)
+- **issue-01.3** health-version (CLI + endpoint /health)
 
 **Exit criteria:**
 - [ ] `make dev-up` levanta stack completo en <60s
@@ -51,42 +51,42 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 1.1 Schema + Migraciones (sem 1-2)
 
-- **HU-01.1** db-schema-migrations (23 tablas iniciales + extensiones)
-- **HU-25.3** migration-linter (squawk + custom)
-- **HU-25.13** schema-conventions-linter (enforce db.md)
-- **HU-25.6** least-privilege-roles (4 roles + grants)
-- **HU-01.7** seeders-system (framework + go:embed)
+- **issue-01.1** db-schema-migrations (23 tablas iniciales + extensiones)
+- **issue-25.3** migration-linter (squawk + custom)
+- **issue-25.13** schema-conventions-linter (enforce db.md)
+- **issue-25.6** least-privilege-roles (4 roles + grants)
+- **issue-01.7** seeders-system (framework + go:embed)
 
 ### 1.2 Observabilidad base (sem 3)
 
-- **HU-17.1** metrics-prometheus
-- **HU-17.2** tracing-otel
-- **HU-17.3** structured-logging-slog
+- **issue-17.1** metrics-prometheus
+- **issue-17.2** tracing-otel
+- **issue-17.3** structured-logging-slog
 
 ### 1.3 Auth core (sem 4-5)
 
-- **HU-02.1** api-key-auth (bcrypt, CRUD, rotación)
-- **HU-02.2** rbac (roles built-in)
-- **HU-02.3** secrets-encryption (AES-256-GCM)
-- **HU-02.4** audit-log (append-only inmutable)
-- **HU-02.5** rate-limit-pii
-- **HU-02.6** activity-log
-- **HU-02.7** passwordless-otp-auth (RUT/email → API key)
+- **issue-02.1** api-key-auth (bcrypt, CRUD, rotación)
+- **issue-02.2** rbac (roles built-in)
+- **issue-02.3** secrets-encryption (AES-256-GCM)
+- **issue-02.4** audit-log (append-only inmutable)
+- **issue-02.5** rate-limit-pii
+- **issue-02.6** activity-log
+- **issue-02.7** passwordless-otp-auth (RUT/email → API key)
 
 ### 1.4 Hardening DB esencial (sem 6)
 
-- **HU-25.5** rls-sensitive-tables (12 tablas críticas)
-- **HU-25.8** resource-limits-timeouts (statement_timeout, TLS verify-full, pg_hba)
-- **HU-25.1** pgbouncer-pooling (transaction-pool + HA)
-- **HU-25.2** pg-stat-statements
+- **issue-25.5** rls-sensitive-tables (12 tablas críticas)
+- **issue-25.8** resource-limits-timeouts (statement_timeout, TLS verify-full, pg_hba)
+- **issue-25.1** pgbouncer-pooling (transaction-pool + HA)
+- **issue-25.2** pg-stat-statements
 
 ### 1.5 Multi-tenant base (sem 7-8)
 
-- **HU-21.1** org-management (CRUD + transfer)
-- **HU-21.2** user-invitations (email + accept via OTP)
-- **HU-01.4** project-templates
-- **HU-01.5** project-merge
-- **HU-01.8** platform-policies (rules en BD)
+- **issue-21.1** org-management (CRUD + transfer)
+- **issue-21.2** user-invitations (email + accept via OTP)
+- **issue-01.4** project-templates
+- **issue-01.5** project-merge
+- **issue-01.8** platform-policies (rules en BD)
 
 **Exit criteria fase 1:**
 - [ ] Smoke E2E: invitar user → recibir email → OTP login → recibir API key → llamar `/health` autenticado
@@ -107,53 +107,53 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 2.1 Memoria + búsqueda (sem 9-11)
 
-- **HU-03.1** observations-crud-fts
-- **HU-03.2** sessions-lifecycle
-- **HU-03.3** prompts-storage
-- **HU-03.4** knowledge-documents (chunking + embeddings)
-- **HU-03.5** context-timeline
-- **HU-03.6** dedup-privacy
-- **HU-03.7** cross-project-global-search (FTS+vector híbrida)
+- **issue-03.1** observations-crud-fts
+- **issue-03.2** sessions-lifecycle
+- **issue-03.3** prompts-storage
+- **issue-03.4** knowledge-documents (chunking + embeddings)
+- **issue-03.5** context-timeline
+- **issue-03.6** dedup-privacy
+- **issue-03.7** cross-project-global-search (FTS+vector híbrida)
 
 ### 2.2 LLM + embeddings (sem 12)
 
-- **HU-06.1** llm-provider-factory
-- **HU-06.2** llm-runners (OpenAI, Anthropic, Google)
-- **HU-06.4** model-registry-cost
-- **HU-06.5** embedding-pgvector
-- **HU-06.6** token-count-stream
+- **issue-06.1** llm-provider-factory
+- **issue-06.2** llm-runners (OpenAI, Anthropic, Google)
+- **issue-06.4** model-registry-cost
+- **issue-06.5** embedding-pgvector
+- **issue-06.6** token-count-stream
 
 ### 2.3 Skills + ejecución (sem 13-14)
 
-- **HU-05.1** skill-definitions
-- **HU-05.2** skill-registry-search
-- **HU-05.3** skill-versioning
-- **HU-05.4** auto-skill-engine
-- **HU-05.5** skill-execution
-- **HU-05.6** agent-skill-contract (JSON Schema + error taxonomy)
+- **issue-05.1** skill-definitions
+- **issue-05.2** skill-registry-search
+- **issue-05.3** skill-versioning
+- **issue-05.4** auto-skill-engine
+- **issue-05.5** skill-execution
+- **issue-05.6** agent-skill-contract (JSON Schema + error taxonomy)
 
 ### 2.4 Agentes core (sem 15-16)
 
-- **HU-08.1** agent-definitions
-- **HU-08.2** agent-execution (loop LLM + tools)
-- **HU-08.3** agent-runs-logs
-- **HU-08.5** agent-templates (5 built-in)
+- **issue-08.1** agent-definitions
+- **issue-08.2** agent-execution (loop LLM + tools)
+- **issue-08.3** agent-runs-logs
+- **issue-08.5** agent-templates (5 built-in)
 
 ### 2.5 MCP server (sem 17)
 
-- **HU-12.1** mcp-core-stdio
-- **HU-12.2** mcp-memory-tools (12 tools `domain_mem_*`)
-- **HU-12.3** mcp-agent-tools (9 tools `domain_*`)
-- **HU-12.5** agent-setup (auto-config Claude/Cline/Cursor)
+- **issue-12.1** mcp-core-stdio
+- **issue-12.2** mcp-memory-tools (12 tools `domain_mem_*`)
+- **issue-12.3** mcp-agent-tools (9 tools `domain_*`)
+- **issue-12.5** agent-setup (auto-config Claude/Cline/Cursor)
 
 ### 2.6 HTTP API + CLI base (sem 18)
 
-- **HU-13.1** http-crud-endpoints
-- **HU-13.2** http-auth-middleware
-- **HU-13.3** http-pagination-filters
-- **HU-14.1** cli-core-commands
-- **HU-14.2** cli-output-formats
-- **HU-14.3** cli-autocomplete-help
+- **issue-13.1** http-crud-endpoints
+- **issue-13.2** http-auth-middleware
+- **issue-13.3** http-pagination-filters
+- **issue-14.1** cli-core-commands
+- **issue-14.2** cli-output-formats
+- **issue-14.3** cli-autocomplete-help
 
 **Exit criteria fase 2:**
 - [ ] Workflow E2E completo: dev usa Claude Code → MCP `domain_mem_save` guarda obs → `domain_agent_run` ejecuta agente con skills → resultado persistido y consultable vía API
@@ -165,7 +165,7 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 **Hito de marketing:** alpha cerrado a equipo + ~5 testers de confianza.
 
 **Riesgos:**
-- LLM cost runaway en dogfooding: HU-21.3 plans/limits NO está aún en esta fase → poner cap manual fuerte
+- LLM cost runaway en dogfooding: issue-21.3 plans/limits NO está aún en esta fase → poner cap manual fuerte
 - Performance search con 10k+ observations: bench y ajustar índices
 
 ---
@@ -176,46 +176,46 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 3.1 Flow system (sem 19-21)
 
-- **HU-09.1** flow-dag-definition
-- **HU-09.2** step-types (10 step types)
-- **HU-09.3** flow-state-machine
-- **HU-09.4** retry-error-handling
-- **HU-09.5** subflows-composition
+- **issue-09.1** flow-dag-definition
+- **issue-09.2** step-types (10 step types)
+- **issue-09.3** flow-state-machine
+- **issue-09.4** retry-error-handling
+- **issue-09.5** subflows-composition
 
 ### 3.2 Cron + Triggers (sem 22)
 
-- **HU-10.1** cron-schedules
-- **HU-10.2** webhook-triggers (inbound HMAC)
-- **HU-10.3** event-execution
+- **issue-10.1** cron-schedules
+- **issue-10.2** webhook-triggers (inbound HMAC)
+- **issue-10.3** event-execution
 
 ### 3.3 Cost observability (sem 23)
 
-- **HU-15.1** token-tracking
-- **HU-15.2** cost-analytics
-- **HU-15.3** usage-alerts
+- **issue-15.1** token-tracking
+- **issue-15.2** cost-analytics
+- **issue-15.3** usage-alerts
 
 ### 3.4 Plans + billing (sem 24-25)
 
-- **HU-21.3** plans-limits (Free/Pro/Enterprise + cuotas)
-- **HU-21.4** billing-stripe (Checkout + webhooks)
+- **issue-21.3** plans-limits (Free/Pro/Enterprise + cuotas)
+- **issue-21.4** billing-stripe (Checkout + webhooks)
 
 ### 3.5 Notificaciones (sem 26)
 
-- **HU-20.1** channel-abstraction
-- **HU-20.2** email-smtp
-- **HU-20.3** slack-webhook
+- **issue-20.1** channel-abstraction
+- **issue-20.2** email-smtp
+- **issue-20.3** slack-webhook
 
 ### 3.6 MCP avanzado + resilience (sem 27)
 
-- **HU-12.4** mcp-bidirectional (consume MCPs externos)
-- **HU-12.6** mcp-tool-resilience (timeout + CB + cache + degraded)
+- **issue-12.4** mcp-bidirectional (consume MCPs externos)
+- **issue-12.6** mcp-tool-resilience (timeout + CB + cache + degraded)
 
 ### 3.7 Context/cache LLM (sem 28)
 
-- **HU-07.1** context-optimizer
-- **HU-07.2** cross-session-stitch
-- **HU-07.3** llm-semantic-cache
-- **HU-07.4** token-budget
+- **issue-07.1** context-optimizer
+- **issue-07.2** cross-session-stitch
+- **issue-07.3** llm-semantic-cache
+- **issue-07.4** token-budget
 
 **Exit criteria fase 3:**
 - [ ] Cliente beta puede signup vía invitación, registrar API key, ejecutar agente, ver costo en su dashboard
@@ -238,60 +238,60 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 4.1 Backup & DR (sem 29-30)
 
-- **HU-18.1** postgres-backups (pgBackRest + PITR)
-- **HU-18.2** s3-replication
-- **HU-18.3** restore-runbook + drill mensual
+- **issue-18.1** postgres-backups (pgBackRest + PITR)
+- **issue-18.2** s3-replication
+- **issue-18.3** restore-runbook + drill mensual
 
 ### 4.2 CI/CD producción (sem 31)
 
-- **HU-19.1** ci-lint-test (ya parcial desde fase 1; completar matrix + integration)
-- **HU-19.2** cd-release-binary (goreleaser + cosign + SBOM)
-- **HU-19.3** docker-image-publish (distroless multi-arch)
+- **issue-19.1** ci-lint-test (ya parcial desde fase 1; completar matrix + integration)
+- **issue-19.2** cd-release-binary (goreleaser + cosign + SBOM)
+- **issue-19.3** docker-image-publish (distroless multi-arch)
 
 ### 4.3 Deployment K8s (sem 32-33)
 
-- **HU-24.1** helm-chart (oficial OCI)
-- **HU-24.2** kustomize-overlays
-- **HU-24.3** k8s-deployment-examples (AWS EKS, GCP GKE, k3s)
+- **issue-24.1** helm-chart (oficial OCI)
+- **issue-24.2** kustomize-overlays
+- **issue-24.3** k8s-deployment-examples (AWS EKS, GCP GKE, k3s)
 
 ### 4.4 SDKs (sem 34-35)
 
-- **HU-22.1** sdk-python
-- **HU-22.2** sdk-typescript
-- **HU-22.3** sdk-go
+- **issue-22.1** sdk-python
+- **issue-22.2** sdk-typescript
+- **issue-22.3** sdk-go
 
 ### 4.5 API maduro (sem 36)
 
-- **HU-13.4** idempotency-keys
-- **HU-13.5** bulk-batch-endpoints
-- **HU-13.6** cursor-pagination
-- **HU-13.7** http-caching-etags
-- **HU-13.8** api-versioning-policy
-- **HU-13.9** response-shape-linter
+- **issue-13.4** idempotency-keys
+- **issue-13.5** bulk-batch-endpoints
+- **issue-13.6** cursor-pagination
+- **issue-13.7** http-caching-etags
+- **issue-13.8** api-versioning-policy
+- **issue-13.9** response-shape-linter
 
 ### 4.6 OPSX SDD (la plataforma documentándose a sí misma) (sem 37)
 
-- **HU-04.1** requirements-crud
-- **HU-04.2** user-stories-gherkin
-- **HU-04.3** specs-designs
-- **HU-04.4** tasks-verification
-- **HU-04.5** traceability
-- **HU-04.6** s3-storage (adjuntos)
+- **issue-04.1** requirements-crud
+- **issue-04.2** user-stories-gherkin
+- **issue-04.3** specs-designs
+- **issue-04.4** tasks-verification
+- **issue-04.5** traceability
+- **issue-04.6** s3-storage (adjuntos)
 
 ### 4.7 Data lifecycle (sem 38)
 
-- **HU-23.1** legacy-import (Notion, Obsidian, MD, JSON)
-- **HU-23.2** soft-delete-restore (papelera uniforme + TTL purge)
-- **HU-23.3** gdpr-export
+- **issue-23.1** legacy-import (Notion, Obsidian, MD, JSON)
+- **issue-23.2** soft-delete-restore (papelera uniforme + TTL purge)
+- **issue-23.3** gdpr-export
 
 ### 4.8 Hardening DB final (sem 39-40)
 
-- **HU-25.4** schema-drift (cron daily)
-- **HU-25.7** pgaudit-db-level
-- **HU-25.9** read-replicas-routing
-- **HU-25.10** db-secrets-rotation
-- **HU-25.11** anonymization-staging
-- **HU-25.12** locks-vacuum-monitoring
+- **issue-25.4** schema-drift (cron daily)
+- **issue-25.7** pgaudit-db-level
+- **issue-25.9** read-replicas-routing
+- **issue-25.10** db-secrets-rotation
+- **issue-25.11** anonymization-staging
+- **issue-25.12** locks-vacuum-monitoring
 
 **Exit criteria fase 4:**
 - [ ] `helm install domain/domain-mcp` levanta cluster prod-ready en AWS/GCP en <30min
@@ -307,7 +307,7 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 **Riesgos:**
 - Helm chart bugs en producción de clientes: drill exhaustivo en kind
-- SDK API contract drift: response shape linter (HU-13.9) crítico
+- SDK API contract drift: response shape linter (issue-13.9) crítico
 - Data lifecycle: GDPR export en cuentas grandes puede ser lento → background async
 
 ---
@@ -318,37 +318,37 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 5.1 Horizontal scalability (sem 41-44)
 
-- **HU-26.1** stateless-invariant (linter)
-- **HU-26.2** leader-election-crons
-- **HU-26.3** distributed-locks
-- **HU-26.4** graceful-shutdown
-- **HU-26.5** circuit-breaker-llm
-- **HU-26.6** backpressure-queue
-- **HU-26.7** cache-invalidation-patterns
+- **issue-26.1** stateless-invariant (linter)
+- **issue-26.2** leader-election-crons
+- **issue-26.3** distributed-locks
+- **issue-26.4** graceful-shutdown
+- **issue-26.5** circuit-breaker-llm
+- **issue-26.6** backpressure-queue
+- **issue-26.7** cache-invalidation-patterns
 
 ### 5.2 Flow durability + advanced (sem 45-48)
 
-- **HU-09.6** durable-execution (checkpointing + recovery)
-- **HU-09.7** workflow-versioning
-- **HU-09.8** external-signals
-- **HU-09.9** saga-compensation
-- **HU-09.10** step-heartbeats
-- **HU-09.11** reproducibility-snapshots
-- **HU-09.12** dry-run-plan-mode
+- **issue-09.6** durable-execution (checkpointing + recovery)
+- **issue-09.7** workflow-versioning
+- **issue-09.8** external-signals
+- **issue-09.9** saga-compensation
+- **issue-09.10** step-heartbeats
+- **issue-09.11** reproducibility-snapshots
+- **issue-09.12** dry-run-plan-mode
 
 ### 5.3 Multi-agent serio (sem 49-50)
 
-- **HU-08.6** multi-agent-supervisor
-- **HU-08.7** agent-handoff
-- **HU-08.8** agent-parallel-fanout
-- **HU-08.9** agent-hierarchical-context
+- **issue-08.6** multi-agent-supervisor
+- **issue-08.7** agent-handoff
+- **issue-08.8** agent-parallel-fanout
+- **issue-08.9** agent-hierarchical-context
 
 ### 5.4 Runners + outbound (sem 51-52)
 
-- **HU-11.1** sandbox-execution (Docker)
-- **HU-11.2** selfhosted-runner
-- **HU-11.3** execution-streaming
-- **HU-10.4** outbound-webhooks (HMAC + retry + CB + SSRF)
+- **issue-11.1** sandbox-execution (Docker)
+- **issue-11.2** selfhosted-runner
+- **issue-11.3** execution-streaming
+- **issue-10.4** outbound-webhooks (HMAC + retry + CB + SSRF)
 
 **Exit criteria fase 5:**
 - [ ] 10 pods Domain handle 1000 req/s sostenido sin race conditions
@@ -368,23 +368,23 @@ Este roadmap divide la implementación en **6 fases** con criterio de exit expl�
 
 ### 6.1 Enterprise auth (sem 53-54)
 
-- **HU-02.8** custom-roles-permissions (fine-grained RBAC)
+- **issue-02.8** custom-roles-permissions (fine-grained RBAC)
 
 ### 6.2 Vertical performance (sem 55-56)
 
-- **HU-27.1** pprof-debug-endpoints
-- **HU-27.2** gomaxprocs-gomemlimit
-- **HU-27.3** hot-reload-config
-- **HU-27.4** feature-benchmarks (regression check en CI)
+- **issue-27.1** pprof-debug-endpoints
+- **issue-27.2** gomaxprocs-gomemlimit
+- **issue-27.3** hot-reload-config
+- **issue-27.4** feature-benchmarks (regression check en CI)
 
 ### 6.3 Web UI mínima (sem 57-60)
 
-- **HU-16.1** web-dashboard (read-only stats)
-- **HU-16.2** web-run-visualization (SSE real-time)
-- **HU-16.4** web-admin-skills
-- **HU-16.5** web-admin-memories
+- **issue-16.1** web-dashboard (read-only stats)
+- **issue-16.2** web-run-visualization (SSE real-time)
+- **issue-16.4** web-admin-skills
+- **issue-16.5** web-admin-memories
 
-> Nota: HU-16.3 flow-editor (editor visual DAG) postpuesto post-v2.0.
+> Nota: issue-16.3 flow-editor (editor visual DAG) postpuesto post-v2.0.
 
 ### 6.4 Marketplace / advanced (sem 61-64)
 
@@ -426,7 +426,7 @@ F5 (scale)      │
 F6 (v2.0) ←─────┘
 ```
 
-**Crítico:** las HUs de **HU-26 horizontal scalability** son técnicamente útiles desde fase 1 (stateless invariant, graceful shutdown), pero se postponen a fase 5 cuando la presión de carga lo justifica. Si en fase 2-4 detectamos un caso real de carga: subir HU-26.x al sprint en cuestión.
+**Crítico:** las HUs de **issue-26 horizontal scalability** son técnicamente útiles desde fase 1 (stateless invariant, graceful shutdown), pero se postponen a fase 5 cuando la presión de carga lo justifica. Si en fase 2-4 detectamos un caso real de carga: subir issue-26.x al sprint en cuestión.
 
 ---
 
@@ -437,9 +437,9 @@ F6 (v2.0) ←─────┘
 | Confirmar tech: Go 1.22+, Postgres 16, pgx v5, mcp-go | bloqueo si cambia |
 | Confirmar deploy target inicial: K8s o solo Docker? | K8s afecta REQ-24 prioridad |
 | ¿GA v1.0 multi-tenant o single-tenant? | multi-tenant agrega complejidad RLS |
-| Pricing tiers definidos antes de fase 3 | bloquea HU-21.3 plans seed |
-| Stripe account live antes de fase 3 | bloquea HU-21.4 |
-| Cert para emails (DKIM, SPF) prod | bloquea HU-20.2 prod |
+| Pricing tiers definidos antes de fase 3 | bloquea issue-21.3 plans seed |
+| Stripe account live antes de fase 3 | bloquea issue-21.4 |
+| Cert para emails (DKIM, SPF) prod | bloquea issue-20.2 prod |
 
 ---
 
@@ -464,16 +464,16 @@ Tracking continuo (Grafana dashboard auto-generado):
 
 | riesgo | probabilidad | impacto | mitigación |
 |--------|--------------|---------|------------|
-| LLM cost runaway en dogfooding | alta | medio | cap manual desde fase 2; HU-21.3 en fase 3 |
+| LLM cost runaway en dogfooding | alta | medio | cap manual desde fase 2; issue-21.3 en fase 3 |
 | RLS performance overhead | media | alto | bench en fase 1, ajustar si >10% |
-| OpenAI/Anthropic outage en demos | media | medio | HU-26.5 fallback desde fase 5; demo con Ollama offline |
+| OpenAI/Anthropic outage en demos | media | medio | issue-26.5 fallback desde fase 5; demo con Ollama offline |
 | GDPR/compliance review tarde | media | alto | revisar legal en fase 3, ajustar fase 4 si necesario |
 | Skill marketplace abuse | baja | alto | curated only en v2.0; community submit con review |
 | pgvector limit por dimension | baja | medio | docs declaran 1536 (OpenAI ada-002), upgradable |
 | Costo cloud durante fase 5 (escala test) | media | medio | load tests con sandbox accounts dedicado |
-| Lock-in dependency (Stripe, OpenAI) | media | alto | LLM ya abstraído (REQ-06); Stripe via HU-21.4 con webhook contract estable |
-| Skills de community injection | media | alto | Tooling-side sandbox (HU-11.1) + skill review |
-| Backup encryption key loss | baja | crítico | KMS-managed + rotation documentada en HU-18.1 |
+| Lock-in dependency (Stripe, OpenAI) | media | alto | LLM ya abstraído (REQ-06); Stripe via issue-21.4 con webhook contract estable |
+| Skills de community injection | media | alto | Tooling-side sandbox (issue-11.1) + skill review |
+| Backup encryption key loss | baja | crítico | KMS-managed + rotation documentada en issue-18.1 |
 
 ---
 

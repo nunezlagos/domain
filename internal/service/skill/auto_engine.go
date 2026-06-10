@@ -1,5 +1,5 @@
-// HU-05.4 auto-skill-engine — descubre automáticamente nuevos skills desde
-// tools MCP externos (HU-12.4) o desde código del repo (annotations).
+// issue-05.4 auto-skill-engine — descubre automáticamente nuevos skills desde
+// tools MCP externos (issue-12.4) o desde código del repo (annotations).
 //
 // Cuando un MCP server externo registra una tool nueva, el auto-engine
 // la materializa como un skill ejecutable en la BD. Idempotente: si la

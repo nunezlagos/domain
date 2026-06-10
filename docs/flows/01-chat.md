@@ -39,8 +39,8 @@ sequenceDiagram
 ```sql
 -- Después de un prompt clasificado como chat:
 SELECT COUNT(*) FROM intake_payloads;  -- 0
-SELECT COUNT(*) FROM hu_drafts;        -- 0
-SELECT COUNT(*) FROM user_stories;     -- 0 (no se materializó nada)
+SELECT COUNT(*) FROM issue_drafts;        -- 0
+SELECT COUNT(*) FROM issues;     -- 0 (no se materializó nada)
 ```
 
 ## Por qué importa

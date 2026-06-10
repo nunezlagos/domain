@@ -20,7 +20,7 @@ Capa de gestión multi-tenant a nivel organización: invitar y administrar miemb
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-21.1-org-management | proposed | CRUD orgs, settings, transfer ownership, member roles |
-| HU-21.2-user-invitations | proposed | Invitaciones email con token, expiración, accept/decline, audit |
-| HU-21.3-plans-limits | proposed | Plans con cuotas por dimensión, tracking, throttle/block al exceder |
-| HU-21.4-billing-stripe | proposed | Integración Stripe: Checkout, Webhooks, métodos de pago, invoices |
+| issue-21.1-org-management | proposed | CRUD orgs, settings, transfer ownership, member roles |
+| issue-21.2-user-invitations | proposed | Invitaciones email con token, expiración, accept/decline, audit |
+| issue-21.3-plans-limits | proposed | Plans con cuotas por dimensión, tracking, throttle/block al exceder |
+| issue-21.4-billing-stripe | proposed | Integración Stripe: Checkout, Webhooks, métodos de pago, invoices |

@@ -1,4 +1,4 @@
-// Package cursor — HU-13.6 cursor-based pagination opaque.
+// Package cursor — issue-13.6 cursor-based pagination opaque.
 //
 // El cursor encodea {last_id, last_sort_value, filters_hash, sort_dir} en base64url JSON
 // y se valida en cada page request (filters_hash debe matchear).
@@ -90,7 +90,7 @@ func NormalizeSort(s string) (string, error) {
 	return "", ErrInvalid
 }
 
-// MaxLegacyOffset cap para offset legacy (HU-13.6 escenario 6).
+// MaxLegacyOffset cap para offset legacy (issue-13.6 escenario 6).
 const MaxLegacyOffset = 10000
 
 // PageMeta es la shape estándar de pagination en responses.

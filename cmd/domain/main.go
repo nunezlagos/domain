@@ -1,8 +1,8 @@
 // Package main es el entrypoint del binario `domain`: CLI principal + servidor HTTP.
 //
-// HU-01.1 db-schema-migrations: subcomandos `migrate up|down|version`.
-// HU-01.3 health-version: subcomando `version` y `server`.
-// HU-14.1 cli-core-commands: estructura base; subcomandos restantes en Fase 2+.
+// issue-01.1 db-schema-migrations: subcomandos `migrate up|down|version`.
+// issue-01.3 health-version: subcomando `version` y `server`.
+// issue-14.1 cli-core-commands: estructura base; subcomandos restantes en Fase 2+.
 package main
 
 import (
@@ -64,7 +64,7 @@ import (
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/cost"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
@@ -80,7 +80,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	rolesvc "nunezlagos/domain/internal/service/role"
-	usvc "nunezlagos/domain/internal/service/userstory"
+	usvc "nunezlagos/domain/internal/service/issue"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	specsvc "nunezlagos/domain/internal/service/spec"
@@ -96,7 +96,7 @@ import (
 	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
 )
 
-// Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
+// Variables sobrescritas por `-ldflags "-X main.Version=..."` (issue-19.2).
 var (
 	Version   = "0.0.0-dev"
 	Commit    = "unknown"
@@ -245,7 +245,7 @@ func runServer() {
 		Output:    cfg.LogOutput,
 		AddSource: cfg.LogAddSource,
 	})
-	// Métricas Prometheus (HU-17.1)
+	// Métricas Prometheus (issue-17.1)
 	metricsReg := metrics.New()
 	if cfg.MetricsEnabled {
 		metricsAddr := fmt.Sprintf("%s:%d", cfg.MetricsBind, cfg.MetricsPort)
@@ -257,7 +257,7 @@ func runServer() {
 		}()
 	}
 
-	// Runtime tuning (HU-27.2)
+	// Runtime tuning (issue-27.2)
 	debugpkg.TuneRuntime(logger)
 
 	// Pools (app_user para runtime, app_admin para auth/audit).
@@ -294,7 +294,7 @@ func runServer() {
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
 	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
 
-	// Debug pprof endpoints (HU-27.1) en puerto separado con basic auth
+	// Debug pprof endpoints (issue-27.1) en puerto separado con basic auth
 	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
 		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
 		go func() {
@@ -346,7 +346,7 @@ func runServer() {
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
 
-	// Runtime config registry (HU-27.3) — refresca al boot + cada 30s + SIGHUP.
+	// Runtime config registry (issue-27.3) — refresca al boot + cada 30s + SIGHUP.
 	rtCfgRegistry := &runtimeconfig.Registry{Pool: pools.App, Logger: logger}
 	if err := rtCfgRegistry.Refresh(ctx); err != nil {
 		logger.Warn("initial runtime config refresh failed (defaults used)",
@@ -354,7 +354,7 @@ func runServer() {
 	}
 	go rtCfgRegistry.RunPolling(ctx, 30*time.Second)
 
-	// OpenTelemetry tracing (HU-17.2) — usa sample ratio del runtime config.
+	// OpenTelemetry tracing (issue-17.2) — usa sample ratio del runtime config.
 	otelShutdown, oTelErr := tracing.Setup(context.Background(), tracing.Config{
 		Enabled:      os.Getenv("DOMAIN_OTEL_ENABLED") == "true",
 		OTLPEndpoint: envOr("DOMAIN_OTEL_ENDPOINT", "localhost:4317"),
@@ -370,14 +370,14 @@ func runServer() {
 	}
 	defer otelShutdown(context.Background())
 
-	// Seeders (HU-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
+	// Seeders (issue-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
 	seedRegistry := seeds.NewRegistry()
 	seedRegistry.Register(&seeds.PlansSeeder{})
 	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
 	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
-	// seeds.SeedAgentTemplatesForOrg (HU-21.1 org-management hook).
+	// seeds.SeedAgentTemplatesForOrg (issue-21.1 org-management hook).
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
@@ -391,7 +391,7 @@ func runServer() {
 		)
 	}
 
-	// Cipher opcional para outbound webhook secrets at-rest (HU-02.3 + HU-10.4).
+	// Cipher opcional para outbound webhook secrets at-rest (issue-02.3 + issue-10.4).
 	var masterCipher *crypto.Cipher
 	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
 		c, err := crypto.LoadFromBase64(mk)
@@ -411,7 +411,7 @@ func runServer() {
 	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
 
 	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
-	// Cada provider se envuelve con circuit breaker (HU-26.5) para shed-load
+	// Cada provider se envuelve con circuit breaker (issue-26.5) para shed-load
 	// cuando hay errores sostenidos del provider externo.
 	llmFactory := llm.NewFactory()
 	cbCfg := circuitbreaker.Config{
@@ -453,16 +453,16 @@ func runServer() {
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 	policyService := &policy.Service{Pool: pools.App}
-	// HU-04.7 wizard interactivo. Attachments se inyectan más abajo cuando
+	// issue-04.7 wizard interactivo. Attachments se inyectan más abajo cuando
 	// se construye el S3 client (puede ser nil si DOMAIN_S3_BUCKET no está).
-	hubuilderSvc := &hubuilder.Service{
+	issuebuilderSvc := &issuebuilder.Service{
 		Pool: pools.App, Audit: recorder, DraftTTLHrs: 24,
 	}
 
-	// HU-04.8 intake pipeline service.
+	// issue-04.8 intake pipeline service.
 	intakeSvc := &intakesvc.Service{Pool: pools.App, Audit: recorder}
 
-	// HU-12.7 prompt router + analyzer + classifier.
+	// issue-12.7 prompt router + analyzer + classifier.
 	// LLM classifier si hay provider configurado; fallback heurístico siempre.
 	var promptClassifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
 	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
@@ -479,7 +479,7 @@ func runServer() {
 	wizardAnalyzer := &wp.Analyzer{
 		Classifier: &promptrouter.WizardplanAdapter{Inner: promptClassifier},
 		Sources: []wp.Source{
-			&wpsources.HUDedupSource{Pool: pools.App, Limit: 5},
+			&wpsources.IssueDedupSource{Pool: pools.App, Limit: 5},
 			&wpsources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
 			&wpsources.MemorySource{Search: searchService, Limit: 5},
 		},
@@ -494,19 +494,19 @@ func runServer() {
 		}
 	}
 
-	hubuilderAdaptive := &hubuilder.AdaptiveService{
-		Service:  hubuilderSvc,
+	issuebuilderAdaptive := &issuebuilder.AdaptiveService{
+		Service:  issuebuilderSvc,
 		Analyzer: wizardAnalyzer,
 		Planner:  wizardPlanner,
 	}
 
 	promptRouterSvc := &promptrouter.Router{
 		IntakeService:    intakeSvc,
-		HubuilderService: hubuilderSvc,
+		IssueBuilderService: issuebuilderSvc,
 		Classifier:       promptClassifier,
 	}
 
-	// HU-12.7 workflow import (override de .md de IA en repo cliente).
+	// issue-12.7 workflow import (override de .md de IA en repo cliente).
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
 
 	dbStatsService := &dbstats.Service{Pool: pools.App}
@@ -529,7 +529,7 @@ func runServer() {
 		Emitter: outboundEmitter, Metrics: metricsReg,
 	}
 
-	// Cron scheduler (HU-10.1): solo corre en el pod leader (HU-26.2)
+	// Cron scheduler (issue-10.1): solo corre en el pod leader (issue-26.2)
 	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
 	scheduler := &cronsched.Scheduler{
 		Crons: cronService, Agents: agentRunnerInst, Flows: flowRunnerInst,
@@ -543,9 +543,9 @@ func runServer() {
 	schedCtx, schedCancel := context.WithCancel(context.Background())
 	go leaderElection.RunAsLeader(schedCtx, func(leaderCtx context.Context) {
 		// El pod leader corre todos los workers single-instance:
-		// - cron scheduler (HU-10.1)
-		// - flow recovery (HU-09.6) marca stale flow_runs como failed
-		// - outbound webhook dispatcher (HU-10.4) procesa cola de deliveries
+		// - cron scheduler (issue-10.1)
+		// - flow recovery (issue-09.6) marca stale flow_runs como failed
+		// - outbound webhook dispatcher (issue-10.4) procesa cola de deliveries
 		go flowRunnerInst.RunRecovery(leaderCtx, flowrunner.RecoveryConfig{
 			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
 		})
@@ -570,7 +570,7 @@ func runServer() {
 	activityStore := &activity.PGStore{Pool: pools.App}
 	secretsStore := &secrets.PGStore{Pool: pools.App, Cipher: masterCipher}
 
-	// Rate limiter (HU-02.5)
+	// Rate limiter (issue-02.5)
 	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
 	refillRate := float64(cfg.RateLimitRequests) / windowDur.Seconds()
 	rateLimiter := ratelimit.New(cfg.RateLimitRequests, refillRate)
@@ -581,7 +581,7 @@ func runServer() {
 			rateLimiter.Cleanup(10 * time.Minute)
 		}
 	}()
-	// Per-route OTP rate limiter (HU-02.5): 5 reqs/min por (identifier, IP)
+	// Per-route OTP rate limiter (issue-02.5): 5 reqs/min por (identifier, IP)
 	otpRateLimiter := ratelimit.New(5, 5.0/60.0)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
@@ -601,7 +601,7 @@ func runServer() {
 	taskService := &tsvc.Service{Pool: pools.App, Audit: recorder}
 	traceService := &tracesvc.Service{Pool: pools.App}
 
-	// S3 client (HU-04.6) — opcional; nil si no configurado
+	// S3 client (issue-04.6) — opcional; nil si no configurado
 	var attachmentService *attSvc.Service
 	if cfg.S3Bucket != "" {
 		s3Client, err := s3client.New(s3client.Config{
@@ -624,10 +624,10 @@ func runServer() {
 		logger.Warn("DOMAIN_S3_BUCKET not set; file attachments disabled")
 	}
 
-	// HU-04.7 + 04.6: inyectar attachment service al hubuilder Service ya
+	// issue-04.7 + 04.6: inyectar attachment service al issuebuilder Service ya
 	// creado para que AttachToDraft / PromoteAttachmentsToHU funcionen.
 	if attachmentService != nil {
-		hubuilderSvc.Attachments = &hubuilder.AttachmentServiceAdapter{Inner: attachmentService}
+		issuebuilderSvc.Attachments = &issuebuilder.AttachmentServiceAdapter{Inner: attachmentService}
 	}
 
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
@@ -664,7 +664,7 @@ func runServer() {
 		PolicyService:             policyService,
 		RuntimeConfigRegistry:    rtCfgRegistry,
 		DBStatsService:           dbStatsService,
-		Hubuilder:                hubuilderSvc,
+		Hubuilder:                issuebuilderSvc,
 		Audit:          recorder,
 		ActivityRecorder: activityStore,
 		ActivityQuerier:  activityStore,
@@ -679,8 +679,8 @@ func runServer() {
 		TaskService:         taskService,
 		TraceService:        traceService,
 		AttachmentService:   attachmentService,
-		// HU-04.7 v2 (wizard adaptive) + HU-04.8 intake + HU-12.7 plug-and-play.
-		HubuilderAdaptive: hubuilderAdaptive,
+		// issue-04.7 v2 (wizard adaptive) + issue-04.8 intake + issue-12.7 plug-and-play.
+		IssueBuilderAdaptive: issuebuilderAdaptive,
 		IntakeService:    intakeSvc,
 		PromptRouter:     promptRouterSvc,
 		WorkflowImport:   workflowImportSvc,
@@ -692,7 +692,7 @@ func runServer() {
 	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
 	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
 
-	// Versioning catalog (HU-13.8). Por ahora solo v1 active.
+	// Versioning catalog (issue-13.8). Por ahora solo v1 active.
 	versionCatalog := versioning.NewCatalog("v1",
 		versioning.Version{Slug: "v1", State: versioning.StateActive})
 	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
@@ -729,9 +729,9 @@ func runServer() {
 		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
 	}
 
-	// Graceful shutdown (HU-26.4): trap SIGINT/SIGTERM, drain sequenced
+	// Graceful shutdown (issue-26.4): trap SIGINT/SIGTERM, drain sequenced
 	// con budget total ~28s (K8s terminationGracePeriodSeconds=30 default).
-	// HU-27.3 hot-reload SIGHUP handler.
+	// issue-27.3 hot-reload SIGHUP handler.
 	hupCh := make(chan os.Signal, 1)
 	signal.Notify(hupCh, syscall.SIGHUP)
 	go func() {
@@ -800,7 +800,7 @@ func runHealthcheckProbe() {
 }
 
 // runOutboundDispatcher procesa la cola de deliveries pendientes cada 5s.
-// Single-leader (HU-10.4 + HU-26.2): se invoca solo en el pod leader.
+// Single-leader (issue-10.4 + issue-26.2): se invoca solo en el pod leader.
 func runOutboundDispatcher(ctx context.Context, d *outboundwebhook.Dispatcher, logger *slog.Logger) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -820,7 +820,7 @@ func runOutboundDispatcher(ctx context.Context, d *outboundwebhook.Dispatcher, l
 	}
 }
 
-// runDBMonitor corre tickers para métricas de HU-25.12 (locks-vacuum).
+// runDBMonitor corre tickers para métricas de issue-25.12 (locks-vacuum).
 // Ticker 30s: connection states + lock waits + dead tuples.
 // Solo en el pod leader.
 func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry, logger *slog.Logger) {
@@ -901,7 +901,7 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 	}
 }
 
-// runUsageAlertEvaluator evalua métricas agregadas cada 5min (HU-15.3).
+// runUsageAlertEvaluator evalua métricas agregadas cada 5min (issue-15.3).
 func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logger *slog.Logger) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -922,7 +922,7 @@ func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logge
 	}
 }
 
-// runSoftDeletePurge purga rows soft-deleted fuera de retention (HU-23.2).
+// runSoftDeletePurge purga rows soft-deleted fuera de retention (issue-23.2).
 // otpUserLookupAdapter implementa otp.UserLookup contra la DB.
 type otpUserLookupAdapter struct {
 	pool *pgxpool.Pool
@@ -1002,7 +1002,7 @@ func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slo
 	}
 }
 
-// runSessionAutoClose cierra sesiones inactivas >24h (HU-03.2).
+// runSessionAutoClose cierra sesiones inactivas >24h (issue-03.2).
 func runSessionAutoClose(ctx context.Context, svc *sesssvc.Service, logger *slog.Logger) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
@@ -1024,7 +1024,7 @@ func runSessionAutoClose(ctx context.Context, svc *sesssvc.Service, logger *slog
 }
 
 // runDBStatsAnalyzer corre cada 5min: slow queries → métricas + snapshot weekly.
-// Solo en el pod leader (HU-26.2 + HU-25.2).
+// Solo en el pod leader (issue-26.2 + issue-25.2).
 func runDBStatsAnalyzer(ctx context.Context, svc *dbstats.Service, reg *metrics.Registry, logger *slog.Logger) {
 	slowTicker := time.NewTicker(5 * time.Minute)
 	snapTicker := time.NewTicker(7 * 24 * time.Hour)
@@ -1134,7 +1134,7 @@ func runAuditPrune(args []string) {
 	fmt.Printf("pruned %d audit log entries (before %s)\n", deleted, cutoff.Format("2006-01-02"))
 }
 
-// HU-25.10 rotate-db-password — genera nuevo password + ALTER ROLE.
+// issue-25.10 rotate-db-password — genera nuevo password + ALTER ROLE.
 // Usage: domain rotate-db-password --role app_user
 // Imprime el nuevo password en stdout (operator lo copia al Secret Manager).
 func runRotateDBPassword(args []string) {
@@ -1196,7 +1196,7 @@ func envOr(key, defaultVal string) string {
 	return defaultVal
 }
 
-// HU-12.5 setup — wizard CLI para configurar agentes externos.
+// issue-12.5 setup — wizard CLI para configurar agentes externos.
 //
 // Usage:
 //   domain setup claude-code

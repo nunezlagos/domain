@@ -1,4 +1,4 @@
-// Package lifecycletrack — HU-04.10 lifecycle state tracking unificado.
+// Package lifecycletrack — issue-04.10 lifecycle state tracking unificado.
 //
 // Provee state machines declarativas por entity_kind con validación de
 // transiciones y registro append-only en entity_state_transitions.

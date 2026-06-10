@@ -19,7 +19,7 @@ Automatización: cron schedules, webhooks (git push, PR), event-driven execution
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-10.1-cron-schedules | proposed | Cron schedule CRUD, scheduler worker cada minuto, timezone support, execution history |
-| HU-10.2-webhook-triggers | proposed | Webhook receiver HMAC-SHA256, GitHub/GitLab/generic mappers, delivery logs, replay |
-| HU-10.3-event-execution | proposed | Event bus pub/sub, suscripciones con filtros, entrega at-least-once con retry, dead letters |
-| HU-10.4-outbound-webhooks | proposed | Outbound webhooks subscriptions, HMAC, retry 8x + DLQ, circuit breaker, filters, replay, test ping |
+| issue-10.1-cron-schedules | proposed | Cron schedule CRUD, scheduler worker cada minuto, timezone support, execution history |
+| issue-10.2-webhook-triggers | proposed | Webhook receiver HMAC-SHA256, GitHub/GitLab/generic mappers, delivery logs, replay |
+| issue-10.3-event-execution | proposed | Event bus pub/sub, suscripciones con filtros, entrega at-least-once con retry, dead letters |
+| issue-10.4-outbound-webhooks | proposed | Outbound webhooks subscriptions, HMAC, retry 8x + DLQ, circuit breaker, filters, replay, test ping |

@@ -1,4 +1,4 @@
-// HU-11.1 sandbox-execution — ejecuta código untrusted en sandbox aislado.
+// issue-11.1 sandbox-execution — ejecuta código untrusted en sandbox aislado.
 //
 // MVP: process-based sandbox usando OS resources limits + chroot opcional
 // + timeout. Para sandboxing real, integrar Firecracker / gVisor en HU futura.

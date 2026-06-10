@@ -22,10 +22,10 @@ Patrones y mecanismos que permiten a Domain escalar horizontalmente con N pods s
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-26.1-stateless-invariant | proposed | Linter Go que detecta state crítico in-memory; whitelist explícita |
-| HU-26.2-leader-election-crons | proposed | Leader election Postgres advisory lock para crons singleton |
-| HU-26.3-distributed-locks | proposed | Helper distributed-locks Postgres + pattern docs |
-| HU-26.4-graceful-shutdown | proposed | SIGTERM handler drain HTTP + workers + pool con timeout |
-| HU-26.5-circuit-breaker-llm | proposed | CB per provider/model con fallback, half-open, métricas |
-| HU-26.6-backpressure-queue | proposed | Caps en colas + shed-load + 429 con Retry-After |
-| HU-26.7-cache-invalidation-patterns | proposed | LISTEN/NOTIFY estándar cross-pod + helper + tests |
+| issue-26.1-stateless-invariant | proposed | Linter Go que detecta state crítico in-memory; whitelist explícita |
+| issue-26.2-leader-election-crons | proposed | Leader election Postgres advisory lock para crons singleton |
+| issue-26.3-distributed-locks | proposed | Helper distributed-locks Postgres + pattern docs |
+| issue-26.4-graceful-shutdown | proposed | SIGTERM handler drain HTTP + workers + pool con timeout |
+| issue-26.5-circuit-breaker-llm | proposed | CB per provider/model con fallback, half-open, métricas |
+| issue-26.6-backpressure-queue | proposed | Caps en colas + shed-load + 429 con Retry-After |
+| issue-26.7-cache-invalidation-patterns | proposed | LISTEN/NOTIFY estándar cross-pod + helper + tests |

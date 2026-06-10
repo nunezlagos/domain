@@ -6,7 +6,7 @@
 
 ## Descripción
 
-Sistema unificado de notificaciones outbound. Una abstracción `NotificationChannel` que adaptan los canales concretos (email SMTP, Slack webhook, webhook genérico). Consumido por usage alerts (HU-15.3), invitaciones (HU-21.2), runs fallidos, audit events. Templating con variables, delivery logs y retry.
+Sistema unificado de notificaciones outbound. Una abstracción `NotificationChannel` que adaptan los canales concretos (email SMTP, Slack webhook, webhook genérico). Consumido por usage alerts (issue-15.3), invitaciones (issue-21.2), runs fallidos, audit events. Templating con variables, delivery logs y retry.
 
 ## Criterios de éxito
 
@@ -20,6 +20,6 @@ Sistema unificado de notificaciones outbound. Una abstracción `NotificationChan
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-20.1-channel-abstraction | proposed | Interfaz NotificationChannel, registry, templates, delivery logs, retry |
-| HU-20.2-email-smtp | proposed | Canal email SMTP con DKIM/SPF/TLS, soporte plantillas HTML/text |
-| HU-20.3-slack-webhook | proposed | Canal Slack incoming webhook + Slack Block Kit messages |
+| issue-20.1-channel-abstraction | proposed | Interfaz NotificationChannel, registry, templates, delivery logs, retry |
+| issue-20.2-email-smtp | proposed | Canal email SMTP con DKIM/SPF/TLS, soporte plantillas HTML/text |
+| issue-20.3-slack-webhook | proposed | Canal Slack incoming webhook + Slack Block Kit messages |

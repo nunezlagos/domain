@@ -57,7 +57,7 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "input requerido")
 		return
 	}
-	// HU-26.6 backpressure: rechazar si queue agent_runs saturada
+	// issue-26.6 backpressure: rechazar si queue agent_runs saturada
 	if a.Backpressure != nil {
 		orgID, _ := uuid.Parse(p.OrganizationID)
 		if err := a.Backpressure.CheckQueue(r.Context(),

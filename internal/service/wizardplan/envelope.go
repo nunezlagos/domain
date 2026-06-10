@@ -1,4 +1,4 @@
-// Package wizardplan — wizard adaptive HU-04.7 v2.
+// Package wizardplan — wizard adaptive issue-04.7 v2.
 //
 // Reemplaza el flow de 8 preguntas fijas (v1) por un planner que analiza
 // el prompt contra 4 fuentes en paralelo y SOLO pregunta lo que no puede
@@ -77,13 +77,13 @@ type MemoryMatch struct {
 	Score      float64   `json:"score"`
 }
 
-// HUDedupFinding compara el prompt vs user_stories existentes.
+// HUDedupFinding compara el prompt vs issues existentes.
 type HUDedupFinding struct {
 	Candidates []HUDedupCandidate `json:"candidates"`
 }
 
 type HUDedupCandidate struct {
-	HUID       uuid.UUID `json:"hu_id"`
+	HUID       uuid.UUID `json:"issue_id"`
 	Slug       string    `json:"slug"`
 	Title      string    `json:"title"`
 	Status     string    `json:"status"`

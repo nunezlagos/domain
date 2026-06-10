@@ -215,6 +215,6 @@ func (u *UserLookup) ByEmail(ctx context.Context, email string) (*UserRow, error
 
 func (u *UserLookup) ByRUT(ctx context.Context, rut string) (*UserRow, error) {
 	// Tabla users no tiene columna RUT explícita en migration 000003;
-	// futura migración HU-02.7 puede agregarla. Por ahora: NotFound.
+	// futura migración issue-02.7 puede agregarla. Por ahora: NotFound.
 	return nil, ErrNotFound
 }

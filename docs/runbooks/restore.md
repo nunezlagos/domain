@@ -87,7 +87,7 @@ SQL
 
 ### 6. Re-encriptar secrets si la pass cambió
 
-Domain tiene secrets cifrados (HU-02.3). Si la master key se rotó tras
+Domain tiene secrets cifrados (issue-02.3). Si la master key se rotó tras
 el incidente, ejecutar:
 
 ```bash

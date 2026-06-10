@@ -1,4 +1,4 @@
-// Package backpressure — HU-26.6 shed-load + per-org quota.
+// Package backpressure — issue-26.6 shed-load + per-org quota.
 //
 // Antes de encolar un agent_run / flow_run / webhook_delivery, el caller
 // consulta CheckQueue() para verificar que la queue global no esté saturada

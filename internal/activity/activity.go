@@ -1,6 +1,6 @@
-// Package activity — HU-02.6 activity-log (user-facing).
+// Package activity — issue-02.6 activity-log (user-facing).
 //
-// Diferenciado de audit_log (HU-02.4 / RFC 0003):
+// Diferenciado de audit_log (issue-02.4 / RFC 0003):
 //   - activity_log: human summaries para UI (feeds, notifications)
 //   - audit_log: technical compliance, field-level diffs, inmutable a DB level
 //

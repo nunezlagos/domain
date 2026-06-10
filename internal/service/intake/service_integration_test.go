@@ -108,9 +108,9 @@ func TestFullFlow_AgentToCommitted(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusApproved, approved.Status)
 
-	huID := uuid.New()
+	issueID := uuid.New()
 	reqID := uuid.New()
-	committed, err := svc.LinkCommitted(ctx, p.ID, &reqID, &huID)
+	committed, err := svc.LinkCommitted(ctx, p.ID, &reqID, &issueID)
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusCommitted, committed.Status)
 }
@@ -132,7 +132,7 @@ func TestReject_FromPending(t *testing.T) {
 	_, _ = svc.UpdateClassification(ctx, p.ID, "fix", "low", 0.7, "")
 	_, _ = svc.MarkPendingReview(ctx, p.ID, "t", "d", "REQ-04-opsx-sdd",
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
-	rejected, err := svc.Reject(ctx, p.ID, uuid.New(), "duplicate of HU-99")
+	rejected, err := svc.Reject(ctx, p.ID, uuid.New(), "duplicate of issue-99")
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusRejected, rejected.Status)
 	require.NotNil(t, rejected.RejectionReason)
@@ -150,8 +150,8 @@ func TestListPending_ExcludesCommitted(t *testing.T) {
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
 	rid := uuid.New()
 	_, _ = svc.Approve(ctx, p2.ID, rid)
-	huID := uuid.New()
-	_, _ = svc.LinkCommitted(ctx, p2.ID, nil, &huID)
+	issueID := uuid.New()
+	_, _ = svc.LinkCommitted(ctx, p2.ID, nil, &issueID)
 
 	list, err := svc.ListPending(ctx, 10)
 	require.NoError(t, err)

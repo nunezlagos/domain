@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-02.4 audit-log integration tests con testcontainers.
+// issue-02.4 audit-log integration tests con testcontainers.
 
 package audit_test
 
@@ -137,7 +137,7 @@ func TestPGRecorder_DefaultActorType(t *testing.T) {
 	require.Equal(t, "system", actorType)
 }
 
-// Sabotaje: simular un app_user que intenta UPDATE → debe fallar (HU-25.6 REVOKE).
+// Sabotaje: simular un app_user que intenta UPDATE → debe fallar (issue-25.6 REVOKE).
 func TestSabotage_AuditLog_AppUser_UpdateDenied(t *testing.T) {
 	pool, cleanup := setupDB(t)
 	defer cleanup()
@@ -164,7 +164,7 @@ func TestSabotage_AuditLog_AppUser_UpdateDenied(t *testing.T) {
 	defer pubConn.Close(ctx)
 
 	_, err = pubConn.Exec(ctx, `UPDATE audit_log SET action='hidden' WHERE action='to_be_hidden'`)
-	require.Error(t, err, "app_user UPDATE audit_log debe fallar (HU-25.6 REVOKE UPDATE)")
+	require.Error(t, err, "app_user UPDATE audit_log debe fallar (issue-25.6 REVOKE UPDATE)")
 
 	_, err = pubConn.Exec(ctx, `DELETE FROM audit_log WHERE action='to_be_hidden'`)
 	require.Error(t, err, "app_user DELETE audit_log debe fallar")

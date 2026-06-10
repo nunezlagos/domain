@@ -1,12 +1,12 @@
-// Package orchestration — patrones multi-agent (HU-08.4 a HU-08.9).
+// Package orchestration — patrones multi-agent (issue-08.4 a issue-08.9).
 //
 // Cubre 6 patterns:
-//   - Orquestación básica: HU-08.4 multi-agent-orch
-//   - Templates: HU-08.5 agent-templates (definitions reutilizables)
-//   - Supervisor: HU-08.6 multi-agent-supervisor (un agent dirige a otros)
-//   - Handoff: HU-08.7 agent-handoff (agent A transfiere a B)
-//   - Parallel fanout: HU-08.8 agent-parallel-fanout
-//   - Hierarchical context: HU-08.9 agent-hierarchical-context (parent visión)
+//   - Orquestación básica: issue-08.4 multi-agent-orch
+//   - Templates: issue-08.5 agent-templates (definitions reutilizables)
+//   - Supervisor: issue-08.6 multi-agent-supervisor (un agent dirige a otros)
+//   - Handoff: issue-08.7 agent-handoff (agent A transfiere a B)
+//   - Parallel fanout: issue-08.8 agent-parallel-fanout
+//   - Hierarchical context: issue-08.9 agent-hierarchical-context (parent visión)
 //
 // Diseño: cada pattern es una struct + Run method que recibe contexto
 // común (Conductor) y devuelve OrchestrationResult. El Conductor abstrae
@@ -25,13 +25,13 @@ import (
 type Pattern string
 
 const (
-	PatternSequential    Pattern = "sequential"      // HU-08.4 básico
-	PatternSupervisor    Pattern = "supervisor"      // HU-08.6
-	PatternHandoff       Pattern = "handoff"         // HU-08.7
-	PatternParallelFanout Pattern = "parallel_fanout" // HU-08.8
+	PatternSequential    Pattern = "sequential"      // issue-08.4 básico
+	PatternSupervisor    Pattern = "supervisor"      // issue-08.6
+	PatternHandoff       Pattern = "handoff"         // issue-08.7
+	PatternParallelFanout Pattern = "parallel_fanout" // issue-08.8
 )
 
-// AgentTemplate es una definition reutilizable (HU-08.5).
+// AgentTemplate es una definition reutilizable (issue-08.5).
 type AgentTemplate struct {
 	ID            uuid.UUID       `json:"id"`
 	Slug          string          `json:"slug"`
@@ -88,7 +88,7 @@ type Conductor interface {
 	LoadTemplate(ctx context.Context, slug string) (*AgentTemplate, error)
 }
 
-// HierarchicalContext (HU-08.9) snapshot del context jerárquico que un
+// HierarchicalContext (issue-08.9) snapshot del context jerárquico que un
 // agent hijo recibe de sus parents.
 type HierarchicalContext struct {
 	ParentTaskID  *uuid.UUID      `json:"parent_task_id,omitempty"`

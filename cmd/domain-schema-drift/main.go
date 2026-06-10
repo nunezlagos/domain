@@ -1,4 +1,4 @@
-// Command domain-schema-drift — HU-25.4 detecta drift entre schema real
+// Command domain-schema-drift — issue-25.4 detecta drift entre schema real
 // y schema esperado por las migraciones.
 //
 // Estrategia:
@@ -9,7 +9,7 @@
 //  5. Exit 0 si idénticos, 1 si difieren (con report).
 //
 // Diseñado para correr en cron diario. Output JSON parseable para feed a
-// alertmanager (HU-17.1 metrics).
+// alertmanager (issue-17.1 metrics).
 package main
 
 import (

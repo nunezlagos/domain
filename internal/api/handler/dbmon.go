@@ -6,10 +6,10 @@ import (
 	"nunezlagos/domain/internal/dbmon"
 )
 
-// GET /api/v1/admin/db-stats — HU-25.12
+// GET /api/v1/admin/db-stats — issue-25.12
 // Devuelve snapshot del cluster (conexiones, tablas, locks) + alertas evaluadas.
 //
-// Requiere rol platform_admin (HU-02.2). Por simplicidad ahora solo verifica
+// Requiere rol platform_admin (issue-02.2). Por simplicidad ahora solo verifica
 // que el principal exista — endurecer cuando RBAC esté completo.
 func (a *API) getDBStats(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)

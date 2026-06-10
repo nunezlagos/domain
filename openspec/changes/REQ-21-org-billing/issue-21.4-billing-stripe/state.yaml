@@ -1,0 +1,8 @@
+status: archived
+created: 2026-06-06
+archived: 2026-06-08
+archive_reason: |
+  Decisión final user 2026-06-08: Domain queda open-source SIN COBRO.
+  issue-21.3 plans-limits permanece como quotas + RBAC INTERNOS
+  (Free/Pro/Enterprise NO son tiers comerciales sino niveles de control
+  de uso). Spec se preserva como referencia histórica; no se implementa.

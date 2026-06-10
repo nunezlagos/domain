@@ -157,7 +157,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 
-	// HU-13.6 cursor pagination
+	// issue-13.6 cursor pagination
 	sortDir, err := cursor.NormalizeSort(r.URL.Query().Get("sort"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_sort", "sort must be asc|desc")
@@ -192,7 +192,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 		in.CursorTime = &t
 		in.CursorID = &id
 	}
-	// Legacy offset deprecated (HU-13.6 escenario 6)
+	// Legacy offset deprecated (issue-13.6 escenario 6)
 	if offStr := r.URL.Query().Get("offset"); offStr != "" {
 		w.Header().Set("Deprecation", "true")
 		w.Header().Set("Sunset", "2026-12-31")
@@ -224,7 +224,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	writeDataWithMeta(w, http.StatusOK, list, map[string]any{"pagination": pageMeta})
 }
 
-// GET /api/v1/search — búsqueda global cross-entity (HU-03.7).
+// GET /api/v1/search — búsqueda global cross-entity (issue-03.7).
 // Parámetros: q, limit, entity_type (csv: observation,prompt,session),
 // project_slug (csv), tags (csv), date_from, date_to (ISO 8601).
 func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,4 @@
-// Package flowrunner — HU-09.3 state machine + HU-09.6 durable execution.
+// Package flowrunner — issue-09.3 state machine + issue-09.6 durable execution.
 //
 // Run(flowID, inputs) flow lifecycle:
 //   1. Resolve flow + validate active
@@ -18,8 +18,8 @@
 //   - condition    : evalúa expression (simple equality) y branch
 //
 // Step types stub (pending HUs):
-//   - parallel: HU-08.8 paralelización
-//   - wait_signal: HU-09.8 external signals
+//   - parallel: issue-08.8 paralelización
+//   - wait_signal: issue-09.8 external signals
 package flowrunner
 
 import (
@@ -95,7 +95,7 @@ type RunResult struct {
 	FinishedAt time.Time
 }
 
-// Run ejecuta el flow síncronamente. Para async/durable usar HU-09.6 worker.
+// Run ejecuta el flow síncronamente. Para async/durable usar issue-09.6 worker.
 func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	f, err := r.Flows.GetByID(ctx, in.FlowID)
 	if err != nil {
@@ -151,7 +151,7 @@ LOOP:
 			defer cancel()
 		}
 
-		// HU-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
+		// issue-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
 		// Backoff arranca en 200ms, se duplica por intento, cap en step.MaxBackoffS (default 30s).
 		var out any
 		var stepErr error
@@ -166,7 +166,7 @@ LOOP:
 			if stepErr == nil {
 				break
 			}
-			// HU-09.4: retry solo para errores transient.
+			// issue-09.4: retry solo para errores transient.
 			// Non-transient (auth, 4xx, validation) fallan inmediato.
 			if !isTransientError(stepErr) {
 				break
@@ -293,13 +293,13 @@ func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outpu
 	case flow.StepTypeParallel:
 		return r.execParallel(ctx, step, inputs, outputs, orgID, userID)
 	case flow.StepTypeHTTPRequest, flow.StepTypeWaitSignal:
-		return nil, fmt.Errorf("%w: %s (HU-09 future)", ErrStepTypeStub, step.Type)
+		return nil, fmt.Errorf("%w: %s (issue-09 future)", ErrStepTypeStub, step.Type)
 	}
 	return nil, fmt.Errorf("unknown step type: %s", step.Type)
 }
 
 // subflowCtxKey rastrea la cadena de slugs ancestrales para detectar
-// referencias circulares (HU-09.5 escenario 6).
+// referencias circulares (issue-09.5 escenario 6).
 type subflowCtxKey struct{}
 
 const maxSubflowDepth = 10

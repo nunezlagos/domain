@@ -2,7 +2,7 @@
 
 Idéntico a `fix` pero con dos diferencias importantes:
 1. **Severity defaulteada a `critical`** por el classifier (confidence ≥ 0.85).
-2. **Notificaciones agresivas** al owner del HU (HU-20 notifications).
+2. **Notificaciones agresivas** al owner del HU (issue-20 notifications).
 
 ## Ejemplo de prompt
 
@@ -52,9 +52,9 @@ sequenceDiagram
 
     Wizard->>BD: status=finished
     Cli->>MCP: Commit + agent IA fixea
-    Cli->>BD: INSERT user_stories<br/>priority=critical
+    Cli->>BD: INSERT issues<br/>priority=critical
     BD->>Notif: emit hu.created + severity=critical
-    Notif->>U: "HU-XX creada, asignada a oncall"
+    Notif->>U: "issue-XX creada, asignada a oncall"
 ```
 
 ## Diferencias clave vs `fix` normal

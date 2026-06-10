@@ -21,6 +21,6 @@ Clientes oficiales del API HTTP (REQ-13) generados desde OpenAPI spec, con typin
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-22.1-sdk-python | proposed | SDK Python desde OpenAPI, async/sync, typing, publish a PyPI |
-| HU-22.2-sdk-typescript | proposed | SDK TS con tipos, ESM+CJS, publish a npm |
-| HU-22.3-sdk-go | proposed | SDK Go idiomatic, context.Context, publish proxy.golang.org |
+| issue-22.1-sdk-python | proposed | SDK Python desde OpenAPI, async/sync, typing, publish a PyPI |
+| issue-22.2-sdk-typescript | proposed | SDK TS con tipos, ESM+CJS, publish a npm |
+| issue-22.3-sdk-go | proposed | SDK Go idiomatic, context.Context, publish proxy.golang.org |

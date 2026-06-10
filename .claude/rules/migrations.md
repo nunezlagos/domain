@@ -1,6 +1,6 @@
 # Migrations Conventions — Domain
 
-Sistema: `golang-migrate` (HU-01.1). Safety enforced por `squawk` linter (HU-25.3) + conventions enforcement (HU-25.13).
+Sistema: `golang-migrate` (issue-01.1). Safety enforced por `squawk` linter (issue-25.3) + conventions enforcement (issue-25.13).
 
 ## Naming
 
@@ -25,7 +25,7 @@ Cada `.up.sql` empieza con:
 ```sql
 -- migration: add_user_rut_column
 -- author: <git_username>
--- issue: #1234 (or HU-XX.Y)
+-- issue: #1234 (or issue-XX.Y)
 -- description: agrega columna RUT con validation módulo 11
 -- breaking: false
 -- estimated_duration: 1s (empty table)
@@ -41,7 +41,7 @@ Campos:
 - `breaking`: `true` si rompe schema previo
 - `estimated_duration`: aproximado (afecta lock-timeout)
 
-Enforced por linter (HU-25.13).
+Enforced por linter (issue-25.13).
 
 ## Idempotencia
 
@@ -51,7 +51,7 @@ Enforced por linter (HU-25.13).
   - `DROP TABLE IF EXISTS ... CASCADE`
 - Migrations corridas 2x deben ser no-op en segunda
 
-## Safety enforcement (HU-25.3 squawk)
+## Safety enforcement (issue-25.3 squawk)
 
 Bloqueados en CI:
 - `CREATE INDEX` sin `CONCURRENTLY`
@@ -68,7 +68,7 @@ Override comment cuando justificado:
 CREATE INDEX idx_x ON new_table(col);
 ```
 
-## Conventions enforcement (HU-25.13)
+## Conventions enforcement (issue-25.13)
 
 - Naming snake_case plural (`organizations`, no `organization`)
 - Columnas estándar: `id UUID`, `created_at`, `updated_at` cuando aplica
@@ -117,7 +117,7 @@ Phase 3 (contract): DROP old column en migration posterior
 ## Seed data — NO en migrations
 
 Migrations son **schema only**. Para data inicial (planes, model registry, templates):
-- Usar sistema de seeders (HU-01.7)
+- Usar sistema de seeders (issue-01.7)
 - Seeders son idempotentes (UPSERT)
 - Migrations no contienen INSERT salvo enums de tipo lookup pequeños
 
@@ -135,13 +135,13 @@ Antes de aplicar en prod:
 1. `make db-lint` local
 2. CI corrida en kind cluster
 3. Aplicar primero en staging
-4. Drill restore después en HU-18.3
+4. Drill restore después en issue-18.3
 
 ## Versioning de schema
 
 - `schema_migrations` tabla manejada por golang-migrate
 - `domain version` CLI reporta version del binary + migration version actual
-- Hook helm pre-upgrade aplica migration antes de rollout pods (HU-24.1)
+- Hook helm pre-upgrade aplica migration antes de rollout pods (issue-24.1)
 
 ## Anti-patterns prohibidos
 

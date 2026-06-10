@@ -1,4 +1,4 @@
-// Package middleware — HU-02.4 audit metadata injection.
+// Package middleware — issue-02.4 audit metadata injection.
 //
 // Este middleware extrae IP, User-Agent y RequestID del request y los pone
 // en el context.Context para que PGRecorder.Record() los use automáticamente.

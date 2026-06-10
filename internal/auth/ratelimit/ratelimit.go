@@ -1,7 +1,7 @@
-// Package ratelimit — HU-02.5 rate-limit + HU-26.6 backpressure compat.
+// Package ratelimit — issue-02.5 rate-limit + issue-26.6 backpressure compat.
 //
 // Token bucket por key (string), state en memoria local con TTL cleanup.
-// Para cross-pod (HU-26 horizontal-scalability), usar Postgres-backed (futuro:
+// Para cross-pod (issue-26 horizontal-scalability), usar Postgres-backed (futuro:
 // tabla auth_rate_limits particionada por hora).
 package ratelimit
 

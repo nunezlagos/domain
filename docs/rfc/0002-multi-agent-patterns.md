@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-06-07
-**Related:** HU-08.6 supervisor, HU-08.7 handoff, HU-08.8 parallel-fanout, HU-08.9 hierarchical-context
+**Related:** issue-08.6 supervisor, issue-08.7 handoff, issue-08.8 parallel-fanout, issue-08.9 hierarchical-context
 
 ## Contexto
 
@@ -12,7 +12,7 @@ OpenAI Swarm, Anthropic sub-agents, LangGraph, CrewAI, AutoGen exploran multi-ag
 
 Domain soporta TRES patrones canónicos, **complementarios y combinables**, cada uno con HU dedicada:
 
-### Patrón 1: Supervisor + Delegate (HU-08.6)
+### Patrón 1: Supervisor + Delegate (issue-08.6)
 
 ```
 A (supervisor)
@@ -28,7 +28,7 @@ A (supervisor)
 
 **Usar cuando:** A necesita combinar/comparar/iterar sobre outputs de subordinados.
 
-### Patrón 2: Handoff (HU-08.7)
+### Patrón 2: Handoff (issue-08.7)
 
 ```
 A (triage)
@@ -44,7 +44,7 @@ A (triage)
 
 **Usar cuando:** routing/triage; un agent decide que B es más apropiado y se sale del medio.
 
-### Patrón 3: Parallel Fan-out (HU-08.8)
+### Patrón 3: Parallel Fan-out (issue-08.8)
 
 ```
 A (supervisor)
@@ -74,7 +74,7 @@ Supervisor A
 
 Cada child puede a su vez aplicar otro patrón. Depth máxima total: **5 niveles**.
 
-## Memoria y contexto (HU-08.9)
+## Memoria y contexto (issue-08.9)
 
 Reglas para todos los patrones:
 

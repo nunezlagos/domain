@@ -27,15 +27,15 @@ Capa transversal de operabilidad y seguridad sobre el Postgres de Domain. Cubre 
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-25.1-pgbouncer-pooling | proposed | PgBouncer transaction-pooling delante de Postgres, HA, monitoring |
-| HU-25.2-pg-stat-statements | proposed | pg_stat_statements + auto_explain + slow query alerts >100ms p95 |
-| HU-25.3-migration-linter | proposed | Migration linter (squawk/atlas) en CI bloquea PRs con DDL peligroso |
-| HU-25.4-schema-drift | proposed | Cron compara schema real vs migraciones aplicadas + alerta |
-| HU-25.5-rls-sensitive-tables | proposed | RLS selectivo en secrets/billing/audit_log/sessions/otp/idempotency |
-| HU-25.6-least-privilege-roles | proposed | Roles app_user/app_migrator/app_readonly/app_admin con grants mínimos |
-| HU-25.7-pgaudit-db-level | proposed | pgaudit extension capturando DDL + ROLE + sensitive ops paralelo a audit_log app |
-| HU-25.8-resource-limits-timeouts | proposed | statement_timeout 30s, lock_timeout 10s, idle_in_tx 60s, work_mem calibrado |
-| HU-25.9-read-replicas-routing | proposed | Read replica + router pgx (writes primary, reads pesados replica), lag monitoring |
-| HU-25.10-db-secrets-rotation | proposed | DB password rotation sin downtime con dual-credentials window |
-| HU-25.11-anonymization-staging | proposed | Tooling dump prod → staging/dev con PII redaction reproducible |
-| HU-25.12-locks-vacuum-monitoring | proposed | Lock waits monitoring + autovacuum alerts + index advisor pg_qualstats |
+| issue-25.1-pgbouncer-pooling | proposed | PgBouncer transaction-pooling delante de Postgres, HA, monitoring |
+| issue-25.2-pg-stat-statements | proposed | pg_stat_statements + auto_explain + slow query alerts >100ms p95 |
+| issue-25.3-migration-linter | proposed | Migration linter (squawk/atlas) en CI bloquea PRs con DDL peligroso |
+| issue-25.4-schema-drift | proposed | Cron compara schema real vs migraciones aplicadas + alerta |
+| issue-25.5-rls-sensitive-tables | proposed | RLS selectivo en secrets/billing/audit_log/sessions/otp/idempotency |
+| issue-25.6-least-privilege-roles | proposed | Roles app_user/app_migrator/app_readonly/app_admin con grants mínimos |
+| issue-25.7-pgaudit-db-level | proposed | pgaudit extension capturando DDL + ROLE + sensitive ops paralelo a audit_log app |
+| issue-25.8-resource-limits-timeouts | proposed | statement_timeout 30s, lock_timeout 10s, idle_in_tx 60s, work_mem calibrado |
+| issue-25.9-read-replicas-routing | proposed | Read replica + router pgx (writes primary, reads pesados replica), lag monitoring |
+| issue-25.10-db-secrets-rotation | proposed | DB password rotation sin downtime con dual-credentials window |
+| issue-25.11-anonymization-staging | proposed | Tooling dump prod → staging/dev con PII redaction reproducible |
+| issue-25.12-locks-vacuum-monitoring | proposed | Lock waits monitoring + autovacuum alerts + index advisor pg_qualstats |

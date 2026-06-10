@@ -14,13 +14,13 @@ import (
 
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/promptrouter"
 	wp "nunezlagos/domain/internal/service/wizardplan"
 	"nunezlagos/domain/internal/service/wizardplan/sources"
 )
 
-func setupAdaptive(t *testing.T) (*hubuilder.AdaptiveService, *db.Pools, func()) {
+func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, func()) {
 	t.Helper()
 	ctx := context.Background()
 	pgC, err := postgres.Run(ctx,
@@ -43,15 +43,15 @@ func setupAdaptive(t *testing.T) (*hubuilder.AdaptiveService, *db.Pools, func())
 	analyzer := &wp.Analyzer{
 		Classifier: classifier,
 		Sources: []wp.Source{
-			&sources.HUDedupSource{Pool: pools.App, Limit: 5},
+			&sources.IssueDedupSource{Pool: pools.App, Limit: 5},
 			&sources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
 			// MemorySource + AgentHistorySource requieren más setup; los omitimos
 			// en este test base. Cubiertos en sus propios tests unit.
 		},
 	}
 
-	hbSvc := &hubuilder.Service{Pool: pools.App}
-	adaptive := &hubuilder.AdaptiveService{
+	hbSvc := &issuebuilder.Service{Pool: pools.App}
+	adaptive := &issuebuilder.AdaptiveService{
 		Service:  hbSvc,
 		Analyzer: analyzer,
 		Planner:  &wp.Planner{},
@@ -74,7 +74,7 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 	d, q, err := svc.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, d)
-	require.Equal(t, hubuilder.ModeBugFix, d.Mode)
+	require.Equal(t, issuebuilder.ModeBugFix, d.Mode)
 
 	// Como es hotfix, el classifier infiere severity=critical implícitamente,
 	// pero el wizard pregunta de todos modos hasta que conf >= threshold.
@@ -106,7 +106,7 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 		max--
 	}
 
-	require.Equal(t, hubuilder.StatusFinished, d.Status)
+	require.Equal(t, issuebuilder.StatusFinished, d.Status)
 
 	// El adaptive NO debe preguntar 8 cosas. Solo lo pendiente.
 	// El intent ya está inferido (no se pregunta). req_parent puede venir
@@ -122,18 +122,18 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 	ctx := context.Background()
 
 	// Sembrar HU existente con título en español que el FTS spanish detecte.
-	var reqID, huID uuid.UUID
+	var reqID, issueID uuid.UUID
 	err := pools.App.QueryRow(ctx,
 		`INSERT INTO requirements (slug, title) VALUES ('REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO user_stories (req_id, slug, title, description)
-		 VALUES ($1, 'HU-03.1-observations',
+		`INSERT INTO issues (req_id, slug, title, description)
+		 VALUES ($1, 'issue-03.1-observations',
 		         'CRUD de observaciones con búsqueda',
 		         'Endpoints para crear y listar observaciones del proyecto con búsqueda FTS')
 		 RETURNING id`, reqID,
-	).Scan(&huID)
+	).Scan(&issueID)
 	require.NoError(t, err)
 
 	prompt := "Bug: al crear una observación nueva el endpoint falla con error 500"

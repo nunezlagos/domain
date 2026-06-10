@@ -1,4 +1,4 @@
-// Package chunker — HU-03.4 RAG chunking strategy.
+// Package chunker — issue-03.4 RAG chunking strategy.
 //
 // Estrategia inicial: recursive character splitting orientada a párrafos +
 // frases. Target ≈ 512 tokens (estimación: 1 token ≈ 4 chars en español).

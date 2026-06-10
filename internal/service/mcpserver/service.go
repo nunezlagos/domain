@@ -1,4 +1,4 @@
-// Package mcpserver — HU-12.4 service CRUD para MCP servers externos +
+// Package mcpserver — issue-12.4 service CRUD para MCP servers externos +
 // auto-discovery de tools + materialización como skills.
 package mcpserver
 
@@ -334,7 +334,7 @@ func (s *Service) ListTools(ctx context.Context, orgID, serverID uuid.UUID) ([]T
 
 // InvokeTool ejecuta una tool externa: spawnea proceso, conecta, llama, cierra.
 // Versión simple: 1 conexión por invocación. Versión avanzada mantendría pool
-// de conexiones long-lived (HU-12.4 mejora).
+// de conexiones long-lived (issue-12.4 mejora).
 func (s *Service) InvokeTool(ctx context.Context, orgID, serverID uuid.UUID,
 	toolName string, args map[string]any) (*client.CallResult, error) {
 

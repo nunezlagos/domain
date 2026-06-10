@@ -42,12 +42,12 @@ Establecemos la jerarquía **Flow > Agent > Skill** con las siguientes reglas:
 ### Reglas
 
 1. **Flow es el outer container**. Si una request entra por trigger (cron/webhook/API), se modela preferentemente como Flow. Si entra como conversación LLM directa, se modela como Agent.
-2. **Flow puede invocar Agent** vía step `agent_run` (HU-09.2 ya lo define).
-3. **Flow puede invocar Skill** vía step `skill_call` (HU-09.2).
-4. **Agent puede invocar Skill** vía tool-calling estándar (HU-08.2 + HU-05.6).
+2. **Flow puede invocar Agent** vía step `agent_run` (issue-09.2 ya lo define).
+3. **Flow puede invocar Skill** vía step `skill_call` (issue-09.2).
+4. **Agent puede invocar Skill** vía tool-calling estándar (issue-08.2 + issue-05.6).
 5. **Agent NO puede invocar Flow directamente.** Si necesita orquestación declarativa, debe declarar una skill `start_flow(flow_slug, inputs)` cuyo execute crea un nuevo flow_run y devuelve handle. La skill DEBE estar explícitamente en sus skills.
-6. **Skill NO puede invocar Flow.** Skill puede invocar otra Skill (HU-05.6 `depends_on`) o sub-step interno, pero levantar un flow es responsabilidad del Flow engine.
-7. **Sub-flows** (HU-09.5) sólo son invocables desde Flow steps.
+6. **Skill NO puede invocar Flow.** Skill puede invocar otra Skill (issue-05.6 `depends_on`) o sub-step interno, pero levantar un flow es responsabilidad del Flow engine.
+7. **Sub-flows** (issue-09.5) sólo son invocables desde Flow steps.
 
 ### Cost & logging accounting
 
@@ -60,24 +60,24 @@ Establecemos la jerarquía **Flow > Agent > Skill** con las siguientes reglas:
 
 ### Durability y replay
 
-- Flows **siempre** son durables (HU-09.6) y versionados (HU-09.7).
+- Flows **siempre** son durables (issue-09.6) y versionados (issue-09.7).
 - Agent runs son durables vía heartbeat + checkpoint en `agent_messages`, pero el "spec" del agent puede cambiar en runtime; usar `agent.version_id` para snapshot.
 - Skills se snapshootean por `skill_version_id` en cada invocation.
 
 ### Cancelación
 
 - Cancelar Flow cascadea a todos sus child agent_runs y sub_flow runs vía context cancel.
-- Cancelar Agent cascadea a su tree de delegate/handoff (HU-08.6/7) y a flows que él disparó vía `start_flow` SOLO si declara `cascade_started_flows: true`.
+- Cancelar Agent cascadea a su tree de delegate/handoff (issue-08.6/7) y a flows que él disparó vía `start_flow` SOLO si declara `cascade_started_flows: true`.
 
 ### Triggers
 
 | trigger | landing |
 |---------|---------|
 | Cron (REQ-10) | Flow run |
-| Inbound webhook (HU-10.2) | Flow run |
-| User chat (HU-12.x MCP) | Agent run |
+| Inbound webhook (issue-10.2) | Flow run |
+| User chat (issue-12.x MCP) | Agent run |
 | API POST /api/v1/runs | Either, explicit `kind: flow|agent` |
-| External signal (HU-09.8) | Flow only |
+| External signal (issue-09.8) | Flow only |
 
 ## Alternativas consideradas
 
@@ -88,7 +88,7 @@ Permitir tool sintético `start_flow` implícito en cualquier agent. **Rechazada
 - Dificulta RBAC enforcement
 - Cualquier prompt injection podría disparar Flows arbitrarios
 
-Mitigación adoptada: el agent debe **explicitar la skill** `start_flow` (con whitelist de flow_slugs) en su definition. Eso reusa el contrato Agent↔Skill (HU-05.6) y RBAC.
+Mitigación adoptada: el agent debe **explicitar la skill** `start_flow` (con whitelist de flow_slugs) en su definition. Eso reusa el contrato Agent↔Skill (issue-05.6) y RBAC.
 
 ### Alternativa B: Sin jerarquía, ambos peer (rechazada)
 
@@ -110,7 +110,7 @@ Modelar todo como flow declarativo, eliminar Agent system. **Rechazada** porque:
 - Boundary clara: developers saben cuál usar para qué
 - RBAC y cost accounting predictible
 - Cancel/cleanup cascadea correctamente
-- Compatible con HU-08.6 supervisor (que delega a sub-agents, no a flows)
+- Compatible con issue-08.6 supervisor (que delega a sub-agents, no a flows)
 
 **Negativas:**
 - Agent que necesita "siguiente paso determinístico" debe declarar skill `start_flow` (más boilerplate)
@@ -118,10 +118,10 @@ Modelar todo como flow declarativo, eliminar Agent system. **Rechazada** porque:
 
 ## Implementación
 
-- HU-08 agentes NO agregar tool implícito `start_flow`
-- HU-05 skills: skill `start_flow` debe estar en skill registry como built-in opcional
-- HU-09 flow_runs.triggered_by_agent_run_id columna agregada
-- HU-09 flow_runs.cascade_started_flows BOOL en Agent config
+- issue-08 agentes NO agregar tool implícito `start_flow`
+- issue-05 skills: skill `start_flow` debe estar en skill registry como built-in opcional
+- issue-09 flow_runs.triggered_by_agent_run_id columna agregada
+- issue-09 flow_runs.cascade_started_flows BOOL en Agent config
 - Cost reporting tree muestra ambas hierarchies linkadas
 
 ## Open questions

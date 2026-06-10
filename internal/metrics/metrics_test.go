@@ -1,4 +1,4 @@
-// HU-17.1 metrics-prometheus unit tests.
+// issue-17.1 metrics-prometheus unit tests.
 
 package metrics
 
@@ -136,7 +136,7 @@ func TestBasicAuth_RejectsBadCreds(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-// Sabotaje: HU-17.1 cardinality linter — el body /metrics NO debe tener `_id="<uuid>"`.
+// Sabotaje: issue-17.1 cardinality linter — el body /metrics NO debe tener `_id="<uuid>"`.
 func TestSabotage_NoUUIDLabelsInMetrics(t *testing.T) {
 	r := New()
 	// Simular tráfico

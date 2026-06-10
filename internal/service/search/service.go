@@ -1,4 +1,4 @@
-// Package search — HU-03.7 búsqueda global cross-entity.
+// Package search — issue-03.7 búsqueda global cross-entity.
 //
 // Une observations + prompts + sessions en una sola query rankeada. Scoped
 // por organization_id del principal (RBAC enforcement por query, sin

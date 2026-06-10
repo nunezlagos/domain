@@ -38,7 +38,7 @@ import (
 // - App: primary read-write, user app_user (NOBYPASSRLS).
 // - Auth: primary read-write, user app_admin (BYPASSRLS) para auth+audit.
 // - ReadOnly: opcional, apunta a read replica para queries pesadas tolerantes
-//   de stale-read (HU-25.9). Si es nil, Read() fallback a App.
+//   de stale-read (issue-25.9). Si es nil, Read() fallback a App.
 type Pools struct {
 	App        *pgxpool.Pool
 	Auth       *pgxpool.Pool
@@ -99,7 +99,7 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 }
 
 // OpenProductionWithReplica extiende OpenProduction abriendo además un pool
-// read-only contra la replica (HU-25.9). Si readDSN está vacío, ReadOnly=nil
+// read-only contra la replica (issue-25.9). Si readDSN está vacío, ReadOnly=nil
 // y Read() fallback a App.
 func OpenProductionWithReplica(ctx context.Context, appDSN, authDSN, readDSN string) (*Pools, error) {
 	pools, err := OpenProduction(ctx, appDSN, authDSN)

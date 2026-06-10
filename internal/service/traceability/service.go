@@ -1,4 +1,4 @@
-// Package traceability — HU-04.5 forward/backward traceability + dashboards.
+// Package traceability — issue-04.5 forward/backward traceability + dashboards.
 package traceability
 
 import (
@@ -139,7 +139,7 @@ func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*Req
 
 func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTraceNode, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, slug, title, status FROM user_stories WHERE req_id = $1 ORDER BY slug`, reqID)
+		`SELECT id, slug, title, status FROM issues WHERE req_id = $1 ORDER BY slug`, reqID)
 	if err != nil {
 		return nil, fmt.Errorf("query HUs: %w", err)
 	}
@@ -154,13 +154,13 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 		// Latest proposal
 		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM proposals WHERE hu_id = $1 ORDER BY version DESC LIMIT 1`,
+			`SELECT version, status FROM proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Proposal)
 
 		// Latest design
 		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM designs WHERE hu_id = $1 ORDER BY version DESC LIMIT 1`,
+			`SELECT version, status FROM designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Design)
 
@@ -169,7 +169,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 		err := s.Pool.QueryRow(ctx,
 			`SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'completed'),
 			        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1), 0)
-			 FROM tasks WHERE hu_id = $1`, n.HU.ID,
+			 FROM tasks WHERE issue_id = $1`, n.HU.ID,
 		).Scan(&tp.Total, &tp.Completed, &tp.Pct)
 		if err == nil && tp.Total > 0 {
 			n.TaskProgress = &tp
@@ -177,7 +177,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 		// Code refs
 		codeRows, err := s.Pool.Query(ctx,
-			`SELECT id, file_path, repo, branch FROM code_references WHERE hu_id = $1 ORDER BY file_path`, n.HU.ID)
+			`SELECT id, file_path, repo, branch FROM code_references WHERE issue_id = $1 ORDER BY file_path`, n.HU.ID)
 		if err == nil {
 			for codeRows.Next() {
 				var cr CodeRefSummary
@@ -198,25 +198,25 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 	var ct CodeTrace
 	ct.File = filePath
 
-	var huID uuid.UUID
+	var issueID uuid.UUID
 	err := s.Pool.QueryRow(ctx,
-		`SELECT cr.hu_id, us.slug, us.title, us.status
+		`SELECT cr.issue_id, us.slug, us.title, us.status
 		 FROM code_references cr
-		 JOIN user_stories us ON us.id = cr.hu_id
+		 JOIN issues us ON us.id = cr.issue_id
 		 WHERE cr.file_path = $1
 		 LIMIT 1`, filePath,
-	).Scan(&huID, &ct.HU.Slug, &ct.HU.Title, &ct.HU.Status)
+	).Scan(&issueID, &ct.HU.Slug, &ct.HU.Title, &ct.HU.Status)
 	if err != nil {
 		return &ct, nil // no trace but no error
 	}
-	ct.HU.ID = huID
+	ct.HU.ID = issueID
 
 	var req RequirementNode
 	err = s.Pool.QueryRow(ctx,
 		`SELECT r.id, r.slug, r.title, r.status, r.created_at
 		 FROM requirements r
-		 JOIN user_stories us ON us.req_id = r.id
-		 WHERE us.id = $1`, huID,
+		 JOIN issues us ON us.req_id = r.id
+		 WHERE us.id = $1`, issueID,
 	).Scan(&req.ID, &req.Slug, &req.Title, &req.Status, &req.CreatedAt)
 	if err == nil {
 		ct.REQ = &req
@@ -231,15 +231,15 @@ func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard,
 	err := s.Pool.QueryRow(ctx, `
 		SELECT
 			COUNT(DISTINCT us.id) AS total_hus,
-			COUNT(DISTINCT us.id) FILTER (WHERE p.hu_id IS NOT NULL) AS hus_with_proposal,
-			COUNT(DISTINCT us.id) FILTER (WHERE d.hu_id IS NOT NULL) AS hus_with_design,
+			COUNT(DISTINCT us.id) FILTER (WHERE p.issue_id IS NOT NULL) AS hus_with_proposal,
+			COUNT(DISTINCT us.id) FILTER (WHERE d.issue_id IS NOT NULL) AS hus_with_design,
 			COUNT(DISTINCT us.id) FILTER (WHERE t.id IS NOT NULL AND t.status = 'completed') AS hus_with_completed_tasks,
-			COUNT(DISTINCT us.id) FILTER (WHERE cr.hu_id IS NOT NULL) AS hus_with_code_refs
-		FROM user_stories us
-		LEFT JOIN LATERAL (SELECT hu_id FROM proposals WHERE hu_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT hu_id FROM designs WHERE hu_id = us.id LIMIT 1) d ON true
-		LEFT JOIN tasks t ON t.hu_id = us.id
-		LEFT JOIN LATERAL (SELECT hu_id FROM code_references WHERE hu_id = us.id LIMIT 1) cr ON true
+			COUNT(DISTINCT us.id) FILTER (WHERE cr.issue_id IS NOT NULL) AS hus_with_code_refs
+		FROM issues us
+		LEFT JOIN LATERAL (SELECT issue_id FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true
+		LEFT JOIN LATERAL (SELECT issue_id FROM designs WHERE issue_id = us.id LIMIT 1) d ON true
+		LEFT JOIN tasks t ON t.issue_id = us.id
+		LEFT JOIN LATERAL (SELECT issue_id FROM code_references WHERE issue_id = us.id LIMIT 1) cr ON true
 	`).Scan(&d.TotalHUs, &d.HUsWithProposal, &d.HUsWithDesign, &d.HUsWithCompletedTasks, &d.HUsWithCodeRefs)
 	if err != nil {
 		return nil, fmt.Errorf("coverage dashboard: %w", err)
@@ -265,8 +265,8 @@ func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, erro
 				ELSE 0
 			END AS task_pct
 		FROM requirements r
-		LEFT JOIN user_stories us ON us.req_id = r.id
-		LEFT JOIN tasks t ON t.hu_id = us.id
+		LEFT JOIN issues us ON us.req_id = r.id
+		LEFT JOIN tasks t ON t.issue_id = us.id
 		WHERE r.status = 'active'
 		GROUP BY r.slug, r.title
 		ORDER BY task_pct ASC
@@ -289,23 +289,23 @@ func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, erro
 
 // GetHUsWithoutProposals returns HUs with no proposal.
 func (s *Service) GetHUsWithoutProposals(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM proposals WHERE hu_id = us.id LIMIT 1) p ON true WHERE p.column1 IS NULL`)
+	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true WHERE p.column1 IS NULL`)
 }
 
 // GetHUsWithoutDesigns returns HUs with no design.
 func (s *Service) GetHUsWithoutDesigns(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM designs WHERE hu_id = us.id LIMIT 1) d ON true WHERE d.column1 IS NULL`)
+	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM designs WHERE issue_id = us.id LIMIT 1) d ON true WHERE d.column1 IS NULL`)
 }
 
 // GetHUsWithIncompleteTasks returns HUs where not all tasks completed.
 func (s *Service) GetHUsWithIncompleteTasks(ctx context.Context) ([]HUGap, error) {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT us.id, us.slug, us.title, r.slug
-		FROM user_stories us
+		FROM issues us
 		LEFT JOIN requirements r ON r.id = us.req_id
 		WHERE us.id IN (
-			SELECT hu_id FROM tasks
-			GROUP BY hu_id
+			SELECT issue_id FROM tasks
+			GROUP BY issue_id
 			HAVING COUNT(*) FILTER (WHERE status = 'completed') < COUNT(*)
 		)
 		ORDER BY us.slug
@@ -323,8 +323,8 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 		SELECT
 			r.slug, r.title,
 			COUNT(DISTINCT us.id) AS total_hus,
-			COUNT(DISTINCT us.id) FILTER (WHERE p.hu_id IS NOT NULL) AS hus_with_proposal,
-			COUNT(DISTINCT us.id) FILTER (WHERE d.hu_id IS NOT NULL) AS hus_with_design,
+			COUNT(DISTINCT us.id) FILTER (WHERE p.issue_id IS NOT NULL) AS hus_with_proposal,
+			COUNT(DISTINCT us.id) FILTER (WHERE d.issue_id IS NOT NULL) AS hus_with_design,
 			COUNT(DISTINCT us.id) FILTER (WHERE us.status = 'completed') AS completed_hus,
 			COUNT(t.id) AS total_tasks,
 			COUNT(t.id) FILTER (WHERE t.status = 'completed') AS completed_tasks,
@@ -333,10 +333,10 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 				ELSE 0
 			END AS task_pct
 		FROM requirements r
-		LEFT JOIN user_stories us ON us.req_id = r.id
-		LEFT JOIN LATERAL (SELECT hu_id FROM proposals WHERE hu_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT hu_id FROM designs WHERE hu_id = us.id LIMIT 1) d ON true
-		LEFT JOIN tasks t ON t.hu_id = us.id
+		LEFT JOIN issues us ON us.req_id = r.id
+		LEFT JOIN LATERAL (SELECT issue_id FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true
+		LEFT JOIN LATERAL (SELECT issue_id FROM designs WHERE issue_id = us.id LIMIT 1) d ON true
+		LEFT JOIN tasks t ON t.issue_id = us.id
 		WHERE r.status = 'active'
 		GROUP BY r.slug, r.title
 		ORDER BY r.slug
@@ -361,14 +361,14 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 }
 
 // AddCodeReference creates a code reference link.
-func (s *Service) AddCodeReference(ctx context.Context, huID uuid.UUID, filePath, repo, branch string) (*CodeRefSummary, error) {
+func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, filePath, repo, branch string) (*CodeRefSummary, error) {
 	var cr CodeRefSummary
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO code_references (hu_id, file_path, repo, branch)
+		`INSERT INTO code_references (issue_id, file_path, repo, branch)
 		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (hu_id, file_path) DO NOTHING
+		 ON CONFLICT (issue_id, file_path) DO NOTHING
 		 RETURNING id, file_path, repo, branch`,
-		huID, filePath, repo, nullStr(branch),
+		issueID, filePath, repo, nullStr(branch),
 	).Scan(&cr.ID, &cr.FilePath, &cr.Repo, &cr.Branch)
 	if err != nil {
 		return nil, fmt.Errorf("add code reference: %w", err)
@@ -388,7 +388,7 @@ func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) erro
 // --- internal ---
 
 func (s *Service) gapQuery(ctx context.Context, joinClause string) ([]HUGap, error) {
-	q := `SELECT us.id, us.slug, us.title, COALESCE(r.slug, '') FROM user_stories us
+	q := `SELECT us.id, us.slug, us.title, COALESCE(r.slug, '') FROM issues us
 		  LEFT JOIN requirements r ON r.id = us.req_id ` + joinClause + ` ORDER BY us.slug`
 	rows, err := s.Pool.Query(ctx, q)
 	if err != nil {

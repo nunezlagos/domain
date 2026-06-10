@@ -1,0 +1,22 @@
+# Tasks: issue-08.6-multi-agent-supervisor
+
+- [ ] **sup-001**: Migración agents.subordinates + agent_runs.parent_run_id + delegation_instructions + cancellation_reason
+- [ ] **sup-002**: Tool generator `delegate_to_<slug>` injection
+- [ ] **sup-003**: DelegateInputSchema definido (instructions, context_keys, budget_hint?)
+- [ ] **sup-004**: Engine intercept tool_call con prefix `delegate_to_`
+- [ ] **sup-005**: Child run creator con context filter por keys
+- [ ] **sup-006**: Budget propagation min(remaining, hint)
+- [ ] **sup-007**: Validación subordinate en allowlist → 403 si no
+- [ ] **sup-008**: ChainDepth check max 5
+- [ ] **sup-009**: Cancel cascade via errgroup + ctx
+- [ ] **sup-010**: Endpoint GET /runs/:id?include=tree con CTE recursive
+- [ ] **sup-011**: OTel parent-child span linking
+- [ ] **test-001**: Tool generation con subordinates
+- [ ] **test-002**: Delegate happy path
+- [ ] **test-003**: Budget enforcement
+- [ ] **test-004**: Cancel cascade
+- [ ] **test-005**: Subordinate not authorized
+- [ ] **test-006**: Max depth 5
+- [ ] **test-007**: Tree query
+- [ ] **sabotaje-001**: Loop A→B→A (depth 6) → reject
+- [ ] **docs-001**: `docs/agents/multi-agent.md` con patrones

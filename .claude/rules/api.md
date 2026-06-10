@@ -1,15 +1,15 @@
 # HTTP API Conventions — Domain
 
-Convenciones para `/api/v1/*` endpoints. Enforcement automatizado en HU-13.9 response-shape-linter.
+Convenciones para `/api/v1/*` endpoints. Enforcement automatizado en issue-13.9 response-shape-linter.
 
 ## URL conventions
 
-- **Versioning**: `/api/v1/`, `/api/v2/` (URL versioning, ver HU-13.8)
+- **Versioning**: `/api/v1/`, `/api/v2/` (URL versioning, ver issue-13.8)
 - **Resources**: plural, kebab-case si multi-word (`/agent-runs`, no `/agent_runs` ni `/agentRuns`)
 - **Sub-resources**: `/orgs/:org_id/projects` para hierarchical
 - **Actions no-CRUD**: `POST /agents/:id/run`, `POST /runs/:id/cancel` (verbo en URL, no método HTTP)
-- **Batch**: sufijo `/batch` (`POST /observations/batch` — HU-13.5)
-- **Search**: `GET /search?q=...` global (HU-03.7)
+- **Batch**: sufijo `/batch` (`POST /observations/batch` — issue-13.5)
+- **Search**: `GET /search?q=...` global (issue-03.7)
 - **Identifiers**: UUIDs en path (`/runs/:id`); slugs cuando user-meaningful (`/projects/:slug`)
 
 ## HTTP methods
@@ -113,7 +113,7 @@ NUNCA devolver array root-level: siempre envolver en `data`.
 ### Request
 - `Authorization: Bearer <api_key>` para autenticación
 - `Content-Type: application/json` para POST/PATCH/PUT
-- `Idempotency-Key: <uuid>` recomendado en POST/PATCH/DELETE (HU-13.4)
+- `Idempotency-Key: <uuid>` recomendado en POST/PATCH/DELETE (issue-13.4)
 - `If-Match: "<etag>"` opcional para optimistic concurrency
 - `X-Organization-Id: <uuid>` opcional si user es member de N orgs
 
@@ -123,13 +123,13 @@ NUNCA devolver array root-level: siempre envolver en `data`.
 - `X-Rate-Limit-Limit`, `X-Rate-Limit-Remaining`, `X-Rate-Limit-Reset` cuando aplica
 
 ### Response condicional
-- `ETag: "<hash>"` en GET single (HU-13.7)
+- `ETag: "<hash>"` en GET single (issue-13.7)
 - `Last-Modified` en GET con resource modificable
 - `Cache-Control` según endpoint policy
 - `Location` en 201 Created
 - `Retry-After` en 429 y 503
-- `Deprecation` / `Sunset` para versions deprecated (HU-13.8)
-- `Idempotent-Replayed: true` cuando se devuelve cached (HU-13.4)
+- `Deprecation` / `Sunset` para versions deprecated (issue-13.8)
+- `Idempotent-Replayed: true` cuando se devuelve cached (issue-13.4)
 
 ## Query params
 
@@ -144,7 +144,7 @@ NUNCA devolver array root-level: siempre envolver en `data`.
 ## Datos sensibles
 
 - NUNCA echar API keys, passwords, OTP codes, payment data en response (ni siquiera redacted)
-- Para tokens nuevos creados (HU-02.7 verify-otp): devolver UNA vez en `data.api_key`, después solo el `key_prefix`
+- Para tokens nuevos creados (issue-02.7 verify-otp): devolver UNA vez en `data.api_key`, después solo el `key_prefix`
 - PII en responses: solo si el caller tiene RBAC para ver
 
 ## Async operations

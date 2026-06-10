@@ -11,7 +11,7 @@ type runtimeConfigUpdateBody struct {
 	Value json.RawMessage `json:"value"`
 }
 
-// GET /api/v1/admin/runtime-configs/{key} — HU-27.3
+// GET /api/v1/admin/runtime-configs/{key} — issue-27.3
 func (a *API) getRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -40,7 +40,7 @@ func (a *API) getRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/v1/admin/runtime-configs/{key} — HU-27.3
+// POST /api/v1/admin/runtime-configs/{key} — issue-27.3
 func (a *API) updateRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

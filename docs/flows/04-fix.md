@@ -49,8 +49,8 @@ sequenceDiagram
         Code-->>Analyzer: hits[handler.go:88, service.go:421]
         Note over Analyzer: infiere component=<br/>"internal/api/handler"
     and
-        Analyzer->>Dedup: SELECT user_stories matching
-        Dedup-->>Analyzer: HU-03.1 observations-crud (sim 0.4)
+        Analyzer->>Dedup: SELECT issues matching
+        Dedup-->>Analyzer: issue-03.1 observations-crud (sim 0.4)
         Note over Analyzer: infiere req_parent=<br/>"REQ-03-memory-system"
     end
 
@@ -58,7 +58,7 @@ sequenceDiagram
 
     Wizard->>Planner: NextQuestion
     Note over Planner: Pendientes: severity, root_cause,<br/>has_repro, expected, actual,<br/>slug, summary
-    Planner-->>Wizard: Question slot=severity<br/>"Encontré HU-03.1 + 2 hits en handler.go.<br/>¿Cuán crítico es?"
+    Planner-->>Wizard: Question slot=severity<br/>"Encontré issue-03.1 + 2 hits en handler.go.<br/>¿Cuán crítico es?"
 
     loop slot por slot
         Wizard-->>Cli: Question
@@ -66,7 +66,7 @@ sequenceDiagram
         U->>Cli: respuesta
         Cli->>MCP: domain_hu_create_answer
         MCP->>Wizard: AnswerAdaptive
-        Wizard->>BD: UPDATE hu_drafts.answers
+        Wizard->>BD: UPDATE issue_drafts.answers
         Wizard->>Planner: NextQuestion
     end
 
@@ -77,7 +77,7 @@ sequenceDiagram
     Wizard->>BD: status=committed
 
     Note over Cli: Agente IA escribe HU formal +<br/>implementa el fix con TDD +<br/>crea test sabotaje
-    Cli->>BD: INSERT user_stories<br/>+ proposal + design + tasks
+    Cli->>BD: INSERT issues<br/>+ proposal + design + tasks
 ```
 
 ## Slots típicos para mode=bug-fix
@@ -106,7 +106,7 @@ WHERE id = <intake_id>;
 -- Verifica draft con envelope serializado
 SELECT mode, status,
        jsonb_extract_path(answers, '__envelope__', 'code', 'hits')
-FROM hu_drafts WHERE id = <draft_id>;
+FROM issue_drafts WHERE id = <draft_id>;
 -- Expected mode=bug-fix; code.hits con al menos 1 entry
 ```
 

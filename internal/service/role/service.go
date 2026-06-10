@@ -1,4 +1,4 @@
-// Package role — HU-02.8 custom roles CRUD.
+// Package role — issue-02.8 custom roles CRUD.
 //
 // Cada organización puede definir roles custom con matriz de permisos JSONB
 // validada contra AllowedResources. Roles built-in son inmutables.

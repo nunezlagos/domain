@@ -1,4 +1,4 @@
-// MCP tools — single-shot prompt router HU-12.7
+// MCP tools — single-shot prompt router issue-12.7
 
 package mcpserver
 

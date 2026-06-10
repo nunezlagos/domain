@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-01.7 seeders integration tests con testcontainers.
+// issue-01.7 seeders integration tests con testcontainers.
 
 package seeds_test
 

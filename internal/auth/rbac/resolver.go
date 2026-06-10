@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PGResolver implementa CustomResolver contra tabla custom_roles (HU-02.8).
+// PGResolver implementa CustomResolver contra tabla custom_roles (issue-02.8).
 // Cachea permisos por (orgID, roleSlug) con invalidación vía LISTEN/NOTIFY.
 type PGResolver struct {
 	pool *pgxpool.Pool

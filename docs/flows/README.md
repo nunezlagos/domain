@@ -29,8 +29,8 @@ Markdown Preview Mermaid), Mermaid Live Editor.
 | **Intake** | `internal/service/intake` — persiste raw prompt + classification |
 | **Analyzer** | `internal/service/wizardplan` — pipeline 4 fuentes en paralelo |
 | **Planner** | Decide qué slot preguntar próximo + LLM formula la pregunta |
-| **Wizard** | `internal/service/hubuilder` — state machine adaptive |
-| **BD Postgres** | tablas: intake_payloads · hu_drafts · user_stories · entity_state_transitions |
+| **Wizard** | `internal/service/issuebuilder` — state machine adaptive |
+| **BD Postgres** | tablas: intake_payloads · issue_drafts · issues · entity_state_transitions |
 
 ## Vista general (router + sub-flows)
 

@@ -1,4 +1,4 @@
-// HU-02.3 secrets-encryption unit tests.
+// issue-02.3 secrets-encryption unit tests.
 
 package crypto
 

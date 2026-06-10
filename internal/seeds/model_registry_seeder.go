@@ -8,7 +8,7 @@ import (
 )
 
 // ModelRegistrySeeder siembra el catálogo inicial de LLM models con pricing
-// USD por 1M tokens. HU-01.7 + HU-06.4.
+// USD por 1M tokens. issue-01.7 + issue-06.4.
 type ModelRegistrySeeder struct{}
 
 func (s *ModelRegistrySeeder) Name() string    { return "model_registry" }

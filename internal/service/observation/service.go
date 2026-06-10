@@ -1,4 +1,4 @@
-// Package observation — HU-03.1 CRUD de observations + búsqueda híbrida.
+// Package observation — issue-03.1 CRUD de observations + búsqueda híbrida.
 //
 // Observations son la unidad central de memoria. Cada una vive en un project
 // dentro de una organization. Búsqueda híbrida combina:
@@ -89,7 +89,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 		in.Metadata = map[string]any{}
 	}
 
-	// HU-03.6 privacy: stripping de bloques <private>...</private>
+	// issue-03.6 privacy: stripping de bloques <private>...</private>
 	cleanContent, redactedCount := privacy.Strip(in.Content)
 	if redactedCount > 0 {
 		in.Metadata["privacy_redacted_blocks"] = redactedCount
@@ -100,7 +100,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 
 	metaJSON, _ := json.Marshal(in.Metadata)
 
-	// HU-03.6 dedup: hash normalizado del fingerprint
+	// issue-03.6 dedup: hash normalizado del fingerprint
 	hash := dedup.Hash(dedup.FingerprintInput{
 		ProjectID:       in.ProjectID,
 		ObservationType: in.ObservationType,
@@ -195,7 +195,7 @@ func (s *Service) List(ctx context.Context, projectID uuid.UUID, limit int) ([]O
 	return out, rows.Err()
 }
 
-// ListPageInput describe filtros + paginación cursor-based (HU-13.6).
+// ListPageInput describe filtros + paginación cursor-based (issue-13.6).
 type ListPageInput struct {
 	ProjectID      uuid.UUID
 	Limit          int

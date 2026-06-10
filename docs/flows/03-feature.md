@@ -42,7 +42,7 @@ sequenceDiagram
         Analyzer->>BD: SELECT observations/knowledge FTS+embedding
         BD-->>Analyzer: matches
     and
-        Analyzer->>BD: SELECT user_stories WHERE ts_match (HU dedup)
+        Analyzer->>BD: SELECT issues WHERE ts_match (HU dedup)
         BD-->>Analyzer: candidates
     and
         Analyzer->>Analyzer: grep internal/**/*.go por keywords
@@ -53,11 +53,11 @@ sequenceDiagram
 
     Analyzer-->>Wizard: ContextEnvelope{<br/> intent, hu_matches,<br/> code_hits, memory,<br/> history, slots[]}
 
-    Wizard->>BD: INSERT hu_drafts<br/>(answers=envelope JSON)
+    Wizard->>BD: INSERT issue_drafts<br/>(answers=envelope JSON)
     Wizard->>Planner: NextQuestion(envelope)
     Planner->>Planner: pending = goal, summary, slug
     Planner->>LLM: FormulateQuestion(slot=goal, envelope)
-    LLM-->>Planner: "Encontré HU-X.X similar y N hits en code/runs/..<br/>¿Qué se gana con este export?"
+    LLM-->>Planner: "Encontré issue-X.X similar y N hits en code/runs/..<br/>¿Qué se gana con este export?"
     Planner-->>Wizard: Question
     Wizard-->>MCP: Question{prompt, context_note, options}
     MCP-->>Cli: JSON
@@ -67,14 +67,14 @@ sequenceDiagram
         U->>Cli: respuesta
         Cli->>MCP: domain_hu_create_answer(draft_id, slot, value)
         MCP->>Wizard: AnswerAdaptive(draft_id, slot, value)
-        Wizard->>BD: UPDATE hu_drafts<br/>(answers[__envelope__].slots[slot]=provided)
+        Wizard->>BD: UPDATE issue_drafts<br/>(answers[__envelope__].slots[slot]=provided)
         Wizard->>Planner: NextQuestion(envelope)
         alt pendientes
             Planner-->>Wizard: Question
             Wizard-->>Cli: Question
         else completo
             Planner-->>Wizard: NoMoreQuestionsErr
-            Wizard->>BD: UPDATE hu_drafts status=finished
+            Wizard->>BD: UPDATE issue_drafts status=finished
             Wizard-->>Cli: nil question + finished
         end
     end
@@ -85,14 +85,14 @@ sequenceDiagram
 
     Cli->>MCP: domain_hu_create_commit(draft_id)
     MCP->>Wizard: Commit()
-    Wizard->>BD: UPDATE hu_drafts status=committed
+    Wizard->>BD: UPDATE issue_drafts status=committed
     Wizard->>BD: audit_log hu_draft.committed
 
-    Note over Cli: Agente IA escribe archivos<br/>en openspec/changes/REQ-XX/HU-XX.Y/<br/>+ crea user_story real
-    Cli->>BD: INSERT user_stories (slug, title, req_id)
-    Cli->>MCP: PromoteAttachmentsToHU(draft_id, hu_id)
+    Note over Cli: Agente IA escribe archivos<br/>en openspec/changes/REQ-XX/issue-XX.Y/<br/>+ crea user_story real
+    Cli->>BD: INSERT issues (slug, title, req_id)
+    Cli->>MCP: PromoteAttachmentsToHU(draft_id, issue_id)
     MCP->>Wizard: PromoteAttachmentsToHU()
-    Wizard->>BD: UPDATE file_attachments<br/>SET entity_type='user_story', entity_id=hu_id
+    Wizard->>BD: UPDATE file_attachments<br/>SET entity_type='user_story', entity_id=issue_id
 ```
 
 ## Asserts BD post-flow
@@ -106,16 +106,16 @@ ORDER BY created_at DESC LIMIT 1;
 -- Expected: ('feature', >= 0.5)
 
 -- 2) Draft committed
-SELECT status, mode FROM hu_drafts WHERE id = <draft_id>;
+SELECT status, mode FROM issue_drafts WHERE id = <draft_id>;
 -- Expected: ('committed', 'feature')
 
 -- 3) Envelope persistido completo en answers JSONB
-SELECT jsonb_extract_path(answers, '__envelope__', 'slots') FROM hu_drafts
+SELECT jsonb_extract_path(answers, '__envelope__', 'slots') FROM issue_drafts
 WHERE id = <draft_id>;
 -- Expected: todos los slots con status in ('provided','inferred')
 
 -- 4) user_story creada
-SELECT slug, status FROM user_stories WHERE slug = '<suggested_slug>';
+SELECT slug, status FROM issues WHERE slug = '<suggested_slug>';
 -- Expected: row con status='proposed' o 'approved'
 ```
 

@@ -1,4 +1,4 @@
-# REQ-04-opsx-sdd: Integración del sistema SDD: requerimientos (REQs), historias de usuario (HUs), specs, diseños, tareas, verificación, trazabilidad.
+# REQ-04-opsx-sdd: Integración del sistema SDD: requerimientos (REQs), issues (HUs), specs, diseños, tareas, verificación, trazabilidad.
 
 **Estado:** activo
 **Creado:** 2026-06-07
@@ -6,7 +6,7 @@
 
 ## Descripción
 
-Integración del sistema SDD: requerimientos (REQs), historias de usuario (HUs), specs, diseños, tareas, verificación, trazabilidad.
+Integración del sistema SDD: requerimientos (REQs), issues (HUs), specs, diseños, tareas, verificación, trazabilidad.
 
 ## Criterios de éxito
 
@@ -22,13 +22,13 @@ Integración del sistema SDD: requerimientos (REQs), historias de usuario (HUs),
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-04.1-requirements-crud | proposed | CRUD de REQs con slug único, descripción, estado, prioridad |
-| HU-04.2-user-stories-gherkin | proposed | Creación y versionado de HUs con Gherkin scenarios |
-| HU-04.3-specs-designs | proposed | Specs, ADRs, alternativas descartadas, diagramas |
-| HU-04.4-tasks-verification | proposed | Tasks, tests, sabotaje, cierre, checklist |
-| HU-04.5-traceability | proposed | Trazabilidad REQ→HU→tasks, reportes de cobertura |
-| HU-04.6-s3-storage | proposed | S3 integration para adjuntos de opsx, knowledge docs y assets |
-| HU-04.7-interactive-hu-builder | proposed | Wizard MCP/CLI con state en BD para generar HUs/REQs/RFCs con preguntas dirigidas; 5 modos; valida persona/REQ contra catálogo |
-| HU-04.8-intake-pipeline | proposed | Pipeline ingestión multi-source con clasificación IA, dedupe semántico, generación Gherkin draft, human review y commit transaccional |
-| HU-04.9-external-provider-sync | proposed | Sync Domain ↔ Jira Cloud (driver pattern para más providers) con push REQ/HU/attachments 1..N, pull webhook, drift detection y conflict resolution |
-| HU-04.10-lifecycle-state-tracking | proposed | State machine declarativa, audit immutable cross-entity, optimistic locking, stuck detector cron, métricas lifecycle, compensation pattern |
+| issue-04.1-requirements-crud | proposed | CRUD de REQs con slug único, descripción, estado, prioridad |
+| issue-04.2-user-stories-gherkin | proposed | Creación y versionado de HUs con Gherkin scenarios |
+| issue-04.3-specs-designs | proposed | Specs, ADRs, alternativas descartadas, diagramas |
+| issue-04.4-tasks-verification | proposed | Tasks, tests, sabotaje, cierre, checklist |
+| issue-04.5-traceability | proposed | Trazabilidad REQ→HU→tasks, reportes de cobertura |
+| issue-04.6-s3-storage | proposed | S3 integration para adjuntos de opsx, knowledge docs y assets |
+| issue-04.7-interactive-hu-builder | proposed | Wizard MCP/CLI con state en BD para generar HUs/REQs/RFCs con preguntas dirigidas; 5 modos; valida persona/REQ contra catálogo |
+| issue-04.8-intake-pipeline | proposed | Pipeline ingestión multi-source con clasificación IA, dedupe semántico, generación Gherkin draft, human review y commit transaccional |
+| issue-04.9-external-provider-sync | proposed | Sync Domain ↔ Jira Cloud (driver pattern para más providers) con push REQ/HU/attachments 1..N, pull webhook, drift detection y conflict resolution |
+| issue-04.10-lifecycle-state-tracking | proposed | State machine declarativa, audit immutable cross-entity, optimistic locking, stuck detector cron, métricas lifecycle, compensation pattern |

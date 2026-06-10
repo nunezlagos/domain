@@ -1,4 +1,4 @@
-// Package rut — HU-02.7 RUT chileno normalize + validate módulo 11.
+// Package rut — issue-02.7 RUT chileno normalize + validate módulo 11.
 //
 // Formato canónico: NNNNNNNN-X (sin puntos, con guión, K mayúscula).
 // Acepta inputs con puntos, sin puntos, con o sin guión.

@@ -1,4 +1,4 @@
-// Package etag — helpers para HU-13.7 HTTP caching con ETag + Last-Modified.
+// Package etag — helpers para issue-13.7 HTTP caching con ETag + Last-Modified.
 //
 // El ETag se computa como sha256_16(updated_at_unix_nano + ":" + id) — barato y
 // no requiere serializar el body. Last-Modified es updated_at en RFC1123 GMT.

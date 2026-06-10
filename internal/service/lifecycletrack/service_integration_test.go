@@ -48,8 +48,8 @@ func TestRecord_CreationTransition(t *testing.T) {
 	svc, cleanup := setupLT(t)
 	defer cleanup()
 
-	huID := uuid.New()
-	tr, err := svc.Record(context.Background(), lt.EntityHU, huID, "", "proposed",
+	issueID := uuid.New()
+	tr, err := svc.Record(context.Background(), lt.EntityHU, issueID, "", "proposed",
 		lt.Actor{Kind: lt.ActorAgent, Name: "claude-code"},
 		"initial HU spec generated", nil, nil)
 	require.NoError(t, err)
@@ -62,11 +62,11 @@ func TestRecord_ValidTransition(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	huID := uuid.New()
-	_, _ = svc.Record(ctx, lt.EntityHU, huID, "", "proposed",
+	issueID := uuid.New()
+	_, _ = svc.Record(ctx, lt.EntityHU, issueID, "", "proposed",
 		lt.Actor{Kind: lt.ActorSystem, Name: "init"}, "", nil, nil)
 
-	tr, err := svc.Record(ctx, lt.EntityHU, huID, "proposed", "approved",
+	tr, err := svc.Record(ctx, lt.EntityHU, issueID, "proposed", "approved",
 		lt.Actor{Kind: lt.ActorUser, Name: "alice@acme"}, "looks good", nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, tr.FromState)
@@ -106,17 +106,17 @@ func TestListByEntity_FullTimeline(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	huID := uuid.New()
+	issueID := uuid.New()
 	actor := lt.Actor{Kind: lt.ActorSystem, Name: "system"}
 
-	_, err := svc.Record(ctx, lt.EntityHU, huID, "", "proposed", actor, "", nil, nil)
+	_, err := svc.Record(ctx, lt.EntityHU, issueID, "", "proposed", actor, "", nil, nil)
 	require.NoError(t, err)
-	_, err = svc.Record(ctx, lt.EntityHU, huID, "proposed", "approved", actor, "", nil, nil)
+	_, err = svc.Record(ctx, lt.EntityHU, issueID, "proposed", "approved", actor, "", nil, nil)
 	require.NoError(t, err)
-	_, err = svc.Record(ctx, lt.EntityHU, huID, "approved", "in_progress", actor, "", nil, nil)
+	_, err = svc.Record(ctx, lt.EntityHU, issueID, "approved", "in_progress", actor, "", nil, nil)
 	require.NoError(t, err)
 
-	timeline, err := svc.ListByEntity(ctx, lt.EntityHU, huID, 0)
+	timeline, err := svc.ListByEntity(ctx, lt.EntityHU, issueID, 0)
 	require.NoError(t, err)
 	require.Len(t, timeline, 3)
 	require.Equal(t, "proposed", timeline[0].ToState)
@@ -128,12 +128,12 @@ func TestCurrentState(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	huID := uuid.New()
+	issueID := uuid.New()
 	actor := lt.Actor{Kind: lt.ActorSystem, Name: "x"}
-	_, _ = svc.Record(ctx, lt.EntityHU, huID, "", "proposed", actor, "", nil, nil)
-	_, _ = svc.Record(ctx, lt.EntityHU, huID, "proposed", "approved", actor, "", nil, nil)
+	_, _ = svc.Record(ctx, lt.EntityHU, issueID, "", "proposed", actor, "", nil, nil)
+	_, _ = svc.Record(ctx, lt.EntityHU, issueID, "proposed", "approved", actor, "", nil, nil)
 
-	st, err := svc.CurrentState(ctx, lt.EntityHU, huID)
+	st, err := svc.CurrentState(ctx, lt.EntityHU, issueID)
 	require.NoError(t, err)
 	require.Equal(t, "approved", st)
 }

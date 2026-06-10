@@ -1,4 +1,4 @@
-// Package circuitbreaker — HU-26.5 protección contra LLM providers caídos.
+// Package circuitbreaker — issue-26.5 protección contra LLM providers caídos.
 //
 // 3 estados:
 //   - Closed: requests pasan normalmente, contador de errores se incrementa

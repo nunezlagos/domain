@@ -1,4 +1,4 @@
-// HU-09.7 workflow-versioning — versiona definitions de flow para que
+// issue-09.7 workflow-versioning — versiona definitions de flow para que
 // runs en curso usen la versión con la que arrancaron y nuevas runs usen
 // la latest.
 package flow

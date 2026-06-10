@@ -71,7 +71,7 @@ func setup(t *testing.T) (*fix, func()) {
 	}
 }
 
-// HU-23.2 — Restore después de soft-delete dentro de window.
+// issue-23.2 — Restore después de soft-delete dentro de window.
 func TestRestore_ProjectRoundTrip(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
@@ -116,7 +116,7 @@ func TestRestore_RetentionExpired(t *testing.T) {
 	require.ErrorIs(t, err, lifecycle.ErrRetentionExpired)
 }
 
-// HU-23.3 — GDPR export incluye todas las entidades del user.
+// issue-23.3 — GDPR export incluye todas las entidades del user.
 func TestExportUserData_FullBundle(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()

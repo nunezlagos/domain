@@ -12,15 +12,15 @@ import (
 
 // LagMonitor consulta periódicamente la replica para conocer el replication lag.
 //
-// HU-25.9 escenario 3: cron 30s + métrica + alerta si >5s sostenido.
-// HU-25.9 escenario 4: fallback automático a primary si lag >ThresholdSecs.
+// issue-25.9 escenario 3: cron 30s + métrica + alerta si >5s sostenido.
+// issue-25.9 escenario 4: fallback automático a primary si lag >ThresholdSecs.
 type LagMonitor struct {
 	Pool          *pgxpool.Pool
 	PollInterval  time.Duration // default 30s
 	ThresholdSecs float64       // default 10.0 (sobre esto → fallback a primary)
 	Logger        *slog.Logger
 
-	// MetricsCB se invoca en cada tick con el lag medido (HU-25.9 métricas).
+	// MetricsCB se invoca en cada tick con el lag medido (issue-25.9 métricas).
 	MetricsCB func(lag float64)
 
 	// lagSeconds es el último valor medido. atomic para acceso lock-free.

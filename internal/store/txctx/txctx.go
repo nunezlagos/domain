@@ -1,4 +1,4 @@
-// Package txctx — HU-25.5 helper de transacciones con SET LOCAL para RLS.
+// Package txctx — issue-25.5 helper de transacciones con SET LOCAL para RLS.
 //
 // Cada query sobre tablas con RLS debe ir dentro de un tx con
 // `SET LOCAL app.current_org_id = $1` ejecutado primero. Este helper lo automatiza.

@@ -1,9 +1,9 @@
-// Package rbac — HU-02.2 RBAC (built-in roles) + HU-02.8 stub for custom roles.
+// Package rbac — issue-02.2 RBAC (built-in roles) + issue-02.8 stub for custom roles.
 //
 // Roles built-in (jerárquicos):
 //   owner > admin > maintainer > member > viewer
 //
-// Custom roles (HU-02.8) viven en tabla custom_roles (futuro). Esta API permite
+// Custom roles (issue-02.8) viven en tabla custom_roles (futuro). Esta API permite
 // override de built-in via Resolver interface.
 package rbac
 
@@ -42,7 +42,7 @@ func IsBuiltin(r Role) bool {
 }
 
 // AtLeast retorna true si actual cumple el role mínimo requerido (jerárquico).
-// Custom roles SIEMPRE retornan false acá (HU-02.8 implementa Resolver custom).
+// Custom roles SIEMPRE retornan false acá (issue-02.8 implementa Resolver custom).
 func AtLeast(actual, required Role) bool {
 	a, ok1 := builtinHierarchy[actual]
 	r, ok2 := builtinHierarchy[required]
@@ -177,7 +177,7 @@ var matrix = map[Role]map[Resource][]Action{
 }
 
 // Check verifica si role tiene permission sobre (resource, action) según matrix.
-// Custom roles (HU-02.8) override via CustomResolver.
+// Custom roles (issue-02.8) override via CustomResolver.
 type Checker struct {
 	CustomResolver CustomResolver // optional; nil = solo built-in
 }

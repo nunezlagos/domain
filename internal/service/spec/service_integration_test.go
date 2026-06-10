@@ -20,7 +20,7 @@ import (
 
 type fix struct {
 	svc  *specsvc.Service
-	huID uuid.UUID
+	issueID uuid.UUID
 }
 
 func setupSpec(t *testing.T) (*fix, func()) {
@@ -47,19 +47,19 @@ func setupSpec(t *testing.T) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	svc := &specsvc.Service{Pool: pools.App, Audit: rec}
 
-	var reqID, huID uuid.UUID
+	var reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
 		`INSERT INTO requirements (slug, title) VALUES ('REQ-spec-test', 'Spec Test REQ') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO user_stories (req_id, slug, title) VALUES ($1, 'HU-spec-test', 'Test HU') RETURNING id`,
+		`INSERT INTO issues (req_id, slug, title) VALUES ($1, 'HU-spec-test', 'Test HU') RETURNING id`,
 		reqID,
-	).Scan(&huID)
+	).Scan(&issueID)
 	require.NoError(t, err)
 
-	return &fix{svc: svc, huID: huID}, func() {
+	return &fix{svc: svc, issueID: issueID}, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
@@ -70,9 +70,9 @@ func TestCreateProposal_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p, err := f.svc.CreateProposal(ctx, f.huID, "Intention", "Scope", "Approach", "Risks", "TestingNotes")
+	p, err := f.svc.CreateProposal(ctx, f.issueID, "Intention", "Scope", "Approach", "Risks", "TestingNotes")
 	require.NoError(t, err)
-	require.Equal(t, f.huID, p.HuID)
+	require.Equal(t, f.issueID, p.HuID)
 	require.Equal(t, 1, p.Version)
 	require.Equal(t, specsvc.PropStatusDraft, p.Status)
 	require.Equal(t, "Intention", p.Intention)
@@ -85,11 +85,11 @@ func TestCreateProposal_VersionIncrement(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p1, err := f.svc.CreateProposal(ctx, f.huID, "v1", "Scope", "Approach", "", "")
+	p1, err := f.svc.CreateProposal(ctx, f.issueID, "v1", "Scope", "Approach", "", "")
 	require.NoError(t, err)
 	require.Equal(t, 1, p1.Version)
 
-	p2, err := f.svc.CreateProposal(ctx, f.huID, "v2", "Scope", "Approach", "", "")
+	p2, err := f.svc.CreateProposal(ctx, f.issueID, "v2", "Scope", "Approach", "", "")
 	require.NoError(t, err)
 	require.Equal(t, 2, p2.Version)
 }
@@ -108,10 +108,10 @@ func TestGetLatestProposal_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _ = f.svc.CreateProposal(ctx, f.huID, "v1", "S1", "A1", "", "")
-	_, _ = f.svc.CreateProposal(ctx, f.huID, "v2", "S2", "A2", "", "")
+	_, _ = f.svc.CreateProposal(ctx, f.issueID, "v1", "S1", "A1", "", "")
+	_, _ = f.svc.CreateProposal(ctx, f.issueID, "v2", "S2", "A2", "", "")
 
-	latest, err := f.svc.GetLatestProposal(ctx, f.huID)
+	latest, err := f.svc.GetLatestProposal(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Equal(t, 2, latest.Version)
 }
@@ -121,7 +121,7 @@ func TestGetLatestProposal_NotFound(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := f.svc.GetLatestProposal(ctx, f.huID)
+	_, err := f.svc.GetLatestProposal(ctx, f.issueID)
 	require.ErrorIs(t, err, specsvc.ErrNotFound)
 }
 
@@ -130,10 +130,10 @@ func TestGetProposalVersion_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p1, err := f.svc.CreateProposal(ctx, f.huID, "v1", "S1", "A1", "", "")
+	p1, err := f.svc.CreateProposal(ctx, f.issueID, "v1", "S1", "A1", "", "")
 	require.NoError(t, err)
 
-	got, err := f.svc.GetProposalVersion(ctx, f.huID, p1.Version)
+	got, err := f.svc.GetProposalVersion(ctx, f.issueID, p1.Version)
 	require.NoError(t, err)
 	require.Equal(t, p1.ID, got.ID)
 }
@@ -143,7 +143,7 @@ func TestGetProposalVersion_NotFound(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := f.svc.GetProposalVersion(ctx, f.huID, 99)
+	_, err := f.svc.GetProposalVersion(ctx, f.issueID, 99)
 	require.ErrorIs(t, err, specsvc.ErrNotFound)
 }
 
@@ -152,10 +152,10 @@ func TestListProposalVersions(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _ = f.svc.CreateProposal(ctx, f.huID, "v1", "", "", "", "")
-	_, _ = f.svc.CreateProposal(ctx, f.huID, "v2", "", "", "", "")
+	_, _ = f.svc.CreateProposal(ctx, f.issueID, "v1", "", "", "", "")
+	_, _ = f.svc.CreateProposal(ctx, f.issueID, "v2", "", "", "", "")
 
-	versions, err := f.svc.ListProposalVersions(ctx, f.huID)
+	versions, err := f.svc.ListProposalVersions(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
 }
@@ -165,7 +165,7 @@ func TestChangeProposalStatus_Approve(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p, err := f.svc.CreateProposal(ctx, f.huID, "intent", "scope", "approach", "", "")
+	p, err := f.svc.CreateProposal(ctx, f.issueID, "intent", "scope", "approach", "", "")
 	require.NoError(t, err)
 
 	updated, err := f.svc.ChangeProposalStatus(ctx, p.ID, specsvc.PropStatusApproved, "")
@@ -178,7 +178,7 @@ func TestChangeProposalStatus_Reject(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p, err := f.svc.CreateProposal(ctx, f.huID, "intent", "scope", "approach", "", "")
+	p, err := f.svc.CreateProposal(ctx, f.issueID, "intent", "scope", "approach", "", "")
 	require.NoError(t, err)
 
 	reason := "does not meet requirements"
@@ -194,7 +194,7 @@ func TestChangeProposalStatus_InvalidTransition(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p, err := f.svc.CreateProposal(ctx, f.huID, "intent", "scope", "approach", "", "")
+	p, err := f.svc.CreateProposal(ctx, f.issueID, "intent", "scope", "approach", "", "")
 	require.NoError(t, err)
 
 	_, err = f.svc.ChangeProposalStatus(ctx, p.ID, specsvc.PropStatusApproved, "")
@@ -209,7 +209,7 @@ func TestChangeProposalStatus_InvalidStatus(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	p, err := f.svc.CreateProposal(ctx, f.huID, "intent", "scope", "approach", "", "")
+	p, err := f.svc.CreateProposal(ctx, f.issueID, "intent", "scope", "approach", "", "")
 	require.NoError(t, err)
 
 	_, err = f.svc.ChangeProposalStatus(ctx, p.ID, "bogus", "")
@@ -230,9 +230,9 @@ func TestCreateDesign_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, err := f.svc.CreateDesign(ctx, f.huID, nil, "Arch decisions", "Alt", "Flow", "TDD", "Risks")
+	d, err := f.svc.CreateDesign(ctx, f.issueID, nil, "Arch decisions", "Alt", "Flow", "TDD", "Risks")
 	require.NoError(t, err)
-	require.Equal(t, f.huID, d.HuID)
+	require.Equal(t, f.issueID, d.HuID)
 	require.Equal(t, 1, d.Version)
 	require.Equal(t, specsvc.DesignStatusDraft, d.Status)
 	require.Equal(t, "Arch decisions", d.ArchDecisions)
@@ -245,11 +245,11 @@ func TestCreateDesign_VersionIncrement(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d1, err := f.svc.CreateDesign(ctx, f.huID, nil, "v1", "", "", "", "")
+	d1, err := f.svc.CreateDesign(ctx, f.issueID, nil, "v1", "", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, 1, d1.Version)
 
-	d2, err := f.svc.CreateDesign(ctx, f.huID, nil, "v2", "", "", "", "")
+	d2, err := f.svc.CreateDesign(ctx, f.issueID, nil, "v2", "", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, 2, d2.Version)
 }
@@ -268,10 +268,10 @@ func TestGetLatestDesign_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _ = f.svc.CreateDesign(ctx, f.huID, nil, "v1", "", "", "", "")
-	_, _ = f.svc.CreateDesign(ctx, f.huID, nil, "v2", "", "", "", "")
+	_, _ = f.svc.CreateDesign(ctx, f.issueID, nil, "v1", "", "", "", "")
+	_, _ = f.svc.CreateDesign(ctx, f.issueID, nil, "v2", "", "", "", "")
 
-	latest, err := f.svc.GetLatestDesign(ctx, f.huID)
+	latest, err := f.svc.GetLatestDesign(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Equal(t, 2, latest.Version)
 }
@@ -281,7 +281,7 @@ func TestGetLatestDesign_NotFound(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := f.svc.GetLatestDesign(ctx, f.huID)
+	_, err := f.svc.GetLatestDesign(ctx, f.issueID)
 	require.ErrorIs(t, err, specsvc.ErrNotFound)
 }
 
@@ -290,10 +290,10 @@ func TestListDesignsByHU(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _ = f.svc.CreateDesign(ctx, f.huID, nil, "d1", "", "", "", "")
-	_, _ = f.svc.CreateDesign(ctx, f.huID, nil, "d2", "", "", "", "")
+	_, _ = f.svc.CreateDesign(ctx, f.issueID, nil, "d1", "", "", "", "")
+	_, _ = f.svc.CreateDesign(ctx, f.issueID, nil, "d2", "", "", "", "")
 
-	designs, err := f.svc.ListDesignsByHU(ctx, f.huID)
+	designs, err := f.svc.ListDesignsByHU(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Len(t, designs, 2)
 }
@@ -303,7 +303,7 @@ func TestChangeDesignStatus_OK(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, err := f.svc.CreateDesign(ctx, f.huID, nil, "arch", "", "", "", "")
+	d, err := f.svc.CreateDesign(ctx, f.issueID, nil, "arch", "", "", "", "")
 	require.NoError(t, err)
 
 	updated, err := f.svc.ChangeDesignStatus(ctx, d.ID, specsvc.DesignStatusFinal)
@@ -316,7 +316,7 @@ func TestChangeDesignStatus_InvalidStatus(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, err := f.svc.CreateDesign(ctx, f.huID, nil, "arch", "", "", "", "")
+	d, err := f.svc.CreateDesign(ctx, f.issueID, nil, "arch", "", "", "", "")
 	require.NoError(t, err)
 
 	_, err = f.svc.ChangeDesignStatus(ctx, d.ID, "bogus")
@@ -337,12 +337,12 @@ func TestSabotage_ProposalUniqueConstraint(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := f.svc.CreateProposal(ctx, f.huID, "v1", "S", "A", "", "")
+	_, err := f.svc.CreateProposal(ctx, f.issueID, "v1", "S", "A", "", "")
 	require.NoError(t, err)
 
-	// Force-insert duplicado (hu_id + version violando UNIQUE)
+	// Force-insert duplicado (issue_id + version violando UNIQUE)
 	_, err = f.svc.Pool.Exec(ctx,
-		`INSERT INTO proposals (hu_id, version, intention, scope, approach)
-		 VALUES ($1, 1, 'dup', 'S', 'A')`, f.huID)
+		`INSERT INTO proposals (issue_id, version, intention, scope, approach)
+		 VALUES ($1, 1, 'dup', 'S', 'A')`, f.issueID)
 	require.ErrorContains(t, err, "unique")
 }

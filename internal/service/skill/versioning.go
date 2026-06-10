@@ -1,6 +1,6 @@
-// HU-05.3 skill-versioning — snapshots inmutables de skills con pin/rollback.
+// issue-05.3 skill-versioning — snapshots inmutables de skills con pin/rollback.
 //
-// Tabla skill_versions ya existe desde migration 000011. HU-25.5 partial
+// Tabla skill_versions ya existe desde migration 000011. issue-25.5 partial
 // agregó column pinned_version en skills.
 package skill
 

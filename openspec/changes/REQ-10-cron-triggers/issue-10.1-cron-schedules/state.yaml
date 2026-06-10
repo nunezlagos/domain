@@ -1,0 +1,39 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/service/cron.Service CRUD sobre tabla crons (migration 16).
+  - Create: valida slug + name + target_type whitelist (flow/agent/skill) +
+    cron_expression parseable (robfig/cron v3) + timezone válido (Go
+    time.LoadLocation). Calcula next_run_at al insertar.
+  - List, GetByID, SetEnabled, SoftDelete con audit.
+  - PickDue(limit): SELECT ... WHERE enabled AND next_run_at <= NOW()
+    FOR UPDATE SKIP LOCKED (multi-worker safe). Avanza next_run_at al
+    pickear para evitar re-pick.
+
+  internal/scheduler/cron.Scheduler loop:
+  - Run(ctx): ticker cada 30s (configurable). En cada tick llama
+    Crons.PickDue → para cada cron due, dispatch en goroutine separada
+    (no bloquea scheduler).
+  - dispatch route por target_type:
+    * flow → flowRunner.Run con triggerType="cron"
+    * agent → agentRunner.Run con input/variables del cron.Inputs
+    * skill → skillRunner.Execute con args
+  - Timeout 10min por execution. Audit "cron.executed"|"cron.failed".
+
+  Cron parser: robfig/cron v3 standard 5-field syntax + descriptors
+  (@every, @daily, @hourly, @midnight).
+
+  Wire cmd/domain server: scheduler corre en goroutine con context
+  cancelable; graceful shutdown cancela el ctx.
+
+  Pending issue-10.* completo:
+  - issue-10.2 webhook triggers (endpoint POST /webhooks/:secret recibe + dispatch)
+  - issue-10.3 event execution (table cron_runs persistir cada ejecución)
+  - issue-10.4 outbound webhooks (notificar URL al completar agent_run)
+  - HTTP CRUD endpoints /api/v1/crons/*
+  - Leader election cuando hay múltiples pods (issue-26.2): solo 1 pod corre
+    el scheduler vía advisory lock pg_try_advisory_lock(domain_cron_leader_id)
+  - Tests integration con testcontainers (PickDue concurrency, SetEnabled,
+    target dispatch)

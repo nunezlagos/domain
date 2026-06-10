@@ -1,4 +1,4 @@
-// MCP tools para intake pipeline — HU-04.8
+// MCP tools para intake pipeline — issue-04.8
 
 package mcpserver
 

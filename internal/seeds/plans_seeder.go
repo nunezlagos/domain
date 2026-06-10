@@ -7,10 +7,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// PlansSeeder siembra los TIERS DE USO INTERNOS — HU-01.7 + HU-21.3.
+// PlansSeeder siembra los TIERS DE USO INTERNOS — issue-01.7 + issue-21.3.
 //
 // IMPORTANTE: Domain es open-source SIN COBRO (decisión user 2026-06-08;
-// HU-21.4 stripe-billing archivada). Estos planes NO son tiers comerciales:
+// issue-21.4 stripe-billing archivada). Estos planes NO son tiers comerciales:
 // son perfiles de control de uso interno (quotas + RBAC) que el operador
 // del despliegue asigna a cada org según su criterio (gratis, paga aparte,
 // trial, lo que sea — Domain no maneja la facturación).

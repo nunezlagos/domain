@@ -1,4 +1,4 @@
-// Package intake — HU-04.8 worker async para el intake pipeline.
+// Package intake — issue-04.8 worker async para el intake pipeline.
 //
 // Polea status='received' → ejecuta classify (LLM call) → dedup (semantic
 // search) → structure (LLM call) → marca pending_review. Si LLM/skill no
@@ -43,7 +43,7 @@ type Structured struct {
 	Title       string         `json:"title"`
 	Description string         `json:"description"`
 	ReqSlug     string         `json:"req_slug"`
-	HUDraft     map[string]any `json:"hu_draft"`
+	IssueDraftWizard     map[string]any `json:"hu_draft"`
 }
 
 // DedupSearcher busca duplicados via embedding del proposed_title + description.
@@ -54,7 +54,7 @@ type DedupSearcher interface {
 // DedupCandidate refleja un match potencial.
 type DedupCandidate struct {
 	ReqID      *uuid.UUID `json:"req_id,omitempty"`
-	HUID       *uuid.UUID `json:"hu_id,omitempty"`
+	HUID       *uuid.UUID `json:"issue_id,omitempty"`
 	Title      string     `json:"title"`
 	Similarity float64    `json:"similarity"`
 	Reason     string     `json:"reason"`
@@ -174,7 +174,7 @@ func (w *Worker) ProcessOne(ctx context.Context, p *intake.Payload) error {
 	}
 
 	if _, err := w.Service.MarkPendingReview(ctx, p.ID,
-		st.Title, st.Description, st.ReqSlug, st.HUDraft, dedupAny, merge); err != nil {
+		st.Title, st.Description, st.ReqSlug, st.IssueDraftWizard, dedupAny, merge); err != nil {
 		return fmt.Errorf("mark pending review: %w", err)
 	}
 
@@ -233,7 +233,7 @@ func (s *StubStructurer) Structure(_ context.Context, raw string, _ Classificati
 	}
 	return Structured{
 		Title: title, Description: desc, ReqSlug: req,
-		HUDraft: map[string]any{
+		IssueDraftWizard: map[string]any{
 			"slug":  "auto-" + json.Number(fmt.Sprintf("%d", time.Now().Unix())).String(),
 			"goal":  "auto-generated stub",
 		},

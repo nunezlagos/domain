@@ -1,0 +1,26 @@
+# Tasks: issue-25.13-schema-conventions-linter
+
+- [ ] **scl-001**: Dep `pganalyze/pg_query_go/v5`
+- [ ] **scl-002**: Rule interface + registry
+- [ ] **scl-003**: Rule naming (plural snake_case)
+- [ ] **scl-004**: Rule required_cols (id/created_at/updated_at)
+- [ ] **scl-005**: Rule types (JSON→JSONB, TIMESTAMP→TIMESTAMPTZ, FLOAT→NUMERIC for money)
+- [ ] **scl-006**: Rule fk_naming (_id suffix)
+- [ ] **scl-007**: Rule triggers (set_updated_at trigger when updated_at present)
+- [ ] **scl-008**: Rule header (6 required fields)
+- [ ] **scl-009**: Rule fk_on_delete strategy explícita
+- [ ] **scl-010**: Override parser (-- domain-lint-ignore-next)
+- [ ] **scl-011**: Baseline file support
+- [ ] **scl-012**: Fix mode (json→jsonb, pluralize naming)
+- [ ] **scl-013**: Output reviewdog + plain
+- [ ] **scl-014**: CI step en issue-19.1
+- [ ] **scl-015**: Makefile `db-conventions-lint` + `db-conventions-fix`
+- [ ] **scl-016**: Self-test: cada rule documentada en db.md
+- [ ] **test-001**: Naming wrong → error
+- [ ] **test-002**: Missing created_at → error
+- [ ] **test-003**: JSON type → error + fix
+- [ ] **test-004**: FK without _id → error
+- [ ] **test-005**: Trigger missing → error
+- [ ] **test-006**: Override comment skip
+- [ ] **test-007**: Baseline skip legacy
+- [ ] **docs-001**: `docs/db/conventions-linter.md`

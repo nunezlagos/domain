@@ -1,4 +1,4 @@
-// HU-07.3 llm-semantic-cache — cache de responses LLM por similaridad
+// issue-07.3 llm-semantic-cache — cache de responses LLM por similaridad
 // semántica de prompts (no exact match). Si el prompt nuevo tiene cosine
 // similarity >= 0.95 con uno cacheado del mismo (provider, model, params),
 // devolvemos el response cacheado y ahorramos la llamada al provider.

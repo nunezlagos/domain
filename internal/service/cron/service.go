@@ -1,4 +1,4 @@
-// Package cron — HU-10.1 cron schedules service (CRUD).
+// Package cron — issue-10.1 cron schedules service (CRUD).
 //
 // Tabla crons: cron_expression interpretado con robfig/cron v3 (standard
 // 5-field syntax + extensión @every / @daily). target_type → flow/agent/skill.

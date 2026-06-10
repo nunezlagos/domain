@@ -1,4 +1,4 @@
-// Package anonymizer — HU-25.11 staging dump anonymization.
+// Package anonymizer — issue-25.11 staging dump anonymization.
 //
 // Pipeline: source pool (prod-mirror) → transform per table+col → dest pool
 // (staging). Idempotente dado el mismo seed (lookup table + idx determinístico).

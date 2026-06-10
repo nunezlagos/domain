@@ -1,4 +1,4 @@
-// HU-17.2 tracing unit tests.
+// issue-17.2 tracing unit tests.
 
 package tracing
 

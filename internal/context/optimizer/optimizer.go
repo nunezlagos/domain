@@ -1,4 +1,4 @@
-// HU-07.1 context-optimizer — comprime context para LLM calls cuando excede
+// issue-07.1 context-optimizer — comprime context para LLM calls cuando excede
 // budget. Estrategias: oldest-first eviction, summary collapsing, token budget.
 package optimizer
 

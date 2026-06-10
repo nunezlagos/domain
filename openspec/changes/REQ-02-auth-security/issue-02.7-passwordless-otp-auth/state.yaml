@@ -1,0 +1,20 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/auth/otp + internal/auth/rut completos.
+  Migration 000026 otp_codes + users.rut/last_login_at/last_organization_id.
+  Service.Request: anti-enumeration (ErrUserNotFound interno, response 200 fake al
+  cliente), genera código 6 dígitos crypto/rand, bcrypt cost 10, persiste con TTL
+  configurable (default 10min), envía via Mailer interface (issue-20.2 plug).
+  Service.Verify: SELECT FOR UPDATE tx, max_attempts enforcement, expired check,
+  attempts increment en wrong code, mark used_at + update last_login_at en éxito.
+  RUT lookup via UserLookup.ByRUT + email lookup via ByEmail.
+  Tests: 6 unit + 8 integration + 1 sabotaje brute-force blocked.
+  HTTP handlers /auth/request-otp y /auth/verify-otp montados en router y
+  funcionales (anti-enumeration, Issue API key post-verify). Mailer real
+  (smtpmail) wired en main.go desde DOMAIN_SMTP_HOST env vars.
+  UserLookup integration: otpUserLookupAdapter en cmd/domain/main.go implementa
+  otp.UserLookup vía consultas directas a users table (ByEmail + ByRUT).
+  Rate-limit per identifier/IP cubierto por issue-02.5 (OTPRateLimiter en handlers).

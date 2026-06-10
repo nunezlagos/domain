@@ -1,4 +1,4 @@
-// Package metrics — HU-17.1 metrics-prometheus.
+// Package metrics — issue-17.1 metrics-prometheus.
 //
 // Custom registry (no DefaultRegisterer) para isolation entre tests y procesos.
 // Registry expone /metrics en puerto separado configurable (DOMAIN_METRICS_PORT).
@@ -31,12 +31,12 @@ type Registry struct {
 	DBPoolAcquired   prometheus.Counter
 	DBQueryDuration  *prometheus.HistogramVec
 
-	// Replicación (HU-25.9)
+	// Replicación (issue-25.9)
 	ReplicationLagSeconds prometheus.Gauge
 	ReplicaQueriesTotal   prometheus.Counter
 	ReplicaFallbackTotal  prometheus.Counter
 
-	// DB monitoring (HU-25.12)
+	// DB monitoring (issue-25.12)
 	DBConnectionsActive            prometheus.Gauge
 	DBConnectionsIdle              prometheus.Gauge
 	DBConnectionsIdleInTransaction prometheus.Gauge
@@ -162,7 +162,7 @@ func New() *Registry {
 		[]string{"threshold_ms"},
 	)
 
-	// HU-25.9 read-replicas
+	// issue-25.9 read-replicas
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
 		Help: "Replication lag en segundos (0 si no hay replica)",
@@ -176,7 +176,7 @@ func New() *Registry {
 		Help: "Fallbacks a primary por replica degradada",
 	})
 
-	// HU-25.12 locks-vacuum
+	// issue-25.12 locks-vacuum
 	r.DBConnectionsActive = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_connections_active",
 		Help: "Conexiones activas en pg_stat_activity",

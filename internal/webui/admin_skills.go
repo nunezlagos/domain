@@ -1,9 +1,9 @@
-// HU-16.4 web-admin-skills — admin UI CRUD para skills.
+// issue-16.4 web-admin-skills — admin UI CRUD para skills.
 //
 // Pattern: server-rendered HTML por Go con html/template + endpoints
 // JSON para acciones. Sin build pipeline, sin SPA. Operaciones soportadas:
 //   - List + filter por slug/source.
-//   - View detail con versions (HU-05.3) + JSON Schemas (HU-05.6).
+//   - View detail con versions (issue-05.3) + JSON Schemas (issue-05.6).
 //   - Pin/Unpin version.
 //   - Delete (soft, marcar disabled).
 package webui

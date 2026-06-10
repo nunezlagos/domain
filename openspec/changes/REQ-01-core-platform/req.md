@@ -21,11 +21,11 @@ Fundación del sistema: Postgres schema, migraciones versionadas, config por env
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-01.1-db-schema-migrations | proposed | Schema Postgres + golang-migrate + pgvector + GIN + FKs |
-| HU-01.2-config-system | proposed | Config desde env vars con validación y defaults |
-| HU-01.3-health-version | proposed | GET /health + version embebida + CLI version |
-| HU-01.4-project-templates | proposed | Templates de proyectos: skills default, scope, agentes y flows preconfigurados |
-| HU-01.5-project-merge | proposed | Merge de proyectos, cross-project references, detección por git remote, relocate |
-| HU-01.6-local-dev-environment | proposed | Docker Compose dev: Postgres+pgvector, MinIO (S3), Adminer, Mailpit, Makefile |
-| HU-01.7-seeders-system | proposed | Framework Go seeders idempotente con go:embed: plans, model registry, templates, policies, error codes, crons |
-| HU-01.8-platform-policies | proposed | Tabla platform_policies + CRUD + version + export/import md + MCP tools `domain_policy_get/search` |
+| issue-01.1-db-schema-migrations | proposed | Schema Postgres + golang-migrate + pgvector + GIN + FKs |
+| issue-01.2-config-system | proposed | Config desde env vars con validación y defaults |
+| issue-01.3-health-version | proposed | GET /health + version embebida + CLI version |
+| issue-01.4-project-templates | proposed | Templates de proyectos: skills default, scope, agentes y flows preconfigurados |
+| issue-01.5-project-merge | proposed | Merge de proyectos, cross-project references, detección por git remote, relocate |
+| issue-01.6-local-dev-environment | proposed | Docker Compose dev: Postgres+pgvector, MinIO (S3), Adminer, Mailpit, Makefile |
+| issue-01.7-seeders-system | proposed | Framework Go seeders idempotente con go:embed: plans, model registry, templates, policies, error codes, crons |
+| issue-01.8-platform-policies | proposed | Tabla platform_policies + CRUD + version + export/import md + MCP tools `domain_policy_get/search` |

@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-// GET /api/v1/admin/db/slow-queries — HU-25.2
+// GET /api/v1/admin/db/slow-queries — issue-25.2
 func (a *API) getSlowQueries(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

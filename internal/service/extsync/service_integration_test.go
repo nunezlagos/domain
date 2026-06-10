@@ -87,10 +87,10 @@ func TestRegisterProvider_InvalidProvider(t *testing.T) {
 func TestRegisterPush_OK(t *testing.T) {
 	f, cleanup := setupExtSync(t)
 	defer cleanup()
-	huID := uuid.New()
+	issueID := uuid.New()
 
 	st, err := f.svc.RegisterPush(context.Background(), f.provider.ID,
-		extsync.EntityHU, huID, "DIDE-100",
+		extsync.EntityHU, issueID, "DIDE-100",
 		"https://acme.atlassian.net/browse/DIDE-100", "Story",
 		map[string]any{"summary": "Test HU"})
 	require.NoError(t, err)
@@ -149,11 +149,11 @@ func TestGetByEntity(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	huID := uuid.New()
+	issueID := uuid.New()
 	created, _ := f.svc.RegisterPush(ctx, f.provider.ID, extsync.EntityHU,
-		huID, "DIDE-103", "url", "Story", nil)
+		issueID, "DIDE-103", "url", "Story", nil)
 
-	got, err := f.svc.GetByEntity(ctx, f.provider.ID, extsync.EntityHU, huID)
+	got, err := f.svc.GetByEntity(ctx, f.provider.ID, extsync.EntityHU, issueID)
 	require.NoError(t, err)
 	require.Equal(t, created.ID, got.ID)
 }

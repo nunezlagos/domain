@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 )
 
 func (a *API) startHubDraft(w http.ResponseWriter, r *http.Request) {
@@ -29,9 +29,9 @@ func (a *API) startHubDraft(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		code, status := "internal_error", 500
 		switch {
-		case isErr(err, hubuilder.ErrInvalidMode):
+		case isErr(err, issuebuilder.ErrInvalidMode):
 			code, status = "invalid_mode", 422
-		case isErr(err, hubuilder.ErrUnsupportedMode):
+		case isErr(err, issuebuilder.ErrUnsupportedMode):
 			code, status = "unsupported_mode", 422
 		}
 		writeError(w, status, code, err.Error())
@@ -60,11 +60,11 @@ func (a *API) answerHubDraft(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		code, status := "internal_error", 500
 		switch {
-		case isErr(err, hubuilder.ErrNotFound):
+		case isErr(err, issuebuilder.ErrNotFound):
 			code, status = "not_found", 404
-		case isErr(err, hubuilder.ErrInvalidAnswer):
+		case isErr(err, issuebuilder.ErrInvalidAnswer):
 			code, status = "invalid_answer", 422
-		case isErr(err, hubuilder.ErrExpired):
+		case isErr(err, issuebuilder.ErrExpired):
 			code, status = "expired", 410
 		}
 		writeError(w, status, code, err.Error())
@@ -85,7 +85,7 @@ func (a *API) previewHubDraft(w http.ResponseWriter, r *http.Request) {
 	preview, err := a.Hubuilder.BuildPreview(r.Context(), id)
 	if err != nil {
 		code, status := "internal_error", 500
-		if isErr(err, hubuilder.ErrNotFound) {
+		if isErr(err, issuebuilder.ErrNotFound) {
 			code, status = "not_found", 404
 		}
 		writeError(w, status, code, err.Error())
@@ -104,9 +104,9 @@ func (a *API) commitHubDraft(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		code, status := "internal_error", 500
 		switch {
-		case isErr(err, hubuilder.ErrNotFound):
+		case isErr(err, issuebuilder.ErrNotFound):
 			code, status = "not_found", 404
-		case isErr(err, hubuilder.ErrInvalidStatus):
+		case isErr(err, issuebuilder.ErrInvalidStatus):
 			code, status = "invalid_status", 422
 		}
 		writeError(w, status, code, err.Error())
@@ -123,7 +123,7 @@ func (a *API) abandonHubDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.Hubuilder.Abandon(r.Context(), id, "abandoned via HTTP"); err != nil {
 		code, status := "internal_error", 500
-		if isErr(err, hubuilder.ErrNotFound) {
+		if isErr(err, issuebuilder.ErrNotFound) {
 			code, status = "not_found", 404
 		}
 		writeError(w, status, code, err.Error())

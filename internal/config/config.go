@@ -1,7 +1,7 @@
-// Package config — HU-01.2 config-system.
+// Package config — issue-01.2 config-system.
 //
 // Carga config desde env vars con prefijo DOMAIN_*. Validación strict + defaults.
-// Una sola Load() al boot; valores no se recargan salvo via HU-27.3 hot-reload.
+// Una sola Load() al boot; valores no se recargan salvo via issue-27.3 hot-reload.
 package config
 
 import (
@@ -25,10 +25,10 @@ type Config struct {
 	// Database
 	DatabaseURL     string // app_user pool — runtime queries (RLS enforced)
 	DatabaseAuthURL     string // app_admin pool — auth/audit lookups (BYPASSRLS).
-	DatabaseReadOnlyURL string // HU-25.9 read replica DSN (opcional, default vacío)
+	DatabaseReadOnlyURL string // issue-25.9 read replica DSN (opcional, default vacío)
 	// Si DatabaseAuthURL vacío, dev-fallback al pool de DatabaseURL con warning.
 
-	// S3 (storage HU-04.6, GDPR export HU-23.3)
+	// S3 (storage issue-04.6, GDPR export issue-23.3)
 	S3Endpoint     string
 	S3Region       string
 	S3Bucket       string
@@ -36,7 +36,7 @@ type Config struct {
 	S3SecretKey    string
 	S3UsePathStyle bool
 
-	// SMTP (HU-20.2, HU-02.7 OTP, HU-21.2 invitations)
+	// SMTP (issue-20.2, issue-02.7 OTP, issue-21.2 invitations)
 	SMTPHost     string
 	SMTPPort     int
 	SMTPAuth     string // none | plain | login | cram-md5
@@ -45,28 +45,28 @@ type Config struct {
 	SMTPTLS      bool
 	SMTPFrom     string
 
-	// Logging (HU-17.3)
+	// Logging (issue-17.3)
 	LogLevel     string
 	LogFormat    string // text | json
 	LogOutput    string // stdout | stderr
 	LogAddSource bool
 
-	// Metrics (HU-17.1)
+	// Metrics (issue-17.1)
 	MetricsEnabled bool
 	MetricsBind    string
 	MetricsPort    int
 
-	// Tracing (HU-17.2)
+	// Tracing (issue-17.2)
 	OTelEnabled         bool
 	OTelExporterOTLPURL string
 	OTelExporterProto   string // grpc | http/protobuf
 	OTelSampleRatio     float64
 	OTelServiceName     string
 
-	// Seeders (HU-01.7)
+	// Seeders (issue-01.7)
 	SeedOnBoot bool
 
-	// Rate limiting (HU-02.5)
+	// Rate limiting (issue-02.5)
 	RateLimitRequests  int
 	RateLimitWindow    string // e.g. "60s"
 }

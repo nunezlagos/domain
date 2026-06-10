@@ -8,13 +8,13 @@
 
 ## Motivación
 
-Hoy Domain usa `HU` (historia de usuario) como unidad básica de SDD. La regla `.claude/rules/sdd.md` admite 6 tipos:
+Hoy Domain usa `HU` (issue) como unidad básica de SDD. La regla `.claude/rules/sdd.md` admite 6 tipos:
 
 ```
 feature | infrastructure | hardening | tooling | docs | runbook
 ```
 
-De estos, sólo `feature` encaja semánticamente con "historia de usuario" BDD pura. Los otros 5 son tareas técnicas que NO tienen "Como X quiero Y para Z" natural. El naming `HU` está estirado.
+De estos, sólo `feature` encaja semánticamente con "issue" BDD pura. Los otros 5 son tareas técnicas que NO tienen "Como X quiero Y para Z" natural. El naming `HU` está estirado.
 
 **`issue` es más universal:**
 - Match natural con Jira / GitHub / Linear (que Domain ya sinca vía REQ-04 `external_sync`)
@@ -28,21 +28,21 @@ Renombrado **integral** del concepto en:
 
 | Área | Hoy | Después |
 |---|---|---|
-| Tabla BD | `user_stories` | `issues` |
-| Tabla BD | `gherkin_scenarios.hu_id` | `gherkin_scenarios.issue_id` |
-| Tabla BD | `proposals.hu_id` | `proposals.issue_id` |
-| Tabla BD | `designs.hu_id` | `designs.issue_id` |
-| Tabla BD | `tasks.hu_id` | `tasks.issue_id` |
-| Tabla BD | `code_references.hu_id` | `code_references.issue_id` |
-| Tabla BD | `hu_drafts` | `issue_drafts` |
-| Tabla BD | `hu_drafts.id` referenciado | `issue_drafts.id` |
+| Tabla BD | `issues` | `issues` |
+| Tabla BD | `gherkin_scenarios.issue_id` | `gherkin_scenarios.issue_id` |
+| Tabla BD | `proposals.issue_id` | `proposals.issue_id` |
+| Tabla BD | `designs.issue_id` | `designs.issue_id` |
+| Tabla BD | `tasks.issue_id` | `tasks.issue_id` |
+| Tabla BD | `code_references.issue_id` | `code_references.issue_id` |
+| Tabla BD | `issue_drafts` | `issue_drafts` |
+| Tabla BD | `issue_drafts.id` referenciado | `issue_drafts.id` |
 | Tabla BD | `entity_state_transitions.entity_kind='hu'` | `entity_kind='issue'` |
-| Service | `internal/service/hubuilder/` | `internal/service/issuebuilder/` |
-| Service | `internal/service/hubuilder.Service.PromoteAttachmentsToHU` | `PromoteAttachmentsToIssue` |
-| Paths spec | `openspec/changes/REQ-XX/HU-XX.Y-slug/` | `openspec/changes/REQ-XX/issue-XX.Y-slug/` |
-| Slugs internos | `HU-XX.Y` (con punto) | `issue-XX.Y` (mantiene formato numerado) |
+| Service | `internal/service/issuebuilder/` | `internal/service/issuebuilder/` |
+| Service | `internal/service/issuebuilder.Service.PromoteAttachmentsToHU` | `PromoteAttachmentsToIssue` |
+| Paths spec | `openspec/changes/REQ-XX/issue-XX.Y-slug/` | `openspec/changes/REQ-XX/issue-XX.Y-slug/` |
+| Slugs internos | `issue-XX.Y` (con punto) | `issue-XX.Y` (mantiene formato numerado) |
 | MCP tools | `domain_hu_*` (si existieran) | `domain_issue_*` |
-| Headers HU.md | `# HU-XX.Y-slug` | `# issue-XX.Y-slug` |
+| Headers HU.md | `# issue-XX.Y-slug` | `# issue-XX.Y-slug` |
 | Rule .md | `.claude/rules/sdd.md` (texto "HU") | "issue" |
 | Diagramas | "HU implementada" | "issue implementada" |
 
@@ -63,16 +63,16 @@ Renombrado **integral** del concepto en:
 -- migration 000074_rename_hu_to_issue.up.sql
 BEGIN;
 
-ALTER TABLE user_stories RENAME TO issues;
-ALTER TABLE hu_drafts RENAME TO issue_drafts;
+ALTER TABLE issues RENAME TO issues;
+ALTER TABLE issue_drafts RENAME TO issue_drafts;
 ALTER TABLE hu_draft_steps_log RENAME TO issue_draft_steps_log;
 ALTER TABLE issue_draft_steps_log RENAME COLUMN draft_id TO issue_draft_id;
 
-ALTER TABLE gherkin_scenarios RENAME COLUMN hu_id TO issue_id;
-ALTER TABLE proposals RENAME COLUMN hu_id TO issue_id;
-ALTER TABLE designs RENAME COLUMN hu_id TO issue_id;
-ALTER TABLE tasks RENAME COLUMN hu_id TO issue_id;
-ALTER TABLE code_references RENAME COLUMN hu_id TO issue_id;
+ALTER TABLE gherkin_scenarios RENAME COLUMN issue_id TO issue_id;
+ALTER TABLE proposals RENAME COLUMN issue_id TO issue_id;
+ALTER TABLE designs RENAME COLUMN issue_id TO issue_id;
+ALTER TABLE tasks RENAME COLUMN issue_id TO issue_id;
+ALTER TABLE code_references RENAME COLUMN issue_id TO issue_id;
 
 -- entity_state_transitions data migration
 UPDATE entity_state_transitions SET entity_kind = 'issue' WHERE entity_kind = 'hu';
@@ -88,11 +88,11 @@ COMMIT;
 ### Fase 2: Code Go
 
 Renombres en orden:
-1. `internal/service/hubuilder/` → `internal/service/issuebuilder/`
-2. Tipos `HUBuilder*` → `IssueBuilder*`
+1. `internal/service/issuebuilder/` → `internal/service/issuebuilder/`
+2. Tipos `IssueBuilder*` → `IssueBuilder*`
 3. Funciones `*HU*` → `*Issue*`
-4. Tags JSON `"hu_id"` → `"issue_id"` en structs
-5. SQL queries con `hu_id` → `issue_id`
+4. Tags JSON `"issue_id"` → `"issue_id"` en structs
+5. SQL queries con `issue_id` → `issue_id`
 6. Variables locales `huID`, `hu` → `issueID`, `issue`
 7. Comments y strings
 
@@ -102,14 +102,14 @@ Herramienta: `gopls rename` + `gofmt` + tests.
 
 ```bash
 # rename paths
-find openspec/changes -depth -name "HU-*" -execdir bash -c \
-  'mv "$0" "${0/HU-/issue-}"' {} \;
+find openspec/changes -depth -name "issue-*" -execdir bash -c \
+  'mv "$0" "${0/issue-/issue-}"' {} \;
 
 # rename contenido archivos
-find openspec/changes -name "*.md" -exec sed -i 's/HU-/issue-/g' {} \;
-find openspec/changes -name "*.md" -exec sed -i 's/historia de usuario/issue/gi' {} \;
-find docs -name "*.md" -exec sed -i 's/HU-/issue-/g' {} \;
-find .claude/rules -name "*.md" -exec sed -i 's/HU-/issue-/g' {} \;
+find openspec/changes -name "*.md" -exec sed -i 's/issue-/issue-/g' {} \;
+find openspec/changes -name "*.md" -exec sed -i 's/issue/issue/gi' {} \;
+find docs -name "*.md" -exec sed -i 's/issue-/issue-/g' {} \;
+find .claude/rules -name "*.md" -exec sed -i 's/issue-/issue-/g' {} \;
 ```
 
 ### Fase 4: MCP tools y API
@@ -176,4 +176,4 @@ Si en el futuro Domain abre a usuarios externos, se documenta el cambio en CHANG
 - RFC 0006 (bloqueado por este) — `docs/rfc/0006-sdd-pipeline-orchestrator.md`
 - `.claude/rules/sdd.md` — define los 6 tipos
 - REQ-04 external_sync — mapping HU ↔ Jira/GitHub/Linear issue
-- Inventario BD — `user_stories`, `hu_drafts`, `hu_draft_steps_log` + columnas `hu_id` en 5 tablas
+- Inventario BD — `issues`, `issue_drafts`, `hu_draft_steps_log` + columnas `issue_id` en 5 tablas

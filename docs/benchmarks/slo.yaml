@@ -1,4 +1,4 @@
-# SLO targets per benchmark (HU-27.4).
+# SLO targets per benchmark (issue-27.4).
 # CI fail si benchmark > target sin override.
 targets:
   benchmark_compute:                 # internal/api/etag

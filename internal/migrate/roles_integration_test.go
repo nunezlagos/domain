@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-25.6 least-privilege roles integration tests.
+// issue-25.6 least-privilege roles integration tests.
 
 package migrate_test
 

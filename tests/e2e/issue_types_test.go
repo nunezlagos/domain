@@ -8,7 +8,7 @@
 //   3. domain_prompt router → analyzer pipeline
 //   4. Verificar:
 //      - intake_payload persistido con classified_type correcto
-//      - hu_drafts persistido con envelope si arrancó wizard
+//      - issue_drafts persistido con envelope si arrancó wizard
 //      - slots inferidos (mínimos) o pendientes (esperados)
 //      - lifecycle transitions registradas
 //   5. Si entró al wizard: responder lo pendiente + verificar commit
@@ -28,7 +28,7 @@ import (
 
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/promptrouter"
 	wp "nunezlagos/domain/internal/service/wizardplan"
@@ -37,7 +37,7 @@ import (
 
 type issueFixture struct {
 	router    *promptrouter.Router
-	adaptive  *hubuilder.AdaptiveService
+	adaptive  *issuebuilder.AdaptiveService
 	intakeSvc *intake.Service
 	pools     *db.Pools
 	orgID     uuid.UUID
@@ -77,18 +77,18 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	analyzer := &wp.Analyzer{
 		Classifier: classifier,
 		Sources: []wp.Source{
-			&sources.HUDedupSource{Pool: pools.App, Limit: 5},
+			&sources.IssueDedupSource{Pool: pools.App, Limit: 5},
 		},
 		Timeout: 5 * time.Second,
 	}
-	hbSvc := &hubuilder.Service{Pool: pools.App}
-	adaptive := &hubuilder.AdaptiveService{
+	hbSvc := &issuebuilder.Service{Pool: pools.App}
+	adaptive := &issuebuilder.AdaptiveService{
 		Service: hbSvc, Analyzer: analyzer, Planner: &wp.Planner{},
 	}
 	intakeSvc := &intake.Service{Pool: pools.App}
 	router := &promptrouter.Router{
 		IntakeService:    intakeSvc,
-		HubuilderService: hbSvc,
+		IssueBuilderService: hbSvc,
 		Classifier:       promptrouter.HeuristicClassifier{},
 	}
 
@@ -123,7 +123,7 @@ func TestIssueType_Chat_SkipsWizardAndReplies(t *testing.T) {
 		`SELECT COUNT(*) FROM intake_payloads`).Scan(&intakeCount))
 	require.Equal(t, 0, intakeCount)
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM hu_drafts`).Scan(&draftCount))
+		`SELECT COUNT(*) FROM issue_drafts`).Scan(&draftCount))
 	require.Equal(t, 0, draftCount)
 }
 
@@ -155,7 +155,7 @@ func TestIssueType_Feature_StartsAdaptiveWizard(t *testing.T) {
 	d, q, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, d)
-	require.Equal(t, hubuilder.ModeFeature, d.Mode)
+	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
 	require.NotNil(t, q, "debe pedir al menos 1 input")
 
 	// Verifica envelope persistido.
@@ -188,13 +188,13 @@ func TestIssueType_Fix_PersistsClassificationAndDraft(t *testing.T) {
 	require.Equal(t, "high", *intakeP.ClassifiedSeverity)
 	require.GreaterOrEqual(t, *intakeP.ClassifiedConfidence, 0.5)
 
-	// Verifica draft en hu_drafts.
+	// Verifica draft en issue_drafts.
 	var draftStatus, draftMode string
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`SELECT status, mode FROM hu_drafts WHERE id = $1`, *resp.DraftID,
+		`SELECT status, mode FROM issue_drafts WHERE id = $1`, *resp.DraftID,
 	).Scan(&draftStatus, &draftMode))
 	require.Equal(t, "in_progress", draftStatus)
-	require.Equal(t, hubuilder.ModeBugFix, draftMode)
+	require.Equal(t, issuebuilder.ModeBugFix, draftMode)
 }
 
 // ============================================================
@@ -227,7 +227,7 @@ func TestIssueType_Refactor_StartsCorrectMode(t *testing.T) {
 	prompt := "Necesito refactor del módulo de auth para extract los handlers en archivos separados"
 	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
-	require.Equal(t, hubuilder.ModeRefactor, d.Mode)
+	require.Equal(t, issuebuilder.ModeRefactor, d.Mode)
 }
 
 // ============================================================
@@ -241,7 +241,7 @@ func TestIssueType_Doc_StartsCorrectMode(t *testing.T) {
 	prompt := "Hay que actualizar la documentación del README con los nuevos endpoints"
 	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
-	require.Equal(t, hubuilder.ModeDoc, d.Mode)
+	require.Equal(t, issuebuilder.ModeDoc, d.Mode)
 }
 
 // ============================================================
@@ -255,7 +255,7 @@ func TestIssueType_RFC_StartsCorrectMode(t *testing.T) {
 	prompt := "RFC: diseño arquitectura del nuevo sistema de cache multi-tier, tradeoffs entre redis vs pgvector"
 	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
-	require.Equal(t, hubuilder.ModeRFC, d.Mode)
+	require.Equal(t, issuebuilder.ModeRFC, d.Mode)
 }
 
 // ============================================================
@@ -272,8 +272,8 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 		`INSERT INTO requirements (slug, title) VALUES ('REQ-13-http-api', 'API HTTP REST') RETURNING id`,
 	).Scan(&reqID))
 	_, err := f.pools.App.Exec(ctx,
-		`INSERT INTO user_stories (req_id, slug, title, description)
-		 VALUES ($1, 'HU-13.5-bulk-batch', 'Endpoints batch de creación masiva',
+		`INSERT INTO issues (req_id, slug, title, description)
+		 VALUES ($1, 'issue-13.5-bulk-batch', 'Endpoints batch de creación masiva',
 		         'Endpoints batch para crear múltiples observaciones simultáneamente')`,
 		reqID,
 	)
@@ -282,7 +282,7 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 	prompt := "Necesito un endpoint batch para crear múltiples observaciones simultáneamente"
 	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
 	require.NoError(t, err)
-	require.Equal(t, hubuilder.ModeFeature, d.Mode)
+	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
 
 	env, err := f.adaptive.LoadEnvelope(ctx, d.ID)
 	require.NoError(t, err)
@@ -331,7 +331,7 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 		wp.SlotSummary:   "Bug en POST /api/v1/observations: nil pointer al insertar; rompe el endpoint y los clientes ven 500.",
 	}
 
-	var d *hubuilder.Draft
+	var d *issuebuilder.Draft
 	var nextQ *wp.Question
 	d, nextQ, err = f.adaptive.AnswerAdaptive(ctx, draftID, wp.SlotSeverity, answers[wp.SlotSeverity])
 	require.NoError(t, err)
@@ -347,13 +347,13 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 		max--
 	}
 
-	require.Equal(t, hubuilder.StatusFinished, d.Status,
+	require.Equal(t, issuebuilder.StatusFinished, d.Status,
 		"el draft debe quedar en finished tras responder todos los slots")
 
 	// Asserts BD: envelope persistido + slots provided.
 	var answersRaw string
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`SELECT answers::text FROM hu_drafts WHERE id = $1`, draftID,
+		`SELECT answers::text FROM issue_drafts WHERE id = $1`, draftID,
 	).Scan(&answersRaw))
 	require.Contains(t, answersRaw, "__envelope__")
 	require.Contains(t, answersRaw, "fix-observation-create-500-nilpointer")

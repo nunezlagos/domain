@@ -20,6 +20,6 @@ Gestión del ciclo de vida de los datos del usuario: importadores para migrar de
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-23.1-legacy-import | proposed | Importadores Markdown vault, JSON dump, Notion export, Obsidian, mapping a entidades |
-| HU-23.2-soft-delete-restore | proposed | Soft-delete uniforme con papelera, restore, TTL y purge job |
-| HU-23.3-gdpr-export | proposed | Export GDPR ZIP con JSON + adjuntos, signed URL temporal |
+| issue-23.1-legacy-import | proposed | Importadores Markdown vault, JSON dump, Notion export, Obsidian, mapping a entidades |
+| issue-23.2-soft-delete-restore | proposed | Soft-delete uniforme con papelera, restore, TTL y purge job |
+| issue-23.3-gdpr-export | proposed | Export GDPR ZIP con JSON + adjuntos, signed URL temporal |

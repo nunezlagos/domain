@@ -1,4 +1,4 @@
-// Package timeline — HU-03.5 cross-entity feed.
+// Package timeline — issue-03.5 cross-entity feed.
 //
 // Combina sessions + observations + prompts en respuestas estructuradas para
 // que un agente IA pueda recuperar contexto rápido sin múltiples roundtrips.

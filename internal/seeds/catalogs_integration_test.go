@@ -62,7 +62,7 @@ func TestPlansSeeder_NoCommercialPricing(t *testing.T) {
 		var price int
 		require.NoError(t, rows.Scan(&slug, &price))
 		require.Equalf(t, 0, price,
-			"plan %s tiene monthly_price_usd=%d — Domain es open-source sin cobro (HU-21.4 archived)",
+			"plan %s tiene monthly_price_usd=%d — Domain es open-source sin cobro (issue-21.4 archived)",
 			slug, price)
 		count++
 	}

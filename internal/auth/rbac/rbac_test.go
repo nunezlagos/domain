@@ -1,4 +1,4 @@
-// HU-02.2 RBAC unit tests.
+// issue-02.2 RBAC unit tests.
 
 package rbac
 
@@ -211,7 +211,7 @@ func TestSabotage_Viewer_ForbiddenForMutations(t *testing.T) {
 	}
 }
 
-// --- HU-02.8 Whitelist Validation Tests ---
+// --- issue-02.8 Whitelist Validation Tests ---
 
 func TestValidatePermissions_Valid(t *testing.T) {
 	err := ValidatePermissions(ResourceActions{

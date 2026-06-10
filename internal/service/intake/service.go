@@ -1,4 +1,4 @@
-// Package intake — HU-04.8 unified requirement intake pipeline.
+// Package intake — issue-04.8 unified requirement intake pipeline.
 //
 // MVP scope: Submit + transitions + Approve/Reject/Commit. LLM classification,
 // embedding dedup y external sync quedan como futuras extensiones del pipeline
@@ -75,7 +75,7 @@ type Payload struct {
 	ReviewedAt             *time.Time      `json:"reviewed_at,omitempty"`
 	RejectionReason        *string         `json:"rejection_reason,omitempty"`
 	CommittedREQ           *uuid.UUID      `json:"committed_req_id,omitempty"`
-	CommittedHU            *uuid.UUID      `json:"committed_hu_id,omitempty"`
+	CommittedHU            *uuid.UUID      `json:"committed_issue_id,omitempty"`
 	FailureReason          *string         `json:"failure_reason,omitempty"`
 	CreatedAt              time.Time       `json:"created_at"`
 	UpdatedAt              time.Time       `json:"updated_at"`
@@ -134,7 +134,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 		          classification_reasoning, needs_clarification, proposed_title,
 		          proposed_description, proposed_req_slug, proposed_hu_draft,
 		          dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		          rejection_reason, committed_req_id, committed_hu_id, failure_reason,
+		          rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		          created_at, updated_at`,
 		in.Source, srcRef, in.OrganizationID, subBy, in.RawText, payloadJSON,
 	).Scan(scanPayloadCols(&p)...)
@@ -162,7 +162,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
 		       classification_reasoning, needs_clarification, proposed_title,
 		       proposed_description, proposed_req_slug, proposed_hu_draft,
 		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		       rejection_reason, committed_req_id, committed_hu_id, failure_reason,
+		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		       created_at, updated_at
 		FROM intake_payloads WHERE id = $1`, id,
 	).Scan(scanPayloadCols(&p)...)
@@ -192,8 +192,8 @@ func (s *Service) UpdateClassification(ctx context.Context, id uuid.UUID, type_,
 }
 
 // MarkPendingReview transiciona a pending_review (después de structuring).
-func (s *Service) MarkPendingReview(ctx context.Context, id uuid.UUID, title, description, reqSlug string, huDraft map[string]any, dedup []any, mergeAction string) (*Payload, error) {
-	huJSON, _ := json.Marshal(huDraft)
+func (s *Service) MarkPendingReview(ctx context.Context, id uuid.UUID, title, description, reqSlug string, issueDraft map[string]any, dedup []any, mergeAction string) (*Payload, error) {
+	huJSON, _ := json.Marshal(issueDraft)
 	dedupJSON, _ := json.Marshal(dedup)
 
 	_, err := s.Pool.Exec(ctx, `
@@ -263,7 +263,7 @@ func (s *Service) Reject(ctx context.Context, id, reviewerID uuid.UUID, reason s
 }
 
 // LinkCommitted asocia el intake con el REQ/HU creado.
-func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, huID *uuid.UUID) (*Payload, error) {
+func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, issueID *uuid.UUID) (*Payload, error) {
 	p, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -273,9 +273,9 @@ func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, huID *
 	}
 	_, err = s.Pool.Exec(ctx, `
 		UPDATE intake_payloads SET status = $1, committed_req_id = $2,
-		                            committed_hu_id = $3, updated_at = now()
+		                            committed_issue_id = $3, updated_at = now()
 		WHERE id = $4`,
-		StatusCommitted, reqID, huID, id,
+		StatusCommitted, reqID, issueID, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("link committed: %w", err)
@@ -294,7 +294,7 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 		       classification_reasoning, needs_clarification, proposed_title,
 		       proposed_description, proposed_req_slug, proposed_hu_draft,
 		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		       rejection_reason, committed_req_id, committed_hu_id, failure_reason,
+		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		       created_at, updated_at
 		FROM intake_payloads
 		WHERE status NOT IN ('committed','rejected','failed')

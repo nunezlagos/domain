@@ -40,9 +40,9 @@ make test-all              # ambos
 ### Step 1: Leer la HU
 
 ```bash
-cat openspec/changes/REQ-XX/HU-XX.Y/hu.md
-cat openspec/changes/REQ-XX/HU-XX.Y/design.md
-cat openspec/changes/REQ-XX/HU-XX.Y/tasks.md
+cat openspec/changes/REQ-XX/issue-XX.Y/hu.md
+cat openspec/changes/REQ-XX/issue-XX.Y/design.md
+cat openspec/changes/REQ-XX/issue-XX.Y/tasks.md
 ```
 
 Identificar:
@@ -117,10 +117,10 @@ func TestSabotage_X_Detected(t *testing.T) {
 ```
 
 Ejemplos:
-- HU-25.5 RLS: tx sin `SET LOCAL` → 0 rows
-- HU-17.1 metrics: label `_id="<uuid>"` en /metrics → linter fail
-- HU-17.3 logging: `slog.String("password", x)` → PII linter fail
-- HU-02.7 OTP: 6 intentos incorrectos → 429 `too_many_attempts`
+- issue-25.5 RLS: tx sin `SET LOCAL` → 0 rows
+- issue-17.1 metrics: label `_id="<uuid>"` en /metrics → linter fail
+- issue-17.3 logging: `slog.String("password", x)` → PII linter fail
+- issue-02.7 OTP: 6 intentos incorrectos → 429 `too_many_attempts`
 
 ### Step 9: Verificar coverage
 
@@ -135,7 +135,7 @@ go tool cover -func=coverage.out | grep -v 100.0%
 Conventional Commits (ver `.claude/rules/git.md`):
 
 ```
-feat(req-XX): implementa HU-XX.Y <título corto>
+feat(req-XX): implementa issue-XX.Y <título corto>
 
 <descripción detallada>
 - punto 1
@@ -146,13 +146,13 @@ Tests:
 - N integration tests
 - Sabotaje test K cubre invariante X
 
-Refs: HU-XX.Y
+Refs: issue-XX.Y
 ```
 
 ### Step 11: Actualizar state.yaml
 
 ```yaml
-# openspec/changes/REQ-XX/HU-XX.Y/state.yaml
+# openspec/changes/REQ-XX/issue-XX.Y/state.yaml
 status: implemented   # antes: proposed
 created: 2026-06-07
 implemented: 2026-06-08
@@ -163,7 +163,7 @@ archived: ~
 
 Sección `[Unreleased]` con bullet apropiado (Added/Fixed/Changed/etc.).
 
-## Setup testcontainers (HU-01.1 ya lo usa)
+## Setup testcontainers (issue-01.1 ya lo usa)
 
 ```go
 //go:build integration
@@ -201,7 +201,7 @@ func setupPostgres(t *testing.T) (*pgxpool.Pool, func()) {
 
 ## Verificación end-to-end por HU
 
-Cada HU termina con un smoke manual documentado en su `tasks.md` sección Cierre. Ejemplo HU-01.1:
+Cada HU termina con un smoke manual documentado en su `tasks.md` sección Cierre. Ejemplo issue-01.1:
 
 ```bash
 make dev-up
@@ -223,11 +223,11 @@ make dev-migrate
 - ❌ Test que falla intermitente (flaky) sin investigar root cause
 - ❌ Tests interdependientes (orden importa)
 
-## CI gating (HU-19.1)
+## CI gating (issue-19.1)
 
 ```yaml
 jobs:
-  lint:        # golangci-lint + custom linters (HU-25.13, HU-13.9)
+  lint:        # golangci-lint + custom linters (issue-25.13, issue-13.9)
   unit:        # go test -race -short ./...
   integration: # go test -race -tags=integration ./... con DinD
   coverage:    # codecov + PR comment + threshold check

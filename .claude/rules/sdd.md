@@ -2,7 +2,7 @@
 
 ## Flujo obligatorio para cualquier cambio
 
-1. Buscá la HU correspondiente en `openspec/changes/REQ-*/HU-*/`
+1. Buscá la HU correspondiente en `openspec/changes/REQ-*/issue-*/`
 2. Leé en orden: `hu.md` (Gherkin) → `design.md` (ADR + decisión) → `tasks.md` (bullets atómicos)
 3. Verificá la **Persona** que declara la HU — debés entender perspectiva del actor
 4. Seguí TDD estricto: **test → implementación mínima → refactor → sabotaje**
@@ -11,7 +11,7 @@
 ## Header obligatorio de toda HU nueva
 
 ```markdown
-# HU-XX.Y-slug-name
+# issue-XX.Y-slug-name
 
 **Origen:** `REQ-XX-req-slug`
 **Prioridad tentativa:** alta | media | baja
@@ -42,8 +42,8 @@ Entonces ...
 ```
 
 > NOTA: el concepto previo de `**Persona:**` field (catálogo de 10 user-types)
-> fue deprecado. Ver HU-01.9 archivada. El equivalente correcto vive en
-> `agent_personalities` (HU-08.5 agent-templates) para describir cómo se
+> fue deprecado. Ver issue-01.9 archivada. El equivalente correcto vive en
+> `agent_personalities` (issue-08.5 agent-templates) para describir cómo se
 > comporta el AGENTE IA — no a quién va dirigida la HU.
 
 ## TDD strict workflow
@@ -72,7 +72,7 @@ Entonces ...
 - Confirmar que el test atrapa la regresión
 - Restaurar — esto garantiza que el test no es "always green"
 
-Ejemplo: HU-25.5 RLS — sabotaje "query sin SET LOCAL → 0 rows".
+Ejemplo: issue-25.5 RLS — sabotaje "query sin SET LOCAL → 0 rows".
 
 ## Reglas duras
 
@@ -102,7 +102,7 @@ Tracked en `state.yaml` per HU + per REQ.
 2. Implementar siguiendo `tasks.md`
 3. Commits siguen Conventional Commits (`.claude/rules/git.md`)
 4. PR usa template `.github/PULL_REQUEST_TEMPLATE.md`
-5. CI verde: lint + tests + linters custom (HU-25.13, HU-13.9)
+5. CI verde: lint + tests + linters custom (issue-25.13, issue-13.9)
 6. Review humano
 7. Merge squash; mensaje squash respeta Conventional + referencia HU
 8. Actualizar `state.yaml` de la HU a `implemented`

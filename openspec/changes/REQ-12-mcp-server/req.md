@@ -22,9 +22,9 @@ Servidor MCP bidireccional: tools para memorias, skills, agentes, flujos. Consum
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-12.1-mcp-core-stdio | proposed | Core MCP stdio con mark3labs/mcp-go: JSON-RPC, tool registry, errores, shutdown |
-| HU-12.2-mcp-memory-tools | proposed | 12 tools MCP de memoria (domain_mem_save, domain_mem_search, etc.) respaldadas por Postgres |
-| HU-12.3-mcp-agent-tools | proposed | 9 tools MCP de plataforma (domain_skill_execute, domain_agent_run, domain_flow_create, etc.) |
-| HU-12.4-mcp-bidirectional | proposed | MCP Hub bidireccional: consume servidores MCP externos y los expone como skills |
-| HU-12.5-agent-setup | proposed | Setup de Domain como MCP server en Claude Code, OpenCode, Codex, Cline. .ai/ folder con directivas. Safe files protection. |
-| HU-12.6-mcp-tool-resilience | proposed | Timeout + circuit breaker + cache LRU + degraded responses + retry transitorio + config en BD hot-reload |
+| issue-12.1-mcp-core-stdio | proposed | Core MCP stdio con mark3labs/mcp-go: JSON-RPC, tool registry, errores, shutdown |
+| issue-12.2-mcp-memory-tools | proposed | 12 tools MCP de memoria (domain_mem_save, domain_mem_search, etc.) respaldadas por Postgres |
+| issue-12.3-mcp-agent-tools | proposed | 9 tools MCP de plataforma (domain_skill_execute, domain_agent_run, domain_flow_create, etc.) |
+| issue-12.4-mcp-bidirectional | proposed | MCP Hub bidireccional: consume servidores MCP externos y los expone como skills |
+| issue-12.5-agent-setup | proposed | Setup de Domain como MCP server en Claude Code, OpenCode, Codex, Cline. .ai/ folder con directivas. Safe files protection. |
+| issue-12.6-mcp-tool-resilience | proposed | Timeout + circuit breaker + cache LRU + degraded responses + retry transitorio + config en BD hot-reload |

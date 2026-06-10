@@ -113,7 +113,7 @@ func TestExecute_CodeNotImplemented(t *testing.T) {
 	}
 	_, err := r.Execute(context.Background(), sk, nil)
 	require.ErrorIs(t, err, ErrNotImplemented)
-	require.Contains(t, err.Error(), "HU-11.1")
+	require.Contains(t, err.Error(), "issue-11.1")
 }
 
 func TestExecute_MCPToolNotImplemented(t *testing.T) {

@@ -1,10 +1,10 @@
-// Package tokens — HU-07.4 estimación local de tokens sin red.
+// Package tokens — issue-07.4 estimación local de tokens sin red.
 //
 // Implementación: aproximación basada en BPE-rule-of-thumb (4 chars/token
 // para inglés/español, 3.5 para CJK). Suficiente para budget enforcement
 // pre-flight (no requiere precisión exacta del tokenizer del provider).
 //
-// Para precisión exacta usar tiktoken (cl100k_base) — futura HU-06.6.
+// Para precisión exacta usar tiktoken (cl100k_base) — futura issue-06.6.
 package tokens
 
 import (

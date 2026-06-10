@@ -1,4 +1,4 @@
-// Package mcpserver — HU-12.1 MCP server stdio.
+// Package mcpserver — issue-12.1 MCP server stdio.
 //
 // Define los tools nombrados con prefix `domain_*` que cualquier cliente MCP
 // (Claude Code, otros agentes IA) puede invocar para persistir y buscar
@@ -29,7 +29,7 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	flowsvc "nunezlagos/domain/internal/service/flow"
-	husvc "nunezlagos/domain/internal/service/hubuilder"
+	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	intakesvc "nunezlagos/domain/internal/service/intake"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
@@ -58,18 +58,18 @@ type Deps struct {
 	AgentRunner  *agentrunner.Runner
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
-	Hubuilder    *husvc.Service // HU-04.7 interactive HU wizard
-	Intake       *intakesvc.Service // HU-04.8 intake pipeline
-	ExtSync      *syncsvc.Service   // HU-04.9 external provider sync
-	PromptRouter   *prouter.Router            // HU-12.7 single-shot prompt router
-	WorkflowImport *workflowimport.Service    // HU-12.7 override de .md
+	Hubuilder    *husvc.Service // issue-04.7 interactive HU wizard
+	Intake       *intakesvc.Service // issue-04.8 intake pipeline
+	ExtSync      *syncsvc.Service   // issue-04.9 external provider sync
+	PromptRouter   *prouter.Router            // issue-12.7 single-shot prompt router
+	WorkflowImport *workflowimport.Service    // issue-12.7 override de .md
 	Pool           *pgxpool.Pool // para queries de agent_run_logs
 	Principal      *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
 }
 
-// defaultBudget rate limit conservador para todas las tools (HU-12.6).
+// defaultBudget rate limit conservador para todas las tools (issue-12.6).
 // Sobreescribe per-tool en producción según necesidad.
 var defaultBudget = ToolBudget{
 	CallsPerMinute: 120,

@@ -1,4 +1,4 @@
-// Package registry — HU-06.4 model_registry con costos por modelo.
+// Package registry — issue-06.4 model_registry con costos por modelo.
 //
 // Consulta la tabla model_registry para calcular CostUSD de un Usage.
 // Cache en memoria con TTL (default 5 min) para evitar query DB en hot path.

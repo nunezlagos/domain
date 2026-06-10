@@ -1,4 +1,4 @@
-// HU-02.1 + HU-13.2 middleware unit tests.
+// issue-02.1 + issue-13.2 middleware unit tests.
 
 package apikey
 
@@ -100,7 +100,7 @@ func TestMiddleware_Allowlist_NoAuthRequired(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
-// Sabotaje: 401 body es uniforme (anti-enumeration HU-02.7).
+// Sabotaje: 401 body es uniforme (anti-enumeration issue-02.7).
 func TestSabotage_401Body_Uniform(t *testing.T) {
 	m := &Middleware{Resolver: &fakeResolver{err: ErrUnauthorized}}
 	for _, h := range []string{"", "Bearer foo", "Bearer domk_live_INVALIDxxxxxxxxxxxxxxxxx"} {

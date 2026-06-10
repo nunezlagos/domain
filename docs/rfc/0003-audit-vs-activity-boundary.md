@@ -2,14 +2,14 @@
 
 **Status:** accepted
 **Date:** 2026-06-07
-**Related:** HU-02.4 audit-log, HU-02.6 activity-log
+**Related:** issue-02.4 audit-log, issue-02.6 activity-log
 
 ## Contexto
 
 REQ-02 incluye dos HUs que suenan similares y se solapan en la práctica:
 
-- **HU-02.4 audit-log**: "Immutable audit trail, queries, retention 90d"
-- **HU-02.6 activity-log**: "Activity log general: quién, qué, cuándo, filtrable por proyecto/usuario/entidad"
+- **issue-02.4 audit-log**: "Immutable audit trail, queries, retention 90d"
+- **issue-02.6 activity-log**: "Activity log general: quién, qué, cuándo, filtrable por proyecto/usuario/entidad"
 
 Sin una boundary clara, el equipo va a duplicar tablas, escribir ambos sistemas para el mismo evento, o (peor) usar uno solo malamente.
 
@@ -17,7 +17,7 @@ Sin una boundary clara, el equipo va a duplicar tablas, escribir ambos sistemas 
 
 Mantenemos AMBAS tablas con propósitos distintos, no fusionar:
 
-### audit_log (HU-02.4) — **technical / compliance**
+### audit_log (issue-02.4) — **technical / compliance**
 
 - **Append-only**, INSERT only, NO UPDATE NO DELETE permitidos (revoke INSERT desde app role).
 - **Granularidad alta**: cada cambio de field con `old_values`/`new_values` JSONB.
@@ -29,7 +29,7 @@ Mantenemos AMBAS tablas con propósitos distintos, no fusionar:
 - **Latencia inserción**: best-effort, async OK; pérdida es aceptable solo en catastrophic failure.
 - **Tabla**: `audit_log` con `BIGSERIAL id` (alto volumen), `actor_id`, `action`, `entity_type`, `entity_id`, `old_values JSONB`, `new_values JSONB`, `ip_address`, `occurred_at`.
 
-### activity_log (HU-02.6) — **product / UX**
+### activity_log (issue-02.6) — **product / UX**
 
 - **Append-only PERO mutable** (puede agregarse correction event)
 - **Granularidad humana**: "Alice creó observation X", "Bob ejecutó flow Y", "Carol invitó a Dave"
@@ -106,5 +106,5 @@ Regla: **audit_log es opt-out (default ON para changes), activity_log es opt-in 
 
 ## Open questions
 
-- ¿Cold storage destination? Probablemente S3 con `s3 archive` lifecycle (HU-18.2 cubre).
+- ¿Cold storage destination? Probablemente S3 con `s3 archive` lifecycle (issue-18.2 cubre).
 - ¿Activity log debería tener notificación push (websocket)? Sí, futuro: `activity_feed_subscriptions` table.

@@ -1,4 +1,4 @@
-// Package cost — HU-15.1+15.2 analytics de cost por org + agent.
+// Package cost — issue-15.1+15.2 analytics de cost por org + agent.
 //
 // Consulta las vistas materializadas (domain_cost_daily_by_org, _by_agent)
 // para responder queries del cliente.

@@ -1,4 +1,4 @@
-// Subcomandos `domain init` y `domain workflow` (HU-12.7).
+// Subcomandos `domain init` y `domain workflow` (issue-12.7).
 //
 //   domain init [--root <path>] [--dry-run] [--no-stub]
 //     Detecta archivos .md de instrucciones IA en el repo + los archiva
@@ -163,7 +163,7 @@ func runInitDryRun(root string) {
 
 func runWorkflow(args []string) {
 	if len(args) == 0 {
-		fmt.Println(`domain workflow — gestión de archivos .md importados (HU-12.7)
+		fmt.Println(`domain workflow — gestión de archivos .md importados (issue-12.7)
 
 Uso:
   domain workflow list [--root <path>]

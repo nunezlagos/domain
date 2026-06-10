@@ -1,4 +1,4 @@
-// Package usagealerts — HU-15.3 alerts configurables sobre cost/tokens.
+// Package usagealerts — issue-15.3 alerts configurables sobre cost/tokens.
 //
 // Métricas soportadas:
 //   - cost_per_run     — cost USD de un agent_run individual
@@ -61,7 +61,7 @@ const (
 	ChannelLogOnly = "log_only"
 )
 
-// EmailSender envía alertas por email (HU-15.3 channel email handler).
+// EmailSender envía alertas por email (issue-15.3 channel email handler).
 type EmailSender interface {
 	SendAlertEmail(ctx context.Context, to []string, subject, body string) error
 }

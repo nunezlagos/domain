@@ -1,4 +1,4 @@
-// HU-25.13 unit tests del linter de convenciones SQL.
+// issue-25.13 unit tests del linter de convenciones SQL.
 
 package dbconvlint
 
@@ -239,7 +239,7 @@ CREATE TABLE foos (
 	require.NotContains(t, issueRules(Lint("000099_foo.up.sql", src)), "prefer-jsonb")
 }
 
-// HU-25.3 Migration Safety rules ----------------------------------------
+// issue-25.3 Migration Safety rules ----------------------------------------
 
 func TestSafety_CreateIndexConcurrent(t *testing.T) {
 	src := validHeader + `CREATE INDEX foos_name_idx ON foos(name);`

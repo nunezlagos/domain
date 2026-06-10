@@ -23,11 +23,11 @@ API REST completa para todas las entidades del plataforma. CRUD, búsqueda, pagi
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-13.1-http-crud-endpoints | proposed | CRUD REST para observations, sessions, projects, skills, agents, flows |
-| HU-13.2-http-auth-middleware | proposed | Auth middleware: API key extraction, validation, user context injection |
-| HU-13.3-http-pagination-filters | proposed | Paginación cursor+offset, filtros combinables, ordenamiento |
-| HU-13.4-idempotency-keys | proposed | Idempotency-Key middleware con cache 24h, body hash, SELECT FOR UPDATE concurrency |
-| HU-13.5-bulk-batch-endpoints | proposed | POST/DELETE /batch con Multi-Status, all_or_nothing/best_effort modes, max 5000 items |
-| HU-13.6-cursor-pagination | proposed | Cursor opaque base64url con filters_hash, sort stable, legacy offset deprecated |
-| HU-13.7-http-caching-etags | proposed | ETag SHA-256 + Cache-Control per-endpoint, If-None-Match 304, If-Match 412 optimistic |
-| HU-13.8-api-versioning-policy | proposed | URL versioning, sunset RFC 8594, /api/version endpoint, changelog enforcement CI |
+| issue-13.1-http-crud-endpoints | proposed | CRUD REST para observations, sessions, projects, skills, agents, flows |
+| issue-13.2-http-auth-middleware | proposed | Auth middleware: API key extraction, validation, user context injection |
+| issue-13.3-http-pagination-filters | proposed | Paginación cursor+offset, filtros combinables, ordenamiento |
+| issue-13.4-idempotency-keys | proposed | Idempotency-Key middleware con cache 24h, body hash, SELECT FOR UPDATE concurrency |
+| issue-13.5-bulk-batch-endpoints | proposed | POST/DELETE /batch con Multi-Status, all_or_nothing/best_effort modes, max 5000 items |
+| issue-13.6-cursor-pagination | proposed | Cursor opaque base64url con filters_hash, sort stable, legacy offset deprecated |
+| issue-13.7-http-caching-etags | proposed | ETag SHA-256 + Cache-Control per-endpoint, If-None-Match 304, If-Match 412 optimistic |
+| issue-13.8-api-versioning-policy | proposed | URL versioning, sunset RFC 8594, /api/version endpoint, changelog enforcement CI |

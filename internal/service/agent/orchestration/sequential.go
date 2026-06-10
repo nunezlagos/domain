@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Sequential implementa HU-08.4: encadena agents en orden, pasando output
+// Sequential implementa issue-08.4: encadena agents en orden, pasando output
 // de uno como input del siguiente.
 type Sequential struct {
 	Conductor Conductor

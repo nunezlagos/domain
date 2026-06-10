@@ -49,13 +49,13 @@ func TestPlanner_LLMFormulator(t *testing.T) {
 	env := wp.NewEnvelope("el director no descarga ficha", "fix")
 	env.Touch(wp.SlotIntent, "fix", "intent_classifier", 0.92, "")
 	env.HUMatches = &wp.HUDedupFinding{Candidates: []wp.HUDedupCandidate{
-		{HUID: uuid.New(), Slug: "HU-04.6-s3-storage", Title: "S3 file attachments", Similarity: 0.72},
+		{HUID: uuid.New(), Slug: "issue-04.6-s3-storage", Title: "S3 file attachments", Similarity: 0.72},
 	}}
 	env.Code = &wp.CodeGrepFinding{Hits: []wp.CodeHit{
 		{Path: "internal/service/observation/service.go", Line: 421, Symbol: "Export", Category: "service"},
 	}}
 
-	formulator := &mockFormulator{response: "¿Cuán crítico es este bug? Encontré HU-04.6 (sim 0.72) y un service de Export."}
+	formulator := &mockFormulator{response: "¿Cuán crítico es este bug? Encontré issue-04.6 (sim 0.72) y un service de Export."}
 	planner := &wp.Planner{QuestionFormulator: formulator}
 
 	q, err := planner.NextQuestion(context.Background(), env)

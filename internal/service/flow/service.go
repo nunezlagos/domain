@@ -1,16 +1,16 @@
-// Package flow — REQ-09 flow_system CRUD (HU-09.1 + 09.2).
+// Package flow — REQ-09 flow_system CRUD (issue-09.1 + 09.2).
 //
 // Un flow tiene un spec JSONB que define los steps en orden topológico.
-// Step types soportados (HU-09.2):
+// Step types soportados (issue-09.2):
 //   - agent_run: ejecuta un agent por slug con inputs interpolados
 //   - skill_run: ejecuta un skill por slug con args
 //   - http_request: HTTP call (similar a skill type=api pero standalone)
 //   - mem_save: persiste una observation en el project
 //   - condition: branch if/then/else basado en expression simple
 //   - parallel: ejecuta children en paralelo, espera todos
-//   - wait_signal: pausa hasta que llegue un signal external (HU-09.8)
+//   - wait_signal: pausa hasta que llegue un signal external (issue-09.8)
 //
-// La ejecución vive en internal/runner/flow (HU-09.3 state machine + 09.6 durable).
+// La ejecución vive en internal/runner/flow (issue-09.3 state machine + 09.6 durable).
 package flow
 
 import (
@@ -63,7 +63,7 @@ type Step struct {
 	Config      map[string]any `json:"config"`       // params específicos por type
 	OnError     string         `json:"on_error,omitempty"` // "fail" (default) | "continue" | step_id
 	Retries     int            `json:"retries,omitempty"`
-	MaxBackoffS int            `json:"max_backoff_s,omitempty"` // HU-09.4 backoff cap en segundos (default 30s)
+	MaxBackoffS int            `json:"max_backoff_s,omitempty"` // issue-09.4 backoff cap en segundos (default 30s)
 	TimeoutS    int            `json:"timeout_s,omitempty"`
 }
 

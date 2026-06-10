@@ -20,7 +20,7 @@ func TestSlugValidation(t *testing.T) {
 		"req-01",
 		"REQ_01",
 		"REQ-01.1", // dot no permitido
-		"HU-01.1",
+		"issue-01.1",
 		"random-slug",
 	}
 

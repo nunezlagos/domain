@@ -1,4 +1,4 @@
-// HU-01.7 seeders unit tests.
+// issue-01.7 seeders unit tests.
 
 package seeds
 

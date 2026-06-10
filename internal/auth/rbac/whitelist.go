@@ -1,6 +1,6 @@
 package rbac
 
-// AllowedResources define los resources y actions válidos para custom_roles (HU-02.8).
+// AllowedResources define los resources y actions válidos para custom_roles (issue-02.8).
 // Versionado en código intencionalmente: para agregar resource/action nuevo se requiere
 // deploy, no datos en DB.
 var AllowedResources = map[Resource][]Action{

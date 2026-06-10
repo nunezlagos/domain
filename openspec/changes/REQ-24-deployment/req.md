@@ -20,6 +20,6 @@ Hacer deployable Domain en producción sobre Kubernetes (cloud y on-prem) sin re
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-24.1-helm-chart | proposed | Helm chart oficial con values, hooks, tests, CI contra Kind |
-| HU-24.2-kustomize-overlays | proposed | Base + overlays dev/staging/prod, NetworkPolicies, RBAC |
-| HU-24.3-k8s-deployment-examples | proposed | Examples ejecutables AWS EKS, GCP GKE, bare-metal k3s |
+| issue-24.1-helm-chart | proposed | Helm chart oficial con values, hooks, tests, CI contra Kind |
+| issue-24.2-kustomize-overlays | proposed | Base + overlays dev/staging/prod, NetworkPolicies, RBAC |
+| issue-24.3-k8s-deployment-examples | proposed | Examples ejecutables AWS EKS, GCP GKE, bare-metal k3s |

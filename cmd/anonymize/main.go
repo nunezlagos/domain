@@ -1,5 +1,5 @@
 // Command anonymize copia datos desde un Postgres source a uno dest
-// aplicando reglas de anonimización (HU-25.11).
+// aplicando reglas de anonimización (issue-25.11).
 //
 // Uso:
 //

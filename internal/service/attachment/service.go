@@ -1,4 +1,4 @@
-// Package attachment — HU-04.6 S3 file attachments for entities.
+// Package attachment — issue-04.6 S3 file attachments for entities.
 package attachment
 
 import (
@@ -195,7 +195,7 @@ func (s *Service) Delete(ctx context.Context, attachmentID uuid.UUID) error {
 func (s *Service) CleanupOrphans(ctx context.Context) (int, error) {
 	rows, err := s.Pool.Query(ctx, `
 		DELETE FROM file_attachments fa
-		WHERE NOT EXISTS (SELECT 1 FROM user_stories WHERE id = fa.entity_id AND entity_type = 'user_story')
+		WHERE NOT EXISTS (SELECT 1 FROM issues WHERE id = fa.entity_id AND entity_type = 'user_story')
 		  AND NOT EXISTS (SELECT 1 FROM requirements WHERE id = fa.entity_id AND entity_type = 'requirement')
 		RETURNING s3_key
 	`)
@@ -239,11 +239,11 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 	var table string
 	switch entityType {
 	case "user_story":
-		table = "user_stories"
+		table = "issues"
 	case "requirement":
 		table = "requirements"
 	case "hu_draft":
-		table = "hu_drafts"
+		table = "issue_drafts"
 	case "intake_payload":
 		table = "intake_payloads"
 	default:
@@ -261,7 +261,7 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 }
 
 // PromoteEntity reasigna todos los attachments de (fromKind, fromID) a
-// (toKind, toID). Usado cuando un draft (HU-04.7) se commit como user_story
+// (toKind, toID). Usado cuando un draft (issue-04.7) se commit como user_story
 // real, o un intake_payload se transforma en HU/REQ. Idempotente.
 func (s *Service) PromoteEntity(ctx context.Context, fromKind, toKind string, fromID, toID uuid.UUID) (int, error) {
 	if err := s.requireEntity(ctx, toKind, toID); err != nil {

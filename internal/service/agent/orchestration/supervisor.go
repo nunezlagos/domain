@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Supervisor implementa HU-08.6: un agent "supervisor" recibe una tarea
+// Supervisor implementa issue-08.6: un agent "supervisor" recibe una tarea
 // compleja, la descompone en sub-tasks, las asigna a sub-agents, y agrega
 // resultados.
 type Supervisor struct {

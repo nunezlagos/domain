@@ -9,7 +9,7 @@ import (
 )
 
 // AgentTemplateCatalogEntry es la definition reutilizable de un agent
-// templates built-in (HU-08.5). Igual que skills, requiere org_id por lo
+// templates built-in (issue-08.5). Igual que skills, requiere org_id por lo
 // que se materializa per-org via SeedAgentTemplatesForOrg.
 type AgentTemplateCatalogEntry struct {
 	Slug          string
@@ -102,7 +102,7 @@ sub-tasks. Output siempre en JSON:
 			Temperature:   0.3,
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid", // supervisor NO hace handoff; agrega
-			Metadata:      map[string]any{"role": "supervisor", "pattern": "multi-agent-orch HU-08.6"},
+			Metadata:      map[string]any{"role": "supervisor", "pattern": "multi-agent-orch issue-08.6"},
 		},
 		{
 			Slug: "doc-writer",
@@ -153,7 +153,7 @@ top 10. Conoces las rules en .claude/rules/security.md. Output:
 		{
 			Slug: "intake-triager",
 			Name: "Intake Triager",
-			SystemPrompt: `Procesás requerimientos crudos del cliente (HU-04.8 intake pipeline).
+			SystemPrompt: `Procesás requerimientos crudos del cliente (issue-04.8 intake pipeline).
 1) classify (type+severity+confidence)
 2) propose title + description estructurados
 3) sugerir REQ padre y hu draft
@@ -165,7 +165,7 @@ Output JSON estricto consumible por intake.Service.`,
 			Temperature:   0.2,
 			MaxTokens:     4096,
 			HandoffPolicy: "forbid",
-			Metadata:      map[string]any{"role": "intake", "pattern": "HU-04.8"},
+			Metadata:      map[string]any{"role": "intake", "pattern": "issue-04.8"},
 		},
 		{
 			Slug: "general-assistant",

@@ -1,4 +1,4 @@
-// Package invite — HU-21.2 invitaciones a organization.
+// Package invite — issue-21.2 invitaciones a organization.
 //
 // Token-based, email-bound, expira en 7 días. Estados: pending → accepted/
 // declined/expired/revoked. Email mismatch al aceptar rechaza. UNIQUE constraint
@@ -57,7 +57,7 @@ type Invitation struct {
 	CreatedAt        time.Time
 }
 
-// Mailer envía emails (HU-20.2 implementa SMTP). Aquí es una abstracción.
+// Mailer envía emails (issue-20.2 implementa SMTP). Aquí es una abstracción.
 type Mailer interface {
 	Send(ctx context.Context, to, subject, body string) error
 }

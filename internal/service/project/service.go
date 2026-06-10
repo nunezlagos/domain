@@ -57,7 +57,7 @@ type CreateInput struct {
 type Service struct {
 	Pool         *pgxpool.Pool
 	Audit        audit.Recorder
-	TemplateSvc  *projecttemplate.Service // opcional — HU-01.4 apply template on create
+	TemplateSvc  *projecttemplate.Service // opcional — issue-01.4 apply template on create
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) {
@@ -65,7 +65,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	if !reSlug.MatchString(in.Slug) {
 		return nil, ErrSlugInvalid
 	}
-	// HU-01.4: si se pasa template_id, mergear settings del template con override del request.
+	// issue-01.4: si se pasa template_id, mergear settings del template con override del request.
 	if in.TemplateID != nil && s.TemplateSvc != nil {
 		tpl, err := s.TemplateSvc.Get(ctx, in.OrganizationID, *in.TemplateID)
 		if err == nil && tpl != nil {

@@ -8,7 +8,7 @@ import (
 )
 
 // PlatformPoliciesSeeder siembra las policies baseline de la plataforma
-// (HU-01.7 + HU-01.8). DB como source of truth — markdown auto-generado.
+// (issue-01.7 + issue-01.8). DB como source of truth — markdown auto-generado.
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
@@ -55,7 +55,7 @@ Breaking changes: feat!: ... o body con BREAKING CHANGE.`,
 			BodyMD: `Lista bloqueada de keys en logs: password, secret, token, api_key,
 otp, email, rut, phone, dob, address, pan, cvc, content, payload.
 Usar campos seguros: email_hash (sha256 first 8), key_prefix, user_id (UUID),
-content_length. PII redaction regex en HU-02.5.`,
+content_length. PII redaction regex en issue-02.5.`,
 		},
 		{
 			Slug: "rls-defense-in-depth",
@@ -88,7 +88,7 @@ para auth path.`,
 			SourceFile: ".claude/rules/observability.md",
 			BodyMD: `NUNCA labels con: user_id, request_id, run_id, observation_id,
 project_id, trace_id. org_id permitido solo si <10000 orgs.
-HU-17.1 lint chequea regex _id="<uuid>" en /metrics response y falla CI.
+issue-17.1 lint chequea regex _id="<uuid>" en /metrics response y falla CI.
 Path normalization UUID→:id, numeric→:n previene explosion.`,
 		},
 		{

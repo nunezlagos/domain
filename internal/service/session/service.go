@@ -1,4 +1,4 @@
-// Package session — HU-03.2 sessions lifecycle.
+// Package session — issue-03.2 sessions lifecycle.
 //
 // Una session agrupa observations + prompts de una conversación/run.
 // Lifecycle: Start → (durante) → End con summary.
@@ -212,7 +212,7 @@ func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Ses
 }
 
 // CloseInactive cierra sesiones activas que no tuvieron actividad en >idle.
-// Retorna IDs de sesiones cerradas. Usado por cron leader (HU-03.2).
+// Retorna IDs de sesiones cerradas. Usado por cron leader (issue-03.2).
 func (s *Service) CloseInactive(ctx context.Context, idle time.Duration) ([]uuid.UUID, error) {
 	cutoff := time.Now().UTC().Add(-idle)
 	rows, err := s.Pool.Query(ctx, `

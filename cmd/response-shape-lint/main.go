@@ -1,4 +1,4 @@
-// Command response-shape-lint — HU-13.9 entrypoint CLI.
+// Command response-shape-lint — issue-13.9 entrypoint CLI.
 //
 // Verifica que cada handler HTTP en internal/api/handler/*.go use los helpers
 // canónicos de response shape (writeData / writeDataWithMeta / writeError)

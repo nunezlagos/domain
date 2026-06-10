@@ -1,4 +1,4 @@
-// Package cronsched — HU-10.1 scheduler loop que poll-pickea crons due.
+// Package cronsched — issue-10.1 scheduler loop que poll-pickea crons due.
 //
 // Multi-worker safe (PickDue usa SELECT FOR UPDATE SKIP LOCKED).
 // Stop signal vía context cancel para graceful shutdown.

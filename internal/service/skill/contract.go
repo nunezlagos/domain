@@ -1,4 +1,4 @@
-// HU-05.6 agent-skill-contract — valida input/output de skills contra
+// issue-05.6 agent-skill-contract — valida input/output de skills contra
 // JSON Schema antes/después de invocar. Garantiza que el agente IA no
 // envíe basura ni reciba data que rompe el contrato.
 package skill

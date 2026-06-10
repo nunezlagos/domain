@@ -1,4 +1,4 @@
-// Resilience helpers para MCP tools — HU-12.6.
+// Resilience helpers para MCP tools — issue-12.6.
 //
 // Funcionalidad:
 //   - Rate limiter per-tool (token bucket simple in-memory): cap de calls/min

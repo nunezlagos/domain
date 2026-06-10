@@ -1,4 +1,4 @@
-// Command db-conventions-lint — HU-25.13 entrypoint CLI.
+// Command db-conventions-lint — issue-25.13 entrypoint CLI.
 //
 // Uso:
 //

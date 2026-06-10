@@ -1,4 +1,4 @@
-// Command domain-lint-stateless — HU-26.1 lint del invariante stateless.
+// Command domain-lint-stateless — issue-26.1 lint del invariante stateless.
 //
 // Recorre paquetes Go del proyecto y detecta state in-memory potencialmente
 // crítico que podría romper el invariante "cualquier pod puede recibir

@@ -1,4 +1,4 @@
-// Package httpserver — handlers HTTP del server (HU-01.3 health-version).
+// Package httpserver — handlers HTTP del server (issue-01.3 health-version).
 // Movido fuera de cmd/domain para ser testeable y reusable.
 package httpserver
 
@@ -14,7 +14,7 @@ import (
 
 // ShuttingDown es un flag global que se setea en true al recibir SIGTERM.
 // Una vez true, ReadyHandler responde 503 para que ELB/K8s deje de rutear
-// nuevos requests (HU-26.4 escenario 5).
+// nuevos requests (issue-26.4 escenario 5).
 var ShuttingDown atomic.Bool
 
 // VersionInfo build-time metadata.
@@ -25,7 +25,7 @@ type VersionInfo struct {
 }
 
 // HealthHandler responde /health.
-// HU-01.3: status + version + uptime. DB ping en /health/ready.
+// issue-01.3: status + version + uptime. DB ping en /health/ready.
 type HealthHandler struct {
 	Info      VersionInfo
 	StartedAt time.Time

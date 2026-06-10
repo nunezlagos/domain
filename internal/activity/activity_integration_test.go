@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-02.6 activity-log integration tests con testcontainers.
+// issue-02.6 activity-log integration tests con testcontainers.
 
 package activity_test
 
@@ -227,7 +227,7 @@ func TestPGStore_List_MetadataParsed(t *testing.T) {
 }
 
 // Sabotaje: NUNCA aceptar payload con campo "password" o "api_key" en metadata.
-// (HU-02.6 + .claude/rules/security.md - metadata NO debe tener PII full)
+// (issue-02.6 + .claude/rules/security.md - metadata NO debe tener PII full)
 //
 // Esta validación se aplica en service layer (caller), no en PGStore directo.
 // El test confirma que si caller pasa PII, queda persistida (responsabilidad caller).

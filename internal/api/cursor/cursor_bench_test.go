@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// HU-27.4 benchmarks de cursor encode/decode.
+// issue-27.4 benchmarks de cursor encode/decode.
 //
 //   go test -bench=. -benchmem ./internal/api/cursor/
 

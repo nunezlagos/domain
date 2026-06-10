@@ -1,4 +1,4 @@
-// Package dlock — HU-26.3 distributed locks reutilizables vía advisory locks Postgres.
+// Package dlock — issue-26.3 distributed locks reutilizables vía advisory locks Postgres.
 //
 // API:
 //   - TryAcquire: no-bloqueante, retorna inmediatamente (acquired bool).

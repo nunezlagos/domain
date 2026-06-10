@@ -1,4 +1,4 @@
-// Package knowledge — HU-03.4 knowledge documents con chunking + RAG.
+// Package knowledge — issue-03.4 knowledge documents con chunking + RAG.
 //
 // Lifecycle:
 //   - Save(title, body): persiste doc + chunkea + genera embedding por chunk

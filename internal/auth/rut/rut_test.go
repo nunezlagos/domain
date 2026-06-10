@@ -1,4 +1,4 @@
-// HU-02.7 RUT chileno unit tests.
+// issue-02.7 RUT chileno unit tests.
 
 package rut
 

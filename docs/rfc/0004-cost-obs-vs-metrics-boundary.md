@@ -2,14 +2,14 @@
 
 **Status:** accepted
 **Date:** 2026-06-07
-**Related:** REQ-15 cost-observability, REQ-17 observability (HU-17.1 metrics-prometheus)
+**Related:** REQ-15 cost-observability, REQ-17 observability (issue-17.1 metrics-prometheus)
 
 ## Contexto
 
 Dos sistemas exponen información relacionada a costos/tokens:
 
 - **REQ-15 Cost Observability**: tracking de tokens/costo por run/agent/flow/org, analytics, alertas
-- **REQ-17 HU-17.1 Metrics Prometheus**: métricas `domain_tokens_total`, `domain_cost_usd_total` con labels
+- **REQ-17 issue-17.1 Metrics Prometheus**: métricas `domain_tokens_total`, `domain_cost_usd_total` con labels
 
 Riesgo: dos tablas + dos sistemas de alertas + confusión sobre source of truth.
 
@@ -32,7 +32,7 @@ Separación por **propósito y consumer**:
 - **Alertas**: thresholds configurables por org (`80% del plan` → notif), atadas a billing/plans
 - **Source of truth para facturación**
 
-### REQ-17 HU-17.1 Metrics Prometheus — **operacional / SRE**
+### REQ-17 issue-17.1 Metrics Prometheus — **operacional / SRE**
 
 - **Audience**: SRE, on-call, dashboards Grafana
 - **Granularidad**: aggregated por labels (provider, model, org_id), **sin IDs únicos** (cardinality)

@@ -1,4 +1,4 @@
-// Package dbstats — HU-25.2 monitoreo de queries lentas via pg_stat_statements.
+// Package dbstats — issue-25.2 monitoreo de queries lentas via pg_stat_statements.
 //
 // Requiere postgresql.conf con shared_preload_libraries='pg_stat_statements'
 // y CREATE EXTENSION pg_stat_statements en la DB. Si la extensión no está
@@ -10,7 +10,7 @@
 //   - Snapshot(): captura estado actual a domain_query_stats_history
 //   - Reset(): pg_stat_statements_reset() (caller debe tener privilegio)
 //
-// El llamado se hace periódicamente desde un cron job (HU-27.1 jobs).
+// El llamado se hace periódicamente desde un cron job (issue-27.1 jobs).
 package dbstats
 
 import (

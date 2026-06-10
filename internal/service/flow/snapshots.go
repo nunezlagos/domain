@@ -1,4 +1,4 @@
-// HU-09.11 reproducibility-snapshots — captura input/output exacto de cada
+// issue-09.11 reproducibility-snapshots — captura input/output exacto de cada
 // step para replay determinístico y debugging.
 //
 // Tabla flow_run_step_snapshots (migration 000064) guarda blob input + output

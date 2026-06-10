@@ -216,12 +216,12 @@ const DefaultStub = "# Domain MCP\n\n" +
 	"2. Escribí tu prompt normalmente. Domain MCP intercepta:\n" +
 	"   - Si es chat/idea: respondés directamente.\n" +
 	"   - Si es feature/fix/refactor/doc/rfc: arranca el wizard interactivo\n" +
-	"     `domain_hu_create_start` (HU-04.7) → confección HU + Gherkin con\n" +
+	"     `domain_hu_create_start` (issue-04.7) → confección HU + Gherkin con\n" +
 	"     preguntas dirigidas + upload de screenshots opcional.\n" +
 	"3. Tras confirmar el spec, el agente IA implementa siguiendo TDD strict\n" +
 	"   (rules `.claude/rules/*` migrated a BD platform_policies).\n\n" +
 	"## Recuperar conventions específicas\n\n" +
-	"Las policies del proyecto viven en `platform_policies` (HU-01.8). Para\n" +
+	"Las policies del proyecto viven en `platform_policies` (issue-01.8). Para\n" +
 	"consultarlas:\n\n" +
 	"```\n" +
 	"domain policy list\n" +

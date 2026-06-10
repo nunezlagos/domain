@@ -1,4 +1,4 @@
-// HU-09.6 — durable execution recovery worker.
+// issue-09.6 — durable execution recovery worker.
 //
 // Identifica flow_runs en status='running' cuyo last_heartbeat_at sea > N min
 // (probable crash del worker original). Los marca como 'failed' con
@@ -22,7 +22,7 @@ type RecoveryConfig struct {
 }
 
 // RunRecovery loop periódico que marca runs stale como failed.
-// Pensado para correr en el pod leader (HU-26.2).
+// Pensado para correr en el pod leader (issue-26.2).
 func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 	stale := cfg.StaleAfter
 	if stale == 0 {

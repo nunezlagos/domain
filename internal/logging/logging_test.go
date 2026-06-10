@@ -1,4 +1,4 @@
-// HU-17.3 structured-logging unit tests.
+// issue-17.3 structured-logging unit tests.
 
 package logging
 
@@ -101,7 +101,7 @@ func TestLogger_TextFormat_Readable(t *testing.T) {
 }
 
 // Sabotaje: keys prohibidas en logs → linter atrapa.
-// HU-17.3 / .claude/rules/security.md.
+// issue-17.3 / .claude/rules/security.md.
 // Heurística estricta: pattern `"KEY",` evita falsos positivos en values.
 func TestSabotage_LinterDetectsForbiddenKeys(t *testing.T) {
 	suspect := []string{

@@ -1,4 +1,4 @@
-// Package task — HU-04.4 tasks with status tracking, verification and sabotage.
+// Package task — issue-04.4 tasks with status tracking, verification and sabotage.
 package task
 
 import (
@@ -43,7 +43,7 @@ var validVerifResults = map[string]bool{VerifPass: true, VerifFail: true, VerifB
 
 type Task struct {
 	ID          uuid.UUID  `json:"id"`
-	HuID        uuid.UUID  `json:"hu_id"`
+	HuID        uuid.UUID  `json:"issue_id"`
 	Section     string     `json:"section"`
 	Description string     `json:"description"`
 	Status      string     `json:"status"`
@@ -79,7 +79,7 @@ type SabotageRecord struct {
 }
 
 type ProgressReport struct {
-	HuID        uuid.UUID `json:"hu_id"`
+	HuID        uuid.UUID `json:"issue_id"`
 	Total       int       `json:"total"`
 	Completed   int       `json:"completed"`
 	ProgressPct float64   `json:"progress_pct"`
@@ -96,8 +96,8 @@ type Service struct {
 }
 
 // CreateTasks batch-creates tasks with auto-assigned position per section.
-func (s *Service) CreateTasks(ctx context.Context, huID uuid.UUID, inputs []CreateTaskInput) ([]Task, error) {
-	if err := s.requireHU(ctx, huID); err != nil {
+func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []CreateTaskInput) ([]Task, error) {
+	if err := s.requireHU(ctx, issueID); err != nil {
 		return nil, err
 	}
 	if len(inputs) == 0 {
@@ -119,8 +119,8 @@ func (s *Service) CreateTasks(ctx context.Context, huID uuid.UUID, inputs []Crea
 	for section := range posMap {
 		var maxPos int
 		_ = tx.QueryRow(ctx,
-			`SELECT COALESCE(MAX(position), 0) FROM tasks WHERE hu_id = $1 AND section = $2`,
-			huID, section,
+			`SELECT COALESCE(MAX(position), 0) FROM tasks WHERE issue_id = $1 AND section = $2`,
+			issueID, section,
 		).Scan(&maxPos)
 		posMap[section] = maxPos + 1
 	}
@@ -132,10 +132,10 @@ func (s *Service) CreateTasks(ctx context.Context, huID uuid.UUID, inputs []Crea
 
 		var t Task
 		err := tx.QueryRow(ctx,
-			`INSERT INTO tasks (hu_id, section, description, position, status)
+			`INSERT INTO tasks (issue_id, section, description, position, status)
 			 VALUES ($1, $2, $3, $4, 'pending')
-			 RETURNING id, hu_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
-			huID, in.Section, in.Description, pos,
+			 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
+			issueID, in.Section, in.Description, pos,
 		).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("insert task: %w", err)
@@ -150,10 +150,10 @@ func (s *Service) CreateTasks(ctx context.Context, huID uuid.UUID, inputs []Crea
 }
 
 // ListTasks returns tasks for a HU ordered by section, position.
-func (s *Service) ListTasks(ctx context.Context, huID uuid.UUID) ([]Task, error) {
+func (s *Service) ListTasks(ctx context.Context, issueID uuid.UUID) ([]Task, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, hu_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM tasks WHERE hu_id = $1 ORDER BY section, position`, huID)
+		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
+		 FROM tasks WHERE issue_id = $1 ORDER BY section, position`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
@@ -165,7 +165,7 @@ func (s *Service) ListTasks(ctx context.Context, huID uuid.UUID) ([]Task, error)
 func (s *Service) GetTask(ctx context.Context, taskID uuid.UUID) (*Task, error) {
 	var t Task
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, hu_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
+		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
 		 FROM tasks WHERE id = $1`, taskID,
 	).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -200,7 +200,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 
 	var current Task
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, hu_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
+		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
 		 FROM tasks WHERE id = $1`, taskID,
 	).Scan(&current.ID, &current.HuID, &current.Section, &current.Description, &current.Status, &current.Position, &current.StartedAt, &current.CompletedAt, &current.CompletedBy, &current.CreatedAt, &current.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -243,7 +243,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 		`UPDATE tasks
 		 SET status = $2, started_at = COALESCE($3, started_at), completed_at = $4, completed_by = COALESCE($5, completed_by), updated_at = NOW()
 		 WHERE id = $1
-		 RETURNING id, hu_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
+		 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
 		taskID, newStatus, startedAt, completedAt, cb,
 	).Scan(&updated.ID, &updated.HuID, &updated.Section, &updated.Description, &updated.Status, &updated.Position, &updated.StartedAt, &updated.CompletedAt, &updated.CompletedBy, &updated.CreatedAt, &updated.UpdatedAt)
 	if err != nil {
@@ -264,14 +264,14 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 }
 
 // GetProgress returns aggregate progress for a HU.
-func (s *Service) GetProgress(ctx context.Context, huID uuid.UUID) (*ProgressReport, error) {
+func (s *Service) GetProgress(ctx context.Context, issueID uuid.UUID) (*ProgressReport, error) {
 	var r ProgressReport
 	err := s.Pool.QueryRow(ctx,
-		`SELECT $1::uuid AS hu_id,
+		`SELECT $1::uuid AS issue_id,
 		        COUNT(*) AS total,
 		        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
 		        ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1) AS pct
-		 FROM tasks WHERE hu_id = $1`, huID,
+		 FROM tasks WHERE issue_id = $1`, issueID,
 	).Scan(&r.HuID, &r.Total, &r.Completed, &r.ProgressPct)
 	if err != nil {
 		return nil, fmt.Errorf("get progress: %w", err)
@@ -349,9 +349,9 @@ func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]Sabota
 
 // --- internal ---
 
-func (s *Service) requireHU(ctx context.Context, huID uuid.UUID) error {
+func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
 	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_stories WHERE id = $1)`, huID).Scan(&exists)
+	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM issues WHERE id = $1)`, issueID).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("check hu: %w", err)
 	}

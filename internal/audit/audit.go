@@ -1,10 +1,10 @@
-// Package audit — HU-02.4 audit-log.
+// Package audit — issue-02.4 audit-log.
 //
-// Append-only. Diferenciado de activity_log (HU-02.6) según RFC 0003:
+// Append-only. Diferenciado de activity_log (issue-02.6) según RFC 0003:
 //  - audit_log: technical/compliance, field-level diffs, inmutable a nivel DB
 //  - activity_log: product/UX, human summaries, mutable
 //
-// Esta API no permite UPDATE/DELETE; el role app_user tampoco (REVOKE en HU-25.6).
+// Esta API no permite UPDATE/DELETE; el role app_user tampoco (REVOKE en issue-25.6).
 package audit
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Context keys para metadata de audit (HU-02.4). El AuditMiddleware las inyecta.
+// Context keys para metadata de audit (issue-02.4). El AuditMiddleware las inyecta.
 type ctxKey string
 
 const (
@@ -118,7 +118,7 @@ type PGRecorder struct {
 // Record persiste el evento. Errores se devuelven al caller para que decida
 // (no swallow): un audit miss en operaciones críticas debe loggear loud.
 // IPAddress, UserAgent y RequestID se completan automáticamente desde el
-// context si el AuditMiddleware está en la cadena (HU-02.4).
+// context si el AuditMiddleware está en la cadena (issue-02.4).
 func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 	if e.Action == "" {
 		return fmt.Errorf("audit: action required")

@@ -1,4 +1,4 @@
-// HU-02.1 api-key-auth unit tests.
+// issue-02.1 api-key-auth unit tests.
 
 package apikey
 

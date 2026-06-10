@@ -20,12 +20,12 @@ API REST local (engram serve): endpoints para sessions, observations, search, ti
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-05.1 | proposed | HTTP endpoints para CRUD de sesiones con validación de integridad referencial |
-| HU-05.2 | proposed | HTTP endpoints para CRUD de observaciones con detección de conflict candidates |
-| HU-05.3 | proposed | HTTP endpoints para búsqueda full-text, timeline y context retrieval |
-| HU-05.4 | proposed | HTTP endpoints para almacenar y recuperar prompts de usuario |
-| HU-05.5 | proposed | HTTP endpoints para exportar/importar datos en formato JSON |
-| HU-05.6 | proposed | HTTP endpoints para estadísticas, diagnóstico y health check |
-| HU-05.7 | proposed | HTTP endpoints para resolución de proyecto y migración entre proyectos |
-| HU-05.8 | proposed | HTTP endpoints para detección y resolución de conflictos |
-| HU-05.9 | proposed | HTTP endpoint para estado de sincronización y autenticación Bearer |
+| issue-05.1 | proposed | HTTP endpoints para CRUD de sesiones con validación de integridad referencial |
+| issue-05.2 | proposed | HTTP endpoints para CRUD de observaciones con detección de conflict candidates |
+| issue-05.3 | proposed | HTTP endpoints para búsqueda full-text, timeline y context retrieval |
+| issue-05.4 | proposed | HTTP endpoints para almacenar y recuperar prompts de usuario |
+| issue-05.5 | proposed | HTTP endpoints para exportar/importar datos en formato JSON |
+| issue-05.6 | proposed | HTTP endpoints para estadísticas, diagnóstico y health check |
+| issue-05.7 | proposed | HTTP endpoints para resolución de proyecto y migración entre proyectos |
+| issue-05.8 | proposed | HTTP endpoints para detección y resolución de conflictos |
+| issue-05.9 | proposed | HTTP endpoint para estado de sincronización y autenticación Bearer |

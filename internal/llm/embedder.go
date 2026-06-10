@@ -1,13 +1,13 @@
 // Package llm — abstracción de proveedores LLM (embeddings, completion).
 //
-// Para MVP: solo Embedder. Completion vendrá con HU-12.x.
+// Para MVP: solo Embedder. Completion vendrá con issue-12.x.
 //
 // Implementaciones:
 //   - NopEmbedder: vector zero (útil cuando no hay API key configurada;
 //     búsqueda degrada a tsvector-only)
 //   - FakeEmbedder: vector determinístico hash-based (útil para tests
 //     reproducibles sin red)
-//   - OpenAIEmbedder, AnthropicEmbedder: pending HU-12.2/3
+//   - OpenAIEmbedder, AnthropicEmbedder: pending issue-12.2/3
 package llm
 
 import (
@@ -104,7 +104,7 @@ func (f FakeEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float
 
 // TruncateText limita el texto a maxTokens tokens aproximados.
 // Cuenta tokens como palabras (~4 chars/token para texto en español/inglés).
-// Útil para controlar costos antes de enviar a Embed (HU-06.5).
+// Útil para controlar costos antes de enviar a Embed (issue-06.5).
 func TruncateText(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""

@@ -19,7 +19,7 @@ Tunear el binario Go para que escale verticalmente correctamente en containers/K
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-27.1-pprof-debug-endpoints | proposed | /debug/pprof/* en puerto separado con basic auth |
-| HU-27.2-gomaxprocs-gomemlimit | proposed | uber/automaxprocs + GOMEMLIMIT from cgroup |
-| HU-27.3-hot-reload-config | proposed | Config reload via SIGHUP o admin API + LISTEN/NOTIFY |
-| HU-27.4-feature-benchmarks | proposed | Benchmark suite + benchstat comparativo en CI |
+| issue-27.1-pprof-debug-endpoints | proposed | /debug/pprof/* en puerto separado con basic auth |
+| issue-27.2-gomaxprocs-gomemlimit | proposed | uber/automaxprocs + GOMEMLIMIT from cgroup |
+| issue-27.3-hot-reload-config | proposed | Config reload via SIGHUP o admin API + LISTEN/NOTIFY |
+| issue-27.4-feature-benchmarks | proposed | Benchmark suite + benchstat comparativo en CI |

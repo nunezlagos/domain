@@ -1,4 +1,4 @@
-// Package crypto — HU-02.3 secrets-encryption AES-256-GCM.
+// Package crypto — issue-02.3 secrets-encryption AES-256-GCM.
 //
 // Envelope encryption: master key (32 bytes) cifra valores. Cada valor cifrado
 // lleva su nonce único (12 bytes) + key_version inline:

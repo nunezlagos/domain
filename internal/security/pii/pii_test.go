@@ -1,4 +1,4 @@
-// HU-02.5 PII redaction unit tests.
+// issue-02.5 PII redaction unit tests.
 
 package pii
 

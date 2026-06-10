@@ -1,4 +1,4 @@
-// Package logging — HU-17.3 structured-logging.
+// Package logging — issue-17.3 structured-logging.
 // slog wrapping con campos contextuales (request_id, trace_id, user_id, org_id, project_id).
 package logging
 
@@ -21,7 +21,7 @@ const (
 	ctxKeyProjectID
 )
 
-// dynamicLevel permite cambiar nivel en runtime (HU-17.3 escenario 2 + HU-27.3).
+// dynamicLevel permite cambiar nivel en runtime (issue-17.3 escenario 2 + issue-27.3).
 var dynamicLevel = &slog.LevelVar{}
 
 // Config para Setup.
@@ -57,7 +57,7 @@ func Setup(cfg Config) *slog.Logger {
 	return logger
 }
 
-// SetLevel cambia nivel runtime (HU-17.3 dynamic level + HU-27.3 hot-reload).
+// SetLevel cambia nivel runtime (issue-17.3 dynamic level + issue-27.3 hot-reload).
 func SetLevel(level string) {
 	dynamicLevel.Set(parseLevel(level))
 }

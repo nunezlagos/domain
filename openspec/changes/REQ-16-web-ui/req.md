@@ -20,8 +20,8 @@ Dashboard web: gestión visual de agentes, flows, skills, memorias, costos. Visu
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-16.1-web-dashboard | proposed | Dashboard con resumen de actividad, costos, estado |
-| HU-16.2-web-run-visualization | proposed | Visualización en vivo de runs de agents y flows |
-| HU-16.3-web-flow-editor | proposed | Editor visual de flows DAG con drag & drop |
-| HU-16.4-web-admin-skills | proposed | UI de gestión de skills: CRUD, versionado, diff, panel de prueba |
-| HU-16.5-web-admin-memories | proposed | UI de memorias: búsqueda, edición, exportación, filtro por autor |
+| issue-16.1-web-dashboard | proposed | Dashboard con resumen de actividad, costos, estado |
+| issue-16.2-web-run-visualization | proposed | Visualización en vivo de runs de agents y flows |
+| issue-16.3-web-flow-editor | proposed | Editor visual de flows DAG con drag & drop |
+| issue-16.4-web-admin-skills | proposed | UI de gestión de skills: CRUD, versionado, diff, panel de prueba |
+| issue-16.5-web-admin-memories | proposed | UI de memorias: búsqueda, edición, exportación, filtro por autor |

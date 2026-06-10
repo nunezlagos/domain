@@ -1,4 +1,4 @@
-// Package debug — HU-27.1 pprof endpoints + HU-27.2 GOMAXPROCS/GOMEMLIMIT.
+// Package debug — issue-27.1 pprof endpoints + issue-27.2 GOMAXPROCS/GOMEMLIMIT.
 //
 // Servidor opcional en puerto separado (default 6060, bind 127.0.0.1) con
 // /debug/pprof/* protegido por Basic Auth.
@@ -148,7 +148,7 @@ func intStr(n int) string {
 }
 
 // TuneRuntime aplica GOMAXPROCS/GOMEMLIMIT según env vars o defaults
-// inferidos por K8s cgroup limits (HU-27.2).
+// inferidos por K8s cgroup limits (issue-27.2).
 //
 // Si DOMAIN_GOMAXPROCS está seteado, se aplica. En su ausencia el runtime
 // Go 1.25 ya detecta cgroup CPU quota automáticamente desde Go 1.22+.

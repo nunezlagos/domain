@@ -1,6 +1,6 @@
 # Testing Conventions — Domain
 
-Tests son first-class. CI bloquea merge si rojos (HU-19.1).
+Tests son first-class. CI bloquea merge si rojos (issue-19.1).
 
 ## Estructura
 
@@ -138,7 +138,7 @@ func TestSabotage_ScopeWithoutOrgID_Detected(t *testing.T) {
 ## Coverage
 
 - Target: 70% global, 80% en `service/` y `domain/`
-- HU-19.1 publica coverage en PR
+- issue-19.1 publica coverage en PR
 - Coverage NO baja >2% sin justificación
 
 ## Performance

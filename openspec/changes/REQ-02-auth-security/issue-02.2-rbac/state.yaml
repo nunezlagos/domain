@@ -1,0 +1,13 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/auth/rbac: 5 built-in roles jerárquicos (owner>admin>maintainer>member>viewer),
+  matrix permissions (resource × action) declarativa con 18 resources × 6 actions.
+  Checker.Check con CustomResolver opcional (issue-02.8 plug). AtLeast helper jerárquico.
+  Middlewares RequireRole(min) y RequirePermission(checker, res, act).
+  Anti-enumeration: 403 body uniforme.
+  Tests: 13 unit + 3 sabotaje (matrix coverage, viewer read-only, viewer forbidden mutations).
+  PGResolver con LISTEN/NOTIFY cache implementado en resolver.go.
+  Middleware RequirePermission con custom resolver integrado.

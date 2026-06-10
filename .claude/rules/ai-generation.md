@@ -8,7 +8,7 @@ Esto NO es código generado de forma autónoma sin supervisión: el humano dirig
 
 ### 1. Specs (HUs, RFCs, rules) son la fuente de verdad
 
-- Las HUs en `openspec/changes/REQ-*/HU-*/` son **el contrato** que el agente debe cumplir
+- Las HUs en `openspec/changes/REQ-*/issue-*/` son **el contrato** que el agente debe cumplir
 - Gherkin scenarios son **tests ejecutables conceptualmente** — el código generado debe satisfacerlos todos
 - Si una HU es ambigua, **NO se implementa** — primero se clarifica el spec (regla en `.claude/rules/sdd.md`)
 - Cambios de spec REQUIEREN revisión humana; el agente NO debe modificar specs salvo orden explícita
@@ -16,9 +16,9 @@ Esto NO es código generado de forma autónoma sin supervisión: el humano dirig
 ### 2. Rules son contratos máquina-leíbles
 
 - `.claude/rules/*.md` son leídas por el agente cada vez que toca código
-- Las rules tienen **enforcement automatizado** vía linters (HU-25.13, HU-13.9, HU-17.* PII, HU-26.1 stateless)
+- Las rules tienen **enforcement automatizado** vía linters (issue-25.13, issue-13.9, issue-17.* PII, issue-26.1 stateless)
 - Si un linter falla en CI, el código NO mergea. El agente debe respetar las rules o el lint detiene el merge
-- Cuando una rule se actualiza: la versión en BD (`platform_policies` tabla, HU-01.8) es la activa; el agente la consulta via MCP tool `domain_policy_get`
+- Cuando una rule se actualiza: la versión en BD (`platform_policies` tabla, issue-01.8) es la activa; el agente la consulta via MCP tool `domain_policy_get`
 
 ### 3. Tests como segunda fuente de verdad
 
@@ -33,8 +33,8 @@ Esto NO es código generado de forma autónoma sin supervisión: el humano dirig
   - OpenAPI spec generada desde tipos Go → SDKs auto-generados
   - Helm README via `helm-docs`
   - CHANGELOG via `goreleaser` o `git-cliff` desde Conventional Commits
-  - Slow query reports generados por cron (HU-25.2)
-  - Index suggestions generadas por pg_qualstats (HU-25.12)
+  - Slow query reports generados por cron (issue-25.2)
+  - Index suggestions generadas por pg_qualstats (issue-25.12)
 - Documentos hand-written: solo HUs/RFCs/rules + runbooks operativos
 
 ### 5. Commits firmados sin AI attribution
@@ -48,9 +48,9 @@ Por regla del CLAUDE.md global del usuario:
 
 Que un agente IA distinto pueda re-generar (o continuar) el proyecto requiere:
 - Specs autocontenidas (cada HU debe ser entendible sola con sus refs)
-- Rules versionadas (HU-01.8 mantiene history)
-- Seeders idempotentes (HU-01.7) garantizan misma BD inicial
-- Reproducibility snapshots para flows (HU-09.11) para debugging
+- Rules versionadas (issue-01.8 mantiene history)
+- Seeders idempotentes (issue-01.7) garantizan misma BD inicial
+- Reproducibility snapshots para flows (issue-09.11) para debugging
 - Migration ordering inmutable; nada de "renumerar"
 - CI bloquea drift entre spec, código y tests
 
@@ -87,7 +87,7 @@ Naming explícito > naming breve. El agente NO infiere por contexto, lee literal
 
 ### 10. Test fixtures con datos no-PII
 
-Fixtures usan fakers deterministic (HU-25.11 anonymization). Nunca datos reales aunque sean "de prueba".
+Fixtures usan fakers deterministic (issue-25.11 anonymization). Nunca datos reales aunque sean "de prueba".
 
 ## Workflow estándar para agregar feature
 
@@ -123,7 +123,7 @@ Fixtures usan fakers deterministic (HU-25.11 anonymization). Nunca datos reales 
 ## Lo que el agente DEBE hacer
 
 - **SÍ** leer rules antes de tocar código relacionado
-- **SÍ** consultar `domain_policy_get(slug)` cuando trabaja sobre un dominio (post-HU-01.8 implementada)
+- **SÍ** consultar `domain_policy_get(slug)` cuando trabaja sobre un dominio (post-issue-01.8 implementada)
 - **SÍ** ejecutar tests local antes de proponer commit
 - **SÍ** preguntar cuando hay ambigüedad
 - **SÍ** justificar decisiones no-obvias en commit body o PR description

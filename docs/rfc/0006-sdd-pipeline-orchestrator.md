@@ -10,7 +10,7 @@
 
 ## Resumen ejecutivo
 
-Reemplazar el catálogo flat de 10 `agent_templates` por una jerarquía **1 orquestador thin + 9 phase-workers alineados a fases SDD**, manteniendo el modelo de ejecución actual donde **el cliente IDE (Claude Code / OpenCode / Cursor) ejecuta todo el trabajo real** y Domain server provee **state + LLM + memoria + skills**. Integrar con piezas existentes (`auto-skill-engine` HU-05.4, `crons` REQ-10, `flow_signals` REQ-09) en lugar de re-inventar.
+Reemplazar el catálogo flat de 10 `agent_templates` por una jerarquía **1 orquestador thin + 9 phase-workers alineados a fases SDD**, manteniendo el modelo de ejecución actual donde **el cliente IDE (Claude Code / OpenCode / Cursor) ejecuta todo el trabajo real** y Domain server provee **state + LLM + memoria + skills**. Integrar con piezas existentes (`auto-skill-engine` issue-05.4, `crons` REQ-10, `flow_signals` REQ-09) en lugar de re-inventar.
 
 ## Motivación
 
@@ -21,17 +21,17 @@ Hoy el catálogo de 10 `agent_templates` tiene slugs rol-genérico (`researcher`
 | Pieza | Ubicación | Estado |
 |---|---|---|
 | 10 `agent_templates` (researcher, coder, ...) | `internal/seeds/agent_templates_catalog.go` | implementado |
-| `agent_runs.parent_run_id` + budget hierarchy | HU-08.6 multi-agent-supervisor | implementado |
+| `agent_runs.parent_run_id` + budget hierarchy | issue-08.6 multi-agent-supervisor | implementado |
 | `flows` + `flow_runs` + `flow_run_steps` | REQ-09 | implementado |
 | `flow_run_step_snapshots` (replay deterministic) | migration 000063 | implementado |
 | `flow_signals` (pause/resume async) | REQ-09 | implementado |
 | `saga_compensation_log` | REQ-09 | implementado |
 | MCP tools `domain_mem_*` (save/search/context/get) | `internal/mcp/server/server.go:100-103` | implementado |
-| Auto-skill engine (`POST /api/skills/recommend`) | HU-05.4 | implementado |
+| Auto-skill engine (`POST /api/skills/recommend`) | issue-05.4 | implementado |
 | Crons (user-defined) + scheduler con leader election | REQ-10 + `internal/scheduler/` | implementado |
 | MCP resilience (timeout 5s + retry exponencial) | `internal/mcp/server/resilience.go` | implementado parcial |
-| MCP circuit breaker + LRU cache | HU-12.6 design | **NO implementado** ❌ |
-| Wizard adaptive (HU-04.7 v2) | `internal/service/hubuilder/adaptive.go` | implementado |
+| MCP circuit breaker + LRU cache | issue-12.6 design | **NO implementado** ❌ |
+| Wizard adaptive (issue-04.7 v2) | `internal/service/issuebuilder/adaptive.go` | implementado |
 | PromptRouter | `internal/service/promptrouter/` | implementado |
 | Workflow import (.md override) | `internal/service/workflowimport/` | implementado |
 
@@ -80,7 +80,7 @@ Hoy si el cliente IDE pierde contexto (compaction, sesión cerrada) → flow zom
 
 - MCP tool nuevo: `domain_flow_status(flow_run_id?)` → lista flows activos del usuario con `paused_awaiting_*` o `running` sin heartbeat reciente
 - CLI nuevo: `./bin/domain workflow resume <flow_run_id>` que prepara el cliente IDE para retomar (devuelve el último state + siguiente prompt)
-- Hint al iniciar conversación: si hay flows pendientes, el cliente IDE puede preguntar al user "tenés HU-XX en sdd-design pausado desde 2 días — querés retomar?"
+- Hint al iniciar conversación: si hay flows pendientes, el cliente IDE puede preguntar al user "tenés issue-XX en sdd-design pausado desde 2 días — querés retomar?"
 
 ### 4. Dual output (verbose BD + summary IDE)
 
@@ -135,15 +135,15 @@ Detecté 2 changes separables en tu prompt:
   (c) sólo el #1 ahora, el #2 después
 ```
 
-Detectable via LLM clasificación + dedup en BD (FTS sobre `user_stories.slug` + `requirements.slug`).
+Detectable via LLM clasificación + dedup en BD (FTS sobre `issues.slug` + `requirements.slug`).
 
-### 8. HU-12.6 completa + heartbeat-watcher como **dependencia bloqueante**
+### 8. issue-12.6 completa + heartbeat-watcher como **dependencia bloqueante**
 
 Sin esto, un MCP externo colgado deja `flow_run_steps` zombis. Pre-requisitos:
 
-- **HU-12.6 finalizar:** agregar circuit breaker (`sony/gobreaker` o equivalente) + LRU cache. Hoy sólo hay rate limiter + retry.
-- **Nueva HU-08.11 heartbeat-watcher (system cron):** cron que corre cada 60s y detecta `flow_run_steps` con `status='running'` + `last_heartbeat_at < NOW() - 5min`. Los marca como `status='failed'` con razón `'heartbeat_timeout'` + dispara `saga_compensation_log`.
-- **Nueva HU-08.12 orphan-runs-audit (system cron):** cron diario que cuenta `agent_runs` con `flow_run_id IS NULL` sin flag `standalone`. Incrementa métrica `domain_agent_runs_orphan_total`.
+- **issue-12.6 finalizar:** agregar circuit breaker (`sony/gobreaker` o equivalente) + LRU cache. Hoy sólo hay rate limiter + retry.
+- **Nueva issue-08.11 heartbeat-watcher (system cron):** cron que corre cada 60s y detecta `flow_run_steps` con `status='running'` + `last_heartbeat_at < NOW() - 5min`. Los marca como `status='failed'` con razón `'heartbeat_timeout'` + dispara `saga_compensation_log`.
+- **Nueva issue-08.12 orphan-runs-audit (system cron):** cron diario que cuenta `agent_runs` con `flow_run_id IS NULL` sin flag `standalone`. Incrementa métrica `domain_agent_runs_orphan_total`.
 
 Ambos crons se registran en `system_crons` (NOT `crons` user-defined) — separación clave: user-defined disparan workflows del user, system gestiona salud interna.
 
@@ -168,7 +168,7 @@ El orquestador AGREGA: en cada fase, sugiere qué cosas vale guardar. El cliente
     {
       "type": "code-reference",
       "topic": "rbac-middleware-location",
-      "content_hint": "internal/api/middleware/rbac.go ya existe (HU-02.2)"
+      "content_hint": "internal/api/middleware/rbac.go ya existe (issue-02.2)"
     }
   ]
 }
@@ -181,7 +181,7 @@ El cliente IDE puede:
 
 Mantiene flexibilidad sin perder estructura.
 
-### 10. Auto-skill integration (HU-05.4 ya implementada)
+### 10. Auto-skill integration (issue-05.4 ya implementada)
 
 Por cada fase, el orquestador **antes** de devolver el prompt al cliente IDE, llama internamente a `POST /api/skills/recommend` con `{context: prompt_fase, top_n: 5, threshold: 0.6}`. Inyecta los skills resultantes en el response:
 
@@ -198,7 +198,7 @@ Por cada fase, el orquestador **antes** de devolver el prompt al cliente IDE, ll
 }
 ```
 
-El sub-agent del cliente IDE sabe **qué tools especializados aplicar sin tener que buscar manualmente**. Reduce verbose y errores. Cero código nuevo: HU-05.4 ya hace el trabajo, el orquestador solo lo consume.
+El sub-agent del cliente IDE sabe **qué tools especializados aplicar sin tener que buscar manualmente**. Reduce verbose y errores. Cero código nuevo: issue-05.4 ya hace el trabajo, el orquestador solo lo consume.
 
 ### 11. Cron interno como mecanismo de salud + triggers user-side
 
@@ -269,9 +269,9 @@ sequenceDiagram
 
 ## Out of scope
 
-- Implementar HU-12.6 circuit breaker — es dependencia pero spec separado
-- Implementar `heartbeat-watcher` cron — HU-08.11 separada
-- Cambiar el wizard adaptive existente (HU-04.7 v2) — el orquestador lo invoca, no lo reemplaza
+- Implementar issue-12.6 circuit breaker — es dependencia pero spec separado
+- Implementar `heartbeat-watcher` cron — issue-08.11 separada
+- Cambiar el wizard adaptive existente (issue-04.7 v2) — el orquestador lo invoca, no lo reemplaza
 - Cambios destructivos al schema BD — sólo 1 migration aditiva (`agent_templates.role`)
 - Renombrar tools MCP existentes — todos siguen igual
 - Soportar agentes externos (LangGraph, AutoGen) — fuera de scope este RFC
@@ -279,10 +279,10 @@ sequenceDiagram
 
 ## Dependencias bloqueantes (orden de implementación)
 
-1. **HU-12.6 finalizar** (circuit breaker + LRU cache) — crítico para producción
-2. **HU-08.11 heartbeat-watcher cron** (system cron) — sin esto los flows pueden quedar zombis
-3. **HU-08.12 orphan-runs-audit cron** (system cron) — necesario para enforcement híbrido
-4. **HU-08.10 sdd-pipeline-orchestrator** (este RFC) — desbloqueado tras 1-3
+1. **issue-12.6 finalizar** (circuit breaker + LRU cache) — crítico para producción
+2. **issue-08.11 heartbeat-watcher cron** (system cron) — sin esto los flows pueden quedar zombis
+3. **issue-08.12 orphan-runs-audit cron** (system cron) — necesario para enforcement híbrido
+4. **issue-08.10 sdd-pipeline-orchestrator** (este RFC) — desbloqueado tras 1-3
 
 Sin las 3 dependencias, el orquestador puede arrancar pero NO es prod-ready.
 
@@ -298,7 +298,7 @@ Sin las 3 dependencias, el orquestador puede arrancar pero NO es prod-ready.
 
 - Si TODOS los concerns son `single-file` → orquestador auto-divide en N flows paralelos sin preguntar
 - Si AL MENOS UNO escala a `multi-file` o `multi-module` → pausa y propone interactivo `(a) split / (b) merged / (c) sólo #1`
-- Detectado en `sdd-explore` con LLM analysis sobre el prompt + dedup contra `user_stories.slug` existentes
+- Detectado en `sdd-explore` con LLM analysis sobre el prompt + dedup contra `issues.slug` existentes
 
 ### D3 — Auto-skill threshold: 0.6 default, configurable por fase
 
@@ -352,10 +352,10 @@ RFC aceptado. Bloqueado por **RFC 0007 — Rename HU → issue** (decidido 2026-
 ## Referencias
 
 - [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) — patrón inspirador (1 orquestador + N phase-workers)
-- HU-04.7 v2 wizard adaptive — `openspec/changes/REQ-04-opsx-sdd/HU-04.7-wizard-adaptive/`
-- HU-05.4 auto-skill-engine — `openspec/changes/REQ-05-skill-system/HU-05.4-auto-skill-engine/`
-- HU-08.5 agent-templates — `openspec/changes/REQ-08-agent-system/HU-08.5-agent-templates/`
-- HU-08.6 multi-agent-supervisor — `openspec/changes/REQ-08-agent-system/HU-08.6-multi-agent-supervisor/`
-- HU-12.6 mcp-tool-resilience — `openspec/changes/REQ-12-mcp-server/HU-12.6-mcp-tool-resilience/`
+- issue-04.7 v2 wizard adaptive — `openspec/changes/REQ-04-opsx-sdd/issue-04.7-wizard-adaptive/`
+- issue-05.4 auto-skill-engine — `openspec/changes/REQ-05-skill-system/issue-05.4-auto-skill-engine/`
+- issue-08.5 agent-templates — `openspec/changes/REQ-08-agent-system/issue-08.5-agent-templates/`
+- issue-08.6 multi-agent-supervisor — `openspec/changes/REQ-08-agent-system/issue-08.6-multi-agent-supervisor/`
+- issue-12.6 mcp-tool-resilience — `openspec/changes/REQ-12-mcp-server/issue-12.6-mcp-tool-resilience/`
 - REQ-09 flows + flow_signals
 - REQ-10 cron-triggers + scheduler

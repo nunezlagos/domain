@@ -1,4 +1,4 @@
-// Package setup — HU-12.5 wizard CLI para configurar agentes externos
+// Package setup — issue-12.5 wizard CLI para configurar agentes externos
 // (Claude Code, OpenCode, etc.) para usar domain-mcp como servidor MCP.
 //
 // Versión inicial: solo Claude Desktop (claude_desktop_config.json).

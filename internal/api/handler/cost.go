@@ -8,7 +8,7 @@ import (
 )
 
 // GET /api/v1/cost/daily?days=N&group_by=org|agent
-// HU-15.1 + HU-15.2 — cost analytics
+// issue-15.1 + issue-15.2 — cost analytics
 func (a *API) getCostDaily(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -46,7 +46,7 @@ func (a *API) getCostDaily(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /api/v1/usage — usage actual del mes para la org del principal (HU-21.3).
+// GET /api/v1/usage — usage actual del mes para la org del principal (issue-21.3).
 func (a *API) getCurrentUsage(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

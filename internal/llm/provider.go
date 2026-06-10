@@ -1,4 +1,4 @@
-// Package llm — HU-06.1 Provider interface + factory thread-safe.
+// Package llm — issue-06.1 Provider interface + factory thread-safe.
 //
 // Provider abstrae completion + streaming + embeddings sobre cualquier LLM
 // (OpenAI, Anthropic, Google, Ollama, ...). El factory permite swap por env
@@ -24,7 +24,7 @@ type CompletionOptions struct {
 	SystemPrompt string
 	Messages    []Message // history conversation
 	StopSequences []string
-	Tools       []ToolDef // function calling (HU-08.2)
+	Tools       []ToolDef // function calling (issue-08.2)
 }
 
 // Message en conversation history.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	usvc "nunezlagos/domain/internal/service/userstory"
+	usvc "nunezlagos/domain/internal/service/issue"
 )
 
 type createHUBody struct {

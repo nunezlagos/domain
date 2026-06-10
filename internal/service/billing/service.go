@@ -1,4 +1,4 @@
-// Package billing — HU-21.3 plans + usage tracking + limit enforcement.
+// Package billing — issue-21.3 plans + usage tracking + limit enforcement.
 //
 // Plans son globales (Free/Pro/Enterprise + custom). Cada org tiene plan_id +
 // custom_limits JSONB que pueden override. usage_counters tracks consumo por

@@ -1,11 +1,11 @@
-// Package pii — HU-02.5 PII redaction.
+// Package pii — issue-02.5 PII redaction.
 //
 // Detecta y redacta PII común en strings: email, RUT chileno, número telefónico,
 // API key Domain, números tarjeta crédito básicos, bearer tokens.
 // Útil para responses HTTP de error, logs cuando user content escapa, exports.
 //
 // Regex-based (no AST); más rápido pero menos preciso que detection NER.
-// Para logs estructurados, preferir keys whitelist + slog (HU-17.3).
+// Para logs estructurados, preferir keys whitelist + slog (issue-17.3).
 package pii
 
 import (

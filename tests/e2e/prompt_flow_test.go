@@ -2,13 +2,13 @@
 
 // Package e2e — test E2E del flow real cliente plug-and-play:
 //
-//   prompt crudo → domain_prompt router → wizard interactivo HU-04.7
+//   prompt crudo → domain_prompt router → wizard interactivo issue-04.7
 //   → attach screenshot → 8 respuestas → commit → promote attachments
-//   → verifica intake_payload + hu_drafts + file_attachments en BD
+//   → verifica intake_payload + issue_drafts + file_attachments en BD
 //
 // Cubre los 3 gaps cerrados en esta tirada:
-//   - HU-04.7 + HU-04.6: image upload integrado al wizard (paso 3)
-//   - HU-12.7: domain_prompt router single-shot (paso 2)
+//   - issue-04.7 + issue-04.6: image upload integrado al wizard (paso 3)
+//   - issue-12.7: domain_prompt router single-shot (paso 2)
 //   - workflowimport scanner (paso 2)
 //
 // Si este test pasa, el flow plug-and-play funciona end-to-end.
@@ -27,21 +27,21 @@ import (
 
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
 )
 
-// mockAttSvc satisface hubuilder.AttachmentService sin S3 real.
+// mockAttSvc satisface issuebuilder.AttachmentService sin S3 real.
 type mockAttSvc struct {
 	uploadsCalled  int
 	promotesCalled int
 }
 
-func (m *mockAttSvc) InitUpload(_ context.Context, entityType, entityIDStr, filename, mime, by string, size int64) (*hubuilder.AttachmentInitResult, error) {
+func (m *mockAttSvc) InitUpload(_ context.Context, entityType, entityIDStr, filename, mime, by string, size int64) (*issuebuilder.AttachmentInitResult, error) {
 	m.uploadsCalled++
-	return &hubuilder.AttachmentInitResult{
+	return &issuebuilder.AttachmentInitResult{
 		AttachmentID: uuid.New(),
 		UploadURL:    "https://s3.mock/" + entityType + "/" + entityIDStr + "/" + filename,
 		Filename:     filename,
@@ -78,10 +78,10 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 
 	// 2) Wire services
 	intakeSvc := &intake.Service{Pool: pools.App}
-	hbSvc := &hubuilder.Service{Pool: pools.App, Attachments: &mockAttSvc{}}
+	hbSvc := &issuebuilder.Service{Pool: pools.App, Attachments: &mockAttSvc{}}
 	router := &promptrouter.Router{
 		IntakeService:    intakeSvc,
-		HubuilderService: hbSvc,
+		IssueBuilderService: hbSvc,
 		Classifier:       promptrouter.HeuristicClassifier{},
 	}
 
@@ -152,7 +152,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 		require.True(t, strings.HasPrefix(att.UploadURL, "https://s3.mock/hu_draft/"),
 			"upload URL debe apuntar a entity_type=hu_draft")
 
-		// Verifica que en hu_drafts.answers["attachments"] está la ref
+		// Verifica que en issue_drafts.answers["attachments"] está la ref
 		got, err := hbSvc.Get(ctx, draftID)
 		require.NoError(t, err)
 		require.Contains(t, string(got.Answers), "screenshot-export-broken.png")

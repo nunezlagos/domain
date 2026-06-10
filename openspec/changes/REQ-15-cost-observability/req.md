@@ -18,6 +18,6 @@ Métricas y costos: tracking de tokens por run/agente/flow, agregación por proy
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-15.1-token-tracking | proposed | Tracking de tokens por operación: prompt, completion, modelo, costo estimado |
-| HU-15.2-cost-analytics | proposed | Agregación de costos por proyecto/período/modelo, reportes exportables |
-| HU-15.3-usage-alerts | proposed | Alertas configurables por umbral de costo, notificaciones |
+| issue-15.1-token-tracking | proposed | Tracking de tokens por operación: prompt, completion, modelo, costo estimado |
+| issue-15.2-cost-analytics | proposed | Agregación de costos por proyecto/período/modelo, reportes exportables |
+| issue-15.3-usage-alerts | proposed | Alertas configurables por umbral de costo, notificaciones |

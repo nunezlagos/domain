@@ -1,4 +1,4 @@
-// Package middleware — HU-13.4 idempotency keys.
+// Package middleware — issue-13.4 idempotency keys.
 //
 // Cliente envía header Idempotency-Key: <uuid|nanoid>. Si la key ya existe
 // para esta org y request_body_hash coincide → devuelve la response cached.

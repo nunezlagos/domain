@@ -153,7 +153,7 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, _ := uuid.Parse(p.UserID)
-	// HU-26.6 backpressure
+	// issue-26.6 backpressure
 	if a.Backpressure != nil {
 		orgID, _ := uuid.Parse(p.OrganizationID)
 		if err := a.Backpressure.CheckQueue(r.Context(),
@@ -195,7 +195,7 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/v1/flows/{id}/dry-run — HU-09.12
+// POST /api/v1/flows/{id}/dry-run — issue-09.12
 func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

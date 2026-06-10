@@ -71,7 +71,7 @@ type eraseMyDataBody struct {
 	Reason       string `json:"reason,omitempty"`
 }
 
-// POST /api/v1/me/erase — HU-23.4 GDPR Art. 17 right to erasure.
+// POST /api/v1/me/erase — issue-23.4 GDPR Art. 17 right to erasure.
 // Irreversible. Requiere confirmation="DELETE_ME" en body.
 func (a *API) eraseMyData(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)

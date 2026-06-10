@@ -23,11 +23,11 @@ Autenticación por API keys, RBAC (admin/developer/viewer), secrets encryption, 
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-02.1-api-key-auth | proposed | API key generation, bcrypt hashing, CRUD, rotación, middleware |
-| HU-02.2-rbac | proposed | Roles admin/developer/viewer, permisos por entidad, org scoping |
-| HU-02.3-secrets-encryption | proposed | AES-256-GCM encrypt/decrypt, key rotation |
-| HU-02.4-audit-log | proposed | Immutable audit trail, queries, retention 90d |
-| HU-02.5-rate-limit-pii | proposed | Token bucket rate limit + PII redaction |
-| HU-02.6-activity-log | proposed | Activity log general: quién, qué, cuándo, filtrable por proyecto/usuario/entidad |
-| HU-02.7-passwordless-otp-auth | proposed | Login passwordless OTP por email + RUT/email identifier, devuelve API key (reveal o regenerate) |
-| HU-02.8-custom-roles-permissions | proposed | Custom roles per-org con matriz fine-grained de permisos resource×action, scope opcional por IDs |
+| issue-02.1-api-key-auth | proposed | API key generation, bcrypt hashing, CRUD, rotación, middleware |
+| issue-02.2-rbac | proposed | Roles admin/developer/viewer, permisos por entidad, org scoping |
+| issue-02.3-secrets-encryption | proposed | AES-256-GCM encrypt/decrypt, key rotation |
+| issue-02.4-audit-log | proposed | Immutable audit trail, queries, retention 90d |
+| issue-02.5-rate-limit-pii | proposed | Token bucket rate limit + PII redaction |
+| issue-02.6-activity-log | proposed | Activity log general: quién, qué, cuándo, filtrable por proyecto/usuario/entidad |
+| issue-02.7-passwordless-otp-auth | proposed | Login passwordless OTP por email + RUT/email identifier, devuelve API key (reveal o regenerate) |
+| issue-02.8-custom-roles-permissions | proposed | Custom roles per-org con matriz fine-grained de permisos resource×action, scope opcional por IDs |

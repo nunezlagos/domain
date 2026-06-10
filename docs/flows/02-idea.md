@@ -35,7 +35,7 @@ sequenceDiagram
 
 ## Asserts BD
 
-Igual que `chat`: ninguna fila nueva en intake/hu_drafts/user_stories.
+Igual que `chat`: ninguna fila nueva en intake/issue_drafts/issues.
 La idea queda en el contexto conversacional del agente IA, NO en BD
 estructurada.
 

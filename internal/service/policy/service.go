@@ -1,4 +1,4 @@
-// Package policy — HU-01.8 platform policies en BD como SOT.
+// Package policy — issue-01.8 platform policies en BD como SOT.
 //
 // Cada policy es un markdown body + structured JSONB versioned. Los agents
 // IA consumen las activas via MCP tool domain_policy_get(slug) para

@@ -1,0 +1,27 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/service/flow.Service CRUD sobre tabla flows (migration 000013).
+
+  Spec JSONB:
+  - Version: int (>0)
+  - Steps: array de Step{ID, Type, Config, OnError, Retries, TimeoutS}
+
+  Spec.Validate() verifica:
+  - version > 0
+  - al menos 1 step
+  - step.id no vacío y único en el flow
+  - step.type en whitelist
+  - step.on_error referencia step válido o "fail"/"continue"
+
+  HTTP: POST/GET/DELETE /api/v1/flows + POST /api/v1/flows/{id}/run.
+
+  Tests integration con runner (ver issue-09.3 state).
+
+  Pending REQ-09:
+  - issue-09.5 subflows (step.type=subflow)
+  - issue-09.7 versioning con flow_versions table
+  - issue-09.11 reproducibility snapshots
+  - issue-09.12 dry-run plan mode (sin ejecutar, valida DAG)

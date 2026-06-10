@@ -1,4 +1,4 @@
-// Package org — HU-21.1 organization management.
+// Package org — issue-21.1 organization management.
 //
 // CRUD organizaciones, member list, transfer ownership, soft-delete con confirm.
 // Cada mutation registra audit_log via audit.Recorder inyectado.
@@ -295,7 +295,7 @@ func (s *Service) SoftDelete(ctx context.Context, orgID, actorID uuid.UUID, conf
 }
 
 // AddMember inserta user en org con el rol indicado (helper para tests; en prod
-// se usa HU-21.2 invitations flow).
+// se usa issue-21.2 invitations flow).
 func (s *Service) AddMember(ctx context.Context, orgID uuid.UUID, email, name, role string) (*Member, error) {
 	var m Member
 	err := s.Pool.QueryRow(ctx,

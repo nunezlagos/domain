@@ -1,4 +1,4 @@
-// HU-02.7 OTP unit tests.
+// issue-02.7 OTP unit tests.
 
 package otp
 

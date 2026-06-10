@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-25.5 RLS integration tests con testcontainers.
+// issue-25.5 RLS integration tests con testcontainers.
 // Cubre defense-in-depth: queries SIN SET LOCAL deben devolver 0 rows.
 
 package txctx_test
@@ -122,7 +122,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	require.Equal(t, 1, countB, "org B debe ver solo SU secret")
 }
 
-// Sabotaje (HU-25.5 escenario 1): query sin SET LOCAL → 0 rows.
+// Sabotaje (issue-25.5 escenario 1): query sin SET LOCAL → 0 rows.
 // Esta es la prueba CLAVE: defense-in-depth contra bugs RBAC.
 func TestSabotage_RLS_NoSetLocal_ZeroRows(t *testing.T) {
 	pool, cleanup := setupRLS(t)

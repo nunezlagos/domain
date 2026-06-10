@@ -1,4 +1,4 @@
-// Package seeds — HU-01.7 seeders-system.
+// Package seeds — issue-01.7 seeders-system.
 //
 // Framework Go de seeders idempotente con go:embed. Cada Seeder:
 //  - tiene Name único + Version int

@@ -1,4 +1,4 @@
-// Package dedup — HU-03.6 hash SHA-256 normalizado para dedup de observations.
+// Package dedup — issue-03.6 hash SHA-256 normalizado para dedup de observations.
 //
 // Hash input es la concatenación de campos identificantes con separador NUL.
 // Pre-normalización del content: lowercasing + whitespace collapse + trim.

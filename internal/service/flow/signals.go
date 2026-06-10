@@ -1,4 +1,4 @@
-// HU-09.8 external-signals — inyecta señales externas a flows en ejecución.
+// issue-09.8 external-signals — inyecta señales externas a flows en ejecución.
 //
 // Tabla flow_signals (migration 000062) buffer-able. El executor del flow
 // polea signals para sus runs activos cada tick; un step puede esperar una

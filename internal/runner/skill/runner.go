@@ -1,10 +1,10 @@
-// Package skillrunner — HU-05.5 ejecución runtime de los 4 skill types.
+// Package skillrunner — issue-05.5 ejecución runtime de los 4 skill types.
 //
 // Types soportados:
 //   - prompt  : sustituye {{var}} en content; resultado = template renderizado
 //   - api     : HTTP call con URL/method/headers desde content (JSON config)
-//   - code    : NotImplemented — requiere sandbox (HU-11.1)
-//   - mcp_tool: NotImplemented — requiere MCP forward (HU-12.4)
+//   - code    : NotImplemented — requiere sandbox (issue-11.1)
+//   - mcp_tool: NotImplemented — requiere MCP forward (issue-12.4)
 //
 // Cada ejecución se persiste en agent_run.outputs o como skill_run independiente
 // (futuro). Por ahora el caller (agentrunner) recibe el resultado string.
@@ -57,9 +57,9 @@ func (r *Runner) Execute(ctx context.Context, sk *skillsvc.Skill, args map[strin
 	case skillsvc.TypeAPI:
 		return r.executeAPI(ctx, sk, args)
 	case skillsvc.TypeCode:
-		return "", fmt.Errorf("%w: skill type 'code' requires sandbox runner (HU-11.1 pending)", ErrNotImplemented)
+		return "", fmt.Errorf("%w: skill type 'code' requires sandbox runner (issue-11.1 pending)", ErrNotImplemented)
 	case skillsvc.TypeMCPTool:
-		return "", fmt.Errorf("%w: skill type 'mcp_tool' requires MCP forward (HU-12.4 pending)", ErrNotImplemented)
+		return "", fmt.Errorf("%w: skill type 'mcp_tool' requires MCP forward (issue-12.4 pending)", ErrNotImplemented)
 	default:
 		return "", fmt.Errorf("unknown skill type: %s", sk.SkillType)
 	}

@@ -1,9 +1,9 @@
-// Package webhook — HU-10.2 inbound webhooks.
+// Package webhook — issue-10.2 inbound webhooks.
 //
 // Cliente externo (GitHub, GitLab, generic) hace POST /webhooks/:slug?token=...
 // Domain verifica HMAC y dispatchea target (flow/agent/skill).
 //
-// Secret se cifra at-rest con crypto.AESGCM (HU-02.3). Cada delivery se
+// Secret se cifra at-rest con crypto.AESGCM (issue-02.3). Cada delivery se
 // persiste en webhook_deliveries para auditoría.
 package webhook
 

@@ -1,4 +1,4 @@
-// HU-15.3 aggregate metric alert evaluator (cron-driven).
+// issue-15.3 aggregate metric alert evaluator (cron-driven).
 
 package usagealerts
 

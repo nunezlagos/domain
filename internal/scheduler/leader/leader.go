@@ -1,4 +1,4 @@
-// Package leader — HU-26.2 leader election via Postgres advisory locks.
+// Package leader — issue-26.2 leader election via Postgres advisory locks.
 //
 // Cada pod intenta tomar un advisory lock global (pg_try_advisory_lock).
 // El primero gana y es leader. Si la connection DB muere (graceful shutdown

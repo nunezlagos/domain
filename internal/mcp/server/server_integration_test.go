@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-12.1 MCP server tools integration test.
+// issue-12.1 MCP server tools integration test.
 // Usa mcptest.NewServer (in-process) para invocar tools sin levantar stdio real.
 
 package mcpserver_test

@@ -10,7 +10,7 @@ import (
 )
 
 // UsageAlerter es invocado tras cada agent_run completion para evaluar alerts
-// configuradas (HU-15.3). Implementaciones: usagealerts.Service.
+// configuradas (issue-15.3). Implementaciones: usagealerts.Service.
 type UsageAlerter interface {
 	EvaluateRunEvent(ctx context.Context, orgID uuid.UUID, costUSD float64, tokensTotal int64) ([]AlertFired, error)
 }
@@ -58,7 +58,7 @@ func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUI
 			slog.String("error", err.Error()))
 	}
 
-	// HU-15.3: evaluar alerts y emitir evento usage.alert.fired por cada match.
+	// issue-15.3: evaluar alerts y emitir evento usage.alert.fired por cada match.
 	if e.UsageAlerts != nil {
 		fired, err := e.UsageAlerts.EvaluateRunEvent(ctx, orgID, costUSD, tokensTotal)
 		if err != nil && e.Logger != nil {

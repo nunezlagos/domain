@@ -1,4 +1,4 @@
-// Package jira — HU-04.9 driver Jira Cloud para sync push/pull.
+// Package jira — issue-04.9 driver Jira Cloud para sync push/pull.
 //
 // HTTP client minimalista contra Atlassian REST API v3:
 //   - CreateIssue para Epic (REQ) o Story (HU)
@@ -236,7 +236,7 @@ func walkADF(node map[string]any, out *strings.Builder) {
 	}
 }
 
-// VerifyWebhookSignature valida HMAC-SHA256 del payload (HU-10.2 pattern).
+// VerifyWebhookSignature valida HMAC-SHA256 del payload (issue-10.2 pattern).
 // Header `X-Hub-Signature-256` viene como "sha256=<hex>".
 func VerifyWebhookSignature(payload []byte, signatureHeader, secret string) bool {
 	expected := strings.TrimPrefix(signatureHeader, "sha256=")

@@ -1,4 +1,4 @@
-// HU-09.9 saga-compensation — patrón Saga para flows con side-effects
+// issue-09.9 saga-compensation — patrón Saga para flows con side-effects
 // externos (envío email, write DB, llamada API). Cada step puede declarar
 // un compensation step que revierte su efecto si un step posterior falla.
 //

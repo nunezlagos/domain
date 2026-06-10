@@ -1,0 +1,40 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Extendido internal/dbconvlint + cmd/db-conventions-lint con reglas safety
+  (en lugar de agregar dependencia external squawk; lint Go custom es más
+  fácil de mantener y se integra con conventions enforcement issue-25.13).
+
+  Reglas safety nuevas:
+  - require-concurrent-index: CREATE INDEX sobre tabla existente debe usar
+    CONCURRENTLY. Skip si la tabla se crea en el mismo .up.sql (tabla vacía).
+  - require-default-for-not-null: ALTER TABLE ADD COLUMN ... NOT NULL requiere
+    DEFAULT (sino rewrite full table)
+  - require-if-exists-drop: DROP TABLE/COLUMN debe usar IF EXISTS
+  - no-vacuum-full: VACUUM FULL prohibido (exclusive lock)
+  - no-explicit-lock-table: LOCK TABLE prohibido sin override
+  - require-not-valid-fk: ALTER TABLE ADD FOREIGN KEY debe usar NOT VALID +
+    VALIDATE en migration posterior
+
+  Override: -- domain-lint-ignore-next: <regla> con `reason:` en línea previa.
+  Aplicado a las 2 migrations existentes que requerían override (000026 users
+  rut index y 000031 observations dedup index).
+
+  Multiline-aware: reCreateIndexStmt usa (?is) DOTALL para capturar CREATE
+  INDEX statements multilínea correctamente.
+
+  Tests unit (11 escenarios + 1 sabotaje):
+  - CREATE INDEX sin CONCURRENTLY flagged; con CONCURRENTLY pasa
+  - ADD COLUMN NOT NULL sin DEFAULT flagged; con DEFAULT pasa
+  - DROP TABLE / COLUMN sin IF EXISTS flagged
+  - VACUUM FULL, LOCK TABLE flagged
+  - ADD FK sin NOT VALID flagged; con NOT VALID pasa
+  - Override con -- domain-lint-ignore-next funciona
+  - sabotaje: comment falso ("-- TODO: agregar CONCURRENTLY") NO bypassea
+
+  Pending:
+  - CI integration (.github/workflows/lint.yml) — pending issue-19.1 CI core
+  - Makefile target `db-lint` ya posible via `go run cmd/db-conventions-lint`
+  - Severity levels (error vs warning) — agregar --strict flag

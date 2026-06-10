@@ -1,8 +1,8 @@
-// Package otp — HU-02.7 passwordless OTP login.
+// Package otp — issue-02.7 passwordless OTP login.
 //
 // Flow:
 //  1. Request: identifier (RUT o email) → genera código 6 dígitos, bcrypt hash,
-//     persist en otp_codes, envía via canal email (HU-20.2)
+//     persist en otp_codes, envía via canal email (issue-20.2)
 //  2. Verify: identifier + code + action (reveal | regenerate) → si OK devuelve
 //     API key del user (reveal: actual decifrada; regenerate: nueva).
 //
@@ -67,7 +67,7 @@ type UserLookup interface {
 	ByRUT(ctx context.Context, rut string) (*User, error)
 }
 
-// Mailer envía OTP code por email (canal HU-20.2).
+// Mailer envía OTP code por email (canal issue-20.2).
 type Mailer interface {
 	SendOTP(ctx context.Context, to, code string, expiresIn time.Duration) error
 }

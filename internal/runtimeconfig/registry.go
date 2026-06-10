@@ -1,4 +1,4 @@
-// Package runtimeconfig — HU-27.3 hot-reload de configs sin restart.
+// Package runtimeconfig — issue-27.3 hot-reload de configs sin restart.
 //
 // La fuente de verdad es la tabla runtime_configs (Postgres). En memoria
 // se mantiene un atomic snapshot. Refresh por SIGHUP o cron 30s.

@@ -1,4 +1,4 @@
-// HU-11.2 selfhosted-runner — un runner externo (deployed por el customer
+// issue-11.2 selfhosted-runner — un runner externo (deployed por el customer
 // en su VPC) consume tareas vía HTTP polling, ejecuta localmente, y devuelve
 // resultados. Permite ejecutar cargas que no pueden salir del perímetro
 // (privacy, compliance) sin que Domain SaaS las vea.

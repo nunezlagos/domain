@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-21.2 invitations integration tests.
+// issue-21.2 invitations integration tests.
 
 package invite_test
 

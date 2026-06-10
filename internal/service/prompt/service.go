@@ -1,4 +1,4 @@
-// Package prompt — HU-03.3 prompt templates versionados.
+// Package prompt — issue-03.3 prompt templates versionados.
 //
 // Cada prompt tiene slug + version (UNIQUE por org+project+slug+version).
 // Active = is_active=true AND deleted_at IS NULL. Solo UNA versión activa por

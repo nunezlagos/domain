@@ -1,4 +1,4 @@
-# DB Password Rotation Runbook — HU-25.10
+# DB Password Rotation Runbook — issue-25.10
 
 Policy: rotar passwords de roles Postgres cada 90 días (o ante leak sospechoso).
 

@@ -1,4 +1,4 @@
-// HU-16.5 web-admin-memories — admin UI CRUD para knowledge_docs +
+// issue-16.5 web-admin-memories — admin UI CRUD para knowledge_docs +
 // observations (read-only listing + soft-delete admin action).
 package webui
 

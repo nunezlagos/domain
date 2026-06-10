@@ -1,4 +1,4 @@
-// Package projectmerge — HU-01.5 fusiona un proyecto source en target.
+// Package projectmerge — issue-01.5 fusiona un proyecto source en target.
 //
 // Migra observations, skills, flows, crons, agents desde source.project_id
 // hacia target.project_id en una sola transacción. Tabla project_merges

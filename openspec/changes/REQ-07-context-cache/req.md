@@ -19,7 +19,7 @@ Gestión de contexto: optimización de ventana, truncamiento inteligente, stitch
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-07.1-context-optimizer | propuesta | Optimizador de ventana de contexto: selecciona fragmentos más relevantes por prioridad recent > relevant > structured con truncamiento inteligente |
-| HU-07.2-cross-session-stitch | propuesta | Stitching cross-session: fusiona resúmenes de sesiones anteriores con dedup semántico |
-| HU-07.3-llm-semantic-cache | propuesta | Caché semántico de LLM: respuestas cacheadas por similitud de embeddings con TTL configurable |
-| HU-07.4-token-budget | propuesta | Token budget manager: hard/soft limits, tracking streaming, validación vs model registry |
+| issue-07.1-context-optimizer | propuesta | Optimizador de ventana de contexto: selecciona fragmentos más relevantes por prioridad recent > relevant > structured con truncamiento inteligente |
+| issue-07.2-cross-session-stitch | propuesta | Stitching cross-session: fusiona resúmenes de sesiones anteriores con dedup semántico |
+| issue-07.3-llm-semantic-cache | propuesta | Caché semántico de LLM: respuestas cacheadas por similitud de embeddings con TTL configurable |
+| issue-07.4-token-budget | propuesta | Token budget manager: hard/soft limits, tracking streaming, validación vs model registry |

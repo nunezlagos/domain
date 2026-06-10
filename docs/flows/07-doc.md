@@ -47,7 +47,7 @@ sequenceDiagram
     Wizard->>BD: status=finished
 
     Cli->>MCP: Commit
-    Cli->>BD: INSERT user_stories priority=baja
+    Cli->>BD: INSERT issues priority=baja
 
     Note over Cli: Agente IA edita los .md targets<br/>directo (no TDD strict para docs)
 ```
@@ -70,9 +70,9 @@ Más cortito que feature porque NO necesita:
 ## Asserts BD
 
 ```sql
-SELECT mode, priority FROM hu_drafts
-JOIN user_stories ON user_stories.slug = jsonb_extract_path_text(answers, 'slug')
-WHERE hu_drafts.id = <draft_id>;
+SELECT mode, priority FROM issue_drafts
+JOIN issues ON issues.slug = jsonb_extract_path_text(answers, 'slug')
+WHERE issue_drafts.id = <draft_id>;
 -- Expected: mode='doc', priority='baja' o 'media'
 ```
 

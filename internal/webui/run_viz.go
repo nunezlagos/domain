@@ -1,8 +1,8 @@
-// HU-16.2 web-run-visualization — página de visualización de runs con
+// issue-16.2 web-run-visualization — página de visualización de runs con
 // timeline + streaming live de chunks vía SSE.
 //
 // Pattern: server-rendered HTML + EventSource del browser conectado al
-// endpoint streaming del runner (HU-11.3). Sin SPA, sin react-flow.
+// endpoint streaming del runner (issue-11.3). Sin SPA, sin react-flow.
 package webui
 
 import (
@@ -92,7 +92,7 @@ func (a *RunViz) apiList(w http.ResponseWriter, r *http.Request) {
 }
 
 // apiDetail: /admin/api/runs/{type}/{id}
-// Para runs flow incluye steps + snapshots (HU-09.11) + heartbeats (HU-09.10).
+// Para runs flow incluye steps + snapshots (issue-09.11) + heartbeats (issue-09.10).
 func (a *RunViz) apiDetail(w http.ResponseWriter, r *http.Request) {
 	if !a.checkAuth(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)

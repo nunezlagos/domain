@@ -1,4 +1,4 @@
-// Package webui — HU-16.1 web dashboard MVP.
+// Package webui — issue-16.1 web dashboard MVP.
 //
 // Sirve HTML estático embedded + endpoints JSON que la página consume vía
 // fetch. NO es una SPA completa: es un dashboard read-only minimal con
@@ -8,7 +8,7 @@
 //   - Tail de errors recientes
 //
 // Para SPA full (run viz interactiva, flow editor visual, admin CRUD de
-// skills/memories) ver HU-16.2 a HU-16.5 — esas requieren stack frontend
+// skills/memories) ver issue-16.2 a issue-16.5 — esas requieren stack frontend
 // (React/Vue + build pipeline) fuera del alcance de este package Go.
 package webui
 

@@ -1,0 +1,31 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/api/backpressure/ package:
+  - Queue struct (Name, Table, PendingCondition, GlobalCap, PerOrgCap, OrgColumn)
+  - PredefinedQueues catálogo: agent_runs (5000 global / 100 org),
+    flow_runs (5000/100), outbound_webhook_deliveries (20000/2000)
+  - Limiter.CheckQueue(ctx, queue, orgID) → nil | ErrQueueFull | ErrOrgQuotaExceeded
+    Single SQL query con 2 subqueries (1 roundtrip) para depth global + per-org.
+  - RetryAfterSeconds(err) heurística: 60s queue_full, 5s org quota
+
+  HTTP handlers aplican shed-load:
+  - POST /api/v1/agents/{id}/run → 429 + Retry-After header si saturado
+  - POST /api/v1/flows/{id}/run → 429 idem
+
+  Error codes:
+  - queue_full → 60s (cap global)
+  - org_queue_limit_exceeded → 5s (espera a que org libere)
+
+  Tests backpressure_test.go cubren RetryAfterSeconds + catálogo de queues.
+
+  Pending:
+  - Métricas Prometheus: domain_queue_depth{queue} gauge +
+    domain_queue_shed_total{queue} counter + domain_queue_dropped_total{queue,reason}
+  - Per-plan caps (Free 50, Pro 500, Enterprise unlimited) vía billing.Limits
+  - Aplicar a outbound_webhook_deliveries enqueue path
+  - Drop-oldest policy para telemetry (escenario 5)
+  - issue-26.6 escenario 4: worker pool size adapter (alert al cruzar threshold)
+  - Integration test con httptest llenando queue manualmente y validando 429

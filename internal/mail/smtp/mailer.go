@@ -1,4 +1,4 @@
-// Package smtpmail — HU-20.2 SMTP mailer real.
+// Package smtpmail — issue-20.2 SMTP mailer real.
 //
 // Implementa interfaces invite.Mailer y otp.Mailer usando net/smtp stdlib.
 // Soporta plain auth + TLS (STARTTLS opcional). Config via Config struct.

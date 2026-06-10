@@ -20,7 +20,7 @@ import (
 
 type fix struct {
 	svc  *tsvc.Service
-	huID uuid.UUID
+	issueID uuid.UUID
 }
 
 func setupTask(t *testing.T) (*fix, func()) {
@@ -47,19 +47,19 @@ func setupTask(t *testing.T) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	svc := &tsvc.Service{Pool: pools.App, Audit: rec}
 
-	var reqID, huID uuid.UUID
+	var reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
 		`INSERT INTO requirements (slug, title) VALUES ('REQ-task-test', 'Task Test REQ') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO user_stories (req_id, slug, title) VALUES ($1, 'HU-task-test', 'Test HU') RETURNING id`,
+		`INSERT INTO issues (req_id, slug, title) VALUES ($1, 'HU-task-test', 'Test HU') RETURNING id`,
 		reqID,
-	).Scan(&huID)
+	).Scan(&issueID)
 	require.NoError(t, err)
 
-	return &fix{svc: svc, huID: huID}, func() {
+	return &fix{svc: svc, issueID: issueID}, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
@@ -76,7 +76,7 @@ func TestCreateTasks_Batch(t *testing.T) {
 		{Section: "Tests", Description: "Integration test"},
 		{Section: "Cierre", Description: "Manual verification"},
 	}
-	tasks, err := f.svc.CreateTasks(ctx, f.huID, inputs)
+	tasks, err := f.svc.CreateTasks(ctx, f.issueID, inputs)
 	require.NoError(t, err)
 	require.Len(t, tasks, 4)
 	for _, tsk := range tasks {
@@ -91,7 +91,7 @@ func TestCreateTasks_EmptyFails(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, err := f.svc.CreateTasks(ctx, f.huID, nil)
+	_, err := f.svc.CreateTasks(ctx, f.issueID, nil)
 	require.Error(t, err)
 }
 
@@ -111,13 +111,13 @@ func TestListTasks_Ordered(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _ = f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	_, _ = f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Tests", Description: "Test B"},
 		{Section: "Backend", Description: "Backend A"},
 		{Section: "Backend", Description: "Backend B"},
 	})
 
-	tasks, err := f.svc.ListTasks(ctx, f.huID)
+	tasks, err := f.svc.ListTasks(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Len(t, tasks, 3)
 	require.Equal(t, "Backend", tasks[0].Section)
@@ -130,7 +130,7 @@ func TestUpdateTaskStatus_PendingToInProgress(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Do work"},
 	})
 
@@ -145,7 +145,7 @@ func TestUpdateTaskStatus_InProgressToCompleted(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Do work"},
 	})
 	_, _ = f.svc.UpdateTaskStatus(ctx, tasks[0].ID, tsvc.StatusInProgress, "")
@@ -163,7 +163,7 @@ func TestUpdateTaskStatus_InvalidTransition(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Skip"},
 	})
 
@@ -176,7 +176,7 @@ func TestUpdateTaskStatus_InvalidStatus(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Bad status"},
 	})
 
@@ -189,7 +189,7 @@ func TestGetTask_WithVerificationAndSabotage(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Full cycle"},
 	})
 	taskID := tasks[0].ID
@@ -230,7 +230,7 @@ func TestGetProgress(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "T1"},
 		{Section: "Backend", Description: "T2"},
 		{Section: "Tests", Description: "T3"},
@@ -244,7 +244,7 @@ func TestGetProgress(t *testing.T) {
 		_, _ = f.svc.UpdateTaskStatus(ctx, tasks[i].ID, tsvc.StatusCompleted, "")
 	}
 
-	p, err := f.svc.GetProgress(ctx, f.huID)
+	p, err := f.svc.GetProgress(ctx, f.issueID)
 	require.NoError(t, err)
 	require.Equal(t, 5, p.Total)
 	require.Equal(t, 3, p.Completed)
@@ -256,7 +256,7 @@ func TestCreateVerification_NotCompletedFails(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Pending task"},
 	})
 
@@ -287,7 +287,7 @@ func TestSabotage_DropFKBreaksVerification(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	tasks, _ := f.svc.CreateTasks(ctx, f.huID, []tsvc.CreateTaskInput{
+	tasks, _ := f.svc.CreateTasks(ctx, f.issueID, []tsvc.CreateTaskInput{
 		{Section: "Backend", Description: "Drop FK test"},
 	})
 	taskID := tasks[0].ID

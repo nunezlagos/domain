@@ -180,7 +180,7 @@ func TestObservation_SearchHybrid_EmptyQuery(t *testing.T) {
 	require.Nil(t, results)
 }
 
-// HU-03.6: dedup detecta duplicado exacto.
+// issue-03.6: dedup detecta duplicado exacto.
 func TestObservation_Save_DedupRejectsDuplicate(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
@@ -197,7 +197,7 @@ func TestObservation_Save_DedupRejectsDuplicate(t *testing.T) {
 	require.ErrorIs(t, err, obssvc.ErrDuplicate)
 }
 
-// HU-03.6: normalización detecta duplicado con whitespace/caso distinto.
+// issue-03.6: normalización detecta duplicado con whitespace/caso distinto.
 func TestObservation_Save_DedupNormalizes(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
@@ -215,7 +215,7 @@ func TestObservation_Save_DedupNormalizes(t *testing.T) {
 		"variantes de caso/whitespace deben detectarse como duplicados")
 }
 
-// HU-03.6: distinto observation_type permite mismo content.
+// issue-03.6: distinto observation_type permite mismo content.
 func TestObservation_Save_DedupScopedByType(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
@@ -232,7 +232,7 @@ func TestObservation_Save_DedupScopedByType(t *testing.T) {
 	require.NoError(t, err, "distinto type → distinto hash → permitido")
 }
 
-// HU-03.6: privacy stripping remueve bloques <private>.
+// issue-03.6: privacy stripping remueve bloques <private>.
 func TestObservation_Save_StripsPrivateBlocks(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()

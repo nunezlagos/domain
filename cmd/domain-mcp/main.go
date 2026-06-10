@@ -1,6 +1,6 @@
 // Package main es el entrypoint de `domain-mcp`: servidor MCP stdio.
 //
-// HU-12.1 mcp-core-stdio. Resuelve principal vía env var DOMAIN_API_KEY al
+// issue-12.1 mcp-core-stdio. Resuelve principal vía env var DOMAIN_API_KEY al
 // boot y expone tools `domain_mem_save`, `domain_mem_search`,
 // `domain_mem_context`, `domain_mem_get_observation` sobre stdin/stdout JSON-RPC.
 //
@@ -39,7 +39,7 @@ import (
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
 	flowsvc "nunezlagos/domain/internal/service/flow"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
@@ -140,11 +140,11 @@ func main() {
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
 
-	hubuilderSvc := &hubuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
+	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
 	extsyncSvc := &extsync.Service{Pool: pools.App}
 
-	// HU-12.7 prompt router + workflow override.
+	// issue-12.7 prompt router + workflow override.
 	var classifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
 	if anthrop, _ := factory.Get("anthropic"); anthrop != nil {
 		classifier = &promptrouter.LLMClassifier{
@@ -154,7 +154,7 @@ func main() {
 	}
 	promptRouterSvc := &promptrouter.Router{
 		IntakeService:    intakeSvc,
-		HubuilderService: hubuilderSvc,
+		IssueBuilderService: issuebuilderSvc,
 		Classifier:       classifier,
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
@@ -172,7 +172,7 @@ func main() {
 		AgentRunner:    agentRunnerInst,
 		Flows:          flowService,
 		FlowRunner:     flowRunnerInst,
-		Hubuilder:      hubuilderSvc,
+		Hubuilder:      issuebuilderSvc,
 		Intake:         intakeSvc,
 		ExtSync:        extsyncSvc,
 		PromptRouter:   promptRouterSvc,

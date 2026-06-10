@@ -45,7 +45,7 @@ DOMAIN_DATABASE_AUTH_URL=postgres://app_admin:***@db:5432/domain?sslmode=verify-
 
 Si `DOMAIN_DATABASE_AUTH_URL` no está seteado, el cmd/domain server registra
 una warning y reutiliza el App pool. Esto solo es aceptable en development
-local single-user; en staging/prod CI rechaza el config (HU-25.6 futura).
+local single-user; en staging/prod CI rechaza el config (issue-25.6 futura).
 
 ## En tests
 
@@ -64,6 +64,6 @@ Esto es funcionalmente equivalente a dos DSN distintas pero usa el container
 
 ## Detección en CI
 
-El linter HU-25.13 podría extenderse para verificar que `*PGStore.Pool` se
+El linter issue-25.13 podría extenderse para verificar que `*PGStore.Pool` se
 asigna desde `pools.Auth` SOLO en `internal/auth/*` y `internal/audit/*`.
 Pending.

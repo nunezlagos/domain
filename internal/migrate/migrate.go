@@ -1,5 +1,5 @@
 // Package migrate wrappea golang-migrate embebido en el binario.
-// HU-01.1 db-schema-migrations.
+// issue-01.1 db-schema-migrations.
 //
 // Migraciones SQL viven en internal/migrate/migrations/ embebidas con go:embed.
 // Por convención .claude/rules/db.md, migraciones nunca renombrar ni reordenar.

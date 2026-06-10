@@ -1,4 +1,4 @@
-// HU-06.6 token-count-stream — streaming token counter para responses LLM.
+// issue-06.6 token-count-stream — streaming token counter para responses LLM.
 //
 // Diseñado para ser consumido por wrappers de Anthropic/OpenAI/Ollama
 // que streamean tokens. Calcula:

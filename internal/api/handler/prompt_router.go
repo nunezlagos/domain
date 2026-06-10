@@ -14,7 +14,7 @@ type promptRouterRequest struct {
 	RawText string `json:"raw_text"`
 }
 
-// routePrompt — endpoint HTTP alternativo al MCP tool domain_prompt (HU-12.7).
+// routePrompt — endpoint HTTP alternativo al MCP tool domain_prompt (issue-12.7).
 // Útil para clientes no-MCP (web UI, scripts, curl, tests E2E).
 //
 // POST /api/v1/prompt

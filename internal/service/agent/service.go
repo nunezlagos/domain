@@ -1,4 +1,4 @@
-// Package agent — HU-08.1 agent definitions CRUD.
+// Package agent — issue-08.1 agent definitions CRUD.
 //
 // Un agent compone:
 //   - model + provider (claude-sonnet-4-6 / claude-opus-4-7 / etc.)
@@ -6,7 +6,7 @@
 //   - skills_slugs []string (la lista de skills que tiene acceso a ejecutar)
 //   - guardrails: max_iterations, token_budget, temperature
 //
-// La ejecución (run) vive en HU-08.2, separada. Aquí solo CRUD + validación.
+// La ejecución (run) vive en issue-08.2, separada. Aquí solo CRUD + validación.
 package agent
 
 import (

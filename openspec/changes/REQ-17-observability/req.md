@@ -19,6 +19,6 @@ Sistema de observabilidad operacional: métricas Prometheus exportadas por defec
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-17.1-metrics-prometheus | proposed | Métricas Prometheus en `/metrics`: runtime Go, HTTP, DB pool, runs, costo, custom |
-| HU-17.2-tracing-otel | proposed | Tracing OpenTelemetry con exporter OTLP, propagación W3C, sampling configurable |
-| HU-17.3-structured-logging | proposed | Logs JSON con slog, correlación trace_id/request_id, niveles configurables |
+| issue-17.1-metrics-prometheus | proposed | Métricas Prometheus en `/metrics`: runtime Go, HTTP, DB pool, runs, costo, custom |
+| issue-17.2-tracing-otel | proposed | Tracing OpenTelemetry con exporter OTLP, propagación W3C, sampling configurable |
+| issue-17.3-structured-logging | proposed | Logs JSON con slog, correlación trace_id/request_id, niveles configurables |

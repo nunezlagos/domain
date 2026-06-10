@@ -6,7 +6,7 @@
 //  1. Clasifica intent (chat | idea | feature | fix | hotfix | refactor | doc | rfc)
 //  2. Si chat/idea: responde directamente, NO entra al SDD.
 //  3. Si fix/feature/etc.: crea intake_payload + arranca el wizard
-//     interactivo HU-04.7 con el mode correspondiente, devuelve la
+//     interactivo issue-04.7 con el mode correspondiente, devuelve la
 //     primera pregunta al cliente.
 //
 // El cliente sigue con domain_hu_create_answer / domain_intake_* etc.
@@ -22,7 +22,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
 )
 
@@ -60,7 +60,7 @@ type Response struct {
 	Confidence   float64             `json:"confidence"`
 	IntakeID     *uuid.UUID          `json:"intake_id,omitempty"`
 	DraftID      *uuid.UUID          `json:"draft_id,omitempty"`
-	NextQuestion *hubuilder.Question `json:"next_question,omitempty"`
+	NextQuestion *issuebuilder.Question `json:"next_question,omitempty"`
 	Reply        string              `json:"reply,omitempty"`
 	Reasoning    string              `json:"reasoning,omitempty"`
 }
@@ -74,7 +74,7 @@ type Classifier interface {
 // Router orquesta el flow.
 type Router struct {
 	IntakeService    *intake.Service
-	HubuilderService *hubuilder.Service
+	IssueBuilderService *issuebuilder.Service
 	Classifier       Classifier
 
 	// MinConfidenceForWizard: si la confianza del classifier es menor,
@@ -156,7 +156,7 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 
 	// Mapeo Intent → wizard mode.
 	mode := wizardModeForIntent(intent)
-	draft, q, err := r.HubuilderService.Start(ctx, mode, rawText, createdBy)
+	draft, q, err := r.IssueBuilderService.Start(ctx, mode, rawText, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("wizard start: %w", err)
 	}
@@ -196,15 +196,15 @@ func severityFromIntent(in Intent) string {
 func wizardModeForIntent(in Intent) string {
 	switch in {
 	case IntentFix, IntentHotfix:
-		return hubuilder.ModeBugFix
+		return issuebuilder.ModeBugFix
 	case IntentRefactor:
-		return hubuilder.ModeRefactor
+		return issuebuilder.ModeRefactor
 	case IntentDoc:
-		return hubuilder.ModeDoc
+		return issuebuilder.ModeDoc
 	case IntentRFC:
-		return hubuilder.ModeRFC
+		return issuebuilder.ModeRFC
 	}
-	return hubuilder.ModeFeature
+	return issuebuilder.ModeFeature
 }
 
 func defaultChatReply(intent Intent, rawText string) string {

@@ -23,7 +23,7 @@ import (
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/secrets"
-	"nunezlagos/domain/internal/service/hubuilder"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	intakesvc "nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -51,7 +51,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	rolesvc "nunezlagos/domain/internal/service/role"
-	usvc "nunezlagos/domain/internal/service/userstory"
+	usvc "nunezlagos/domain/internal/service/issue"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -104,8 +104,8 @@ type API struct {
 	TaskService    *tsvc.Service
 	TraceService        *tracesvc.Service
 	AttachmentService   *attSvc.Service
-	Hubuilder           *hubuilder.Service
-	HubuilderAdaptive   *hubuilder.AdaptiveService
+	Hubuilder           *issuebuilder.Service
+	IssueBuilderAdaptive   *issuebuilder.AdaptiveService
 	IntakeService       *intakesvc.Service
 	PromptRouter        *promptrouter.Router
 	WorkflowImport      *workflowimport.Service
@@ -119,15 +119,15 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
 
-	// Audit logs (HU-02.4, requiere auth)
+	// Audit logs (issue-02.4, requiere auth)
 	mux.HandleFunc("GET /api/v1/audit-logs", a.listAuditLogs)
 
-	// API keys CRUD (HU-02.1)
+	// API keys CRUD (issue-02.1)
 	mux.HandleFunc("GET /api/v1/api-keys", a.listAPIKeys)
 	mux.HandleFunc("POST /api/v1/api-keys", a.createAPIKey)
 	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", a.revokeAPIKey)
 
-	// Activity logs (HU-02.6)
+	// Activity logs (issue-02.6)
 	mux.HandleFunc("GET /api/v1/activity-logs", a.listActivityLogs)
 
 	// Organizaciones (require auth)
@@ -138,7 +138,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
 
-	// Requirements (HU-04.1) — SDD dogfood
+	// Requirements (issue-04.1) — SDD dogfood
 	mux.HandleFunc("POST /api/v1/requirements", a.createRequirement)
 	mux.HandleFunc("GET /api/v1/requirements", a.listRequirements)
 	mux.HandleFunc("GET /api/v1/requirements/{slug}", a.getRequirement)
@@ -146,7 +146,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/requirements/{slug}/archive", a.archiveRequirement)
 	mux.HandleFunc("GET /api/v1/requirements/{slug}/tree", a.getRequirementTree)
 
-	// User stories (HU-04.2)
+	// User stories (issue-04.2)
 	mux.HandleFunc("POST /api/v1/user-stories", a.createUserStory)
 	mux.HandleFunc("GET /api/v1/user-stories", a.listUserStories)
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}", a.getUserStory)
@@ -155,7 +155,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/user-stories/{slug}/scenarios", a.addScenario)
 	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}/scenarios/{id}", a.removeScenario)
 
-	// Proposals & Designs (HU-04.3)
+	// Proposals & Designs (issue-04.3)
 	mux.HandleFunc("POST /api/v1/user-stories/{slug}/proposals", a.createProposal)
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals", a.listProposalVersions)
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals/latest", a.getLatestProposal)
@@ -165,7 +165,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}/designs/latest", a.getLatestDesign)
 	mux.HandleFunc("PATCH /api/v1/designs/{id}/status", a.changeDesignStatus)
 
-	// Tasks (HU-04.4)
+	// Tasks (issue-04.4)
 	mux.HandleFunc("POST /api/v1/user-stories/{slug}/tasks", a.createTasks)
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}/tasks", a.listTasks)
 	mux.HandleFunc("GET /api/v1/tasks/{id}", a.getTask)
@@ -174,7 +174,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/tasks/{id}/sabotage", a.createSabotage)
 	mux.HandleFunc("GET /api/v1/user-stories/{slug}/progress", a.getProgress)
 
-	// Traceability (HU-04.5)
+	// Traceability (issue-04.5)
 	mux.HandleFunc("GET /api/v1/traceability/req/{slug}", a.getRequirementTrace)
 	mux.HandleFunc("GET /api/v1/traceability/code", a.getCodeTrace)
 	mux.HandleFunc("GET /api/v1/traceability/coverage", a.getCoverageDashboard)
@@ -186,14 +186,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/traceability/code-refs", a.addCodeReference)
 	mux.HandleFunc("DELETE /api/v1/traceability/code-refs/{id}", a.removeCodeReference)
 
-	// Attachments / S3 (HU-04.6)
+	// Attachments / S3 (issue-04.6)
 	mux.HandleFunc("POST /api/v1/attachments", a.initUpload)
 	mux.HandleFunc("POST /api/v1/attachments/{id}/confirm", a.confirmUpload)
 	mux.HandleFunc("GET /api/v1/attachments/{id}/download", a.getAttachmentDownload)
 	mux.HandleFunc("GET /api/v1/attachments", a.listAttachments)
 	mux.HandleFunc("DELETE /api/v1/attachments/{id}", a.deleteAttachment)
 
-	// Custom roles (HU-02.8)
+	// Custom roles (issue-02.8)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/roles", a.listRoles)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/roles", a.createRole)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/roles/{slug}", a.getRole)
@@ -257,7 +257,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", a.deleteSkill)
 
-	// Lifecycle (HU-23.2 restore + HU-23.3 GDPR export)
+	// Lifecycle (issue-23.2 restore + issue-23.3 GDPR export)
 	mux.HandleFunc("POST /api/v1/restore", a.restoreEntity)
 	mux.HandleFunc("GET /api/v1/me/export", a.exportMyData)
 	mux.HandleFunc("POST /api/v1/me/erase", a.eraseMyData)
@@ -281,41 +281,41 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/prompts/by-slug/{slug}/versions", a.listPromptVersions)
 	mux.HandleFunc("GET /api/v1/prompts/search", a.searchPrompts)
 
-	// Cost analytics (HU-15.1 + HU-15.2)
+	// Cost analytics (issue-15.1 + issue-15.2)
 	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
-	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // HU-21.3 plan usage actual
+	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 plan usage actual
 
-	// Admin DB stats (HU-25.12)
+	// Admin DB stats (issue-25.12)
 	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
 
-	// Runtime configs (HU-27.3)
+	// Runtime configs (issue-27.3)
 	mux.HandleFunc("GET /api/v1/admin/runtime-configs/{key}", a.getRuntimeConfig)
 	mux.HandleFunc("POST /api/v1/admin/runtime-configs/{key}", a.updateRuntimeConfig)
 
-	// Slow queries (HU-25.2)
+	// Slow queries (issue-25.2)
 	mux.HandleFunc("GET /api/v1/admin/db/slow-queries", a.getSlowQueries)
 
-	// Usage alerts (HU-15.3)
+	// Usage alerts (issue-15.3)
 	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
 	mux.HandleFunc("PATCH /api/v1/usage-alerts/{id}", a.updateUsageAlert)
 	mux.HandleFunc("GET /api/v1/usage-alerts/{id}/fires", a.listUsageAlertFires)
 	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
 
-	// Platform policies (HU-01.8)
+	// Platform policies (issue-01.8)
 	mux.HandleFunc("POST /api/v1/platform/policies", a.createPolicy)
 	mux.HandleFunc("GET /api/v1/platform/policies", a.listPolicies)
 	mux.HandleFunc("GET /api/v1/platform/policies/{slug}", a.getPolicyBySlug)
 	mux.HandleFunc("PATCH /api/v1/platform/policies/{id}", a.updatePolicy)
 	mux.HandleFunc("DELETE /api/v1/platform/policies/{id}", a.deletePolicy)
 
-	// Project templates (HU-01.4)
+	// Project templates (issue-01.4)
 	mux.HandleFunc("POST /api/v1/project-templates", a.createProjectTemplate)
 	mux.HandleFunc("GET /api/v1/project-templates", a.listProjectTemplates)
 	mux.HandleFunc("GET /api/v1/project-templates/{id}", a.getProjectTemplate)
 	mux.HandleFunc("DELETE /api/v1/project-templates/{id}", a.deleteProjectTemplate)
 
-	// HU builder (HU-04.7)
+	// HU builder (issue-04.7)
 	mux.HandleFunc("POST /api/v1/hu-drafts", a.startHubDraft)
 	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/answer", a.answerHubDraft)
 	mux.HandleFunc("GET /api/v1/hu-drafts/{id}/preview", a.previewHubDraft)
@@ -323,7 +323,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/abandon", a.abandonHubDraft)
 	mux.HandleFunc("GET /api/v1/hu-drafts", a.listHubDrafts)
 
-	// MCP servers externos (HU-12.4)
+	// MCP servers externos (issue-12.4)
 	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)
 	mux.HandleFunc("GET /api/v1/mcp-servers", a.listMCPServers)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{id}", a.getMCPServer)
@@ -332,7 +332,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/mcp-servers/{id}/tools", a.listMCPTools)
 	mux.HandleFunc("POST /api/v1/mcp-servers/{id}/invoke", a.invokeMCPTool)
 
-	// Outbound webhooks (HU-10.4)
+	// Outbound webhooks (issue-10.4)
 	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)
 	mux.HandleFunc("GET /api/v1/outbound-webhooks", a.listOutboundWebhooks)
 	mux.HandleFunc("GET /api/v1/outbound-webhooks/{id}", a.getOutboundWebhook)

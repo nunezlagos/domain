@@ -45,7 +45,7 @@ sequenceDiagram
 
     Analyzer-->>Wizard: Envelope{<br/> code.hits=3 (auth module)<br/> memory.matches=2}
 
-    Wizard->>BD: INSERT hu_drafts mode=refactor
+    Wizard->>BD: INSERT issue_drafts mode=refactor
 
     Wizard-->>Cli: Question slot=goal<br/>"Detecté 3 hits en internal/auth/* y 2<br/>diseños previos sobre auth. ¿Qué meta<br/>concreta del refactor? (ej: separar handlers,<br/>extract middlewares, consolidar tipos)"
 
@@ -62,7 +62,7 @@ sequenceDiagram
 
     Wizard->>BD: status=finished
     Cli->>MCP: Commit
-    Cli->>BD: INSERT user_stories slug='auth-handlers-extract'
+    Cli->>BD: INSERT issues slug='auth-handlers-extract'
 
     Note over Cli: Agente IA hace el refactor:<br/>1) crea tests baseline (snapshot)<br/>2) mueve código en pasos pequeños<br/>3) tests siguen verdes en cada paso<br/>4) NO cambios funcionales
     Cli->>BD: INSERT tasks (1 por paso del refactor)
@@ -88,13 +88,13 @@ refactor. El CodebaseSource es esencial acá.
 ## Asserts BD
 
 ```sql
-SELECT mode FROM hu_drafts WHERE id = <draft_id>;
+SELECT mode FROM issue_drafts WHERE id = <draft_id>;
 -- Expected: 'refactor'
 
 -- code.hits debe tener al menos 1 entry
 SELECT jsonb_array_length(
   jsonb_extract_path(answers, '__envelope__', 'code', 'hits')
-) FROM hu_drafts WHERE id = <draft_id>;
+) FROM issue_drafts WHERE id = <draft_id>;
 -- Expected: >= 1
 ```
 

@@ -44,7 +44,7 @@ Si es entidad scoped por org:
 organization_id UUID NOT NULL REFERENCES organizations(id),
 ```
 
-Si aplica soft-delete (la mayoría — ver HU-23.2):
+Si aplica soft-delete (la mayoría — ver issue-23.2):
 ```sql
 deleted_at TIMESTAMPTZ,
 ```
@@ -81,7 +81,7 @@ CREATE TRIGGER set_updated_at_<table>
   ```
 - **GIN** para `tsvector` y `JSONB` con búsquedas
 - **ivfflat** para embeddings (`vector_cosine_ops`)
-- **CONCURRENTLY** SIEMPRE en migraciones (HU-25.3 linter lo enforce)
+- **CONCURRENTLY** SIEMPRE en migraciones (issue-25.3 linter lo enforce)
 
 ## JSONB
 
@@ -109,7 +109,7 @@ Tablas particionadas existentes:
 - SIEMPRE usar parameterized queries (`$1`, `$2`); NUNCA `fmt.Sprintf` con valores
 - Usar `pgx.CollectRows`/`CollectOneRow` con `pgx.RowToStructByName`
 - TX para multi-write con `pool.BeginTxFunc`
-- RLS tables → SIEMPRE via `db.WithOrgTx` helper (HU-25.5)
+- RLS tables → SIEMPRE via `db.WithOrgTx` helper (issue-25.5)
 
 ## Anti-patterns prohibidos
 

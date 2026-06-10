@@ -88,7 +88,7 @@ flowchart LR
     Classifier[LLMClassifier + Heuristic fallback]
     Analyzer[wizardplan.Analyzer<br/>4 fuentes paralelas]
     Planner[wizardplan.Planner + LLM Formulator]
-    Wizard[hubuilder.AdaptiveService]
+    Wizard[issuebuilder.AdaptiveService]
     BD[(Postgres)]
 
     CC --> STDIO
@@ -125,7 +125,7 @@ flowchart TB
     Pools --> In[intake.Service]
     Pools --> Wi[workflowimport.Service]
 
-    Wp --> Hb[hubuilder.AdaptiveService<br/>wraps Service v1]
+    Wp --> Hb[issuebuilder.AdaptiveService<br/>wraps Service v1]
     In --> Pr[promptrouter.Router]
     Hb --> Pr
 

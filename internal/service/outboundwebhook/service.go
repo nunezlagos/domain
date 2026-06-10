@@ -1,4 +1,4 @@
-// Package outboundwebhook — HU-10.4 outbound webhooks.
+// Package outboundwebhook — issue-10.4 outbound webhooks.
 //
 // Permite suscribir endpoints HTTPS a eventos del sistema (agent_run.completed,
 // flow_run.completed, observation.created, etc.) y entrega async con HMAC signing

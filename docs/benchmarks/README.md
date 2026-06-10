@@ -1,4 +1,4 @@
-# Benchmarks — HU-27.4
+# Benchmarks — issue-27.4
 
 Suite de benchmarks para hot-paths del runtime. Sirven como baseline
 para detectar regresiones de performance.
@@ -37,7 +37,7 @@ benchstat benchmark-results/main.txt benchmark-results/feature.txt
 
 ## Áreas pendientes
 
-- Search global híbrido (HU-03.7) con dataset 100/1k/10k rows
+- Search global híbrido (issue-03.7) con dataset 100/1k/10k rows
 - Agent run end-to-end (mock LLM)
 - Flow run 5-step linear
 - pgx query simple SELECT

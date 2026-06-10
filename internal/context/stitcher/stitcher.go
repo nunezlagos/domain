@@ -1,4 +1,4 @@
-// HU-07.2 cross-session-stitch — descubre sesiones relacionadas y construye
+// issue-07.2 cross-session-stitch — descubre sesiones relacionadas y construye
 // un timeline cross-session para que un agente vea el contexto histórico
 // completo (no solo la sesión actual).
 //

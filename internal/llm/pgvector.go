@@ -1,4 +1,4 @@
-// Package llm — helpers pgvector para cosine similarity (HU-06.5).
+// Package llm — helpers pgvector para cosine similarity (issue-06.5).
 package llm
 
 import "fmt"

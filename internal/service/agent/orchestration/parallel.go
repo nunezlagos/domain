@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ParallelFanout implementa HU-08.8: lanza N agents en paralelo con
+// ParallelFanout implementa issue-08.8: lanza N agents en paralelo con
 // inputs distintos (o iguales), espera todos, agrega.
 type ParallelFanout struct {
 	Conductor    Conductor

@@ -1,4 +1,4 @@
-// MCP tools para external provider sync — HU-04.9
+// MCP tools para external provider sync — issue-04.9
 
 package mcpserver
 

@@ -1,4 +1,4 @@
-// HU-02.4 audit-log unit tests.
+// issue-02.4 audit-log unit tests.
 
 package audit
 

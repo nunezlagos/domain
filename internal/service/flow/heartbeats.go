@@ -1,8 +1,8 @@
-// HU-09.10 step-heartbeats — detecta steps long-running que se colgaron.
+// issue-09.10 step-heartbeats — detecta steps long-running que se colgaron.
 //
 // Cada step en ejecución registra heartbeat cada N segundos. Watchdog
 // background corre cada minute y marca steps sin heartbeat > threshold
-// como failed (timeout). Permite a otros runners retomar (HU-26.2 leader).
+// como failed (timeout). Permite a otros runners retomar (issue-26.2 leader).
 package flow
 
 import (
@@ -90,7 +90,7 @@ func (s *HeartbeatStore) MarkFailed(ctx context.Context, stepIDs []uuid.UUID) (i
 }
 
 // Watchdog corre periódicamente buscando steps stuck.
-// Usado por leader-elected scheduler (HU-26.2).
+// Usado por leader-elected scheduler (issue-26.2).
 func (s *HeartbeatStore) Watchdog(ctx context.Context, interval time.Duration, logger *slog.Logger) error {
 	if interval <= 0 {
 		interval = time.Minute

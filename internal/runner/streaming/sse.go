@@ -1,4 +1,4 @@
-// HU-11.3 execution-streaming — SSE (Server-Sent Events) para streamear
+// issue-11.3 execution-streaming — SSE (Server-Sent Events) para streamear
 // progreso/output de runs a clientes en tiempo real.
 //
 // Compatible con cualquier runner: agent, flow, skill. Cada chunk emitido

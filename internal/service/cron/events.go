@@ -1,4 +1,4 @@
-// HU-10.3 event-execution — bus de eventos internos para disparar flows/
+// issue-10.3 event-execution — bus de eventos internos para disparar flows/
 // agents/skills cuando ocurre un trigger declarativo (no cron, no webhook).
 //
 // Ejemplo: cuando se crea una observation con tag X, ejecuta el flow Y.

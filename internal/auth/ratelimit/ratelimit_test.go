@@ -1,4 +1,4 @@
-// HU-02.5 rate-limit unit tests.
+// issue-02.5 rate-limit unit tests.
 
 package ratelimit
 

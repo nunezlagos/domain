@@ -1,4 +1,4 @@
-// Package client — HU-12.4 MCP client externo via stdio.
+// Package client — issue-12.4 MCP client externo via stdio.
 //
 // Spawnea un proceso (típicamente `npx @modelcontextprotocol/server-X`) y se
 // comunica via JSON-RPC 2.0 sobre stdin/stdout siguiendo la spec MCP.

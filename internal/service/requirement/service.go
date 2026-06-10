@@ -1,4 +1,4 @@
-// Package requirement — HU-04.1 requirements CRUD con jerarquía padre-hijo.
+// Package requirement — issue-04.1 requirements CRUD con jerarquía padre-hijo.
 //
 // Un requirement (REQ) es la unidad de especificación SDD. Puede tener hijos
 // (sub-requisitos) formando un árbol. Soft-delete via status = "archived".

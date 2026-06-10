@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Handoff implementa HU-08.7: un agent activo puede transferir su
+// Handoff implementa issue-08.7: un agent activo puede transferir su
 // conversación a otro agent cuando detecta que el otro tiene mejor expertise.
 //
 // El handoff signal viene del LLM output con marker estructurado: `<handoff

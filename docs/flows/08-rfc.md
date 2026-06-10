@@ -84,13 +84,13 @@ Diferencias clave vs feature/fix:
 ## Asserts BD
 
 ```sql
-SELECT mode FROM hu_drafts WHERE id = <draft_id>;
+SELECT mode FROM issue_drafts WHERE id = <draft_id>;
 -- Expected: 'rfc'
 
 -- NO debe haber user_story creado
-SELECT COUNT(*) FROM user_stories
+SELECT COUNT(*) FROM issues
 WHERE slug LIKE jsonb_extract_path_text(answers, 'slug') || '%';
--- Expected: 0 (las RFC no materializan en user_stories)
+-- Expected: 0 (las RFC no materializan en issues)
 ```
 
 Tests: `TestIssueType_RFC_StartsCorrectMode`.

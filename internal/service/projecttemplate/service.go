@@ -1,4 +1,4 @@
-// Package projecttemplate — HU-01.4 CRUD de templates de proyecto.
+// Package projecttemplate — issue-01.4 CRUD de templates de proyecto.
 //
 // Los templates definen defaults (settings + skills + agents + flows slugs)
 // que se asignan al crear un project con template_id.

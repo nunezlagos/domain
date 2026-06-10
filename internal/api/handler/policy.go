@@ -19,7 +19,7 @@ type createPolicyBody struct {
 	SourceFile     string         `json:"source_file,omitempty"`
 }
 
-// POST /api/v1/platform/policies — HU-01.8 admin only
+// POST /api/v1/platform/policies — issue-01.8 admin only
 func (a *API) createPolicy(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

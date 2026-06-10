@@ -109,13 +109,13 @@ Domain MCP:
 3. Arranca el wizard adaptive (`mode=bug-fix`)
 4. **Analyzer pipeline** corre 4 fuentes en paralelo:
    - Memory search vs observations + knowledge
-   - HU dedup vs user_stories existentes (sugiere `req_parent`)
+   - HU dedup vs issues existentes (sugiere `req_parent`)
    - Code grep en `internal/**/*.go` (sugiere `affected_component`)
    - Agent runs history reciente
 5. Solo pregunta lo no inferible (típicamente 3-5 cosas vs 8 fijas)
 6. LLM (Claude Haiku) formula cada pregunta con contexto inline:
 
-> "Detecté HU-03.1 similar y 2 hits en handler.go. ¿Cuán crítico
+> "Detecté issue-03.1 similar y 2 hits en handler.go. ¿Cuán crítico
 >  es este bug? Opciones: critical, high, medium, low."
 
 7. Tras responder todo → `Commit()` → escribe HU + Gherkin + Proposal +
@@ -170,5 +170,5 @@ export DOMAIN_ANTHROPIC_KEY=sk-ant-xxx
 - [docs/flows/README.md](./flows/README.md) — diagramas por flow
 - `openspec/changes/` — 139 HUs implementadas con spec + design + tests
 - `.claude/rules/` — conventions; ahora también en `platform_policies` BD
-  (HU-01.8)
+  (issue-01.8)
 - `tests/e2e/` — 14 tests E2E del flow real

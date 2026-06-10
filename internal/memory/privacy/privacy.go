@@ -1,4 +1,4 @@
-// Package privacy — HU-03.6 stripping de contenido marcado como privado.
+// Package privacy — issue-03.6 stripping de contenido marcado como privado.
 //
 // Convención: cualquier bloque <private>...</private> en content NO se persiste.
 // Útil para que clientes/agentes IA marquen secretos antes de guardar.

@@ -1,4 +1,4 @@
-// HU-02.1 + HU-13.2 — middleware HTTP que extrae API key del header Authorization
+// issue-02.1 + issue-13.2 — middleware HTTP que extrae API key del header Authorization
 // y resuelve user/org context vía Resolver interface.
 
 package apikey
@@ -28,7 +28,7 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 }
 
 // Resolver lookup de API key plaintext → Principal.
-// Implementaciones: pg adapter (HU-02.1 store).
+// Implementaciones: pg adapter (issue-02.1 store).
 type Resolver interface {
 	Resolve(ctx context.Context, plaintext string) (*Principal, error)
 }

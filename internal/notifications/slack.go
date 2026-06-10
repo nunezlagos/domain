@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// SlackChannel — HU-20.3 webhook delivery a Slack vía incoming webhook URL.
+// SlackChannel — issue-20.3 webhook delivery a Slack vía incoming webhook URL.
 //
 // El recipient en Message debe ser una webhook URL completa (https://hooks.slack.com/...).
 // Body se mappea al campo "text" del payload Slack. Subject se prepende como bold.

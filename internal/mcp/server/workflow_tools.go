@@ -1,4 +1,4 @@
-// MCP tools — workflow import / list / restore (HU-12.7)
+// MCP tools — workflow import / list / restore (issue-12.7)
 //
 // Tres tools para que el agente IA gestione el override de archivos .md
 // desde dentro del flow, sin tener que salirse al CLI:

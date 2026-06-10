@@ -1,4 +1,4 @@
-// Package extsync — HU-04.9 external provider sync state tracking.
+// Package extsync — issue-04.9 external provider sync state tracking.
 //
 // MVP scope: schema + state CRUD + drift marker. Los drivers reales (Jira HTTP
 // client, GitHub Issues API, webhooks pull) viven en HUs siguientes que

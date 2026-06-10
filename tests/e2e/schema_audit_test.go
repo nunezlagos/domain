@@ -44,11 +44,11 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Memory
 		"observations", "sessions", "prompts", "knowledge_docs", "knowledge_chunks",
 		// SDD
-		"requirements", "user_stories", "gherkin_scenarios",
+		"requirements", "issues", "gherkin_scenarios",
 		"proposals", "designs", "tasks", "verification_results", "sabotage_records",
 		"code_references", "file_attachments",
 		// Wizard + Intake + ExtSync
-		"hu_drafts", "hu_draft_steps_log",
+		"issue_drafts", "issue_draft_steps_log",
 		"intake_payloads", "intake_attachments",
 		"external_providers", "external_sync_state", "external_sync_events",
 		"entity_state_transitions",
@@ -65,7 +65,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Audit + Cost
 		"audit_log", "activity_log", "cost_logs", "usage_counters", "usage_alerts",
 		"notification_deliveries",
-		// Auth + RBAC (auth_rate_limits es in-memory HU-02.5;
+		// Auth + RBAC (auth_rate_limits es in-memory issue-02.5;
 		// role_resource_limits es ALTER ROLE migration 000029, no tabla)
 		"otp_codes", "custom_roles", "invitations", "secrets",
 		// Plans + Policies + Templates
@@ -185,13 +185,13 @@ func TestSchemaAudit_CriticalForeignKeysPresent(t *testing.T) {
 		column      string
 		referencedT string
 	}{
-		{"user_stories", "req_id", "requirements"},
-		{"proposals", "hu_id", "user_stories"},
-		{"designs", "hu_id", "user_stories"},
-		{"tasks", "hu_id", "user_stories"},
+		{"issues", "req_id", "requirements"},
+		{"proposals", "issue_id", "issues"},
+		{"designs", "issue_id", "issues"},
+		{"tasks", "issue_id", "issues"},
 		{"file_attachments", "entity_id", ""}, // polymorphic, no FK
-		{"hu_drafts", "organization_id", "organizations"},
-		{"intake_payloads", "committed_hu_id", "user_stories"},
+		{"issue_drafts", "organization_id", "organizations"},
+		{"intake_payloads", "committed_issue_id", "issues"},
 		{"external_sync_state", "provider_id", "external_providers"},
 		{"projects", "organization_id", "organizations"},
 		{"observations", "project_id", "projects"},

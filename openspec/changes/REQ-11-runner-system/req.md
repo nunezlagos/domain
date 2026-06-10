@@ -18,6 +18,6 @@ Ejecución en sandbox: runners cloud y self-hosted (Docker), execution streaming
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-11.1-sandbox-execution | proposed | Sandbox Docker con resource limits, timeout, network isolation y GC |
-| HU-11.2-selfhosted-runner | proposed | Agente Go self-hosted vía WebSocket con registro, heartbeat y ejecución local |
-| HU-11.3-execution-streaming | proposed | Streaming bidireccional WS + SSE para logs, progreso y LLM tokens en vivo |
+| issue-11.1-sandbox-execution | proposed | Sandbox Docker con resource limits, timeout, network isolation y GC |
+| issue-11.2-selfhosted-runner | proposed | Agente Go self-hosted vía WebSocket con registro, heartbeat y ejecución local |
+| issue-11.3-execution-streaming | proposed | Streaming bidireccional WS + SSE para logs, progreso y LLM tokens en vivo |

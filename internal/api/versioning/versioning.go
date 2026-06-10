@@ -1,4 +1,4 @@
-// Package versioning — HU-13.8 API versioning policy.
+// Package versioning — issue-13.8 API versioning policy.
 //
 // Mantiene un catálogo de versiones (v1, v2, ...) con su estado:
 //   - active: en producción, soportada sin warnings

@@ -6,8 +6,8 @@ import (
 
 // WizardplanAdapter envuelve un promptrouter.Classifier para que satisfaga
 // wizardplan.IntentClassifier (devuelve string en lugar del type Intent).
-// Vive en este package para no introducir import cycle hubuilder →
-// wizardplan → promptrouter → hubuilder.
+// Vive en este package para no introducir import cycle issuebuilder →
+// wizardplan → promptrouter → issuebuilder.
 //
 // Wire desde el lado consumer (cmd/domain/main.go):
 //

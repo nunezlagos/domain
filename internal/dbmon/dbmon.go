@@ -1,4 +1,4 @@
-// Package dbmon — HU-25.12 monitoring de locks, vacuum y conexiones Postgres.
+// Package dbmon — issue-25.12 monitoring de locks, vacuum y conexiones Postgres.
 //
 // Expone queries periódicas sobre pg_stat_user_tables, pg_stat_activity y
 // pg_locks. El consumidor publica las métricas (Prometheus, log, endpoint).

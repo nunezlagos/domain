@@ -1,4 +1,4 @@
-// Package batch — HU-13.5 endpoints batch genéricos.
+// Package batch — issue-13.5 endpoints batch genéricos.
 //
 // Provee handler wrapper que recibe array de items, valida cada uno
 // independientemente, y devuelve resultado por item con 207 Multi-Status.

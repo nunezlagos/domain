@@ -1,4 +1,4 @@
-// Package lifecycle — HU-23.2 soft-delete restore + HU-23.3 GDPR export.
+// Package lifecycle — issue-23.2 soft-delete restore + issue-23.3 GDPR export.
 //
 // Restore: revierte deleted_at = NULL para entidades soft-deleted dentro de la
 // ventana de retención (default 30 días).
@@ -296,7 +296,7 @@ func normalizeValue(v any) any {
 }
 
 // PurgeExpiredSoftDeleted elimina rows soft-deleted fuera de la retention window.
-// Retorna total de rows purgadas. Solo en el pod leader (HU-23.2.1).
+// Retorna total de rows purgadas. Solo en el pod leader (issue-23.2.1).
 func (s *Service) PurgeExpiredSoftDeleted(ctx context.Context) (int64, error) {
 	cutoff := time.Now().Add(-time.Duration(s.retentionDays()) * 24 * time.Hour)
 	var total int64

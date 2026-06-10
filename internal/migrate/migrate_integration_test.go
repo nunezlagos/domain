@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-01.1 db-schema-migrations — integration tests con testcontainers.
+// issue-01.1 db-schema-migrations — integration tests con testcontainers.
 // Cubre Gherkin escenarios 1-5 + sabotaje.
 
 package migrate_test

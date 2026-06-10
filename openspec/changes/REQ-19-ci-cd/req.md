@@ -20,6 +20,6 @@ Pipelines de integración y entrega continua para el binario `domain-mcp` y su i
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-19.1-ci-lint-test | proposed | GitHub Actions: lint, vet, unit tests, integration tests con testcontainers, coverage |
-| HU-19.2-cd-release-binary | proposed | goreleaser multi-arch en tag, changelog auto, GitHub Release con artifacts firmados |
-| HU-19.3-docker-image-publish | proposed | Imagen Docker oficial publicada en GHCR + Docker Hub, firma cosign, SBOM |
+| issue-19.1-ci-lint-test | proposed | GitHub Actions: lint, vet, unit tests, integration tests con testcontainers, coverage |
+| issue-19.2-cd-release-binary | proposed | goreleaser multi-arch en tag, changelog auto, GitHub Release con artifacts firmados |
+| issue-19.3-docker-image-publish | proposed | Imagen Docker oficial publicada en GHCR + Docker Hub, firma cosign, SBOM |

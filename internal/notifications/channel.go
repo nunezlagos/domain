@@ -1,12 +1,12 @@
-// Package notifications — HU-20.1 channel abstraction + delivery log.
+// Package notifications — issue-20.1 channel abstraction + delivery log.
 //
 // Cada canal implementa Channel. El Registry permite resolver por slug
 // y el Sender orquesta envío + persistencia del delivery log.
 //
 // Canales actuales:
 //   - log_only   — solo log slog (no envía nada)
-//   - slack      — webhook Slack (HU-20.3)
-//   - email_smtp — SMTP genérico (HU-20.2 ya existe en internal/mail/smtp)
+//   - slack      — webhook Slack (issue-20.3)
+//   - email_smtp — SMTP genérico (issue-20.2 ya existe en internal/mail/smtp)
 package notifications
 
 import (

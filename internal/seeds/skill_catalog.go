@@ -11,7 +11,7 @@ import (
 // SkillCatalog define skills built-in que toda org nueva recibe.
 // Pattern: skill_catalog NO es global (skills tienen org_id NOT NULL),
 // se materializa per-org via SeedSkillsForOrg invocado al crear org
-// (HU-21.1 org-management) o vía CLI `domain seed --org <id>`.
+// (issue-21.1 org-management) o vía CLI `domain seed --org <id>`.
 //
 // Cada skill se marca seed_managed=true; updates futuros del catalog
 // solo afectan filas con is_user_modified=false (no sobrescribe customs).
@@ -35,7 +35,7 @@ func SkillCatalog() []SkillCatalogEntry {
 		{
 			Slug:        "intake-classify",
 			Name:        "Intake Classify",
-			Description: "Clasifica un raw text en {type, severity, confidence} para el intake pipeline (HU-04.8).",
+			Description: "Clasifica un raw text en {type, severity, confidence} para el intake pipeline (issue-04.8).",
 			SkillType:   "prompt",
 			Content: `Sos un classifier de requerimientos.
 Input: texto libre del cliente.

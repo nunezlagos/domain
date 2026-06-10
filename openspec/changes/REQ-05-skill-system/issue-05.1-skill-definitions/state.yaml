@@ -1,0 +1,61 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/service/skill.Service implementa CRUD sobre tabla skills
+  (migration 000010 ya existía con CHECK skill_type IN prompt/code/api/mcp_tool).
+
+  Funcionalidades:
+  - Create(CreateInput): valida slug (regex), name, type whitelist, content,
+    InputSchema y OutputSchema con santhosh-tekuri/jsonschema/v6 contra
+    meta-schema JSON Schema 2020-12. Auto-embed sobre name + " " + description.
+  - Update(id, UpdateInput): re-embed solo si name o description cambian
+    (optimización). Re-valida schemas si se proveen. is_user_modified=true
+    si la skill era seed_managed (preserva customizaciones issue-01.7).
+  - GetByID, GetBySlug.
+  - List(orgID, Filter): filtros por skill_type, tag, limit.
+  - SearchHybrid(orgID, query, limit): BM25 sobre description_tsv + cosine
+    sobre embedding con RRF k=60. Degrada a tsvector-only con NopEmbedder.
+  - SoftDelete(id): rechaza con ErrHasDependencies si otra skill referencia
+    el slug en depends_on (defense in depth contra cascade roto).
+  - ValidateInput(skillID, input): valida un input map contra InputSchema
+    al runtime — útil para issue-05.5 ejecución.
+
+  HTTP handlers:
+  - POST   /api/v1/skills
+  - GET    /api/v1/skills           ?type= &tag= &limit=
+  - GET    /api/v1/skills/search    ?q= &limit=
+  - GET    /api/v1/skills/{id}
+  - PATCH  /api/v1/skills/{id}
+  - DELETE /api/v1/skills/{id}
+
+  MCP tools (prefix domain_*):
+  - domain_skill_list(type?, tag?, limit?)
+  - domain_skill_search(query, limit?)
+  - domain_skill_get(id?, slug?)
+
+  Tests integration (12 escenarios + 1 sabotaje):
+  - Create prompt/code/api/mcp_tool válidos
+  - Invalid type → ErrInvalidType
+  - Invalid JSON schema (type: invalid-type-xyz) → ErrInvalidSchema
+  - Slug duplicado por org → ErrSlugTaken
+  - GetBySlug funciona
+  - Update name re-embed sin error
+  - List filter por type
+  - SearchHybrid encuentra match por description semántica
+  - SoftDelete básico funciona
+  - SoftDelete con depends_on referenciando el slug → ErrHasDependencies
+  - ValidateInput pasa con input válido
+  - ValidateInput rechaza missing required
+  - sabotaje DB-level CHECK constraint rechaza skill_type inválido aunque
+    bypass desde service
+
+  Pending (futuras HUs REQ-05):
+  - issue-05.3 versioning (skill_versions tabla migration 11 lista, sin service)
+  - issue-05.4 auto-skill engine (extracción de skills repetidas en flows)
+  - issue-05.5 ejecución (runtime real por skill_type)
+  - issue-05.6 agent-skill contract enforcement
+  - project_id scoping en lugar de org-only (decisión arquitectónica
+    pending; spec menciona project_id pero tabla solo tiene organization_id)
+  - Embedder real (Open AI / Anthropic) en lugar de Nop en prod

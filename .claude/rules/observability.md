@@ -2,7 +2,7 @@
 
 3 pilares: **logs** (slog), **metrics** (Prometheus), **traces** (OpenTelemetry). Correlacionados por `trace_id` + `request_id`.
 
-Implementado por REQ-17 (HU-17.1 metrics, HU-17.2 traces, HU-17.3 logs).
+Implementado por REQ-17 (issue-17.1 metrics, issue-17.2 traces, issue-17.3 logs).
 
 ## Logs
 
@@ -64,7 +64,7 @@ Ejemplos:
 - Labels acotados: status (5-10 values), method (5), path (~30 routes), provider (4), model (~20)
 - NUNCA labels con: user_id, request_id, run_id, observation_id, project_id de prod (millones)
 - `org_id` aceptable solo si <10000 orgs esperados
-- HU-17.1 lint test `_id="<uuid>"` regex en `/metrics` body
+- issue-17.1 lint test `_id="<uuid>"` regex en `/metrics` body
 
 ### Histograms buckets
 
@@ -101,7 +101,7 @@ DB query duration: `[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5]` (seconds)
 
 ### Attributes
 
-Whitelist (HU-17.2 `SafeAttrs()`):
+Whitelist (issue-17.2 `SafeAttrs()`):
 - `http.method`, `http.status_code`, `http.route`
 - `db.statement` redacted (no values)
 - `db.rows_affected`

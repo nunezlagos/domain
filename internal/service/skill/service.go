@@ -1,4 +1,4 @@
-// Package skill — HU-05.1 + HU-05.2 skill registry y management.
+// Package skill — issue-05.1 + issue-05.2 skill registry y management.
 //
 // Skills son capacidades reutilizables (prompt | code | api | mcp_tool) que
 // los agentes invocan. Cada skill tiene:
@@ -8,7 +8,7 @@
 //   - content (template / código / config de la skill)
 //   - embedding generado de (name + description) para semantic search
 //
-// La ejecución (run) vive en HU-05.5, separada.
+// La ejecución (run) vive en issue-05.5, separada.
 package skill
 
 import (
@@ -225,7 +225,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 }
 
 // Update modifica los campos provistos. Re-embed si Name o Description cambian.
-// Marca is_user_modified=true si seed_managed (HU-01.7 seeders contract).
+// Marca is_user_modified=true si seed_managed (issue-01.7 seeders contract).
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Skill, error) {
 	prev, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -527,7 +527,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 }
 
 // ValidateInput valida un input contra el InputSchema de la skill.
-// Útil antes de llamar Run() en HU-05.5.
+// Útil antes de llamar Run() en issue-05.5.
 func (s *Service) ValidateInput(ctx context.Context, skillID uuid.UUID, input map[string]any) error {
 	sk, err := s.GetByID(ctx, skillID)
 	if err != nil {

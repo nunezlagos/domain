@@ -1,4 +1,4 @@
-// Package secrets — HU-25.10 password rotation para roles Postgres.
+// Package secrets — issue-25.10 password rotation para roles Postgres.
 //
 // Modelo dual-credentials (sin downtime):
 //   1. ALTER ROLE app_user PASSWORD 'new_pwd' (Postgres acepta SCRAM con un solo password activo)

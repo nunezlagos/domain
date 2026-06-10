@@ -1,4 +1,4 @@
-// Package tracing — HU-17.2 OpenTelemetry tracing.
+// Package tracing — issue-17.2 OpenTelemetry tracing.
 //
 // SDK setup con OTLP gRPC exporter + ParentBased(TraceIDRatioBased) sampler.
 // Resource attributes: service.name, service.version, deployment.environment.
@@ -105,7 +105,7 @@ func Tracer(name string) trace.Tracer {
 	return otel.Tracer(name)
 }
 
-// ===== Safe Attrs (HU-17.2 + .claude/rules/security.md) =====
+// ===== Safe Attrs (issue-17.2 + .claude/rules/security.md) =====
 
 // SafeAttrKeys whitelist explícita. Otros keys son rechazados por SafeAttr.
 var safeAttrKeys = map[string]bool{
@@ -184,7 +184,7 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 }
 
 // normalizeRoute reemplaza UUIDs y números por placeholders.
-// Similar a HU-17.1 metrics normalizePath para evitar cardinality blow-up en traces.
+// Similar a issue-17.1 metrics normalizePath para evitar cardinality blow-up en traces.
 func normalizeRoute(p string) string {
 	parts := strings.Split(p, "/")
 	for i, part := range parts {

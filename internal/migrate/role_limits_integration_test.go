@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-25.8 verifica timeouts y connection limits aplicados a roles.
+// issue-25.8 verifica timeouts y connection limits aplicados a roles.
 
 package migrate_test
 

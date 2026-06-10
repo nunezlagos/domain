@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TemplateStore — HU-08.5 CRUD de agent_templates.
+// TemplateStore — issue-08.5 CRUD de agent_templates.
 type TemplateStore struct {
 	Pool *pgxpool.Pool
 }

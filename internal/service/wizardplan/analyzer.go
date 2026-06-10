@@ -7,8 +7,8 @@ import (
 )
 
 // IntentClassifier abstrae el classifier de intent. Definida acá (no en
-// promptrouter) para evitar import cycle hubuilder → wizardplan →
-// promptrouter → hubuilder. promptrouter.Classifier satisface esta
+// promptrouter) para evitar import cycle issuebuilder → wizardplan →
+// promptrouter → issuebuilder. promptrouter.Classifier satisface esta
 // interface trivialmente con un adapter (ver IntentClassifierAdapter).
 type IntentClassifier interface {
 	Classify(ctx context.Context, rawText string) (intent string, confidence float64, reasoning string, err error)

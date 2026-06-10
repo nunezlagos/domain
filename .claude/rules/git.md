@@ -62,7 +62,7 @@ feat(req-02): implement passwordless OTP login
 Add OTP-based auth flow with RUT/email identifier.
 Email channel via SMTP (mailpit dev).
 
-Refs: HU-02.7
+Refs: issue-02.7
 ```
 
 ```
@@ -80,7 +80,7 @@ feat(req-08)!: change agent.subordinates schema to require slugs
 BREAKING CHANGE: agents.subordinates ahora es TEXT[] con slugs,
 no UUIDs. Migration 000XYZ aplica conversión automática.
 
-Refs: HU-08.6
+Refs: issue-08.6
 ```
 
 ## NO se permite
@@ -98,7 +98,7 @@ Format: `vMAJOR.MINOR.PATCH` (ej. `v0.1.0`, `v1.2.3`).
 - `0.x.y`: pre-1.0 — breaking permitido en minor; usar para alfa/beta
 - `1.0.0` → `1.x.y`: estable; breaking solo en major bump
 - Pre-release: `v1.0.0-rc.1`, `v1.0.0-beta.2`
-- Tags firmadas con cosign (HU-19.2)
+- Tags firmadas con cosign (issue-19.2)
 
 ### Reglas de bump
 
@@ -110,7 +110,7 @@ Format: `vMAJOR.MINOR.PATCH` (ej. `v0.1.0`, `v1.2.3`).
 ### Componentes con SemVer propio
 
 - Binary `domain-mcp` — main SemVer
-- API HTTP — versionado en URL (`/api/v1/`); HU-13.8 maneja sunset
+- API HTTP — versionado en URL (`/api/v1/`); issue-13.8 maneja sunset
 - SDK Python (`domain-sdk`) — SemVer independiente, refleja API major
 - SDK TypeScript (`@domain/sdk`) — idem
 - SDK Go (`github.com/domain/sdk-go`) — idem
@@ -163,15 +163,15 @@ Instalar via `pre-commit` framework o `.git/hooks/` versionados.
 
 ## Releases automáticos
 
-- Tag `vX.Y.Z` push → workflow `release.yml` (HU-19.2):
+- Tag `vX.Y.Z` push → workflow `release.yml` (issue-19.2):
   1. Build multi-arch binaries con goreleaser
   2. Sign con cosign keyless
   3. SBOM con syft
   4. CHANGELOG section desde commits desde último tag
   5. GitHub Release con artifacts attached
-  6. Docker image push (HU-19.3)
-  7. Helm chart push OCI (HU-24.1)
-  8. SDKs publish (HU-22.* en su workflow propio)
+  6. Docker image push (issue-19.3)
+  7. Helm chart push OCI (issue-24.1)
+  8. SDKs publish (issue-22.* en su workflow propio)
 
 ## Documentación de cambios
 

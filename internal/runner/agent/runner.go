@@ -1,4 +1,4 @@
-// Package agentrunner — HU-08.2 motor de ejecución de agents.
+// Package agentrunner — issue-08.2 motor de ejecución de agents.
 //
 // Flow:
 //   1. Crear agent_run con status=pending
@@ -14,7 +14,7 @@
 //   5. status=completed | failed
 //
 // Skill execution: actualmente solo skill_type "prompt" se ejecuta sustituyendo
-// variables en content. Otros types (code/api/mcp_tool) requieren HU-05.5.
+// variables en content. Otros types (code/api/mcp_tool) requieren issue-05.5.
 package agentrunner
 
 import (
@@ -55,7 +55,7 @@ const (
 	StatusCancelled = "cancelled"
 )
 
-// EventEmitter dispara eventos de dominio post-run (HU-10.4 outbound webhooks + HU-15.3 alerts).
+// EventEmitter dispara eventos de dominio post-run (issue-10.4 outbound webhooks + issue-15.3 alerts).
 type EventEmitter interface {
 	EmitAgentRunFinished(ctx context.Context, orgID uuid.UUID, runID uuid.UUID, agentSlug, status string, costUSD float64, tokensTotal int64)
 }
@@ -94,7 +94,7 @@ type RunResult struct {
 }
 
 // Run ejecuta el agente con el prompt del usuario y devuelve resultado.
-// Es síncrono — bloquea hasta finalizar. Streaming versión en HU-08.2.1.
+// Es síncrono — bloquea hasta finalizar. Streaming versión en issue-08.2.1.
 func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	agent, err := r.Agents.GetByID(ctx, in.AgentID)
 	if err != nil {
@@ -314,7 +314,7 @@ func (r *Runner) loadSkillTools(ctx context.Context, agent *agentsvc.Agent) ([]l
 	return out, bySlug, nil
 }
 
-// executeTool delega al SkillRunner (HU-05.5).
+// executeTool delega al SkillRunner (issue-05.5).
 func (r *Runner) executeTool(ctx context.Context, sk *skillsvc.Skill, args map[string]any) (string, error) {
 	if sk == nil {
 		return "", errors.New("skill not loaded")
@@ -352,9 +352,9 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, re
 	}, err
 }
 
-// Helpers de templating quedaron en internal/runner/skill (HU-05.5).
+// Helpers de templating quedaron en internal/runner/skill (issue-05.5).
 
-// appendLog persiste una entry en agent_run_logs (HU-08.3). Best-effort:
+// appendLog persiste una entry en agent_run_logs (issue-08.3). Best-effort:
 // errores de logging NO interrumpen el run principal.
 func (r *Runner) appendLog(ctx context.Context, runID uuid.UUID, iteration int,
 	eventType string, payload map[string]any, tokensIn, tokensOut, latencyMS int) {

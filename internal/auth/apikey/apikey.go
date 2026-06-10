@@ -1,4 +1,4 @@
-// Package apikey — HU-02.1 api-key-auth.
+// Package apikey — issue-02.1 api-key-auth.
 //
 // Formato: domk_{env}_{rand32_b64url}.
 // Storage: bcrypt(key) + key_prefix visible (primeros N chars).

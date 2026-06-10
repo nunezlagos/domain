@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-02.7 OTP integration tests con testcontainers.
+// issue-02.7 OTP integration tests con testcontainers.
 
 package otp_test
 

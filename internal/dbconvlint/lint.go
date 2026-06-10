@@ -1,4 +1,4 @@
-// Package dbconvlint — HU-25.13 linter de convenciones SQL para migrations.
+// Package dbconvlint — issue-25.13 linter de convenciones SQL para migrations.
 //
 // Reglas core verificadas (todas configurables vía // domain-lint-ignore-next):
 //
@@ -386,7 +386,7 @@ func Fix(src string) (string, bool) {
 	return strings.Join(lines, "\n"), fixed
 }
 
-// === Migration Safety (HU-25.3) ===
+// === Migration Safety (issue-25.3) ===
 //
 // Reglas que detectan patrones peligrosos para producción:
 //   * CREATE INDEX sin CONCURRENTLY → bloquea writes en tablas grandes
@@ -466,7 +466,7 @@ func checkMigrationSafety(src string, lines []string, add func(int, string, stri
 		// LOCK TABLE explícito
 		if reLockTable.MatchString(stripped) {
 			add(i+1, "no-explicit-lock-table",
-				"explicit LOCK TABLE is rarely safe in migrations; statement_timeout (HU-25.8) protects against runaways")
+				"explicit LOCK TABLE is rarely safe in migrations; statement_timeout (issue-25.8) protects against runaways")
 		}
 		// ADD FOREIGN KEY sin NOT VALID
 		if reAddFK.MatchString(stripped) && !reNotValid.MatchString(stripped) {

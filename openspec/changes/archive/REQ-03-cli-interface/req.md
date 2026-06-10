@@ -15,7 +15,7 @@ Interfaz de línea de comandos completa: save, search, delete, context, stats, e
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-03.1-core-commands | proposed | save, search, delete, context, stats, version |
-| HU-03.2-data-commands | proposed | export, import, projects (list/consolidate/prune) |
-| HU-03.3-admin-commands | proposed | doctor, conflicts, cloud, sync |
-| HU-03.4-daemon-commands | proposed | serve, mcp, tui, setup |
+| issue-03.1-core-commands | proposed | save, search, delete, context, stats, version |
+| issue-03.2-data-commands | proposed | export, import, projects (list/consolidate/prune) |
+| issue-03.3-admin-commands | proposed | doctor, conflicts, cloud, sync |
+| issue-03.4-daemon-commands | proposed | serve, mcp, tui, setup |

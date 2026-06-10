@@ -1,6 +1,6 @@
 //go:build integration
 
-// HU-21.1 organization service integration tests.
+// issue-21.1 organization service integration tests.
 
 package org_test
 

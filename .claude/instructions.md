@@ -19,7 +19,7 @@ Regla: NO implementar nada sin una HU que lo respalde. Si falta una HU: crearla 
 - Auto-skill: matching semántico por pgvector entre query y skills registrados
 - Versionado semántico (major.minor.patch) con changelog por versión
 - Registry search por nombre, tipo, descripción, embedding similarity
-- Skills pueden depender de otros skills y de MCPs externos (HU-12.4)
+- Skills pueden depender de otros skills y de MCPs externos (issue-12.4)
 
 ## Flows
 
@@ -49,7 +49,7 @@ Regla: NO implementar nada sin una HU que lo respalde. Si falta una HU: crearla 
 - MCP tools con prefijo `domain_` (coexisten con tools nativas del agente)
 - API key auth resuelve a user_id + organization_id
 - Observaciones tienen created_by FK → users, project_id FK → projects
-- Activity log general (HU-02.6) + Audit log de seguridad (HU-02.4)
+- Activity log general (issue-02.6) + Audit log de seguridad (issue-02.4)
 - S3 storage para adjuntos de opsx, knowledge docs y skills
 - Runners: sandbox Docker cloud + self-hosted WebSocket
 

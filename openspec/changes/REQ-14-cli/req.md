@@ -18,6 +18,6 @@ Interfaz de línea de comandos: todos los comandos del plataforma, output pipe-f
 
 | HU | Estado | Descripción |
 |----|--------|-------------|
-| HU-14.1-cli-core-commands | proposed | Comandos core: memory, skill, agent, flow, cron, config, project, setup |
-| HU-14.2-cli-output-formats | proposed | Output formats: table, JSON, YAML, silent, colores |
-| HU-14.3-cli-autocomplete-help | proposed | Autocompletado bash/zsh/fish, man pages, --help detallado |
+| issue-14.1-cli-core-commands | proposed | Comandos core: memory, skill, agent, flow, cron, config, project, setup |
+| issue-14.2-cli-output-formats | proposed | Output formats: table, JSON, YAML, silent, colores |
+| issue-14.3-cli-autocomplete-help | proposed | Autocompletado bash/zsh/fish, man pages, --help detallado |

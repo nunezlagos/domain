@@ -1,4 +1,4 @@
-// HU-23.1 legacy-import — importa contenido desde formatos externos a Domain.
+// issue-23.1 legacy-import — importa contenido desde formatos externos a Domain.
 //
 // MVP: markdown-vault (Obsidian-style). Cada archivo .md → un knowledge_doc.
 // Front matter YAML → metadata. Wikilinks [[Other]] se preservan como

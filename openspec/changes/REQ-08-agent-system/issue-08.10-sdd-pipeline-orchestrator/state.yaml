@@ -21,18 +21,35 @@ progress: |
     Idempotent xmax, CleanupRemovesLegacy, CleanupPreservesUserModified)
   - Bloqueantes 08.11 + 08.12 implementados y mergeados
 
-  PENDING (próxima sesión dedicada — ~6-8h):
-  - Service internal/service/orchestrator/ con 5 modos (Express/Full/Solo/Detect/Async)
-  - 10 phases handlers (phases/sdd_*.go)
-  - Seeder de flow sdd-pipeline-v1 (internal/seeds/flows_catalog.go)
-  - WithStandalone Option pattern explícito en agent service (hoy hardcoded)
-  - ErrOrphanRunNotAllowed enforcement con env-aware check
-  - MCP tools: domain_orchestrate, domain_orchestrate_phase_result,
-    domain_orchestrate_confirm, domain_flow_status
-  - CLI: domain workflow resume <flow_run_id>
-  - Intent analysis mini-pipeline (2 fases que generan knowledge_doc)
-  - Multi-concern detection en sdd-explore
-  - suggested_saves contract con required=true en sdd-design/apply/judge
-  - 15 tests E2E adicionales
-  - PromptRouter integration con orchestratorSvc.Run()
-  - docs/agents/sdd-pipeline.md + docs/flows/09-orchestrator.md
+  Skeleton commit completado en 2026-06-10 (chunk 2):
+  - Runner: RunOption variadic (WithStandalone, WithFlowRun, WithFlowRunStep)
+    + buildRunMetadata centralizado + Runner.Env + checkOrphanPolicy
+  - INSERT agent_runs ahora persiste flow_run_id explícito + metadata
+    derivada de options (vs hardcoded standalone:true)
+  - ErrOrphanRunNotAllowed activo: prod sin flow_run_id + standalone=false
+    se bloquea proactivo (complementa cron orphan-audit issue-08.12)
+  - internal/service/orchestrator/ skeleton:
+    * types.go (Mode, PhaseSlug, OrchestrateInput, OrchestrateResult)
+    * errors.go (ErrAsyncModeUnsupported D6, ErrRequiredSaveMissing D5,
+      ErrInvalidMode, ErrEmptyRawText, ErrUnknownPhase)
+    * service.go (Service.Run con validate(): empty, mode válido, D6,
+      fases registradas)
+    * phases/registry.go (Handler interface + Registry concurrent-safe
+      + SuggestedSave + RetryPolicy + MemoryRef + Input/Output/ClientResult)
+  - Tests: 21 unit verdes nuevos. Repo 536 tests verdes, cero regresiones.
+
+  PENDING (chunks futuros):
+  - svc-003..007: implementaciones de modes/{express,full,solo,detect,async}
+  - svc-008: validator.go con DAG-check de SkipPhases
+  - svc-009..018: 10 handlers de fase (sdd_explore..sdd_onboard)
+  - seed-003: flows_catalog.go con flow:sdd-pipeline-v1 DAG
+  - save-001..003: SuggestedSave validation post-phase (D5 enforcement)
+  - skill-001..003: integración auto-skill (D3 threshold)
+  - mcp-001..006: 4 MCP tools nuevos + wire-up + PromptRouter integration
+  - cli-001: domain workflow resume <flow_run_id>
+  - ana-001..004: Intent analysis mini-pipeline
+  - obs-001..004: métricas + OTel spans + alerts
+  - test-001..015: 15 escenarios E2E del issue.md
+  - sab-001..003: 3 sabotajes
+  - doc-001..004: docs/agents + docs/flows + GETTING_STARTED + CHANGELOG
+  - state-001..003: implemented + RFC + req.md updates

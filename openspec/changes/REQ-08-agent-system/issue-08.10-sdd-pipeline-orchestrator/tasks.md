@@ -13,14 +13,14 @@
 
 ## Service `internal/service/orchestrator/`
 
-- [ ] **svc-001**: `service.go` — Service + Run(ctx, OrchestrateInput) (orchestrator_run_id, flow_run_id, error)
-- [ ] **svc-002**: `OrchestrateInput` struct (Mode, RawText, StartingPhase, SkipPhases, AsyncTimeout, ExpressMaxLines)
+- [x] **svc-001**: `service.go` — Service + Run(ctx, OrchestrateInput) (orchestrator_run_id, flow_run_id, error) — skeleton 2026-06-10
+- [x] **svc-002**: `OrchestrateInput` struct (Mode, RawText, StartingPhase, SkipPhases, AsyncTimeout, ExpressMaxLines) — 2026-06-10
 - [ ] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only)
 - [ ] **svc-004**: `modes/full.go` — pipeline 10 fases vía sub-agents nativos del IDE
 - [ ] **svc-005**: `modes/solo.go` — inline execution server-side con LLM provider directo
 - [ ] **svc-006**: `modes/detect.go` — dry_run=true, persiste a `*.status='draft'`
 - [ ] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail
-- [ ] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6)
+- [~] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6) — validate() en service.go cubre D6 + empty/mode/unknown-phase; falta DAG-check de SkipPhases
 - [ ] **svc-009**: `phases/sdd_explore.go` — system_prompt + input/output schema + multi-concern detection (D2)
 - [ ] **svc-010**: `phases/sdd_spec.go` — delega a issuebuilder.AdaptiveService (issue-04.7)
 - [ ] **svc-011**: `phases/sdd_propose.go`
@@ -31,13 +31,13 @@
 - [ ] **svc-016**: `phases/sdd_judge.go` — suggested_saves required=true para sabotage_records (D5)
 - [ ] **svc-017**: `phases/sdd_archive.go` — entity_state_transitions to_state='archived'
 - [ ] **svc-018**: `phases/sdd_onboard.go` — opcional, genera knowledge_doc si aplica
-- [ ] **svc-019**: `phases/registry.go` — map slug → handler + retry_policy lookup
+- [x] **svc-019**: `phases/registry.go` — map slug → handler + retry_policy lookup — 2026-06-10 (Handler iface + Registry concurrent-safe + SuggestedSave/RetryPolicy/MemoryRef)
 
 ## Service enforcement
 
-- [ ] **enf-001**: `internal/service/agent/option.go` — Option pattern + WithStandalone(bool) + WithFlowRun(uuid)
-- [ ] **enf-002**: `internal/service/agent/service.go::Create` — if flow_run_id nil AND !standalone AND env='production' → ErrOrphanRunNotAllowed
-- [ ] **enf-003**: `internal/service/agent/errors.go` — ErrOrphanRunNotAllowed + ErrAsyncModeUnsupported + ErrRequiredSaveMissing
+- [x] **enf-001**: `internal/runner/agent/options.go` — Option pattern + WithStandalone(bool) + WithFlowRun(uuid) + WithFlowRunStep — 2026-06-10 (movido a `runner/agent/` que es donde se crean los agent_runs)
+- [x] **enf-002**: `internal/runner/agent/runner.go::Run` — checkOrphanPolicy: prod + flow_run_id nil + !standalone → ErrOrphanRunNotAllowed — 2026-06-10
+- [x] **enf-003**: errores tipados — ErrOrphanRunNotAllowed en `runner/agent`, ErrAsyncModeUnsupported + ErrRequiredSaveMissing en `service/orchestrator/errors.go` — 2026-06-10
 
 ## Auto-skill integration (consume issue-05.4)
 

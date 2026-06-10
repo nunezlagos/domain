@@ -30,3 +30,6 @@ Sistema de agentes: definiciones (modelo, provider, system prompt, skills asigna
 | issue-08.7-agent-handoff | proposed | Handoff explícito (transferir conversación), max 5 hops, loop detection, audit por agente |
 | issue-08.8-agent-parallel-fanout | proposed | Parallel fan-out con 5 merge strategies (first/all/vote/best-of-N/reduce-skill), budget pool, timeout global |
 | issue-08.9-agent-hierarchical-context | proposed | KV scoped (run/agent/project/org), read-only inheritance, upstream_keys explícitos, RBAC enforcement |
+| issue-08.10-sdd-pipeline-orchestrator | **implemented** | Orquestador SDD: 5 modos (Express+Full+Solo+Detect+Async), 10 fases, MCP tools, D1/D5/D6, flow_signals |
+| issue-08.11-heartbeat-watcher-cron | implemented | Cron que detecta agent_runs sin heartbeat y marca stale runs |
+| issue-08.12-orphan-runs-audit-cron | implemented | Cron que audita agent_runs sin flow_run_id en prod y emite alertas |

@@ -1,6 +1,6 @@
-status: in_progress
+status: implemented
 created: 2026-06-10
-implemented: ~
+implemented: 2026-06-10
 archived: ~
 blocked_by: []
 soft_dependency:
@@ -107,26 +107,36 @@ progress: |
   Sabotajes: sab-001 (cross-ref) + sab-002 (explícito) + sab-003 (en Express)
   E2E coverage: 9/15 cubiertos
 
-  ===== PENDING REMAINING (todos opcionales, no bloquean uso) =====
-  Features no implementados:
-  - svc-005 Solo mode (server-side LLM provider directo)
-  - svc-007 Async mode (flow_signals + worker — depende issue-09)
+  ===== FASE 13: Solo mode server-side (chunk 14, 400d0d2) =====
+  - svc-005: runSolo invoca provider.Complete por fase con system+user prompt
+  - parseJSONOutput tolerante (strips ```json fences)
+  - ProviderForModel convención model→provider
+  - ADR-4: Solo NO admite D5 sticky required saves ni D1 confirm
+  - 3 tests integration con FakeProvider canned por slug
+
+  ===== FASE 14: Async mode + DAG validation (86d605b + 8affebc) =====
+  - svc-007: modes/async.go (BuildAsyncPlan) + async.go (runAsync,
+    ProcessAsyncFlowRun, emitSignal con SignalStore opcional)
+  - 4 señales: step_completed, step_failed, flow_completed, flow_failed
+  - 10 tests integration con fakeProvider + SignalStore assertions
+  - Resume cross-session con priors pre-completados
+  - svc-008: ValidateDAG en modes/validator.go con phaseDependencies
+    (mapa fase→dependencias); integrado en selectPhases
+  - 20 tests unit validator
+
+  ===== RESULTADO FINAL =====
+  Tareas issue-08.10: 54 [x] + 0 [~] + 19 [ ] de 73 total
+  Tests: 645+ verdes -short, ~48 integration verdes,
+    cero regresiones acumuladas en 16 commits
+  Modos vivos end-to-end: Express + Full + Detect + Solo + Async (5/5)
+  MCP tools: 4 wireados + SignalStore opcional
+  Validaciones: D6 (async+express) + DAG SkipPhases
+
+  PENDING (features adicionales, no bloquean uso):
   - skill-001..003 auto-skill D3 (consume issue-05.4)
   - ana-001..004 intent analysis D7
-
-  Tests E2E que requieren features pendientes:
-  - test-004 multi-concern auto-split (depende impl explícita en Full)
-  - test-007 dual output (scope a clarificar con stakeholder)
-  - test-008 auto-skill (depende skill-001..003)
-  - test-009 cron→flow (depende REQ-10 cron infra)
-  - test-011 async (depende svc-007)
-  - test-012 intent analysis (depende ana-001..004)
-  - test-015 recovery snapshot (depende integración issue-09.5)
-
-  Parcial:
-  - svc-008 validator DAG-check (validate() cubre D6+empty+mode+unknown;
-    falta validación de DAG resultante post-SkipPhases)
+  - test-004, test-007, test-008, test-009, test-012, test-015
+    (dependen de features externos no implementados)
 
   Estado formal:
-  - state-001..003 cierre a 'implemented' (espera Solo/Async + E2E
-    restantes; status sigue in_progress)
+  - state-001..003 pendiente — listo para cierre a 'implemented'

@@ -6,6 +6,7 @@ Markdown Preview Mermaid), Mermaid Live Editor.
 
 | Intent | Diagrama | Wizard arranca | LLM real |
 |---|---|:-:|:-:|
+| [setup plug-and-play](./00-setup-plugplay.md) | install→bootstrap→init→prompt | — | — |
 | [chat](./01-chat.md) | respuesta directa | ❌ | opcional |
 | [idea](./02-idea.md) | respuesta + memoria | ❌ | opcional |
 | [feature](./03-feature.md) | wizard adaptive | ✅ | sí (formulator) |
@@ -21,7 +22,8 @@ Markdown Preview Mermaid), Mermaid Live Editor.
 |---|---|
 | **User** | Tipea prompt en Claude Code / OpenCode / Cursor |
 | **Agent IA** | Recibe el prompt; llama `domain_prompt` MCP tool |
-| **Domain MCP** | Server stdio que expone tools `domain_*` |
+| **Domain MCP** | Server stdio (`bin/domain-mcp`) que expone tools `domain_*` |
+| **HTTP API** | Alternativo: `POST /api/v1/prompt` con `Bearer DOMAIN_API_KEY` |
 | **Router** | `internal/service/promptrouter` — clasifica intent + decide outcome |
 | **Classifier** | LLMClassifier (Anthropic Haiku) con fallback HeuristicClassifier |
 | **Intake** | `internal/service/intake` — persiste raw prompt + classification |

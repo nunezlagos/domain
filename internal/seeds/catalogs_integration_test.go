@@ -41,6 +41,89 @@ func setupSeedDB(t *testing.T) (pools *db.Pools, cleanup func()) {
 	}
 }
 
+func TestPlansSeeder_NoCommercialPricing(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	reg := seeds.NewRegistry()
+	reg.Register(&seeds.PlansSeeder{})
+	_, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
+	require.NoError(t, err)
+
+	// Invariante open-source: monthly_price_usd siempre 0.
+	rows, err := pools.App.Query(ctx,
+		`SELECT slug, monthly_price_usd FROM plans`)
+	require.NoError(t, err)
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var slug string
+		var price int
+		require.NoError(t, rows.Scan(&slug, &price))
+		require.Equalf(t, 0, price,
+			"plan %s tiene monthly_price_usd=%d — Domain es open-source sin cobro (HU-21.4 archived)",
+			slug, price)
+		count++
+	}
+	require.GreaterOrEqual(t, count, 4)
+
+	// Slugs nuevos (no comerciales) presentes.
+	for _, want := range []string{"trial", "standard", "extended", "unlimited"} {
+		var found bool
+		err := pools.App.QueryRow(ctx,
+			`SELECT TRUE FROM plans WHERE slug = $1`, want).Scan(&found)
+		require.NoErrorf(t, err, "slug %s missing", want)
+	}
+
+	// Slugs comerciales viejos NO deben estar.
+	for _, old := range []string{"free", "starter", "team", "enterprise"} {
+		var count int
+		require.NoError(t, pools.App.QueryRow(ctx,
+			`SELECT COUNT(*) FROM plans WHERE slug = $1`, old).Scan(&count))
+		require.Equalf(t, 0, count,
+			"slug comercial viejo %s todavía existe — cleanup falló", old)
+	}
+}
+
+// Sabotaje: si una org tiene asignado un plan legacy ("free" sembrado por
+// migration 000032), el cleanup del seeder NO debe borrarlo — rompería el
+// FK organizations.plan_id ON DELETE RESTRICT. Solo los huérfanos van.
+func TestSabotage_PlansSeeder_PreservesAssignedLegacyPlan(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Migration 000032 ya creó "free"/"pro"/"enterprise". Tomo el id de
+	// "free" y se lo asigno a una org.
+	var legacyID uuid.UUID
+	err := pools.App.QueryRow(ctx,
+		`SELECT id FROM plans WHERE slug = 'free'`).Scan(&legacyID)
+	require.NoError(t, err, "migration 000032 debió haber sembrado 'free'")
+	_, err = pools.App.Exec(ctx,
+		`INSERT INTO organizations (name, slug, plan_id) VALUES ('Acme', 'acme', $1)`,
+		legacyID)
+	require.NoError(t, err)
+
+	// Corro el seeder.
+	reg := seeds.NewRegistry()
+	reg.Register(&seeds.PlansSeeder{})
+	_, err = reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
+	require.NoError(t, err)
+
+	// "free" SIGUE existiendo porque está referenciado por la org.
+	var still int
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT COUNT(*) FROM plans WHERE slug = 'free'`).Scan(&still))
+	require.Equal(t, 1, still, "legacy plan asignado a org NO debe borrarse")
+
+	// "pro" y "enterprise" SÍ deberían haberse borrado (no asignados).
+	var pro int
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT COUNT(*) FROM plans WHERE slug = 'pro'`).Scan(&pro))
+	require.Equal(t, 0, pro, "pro legacy huérfano debió borrarse")
+}
+
 func TestModelRegistrySeeder_PopulatesCatalog(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)
 	defer cleanup()

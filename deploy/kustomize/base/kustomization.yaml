@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base Kustomize manifests para Domain (HU-24.2).
+# Re-usa los YAMLs canónicos de deploy/k8s-examples/ (HU-24.3) — los
+# overlays aplican patches por entorno encima de esta base.
+
+namespace: domain
+
+commonLabels:
+  app.kubernetes.io/name: domain
+  app.kubernetes.io/part-of: domain
+
+resources:
+  - ../../k8s-examples/01-namespace.yaml
+  - ../../k8s-examples/02-secrets.yaml
+  - ../../k8s-examples/03-deployment.yaml
+  - ../../k8s-examples/04-service-hpa.yaml
+  - ../../k8s-examples/05-networkpolicy.yaml
+  - ../../k8s-examples/06-migrations-job.yaml

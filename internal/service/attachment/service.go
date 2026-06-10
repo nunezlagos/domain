@@ -242,6 +242,10 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 		table = "user_stories"
 	case "requirement":
 		table = "requirements"
+	case "hu_draft":
+		table = "hu_drafts"
+	case "intake_payload":
+		table = "intake_payloads"
 	default:
 		return ErrInvalidEntity
 	}
@@ -254,4 +258,23 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 		return ErrInvalidEntity
 	}
 	return nil
+}
+
+// PromoteEntity reasigna todos los attachments de (fromKind, fromID) a
+// (toKind, toID). Usado cuando un draft (HU-04.7) se commit como user_story
+// real, o un intake_payload se transforma en HU/REQ. Idempotente.
+func (s *Service) PromoteEntity(ctx context.Context, fromKind, toKind string, fromID, toID uuid.UUID) (int, error) {
+	if err := s.requireEntity(ctx, toKind, toID); err != nil {
+		return 0, fmt.Errorf("target entity: %w", err)
+	}
+	tag, err := s.Pool.Exec(ctx, `
+		UPDATE file_attachments
+		SET entity_type = $1, entity_id = $2
+		WHERE entity_type = $3 AND entity_id = $4`,
+		toKind, toID, fromKind, fromID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("promote: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }

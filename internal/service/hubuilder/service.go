@@ -90,12 +90,33 @@ type Preview struct {
 	SuggestedSlug string            `json:"suggested_slug"`
 }
 
+// AttachmentService es el subset de internal/service/attachment.Service que
+// el wizard necesita para colgar imágenes a un draft. Inyectable para tests.
+type AttachmentService interface {
+	InitUpload(ctx context.Context, entityType, entityIDStr, filename, mimeType, createdBy string, size int64) (*AttachmentInitResult, error)
+	PromoteEntity(ctx context.Context, fromKind, toKind string, fromID, toID uuid.UUID) (int, error)
+}
+
+// AttachmentInitResult — espejo lite del tipo del attachment service.
+// Evita import cycle: internal/service/attachment.InitUploadResult tiene
+// shape compatible y satisface esto.
+type AttachmentInitResult struct {
+	AttachmentID uuid.UUID `json:"attachment_id"`
+	UploadURL    string    `json:"upload_url"`
+	Filename     string    `json:"filename"`
+}
+
 // Service orquesta el wizard. Stateless; depende de pgxpool y registry steps.
 type Service struct {
-	Pool         *pgxpool.Pool
-	Audit        *audit.PGRecorder
-	DraftTTLHrs  int // Default 24
+	Pool        *pgxpool.Pool
+	Audit       *audit.PGRecorder
+	Attachments AttachmentService // opcional; si nil → AttachToDraft falla con ErrAttachmentsNotConfigured
+	DraftTTLHrs int               // Default 24
 }
+
+// ErrAttachmentsNotConfigured se devuelve si AttachToDraft se llama sin
+// AttachmentService inyectado.
+var ErrAttachmentsNotConfigured = errors.New("attachment service not configured")
 
 const defaultDraftTTLHrs = 24
 
@@ -271,9 +292,77 @@ func (s *Service) BuildPreview(ctx context.Context, draftID uuid.UUID) (*Preview
 	return preview, nil
 }
 
+// AttachToDraft sube una imagen/archivo asociada al draft en curso. Genera
+// presigned PUT URL via attachment.Service y registra el attachment_id en
+// hu_drafts.answers["attachments"] como []{id, filename, mime_type}.
+//
+// El cliente (Claude Code / agente IA) sube el archivo a UploadURL y luego
+// invoca de nuevo `Answer` con el step "attachments_confirmed" si el flow
+// lo requiere. Al commit del draft, PromoteAttachments mueve los
+// attachments del entity_type=hu_draft → user_story (HU final).
+func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename, mimeType string, size int64) (*AttachmentInitResult, error) {
+	if s.Attachments == nil {
+		return nil, ErrAttachmentsNotConfigured
+	}
+	d, err := s.Get(ctx, draftID)
+	if err != nil {
+		return nil, err
+	}
+	if d.Status != StatusInProgress && d.Status != StatusFinished {
+		return nil, fmt.Errorf("%w: cannot attach to %s draft", ErrInvalidStatus, d.Status)
+	}
+
+	createdBy := ""
+	if d.CreatedBy != nil {
+		createdBy = d.CreatedBy.String()
+	}
+	res, err := s.Attachments.InitUpload(ctx,
+		"hu_draft", draftID.String(),
+		filename, mimeType, createdBy, size)
+	if err != nil {
+		return nil, fmt.Errorf("init upload: %w", err)
+	}
+
+	// Persist attachment_id + filename en answers["attachments"].
+	answers := map[string]any{}
+	_ = json.Unmarshal(d.Answers, &answers)
+	existing, _ := answers["attachments"].([]any)
+	existing = append(existing, map[string]any{
+		"attachment_id": res.AttachmentID.String(),
+		"filename":      filename,
+		"mime_type":     mimeType,
+		"size":          size,
+	})
+	answers["attachments"] = existing
+	newAnswers, _ := json.Marshal(answers)
+	if _, err := s.Pool.Exec(ctx,
+		`UPDATE hu_drafts SET answers = $1, updated_at = now() WHERE id = $2`,
+		newAnswers, draftID,
+	); err != nil {
+		return nil, fmt.Errorf("persist attachment ref: %w", err)
+	}
+
+	if s.Audit != nil {
+		_ = s.Audit.Record(ctx, audit.Event{
+			ActorType:  audit.ActorSystem,
+			Action:     "hu_draft.attached",
+			EntityType: "hu_draft",
+			EntityID:   &draftID,
+			NewValues: map[string]any{
+				"attachment_id": res.AttachmentID.String(),
+				"filename":      filename,
+			},
+		})
+	}
+	return res, nil
+}
+
 // Commit marca el draft como committed. NO escribe archivos; eso es trabajo
 // del agente que consume el preview (Edit/Write). El Commit registra audit
 // y bloquea Answer posterior.
+//
+// Si el draft tiene attachments + un huID válido provisto, los promueve de
+// entity_type=hu_draft → user_story para que queden asociados a la HU real.
 func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error) {
 	d, err := s.Get(ctx, draftID)
 	if err != nil {
@@ -307,6 +396,41 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 		})
 	}
 	return d, nil
+}
+
+// PromoteAttachmentsToHU mueve los attachments vinculados al draft hacia
+// la HU final creada por el agente IA tras consumir el preview. Llamado
+// por el agente al hacer el write filesystem + INSERT user_story.
+// Retorna el count de attachments movidos.
+func (s *Service) PromoteAttachmentsToHU(ctx context.Context, draftID, huID uuid.UUID) (int, error) {
+	if s.Attachments == nil {
+		return 0, nil
+	}
+	d, err := s.Get(ctx, draftID)
+	if err != nil {
+		return 0, err
+	}
+	if d.Status != StatusCommitted {
+		return 0, fmt.Errorf("%w: draft must be committed first (got %s)",
+			ErrInvalidStatus, d.Status)
+	}
+	moved, err := s.Attachments.PromoteEntity(ctx, "hu_draft", "user_story", draftID, huID)
+	if err != nil {
+		return 0, err
+	}
+	if s.Audit != nil {
+		_ = s.Audit.Record(ctx, audit.Event{
+			ActorType:  audit.ActorSystem,
+			Action:     "hu_draft.attachments_promoted",
+			EntityType: "user_story",
+			EntityID:   &huID,
+			NewValues: map[string]any{
+				"draft_id":     draftID.String(),
+				"moved_count":  moved,
+			},
+		})
+	}
+	return moved, nil
 }
 
 // Abandon marca el draft como abandonado.

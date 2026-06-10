@@ -495,7 +495,7 @@ Equipo óptimo (acelera fases 4-6): + **1 frontend** (para Web UI fase 6) + **1 
 ## Cómo navegar este roadmap
 
 1. **PM**: usa la tabla "Visión general" para reporting; ajusta fechas con velocity real medida
-2. **Dev**: cada HU tiene `hu.md` con Gherkin scenarios y `tasks.md` con bullets atómicas
+2. **Dev**: cada HU tiene `issue.md` con Gherkin scenarios y `tasks.md` con bullets atómicas
 3. **SRE**: foco fases 1, 4, 5 (REQs 17, 18, 19, 24, 25, 26, 27)
 4. **Security**: review continuo de fase 1 + fase 4 (audit_log, RLS, secrets rotation)
 5. **Product**: validar exit criteria de cada fase con clientes design partners

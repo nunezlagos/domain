@@ -150,7 +150,7 @@ func TestFullFlow_FeatureMode(t *testing.T) {
 
 	prev, err := svc.BuildPreview(ctx, d.ID)
 	require.NoError(t, err)
-	require.Contains(t, prev.Files, "hu.md")
+	require.Contains(t, prev.Files, "issue.md")
 	require.Contains(t, prev.Files, "state.yaml")
 	require.Contains(t, prev.TargetPath, "REQ-08-agent-system")
 	require.Contains(t, prev.SuggestedSlug, "agent-runs-csv-export")

@@ -2,31 +2,39 @@
 
 ## Scope (in)
 
-- Reemplazo del catálogo de 10 `agent_templates` (researcher/coder/...) por 10 alineados a fases SDD (`sdd-orchestrator` + 9 `sdd-<phase>`).
-- Cleanup defensivo en `agent_templates_catalog.go` (mismo patrón que `PlansSeeder v2` issue-21.3).
-- 1 seeder nuevo: `flow:sdd-pipeline-v1` con `spec` JSONB que encadena las 10 fases vía `flow_run_steps`.
-- Service nuevo: `internal/service/orchestrator/Service` (thin, 4 modos: Full/Solo/Detect/Async).
-- Enforcement service-layer: `agent_runs` orphan (sin `flow_run_id`) rechazado en prod salvo `WithStandalone(true)`.
-- Métrica `domain_agent_runs_orphan_total{org_id, reason}` + alert PrometheusRule.
-- CHECK constraint `agent_templates.role IN ('orchestrator', 'phase-worker')` + UNIQUE INDEX parcial `WHERE role='orchestrator'`.
-- Modo Async: pausa via `flow_signals` (BIGSERIAL) — diferencial Domain (gentle-ai no tiene).
-- 10 tests E2E (1 por escenario) + 1 sabotaje + 1 cron de auditoría orphan.
+- Reemplazo del catálogo de 10 `agent_templates` por 1 orquestador + 9 phase-workers (slugs `sdd-*`)
+- Cleanup defensivo en `agent_templates_catalog.go` (patrón `PlansSeeder v2`)
+- Seeder nuevo: `flow:sdd-pipeline-v1` con `spec` JSONB de 10 fases
+- Service nuevo: `internal/service/orchestrator/` con 5 modos (Express/Full/Solo/Detect/Async)
+- Enforcement service-layer: `agent_runs` orphan rechazado en prod salvo `WithStandalone(true)`
+- Métrica `domain_agent_runs_orphan_total{org_id, reason}` (incrementada por cron de issue-08.12)
+- Métrica `domain_orchestrator_phase_duration_seconds{phase, mode}`
+- CHECK + UNIQUE INDEX parcial `agent_templates.role`
+- Modo Async via `flow_signals` (diferencial Domain vs gentle-ai)
+- Auto-skill inyección por fase (consume issue-05.4 implementada)
+- MCP tools nuevos: `domain_orchestrate`, `domain_orchestrate_phase_result`, `domain_orchestrate_confirm`, `domain_flow_status`
+- CLI nuevo: `./bin/domain workflow resume <flow_run_id>`
+- Intent `analysis` (mini-pipeline 2 fases que genera `knowledge_doc`)
+- 15 tests E2E (1 por escenario) + 1 sabotaje + tests integration por modo
 
 ## Scope (out)
 
-- Wizard adaptive (issue-04.7 v2) — NO se toca. Cuando wizard termina, emite `flow_signal` que el orquestador toma.
-- PromptRouter — NO se toca. Sigue clasificando intent y delegando a issuebuilder.
-- MCP `domain_prompt` tool — NO cambia la firma; internamente decide si crea un flow_run o sólo wizard.
-- Re-implementar parent_run_id (ya existe issue-08.6).
-- Re-implementar flow_signals (ya existe en migrations 000060-000063).
-- Cambios de schema BD destructivos (no hay drops).
+- Wizard adaptive (issue-04.7 v2) — NO se toca. sdd-spec lo invoca como sub-rutina.
+- PromptRouter — NO se cambia firma. Internamente decide si crea orchestrator_run o solo wizard.
+- Schema BD destructivo — sólo 1 migration aditiva (`agent_templates.role` + CHECK + INDEX)
+- Re-implementar parent_run_id (ya existe issue-08.6)
+- Re-implementar flow_signals (ya existe REQ-09)
+- Re-implementar circuit breaker (es issue-12.6, bloqueante separado)
+- Re-implementar heartbeat watcher (es issue-08.11, bloqueante separado)
+- Re-implementar orphan audit cron (es issue-08.12, bloqueante separado)
+- Web UI para visualizar flows (issue futura)
 
 ## Cambios
 
-### Schema (1 migration mínima)
+### Schema (1 migration aditiva)
 
 ```sql
--- migration 000073: agent_templates.role + constraints
+-- 000074_agent_templates_role.up.sql
 ALTER TABLE agent_templates
   ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'phase-worker'
   CHECK (role IN ('orchestrator', 'phase-worker'));
@@ -35,42 +43,46 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_templates_orchestrator_unique_idx
   ON agent_templates (organization_id) WHERE role = 'orchestrator';
 ```
 
-Backfill: cero rows necesitan ser tocadas (todas defaultean a `phase-worker`, el orchestrator se inserta como nuevo).
-
 ### Seeders
 
-- `internal/seeds/agent_templates_catalog.go`: replace 10 entries actuales por 10 nuevos (1 orchestrator + 9 phase-workers).
-- `internal/seeds/flows_catalog.go` (NUEVO): seeder de `flow:sdd-pipeline-v1` per-org con spec JSONB.
+- `internal/seeds/agent_templates_catalog.go` v3: replace 10 entries por 1 orchestrator + 9 phase-workers
+- `internal/seeds/flows_catalog.go` (NUEVO): seeder de `flow:sdd-pipeline-v1` per-org con spec JSONB DAG
 
-### Code
+### Code Go
 
-- `internal/service/orchestrator/service.go` — Run(mode, prompt) → orchestrator_run_id + flow_run_id
-- `internal/service/orchestrator/modes/` — full.go, solo.go, detect.go, async.go
-- `internal/service/agent/service.go` — agregar `WithStandalone()` option + check env-aware
-- `internal/metrics/` — registrar `domain_agent_runs_orphan_total`
+- `internal/service/orchestrator/service.go` — Run(ctx, OrchestrateInput) (orchestrator_run_id, flow_run_id, error)
+- `internal/service/orchestrator/modes/{full,solo,detect,async,express}.go` — 1 file por modo
+- `internal/service/orchestrator/phases/sdd_*.go` — 10 files con system_prompt + input_schema + output_schema por fase
+- `internal/service/agent/option.go` — Option pattern con WithStandalone()
+- `internal/service/agent/errors.go` — ErrOrphanRunNotAllowed
+- `internal/metrics/orchestrator.go` — registrar histograms + counters
+- `internal/mcp/tools/orchestrate.go` — MCP tools
+- `cmd/domain/workflow_resume.go` — CLI subcomando
 
 ### Tests
 
-- `tests/e2e/orchestrator_test.go` — 10 escenarios
+- `tests/e2e/orchestrator_test.go` — 15 escenarios
 - `internal/service/orchestrator/sabotage_test.go` — orphan bypass
-- `cmd/audit-orphan-runs/main.go` (NUEVO) — cron que cuenta orphans
-
-## No-goals
-
-- NO se cambia el wire-up de `cmd/domain/main.go` salvo agregar `orchestratorSvc := &orchestrator.Service{...}` en `runServer`.
-- NO se rompe API HTTP existente.
+- `internal/service/orchestrator/modes/*_test.go` — uno por modo
 
 ## Stakeholders
 
-- nunezlagos (decisión: Replace+cleanup, híbrido reforzado, 4 modos)
-- Domain MCP runtime (consumer del nuevo orchestrator)
+- nunezlagos (decisiones D1-D7 RFC 0006)
 
 ## Dependencias
 
-- issue-08.5 agent-templates ✅
-- issue-08.6 multi-agent-supervisor ✅
-- issue-09.x flows + flow_signals ✅
+| Issue | Estado | Por qué bloquea |
+|---|---|---|
+| issue-12.6 mcp-tool-resilience | implementación parcial (CB+LRU pendientes) | Sin CB, MCPs externos pueden colgar al orquestador |
+| issue-08.11 heartbeat-watcher-cron | NO existe | Sin esto los flow_run_steps stuck quedan zombis |
+| issue-08.12 orphan-runs-audit-cron | NO existe | Sin esto el enforcement híbrido no tiene auditoría |
+| issue-05.4 auto-skill-engine | implementada | Consumida por el orquestador en cada fase |
+| issue-08.5 agent-templates | implementada | Modelo de templates ya existe |
+| issue-08.6 multi-agent-supervisor | implementada | parent_run_id + budget hierarchy ya existen |
+| REQ-09 flows + flow_signals | implementado | Estado machine + pause/resume |
+| REQ-10 crons + scheduler | implementado | Disparo de flows con leader election |
+| issue-04.7 wizard-adaptive v2 | implementada | sdd-spec lo invoca como sub-rutina |
 
 ## Estado
 
-`proposed` — aprobada por usuario en 2026-06-10, lista para implementación.
+`proposed` — bloqueado por 12.6/08.11/08.12. Implementación en orden 12.6 → 08.11 → 08.12 → 08.10.

@@ -2,3 +2,11 @@ status: proposed
 created: 2026-06-10
 implemented: ~
 archived: ~
+blocked_by:
+  - issue-08.11-heartbeat-watcher-cron
+  - issue-08.12-orphan-runs-audit-cron
+soft_dependency:
+  # issue-12.6 está implemented; CB + LRU listados como TODO en sus notes
+  # son enhancements futuros, no bloqueantes duros (retry + timeout 5s actuales cubren el caso básico)
+  - issue-12.6-mcp-tool-resilience-cb-lru-enhancement
+rfc: docs/rfc/0006-sdd-pipeline-orchestrator.md

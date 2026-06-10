@@ -9,7 +9,7 @@ Cada feature sigue: REQ → HU → Proposal → Design → Tasks → TDD → Sab
 
 - `openspec/changes/REQ-XX-slug/` — requisitos activos
 - `openspec/changes/archive/` — requisitos archivados
-- Cada HU tiene 5 archivos: `hu.md` (Gherkin), `proposal.md`, `design.md` (ADR+TDD), `tasks.md`, `state.yaml`
+- Cada HU tiene 5 archivos: `issue.md` (Gherkin), `proposal.md`, `design.md` (ADR+TDD), `tasks.md`, `state.yaml`
 
 Regla: NO implementar nada sin una HU que lo respalde. Si falta una HU: crearla con opsx.
 

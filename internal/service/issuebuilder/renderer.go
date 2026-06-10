@@ -27,7 +27,7 @@ func renderFeaturePreview(d *Draft, answers map[string]any) (*Preview, error) {
 	targetPath := fmt.Sprintf("openspec/changes/%s/%s/", reqParent, suggested)
 
 	files := map[string]string{
-		"hu.md":       renderHUMd(suggested, reqParent, priority, changeType, audience, goal, d.InitialIdea, summary),
+		"issue.md":       renderHUMd(suggested, reqParent, priority, changeType, audience, goal, d.InitialIdea, summary),
 		"proposal.md": renderProposalMd(suggested, summary, reqParent, effort),
 		"design.md":   renderDesignMd(suggested, summary),
 		"tasks.md":    renderTasksMd(suggested),

@@ -40,7 +40,7 @@ make test-all              # ambos
 ### Step 1: Leer la HU
 
 ```bash
-cat openspec/changes/REQ-XX/issue-XX.Y/hu.md
+cat openspec/changes/REQ-XX/issue-XX.Y/issue.md
 cat openspec/changes/REQ-XX/issue-XX.Y/design.md
 cat openspec/changes/REQ-XX/issue-XX.Y/tasks.md
 ```
@@ -107,7 +107,7 @@ Aplicar:
 
 ### Step 8: Sabotaje test
 
-Cada HU declara al menos UN test sabotaje (ver tabla en `hu.md`).
+Cada HU declara al menos UN test sabotaje (ver tabla en `issue.md`).
 
 ```go
 func TestSabotage_X_Detected(t *testing.T) {

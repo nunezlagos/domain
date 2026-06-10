@@ -3,7 +3,7 @@
 ## Flujo obligatorio para cualquier cambio
 
 1. Buscá la HU correspondiente en `openspec/changes/REQ-*/issue-*/`
-2. Leé en orden: `hu.md` (Gherkin) → `design.md` (ADR + decisión) → `tasks.md` (bullets atómicos)
+2. Leé en orden: `issue.md` (Gherkin) → `design.md` (ADR + decisión) → `tasks.md` (bullets atómicos)
 3. Verificá la **Persona** que declara la HU — debés entender perspectiva del actor
 4. Seguí TDD estricto: **test → implementación mínima → refactor → sabotaje**
 5. Si encontrás un gap en los requirements: **PREGUNTÁ ANTES DE CODEAR** (regla CLAUDE.md global)
@@ -77,7 +77,7 @@ Ejemplo: issue-25.5 RLS — sabotaje "query sin SET LOCAL → 0 rows".
 ## Reglas duras
 
 - **NUNCA** implementar sin HU aprobada
-- **NUNCA** modificar `hu.md` / `design.md` sin orden explícita del humano
+- **NUNCA** modificar `issue.md` / `design.md` sin orden explícita del humano
 - **NUNCA** commitear sin tests verdes locales
 - **NUNCA** skipear linters con `--no-verify`
 - **PREGUNTÁ** si hay ambigüedad en spec antes de codear

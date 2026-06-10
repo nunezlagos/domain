@@ -2,140 +2,150 @@
 
 ## Contexto
 
-Domain hoy tiene 10 `agent_templates` con slugs rol-genérico (`researcher`, `coder`, `tester`, etc.) + 1 `supervisor` marcado con `metadata.pattern = 'multi-agent-orch issue-08.6'`. El catálogo es **flat**: no hay distinción visual entre orquestador y workers. El patrón gentle-ai (Gentleman-Programming) demuestra que **alineación slug↔fase-SDD** da mejor reproducibilidad porque cada fase es un sub-agente fresh.
+Ver RFC 0006 (`docs/rfc/0006-sdd-pipeline-orchestrator.md`, accepted 2026-06-10) para la motivación completa y decisiones D1-D7.
 
-Domain ya tiene infraestructura más rica que gentle-ai:
-- `flow_signals` (BIGSERIAL append) para async
-- `flow_run_step_snapshots` para deterministic replay
-- `entity_state_transitions` para audit append-only
-- `external_sync_state` para bidirectional Jira/GitHub
-- `observations` + `knowledge_chunks` para memoria con embedding (gentle-ai usa Engram externamente)
+Resumen: hoy `agent_templates` es catálogo flat con slugs rol-genérico. Patrón gentle-ai demuestra que slug↔fase-SDD da mejor reproducibilidad. Domain extiende con modo Async + auto-skill + crons.
 
-Por lo tanto: **adopto el patrón slug↔fase de gentle-ai + agrego modo Async como mejora Domain-native**.
+## Principio rector (del RFC)
 
-## Decisiones arquitectónicas
+**Domain server = state + LLM + memoria + skills.**
+**Cliente IDE = ejecutor real** (bash, edit, test, commit, grep workspace).
 
-### ADR-1: Re-cataloging vs Soft-delete
+Verificación: todos los MCP tools en `internal/mcp/tools/*.go` son data-only (cero `os.Open`, cero `exec.Command`, cero filesystem writes).
 
-**Decisión:** Re-cataloging con cleanup defensivo en el seeder (mismo patrón que `PlansSeeder v2` issue-21.3).
+## ADRs
 
-**Alternativas consideradas:**
-- A. Soft-delete vía `deleted_at NOT NULL` en agent_templates legacy.
-- B. ✅ **Sacar del catálogo + cleanup defensivo en el seeder**.
-- C. Mantener viejos + agregar nuevos en paralelo (20 templates total).
+### ADR-1 — Cleanup defensivo en seeder (no soft-delete)
 
-**Por qué B:** Domain es local-only sin prod. El "history preservado" del soft-delete es teatro. El cleanup defensivo en seeder es el patrón establecido y respeta `is_user_modified=true`. No introduce data zombies. Aprobado por usuario.
+Decisión: Replace + cleanup en seeder. Patrón establecido en `PlansSeeder v2` (issue-21.3).
 
-**Tradeoff aceptado:** orgs con agent_runs activos sobre templates legacy fallarán el cleanup por la cláusula `NOT EXISTS (SELECT 1 FROM agent_runs WHERE status='running')`. Tienen que esperar a que terminen. Es comportamiento correcto.
+Justificación: Domain hoy es local-only sin orgs con `is_user_modified=true` reales. Soft-delete sería teatro. El cleanup defensivo respeta customizaciones (`WHERE is_user_modified=false`).
 
-### ADR-2: Enforcement orphan agent_runs
+### ADR-2 — Enforcement híbrido reforzado
 
-**Decisión:** Híbrido reforzado.
+Decisión: service-layer + métrica + cron + sabotage test.
 
-**Alternativas:**
-- A. Hard: `agent_runs.flow_run_id NOT NULL` + CHECK constraint.
-- B. Soft: warning en service layer.
-- C. ✅ **Híbrido:** service layer rechaza en prod salvo `WithStandalone(true)` + métrica `domain_agent_runs_orphan_total` + cron de auditoría + alert.
+Alternativas:
+- Hard CHECK `flow_run_id NOT NULL` → rompe debugging (rechazado)
+- Soft warning → bypaseable con INSERT directo (rechazado)
+- ✅ Híbrido: `WithStandalone(true)` flag explícito + métrica + cron + alert
 
-**Por qué C:**
-- Hard (A) rompe debugging y scripts ad-hoc (alguien troubleshooting en staging necesita un agent_run aislado).
-- Soft (B) sólo no es suficiente — alguien puede INSERT directo en BD bypaseando el service.
-- Híbrido (C) da:
-  - Bloqueo en prod por default (catch del 99% de casos)
-  - Escape válido para troubleshooting (`WithStandalone()` explícito)
-  - Visibility para los casos que bypaseen el service (métrica + cron + alert)
-  - Test sabotaje que demuestra que la métrica funciona
+Tradeoff: schema permite NULL pero service-layer + cron lo detectan. Visibility sin bloqueo dura.
 
-**Tradeoff aceptado:** un INSERT directo en BD no es bloqueado a nivel schema, pero queda visible vía métrica dentro de 5min. Trade-off correcto: privilege separation + Datadog/Prometheus visibility en lugar de constraint dura.
+### ADR-3 — 5 modos (Express agregado a los 4 del RFC original)
 
-### ADR-3: 4 modos (Full / Solo / Detect / Async)
+Decisión D1 del RFC: agregar **Express** como pre-fase del classifier.
 
-**Decisión:** soportar los 3 modos de gentle-ai + agregar Async como diferencial.
-
-| Modo | Cuándo | Mecanismo |
+| Modo | Cuándo | Trigger |
 |---|---|---|
-| **Full** | Claude Code / OpenCode / Cursor (default) | `agent_runs` con `parent_run_id` + sub-agent nativo via MCP tool |
-| **Solo** | API/MCP sin sub-agent support | `flow_run_steps` ejecutados secuencialmente en el mismo proceso del orquestador |
-| **Detect-only** | CI/CD dry-run | `flows.spec.dry_run=true` → outputs persisten en `proposals.status='draft'` sin apply |
-| **Async** ⭐ | Pause/resume cross-session | `flow_runs.status='paused_awaiting_*'` + `flow_signals` (BIGSERIAL) |
+| Express | `estimated_scope='single-line' OR 'single-file'` | classifier auto-detect |
+| Full | default para `multi-file` o `multi-module` | classifier |
+| Solo | API/MCP sin sub-agent support | input flag |
+| Detect | dry-run para CI/CD | input flag |
+| Async | pause/resume cross-session | flow config |
 
-**Modo Async — por qué Domain lo necesita pero gentle-ai no:**
-- gentle-ai corre en un IDE con humano presente. Async no aplica.
-- Domain corre como server HTTP/MCP + tiene `flow_signals` heredado de REQ-09.
-- Use cases concretos:
-  - sdd-design pausa hasta que stakeholder apruebe en Slack (issue-20.x)
-  - sdd-tasks pausa hasta que PR de upstream se mergee
-  - sdd-apply pausa esperando `domain workflow approve <flow_run_id>`
+**D6 enforcement:** Async sólo compatible con Full y Detect. Si input declara `mode='express' AND async=true` → error `async_mode_unsupported`.
 
-**Riesgo Async:** pausa indefinida. Mitigación: `flow_runs.timeout_at` con default 7d, configurable via `flow.spec.async_timeout`.
+### ADR-4 — State server / Execution client (corrige error del spec previo)
 
-### ADR-4: Mapeo fase ↔ tabla SDD
+Pre-RFC el spec decía "server-side bias" para algunas fases (sdd-explore, sdd-design). Eso era **retroceso conceptual**: Domain no puede ejecutar grep sobre el workspace del cliente porque no tiene filesystem access. Las observations + knowledge_chunks son caché parcial, NO sustituyen el workspace fresh.
+
+**Modelo correcto:**
+
+| Responsabilidad | Server | Cliente IDE |
+|---|:-:|:-:|
+| Decidir fase siguiente | ✓ | |
+| Formular prompt para la fase | ✓ | |
+| Persistir state + snapshots | ✓ | |
+| Inyectar skills recomendadas | ✓ | |
+| Sugerir guardados de memoria | ✓ | |
+| Ejecutar grep/read del workspace | | ✓ |
+| Ejecutar bash/tests/git/edits | | ✓ |
+| Llamar `domain_mem_save/search` | | ✓ |
+
+### ADR-5 — D4: crons → flows pre-registrados, sin PromptRouter
+
+Decisión: `crons.target_type='flow', target_id=<flow_uuid>, inputs JSONB`.
+
+NO pasa por PromptRouter porque NO hay prompt natural. El flow está pre-definido con DAG + input schema. Cada project puede registrar flows reusables (ej. `weekly-security-audit`, `daily-cost-report`); `sdd-pipeline-v1` es UNO de esos flows.
+
+Justificación: eficiencia (sin LLM call de classify) + predictibilidad (idempotente sobre el flow registrado). El scheduler existente con leader election (`internal/scheduler/`) ya soporta este patrón.
+
+### ADR-6 — D5: suggested_saves con `required: true` en críticos
+
+Defaults: `required: false` (cliente decide).
+
+Marcados `required: true` SÓLO en:
+- `sdd-design` → ADRs (entity_state_transitions registra la transición)
+- `sdd-apply` → code_references (file_path + commit_sha post-commit)
+- `sdd-judge` → sabotage_records
+
+Si el cliente IDE NO ejecuta un required save:
+- Fase no avanza
+- Devuelve error `RequiredSaveMissing` con la lista de topics faltantes
+- Cliente IDE debe ejecutar save + re-reportar phase_result
+
+Justificación: preserva el modelo memory-explícito actual (cliente IDE decide) pero garantiza traceability de decisiones críticas que rotan en cross-fase. Sin esto, sdd-tasks no sabe los ADRs que sdd-design decidió.
+
+### ADR-7 — Mapeo fase ↔ tabla SDD (verificado, cero schema nuevo)
 
 ```
-sdd-explore   → intake_payloads (source=agent_orchestrator) + memoria (observations search)
+sdd-explore   → intake_payloads (source=agent_orchestrator) + observations (search)
 sdd-spec      → issue_drafts (delega al wizard adaptive issue-04.7)
 sdd-propose   → proposals (status: draft → approved)
 sdd-design    → designs (arch_decisions + tdd_plan + alternatives)
-sdd-tasks     → tasks (descompone implementación)
-sdd-apply     → code_references + commit
+sdd-tasks     → tasks (descompone)
+sdd-apply     → code_references + commit (vía cliente IDE)
 sdd-verify    → verification_results
 sdd-judge     → sabotage_records (TDD strict step 4)
 sdd-archive   → entity_state_transitions (to_state='archived')
-sdd-onboard   → knowledge_docs + platform_policies (genera docs para nuevos devs)
+sdd-onboard   → knowledge_docs + platform_policies (opcional)
 ```
 
-**Cero schema nuevo.** Todas las tablas existen. Sólo se agrega `agent_templates.role`.
+**Cero schema nuevo.** Sólo se agrega `agent_templates.role`.
 
-### ADR-5: Orquestador como tool MCP
+### ADR-8 — MCP tools nuevos
 
-El orquestador se expone como nuevo MCP tool `domain_orchestrate`:
+| Tool | Quién lo llama | Qué hace |
+|---|---|---|
+| `domain_orchestrate` | cliente IDE (1 vez por prompt) | dispara flow_run + devuelve primera fase |
+| `domain_orchestrate_phase_result` | cliente IDE (1 vez por fase) | reporta output de la fase + recibe siguiente |
+| `domain_orchestrate_confirm` | cliente IDE (cuando D1 pide confirm) | OK explícito antes de sdd-apply commit |
+| `domain_flow_status` | cliente IDE (al iniciar conversación) | lista flow_runs activos del user |
 
-```jsonc
-{
-  "name": "domain_orchestrate",
-  "description": "Ejecuta pipeline SDD completo desde un prompt natural",
-  "inputSchema": {
-    "raw_text": "string",
-    "mode": "full | solo | detect | async",
-    "starting_phase": "sdd-explore | ...",  // optional, default sdd-explore
-    "skip_phases": ["sdd-onboard"]          // optional
-  }
-}
-```
+### ADR-9 — Retry policy explícita por phase (D del RFC)
 
-El `PromptRouter` existente queda como gate de entrada — si intent es feature/fix/refactor, el router invoca `orchestratorSvc.Run()`. Si es chat/idea, replica directo (sin entrar al pipeline).
+Cada `agent_templates.metadata.retry_policy`:
+
+| Política | Comportamiento | Defaults |
+|---|---|---|
+| `idempotent` | Re-corre desde 0, sobreescribe snapshot | sdd-explore, sdd-onboard |
+| `re-emit` | Usa snapshot anterior, no re-LLM | sdd-archive |
+| `require-cleanup` | Saga compensation antes del retry | sdd-apply (rollback commit), sdd-tasks (delete tasks) |
 
 ## Patrones aplicados
 
-- **Strategy** — 4 modos como `orchestrator.Mode` interface
-- **Saga** — `saga_compensation_log` ya existe para rollback per-phase
-- **State machine** — `flow_runs.status` ya tiene paused_awaiting_*
-- **Repository** — `agent_templates` accedido sólo via service
+- **Strategy** — 5 modos como `orchestrator.Mode` interface
+- **Saga** — `saga_compensation_log` existente para rollback
+- **State machine** — `flow_runs.status` con paused_awaiting_*
+- **Repository** — agent_templates accedido sólo via service
 - **Adapter** — MCP tool `domain_orchestrate` adapta a `orchestratorSvc.Run()`
+- **Pipeline** — `flow_run_steps` con position secuencial
 
-## Alternatives rechazadas
-
-| Alt | Por qué no |
-|---|---|
-| Crear nuevo schema de "phases" | Redundante con `flow_run_steps.step_key` |
-| Hard CHECK orphan agent_runs | Rompe debugging legítimo |
-| Modo único Full | Pierde valor de async + dry-run |
-| Re-implementar handoff | Ya existe issue-08.6/08.7 |
-
-## Riesgos identificados
+## Riesgos
 
 | Riesgo | Probabilidad | Mitigación |
 |---|---|---|
-| Modo Solo agota context window con 10 fases inline | Media | Budget caps por fase + summary handoff via observations |
+| Solo agota context con 10 fases inline | Media | Budget caps por fase + summary handoff via observations |
 | Async pause indefinida | Media | `flow_runs.timeout_at` default 7d + alert si pausa > 3d |
-| Loop orchestrator → orchestrator | Baja (CHECK depth) | `flow_run_steps.depth ≤ 1` (orq no puede invocarse a sí mismo) |
+| Loop orchestrator → orchestrator | Baja | `flow_run_steps.depth ≤ 1` (CHECK constraint) |
 | Orphan cron false positives en dev | Alta | Cron sólo corre con `DOMAIN_ENV=production` |
-| Templates legacy quedan en BD por agent_runs activos | Media | Aceptado — cleanup en próximo seed run |
+| Cleanup borra template legacy con agent_runs activos | Media | `NOT EXISTS (running)` en WHERE; falla silenciosa, reintenta próximo seed |
 
 ## Observabilidad
 
-- **Métrica:** `domain_orchestrator_phase_duration_seconds{phase, mode}` histogram
-- **Métrica:** `domain_orchestrator_runs_total{mode, status}` counter
-- **Métrica:** `domain_agent_runs_orphan_total{org_id, reason}` counter (enforcement)
-- **Trace:** OTel span por fase con `flow_run_step.id` como span_id
-- **Log:** info en cada `flow_run_steps.status` transition
+- `domain_orchestrator_phase_duration_seconds{phase, mode}` histogram
+- `domain_orchestrator_runs_total{mode, status}` counter
+- `domain_agent_runs_orphan_total{org_id, reason}` counter (consumido por issue-08.12)
+- OTel span por fase con `flow_run_step.id` como attribute (issue-17.2 SafeAttrs)
+- Log Info en cada `flow_run_steps.status` transition (sin PII)

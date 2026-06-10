@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-06-10
+implemented: ~
+archived: ~
+blocks:
+  - issue-08.10-sdd-pipeline-orchestrator
+rfc: docs/rfc/0006-sdd-pipeline-orchestrator.md

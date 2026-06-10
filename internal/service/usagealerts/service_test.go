@@ -1,6 +1,12 @@
 package usagealerts
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+)
 
 func TestCompareThreshold(t *testing.T) {
 	cases := []struct {
@@ -34,6 +40,30 @@ func TestValidMetrics(t *testing.T) {
 	if validMetrics["random_metric"] {
 		t.Fatal("random metric should NOT be valid")
 	}
+}
+
+// Sabotaje: cooldown debe prevenir re-fire dentro de la ventana.
+func TestSabotage_CooldownPreventsRefire(t *testing.T) {
+	now := time.Now()
+	alert := &Alert{
+		ID:           uuid.New(),
+		Name:         "test",
+		Metric:       MetricCostPerRun,
+		Threshold:    10,
+		Condition:    ConditionGT,
+		Channel:      ChannelLogOnly,
+		CooldownSecs: 3600,
+		LastFiredAt:  &now,
+	}
+	s := &Service{}
+	require.True(t, s.inCooldown(alert), "reciente fire debe estar en cooldown")
+
+	past := now.Add(-3700 * time.Second)
+	alert.LastFiredAt = &past
+	require.False(t, s.inCooldown(alert), "fire hace >1h no debe estar en cooldown")
+
+	alert.LastFiredAt = nil
+	require.False(t, s.inCooldown(alert), "sin fire previo no debe estar en cooldown")
 }
 
 func TestValidConditions(t *testing.T) {

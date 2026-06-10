@@ -81,6 +81,45 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	return keys, nil
 }
 
+// Rotate genera nueva key, persiste, y revoca la anterior en una transacción.
+// Retorna plaintext de la nueva key.
+func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID uuid.UUID, name, env string) (newPlaintext string, newKeyID uuid.UUID, err error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return "", uuid.Nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	newPlaintext, prefix, hash, err := Generate(env)
+	if err != nil {
+		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
+	}
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO api_keys (organization_id, user_id, key_hash, key_prefix, name)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id`,
+		orgID, userID, hash, prefix, name,
+	).Scan(&newKeyID)
+	if err != nil {
+		return "", uuid.Nil, fmt.Errorf("insert new key: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, oldKeyID)
+	if err != nil {
+		return "", uuid.Nil, fmt.Errorf("revoke old key: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return "", uuid.Nil, ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", uuid.Nil, fmt.Errorf("commit rotate: %w", err)
+	}
+	return newPlaintext, newKeyID, nil
+}
+
 // Revoke marca soft-delete sobre la key.
 func (s *PGStore) Revoke(ctx context.Context, keyID uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx,

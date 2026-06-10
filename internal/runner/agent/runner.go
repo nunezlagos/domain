@@ -32,6 +32,7 @@ import (
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/registry"
 	"nunezlagos/domain/internal/llm/tokens"
+	"nunezlagos/domain/internal/metrics"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
@@ -70,6 +71,7 @@ type Runner struct {
 	SkillRunner  *skillrunner.Runner // si nil, se crea uno default por Run()
 	Models       *registry.Registry  // si nil, costo siempre 0
 	Emitter      EventEmitter        // si nil, no emite eventos outbound
+	Metrics      *metrics.Registry   // opcional, si nil no genera métricas
 }
 
 type RunInput struct {
@@ -278,6 +280,12 @@ LOOP:
 				"tokens_total": totalIn + totalOut,
 			},
 		})
+	}
+
+	if r.Metrics != nil && status == StatusCompleted {
+		r.Metrics.LLMTokensTotal.WithLabelValues(agent.Provider, agent.Model, "input").Add(float64(totalIn))
+		r.Metrics.LLMTokensTotal.WithLabelValues(agent.Provider, agent.Model, "output").Add(float64(totalOut))
+		r.Metrics.CostUSDTotal.WithLabelValues(agent.Provider, agent.Model).Add(costUSD)
 	}
 
 	return &RunResult{

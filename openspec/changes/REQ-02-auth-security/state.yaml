@@ -2,7 +2,7 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  02.1-api-key-auth: partially_implemented
+  02.1-api-key-auth: implemented
   02.2-rbac: implemented
   02.3-secrets-encryption: partially_implemented
   02.4-audit-log: partially_implemented

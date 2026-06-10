@@ -437,7 +437,7 @@ func runServer() {
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
-		Emitter: outboundEmitter,
+		Emitter: outboundEmitter, Metrics: metricsReg,
 	}
 	flowRunnerInst := &flowrunner.Runner{
 		Pool: pools.App, Audit: recorder, Flows: flowService,

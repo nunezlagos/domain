@@ -82,6 +82,26 @@ func TestSabotage_BcryptCostAtLeast10(t *testing.T) {
 	require.GreaterOrEqual(t, BcryptCost, 10, "bcrypt cost <10 es inseguro")
 }
 
+// Sabotaje: empty key no puede pasar Verify ni GeneratePlaintext.
+func TestSabotage_EmptyKeyRejected(t *testing.T) {
+	require.Error(t, Verify("", []byte("hash")), "empty plaintext must fail")
+	_, _, err := GeneratePlaintext("")
+	require.ErrorIs(t, err, ErrInvalidEnv)
+}
+
+// Sabotaje: si Verify siempre retorna nil, una key random no debe autenticar.
+func TestSabotage_VerifyWithWrongKey(t *testing.T) {
+	pt, _, hash, err := Generate("dev")
+	require.NoError(t, err)
+	require.NoError(t, Verify(pt, hash))
+	// misma key con byte corrupto debe fallar
+	wrong := pt[:len(pt)-1] + "X"
+	require.Error(t, Verify(wrong, hash), "corrupted key must fail verify")
+
+	// hash completamente distinto debe fallar
+	require.Error(t, Verify(pt, []byte("$2a$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")), "bogus hash must fail")
+}
+
 // Sabotaje: keys generados consecutivos NO repiten (random).
 // Usa GeneratePlaintext para evitar bcrypt overhead (mide solo randomness).
 func TestSabotage_KeysAreUnique(t *testing.T) {

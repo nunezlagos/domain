@@ -59,6 +59,14 @@ notes: |
   - NewSMTPEmailSender() constructor. Wireado en main.go con cfg.SMTPHost.
   - Async (goroutine con 30s timeout) para no bloquear el evaluador.
 
+  Prometheus metrics (completado):
+  - LLMTokensTotal (provider/model/direction) incrementado en agent runner post-run
+  - CostUSDTotal (provider/model) incrementado en agent runner post-run
+  - Metrics wired en Runner.Metrics desde metricsReg en main.go
+
+  Sabotaje test (completado):
+  - TestSabotage_CooldownPreventsRefire: reciente fire en cooldown, fire >1h fuera,
+    nil LastFiredAt fuera de cooldown
+
   Pending:
   - SDK Python/TS/Go: agregar resource UsageAlerts
-  - Sabotaje test: cooldown debe prevenir re-fire en < cooldown_secs

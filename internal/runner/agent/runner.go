@@ -40,10 +40,14 @@ import (
 )
 
 var (
-	ErrAgentNotFound   = errors.New("agent not found")
-	ErrProviderMissing = errors.New("LLM provider not registered for agent.provider")
-	ErrQuotaExceeded   = errors.New("organization quota exceeded")
-	ErrMaxIterations   = errors.New("max iterations reached")
+	ErrAgentNotFound       = errors.New("agent not found")
+	ErrProviderMissing     = errors.New("LLM provider not registered for agent.provider")
+	ErrQuotaExceeded       = errors.New("organization quota exceeded")
+	ErrMaxIterations       = errors.New("max iterations reached")
+	// issue-08.10: enforcement híbrido. En prod un run sin flow_run_id requiere
+	// WithStandalone(true) explícito. El cron orphan-runs-audit (issue-08.12)
+	// audita en métricas el caso ya admitido; este error bloquea proactivo.
+	ErrOrphanRunNotAllowed = errors.New("agent_run without flow_run_id requires WithStandalone in this environment")
 )
 
 // Status del agent_run.
@@ -72,6 +76,10 @@ type Runner struct {
 	Models       *registry.Registry  // si nil, costo siempre 0
 	Emitter      EventEmitter        // si nil, no emite eventos outbound
 	Metrics      *metrics.Registry   // opcional, si nil no genera métricas
+	// Env es el entorno deployado (dev|staging|prod). En prod, runs sin
+	// flow_run_id requieren WithStandalone(true) explícito (issue-08.10).
+	// Si vacío, se asume dev (no enforcement).
+	Env string
 }
 
 type RunInput struct {
@@ -95,7 +103,15 @@ type RunResult struct {
 
 // Run ejecuta el agente con el prompt del usuario y devuelve resultado.
 // Es síncrono — bloquea hasta finalizar. Streaming versión en issue-08.2.1.
-func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
+//
+// Las opciones variadic permiten al orquestador SDD (issue-08.10) atar el
+// run a un flow_run. Sin opciones, el comportamiento es el legacy:
+// standalone=true, flow_run_id NULL.
+func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunResult, error) {
+	ro := resolveRunOpts(opts)
+	if err := r.checkOrphanPolicy(ro); err != nil {
+		return nil, err
+	}
 	agent, err := r.Agents.GetByID(ctx, in.AgentID)
 	if err != nil {
 		return nil, fmt.Errorf("get agent: %w", err)
@@ -107,7 +123,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 			[]llm.Message{{Role: "user", Content: in.UserPrompt}})
 		state, qerr := r.Billing.CheckTokens(ctx, agent.OrganizationID, int64(estimated))
 		if qerr != nil {
-			return r.failedRun(ctx, agent.OrganizationID, in, "quota_exceeded",
+			return r.failedRun(ctx, agent.OrganizationID, in, ro, "quota_exceeded",
 				fmt.Errorf("%w: estimated %d tokens would exceed (state: used=%d, limit=%d): %v",
 					ErrQuotaExceeded, estimated, state.Used, state.Limit, qerr))
 		}
@@ -115,14 +131,14 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 
 	provider, err := r.Factory.Get(agent.Provider)
 	if err != nil {
-		return r.failedRun(ctx, agent.OrganizationID, in, "provider_missing",
+		return r.failedRun(ctx, agent.OrganizationID, in, ro, "provider_missing",
 			fmt.Errorf("%w: %v", ErrProviderMissing, err))
 	}
 
 	// Cargar skills asignadas como ToolDefs
 	tools, skillBySlug, err := r.loadSkillTools(ctx, agent)
 	if err != nil {
-		return r.failedRun(ctx, agent.OrganizationID, in, "load_skills", err)
+		return r.failedRun(ctx, agent.OrganizationID, in, ro, "load_skills", err)
 	}
 
 	// Crear agent_run con status running
@@ -132,17 +148,12 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	})
 	var runID uuid.UUID
 	now := time.Now().UTC()
-	// issue-08.10: marcar como standalone (invocación directa, no via
-	// sdd-pipeline orchestrator). El cron orphan-audit (issue-08.12) ignora
-	// estos runs porque metadata.standalone='true' es signal legítimo.
-	// Cuando el orquestador (issue-08.10 service) tome control, pasará
-	// flow_run_id explícito y NO marcará standalone.
-	metadataJSON := []byte(`{"standalone":true,"reason":"direct_invocation"}`)
+	metadataJSON := buildRunMetadata(ro, "direct_invocation")
 	err = r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, metadata, started_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO agent_runs (organization_id, agent_id, user_id, flow_run_id, status, inputs, metadata, started_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id`,
-		agent.OrganizationID, agent.ID, in.UserID, StatusRunning, inputsJSON, metadataJSON, now,
+		agent.OrganizationID, agent.ID, in.UserID, ro.flowRunID, StatusRunning, inputsJSON, metadataJSON, now,
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create run: %w", err)
@@ -301,6 +312,29 @@ LOOP:
 	}, nil
 }
 
+// checkOrphanPolicy decide si un run sin flow_run_id está permitido.
+//
+// Regla (issue-08.10):
+//   - Env != "prod"           → permitido siempre (dev/staging libres)
+//   - flow_run_id presente     → permitido (no es orphan)
+//   - standalone explícito true → permitido (caller declaró intent)
+//   - resto                    → ErrOrphanRunNotAllowed
+//
+// Esta es la barrera proactiva. El cron orphan-runs-audit (issue-08.12)
+// es la red de seguridad reactiva que cuenta los que pasaron de todos modos.
+func (r *Runner) checkOrphanPolicy(o runOpts) error {
+	if r.Env != "prod" {
+		return nil
+	}
+	if o.flowRunID != nil {
+		return nil
+	}
+	if o.standalone {
+		return nil
+	}
+	return ErrOrphanRunNotAllowed
+}
+
 // loadSkillTools resuelve los skills asignados a ToolDef LLM-format.
 func (r *Runner) loadSkillTools(ctx context.Context, agent *agentsvc.Agent) ([]llm.ToolDef, map[string]*skillsvc.Skill, error) {
 	out := make([]llm.ToolDef, 0, len(agent.SkillsSlugs))
@@ -336,19 +370,19 @@ func (r *Runner) executeTool(ctx context.Context, sk *skillsvc.Skill, args map[s
 }
 
 // failedRun crea un agent_run con status=failed sin invocar LLM.
-func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, reason string, err error) (*RunResult, error) {
+func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, ro runOpts, reason string, err error) (*RunResult, error) {
 	inputsJSON, _ := json.Marshal(map[string]any{
 		"user_prompt": in.UserPrompt,
 		"variables":   in.Variables,
 	})
 	now := time.Now().UTC()
 	var runID uuid.UUID
-	metadataJSON := []byte(`{"standalone":true,"reason":"direct_invocation_failed"}`)
+	metadataJSON := buildRunMetadata(ro, "direct_invocation_failed")
 	dbErr := r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, metadata, error, started_at, finished_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+		`INSERT INTO agent_runs (organization_id, agent_id, user_id, flow_run_id, status, inputs, metadata, error, started_at, finished_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 		 RETURNING id`,
-		orgID, in.AgentID, in.UserID, StatusFailed, inputsJSON, metadataJSON, err.Error(), now,
+		orgID, in.AgentID, in.UserID, ro.flowRunID, StatusFailed, inputsJSON, metadataJSON, err.Error(), now,
 	).Scan(&runID)
 	if dbErr != nil {
 		return nil, fmt.Errorf("create failed run: %w", dbErr)

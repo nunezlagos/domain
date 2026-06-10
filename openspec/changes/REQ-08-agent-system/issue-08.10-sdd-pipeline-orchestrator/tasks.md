@@ -64,7 +64,7 @@
 - [x] **mcp-002**: `domain_orchestrate_phase_result` — 2026-06-10 (valida D5 + handler.Validate; devuelve step status + next step prompt; propaga flow_run status agregado)
 - [ ] **mcp-003**: `domain_orchestrate_confirm` (flow_run_id, confirmed bool) — para D1 confirm condicional
 - [x] **mcp-004**: `domain_flow_status` — 2026-06-10 (lee flow_run + steps con outputs/error/preview)
-- [~] **mcp-005**: Wire-up — `Deps.Orchestrator` + `registerOrchestrateTools` listos en server.go; falta inyectar el Service en `cmd/domain-mcp/main.go` y `cmd/domain/main.go::runServer`
+- [x] **mcp-005**: Wire-up completo — `cmd/domain-mcp/main.go` construye `phases.Registry` + `orchestrator.New(pool, recorder, registry, cfg.Env)` y inyecta a `Deps.Orchestrator`. `agentRunnerInst.Env = cfg.Env` también wireado (enforcement orphan-runs activo en prod). `cmd/domain` no construye MCP (no aplica). — 2026-06-10
 - [ ] **mcp-006**: PromptRouter integration — feat/fix/refactor/hotfix/rfc/doc invokan orchestratorSvc.Run() (NO chat, NO idea, NO analysis)
 
 ## CLI

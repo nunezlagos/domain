@@ -43,6 +43,8 @@ import (
 	"nunezlagos/domain/internal/service/intake"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
+	"nunezlagos/domain/internal/service/orchestrator"
+	"nunezlagos/domain/internal/service/orchestrator/phases"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
@@ -131,6 +133,10 @@ func main() {
 		Pool: pools.App, Audit: recorder, Factory: factory,
 		Agents: agents, Skills: skills, Billing: billingSvc,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
+		// issue-08.10 enforcement híbrido: checkOrphanPolicy sólo bloquea
+		// cuando Env="prod"; dev/staging permiten runs sin flow_run_id
+		// para iteración libre.
+		Env: cfg.Env,
 	}
 
 	flowService := &flowsvc.Service{Pool: pools.App, Audit: recorder}
@@ -139,6 +145,19 @@ func main() {
 		Agents: agents, Skills: skills, Observations: observations,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
+
+	// issue-08.10 sdd-pipeline-orchestrator. Registry de handlers de fase
+	// + Service que el MCP tools de orchestrate_tools.go invoca.
+	//
+	// Hoy registramos los 2 handlers implementados (apply + verify) que
+	// cubren modo Express. A medida que se implementen los otros 8
+	// handlers (svc-009..svc-018) se van agregando acá. El registry
+	// rechaza duplicados via MustRegister → boot panic si alguien
+	// accidentalmente registra dos veces el mismo slug.
+	orchPhases := phases.NewRegistry()
+	orchPhases.MustRegister(phases.NewSDDApplyHandler())
+	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
+	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
@@ -172,6 +191,7 @@ func main() {
 		AgentRunner:    agentRunnerInst,
 		Flows:          flowService,
 		FlowRunner:     flowRunnerInst,
+		Orchestrator:   orchestratorSvc,
 		Hubuilder:      issuebuilderSvc,
 		Intake:         intakeSvc,
 		ExtSync:        extsyncSvc,

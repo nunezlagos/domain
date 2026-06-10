@@ -1,18 +1,21 @@
-status: in_progress
+status: archived
 created: 2026-06-06
-started: 2026-06-10
-archived: ~
-notes: |
-  Pendiente: stack frontend SPA (React/Vue/Svelte + build pipeline +
-  shadcn-style UI). HU-16.1 estableció el pattern Go-served HTML+vanilla-JS
-  como dashboard read-only, pero las features interactivas necesitan:
-    - HU-16.2 run-visualization: graph live de tasks anidadas + SSE
-      streaming desde HU-11.3, timeline replay desde HU-09.11 snapshots.
-    - HU-16.3 flow-editor: drag-drop DAG con react-flow o similar, valida
-      contra HU-09.1 schema + HU-09.7 versioning para autosave.
-    - HU-16.4 admin-skills: CRUD UI sobre HU-05.1 skills + version pin
-      (HU-05.3) + agent contract (HU-05.6) JSON Schema editor.
-    - HU-16.5 admin-memories: CRUD knowledge_docs (HU-03.4) + observations
-      (HU-03.1) + bulk operations (HU-13.5).
-  Backend está listo: todos los endpoints REST consumen estos services.
-  Falta solo capa frontend + build CI (HU-19.1).
+archived: 2026-06-10
+archive_reason: |
+  Decisión user 2026-06-10: "por ahora todo en base de datos, nada en web".
+  Domain prioriza flow definition vía:
+  - CLI: cmd/domain (HU-14.1) con subcomandos flow create/update/list.
+  - MCP: tools domain_flow_* expuestos por internal/mcp/server (HU-12.3).
+  - REST API: /api/v1/flows endpoints CRUD (HU-13.1 + REQ-09).
+  - YAML/JSON: import/export programático vía endpoints.
+  - Versionado: HU-09.7 flow_versions persistido en BD.
+
+  Editor visual drag-and-drop (react-flow / canvas SPA) queda fuera del
+  scope inmediato. Si en el futuro un equipo necesita UI visual, esta HU
+  puede reactivarse: backend ya tiene todo lo necesario (DAG validator,
+  state machine, step types, versioning, dry-run, snapshots) — solo
+  faltaría la capa frontend.
+
+  Las otras HUs web-ui (16.1 dashboard, 16.2 run-viz, 16.4 admin-skills,
+  16.5 admin-memories) quedan implementadas como server-rendered HTML
+  minimal — útiles para ops/debug sin requerir SPA stack.

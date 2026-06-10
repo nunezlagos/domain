@@ -3,11 +3,20 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/auth/otp"
 )
+
+// clientIP extrae IP del request priorizando X-Forwarded-For.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.Split(fwd, ",")[0]
+	}
+	return strings.Split(r.RemoteAddr, ":")[0]
+}
 
 type requestOTPBody struct {
 	Identifier string `json:"identifier"` // RUT o email
@@ -31,6 +40,10 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "identifier requerido")
 		return
 	}
+	if a.OTPRateLimiter != nil && !a.OTPRateLimiter.Allow("otp:request:"+b.Identifier+":"+clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiadas solicitudes, intentá más tarde")
+		return
+	}
 	if a.OTPService != nil {
 		_ = a.OTPService.Request(r.Context(), b.Identifier, r.RemoteAddr, r.UserAgent())
 		// Swallow ErrUserNotFound: anti-enumeration
@@ -50,6 +63,10 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Identifier == "" || b.Code == "" {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "identifier y code requeridos")
+		return
+	}
+	if a.OTPRateLimiter != nil && !a.OTPRateLimiter.Allow("otp:verify:"+b.Identifier+":"+clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiados intentos, intentá más tarde")
 		return
 	}
 	if a.OTPService == nil || a.APIKeys == nil {

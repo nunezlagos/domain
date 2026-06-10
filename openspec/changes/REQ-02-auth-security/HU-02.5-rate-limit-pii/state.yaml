@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -15,5 +15,6 @@ notes: |
   14 unit pii + 2 sabotaje (EmailWithPlusTag detecta, NoFalsePositives UUIDs/timestamps).
   Middleware HTTP: RateLimitMiddleware + DefaultKeyFunc (org|ip) ya en cadena
   de main.go. Configurable vía DOMAIN_RATE_LIMIT_* env vars.
-  Pending: per-route tuning para OTP/auth con rate-limit por (identifier, IP),
-  persistencia cross-pod via DB.
+  Per-route tuning (cerrado): OTP rate limiter separado (5 reqs/min por
+  identifier+IP) en requestOTP y verifyOTP, wireado como OTPRateLimiter
+  en handler.API. Cross-pod persistence delegada a HU-26.

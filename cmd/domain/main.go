@@ -497,6 +497,15 @@ func runServer() {
 			rateLimiter.Cleanup(10 * time.Minute)
 		}
 	}()
+	// Per-route OTP rate limiter (HU-02.5): 5 reqs/min por (identifier, IP)
+	otpRateLimiter := ratelimit.New(5, 5.0/60.0)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			otpRateLimiter.Cleanup(10 * time.Minute)
+		}
+	}()
 
 	customResolver := rbac.NewPGResolver(pools.App)
 	rbacChecker := &rbac.Checker{CustomResolver: customResolver}
@@ -570,6 +579,7 @@ func runServer() {
 		ActivityRecorder: activityStore,
 		ActivityQuerier:  activityStore,
 		OTPService:     otpService,
+		OTPRateLimiter: otpRateLimiter,
 		APIKeys:        apiKeyStore,
 		SecretsStore:   secretsStore,
 		RoleService:    roleService,

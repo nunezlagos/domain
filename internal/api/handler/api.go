@@ -16,6 +16,7 @@ import (
 	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/ratelimit"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
 	tracesvc "nunezlagos/domain/internal/service/traceability"
@@ -90,6 +91,7 @@ type API struct {
 	ActivityRecorder activity.Recorder
 	ActivityQuerier  activity.Querier
 	OTPService     *otp.Service
+	OTPRateLimiter *ratelimit.Limiter
 	APIKeys        *apikey.PGStore
 	SecretsStore   *secrets.PGStore
 	RoleService    *rolesvc.Service

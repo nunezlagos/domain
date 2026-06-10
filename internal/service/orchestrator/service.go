@@ -89,10 +89,12 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		Mode:              mode,
 		StartedAt:         now,
 	}
-	if mode == ModeExpress || mode == ModeFull {
+	if mode == ModeExpress || mode == ModeFull || mode == ModeDetect {
 		// Si hay Repo configurado, resolver el flow_id ANTES de armar
 		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
 		// hecho trabajo de prompts si la org no está inicializada.
+		// Detect requiere el flow seedeado igual (queremos validar que
+		// la org está lista para Full antes de devolver preview).
 		var flowID uuid.UUID
 		if s.Repo != nil {
 			var err error
@@ -114,7 +116,9 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		switch mode {
 		case ModeExpress:
 			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
-		case ModeFull:
+		case ModeFull, ModeDetect:
+			// Detect usa el mismo planner que Full — la diferencia es
+			// que NO persistimos abajo (dry-run).
 			plan, err = modes.BuildFullPlan(ctx, s.Phases, phaseInput,
 				phases.PhaseSlug(in.StartingPhase),
 				convertSkipPhases(in.SkipPhases), now)
@@ -126,16 +130,18 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		// Los handlers devuelven SystemPrompt="" intencionalmente; el Service
 		// hace lookup acá por cada step usando AgentTemplateSlug. Esto
 		// permite que operadores customicen prompts vía UI/MCP sin
-		// recompilar binario.
+		// recompilar binario. Detect TAMBIÉN hidrata: el preview es útil
+		// sólo si refleja los prompts reales que correrá Full.
 		if s.Repo != nil {
 			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
 				return nil, err
 			}
 		}
-		// Persistir si Repo está configurado. El fallback in-memory
-		// (Repo nil) sigue funcionando para tests unit que no quieren
-		// pagar el costo de testcontainers.
-		if s.Repo != nil {
+		// Persistir SÓLO en modos no-dry-run. Detect devuelve plan
+		// in-memory para inspección sin ensuciar BD; si el caller
+		// quiere ejecutar de verdad, invoca el orquestador de nuevo
+		// con Mode=ModeFull.
+		if s.Repo != nil && mode != ModeDetect {
 			if err := s.persistPlan(ctx, in, mode,
 				res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
 				return nil, err

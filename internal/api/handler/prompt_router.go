@@ -54,13 +54,17 @@ func (a *API) routePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var createdBy *uuid.UUID
+	var orgID *uuid.UUID
 	if p, ok := apikey.FromContext(r.Context()); ok && p != nil {
 		if u, err := uuid.Parse(p.UserID); err == nil {
 			createdBy = &u
 		}
+		if o, err := uuid.Parse(p.OrganizationID); err == nil {
+			orgID = &o
+		}
 	}
 
-	resp, err := a.PromptRouter.Route(r.Context(), req.RawText, createdBy)
+	resp, err := a.PromptRouter.Route(r.Context(), req.RawText, createdBy, orgID)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "route_failed", err.Error())
 		return

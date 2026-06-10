@@ -47,6 +47,12 @@ type Repository interface {
 	// debemos actualizar el prompt del próximo step usando los outputs
 	// acumulados).
 	UpdateStepInputs(ctx context.Context, stepID uuid.UUID, inputs map[string]any) error
+	// MarkStepBlocked / MarkStepPending soportan el confirm condicional D1
+	// (RFC 0006): cuando Express detecta un cambio que supera ExpressMaxLines
+	// tras sdd-apply, marca verify como 'blocked' hasta que el cliente
+	// invoque domain_orchestrate_confirm.
+	MarkStepBlocked(ctx context.Context, stepID uuid.UUID, reason string) error
+	MarkStepPending(ctx context.Context, stepID uuid.UUID) error
 	// GetAgentTemplateSystemPrompt obtiene el system_prompt del agent_template
 	// seedeado per-org. La fuente de verdad de los prompts de cada fase es
 	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
@@ -307,13 +313,43 @@ func (r *pgRepository) MarkStepFailed(ctx context.Context, stepID uuid.UUID, err
 		    error = $2,
 		    completed_at = NOW()
 		WHERE id = $1
-		  AND status IN ('pending','running')`,
+		  AND status IN ('pending','running','blocked')`,
 		stepID, errorMsg)
 	if err != nil {
 		return fmt.Errorf("update step failed: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrFlowRunStepNotPending
+	}
+	return nil
+}
+
+func (r *pgRepository) MarkStepBlocked(ctx context.Context, stepID uuid.UUID, reason string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps SET status = 'blocked', error = $2
+		WHERE id = $1 AND status IN ('pending','running')`,
+		stepID, reason)
+	if err != nil {
+		return fmt.Errorf("mark step blocked: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrFlowRunStepNotPending
+	}
+	return nil
+}
+
+func (r *pgRepository) MarkStepPending(ctx context.Context, stepID uuid.UUID) error {
+	// Sólo permite reactivar desde blocked — nunca desde completed o failed
+	// (eso sería re-correr lógica idempotente que rompe trazabilidad).
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps SET status = 'pending', error = NULL
+		WHERE id = $1 AND status = 'blocked'`,
+		stepID)
+	if err != nil {
+		return fmt.Errorf("mark step pending: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("orchestrator: step is not blocked (only blocked steps can be reactivated)")
 	}
 	return nil
 }
@@ -400,10 +436,15 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 			"orchestrator_run_id": orchestratorRunID.String(),
 			"mode":                string(mode),
 			"raw_text":            in.RawText,
+			"express_max_lines":   in.ExpressMaxLines,
 		},
 		StartedAt: now,
 	}); err != nil {
 		return err
+	}
+	expressMax := in.ExpressMaxLines
+	if expressMax <= 0 {
+		expressMax = 10 // RFC 0006 D1 default
 	}
 	for _, step := range plan.Steps {
 		if err := s.Repo.CreateFlowRunStep(ctx, FlowRunStepInsert{
@@ -422,6 +463,11 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 				// lazy build de Full mode (Service.rebuildNextStepPrompt)
 				// pueda reconstruir el prompt sin join contra flow_runs.cursor.
 				"raw_text": in.RawText,
+				// mode + express_max_lines replicados para que el
+				// RecordPhaseResult evalúe el D1 confirm condicional
+				// sin lookup adicional contra flow_runs.
+				"mode":              string(mode),
+				"express_max_lines": expressMax,
 			},
 		}); err != nil {
 			return err

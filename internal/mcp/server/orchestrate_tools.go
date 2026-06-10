@@ -69,6 +69,20 @@ func toolOrchestratePhaseResult() mcp.Tool {
 	)
 }
 
+func toolOrchestrateConfirm() mcp.Tool {
+	return mcp.NewTool("domain_orchestrate_confirm",
+		mcp.WithDescription("Confirma o rechaza un paso bloqueado por el confirm condicional D1 (RFC 0006). Se invoca cuando domain_orchestrate_phase_result devolvió RequiresConfirm=true. Si confirmed=true, el step queda pending y el cliente puede continuar con su prompt original; si false, el flow_run pasa a failed con razón 'user_rejected_confirm'."),
+		mcp.WithString("flow_run_id",
+			mcp.Description("UUID del flow_run que tiene un step bloqueado."),
+			mcp.Required(),
+		),
+		mcp.WithBoolean("confirmed",
+			mcp.Description("true para desbloquear y continuar; false para rechazar y marcar el flow como failed."),
+			mcp.Required(),
+		),
+	)
+}
+
 func toolFlowStatus() mcp.Tool {
 	return mcp.NewTool("domain_flow_status",
 		mcp.WithDescription("Lee el estado de un flow_run del orquestador SDD: status del run + lista de steps con su status, outputs y previews de prompts. Útil para resumir, retomar tras reconexión, debugging."),
@@ -181,6 +195,31 @@ func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToo
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
+func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if d.Orchestrator == nil {
+		return mcp.NewToolResultError("orchestrator service not configured"), nil
+	}
+	idStr, err := req.RequireString("flow_run_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	flowRunID, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("invalid flow_run_id"), nil
+	}
+	args := req.GetArguments()
+	confirmed, _ := args["confirmed"].(bool)
+	res, err := d.Orchestrator.ConfirmContinue(ctx, flowRunID, confirmed)
+	if err != nil {
+		return mcp.NewToolResultError("confirm: " + err.Error()), nil
+	}
+	body, _ := json.MarshalIndent(res, "", "  ")
+	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
 func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
@@ -212,9 +251,12 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_phase_result",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
+	wrap.SetBudget("domain_orchestrate_confirm",
+		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	return []mcpgo.ServerTool{
 		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", deps.handleOrchestrate)},
 		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", deps.handleOrchestratePhaseResult)},
+		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", deps.handleOrchestrateConfirm)},
 		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", deps.handleFlowStatus)},
 	}
 }

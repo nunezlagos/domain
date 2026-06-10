@@ -177,9 +177,13 @@ func main() {
 		}
 	}
 	promptRouterSvc := &promptrouter.Router{
-		IntakeService:    intakeSvc,
+		IntakeService:       intakeSvc,
 		IssueBuilderService: issuebuilderSvc,
-		Classifier:       classifier,
+		Classifier:          classifier,
+		// issue-08.10 mcp-006: con Orchestrator inyectado, los intents
+		// feat/fix/refactor/hotfix/rfc/doc disparan el pipeline SDD
+		// plug-and-play del orquestador en lugar del wizard legacy.
+		Orchestrator: orchestratorSvc,
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
 

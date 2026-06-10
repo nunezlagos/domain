@@ -24,6 +24,7 @@ import (
 
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
+	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 )
 
 // Intent es el resultado de la clasificación inicial.
@@ -47,22 +48,33 @@ const (
 	// OutcomeChat: el router NO disparó SDD; la respuesta es Reply directo.
 	OutcomeChat Outcome = "chat"
 	// OutcomeWizardStarted: el wizard arrancó, hay DraftID + NextQuestion.
+	// Path legacy — sólo si Router.Orchestrator es nil.
 	OutcomeWizardStarted Outcome = "wizard_started"
 	// OutcomeIntakeOnly: el intake_payload se persistió pero el wizard no
 	// arrancó (clasificador con confidence baja → review manual).
 	OutcomeIntakeOnly Outcome = "intake_only"
+	// OutcomeOrchestratorStarted: el orquestador SDD (issue-08.10) inició
+	// un flow_run. Hay FlowRunID + OrchestratorRunID + SnapshotPrompt para
+	// que el cliente IDE arranque la primera fase.
+	OutcomeOrchestratorStarted Outcome = "orchestrator_started"
 )
 
 // Response devuelta por Route.
 type Response struct {
-	Outcome      Outcome             `json:"outcome"`
-	Intent       Intent              `json:"intent"`
-	Confidence   float64             `json:"confidence"`
-	IntakeID     *uuid.UUID          `json:"intake_id,omitempty"`
-	DraftID      *uuid.UUID          `json:"draft_id,omitempty"`
+	Outcome      Outcome                `json:"outcome"`
+	Intent       Intent                 `json:"intent"`
+	Confidence   float64                `json:"confidence"`
+	IntakeID     *uuid.UUID             `json:"intake_id,omitempty"`
+	DraftID      *uuid.UUID             `json:"draft_id,omitempty"`
 	NextQuestion *issuebuilder.Question `json:"next_question,omitempty"`
-	Reply        string              `json:"reply,omitempty"`
-	Reasoning    string              `json:"reasoning,omitempty"`
+	Reply        string                 `json:"reply,omitempty"`
+	Reasoning    string                 `json:"reasoning,omitempty"`
+	// Campos del orquestador (issue-08.10): poblados cuando
+	// Outcome=OutcomeOrchestratorStarted.
+	FlowRunID         *uuid.UUID `json:"flow_run_id,omitempty"`
+	OrchestratorRunID *uuid.UUID `json:"orchestrator_run_id,omitempty"`
+	SnapshotPrompt    string     `json:"snapshot_prompt,omitempty"`
+	Mode              string     `json:"mode,omitempty"`
 }
 
 // Classifier es la interfaz para clasificación. Inyectable para tests +
@@ -77,6 +89,15 @@ type Router struct {
 	IssueBuilderService *issuebuilder.Service
 	Classifier       Classifier
 
+	// Orchestrator opcional (issue-08.10). Si está inyectado, los intents
+	// feat/fix/refactor/hotfix/rfc/doc invocan orchestratorSvc.Run en
+	// lugar del wizard legacy (issuebuilder.Start). Esto es lo que
+	// activa el pipeline SDD plug-and-play del RFC 0006.
+	//
+	// Backward compat: si nil, el comportamiento previo se preserva
+	// (wizard arranca, devuelve NextQuestion).
+	Orchestrator *orchsvc.Service
+
 	// MinConfidenceForWizard: si la confianza del classifier es menor,
 	// el router devuelve OutcomeIntakeOnly (sin arrancar wizard) para
 	// que un humano revise. Default 0.5.
@@ -88,11 +109,17 @@ type Router struct {
 }
 
 var (
-	ErrEmptyPrompt = errors.New("raw_text required")
+	ErrEmptyPrompt                    = errors.New("raw_text required")
+	ErrOrgIDRequiredForOrchestrator   = errors.New("orgID required when Router.Orchestrator is configured")
 )
 
 // Route es el entry point: prompt → outcome.
-func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID) (*Response, error) {
+//
+// orgID es opcional para el path legacy (wizard). Si Router.Orchestrator
+// está configurado, orgID es OBLIGATORIO — sin org_id el orquestador no
+// puede crear el flow_run. En ese caso Route devuelve error tipado
+// ErrOrgIDRequiredForOrchestrator.
+func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID, orgID *uuid.UUID) (*Response, error) {
 	if strings.TrimSpace(rawText) == "" {
 		return nil, ErrEmptyPrompt
 	}
@@ -154,7 +181,40 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 		}, nil
 	}
 
-	// Mapeo Intent → wizard mode.
+	// Path orquestador (issue-08.10): si está configurado, los intents
+	// SDD-capables invocan el orquestador en lugar del wizard legacy.
+	if r.Orchestrator != nil {
+		if orgID == nil {
+			return nil, ErrOrgIDRequiredForOrchestrator
+		}
+		userID := uuid.Nil
+		if createdBy != nil {
+			userID = *createdBy
+		}
+		mode := orchestratorModeForIntent(intent)
+		orchRes, err := r.Orchestrator.Run(ctx, orchsvc.OrchestrateInput{
+			OrganizationID: *orgID,
+			UserID:         userID,
+			RawText:        rawText,
+			Mode:           mode,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("orchestrator run: %w", err)
+		}
+		return &Response{
+			Outcome:           OutcomeOrchestratorStarted,
+			Intent:            intent,
+			Confidence:        conf,
+			IntakeID:          &intakeP.ID,
+			FlowRunID:         &orchRes.FlowRunID,
+			OrchestratorRunID: &orchRes.OrchestratorRunID,
+			SnapshotPrompt:    orchRes.SnapshotPrompt,
+			Mode:              string(orchRes.Mode),
+			Reasoning:         reasoning,
+		}, nil
+	}
+
+	// Path legacy (wizard): preservado para deploys sin Orchestrator configurado.
 	mode := wizardModeForIntent(intent)
 	draft, q, err := r.IssueBuilderService.Start(ctx, mode, rawText, createdBy)
 	if err != nil {
@@ -170,6 +230,21 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 		NextQuestion: q,
 		Reasoning:    reasoning,
 	}, nil
+}
+
+// orchestratorModeForIntent decide el modo del orquestador según el
+// intent clasificado. Reglas (RFC 0006):
+//   - hotfix/fix → Express (cambios pequeños, fast path 2 fases)
+//   - feature/refactor/doc/rfc → Full (pipeline 10 fases completo)
+//
+// El cliente puede override pasando Mode explícito si invoca el MCP
+// tool domain_orchestrate directamente.
+func orchestratorModeForIntent(in Intent) orchsvc.Mode {
+	switch in {
+	case IntentHotfix, IntentFix:
+		return orchsvc.ModeExpress
+	}
+	return orchsvc.ModeFull
 }
 
 func actorRef(u *uuid.UUID) string {

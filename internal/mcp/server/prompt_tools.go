@@ -39,13 +39,23 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	var createdBy *uuid.UUID
+	var orgID *uuid.UUID
+	if d.Principal != nil {
+		if u, err := uuid.Parse(d.Principal.UserID); err == nil {
+			createdBy = &u
+		}
+		if o, err := uuid.Parse(d.Principal.OrganizationID); err == nil {
+			orgID = &o
+		}
+	}
+	// Override desde args si el caller lo pasa explícito (tests, batch)
 	if s := req.GetString("created_by_user_id", ""); s != "" {
 		if u, err := uuid.Parse(s); err == nil {
 			createdBy = &u
 		}
 	}
 
-	resp, err := d.PromptRouter.Route(ctx, rawText, createdBy)
+	resp, err := d.PromptRouter.Route(ctx, rawText, createdBy, orgID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("route: %v", err)), nil
 	}

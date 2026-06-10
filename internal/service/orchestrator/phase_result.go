@@ -30,6 +30,13 @@ type PhaseResultResult struct {
 	NextStepID     *uuid.UUID
 	NextStepKey    string
 	NextStepPrompt string
+	// RequiresConfirm D1 (RFC 0006): true cuando Express detecta que
+	// el output de sdd-apply supera el threshold ExpressMaxLines o
+	// toca múltiples archivos. El próximo step (NextStepID) queda
+	// marcado 'blocked' hasta que el cliente invoque ConfirmContinue
+	// (vía domain_orchestrate_confirm).
+	RequiresConfirm bool
+	ConfirmMessage  string
 }
 
 // RecordPhaseResult procesa el reporte del cliente sobre una fase:
@@ -131,9 +138,105 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				}
 				out.NextStepPrompt = built
 			}
+
+			// D1 confirm condicional (RFC 0006): si Express + step actual
+			// fue sdd-apply + threshold superado → bloquear el verify.
+			if shouldRequireConfirm(step, in.Output) {
+				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
+					"D1 confirm required: change exceeds express threshold"); err != nil {
+					return nil, fmt.Errorf("mark next blocked: %w", err)
+				}
+				out.RequiresConfirm = true
+				out.ConfirmMessage = "Express detected change exceeds threshold; call domain_orchestrate_confirm to proceed"
+			}
 		}
 	}
 	return out, nil
+}
+
+// shouldRequireConfirm evalúa D1: Express + apply completado + scope >
+// threshold. Lee mode + express_max_lines del step.inputs (replicados al
+// persistir el plan) y compara contra output.files_changed length.
+//
+// El cliente IDE puede pasar lines_changed (count) en el output si lo
+// tiene; si no, sólo evaluamos files_changed > 1 (multi-file).
+func shouldRequireConfirm(step *FlowRunStepRow, output map[string]any) bool {
+	if step.StepKey != "sdd-apply" {
+		return false
+	}
+	mode, _ := step.Inputs["mode"].(string)
+	if mode != "express" {
+		return false
+	}
+	maxLines := readNumber(step.Inputs["express_max_lines"], 10)
+	files, _ := output["files_changed"].([]any)
+	if len(files) > 1 {
+		return true
+	}
+	lines := readNumber(output["lines_changed"], 0)
+	return lines > maxLines
+}
+
+// readNumber extrae un int de un map[string]any tolerando float64
+// (json.Unmarshal default) y enteros nativos.
+func readNumber(v any, defaultVal int) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return defaultVal
+}
+
+// ConfirmContinue desbloquea el step blocked tras el confirm condicional
+// D1. Si confirmed=true → MarkStepPending (cliente puede ejecutar);
+// si confirmed=false → MarkStepFailed + flow_run pasa a failed.
+func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, confirmed bool) (*PhaseResultResult, error) {
+	if s.Repo == nil {
+		return nil, errors.New("orchestrator: Repo not configured")
+	}
+	steps, err := s.Repo.ListFlowRunSteps(ctx, flowRunID)
+	if err != nil {
+		return nil, err
+	}
+	var blocked *FlowRunStepRow
+	for i := range steps {
+		if steps[i].Status == "blocked" {
+			blocked = &steps[i]
+			break
+		}
+	}
+	if blocked == nil {
+		return nil, errors.New("orchestrator: no blocked step found for this flow_run")
+	}
+	if !confirmed {
+		// Usuario rechazó: marcamos el step como failed + propagamos a flow.
+		if err := s.Repo.MarkStepFailed(ctx, blocked.ID, "user_rejected_confirm"); err != nil {
+			return nil, fmt.Errorf("mark step failed: %w", err)
+		}
+		_ = s.propagateFlowStatusAfterFailure(ctx, flowRunID)
+		return &PhaseResultResult{
+			StepID:        blocked.ID,
+			StepStatus:    "failed",
+			FlowRunStatus: "failed",
+		}, nil
+	}
+	// Confirmado: desbloquear y devolver el prompt cacheado.
+	if err := s.Repo.MarkStepPending(ctx, blocked.ID); err != nil {
+		return nil, err
+	}
+	userPrompt, _ := blocked.Inputs["user_prompt"].(string)
+	return &PhaseResultResult{
+		StepID:         blocked.ID,
+		StepStatus:     "pending",
+		FlowRunStatus:  "running",
+		NextStepID:     &blocked.ID,
+		NextStepKey:    blocked.StepKey,
+		NextStepPrompt: userPrompt,
+	}, nil
 }
 
 // findStepByID es helper local — pgx no retorna las rows por id por default.

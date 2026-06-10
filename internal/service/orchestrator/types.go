@@ -125,4 +125,38 @@ type OrchestrateResult struct {
 	// modo async, devolvemos el prompt rendered para que IDE lo muestre
 	// sin tener que polear inmediatamente.
 	SnapshotPrompt string
+
+	// Plan contiene los steps a despachar al cliente IDE para modos
+	// sincrónicos in-memory (Express principalmente). Nil para los modos
+	// async/persistidos donde el cliente debe pollear por flow_run_id.
+	Plan *PhasePlanSummary
+}
+
+// PhasePlanSummary es la vista exportada del modes.PhasePlan, sin
+// importar el subpaquete modes desde callers externos.
+type PhasePlanSummary struct {
+	Mode  string
+	Steps []PhaseStepSummary
+}
+
+// PhaseStepSummary es la fase individual desde la perspectiva del
+// caller. El cliente IDE recibe esto y ejecuta usando AgentTemplateSlug
+// como referencia para resolver agent_templates → agent_id real.
+type PhaseStepSummary struct {
+	ID                uuid.UUID
+	Slug              PhaseSlug
+	AgentTemplateSlug string
+	SystemPrompt      string
+	UserPrompt        string
+	SuggestedSaves    []SuggestedSaveSummary
+	RetryPolicy       string
+	SkillThreshold    float64
+}
+
+// SuggestedSaveSummary expone el contrato D5 sin reexportar el tipo del
+// subpaquete phases.
+type SuggestedSaveSummary struct {
+	Type     string
+	Required bool
+	Hint     string
 }

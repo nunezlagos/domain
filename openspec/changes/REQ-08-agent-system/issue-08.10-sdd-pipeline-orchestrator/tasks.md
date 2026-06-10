@@ -15,7 +15,7 @@
 
 - [x] **svc-001**: `service.go` — Service + Run(ctx, OrchestrateInput) (orchestrator_run_id, flow_run_id, error) — skeleton 2026-06-10
 - [x] **svc-002**: `OrchestrateInput` struct (Mode, RawText, StartingPhase, SkipPhases, AsyncTimeout, ExpressMaxLines) — 2026-06-10
-- [ ] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only)
+- [x] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only) — 2026-06-10 (in-memory; persistencia flow_runs pendiente)
 - [ ] **svc-004**: `modes/full.go` — pipeline 10 fases vía sub-agents nativos del IDE
 - [ ] **svc-005**: `modes/solo.go` — inline execution server-side con LLM provider directo
 - [ ] **svc-006**: `modes/detect.go` — dry_run=true, persiste a `*.status='draft'`
@@ -26,8 +26,8 @@
 - [ ] **svc-011**: `phases/sdd_propose.go`
 - [ ] **svc-012**: `phases/sdd_design.go` — suggested_saves required=true para ADRs (D5)
 - [ ] **svc-013**: `phases/sdd_tasks.go`
-- [ ] **svc-014**: `phases/sdd_apply.go` — express confirm condicional D1, retry-policy require-cleanup
-- [ ] **svc-015**: `phases/sdd_verify.go`
+- [x] **svc-014**: `phases/sdd_apply.go` — code_reference D5 required + RetryCleanup + multi_concern/blocked detection — 2026-06-10 (D1 confirm condicional pendiente para wire-up MCP)
+- [x] **svc-015**: `phases/sdd_verify.go` — Gherkin verifier + RetryReemit + blocker/failed scenarios — 2026-06-10
 - [ ] **svc-016**: `phases/sdd_judge.go` — suggested_saves required=true para sabotage_records (D5)
 - [ ] **svc-017**: `phases/sdd_archive.go` — entity_state_transitions to_state='archived'
 - [ ] **svc-018**: `phases/sdd_onboard.go` — opcional, genera knowledge_doc si aplica
@@ -47,9 +47,9 @@
 
 ## suggested_saves contract (D5)
 
-- [ ] **save-001**: `internal/service/orchestrator/saves.go` — SuggestedSave struct + buildSaves(phase) handler
-- [ ] **save-002**: Validation post-phase: si required save no en cliente_memory_refs reportados → ErrRequiredSaveMissing
-- [ ] **save-003**: Tests unit por fase: sdd-design emite 3 required, sdd-apply emite 1 required, etc.
+- [x] **save-001**: SuggestedSave struct vive en `phases/registry.go`; buildSaves implícito en cada handler — 2026-06-10
+- [x] **save-002**: `orchestrator/saves.go::ValidateRequiredSaves` con RequiredSaveError + Unwrap → ErrRequiredSaveMissing — 2026-06-10
+- [~] **save-003**: Tests unit cubren sdd-apply (1 required code_reference) y sdd-verify (0 required); faltan sdd-design (3 required ADRs), sdd-judge (sabotage_record) cuando se implementen los handlers
 
 ## Métricas + observabilidad
 
@@ -100,7 +100,7 @@
 
 - [ ] **sab-001**: INSERT directo bypass → métrica orphan incrementa dentro 5min vía cron issue-08.12
 - [ ] **sab-002**: Intentar 2 templates con role='orchestrator' por org → UNIQUE violation
-- [ ] **sab-003**: Forzar required_save missing → fase no avanza, error específico
+- [x] **sab-003**: Forzar required_save missing → fase no avanza, error específico — 2026-06-10 (`TestService_Sabotage_ApplyMissingRequiredCodeReference`)
 
 ## Docs
 

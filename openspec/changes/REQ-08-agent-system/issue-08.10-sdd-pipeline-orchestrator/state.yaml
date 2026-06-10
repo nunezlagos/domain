@@ -38,10 +38,27 @@ progress: |
       + SuggestedSave + RetryPolicy + MemoryRef + Input/Output/ClientResult)
   - Tests: 21 unit verdes nuevos. Repo 536 tests verdes, cero regresiones.
 
+  Slice Express end-to-end completado en 2026-06-10 (chunk 3):
+  - svc-014 phases/sdd_apply.go: code_reference required D5 + RetryCleanup
+    + multi_concern detection + blocked-by-client signal
+  - svc-015 phases/sdd_verify.go: Gherkin verifier tolerante (Build sin
+    apply previo) + RetryReemit + scenarios_failed/blockers wiring
+  - svc-003 modes/express.go: BuildExpressPlan dispatcher in-memory
+    (sdd-apply → sdd-verify) sin persistencia flow_runs todavía
+  - save-001/002 orchestrator/saves.go: ValidateRequiredSaves + tipo
+    RequiredSaveError con Unwrap a ErrRequiredSaveMissing
+  - Service.Run cuando Mode=Express delega a modes.BuildExpressPlan y
+    exporta PhasePlanSummary/PhaseStepSummary/SuggestedSaveSummary para
+    desacoplar el subpaquete modes/ del API público
+  - Clock inyectable (Clock interface + systemClock + override per test)
+  - sab-003 sabotaje verde: apply sin code_reference → ErrRequiredSaveMissing
+  - Tests: 38 unit verdes en los 3 paquetes orchestrator + repo total
+    564 verdes con -short (+28 vs chunk anterior), cero regresiones
+
   PENDING (chunks futuros):
-  - svc-003..007: implementaciones de modes/{express,full,solo,detect,async}
+  - svc-004..007: modes/{full,solo,detect,async}
   - svc-008: validator.go con DAG-check de SkipPhases
-  - svc-009..018: 10 handlers de fase (sdd_explore..sdd_onboard)
+  - svc-009/010/011/012/013/016/017/018: 8 handlers de fase restantes
   - seed-003: flows_catalog.go con flow:sdd-pipeline-v1 DAG
   - save-001..003: SuggestedSave validation post-phase (D5 enforcement)
   - skill-001..003: integración auto-skill (D3 threshold)

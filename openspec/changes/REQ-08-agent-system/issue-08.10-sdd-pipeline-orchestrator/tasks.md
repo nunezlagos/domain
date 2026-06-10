@@ -99,15 +99,15 @@
 ## Sabotaje
 
 - [ ] **sab-001**: INSERT directo bypass → métrica orphan incrementa dentro 5min vía cron issue-08.12
-- [ ] **sab-002**: Intentar 2 templates con role='orchestrator' por org → UNIQUE violation
+- [x] **sab-002**: 2 templates orchestrator por org → UNIQUE violation — 2026-06-10 (TestSabotage_UniqueOrchestratorPerOrg + AcrossOrgs en internal/seeds/sabotage_orchestrator_integration_test.go)
 - [x] **sab-003**: Forzar required_save missing → fase no avanza, error específico — 2026-06-10 (`TestService_Sabotage_ApplyMissingRequiredCodeReference`)
 
 ## Docs
 
-- [ ] **doc-001**: `docs/agents/sdd-pipeline.md` — descripción flow + 5 modos con ejemplos
-- [ ] **doc-002**: `docs/flows/09-orchestrator.md` — diagrama Mermaid (sumar al set existente)
-- [ ] **doc-003**: Actualizar `docs/GETTING_STARTED.md` con sección "Primer prompt con orquestador"
-- [ ] **doc-004**: `CHANGELOG.md` Unreleased — agregar entrada issue-08.10
+- [x] **doc-001**: `docs/agents/sdd-pipeline.md` — user-facing doc completa con 5 modos, 10 fases, 4 MCP tools, D1/D5, CLI, métricas, bootstrap, troubleshooting — 2026-06-10
+- [x] **doc-002**: `docs/flows/09-orchestrator.md` — DAG flowchart + secuencias Mermaid Full mode + Express D1 confirm + resume cross-session — 2026-06-10
+- [x] **doc-003**: `docs/GETTING_STARTED.md` sección 8 "Primer prompt con orquestador SDD" con ejemplos Express + Full + D1 + resume — 2026-06-10
+- [x] **doc-004**: `CHANGELOG.md` Unreleased — entrada consolidada issue-08.10 — 2026-06-10
 
 ## Estado
 

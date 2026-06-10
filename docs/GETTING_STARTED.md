@@ -124,10 +124,111 @@ Domain MCP:
 
 ## Diagramas por tipo de issue
 
-Ver [`docs/flows/README.md`](./flows/README.md) — 8 diagramas Mermaid:
+Ver [`docs/flows/README.md`](./flows/README.md) — 9 diagramas Mermaid:
 
 - chat, idea (no entra al SDD)
-- feature, fix, hotfix, refactor, doc, rfc (wizard adaptive)
+- feature, fix, hotfix, refactor, doc, rfc (wizard adaptive o orquestador)
+- orquestador SDD plug-and-play (issue-08.10) — ver [`docs/flows/09-orchestrator.md`](./flows/09-orchestrator.md)
+
+## 8) Primer prompt con el orquestador SDD (issue-08.10)
+
+Cuando el operador tiene `Router.Orchestrator` configurado (default en
+`cmd/domain-mcp` desde el commit `44567e2`), los intents `feature` /
+`refactor` / `doc` / `rfc` / `fix` / `hotfix` arrancan el **pipeline SDD
+plug-and-play** en lugar del wizard legacy. El cliente IDE recibe
+prompts construidos por el servidor y ejecuta cada fase en orden.
+
+### Bootstrap por org (una sola vez)
+
+Antes de invocar el orquestador, la org debe tener los catálogos
+seedeados:
+
+```bash
+# Desde cmd/domain server (auto al boot via dev-bootstrap) o manual:
+./bin/domain dev-bootstrap   # incluye SeedAgentTemplatesForOrg + SeedFlowsForOrg
+```
+
+Sin esto, el orquestador devuelve `ErrFlowNotSeeded` o `ErrAgentTemplateNotFound`.
+
+### Ejemplo Express (fast path, fix pequeño)
+
+En Claude Code:
+
+> "fix: corregir typo en CHANGELOG.md línea 42"
+
+El servidor clasifica `intent=fix` → `mode=express` → arranca el flow
+con 2 fases pre-armadas:
+
+1. `sdd-apply` con `system_prompt` desde `agent_templates` + `user_prompt`
+   que cita el raw_text del usuario
+2. `sdd-verify` con un prompt genérico (sdd-verify tolera ausencia del
+   output de apply en Express porque el cliente lo tiene en su contexto)
+
+Claude Code ejecuta `sdd-apply`, hace el edit, corre tests, y reporta:
+
+```jsonc
+domain_orchestrate_phase_result({
+  "flow_run_step_id": "<step_apply.id>",
+  "output": {
+    "files_changed": ["CHANGELOG.md"],
+    "lines_changed": 1,
+    "summary": "fix typo línea 42"
+  },
+  "memory_refs_saved": [
+    { "type": "code_reference", "id": "<observation_id>" }
+  ]
+})
+```
+
+D5 valida que `code_reference` esté presente (es **required** en
+sdd-apply). Si todo OK, devuelve `NextStepPrompt` con el prompt de
+`sdd-verify`. Cliente ejecuta los Gherkin scenarios, reporta verify
+completed, flow termina.
+
+### Ejemplo Full (10 fases, refactor)
+
+> "refactor: extraer ResponseShape a un paquete propio en internal/api/response"
+
+`intent=refactor` → `mode=full` → 10 steps en BD, sólo `sdd-explore`
+con prompt construido up-front. Cliente avanza fase por fase; cada
+phase_result reconstruye el prompt del siguiente step usando los
+outputs acumulados (lazy build).
+
+Las fases **D5 required** (`sdd-design`, `sdd-apply`, `sdd-judge`) van
+a fallar el step si el cliente no guardó la `memory_ref` del tipo
+correcto antes de reportar.
+
+### D1 confirm condicional (Express only)
+
+Si en Express el `sdd-apply.output` reporta `files_changed > 1` o
+`lines_changed > 10`, el `sdd-verify` step se marca **`blocked`** y la
+respuesta de phase_result trae `requires_confirm: true`. El cliente
+debe llamar:
+
+```jsonc
+domain_orchestrate_confirm({
+  "flow_run_id": "<flow_run.id>",
+  "confirmed": true     // false para abortar
+})
+```
+
+El step pasa a `pending` y el cliente continúa con su prompt cacheado.
+
+### Consultar estado / reanudar
+
+```bash
+./bin/domain workflow resume <flow_run_id>
+```
+
+Imprime tabla numerada de los 10 steps con su status + preview del
+prompt del próximo step pending o blocked. Útil después de una sesión
+cortada.
+
+## Diagramas por tipo de issue (anterior)
+
+Ver [`docs/flows/README.md`](./flows/README.md) (legacy wizard) y
+[`docs/agents/sdd-pipeline.md`](./agents/sdd-pipeline.md) (orquestador
+nuevo).
 
 ## Troubleshooting
 

@@ -607,15 +607,20 @@ func runServer() {
 	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
 
 	// API REST montada bajo /api/v1/*.
-	// Middleware order: versioning → auth → rate-limit → audit → idempotency → handler.
-	authMW := &apikey.Middleware{Resolver: apiKeyStore, Allowlist: handler.AuthAllowlist()}
+	// Middleware order: CORS → versioning → request-log → auth → rate-limit → audit → idempotency → handler.
+	corsMW := middleware.DefaultCORS()
+	requestLogMW := middleware.RequestLog(logger)
+	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
+	authMW := &apikey.Middleware{Resolver: cachedResolver, Allowlist: handler.AuthAllowlist()}
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
 	idempMW := &middleware.Idempotency{Pool: pools.App}
-	mux.Handle("/api/", versionCatalog.Middleware(
-		authMW.Wrap(
-			rateLimitMW.Wrap(
-				auditMW(idempMW.Wrap(api.Router()))))))
+	mux.Handle("/api/", corsMW.Wrap(
+		versionCatalog.Middleware(
+			requestLogMW(
+				authMW.Wrap(
+					rateLimitMW.Wrap(
+						auditMW(idempMW.Wrap(api.Router()))))))))
 
 	// Aplica tracing + metrics middleware al mux principal
 	handler := metricsReg.HTTPMiddleware(tracing.HTTPMiddleware("domain")(mux))

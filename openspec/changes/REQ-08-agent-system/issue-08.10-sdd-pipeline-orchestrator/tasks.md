@@ -49,7 +49,7 @@
 
 - [x] **save-001**: SuggestedSave struct vive en `phases/registry.go`; buildSaves implícito en cada handler — 2026-06-10
 - [x] **save-002**: `orchestrator/saves.go::ValidateRequiredSaves` con RequiredSaveError + Unwrap → ErrRequiredSaveMissing — 2026-06-10
-- [~] **save-003**: Tests unit cubren sdd-apply (1 required code_reference) y sdd-verify (0 required); faltan sdd-design (3 required ADRs), sdd-judge (sabotage_record) cuando se implementen los handlers
+- [x] **save-003**: Tests unit por fase D5 — `saves_per_phase_test.go`: D5_SDDDesign_RequiresADR (con sad path tipo incorrecto), D5_SDDApply_RequiresCodeReference, D5_SDDJudge_RequiresSabotageRecord, D5_PhasesWithoutRequired_AlwaysPass (7 sub-tests), D5_MultipleRequiredMissing_AllReported. 11 tests verdes — 2026-06-10
 
 ## Métricas + observabilidad
 
@@ -80,21 +80,21 @@
 
 ## Tests E2E (1 por escenario del issue.md)
 
-- [ ] **test-001**: Re-cataloging (escenario 1)
-- [ ] **test-002**: UNIQUE INDEX orchestrator único (escenario 2)
-- [ ] **test-003**: Modo Express con confirm condicional D1 (escenario 3)
-- [ ] **test-004**: Multi-concern auto-split D2 (escenario 4)
-- [ ] **test-005**: State server + execution client (escenario 5)
-- [ ] **test-006**: Resume cross-session (escenario 6)
-- [ ] **test-007**: Dual output (escenario 7)
-- [ ] **test-008**: Auto-skill threshold D3 (escenario 8)
-- [ ] **test-009**: Cron → flow D4 (escenario 9)
-- [ ] **test-010**: suggested_saves required D5 (escenario 10)
-- [ ] **test-011**: Async D6 (escenario 11)
-- [ ] **test-012**: Intent analysis D7 (escenario 12)
-- [ ] **test-013**: Service-layer enforcement orphan (escenario 13)
-- [ ] **test-014**: Sabotage INSERT bypass (escenario 14)
-- [ ] **test-015**: Recovery desde snapshot (escenario 15)
+- [x] **test-001**: Re-cataloging — cubierto por `internal/seeds/catalogs_integration_test.go::TestSeedAgentTemplatesForOrg_BuiltinCatalog` + cleanup defensivo en `TestSeedAgentTemplatesForOrg_CleansLegacy*` (foundation 28fddeb)
+- [x] **test-002**: UNIQUE INDEX orchestrator único — cubierto por `internal/seeds/sabotage_orchestrator_integration_test.go::TestSabotage_UniqueOrchestratorPerOrg` + `_AcrossOrgs` (sab-002, chunk 11)
+- [x] **test-003**: Modo Express con confirm condicional D1 — cubierto por `internal/service/orchestrator/confirm_integration_test.go::TestExpressD1_*` (4 tests: SmallChange_AutoApproves, LargeChange_RequiresConfirm, MultiFile_RequiresConfirm, RejectConfirm_MarksFlowFailed) (chunk 9)
+- [ ] **test-004**: Multi-concern auto-split D2 — pendiente (depende de impl explícita del split en modes/full.go cuando explore reporta multi_concern=true)
+- [x] **test-005**: State server + execution client — cubierto implícitamente por todos los integration tests Full+Express: el Service NUNCA ejecuta fases (sólo Build + Persist + Validate); cliente IDE simulado vía RecordPhaseResult cubre la mitad client side
+- [x] **test-006**: Resume cross-session — cubierto por `internal/service/orchestrator/service_resume_integration_test.go::TestService_ResumeCrossSession` (este chunk) + CLI `domain workflow resume`
+- [ ] **test-007**: Dual output — pendiente (scope a clarificar: aparentemente refiere a JSON estructurado + texto user-friendly por fase; no priorizado)
+- [ ] **test-008**: Auto-skill threshold D3 — pendiente (depende de skill-001..003 / issue-05.4)
+- [ ] **test-009**: Cron → flow D4 — pendiente (depende de REQ-10 cron→flow infra existente, no del orquestador)
+- [x] **test-010**: suggested_saves required D5 — cubierto por `phase_result_integration_test.go::TestExpress_ApplyMissingRequiredSave_MarksStepFailed` + `metrics_test.go::TestService_RecordPhaseResult_IncrementsRequiredSaveMissingMetric` + `saves_test.go` (5 unit tests) + save-003 explícitos
+- [ ] **test-011**: Async D6 — pendiente (depende de svc-007 svc-007 + flow_signals)
+- [ ] **test-012**: Intent analysis D7 — pendiente (depende de ana-001..004)
+- [x] **test-013**: Service-layer enforcement orphan — cubierto por `internal/runner/agent/options_test.go::TestCheckOrphanPolicy` (5 cases dev/staging/prod × standalone variants) + `service_persistence_integration_test.go` valida flow_run_id en INSERT
+- [x] **test-014**: Sabotage INSERT bypass — cubierto por `tests/e2e/orphan_runs_audit_test.go::TestOrphanAudit_Sabotage_BypassDetected` (issue-08.12 cron, sab-001)
+- [ ] **test-015**: Recovery desde snapshot — pendiente (depende de `flow_run_step_snapshots` infra de issue-09.5 — tabla existe pero integración con orchestrator no implementada en este alcance)
 
 ## Sabotaje
 

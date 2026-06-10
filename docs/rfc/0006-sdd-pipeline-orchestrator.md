@@ -1,12 +1,13 @@
 # RFC 0006 — SDD Pipeline Orchestrator
 
-**Status:** accepted
+**Status:** accepted (implementación 2026-06-10: 3 de 5 modos vivos end-to-end)
 **Author:** nunezlagos
 **Created:** 2026-06-10
 **Accepted:** 2026-06-10
 **Supersedes:** —
 **Blocked by:** RFC 0007 (renombrado `HU` → `issue`) — las HUs derivadas se crearán bajo el naming nuevo
-**Targets specs:** issue-08.10 + issue-08.11 + issue-08.12 (a crear post-RFC 0007)
+**Targets specs:** issue-08.10 + issue-08.11 + issue-08.12 (todos en main)
+**Implementation refs:** ver `openspec/changes/REQ-08-agent-system/issue-08.10-sdd-pipeline-orchestrator/state.yaml` para narrativa por fase. User-facing: `docs/agents/sdd-pipeline.md` + `docs/flows/09-orchestrator.md`.
 
 ## Resumen ejecutivo
 

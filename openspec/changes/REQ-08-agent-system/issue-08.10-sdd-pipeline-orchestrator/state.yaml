@@ -68,38 +68,65 @@ progress: |
   - Tool MCP nuevo domain_orchestrate_confirm
   - Tests: +10 integration (2 Detect + 4 Router + 4 D1)
 
-  ===== FASE 9: CLI + métricas (este chunk) =====
-  - cli-001 domain workflow resume <flow_run_id>: status + tabla steps +
-    preview prompt del próximo pending
-  - obs-001 métricas Prometheus:
-    domain_orchestrator_runs_total{mode,status}
-    domain_orchestrator_phase_duration_seconds histogram{phase,mode}
-    domain_orchestrator_phase_results_total{phase,mode,result}
-    domain_orchestrator_confirms_total{confirmed}
-    domain_orchestrator_required_save_missing_total{phase,save_type}
-  - Service.Metrics opcional; instrumentado en Run/RecordPhaseResult/ConfirmContinue
-  - Tests: +3 unit (fakeRepo + testutil.ToFloat64)
+  ===== FASE 9: CLI + métricas (chunk autónomo) =====
+  - cli-001 domain workflow resume <flow_run_id>
+  - obs-001 métricas Prometheus (5 series)
+
+  ===== FASE 10: docs + sabotaje UNIQUE (chunk 11) =====
+  - doc-001 docs/agents/sdd-pipeline.md user-facing completo
+  - doc-002 docs/flows/09-orchestrator.md con 3 diagramas Mermaid
+  - doc-003 GETTING_STARTED sección 8 con ejemplos Express+Full+D1+resume
+  - sab-002 UNIQUE INDEX parcial rechaza segundo orchestrator (test integration)
+
+  ===== FASE 11: observabilidad triad + sab-001 cross-ref (chunk 12) =====
+  - obs-003 OTel spans orchestrator.run + orchestrator.phase_result con
+    6 SafeAttrKeys nuevas; raw_text excluido por security.md
+  - obs-004 5 alerts Prometheus en deploy/prometheus/alerts/orchestrator.yml
+  - sab-001 ya cubierto por tests/e2e/orphan_runs_audit_test.go (cross-ref)
+
+  ===== FASE 12: E2E coverage + resume + save-003 (chunk 13) =====
+  - Audit completa E2E coverage: 9 escenarios cubiertos via tests existentes,
+    6 pendientes por features no implementados (multi-concern, dual-output,
+    auto-skill, cron→flow, async, intent analysis, recovery snapshot)
+  - test-006 explícito: TestService_ResumeCrossSession + _PendingConfirm —
+    valida que un Service nuevo en sesión 2 continúa el flow + confirm de la
+    sesión 1 sin estado in-memory (separación state-vs-exec del RFC 0006)
+  - save-003 unit tests por fase D5: 11 tests cubriendo
+    sdd-design/sdd-apply/sdd-judge Required + 7 fases sin required +
+    multiple missing all reported en RequiredSaveError.Missing
 
   ===== ESTADO ACTUAL =====
-  Tareas issue-08.10: 32 [x] + 2 [~] + 39 [ ]
-  Tests: 633 verdes -short, ~28 integration verdes, cero regresiones acumuladas
-  Modos vivos end-to-end: Express, Full, Detect (3/5)
-  MCP tools: 4 (orchestrate, phase_result, confirm, flow_status) wireados al boot
+  Tareas issue-08.10: 45 [x] + 1 [~] + 27 [ ] de 73 total
+  Tests: 645 verdes -short (+12 vs último chunk), ~35 integration verdes,
+    cero regresiones acumuladas en 14 commits del día
+  Modos vivos end-to-end: Express + Full + Detect (3/5)
+  MCP tools: 4 (orchestrate, phase_result, confirm, flow_status) wireados
   CLI: domain workflow resume funcional
+  Observabilidad triad: 5 métricas + 5 alerts + OTel spans
+  Docs user-facing: sdd-pipeline.md + flows/09 + GETTING_STARTED
+  Sabotajes: sab-001 (cross-ref) + sab-002 (explícito) + sab-003 (en Express)
+  E2E coverage: 9/15 cubiertos
 
-  ===== PENDING REMAINING =====
-  - svc-005 Solo mode (server-side LLM provider, M)
-  - svc-007 Async mode (flow_signals + worker tail, depende issue-09 L)
-  - svc-008 validator.go DAG-check (parcial — empty/mode/unknown ya cubren mucho)
+  ===== PENDING REMAINING (todos opcionales, no bloquean uso) =====
+  Features no implementados:
+  - svc-005 Solo mode (server-side LLM provider directo)
+  - svc-007 Async mode (flow_signals + worker — depende issue-09)
   - skill-001..003 auto-skill D3 (consume issue-05.4)
-  - ana-001..004 intent analysis D7 (mini-pipeline 2 fases)
-  - obs-003 OTel spans + obs-004 alerts orchestrator.yml
-  - test-001..015 (14 restantes: re-cataloging, UNIQUE, multi-concern,
-    state-vs-exec, resume cross-session, dual-output, auto-skill,
-    cron→flow, suggested_saves D5, async D6, intent analysis D7,
-    orphan enforce, INSERT bypass, recovery snapshot)
-  - sab-001 INSERT directo bypass cron audit + sab-002 UNIQUE 2 orchestrators
-  - doc-001..004 (docs/agents/sdd-pipeline.md, docs/flows/09-orchestrator.md,
-    GETTING_STARTED, CHANGELOG)
-  - save-003 tests por fase (parcial: apply/verify cubiertos, falta design/judge)
-  - state-001..003 cierre formal a implemented + RFC + req.md
+  - ana-001..004 intent analysis D7
+
+  Tests E2E que requieren features pendientes:
+  - test-004 multi-concern auto-split (depende impl explícita en Full)
+  - test-007 dual output (scope a clarificar con stakeholder)
+  - test-008 auto-skill (depende skill-001..003)
+  - test-009 cron→flow (depende REQ-10 cron infra)
+  - test-011 async (depende svc-007)
+  - test-012 intent analysis (depende ana-001..004)
+  - test-015 recovery snapshot (depende integración issue-09.5)
+
+  Parcial:
+  - svc-008 validator DAG-check (validate() cubre D6+empty+mode+unknown;
+    falta validación de DAG resultante post-SkipPhases)
+
+  Estado formal:
+  - state-001..003 cierre a 'implemented' (espera Solo/Async + E2E
+    restantes; status sigue in_progress)

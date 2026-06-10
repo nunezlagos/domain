@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/metrics"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
@@ -56,6 +57,10 @@ type Service struct {
 	// Metrics opcional (issue-08.10 obs-001). Si nil, las métricas no
 	// se incrementan; usado en tests que no levantan Prometheus.
 	Metrics *metrics.Registry
+	// LLM Factory para Mode=Solo (issue-08.10 svc-005). Si nil, RunSolo
+	// devuelve ErrLLMFactoryRequired. Tests inyectan un factory con
+	// providers fake; cmd/domain-mcp usa el global con providers reales.
+	LLM *llm.Factory
 }
 
 // New construye un Service. El registry debe venir poblado por el
@@ -107,6 +112,47 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		FlowRunID:         uuid.New(),
 		Mode:              mode,
 		StartedAt:         now,
+	}
+	if mode == ModeSolo {
+		// Solo NO admite Repo nil (necesita BD para agent_templates y flow_runs)
+		// ni LLM nil. Express/Full/Detect tienen un fallback in-memory útil
+		// para tests; Solo es server-side puro y no tiene sentido sin BD.
+		if s.Repo == nil {
+			return nil, errors.New("orchestrator: Repo required for Solo mode")
+		}
+		flowID, err := s.Repo.GetFlowIDBySlug(ctx, in.OrganizationID, "sdd-pipeline-v1")
+		if err != nil {
+			return nil, err
+		}
+		plan, err := modes.BuildFullPlan(ctx, s.Phases, phases.Input{
+			OrganizationID: in.OrganizationID,
+			UserID:         in.UserID,
+			FlowRunID:      res.FlowRunID,
+			RawText:        in.RawText,
+		}, phases.PhaseSlug(in.StartingPhase),
+			convertSkipPhases(in.SkipPhases), now)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+			return nil, err
+		}
+		if err := s.persistPlan(ctx, in, mode,
+			res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
+			return nil, err
+		}
+		if s.Metrics != nil {
+			s.Metrics.OrchestratorRunsTotal.WithLabelValues(string(mode), "started").Inc()
+		}
+		if err := s.runSolo(ctx, in, flowID, res.FlowRunID, res.OrchestratorRunID, plan); err != nil {
+			return nil, err
+		}
+		res.Plan = exportPlan(plan)
+		span.SetAttributes(
+			tracing.SafeAttr("orchestrator.run_id", res.OrchestratorRunID.String()),
+			tracing.SafeAttr("flow_run.id", res.FlowRunID.String()),
+		)
+		return res, nil
 	}
 	if mode == ModeExpress || mode == ModeFull || mode == ModeDetect {
 		// Si hay Repo configurado, resolver el flow_id ANTES de armar

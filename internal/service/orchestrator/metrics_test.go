@@ -54,6 +54,9 @@ func (f *fakeRepo) MarkStepPending(_ context.Context, _ uuid.UUID) error        
 func (f *fakeRepo) GetAgentTemplateSystemPrompt(_ context.Context, _ uuid.UUID, _ string) (string, error) {
 	return "system", nil
 }
+func (f *fakeRepo) GetAgentTemplate(_ context.Context, _ uuid.UUID, slug string) (*AgentTemplate, error) {
+	return &AgentTemplate{Slug: slug, Model: "claude-sonnet-4-6", Temperature: 0.3, MaxTokens: 4096, SystemPrompt: "system"}, nil
+}
 
 func TestService_RecordPhaseResult_IncrementsCompletedMetric(t *testing.T) {
 	t.Parallel()

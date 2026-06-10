@@ -58,6 +58,23 @@ type Repository interface {
 	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
 	// prompts en Go — los maneja desde el catálogo persistido.
 	GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error)
+	// GetAgentTemplate obtiene la config completa del agent_template
+	// (model + temperature + max_tokens + system_prompt + provider). Lo
+	// usa Solo mode para invocar el LLM directamente con los parámetros
+	// declarativos del catálogo.
+	GetAgentTemplate(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error)
+}
+
+// AgentTemplate es la vista de lectura desde agent_templates para Solo
+// mode. Coincide con SeedAgentTemplatesForOrg + customizaciones del
+// operador (is_user_modified=true). El provider se infiere desde el
+// prefijo del Model name por convención (claude-* → anthropic, etc.).
+type AgentTemplate struct {
+	Slug         string
+	Model        string
+	Temperature  float32
+	MaxTokens    int
+	SystemPrompt string
 }
 
 // FlowRunRow es la vista de lectura completa de un flow_run.
@@ -140,6 +157,24 @@ func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID u
 		return "", fmt.Errorf("get agent_template system_prompt: %w", err)
 	}
 	return prompt, nil
+}
+
+func (r *pgRepository) GetAgentTemplate(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error) {
+	var t AgentTemplate
+	t.Slug = slug
+	err := r.pool.QueryRow(ctx, `
+		SELECT model, temperature, max_tokens, system_prompt
+		FROM agent_templates
+		WHERE organization_id = $1 AND slug = $2
+		LIMIT 1`, orgID, slug,
+	).Scan(&t.Model, &t.Temperature, &t.MaxTokens, &t.SystemPrompt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: slug=%s", ErrAgentTemplateNotFound, slug)
+		}
+		return nil, fmt.Errorf("get agent_template: %w", err)
+	}
+	return &t, nil
 }
 
 func (r *pgRepository) GetFlowIDBySlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {

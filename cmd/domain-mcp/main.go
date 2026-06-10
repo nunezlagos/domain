@@ -163,6 +163,10 @@ func main() {
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
+	// issue-08.10 svc-005: LLM factory inyectado para Mode=Solo. El
+	// orquestador llama provider.Complete por cada fase server-side
+	// cuando se invoca con Mode=ModeSolo (CI/CD, batch jobs).
+	orchestratorSvc.LLM = factory
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}

@@ -17,7 +17,7 @@
 - [x] **svc-002**: `OrchestrateInput` struct (Mode, RawText, StartingPhase, SkipPhases, AsyncTimeout, ExpressMaxLines) — 2026-06-10
 - [x] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only) — 2026-06-10 (con persistencia flow_runs + flow_run_steps via Repository pattern)
 - [x] **svc-004**: `modes/full.go` — pipeline 10 fases con lazy-build (sólo step[0] pre-construido; RecordPhaseResult reconstruye user_prompt del próximo step con PriorOutputs acumulados) + SkipPhases + StartingPhase — 2026-06-10
-- [ ] **svc-005**: `modes/solo.go` — inline execution server-side con LLM provider directo
+- [x] **svc-005**: Solo mode server-side — `internal/service/orchestrator/solo.go::Service.runSolo` invoca provider.Complete por fase con system+user prompt + parseJSONOutput tolerante (strips code fences) + handler.Validate + lazy build PriorOutputs. Repository.GetAgentTemplate trae model/temperature/max_tokens. ProviderForModel infiere provider desde model name. ADR-4: Solo NO admite D5 sticky required saves ni D1 confirm (CI/CD use case sin cliente IDE). Tests: 3 integration con FakeProvider canned responses por slug — 2026-06-10
 - [x] **svc-006**: Detect mode dry-run sin persistencia — BuildFullPlan hidratado pero NO se persisten flow_run/steps en BD; el caller invoca Mode=Full por separado para ejecutar — 2026-06-10
 - [ ] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail
 - [~] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6) — validate() en service.go cubre D6 + empty/mode/unknown-phase; falta DAG-check de SkipPhases

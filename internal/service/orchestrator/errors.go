@@ -38,4 +38,7 @@ var (
 	// (completed/failed/skipped/cancelled) — no se puede re-marcar.
 	// El cliente debe verificar el estado antes de reportar phase_result.
 	ErrFlowRunStepNotPending = errors.New("flow_run_step is not in pending/running state")
+
+	// ErrLLMFactoryRequired Mode=Solo necesita un LLM factory inyectado.
+	ErrLLMFactoryRequired = errors.New("orchestrator: LLM factory required for Solo mode")
 )

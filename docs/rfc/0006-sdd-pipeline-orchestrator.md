@@ -1,10 +1,12 @@
 # RFC 0006 — SDD Pipeline Orchestrator
 
-**Status:** draft
+**Status:** accepted
 **Author:** nunezlagos
 **Created:** 2026-06-10
+**Accepted:** 2026-06-10
 **Supersedes:** —
-**Targets HU:** HU-08.10 (pendiente de re-escribir tras este RFC)
+**Blocked by:** RFC 0007 (renombrado `HU` → `issue`) — las HUs derivadas se crearán bajo el naming nuevo
+**Targets specs:** issue-08.10 + issue-08.11 + issue-08.12 (a crear post-RFC 0007)
 
 ## Resumen ejecutivo
 
@@ -284,26 +286,68 @@ sequenceDiagram
 
 Sin las 3 dependencias, el orquestador puede arrancar pero NO es prod-ready.
 
-## Preguntas abiertas para el usuario
+## Decisiones (cerradas 2026-06-10)
 
-1. **Modo Express:** ¿`single-line` salta directo a sdd-apply sin pedir confirmación, o siempre confirma antes? Mi default: confirm si afecta files con > N líneas modificadas.
-2. **Multi-concern UX:** cuando se detectan 2 concerns, ¿el orquestador propone interactivo (espera respuesta) o auto-asume opción (a) 2 flows separados? Mi default: interactivo solo si scope > single-file; si todos son small, auto-split sin preguntar.
-3. **Auto-skill threshold:** `0.6` es default razonable o muy permisivo? Si baja a 0.5 inyecta demasiados skills irrelevantes; si sube a 0.7 puede no devolver nada útil.
-4. **Cron user-defined disparando flows del orquestador:** ¿queremos que un cron pueda gatillar `sdd-pipeline-v1` con un prompt fijo? Caso de uso: cron semanal "audita seguridad de los handlers tocados esta semana". Si sí, ¿el cron pasa por PromptRouter o entra directo al orquestador?
-5. **`suggested_saves` priority:** ¿el orquestador marca algunas como `required: true` (el cliente DEBE guardarlas) vs `optional`? Riesgo: si todo es opcional, el cliente puede no guardar nada y se pierde contexto cross-fase.
-6. **Express + Async:** ¿son compatibles? Un fix single-file no debería pausar nunca. Mi default: Async sólo disponible para modo Full y Detect.
-7. **Intent `analysis` privacy:** los `knowledge_doc` que genera, ¿son privados al user que pidió, o accesibles a toda la org? Default mío: scope org pero con `created_by` visible.
+### D1 — Modo Express: confirm condicional
+
+- Si diff `≤ 10 líneas` AND `single-file` → auto-apply + commit sin confirmar
+- Si `> 10 líneas` OR `multi-file` → muestra diff + espera OK explícito antes de commit
+- Threshold `10` configurable via `agent_templates.metadata.express_auto_apply_max_lines`
+
+### D2 — Multi-concern: auto-split condicional
+
+- Si TODOS los concerns son `single-file` → orquestador auto-divide en N flows paralelos sin preguntar
+- Si AL MENOS UNO escala a `multi-file` o `multi-module` → pausa y propone interactivo `(a) split / (b) merged / (c) sólo #1`
+- Detectado en `sdd-explore` con LLM analysis sobre el prompt + dedup contra `user_stories.slug` existentes
+
+### D3 — Auto-skill threshold: 0.6 default, configurable por fase
+
+- Default global `skill_threshold = 0.6` en config
+- Override por fase via `agent_templates.metadata.skill_threshold`
+- Ejemplos esperados: `sdd-apply = 0.7` (estricto, evita confusión), `sdd-explore = 0.5` (permisivo, descubrir)
+
+### D4 — Crons → flows: project-scoped, flow_id pre-registrado
+
+- El cron declara `target_type='flow'`, `target_id=<flow_uuid>`, `inputs JSONB` con valores concretos del input schema del flow
+- **NO pasa por PromptRouter** — no hay prompt natural, el flow está pre-definido
+- Cada project registra sus flows reusables (DAG + input/output schemas)
+- El orquestador SDD (`sdd-pipeline-v1`) es UNO de esos flows; cada project puede tener flows propios (ej. `weekly-security-audit`, `daily-cost-report`)
+- El scheduler existente (`internal/scheduler/`) con leader election dispara — cero código nuevo
+
+### D5 — suggested_saves: mix con required en críticos
+
+- Default `required: false` (cliente IDE decide)
+- Marcar `required: true` SÓLO en:
+  - Decisiones arquitectónicas que emite `sdd-design` (ADRs)
+  - `code_references` que emite `sdd-apply` (file_path + commit_sha post-commit)
+  - `sabotage_records` que emite `sdd-judge`
+- Si el cliente IDE ignora un `required: true` → fase no avanza, devuelve error `RequiredSaveMissing`
+
+### D6 — Express + Async: NO compatibles
+
+- Async (pause/resume via `flow_signals`) disponible SÓLO en modos `Full` y `Detect`
+- Express es para changes triviales sub-1min; pausarlo no agrega valor
+- `Solo` tampoco soporta Async (corre inline en un solo proceso)
+
+### D7 — Intent `analysis` privacy: scope org
+
+- `knowledge_docs` generados por intent `analysis` son visibles a toda la org
+- `created_by` siempre persistido y visible
+- RBAC normal aplica
+- Mismo patrón que `observations` y `knowledge_docs` existentes
 
 ## Próximos pasos
 
-Si este RFC se aprueba:
+RFC aceptado. Bloqueado por **RFC 0007 — Rename HU → issue** (decidido 2026-06-10) — las specs derivadas de este RFC se crearán con el naming nuevo:
 
-1. Decidir las 7 preguntas abiertas → este doc se actualiza a `accepted`
-2. Re-escribir `HU-08.10/hu.md` con los 11 puntos + escenarios Gherkin actualizados
-3. Crear `HU-08.11-heartbeat-watcher-cron` (system cron)
-4. Crear `HU-08.12-orphan-runs-audit-cron` (system cron)
-5. Verificar prioridad de HU-12.6 — si está in_progress o necesita kickoff
-6. Implementar en orden 12.6 → 08.11 → 08.12 → 08.10
+1. ✅ ~~Decidir 7 preguntas abiertas~~ — cerradas D1-D7
+2. **RFC 0007** — rename `HU` → `issue` en todo el repo (schema, código, paths, docs)
+3. **Crear `issue-08.10` sdd-pipeline-orchestrator** (este RFC) — usando naming nuevo
+4. **Crear `issue-08.11-heartbeat-watcher-cron`** (system cron 60s)
+5. **Crear `issue-08.12-orphan-runs-audit-cron`** (system cron diario)
+6. **Verificar estado real de issue-12.6** — CB + LRU pendientes
+7. **Implementar en orden:** 12.6 → 08.11 → 08.12 → 08.10
+8. Tras 08.10: agregar `docs/flows/09-orchestrator.md`
 
 ## Referencias
 

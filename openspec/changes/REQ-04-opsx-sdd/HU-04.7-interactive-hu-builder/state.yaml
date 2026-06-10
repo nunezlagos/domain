@@ -14,5 +14,8 @@ notes: |
   flow_doc.go (6 steps: doc_type/audience/topic/existing/slug/summary),
   flow_rfc.go (8 steps: adr_status/context/decision/consequences/alternatives/
   related/slug/summary). Todos wireados en flowsByMode.
-  Pendiente: HTTP endpoints, audience dinámico desde agent_personalities
-  (HU-08.5), cron purge, tests para nuevos modos.
+  HTTP endpoints: POST /api/v1/hu-drafts, POST /{id}/answer, GET /{id}/preview,
+  POST /{id}/commit, POST /{id}/abandon, GET /api/v1/hu-drafts — todos wireados
+  en handler.API.Hubuilder + registrados en Router(). Auth via apikey.FromContext.
+  Pendiente: audience dinámico desde agent_personalities (HU-08.5), cron purge,
+  tests para nuevos modos y HTTP handlers.

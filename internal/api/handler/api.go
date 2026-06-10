@@ -22,6 +22,7 @@ import (
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/secrets"
+	"nunezlagos/domain/internal/service/hubuilder"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -98,6 +99,7 @@ type API struct {
 	TaskService    *tsvc.Service
 	TraceService        *tracesvc.Service
 	AttachmentService   *attSvc.Service
+	Hubuilder           *hubuilder.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -303,6 +305,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/project-templates", a.listProjectTemplates)
 	mux.HandleFunc("GET /api/v1/project-templates/{id}", a.getProjectTemplate)
 	mux.HandleFunc("DELETE /api/v1/project-templates/{id}", a.deleteProjectTemplate)
+
+	// HU builder (HU-04.7)
+	mux.HandleFunc("POST /api/v1/hu-drafts", a.startHubDraft)
+	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/answer", a.answerHubDraft)
+	mux.HandleFunc("GET /api/v1/hu-drafts/{id}/preview", a.previewHubDraft)
+	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/commit", a.commitHubDraft)
+	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/abandon", a.abandonHubDraft)
+	mux.HandleFunc("GET /api/v1/hu-drafts", a.listHubDrafts)
 
 	// MCP servers externos (HU-12.4)
 	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)

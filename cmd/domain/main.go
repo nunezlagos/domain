@@ -63,6 +63,7 @@ import (
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/cost"
+	"nunezlagos/domain/internal/service/hubuilder"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
@@ -426,6 +427,7 @@ func runServer() {
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 	policyService := &policy.Service{Pool: pools.App}
+	hubuilderSvc := &hubuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 	dbStatsService := &dbstats.Service{Pool: pools.App}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
@@ -563,6 +565,7 @@ func runServer() {
 		PolicyService:             policyService,
 		RuntimeConfigRegistry:    rtCfgRegistry,
 		DBStatsService:           dbStatsService,
+		Hubuilder:                hubuilderSvc,
 		Audit:          recorder,
 		ActivityRecorder: activityStore,
 		ActivityQuerier:  activityStore,

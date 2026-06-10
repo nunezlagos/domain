@@ -9,7 +9,7 @@
 
 - [ ] **seed-001**: `agent_templates_catalog.go` v3 — replace 10 entries: 1×sdd-orchestrator (role='orchestrator') + 9×sdd-{explore,spec,propose,design,tasks,apply,verify,judge,archive,onboard}
 - [ ] **seed-002**: Cleanup defensivo (mismo patrón PlansSeeder v2)
-- [ ] **seed-003**: NUEVO `flows_catalog.go` — seeder de `flow:sdd-pipeline-v1` per-org con spec JSONB DAG 10 steps
+- [x] **seed-003**: `internal/seeds/flows_catalog.go` — seeder `flow:sdd-pipeline-v1` per-org con spec JSONB DAG 10 steps — 2026-06-10 (idempotente UPSERT + cleanup defensivo respeta is_user_modified + flow_runs activos)
 
 ## Service `internal/service/orchestrator/`
 

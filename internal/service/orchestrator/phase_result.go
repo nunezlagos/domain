@@ -112,18 +112,131 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 			return nil, fmt.Errorf("update flow_run status: %w", err)
 		}
 	}
-	// Next step prompt: leemos del step.inputs.user_prompt persistido
+	// Next step prompt: para Full mode (lazy build) reconstruimos el
+	// user_prompt usando los outputs acumulados de las fases completadas.
+	// Para Express ya estaba pre-armado en step.inputs.user_prompt al
+	// crear el plan. La detección: si step.inputs.user_prompt está vacío,
+	// asumimos lazy y rebuildemos.
 	if out.NextStepID != nil {
-		for _, st := range steps {
-			if st.ID == *out.NextStepID {
-				if up, ok := st.Inputs["user_prompt"].(string); ok {
-					out.NextStepPrompt = up
+		nextStep := findStepByID(steps, *out.NextStepID)
+		if nextStep != nil {
+			cached, _ := nextStep.Inputs["user_prompt"].(string)
+			if cached != "" {
+				out.NextStepPrompt = cached
+			} else {
+				// Lazy build path (Full mode)
+				built, err := s.rebuildNextStepPrompt(ctx, nextStep, steps)
+				if err != nil {
+					return nil, fmt.Errorf("rebuild next step prompt: %w", err)
 				}
-				break
+				out.NextStepPrompt = built
 			}
 		}
 	}
 	return out, nil
+}
+
+// findStepByID es helper local — pgx no retorna las rows por id por default.
+func findStepByID(steps []FlowRunStepRow, id uuid.UUID) *FlowRunStepRow {
+	for i := range steps {
+		if steps[i].ID == id {
+			return &steps[i]
+		}
+	}
+	return nil
+}
+
+// rebuildNextStepPrompt — lazy build de user_prompt para el próximo step
+// en modo Full. Reúne los outputs de los steps completados como
+// PriorOutputs, llama handler.Build, persiste el inputs actualizado.
+//
+// Esto es lo que hace Full "lazy": en BuildFullPlan sólo el primer step
+// recibe prompt; los demás quedan con UserPrompt="" hasta que su
+// predecesor termine y disparemos esta función vía RecordPhaseResult.
+func (s *Service) rebuildNextStepPrompt(ctx context.Context, next *FlowRunStepRow, allSteps []FlowRunStepRow) (string, error) {
+	if s.Phases == nil {
+		return "", nil
+	}
+	handler, err := s.Phases.Lookup(phases.PhaseSlug(next.StepKey))
+	if err != nil {
+		// Sin handler no podemos rebuildear. Devolvemos vacío sin fallar
+		// el run; el cliente verá NextStepPrompt vacío y podrá pedir
+		// status para inspeccionar.
+		return "", nil
+	}
+	priorOutputs := collectPriorOutputs(allSteps, next.StepKey)
+	rawText := extractRawTextFromInputs(allSteps, next)
+	out, err := handler.Build(ctx, phases.Input{
+		OrganizationID: uuid.Nil, // no necesario para Build (sólo composición de prompt)
+		UserID:         uuid.Nil,
+		FlowRunID:      next.FlowRunID,
+		PhaseSlug:      phases.PhaseSlug(next.StepKey),
+		RawText:        rawText,
+		PriorOutputs:   priorOutputs,
+	})
+	if err != nil {
+		return "", fmt.Errorf("handler.Build %s: %w", next.StepKey, err)
+	}
+	// Persistir el inputs actualizado con el user_prompt nuevo.
+	// Preservamos los demás campos (suggested_saves, retry_policy, etc.)
+	updatedInputs := mapClone(next.Inputs)
+	updatedInputs["user_prompt"] = out.UserPrompt
+	if err := s.Repo.UpdateStepInputs(ctx, next.ID, updatedInputs); err != nil {
+		return "", err
+	}
+	return out.UserPrompt, nil
+}
+
+// collectPriorOutputs arma el map slug→output de todos los steps
+// completed/skipped antes del próximo step. Sólo cuentan las fases
+// efectivamente ejecutadas con éxito (failed steps no aportan output útil).
+func collectPriorOutputs(steps []FlowRunStepRow, nextSlug string) map[phases.PhaseSlug]map[string]any {
+	out := make(map[phases.PhaseSlug]map[string]any)
+	for _, st := range steps {
+		if st.StepKey == nextSlug {
+			break
+		}
+		if st.Status != "completed" {
+			continue
+		}
+		if len(st.Outputs) == 0 {
+			continue
+		}
+		out[phases.PhaseSlug(st.StepKey)] = st.Outputs
+	}
+	return out
+}
+
+// extractRawTextFromInputs busca el raw_text original. Se persiste en
+// flow_runs.cursor.raw_text pero como acceso rápido también en cada
+// step.inputs (lo replicamos para evitar un join). Si no está, se
+// busca en cualquier step.inputs.raw_text.
+func extractRawTextFromInputs(steps []FlowRunStepRow, target *FlowRunStepRow) string {
+	if target != nil {
+		if rt, ok := target.Inputs["raw_text"].(string); ok && rt != "" {
+			return rt
+		}
+	}
+	for _, st := range steps {
+		if rt, ok := st.Inputs["raw_text"].(string); ok && rt != "" {
+			return rt
+		}
+	}
+	return ""
+}
+
+// mapClone copia plana — necesario porque modificar el map del
+// FlowRunStepRow leído de DB y luego pasarlo a UpdateStepInputs
+// podría haber side-effects en tests si el caller retenía referencia.
+func mapClone(m map[string]any) map[string]any {
+	if m == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // propagateFlowStatusAfterFailure recalcula el status agregado y lo

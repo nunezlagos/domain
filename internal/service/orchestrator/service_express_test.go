@@ -95,18 +95,18 @@ func TestService_Run_ExpressMode_RegistryWithoutHandlers_Fails(t *testing.T) {
 	require.Error(t, err, "sin handlers el Express dispatcher debe fallar")
 }
 
-func TestService_Run_FullMode_ReturnsStubWithoutPlan(t *testing.T) {
+func TestService_Run_FullMode_WithoutAllHandlers_Fails(t *testing.T) {
 	t.Parallel()
+	// Full requiere los 10 handlers en el registry. Con sólo apply+verify
+	// el lookup de sdd-explore falla cuando intenta armar el plan.
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
-	res, err := s.Run(context.Background(), OrchestrateInput{
+	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		Mode:           ModeFull,
 	})
-	require.NoError(t, err)
-	require.Equal(t, ModeFull, res.Mode)
-	require.Nil(t, res.Plan, "Full mode aún no tiene dispatcher → Plan nil hasta el próximo chunk")
+	require.Error(t, err, "Full sin todos los handlers debe fallar al armar el plan")
 }
 
 // Sabotaje sab-003: el cliente IDE termina apply sin guardar el

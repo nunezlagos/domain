@@ -58,9 +58,22 @@ func TestService_Run_UnknownStartingPhase(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnknownPhase)
 }
 
-func TestService_Run_HappyPath_ReturnsIDs(t *testing.T) {
+func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	t.Parallel()
-	s := New(nil, nil, phases.NewRegistry(), "dev")
+	// Default Mode (vacío) resuelve a Full. Para que el dispatcher
+	// Full no falle por handlers faltantes, registramos los 10.
+	reg := phases.NewRegistry()
+	reg.MustRegister(phases.NewSDDExploreHandler())
+	reg.MustRegister(phases.NewSDDSpecHandler())
+	reg.MustRegister(phases.NewSDDProposeHandler())
+	reg.MustRegister(phases.NewSDDDesignHandler())
+	reg.MustRegister(phases.NewSDDTasksHandler())
+	reg.MustRegister(phases.NewSDDApplyHandler())
+	reg.MustRegister(phases.NewSDDVerifyHandler())
+	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDDArchiveHandler())
+	reg.MustRegister(phases.NewSDDOnboardHandler())
+	s := New(nil, nil, reg, "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
 		UserID:         uuid.New(),
@@ -70,4 +83,6 @@ func TestService_Run_HappyPath_ReturnsIDs(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, res.OrchestratorRunID)
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.Equal(t, ModeFull, res.Mode, "Mode vacío resuelve a Full por default")
+	require.NotNil(t, res.Plan, "Full mode arma plan in-memory cuando Repo es nil")
+	require.Len(t, res.Plan.Steps, 10, "Full plan = 10 fases sin skips")
 }

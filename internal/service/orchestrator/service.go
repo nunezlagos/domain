@@ -89,7 +89,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		Mode:              mode,
 		StartedAt:         now,
 	}
-	if mode == ModeExpress {
+	if mode == ModeExpress || mode == ModeFull {
 		// Si hay Repo configurado, resolver el flow_id ANTES de armar
 		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
 		// hecho trabajo de prompts si la org no está inicializada.
@@ -101,12 +101,24 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 				return nil, err
 			}
 		}
-		plan, err := modes.BuildExpressPlan(ctx, s.Phases, phases.Input{
+		phaseInput := phases.Input{
 			OrganizationID: in.OrganizationID,
 			UserID:         in.UserID,
 			FlowRunID:      res.FlowRunID,
 			RawText:        in.RawText,
-		}, now)
+		}
+		var (
+			plan *modes.PhasePlan
+			err  error
+		)
+		switch mode {
+		case ModeExpress:
+			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
+		case ModeFull:
+			plan, err = modes.BuildFullPlan(ctx, s.Phases, phaseInput,
+				phases.PhaseSlug(in.StartingPhase),
+				convertSkipPhases(in.SkipPhases), now)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -135,6 +147,19 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		}
 	}
 	return res, nil
+}
+
+// convertSkipPhases pasa el slice del API público al tipo del subpaquete
+// phases sin reexportar el tipo desde el service.
+func convertSkipPhases(in []PhaseSlug) []phases.PhaseSlug {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]phases.PhaseSlug, len(in))
+	for i, p := range in {
+		out[i] = phases.PhaseSlug(p)
+	}
+	return out
 }
 
 // exportPlan traduce el plan interno (modes.PhasePlan) al shape

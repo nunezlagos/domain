@@ -42,6 +42,11 @@ type Repository interface {
 	MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error
 	MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error
 	UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error
+	// UpdateStepInputs reemplaza el JSONB step.inputs (usado para lazy
+	// build de user_prompt en modo Full cuando una fase completa y
+	// debemos actualizar el prompt del próximo step usando los outputs
+	// acumulados).
+	UpdateStepInputs(ctx context.Context, stepID uuid.UUID, inputs map[string]any) error
 	// GetAgentTemplateSystemPrompt obtiene el system_prompt del agent_template
 	// seedeado per-org. La fuente de verdad de los prompts de cada fase es
 	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
@@ -313,6 +318,23 @@ func (r *pgRepository) MarkStepFailed(ctx context.Context, stepID uuid.UUID, err
 	return nil
 }
 
+func (r *pgRepository) UpdateStepInputs(ctx context.Context, stepID uuid.UUID, inputs map[string]any) error {
+	inputsJSON, err := json.Marshal(inputs)
+	if err != nil {
+		return fmt.Errorf("marshal step inputs: %w", err)
+	}
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps SET inputs = $2 WHERE id = $1`,
+		stepID, inputsJSON)
+	if err != nil {
+		return fmt.Errorf("update step inputs: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrFlowRunStepNotFound
+	}
+	return nil
+}
+
 func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error {
 	finishedAtClause := ""
 	if status == "completed" || status == "failed" || status == "cancelled" {
@@ -396,6 +418,10 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 				"suggested_saves":     toAnySuggestedSaves(step.SuggestedSaves),
 				"retry_policy":        string(step.RetryPolicy),
 				"skill_threshold":     step.SkillThreshold,
+				// raw_text replicado en cada step.inputs para que el
+				// lazy build de Full mode (Service.rebuildNextStepPrompt)
+				// pueda reconstruir el prompt sin join contra flow_runs.cursor.
+				"raw_text": in.RawText,
 			},
 		}); err != nil {
 			return err

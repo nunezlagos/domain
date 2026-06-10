@@ -45,6 +45,7 @@ import (
 	setuppkg "nunezlagos/domain/internal/cli/setup"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"nunezlagos/domain/internal/logging"
 	"nunezlagos/domain/internal/metrics"
@@ -479,9 +480,11 @@ func runServer() {
 	})
 	defer schedCancel()
 	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
+	otpUserLookup := &otpUserLookupAdapter{pool: pools.Auth}
 	otpService := &otp.Service{
-		Pool: pools.Auth, // Request/Verify cruzan org_id (lookup users por email)
-		Mail: otpMailer,
+		Pool:  pools.Auth,
+		Users: otpUserLookup,
+		Mail:  otpMailer,
 	}
 
 	activityStore := &activity.PGStore{Pool: pools.App}
@@ -824,6 +827,43 @@ func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logge
 }
 
 // runSoftDeletePurge purga rows soft-deleted fuera de retention (HU-23.2).
+// otpUserLookupAdapter implementa otp.UserLookup contra la DB.
+type otpUserLookupAdapter struct {
+	pool *pgxpool.Pool
+}
+
+func (a *otpUserLookupAdapter) ByEmail(ctx context.Context, email string) (*otp.User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	var u otp.User
+	err := a.pool.QueryRow(ctx,
+		`SELECT id, email, COALESCE(rut, '') FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
+		email,
+	).Scan(&u.ID, &u.Email, &u.RUT)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apikey.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (a *otpUserLookupAdapter) ByRUT(ctx context.Context, rut string) (*otp.User, error) {
+	rut = strings.TrimSpace(rut)
+	var u otp.User
+	err := a.pool.QueryRow(ctx,
+		`SELECT id, email, rut FROM users WHERE rut = $1 AND deleted_at IS NULL LIMIT 1`,
+		rut,
+	).Scan(&u.ID, &u.Email, &u.RUT)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apikey.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func runAuditPruneScheduler(ctx context.Context, recorder *audit.PGRecorder, logger *slog.Logger) {
 	retention := 90 * 24 * time.Hour
 	ticker := time.NewTicker(24 * time.Hour)

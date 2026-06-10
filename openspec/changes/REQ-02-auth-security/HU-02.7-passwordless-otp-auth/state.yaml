@@ -15,4 +15,6 @@ notes: |
   HTTP handlers /auth/request-otp y /auth/verify-otp montados en router y
   funcionales (anti-enumeration, Issue API key post-verify). Mailer real
   (smtpmail) wired en main.go desde DOMAIN_SMTP_HOST env vars.
-  Pending: rate-limit per identifier/IP (HU-02.5), UserLookup integration.
+  UserLookup integration: otpUserLookupAdapter en cmd/domain/main.go implementa
+  otp.UserLookup vía consultas directas a users table (ByEmail + ByRUT).
+  Rate-limit per identifier/IP cubierto por HU-02.5 (OTPRateLimiter en handlers).

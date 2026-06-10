@@ -1,8 +1,3 @@
-// Package commands — implementa los subcomandos del CLI Domain.
-//
-// Estructura: domain <resource> <action> [args] [flags]
-// Resources: projects, observations, agents, flows, skills, search.
-// Actions estándar: list, get, create, run, delete.
 package commands
 
 import (
@@ -15,8 +10,6 @@ import (
 	"nunezlagos/domain/internal/cli/output"
 )
 
-// Dispatch parsea args y ejecuta el subcomando.
-// Args incluyen TODO desde domain[1:] (sin el binary path).
 func Dispatch(args []string) int {
 	if len(args) == 0 {
 		printUsage()
@@ -74,7 +67,9 @@ Recursos:
   completion    bash|zsh|fish
 
 Flags globales:
-  --format json|table   (default: table)
+  --format json|table|yaml|csv   (default: table)
+  --no-headers                   omitir cabeceras en table/csv
+  --quiet, -q                    solo errores (exit code)
 
 Env:
   DOMAIN_API_KEY      requerido
@@ -87,10 +82,10 @@ Ejemplos:
   domain obs save --project demo "Decidimos usar X"`)
 }
 
-// --- helpers globales de flags ---
-
 type globalFlags struct {
-	Format string
+	Format    string
+	NoHeaders bool
+	Quiet     bool
 }
 
 func parseGlobalFlags(args []string) (*globalFlags, []string) {
@@ -105,6 +100,14 @@ func parseGlobalFlags(args []string) (*globalFlags, []string) {
 			}
 		case "--json":
 			gf.Format = "json"
+		case "--yaml":
+			gf.Format = "yaml"
+		case "--csv":
+			gf.Format = "csv"
+		case "--no-headers":
+			gf.NoHeaders = true
+		case "--quiet", "-q":
+			gf.Quiet = true
 		default:
 			rest = append(rest, args[i])
 		}
@@ -121,8 +124,8 @@ func newClient() *clicli.Client {
 	return c
 }
 
-func render(data any, format string) {
-	_ = output.Render(os.Stdout, data, output.Format(format))
+func renderOpts(data any, opts output.RenderOpts) {
+	_ = output.RenderWithOpts(os.Stdout, data, opts)
 }
 
 func handleErr(err error) int {
@@ -148,7 +151,10 @@ func projects(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "get":
 		if len(args) < 2 {
@@ -159,7 +165,10 @@ func projects(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "create":
 		if len(args) < 3 {
@@ -171,7 +180,10 @@ func projects(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "acción desconocida: %s\n", args[0])
@@ -203,7 +215,10 @@ func observations(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "save":
 		_ = fs.Parse(args[1:])
@@ -220,7 +235,10 @@ func observations(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "acción desconocida: %s\n", args[0])
@@ -242,7 +260,10 @@ func agents(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "get":
 		if len(args) < 2 {
@@ -253,7 +274,10 @@ func agents(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "run":
 		if len(args) < 3 {
@@ -265,7 +289,10 @@ func agents(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "acción desconocida: %s\n", args[0])
@@ -287,7 +314,10 @@ func flows(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	case "run":
 		if len(args) < 2 {
@@ -298,7 +328,10 @@ func flows(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
 	return 2
@@ -325,7 +358,10 @@ func skills(args []string) int {
 		if err != nil {
 			return handleErr(err)
 		}
-		render(data, gf.Format)
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
 	return 2
@@ -352,7 +388,10 @@ func search(args []string) int {
 	if err != nil {
 		return handleErr(err)
 	}
-	render(data, gf.Format)
+	if gf.Quiet {
+		return 0
+	}
+	renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 	return 0
 }
 
@@ -372,6 +411,9 @@ func contextCmd(args []string) int {
 	if err != nil {
 		return handleErr(err)
 	}
-	render(data, gf.Format)
+	if gf.Quiet {
+		return 0
+	}
+	renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 	return 0
 }

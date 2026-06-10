@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -12,8 +12,9 @@ notes: |
 
   --json es alias de --format json.
 
-  Pending HU-14.2 completo:
-  - yaml format con gopkg.in/yaml.v3
-  - csv format para data scripts
-  - --no-headers flag para output piped
-  - --quiet flag (solo errores + status code)
+  HU-14.2 completo:
+  - yaml format (gopkg.in/yaml.v3) con indent 2
+  - csv format (encoding/csv) para data scripts
+  - --no-headers flag para output piped (table y csv)
+  - --quiet (-q) flag (solo errores + status code)
+  - --yaml y --csv flags directos como alias

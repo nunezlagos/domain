@@ -36,6 +36,8 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/extsync"
+	"nunezlagos/domain/internal/service/promptrouter"
+	"nunezlagos/domain/internal/service/workflowimport"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/hubuilder"
 	"nunezlagos/domain/internal/service/intake"
@@ -142,26 +144,43 @@ func main() {
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
 	extsyncSvc := &extsync.Service{Pool: pools.App}
 
+	// HU-12.7 prompt router + workflow override.
+	var classifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
+	if anthrop, _ := factory.Get("anthropic"); anthrop != nil {
+		classifier = &promptrouter.LLMClassifier{
+			Provider: anthrop, Model: "claude-haiku-4-5-20251001",
+			Fallback: promptrouter.HeuristicClassifier{},
+		}
+	}
+	promptRouterSvc := &promptrouter.Router{
+		IntakeService:    intakeSvc,
+		HubuilderService: hubuilderSvc,
+		Classifier:       classifier,
+	}
+	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
+
 	srv := mcpserver.New(mcpserver.Deps{
-		Observations: observations,
-		Projects:     projects,
-		Sessions:     sessions,
-		Prompts:      prompts,
-		Timeline:     timeline,
-		Search:       search,
-		Knowledge:    knowledgeSvc,
-		Skills:       skills,
-		Agents:       agents,
-		AgentRunner:  agentRunnerInst,
-		Flows:        flowService,
-		FlowRunner:   flowRunnerInst,
-		Hubuilder:    hubuilderSvc,
-		Intake:       intakeSvc,
-		ExtSync:      extsyncSvc,
-		Pool:         pools.App,
-		Principal:    principal,
-		ServerName:   "domain-mcp",
-		ServerVer:    Version,
+		Observations:   observations,
+		Projects:       projects,
+		Sessions:       sessions,
+		Prompts:        prompts,
+		Timeline:       timeline,
+		Search:         search,
+		Knowledge:      knowledgeSvc,
+		Skills:         skills,
+		Agents:         agents,
+		AgentRunner:    agentRunnerInst,
+		Flows:          flowService,
+		FlowRunner:     flowRunnerInst,
+		Hubuilder:      hubuilderSvc,
+		Intake:         intakeSvc,
+		ExtSync:        extsyncSvc,
+		PromptRouter:   promptRouterSvc,
+		WorkflowImport: workflowImportSvc,
+		Pool:           pools.App,
+		Principal:      principal,
+		ServerName:     "domain-mcp",
+		ServerVer:      Version,
 	})
 
 	fmt.Fprintf(os.Stderr, "domain-mcp %s ready (org=%s user=%s)\n",

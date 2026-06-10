@@ -87,9 +87,13 @@ import (
 	tsvc "nunezlagos/domain/internal/service/task"
 	tracesvc "nunezlagos/domain/internal/service/traceability"
 	attSvc "nunezlagos/domain/internal/service/attachment"
+	intakesvc "nunezlagos/domain/internal/service/intake"
+	"nunezlagos/domain/internal/service/promptrouter"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
+	wp "nunezlagos/domain/internal/service/wizardplan"
+	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -125,6 +129,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "workflow":
 		runWorkflow(os.Args[2:])
+	case "dev-bootstrap":
+		runDevBootstrap(os.Args[2:])
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -447,7 +453,62 @@ func runServer() {
 	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
 	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
 	policyService := &policy.Service{Pool: pools.App}
-	hubuilderSvc := &hubuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
+	// HU-04.7 wizard interactivo. Attachments se inyectan más abajo cuando
+	// se construye el S3 client (puede ser nil si DOMAIN_S3_BUCKET no está).
+	hubuilderSvc := &hubuilder.Service{
+		Pool: pools.App, Audit: recorder, DraftTTLHrs: 24,
+	}
+
+	// HU-04.8 intake pipeline service.
+	intakeSvc := &intakesvc.Service{Pool: pools.App, Audit: recorder}
+
+	// HU-12.7 prompt router + analyzer + classifier.
+	// LLM classifier si hay provider configurado; fallback heurístico siempre.
+	var promptClassifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
+	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
+		promptClassifier = &promptrouter.LLMClassifier{
+			Provider: anthropicProv,
+			Model:    "claude-haiku-4-5-20251001",
+			Fallback: promptrouter.HeuristicClassifier{},
+		}
+		logger.Info("prompt classifier: LLM anthropic con fallback heurístico")
+	} else {
+		logger.Info("prompt classifier: heurístico (no anthropic provider)")
+	}
+
+	wizardAnalyzer := &wp.Analyzer{
+		Classifier: &promptrouter.WizardplanAdapter{Inner: promptClassifier},
+		Sources: []wp.Source{
+			&wpsources.HUDedupSource{Pool: pools.App, Limit: 5},
+			&wpsources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
+			&wpsources.MemorySource{Search: searchService, Limit: 5},
+		},
+		Timeout: 10 * time.Second,
+	}
+	wizardPlanner := &wp.Planner{}
+	// LLM formulator si hay provider.
+	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
+		wizardPlanner.QuestionFormulator = &wp.LLMQuestionFormulator{
+			Provider: anthropicProv,
+			Model:    "claude-haiku-4-5-20251001",
+		}
+	}
+
+	hubuilderAdaptive := &hubuilder.AdaptiveService{
+		Service:  hubuilderSvc,
+		Analyzer: wizardAnalyzer,
+		Planner:  wizardPlanner,
+	}
+
+	promptRouterSvc := &promptrouter.Router{
+		IntakeService:    intakeSvc,
+		HubuilderService: hubuilderSvc,
+		Classifier:       promptClassifier,
+	}
+
+	// HU-12.7 workflow import (override de .md de IA en repo cliente).
+	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
+
 	dbStatsService := &dbstats.Service{Pool: pools.App}
 
 	outboundEmitter := &outboundwebhook.RunnerEmitter{
@@ -563,6 +624,12 @@ func runServer() {
 		logger.Warn("DOMAIN_S3_BUCKET not set; file attachments disabled")
 	}
 
+	// HU-04.7 + 04.6: inyectar attachment service al hubuilder Service ya
+	// creado para que AttachToDraft / PromoteAttachmentsToHU funcionen.
+	if attachmentService != nil {
+		hubuilderSvc.Attachments = &hubuilder.AttachmentServiceAdapter{Inner: attachmentService}
+	}
+
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 	if err := customResolver.StartCacheListener(ctx); err != nil {
 		logger.Warn("custom roles cache listener", slog.String("error", err.Error()))
@@ -612,6 +679,11 @@ func runServer() {
 		TaskService:         taskService,
 		TraceService:        traceService,
 		AttachmentService:   attachmentService,
+		// HU-04.7 v2 (wizard adaptive) + HU-04.8 intake + HU-12.7 plug-and-play.
+		HubuilderAdaptive: hubuilderAdaptive,
+		IntakeService:    intakeSvc,
+		PromptRouter:     promptRouterSvc,
+		WorkflowImport:   workflowImportSvc,
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)

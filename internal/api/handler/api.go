@@ -24,6 +24,9 @@ import (
 	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/service/hubuilder"
+	intakesvc "nunezlagos/domain/internal/service/intake"
+	"nunezlagos/domain/internal/service/promptrouter"
+	"nunezlagos/domain/internal/service/workflowimport"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -102,6 +105,10 @@ type API struct {
 	TraceService        *tracesvc.Service
 	AttachmentService   *attSvc.Service
 	Hubuilder           *hubuilder.Service
+	HubuilderAdaptive   *hubuilder.AdaptiveService
+	IntakeService       *intakesvc.Service
+	PromptRouter        *promptrouter.Router
+	WorkflowImport      *workflowimport.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.

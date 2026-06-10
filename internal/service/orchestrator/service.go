@@ -38,6 +38,11 @@ type Service struct {
 	Pool    *pgxpool.Pool
 	Audit   audit.Recorder
 	Phases  *phases.Registry
+	// Repo encapsula la persistencia (flow lookup + flow_runs + steps).
+	// Si nil, Service.Run en modo Express NO persistirá y devolverá
+	// IDs in-memory — útil para tests unit sin DB. En boot real,
+	// pasarlo explícitamente via NewPGRepository(pool).
+	Repo Repository
 	// Env replica config.Env. Empty o "dev" deshabilita enforcements
 	// estrictos para iteración local; "prod" los habilita.
 	Env string
@@ -49,8 +54,15 @@ type Service struct {
 // New construye un Service. El registry debe venir poblado por el
 // caller (boot wiring) — el orquestador no se auto-registra fases para
 // permitir testing con handlers fake.
+//
+// Si pool != nil, se construye un PGRepository automáticamente. Tests
+// que quieran fakearlo pueden override `s.Repo` después de New.
 func New(pool *pgxpool.Pool, audit audit.Recorder, reg *phases.Registry, env string) *Service {
-	return &Service{Pool: pool, Audit: audit, Phases: reg, Env: env, Clock: systemClock{}}
+	s := &Service{Pool: pool, Audit: audit, Phases: reg, Env: env, Clock: systemClock{}}
+	if pool != nil {
+		s.Repo = NewPGRepository(pool)
+	}
+	return s
 }
 
 // Run despacha el orquestador según el Mode. Devuelve OrchestrateResult
@@ -78,6 +90,17 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		StartedAt:         now,
 	}
 	if mode == ModeExpress {
+		// Si hay Repo configurado, resolver el flow_id ANTES de armar
+		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
+		// hecho trabajo de prompts si la org no está inicializada.
+		var flowID uuid.UUID
+		if s.Repo != nil {
+			var err error
+			flowID, err = s.Repo.GetFlowIDBySlug(ctx, in.OrganizationID, "sdd-pipeline-v1")
+			if err != nil {
+				return nil, err
+			}
+		}
 		plan, err := modes.BuildExpressPlan(ctx, s.Phases, phases.Input{
 			OrganizationID: in.OrganizationID,
 			UserID:         in.UserID,
@@ -86,6 +109,15 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		}, now)
 		if err != nil {
 			return nil, err
+		}
+		// Persistir si Repo está configurado. El fallback in-memory
+		// (Repo nil) sigue funcionando para tests unit que no quieren
+		// pagar el costo de testcontainers.
+		if s.Repo != nil {
+			if err := s.persistPlan(ctx, in, mode,
+				res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
+				return nil, err
+			}
 		}
 		res.Plan = exportPlan(plan)
 		if len(res.Plan.Steps) > 0 {

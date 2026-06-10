@@ -15,7 +15,7 @@
 
 - [x] **svc-001**: `service.go` — Service + Run(ctx, OrchestrateInput) (orchestrator_run_id, flow_run_id, error) — skeleton 2026-06-10
 - [x] **svc-002**: `OrchestrateInput` struct (Mode, RawText, StartingPhase, SkipPhases, AsyncTimeout, ExpressMaxLines) — 2026-06-10
-- [x] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only) — 2026-06-10 (in-memory; persistencia flow_runs pendiente)
+- [x] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only) — 2026-06-10 (con persistencia flow_runs + flow_run_steps via Repository pattern)
 - [ ] **svc-004**: `modes/full.go` — pipeline 10 fases vía sub-agents nativos del IDE
 - [ ] **svc-005**: `modes/solo.go` — inline execution server-side con LLM provider directo
 - [ ] **svc-006**: `modes/detect.go` — dry_run=true, persiste a `*.status='draft'`

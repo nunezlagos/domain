@@ -41,6 +41,7 @@ import (
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/service/workflowimport"
 )
 
 // Deps colecciona las dependencias del servidor MCP.
@@ -60,9 +61,10 @@ type Deps struct {
 	Hubuilder    *husvc.Service // HU-04.7 interactive HU wizard
 	Intake       *intakesvc.Service // HU-04.8 intake pipeline
 	ExtSync      *syncsvc.Service   // HU-04.9 external provider sync
-	PromptRouter *prouter.Router    // HU-12.7 single-shot prompt router
-	Pool         *pgxpool.Pool // para queries de agent_run_logs
-	Principal    *apikey.Principal // resuelto al boot
+	PromptRouter   *prouter.Router            // HU-12.7 single-shot prompt router
+	WorkflowImport *workflowimport.Service    // HU-12.7 override de .md
+	Pool           *pgxpool.Pool // para queries de agent_run_logs
+	Principal      *apikey.Principal // resuelto al boot
 	ServerName   string
 	ServerVer    string
 }

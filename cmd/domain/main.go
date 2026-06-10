@@ -89,6 +89,7 @@ import (
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/service/workflowimport"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (HU-19.2).
@@ -120,6 +121,10 @@ func main() {
 		runAuditPrune(os.Args[2:])
 	case "setup":
 		runSetup(os.Args[2:])
+	case "init":
+		runInit(os.Args[2:])
+	case "workflow":
+		runWorkflow(os.Args[2:])
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -155,6 +160,15 @@ CLI cliente (requiere DOMAIN_API_KEY):
   context [--project <slug>]
   policies import-md|export-md [options]
   completion bash|zsh|fish
+
+Plug-and-play:
+  init [--root .] [--dry-run] [--no-stub]
+                      Detecta .md de IA (CLAUDE.md, .claude/**, .opencode/**,
+                      .cursor/**, .windsurfrules, AGENTS.md...) y los archiva
+                      en BD reemplazándolos por stubs que apuntan al MCP.
+  workflow list       Lista archivos importados con su status
+  workflow restore <rel-path>
+                      Restaura el .md original desde el backup en BD
 
 Common:
   version             Version + commit + build time
@@ -1120,6 +1134,8 @@ func runSetup(args []string) {
 	mcpBinary := ""
 	apiKey := os.Getenv("DOMAIN_API_KEY")
 	baseURL := os.Getenv("DOMAIN_BASE_URL")
+	autoInit := false
+	skipInit := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "claude-code", "claude":
@@ -1141,9 +1157,17 @@ func runSetup(args []string) {
 				baseURL = args[i+1]
 				i++
 			}
+		case "--auto-init":
+			autoInit = true
+		case "--skip-init":
+			skipInit = true
 		case "--help", "-h":
-			fmt.Println("Usage: domain setup [claude-code] [--mcp-binary PATH] [--api-key KEY] [--base-url URL]")
+			fmt.Println("Usage: domain setup [claude-code] [--mcp-binary PATH] [--api-key KEY] [--base-url URL] [--auto-init|--skip-init]")
 			fmt.Println("Configura un agente externo (Claude Desktop) para usar domain-mcp.")
+			fmt.Println()
+			fmt.Println("--auto-init  Después del setup, corre `domain init` que reemplaza")
+			fmt.Println("             los .md de IA del repo actual por stubs apuntando al MCP.")
+			fmt.Println("--skip-init  Saltea el prompt interactivo de init (no ofrece reemplazar).")
 			os.Exit(0)
 		}
 	}
@@ -1175,8 +1199,72 @@ func runSetup(args []string) {
 			}
 		}
 		fmt.Println("\nReinicia Claude Desktop para activar Domain.")
+
+		// Hook auto-init: detectar archivos .md de IA en el cwd y ofrecer
+		// reemplazarlos. Esto cierra el flow plug-and-play: post-setup el
+		// agente IA tendrá su contexto desde el MCP en lugar de los .md.
+		if skipInit {
+			break
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			break
+		}
+		offerOrRunAutoInit(cwd, autoInit)
 	default:
 		fmt.Fprintf(os.Stderr, "agente no soportado aún: %s\n", agent)
 		os.Exit(2)
 	}
+}
+
+// offerOrRunAutoInit detecta archivos .md de IA en cwd. Si autoInit=true,
+// los reemplaza directo. Si false, los lista y sugiere correr `domain init`
+// manualmente. Cierra el flow setup → init plug-and-play.
+func offerOrRunAutoInit(cwd string, autoInit bool) {
+	scanner := &workflowimport.Scanner{ProjectRoot: cwd}
+	files, err := scanner.Detect(false)
+	if err != nil || len(files) == 0 {
+		return
+	}
+	fmt.Println()
+	fmt.Printf("✓ Detectados %d archivos .md de IA en el proyecto actual:\n", len(files))
+	for _, f := range files {
+		fmt.Printf("    %s  (%s)\n", f.RelPath, f.SourceTool)
+	}
+	fmt.Println()
+
+	if !autoInit {
+		fmt.Println("Para reemplazar estos archivos por stubs que apunten al MCP de Domain:")
+		fmt.Println("    domain init")
+		fmt.Println("Para hacerlo automático en el próximo setup: --auto-init")
+		return
+	}
+
+	// Auto-init: invoca workflowimport.Service.Import.
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auto-init: no pude cargar config: %v\n", err)
+		return
+	}
+	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auto-init: db open falló: %v\n", err)
+		return
+	}
+	defer pool.Close()
+
+	svc := &workflowimport.Service{Pool: pool}
+	rep, err := svc.Import(context.Background(), workflowimport.ImportInput{
+		ProjectRoot:  cwd,
+		StubTemplate: workflowimport.DefaultStub,
+		WriteStub:    true,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auto-init: import falló: %v\n", err)
+		return
+	}
+	fmt.Printf("✓ Auto-init OK — %d backed up, %d reemplazados con stub.\n",
+		rep.BackedUp, rep.Replaced)
+	fmt.Println("  Originales en BD (tabla imported_workflow_files).")
+	fmt.Println("  Rollback: domain workflow restore <rel-path>")
 }

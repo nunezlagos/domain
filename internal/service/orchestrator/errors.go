@@ -41,4 +41,10 @@ var (
 
 	// ErrLLMFactoryRequired Mode=Solo necesita un LLM factory inyectado.
 	ErrLLMFactoryRequired = errors.New("orchestrator: LLM factory required for Solo mode")
+
+	// ErrAsyncFlowRunNotFound lookup de un flow_run_id async que no existe.
+	ErrAsyncFlowRunNotFound = errors.New("orchestrator: async flow_run not found")
+
+	// ErrAsyncFlowNotAsync el flow_run existe pero no está en modo async.
+	ErrAsyncFlowNotAsync = errors.New("orchestrator: flow_run is not in async mode")
 )

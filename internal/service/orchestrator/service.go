@@ -12,6 +12,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/metrics"
+	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 	"nunezlagos/domain/internal/tracing"
@@ -61,6 +62,11 @@ type Service struct {
 	// devuelve ErrLLMFactoryRequired. Tests inyectan un factory con
 	// providers fake; cmd/domain-mcp usa el global con providers reales.
 	LLM *llm.Factory
+	// SignalStore opcional para ModeAsync. Si nil, async mode funciona
+	// sin emitir flow_signals (modo degraded). Cuando está configurado,
+	// ProcessAsyncFlowRun emite señales por step completado/fallido y
+	// al finalizar el flow.
+	SignalStore *flow.SignalStore
 }
 
 // New construye un Service. El registry debe venir poblado por el
@@ -153,6 +159,42 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 			tracing.SafeAttr("flow_run.id", res.FlowRunID.String()),
 		)
 		return res, nil
+	}
+	if mode == ModeAsync {
+		if s.Repo == nil {
+			return nil, errors.New("orchestrator: Repo required for Async mode")
+		}
+		flowID, err := s.Repo.GetFlowIDBySlug(ctx, in.OrganizationID, "sdd-pipeline-v1")
+		if err != nil {
+			return nil, err
+		}
+		plan, err := modes.BuildAsyncPlan(ctx, s.Phases, phases.Input{
+			OrganizationID: in.OrganizationID,
+			UserID:         in.UserID,
+			FlowRunID:      res.FlowRunID,
+			RawText:        in.RawText,
+		}, phases.PhaseSlug(in.StartingPhase),
+			convertSkipPhases(in.SkipPhases), now)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+			return nil, err
+		}
+		if err := s.persistPlan(ctx, in, mode,
+			res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
+			return nil, err
+		}
+		result, err := s.runAsync(ctx, in, flowID, res.FlowRunID, res.OrchestratorRunID, plan)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		span.SetAttributes(
+			tracing.SafeAttr("orchestrator.run_id", result.OrchestratorRunID.String()),
+			tracing.SafeAttr("flow_run.id", result.FlowRunID.String()),
+		)
+		return result, nil
 	}
 	if mode == ModeExpress || mode == ModeFull || mode == ModeDetect {
 		// Si hay Repo configurado, resolver el flow_id ANTES de armar

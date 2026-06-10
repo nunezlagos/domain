@@ -19,7 +19,7 @@
 - [x] **svc-004**: `modes/full.go` — pipeline 10 fases con lazy-build (sólo step[0] pre-construido; RecordPhaseResult reconstruye user_prompt del próximo step con PriorOutputs acumulados) + SkipPhases + StartingPhase — 2026-06-10
 - [x] **svc-005**: Solo mode server-side — `internal/service/orchestrator/solo.go::Service.runSolo` invoca provider.Complete por fase con system+user prompt + parseJSONOutput tolerante (strips code fences) + handler.Validate + lazy build PriorOutputs. Repository.GetAgentTemplate trae model/temperature/max_tokens. ProviderForModel infiere provider desde model name. ADR-4: Solo NO admite D5 sticky required saves ni D1 confirm (CI/CD use case sin cliente IDE). Tests: 3 integration con FakeProvider canned responses por slug — 2026-06-10
 - [x] **svc-006**: Detect mode dry-run sin persistencia — BuildFullPlan hidratado pero NO se persisten flow_run/steps en BD; el caller invoca Mode=Full por separado para ejecutar — 2026-06-10
-- [ ] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail
+- [x] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail — 2026-06-10 (BuildAsyncPlan reusa BuildFullPlan; async.go::Service.runAsync + ProcessAsyncFlowRun + emitSignal con SignalStore. Tests: 10 integration con fakeProvider + SignalStore assertions, verifica signals step_completed/flow_completed/step_failed, resume cross-session, degraded sin SignalStore, invalid JSON → failure signal, non-async flow rejected)
 - [~] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6) — validate() en service.go cubre D6 + empty/mode/unknown-phase; falta DAG-check de SkipPhases
 - [x] **svc-009**: `phases/sdd_explore.go` — analiza prompt + multi-concern detection (D2) — 2026-06-10
 - [x] **svc-010**: `phases/sdd_spec.go` — produce issue.md (slug + md content) — 2026-06-10
@@ -90,7 +90,7 @@
 - [ ] **test-008**: Auto-skill threshold D3 — pendiente (depende de skill-001..003 / issue-05.4)
 - [ ] **test-009**: Cron → flow D4 — pendiente (depende de REQ-10 cron→flow infra existente, no del orquestador)
 - [x] **test-010**: suggested_saves required D5 — cubierto por `phase_result_integration_test.go::TestExpress_ApplyMissingRequiredSave_MarksStepFailed` + `metrics_test.go::TestService_RecordPhaseResult_IncrementsRequiredSaveMissingMetric` + `saves_test.go` (5 unit tests) + save-003 explícitos
-- [ ] **test-011**: Async D6 — pendiente (depende de svc-007 svc-007 + flow_signals)
+- [x] **test-011**: Async D6 — 2026-06-10 (10 integration tests: Run returns inmediatamente, Process ejecuta 10 fases + signals, LLM factory required, non-async rejected, invalid JSON → failure signal, degraded sin SignalStore, resume cross-session, StartingPhase, SkipPhases, Repo required)
 - [ ] **test-012**: Intent analysis D7 — pendiente (depende de ana-001..004)
 - [x] **test-013**: Service-layer enforcement orphan — cubierto por `internal/runner/agent/options_test.go::TestCheckOrphanPolicy` (5 cases dev/staging/prod × standalone variants) + `service_persistence_integration_test.go` valida flow_run_id en INSERT
 - [x] **test-014**: Sabotage INSERT bypass — cubierto por `tests/e2e/orphan_runs_audit_test.go::TestOrphanAudit_Sabotage_BypassDetected` (issue-08.12 cron, sab-001)

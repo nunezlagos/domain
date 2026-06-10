@@ -58,12 +58,13 @@ var validStepTypes = map[string]bool{
 
 // Step en el DAG del flow.
 type Step struct {
-	ID        string         `json:"id"`           // identificador único en el flow
-	Type      string         `json:"type"`         // ver validStepTypes
-	Config    map[string]any `json:"config"`       // params específicos por type
-	OnError   string         `json:"on_error,omitempty"` // "fail" (default) | "continue" | step_id
-	Retries   int            `json:"retries,omitempty"`
-	TimeoutS  int            `json:"timeout_s,omitempty"`
+	ID          string         `json:"id"`           // identificador único en el flow
+	Type        string         `json:"type"`         // ver validStepTypes
+	Config      map[string]any `json:"config"`       // params específicos por type
+	OnError     string         `json:"on_error,omitempty"` // "fail" (default) | "continue" | step_id
+	Retries     int            `json:"retries,omitempty"`
+	MaxBackoffS int            `json:"max_backoff_s,omitempty"` // HU-09.4 backoff cap en segundos (default 30s)
+	TimeoutS    int            `json:"timeout_s,omitempty"`
 }
 
 // Spec del flow (deserializado del JSONB).

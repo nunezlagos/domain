@@ -443,7 +443,7 @@ func runServer() {
 		Pool: pools.App, Audit: recorder, Flows: flowService,
 		Agents: agentService, Skills: skillService, Observations: obsService,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
-		Emitter: outboundEmitter,
+		Emitter: outboundEmitter, Metrics: metricsReg,
 	}
 
 	// Cron scheduler (HU-10.1): solo corre en el pod leader (HU-26.2)

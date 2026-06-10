@@ -12,7 +12,10 @@ notes: |
   - Respeta ctx cancel (timeout step.TimeoutS o shutdown global)
   - Si todos los retries fallan, aplica step.OnError (fail|continue|<step_id>)
 
+  Completado:
+  - Step.MaxBackoffS: campo en step definition (segundos, default 30s)
+  - max_backoff cap en retry loop: backoff *= 2 capped a maxBackoff (default 30s)
+  - FlowStepRetriesTotal: CounterVec (flow_slug, step_id) incrementado en cada retry
+  - metrics.FlowStepRetriesTotal registrado + wireado en flow Runner y main.go
   Pending:
-  - HU-09.4.1 max_backoff cap configurable
   - Retry por error class (transient vs non-transient)
-  - Métricas Prometheus: domain_flow_step_retries_total

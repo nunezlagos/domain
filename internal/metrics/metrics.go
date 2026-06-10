@@ -49,9 +49,10 @@ type Registry struct {
 	AgentRunDuration  *prometheus.HistogramVec
 	LLMTokensTotal    *prometheus.CounterVec
 	CostUSDTotal      *prometheus.CounterVec
-	SkillExecsTotal   *prometheus.CounterVec
-	PprofAccessTotal  prometheus.Counter
-	SlowQueriesTotal  *prometheus.CounterVec
+	SkillExecsTotal    *prometheus.CounterVec
+	FlowStepRetriesTotal *prometheus.CounterVec
+	PprofAccessTotal   prometheus.Counter
+	SlowQueriesTotal   *prometheus.CounterVec
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -142,6 +143,13 @@ func New() *Registry {
 		},
 		[]string{"skill_slug", "status"},
 	)
+	r.FlowStepRetriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_flow_step_retries_total",
+			Help: "Flow step retries por flow_slug/step_id",
+		},
+		[]string{"flow_slug", "step_id"},
+	)
 	r.PprofAccessTotal = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "domain_debug_pprof_accessed_total",
 		Help: "Total accesos a /debug/pprof/*",
@@ -222,6 +230,7 @@ func New() *Registry {
 		r.LLMTokensTotal,
 		r.CostUSDTotal,
 		r.SkillExecsTotal,
+		r.FlowStepRetriesTotal,
 		r.PprofAccessTotal,
 		r.SlowQueriesTotal,
 	)

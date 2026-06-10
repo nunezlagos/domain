@@ -33,6 +33,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/metrics"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -74,6 +75,7 @@ type Runner struct {
 	AgentRunner *agentrunner.Runner
 	SkillRunner *skillrunner.Runner
 	Emitter     EventEmitter
+	Metrics     *metrics.Registry // nil = no metrics
 }
 
 type RunInput struct {
@@ -149,9 +151,14 @@ LOOP:
 		}
 
 		// HU-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
+		// Backoff arranca en 200ms, se duplica por intento, cap en step.MaxBackoffS (default 30s).
 		var out any
 		var stepErr error
 		backoff := 200 * time.Millisecond
+		maxBackoff := 30 * time.Second
+		if step.MaxBackoffS > 0 {
+			maxBackoff = time.Duration(step.MaxBackoffS) * time.Second
+		}
 		maxAttempts := step.Retries + 1 // 0 retries = 1 attempt
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			out, stepErr = r.executeStep(ctxStep, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
@@ -159,6 +166,9 @@ LOOP:
 				break
 			}
 			if attempt < maxAttempts {
+				if r.Metrics != nil {
+					r.Metrics.FlowStepRetriesTotal.WithLabelValues(f.Slug, step.ID).Inc()
+				}
 				select {
 				case <-ctxStep.Done():
 					stepErr = ctxStep.Err()
@@ -166,6 +176,9 @@ LOOP:
 				case <-time.After(backoff):
 				}
 				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
 			}
 		}
 		if stepErr != nil {

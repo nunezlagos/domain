@@ -568,6 +568,17 @@ func runServer() {
 			}
 			go watcher.Start(leaderCtx)
 		}
+		// issue-08.12 orphan-runs-audit (cuenta agent_runs bypass del enforcement)
+		if cfg.OrphanAuditEnabled {
+			auditor := &systemcron.OrphanAuditor{
+				Pool:    pools.App,
+				Metrics: metricsReg,
+				Tick:    24 * time.Hour,
+				Batch:   1000,
+				Logger:  logger,
+			}
+			go auditor.Start(leaderCtx)
+		}
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()

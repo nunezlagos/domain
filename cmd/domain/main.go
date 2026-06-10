@@ -473,6 +473,7 @@ func runServer() {
 		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
 		go runSessionAutoClose(leaderCtx, sessionService, logger)
 		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
+		go runAuditPruneScheduler(leaderCtx, recorder, logger)
 		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
 		scheduler.Run(leaderCtx)
 	})
@@ -823,6 +824,28 @@ func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logge
 }
 
 // runSoftDeletePurge purga rows soft-deleted fuera de retention (HU-23.2).
+func runAuditPruneScheduler(ctx context.Context, recorder *audit.PGRecorder, logger *slog.Logger) {
+	retention := 90 * 24 * time.Hour
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-retention)
+			n, err := recorder.Prune(ctx, cutoff)
+			if err != nil {
+				logger.Warn("audit prune failed", slog.String("error", err.Error()))
+				continue
+			}
+			if n > 0 {
+				logger.Info("pruned old audit logs", slog.Int64("count", n))
+			}
+		}
+	}
+}
+
 func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slog.Logger) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()

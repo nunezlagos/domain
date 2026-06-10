@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -11,5 +11,8 @@ notes: |
   Inmutabilidad enforced por DB grants (HU-25.6) + futuro pgaudit (HU-25.7).
   AuditMiddleware HTTP inyecta IP/UA/RequestID en context para PGRecorder.
   CLI: domain audit prune con --retention (default 90d) y --dry-run.
-  Pending: middleware HTTP audit-on-mutation (auto-record en mutaciones HTTP),
-  retention purge cron 90d automático en scheduler leader.
+  Retention purge cron: runAuditPruneScheduler ejecuta Prune cada 24h
+  desde el leader scheduler (retention 90d).
+  Auto-record en mutaciones HTTP: cubierto por service-layer Recording
+  en cada servicio (s.Audit.Record) — 73+ call sites en toda la codebase.
+  Middleware HTTP específico sería redundante.

@@ -29,10 +29,44 @@ var ErrFlowNotSeeded = errors.New("orchestrator: flow sdd-pipeline-v1 not seeded
 //     persistible (audit + heartbeat-watcher + orphan-runs-audit lo
 //     consultan vía flow_runs.metadata.orchestrator_run_id)
 //   - crear los flow_run_steps en pending, uno por PhaseStep del Plan
+//   - leer/actualizar steps cuando el cliente IDE reporta phase_result
+//     vía MCP (mcp-002)
+//   - leer flow_run + steps para responder a domain_flow_status (mcp-004)
 type Repository interface {
 	GetFlowIDBySlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error)
 	CreateFlowRun(ctx context.Context, in FlowRunInsert) error
 	CreateFlowRunStep(ctx context.Context, in FlowRunStepInsert) error
+	GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRow, error)
+	GetFlowRunStep(ctx context.Context, id uuid.UUID) (*FlowRunStepRow, error)
+	ListFlowRunSteps(ctx context.Context, flowRunID uuid.UUID) ([]FlowRunStepRow, error)
+	MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error
+	MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error
+	UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error
+}
+
+// FlowRunRow es la vista de lectura completa de un flow_run.
+type FlowRunRow struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	FlowID         uuid.UUID
+	Status         string
+	Cursor         map[string]any
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
+}
+
+// FlowRunStepRow es la vista de lectura de un flow_run_step.
+type FlowRunStepRow struct {
+	ID         uuid.UUID
+	FlowRunID  uuid.UUID
+	StepKey    string
+	Status     string
+	Inputs     map[string]any
+	Outputs    map[string]any
+	Error      string
+	Attempt    int
+	StartedAt  *time.Time
+	CompletedAt *time.Time
 }
 
 // FlowRunInsert es el shape que el repo persiste. El service compone
@@ -106,6 +140,166 @@ func (r *pgRepository) CreateFlowRun(ctx context.Context, in FlowRunInsert) erro
 		in.Status, inputsJSON, metadataJSON, in.StartedAt)
 	if err != nil {
 		return fmt.Errorf("insert flow_run: %w", err)
+	}
+	return nil
+}
+
+func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRow, error) {
+	var (
+		row        FlowRunRow
+		cursorRaw  []byte
+		startedAt  *time.Time
+		finishedAt *time.Time
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, organization_id, flow_id, status, cursor, started_at, finished_at
+		FROM flow_runs WHERE id = $1`, id,
+	).Scan(&row.ID, &row.OrganizationID, &row.FlowID, &row.Status,
+		&cursorRaw, &startedAt, &finishedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrFlowRunNotFound
+		}
+		return nil, fmt.Errorf("get flow_run: %w", err)
+	}
+	row.StartedAt = startedAt
+	row.FinishedAt = finishedAt
+	if len(cursorRaw) > 0 {
+		_ = json.Unmarshal(cursorRaw, &row.Cursor)
+	}
+	return &row, nil
+}
+
+func (r *pgRepository) GetFlowRunStep(ctx context.Context, id uuid.UUID) (*FlowRunStepRow, error) {
+	var (
+		row         FlowRunStepRow
+		inputsRaw   []byte
+		outputsRaw  []byte
+		errorStr    *string
+		startedAt   *time.Time
+		completedAt *time.Time
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, flow_run_id, step_key, status, inputs, outputs, error,
+		       attempt, started_at, completed_at
+		FROM flow_run_steps WHERE id = $1`, id,
+	).Scan(&row.ID, &row.FlowRunID, &row.StepKey, &row.Status,
+		&inputsRaw, &outputsRaw, &errorStr, &row.Attempt,
+		&startedAt, &completedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrFlowRunStepNotFound
+		}
+		return nil, fmt.Errorf("get flow_run_step: %w", err)
+	}
+	if len(inputsRaw) > 0 {
+		_ = json.Unmarshal(inputsRaw, &row.Inputs)
+	}
+	if len(outputsRaw) > 0 {
+		_ = json.Unmarshal(outputsRaw, &row.Outputs)
+	}
+	if errorStr != nil {
+		row.Error = *errorStr
+	}
+	row.StartedAt = startedAt
+	row.CompletedAt = completedAt
+	return &row, nil
+}
+
+func (r *pgRepository) ListFlowRunSteps(ctx context.Context, flowRunID uuid.UUID) ([]FlowRunStepRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, flow_run_id, step_key, status, inputs, outputs, error,
+		       attempt, started_at, completed_at
+		FROM flow_run_steps
+		WHERE flow_run_id = $1
+		ORDER BY created_at`, flowRunID)
+	if err != nil {
+		return nil, fmt.Errorf("list flow_run_steps: %w", err)
+	}
+	defer rows.Close()
+	var out []FlowRunStepRow
+	for rows.Next() {
+		var (
+			row         FlowRunStepRow
+			inputsRaw   []byte
+			outputsRaw  []byte
+			errorStr    *string
+			startedAt   *time.Time
+			completedAt *time.Time
+		)
+		if err := rows.Scan(&row.ID, &row.FlowRunID, &row.StepKey, &row.Status,
+			&inputsRaw, &outputsRaw, &errorStr, &row.Attempt,
+			&startedAt, &completedAt); err != nil {
+			return nil, fmt.Errorf("scan step: %w", err)
+		}
+		if len(inputsRaw) > 0 {
+			_ = json.Unmarshal(inputsRaw, &row.Inputs)
+		}
+		if len(outputsRaw) > 0 {
+			_ = json.Unmarshal(outputsRaw, &row.Outputs)
+		}
+		if errorStr != nil {
+			row.Error = *errorStr
+		}
+		row.StartedAt = startedAt
+		row.CompletedAt = completedAt
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (r *pgRepository) MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error {
+	outputsJSON, err := json.Marshal(outputs)
+	if err != nil {
+		return fmt.Errorf("marshal outputs: %w", err)
+	}
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps
+		SET status = 'completed',
+		    outputs = $2,
+		    completed_at = NOW()
+		WHERE id = $1
+		  AND status IN ('pending','running')`,
+		stepID, outputsJSON)
+	if err != nil {
+		return fmt.Errorf("update step completed: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrFlowRunStepNotPending
+	}
+	return nil
+}
+
+func (r *pgRepository) MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps
+		SET status = 'failed',
+		    error = $2,
+		    completed_at = NOW()
+		WHERE id = $1
+		  AND status IN ('pending','running')`,
+		stepID, errorMsg)
+	if err != nil {
+		return fmt.Errorf("update step failed: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrFlowRunStepNotPending
+	}
+	return nil
+}
+
+func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error {
+	finishedAtClause := ""
+	if status == "completed" || status == "failed" || status == "cancelled" {
+		finishedAtClause = ", finished_at = NOW()"
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE flow_runs
+		SET status = $2`+finishedAtClause+`
+		WHERE id = $1`,
+		flowRunID, status)
+	if err != nil {
+		return fmt.Errorf("update flow_run status: %w", err)
 	}
 	return nil
 }

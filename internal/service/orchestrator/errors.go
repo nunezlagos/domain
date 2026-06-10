@@ -27,4 +27,15 @@ var (
 	// ErrUnknownPhase StartingPhase o SkipPhases referencia una fase no
 	// registrada en phases.Registry.
 	ErrUnknownPhase = errors.New("unknown phase slug")
+
+	// ErrFlowRunNotFound lookup de un flow_run_id que no existe.
+	ErrFlowRunNotFound = errors.New("flow_run not found")
+
+	// ErrFlowRunStepNotFound lookup de step_id que no existe.
+	ErrFlowRunStepNotFound = errors.New("flow_run_step not found")
+
+	// ErrFlowRunStepNotPending el step ya está en estado terminal
+	// (completed/failed/skipped/cancelled) — no se puede re-marcar.
+	// El cliente debe verificar el estado antes de reportar phase_result.
+	ErrFlowRunStepNotPending = errors.New("flow_run_step is not in pending/running state")
 )

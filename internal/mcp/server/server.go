@@ -37,6 +37,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
+	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	prouter "nunezlagos/domain/internal/service/promptrouter"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
@@ -58,6 +59,7 @@ type Deps struct {
 	AgentRunner  *agentrunner.Runner
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
+	Orchestrator *orchsvc.Service // issue-08.10 sdd-pipeline-orchestrator
 	Hubuilder    *husvc.Service // issue-04.7 interactive HU wizard
 	Intake       *intakesvc.Service // issue-04.8 intake pipeline
 	ExtSync      *syncsvc.Service   // issue-04.9 external provider sync
@@ -127,6 +129,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)
 	tools = append(tools, registerPromptTools(wrap, deps)...)
+	tools = append(tools, registerOrchestrateTools(wrap, deps)...)
 	return tools
 }
 

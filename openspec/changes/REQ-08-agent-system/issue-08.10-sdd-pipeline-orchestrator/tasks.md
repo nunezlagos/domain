@@ -60,11 +60,11 @@
 
 ## MCP tools nuevos
 
-- [ ] **mcp-001**: `internal/mcp/tools/orchestrate.go::domain_orchestrate` (raw_text, mode?, starting_phase?, skip_phases?)
-- [ ] **mcp-002**: `domain_orchestrate_phase_result` (flow_run_step_id, output, memory_refs_saved)
+- [x] **mcp-001**: `internal/mcp/server/orchestrate_tools.go::domain_orchestrate` — 2026-06-10 (con raw_text + mode + starting_phase + skip_phases + express_max_lines)
+- [x] **mcp-002**: `domain_orchestrate_phase_result` — 2026-06-10 (valida D5 + handler.Validate; devuelve step status + next step prompt; propaga flow_run status agregado)
 - [ ] **mcp-003**: `domain_orchestrate_confirm` (flow_run_id, confirmed bool) — para D1 confirm condicional
-- [ ] **mcp-004**: `domain_flow_status` (flow_run_id? optional) — list flows activos del user
-- [ ] **mcp-005**: Wire-up en `cmd/domain-mcp/main.go` y `cmd/domain/main.go::runServer`
+- [x] **mcp-004**: `domain_flow_status` — 2026-06-10 (lee flow_run + steps con outputs/error/preview)
+- [~] **mcp-005**: Wire-up — `Deps.Orchestrator` + `registerOrchestrateTools` listos en server.go; falta inyectar el Service en `cmd/domain-mcp/main.go` y `cmd/domain/main.go::runServer`
 - [ ] **mcp-006**: PromptRouter integration — feat/fix/refactor/hotfix/rfc/doc invokan orchestratorSvc.Run() (NO chat, NO idea, NO analysis)
 
 ## CLI

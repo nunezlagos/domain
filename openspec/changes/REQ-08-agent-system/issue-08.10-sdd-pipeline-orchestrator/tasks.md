@@ -18,7 +18,7 @@
 - [x] **svc-003**: `modes/express.go` — sub-S fast path (sdd-apply + sdd-verify only) — 2026-06-10 (con persistencia flow_runs + flow_run_steps via Repository pattern)
 - [x] **svc-004**: `modes/full.go` — pipeline 10 fases con lazy-build (sólo step[0] pre-construido; RecordPhaseResult reconstruye user_prompt del próximo step con PriorOutputs acumulados) + SkipPhases + StartingPhase — 2026-06-10
 - [ ] **svc-005**: `modes/solo.go` — inline execution server-side con LLM provider directo
-- [ ] **svc-006**: `modes/detect.go` — dry_run=true, persiste a `*.status='draft'`
+- [x] **svc-006**: Detect mode dry-run sin persistencia — BuildFullPlan hidratado pero NO se persisten flow_run/steps en BD; el caller invoca Mode=Full por separado para ejecutar — 2026-06-10
 - [ ] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail
 - [~] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6) — validate() en service.go cubre D6 + empty/mode/unknown-phase; falta DAG-check de SkipPhases
 - [x] **svc-009**: `phases/sdd_explore.go` — analiza prompt + multi-concern detection (D2) — 2026-06-10
@@ -53,8 +53,8 @@
 
 ## Métricas + observabilidad
 
-- [ ] **obs-001**: `internal/metrics/orchestrator.go` — phase_duration_seconds histogram + runs_total counter
-- [ ] **obs-002**: `internal/metrics/agent.go` — agent_runs_orphan_total counter (org_id, reason)
+- [x] **obs-001**: métricas orquestador en internal/metrics — domain_orchestrator_runs_total{mode,status}, _phase_duration_seconds histogram, _phase_results_total{phase,mode,result}, _confirms_total{confirmed}, _required_save_missing_total{phase,save_type} — 2026-06-10 (Service.Metrics opcional)
+- [x] **obs-002**: `domain_agent_runs_orphan_total` ya implementado en chunk foundation (28fddeb) + issue-08.12 cron — 2026-06-10
 - [ ] **obs-003**: OTel span por fase, attribute `flow_run_step.id` (vía SafeAttrs de issue-17.2)
 - [ ] **obs-004**: `deploy/prometheus/alerts/orchestrator.yml` — alerts orphan_runs > 0 por 5min
 
@@ -62,14 +62,14 @@
 
 - [x] **mcp-001**: `internal/mcp/server/orchestrate_tools.go::domain_orchestrate` — 2026-06-10 (con raw_text + mode + starting_phase + skip_phases + express_max_lines)
 - [x] **mcp-002**: `domain_orchestrate_phase_result` — 2026-06-10 (valida D5 + handler.Validate; devuelve step status + next step prompt; propaga flow_run status agregado)
-- [ ] **mcp-003**: `domain_orchestrate_confirm` (flow_run_id, confirmed bool) — para D1 confirm condicional
+- [x] **mcp-003**: `domain_orchestrate_confirm` (flow_run_id, confirmed) — D1 confirm condicional Express: si apply reporta files>1 OR lines>ExpressMaxLines, verify queda blocked hasta confirm — 2026-06-10
 - [x] **mcp-004**: `domain_flow_status` — 2026-06-10 (lee flow_run + steps con outputs/error/preview)
 - [x] **mcp-005**: Wire-up completo — `cmd/domain-mcp/main.go` construye `phases.Registry` + `orchestrator.New(pool, recorder, registry, cfg.Env)` y inyecta a `Deps.Orchestrator`. `agentRunnerInst.Env = cfg.Env` también wireado (enforcement orphan-runs activo en prod). `cmd/domain` no construye MCP (no aplica). — 2026-06-10
-- [ ] **mcp-006**: PromptRouter integration — feat/fix/refactor/hotfix/rfc/doc invokan orchestratorSvc.Run() (NO chat, NO idea, NO analysis)
+- [x] **mcp-006**: PromptRouter integration — Router.Orchestrator opcional; cuando inyectado, feat/refactor/doc/rfc → Full, fix/hotfix → Express. chat/idea bypass. Outcome=OutcomeOrchestratorStarted con FlowRunID + SnapshotPrompt — 2026-06-10
 
 ## CLI
 
-- [ ] **cli-001**: `cmd/domain/workflow_resume.go` — `domain workflow resume <flow_run_id>` que devuelve last snapshot + next prompt
+- [x] **cli-001**: `domain workflow resume <flow_run_id>` — devuelve flow status + tabla de steps + preview prompt del próximo pending — 2026-06-10 (cmd/domain/init_cli.go::runWorkflowResume)
 
 ## Intent analysis (D7)
 

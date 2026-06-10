@@ -7,66 +7,99 @@ soft_dependency:
   - issue-12.6-mcp-tool-resilience-cb-lru-enhancement
 rfc: docs/rfc/0006-sdd-pipeline-orchestrator.md
 progress: |
-  Foundation commit completado en 2026-06-10:
-  - Migration 000075_agent_templates_role_seed_managed (role + seed_managed +
-    is_user_modified + seed_version + UNIQUE INDEX parcial role='orchestrator')
-  - Seeder v3 con 1 sdd-orchestrator + 10 phase-workers (sdd-explore/spec/
-    propose/design/tasks/apply/verify/judge/archive/onboard)
-  - Cleanup defensivo: borra seed_managed=true que no esté en catálogo actual
-    Y sin agent_runs running (respeta is_user_modified=true)
-  - Report.Deleted nuevo en internal/seeds/seeds.go
-  - Runner.agent marca metadata.standalone=true en direct_invocation
-    (preserva compatibilidad con cron orphan-audit issue-08.12)
-  - Tests: 5 integration verdes (SeederV3 inserts, UniqueOrchestrator,
-    Idempotent xmax, CleanupRemovesLegacy, CleanupPreservesUserModified)
-  - Bloqueantes 08.11 + 08.12 implementados y mergeados
+  Resumen del trabajo realizado el 2026-06-10 (11 commits en main local).
 
-  Skeleton commit completado en 2026-06-10 (chunk 2):
-  - Runner: RunOption variadic (WithStandalone, WithFlowRun, WithFlowRunStep)
-    + buildRunMetadata centralizado + Runner.Env + checkOrphanPolicy
-  - INSERT agent_runs ahora persiste flow_run_id explícito + metadata
-    derivada de options (vs hardcoded standalone:true)
-  - ErrOrphanRunNotAllowed activo: prod sin flow_run_id + standalone=false
-    se bloquea proactivo (complementa cron orphan-audit issue-08.12)
-  - internal/service/orchestrator/ skeleton:
-    * types.go (Mode, PhaseSlug, OrchestrateInput, OrchestrateResult)
-    * errors.go (ErrAsyncModeUnsupported D6, ErrRequiredSaveMissing D5,
-      ErrInvalidMode, ErrEmptyRawText, ErrUnknownPhase)
-    * service.go (Service.Run con validate(): empty, mode válido, D6,
-      fases registradas)
-    * phases/registry.go (Handler interface + Registry concurrent-safe
-      + SuggestedSave + RetryPolicy + MemoryRef + Input/Output/ClientResult)
-  - Tests: 21 unit verdes nuevos. Repo 536 tests verdes, cero regresiones.
+  ===== FASE 1: Foundation (commit 28fddeb pre-sesión) =====
+  - Migration 000075_agent_templates_role_seed_managed
+  - Catálogo v3 agent_templates (1 sdd-orchestrator + 10 phase-workers)
+  - Runner.agent.metadata.standalone='true' en direct_invocation
+  - Tests: 5 integration verdes
 
-  Slice Express end-to-end completado en 2026-06-10 (chunk 3):
-  - svc-014 phases/sdd_apply.go: code_reference required D5 + RetryCleanup
-    + multi_concern detection + blocked-by-client signal
-  - svc-015 phases/sdd_verify.go: Gherkin verifier tolerante (Build sin
-    apply previo) + RetryReemit + scenarios_failed/blockers wiring
-  - svc-003 modes/express.go: BuildExpressPlan dispatcher in-memory
-    (sdd-apply → sdd-verify) sin persistencia flow_runs todavía
-  - save-001/002 orchestrator/saves.go: ValidateRequiredSaves + tipo
-    RequiredSaveError con Unwrap a ErrRequiredSaveMissing
-  - Service.Run cuando Mode=Express delega a modes.BuildExpressPlan y
-    exporta PhasePlanSummary/PhaseStepSummary/SuggestedSaveSummary para
-    desacoplar el subpaquete modes/ del API público
-  - Clock inyectable (Clock interface + systemClock + override per test)
-  - sab-003 sabotaje verde: apply sin code_reference → ErrRequiredSaveMissing
-  - Tests: 38 unit verdes en los 3 paquetes orchestrator + repo total
-    564 verdes con -short (+28 vs chunk anterior), cero regresiones
+  ===== FASE 2: Skeleton (16958b1 + f8cdb5f) =====
+  - Runner: RunOption variadic + Env + checkOrphanPolicy + ErrOrphanRunNotAllowed
+  - internal/service/orchestrator skeleton: types + errors + service + phases.Registry
+  - Tests: 21 unit nuevos
 
-  PENDING (chunks futuros):
-  - svc-004..007: modes/{full,solo,detect,async}
-  - svc-008: validator.go con DAG-check de SkipPhases
-  - svc-009/010/011/012/013/016/017/018: 8 handlers de fase restantes
-  - seed-003: flows_catalog.go con flow:sdd-pipeline-v1 DAG
-  - save-001..003: SuggestedSave validation post-phase (D5 enforcement)
-  - skill-001..003: integración auto-skill (D3 threshold)
-  - mcp-001..006: 4 MCP tools nuevos + wire-up + PromptRouter integration
-  - cli-001: domain workflow resume <flow_run_id>
-  - ana-001..004: Intent analysis mini-pipeline
-  - obs-001..004: métricas + OTel spans + alerts
-  - test-001..015: 15 escenarios E2E del issue.md
-  - sab-001..003: 3 sabotajes
-  - doc-001..004: docs/agents + docs/flows + GETTING_STARTED + CHANGELOG
-  - state-001..003: implemented + RFC + req.md updates
+  ===== FASE 3: Slice Express (44db842) =====
+  - sdd_apply + sdd_verify handlers
+  - modes/express.go (BuildExpressPlan in-memory)
+  - saves.go ValidateRequiredSaves D5
+  - sab-003 verde
+  - Service.Clock inyectable
+  - Tests: +17 unit (38 total orquestador)
+
+  ===== FASE 4: Persistencia + MCP tools (a4ab297 + d731355 + 72c616b) =====
+  - seed-003 internal/seeds/flows_catalog.go (flow:sdd-pipeline-v1)
+  - Repository pgx (CRUD flow_runs + flow_run_steps + agent_templates lookup)
+  - 3 MCP tools: domain_orchestrate, _phase_result, _flow_status
+  - Service.RecordPhaseResult + Service.GetFlowStatus
+  - D5 enforcement bloqueante a nivel BD (sticky failure)
+  - Tests: +8 unit + 13 integration
+
+  ===== FASE 5: wire-up MCP (44567e2) =====
+  - cmd/domain-mcp boot construye Registry + Service + inyecta a Deps.Orchestrator
+  - agentRunnerInst.Env = cfg.Env (enforcement orphan-runs activo en prod)
+  - Tests: +2 integration MCP
+
+  ===== FASE 6: 8 handlers + BD source-of-truth (24bb359) =====
+  - 8 phase handlers nuevos: explore, spec, propose, design, tasks,
+    judge, archive, onboard (Handler iface + D5 contracts)
+  - system_prompts movidos a BD (agent_templates.system_prompt);
+    Service.hydrateSystemPrompts lookup por slug
+  - Lenguaje: español neutro project-wide (no rioplatense)
+  - Tests: +51 unit por handler
+
+  ===== FASE 7: Full mode (384eb12) =====
+  - modes/full.go BuildFullPlan con lazy-build
+  - SkipPhases + StartingPhase support
+  - Service.rebuildNextStepPrompt para construir prompts on-demand con
+    PriorOutputs acumulados de los steps completados
+  - Repository.UpdateStepInputs
+  - persistPlan replica raw_text en cada step.inputs
+  - Tests: +5 integration Full (incluye 10 fases end-to-end)
+
+  ===== FASE 8: Detect + PromptRouter + D1 (73b9ecd) =====
+  - svc-006 Detect mode (dry-run sin persistencia)
+  - mcp-006 PromptRouter.Orchestrator opcional: feat/refactor/doc/rfc → Full,
+    fix/hotfix → Express; chat/idea bypass
+  - mcp-003 D1 confirm condicional Express: files>1 OR lines>ExpressMaxLines
+    → verify status=blocked + RequiresConfirm=true
+  - Service.ConfirmContinue + Repository.MarkStepBlocked + MarkStepPending
+  - Tool MCP nuevo domain_orchestrate_confirm
+  - Tests: +10 integration (2 Detect + 4 Router + 4 D1)
+
+  ===== FASE 9: CLI + métricas (este chunk) =====
+  - cli-001 domain workflow resume <flow_run_id>: status + tabla steps +
+    preview prompt del próximo pending
+  - obs-001 métricas Prometheus:
+    domain_orchestrator_runs_total{mode,status}
+    domain_orchestrator_phase_duration_seconds histogram{phase,mode}
+    domain_orchestrator_phase_results_total{phase,mode,result}
+    domain_orchestrator_confirms_total{confirmed}
+    domain_orchestrator_required_save_missing_total{phase,save_type}
+  - Service.Metrics opcional; instrumentado en Run/RecordPhaseResult/ConfirmContinue
+  - Tests: +3 unit (fakeRepo + testutil.ToFloat64)
+
+  ===== ESTADO ACTUAL =====
+  Tareas issue-08.10: 32 [x] + 2 [~] + 39 [ ]
+  Tests: 633 verdes -short, ~28 integration verdes, cero regresiones acumuladas
+  Modos vivos end-to-end: Express, Full, Detect (3/5)
+  MCP tools: 4 (orchestrate, phase_result, confirm, flow_status) wireados al boot
+  CLI: domain workflow resume funcional
+
+  ===== PENDING REMAINING =====
+  - svc-005 Solo mode (server-side LLM provider, M)
+  - svc-007 Async mode (flow_signals + worker tail, depende issue-09 L)
+  - svc-008 validator.go DAG-check (parcial — empty/mode/unknown ya cubren mucho)
+  - skill-001..003 auto-skill D3 (consume issue-05.4)
+  - ana-001..004 intent analysis D7 (mini-pipeline 2 fases)
+  - obs-003 OTel spans + obs-004 alerts orchestrator.yml
+  - test-001..015 (14 restantes: re-cataloging, UNIQUE, multi-concern,
+    state-vs-exec, resume cross-session, dual-output, auto-skill,
+    cron→flow, suggested_saves D5, async D6, intent analysis D7,
+    orphan enforce, INSERT bypass, recovery snapshot)
+  - sab-001 INSERT directo bypass cron audit + sab-002 UNIQUE 2 orchestrators
+  - doc-001..004 (docs/agents/sdd-pipeline.md, docs/flows/09-orchestrator.md,
+    GETTING_STARTED, CHANGELOG)
+  - save-003 tests por fase (parcial: apply/verify cubiertos, falta design/judge)
+  - state-001..003 cierre formal a implemented + RFC + req.md

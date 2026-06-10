@@ -60,6 +60,12 @@ type Registry struct {
 	// issue-08.12 orphan-runs-audit
 	AgentRunsOrphanTotal *prometheus.CounterVec // labels: org_id, reason
 	OrphanAuditTicksTotal *prometheus.CounterVec // labels: result
+	// issue-08.10 sdd-pipeline-orchestrator
+	OrchestratorRunsTotal       *prometheus.CounterVec   // labels: mode, status
+	OrchestratorPhaseDuration   *prometheus.HistogramVec // labels: phase, mode
+	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed)
+	OrchestratorConfirmsTotal   *prometheus.CounterVec   // labels: confirmed (true|false)
+	OrchestratorRequiredSaveMissingTotal *prometheus.CounterVec // labels: phase, save_type
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -197,6 +203,44 @@ func New() *Registry {
 		[]string{"threshold_ms"},
 	)
 
+	// issue-08.10 orchestrator
+	r.OrchestratorRunsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orchestrator_runs_total",
+			Help: "Runs del orquestador SDD iniciados, por mode y status terminal",
+		},
+		[]string{"mode", "status"},
+	)
+	r.OrchestratorPhaseDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "domain_orchestrator_phase_duration_seconds",
+			Help:    "Duración (s) reportada por el cliente para cada fase SDD",
+			Buckets: []float64{0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600},
+		},
+		[]string{"phase", "mode"},
+	)
+	r.OrchestratorPhaseResultsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orchestrator_phase_results_total",
+			Help: "Resultados de fase reportados (completed o failed)",
+		},
+		[]string{"phase", "mode", "result"},
+	)
+	r.OrchestratorConfirmsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orchestrator_confirms_total",
+			Help: "Eventos de domain_orchestrate_confirm (D1) — accepted o rejected",
+		},
+		[]string{"confirmed"},
+	)
+	r.OrchestratorRequiredSaveMissingTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orchestrator_required_save_missing_total",
+			Help: "Veces que un cliente reportó phase_result sin un suggested_save Required (D5)",
+		},
+		[]string{"phase", "save_type"},
+	)
+
 	// issue-25.9 read-replicas
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
@@ -272,6 +316,11 @@ func New() *Registry {
 		r.HeartbeatWatcherTicksTotal,
 		r.AgentRunsOrphanTotal,
 		r.OrphanAuditTicksTotal,
+		r.OrchestratorRunsTotal,
+		r.OrchestratorPhaseDuration,
+		r.OrchestratorPhaseResultsTotal,
+		r.OrchestratorConfirmsTotal,
+		r.OrchestratorRequiredSaveMissingTotal,
 	)
 	return r
 }

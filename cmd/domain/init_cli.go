@@ -1,4 +1,4 @@
-// Subcomandos `domain init` y `domain workflow` (issue-12.7).
+// Subcomandos `domain init` y `domain workflow` (issue-12.7 + issue-08.10).
 //
 //   domain init [--root <path>] [--dry-run] [--no-stub]
 //     Detecta archivos .md de instrucciones IA en el repo + los archiva
@@ -9,6 +9,11 @@
 //
 //   domain workflow restore <rel-path> [--root <path>]
 //     Reescribe el archivo .md original desde el backup en BD.
+//
+//   domain workflow resume <flow_run_id>   (issue-08.10 cli-001)
+//     Devuelve el snapshot del flow_run del orquestador SDD: status del
+//     run, lista de steps con su estado, y el prompt del próximo step
+//     pending (si existe). Útil para reanudar cross-session.
 
 package main
 
@@ -19,9 +24,12 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/config"
+	"nunezlagos/domain/internal/service/orchestrator"
+	"nunezlagos/domain/internal/service/orchestrator/phases"
 	"nunezlagos/domain/internal/service/workflowimport"
 )
 
@@ -163,11 +171,12 @@ func runInitDryRun(root string) {
 
 func runWorkflow(args []string) {
 	if len(args) == 0 {
-		fmt.Println(`domain workflow — gestión de archivos .md importados (issue-12.7)
+		fmt.Println(`domain workflow — gestión de archivos .md importados y flow_runs del orquestador
 
 Uso:
   domain workflow list [--root <path>]
-  domain workflow restore <rel-path> [--root <path>]`)
+  domain workflow restore <rel-path> [--root <path>]
+  domain workflow resume <flow_run_id>`)
 		return
 	}
 	switch args[0] {
@@ -175,6 +184,8 @@ Uso:
 		runWorkflowList(args[1:])
 	case "restore":
 		runWorkflowRestore(args[1:])
+	case "resume":
+		runWorkflowResume(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "subcomando workflow desconocido: %s\n", args[0])
 		os.Exit(2)
@@ -257,6 +268,104 @@ func runWorkflowRestore(args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("✓ Restaurado %s desde backup en BD\n", relPath)
+}
+
+// runWorkflowResume — issue-08.10 cli-001.
+//
+// `domain workflow resume <flow_run_id>` lee el estado del flow del
+// orquestador SDD y muestra:
+//   - Status del flow_run (pending/running/completed/failed/etc.)
+//   - Mode (express/full/detect)
+//   - Tabla con cada step: slug, status, error si aplica
+//   - Prompt del próximo step pending (para que el operador lo copie y
+//     reanude la conversación con el agente IDE)
+//
+// Útil cuando una sesión se cortó: el orquestador persiste todo en BD,
+// así que el operador puede consultar fuera de banda con el CLI y
+// continuar desde donde quedó.
+func runWorkflowResume(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "uso: domain workflow resume <flow_run_id>")
+		os.Exit(2)
+	}
+	flowRunID, err := uuid.Parse(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "flow_run_id inválido: %v\n", err)
+		os.Exit(2)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "db open: %v\n", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	// Registry con todos los handlers para que GetFlowStatus pueda
+	// resolver previews. El CLI no ejecuta fases — sólo lee estado —
+	// pero el service requiere el registry para no panic en lookup.
+	reg := phases.NewRegistry()
+	reg.MustRegister(phases.NewSDDExploreHandler())
+	reg.MustRegister(phases.NewSDDSpecHandler())
+	reg.MustRegister(phases.NewSDDProposeHandler())
+	reg.MustRegister(phases.NewSDDDesignHandler())
+	reg.MustRegister(phases.NewSDDTasksHandler())
+	reg.MustRegister(phases.NewSDDApplyHandler())
+	reg.MustRegister(phases.NewSDDVerifyHandler())
+	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDDArchiveHandler())
+	reg.MustRegister(phases.NewSDDOnboardHandler())
+
+	svc := orchestrator.New(pool, nil, reg, cfg.Env)
+	status, err := svc.GetFlowStatus(ctx, flowRunID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "flow_status: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("flow_run: %s\n", status.FlowRunID)
+	if status.OrchestratorRunID != "" {
+		fmt.Printf("orchestrator_run_id: %s\n", status.OrchestratorRunID)
+	}
+	if status.Mode != "" {
+		fmt.Printf("mode: %s\n", status.Mode)
+	}
+	fmt.Printf("status: %s\n\n", status.Status)
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "#\tSTEP\tSTATUS\tERROR")
+	var nextPending *orchestrator.FlowStepStatus
+	for i, st := range status.Steps {
+		errCol := st.Error
+		if errCol == "" {
+			errCol = "-"
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", i+1, st.StepKey, st.Status, errCol)
+		if nextPending == nil && (st.Status == "pending" || st.Status == "blocked") {
+			s := st
+			nextPending = &s
+		}
+	}
+	w.Flush()
+
+	if nextPending != nil {
+		fmt.Printf("\npróximo step: %s (id=%s, status=%s)\n",
+			nextPending.StepKey, nextPending.StepID, nextPending.Status)
+		if nextPending.UserPromptPreview != "" {
+			fmt.Println("\n=== prompt preview (truncado) ===")
+			fmt.Println(nextPending.UserPromptPreview)
+		}
+	} else if status.Status == "completed" {
+		fmt.Println("\n✓ flow completado")
+	} else if status.Status == "failed" {
+		fmt.Println("\n✗ flow falló — revisar errores arriba")
+	}
 }
 
 // dummy helper para evitar warnings de imports no usados si runInit no se

@@ -80,6 +80,20 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		// quedó marcado failed (D5 es bloqueante por diseño).
 		_ = s.Repo.MarkStepFailed(ctx, step.ID, err.Error())
 		_ = s.propagateFlowStatusAfterFailure(ctx, flowRun.ID)
+		// Métricas D5: rastrear qué fases más se quedan sin guardar
+		// requireds (señal de UX problem en el cliente IDE).
+		if s.Metrics != nil {
+			var rse *RequiredSaveError
+			if errors.As(err, &rse) {
+				for _, m := range rse.Missing {
+					s.Metrics.OrchestratorRequiredSaveMissingTotal.
+						WithLabelValues(string(phaseSlug), m.Type).Inc()
+				}
+			}
+			modeStr, _ := step.Inputs["mode"].(string)
+			s.Metrics.OrchestratorPhaseResultsTotal.
+				WithLabelValues(string(phaseSlug), modeStr, "failed").Inc()
+		}
 		return nil, err
 	}
 
@@ -102,6 +116,17 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	if err := s.Repo.MarkStepCompleted(ctx, step.ID, in.Output); err != nil {
 		return nil, fmt.Errorf("mark completed: %w", err)
 	}
+	// Métricas: phase completada + duración reportada por cliente.
+	if s.Metrics != nil {
+		modeStr, _ := step.Inputs["mode"].(string)
+		s.Metrics.OrchestratorPhaseResultsTotal.
+			WithLabelValues(string(phaseSlug), modeStr, "completed").Inc()
+		if in.DurationMS > 0 {
+			s.Metrics.OrchestratorPhaseDuration.
+				WithLabelValues(string(phaseSlug), modeStr).
+				Observe(float64(in.DurationMS) / 1000.0)
+		}
+	}
 
 	// Calcular status agregado del flow_run + next step si hay
 	steps, err := s.Repo.ListFlowRunSteps(ctx, flowRun.ID)
@@ -117,6 +142,12 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	if out.FlowRunStatus != flowRun.Status {
 		if err := s.Repo.UpdateFlowRunStatus(ctx, flowRun.ID, out.FlowRunStatus); err != nil {
 			return nil, fmt.Errorf("update flow_run status: %w", err)
+		}
+		// Si el flow alcanzó estado terminal (completed/failed) incrementamos
+		// runs_total con ese status para distinguir del started inicial.
+		if s.Metrics != nil && (out.FlowRunStatus == "completed" || out.FlowRunStatus == "failed") {
+			modeStr, _ := step.Inputs["mode"].(string)
+			s.Metrics.OrchestratorRunsTotal.WithLabelValues(modeStr, out.FlowRunStatus).Inc()
 		}
 	}
 	// Next step prompt: para Full mode (lazy build) reconstruimos el
@@ -218,6 +249,9 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 			return nil, fmt.Errorf("mark step failed: %w", err)
 		}
 		_ = s.propagateFlowStatusAfterFailure(ctx, flowRunID)
+		if s.Metrics != nil {
+			s.Metrics.OrchestratorConfirmsTotal.WithLabelValues("false").Inc()
+		}
 		return &PhaseResultResult{
 			StepID:        blocked.ID,
 			StepStatus:    "failed",
@@ -227,6 +261,9 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 	// Confirmado: desbloquear y devolver el prompt cacheado.
 	if err := s.Repo.MarkStepPending(ctx, blocked.ID); err != nil {
 		return nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.OrchestratorConfirmsTotal.WithLabelValues("true").Inc()
 	}
 	userPrompt, _ := blocked.Inputs["user_prompt"].(string)
 	return &PhaseResultResult{

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/metrics"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
@@ -49,6 +50,9 @@ type Service struct {
 	// Clock inyectable (default time.Now UTC). Tests sustituyen para
 	// hacer determinista StartedAt.
 	Clock Clock
+	// Metrics opcional (issue-08.10 obs-001). Si nil, las métricas no
+	// se incrementan; usado en tests que no levantan Prometheus.
+	Metrics *metrics.Registry
 }
 
 // New construye un Service. El registry debe venir poblado por el
@@ -150,6 +154,13 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		res.Plan = exportPlan(plan)
 		if len(res.Plan.Steps) > 0 {
 			res.SnapshotPrompt = res.Plan.Steps[0].UserPrompt
+		}
+		// Métricas: orchestrator_runs_total{mode, status="started"}.
+		// El status terminal (completed/failed) se incrementa cuando el
+		// flow_run cambia de estado vía propagateFlowStatusAfterFailure
+		// o cuando la última fase termina vía RecordPhaseResult.
+		if s.Metrics != nil {
+			s.Metrics.OrchestratorRunsTotal.WithLabelValues(string(mode), "started").Inc()
 		}
 	}
 	return res, nil

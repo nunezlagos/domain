@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -165,6 +166,11 @@ LOOP:
 			if stepErr == nil {
 				break
 			}
+			// HU-09.4: retry solo para errores transient.
+			// Non-transient (auth, 4xx, validation) fallan inmediato.
+			if !isTransientError(stepErr) {
+				break
+			}
 			if attempt < maxAttempts {
 				if r.Metrics != nil {
 					r.Metrics.FlowStepRetriesTotal.WithLabelValues(f.Slug, step.ID).Inc()
@@ -248,6 +254,28 @@ LOOP:
 }
 
 // executeStep dispatch por step.Type.
+// isTransientError determina si un error es retryable.
+// Non-transient: auth, 4xx, validation → fail inmediato.
+// Transient: network, 5xx, timeout → retry.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	nonTransient := []string{
+		"unauthorized", "forbidden", "not found", "invalid",
+		"bad request", "HTTP 4", "conflict", "too many requests",
+		"not supported", "validation", "ErrStepTypeStub",
+		"unknown step type", "step_type_required",
+	}
+	for _, kw := range nonTransient {
+		if strings.Contains(strings.ToLower(msg), kw) {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outputs map[string]any,
 	orgID uuid.UUID, userID *uuid.UUID) (any, error) {
 

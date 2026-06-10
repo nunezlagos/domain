@@ -8,7 +8,7 @@ hus:
   09.1-flow-dag-definition: partially_implemented
   09.2-step-types: partially_implemented
   09.3-flow-state-machine: partially_implemented
-  09.4-retry-error-handling: partially_implemented
+   09.4-retry-error-handling: implemented
   09.5-subflows-composition: implemented
   09.6-durable-execution: partially_implemented
   09.7-workflow-versioning: proposed

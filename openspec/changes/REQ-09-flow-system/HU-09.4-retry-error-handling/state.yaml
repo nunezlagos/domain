@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -17,5 +17,6 @@ notes: |
   - max_backoff cap en retry loop: backoff *= 2 capped a maxBackoff (default 30s)
   - FlowStepRetriesTotal: CounterVec (flow_slug, step_id) incrementado en cada retry
   - metrics.FlowStepRetriesTotal registrado + wireado en flow Runner y main.go
-  Pending:
-  - Retry por error class (transient vs non-transient)
+  - Retry por error class (transient vs non-transient): isTransientError()
+    detecta non-transient (auth, 4xx, validation, not found, etc.) y
+    skipea retry inmediatamente para evitar reintentos inútiles.

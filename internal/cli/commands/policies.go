@@ -16,7 +16,7 @@ func policies(args []string) int {
 		return 2
 	}
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 
 	switch args[0] {
 	case "import-md":

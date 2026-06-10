@@ -70,6 +70,7 @@ Flags globales:
   --format json|table|yaml|csv   (default: table)
   --no-headers                   omitir cabeceras en table/csv
   --quiet, -q                    solo errores (exit code)
+  --config <path>                archivo YAML con api_key/base_url
 
 Env:
   DOMAIN_API_KEY      requerido
@@ -86,6 +87,7 @@ type globalFlags struct {
 	Format    string
 	NoHeaders bool
 	Quiet     bool
+	Config    string
 }
 
 func parseGlobalFlags(args []string) (*globalFlags, []string) {
@@ -108,6 +110,11 @@ func parseGlobalFlags(args []string) (*globalFlags, []string) {
 			gf.NoHeaders = true
 		case "--quiet", "-q":
 			gf.Quiet = true
+		case "--config":
+			if i+1 < len(args) {
+				gf.Config = args[i+1]
+				i++
+			}
 		default:
 			rest = append(rest, args[i])
 		}
@@ -115,8 +122,14 @@ func parseGlobalFlags(args []string) (*globalFlags, []string) {
 	return gf, rest
 }
 
-func newClient() *clicli.Client {
-	c, err := clicli.NewFromEnv()
+func newClient(gf *globalFlags) *clicli.Client {
+	var c *clicli.Client
+	var err error
+	if gf != nil && gf.Config != "" {
+		c, err = clicli.NewFromFile(gf.Config)
+	} else {
+		c, err = clicli.NewFromEnv()
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -144,7 +157,7 @@ func projects(args []string) int {
 		return 2
 	}
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 	switch args[0] {
 	case "ls", "list":
 		data, err := c.Do("GET", "/projects", nil, nil)
@@ -198,7 +211,7 @@ func observations(args []string) int {
 		return 2
 	}
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 
 	fs := flag.NewFlagSet("obs", flag.ContinueOnError)
 	project := fs.String("project", "", "project slug")
@@ -253,7 +266,7 @@ func agents(args []string) int {
 		return 2
 	}
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 	switch args[0] {
 	case "ls":
 		data, err := c.Do("GET", "/agents", nil, nil)
@@ -307,7 +320,7 @@ func flows(args []string) int {
 		return 2
 	}
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 	switch args[0] {
 	case "ls":
 		data, err := c.Do("GET", "/flows", nil, nil)
@@ -341,7 +354,7 @@ func flows(args []string) int {
 
 func skills(args []string) int {
 	gf, args := parseGlobalFlags(args)
-	c := newClient()
+	c := newClient(gf)
 	if len(args) == 0 || args[0] == "ls" {
 		fs := flag.NewFlagSet("skills", flag.ContinueOnError)
 		typ := fs.String("type", "", "filter by type")
@@ -383,7 +396,7 @@ func search(args []string) int {
 	if *typ != "" {
 		q["entity_type"] = *typ
 	}
-	c := newClient()
+	c := newClient(gf)
 	data, err := c.Do("GET", "/search", nil, q)
 	if err != nil {
 		return handleErr(err)
@@ -406,7 +419,7 @@ func contextCmd(args []string) int {
 	if *project != "" {
 		q["project_slug"] = *project
 	}
-	c := newClient()
+	c := newClient(gf)
 	data, err := c.Do("GET", "/context", nil, q)
 	if err != nil {
 		return handleErr(err)

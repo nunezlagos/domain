@@ -14,7 +14,14 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+type ConfigFile struct {
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+}
 
 type Client struct {
 	APIKey  string
@@ -29,6 +36,38 @@ func NewFromEnv() (*Client, error) {
 		return nil, errors.New("DOMAIN_API_KEY env var requerida")
 	}
 	base := os.Getenv("DOMAIN_BASE_URL")
+	if base == "" {
+		base = "http://localhost:8000"
+	}
+	return &Client{
+		APIKey:  key,
+		BaseURL: strings.TrimRight(base, "/"),
+		HTTP:    &http.Client{Timeout: 30 * time.Second},
+	}, nil
+}
+
+// NewFromFile lee configuración desde archivo YAML.
+// Si un campo está vacío en el archivo, cae a env var.
+func NewFromFile(path string) (*Client, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("leer config %s: %w", path, err)
+	}
+	var cfg ConfigFile
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		return nil, fmt.Errorf("parsear config %s: %w", path, err)
+	}
+	key := cfg.APIKey
+	if key == "" {
+		key = os.Getenv("DOMAIN_API_KEY")
+	}
+	if key == "" {
+		return nil, errors.New("api_key requerida en config o DOMAIN_API_KEY env")
+	}
+	base := cfg.BaseURL
+	if base == "" {
+		base = os.Getenv("DOMAIN_BASE_URL")
+	}
 	if base == "" {
 		base = "http://localhost:8000"
 	}

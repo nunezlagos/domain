@@ -2,6 +2,6 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  14.1-cli-core-commands: partially_implemented
+  14.1-cli-core-commands: implemented
   14.2-cli-output-formats: implemented
   14.3-cli-autocomplete-help: partially_implemented

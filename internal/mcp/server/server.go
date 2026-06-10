@@ -37,6 +37,7 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
+	prouter "nunezlagos/domain/internal/service/promptrouter"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
@@ -59,6 +60,7 @@ type Deps struct {
 	Hubuilder    *husvc.Service // HU-04.7 interactive HU wizard
 	Intake       *intakesvc.Service // HU-04.8 intake pipeline
 	ExtSync      *syncsvc.Service   // HU-04.9 external provider sync
+	PromptRouter *prouter.Router    // HU-12.7 single-shot prompt router
 	Pool         *pgxpool.Pool // para queries de agent_run_logs
 	Principal    *apikey.Principal // resuelto al boot
 	ServerName   string
@@ -122,6 +124,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	tools = append(tools, registerHUTools(wrap, deps)...)
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)
+	tools = append(tools, registerPromptTools(wrap, deps)...)
 	return tools
 }
 

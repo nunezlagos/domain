@@ -122,6 +122,14 @@ var safeAttrKeys = map[string]bool{
 	"agent.slug": true, "skill.slug": true, "flow.slug": true,
 	"org.id": true, "user.id": true, "project.id": true,
 	"run.id": true,
+	// Orchestrator SDD (issue-08.10 obs-003)
+	"orchestrator.mode":       true,
+	"orchestrator.run_id":     true,
+	"phase.slug":              true,
+	"flow_run.id":             true,
+	"flow_run_step.id":        true,
+	"phase.result":            true, // "completed" | "failed"
+	"phase.requires_confirm":  true,
 }
 
 // SafeAttr crea attribute.KeyValue solo si key está en whitelist.

@@ -55,8 +55,8 @@
 
 - [x] **obs-001**: métricas orquestador en internal/metrics — domain_orchestrator_runs_total{mode,status}, _phase_duration_seconds histogram, _phase_results_total{phase,mode,result}, _confirms_total{confirmed}, _required_save_missing_total{phase,save_type} — 2026-06-10 (Service.Metrics opcional)
 - [x] **obs-002**: `domain_agent_runs_orphan_total` ya implementado en chunk foundation (28fddeb) + issue-08.12 cron — 2026-06-10
-- [ ] **obs-003**: OTel span por fase, attribute `flow_run_step.id` (vía SafeAttrs de issue-17.2)
-- [ ] **obs-004**: `deploy/prometheus/alerts/orchestrator.yml` — alerts orphan_runs > 0 por 5min
+- [x] **obs-003**: OTel spans `orchestrator.run` + `orchestrator.phase_result` con SafeAttrs nuevos (orchestrator.mode, orchestrator.run_id, phase.slug, flow_run.id, flow_run_step.id, phase.result, phase.requires_confirm) — 2026-06-10
+- [x] **obs-004**: `deploy/prometheus/alerts/orchestrator.yml` — 5 alerts (FailureRateHigh, D5RequiredSaveMissingSpike, PhaseSlow p95>10min, D1ConfirmsRejected >50%, RunsStuck sin terminal en 1h) — 2026-06-10
 
 ## MCP tools nuevos
 
@@ -98,7 +98,7 @@
 
 ## Sabotaje
 
-- [ ] **sab-001**: INSERT directo bypass → métrica orphan incrementa dentro 5min vía cron issue-08.12
+- [x] **sab-001**: INSERT directo bypass → métrica orphan incrementa — ya cubierto por `tests/e2e/orphan_runs_audit_test.go::TestOrphanAudit_Sabotage_BypassDetected` (issue-08.12 cron) — 2026-06-10
 - [x] **sab-002**: 2 templates orchestrator por org → UNIQUE violation — 2026-06-10 (TestSabotage_UniqueOrchestratorPerOrg + AcrossOrgs en internal/seeds/sabotage_orchestrator_integration_test.go)
 - [x] **sab-003**: Forzar required_save missing → fase no avanza, error específico — 2026-06-10 (`TestService_Sabotage_ApplyMissingRequiredCodeReference`)
 

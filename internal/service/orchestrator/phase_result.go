@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	"nunezlagos/domain/internal/tracing"
 )
 
 // PhaseResultInput es lo que el cliente IDE reporta vía MCP cuando
@@ -50,12 +52,29 @@ type PhaseResultResult struct {
 // Devuelve PhaseResultResult con el status final del step + flow + next
 // step pending si aún hay fases por correr.
 func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*PhaseResultResult, error) {
+	ctx, span := tracing.Tracer("orchestrator").Start(ctx, "orchestrator.phase_result",
+		trace.WithAttributes(
+			tracing.SafeAttr("flow_run_step.id", in.FlowRunStepID.String()),
+		),
+	)
+	defer span.End()
+
 	if s.Repo == nil {
-		return nil, errors.New("orchestrator: Repo not configured")
+		err := errors.New("orchestrator: Repo not configured")
+		span.RecordError(err)
+		return nil, err
 	}
 	step, err := s.Repo.GetFlowRunStep(ctx, in.FlowRunStepID)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
+	}
+	span.SetAttributes(
+		tracing.SafeAttr("phase.slug", step.StepKey),
+		tracing.SafeAttr("flow_run.id", step.FlowRunID.String()),
+	)
+	if modeStr, _ := step.Inputs["mode"].(string); modeStr != "" {
+		span.SetAttributes(tracing.SafeAttr("orchestrator.mode", modeStr))
 	}
 	if step.Status != "pending" && step.Status != "running" {
 		return nil, ErrFlowRunStepNotPending
@@ -116,6 +135,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	if err := s.Repo.MarkStepCompleted(ctx, step.ID, in.Output); err != nil {
 		return nil, fmt.Errorf("mark completed: %w", err)
 	}
+	span.SetAttributes(tracing.SafeAttr("phase.result", "completed"))
 	// Métricas: phase completada + duración reportada por cliente.
 	if s.Metrics != nil {
 		modeStr, _ := step.Inputs["mode"].(string)
@@ -179,6 +199,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				}
 				out.RequiresConfirm = true
 				out.ConfirmMessage = "Express detected change exceeds threshold; call domain_orchestrate_confirm to proceed"
+				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
 			}
 		}
 	}

@@ -13,6 +13,9 @@ import (
 	"nunezlagos/domain/internal/metrics"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	"nunezlagos/domain/internal/tracing"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Clock permite inyectar wall-clock para tests deterministas (regla
@@ -79,7 +82,19 @@ func New(pool *pgxpool.Pool, audit audit.Recorder, reg *phases.Registry, env str
 //     sin Plan. Los modos restantes vienen en próximos chunks junto con
 //     la persistencia flow_runs + dispatch loop MCP.
 func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateResult, error) {
+	// OTel span: orchestrator.run. SafeAttrs whitelist evita PII; raw_text
+	// NO se incluye porque puede contener datos sensibles del usuario.
+	ctx, span := tracing.Tracer("orchestrator").Start(ctx, "orchestrator.run",
+		trace.WithAttributes(
+			tracing.SafeAttr("orchestrator.mode", string(in.Mode)),
+			tracing.SafeAttr("org.id", in.OrganizationID.String()),
+			tracing.SafeAttr("user.id", in.UserID.String()),
+		),
+	)
+	defer span.End()
+
 	if err := s.validate(in); err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	mode := in.Mode
@@ -162,6 +177,10 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if s.Metrics != nil {
 			s.Metrics.OrchestratorRunsTotal.WithLabelValues(string(mode), "started").Inc()
 		}
+		span.SetAttributes(
+			tracing.SafeAttr("orchestrator.run_id", res.OrchestratorRunID.String()),
+			tracing.SafeAttr("flow_run.id", res.FlowRunID.String()),
+		)
 	}
 	return res, nil
 }

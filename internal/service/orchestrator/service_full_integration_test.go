@@ -168,15 +168,15 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 		RawText:        "doc only",
 		Mode:           orchestrator.ModeFull,
 		SkipPhases: []orchestrator.PhaseSlug{
-			orchestrator.PhaseSlug("sdd-judge"),
 			orchestrator.PhaseSlug("sdd-archive"),
+			orchestrator.PhaseSlug("sdd-onboard"),
 		},
 	})
 	require.NoError(t, err)
 	require.Len(t, res.Plan.Steps, 8, "10 - 2 skipped = 8 steps")
 	for _, st := range res.Plan.Steps {
-		require.NotEqual(t, "sdd-judge", string(st.Slug))
 		require.NotEqual(t, "sdd-archive", string(st.Slug))
+		require.NotEqual(t, "sdd-onboard", string(st.Slug))
 	}
 }
 

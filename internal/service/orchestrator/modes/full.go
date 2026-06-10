@@ -124,6 +124,9 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 //   - SkipPhases → se omiten esos slugs del resultado
 //   - El resultado preserva el orden de base
 func selectPhases(base []phases.PhaseSlug, startingPhase phases.PhaseSlug, skipPhases []phases.PhaseSlug) ([]phases.PhaseSlug, error) {
+	if err := ValidateDAG(base, skipPhases, startingPhase); err != nil {
+		return nil, fmt.Errorf("modes.full: %w", err)
+	}
 	skip := make(map[phases.PhaseSlug]struct{}, len(skipPhases))
 	for _, s := range skipPhases {
 		skip[s] = struct{}{}

@@ -414,10 +414,13 @@ func TestService_Async_WithSkipPhases_OmittedPhases(t *testing.T) {
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeAsync,
-		SkipPhases:     []orchestrator.PhaseSlug{"sdd-judge", "sdd-archive"},
+		SkipPhases:     []orchestrator.PhaseSlug{"sdd-archive", "sdd-onboard"},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 8, "10 - 2 skip = 8")
+	require.Len(t, res.Plan.Steps, 8, "10 - 2 skip = 8 (archive + onboard son sufijo válido)")
+	// Verificar que el último step es sdd-judge (archive y onboard saltados)
+	last := res.Plan.Steps[len(res.Plan.Steps)-1]
+	require.Equal(t, "sdd-judge", string(last.Slug))
 }
 
 // TestService_Async_RequiresRepo verifica que ModeAsync sin Repo falla.

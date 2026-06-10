@@ -34,6 +34,7 @@ type Report struct {
 	Updated   int      `json:"updated"`
 	Skipped   int      `json:"skipped"`
 	Preserved int      `json:"preserved"` // user-modified, no sobrescrito
+	Deleted   int      `json:"deleted,omitempty"` // cleanup defensivo (issue-08.10)
 	Errors    []string `json:"errors,omitempty"`
 }
 

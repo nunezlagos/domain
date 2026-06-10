@@ -132,11 +132,17 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	})
 	var runID uuid.UUID
 	now := time.Now().UTC()
+	// issue-08.10: marcar como standalone (invocación directa, no via
+	// sdd-pipeline orchestrator). El cron orphan-audit (issue-08.12) ignora
+	// estos runs porque metadata.standalone='true' es signal legítimo.
+	// Cuando el orquestador (issue-08.10 service) tome control, pasará
+	// flow_run_id explícito y NO marcará standalone.
+	metadataJSON := []byte(`{"standalone":true,"reason":"direct_invocation"}`)
 	err = r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, started_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, metadata, started_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id`,
-		agent.OrganizationID, agent.ID, in.UserID, StatusRunning, inputsJSON, now,
+		agent.OrganizationID, agent.ID, in.UserID, StatusRunning, inputsJSON, metadataJSON, now,
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create run: %w", err)
@@ -337,11 +343,12 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, re
 	})
 	now := time.Now().UTC()
 	var runID uuid.UUID
+	metadataJSON := []byte(`{"standalone":true,"reason":"direct_invocation_failed"}`)
 	dbErr := r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, error, started_at, finished_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+		`INSERT INTO agent_runs (organization_id, agent_id, user_id, status, inputs, metadata, error, started_at, finished_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
 		 RETURNING id`,
-		orgID, in.AgentID, in.UserID, StatusFailed, inputsJSON, err.Error(), now,
+		orgID, in.AgentID, in.UserID, StatusFailed, inputsJSON, metadataJSON, err.Error(), now,
 	).Scan(&runID)
 	if dbErr != nil {
 		return nil, fmt.Errorf("create failed run: %w", dbErr)

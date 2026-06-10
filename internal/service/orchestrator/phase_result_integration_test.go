@@ -27,7 +27,9 @@ func TestExpress_FullHappyPath(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
+	require.NoError(t, err)
+	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
@@ -99,7 +101,9 @@ func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
+	require.NoError(t, err)
+	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
@@ -137,7 +141,9 @@ func TestExpress_PhaseResult_OnAlreadyCompletedStep_Rejected(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
+	require.NoError(t, err)
+	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")

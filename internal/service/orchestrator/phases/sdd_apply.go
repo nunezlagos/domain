@@ -7,46 +7,19 @@ import (
 	"strings"
 )
 
-// sddApplySystemPrompt es la guía para el agente sdd-apply (cliente IDE).
-// Sigue TDD strict (.claude/rules/sdd.md): test → impl mínima → refactor
-// → sabotaje. Cada bullet referencia un rule del repo para que el modelo
-// pueda navegar por contexto cuando tenga dudas.
-const sddApplySystemPrompt = `Sos el agente sdd-apply del orquestador Domain. Tu trabajo es implementar
-la tarea ATÓMICA descrita en el UserPrompt usando TDD estricto.
-
-CONTRATO DURO:
-- Una sola intención por iteración. Si detectás multi-concern, parás y
-  devolvés error multi_concern_detected — no es tu lugar splittear.
-- Orden obligatorio: TEST primero (debe fallar por la razón correcta) →
-  implementación mínima → refactor → sabotaje opcional.
-- Respetás .claude/rules/* — clean-architecture, db, security, testing,
-  observability, api, go, migrations. No inventes convenciones nuevas.
-- NUNCA hardcodeás secrets, NUNCA log de PII (ver security.md), NUNCA
-  rompés convenciones de conventional commits (git.md).
-
-OUTPUT esperado (JSON):
-  {
-    "files_changed":  ["path/a/file.go", ...],
-    "tests_added":    ["path/test_file.go::TestX_Scenario", ...],
-    "commits_made":   ["sha-or-pending"],
-    "multi_concern":  false,
-    "summary":        "1-3 oraciones sobre qué quedó hecho"
-  }
-
-OBLIGACIÓN D5 (suggested_saves):
-- Antes de devolver el phase_result, ejecutás mem_save con type
-  'code_reference' apuntando al archivo + identifier principal que
-  cambiaste. Es REQUIRED — si no lo guardás, la fase no avanza.
-
-Si te bloquea algo que no podés resolver solo (ambigüedad en spec,
-decisión arquitectónica), devolvés output.blocked=true con un campo
-question describiendo qué necesita el humano. NO inventes.`
-
 // sddApplyHandler implementa Handler para la fase sdd-apply.
+//
+// El system_prompt NO vive en este archivo: es source-of-truth en BD
+// (agent_templates.system_prompt, seedeado por SeedAgentTemplatesForOrg
+// con catálogo v3). El Service.Run hace lookup vía Repository y rellena
+// PhaseStep.SystemPrompt antes de despachar al cliente IDE. Esto permite
+// que el operador del despliegue customice los prompts vía MCP/UI sin
+// recompilar el binario, y mantiene la convención de
+// .claude/rules/ai-generation.md (TODO en BD).
 type sddApplyHandler struct{}
 
-// NewSDDApplyHandler construye el handler. Stateless; podés tener uno
-// global, pero el registry no obliga singleton.
+// NewSDDApplyHandler construye el handler. Stateless; puede existir
+// uno global, pero el registry no obliga singleton.
 func NewSDDApplyHandler() Handler { return &sddApplyHandler{} }
 
 func (h *sddApplyHandler) Slug() PhaseSlug { return PhaseSlug("sdd-apply") }
@@ -68,12 +41,14 @@ func (h *sddApplyHandler) Build(_ context.Context, in Input) (*Output, error) {
 			fmt.Fprintln(&b)
 		}
 	}
-	fmt.Fprintln(&b, "Implementá la tarea siguiendo TDD strict + las rules del repo.")
-	fmt.Fprintln(&b, "Cuando termines, llamá domain_orchestrate_phase_result con el JSON descripto.")
+	fmt.Fprintln(&b, "Implementa la tarea siguiendo TDD estricto y las reglas del repositorio.")
+	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito.")
 	return &Output{
 		AgentTemplateSlug: "sdd-apply",
-		SystemPrompt:      sddApplySystemPrompt,
-		UserPrompt:        b.String(),
+		// SystemPrompt vacío: el Service.Run lo rellena desde
+		// agent_templates.system_prompt en BD (source-of-truth).
+		SystemPrompt: "",
+		UserPrompt:   b.String(),
 		SuggestedSaves: []SuggestedSave{
 			{
 				Type:     "code_reference",

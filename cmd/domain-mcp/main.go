@@ -146,17 +146,22 @@ func main() {
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 	}
 
-	// issue-08.10 sdd-pipeline-orchestrator. Registry de handlers de fase
-	// + Service que el MCP tools de orchestrate_tools.go invoca.
-	//
-	// Hoy registramos los 2 handlers implementados (apply + verify) que
-	// cubren modo Express. A medida que se implementen los otros 8
-	// handlers (svc-009..svc-018) se van agregando acá. El registry
-	// rechaza duplicados via MustRegister → boot panic si alguien
-	// accidentalmente registra dos veces el mismo slug.
+	// issue-08.10 sdd-pipeline-orchestrator. Registry con los 10 handlers
+	// de fase SDD. El registry rechaza duplicados via MustRegister →
+	// boot panic si alguien accidentalmente registra dos veces el mismo
+	// slug. Los system_prompts NO viven acá: se obtienen vía
+	// Repository.GetAgentTemplateSystemPrompt desde agent_templates en BD.
 	orchPhases := phases.NewRegistry()
+	orchPhases.MustRegister(phases.NewSDDExploreHandler())
+	orchPhases.MustRegister(phases.NewSDDSpecHandler())
+	orchPhases.MustRegister(phases.NewSDDProposeHandler())
+	orchPhases.MustRegister(phases.NewSDDDesignHandler())
+	orchPhases.MustRegister(phases.NewSDDTasksHandler())
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
+	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
+	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}

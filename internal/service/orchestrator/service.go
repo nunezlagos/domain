@@ -110,6 +110,16 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
+		// Hydrate los system_prompts desde agent_templates (BD source-of-truth).
+		// Los handlers devuelven SystemPrompt="" intencionalmente; el Service
+		// hace lookup acá por cada step usando AgentTemplateSlug. Esto
+		// permite que operadores customicen prompts vía UI/MCP sin
+		// recompilar binario.
+		if s.Repo != nil {
+			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+				return nil, err
+			}
+		}
 		// Persistir si Repo está configurado. El fallback in-memory
 		// (Repo nil) sigue funcionando para tests unit que no quieren
 		// pagar el costo de testcontainers.
@@ -152,6 +162,36 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 		}
 	}
 	return out
+}
+
+// hydrateSystemPrompts rellena step.SystemPrompt para cada step del plan
+// desde agent_templates en BD. Si el lookup falla con
+// ErrAgentTemplateNotFound, devolvemos error para que el caller corrija
+// el seed (no hay default sano para un prompt en blanco).
+func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, plan *modes.PhasePlan) error {
+	if plan == nil {
+		return nil
+	}
+	// Cache local por slug para no repetir queries cuando dos steps
+	// comparten template (raro pero posible).
+	cache := make(map[string]string, len(plan.Steps))
+	for i := range plan.Steps {
+		slug := plan.Steps[i].AgentTemplateSlug
+		if slug == "" {
+			continue
+		}
+		if cached, ok := cache[slug]; ok {
+			plan.Steps[i].SystemPrompt = cached
+			continue
+		}
+		prompt, err := s.Repo.GetAgentTemplateSystemPrompt(ctx, orgID, slug)
+		if err != nil {
+			return err
+		}
+		cache[slug] = prompt
+		plan.Steps[i].SystemPrompt = prompt
+	}
+	return nil
 }
 
 // now devuelve la hora vía Clock o cae a UTC system si Clock fue nil

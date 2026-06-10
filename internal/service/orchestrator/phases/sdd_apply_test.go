@@ -27,7 +27,9 @@ func TestSDDApplyHandler_Build_DeclaresRequiredCodeReference_D5(t *testing.T) {
 	out, err := h.Build(context.Background(), Input{RawText: "refactor X"})
 	require.NoError(t, err)
 	require.Equal(t, "sdd-apply", out.AgentTemplateSlug)
-	require.NotEmpty(t, out.SystemPrompt)
+	// SystemPrompt llega vacío del handler — el Service lo hidrata desde
+	// agent_templates en BD antes de despachar. Ver Service.hydrateSystemPrompts.
+	require.Empty(t, out.SystemPrompt)
 	require.Contains(t, out.UserPrompt, "refactor X")
 	require.Len(t, out.SuggestedSaves, 1)
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)

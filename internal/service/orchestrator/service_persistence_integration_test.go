@@ -99,7 +99,12 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
+	// El orquestador depende de DOS catálogos seedeados:
+	// 1. flows (para lookup sdd-pipeline-v1)
+	// 2. agent_templates (para lookup system_prompt por slug, BD source-of-truth)
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
+	require.NoError(t, err)
+	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
@@ -165,7 +170,9 @@ func TestService_Run_Express_StepInputsIncludeSuggestedSaves(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
+	require.NoError(t, err)
+	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")

@@ -7,36 +7,9 @@ import (
 	"strings"
 )
 
-const sddVerifySystemPrompt = `Sos el agente sdd-verify del orquestador Domain. Tu trabajo es validar
-que la implementación que produjo sdd-apply cumple los escenarios Gherkin
-declarados en el issue.md, y reportar verificación cruda (no fixes).
-
-CONTRATO DURO:
-- NO modificás código. Si encontrás un test rojo, lo reportás; el fix
-  es responsabilidad de sdd-apply en una iteración posterior.
-- Corrés go test sobre los paquetes tocados por sdd-apply (files_changed).
-- Si hay coverage gate (.claude/rules/testing.md target 70% global, 80%
-  service+domain), reportás porcentaje.
-- Validás cada escenario Gherkin del issue.md como un check independiente.
-
-OUTPUT esperado (JSON):
-  {
-    "scenarios_passed":  ["Escenario 1: ...", ...],
-    "scenarios_failed":  ["Escenario 3: ...", ...],
-    "tests_passed":      234,
-    "tests_failed":      0,
-    "coverage_pct":      78.4,
-    "blockers":          [],
-    "summary":           "1-2 oraciones"
-  }
-
-SUGGESTED_SAVES (no required):
-- type 'verification_result' apuntando al run completo si querés que el
-  histórico quede indexable en memoria (recomendado en runs >5min).
-
-Si encontrás un blocker que NO puede ser fixed por sdd-apply solo
-(ej: requiere decisión humana sobre comportamiento ambiguo), agregás
-una entrada en blockers con question: "...".`
+// sddVerifyHandler — fase sdd-verify. El system_prompt es source-of-truth
+// en BD (agent_templates.system_prompt). Service.Run lo rellena via
+// Repository.GetAgentTemplateSystemPrompt antes de despachar al cliente.
 
 type sddVerifyHandler struct{}
 
@@ -68,14 +41,14 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 			fmt.Fprintln(&b)
 		}
 	} else {
-		fmt.Fprintln(&b, "Validá la salida que el agente sdd-apply produjo en este flow_run.")
+		fmt.Fprintln(&b, "Valida la salida que el agente sdd-apply produzca en este flow_run.")
 		fmt.Fprintln(&b)
 	}
-	fmt.Fprintln(&b, "Validá los escenarios Gherkin del issue.md. NO modifiques código.")
-	fmt.Fprintln(&b, "Cuando termines, llamá domain_orchestrate_phase_result con el JSON descripto.")
+	fmt.Fprintln(&b, "Valida los escenarios Gherkin del issue.md. NO modifiques código.")
+	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito.")
 	return &Output{
 		AgentTemplateSlug: "sdd-verify",
-		SystemPrompt:      sddVerifySystemPrompt,
+		SystemPrompt:      "",
 		UserPrompt:        b.String(),
 		SuggestedSaves: []SuggestedSave{
 			{

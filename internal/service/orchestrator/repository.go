@@ -42,6 +42,11 @@ type Repository interface {
 	MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error
 	MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error
 	UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error
+	// GetAgentTemplateSystemPrompt obtiene el system_prompt del agent_template
+	// seedeado per-org. La fuente de verdad de los prompts de cada fase es
+	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
+	// prompts en Go — los maneja desde el catálogo persistido.
+	GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error)
 }
 
 // FlowRunRow es la vista de lectura completa de un flow_run.
@@ -104,6 +109,26 @@ type pgRepository struct {
 // NewPGRepository devuelve un Repository persistido en Postgres.
 func NewPGRepository(pool *pgxpool.Pool) Repository {
 	return &pgRepository{pool: pool}
+}
+
+// ErrAgentTemplateNotFound: el slug no está seedeado en la org. El caller
+// debe correr SeedAgentTemplatesForOrg primero (catálogo v3).
+var ErrAgentTemplateNotFound = errors.New("orchestrator: agent_template not seeded for org")
+
+func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error) {
+	var prompt string
+	err := r.pool.QueryRow(ctx, `
+		SELECT system_prompt FROM agent_templates
+		WHERE organization_id = $1 AND slug = $2
+		LIMIT 1`, orgID, slug,
+	).Scan(&prompt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("%w: slug=%s", ErrAgentTemplateNotFound, slug)
+		}
+		return "", fmt.Errorf("get agent_template system_prompt: %w", err)
+	}
+	return prompt, nil
 }
 
 func (r *pgRepository) GetFlowIDBySlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {

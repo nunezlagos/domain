@@ -21,16 +21,16 @@
 - [ ] **svc-006**: `modes/detect.go` — dry_run=true, persiste a `*.status='draft'`
 - [ ] **svc-007**: `modes/async.go` — emite flow_signals, reanuda con worker que tail
 - [~] **svc-008**: `modes/validator.go` — validate `async + express` → ErrAsyncModeUnsupported (D6) — validate() en service.go cubre D6 + empty/mode/unknown-phase; falta DAG-check de SkipPhases
-- [ ] **svc-009**: `phases/sdd_explore.go` — system_prompt + input/output schema + multi-concern detection (D2)
-- [ ] **svc-010**: `phases/sdd_spec.go` — delega a issuebuilder.AdaptiveService (issue-04.7)
-- [ ] **svc-011**: `phases/sdd_propose.go`
-- [ ] **svc-012**: `phases/sdd_design.go` — suggested_saves required=true para ADRs (D5)
-- [ ] **svc-013**: `phases/sdd_tasks.go`
+- [x] **svc-009**: `phases/sdd_explore.go` — analiza prompt + multi-concern detection (D2) — 2026-06-10
+- [x] **svc-010**: `phases/sdd_spec.go` — produce issue.md (slug + md content) — 2026-06-10
+- [x] **svc-011**: `phases/sdd_propose.go` — proposal.md status='draft' (no auto-promoción) — 2026-06-10
+- [x] **svc-012**: `phases/sdd_design.go` — D5 'adr' Required + sanity ≥1 ADR — 2026-06-10
+- [x] **svc-013**: `phases/sdd_tasks.go` — descomposición atómica con id+description+depends_on — 2026-06-10
 - [x] **svc-014**: `phases/sdd_apply.go` — code_reference D5 required + RetryCleanup + multi_concern/blocked detection — 2026-06-10 (D1 confirm condicional pendiente para wire-up MCP)
 - [x] **svc-015**: `phases/sdd_verify.go` — Gherkin verifier + RetryReemit + blocker/failed scenarios — 2026-06-10
-- [ ] **svc-016**: `phases/sdd_judge.go` — suggested_saves required=true para sabotage_records (D5)
-- [ ] **svc-017**: `phases/sdd_archive.go` — entity_state_transitions to_state='archived'
-- [ ] **svc-018**: `phases/sdd_onboard.go` — opcional, genera knowledge_doc si aplica
+- [x] **svc-016**: `phases/sdd_judge.go` — D5 'sabotage_record' Required + sanity ≥1 record — 2026-06-10
+- [x] **svc-017**: `phases/sdd_archive.go` — archived flag + entity_state_transitions tracking — 2026-06-10
+- [x] **svc-018**: `phases/sdd_onboard.go` — knowledge_doc opcional con skipped=true válido — 2026-06-10
 - [x] **svc-019**: `phases/registry.go` — map slug → handler + retry_policy lookup — 2026-06-10 (Handler iface + Registry concurrent-safe + SuggestedSave/RetryPolicy/MemoryRef)
 
 ## Service enforcement

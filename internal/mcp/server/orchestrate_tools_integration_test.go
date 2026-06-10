@@ -59,6 +59,8 @@ func setupOrchMCP(t *testing.T) *orchFixture {
 	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
+	_, err = seeds.SeedAgentTemplatesForOrg(ctx, pools.App, org.ID)
+	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, org.ID)
 	require.NoError(t, err)
 

@@ -59,6 +59,7 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	cronsched "nunezlagos/domain/internal/scheduler/cron"
+	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 	"nunezlagos/domain/internal/scheduler/leader"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	cronsvc "nunezlagos/domain/internal/service/cron"
@@ -556,6 +557,17 @@ func runServer() {
 		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
 		go runAuditPruneScheduler(leaderCtx, recorder, logger)
 		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
+		// issue-08.11 heartbeat-watcher (detecta flow_run_steps stuck)
+		if cfg.HeartbeatWatcherEnabled {
+			watcher := &systemcron.HeartbeatWatcher{
+				Pool:    pools.App,
+				Metrics: metricsReg,
+				Timeout: time.Duration(cfg.HeartbeatWatcherTimeoutMinutes) * time.Minute,
+				Tick:    time.Duration(cfg.HeartbeatWatcherTickSeconds) * time.Second,
+				Logger:  logger,
+			}
+			go watcher.Start(leaderCtx)
+		}
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()

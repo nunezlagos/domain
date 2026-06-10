@@ -53,6 +53,13 @@ type Registry struct {
 	FlowStepRetriesTotal *prometheus.CounterVec
 	PprofAccessTotal   prometheus.Counter
 	SlowQueriesTotal   *prometheus.CounterVec
+
+	// issue-08.11 heartbeat-watcher
+	HeartbeatWatcherStuckTotal *prometheus.CounterVec // labels: org_id, phase, reason
+	HeartbeatWatcherTicksTotal *prometheus.CounterVec // labels: result (ok|leader_skip|error)
+	// issue-08.12 orphan-runs-audit
+	AgentRunsOrphanTotal *prometheus.CounterVec // labels: org_id, reason
+	OrphanAuditTicksTotal *prometheus.CounterVec // labels: result
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -154,6 +161,34 @@ func New() *Registry {
 		Name: "domain_debug_pprof_accessed_total",
 		Help: "Total accesos a /debug/pprof/*",
 	})
+	r.HeartbeatWatcherStuckTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_heartbeat_watcher_stuck_total",
+			Help: "Flow run steps detectados stuck por heartbeat timeout (issue-08.11)",
+		},
+		[]string{"org_id", "phase", "reason"},
+	)
+	r.HeartbeatWatcherTicksTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_heartbeat_watcher_ticks_total",
+			Help: "Ticks del heartbeat-watcher cron (issue-08.11)",
+		},
+		[]string{"result"},
+	)
+	r.AgentRunsOrphanTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_agent_runs_orphan_total",
+			Help: "Agent runs orphan detectados (sin flow_run_id ni standalone flag) — issue-08.12",
+		},
+		[]string{"org_id", "reason"},
+	)
+	r.OrphanAuditTicksTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orphan_audit_ticks_total",
+			Help: "Ticks del orphan-runs-audit cron (issue-08.12)",
+		},
+		[]string{"result"},
+	)
 	r.SlowQueriesTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "domain_db_slow_queries_total",
@@ -233,6 +268,10 @@ func New() *Registry {
 		r.FlowStepRetriesTotal,
 		r.PprofAccessTotal,
 		r.SlowQueriesTotal,
+		r.HeartbeatWatcherStuckTotal,
+		r.HeartbeatWatcherTicksTotal,
+		r.AgentRunsOrphanTotal,
+		r.OrphanAuditTicksTotal,
 	)
 	return r
 }

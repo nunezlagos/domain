@@ -119,4 +119,6 @@ const (
 	LockKeyIdempotencyCleanup int64 = 1003
 	LockKeyInvitationsExpire  int64 = 1004
 	LockKeyDBStatsSnapshot    int64 = 1005
+	LockKeyHeartbeatWatcher   int64 = 1006 // issue-08.11
+	LockKeyOrphanRunsAudit    int64 = 1007 // issue-08.12
 )

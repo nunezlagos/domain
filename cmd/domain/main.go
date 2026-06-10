@@ -353,6 +353,11 @@ func runServer() {
 	// Seeders (HU-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
 	seedRegistry := seeds.NewRegistry()
 	seedRegistry.Register(&seeds.PlansSeeder{})
+	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
+	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
+	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
+	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
+	// seeds.SeedAgentTemplatesForOrg (HU-21.1 org-management hook).
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))

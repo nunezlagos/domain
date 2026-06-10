@@ -20,6 +20,8 @@ type DailyByOrg struct {
 	TokensOutput  int64     `json:"tokens_output"`
 	CostUSD       float64   `json:"cost_usd"`
 	AvgDurationS  float64   `json:"avg_duration_s"`
+	PrevCostUSD   *float64  `json:"prev_cost_usd,omitempty"`   // LAG day before
+	CostChangePCT *float64  `json:"cost_change_pct,omitempty"` // % vs prev
 }
 
 type DailyByAgent struct {
@@ -42,7 +44,8 @@ func (s *Service) DailyByOrg(ctx context.Context, orgID uuid.UUID, days int) ([]
 		days = 30
 	}
 	rows, err := s.Pool.Query(ctx,
-		`SELECT day, runs, tokens_input, tokens_output, cost_usd, avg_duration_s
+		`SELECT day, runs, tokens_input, tokens_output, cost_usd, avg_duration_s,
+		        LAG(cost_usd) OVER (ORDER BY day) AS prev_cost_usd
 		 FROM domain_cost_daily_by_org
 		 WHERE organization_id = $1
 		   AND day >= CURRENT_DATE - $2::int
@@ -56,8 +59,12 @@ func (s *Service) DailyByOrg(ctx context.Context, orgID uuid.UUID, days int) ([]
 	for rows.Next() {
 		var d DailyByOrg
 		if err := rows.Scan(&d.Day, &d.Runs, &d.TokensInput, &d.TokensOutput,
-			&d.CostUSD, &d.AvgDurationS); err != nil {
+			&d.CostUSD, &d.AvgDurationS, &d.PrevCostUSD); err != nil {
 			return nil, err
+		}
+		if d.PrevCostUSD != nil && *d.PrevCostUSD > 0 {
+			pct := ((d.CostUSD - *d.PrevCostUSD) / *d.PrevCostUSD) * 100
+			d.CostChangePCT = &pct
 		}
 		out = append(out, d)
 	}

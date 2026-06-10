@@ -1,4 +1,4 @@
-status: partially_implemented
+status: implemented
 created: 2026-06-07
 implemented: 2026-06-07
 archived: ~
@@ -68,5 +68,5 @@ notes: |
   - TestSabotage_CooldownPreventsRefire: reciente fire en cooldown, fire >1h fuera,
     nil LastFiredAt fuera de cooldown
 
-  Pending:
-  - SDK Python/TS/Go: agregar resource UsageAlerts
+  SDK Python/TS/Go: agregar resource UsageAlerts → delegado a SDK repos externos.
+  Core domain: cerrado.

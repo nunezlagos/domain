@@ -1,3 +1,7 @@
-status: proposed
+status: archived
 created: 2026-06-07
-archived: ~
+archived: 2026-06-09
+archive_reason: |
+  Duplicado de HU-25.5-rls-selective-tables. Placeholder de rename que
+  nunca completó. La spec real con código (migration 000028 +
+  internal/store/txctx) vive en HU-25.5-rls-selective-tables (canónica).

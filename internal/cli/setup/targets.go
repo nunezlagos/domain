@@ -93,6 +93,11 @@ func SetupClaudeCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error)
 		servers = map[string]any{}
 	}
 	if _, ok := servers["domain"]; ok {
+		// Ya configurado. Aun asi, asegura que el slash command este
+		// instalado (issue-01.9).
+		if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
+			return path, fmt.Errorf("install slash command: %w", err)
+		}
 		return path, ErrAlreadyConfigured
 	}
 	servers["domain"] = map[string]any{
@@ -103,6 +108,10 @@ func SetupClaudeCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error)
 	doc["mcpServers"] = servers
 	if err := writeJSONWithBackup(path, original, doc); err != nil {
 		return "", err
+	}
+	// issue-01.9: instala el slash command /domain-login.
+	if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
+		return path, fmt.Errorf("install slash command: %w", err)
 	}
 	return path, nil
 }
@@ -123,6 +132,11 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		mcp = map[string]any{}
 	}
 	if _, ok := mcp["domain"]; ok {
+		// Ya configurado. Aun asi, asegura que el slash command este
+		// instalado (puede haberse eliminado manualmente).
+		if _, err := InstallSlashCommand(AgentOpenCode); err != nil {
+			return path, fmt.Errorf("install slash command: %w", err)
+		}
 		return path, ErrAlreadyConfigured
 	}
 	mcp["domain"] = map[string]any{
@@ -134,6 +148,12 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 	doc["mcp"] = mcp
 	if err := writeJSONWithBackup(path, original, doc); err != nil {
 		return "", err
+	}
+	// issue-01.9: instala el slash command /domain-login.
+	if _, err := InstallSlashCommand(AgentOpenCode); err != nil {
+		// No es fatal — el MCP server sigue funcionando, pero el slash
+		// command no estara disponible. Loguear via return.
+		return path, fmt.Errorf("install slash command: %w", err)
 	}
 	return path, nil
 }
@@ -204,4 +224,113 @@ func Uninstall(agent Agent, dir string) (string, bool, error) {
 		return "", false, err
 	}
 	return path, true, nil
+}
+
+// issue-01.9 — slash command /domain-login. Se instala en el dir de
+// commands del agente (opencode o claude-code) cuando se hace
+// `domain setup [agent]`. El user puede entonces invocar el wizard
+// desde dentro del chat del agente con /domain-login.
+
+// CommandsDir retorna el dir donde se ponen los slash commands para el
+// agente. Para opencode: ~/.config/opencode/commands. Para claude-code:
+// ~/.claude/commands. Para claude-desktop: no aplica (no tiene slash
+// commands en el mismo sentido — retorna "").
+func CommandsDir(agent Agent) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch agent {
+	case AgentOpenCode:
+		return filepath.Join(home, ".config", "opencode", "commands"), nil
+	case AgentClaudeCode:
+		return filepath.Join(home, ".claude", "commands"), nil
+	case AgentClaudeDesktop:
+		return "", fmt.Errorf("claude-desktop no soporta slash commands custom")
+	}
+	return "", fmt.Errorf("agent %s no soportado", agent)
+}
+
+// DomainLoginCommandContent es el contenido del slash command /domain-login.
+// Es markdown que el agente lee como system prompt cuando el user
+// invoca /domain-login. Usa \u0060 (Unicode escape) en vez de backticks
+// para evitar cerrar prematuramente el raw string de Go.
+const DomainLoginCommandContent = `---
+description: Trigger the Domain onboarding wizard (login or bootstrap first user)
+agent: build
+---
+
+# /domain-login
+
+The user wants to authenticate with the Domain MCP server.
+
+## Steps
+
+1. **Run the onboard wizard** in a TTY-attached way. The wizard will:
+   - Detect if the DB is empty (first-run): if so, it auto-creates the first user + org + API key.
+   - Otherwise, it sends a 6-digit OTP code to the user's email and prompts for it.
+   - Saves the API key to \u0060~/.config/domain/credentials.json\u0060 (mode 0600).
+
+   \u0060\u0060\u0060bash
+   # Detect the domain binary path: usually the domain-mcp binary's sibling.
+   DOMAIN_BIN="$(dirname "$(command -v domain-mcp 2>/dev/null || echo /usr/local/bin/domain-mcp)")/domain"
+   if [ ! -x "$DOMAIN_BIN" ]; then
+     DOMAIN_BIN="$(command -v domain 2>/dev/null || echo domain)"
+   fi
+   "$DOMAIN_BIN" onboard --base-url "${DOMAIN_BASE_URL:-http://localhost:8000}"
+   \u0060\u0060\u0060
+
+2. **If the wizard asked the user for the server URL**, the user can type the URL directly into the terminal.
+
+3. **Re-configure opencode** to use the new key:
+
+   \u0060\u0060\u0060bash
+   "$DOMAIN_BIN" setup opencode --api-key "$(jq -r '.api_key' \u0060~/.config/domain/credentials.json\u0060)" --base-url "${DOMAIN_BASE_URL:-http://localhost:8000}"
+   \u0060\u0060\u0060
+
+4. **Confirm to the user**:
+   - Print: \u2705 Logged in to Domain. You can now use domain_mem_save, domain_policy_list, etc.
+   - **DO NOT** print the API key in the chat (it would be logged in the agent's history).
+   - **DO NOT** echo any environment variables that contain the API key.
+
+5. **If the wizard fails**, surface the error verbatim to the user (without paraphrasing or adding commentary).
+
+## Security notes
+
+- The API key is sensitive. Never echo it in chat, never write it to files that the agent could read, never include it in tool call results that the user could accidentally copy.
+- The user sees the key once during the wizard on their terminal; that's the only place it should appear.
+- The wizard may take 30-60 seconds if the user has to check their email for the OTP code. Be patient.
+
+## When to use this command
+
+- The user just installed the Domain MCP server and needs to authenticate.
+- The user got an "API key invalid" error from a tool call.
+- The user wants to switch to a different account.
+- The user is a brand new user (first run of the system) and needs to bootstrap the first user.
+`
+
+// InstallSlashCommand escribe el .md del slash command /domain-login en
+// el dir del agente. Si el archivo ya existe, hace backup.
+func InstallSlashCommand(agent Agent) (string, error) {
+	dir, err := CommandsDir(agent)
+	if err != nil {
+		return "", err
+	}
+	if dir == "" {
+		return "", fmt.Errorf("agent %s no soporta slash commands", agent)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "domain-login.md")
+	if _, err := os.Stat(path); err == nil {
+		backup := path + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
+		if err := os.Rename(path, backup); err != nil {
+			return "", err
+		}
+	}
+	if err := os.WriteFile(path, []byte(DomainLoginCommandContent), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }

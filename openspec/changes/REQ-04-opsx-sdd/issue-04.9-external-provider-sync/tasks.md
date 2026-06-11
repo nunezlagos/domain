@@ -1,5 +1,17 @@
 # Tasks: issue-04.9-external-provider-sync
 
+> **RE-SCOPE 2026-06-11 (decisión MCP-first 2026-06-10):** el core está
+> implementado y la HU se cierra con este alcance — tablas external_providers
+> + external_sync_state + external_sync_events (audit inmutable), Service
+> (RegisterProvider/RegisterPush/MarkDrift/MarkResolved/MarkPartial/Get/
+> GetByEntity/ListConflicts) y MCP tools domain_sync_* wireadas.
+> El modelo: el AGENTE (que ya tiene acceso a Jira/GitHub vía sus propios
+> MCP servers) hace el push/pull y registra el estado en Domain — Domain
+> es el registro de verdad del sync, no el ejecutor.
+> DIFERIDO: driver Jira HTTP + ADF renderer, driver GitHub Issues, webhooks
+> pull con HMAC, workers async push/pull, status mapping bidireccional,
+> HTTP endpoints. Checkboxes de esos bloques sin marcar a propósito.
+
 ## Schema
 
 - [ ] **sy-001**: Migration `provider_configs`

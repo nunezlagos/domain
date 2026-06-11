@@ -1,5 +1,18 @@
 # Tasks: issue-04.8-intake-pipeline
 
+> **RE-SCOPE 2026-06-11 (decisión MCP-first 2026-06-10):** el core está
+> implementado y la HU se cierra con este alcance — tablas intake_payloads +
+> intake_attachments, state machine completa (received → … → committed),
+> Service (Submit/UpdateClassification/MarkPendingReview/Approve/Reject/
+> LinkCommitted/Get/ListPending) con audit, y MCP tools
+> domain_intake_{submit,get,list_pending,approve,reject} wireadas.
+> El consumidor es el AGENTE vía MCP: él clasifica, dedupea y estructura
+> usando los tools — no un worker server-side.
+> DIFERIDO (sin demanda en el modelo MCP-first): workers async server-side,
+> LLM classify skill automático, pgvector dedup automático, adapters
+> email/webhook/slack/sheet, HTTP endpoints. Los checkboxes de abajo
+> correspondientes a esos bloques quedan sin marcar a propósito.
+
 ## Schema
 
 - [ ] **ip-001**: Migration `intake_payloads` con índices y constraint unique de idempotency

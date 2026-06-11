@@ -3,5 +3,5 @@ created: 2026-06-07
 archived: ~
 hus:
   15.1-token-tracking: implemented
-  15.2-cost-analytics: partially_implemented
+  15.2-cost-analytics: implemented
   15.3-usage-alerts: implemented

@@ -121,8 +121,43 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/cost/breakdown/{dimension}",
+    "handler": "getCostBreakdown"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/budgets",
+    "handler": "listBudgets"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/cost/budgets",
+    "handler": "createBudget"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/cost/budgets/{id}",
+    "handler": "deleteBudget"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/cost/daily",
     "handler": "getCostDaily"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/export",
+    "handler": "exportCost"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/forecast",
+    "handler": "getCostForecast"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/spend/{granularity}",
+    "handler": "getCostSpend"
   },
   {
     "method": "PATCH",

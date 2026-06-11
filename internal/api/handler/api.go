@@ -299,6 +299,13 @@ func (a *API) Router() http.Handler {
 
 	// Cost analytics (issue-15.1 + issue-15.2)
 	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
+	mux.HandleFunc("GET /api/v1/cost/spend/{granularity}", a.getCostSpend)
+	mux.HandleFunc("GET /api/v1/cost/breakdown/{dimension}", a.getCostBreakdown)
+	mux.HandleFunc("GET /api/v1/cost/forecast", a.getCostForecast)
+	mux.HandleFunc("POST /api/v1/cost/budgets", a.createBudget)
+	mux.HandleFunc("GET /api/v1/cost/budgets", a.listBudgets)
+	mux.HandleFunc("DELETE /api/v1/cost/budgets/{id}", a.deleteBudget)
+	mux.HandleFunc("GET /api/v1/cost/export", a.exportCost)
 	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 plan usage actual
 
 	// Admin DB stats (issue-25.12)

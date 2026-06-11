@@ -198,9 +198,10 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		j, _ := json.Marshal(in.BodyStructured)
 		newStructured = j
 	}
+	// is_user_modified=TRUE marca la policy para que el seeder no la pise.
 	_, err = tx.Exec(ctx,
 		`UPDATE platform_policies
-		 SET body_md=$1, body_structured=$2, version=version+1
+		 SET body_md=$1, body_structured=$2, version=version+1, is_user_modified=TRUE
 		 WHERE id=$3`, newBody, newStructured, id)
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)

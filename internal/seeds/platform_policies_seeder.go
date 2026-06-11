@@ -12,7 +12,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 1 }
+func (s *PlatformPoliciesSeeder) Version() int    { return 2 }
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -133,14 +133,15 @@ Sabotaje test obligatorio por HU.`,
 	}
 
 	for _, p := range policies {
+		// is_user_modified=TRUE → el seeder no pisa la edición manual (mismo patrón que agent_templates).
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO platform_policies (slug, name, kind, body_md, source_file, is_active)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), TRUE)
 			ON CONFLICT (slug, is_active) DO UPDATE
-			SET name        = EXCLUDED.name,
-			    kind        = EXCLUDED.kind,
-			    body_md     = EXCLUDED.body_md,
-			    source_file = EXCLUDED.source_file`,
+			SET name        = CASE WHEN platform_policies.is_user_modified THEN platform_policies.name        ELSE EXCLUDED.name        END,
+			    kind        = CASE WHEN platform_policies.is_user_modified THEN platform_policies.kind        ELSE EXCLUDED.kind        END,
+			    body_md     = CASE WHEN platform_policies.is_user_modified THEN platform_policies.body_md     ELSE EXCLUDED.body_md     END,
+			    source_file = CASE WHEN platform_policies.is_user_modified THEN platform_policies.source_file ELSE EXCLUDED.source_file END`,
 			p.Slug, p.Name, p.Kind, p.BodyMD, p.SourceFile,
 		)
 		if err != nil {

@@ -9,4 +9,4 @@ hus:
   01.5-project-merge: proposed
   01.6-local-dev-environment: implemented
   01.7-seeders-system: implemented
-  01.8-platform-policies: partially_implemented
+  01.8-platform-policies: implemented

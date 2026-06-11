@@ -184,6 +184,44 @@ func TestPlatformPoliciesSeeder_PopulatesBaseline(t *testing.T) {
 	require.Contains(t, name, "TDD")
 }
 
+func TestPlatformPoliciesSeeder_PreservesUserModified(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	reg := seeds.NewRegistry()
+	reg.Register(&seeds.PlatformPoliciesSeeder{})
+	_, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
+	require.NoError(t, err)
+
+	// Usuario edita una policy → is_user_modified=TRUE
+	_, err = pools.App.Exec(ctx,
+		`UPDATE platform_policies
+		 SET body_md='CONTENIDO CUSTOM DEL USUARIO', is_user_modified=TRUE
+		 WHERE slug='sdd-tdd-strict'`)
+	require.NoError(t, err)
+
+	// Re-corro el seeder directo (bypass del skip por version del registry)
+	tx, err := pools.Auth.Begin(ctx)
+	require.NoError(t, err)
+	_, err = (&seeds.PlatformPoliciesSeeder{}).Run(ctx, tx, seeds.EnvDev)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+
+	// Sabotaje: la edición del usuario NO debe pisarse
+	var body string
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT body_md FROM platform_policies WHERE slug='sdd-tdd-strict'`).Scan(&body))
+	require.Equal(t, "CONTENIDO CUSTOM DEL USUARIO", body,
+		"seeder no debe pisar policy con is_user_modified=TRUE")
+
+	// Una policy NO modificada sí se re-sincroniza desde el catálogo
+	var modified bool
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT is_user_modified FROM platform_policies WHERE slug='migration-safety'`).Scan(&modified))
+	require.False(t, modified)
+}
+
 func TestSeedSkillsForOrg_BuiltinCatalog(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)
 	defer cleanup()

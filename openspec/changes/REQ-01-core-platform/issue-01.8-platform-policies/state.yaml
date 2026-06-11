@@ -24,11 +24,19 @@ notes: |
 
   Tests cubren validKinds + reSlug + invalid slug/kind + sentinel.
 
-  Pending:
-  - CLI domain policies import-md (leer .claude/rules/*.md → bulk INSERT)
-  - CLI domain policies export-md (regenerar files desde BD)
-  - MCP tool domain_policy_get(slug) para agents
-  - Seeders built-in policies desde .claude/rules/
-  - GET /policies/{slug}/versions history
-  - RBAC platform_admin only para mutations
-  - Markdown-aware diff entre versiones
+  Cerrado 2026-06-11 (MCP-first):
+  - MCP tools domain_policy_get(slug) + domain_policy_list(kind) en
+    internal/mcp/server/policy_tools.go, wireados en cmd/domain-mcp
+    (TestMCP_PolicyGetAndList: get body completo, list, slug inexistente).
+  - CLI domain policies import-md/export-md (front matter, kind.slug.md,
+    --dry-run) en internal/cli/commands/policies.go.
+  - Seeder platform_policies (10 policies baseline desde .claude/rules/).
+  - is_user_modified: migration 000082 + guard CASE WHEN en seeder +
+    Update del service marca TRUE → TestPlatformPoliciesSeeder_PreservesUserModified.
+
+  Diferido (decisión MCP-first 2026-06-10, ver tasks.md):
+  - Parser md→body_structured + renderer (body_md es lo que consume el agente)
+  - FTS search + domain_policies_search (list cubre <30 policies)
+  - Cache LRU 5min (se evalúa con issue-12.6)
+  - GET versions history + rollback endpoint (history sí se persiste)
+  - Linters leyendo body_structured

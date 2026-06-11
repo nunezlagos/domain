@@ -31,6 +31,7 @@ import (
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
+	policysvc "nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -40,6 +41,7 @@ type mcpFixture struct {
 	srv         *mcptest.Server
 	projectSlug string
 	skills      *skillsvc.Service
+	policies    *policysvc.Service
 	orgID       uuid.UUID
 	userID      uuid.UUID
 	cleanup     func()
@@ -78,6 +80,7 @@ func setupMCP(t *testing.T) *mcpFixture {
 	require.NoError(t, err)
 
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	policyS := &policysvc.Service{Pool: pools.App}
 	deps := mcpserver.Deps{
 		Observations: obsS,
 		Projects:     projS,
@@ -90,8 +93,9 @@ func setupMCP(t *testing.T) *mcpFixture {
 		},
 		Agents: &agentsvc.Service{Pool: pools.App, Audit: rec},
 		Flows:  &flowsvc.Service{Pool: pools.App, Audit: rec},
-		Crons:  &cronsvc.Service{Pool: pools.App, Audit: rec},
-		Pool:   pools.App,
+		Crons:    &cronsvc.Service{Pool: pools.App, Audit: rec},
+		Policies: policyS,
+		Pool:     pools.App,
 		Principal: &apikey.Principal{
 			UserID:         owner.UserID.String(),
 			OrganizationID: org.ID.String(),
@@ -108,6 +112,7 @@ func setupMCP(t *testing.T) *mcpFixture {
 		srv:         testSrv,
 		projectSlug: proj.Slug,
 		skills:      skillS,
+		policies:    policyS,
 		orgID:       org.ID,
 		userID:      owner.UserID,
 		cleanup: func() {

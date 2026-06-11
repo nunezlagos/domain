@@ -40,6 +40,7 @@ import (
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	prouter "nunezlagos/domain/internal/service/promptrouter"
 	cronsvc "nunezlagos/domain/internal/service/cron"
+	policysvc "nunezlagos/domain/internal/service/policy"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
@@ -60,6 +61,7 @@ type Deps struct {
 	Agents       *agentsvc.Service
 	AgentRunner  *agentrunner.Runner
 	Crons        *cronsvc.Service // issue-12.3 domain_cron_list
+	Policies     *policysvc.Service // issue-01.8 domain_policy_get/list
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
 	Orchestrator *orchsvc.Service // issue-08.10 sdd-pipeline-orchestrator
@@ -130,6 +132,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	}
 	tools = append(tools, registerMemoryTools(wrap, deps)...)
 	tools = append(tools, registerCatalogTools(wrap, deps)...)
+	tools = append(tools, registerPolicyTools(wrap, deps)...)
 	tools = append(tools, registerHUTools(wrap, deps)...)
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)

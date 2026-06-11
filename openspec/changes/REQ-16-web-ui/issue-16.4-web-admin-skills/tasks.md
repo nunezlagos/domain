@@ -2,19 +2,19 @@
 
 ## Backend
 
-- [ ] Tarea 1
+- [x] Tarea 1
 
 ## Frontend
 
-- [ ] Tarea 1
+- [x] Tarea 1
 
 ## Tests
 
-- [ ] Test unitario
-- [ ] Test E2E
-- [ ] Sabotaje
+- [x] Test unitario
+- [x] Test E2E
+- [x] Sabotaje
 
 ## Cierre
 
-- [ ] Verificación manual
-- [ ] Suite verde
+- [x] Verificación manual
+- [x] Suite verde

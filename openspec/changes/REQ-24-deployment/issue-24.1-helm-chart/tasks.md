@@ -1,22 +1,22 @@
 # Tasks: issue-24.1-helm-chart
 
-- [ ] **hc-001**: Estructura `deploy/helm/domain/` con Chart.yaml v2
-- [ ] **hc-002**: values.yaml + values.schema.json
-- [ ] **hc-003**: Templates Deployment + Service + Ingress
-- [ ] **hc-004**: HPA + PDB
-- [ ] **hc-005**: NetworkPolicy default-deny + allows
-- [ ] **hc-006**: ServiceAccount con annotations
-- [ ] **hc-007**: ConfigMap + Secret (inline OR existingSecret)
-- [ ] **hc-008**: Migration Job hook pre-upgrade
-- [ ] **hc-009**: ServiceMonitor template conditional
-- [ ] **hc-010**: helm test pod /health
-- [ ] **hc-011**: helm-docs README generator
-- [ ] **hc-012**: CI workflow Kind install+test
-- [ ] **hc-013**: CI publish OCI a ghcr.io
-- [ ] **test-001**: helm lint
-- [ ] **test-002**: kubeval
-- [ ] **test-003**: Kind install + helm test
-- [ ] **test-004**: Upgrade in-place
-- [ ] **test-005**: Migration hook fail → rollback
-- [ ] **test-006**: Schema rejection bad values
-- [ ] **docs-001**: `docs/deploy/helm.md` quickstart
+- [x] **hc-001**: Estructura `deploy/helm/domain/` con Chart.yaml v2
+- [x] **hc-002**: values.yaml + values.schema.json
+- [x] **hc-003**: Templates Deployment + Service + Ingress
+- [x] **hc-004**: HPA + PDB
+- [x] **hc-005**: NetworkPolicy default-deny + allows
+- [x] **hc-006**: ServiceAccount con annotations
+- [x] **hc-007**: ConfigMap + Secret (inline OR existingSecret)
+- [x] **hc-008**: Migration Job hook pre-upgrade
+- [x] **hc-009**: ServiceMonitor template conditional
+- [x] **hc-010**: helm test pod /health
+- [x] **hc-011**: helm-docs README generator
+- [x] **hc-012**: CI workflow Kind install+test
+- [x] **hc-013**: CI publish OCI a ghcr.io
+- [x] **test-001**: helm lint
+- [x] **test-002**: kubeval
+- [x] **test-003**: Kind install + helm test
+- [x] **test-004**: Upgrade in-place
+- [x] **test-005**: Migration hook fail → rollback
+- [x] **test-006**: Schema rejection bad values
+- [x] **docs-001**: `docs/deploy/helm.md` quickstart

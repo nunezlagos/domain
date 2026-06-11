@@ -2,41 +2,41 @@
 
 ## Backend
 
-- [ ] Implementar `extractBearerToken()` del header Authorization
-- [ ] Implementar `AuthMiddleware` con validación contra tabla api_keys
-- [ ] Implementar caché de API keys con TTL (sync.Map + cleanup goroutine)
-- [ ] Implementar `RBACMiddleware` que verifica permisos por entidad+acción
-- [ ] Definir roles base: admin, editor, viewer con sus permisos
-- [ ] Implementar `RateLimiter` con sliding window counters en memoria
-- [ ] Implementar sharding de rate limit buckets para concurrencia
-- [ ] Implementar `RequestLogger` con duración, status, método, path, api_key_id, ip
-- [ ] Implementar sanitización de Authorization header en logs
-- [ ] Implementar CORS middleware configurable
-- [ ] Configurar middleware chain en router principal
-- [ ] Excluir /api/v1/health de auth
-- [ ] Manejar edge cases: token vacío, malformado, expires_at vencido, is_active=false
+- [x] Implementar `extractBearerToken()` del header Authorization
+- [x] Implementar `AuthMiddleware` con validación contra tabla api_keys
+- [x] Implementar caché de API keys con TTL (sync.Map + cleanup goroutine)
+- [x] Implementar `RBACMiddleware` que verifica permisos por entidad+acción
+- [x] Definir roles base: admin, editor, viewer con sus permisos
+- [x] Implementar `RateLimiter` con sliding window counters en memoria
+- [x] Implementar sharding de rate limit buckets para concurrencia
+- [x] Implementar `RequestLogger` con duración, status, método, path, api_key_id, ip
+- [x] Implementar sanitización de Authorization header en logs
+- [x] Implementar CORS middleware configurable
+- [x] Configurar middleware chain en router principal
+- [x] Excluir /api/v1/health de auth
+- [x] Manejar edge cases: token vacío, malformado, expires_at vencido, is_active=false
 
 ## Frontend
 
-- [ ] N/A (API pura)
+- [x] N/A (API pura)
 
 ## Tests
 
-- [ ] Test unitario: extracción Bearer token
-- [ ] Test unitario: auth middleware sin token → 401
-- [ ] Test unitario: auth middleware con token inválido → 401
-- [ ] Test unitario: auth middleware con token expirado → 401
-- [ ] Test unitario: auth middleware con token desactivado → 401
-- [ ] Test unitario: RBAC permisos correctos → 200, incorrectos → 403
-- [ ] Test unitario: rate limiter dentro del límite → pasa, excede → 429
-- [ ] Test unitario: rate limiter reset después de ventana
-- [ ] Test unitario: health endpoint no requiere auth
-- [ ] Test unitario: CORS headers presentes
-- [ ] Test unitario: sanitización de tokens en logs
-- [ ] Sabotaje: eliminar auth middleware → test CRUD sin token detecta
+- [x] Test unitario: extracción Bearer token
+- [x] Test unitario: auth middleware sin token → 401
+- [x] Test unitario: auth middleware con token inválido → 401
+- [x] Test unitario: auth middleware con token expirado → 401
+- [x] Test unitario: auth middleware con token desactivado → 401
+- [x] Test unitario: RBAC permisos correctos → 200, incorrectos → 403
+- [x] Test unitario: rate limiter dentro del límite → pasa, excede → 429
+- [x] Test unitario: rate limiter reset después de ventana
+- [x] Test unitario: health endpoint no requiere auth
+- [x] Test unitario: CORS headers presentes
+- [x] Test unitario: sanitización de tokens en logs
+- [x] Sabotaje: eliminar auth middleware → test CRUD sin token detecta
 
 ## Cierre
 
-- [ ] Verificación manual: curl con/ sin token contra endpoints
-- [ ] Suite verde: `go test ./internal/api/...`
-- [ ] Rate limit test con 101 requests en 60s
+- [x] Verificación manual: curl con/ sin token contra endpoints
+- [x] Suite verde: `go test ./internal/api/...`
+- [x] Rate limit test con 101 requests en 60s

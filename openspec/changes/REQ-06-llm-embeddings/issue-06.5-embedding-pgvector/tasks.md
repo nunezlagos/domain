@@ -2,33 +2,33 @@
 
 ## Backend
 
-- [ ] Definir interface Embedder con Name, Dimensions, Embed, EmbedBatch
-- [ ] Implementar OpenAIEmbedder (text-embedding-3-small)
-- [ ] Implementar AnthropicEmbedder
-- [ ] Crear migración SQL: CREATE EXTENSION vector
-- [ ] Crear migración: agregar columna embedding a skills
-- [ ] Crear migración: agregar columna embedding a observations
-- [ ] Crear índices IVFFlat (y opcional HNSW)
-- [ ] Implementar helper queries para cosine similarity
-- [ ] Implementar truncado a 512 tokens antes de embedder
-- [ ] Integrar generación de embedding en creación/actualización de skills
+- [x] Definir interface Embedder con Name, Dimensions, Embed, EmbedBatch
+- [x] Implementar OpenAIEmbedder (text-embedding-3-small)
+- [x] Implementar AnthropicEmbedder
+- [x] Crear migración SQL: CREATE EXTENSION vector
+- [x] Crear migración: agregar columna embedding a skills
+- [x] Crear migración: agregar columna embedding a observations
+- [x] Crear índices IVFFlat (y opcional HNSW)
+- [x] Implementar helper queries para cosine similarity
+- [x] Implementar truncado a 512 tokens antes de embedder
+- [x] Integrar generación de embedding en creación/actualización de skills
 
 ## Frontend
 
-- [ ] N/A
+- [x] N/A
 
 ## Tests
 
-- [ ] Test unitario: OpenAI embedder con mock HTTP
-- [ ] Test unitario: Anthropic embedder con mock HTTP
-- [ ] Test unitario: EmbedBatch produce vectores correctos
-- [ ] Test unitario: texto vacío manejado
-- [ ] Test unitario: truncado a 512 tokens
-- [ ] Test integración: migración pgvector en DB test
-- [ ] Test integración: insertar embedding y buscar por similitud
-- [ ] Sabotaje: API key inválida → error graceful
+- [x] Test unitario: OpenAI embedder con mock HTTP
+- [x] Test unitario: Anthropic embedder con mock HTTP
+- [x] Test unitario: EmbedBatch produce vectores correctos
+- [x] Test unitario: texto vacío manejado
+- [x] Test unitario: truncado a 512 tokens
+- [x] Test integración: migración pgvector en DB test
+- [x] Test integración: insertar embedding y buscar por similitud
+- [x] Sabotaje: API key inválida → error graceful
 
 ## Cierre
 
-- [ ] Verificar migración en DB local
-- [ ] Suite verde
+- [x] Verificar migración en DB local
+- [x] Suite verde

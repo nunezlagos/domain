@@ -2,33 +2,33 @@
 
 ## Backend
 
-- [ ] Implementar struct ModelInfo y ModelRegistry
-- [ ] Precargar modelos default con precios actualizados
-- [ ] Implementar CalculateCost con desglose
-- [ ] Implementar interface TokenCounter
-- [ ] Implementar TiktokenCounter (OpenAI)
-- [ ] Implementar ClaudeTokenizer (Anthropic)
-- [ ] Implementar ApproxCounter (fallback genérico)
-- [ ] Integrar token counter en los runners para poblar TokenUsage
+- [x] Implementar struct ModelInfo y ModelRegistry
+- [x] Precargar modelos default con precios actualizados
+- [x] Implementar CalculateCost con desglose
+- [x] Implementar interface TokenCounter
+- [x] Implementar TiktokenCounter (OpenAI)
+- [x] Implementar ClaudeTokenizer (Anthropic)
+- [x] Implementar ApproxCounter (fallback genérico)
+- [x] Integrar token counter en los runners para poblar TokenUsage
 
 ## Frontend
 
-- [ ] N/A
+- [x] N/A
 
 ## Tests
 
-- [ ] Test unitario: GetModel para cada modelo conocido
-- [ ] Test unitario: GetModel para modelo inexistente → error
-- [ ] Test unitario: CalculateCost con valores exactos
-- [ ] Test unitario: CalculateCost con modelo local (costo 0)
-- [ ] Test unitario: UpdatePrice funciona
-- [ ] Test unitario: ListModels devuelve todos
-- [ ] Test unitario: TiktokenCount con texto conocido
-- [ ] Test unitario: ClaudeCount con texto conocido
-- [ ] Test unitario: ApproxCount como fallback
-- [ ] Sabotaje: tokenizer falla → fallback a approx
+- [x] Test unitario: GetModel para cada modelo conocido
+- [x] Test unitario: GetModel para modelo inexistente → error
+- [x] Test unitario: CalculateCost con valores exactos
+- [x] Test unitario: CalculateCost con modelo local (costo 0)
+- [x] Test unitario: UpdatePrice funciona
+- [x] Test unitario: ListModels devuelve todos
+- [x] Test unitario: TiktokenCount con texto conocido
+- [x] Test unitario: ClaudeCount con texto conocido
+- [x] Test unitario: ApproxCount como fallback
+- [x] Sabotaje: tokenizer falla → fallback a approx
 
 ## Cierre
 
-- [ ] Verificar que todos los modelos usados en la app están registrados
-- [ ] Suite verde
+- [x] Verificar que todos los modelos usados en la app están registrados
+- [x] Suite verde

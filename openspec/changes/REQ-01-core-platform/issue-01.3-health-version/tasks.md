@@ -2,29 +2,29 @@
 
 ## Backend
 
-- [ ] Crear `internal/version/version.go` con variables Version, Commit, BuildTime
-- [ ] Implementar handler `GET /health` en `internal/api/health.go`
-- [ ] Integrar DB ping con timeout en health handler
-- [ ] Registrar ruta `/health` en el router principal
-- [ ] Guardar startTime al inicio de `main()` para uptime
-- [ ] Agregar target `build` en Makefile con ldflags
-- [ ] Agregar target `run` que compile con version y ejecute
-- [ ] Implementar comando `domain version` en CLI
-- [ ] Health response JSON con todos los campos
+- [x] Crear `internal/version/version.go` con variables Version, Commit, BuildTime
+- [x] Implementar handler `GET /health` en `internal/api/health.go`
+- [x] Integrar DB ping con timeout en health handler
+- [x] Registrar ruta `/health` en el router principal
+- [x] Guardar startTime al inicio de `main()` para uptime
+- [x] Agregar target `build` en Makefile con ldflags
+- [x] Agregar target `run` que compile con version y ejecute
+- [x] Implementar comando `domain version` en CLI
+- [x] Health response JSON con todos los campos
 
 ## Tests
 
-- [ ] Test unitario: handler devuelve 200 con DB mock
-- [ ] Test unitario: handler devuelve 503 con DB caída
-- [ ] Test unitario: version default "dev"
-- [ ] Test unitario: version se sobreescribe
-- [ ] Test unitario: uptime positivo
-- [ ] Test unitario: CLI `version` imprime correctamente
-- [ ] Sabotaje: remover ldflags → confirmar "dev" → restaurar
-- [ ] Sabotaje: DB mock siempre error → confirmar 503 → restaurar
+- [x] Test unitario: handler devuelve 200 con DB mock
+- [x] Test unitario: handler devuelve 503 con DB caída
+- [x] Test unitario: version default "dev"
+- [x] Test unitario: version se sobreescribe
+- [x] Test unitario: uptime positivo
+- [x] Test unitario: CLI `version` imprime correctamente
+- [x] Sabotaje: remover ldflags → confirmar "dev" → restaurar
+- [x] Sabotaje: DB mock siempre error → confirmar 503 → restaurar
 
 ## Cierre
 
-- [ ] Verificación manual: `curl localhost:3000/health`
-- [ ] Verificación manual: `domain version`
-- [ ] Suite verde
+- [x] Verificación manual: `curl localhost:3000/health`
+- [x] Verificación manual: `domain version`
+- [x] Suite verde

@@ -1,21 +1,21 @@
 # Tasks: issue-08.9-agent-hierarchical-context
 
-- [ ] **hc-001**: Migración agent_memory_kv + agents.upstream_keys
-- [ ] **hc-002**: Service `internal/agents/memory/` con Get/Set/Delete
-- [ ] **hc-003**: Cache LRU en memoria + LISTEN/NOTIFY invalidation
-- [ ] **hc-004**: Inheritance walker (busca en chain de parent runs)
-- [ ] **hc-005**: Upstream merge on completion (tx atómica)
-- [ ] **hc-006**: Tool sintético `parent_memory_get` + `parent_memory_list`
-- [ ] **hc-007**: TTL cleaner cada 5min
-- [ ] **hc-008**: RBAC scope validator
-- [ ] **hc-009**: Warning si scope >10MB
-- [ ] **test-001**: CRUD por scope
-- [ ] **test-002**: Inheritance read child
-- [ ] **test-003**: Upstream merge solo declarados
-- [ ] **test-004**: TTL expira
-- [ ] **test-005**: RBAC cross-org 403
-- [ ] **test-006**: Concurrent upstream lock
-- [ ] **test-007**: Cancel no mergea
-- [ ] **test-008**: Performance cache 10k/s
-- [ ] **sabotaje-001**: Child write parent scope → 403
-- [ ] **docs-001**: `docs/agents/memory-scopes.md`
+- [x] **hc-001**: Migración agent_memory_kv + agents.upstream_keys
+- [x] **hc-002**: Service `internal/agents/memory/` con Get/Set/Delete
+- [x] **hc-003**: Cache LRU en memoria + LISTEN/NOTIFY invalidation
+- [x] **hc-004**: Inheritance walker (busca en chain de parent runs)
+- [x] **hc-005**: Upstream merge on completion (tx atómica)
+- [x] **hc-006**: Tool sintético `parent_memory_get` + `parent_memory_list`
+- [x] **hc-007**: TTL cleaner cada 5min
+- [x] **hc-008**: RBAC scope validator
+- [x] **hc-009**: Warning si scope >10MB
+- [x] **test-001**: CRUD por scope
+- [x] **test-002**: Inheritance read child
+- [x] **test-003**: Upstream merge solo declarados
+- [x] **test-004**: TTL expira
+- [x] **test-005**: RBAC cross-org 403
+- [x] **test-006**: Concurrent upstream lock
+- [x] **test-007**: Cancel no mergea
+- [x] **test-008**: Performance cache 10k/s
+- [x] **sabotaje-001**: Child write parent scope → 403
+- [x] **docs-001**: `docs/agents/memory-scopes.md`

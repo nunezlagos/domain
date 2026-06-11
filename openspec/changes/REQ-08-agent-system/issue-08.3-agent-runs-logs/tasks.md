@@ -2,31 +2,31 @@
 
 ## Backend
 
-- [ ] Crear migración SQL para tablas `agent_runs` y `run_logs`
-- [ ] Implementar `RunRepository` con métodos: CreateRun, UpdateRun, AppendLog, GetRun, ListRuns, GetLogs
-- [ ] Implementar `RunLogger` service con métodos: LogRunCreated, LogLLMCall, LogSkillExecution, LogRunCompleted, LogRunFailed
-- [ ] Implementar cálculo de costo al finalizar run: tokens_input * cost_input + tokens_output * cost_output
-- [ ] Implementar endpoints: GET /agents/:id/runs (con filtros y paginación)
-- [ ] Implementar endpoint: GET /runs/:run_id
-- [ ] Implementar endpoint: GET /runs/:run_id/log (con paginación por secuencia)
-- [ ] Integrar `RunLogger` con `AgentExecutor` (issue-08.2)
-- [ ] Agregar límite de tamaño en prompt/response (10KB) con truncamiento
-- [ ] Implementar política de retención: purge de runs > 30 días (configurable)
+- [x] Crear migración SQL para tablas `agent_runs` y `run_logs`
+- [x] Implementar `RunRepository` con métodos: CreateRun, UpdateRun, AppendLog, GetRun, ListRuns, GetLogs
+- [x] Implementar `RunLogger` service con métodos: LogRunCreated, LogLLMCall, LogSkillExecution, LogRunCompleted, LogRunFailed
+- [x] Implementar cálculo de costo al finalizar run: tokens_input * cost_input + tokens_output * cost_output
+- [x] Implementar endpoints: GET /agents/:id/runs (con filtros y paginación)
+- [x] Implementar endpoint: GET /runs/:run_id
+- [x] Implementar endpoint: GET /runs/:run_id/log (con paginación por secuencia)
+- [x] Integrar `RunLogger` con `AgentExecutor` (issue-08.2)
+- [x] Agregar límite de tamaño en prompt/response (10KB) con truncamiento
+- [x] Implementar política de retención: purge de runs > 30 días (configurable)
 
 ## Tests
 
-- [ ] Test unitario: RunLogger registra eventos en orden
-- [ ] Test unitario: cálculo de costo con snapshot de precios
-- [ ] Test unitario: filtros de status en ListRuns
-- [ ] Test unitario: paginación (limit/offset)
-- [ ] Test unitario: run sin logs retorna array vacío
-- [ ] Test de integración: CRUD runs + logs en DB real
-- [ ] Test de integración: logging durante ejecución de agente real
-- [ ] Test E2E: escenarios Gherkin del hu.md vía API
-- [ ] Sabotaje: run sin logs → array vacío, no error
+- [x] Test unitario: RunLogger registra eventos en orden
+- [x] Test unitario: cálculo de costo con snapshot de precios
+- [x] Test unitario: filtros de status en ListRuns
+- [x] Test unitario: paginación (limit/offset)
+- [x] Test unitario: run sin logs retorna array vacío
+- [x] Test de integración: CRUD runs + logs en DB real
+- [x] Test de integración: logging durante ejecución de agente real
+- [x] Test E2E: escenarios Gherkin del hu.md vía API
+- [x] Sabotaje: run sin logs → array vacío, no error
 
 ## Cierre
 
-- [ ] Verificación manual: ejecutar agente, consultar logs
-- [ ] Suite verde completa
-- [ ] Documentar endpoints y estructura de logs
+- [x] Verificación manual: ejecutar agente, consultar logs
+- [x] Suite verde completa
+- [x] Documentar endpoints y estructura de logs

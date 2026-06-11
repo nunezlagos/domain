@@ -51,9 +51,12 @@ import (
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/llm/anthropic"
+	"nunezlagos/domain/internal/llm/google"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
+	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
+	llmretry "nunezlagos/domain/internal/llm/retry"
 	smtpmail "nunezlagos/domain/internal/mail/smtp"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
@@ -412,26 +415,33 @@ func runServer() {
 	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
 
 	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
-	// Cada provider se envuelve con circuit breaker (issue-26.5) para shed-load
-	// cuando hay errores sostenidos del provider externo.
+	// Stack de resiliencia por provider (issue-06.2 + issue-26.5):
+	// circuit breaker( ratelimit( retry( provider ) ) )
 	llmFactory := llm.NewFactory()
 	cbCfg := circuitbreaker.Config{
 		FailureThreshold: 5,
 		RecoveryTimeout:  30 * time.Second,
 	}
+	maxConc := 8
+	if v := os.Getenv("DOMAIN_LLM_MAX_CONCURRENT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxConc = n
+		}
+	}
+	wrapLLM := func(p llm.Provider) llm.Provider {
+		return circuitbreaker.New(
+			llmratelimit.New(llmretry.New(p, llmretry.Config{}), maxConc), cbCfg)
+	}
 	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
-		llmFactory.Register("anthropic", circuitbreaker.New(anthropic.New(k), cbCfg))
+		llmFactory.Register("anthropic", wrapLLM(anthropic.New(k)))
 	}
 	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
-		llmFactory.Register("openai", circuitbreaker.New(llmopenai.New(k), cbCfg))
+		llmFactory.Register("openai", wrapLLM(llmopenai.New(k)))
 	}
-	if k := os.Getenv("DOMAIN_OLLAMA_HOST"); k != "" || true {
-		p := ollama.New()
-		if k != "" {
-			p.BaseURL = k
-		}
-		llmFactory.Register("ollama", circuitbreaker.New(p, cbCfg))
+	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
+		llmFactory.Register("google", wrapLLM(google.New(k)))
 	}
+	llmFactory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		llmFactory.SetDefault(def, def)
 	}

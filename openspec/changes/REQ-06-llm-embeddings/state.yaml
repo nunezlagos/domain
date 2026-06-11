@@ -3,7 +3,7 @@ created: 2026-06-07
 archived: ~
 hus:
   06.1-llm-provider-factory: implemented
-  06.2-llm-runners: partially_implemented
+  06.2-llm-runners: implemented
   06.3-ollama-runner: implemented
   06.4-model-registry-cost: implemented
   06.5-embedding-pgvector: implemented

@@ -26,9 +26,12 @@ import (
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
+	"nunezlagos/domain/internal/llm/google"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
+	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
+	llmretry "nunezlagos/domain/internal/llm/retry"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
@@ -111,19 +114,22 @@ func main() {
 	agents := &agentsvc.Service{Pool: pools.App, Audit: recorder}
 	billingSvc := &billing.Service{Pool: pools.App}
 
-	// LLM factory: providers según env vars DOMAIN_*_KEY.
+	// LLM factory: providers según env vars DOMAIN_*_KEY, con retry +
+	// rate limit (issue-06.2).
 	factory := llm.NewFactory()
+	wrapLLM := func(p llm.Provider) llm.Provider {
+		return llmratelimit.New(llmretry.New(p, llmretry.Config{}), 8)
+	}
 	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
-		factory.Register("anthropic", anthropic.New(k))
+		factory.Register("anthropic", wrapLLM(anthropic.New(k)))
 	}
 	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
-		factory.Register("openai", llmopenai.New(k))
+		factory.Register("openai", wrapLLM(llmopenai.New(k)))
 	}
-	op := ollama.New()
-	if h := os.Getenv("DOMAIN_OLLAMA_HOST"); h != "" {
-		op.BaseURL = h
+	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
+		factory.Register("google", wrapLLM(google.New(k)))
 	}
-	factory.Register("ollama", op)
+	factory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)
 	}

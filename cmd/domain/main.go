@@ -568,6 +568,8 @@ func runServer() {
 			}
 			go watcher.Start(leaderCtx)
 		}
+		// issue-09.7 fv-009: archiva flow_versions deprecated >90d sin runs
+		go runFlowVersionArchiver(leaderCtx, pools.App, logger)
 		// issue-08.12 orphan-runs-audit (cuenta agent_runs bypass del enforcement)
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
@@ -1000,6 +1002,30 @@ func runAuditPruneScheduler(ctx context.Context, recorder *audit.PGRecorder, log
 			}
 			if n > 0 {
 				logger.Info("pruned old audit logs", slog.Int64("count", n))
+			}
+		}
+	}
+}
+
+// runFlowVersionArchiver elimina flow_versions deprecated >90d que ningún
+// run referencia (issue-09.7 fv-009). Corre diario en el pod leader.
+func runFlowVersionArchiver(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) {
+	vs := &flow.VersioningStore{Pool: pool}
+	retention := 90 * 24 * time.Hour
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := vs.ArchiveDeprecated(ctx, retention)
+			if err != nil {
+				logger.Warn("flow version archive failed", slog.String("error", err.Error()))
+				continue
+			}
+			if n > 0 {
+				logger.Info("archived deprecated flow versions", slog.Int64("count", n))
 			}
 		}
 	}

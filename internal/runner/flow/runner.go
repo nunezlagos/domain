@@ -92,6 +92,9 @@ type RunInput struct {
 	TriggeredBy *uuid.UUID
 	TriggerType string // "manual" | "cron" | "webhook" | ...
 	Inputs      map[string]any
+	// FlowVersion invoca una versión específica (issue-09.7). 0 = current.
+	// La versión debe estar published; draft/deprecated son rechazadas.
+	FlowVersion int
 }
 
 type RunResult struct {
@@ -152,14 +155,27 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	}
 	inputsJSON, _ := json.Marshal(in.Inputs)
 
+	// issue-09.7 fv-008: el run conserva la versión con la que arranca.
+	var versionID *uuid.UUID
+	if in.FlowVersion > 0 {
+		v, spec, verr := r.resolveVersionSpec(ctx, f.ID, in.FlowVersion)
+		if verr != nil {
+			return nil, fmt.Errorf("flow version %d: %w", in.FlowVersion, verr)
+		}
+		f.Spec = *spec
+		versionID = &v.ID
+	} else if pinned := r.pinVersion(ctx, f); pinned != nil {
+		versionID = &pinned.ID
+	}
+
 	now := time.Now().UTC()
 	var runID uuid.UUID
 	err = r.Pool.QueryRow(ctx,
 		`INSERT INTO flow_runs
-		   (organization_id, flow_id, triggered_by, trigger_type, status, inputs, started_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		   (organization_id, flow_id, triggered_by, trigger_type, status, inputs, started_at, flow_version_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id`,
-		f.OrganizationID, f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now,
+		f.OrganizationID, f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now, versionID,
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create flow_run: %w", err)

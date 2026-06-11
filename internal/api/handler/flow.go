@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -231,6 +233,70 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, plan)
+}
+
+type updateFlowBody struct {
+	Spec *flow.Spec `json:"spec"`
+	Note string     `json:"note,omitempty"`
+}
+
+// PATCH /api/v1/flows/{id} — issue-09.7 (fv-002)
+// Crea una nueva flow_version en draft con el spec propuesto. NO muta la
+// definition current del flow: el draft se activa recién al publish.
+func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	prev, err := a.FlowService.GetByID(r.Context(), id)
+	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+
+	var b updateFlowBody
+	if err := decodeJSON(r, &b); err != nil || b.Spec == nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "spec required")
+		return
+	}
+	if err := b.Spec.Validate(); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", err.Error())
+		return
+	}
+
+	def, err := json.Marshal(b.Spec)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", err.Error())
+		return
+	}
+	sum := sha256.Sum256(def)
+	hash := hex.EncodeToString(sum[:])
+
+	actorID, _ := uuid.Parse(p.UserID)
+	vs := &flow.VersioningStore{Pool: a.FlowService.Pool}
+	v, err := vs.NewVersion(r.Context(), id, def, hash, b.Note, &actorID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "version_create", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"flow_id":    v.FlowID,
+		"version":    v.Version,
+		"version_id": v.ID,
+		"status":     "draft",
+		"hash":       v.Hash,
+		"created_at": v.CreatedAt,
+	})
 }
 
 type signalRunBody struct {

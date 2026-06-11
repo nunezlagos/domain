@@ -34,11 +34,12 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 		outputsRaw    []byte
 		inputsRaw     []byte
 		recoveryCount int
+		versionID     *uuid.UUID
 	)
 	err := r.Pool.QueryRow(ctx, `
-		SELECT flow_id, status, cursor, outputs, inputs, recovery_count
+		SELECT flow_id, status, cursor, outputs, inputs, recovery_count, flow_version_id
 		FROM flow_runs WHERE id = $1 FOR UPDATE`, in.RunID,
-	).Scan(&flowID, &status, &cursorRaw, &outputsRaw, &inputsRaw, &recoveryCount)
+	).Scan(&flowID, &status, &cursorRaw, &outputsRaw, &inputsRaw, &recoveryCount, &versionID)
 	if err != nil {
 		return nil, fmt.Errorf("load run: %w", err)
 	}
@@ -50,6 +51,13 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 	f, err := r.Flows.GetByID(ctx, flowID)
 	if err != nil {
 		return nil, fmt.Errorf("flow not found: %w", err)
+	}
+	// issue-09.7 fv-008: el engine lee la versión pinneada del run, no la
+	// definition actual del flow (que pudo cambiar mientras el run corría).
+	if versionID != nil {
+		if spec, ok := r.loadRunVersionSpec(ctx, *versionID); ok {
+			f.Spec = *spec
+		}
 	}
 
 	cursor := map[string]any{}

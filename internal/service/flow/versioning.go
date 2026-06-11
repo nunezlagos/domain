@@ -125,6 +125,44 @@ func (s *VersioningStore) GetLatest(ctx context.Context, flowID uuid.UUID) (*Flo
 	return &versions[0], nil
 }
 
+// FindByHash localiza una versión por hash de definition (cualquier posición,
+// no solo la última). Para run pinning idempotente (fv-008).
+func (s *VersioningStore) FindByHash(ctx context.Context, flowID uuid.UUID, hash string) (*FlowVersion, error) {
+	var v FlowVersion
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, flow_id, version, definition, hash, created_by, created_at, COALESCE(note, '')
+		 FROM flow_versions WHERE flow_id = $1 AND hash = $2
+		 ORDER BY version DESC LIMIT 1`,
+		flowID, hash,
+	).Scan(&v.ID, &v.FlowID, &v.Version, &v.Definition, &v.Hash, &v.CreatedBy, &v.CreatedAt, &v.Note)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrFlowVersionNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find by hash: %w", err)
+	}
+	return &v, nil
+}
+
+// ArchiveDeprecated elimina versiones deprecated hace más de retention que
+// ningún run referencia (fv-009, cron diario). Nunca toca la default.
+func (s *VersioningStore) ArchiveDeprecated(ctx context.Context, retention time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-retention)
+	tag, err := s.Pool.Exec(ctx, `
+		DELETE FROM flow_versions v
+		WHERE v.status = 'deprecated'
+		  AND v.is_default = false
+		  AND v.deprecated_at IS NOT NULL
+		  AND v.deprecated_at < $1
+		  AND NOT EXISTS (
+			SELECT 1 FROM flow_runs r WHERE r.flow_version_id = v.id
+		  )`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("archive deprecated: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 var (
 	ErrVersionAlreadyPublished  = errors.New("version already published")
 	ErrVersionAlreadyDeprecated = errors.New("version already deprecated")

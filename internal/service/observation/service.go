@@ -19,12 +19,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/memory/dedup"
 	"nunezlagos/domain/internal/memory/privacy"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -79,6 +81,23 @@ type Service struct {
 	Events   EventEmitter // nil = sin webhooks
 }
 
+// querier retorna la tx con SET LOCAL si el middleware HTTP la inyectó
+// (issue-25.14), o el pool como fallback. Permite que las mismas queries
+// funcionen dentro de una request HTTP (RLS activa) o desde un job/cron
+// (que corre como app_admin con BYPASSRLS, sin necesidad de tx).
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Service) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
+}
+
 // Save crea observation con embedding generado en línea.
 // Aplica privacy stripping (<private>...</private>) y dedup hash check
 // (UNIQUE constraint en DB = defense in depth contra bypass de la app).
@@ -123,7 +142,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 	embedLit := vectorLiteral(vec)
 
 	var o Observation
-	err = s.Pool.QueryRow(ctx,
+	err = s.q(ctx).QueryRow(ctx,
 		`INSERT INTO observations
 		   (organization_id, project_id, created_by, session_id, content,
 		    embedding, observation_type, tags, metadata, content_hash)
@@ -168,7 +187,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Observation, error) {
 	var o Observation
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT id, organization_id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
 		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, id,
@@ -188,7 +207,7 @@ func (s *Service) List(ctx context.Context, projectID uuid.UUID, limit int) ([]O
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.q(ctx).Query(ctx,
 		`SELECT id, organization_id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
 		 FROM observations
@@ -245,7 +264,7 @@ func (s *Service) ListPaginated(ctx context.Context, in ListPageInput) ([]Observ
 	args = append(args, limit+1)
 	q += fmt.Sprintf(" ORDER BY created_at %s, id %s LIMIT $%d", dir, dir, len(args))
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("list paginated: %w", err)
 	}
@@ -271,7 +290,7 @@ func (s *Service) ListPaginated(ctx context.Context, in ListPageInput) ([]Observ
 
 // SoftDelete marca deleted_at.
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
+	tag, err := s.q(ctx).Exec(ctx,
 		`UPDATE observations SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
@@ -313,7 +332,7 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 	// CTE: BM25 ranking + (opcional) vector ranking, después RRF fusion.
 	var rows pgx.Rows
 	if useVector {
-		rows, err = s.Pool.Query(ctx, `
+		rows, err = s.q(ctx).Query(ctx, `
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, query) DESC) AS r
   FROM observations, plainto_tsquery('spanish', $2) AS query
@@ -342,7 +361,7 @@ ORDER BY f.score DESC
 LIMIT $6
 `, orgID, query, vectorLiteral(vec), candidates, rrfK, limit)
 	} else {
-		rows, err = s.Pool.Query(ctx, `
+		rows, err = s.q(ctx).Query(ctx, `
 SELECT o.id, o.organization_id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,
        ts_rank(o.content_tsv, query)::float8 AS score,

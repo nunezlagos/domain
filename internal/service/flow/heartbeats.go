@@ -7,6 +7,7 @@ package flow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -63,6 +64,30 @@ func (s *HeartbeatStore) BeatWithProgress(ctx context.Context, stepID uuid.UUID,
 		return fmt.Errorf("beat with progress: %w", err)
 	}
 	return nil
+}
+
+// ProgressChannel es el canal pg NOTIFY de eventos de progreso (hb-004).
+// Consumido por el SSE endpoint GET /flow-runs/:id/stream (issue-09.3).
+const ProgressChannel = "flow_step_progress"
+
+// ProgressEvent es el payload JSON publicado en ProgressChannel.
+type ProgressEvent struct {
+	FlowRunID uuid.UUID `json:"flow_run_id"`
+	StepKey   string    `json:"step_key"`
+	Progress  float64   `json:"progress"`
+	Message   string    `json:"message,omitempty"`
+}
+
+// NotifyProgress publica el evento de progreso vía pg_notify (hb-004).
+// Best-effort: un fallo de NOTIFY no invalida el heartbeat ya persistido.
+func (s *HeartbeatStore) NotifyProgress(ctx context.Context, runID uuid.UUID, stepKey string, progress float64, message string) {
+	payload, err := json.Marshal(ProgressEvent{
+		FlowRunID: runID, StepKey: stepKey, Progress: progress, Message: message,
+	})
+	if err != nil {
+		return
+	}
+	_, _ = s.Pool.Exec(ctx, `SELECT pg_notify($1, $2)`, ProgressChannel, string(payload))
 }
 
 // UpdateProgress actualiza solo progress + message sin modificar heartbeat.

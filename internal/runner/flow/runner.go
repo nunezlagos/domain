@@ -213,6 +213,15 @@ LOOP:
 			defer cancel()
 		}
 
+		// issue-09.10: fila running visible para watchdog + heartbeater con throttle
+		stepRowID := r.beginStepRow(ctx, runID, step.ID)
+		ctxStep = WithHeartbeater(ctxStep, &StepHeartbeater{
+			Store:     &flow.HeartbeatStore{Pool: r.Pool},
+			RunID:     runID,
+			StepRowID: stepRowID,
+			StepKey:   step.ID,
+		})
+
 		// issue-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
 		// Backoff arranca en 200ms, se duplica por intento, cap en step.MaxBackoffS (default 30s).
 		var out any
@@ -249,6 +258,10 @@ LOOP:
 				}
 			}
 		}
+		// issue-09.10: cerrar fila del step con resultado final (éxito o fallo)
+		if err := r.completeStepRow(ctx, stepRowID, out, stepErr); err != nil {
+			slog.Default().Warn("complete step row", slog.String("step", step.ID), slog.Any("err", err))
+		}
 		if stepErr != nil {
 			switch step.OnError {
 			case "continue":
@@ -280,9 +293,6 @@ LOOP:
 		completedIDs = append(completedIDs, step.ID)
 		cursor["completed"] = completedIDs
 		_ = r.persistCursor(ctx, runID, cursor)
-		if err := r.persistStepOutput(ctx, runID, step.ID, out, nil); err != nil {
-			slog.Default().Error("persist step output", slog.String("step", step.ID), slog.Any("err", err))
-		}
 		// issue-09.9: registrar compensación si el step declara compensate
 		if step.Compensate != "" && r.SagaExecutor != nil {
 			comp := flow.SagaCompensation{

@@ -2,7 +2,7 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  09.10-step-heartbeats: partially_implemented
+  09.10-step-heartbeats: implemented
   09.11-reproducibility-snapshots: implemented
   09.12-dry-run-plan-mode: implemented
   09.1-flow-dag-definition: partially_implemented

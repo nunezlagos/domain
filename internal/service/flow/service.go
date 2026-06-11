@@ -422,6 +422,39 @@ func (s *Service) GetRun(ctx context.Context, id uuid.UUID) (*RunRow, error) {
 	return &r, nil
 }
 
+// StepRow es la vista de un step para GET /flow-runs/:id (issue-09.3/09.10).
+type StepRow struct {
+	ID              uuid.UUID  `json:"id"`
+	StepKey         string     `json:"step_key"`
+	Status          string     `json:"status"`
+	Progress        *float64   `json:"progress,omitempty"`
+	ProgressMessage *string    `json:"progress_message,omitempty"`
+	Error           *string    `json:"error,omitempty"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+}
+
+// GetRunSteps lista los steps de un run con su progreso.
+func (s *Service) GetRunSteps(ctx context.Context, runID uuid.UUID) ([]StepRow, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, step_key, status, progress, progress_message, error, started_at, completed_at
+		FROM flow_run_steps WHERE flow_run_id = $1 ORDER BY created_at ASC`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("get run steps: %w", err)
+	}
+	defer rows.Close()
+	var out []StepRow
+	for rows.Next() {
+		var st StepRow
+		if err := rows.Scan(&st.ID, &st.StepKey, &st.Status, &st.Progress,
+			&st.ProgressMessage, &st.Error, &st.StartedAt, &st.CompletedAt); err != nil {
+			return nil, fmt.Errorf("scan step: %w", err)
+		}
+		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
 // PauseRun transitions a running flow run to paused.
 func (s *Service) PauseRun(ctx context.Context, id uuid.UUID) error {
 	m := NewFlowStateMachine()

@@ -13,32 +13,32 @@
 - [x] Implementar `FlowContext` compartido entre steps (map[string]StepResult) (ya existía como stepOutputs)
 - [x] Implementar pause/resume con context cancel + snapshot (service.PauseRun/ResumeRun + runner context tracking)
 - [x] Implementar cancel con propagación a todos los steps activos (service.CancelRun + runner.CancelRun)
-- [ ] Crear handler REST: POST /flows/:slug/run (ya existía como POST /flows/{id}/run)
-- [ ] Crear handler REST: GET /flow-runs/:id
-- [ ] Crear handler REST: POST /flow-runs/:id/pause
-- [ ] Crear handler REST: POST /flow-runs/:id/resume
-- [ ] Crear handler REST: POST /flow-runs/:id/cancel
-- [ ] Implementar SSE endpoint GET /flow-runs/:id/stream
+- [x] Crear handler REST: POST /flows/{id}/run (por id en lugar de slug — UUIDs en path per api.md)
+- [x] Crear handler REST: GET /flow-runs/:id → handler/flowrun.go getFlowRun (run + steps con progreso) — 2026-06-10
+- [x] Crear handler REST: POST /flow-runs/:id/pause → pauseFlowRun (409 invalid transition) — 2026-06-10
+- [x] Crear handler REST: POST /flow-runs/:id/resume → resumeFlowRun — 2026-06-10
+- [x] Crear handler REST: POST /flow-runs/:id/cancel → cancelFlowRun (+ propagación best-effort a runner local) — 2026-06-10
+- [x] Implementar SSE endpoint GET /flow-runs/:id/stream → streamFlowRun (LISTEN flow_step_progress + snapshots status cada 5s, cierra en terminal; directiva response-shape-lint:allow) — 2026-06-10
 
 ## Tests
 
 - [x] Test unitario: todas las transiciones válidas de flow state machine
 - [x] Test unitario: todas las transiciones inválidas (completed→running, etc.)
 - [x] Test unitario: todas las transiciones válidas de step state machine
-- [ ] Test unitario: DAG traversal con steps lineales
-- [ ] Test unitario: DAG traversal con parallel branches
-- [ ] Test unitario: DAG traversal con step fallido detiene ejecución
-- [ ] Test unitario: FlowContext pasa resultados correctamente
-- [ ] Test unitario: FlowContext step fallido no disponible
-- [ ] Test de integración: ejecución linear completa
-- [ ] Test de integración: ejecución con parallel (diamante)
-- [ ] Test de integración: pause → resume cycle
-- [ ] Test de integración: cancel en medio de step
-- [ ] Test de integración: consulta GET flow-run después de completar
+- [x] Test unitario: DAG traversal con steps lineales → TestFlow_LinearTraversal_ContextAccumulates (orden + filas) — 2026-06-10
+- [x] Test unitario: DAG traversal con parallel branches → TestFlow_ParallelDiamond — 2026-06-10
+- [x] Test unitario: DAG traversal con step fallido detiene ejecución → TestFlow_OnErrorFailAborts
+- [x] Test unitario: FlowContext pasa resultados correctamente → TestFlow_LinearTraversal_ContextAccumulates (outputs s1..s3) + TestResolveTemplate_StepOutputs
+- [x] Test unitario: FlowContext step fallido no disponible → TestFlow_OnErrorContinue (error marker en lugar de output)
+- [x] Test de integración: ejecución linear completa → TestFlow_BasicSkillRun + LinearTraversal
+- [x] Test de integración: ejecución con parallel (diamante) → TestFlow_ParallelDiamond — 2026-06-10
+- [x] Test de integración: pause → resume cycle → TestFlowRunAPI_PauseResumeCancel (API end-to-end) — 2026-06-10
+- [x] Test de integración: cancel en medio de step → TestFlow_CancelMidStep — 2026-06-10
+- [x] Test de integración: consulta GET flow-run después de completar → TestFlowRunAPI_Lifecycle — 2026-06-10
 - [x] Sabotaje: remover validación de transición → test falla
 
 ## Cierre
 
-- [ ] Verificación manual: crear flow, ejecutar, ver estado via GET
-- [ ] Verificación manual: pause → resume en flow con wait step
-- [ ] Suite verde
+- [x] Verificación manual: crear flow, ejecutar, ver estado via GET → cubierto end-to-end por TestFlowRunAPI_Lifecycle (httptest con auth real)
+- [x] Verificación manual: pause → resume en flow con wait step → TestFlowRunAPI_PauseResumeCancel + TestFlow_WaitSignal_DeliveredResumes
+- [x] Suite verde → 2026-06-10: suite corta + integración flows/handler verdes

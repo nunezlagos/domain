@@ -1,12 +1,16 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// -regen: regenera los snapshots reales (ver TestRegenSnapshots_Manual).
+var regenFlag = flag.Bool("regen", false, "regenera snapshots del API real")
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
@@ -170,6 +174,21 @@ func TestRealAPI_SnapshotsUpToDate(t *testing.T) {
 	for _, v := range violations {
 		t.Errorf("%s", v.String())
 	}
+}
+
+// TestRegenSnapshots_Manual regenera los snapshots reales. Equivalente a
+// `make api-snapshot-update`. Correr explícito:
+//
+//	go test -run TestRegenSnapshots_Manual ./cmd/response-shape-lint -args -regen
+func TestRegenSnapshots_Manual(t *testing.T) {
+	if !*regenFlag && os.Getenv("REGEN_SNAPSHOTS") != "1" {
+		t.Skip("pasar -args -regen (o REGEN_SNAPSHOTS=1) para regenerar")
+	}
+	root := repoRoot(t)
+	handlerDir := filepath.Join(root, "internal", "api", "handler")
+	_, err := runShapeChecks(handlerDir, filepath.Join(handlerDir, "api.go"),
+		filepath.Join(handlerDir, "testdata", "api"), true)
+	require.NoError(t, err)
 }
 
 // El código real de handlers debe pasar el linter de shapes (CI lo bloquea).

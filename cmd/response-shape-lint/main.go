@@ -98,7 +98,7 @@ func lintDir(dir string) (violations []Violation, scanned int, err error) {
 		if strings.HasSuffix(base, "_test.go") {
 			continue
 		}
-		f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution|parser.ParseComments)
 		if err != nil {
 			return nil, 0, fmt.Errorf("parse %s: %w", path, err)
 		}
@@ -152,9 +152,31 @@ func lintFile(fset *token.FileSet, path string, f *ast.File) (violations []Viola
 			continue
 		}
 		scanned++
+		if hasAllowDirective(fn) {
+			continue
+		}
 		violations = append(violations, scanHandler(fset, path, fn, writerName)...)
 	}
 	return violations, scanned
+}
+
+// hasAllowDirective detecta `// response-shape-lint:allow <reason>` en el doc
+// comment del handler. La reason es obligatoria (directiva sin reason no aplica).
+// Uso legítimo: streams SSE / binarios que no responden JSON envelope.
+func hasAllowDirective(fn *ast.FuncDecl) bool {
+	if fn.Doc == nil {
+		return false
+	}
+	for _, c := range fn.Doc.List {
+		text := strings.TrimPrefix(c.Text, "//")
+		text = strings.TrimSpace(text)
+		if reason, ok := strings.CutPrefix(text, "response-shape-lint:allow"); ok {
+			if strings.TrimSpace(reason) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // apiHandlerWriterName devuelve el nombre del parámetro http.ResponseWriter

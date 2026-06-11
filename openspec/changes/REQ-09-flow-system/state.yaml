@@ -7,7 +7,7 @@ hus:
   09.12-dry-run-plan-mode: implemented
   09.1-flow-dag-definition: partially_implemented
   09.2-step-types: implemented
-  09.3-flow-state-machine: partially_implemented
+  09.3-flow-state-machine: implemented
   09.4-retry-error-handling: partially_implemented
   09.5-subflows-composition: partially_implemented
   09.6-durable-execution: implemented

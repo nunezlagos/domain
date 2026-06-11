@@ -131,6 +131,31 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/flow-runs/{id}",
+    "handler": "getFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/cancel",
+    "handler": "cancelFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/pause",
+    "handler": "pauseFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/resume",
+    "handler": "resumeFlowRun"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flow-runs/{id}/stream",
+    "handler": "streamFlowRun"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/flows",
     "handler": "listFlows"
   },

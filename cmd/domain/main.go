@@ -829,10 +829,18 @@ func runServer() {
 		shutdownStart := time.Now()
 		logger.Info("shutdown signal received", slog.String("signal", sig.String()))
 
-		// Paso 1: flip readiness → ELB deja de rutear nuevos requests (5s grace)
+		// Paso 1: flip readiness → ELB deja de rutear nuevos requests.
+		// Grace configurable: DOMAIN_SHUTDOWN_GRACE_SECONDS (default 5).
+		grace := 5 * time.Second
+		if v := os.Getenv("DOMAIN_SHUTDOWN_GRACE_SECONDS"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 25 {
+				grace = time.Duration(n) * time.Second
+			}
+		}
 		httpserver.ShuttingDown.Store(true)
-		logger.Info("readiness flipped → unhealthy; waiting ELB drain (5s)")
-		time.Sleep(5 * time.Second)
+		logger.Info("readiness flipped → unhealthy; waiting ELB drain",
+			slog.Duration("grace", grace))
+		time.Sleep(grace)
 
 		// Paso 2: HTTP server Shutdown (espera in-flight) — budget 20s
 		httpCtx, httpCancel := context.WithTimeout(context.Background(), 20*time.Second)

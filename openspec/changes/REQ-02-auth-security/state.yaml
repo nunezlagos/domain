@@ -4,9 +4,9 @@ archived: ~
 hus:
   02.1-api-key-auth: implemented
   02.2-rbac: implemented
-  02.3-secrets-encryption: partially_implemented
-   02.4-audit-log: implemented
-   02.5-rate-limit-pii: implemented
+  02.3-secrets-encryption: implemented
+  02.4-audit-log: implemented
+  02.5-rate-limit-pii: implemented
   02.6-activity-log: partially_implemented
-   02.7-passwordless-otp-auth: implemented
+  02.7-passwordless-otp-auth: implemented
   02.8-custom-roles-permissions: implemented

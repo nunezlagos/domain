@@ -227,6 +227,56 @@ func (s *PGStore) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Se
 	return &secret, nil
 }
 
+// ReEncryptAll re-cifra con la versión current todos los secrets cuyo
+// encryption_key_version sea anterior (issue-02.3 rotation). Batch job:
+// usar pool con BYPASSRLS (pools.Auth) — cruza orgs por diseño.
+func (s *PGStore) ReEncryptAll(ctx context.Context) (int, error) {
+	current := int(s.Cipher.CurrentVersion())
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, encrypted_value FROM secrets
+		WHERE encryption_key_version < $1 AND deleted_at IS NULL`, current)
+	if err != nil {
+		return 0, fmt.Errorf("select stale secrets: %w", err)
+	}
+	type item struct {
+		id  uuid.UUID
+		enc []byte
+	}
+	var items []item
+	for rows.Next() {
+		var it item
+		if err := rows.Scan(&it.id, &it.enc); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan: %w", err)
+		}
+		items = append(items, it)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, it := range items {
+		plain, err := s.Cipher.Decrypt(it.enc)
+		if err != nil {
+			return count, fmt.Errorf("decrypt secret %s: %w", it.id, err)
+		}
+		newEnc, err := s.Cipher.Encrypt(plain)
+		if err != nil {
+			return count, fmt.Errorf("re-encrypt secret %s: %w", it.id, err)
+		}
+		if _, err := s.Pool.Exec(ctx, `
+			UPDATE secrets SET encrypted_value = $2, encryption_key_version = $3,
+			  rotated_at = NOW()
+			WHERE id = $1`, it.id, newEnc, current); err != nil {
+			return count, fmt.Errorf("update secret %s: %w", it.id, err)
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (s *PGStore) Delete(ctx context.Context, id uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx, `UPDATE secrets SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {

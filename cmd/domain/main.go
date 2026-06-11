@@ -125,6 +125,8 @@ func main() {
 		runHealthcheckProbe()
 	case "rotate-db-password":
 		runRotateDBPassword(os.Args[2:])
+	case "secrets":
+		runSecretsCmd(os.Args[2:])
 	case "audit":
 		runAuditPrune(os.Args[2:])
 	case "setup":
@@ -1193,6 +1195,64 @@ func runAuditPrune(args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("pruned %d audit log entries (before %s)\n", deleted, cutoff.Format("2006-01-02"))
+}
+
+// issue-02.3 secrets re-encrypt — re-cifra secrets tras rotar la master key.
+// Usage: domain secrets re-encrypt
+// Requiere DOMAIN_MASTER_KEYS="1:<b64>,2:<b64>" (keyring multi-versión: la
+// más alta cifra, las anteriores solo descifran) o DOMAIN_MASTER_KEY simple.
+func runSecretsCmd(args []string) {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		fmt.Println("Usage: domain secrets re-encrypt")
+		fmt.Println("  Re-cifra todos los secrets con la versión current del keyring.")
+		fmt.Println("  Env: DOMAIN_MASTER_KEYS=\"1:<b64>,2:<b64>\" (o DOMAIN_MASTER_KEY)")
+		fmt.Println("       DOMAIN_DATABASE_AUTH_URL (batch cross-org, BYPASSRLS)")
+		os.Exit(0)
+	}
+	if args[0] != "re-encrypt" {
+		fmt.Fprintf(os.Stderr, "subcomando no implementado: secrets %s\n", args[0])
+		os.Exit(2)
+	}
+
+	var cipherInst *crypto.Cipher
+	var err error
+	if spec := os.Getenv("DOMAIN_MASTER_KEYS"); spec != "" {
+		cipherInst, err = crypto.LoadKeyring(spec)
+	} else if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
+		cipherInst, err = crypto.LoadFromBase64(mk)
+	} else {
+		fmt.Fprintln(os.Stderr, "DOMAIN_MASTER_KEYS o DOMAIN_MASTER_KEY requerido")
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "keyring: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
+	dsn := cfg.DatabaseAuthURL
+	if dsn == "" {
+		dsn = cfg.DatabaseURL
+	}
+	ctx := context.Background()
+	pool, err := pgxpoolNew(ctx, dsn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "pool: %v\n", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	store := &secrets.PGStore{Pool: pool, Cipher: cipherInst}
+	n, err := store.ReEncryptAll(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "re-encrypt: %v (re-encrypted %d before failure)\n", err, n)
+		os.Exit(1)
+	}
+	fmt.Printf("re-encrypted %d secret(s) to key version %d\n", n, cipherInst.CurrentVersion())
 }
 
 // issue-25.10 rotate-db-password — genera nuevo password + ALTER ROLE.

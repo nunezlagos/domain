@@ -72,6 +72,17 @@ coverage: ## Tests con cobertura + reporte HTML
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Reporte: coverage.html"
 
+db-lint: ## Linter de migraciones (conventions + safety; issue-25.3/25.13)
+	go run ./cmd/db-conventions-lint -dir internal/migrate/migrations
+	@command -v squawk >/dev/null 2>&1 && squawk internal/migrate/migrations/*.up.sql || echo "squawk no instalado (opcional); reglas core cubiertas por db-conventions-lint"
+
+db-lint-fix: ## Aplica fixes automáticos del linter (JSON→JSONB, TIMESTAMP→TIMESTAMPTZ)
+	go run ./cmd/db-conventions-lint -dir internal/migrate/migrations -fix
+
+install-githooks: ## Instala pre-commit hook opcional (db-lint + tests cortos)
+	@/usr/bin/cp scripts/githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook instalado"
+
 bench: ## Benchmarks (5 runs, baseline comparativo)
 	@mkdir -p benchmark-results
 	go test -bench=. -benchmem -count=5 ./... 2>&1 | tee benchmark-results/$(or $(BENCH_OUT),bench).txt

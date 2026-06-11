@@ -1,0 +1,18 @@
+#!/bin/sh
+# pre-commit opcional (issue-25.3): instala con `make install-githooks`.
+# Corre el linter de migraciones si hay .sql staged + tests cortos del
+# código Go staged. Bypass de emergencia: git commit --no-verify
+# (requiere post-mortem según .claude/rules/git.md).
+
+set -e
+
+if git diff --cached --name-only | grep -q "internal/migrate/migrations/.*\.sql"; then
+  echo "pre-commit: linting migraciones..."
+  go run ./cmd/db-conventions-lint -dir internal/migrate/migrations
+fi
+
+if git diff --cached --name-only | grep -q "\.go$"; then
+  echo "pre-commit: go vet + tests cortos..."
+  go vet ./...
+  go test -short ./... >/dev/null
+fi

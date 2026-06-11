@@ -1,0 +1,19 @@
+# squawk — linter externo de migraciones Postgres (issue-25.3).
+# Complementa cmd/db-conventions-lint (que es el enforcement primario en CI).
+# Instalar: https://squawkhq.com — correr: make db-lint
+
+# Versión asumida del servidor
+pg_version = "16.0"
+
+# Reglas excluidas:
+# - prefer-text-field: usamos VARCHAR(N) con CHECK por convención (db.md)
+# - prefer-robust-stmts: idempotencia ya enforced por db-conventions-lint
+excluded_rules = [
+  "prefer-text-field",
+  "prefer-robust-stmts",
+]
+
+# Las reglas core que bloquean merge (CREATE INDEX sin CONCURRENTLY,
+# ADD COLUMN NOT NULL sin DEFAULT, DROP TABLE sin IF EXISTS, VACUUM FULL,
+# LOCK TABLE, FK sin NOT VALID) están implementadas en
+# internal/dbconvlint y corren en CI aunque squawk no esté instalado.

@@ -69,6 +69,10 @@ type Registry struct {
 
 	// issue-09.6 durable-execution
 	FlowHeartbeatAgeSeconds prometheus.Gauge // age del heartbeat más reciente en flow_runs
+
+	// issue-26.3 distributed locks
+	DlockAcquireTotal *prometheus.CounterVec   // labels: key, result (acquired|busy|error)
+	DlockHeldSeconds  *prometheus.HistogramVec // labels: key
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -249,6 +253,23 @@ func New() *Registry {
 		Help: "Edad del heartbeat más reciente entre flow_runs running (issue-09.6)",
 	})
 
+	// issue-26.3 distributed locks — key es nombre lógico acotado (feature locks)
+	r.DlockAcquireTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_dlock_acquire_total",
+			Help: "Intentos de acquire de distributed locks por resultado",
+		},
+		[]string{"key", "result"},
+	)
+	r.DlockHeldSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "domain_dlock_held_duration_seconds",
+			Help:    "Duración que un distributed lock estuvo tomado",
+			Buckets: []float64{0.01, 0.1, 0.5, 1, 5, 30, 60, 300, 1800},
+		},
+		[]string{"key"},
+	)
+
 	// issue-25.9 read-replicas
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
@@ -330,6 +351,8 @@ func New() *Registry {
 		r.OrchestratorConfirmsTotal,
 		r.OrchestratorRequiredSaveMissingTotal,
 		r.FlowHeartbeatAgeSeconds,
+		r.DlockAcquireTotal,
+		r.DlockHeldSeconds,
 	)
 	return r
 }

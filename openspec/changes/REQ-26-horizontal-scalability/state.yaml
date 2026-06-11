@@ -4,7 +4,7 @@ archived: ~
 hus:
   26.1-stateless-invariant: proposed
   26.2-leader-election-crons: implemented
-  26.3-distributed-locks: partially_implemented
+  26.3-distributed-locks: implemented
   26.4-graceful-shutdown: partially_implemented
   26.5-circuit-breaker-llm: implemented
   26.6-backpressure-queue: partially_implemented

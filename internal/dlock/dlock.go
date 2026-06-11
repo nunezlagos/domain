@@ -24,6 +24,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/metrics"
 )
 
 var (
@@ -46,8 +48,16 @@ func HashKey(name string) int64 {
 // Manager crea locks sobre un pool. El pool debe ser session-mode capable
 // (NO PgBouncer transaction-pool) — Acquire saca una conn dedicada que retiene.
 type Manager struct {
-	Pool   *pgxpool.Pool
-	Logger *slog.Logger
+	Pool    *pgxpool.Pool
+	Logger  *slog.Logger
+	Metrics *metrics.Registry // nil = sin métricas (dl-005)
+}
+
+// observeAcquire registra el resultado del intento (acquired|busy|error).
+func (m *Manager) observeAcquire(keyName, result string) {
+	if m.Metrics != nil {
+		m.Metrics.DlockAcquireTotal.WithLabelValues(keyName, result).Inc()
+	}
 }
 
 // Lock representa un advisory lock mantenido por una conn dedicada.
@@ -58,6 +68,7 @@ type Lock struct {
 	keyName   string
 	acquired  time.Time
 	logger    *slog.Logger
+	metrics   *metrics.Registry
 	released  bool
 }
 
@@ -72,19 +83,22 @@ func (m *Manager) TryAcquire(ctx context.Context, keyName string) (*Lock, bool, 
 	err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&got)
 	if err != nil {
 		conn.Release()
+		m.observeAcquire(keyName, "error")
 		return nil, false, fmt.Errorf("try_advisory_lock: %w", err)
 	}
 	if !got {
 		conn.Release()
+		m.observeAcquire(keyName, "busy")
 		return nil, false, nil
 	}
 	if m.Logger != nil {
 		m.Logger.DebugContext(ctx, "dlock acquired",
 			slog.String("key", keyName))
 	}
+	m.observeAcquire(keyName, "acquired")
 	return &Lock{
 		conn: conn, key: key, keyName: keyName,
-		acquired: time.Now(), logger: m.Logger,
+		acquired: time.Now(), logger: m.Logger, metrics: m.Metrics,
 	}, true, nil
 }
 
@@ -119,6 +133,9 @@ func (l *Lock) Release(ctx context.Context) error {
 	}
 	l.released = true
 	defer l.conn.Release()
+	if l.metrics != nil {
+		l.metrics.DlockHeldSeconds.WithLabelValues(l.keyName).Observe(time.Since(l.acquired).Seconds())
+	}
 	_, err := l.conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", l.key)
 	if l.logger != nil {
 		l.logger.DebugContext(ctx, "dlock released",

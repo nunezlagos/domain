@@ -1,6 +1,6 @@
-status: implemented
+status: partially_implemented
 created: 2026-06-06
-implemented: 2026-06-07
+implemented: ~
 archived: ~
 notes: |
   Migration 000028_create_rls_sensitive aplica RLS + FORCE en 5 tablas

@@ -38,11 +38,19 @@ func Dispatch(args []string) int {
 		return completion(rest)
 	case "policies":
 		return policies(rest)
+	case "config":
+		return configCmd(rest)
+	case "man":
+		return manCmd()
 	case "help", "-h", "--help":
 		printUsage()
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "comando desconocido: %s\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "comando desconocido: %s\n", cmd)
+		if s := suggest(cmd, knownCommands); s != "" {
+			fmt.Fprintf(os.Stderr, "¿Quisiste decir %q?\n", s)
+		}
+		fmt.Fprintln(os.Stderr)
 		printUsage()
 		return 2
 	}
@@ -64,12 +72,15 @@ Recursos:
   context       [--project <slug>]
   policies      import-md <dir> | export-md [dir]
   audit         prune [--retention N] [--dry-run]
-  completion    bash|zsh|fish
+  completion    bash|zsh|fish|powershell
+  config        view (API key solo prefix)
+  man           imprime man page (domain man > .../man1/domain.1)
 
 Flags globales:
   --format json|table|yaml|csv   (default: table)
   --no-headers                   omitir cabeceras en table/csv
   --quiet, -q                    solo errores (exit code)
+  --verbose, -v                  imprime requests HTTP a stderr
   --config <path>                archivo YAML con api_key/base_url
 
 Env:
@@ -88,6 +99,7 @@ type globalFlags struct {
 	NoHeaders bool
 	Quiet     bool
 	Config    string
+	Verbose   bool
 }
 
 func parseGlobalFlags(args []string) (*globalFlags, []string) {
@@ -110,6 +122,8 @@ func parseGlobalFlags(args []string) (*globalFlags, []string) {
 			gf.NoHeaders = true
 		case "--quiet", "-q":
 			gf.Quiet = true
+		case "--verbose", "-v":
+			gf.Verbose = true
 		case "--config":
 			if i+1 < len(args) {
 				gf.Config = args[i+1]
@@ -133,6 +147,9 @@ func newClient(gf *globalFlags) *clicli.Client {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
+	}
+	if gf != nil {
+		c.Verbose = gf.Verbose
 	}
 	return c
 }

@@ -5,10 +5,10 @@ import (
 	"os"
 )
 
-// completion imprime el script de autocompletado para bash/zsh/fish.
+// completion imprime el script de autocompletado para bash/zsh/fish/powershell.
 func completion(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "uso: domain completion bash|zsh|fish")
+		fmt.Fprintln(os.Stderr, "uso: domain completion bash|zsh|fish|powershell")
 		return 2
 	}
 	switch args[0] {
@@ -21,10 +21,27 @@ func completion(args []string) int {
 	case "fish":
 		fmt.Print(fishCompletion)
 		return 0
+	case "powershell", "pwsh":
+		fmt.Print(powershellCompletion)
+		return 0
 	}
 	fmt.Fprintln(os.Stderr, "shell no soportado")
+	if s := suggest(args[0], []string{"bash", "zsh", "fish", "powershell"}); s != "" {
+		fmt.Fprintf(os.Stderr, "¿Quisiste decir %q?\n", s)
+	}
 	return 2
 }
+
+const powershellCompletion = `# powershell completion for domain CLI
+Register-ArgumentCompleter -Native -CommandName domain -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $commands = @('projects','observations','obs','agents','flows','skills',
+                  'search','context','completion','policies','config','man','help')
+    $commands | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}
+`
 
 const bashCompletion = `# bash completion for domain CLI
 _domain_complete() {

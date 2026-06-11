@@ -27,6 +27,8 @@ type Client struct {
 	APIKey  string
 	BaseURL string
 	HTTP    *http.Client
+	// Verbose imprime method+URL de cada request a stderr (--verbose).
+	Verbose bool
 }
 
 // NewFromEnv toma DOMAIN_API_KEY + DOMAIN_BASE_URL del environment.
@@ -92,6 +94,9 @@ func (c *Client) Do(method, path string, body any, query map[string]string) (any
 		if len(qs) > 0 {
 			url += "?" + strings.Join(qs, "&")
 		}
+	}
+	if c.Verbose {
+		fmt.Fprintf(os.Stderr, "> %s %s\n", method, url)
 	}
 	var bodyReader io.Reader
 	if body != nil {

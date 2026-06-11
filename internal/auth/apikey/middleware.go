@@ -39,6 +39,15 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 	return p, ok
 }
 
+// WithPrincipal inyecta un Principal en el context. Usado por:
+//   - el middleware HTTP (post-auth) para propagar identidad a handlers
+//   - tests para inyectar un Principal sin pasar por el flujo de auth
+//
+// La key privada garantiza que solo este package puede setear/extraer.
+func WithPrincipal(ctx context.Context, p *Principal) context.Context {
+	return context.WithValue(ctx, principalKey{}, p)
+}
+
 // Resolver lookup de API key plaintext → Principal.
 // Implementaciones: pg adapter (issue-02.1 store).
 type Resolver interface {
@@ -97,7 +106,7 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), principalKey{}, p)
+		ctx := WithPrincipal(r.Context(), p)
 
 		// issue-25.14: wireup tx con SET LOCAL post-auth.
 		// Si m.Pool es nil → modo legacy (solo Principal en ctx, sin tx).

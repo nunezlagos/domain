@@ -1,5 +1,22 @@
 # Tasks: issue-12.4-mcp-bidirectional
 
+> **RE-SCOPE 2026-06-11 (decisión MCP-first 2026-06-10):** la HU se cierra
+> con el core implementado — StdioClient JSON-RPC 2.0 (spec MCP 2024-11-05:
+> initialize/tools-list/tools-call/close idempotente), service CRUD con env
+> cifradas AES-GCM, SyncTools (discovery → cache mcp_server_tools), InvokeTool
+> 1-shot, y HTTP /api/v1/mcp-servers completo (create/list/get/delete/
+> sync-tools/tools/invoke). Gherkin 1, 3, 4 y 7 cubiertos.
+>
+> En el modelo MCP-first el agente (Claude Code/OpenCode) YA tiene acceso
+> directo a MCP servers externos propios — Domain-como-cliente es un caso
+> secundario (flows/crons server-side que necesiten un tool externo).
+> DIFERIDO hasta demanda real: pool long-lived + reconnect backoff
+> (escenario 5), cron sync periódico (escenario 6), materialización
+> automática como skills tipo "mcp" (escenario 2 parcial — los tools se
+> invocan directo vía InvokeTool), integración con agent runner
+> tool_calling, transports http/sse, sandbox seccomp. Checkboxes de esos
+> bloques quedan sin marcar a propósito.
+
 ## Backend
 
 - [ ] Implementar `MCPHub` struct en `internal/mcp/hub/hub.go` con mapa de servidores

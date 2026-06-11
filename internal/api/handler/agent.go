@@ -161,6 +161,37 @@ func (a *API) updateAgent(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, out)
 }
 
+func (a *API) listAgentVersions(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	ag, err := a.AgentService.GetByID(r.Context(), id)
+	if errors.Is(err, agent.ErrNotFound) || (err == nil && ag.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	versions, err := a.AgentService.GetVersions(r.Context(), id, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "versions", err.Error())
+		return
+	}
+	if versions == nil {
+		versions = []agent.AgentVersion{}
+	}
+	writeData(w, http.StatusOK, versions)
+}
+
 func (a *API) deleteAgent(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

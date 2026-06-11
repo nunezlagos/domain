@@ -235,6 +235,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents", a.listAgents)
 	mux.HandleFunc("GET /api/v1/agents/{id}", a.getAgent)
 	mux.HandleFunc("PATCH /api/v1/agents/{id}", a.updateAgent)
+	mux.HandleFunc("GET /api/v1/agents/{id}/versions", a.listAgentVersions)
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
 	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/logs", a.getAgentRunLogs)

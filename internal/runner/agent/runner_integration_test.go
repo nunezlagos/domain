@@ -109,7 +109,7 @@ func TestRunner_BasicCompletion(t *testing.T) {
 
 	ag, err := f.agents.Create(ctx, agentsvc.CreateInput{
 		OrganizationID: f.orgID, Slug: "test-agent", Name: "Test",
-		Provider: "anthropic", Model: "claude-sonnet",
+		Provider: "anthropic", Model: "claude-sonnet-4-6",
 		SystemPrompt: "Eres conciso", ActorID: f.userID,
 	})
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestRunner_ToolCallLoop(t *testing.T) {
 
 	ag, err := f.agents.Create(ctx, agentsvc.CreateInput{
 		OrganizationID: f.orgID, Slug: "greeter", Name: "Greeter",
-		Provider: "anthropic", Model: "claude-sonnet",
+		Provider: "anthropic", Model: "claude-sonnet-4-6",
 		SkillsSlugs: []string{"search-greet"},
 		ActorID:     f.userID,
 	})
@@ -224,7 +224,7 @@ func TestRunner_MaxIterationsBreak(t *testing.T) {
 	})
 	ag, _ := f.agents.Create(ctx, agentsvc.CreateInput{
 		OrganizationID: f.orgID, Slug: "looper", Name: "X",
-		Provider: "anthropic", Model: "m", SkillsSlugs: []string{"loop"},
+		Provider: "anthropic", Model: "claude-sonnet-4-6", SkillsSlugs: []string{"loop"},
 		MaxIterations: 3, ActorID: f.userID,
 	})
 
@@ -244,7 +244,7 @@ func TestSabotage_Runner_PersistsFailedRun(t *testing.T) {
 	ctx := context.Background()
 	ag, _ := f.agents.Create(ctx, agentsvc.CreateInput{
 		OrganizationID: f.orgID, Slug: "x", Name: "X",
-		Provider: "openai", Model: "m", ActorID: f.userID,
+		Provider: "openai", Model: "gpt-4o-mini", ActorID: f.userID,
 	})
 	res, _ := f.runner.Run(ctx, agentrunner.RunInput{
 		AgentID: ag.ID, UserPrompt: "x",

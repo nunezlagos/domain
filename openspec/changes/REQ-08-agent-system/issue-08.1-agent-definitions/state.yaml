@@ -1,8 +1,18 @@
 status: implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-11
 archived: ~
 notes: |
+  Completado 2026-06-11:
+  - Migration 000083 agent_versions: Update archiva snapshot JSONB de la
+    config previa; purge automático mantiene 50; GET /agents/{id}/versions.
+  - Slug autogenerado desde name con sufijo -2..-N en colisión.
+  - Validación temperature [0,2] + model contra model_registry (ollama
+    exento para modelos locales arbitrarios).
+  - Tests: AutoSlug_CollisionSuffix, TemperatureOutOfRange,
+    Update_Versioning, Versions_PurgeOver50, sabotaje UnknownModelRejected.
+
+  Estado previo (2026-06-07):
   internal/service/agent.Service CRUD sobre tabla agents (migration 000012):
   - Create: valida slug, name, model required, provider en whitelist
     (anthropic/openai/google/ollama), valida que TODOS los skills_slugs

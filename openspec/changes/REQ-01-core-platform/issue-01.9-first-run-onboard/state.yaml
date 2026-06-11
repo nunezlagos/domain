@@ -1,0 +1,12 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+archived: ~
+notes: |
+  HU spec completo (issue.md, design.md, proposal.md, tasks.md).
+  Cubre los 4 entry points del onboard:
+    1. CLI ./bin/domain onboard (standalone)
+    2. Slash /domain-login (opencode + claude-code)
+    3. Enforcement al instalar herramienta (gate en domain-mcp)
+    4. Persistencia sin expiracion automatica (expires_at nullable)
+  Pendiente: implementacion en 6-7 commits atomicos.

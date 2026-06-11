@@ -60,11 +60,8 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	// Dispatch en background (no block client; webhook devuelve 202 Accepted)
 	go a.dispatchWebhook(context.Background(), hook, body, inputs, r)
 
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"data": map[string]any{
-			"received": true, "webhook_id": hook.ID, "target_type": hook.TargetType,
-		},
+	writeData(w, http.StatusAccepted, map[string]any{
+		"received": true, "webhook_id": hook.ID, "target_type": hook.TargetType,
 	})
 }
 

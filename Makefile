@@ -79,6 +79,12 @@ db-lint: ## Linter de migraciones (conventions + safety; issue-25.3/25.13)
 db-lint-fix: ## Aplica fixes automáticos del linter (JSON→JSONB, TIMESTAMP→TIMESTAMPTZ)
 	go run ./cmd/db-conventions-lint -dir internal/migrate/migrations -fix
 
+api-lint: ## Linter de response shapes + rutas + snapshots (issue-13.9)
+	go run ./cmd/response-shape-lint -verbose
+
+api-snapshot-update: ## Regenera snapshots de endpoints + error codes
+	go run ./cmd/response-shape-lint -update
+
 install-githooks: ## Instala pre-commit hook opcional (db-lint + tests cortos)
 	@/usr/bin/cp scripts/githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 	@echo "pre-commit hook instalado"

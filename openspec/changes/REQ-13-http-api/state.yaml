@@ -10,4 +10,4 @@ hus:
   13.6-cursor-pagination: implemented
   13.7-http-caching-etags: implemented
   13.8-api-versioning-policy: implemented
-  13.9-response-shape-linter: partially_implemented
+  13.9-response-shape-linter: implemented

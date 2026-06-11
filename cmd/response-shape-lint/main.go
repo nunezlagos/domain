@@ -28,6 +28,9 @@ import (
 
 func main() {
 	dir := flag.String("dir", "internal/api/handler", "directorio de handlers HTTP a scanear")
+	routes := flag.String("routes", "internal/api/handler/api.go", "archivo con registraciones mux.HandleFunc")
+	snapshotDir := flag.String("snapshot-dir", "internal/api/handler/testdata/api", "directorio de snapshots endpoint_shapes.json + error_codes.json")
+	update := flag.Bool("update", false, "regenera snapshots en lugar de comparar")
 	verbose := flag.Bool("verbose", false, "imprime handlers scaneados aunque no haya violations")
 	flag.Parse()
 
@@ -36,6 +39,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "response-shape-lint: %v\n", err)
 		os.Exit(2)
 	}
+
+	shapeViolations, err := runShapeChecks(*dir, *routes, *snapshotDir, *update)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "response-shape-lint: %v\n", err)
+		os.Exit(2)
+	}
+	violations = append(violations, shapeViolations...)
 
 	if *verbose {
 		fmt.Fprintf(os.Stderr, "scanned %d handler(s) in %s\n", scanned, *dir)

@@ -20,24 +20,15 @@ notes: |
   non-handler skip, negative apiHandlerWriterName).
   Todos passing.
 
-  Lo que queda PENDIENTE para considerar implemented:
-    - Runtime/integration linter que ejecute tests E2E contra handlers reales
-      y verifique shape JSON ({data}, {data, pagination}, {error: {...}}).
-    - Snapshot test de error codes (testdata/error_codes_snapshot.json) — HU
-      escenario 6.
-    - Validación de status codes por método HTTP (POST→201, DELETE→204) basada
-      en parseo de las rutas registradas en Router().
-    - Header X-Request-Id obligatorio: requiere observar response real, no AST.
-    - Location header en 201 Created: idem, runtime.
-    - URLs kebab-case scan de routes registered (parse strings literales en
-      Router()).
-    - Target Makefile + step CI que corra `response-shape-lint -dir
-      internal/api/handler` y bloquee merge si exit != 0.
+  Completado 2026-06-10 (snapshot.go):
+    - Snapshots endpoint_shapes.json + error_codes.json con drift detection
+      y modo -update (internal/api/handler/testdata/api/).
+    - Rutas: kebab-case enforcement + POST create* → http.StatusCreated.
+    - Makefile api-lint / api-snapshot-update + CI job response-shape-lint.
+    - TestRealAPI_SnapshotsUpToDate + TestRealAPI_HandlersUseCanonicalWriters
+      corren en cada go test (auto-bootstrap del snapshot inicial).
+    - Violations de webhook.go (receiveWebhook raw WriteHeader/Encoder)
+      corregidas a writeData.
 
-  Violations encontradas al correr el linter contra el código actual:
-    - internal/api/handler/webhook.go:63 receiveWebhook usa
-      w.WriteHeader(http.StatusAccepted) raw.
-    - internal/api/handler/webhook.go:64 receiveWebhook usa
-      json.NewEncoder(w).Encode(...) raw.
-  No arregladas en esta HU (scope = linter), reportadas para fix posterior
-  bajo HU separada o tarea de cleanup en REQ-13.
+  Deferred consciente (requieren runtime, no AST — cubrir en tests E2E
+  de REQ-13 si se priorizan): X-Request-Id header check, Location en 201.

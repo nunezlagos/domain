@@ -48,6 +48,19 @@ jobs:
       - name: Lint migrations
         run: /tmp/db-conv-lint --dir internal/migrate/migrations
 
+  response-shape-lint:
+    name: response-shape-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Build linter
+        run: go build -o /tmp/response-shape-lint ./cmd/response-shape-lint
+      - name: Lint API response shapes + snapshots
+        run: /tmp/response-shape-lint -verbose
+
   commitlint:
     name: Conventional Commits
     runs-on: ubuntu-latest

@@ -81,6 +81,7 @@ type Runner struct {
 	Metrics      *metrics.Registry // nil = no metrics
 	SagaExecutor *flow.SagaExecutor // issue-09.9: compensaciones Saga
 	Snapshots    *flow.SnapshotStore // issue-09.11: snapshots de I/O
+	Signals      *flow.SignalStore   // issue-09.8: await_signal + wake LISTEN/NOTIFY
 
 	runContexts   map[uuid.UUID]context.CancelFunc
 	runContextsMu sync.Mutex
@@ -223,7 +224,7 @@ LOOP:
 		}
 		maxAttempts := step.Retries + 1 // 0 retries = 1 attempt
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			out, stepErr = r.executeStep(ctxStep, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
+			out, stepErr = r.executeStep(ctxStep, runID, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
 			if stepErr == nil {
 				break
 			}
@@ -404,7 +405,7 @@ func isTransientError(err error) bool {
 	return true
 }
 
-func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outputs map[string]any,
+func (r *Runner) executeStep(ctx context.Context, runID uuid.UUID, step *flow.Step, inputs, outputs map[string]any,
 	orgID uuid.UUID, userID *uuid.UUID) (any, error) {
 
 	switch step.Type {
@@ -419,11 +420,68 @@ func (r *Runner) executeStep(ctx context.Context, step *flow.Step, inputs, outpu
 	case flow.StepTypeSubFlow:
 		return r.execSubFlow(ctx, step, orgID, userID)
 	case flow.StepTypeParallel:
-		return r.execParallel(ctx, step, inputs, outputs, orgID, userID)
-	case flow.StepTypeHTTPRequest, flow.StepTypeWaitSignal:
+		return r.execParallel(ctx, runID, step, inputs, outputs, orgID, userID)
+	case flow.StepTypeWaitSignal:
+		return r.execWaitSignal(ctx, runID, step)
+	case flow.StepTypeHTTPRequest:
 		return nil, fmt.Errorf("%w: %s (issue-09 future)", ErrStepTypeStub, step.Type)
 	}
 	return nil, fmt.Errorf("unknown step type: %s", step.Type)
+}
+
+// execWaitSignal pausa el run hasta recibir la señal externa (issue-09.8).
+//
+// Config esperado:
+//
+//	{"signal_name": "approval_received", "timeout_seconds": 86400}
+//
+// El run pasa a paused_awaiting_signal mientras espera (sin CPU: LISTEN/NOTIFY)
+// y vuelve a running al recibirla. Output: payload del signal.
+func (r *Runner) execWaitSignal(ctx context.Context, runID uuid.UUID, step *flow.Step) (any, error) {
+	if r.Signals == nil {
+		return nil, fmt.Errorf("wait_signal: SignalStore not configured")
+	}
+	name, _ := step.Config["signal_name"].(string)
+	if name == "" {
+		name, _ = step.Config["signal"].(string)
+	}
+	if name == "" {
+		return nil, fmt.Errorf("wait_signal: signal_name required (validation)")
+	}
+	timeout := 24 * time.Hour
+	if ts, ok := step.Config["timeout_seconds"].(float64); ok && ts > 0 {
+		timeout = time.Duration(ts) * time.Second
+	}
+
+	if _, err := r.Signals.ExpectSignal(ctx, runID, step.ID, name, timeout); err != nil {
+		return nil, fmt.Errorf("wait_signal expect: %w", err)
+	}
+	r.setRunStatus(ctx, runID, StatusAwaitSig)
+
+	stepKey := step.ID
+	sig, err := r.Signals.WaitNotify(ctx, runID, &stepKey, name, timeout)
+	r.setRunStatus(ctx, runID, StatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("wait_signal %q: %w", name, err)
+	}
+	_ = r.Signals.CancelExpectation(ctx, runID)
+
+	out := map[string]any{"signal": sig.Name, "delivered_at": sig.DeliveredAt}
+	if len(sig.Payload) > 0 {
+		var payload any
+		if err := json.Unmarshal(sig.Payload, &payload); err == nil {
+			out["payload"] = payload
+		}
+	}
+	return out, nil
+}
+
+// setRunStatus actualiza el status del run sin tocar finished_at.
+func (r *Runner) setRunStatus(ctx context.Context, runID uuid.UUID, status string) {
+	if _, err := r.Pool.Exec(ctx,
+		`UPDATE flow_runs SET status = $2 WHERE id = $1`, runID, status); err != nil {
+		slog.Default().Warn("set run status", slog.String("status", status), slog.Any("err", err))
+	}
 }
 
 // subflowCtxKey rastrea la cadena de slugs ancestrales para detectar
@@ -503,7 +561,7 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 // y los demás branches reciben ctx cancel.
 //
 // Output: {"results": [...], "errors": [...]} ambos arrays paralelos a branches.
-func (r *Runner) execParallel(parentCtx context.Context, step *flow.Step,
+func (r *Runner) execParallel(parentCtx context.Context, runID uuid.UUID, step *flow.Step,
 	inputs, outputs map[string]any, orgID uuid.UUID, userID *uuid.UUID) (any, error) {
 
 	branchesRaw, ok := step.Config["branches"].([]any)
@@ -532,7 +590,7 @@ func (r *Runner) execParallel(parentCtx context.Context, step *flow.Step,
 		}
 		branchStep := mapToStep(branchMap)
 		go func(idx int, st *flow.Step) {
-			val, err := r.executeStep(ctx, st, inputs, outputs, orgID, userID)
+			val, err := r.executeStep(ctx, runID, st, inputs, outputs, orgID, userID)
 			resCh <- result{idx: idx, val: val, err: err}
 		}(i, branchStep)
 	}

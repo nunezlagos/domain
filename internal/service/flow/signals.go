@@ -35,8 +35,12 @@ type SignalStore struct {
 
 var ErrSignalNotFound = errors.New("signal not found")
 
+// SignalChannel es el canal pg NOTIFY usado para despertar waiters (sig-005).
+const SignalChannel = "flow_signals"
+
 // Send registra un signal nuevo. Idempotencia: si name='approve' ya existe
 // y no-delivered para este run+step, se actualiza el payload en lugar de duplicar.
+// Emite NOTIFY flow_signals con el run_id para despertar waiters sin polling.
 func (s *SignalStore) Send(ctx context.Context, flowRunID uuid.UUID, stepKey *string, name string, payload []byte) (*Signal, error) {
 	var sig Signal
 	err := s.Pool.QueryRow(ctx, `
@@ -49,7 +53,29 @@ func (s *SignalStore) Send(ctx context.Context, flowRunID uuid.UUID, stepKey *st
 	if err != nil {
 		return nil, fmt.Errorf("insert signal: %w", err)
 	}
+	s.notify(ctx, flowRunID)
 	return &sig, nil
+}
+
+// notify emite pg_notify(flow_signals, run_id). Best-effort: un fallo de
+// NOTIFY no invalida el signal ya persistido (los waiters tienen fallback poll).
+func (s *SignalStore) notify(ctx context.Context, flowRunID uuid.UUID) {
+	_, _ = s.Pool.Exec(ctx, `SELECT pg_notify($1, $2)`, SignalChannel, flowRunID.String())
+}
+
+// HasPendingExpectation indica si el run espera (no expirado) la señal name.
+func (s *SignalStore) HasPendingExpectation(ctx context.Context, runID uuid.UUID, name string) (bool, error) {
+	var exists bool
+	err := s.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM flow_run_signals_pending
+			WHERE flow_run_id = $1 AND signal_name = $2 AND expires_at > NOW()
+		)`, runID, name,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check pending: %w", err)
+	}
+	return exists, nil
 }
 
 // Consume devuelve el próximo signal no-delivered para (flowRun, stepKey, name)
@@ -204,9 +230,76 @@ func (s *SignalStore) BroadcastSignal(ctx context.Context, name string, payload 
 		); err != nil {
 			return 0, fmt.Errorf("insert signal for run %s: %w", t.runID, err)
 		}
+		s.notify(ctx, t.runID)
 	}
 
 	return len(targets), nil
+}
+
+// WaitNotify espera la señal usando LISTEN/NOTIFY (sig-005) con fallback a
+// polling si la conexión dedicada no puede establecerse. Sin CPU mientras
+// espera: bloquea en WaitForNotification hasta NOTIFY o timeout.
+func (s *SignalStore) WaitNotify(ctx context.Context, runID uuid.UUID, stepKey *string, name string, timeout time.Duration) (*Signal, error) {
+	// Intento inmediato: la señal pudo llegar antes del LISTEN (early signal).
+	sig, err := s.Consume(ctx, runID, stepKey, name)
+	if err == nil {
+		return sig, nil
+	}
+	if !errors.Is(err, ErrSignalNotFound) {
+		return nil, err
+	}
+
+	conn, err := s.Pool.Acquire(ctx)
+	if err != nil {
+		return s.WaitForSignal(ctx, runID, stepKey, name, timeout)
+	}
+	// La conexión queda con estado LISTEN: cerrarla al salir para que el pool
+	// no la reuse con suscripciones colgadas.
+	defer func() {
+		_ = conn.Conn().Close(context.Background())
+		conn.Release()
+	}()
+
+	if _, err := conn.Exec(ctx, "LISTEN "+SignalChannel); err != nil {
+		return s.WaitForSignal(ctx, runID, stepKey, name, timeout)
+	}
+
+	// Re-chequear post-LISTEN: cierra la ventana entre Consume y LISTEN.
+	sig, err = s.Consume(ctx, runID, stepKey, name)
+	if err == nil {
+		return sig, nil
+	}
+	if !errors.Is(err, ErrSignalNotFound) {
+		return nil, err
+	}
+
+	deadline := time.Now().Add(timeout)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, ErrSignalTimeout
+		}
+		nctx, cancel := context.WithTimeout(ctx, remaining)
+		_, werr := conn.Conn().WaitForNotification(nctx)
+		cancel()
+		if werr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if errors.Is(werr, context.DeadlineExceeded) {
+				return nil, ErrSignalTimeout
+			}
+			return nil, fmt.Errorf("wait notification: %w", werr)
+		}
+		// Cualquier NOTIFY del canal: intentar consumir nuestra señal.
+		sig, err := s.Consume(ctx, runID, stepKey, name)
+		if err == nil {
+			return sig, nil
+		}
+		if !errors.Is(err, ErrSignalNotFound) {
+			return nil, err
+		}
+	}
 }
 
 // WaitForSignal es un wrapper sobre Wait que traduce ErrSignalNotFound a

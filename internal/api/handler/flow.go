@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/api/backpressure"
+	"nunezlagos/domain/internal/audit"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	"nunezlagos/domain/internal/service/flow"
 )
@@ -229,4 +231,77 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, plan)
+}
+
+type signalRunBody struct {
+	Name    string          `json:"name"`
+	StepKey string          `json:"step_key,omitempty"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// POST /api/v1/runs/{id}/signals — issue-09.8 (sig-003)
+// Entrega una señal externa a un flow_run en paused_awaiting_signal.
+// 409 si el run no tiene expectativa pendiente para ese nombre.
+func (a *API) signalFlowRun(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	run, err := a.FlowService.GetRun(r.Context(), id)
+	if errors.Is(err, flow.ErrRunNotFound) || (err == nil && run.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+
+	var b signalRunBody
+	if err := decodeJSON(r, &b); err != nil || b.Name == "" {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "name required")
+		return
+	}
+
+	signals := &flow.SignalStore{Pool: a.FlowService.Pool}
+	pending, err := signals.HasPendingExpectation(r.Context(), id, b.Name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "pending_check", err.Error())
+		return
+	}
+	if !pending {
+		writeError(w, http.StatusConflict, "no_pending_signal",
+			"no pending signal of that name for this run")
+		return
+	}
+
+	var stepKey *string
+	if b.StepKey != "" {
+		stepKey = &b.StepKey
+	}
+	sig, err := signals.Send(r.Context(), id, stepKey, b.Name, b.Payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "signal_send", err.Error())
+		return
+	}
+	if a.Audit != nil {
+		actorID, _ := uuid.Parse(p.UserID)
+		orgID, _ := uuid.Parse(p.OrganizationID)
+		_ = a.Audit.Record(r.Context(), audit.Event{
+			OrganizationID: &orgID, ActorID: &actorID,
+			Action: "flow.signal_delivered", EntityType: "flow_run", EntityID: &id,
+		})
+	}
+	writeData(w, http.StatusAccepted, map[string]any{
+		"signal_id":   sig.ID,
+		"flow_run_id": sig.FlowRunID,
+		"name":        sig.Name,
+		"created_at":  sig.CreatedAt,
+	})
 }

@@ -12,5 +12,5 @@ hus:
   09.5-subflows-composition: partially_implemented
   09.6-durable-execution: implemented
   09.7-workflow-versioning: partially_implemented
-  09.8-external-signals: partially_implemented
+  09.8-external-signals: implemented
   09.9-saga-compensation: implemented

@@ -139,7 +139,7 @@ LOOP:
 		}
 		maxAttempts := step.Retries + 1
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			out, stepErr = r.executeStep(ctxStep, &step, inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
+			out, stepErr = r.executeStep(ctxStep, in.RunID, &step, inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
 			if stepErr == nil {
 				break
 			}

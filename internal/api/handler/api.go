@@ -245,6 +245,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow)
 	mux.HandleFunc("POST /api/v1/flows/{id}/run", a.runFlow)
 	mux.HandleFunc("POST /api/v1/flows/{id}/dry-run", a.dryRunFlow)
+	mux.HandleFunc("POST /api/v1/runs/{id}/signals", a.signalFlowRun)
 
 	// Webhooks inbound (público, HMAC auth — slug + secret en config)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)

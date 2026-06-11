@@ -72,6 +72,7 @@ type API struct {
 	KnowledgeService *knowledge.Service
 	LifecycleService *lifecycle.Service
 	SkillService     *skillsvc.Service
+	SkillExecution   *skillsvc.ExecutionService
 	AgentService     *agentsvc.Service
 	AgentRunner      *agentrunner.Runner
 	FlowService      *flow.Service
@@ -269,6 +270,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/skills/{id}", a.getSkill)
 	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", a.deleteSkill)
+	mux.HandleFunc("POST /api/v1/skills/{id}/execute", a.executeSkill)
+	mux.HandleFunc("GET /api/v1/executions/{id}", a.getExecution)
 
 	// Lifecycle (issue-23.2 restore + issue-23.3 GDPR export)
 	mux.HandleFunc("POST /api/v1/restore", a.restoreEntity)

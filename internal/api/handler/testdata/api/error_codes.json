@@ -53,6 +53,8 @@
   "entity_not_supported",
   "erase",
   "events_required",
+  "execute",
+  "execution_disabled",
   "expired",
   "export",
   "file_too_large",

@@ -141,6 +141,11 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/executions/{id}",
+    "handler": "getExecution"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/flow-runs/{id}",
     "handler": "getFlowRun"
   },
@@ -658,6 +663,11 @@
     "method": "PATCH",
     "path": "/api/v1/skills/{id}",
     "handler": "updateSkill"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/skills/{id}/execute",
+    "handler": "executeSkill"
   },
   {
     "method": "GET",

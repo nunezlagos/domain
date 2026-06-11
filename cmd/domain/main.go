@@ -688,6 +688,11 @@ func runServer() {
 		KnowledgeService: knowledgeService,
 		LifecycleService: lifecycleService,
 		SkillService:     skillService,
+		SkillExecution: &skillsvc.ExecutionService{
+			Pool: pools.App, Skills: skillService,
+			Versions: &skillsvc.VersionStore{Pool: pools.App},
+			Runner:   skillRunnerInst,
+		},
 		AgentService:     agentService,
 		AgentRunner:      agentRunnerInst,
 		FlowService:      flowService,

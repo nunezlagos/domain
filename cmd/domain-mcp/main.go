@@ -49,6 +49,7 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
@@ -220,6 +221,12 @@ func main() {
 		Search:         search,
 		Knowledge:      knowledgeSvc,
 		Skills:         skills,
+		SkillExecution: &skillsvc.ExecutionService{
+			Pool: pools.App, Skills: skills,
+			Versions: &skillsvc.VersionStore{Pool: pools.App},
+			Runner:   skillRunnerInst,
+		},
+		Crons:          &cronsvc.Service{Pool: pools.App, Audit: recorder},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,
 		Flows:          flowService,

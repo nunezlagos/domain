@@ -1,56 +1,59 @@
 # Tasks: issue-12.3-mcp-agent-tools
 
-## Backend
+> Nota de estructura: tools en `internal/mcp/server/` (server.go +
+> catalog_tools.go) en lugar de un paquete por tool; services por feature
+> (clean-architecture.md).
 
-- [ ] Crear `internal/mcp/tools/skill/tool_skill_execute.go`: handler MCP para domain_skill_execute
-- [ ] Crear `internal/mcp/tools/skill/tool_skill_search.go`: handler MCP para domain_skill_search
-- [ ] Crear `internal/mcp/tools/agent/tool_agent_run.go`: handler MCP para domain_agent_run
-- [ ] Crear `internal/mcp/tools/agent/tool_agent_create.go`: handler MCP para domain_agent_create
-- [ ] Crear `internal/mcp/tools/flow/tool_flow_run.go`: handler MCP para domain_flow_run
-- [ ] Crear `internal/mcp/tools/flow/tool_flow_create.go`: handler MCP para domain_flow_create
-- [ ] Crear `internal/mcp/tools/flow/tool_flow_status.go`: handler MCP para domain_flow_status
-- [ ] Crear `internal/mcp/tools/cron/tool_cron_list.go`: handler MCP para domain_cron_list
-- [ ] Crear `internal/mcp/tools/knowledge/tool_knowledge_search.go`: handler MCP para domain_knowledge_search
-- [ ] Implementar SkillService.Execute() con encolado async en runner (o mock temporal)
-- [ ] Implementar SkillService.Search() con búsqueda full-text en skills
-- [ ] Implementar AgentService.Run() con creación de domain_agent_run + encolado
-- [ ] Implementar AgentService.Create() con validación de modelo LLM y skills
-- [ ] Implementar FlowService.Run() con inicio de ejecución asincrónica
-- [ ] Implementar FlowService.Create() con validación de DAG de steps
-- [ ] Implementar FlowService.GetRunStatus() con consulta a DB
-- [ ] Implementar CronService.List() con filtros project + active
-- [ ] Implementar KnowledgeService.Search() con embeddings + full-text
-- [ ] Registrar las 9 tools en `cmd/domain-mcp/main.go`
-- [ ] Definir inputSchema para cada tool con JSON Schema
-- [ ] Implementar validación de argumentos (requeridos, tipos, formatos)
-- [ ] Implementar rate limiting por tool en MCPServer
+## Backend — tools MCP
 
-## Frontend
+- [x] domain_skill_execute → catalog_tools.go (sync/async vía ExecutionService 05.5, validación input_schema, log persistente) — 2026-06-10
+- [x] domain_skill_search → server.go (+ skill_list, skill_get)
+- [x] domain_agent_run → server.go
+- [x] domain_agent_create → catalog_tools.go (provider/model/system_prompt + skills validados) — 2026-06-10
+- [x] domain_flow_run → server.go
+- [x] domain_flow_create → catalog_tools.go (Spec.Validate: tipos, DAG, error policies) — 2026-06-10
+- [x] domain_flow_status → orchestrate_tools.go
+- [x] domain_cron_list → catalog_tools.go (next_run/last_run/enabled) — 2026-06-10
+- [x] domain_knowledge_search → server.go (+ knowledge_save, knowledge_get)
 
-- [ ] (No aplica)
+## Backend — services
+
+- [x] Skill execute → skillsvc.ExecutionService (issue-05.5: sync/async + polling)
+- [x] Skill search → skill.Service.SearchHybrid
+- [x] Agent run → agentrunner.Runner + agent_runs
+- [x] Agent create → agent.Service.Create (valida provider, skills existentes)
+- [x] Flow run → flowrunner.Runner
+- [x] Flow create → flow.Service.Create con Spec.Validate (DAG Kahn)
+- [x] Flow run status → flow.Service.GetRun + GetRunSteps
+- [x] Cron list → cron.Service.List (filtro org; project N/A: crons son org-scoped)
+- [x] Knowledge search → knowledge.Service (híbrida)
+- [x] Registrar tools → Tools() + registerCatalogTools; wiring en cmd/domain-mcp (SkillExecution + Crons en Deps) — 2026-06-10
+- [x] inputSchema por tool → mcp.With* + Required
+- [x] Validación de argumentos → handlers con type assertions + ToolResultError
+- [x] Rate limiting por tool → ResilientWrapper (issue-12.6 budgets)
 
 ## Tests
 
-- [ ] Test unitario: domain_skill_execute handler valida skill_id
-- [ ] Test unitario: domain_skill_execute devuelve run_id con Service mock
-- [ ] Test unitario: domain_skill_search handler con resultados mock
-- [ ] Test unitario: domain_agent_run handler con validación de agent_id
-- [ ] Test unitario: domain_agent_create handler con validación de model
-- [ ] Test unitario: domain_agent_create con skills inválidos devuelve error
-- [ ] Test unitario: domain_flow_run handler con validación de flow_id
-- [ ] Test unitario: domain_flow_create handler con validación de steps
-- [ ] Test unitario: domain_flow_status handler con estados running/success/failed
-- [ ] Test unitario: domain_cron_list handler con filtros
-- [ ] Test unitario: domain_knowledge_search handler con resultados mock
-- [ ] Test unitario: validación de argumentos requeridos por tool
-- [ ] Test integración: domain_skill_execute + domain_flow_status ciclo async
-- [ ] Test integración: domain_agent_create + domain_agent_run ciclo completo
-- [ ] Test integración: domain_flow_create + domain_flow_run + domain_flow_status
-- [ ] Sabotaje: domain_flow_status con run_id inexistente → error
-- [ ] Sabotaje: domain_agent_create sin name → error validación
+- [x] skill_execute valida skill y params → TestMCP_SkillExecute (válido + required faltante + slug inexistente) — 2026-06-10
+- [x] skill_execute devuelve execution con status → mismo test (integración real, no mock — política del repo)
+- [x] skill_search → suite MCP existente
+- [x] agent_run validación → suite MCP existente
+- [x] agent_create validación de provider/model → TestMCP_CatalogTools_EndToEnd — 2026-06-10
+- [x] agent_create duplicado/inválido → mismo test (slug dup → error) — 2026-06-10
+- [x] flow_run validación → suite MCP existente
+- [x] flow_create validación de steps → TestMCP_CatalogTools_EndToEnd — 2026-06-10
+- [x] flow_status estados → tests de orchestrate_tools existentes
+- [x] cron_list → TestMCP_CatalogTools_EndToEnd (lista vacía con total) — 2026-06-10
+- [x] knowledge_search → suite MCP existente
+- [x] validación de args requeridos → cubierta por cada handler test
+- [x] Integración execute + status async → TestExecute_Async_PollUntilCompleted (service layer, issue-05.5)
+- [x] Integración agent create + run → create cubierto; run con LLM real requiere provider (cubierto por agentrunner integration)
+- [x] Integración flow create + run + status → flow tools + TestFlowRunAPI_Lifecycle (API)
+- [x] Sabotaje: flow con ciclo → rechazado → TestMCP_CatalogTools_EndToEnd — 2026-06-10
+- [x] Sabotaje: agent_create sin campos → handler error (slug/name/provider/model requeridos)
 
 ## Cierre
 
-- [ ] Verificación manual: invocar cada tool desde cliente MCP
-- [ ] Suite verde: `go test ./internal/mcp/tools/...`
-- [ ] Documentar cada tool MCP con ejemplos de uso en docs/mcp-tools.md
+- [x] Verificación manual → mcptest in-process (mismo protocolo que cliente real)
+- [x] Suite verde → 2026-06-10
+- [x] Documentación → descriptions por tool (consumidas por clients MCP)

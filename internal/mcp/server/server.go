@@ -39,6 +39,7 @@ import (
 	sesssvc "nunezlagos/domain/internal/service/session"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	prouter "nunezlagos/domain/internal/service/promptrouter"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
@@ -55,8 +56,10 @@ type Deps struct {
 	Search       *searchsvc.Service
 	Knowledge    *knowsvc.Service
 	Skills       *skillsvc.Service
+	SkillExecution *skillsvc.ExecutionService // issue-12.3 domain_skill_execute
 	Agents       *agentsvc.Service
 	AgentRunner  *agentrunner.Runner
+	Crons        *cronsvc.Service // issue-12.3 domain_cron_list
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
 	Orchestrator *orchsvc.Service // issue-08.10 sdd-pipeline-orchestrator
@@ -126,6 +129,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
 	tools = append(tools, registerMemoryTools(wrap, deps)...)
+	tools = append(tools, registerCatalogTools(wrap, deps)...)
 	tools = append(tools, registerHUTools(wrap, deps)...)
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)

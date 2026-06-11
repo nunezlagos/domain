@@ -25,15 +25,23 @@ import (
 	"nunezlagos/domain/internal/llm"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	dmigrate "nunezlagos/domain/internal/migrate"
+	skillrunner "nunezlagos/domain/internal/runner/skill"
+	agentsvc "nunezlagos/domain/internal/service/agent"
+	cronsvc "nunezlagos/domain/internal/service/cron"
+	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
 type mcpFixture struct {
 	srv         *mcptest.Server
 	projectSlug string
+	skills      *skillsvc.Service
+	orgID       uuid.UUID
+	userID      uuid.UUID
 	cleanup     func()
 }
 
@@ -69,11 +77,21 @@ func setupMCP(t *testing.T) *mcpFixture {
 	})
 	require.NoError(t, err)
 
+	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	deps := mcpserver.Deps{
 		Observations: obsS,
 		Projects:     projS,
 		Prompts:      &promptsvc.Service{Pool: pools.App, Audit: rec},
-		Pool:         pools.App,
+		Skills:       skillS,
+		SkillExecution: &skillsvc.ExecutionService{
+			Pool: pools.App, Skills: skillS,
+			Versions: &skillsvc.VersionStore{Pool: pools.App},
+			Runner:   skillrunner.New(),
+		},
+		Agents: &agentsvc.Service{Pool: pools.App, Audit: rec},
+		Flows:  &flowsvc.Service{Pool: pools.App, Audit: rec},
+		Crons:  &cronsvc.Service{Pool: pools.App, Audit: rec},
+		Pool:   pools.App,
 		Principal: &apikey.Principal{
 			UserID:         owner.UserID.String(),
 			OrganizationID: org.ID.String(),
@@ -89,6 +107,9 @@ func setupMCP(t *testing.T) *mcpFixture {
 	return &mcpFixture{
 		srv:         testSrv,
 		projectSlug: proj.Slug,
+		skills:      skillS,
+		orgID:       org.ID,
+		userID:      owner.UserID,
 		cleanup: func() {
 			testSrv.Close()
 			pools.Close()

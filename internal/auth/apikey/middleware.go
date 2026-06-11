@@ -125,8 +125,20 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 						http.StatusInternalServerError)
 					return
 				}
-				defer func() { _ = tx.Rollback(ctx) }()
+				// Wireup: capturamos el status del response para decidir
+				// commit vs rollback. 2xx y 4xx → commit (4xx es error del
+				// cliente, los datos válidos persisten). 5xx → rollback
+				// (error de servidor, tx es probablemente inválida).
+				rec := &statusRecorder{ResponseWriter: w, status: 200}
+				defer func() {
+					if rec.status >= 500 {
+						_ = tx.Rollback(ctx)
+						return
+					}
+					_ = tx.Commit(ctx)
+				}()
 				ctx = txctx.WithTxContext(ctx, tx)
+				w = rec
 			}
 		}
 
@@ -164,4 +176,32 @@ func writeUnauthorized(w http.ResponseWriter, code, msg string) {
 	_, _ = w.Write([]byte(`{"error":{"code":"unauthorized","message":"unauthorized"}}`))
 	_ = code
 	_ = msg
+}
+
+// statusRecorder captura el status code del response para que el wireup
+// de tx pueda decidir commit (status<500) vs rollback (status>=500).
+//
+// Status default = 200 (per http.ResponseWriter contract) si el handler
+// nunca llamo WriteHeader explicitamente.
+type statusRecorder struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if r.wroteHeader {
+		return
+	}
+	r.status = code
+	r.wroteHeader = true
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if !r.wroteHeader {
+		// Write antes de WriteHeader → status default 200
+		r.wroteHeader = true
+	}
+	return r.ResponseWriter.Write(b)
 }

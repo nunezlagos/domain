@@ -1,10 +1,10 @@
 package intake
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -58,8 +58,8 @@ func TestBehavior_NilLogger_FallsBackToDefault(t *testing.T) {
 // intake service que lo procesa.
 func TestBehavior_Classification_ValidTypes(t *testing.T) {
 	validTypes := []string{"feat", "fix", "hotfix", "chore", "refactor", "docs"}
-	for _, t := range validTypes {
-		cls := Classification{Type: t}
+	for _, typ := range validTypes {
+		cls := Classification{Type: typ}
 		require.NotEmpty(t, cls.Type)
 	}
 

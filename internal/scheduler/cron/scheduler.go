@@ -83,8 +83,25 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 		dispatchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
+		execID, skipped, histErr := s.Crons.StartExecution(dispatchCtx, c.ID, c.TargetType)
+		if histErr != nil {
+			logger.Error("cron history start failed",
+				slog.String("slug", c.Slug), slog.Any("err", histErr))
+		}
+		if skipped {
+			logger.Warn("cron overlap: previous execution still running, skipping",
+				slog.String("slug", c.Slug))
+			return
+		}
+
 		execErr := s.dispatchSync(dispatchCtx, c)
 
+		if histErr == nil {
+			if err := s.Crons.FinishExecution(dispatchCtx, execID, execErr); err != nil {
+				logger.Error("cron history finish failed",
+					slog.String("slug", c.Slug), slog.Any("err", err))
+			}
+		}
 		if execErr != nil {
 			logger.Error("cron exec failed",
 				slog.String("slug", c.Slug), slog.Any("err", execErr))

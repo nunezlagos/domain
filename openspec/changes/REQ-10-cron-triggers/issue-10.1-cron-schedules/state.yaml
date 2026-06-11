@@ -1,8 +1,19 @@
 status: implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-11
 archived: ~
 notes: |
+  Completado 2026-06-11:
+  - Migration 000084 cron_executions: historial running/completed/failed/
+    skipped_overlap con duration_ms.
+  - Overlap detection: StartExecution con INSERT condicional NOT EXISTS
+    running (statement único, sin race); scheduler skipea sin disparar target.
+  - HTTP CRUD: POST/GET /api/v1/crons, GET/PATCH(enabled)/DELETE /{id},
+    GET /{id}/history. CronService wireado en cmd/domain.
+  - PickDue ahora refleja last_run_at/next_run_at post-claim en el retorno.
+  - Tests: ExecutionHistory_Lifecycle + sabotaje OverlapSkipped (per-cron).
+
+  Estado previo (2026-06-07):
   internal/service/cron.Service CRUD sobre tabla crons (migration 16).
   - Create: valida slug + name + target_type whitelist (flow/agent/skill) +
     cron_expression parseable (robfig/cron v3) + timezone válido (Go

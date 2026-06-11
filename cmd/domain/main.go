@@ -700,6 +700,7 @@ func runServer() {
 		AgentRunner:      agentRunnerInst,
 		FlowService:      flowService,
 		FlowRunner:       flowRunnerInst,
+		CronService:      cronService,
 		CostService:      costService,
 		BillingService:   billingService,
 		OutboundWebhookService:    outboundWebhookService,

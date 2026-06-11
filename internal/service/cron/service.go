@@ -241,11 +241,14 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	// reescoja inmediatamente. La ejecución real ocurre fuera de esta tx;
 	// si falla el caller llama MarkRan(success=false) y schedule sigue normal.
 	now := time.Now().UTC()
-	for _, c := range out {
-		next, _ := NextRun(c.CronExpression, c.Timezone, now)
+	for i := range out {
+		next, _ := NextRun(out[i].CronExpression, out[i].Timezone, now)
 		_, _ = tx.Exec(ctx,
 			`UPDATE crons SET last_run_at = $1, next_run_at = $2 WHERE id = $3`,
-			now, next, c.ID)
+			now, next, out[i].ID)
+		nowCopy, nextCopy := now, next
+		out[i].LastRunAt = &nowCopy
+		out[i].NextRunAt = &nextCopy
 	}
 
 	if err := tx.Commit(ctx); err != nil {

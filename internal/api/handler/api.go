@@ -32,6 +32,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/cost"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -77,6 +78,7 @@ type API struct {
 	AgentRunner      *agentrunner.Runner
 	FlowService      *flow.Service
 	FlowRunner       *flowrunner.Runner
+	CronService      *cronsvc.Service
 	WebhookService   *webhooksvc.Service
 	CostService      *cost.Service
 	BillingService   *billing.Service
@@ -239,6 +241,14 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
 	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/logs", a.getAgentRunLogs)
+
+	// Crons (issue-10.1)
+	mux.HandleFunc("POST /api/v1/crons", a.createCron)
+	mux.HandleFunc("GET /api/v1/crons", a.listCrons)
+	mux.HandleFunc("GET /api/v1/crons/{id}", a.getCron)
+	mux.HandleFunc("PATCH /api/v1/crons/{id}", a.patchCron)
+	mux.HandleFunc("DELETE /api/v1/crons/{id}", a.deleteCron)
+	mux.HandleFunc("GET /api/v1/crons/{id}/history", a.cronHistory)
 
 	// Flows
 	mux.HandleFunc("POST /api/v1/flows", a.createFlow)

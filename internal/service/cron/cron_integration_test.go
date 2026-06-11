@@ -162,3 +162,85 @@ func TestCronService_PickDue_RespectsLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, due, 2, "should respect limit=2")
 }
+
+func insertCron(t *testing.T, pool *pgxpool.Pool, orgID uuid.UUID) uuid.UUID {
+	t.Helper()
+	cronID := uuid.New()
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at)
+		VALUES ($1, $2, $3, 'Cron', '* * * * *', 'flow', $4, NOW())`,
+		cronID, orgID, "cron-"+uuid.New().String(), uuid.New())
+	require.NoError(t, err)
+	return cronID
+}
+
+func TestCronService_ExecutionHistory_Lifecycle(t *testing.T) {
+	pool, cleanup := setupCronDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	orgID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
+	require.NoError(t, err)
+	cronID := insertCron(t, pool, orgID)
+	svc := &cron.Service{Pool: pool}
+
+	// Ejecución exitosa
+	execID, skipped, err := svc.StartExecution(ctx, cronID, "flow")
+	require.NoError(t, err)
+	require.False(t, skipped)
+	require.NoError(t, svc.FinishExecution(ctx, execID, nil))
+
+	// Ejecución fallida
+	execID2, skipped, err := svc.StartExecution(ctx, cronID, "flow")
+	require.NoError(t, err)
+	require.False(t, skipped, "sin running activa no hay overlap")
+	require.NoError(t, svc.FinishExecution(ctx, execID2, context.DeadlineExceeded))
+
+	hist, err := svc.History(ctx, cronID, 0)
+	require.NoError(t, err)
+	require.Len(t, hist, 2)
+	require.Equal(t, "failed", hist[0].Status, "más reciente primero")
+	require.Contains(t, hist[0].Error, "deadline")
+	require.Equal(t, "completed", hist[1].Status)
+	require.NotNil(t, hist[1].FinishedAt)
+	require.NotNil(t, hist[1].DurationMS)
+}
+
+// Sabotaje overlap: con una ejecución running, el siguiente Start NO dispara
+// y deja rastro skipped_overlap en el historial.
+func TestSabotage_CronService_OverlapSkipped(t *testing.T) {
+	pool, cleanup := setupCronDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	orgID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
+	require.NoError(t, err)
+	cronID := insertCron(t, pool, orgID)
+	svc := &cron.Service{Pool: pool}
+
+	// Primera ejecución queda running (no se cierra)
+	_, skipped, err := svc.StartExecution(ctx, cronID, "flow")
+	require.NoError(t, err)
+	require.False(t, skipped)
+
+	// Segunda: overlap → skipped
+	_, skipped, err = svc.StartExecution(ctx, cronID, "flow")
+	require.NoError(t, err)
+	require.True(t, skipped, "previous running debe forzar skip")
+
+	hist, err := svc.History(ctx, cronID, 0)
+	require.NoError(t, err)
+	require.Len(t, hist, 2)
+	require.Equal(t, "skipped_overlap", hist[0].Status)
+	require.Equal(t, "running", hist[1].Status)
+
+	// Otro cron NO se ve afectado por la running ajena
+	otherID := insertCron(t, pool, orgID)
+	_, skipped, err = svc.StartExecution(ctx, otherID, "flow")
+	require.NoError(t, err)
+	require.False(t, skipped, "el overlap es per-cron, no global")
+}

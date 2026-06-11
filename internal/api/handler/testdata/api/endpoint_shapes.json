@@ -165,6 +165,36 @@
     "handler": "getCostSpend"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/crons",
+    "handler": "listCrons"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/crons",
+    "handler": "createCron"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/crons/{id}",
+    "handler": "deleteCron"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/crons/{id}",
+    "handler": "getCron"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/crons/{id}",
+    "handler": "patchCron"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/crons/{id}/history",
+    "handler": "cronHistory"
+  },
+  {
     "method": "PATCH",
     "path": "/api/v1/designs/{id}/status",
     "handler": "changeDesignStatus"

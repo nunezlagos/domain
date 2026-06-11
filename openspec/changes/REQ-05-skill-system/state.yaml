@@ -3,8 +3,8 @@ created: 2026-06-07
 archived: ~
 hus:
   05.1-skill-definitions: implemented
-  05.2-skill-registry-search: partially_implemented
+  05.2-skill-registry-search: implemented
   05.3-skill-versioning: proposed
-  05.4-auto-skill-engine: proposed
+  05.4-auto-skill-engine: implemented
   05.5-skill-execution: implemented
   05.6-agent-skill-contract: proposed

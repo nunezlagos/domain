@@ -6,5 +6,7 @@ notes: |
   ~80 rutas REST registradas para 20+ entidades en internal/api/handler/api.go.
   Response envelope consistente ({data}, {error}).
   Handlers específicos por entidad en internal/api/handler/.
-  Pending: CRUD factory genérico (Entity interface), validación schemas
-  con go-playground/validator, generación OpenAPI.
+  Cierre 2026-06-11: CRUD factory genérico y go-playground/validator
+  marcados N/A por diseño (handlers explícitos + validación en services;
+  consistencia de shapes enforced por linter issue-13.9). OpenAPI diferido
+  a REQ-22 SDK clients. Ver tasks.md.

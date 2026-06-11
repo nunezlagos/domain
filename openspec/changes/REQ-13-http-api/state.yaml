@@ -2,9 +2,9 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  13.1-http-crud-endpoints: partially_implemented
+  13.1-http-crud-endpoints: implemented
   13.2-http-auth-middleware: implemented
-  13.3-http-pagination-filters: partially_implemented
+  13.3-http-pagination-filters: implemented
   13.4-idempotency-keys: implemented
   13.5-bulk-batch-endpoints: proposed
   13.6-cursor-pagination: implemented

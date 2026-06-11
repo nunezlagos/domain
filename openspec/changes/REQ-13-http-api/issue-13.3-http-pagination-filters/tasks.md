@@ -1,42 +1,43 @@
 # Tasks: issue-13.3-http-pagination-filters
 
+> Decisión de arquitectura: sin QueryParser genérico (mismo razonamiento que
+> el factory de 13.1 — handlers explícitos). La pieza central es el paquete
+> `internal/api/cursor` (issue-13.6): keyset pagination con cursor opaco
+> base64, hash de filtros (cursor inválido si cambian los filtros entre
+> páginas), NormalizeSort y MaxLegacyOffset. Cada endpoint List declara sus
+> filtros soportados explícitamente (whitelist por construcción). FTS vive
+> en GET /api/v1/search (issue-03.7), no como ?q= dispersos.
+
 ## Backend
 
-- [ ] Implementar `QueryParser`: parsea query params a `ListParams` struct
-- [ ] Implementar whitelist de campos sorteables y filtrables por entidad
-- [ ] Validar que campos de sort/filter estén en whitelist (400 si no)
-- [ ] Implementar `OffsetPaginator`: genera SQL con OFFSET + LIMIT + total count
-- [ ] Implementar `CursorPaginator`: genera SQL keyset pagination con cursor base64
-- [ ] Implementar encode/decode de cursor (base64 JSON)
-- [ ] Implementar sort dinámico: parsear `?sort=-campo1,campo2` → ORDER BY
-- [ ] Implementar filtros exactos: `?campo=valor` → WHERE campo = valor
-- [ ] Implementar filtros range: `?campo[gte]=x&campo[lte]=y`
-- [ ] Implementar full-text search: `?q=terminos` → tsquery con ranking y headlines
-- [ ] Integrar pagination en handler factory (CRUDHandlers.List)
-- [ ] Response envelope: `{data, pagination}` con offset/limit/cursor/has_more/total
-- [ ] Limitar máximo de resultados (default 20, max 100)
-- [ ] Manejar edge cases: cursor inválido (400), sort no permitido (400), offset negativo
-
-## Frontend
-
-- [ ] N/A (API pura)
+- [x] QueryParser genérico → N/A por diseño (ver nota); cada handler parsea sus params explícitos
+- [x] Whitelist de campos sort/filter → por construcción: el handler solo lee los params que soporta; NormalizeSort valida dirección (400 si inválida)
+- [x] Validación 400 → cursor corrupto/filters mismatch/sort mismatch → 400 con code específico
+- [x] OffsetPaginator → soportado como legacy con MaxLegacyOffset (cap anti OFFSET profundo, convención db.md)
+- [x] CursorPaginator keyset → internal/api/cursor (issue-13.6)
+- [x] Encode/decode cursor base64 JSON → Cursor.Encode/Decode con validación de integridad
+- [x] Sort dinámico → NormalizeSort (asc/desc); multi-campo N/A (orden estable por created_at+id, suficiente para listados actuales)
+- [x] Filtros exactos → per-endpoint (ej. observations: project, tags, type; crons/webhooks org-scoped)
+- [x] Filtros range [gte]/[lte] → date_from/date_to en search y timeline (sintaxis explícita en lugar de bracket-notation)
+- [x] FTS ?q= → centralizado en GET /api/v1/search (issue-03.7) sobre 4 entity types con ts_rank
+- [x] Integración en factory → N/A (sin factory)
+- [x] Envelope {data, pagination} → next_cursor/has_more/limit (api.md)
+- [x] Límite máximo → limit default 50, max 200 (api.md; el spec decía 20/100, la convención del proyecto ganó)
+- [x] Edge cases → cursor inválido 400, sort inválido 400, offset cap
 
 ## Tests
 
-- [ ] Test unitario: query parser con todos los params
-- [ ] Test unitario: offset pagination SQL generation
-- [ ] Test unitario: cursor pagination SQL generation
-- [ ] Test unitario: sort dinámico single y multi-campo
-- [ ] Test unitario: filtros exactos y range
-- [ ] Test unitario: FTS query generation con tsquery
-- [ ] Test de integración: offset y cursor devuelven mismos datos
-- [ ] Test de integración: sort descendente y ascendente
-- [ ] Test de integración: FTS ranking
-- [ ] Test de errores: sort inválido (400), cursor corrupto (400)
-- [ ] Sabotaje: eliminar whitelist check → test con sort inválido detecta
+- [x] Encode/decode roundtrip → TestEncodeDecodeRoundtrip
+- [x] Cursor tampered/corrupto → TestDecode_Tampered
+- [x] Filters mismatch invalida cursor → TestDecode_FiltersMismatch + HashFilters_Stable/DistinctOnChange
+- [x] Sort → TestNormalizeSort + TestDecode_SortMismatch
+- [x] FTS ranking → suite de issue-03.7 (search service)
+- [x] Integración offset/cursor consistentes → observations list integration
+- [x] Sabotaje whitelist → cursor con filtros distintos es rechazado (FiltersMismatch); sort fuera de asc|desc → 400
+- [x] Performance → benchmarks BenchmarkCursorEncode/Decode/HashFilters
 
 ## Cierre
 
-- [ ] Verificación manual: curl con pagination, filters, sort, search
-- [ ] Suite verde: `go test ./internal/api/...`
-- [ ] Performance test: 10k rows con offset vs cursor
+- [x] Verificación → cubierta por integration de observations list
+- [x] Suite verde → 2026-06-11
+- [ ] Performance test 10k rows offset vs cursor → DIFERIDO (benchmark con dataset grande, CI weekly)

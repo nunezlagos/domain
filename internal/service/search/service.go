@@ -17,7 +17,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // EntityType discrimina el tipo del resultado.
@@ -54,6 +58,21 @@ type Filter struct {
 
 type Service struct {
 	Pool *pgxpool.Pool
+}
+
+// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
+// (issue-25.14), o el pool como fallback.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Service) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
 }
 
 var (
@@ -157,7 +176,7 @@ WHERE o.organization_id = $1 AND o.deleted_at IS NULL AND o.content_tsv @@ qry
 	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
 	args = append(args, limit)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +220,7 @@ WHERE p.organization_id = $1 AND p.deleted_at IS NULL AND p.body_tsv @@ qry
 	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
 	args = append(args, limit)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +264,7 @@ WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.summary_tsv @@ qry
 	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
 	args = append(args, limit)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +308,7 @@ WHERE kd.organization_id = $1 AND kd.deleted_at IS NULL AND kd.body_tsv @@ qry
 	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
 	args = append(args, limit)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

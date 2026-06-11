@@ -15,7 +15,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // RelatedSession es una session candidate con score de relevancia.
@@ -34,6 +38,21 @@ type RelatedSession struct {
 // Stitcher descubre relaciones cross-session.
 type Stitcher struct {
 	Pool *pgxpool.Pool
+}
+
+// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
+// (issue-25.14), o el pool como fallback.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Stitcher) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
 }
 
 // Options para customizar el matching.
@@ -76,7 +95,7 @@ func (s *Stitcher) FindRelated(ctx context.Context, currentSession uuid.UUID, op
 	}
 	q += ` ORDER BY started_at DESC LIMIT 200`
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}

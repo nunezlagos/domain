@@ -19,9 +19,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -48,6 +50,21 @@ type Service struct {
 	Pool             *pgxpool.Pool
 	Audit            audit.Recorder
 	RetentionDays    int // default 30; restore falla si deleted_at < now()-RetentionDays
+}
+
+// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
+// (issue-25.14), o el pool como fallback.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Service) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
 }
 
 func (s *Service) retentionDays() int {
@@ -77,7 +94,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	} else {
 		query = fmt.Sprintf(`SELECT deleted_at, NULL::uuid FROM %s WHERE id = $1`, table)
 	}
-	err := s.Pool.QueryRow(ctx, query, args...).Scan(&deletedAt, &entityOrg)
+	err := s.q(ctx).QueryRow(ctx, query, args...).Scan(&deletedAt, &entityOrg)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -96,7 +113,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 		return ErrRetentionExpired
 	}
 
-	_, err = s.Pool.Exec(ctx,
+	_, err = s.q(ctx).Exec(ctx,
 		fmt.Sprintf(`UPDATE %s SET deleted_at = NULL WHERE id = $1`, table), id)
 	if err != nil {
 		return fmt.Errorf("restore: %w", err)
@@ -151,7 +168,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	}
 
 	// 1. user record
-	usr, err := scanRow(ctx, s.Pool,
+	usr, err := scanRow(ctx, s.q(ctx),
 		`SELECT id, organization_id, email, name, role, created_at, updated_at, deleted_at
 		 FROM users WHERE id = $1 AND organization_id = $2`,
 		userID, orgID)
@@ -164,7 +181,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	out.User = usr
 
 	// 2. organization (one, the user's)
-	orgRow, _ := scanRow(ctx, s.Pool,
+	orgRow, _ := scanRow(ctx, s.q(ctx),
 		`SELECT id, name, slug, settings, created_at, plan_id, custom_limits
 		 FROM organizations WHERE id = $1`, orgID)
 	if orgRow != nil {
@@ -223,8 +240,8 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 }
 
 // scanRow ejecuta una query que devuelve UNA fila y la convierte a map[string]any.
-func scanRow(ctx context.Context, pool *pgxpool.Pool, sql string, args ...any) (map[string]any, error) {
-	rows, err := pool.Query(ctx, sql, args...)
+func scanRow(ctx context.Context, q querier, sql string, args ...any) (map[string]any, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -248,8 +265,8 @@ func scanRow(ctx context.Context, pool *pgxpool.Pool, sql string, args ...any) (
 	return m, nil
 }
 
-func scanRows(ctx context.Context, pool *pgxpool.Pool, sql string, args ...any) ([]map[string]any, error) {
-	rows, err := pool.Query(ctx, sql, args...)
+func scanRows(ctx context.Context, q querier, sql string, args ...any) ([]map[string]any, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -301,7 +318,7 @@ func (s *Service) PurgeExpiredSoftDeleted(ctx context.Context) (int64, error) {
 	cutoff := time.Now().Add(-time.Duration(s.retentionDays()) * 24 * time.Hour)
 	var total int64
 	for entityType, table := range restorableEntities {
-		tag, err := s.Pool.Exec(ctx,
+		tag, err := s.q(ctx).Exec(ctx,
 			fmt.Sprintf(`DELETE FROM %s WHERE deleted_at IS NOT NULL AND deleted_at < $1`, table), cutoff)
 		if err != nil {
 			return total, fmt.Errorf("purge %s: %w", entityType, err)

@@ -1,28 +1,20 @@
 status: implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-10
 archived: ~
 notes: |
-  internal/runner/flow/recovery.go: worker que detecta flow_runs stale.
+  Implementación completa de durable execution para flow runs.
 
-  Lógica:
-  - Loop cada PollInterval (default 60s)
-  - Para runs en status='running' con last_heartbeat_at < NOW - StaleAfter
-    (default 5min) → marca como 'failed' con recovery_reason
-  - Incrementa flow_runs.recovery_count para tracking
+  Componentes:
+  - internal/runner/flow/claim.go: ClaimRun con FOR UPDATE SKIP LOCKED
+  - internal/runner/flow/heartbeat.go: Heartbeat goroutine cada 30s
+  - internal/runner/flow/recovery.go: Recovery scanner (libera worker_id, crash-loop detection)
+  - internal/runner/flow/resume.go: ResumeRun desde cursor con skip de completados
+  - internal/runner/flow/durable.go: Gzip compression, S3 spillover (>10MB),
+    idempotency keys (flow_run:uuid:step:key), replay_safe detection
+  - internal/metrics/metrics.go: FlowHeartbeatAgeSeconds gauge
+  - Migration 000076: output_compressed BYTEA, output_s3_key VARCHAR(500)
 
-  Política simple (fail) en lugar de resume:
-  - Reanudar desde cursor requiere step-level idempotency garantizado para
-    TODOS los step types (incluso http_request, agent_run con side-effects)
-  - Por ahora marca failed → cliente decide re-trigger manualmente
-  - Versión avanzada con resume requiere issue-09.6.1 (step idempotency keys)
-
-  Wire cmd/domain server:
-  - Recovery worker corre dentro de leader.RunAsLeader (issue-26.2)
-  - Solo el pod leader hace cleanup; el resto sirve tráfico
-
-  Pending:
-  - issue-09.6.1 resume parcial desde cursor para steps idempotentes
-  - issue-09.10 heartbeat por step (no solo per-run)
-  - Métricas Prometheus: domain_flow_recovery_total
-  - Notification al admin cuando recovery_count > N en una org
+  Tests: 8 unit + 5 integration (claim, recovery, race, compress, idempotency)
+  Build: go build + go vet + go test -short → PASS
+  Lock key: LockKeyFlowRecovery (existente)

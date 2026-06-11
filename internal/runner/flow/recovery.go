@@ -1,12 +1,11 @@
-// issue-09.6 — durable execution recovery worker.
+// issue-09.6 — durable execution recovery scanner (de-005).
 //
-// Identifica flow_runs en status='running' cuyo last_heartbeat_at sea > N min
-// (probable crash del worker original). Los marca como 'failed' con
-// recovery_reason — política simple. Una versión más sofisticada podría
-// reanudar desde cursor pero requiere step-level idempotency garantizado
-// para todos los step types (no aplica para http_request, agent_run con
-// side effects).
-
+// Libera flow_runs en status='running' cuyo last_heartbeat_at sea > N min
+// (probable crash del worker original). El próximo worker que claimée el
+// run lo reanudará desde su cursor con ResumeRun.
+//
+// recovery_count se incrementa para tracking. Si recovery_count supera un
+// umbral, el run se marca como failed (crash loop detection).
 package flowrunner
 
 import (
@@ -15,13 +14,15 @@ import (
 	"time"
 )
 
-// RecoveryConfig parámetros del worker.
+// RecoveryConfig parámetros del scanner.
 type RecoveryConfig struct {
-	StaleAfter   time.Duration // si last_heartbeat_at + StaleAfter < NOW → stale
-	PollInterval time.Duration // default 1min
+	StaleAfter    time.Duration // si last_heartbeat_at + StaleAfter < NOW → stale
+	PollInterval  time.Duration // default 1min
+	MaxRecoveries int           // 0 = unlimited, >0 = crash-loop threshold
 }
 
-// RunRecovery loop periódico que marca runs stale como failed.
+// RunRecovery loop periódico que libera runs stale para que otro worker
+// pueda reclamarlos y reanudarlos.
 // Pensado para correr en el pod leader (issue-26.2).
 func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 	stale := cfg.StaleAfter
@@ -33,7 +34,7 @@ func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 		poll = 60 * time.Second
 	}
 	logger := slog.Default()
-	logger.Info("flow recovery worker started",
+	logger.Info("flow recovery scanner started",
 		slog.Duration("stale_after", stale),
 		slog.Duration("poll", poll))
 
@@ -43,34 +44,62 @@ func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("flow recovery worker stopping")
+			logger.Info("flow recovery scanner stopping")
 			return
 		case <-ticker.C:
-			n, err := r.markStaleAsFailed(ctx, stale)
+			released, failed, err := r.ReleaseStaleRuns(ctx, stale, cfg.MaxRecoveries)
 			if err != nil {
 				logger.Error("recovery sweep failed", slog.Any("err", err))
 				continue
 			}
-			if n > 0 {
-				logger.Warn("recovered stale flow_runs", slog.Int64("count", n))
+			if released > 0 {
+				logger.Warn("released stale flow_runs for recovery",
+					slog.Int64("released", released),
+					slog.Int64("crash_loop_failed", failed))
 			}
 		}
 	}
 }
 
-func (r *Runner) markStaleAsFailed(ctx context.Context, stale time.Duration) (int64, error) {
-	tag, err := r.Pool.Exec(ctx, `
-UPDATE flow_runs
-SET status = 'failed',
-    error = COALESCE(error, '') || ' [recovery: worker stale > ' || $1::text || ']',
-    finished_at = NOW(),
-    recovery_count = recovery_count + 1
-WHERE status = 'running'
-  AND last_heartbeat_at IS NOT NULL
-  AND last_heartbeat_at < NOW() - $2::interval
-`, stale.String(), stale)
-	if err != nil {
-		return 0, err
+// ReleaseStaleRuns libera runs stale y marca los que exceden crash-loop
+// threshold como failed. Retorna (released, crashLoopFailed, err).
+func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxRecoveries int) (int64, int64, error) {
+	// Primero: marcar como failed los que exceden el crash-loop threshold
+	var crashLoopCount int64
+	if maxRecoveries > 0 {
+		tag, err := r.Pool.Exec(ctx, `
+			UPDATE flow_runs
+			SET status = 'failed',
+			    error = COALESCE(error, '') || ' [crash-loop: recovery_count >= ' || $1::text || ']',
+			    finished_at = NOW(),
+			    worker_id = NULL
+			WHERE status = 'running'
+			  AND last_heartbeat_at IS NOT NULL
+			  AND last_heartbeat_at < NOW() - $2::interval
+			  AND recovery_count >= $1
+		`, maxRecoveries, stale)
+		if err != nil {
+			return 0, 0, err
+		}
+		crashLoopCount = tag.RowsAffected()
 	}
-	return tag.RowsAffected(), nil
+
+	// Liberar los demás: limpiar worker_id, incrementar recovery_count,
+	// dejar en running para que ClaimRun los tome.
+	tag, err := r.Pool.Exec(ctx, `
+		UPDATE flow_runs
+		SET worker_id = NULL,
+		    last_heartbeat_at = NOW(),
+		    recovery_count = recovery_count + 1
+		WHERE status = 'running'
+		  AND last_heartbeat_at IS NOT NULL
+		  AND last_heartbeat_at < NOW() - $1::interval
+		  AND (worker_id IS NOT NULL OR recovery_count = 0)
+	`, stale)
+	if err != nil {
+		return 0, crashLoopCount, err
+	}
+
+	// Log audit por cada run liberado (opcional, se podría hacer con RETURNING)
+	return tag.RowsAffected(), crashLoopCount, nil
 }

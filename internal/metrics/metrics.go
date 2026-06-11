@@ -66,6 +66,9 @@ type Registry struct {
 	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed)
 	OrchestratorConfirmsTotal   *prometheus.CounterVec   // labels: confirmed (true|false)
 	OrchestratorRequiredSaveMissingTotal *prometheus.CounterVec // labels: phase, save_type
+
+	// issue-09.6 durable-execution
+	FlowHeartbeatAgeSeconds prometheus.Gauge // age del heartbeat más reciente en flow_runs
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -241,6 +244,11 @@ func New() *Registry {
 		[]string{"phase", "save_type"},
 	)
 
+	r.FlowHeartbeatAgeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_flow_heartbeat_age_seconds",
+		Help: "Edad del heartbeat más reciente entre flow_runs running (issue-09.6)",
+	})
+
 	// issue-25.9 read-replicas
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
@@ -321,6 +329,7 @@ func New() *Registry {
 		r.OrchestratorPhaseResultsTotal,
 		r.OrchestratorConfirmsTotal,
 		r.OrchestratorRequiredSaveMissingTotal,
+		r.FlowHeartbeatAgeSeconds,
 	)
 	return r
 }

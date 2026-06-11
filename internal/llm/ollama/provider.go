@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"nunezlagos/domain/internal/llm"
@@ -18,20 +20,61 @@ import (
 const (
 	defaultBaseURL = "http://localhost:11434"
 	defaultModel   = "llama3.1"
+	// defaultTimeout para generación local (issue-06.3).
+	defaultTimeout = 120 * time.Second
 )
 
 type Provider struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	Model      string
+	// AutoPull descarga el modelo vía /api/pull si el chat responde 404
+	// "model not found" (opt-in: DOMAIN_OLLAMA_AUTO_PULL=true).
+	AutoPull bool
 }
 
+// New construye el provider. Config por env:
+//   - DOMAIN_OLLAMA_URL (o DOMAIN_OLLAMA_HOST legacy): base URL
+//   - DOMAIN_OLLAMA_AUTO_PULL=true: pull automático de modelos faltantes
 func New() *Provider {
-	return &Provider{
-		BaseURL:    defaultBaseURL,
-		HTTPClient: &http.Client{Timeout: 10 * time.Minute},
-		Model:      defaultModel,
+	base := defaultBaseURL
+	if u := os.Getenv("DOMAIN_OLLAMA_URL"); u != "" {
+		base = u
+	} else if u := os.Getenv("DOMAIN_OLLAMA_HOST"); u != "" {
+		base = u
 	}
+	return &Provider{
+		BaseURL:    base,
+		HTTPClient: &http.Client{Timeout: defaultTimeout},
+		Model:      defaultModel,
+		AutoPull:   os.Getenv("DOMAIN_OLLAMA_AUTO_PULL") == "true",
+	}
+}
+
+// isModelMissing detecta el error de modelo no descargado.
+func isModelMissing(status int, body string) bool {
+	return status == http.StatusNotFound && strings.Contains(body, "model")
+}
+
+// pullModel descarga el modelo (blocking, stream=false).
+func (p *Provider) pullModel(ctx context.Context, model string) error {
+	raw, _ := json.Marshal(map[string]any{"name": model, "stream": false})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		p.BaseURL+"/api/pull", bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := p.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ollama pull: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ollama pull %d: %s", resp.StatusCode, string(msg))
+	}
+	return nil
 }
 
 func (p *Provider) Name() string { return "ollama" }
@@ -82,6 +125,10 @@ func (p *Provider) buildRequest(opts llm.CompletionOptions, stream bool) chatReq
 }
 
 func (p *Provider) Complete(ctx context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
+	return p.complete(ctx, opts, true)
+}
+
+func (p *Provider) complete(ctx context.Context, opts llm.CompletionOptions, allowPull bool) (*llm.Response, error) {
 	body := p.buildRequest(opts, false)
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -97,11 +144,18 @@ func (p *Provider) Complete(ctx context.Context, opts llm.CompletionOptions) (*l
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(resp.Body)
+		// issue-06.3: pull automático opt-in si el modelo no está descargado
+		if p.AutoPull && allowPull && isModelMissing(resp.StatusCode, string(msg)) {
+			if perr := p.pullModel(ctx, body.Model); perr != nil {
+				return nil, fmt.Errorf("ollama auto-pull %q: %w", body.Model, perr)
+			}
+			return p.complete(ctx, opts, false)
+		}
 		return nil, fmt.Errorf("ollama %d: %s", resp.StatusCode, string(msg))
 	}
 	var cr chatResp
 	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ollama: invalid response: %w", err)
 	}
 	return &llm.Response{
 		Content:      cr.Message.Content,

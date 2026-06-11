@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"os/signal"
 	"strconv"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
+	"nunezlagos/domain/internal/cli/onboard"
 	"nunezlagos/domain/internal/auth/rbac"
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/dbstats"
@@ -139,8 +141,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "workflow":
 		runWorkflow(os.Args[2:])
-	case "dev-bootstrap":
-		runDevBootstrap(os.Args[2:])
+	case "onboard", "bootstrap":
+		os.Exit(runOnboard(os.Args[2:]))
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -1352,6 +1354,107 @@ func runRotateDBPassword(args []string) {
 	//   domain rotate-db-password --role app_user > /tmp/new_pwd
 	fmt.Println(newPass)
 	fmt.Fprintf(os.Stderr, "rotated role=%s — update Secret Manager + rolling deploy app pods.\n", role)
+}
+
+// runOnboard ejecuta el wizard first-run (issue-01.9).
+// Uso:
+//
+//	domain onboard [--base-url URL] [--non-interactive] [--no-opencode]
+//
+// Sin flags corre en modo interactivo: detecta first-run, pide email,
+// dispara bootstrap u OTP, guarda credenciales, opcionalmente
+// configura opencode.
+func runOnboard(args []string) int {
+	baseURL := envOr("DOMAIN_BASE_URL", "http://localhost:8000")
+	nonInteractive := false
+	noOpencode := false
+	email := ""
+	// keyName y orgName son parametros del wizard, no del CLI por ahora.
+	// El wizard usa defaults sensatos: key_name="default", org_name derivado
+	// del email domain. Si el user quiere custom, edita el codigo o
+	// usamos env vars DOMAIN_KEY_NAME / DOMAIN_ORG_NAME en el futuro.
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--base-url":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "missing value for --base-url")
+				return 2
+			}
+			baseURL = args[i+1]
+			i++
+		case "--non-interactive", "-y":
+			nonInteractive = true
+		case "--no-opencode":
+			noOpencode = true
+		case "--email":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "missing value for --email")
+				return 2
+			}
+			email = args[i+1]
+			i++
+		case "--help", "-h":
+			fmt.Println("Usage: domain onboard [flags]")
+			fmt.Println("  --base-url URL      Domain server URL (default http://localhost:8000)")
+			fmt.Println("  --non-interactive  Skip prompts (use defaults)")
+			fmt.Println("  --no-opencode      Skip opencode config step")
+			fmt.Println("  --email EMAIL      Pre-fill email (non-interactive mode)")
+			fmt.Println("  --key-name NAME    API key name (default 'default')")
+			fmt.Println("  --org-name NAME    Organization name (auto-derived from email domain)")
+			return 0
+		}
+	}
+
+	w := onboard.New(baseURL)
+	w.NonInteractive = nonInteractive
+	w.NoOpencode = noOpencode
+	// Auto-detect domain bin path: assume domain junto a domain-mcp en el mismo dir.
+	if ex, err := os.Executable(); err == nil {
+		w.DomainBinPath = ex
+	}
+	if mcp, err := findDomainMCPSibling(w.DomainBinPath); err == nil {
+		w.DomainMCPPath = mcp
+	}
+
+	// In non-interactive mode, pre-fill email via ask callback.
+	if nonInteractive && email != "" {
+		// We set the email on the wizard by wrapping SaveCredentials. The
+		// ask("Your email", email, true) will be called by Run; the
+		// default returns email. We need to pass email through somehow.
+		// Simpler: set a custom SaveCredentials that injects email.
+		original := w.SaveCredentials
+		w.SaveCredentials = func(c *onboard.Credentials) error {
+			if c.Email == "" {
+				c.Email = email
+			}
+			return original(c)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := w.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "onboard failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// findDomainMCPSibling busca domain-mcp junto al binario domain. Si
+// domain esta en /usr/bin/domain, busca /usr/bin/domain-mcp. Si no
+// existe, retorna error (el caller puede pasar --mcp-binary manualmente).
+func findDomainMCPSibling(domainPath string) (string, error) {
+	dir := filepath.Dir(domainPath)
+	base := strings.TrimSuffix(filepath.Base(domainPath), "domain")
+	if base != "" && base != filepath.Base(domainPath) {
+		// Binary name had a prefix (e.g., "domain-cli"); not our case.
+		_ = base
+	}
+	candidate := filepath.Join(dir, "domain-mcp")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate, nil
+	}
+	return "", fmt.Errorf("domain-mcp not found next to %s; pass --mcp-binary", domainPath)
 }
 
 // pgxpoolNew wrapper para evitar import alias en main.

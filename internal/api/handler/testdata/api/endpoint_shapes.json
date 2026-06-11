@@ -325,6 +325,41 @@
     "handler": "previewHubDraft"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks",
+    "handler": "listInboundWebhooks"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inbound-webhooks",
+    "handler": "createInboundWebhook"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inbound-webhooks/deliveries/{id}/replay",
+    "handler": "replayWebhookDelivery"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "deleteInboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "getInboundWebhook"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "patchInboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks/{id}/deliveries",
+    "handler": "listWebhookDeliveries"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/invitations/{id}/revoke",
     "handler": "revokeInvite"

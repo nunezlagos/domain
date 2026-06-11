@@ -74,6 +74,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
+	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	"nunezlagos/domain/internal/service/policy"
 	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/usagealerts"
@@ -411,6 +412,12 @@ func runServer() {
 		}
 	}
 	outboundWebhookService := &outboundwebhook.Service{Pool: pools.App, Cipher: masterCipher}
+	// Inbound webhooks requieren cipher para el secret at-rest; sin master key
+	// el service queda nil y los endpoints responden webhooks_disabled.
+	var inboundWebhookService *webhooksvc.Service
+	if masterCipher != nil {
+		inboundWebhookService = &webhooksvc.Service{Pool: pools.App, Audit: recorder, Crypto: masterCipher}
+	}
 	outboundDispatcher := &outboundwebhook.Dispatcher{
 		Pool: pools.App, Svc: outboundWebhookService,
 		HTTPClient: &http.Client{Timeout: 10 * time.Second},
@@ -701,6 +708,7 @@ func runServer() {
 		FlowService:      flowService,
 		FlowRunner:       flowRunnerInst,
 		CronService:      cronService,
+		WebhookService:   inboundWebhookService,
 		CostService:      costService,
 		BillingService:   billingService,
 		OutboundWebhookService:    outboundWebhookService,

@@ -47,6 +47,7 @@
   "decline",
   "delete",
   "delete_failed",
+  "deliveries",
   "dispatcher_not_configured",
   "dlq_list",
   "dlq_resolve",

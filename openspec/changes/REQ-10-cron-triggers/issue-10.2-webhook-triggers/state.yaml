@@ -36,9 +36,18 @@ notes: |
   master key (issue-02.3). Cuando se configure DOMAIN_MASTER_KEY env var,
   agregar a API.WebhookService.
 
-  Pending:
-  - issue-10.4 outbound webhooks (notificar URL al completar agent_run/flow_run)
-  - Tests E2E con mock HMAC signature
-  - Replay protection con nonces (defense contra captura+resend)
-  - Allowlist IPs por source_type (e.g. GitHub IP ranges)
-  - HTTP CRUD endpoints /api/v1/webhooks (admin UI)
+  Completado 2026-06-11:
+  - Management CRUD: POST/GET /api/v1/inbound-webhooks, GET/PATCH/DELETE
+    /{id}, GET /{id}/deliveries, POST /deliveries/{id}/replay.
+  - Service management.go: GetByID/List/SetEnabled/SoftDelete/Deliveries/
+    GetDelivery (struct sin campo Secret — no leak posible).
+  - Replay: re-dispatch del payload almacenado (ciclo fresco).
+  - Wire en cmd/domain: inboundWebhookService con masterCipher (nil sin
+    DOMAIN_MASTER_KEY → webhooks_disabled).
+  - Tests: HMAC round-trip (válida/inválida/tampered), management + disable
+    corta receive, deliveries log, sabotaje secret cifrado at-rest.
+
+  Diferido:
+  - issue-10.4 outbound webhooks → YA implementado (HU aparte, implemented)
+  - Replay protection con nonces + allowlist IPs por source_type
+    (hardening adicional, sin demanda actual)

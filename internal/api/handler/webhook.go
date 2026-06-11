@@ -58,7 +58,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	inputs := buildInputs(body, hook.InputsMapping)
 
 	// Dispatch en background (no block client; webhook devuelve 202 Accepted)
-	go a.dispatchWebhook(context.Background(), hook, body, inputs, r)
+	go a.dispatchWebhook(context.Background(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
 
 	writeData(w, http.StatusAccepted, map[string]any{
 		"received": true, "webhook_id": hook.ID, "target_type": hook.TargetType,
@@ -141,7 +141,7 @@ func collectHeaders(r *http.Request) map[string]string {
 }
 
 func (a *API) dispatchWebhook(ctx context.Context, hook *webhook.Webhook,
-	body []byte, inputs map[string]any, r *http.Request) {
+	body []byte, inputs map[string]any, headers map[string]string, sourceIP string) {
 
 	var triggeredID *uuid.UUID
 	var errStr string
@@ -192,7 +192,7 @@ func (a *API) dispatchWebhook(ctx context.Context, hook *webhook.Webhook,
 	}
 
 	_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
-		collectHeaders(r), r.RemoteAddr, status, triggeredID, errStr)
+		headers, sourceIP, status, triggeredID, errStr)
 }
 
 // Wrap bytes para evitar consumir body más de una vez (si necesario en futuro)

@@ -242,6 +242,16 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/logs", a.getAgentRunLogs)
 
+	// Inbound webhooks management (issue-10.2). El receive público vive en
+	// /api/v1/webhooks/{slug}/receive (sin Bearer; HMAC).
+	mux.HandleFunc("POST /api/v1/inbound-webhooks", a.createInboundWebhook)
+	mux.HandleFunc("GET /api/v1/inbound-webhooks", a.listInboundWebhooks)
+	mux.HandleFunc("GET /api/v1/inbound-webhooks/{id}", a.getInboundWebhook)
+	mux.HandleFunc("PATCH /api/v1/inbound-webhooks/{id}", a.patchInboundWebhook)
+	mux.HandleFunc("DELETE /api/v1/inbound-webhooks/{id}", a.deleteInboundWebhook)
+	mux.HandleFunc("GET /api/v1/inbound-webhooks/{id}/deliveries", a.listWebhookDeliveries)
+	mux.HandleFunc("POST /api/v1/inbound-webhooks/deliveries/{id}/replay", a.replayWebhookDelivery)
+
 	// Crons (issue-10.1)
 	mux.HandleFunc("POST /api/v1/crons", a.createCron)
 	mux.HandleFunc("GET /api/v1/crons", a.listCrons)

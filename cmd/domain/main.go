@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
 	"nunezlagos/domain/internal/dbmon"
@@ -737,7 +739,7 @@ func runServer() {
 	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
 
 	// API REST montada bajo /api/v1/*.
-	// Middleware order: CORS → versioning → request-log → auth → rate-limit → audit → idempotency → handler.
+	// Middleware order: CORS → versioning → request-log → auth → rate-limit → audit → activity → idempotency → handler.
 	corsMW := middleware.DefaultCORS()
 	requestLogMW := middleware.RequestLog(logger)
 	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
@@ -745,12 +747,32 @@ func runServer() {
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
 	idempMW := &middleware.Idempotency{Pool: pools.App}
+	// issue-02.6: activity feed automático en mutaciones (post-auth)
+	activityMW := &activity.HTTPMiddleware{
+		Recorder: activityStore,
+		Logger:   logger,
+		Principal: func(r *http.Request) (uuid.UUID, *uuid.UUID, bool) {
+			p, ok := apikey.FromContext(r.Context())
+			if !ok || p == nil {
+				return uuid.Nil, nil, false
+			}
+			orgID, err := uuid.Parse(p.OrganizationID)
+			if err != nil {
+				return uuid.Nil, nil, false
+			}
+			var actor *uuid.UUID
+			if uid, err := uuid.Parse(p.UserID); err == nil {
+				actor = &uid
+			}
+			return orgID, actor, true
+		},
+	}
 	mux.Handle("/api/", corsMW.Wrap(
 		versionCatalog.Middleware(
 			requestLogMW(
 				authMW.Wrap(
 					rateLimitMW.Wrap(
-						auditMW(idempMW.Wrap(api.Router()))))))))
+						auditMW(activityMW.Wrap(idempMW.Wrap(api.Router())))))))))
 
 	// Aplica tracing + metrics middleware al mux principal
 	handler := metricsReg.HTTPMiddleware(tracing.HTTPMiddleware("domain")(mux))

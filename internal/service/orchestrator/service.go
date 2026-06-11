@@ -15,6 +15,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	skillsvc "nunezlagos/domain/internal/service/skill"
 	"nunezlagos/domain/internal/tracing"
 
 	"go.opentelemetry.io/otel/trace"
@@ -67,6 +68,9 @@ type Service struct {
 	// ProcessAsyncFlowRun emite señales por step completado/fallido y
 	// al finalizar el flow.
 	SignalStore *flow.SignalStore
+	// Skills opcional para auto-recomendación D3 (skill-001). Si nil,
+	// fetchRecommendedSkills devuelve nil sin error.
+	Skills *skillsvc.Service
 }
 
 // New construye un Service. El registry debe venir poblado por el
@@ -317,28 +321,35 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 // desde agent_templates en BD. Si el lookup falla con
 // ErrAgentTemplateNotFound, devolvemos error para que el caller corrija
 // el seed (no hay default sano para un prompt en blanco).
+//
+// También extrae SkillThreshold desde agent_templates.metadata (D3).
 func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, plan *modes.PhasePlan) error {
 	if plan == nil {
 		return nil
 	}
-	// Cache local por slug para no repetir queries cuando dos steps
-	// comparten template (raro pero posible).
-	cache := make(map[string]string, len(plan.Steps))
+	type cached struct {
+		systemPrompt string
+		threshold    float64
+	}
+	cache := make(map[string]cached, len(plan.Steps))
 	for i := range plan.Steps {
 		slug := plan.Steps[i].AgentTemplateSlug
 		if slug == "" {
 			continue
 		}
-		if cached, ok := cache[slug]; ok {
-			plan.Steps[i].SystemPrompt = cached
+		if c, ok := cache[slug]; ok {
+			plan.Steps[i].SystemPrompt = c.systemPrompt
+			plan.Steps[i].SkillThreshold = c.threshold
 			continue
 		}
-		prompt, err := s.Repo.GetAgentTemplateSystemPrompt(ctx, orgID, slug)
+		t, err := s.Repo.GetAgentTemplate(ctx, orgID, slug)
 		if err != nil {
 			return err
 		}
-		cache[slug] = prompt
-		plan.Steps[i].SystemPrompt = prompt
+		c := cached{systemPrompt: t.SystemPrompt, threshold: t.SkillThreshold()}
+		cache[slug] = c
+		plan.Steps[i].SystemPrompt = c.systemPrompt
+		plan.Steps[i].SkillThreshold = c.threshold
 	}
 	return nil
 }

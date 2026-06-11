@@ -220,21 +220,21 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 
 	rep, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, rep.Created, 8, "10 agent templates built-in")
+	require.GreaterOrEqual(t, rep.Created, 8, "11 agent templates v3 (1 orchestrator + 10 workers)")
 
-	// Verifica que el supervisor está
+	// Verifica que sdd-orchestrator está (reemplazó a supervisor en v3)
 	var slug string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT slug FROM agent_templates WHERE organization_id=$1 AND slug='supervisor'`,
+		`SELECT slug FROM agent_templates WHERE organization_id=$1 AND slug='sdd-orchestrator'`,
 		orgID).Scan(&slug))
-	require.Equal(t, "supervisor", slug)
+	require.Equal(t, "sdd-orchestrator", slug)
 
-	// Verifica que researcher tiene capabilities
+	// Verifica que sdd-explore tiene capabilities (reemplazó a researcher en v3)
 	var caps []string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT capabilities FROM agent_templates WHERE organization_id=$1 AND slug='researcher'`,
+		`SELECT capabilities FROM agent_templates WHERE organization_id=$1 AND slug='sdd-explore'`,
 		orgID).Scan(&caps))
-	require.Contains(t, caps, "web-fetch")
+	require.Contains(t, caps, "code-search")
 }
 
 // Sabotaje: SeedSkillsForOrg con is_user_modified=TRUE NO debe sobrescribir.

@@ -83,41 +83,7 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 		dispatchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
-		var execErr error
-		switch c.TargetType {
-		case "flow":
-			if s.Flows == nil {
-				execErr = fmt.Errorf("flow runner not configured")
-				break
-			}
-			_, execErr = s.Flows.Run(dispatchCtx, flowrunner.RunInput{
-				FlowID: c.TargetID, TriggerType: "cron", Inputs: c.Inputs,
-			})
-		case "agent":
-			if s.Agents == nil {
-				execErr = fmt.Errorf("agent runner not configured")
-				break
-			}
-			input, _ := c.Inputs["input"].(string)
-			_, execErr = s.Agents.Run(dispatchCtx, agentrunner.RunInput{
-				AgentID:    c.TargetID,
-				UserPrompt: input,
-				Variables:  c.Inputs,
-			})
-		case "skill":
-			if s.Skills == nil || s.SkillRunner == nil {
-				execErr = fmt.Errorf("skill runner not configured")
-				break
-			}
-			sk, err := s.Skills.GetByID(dispatchCtx, c.TargetID)
-			if err != nil {
-				execErr = fmt.Errorf("load skill: %w", err)
-				break
-			}
-			_, execErr = s.SkillRunner.Execute(dispatchCtx, sk, c.Inputs)
-		default:
-			execErr = fmt.Errorf("unknown target_type: %s", c.TargetType)
-		}
+		execErr := s.dispatchSync(dispatchCtx, c)
 
 		if execErr != nil {
 			logger.Error("cron exec failed",
@@ -143,6 +109,42 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 		}
 		_ = uuid.Nil // keep import
 	}()
+}
+
+// dispatchSync ejecuta el target del cron y devuelve el error.
+// Separado de dispatch() para testing sincrónico.
+func (s *Scheduler) dispatchSync(ctx context.Context, c cron.Cron) error {
+	switch c.TargetType {
+	case "flow":
+		if s.Flows == nil {
+			return fmt.Errorf("flow runner not configured")
+		}
+		_, err := s.Flows.Run(ctx, flowrunner.RunInput{
+			FlowID: c.TargetID, TriggerType: "cron", Inputs: c.Inputs,
+		})
+		return err
+	case "agent":
+		if s.Agents == nil {
+			return fmt.Errorf("agent runner not configured")
+		}
+		input, _ := c.Inputs["input"].(string)
+		_, err := s.Agents.Run(ctx, agentrunner.RunInput{
+			AgentID: c.TargetID, UserPrompt: input, Variables: c.Inputs,
+		})
+		return err
+	case "skill":
+		if s.Skills == nil || s.SkillRunner == nil {
+			return fmt.Errorf("skill runner not configured")
+		}
+		sk, err := s.Skills.GetByID(ctx, c.TargetID)
+		if err != nil {
+			return fmt.Errorf("load skill: %w", err)
+		}
+		_, err = s.SkillRunner.Execute(ctx, sk, c.Inputs)
+		return err
+	default:
+		return fmt.Errorf("unknown target_type: %s", c.TargetType)
+	}
 }
 
 func errString(err error) string {

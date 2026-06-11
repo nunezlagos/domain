@@ -39,6 +39,7 @@ const (
 	IntentRefactor Intent = "refactor"
 	IntentDoc      Intent = "doc"
 	IntentRFC      Intent = "rfc"
+	IntentAnalysis Intent = "analysis"
 )
 
 // Outcome describe qué hizo el router con el prompt.
@@ -57,6 +58,10 @@ const (
 	// un flow_run. Hay FlowRunID + OrchestratorRunID + SnapshotPrompt para
 	// que el cliente IDE arranque la primera fase.
 	OutcomeOrchestratorStarted Outcome = "orchestrator_started"
+	// OutcomeAnalysis: el prompt se clasificó como analysis y se ejecutó
+	// el mini-pipeline de análisis read-only. Hay KnowledgeDocID con el
+	// documento generado.
+	OutcomeAnalysis Outcome = "analysis"
 )
 
 // Response devuelta por Route.
@@ -75,6 +80,9 @@ type Response struct {
 	OrchestratorRunID *uuid.UUID `json:"orchestrator_run_id,omitempty"`
 	SnapshotPrompt    string     `json:"snapshot_prompt,omitempty"`
 	Mode              string     `json:"mode,omitempty"`
+	// KnowledgeDocID se popula cuando Outcome=OutcomeAnalysis: el ID del
+	// knowledge_document generado por el mini-pipeline de análisis.
+	KnowledgeDocID *uuid.UUID `json:"knowledge_doc_id,omitempty"`
 }
 
 // Classifier es la interfaz para clasificación. Inyectable para tests +
@@ -106,6 +114,31 @@ type Router struct {
 	// ChatReplyTemplate: si Intent=chat, el router responde con este
 	// template. Si vacío, devuelve un default.
 	ChatReplyTemplate string
+
+	// AnalysisService opcional (issue-08.10 ana-002). Si está inyectado,
+	// los prompts clasificados como IntentAnalysis invocan el mini-pipeline
+	// de análisis read-only que produce un knowledge_doc + observation.
+	AnalysisService AnalysisRunner
+}
+
+// AnalysisRunner es la interfaz que el router necesita del analysis
+// service. Permite testear sin acoplar al service concreto.
+type AnalysisRunner interface {
+	RunAnalysis(ctx context.Context, in AnalysisInput) (*AnalysisResult, error)
+}
+
+// AnalysisInput es lo que el router pasa al analysis service.
+type AnalysisInput struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+	RawText        string
+}
+
+// AnalysisResult es lo que el analysis service devuelve al router.
+type AnalysisResult struct {
+	KnowledgeDocID uuid.UUID
+	Title          string
+	Body           string
 }
 
 var (
@@ -181,6 +214,13 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 		}, nil
 	}
 
+	// Path analysis: mini-pipeline read-only que produce knowledge_doc + observation.
+	// NO pasa por el orquestador ni el wizard — es una operación de análisis puro
+	// que lee información y la persiste como documento.
+	if intent == IntentAnalysis {
+		return r.handleAnalysis(ctx, rawText, createdBy, orgID, intent, conf, reasoning, intakeP.ID)
+	}
+
 	// Path orquestador (issue-08.10): si está configurado, los intents
 	// SDD-capables invocan el orquestador en lugar del wizard legacy.
 	if r.Orchestrator != nil {
@@ -239,6 +279,44 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 //
 // El cliente puede override pasando Mode explícito si invoca el MCP
 // tool domain_orchestrate directamente.
+// handleAnalysis ejecuta el mini-pipeline de análisis read-only si el
+// AnalysisService está configurado. Si no, responde con un mensaje default.
+func (r *Router) handleAnalysis(ctx context.Context, rawText string, createdBy *uuid.UUID,
+	orgID *uuid.UUID, intent Intent, conf float64, reasoning string, intakeID uuid.UUID,
+) (*Response, error) {
+	if r.AnalysisService == nil || orgID == nil {
+		reply := "Clasifiqué el prompt como análisis, pero no tengo el motor de análisis configurado. Si necesitás convertir esto en una feature, decime y arranco el wizard SDD."
+		return &Response{
+			Outcome:    OutcomeChat,
+			Intent:     intent,
+			Confidence: conf,
+			Reply:      reply,
+			Reasoning:  reasoning + " (analysis service not available)",
+		}, nil
+	}
+	userID := uuid.Nil
+	if createdBy != nil {
+		userID = *createdBy
+	}
+	result, err := r.AnalysisService.RunAnalysis(ctx, AnalysisInput{
+		OrganizationID: *orgID,
+		UserID:         userID,
+		RawText:        rawText,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("analysis run: %w", err)
+	}
+	return &Response{
+		Outcome:        OutcomeAnalysis,
+		Intent:         intent,
+		Confidence:     conf,
+		IntakeID:       &intakeID,
+		KnowledgeDocID: &result.KnowledgeDocID,
+		SnapshotPrompt: result.Body,
+		Reasoning:      reasoning,
+	}, nil
+}
+
 func orchestratorModeForIntent(in Intent) orchsvc.Mode {
 	switch in {
 	case IntentHotfix, IntentFix:
@@ -307,6 +385,16 @@ func heuristicClassify(rawText string) (Intent, float64, string) {
 	t := strings.ToLower(rawText)
 	// Patterns ordenados por especificidad.
 	switch {
+	case containsAny(t, "analiza", "analizá", "investiga", "cuántos", "cuantas",
+		"qué hu", "qué tables", "qué endpoints", "qué archivos", "qué módulos",
+		"dónde está", "dónde se usa", "cómo está implementado",
+		"trazabilidad", "impacto de", "qué pasa si", "explorar", "mapear",
+		"listar", "listame", "decime qué", "mostrame",
+		"cómo se llama", "qué hace", "qué contiene", "qué relación",
+		"análisis", "analysis", "research", "investigate", "explore",
+		"find all", "find where", "find out", "tell me about",
+		"what modules", "what files", "what endpoints"):
+		return IntentAnalysis, 0.7, "keywords de análisis/detección detectadas"
 	case containsAny(t, "urgente", "production caída", "prod down", "p0", "p1", "critical bug"):
 		return IntentHotfix, 0.85, "keywords de urgencia detectadas"
 	case containsAny(t, "bug", "no funciona", "no anda", "rota", "roto", "falla", "error",

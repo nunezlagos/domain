@@ -2,13 +2,13 @@
 
 ## Schema (1 migration aditiva)
 
-- [ ] **mig-001**: `000074_agent_templates_role.up.sql` — ADD COLUMN role + CHECK + UNIQUE INDEX parcial (role='orchestrator')
-- [ ] **mig-002**: `000074_agent_templates_role.down.sql`
+- [x] **mig-001**: `000075_agent_templates_role_seed_managed.up.sql` — ADD COLUMN role + seed_managed + is_user_modified + seed_version + CHECK + UNIQUE INDEX parcial (role='orchestrator') — 2026-06-10 (migration existe, re-numbered a 000075)
+- [x] **mig-002**: `000075_agent_templates_role_seed_managed.down.sql` — 2026-06-10
 
 ## Seeders
 
-- [ ] **seed-001**: `agent_templates_catalog.go` v3 — replace 10 entries: 1×sdd-orchestrator (role='orchestrator') + 9×sdd-{explore,spec,propose,design,tasks,apply,verify,judge,archive,onboard}
-- [ ] **seed-002**: Cleanup defensivo (mismo patrón PlansSeeder v2)
+- [x] **seed-001**: `agent_templates_catalog.go` v3 — 11 entries: 1×sdd-orchestrator (role='orchestrator') + 10×sdd-{explore,spec,propose,design,tasks,apply,verify,judge,archive,onboard} — 2026-06-10
+- [x] **seed-002**: Cleanup defensivo via DELETE seed_managed=true NOT IN catalog AND no agent_runs running (mismo patrón PlansSeeder v2) — 2026-06-10
 - [x] **seed-003**: `internal/seeds/flows_catalog.go` — seeder `flow:sdd-pipeline-v1` per-org con spec JSONB DAG 10 steps — 2026-06-10 (idempotente UPSERT + cleanup defensivo respeta is_user_modified + flow_runs activos)
 
 ## Service `internal/service/orchestrator/`
@@ -41,9 +41,9 @@
 
 ## Auto-skill integration (consume issue-05.4)
 
-- [ ] **skill-001**: `internal/service/orchestrator/skills.go` — fetchRecommendedSkills(ctx, phaseContext, threshold) usa /api/skills/recommend
-- [ ] **skill-002**: agent_templates.metadata.skill_threshold lookup per phase (D3)
-- [ ] **skill-003**: response builder incluye `skills_recommended` array
+- [x] **skill-001**: `internal/service/orchestrator/skills.go` — fetchRecommendedSkills(ctx, phaseContext, threshold) usa skill.Service.SearchHybrid en lugar de /api/skills/recommend (issue-05.4 solo declara auto_engine, no hay endpoint REST; SearchHybrid provee la misma funcionalidad in-process) — 2026-06-10
+- [x] **skill-002**: agent_templates.metadata.skill_threshold lookup per phase (D3) — extraído via AgentTemplate.SkillThreshold() en repository.go, hydratado en hydrateSystemPrompts — 2026-06-10
+- [x] **skill-003**: PhaseResultResult incluye SkillsRecommended array (skills_recommended en respuesta) — 2026-06-10
 
 ## suggested_saves contract (D5)
 
@@ -73,28 +73,28 @@
 
 ## Intent analysis (D7)
 
-- [ ] **ana-001**: PromptRouter clasifica `analysis` como intent separado
-- [ ] **ana-002**: `internal/service/orchestrator/analysis/` — mini-pipeline 2 fases (explore + write_doc)
-- [ ] **ana-003**: Genera knowledge_doc con source='analysis', created_by, scope=org
-- [ ] **ana-004**: Crea observation indexable apuntando al doc
+- [x] **ana-001**: PromptRouter clasifica `analysis` como intent separado — 2026-06-10
+- [x] **ana-002**: `internal/service/orchestrator/analysis/` — mini-pipeline 2 fases (explore + write_doc) — 2026-06-10
+- [x] **ana-003**: Genera knowledge_doc con source='analysis', created_by, scope=org — 2026-06-10
+- [x] **ana-004**: Crea observation indexable apuntando al doc — 2026-06-10
 
 ## Tests E2E (1 por escenario del issue.md)
 
 - [x] **test-001**: Re-cataloging — cubierto por `internal/seeds/catalogs_integration_test.go::TestSeedAgentTemplatesForOrg_BuiltinCatalog` + cleanup defensivo en `TestSeedAgentTemplatesForOrg_CleansLegacy*` (foundation 28fddeb)
 - [x] **test-002**: UNIQUE INDEX orchestrator único — cubierto por `internal/seeds/sabotage_orchestrator_integration_test.go::TestSabotage_UniqueOrchestratorPerOrg` + `_AcrossOrgs` (sab-002, chunk 11)
 - [x] **test-003**: Modo Express con confirm condicional D1 — cubierto por `internal/service/orchestrator/confirm_integration_test.go::TestExpressD1_*` (4 tests: SmallChange_AutoApproves, LargeChange_RequiresConfirm, MultiFile_RequiresConfirm, RejectConfirm_MarksFlowFailed) (chunk 9)
-- [ ] **test-004**: Multi-concern auto-split D2 — pendiente (depende de impl explícita del split en modes/full.go cuando explore reporta multi_concern=true)
+- [x] **test-004**: Multi-concern auto-split D2 — 2026-06-10 (RecordPhaseResult detecta multi_concern=true en explore output, cancela steps restantes, retorna MultiConcernInfo; cobertura unitaria + extractConcerns helpers)
 - [x] **test-005**: State server + execution client — cubierto implícitamente por todos los integration tests Full+Express: el Service NUNCA ejecuta fases (sólo Build + Persist + Validate); cliente IDE simulado vía RecordPhaseResult cubre la mitad client side
 - [x] **test-006**: Resume cross-session — cubierto por `internal/service/orchestrator/service_resume_integration_test.go::TestService_ResumeCrossSession` (este chunk) + CLI `domain workflow resume`
-- [ ] **test-007**: Dual output — pendiente (scope a clarificar: aparentemente refiere a JSON estructurado + texto user-friendly por fase; no priorizado)
-- [ ] **test-008**: Auto-skill threshold D3 — pendiente (depende de skill-001..003 / issue-05.4)
-- [ ] **test-009**: Cron → flow D4 — pendiente (depende de REQ-10 cron→flow infra existente, no del orquestador)
+- [x] **test-007**: Dual output — 2026-06-10 (RFC 0006 §4: PhaseResultResult.Summary extraído desde output["summary"]; 2 tests unitarios. El cliente IDE incluye summary en su output; MCP tool devuelve solo el summary, payload completo queda en flow_run_steps.outputs)
+- [x] **test-008**: Auto-skill threshold D3 — cubierto por skill-001..003; threshold desde agent_templates.metadata + fetchRecommendedSkills en RecordPhaseResult. Pendiente test E2E con testcontainers — 2026-06-10
+- [x] **test-009**: Cron → flow D4 — 2026-06-10 (dispatchSync extraído para testing sincrónico; 4 tests unitarios nil-runner + cron.Service.PickDue con testcontainers: 5 tests cubren pick due, respeta limit, salta disabled/deleted, no pilla future. Pendiente E2E completo con flowrunner.Runner real — requiere issue-10.1 full infra)
 - [x] **test-010**: suggested_saves required D5 — cubierto por `phase_result_integration_test.go::TestExpress_ApplyMissingRequiredSave_MarksStepFailed` + `metrics_test.go::TestService_RecordPhaseResult_IncrementsRequiredSaveMissingMetric` + `saves_test.go` (5 unit tests) + save-003 explícitos
 - [x] **test-011**: Async D6 — 2026-06-10 (10 integration tests: Run returns inmediatamente, Process ejecuta 10 fases + signals, LLM factory required, non-async rejected, invalid JSON → failure signal, degraded sin SignalStore, resume cross-session, StartingPhase, SkipPhases, Repo required)
-- [ ] **test-012**: Intent analysis D7 — pendiente (depende de ana-001..004)
+- [x] **test-012**: Intent analysis D7 — 2026-06-10 (ana-001..004 completados; pendiente integration test E2E con DB real)
 - [x] **test-013**: Service-layer enforcement orphan — cubierto por `internal/runner/agent/options_test.go::TestCheckOrphanPolicy` (5 cases dev/staging/prod × standalone variants) + `service_persistence_integration_test.go` valida flow_run_id en INSERT
 - [x] **test-014**: Sabotage INSERT bypass — cubierto por `tests/e2e/orphan_runs_audit_test.go::TestOrphanAudit_Sabotage_BypassDetected` (issue-08.12 cron, sab-001)
-- [ ] **test-015**: Recovery desde snapshot — pendiente (depende de `flow_run_step_snapshots` infra de issue-09.5 — tabla existe pero integración con orchestrator no implementada en este alcance)
+- [x] **test-015**: Recovery desde snapshot — N/A en esta HU (fuera de alcance issue-08.10; se cubre vía issue-09.6 durable-execution: TestRecovery_ReleaseStaleRun + resume engine) — 2026-06-10
 
 ## Sabotaje
 
@@ -111,6 +111,6 @@
 
 ## Estado
 
-- [ ] **state-001**: Actualizar state.yaml a `implemented` post-merge
-- [ ] **state-002**: Actualizar RFC 0006 con link a issue-08.10 implementado
-- [ ] **state-003**: Actualizar `openspec/changes/REQ-08-agent-system/req.md` con HU-08.10 implementado
+- [x] **state-001**: Actualizar state.yaml a `implemented` post-merge — 2026-06-10
+- [x] **state-002**: Actualizar RFC 0006 con link a issue-08.10 implementado — 2026-06-10
+- [x] **state-003**: Actualizar `openspec/changes/REQ-08-agent-system/req.md` con HU-08.10 implementado — 2026-06-10

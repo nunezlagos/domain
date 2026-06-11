@@ -37,6 +37,8 @@ estas categorías describe MEJOR su intención:
   - refactor: mejora interna sin cambio funcional ("limpiar código", "extract Z")
   - doc:      cambio en documentación ("actualizar README", "agregar ejemplo")
   - rfc:      decisión arquitectónica ("diseño de", "tradeoffs entre", "RFC")
+  - analysis: investigación o análisis read-only ("cuántos endpoints tienen X?",
+              "qué HUs tocan la tabla Y?", "dónde se usa Z?", "analizame X")
 
 IMPORTANTE: respondés ÚNICAMENTE con JSON estricto sin texto adicional, sin
 fences markdown, sin comentarios. Schema:
@@ -138,7 +140,7 @@ func parseClassifierResponse(raw string) (*classifierParsed, error) {
 func validIntent(s string) bool {
 	switch Intent(s) {
 	case IntentChat, IntentIdea, IntentFeature, IntentFix, IntentHotfix,
-		IntentRefactor, IntentDoc, IntentRFC:
+		IntentRefactor, IntentDoc, IntentRFC, IntentAnalysis:
 		return true
 	}
 	return false

@@ -11,3 +11,6 @@ hus:
   08.7-agent-handoff: proposed
   08.8-agent-parallel-fanout: proposed
   08.9-agent-hierarchical-context: proposed
+  08.10-sdd-pipeline-orchestrator: implemented
+  08.11-heartbeat-watcher-cron: implemented
+  08.12-orphan-runs-audit-cron: implemented

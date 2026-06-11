@@ -51,6 +51,7 @@ func (f *fakeRepo) UpdateStepInputs(_ context.Context, _ uuid.UUID, _ map[string
 }
 func (f *fakeRepo) MarkStepBlocked(_ context.Context, _ uuid.UUID, _ string) error { return nil }
 func (f *fakeRepo) MarkStepPending(_ context.Context, _ uuid.UUID) error           { return nil }
+func (f *fakeRepo) MarkStepCancelled(_ context.Context, _ uuid.UUID) error         { return nil }
 func (f *fakeRepo) GetAgentTemplateSystemPrompt(_ context.Context, _ uuid.UUID, _ string) (string, error) {
 	return "system", nil
 }

@@ -44,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/orchestrator"
+	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
@@ -163,10 +164,20 @@ func main() {
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
-	// issue-08.10 svc-005: LLM factory inyectado para Mode=Solo. El
-	// orquestador llama provider.Complete por cada fase server-side
-	// cuando se invoca con Mode=ModeSolo (CI/CD, batch jobs).
+	// issue-08.10 svc-005: LLM factory inyectado para Mode=Solo.
 	orchestratorSvc.LLM = factory
+	// issue-08.10 skill-001: Skills service para auto-recomendación D3.
+	orchestratorSvc.Skills = skills
+
+	// issue-08.10 ana-002: analysis service para intent de análisis read-only.
+	// Crea knowledge_doc + observation con contenido generado por LLM.
+	analysisSvc := &analysissvc.Service{
+		Pool:        pools.App,
+		Audit:       recorder,
+		LLM:         factory,
+		Knowledge:   knowledgeSvc,
+		Observation: observations,
+	}
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
@@ -187,7 +198,8 @@ func main() {
 		// issue-08.10 mcp-006: con Orchestrator inyectado, los intents
 		// feat/fix/refactor/hotfix/rfc/doc disparan el pipeline SDD
 		// plug-and-play del orquestador en lugar del wizard legacy.
-		Orchestrator: orchestratorSvc,
+		Orchestrator:    orchestratorSvc,
+		AnalysisService: &analysisAdapter{inner: analysisSvc},
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
 
@@ -223,4 +235,26 @@ func main() {
 		fmt.Fprintf(os.Stderr, "domain-mcp: serve: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// analysisAdapter puentea analysissvc.Input/Result → promptrouter.AnalysisInput/Result.
+// Mantiene el analysis service desacoplado del promptrouter.
+type analysisAdapter struct {
+	inner *analysissvc.Service
+}
+
+func (a *analysisAdapter) RunAnalysis(ctx context.Context, in promptrouter.AnalysisInput) (*promptrouter.AnalysisResult, error) {
+	result, err := a.inner.RunAnalysis(ctx, analysissvc.Input{
+		OrganizationID: in.OrganizationID,
+		UserID:         in.UserID,
+		RawText:        in.RawText,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &promptrouter.AnalysisResult{
+		KnowledgeDocID: result.KnowledgeDocID,
+		Title:          result.Title,
+		Body:           result.Body,
+	}, nil
 }

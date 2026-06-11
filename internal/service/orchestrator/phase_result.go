@@ -39,6 +39,33 @@ type PhaseResultResult struct {
 	// (vía domain_orchestrate_confirm).
 	RequiresConfirm bool
 	ConfirmMessage  string
+	// SkillsRecommended opcional (D3). Poblado cuando el next step tiene
+	// skill_threshold > 0 y el Service tiene Skills configurado. El
+	// cliente IDE puede usar esta info para sugerir skills al agente.
+	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
+	// MultiConcern opcional (D2). Poblado cuando sdd-explore detectó
+	// multi_concern=true en el output. Contiene la lista de concerns
+	// separables. El cliente IDE puede usar esta info para crear
+	// sub-flows por concern.
+	MultiConcern *MultiConcernInfo `json:"multi_concern,omitempty"`
+	// Summary es el resumen texto plano de 1 línea que el cliente IDE
+	// devuelve en su output (Dual Output RFC 0006 §4). El MCP tool
+	// response al IDE contiene sólo el summary; el payload completo
+	// queda en flow_run_steps.outputs JSONB para debug/audit.
+	Summary string `json:"summary,omitempty"`
+}
+
+// MultiConcernInfo modela la detección de multi-concern en sdd-explore
+// (RFC 0006 D2). Contiene la lista de concerns separables que el cliente
+// puede convertir en sub-flows independientes.
+type MultiConcernInfo struct {
+	Concerns []ConcernInfo `json:"concerns"`
+}
+
+// ConcernInfo describe un concern separable detectado por sdd-explore.
+type ConcernInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // RecordPhaseResult procesa el reporte del cliente sobre una fase:
@@ -158,6 +185,10 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		StepStatus:    "completed",
 		FlowRunStatus: flowRun.Status,
 	}
+	// Dual output (RFC 0006 §4): extraer summary del cliente si lo envió
+	if summary, ok := in.Output["summary"].(string); ok {
+		out.Summary = summary
+	}
 	out.FlowRunStatus, out.NextStepID, out.NextStepKey = aggregateFlowStatus(steps)
 	if out.FlowRunStatus != flowRun.Status {
 		if err := s.Repo.UpdateFlowRunStatus(ctx, flowRun.ID, out.FlowRunStatus); err != nil {
@@ -170,6 +201,33 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 			s.Metrics.OrchestratorRunsTotal.WithLabelValues(modeStr, out.FlowRunStatus).Inc()
 		}
 	}
+	// D2 multi-concern auto-split (RFC 0006): si sdd-explore reportó
+	// multi_concern=true, completamos la exploración pero cancelamos los
+	// steps restantes. El cliente recibe la lista de concerns y decide
+	// si crear sub-flows independientes.
+	if phaseSlug == "sdd-explore" {
+		if isMulti, _ := in.Output["multi_concern"].(bool); isMulti {
+			concerns := extractConcerns(in.Output)
+			if len(concerns) > 0 {
+				// Cancelar todos los steps restantes (pending/running)
+				// y actualizar el slice in-memory para el recálculo
+				for i := range steps {
+					if (steps[i].Status == "pending" || steps[i].Status == "running") && steps[i].ID != step.ID {
+						_ = s.Repo.MarkStepCancelled(ctx, steps[i].ID)
+						steps[i].Status = "cancelled"
+					}
+				}
+				out.MultiConcern = &MultiConcernInfo{Concerns: concerns}
+				// Recalcular status: explore completed + resto cancelled → completed
+				out.FlowRunStatus, out.NextStepID, out.NextStepKey = aggregateFlowStatus(steps)
+				if out.FlowRunStatus != flowRun.Status {
+					_ = s.Repo.UpdateFlowRunStatus(ctx, flowRun.ID, out.FlowRunStatus)
+				}
+				span.SetAttributes(tracing.SafeAttr("phase.multi_concern", true))
+			}
+		}
+	}
+
 	// Next step prompt: para Full mode (lazy build) reconstruimos el
 	// user_prompt usando los outputs acumulados de las fases completadas.
 	// Para Express ya estaba pre-armado en step.inputs.user_prompt al
@@ -200,6 +258,20 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				out.RequiresConfirm = true
 				out.ConfirmMessage = "Express detected change exceeds threshold; call domain_orchestrate_confirm to proceed"
 				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
+			}
+
+			// D3 auto-skill: recomendar skills para el próximo step
+			// si tiene skill_threshold configurado.
+			threshold := readFloat(nextStep.Inputs["skill_threshold"], 0)
+			if threshold > 0 {
+				agentSlug, _ := nextStep.Inputs["agent_template_slug"].(string)
+				recs, err := s.fetchRecommendedSkills(ctx, flowRun.OrganizationID, agentSlug, threshold)
+				if err != nil {
+					// D3 es informativo — no bloqueamos el flow si falla
+					span.RecordError(err)
+				} else {
+					out.SkillsRecommended = recs
+				}
 			}
 		}
 	}
@@ -239,6 +311,19 @@ func readNumber(v any, defaultVal int) int {
 		return int(n)
 	case float64:
 		return int(n)
+	}
+	return defaultVal
+}
+
+// readFloat extrae un float64 de un map[string]any.
+func readFloat(v any, defaultVal float64) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
 	}
 	return defaultVal
 }
@@ -447,6 +532,30 @@ func aggregateFlowStatus(steps []FlowRunStepRow) (string, *uuid.UUID, string) {
 	default:
 		return "running", nextID, nextKey
 	}
+}
+
+// extractConcerns extrae la lista de concerns del output de sdd-explore.
+// Espera el formato: {"multi_concern": true, "concerns": [{"name": "...", "description": "..."}]}
+// Si el campo concerns no existe o no es un array válido, retorna nil.
+func extractConcerns(output map[string]any) []ConcernInfo {
+	raw, ok := output["concerns"].([]any)
+	if !ok {
+		return nil
+	}
+	var concerns []ConcernInfo
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		desc, _ := m["description"].(string)
+		if name == "" {
+			continue
+		}
+		concerns = append(concerns, ConcernInfo{Name: name, Description: desc})
+	}
+	return concerns
 }
 
 // rebuildOutputFromStepInputs reconstruye un phases.Output desde el

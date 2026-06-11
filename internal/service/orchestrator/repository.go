@@ -53,6 +53,7 @@ type Repository interface {
 	// invoque domain_orchestrate_confirm.
 	MarkStepBlocked(ctx context.Context, stepID uuid.UUID, reason string) error
 	MarkStepPending(ctx context.Context, stepID uuid.UUID) error
+	MarkStepCancelled(ctx context.Context, stepID uuid.UUID) error
 	// GetAgentTemplateSystemPrompt obtiene el system_prompt del agent_template
 	// seedeado per-org. La fuente de verdad de los prompts de cada fase es
 	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
@@ -75,6 +76,28 @@ type AgentTemplate struct {
 	Temperature  float32
 	MaxTokens    int
 	SystemPrompt string
+	// Metadata JSONB desde agent_templates.metadata. Incluye
+	// skill_threshold, required_saves, etc. issue-08.10 skill-002.
+	Metadata map[string]any
+}
+
+// SkillThreshold extrae el threshold de metadata (D3). Retorna 0 si
+// no está configurado o si Metadata es nil.
+func (t *AgentTemplate) SkillThreshold() float64 {
+	if t.Metadata == nil {
+		return 0
+	}
+	v, ok := t.Metadata["skill_threshold"]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	}
+	return 0
 }
 
 // FlowRunRow es la vista de lectura completa de un flow_run.
@@ -162,17 +185,21 @@ func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID u
 func (r *pgRepository) GetAgentTemplate(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error) {
 	var t AgentTemplate
 	t.Slug = slug
+	var metaJSON []byte
 	err := r.pool.QueryRow(ctx, `
-		SELECT model, temperature, max_tokens, system_prompt
+		SELECT model, temperature, max_tokens, system_prompt, metadata
 		FROM agent_templates
 		WHERE organization_id = $1 AND slug = $2
 		LIMIT 1`, orgID, slug,
-	).Scan(&t.Model, &t.Temperature, &t.MaxTokens, &t.SystemPrompt)
+	).Scan(&t.Model, &t.Temperature, &t.MaxTokens, &t.SystemPrompt, &metaJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: slug=%s", ErrAgentTemplateNotFound, slug)
 		}
 		return nil, fmt.Errorf("get agent_template: %w", err)
+	}
+	if len(metaJSON) > 0 {
+		_ = json.Unmarshal(metaJSON, &t.Metadata)
 	}
 	return &t, nil
 }
@@ -385,6 +412,20 @@ func (r *pgRepository) MarkStepPending(ctx context.Context, stepID uuid.UUID) er
 	}
 	if tag.RowsAffected() == 0 {
 		return errors.New("orchestrator: step is not blocked (only blocked steps can be reactivated)")
+	}
+	return nil
+}
+
+func (r *pgRepository) MarkStepCancelled(ctx context.Context, stepID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE flow_run_steps SET status = 'cancelled', completed_at = NOW()
+		WHERE id = $1 AND status IN ('pending','running','blocked')`,
+		stepID)
+	if err != nil {
+		return fmt.Errorf("mark step cancelled: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrFlowRunStepNotPending
 	}
 	return nil
 }

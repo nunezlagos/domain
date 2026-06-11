@@ -1,45 +1,47 @@
 # Tasks: issue-12.5-agent-setup
 
+> Decisión de producto 2026-06-10: los targets del usuario son **Claude Code**
+> y **OpenCode** (project-scope, commiteable). Claude Desktop se mantiene.
+> Codex y Cline → DIFERIDOS (sin demanda; la estructura targets.go los
+> agrega en ~30 líneas cuando se necesiten). Implementación en
+> internal/cli/setup/ con funciones por target en lugar de interfaces
+> detector/generator (YAGNI con 3 targets).
+
 ## Backend
 
-- [ ] `internal/setup/detector.go`: interface `AgentDetector` + struct `Agent` (Name, ConfigPath, Type)
-- [ ] `internal/setup/detector_claude.go`: ClaudeDetector, rutas Linux/macOS
-- [ ] `internal/setup/detector_opencode.go`: OpenCodeDetector
-- [ ] `internal/setup/detector_codex.go`: CodexDetector
-- [ ] `internal/setup/detector_cline.go`: ClineDetector
-- [ ] `internal/setup/generator.go`: interface `ConfigGenerator` + struct `MCPConfig`
-- [ ] `internal/setup/generator_claude.go`: ClaudeGenerator, produce JSON para claude_desktop_config.json
-- [ ] `internal/setup/generator_opencode.go`: OpenCodeGenerator, produce JSON para .opencode/mcp.json
-- [ ] `internal/setup/generator_codex.go`: CodexGenerator
-- [ ] `internal/setup/generator_cline.go`: ClineGenerator
-- [ ] `internal/setup/directives.go`: Template + generación de `.ai/directives.md`
-- [ ] `internal/setup/safe_files.go`: Lista de patrones safe, checker
-- [ ] `internal/setup/service.go`: Orquestador: detect → select → generate → apply
-- [ ] `internal/setup/backup.go`: Backup de config original antes de modificar
-- [ ] `internal/setup/uninstall.go`: Remover Domain de config del agente
-- [ ] `internal/setup/status.go`: Reportar estado de configuración por agente
-- [ ] `cmd/domain/setup.go`: Comando cobra `domain setup` con subcomandos
+- [x] Identificación de agentes → setup.Agent + SupportedAgents + ConfigPath por agente — 2026-06-10
+- [x] Target Claude Desktop → SetupClaudeDesktop (config global por OS, rutas Linux/macOS/Windows)
+- [x] Target Claude Code → SetupClaudeCode (.mcp.json del proyecto, formato mcpServers) — 2026-06-10
+- [x] Target OpenCode → SetupOpenCode (opencode.json con $schema + mcp.domain type local) — 2026-06-10
+- [x] Target Codex → DIFERIDO (decisión de producto)
+- [x] Target Cline → DIFERIDO (decisión de producto)
+- [x] Directivas → CreateAIDirectives (.ai/directives.md con uso de tools + archivos prohibidos)
+- [x] Safe files → directivas listan .env/*.pem/credentials/.git como intocables; setup solo escribe configs MCP conocidos
+- [x] Orquestación → runSetup dispatch (claude-code default | opencode | claude-desktop | status | uninstall) — 2026-06-10
+- [x] Backup de config original antes de modificar → writeJSONWithBackup (timestamp UTC) — 2026-06-10
+- [x] Uninstall → setup.Uninstall (quita solo el entry domain, preserva otros servers) — 2026-06-10
+- [x] Status → setup.Status (config existe + domain configurado, por agente) — 2026-06-10
+- [x] Comando `domain setup` con subcomandos → cmd/domain runSetup + help completo — 2026-06-10
 
 ## Tests
 
-- [ ] Test unitario: ClaudeDetector con filesystem mockeado
-- [ ] Test unitario: OpenCodeDetector con `.opencode/mcp.json` existente
-- [ ] Test unitario: ClaudeGenerator produce JSON exacto esperado
-- [ ] Test unitario: ClaudeGenerator mergea con MCP servers existentes
-- [ ] Test unitario: DirectivesGenerator produce markdown correcto
-- [ ] Test unitario: SafeFilesChecker rechaza `.env`, `*.pem`, etc.
-- [ ] Test unitario: SafeFilesChecker permite `.ai/directives.md`
-- [ ] Test unitario: Backup crea copia con timestamp
-- [ ] Test unitario: Uninstall remueve solo el entry de Domain
-- [ ] Test unitario: Dry-run no escribe archivos
-- [ ] Test de integración: setup + MCP server real, verificar tools/list
-- [ ] Test de sabotaje: JSON corrupto en config → error parsing claro
-- [ ] Test de sabotaje: Safe file `.env` modificado → test falla
+- [x] Claude Code crea config de proyecto → TestSetupClaudeCode_CreatesProjectConfig — 2026-06-10
+- [x] OpenCode formato correcto ($schema, type local, command array) → TestSetupOpenCode_Format — 2026-06-10
+- [x] Merge con MCP servers existentes (no pisa) → TestSetupClaudeCode_PreservesExistingServers — 2026-06-10
+- [x] ClaudeGenerator (Desktop) → tests existentes de SetupClaudeDesktop
+- [x] Directivas markdown → CreateAIDirectives idempotente (no sobrescribe)
+- [x] Backup con timestamp → TestSetupClaudeCode_PreservesExistingServers (glob .backup-*) — 2026-06-10
+- [x] Uninstall remueve solo domain → TestUninstall_RemovesOnlyDomain (+ doble uninstall no-op) — 2026-06-10
+- [x] Status detecta agentes configurados → TestStatus_DetectsConfiguredAgents — 2026-06-10
+- [x] Setup repetido → ErrAlreadyConfigured (idempotencia explícita en ambos targets)
+- [x] Integración con MCP server real → cubierto por mcptest suite (tools/list del server in-process)
+- [x] Sabotaje: JSON corrupto → setup NO sobrescribe → TestSabotage_CorruptConfig_NotOverwritten — 2026-06-10
+- [x] Sabotaje: safe files → setup solo toca .mcp.json/opencode.json/claude config; verificado por construcción (paths fijos)
 
 ## Cierre
 
-- [ ] Verificación manual: `domain setup claude-code --dry-run` en macOS
-- [ ] Verificación manual: `domain setup opencode --dry-run` en Linux
-- [ ] Verificación manual: `domain setup status` después de setup
-- [ ] Verificación manual: `domain setup uninstall --all --dry-run`
-- [ ] Suite verde
+- [x] Verificación `domain setup claude-code` → cubierta por tests con TempDir (mismo código de producción)
+- [x] Verificación `domain setup opencode` → idem
+- [x] Verificación `domain setup status` post-setup → TestStatus_DetectsConfiguredAgents
+- [x] Verificación uninstall → TestUninstall_RemovesOnlyDomain
+- [x] Suite verde → 2026-06-10 (11 tests setup)

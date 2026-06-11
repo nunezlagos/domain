@@ -1363,6 +1363,14 @@ func runSetup(args []string) {
 		switch args[i] {
 		case "claude-code", "claude":
 			agent = "claude-code"
+		case "opencode":
+			agent = "opencode"
+		case "claude-desktop", "desktop":
+			agent = "claude-desktop"
+		case "status":
+			agent = "status"
+		case "uninstall":
+			agent = "uninstall"
 		case "--mcp-binary":
 			if i+1 >= len(args) {
 				fmt.Fprintln(os.Stderr, "missing value for --mcp-binary")
@@ -1385,9 +1393,16 @@ func runSetup(args []string) {
 		case "--skip-init":
 			skipInit = true
 		case "--help", "-h":
-			fmt.Println("Usage: domain setup [claude-code] [--mcp-binary PATH] [--api-key KEY] [--base-url URL] [--auto-init|--skip-init]")
-			fmt.Println("Configura un agente externo (Claude Desktop) para usar domain-mcp.")
+			fmt.Println("Usage: domain setup [claude-code|opencode|claude-desktop|status|uninstall] [flags]")
+			fmt.Println("Registra domain-mcp como server MCP del agente elegido.")
 			fmt.Println()
+			fmt.Println("  claude-code     .mcp.json del proyecto actual (default, commiteable)")
+			fmt.Println("  opencode        opencode.json del proyecto actual")
+			fmt.Println("  claude-desktop  config global de Claude Desktop")
+			fmt.Println("  status          muestra qué agentes tienen domain configurado")
+			fmt.Println("  uninstall       quita domain de los configs del proyecto")
+			fmt.Println()
+			fmt.Println("Flags: --mcp-binary PATH | --api-key KEY | --base-url URL")
 			fmt.Println("--auto-init  Después del setup, corre `domain init` que reemplaza")
 			fmt.Println("             los .md de IA del repo actual por stubs apuntando al MCP.")
 			fmt.Println("--skip-init  Saltea el prompt interactivo de init (no ofrece reemplazar).")
@@ -1404,40 +1419,74 @@ func runSetup(args []string) {
 		mcpBinary = strings.Replace(ex, "/domain", "/domain-mcp", 1)
 	}
 
+	cwd, _ := os.Getwd()
+
+	var path string
+	var err error
+	var restartHint string
 	switch agent {
 	case "claude-code":
-		path, err := setuppkg.SetupClaudeDesktop(mcpBinary, apiKey, baseURL)
-		if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
-			fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
-			os.Exit(0)
+		// Project-scope: .mcp.json en el repo actual (commiteable).
+		path, err = setuppkg.SetupClaudeCode(cwd, mcpBinary, apiKey, baseURL)
+		restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprobá el server al primer uso)."
+	case "opencode":
+		path, err = setuppkg.SetupOpenCode(cwd, mcpBinary, apiKey, baseURL)
+		restartHint = "OpenCode carga opencode.json al iniciar en este proyecto."
+	case "claude-desktop":
+		path, err = setuppkg.SetupClaudeDesktop(mcpBinary, apiKey, baseURL)
+		restartHint = "Reinicia Claude Desktop para activar Domain."
+	case "status":
+		for _, st := range setuppkg.Status(cwd) {
+			mark := "✗"
+			if st.Configured {
+				mark = "✓"
+			} else if st.Exists {
+				mark = "—"
+			}
+			fmt.Printf("%s %-15s %s\n", mark, st.Agent, st.ConfigPath)
 		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "setup falló: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("✓ Domain MCP agregado a %s\n", path)
-		if cwd, err := os.Getwd(); err == nil {
-			if dp, err := setuppkg.CreateAIDirectives(cwd); err == nil {
-				fmt.Printf("✓ Directivas creadas en %s\n", dp)
+		return
+	case "uninstall":
+		removedAny := false
+		for _, ag := range setuppkg.SupportedAgents {
+			p, removed, uerr := setuppkg.Uninstall(ag, cwd)
+			if uerr == nil && removed {
+				fmt.Printf("✓ domain removido de %s (%s)\n", ag, p)
+				removedAny = true
 			}
 		}
-		fmt.Println("\nReinicia Claude Desktop para activar Domain.")
-
-		// Hook auto-init: detectar archivos .md de IA en el cwd y ofrecer
-		// reemplazarlos. Esto cierra el flow plug-and-play: post-setup el
-		// agente IA tendrá su contexto desde el MCP en lugar de los .md.
-		if skipInit {
-			break
+		if !removedAny {
+			fmt.Println("domain no estaba configurado en ningún agente del proyecto.")
 		}
-		cwd, err := os.Getwd()
-		if err != nil {
-			break
-		}
-		offerOrRunAutoInit(cwd, autoInit)
+		return
 	default:
-		fmt.Fprintf(os.Stderr, "agente no soportado aún: %s\n", agent)
+		fmt.Fprintf(os.Stderr, "agente no soportado: %s (soportados: claude-code, opencode, claude-desktop, status, uninstall)\n", agent)
 		os.Exit(2)
 	}
+
+	if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
+		fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "setup falló: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Domain MCP agregado a %s\n", path)
+	if cwd != "" {
+		if dp, derr := setuppkg.CreateAIDirectives(cwd); derr == nil {
+			fmt.Printf("✓ Directivas creadas en %s\n", dp)
+		}
+	}
+	fmt.Println("\n" + restartHint)
+
+	// Hook auto-init: detectar archivos .md de IA en el cwd y ofrecer
+	// reemplazarlos. Esto cierra el flow plug-and-play: post-setup el
+	// agente IA tendrá su contexto desde el MCP en lugar de los .md.
+	if skipInit || cwd == "" {
+		return
+	}
+	offerOrRunAutoInit(cwd, autoInit)
 }
 
 // offerOrRunAutoInit detecta archivos .md de IA en cwd. Si autoInit=true,

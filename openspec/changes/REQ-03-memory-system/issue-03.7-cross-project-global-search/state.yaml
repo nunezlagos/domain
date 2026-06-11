@@ -37,10 +37,12 @@ notes: |
   - Filter DateFrom futuro → 0 resultados
   - sabotaje cross-org → 0 resultados
 
-  Pending:
-  - Hybrid scoring (BM25 + vector) en observations solo (necesita embedder
-    de la query) — actualmente solo BM25 unificado
-  - knowledge_docs entity (REQ-09 no implementado)
-  - Saved searches HU futura
-  - Suggestions (Levenshtein) cuando results vacío
-  - p99 < 500ms con 100k entries — pending benchmark
+  Actualización 2026-06-11: knowledge_docs SÍ está incluido en el search
+  unificado (searchKnowledgeDocs sobre body_tsv) — la nota previa estaba
+  stale. Son 4 entity types: observation, prompt, session, knowledge_doc.
+
+  Diferido (decisión MCP-first 2026-06-10, ver tasks.md):
+  - MV searchable_entities + cron refresh (FTS per-entity con GIN alcanza)
+  - saved_searches + suggestions pg_trgm (features de Web UI)
+  - Hybrid scoring BM25+vector (SearchHybrid existe para observations)
+  - Benchmark p99 <500ms con 100k entries

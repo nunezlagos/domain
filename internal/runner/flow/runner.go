@@ -82,6 +82,7 @@ type Runner struct {
 	SagaExecutor *flow.SagaExecutor // issue-09.9: compensaciones Saga
 	Snapshots    *flow.SnapshotStore // issue-09.11: snapshots de I/O
 	Signals      *flow.SignalStore   // issue-09.8: await_signal + wake LISTEN/NOTIFY
+	DLQ          *flow.DLQStore      // issue-09.4: dead letter queue (nil = sin DLQ)
 
 	runContexts   map[uuid.UUID]context.CancelFunc
 	runContextsMu sync.Mutex
@@ -253,61 +254,52 @@ LOOP:
 			StepKey:   step.ID,
 		})
 
-		// issue-09.4 retry: si step.Retries > 0, reintentar con backoff exponencial.
-		// Backoff arranca en 200ms, se duplica por intento, cap en step.MaxBackoffS (default 30s).
-		var out any
-		var stepErr error
-		backoff := 200 * time.Millisecond
-		maxBackoff := 30 * time.Second
-		if step.MaxBackoffS > 0 {
-			maxBackoff = time.Duration(step.MaxBackoffS) * time.Second
-		}
-		maxAttempts := step.Retries + 1 // 0 retries = 1 attempt
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			out, stepErr = r.executeStep(ctxStep, runID, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
-			if stepErr == nil {
-				break
-			}
-			// issue-09.4: retry solo para errores transient.
-			// Non-transient (auth, 4xx, validation) fallan inmediato.
-			if !isTransientError(stepErr) {
-				break
-			}
-			if attempt < maxAttempts {
-				if r.Metrics != nil {
-					r.Metrics.FlowStepRetriesTotal.WithLabelValues(f.Slug, step.ID).Inc()
-				}
-				select {
-				case <-ctxStep.Done():
-					stepErr = ctxStep.Err()
-					break
-				case <-time.After(backoff):
-				}
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
-			}
-		}
+		// issue-09.4: retry policy por step (rica o legacy) con backoff.
+		out, stepErr, attemptErrs, retryCount := r.runStepWithRetry(
+			ctxStep, runID, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy, f.Slug)
 		// issue-09.10: cerrar fila del step con resultado final (éxito o fallo)
 		if err := r.completeStepRow(ctx, stepRowID, out, stepErr); err != nil {
 			slog.Default().Warn("complete step row", slog.String("step", step.ID), slog.Any("err", err))
 		}
 		if stepErr != nil {
-			switch step.OnError {
-			case "continue":
-				stepOutputs[step.ID] = map[string]any{"error": stepErr.Error()}
+			// issue-09.4 escenario 8: política del step > default del flow > fail
+			policy := step.OnError
+			if policy == "" {
+				policy = f.Spec.DefaultStepErrorPolicy
+			}
+			switch policy {
+			case "continue", "ignore_and_continue":
+				// Escenario 4: el resultado se reemplaza con default_on_error
+				if step.DefaultOnError != nil {
+					stepOutputs[step.ID] = step.DefaultOnError
+				} else {
+					stepOutputs[step.ID] = map[string]any{"error": stepErr.Error()}
+				}
 				idx++
 				continue LOOP
-			case "", "fail":
-				finalErr = fmt.Sprintf("step '%s': %v", step.ID, stepErr)
+			case "fallback_step":
+				// Escenario 6: ejecutar el step alternativo
+				fbOut, fbErr := r.execFallback(ctxStep, runID, &step,
+					in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy, f.Slug, 1)
+				if fbErr != nil {
+					r.pushDLQ(ctx, f.OrganizationID, runID, f.Slug, step.ID, fbErr, attemptErrs, retryCount)
+					finalErr = fmt.Sprintf("step '%s': %v", step.ID, fbErr)
+					break LOOP
+				}
+				out = map[string]any{"result": fbOut, "fallback_used": true,
+					"retry_count": retryCount, "errors": attemptErrs}
+				stepErr = nil
+			case "", "fail", "abort_flow":
+				// Escenario 7: fallo permanente → DLQ
+				r.pushDLQ(ctx, f.OrganizationID, runID, f.Slug, step.ID, stepErr, attemptErrs, retryCount)
+				finalErr = fmt.Sprintf("step '%s' (retry_count=%d): %v", step.ID, retryCount, stepErr)
 				break LOOP
 			default:
 				// Jump al step_id especificado
-				next, ok := stepByID[step.OnError]
+				next, ok := stepByID[policy]
 				if !ok {
 					finalErr = fmt.Sprintf("step '%s' on_error '%s': %s",
-						step.ID, step.OnError, ErrUnknownStepRef.Error())
+						step.ID, policy, ErrUnknownStepRef.Error())
 					break LOOP
 				}
 				stepOutputs[step.ID] = map[string]any{"error": stepErr.Error(), "jumped_to": next.ID}

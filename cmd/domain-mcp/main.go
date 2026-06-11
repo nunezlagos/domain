@@ -151,6 +151,8 @@ func main() {
 		Pool: pools.App, Audit: recorder, Flows: flowService,
 		Agents: agents, Skills: skills, Observations: observations,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
+		Signals: &flowsvc.SignalStore{Pool: pools.App},
+		DLQ:     &flowsvc.DLQStore{Pool: pools.App},
 	}
 
 	// issue-08.10 sdd-pipeline-orchestrator. Registry con los 10 handlers

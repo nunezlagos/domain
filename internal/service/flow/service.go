@@ -63,24 +63,47 @@ var validStepTypes = map[string]bool{
 	StepTypeWaitSignal: true, StepTypeSubFlow: true,
 }
 
+// StepRetryPolicy configura reintentos por step (issue-09.4).
+// (RetryPolicy a secas ya existe en saga.go para compensaciones.)
+type StepRetryPolicy struct {
+	MaxRetries     int      `json:"max_retries" yaml:"max_retries"`
+	Backoff        string   `json:"backoff,omitempty" yaml:"backoff,omitempty"` // "exponential" (default) | "fixed"
+	InitialDelayMs int      `json:"initial_delay_ms,omitempty" yaml:"initial_delay_ms,omitempty"`
+	FixedDelayMs   int      `json:"fixed_delay_ms,omitempty" yaml:"fixed_delay_ms,omitempty"`
+	RetryOn        []string `json:"retry_on,omitempty" yaml:"retry_on,omitempty"` // vacío = todos los errores
+}
+
+// MaxRetriesCap — límite duro de reintentos por step (issue-09.4).
+const MaxRetriesCap = 10
+
 // Step en el DAG del flow.
 type Step struct {
 	ID          string         `json:"id" yaml:"id"`                               // identificador único en el flow
 	Type        string         `json:"type" yaml:"type"`                           // ver validStepTypes
 	Config      map[string]any `json:"config" yaml:"config"`                       // params específicos por type
 	DependsOn   []string       `json:"depends_on,omitempty" yaml:"depends_on,omitempty"` // step ids de los que depende (DAG edge)
-	OnError     string         `json:"on_error,omitempty" yaml:"on_error,omitempty"`     // "fail" (default) | "continue" | step_id
+	OnError     string         `json:"on_error,omitempty" yaml:"on_error,omitempty"`     // "fail"/"abort_flow" (default) | "continue"/"ignore_and_continue" | "fallback_step" | step_id
 	Retries     int            `json:"retries,omitempty" yaml:"retries,omitempty"`
 	MaxBackoffS int            `json:"max_backoff_s,omitempty" yaml:"max_backoff_s,omitempty"` // issue-09.4 backoff cap en segundos (default 30s)
 	TimeoutS    int            `json:"timeout_s,omitempty" yaml:"timeout_s,omitempty"`
 	ReplaySafe  *bool          `json:"replay_safe,omitempty" yaml:"replay_safe,omitempty"` // issue-09.6: nil=true (safe to re-run on resume)
 	Compensate  string         `json:"compensate,omitempty" yaml:"compensate,omitempty"`  // issue-09.9: referencia a skill/step de compensación
+
+	// issue-09.4: retry policy rica (tiene precedencia sobre Retries legacy)
+	Retry *StepRetryPolicy `json:"retry,omitempty" yaml:"retry,omitempty"`
+	// DefaultOnError reemplaza el resultado cuando on_error=ignore_and_continue.
+	DefaultOnError map[string]any `json:"default_on_error,omitempty" yaml:"default_on_error,omitempty"`
+	// FallbackStep se ejecuta en lugar del step cuando on_error=fallback_step.
+	FallbackStep *Step `json:"fallback_step,omitempty" yaml:"fallback_step,omitempty"`
 }
 
 // Spec del flow (deserializado del JSONB).
 type Spec struct {
 	Version int    `json:"version" yaml:"version"`
 	Steps   []Step `json:"steps" yaml:"steps"`
+	// DefaultStepErrorPolicy aplica cuando un step no declara on_error
+	// (issue-09.4 escenario 8). La política del step tiene prioridad.
+	DefaultStepErrorPolicy string `json:"default_step_error_policy,omitempty" yaml:"default_step_error_policy,omitempty"`
 }
 
 // Validate verifica el spec antes de persistirlo: step ids únicos, types
@@ -105,18 +128,79 @@ func (s Spec) Validate() error {
 			return fmt.Errorf("%w: step '%s' type '%s' not valid", ErrSpecInvalid, step.ID, step.Type)
 		}
 	}
-	// Verificar on_error referencias
+	// Verificar on_error referencias + reglas issue-09.4
 	for _, step := range s.Steps {
-		if step.OnError != "" && step.OnError != "fail" && step.OnError != "continue" {
-			if !ids[step.OnError] {
-				return fmt.Errorf("%w: step '%s' on_error references unknown step '%s'",
-					ErrSpecInvalid, step.ID, step.OnError)
-			}
+		if err := validateErrorHandling(step, ids, 0); err != nil {
+			return err
 		}
+	}
+	if s.DefaultStepErrorPolicy != "" && !isNamedErrorPolicy(s.DefaultStepErrorPolicy) {
+		return fmt.Errorf("%w: default_step_error_policy '%s' not valid",
+			ErrSpecInvalid, s.DefaultStepErrorPolicy)
 	}
 	// Validar DAG: depends_on referencias + detección de ciclos
 	if err := ValidateDAG(s.Steps); err != nil {
 		return err
+	}
+	return nil
+}
+
+// MaxFallbackDepth — profundidad máxima de cadena de fallback_steps (issue-09.4).
+const MaxFallbackDepth = 3
+
+func isNamedErrorPolicy(p string) bool {
+	switch p {
+	case "fail", "abort_flow", "continue", "ignore_and_continue", "fallback_step":
+		return true
+	}
+	return false
+}
+
+// validateErrorHandling aplica las reglas de issue-09.4 sobre un step
+// (y recursivamente sobre su cadena de fallbacks).
+func validateErrorHandling(step Step, ids map[string]bool, fallbackDepth int) error {
+	if step.OnError != "" && !isNamedErrorPolicy(step.OnError) {
+		if !ids[step.OnError] {
+			return fmt.Errorf("%w: step '%s' on_error references unknown step '%s'",
+				ErrSpecInvalid, step.ID, step.OnError)
+		}
+	}
+	if step.OnError == "fallback_step" && step.FallbackStep == nil {
+		return fmt.Errorf("%w: step '%s' on_error=fallback_step requires fallback_step",
+			ErrSpecInvalid, step.ID)
+	}
+	if step.OnError == "ignore_and_continue" && step.DefaultOnError == nil {
+		return fmt.Errorf("%w: step '%s' on_error=ignore_and_continue requires default_on_error",
+			ErrSpecInvalid, step.ID)
+	}
+	maxRetries := step.Retries
+	if step.Retry != nil {
+		maxRetries = step.Retry.MaxRetries
+		if b := step.Retry.Backoff; b != "" && b != "exponential" && b != "fixed" {
+			return fmt.Errorf("%w: step '%s' retry.backoff '%s' not valid",
+				ErrSpecInvalid, step.ID, b)
+		}
+	}
+	if maxRetries > MaxRetriesCap {
+		return fmt.Errorf("%w: step '%s' max_retries %d exceeds cap %d",
+			ErrSpecInvalid, step.ID, maxRetries, MaxRetriesCap)
+	}
+	if step.FallbackStep != nil {
+		if fallbackDepth+1 > MaxFallbackDepth {
+			return fmt.Errorf("%w: step '%s' fallback chain exceeds %d levels",
+				ErrSpecInvalid, step.ID, MaxFallbackDepth)
+		}
+		fb := *step.FallbackStep
+		if fb.ID == "" {
+			return fmt.Errorf("%w: step '%s' fallback_step.id required", ErrSpecInvalid, step.ID)
+		}
+		if !validStepTypes[fb.Type] {
+			return fmt.Errorf("%w: fallback step '%s' type '%s' not valid",
+				ErrSpecInvalid, fb.ID, fb.Type)
+		}
+		if err := validateErrorHandling(fb, ids, fallbackDepth+1); err != nil {
+			return err
+		}
 	}
 	return nil
 }

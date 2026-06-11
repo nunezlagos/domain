@@ -44,6 +44,8 @@
   "delete",
   "delete_failed",
   "dispatcher_not_configured",
+  "dlq_list",
+  "dlq_resolve",
   "dryrun",
   "email_mismatch",
   "emit",

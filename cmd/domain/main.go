@@ -538,6 +538,8 @@ func runServer() {
 		Agents: agentService, Skills: skillService, Observations: obsService,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 		Emitter: outboundEmitter, Metrics: metricsReg,
+		Signals: &flow.SignalStore{Pool: pools.App},
+		DLQ:     &flow.DLQStore{Pool: pools.App},
 	}
 
 	// Cron scheduler (issue-10.1): solo corre en el pod leader (issue-26.2)

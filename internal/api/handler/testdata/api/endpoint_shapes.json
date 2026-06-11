@@ -131,6 +131,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/dlq",
+    "handler": "listDLQ"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/dlq/{id}",
+    "handler": "resolveDLQ"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/flow-runs/{id}",
     "handler": "getFlowRun"
   },

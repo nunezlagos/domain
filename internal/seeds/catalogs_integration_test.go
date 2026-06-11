@@ -222,6 +222,48 @@ func TestPlatformPoliciesSeeder_PreservesUserModified(t *testing.T) {
 	require.False(t, modified)
 }
 
+func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	reg := seeds.NewRegistry()
+	reg.Register(&seeds.ProjectTemplatesSeeder{})
+	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
+	require.NoError(t, err)
+	require.Equal(t, 4, results["project_templates"].Created)
+
+	// Built-ins son públicos sin org y hay exactamente un default
+	var publics, defaults int
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT COUNT(*), COUNT(*) FILTER (WHERE is_default)
+		 FROM project_templates WHERE organization_id IS NULL AND is_public`).
+		Scan(&publics, &defaults))
+	require.Equal(t, 4, publics)
+	require.Equal(t, 1, defaults)
+
+	// Usuario edita go-backend → re-seed no lo pisa
+	_, err = pools.App.Exec(ctx,
+		`UPDATE project_templates
+		 SET name='Mi Go Custom', is_user_modified=TRUE
+		 WHERE organization_id IS NULL AND slug='go-backend'`)
+	require.NoError(t, err)
+
+	tx, err := pools.Auth.Begin(ctx)
+	require.NoError(t, err)
+	rep, err := (&seeds.ProjectTemplatesSeeder{}).Run(ctx, tx, seeds.EnvDev)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+	require.Equal(t, 1, rep.Skipped, "go-backend editado debe skipearse")
+	require.Equal(t, 3, rep.Updated)
+
+	var name string
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT name FROM project_templates
+		 WHERE organization_id IS NULL AND slug='go-backend'`).Scan(&name))
+	require.Equal(t, "Mi Go Custom", name, "edición del usuario preservada")
+}
+
 func TestSeedSkillsForOrg_BuiltinCatalog(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)
 	defer cleanup()

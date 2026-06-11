@@ -384,6 +384,7 @@ func runServer() {
 	seedRegistry.Register(&seeds.PlansSeeder{})
 	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
+	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
 	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
 	// seeds.SeedAgentTemplatesForOrg (issue-21.1 org-management hook).

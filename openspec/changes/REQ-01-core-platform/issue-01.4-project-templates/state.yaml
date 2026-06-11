@@ -20,12 +20,11 @@ notes: |
 
   Tests cubren reSlug regex + Create slug inválido + sentinel.
 
-  Pending (escenario 2 completo):
-  - projectsvc.Create con template_id debe:
-    * Aplicar settings del template (merge con override)
-    * Auto-asignar default_skills (insertar en project_skills)
-    * Crear/asignar default_agents si no existen
-    * Crear/asignar default_flows
-  - Seeders built-in templates ("Go Backend", "Python Data", etc.)
-  - Versionado de template
-  - Detectar drift settings → is_user_modified=TRUE
+  Cierre 2026-06-11:
+  - projectsvc.Create con template_id ya mergea settings (template base +
+    request override) — implementado previamente, nota stale.
+  - Seeder built-in: default/go-backend/python-data/frontend-web (org NULL,
+    is_public, upsert manual respetando is_user_modified).
+  - Auto-asignar default_skills/agents/flows → N/A por schema (no existe
+    project_skills; entidades son org-scoped). Los arrays son recomendación.
+  - Versionado de template y drift-detection → diferidos (sin demanda).

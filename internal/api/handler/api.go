@@ -16,6 +16,7 @@ import (
 	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/auth/bootstrap"
 	"nunezlagos/domain/internal/auth/ratelimit"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
@@ -99,6 +100,7 @@ type API struct {
 	OTPService     *otp.Service
 	OTPRateLimiter *ratelimit.Limiter
 	APIKeys        *apikey.PGStore
+	Bootstrap      *bootstrap.Service
 	SecretsStore   *secrets.PGStore
 	RoleService    *rolesvc.Service
 	ReqService     *reqsvc.Service
@@ -121,6 +123,10 @@ func (a *API) Router() http.Handler {
 	// Auth (sin Bearer requerido)
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
+	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
+	// Tambien sin Bearer: la primera request al sistema no tiene user todavía.
+	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
+	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 
 	// Audit logs (issue-02.4, requiere auth)
 	mux.HandleFunc("GET /api/v1/audit-logs", a.listAuditLogs)

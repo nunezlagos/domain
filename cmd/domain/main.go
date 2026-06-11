@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
+	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
 	"nunezlagos/domain/internal/auth/rbac"
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/dbstats"
@@ -730,6 +731,7 @@ func runServer() {
 		OTPService:     otpService,
 		OTPRateLimiter: otpRateLimiter,
 		APIKeys:        apiKeyStore,
+		Bootstrap:      bootstrapsvc.New(pools.App),
 		SecretsStore:   secretsStore,
 		RoleService:    roleService,
 		ReqService:     requirementService,

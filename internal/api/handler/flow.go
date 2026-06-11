@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/audit"
@@ -297,6 +301,173 @@ func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 		"hash":       v.Hash,
 		"created_at": v.CreatedAt,
 	})
+}
+
+// PUT /api/v1/flows/{id} — issue-09.1: full update del flow current con
+// optimistic locking opcional vía header If-Unmodified-Since (RFC 7232).
+// Mismatch → 412 Precondition Failed.
+func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	prev, err := a.FlowService.GetByID(r.Context(), id)
+	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+
+	var b createFlowBody
+	if err := decodeJSON(r, &b); err != nil || b.Name == "" {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "name and spec required")
+		return
+	}
+	actorID, _ := uuid.Parse(p.UserID)
+	in := flow.UpdateInput{
+		Name: &b.Name, Description: &b.Description, Spec: &b.Spec, ActorID: actorID,
+	}
+	if ius := r.Header.Get("If-Unmodified-Since"); ius != "" {
+		ts, err := http.ParseTime(ius)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "validation_failed", "invalid If-Unmodified-Since")
+			return
+		}
+		// Comparación a resolución de segundo (HTTP date no tiene sub-segundo):
+		// usamos el updated_at real si coincide truncado.
+		if prev.UpdatedAt.UTC().Truncate(time.Second).Equal(ts.UTC().Truncate(time.Second)) {
+			expected := prev.UpdatedAt
+			in.ExpectedUpdatedAt = &expected
+		} else {
+			writeError(w, http.StatusPreconditionFailed, "precondition_failed",
+				"flow was modified since the provided timestamp")
+			return
+		}
+	}
+	f, err := a.FlowService.Update(r.Context(), id, in)
+	if errors.Is(err, flow.ErrUpdateConflict) {
+		writeError(w, http.StatusPreconditionFailed, "precondition_failed", "concurrent modification")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, f)
+}
+
+type flowExport struct {
+	Slug        string    `json:"slug" yaml:"slug"`
+	Name        string    `json:"name" yaml:"name"`
+	Description string    `json:"description,omitempty" yaml:"description,omitempty"`
+	Spec        flow.Spec `json:"spec" yaml:"spec"`
+}
+
+// response-shape-lint:allow export endpoint — responde el documento crudo (json/yaml), no envelope
+//
+// GET /api/v1/flows/{id}/export?format=yaml|json — issue-09.1
+func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	f, err := a.FlowService.GetByID(r.Context(), id)
+	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	doc := flowExport{Slug: f.Slug, Name: f.Name, Description: f.Description, Spec: f.Spec}
+	switch r.URL.Query().Get("format") {
+	case "yaml":
+		raw, err := yaml.Marshal(doc)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "export", err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", f.Slug))
+		_, _ = w.Write(raw)
+	case "", "json":
+		raw, err := json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "export", err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", f.Slug))
+		_, _ = w.Write(raw)
+	default:
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "format must be yaml or json")
+	}
+}
+
+const maxImportBytes = 1 << 20 // 1MB (issue-09.1)
+
+// POST /api/v1/flows/import — issue-09.1. Acepta JSON o YAML según
+// Content-Type; slug duplicado → 409.
+func (a *API) importFlow(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxImportBytes+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read_body", err.Error())
+		return
+	}
+	if len(raw) > maxImportBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "import max 1MB")
+		return
+	}
+
+	var doc flowExport
+	ct := r.Header.Get("Content-Type")
+	if strings.Contains(ct, "yaml") {
+		err = yaml.Unmarshal(raw, &doc)
+	} else {
+		err = json.Unmarshal(raw, &doc)
+	}
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "invalid document: "+err.Error())
+		return
+	}
+
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	actorID, _ := uuid.Parse(p.UserID)
+	f, err := a.FlowService.Create(r.Context(), flow.CreateInput{
+		OrganizationID: orgID, Slug: doc.Slug, Name: doc.Name,
+		Description: doc.Description, Spec: doc.Spec, ActorID: actorID,
+	})
+	if errors.Is(err, flow.ErrSlugTaken) {
+		writeError(w, http.StatusConflict, "slug_taken", "a flow with that slug already exists")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", err.Error())
+		return
+	}
+	w.Header().Set("Location", "/api/v1/flows/"+f.ID.String())
+	writeData(w, http.StatusCreated, f)
 }
 
 type signalRunBody struct {

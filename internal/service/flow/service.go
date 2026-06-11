@@ -153,7 +153,13 @@ type UpdateInput struct {
 	Spec        *Spec
 	IsActive    *bool
 	ActorID     uuid.UUID
+	// ExpectedUpdatedAt habilita optimistic locking (issue-09.1): si no
+	// coincide con flows.updated_at actual, Update retorna ErrUpdateConflict.
+	ExpectedUpdatedAt *time.Time
 }
+
+// ErrUpdateConflict — el flow fue modificado por otro actor (412 en API).
+var ErrUpdateConflict = errors.New("flow modified concurrently")
 
 type Service struct {
 	Pool  *pgxpool.Pool
@@ -236,19 +242,31 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Fl
 	userMod := prev.IsUserModified || prev.SeedManaged
 	specJSON, _ := json.Marshal(spec)
 
+	// issue-09.1 optimistic locking: la condición updated_at garantiza que
+	// no pisamos una modificación concurrente.
+	where := `WHERE id = $1 AND deleted_at IS NULL`
+	args := []any{id, name, nullStr(desc), specJSON, isActive, userMod}
+	if in.ExpectedUpdatedAt != nil {
+		where += ` AND updated_at = $7`
+		args = append(args, *in.ExpectedUpdatedAt)
+	}
+
 	var f Flow
 	err = s.Pool.QueryRow(ctx,
 		`UPDATE flows SET name = $2, description = $3, spec = $4, is_active = $5,
 		    is_user_modified = $6
-		 WHERE id = $1 AND deleted_at IS NULL
+		 `+where+`
 		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
 		           spec, is_active, deterministic_replay, seed_managed, seed_version,
 		           is_user_modified, created_at, updated_at`,
-		id, name, nullStr(desc), specJSON, isActive, userMod,
+		args...,
 	).Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
 		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if in.ExpectedUpdatedAt != nil {
+			return nil, ErrUpdateConflict
+		}
 		return nil, ErrNotFound
 	}
 	if err != nil {

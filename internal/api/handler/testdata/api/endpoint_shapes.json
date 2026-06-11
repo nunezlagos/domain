@@ -165,6 +165,11 @@
     "handler": "createFlow"
   },
   {
+    "method": "POST",
+    "path": "/api/v1/flows/import",
+    "handler": "importFlow"
+  },
+  {
     "method": "DELETE",
     "path": "/api/v1/flows/{id}",
     "handler": "deleteFlow"
@@ -180,9 +185,19 @@
     "handler": "updateFlow"
   },
   {
+    "method": "PUT",
+    "path": "/api/v1/flows/{id}",
+    "handler": "replaceFlow"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/flows/{id}/dry-run",
     "handler": "dryRunFlow"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flows/{id}/export",
+    "handler": "exportFlow"
   },
   {
     "method": "POST",

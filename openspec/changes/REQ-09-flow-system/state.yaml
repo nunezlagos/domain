@@ -5,7 +5,7 @@ hus:
   09.10-step-heartbeats: implemented
   09.11-reproducibility-snapshots: implemented
   09.12-dry-run-plan-mode: implemented
-  09.1-flow-dag-definition: partially_implemented
+  09.1-flow-dag-definition: implemented
   09.2-step-types: implemented
   09.3-flow-state-machine: implemented
   09.4-retry-error-handling: partially_implemented

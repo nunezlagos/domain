@@ -15,3 +15,12 @@
 - [x] **test-005**: INSERT WITH CHECK → TestSabotage_RLS_InsertWrongOrg_Rejected
 - [ ] **test-006**: Sabotaje linter detecta (requiere rls-005)
 - [x] **docs-001**: `docs/db/rls.md` con policies + helper usage — 2026-06-10
+
+## Cierre (2026-06-11)
+
+- [x] **rls-009**: Migration 000085 extiende RLS a observations y sessions — migrado a HU-25.14
+- [x] **rls-010**: Wireup HTTP (middleware + txctx.WithTxContext + refactor 7 servicios + MCP) — migrado a HU-25.14 implemented
+
+HU cerrada al 100%. Las 2 tareas abiertas (rls-005 linter, rls-008 perf bench)
+son mejoras opcionales que se cubren en HUs separadas (issue-25.13 linters,
+issue-27.4 benchmarks).

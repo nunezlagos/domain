@@ -122,6 +122,113 @@ func (s *SignalStore) Wait(ctx context.Context, flowRunID uuid.UUID, stepKey *st
 	}
 }
 
+// ErrSignalTimeout se retorna cuando WaitForSignal agota el timeout.
+var ErrSignalTimeout = errors.New("signal timeout")
+
+// SignalPendingExpectation registra que un flow_run step espera una señal externa.
+type SignalPendingExpectation struct {
+	ID         uuid.UUID `json:"id"`
+	FlowRunID  uuid.UUID `json:"flow_run_id"`
+	StepID     string    `json:"step_id"`
+	SignalName string    `json:"signal_name"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ExpectSignal registra la expectativa de señal para un step.
+func (s *SignalStore) ExpectSignal(ctx context.Context, runID uuid.UUID, stepID, signalName string, ttl time.Duration) (*SignalPendingExpectation, error) {
+	expiresAt := time.Now().Add(ttl)
+	var exp SignalPendingExpectation
+	err := s.Pool.QueryRow(ctx, `
+		INSERT INTO flow_run_signals_pending (flow_run_id, step_id, signal_name, expires_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (flow_run_id, step_id) DO UPDATE SET
+		  signal_name = EXCLUDED.signal_name,
+		  expires_at = EXCLUDED.expires_at
+		RETURNING id, flow_run_id, step_id, signal_name, expires_at, created_at`,
+		runID, stepID, signalName, expiresAt,
+	).Scan(&exp.ID, &exp.FlowRunID, &exp.StepID, &exp.SignalName, &exp.ExpiresAt, &exp.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("insert pending: %w", err)
+	}
+	return &exp, nil
+}
+
+// CancelExpectation elimina las expectativas de un run (run completed/cancelled).
+func (s *SignalStore) CancelExpectation(ctx context.Context, runID uuid.UUID) error {
+	_, err := s.Pool.Exec(ctx,
+		`DELETE FROM flow_run_signals_pending WHERE flow_run_id = $1`, runID)
+	if err != nil {
+		return fmt.Errorf("cancel expectation: %w", err)
+	}
+	return nil
+}
+
+// BroadcastSignal envía una señal con el nombre dado a TODOS los runs que la
+// estén esperando. Retorna la cantidad de runs notificados.
+func (s *SignalStore) BroadcastSignal(ctx context.Context, name string, payload []byte) (int, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT frp.flow_run_id, frp.step_id
+		FROM flow_run_signals_pending frp
+		WHERE frp.signal_name = $1
+		  AND frp.expires_at > NOW()`,
+		name,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("query pending: %w", err)
+	}
+	defer rows.Close()
+
+	type target struct {
+		runID  uuid.UUID
+		stepID string
+	}
+	var targets []target
+	for rows.Next() {
+		var t target
+		if err := rows.Scan(&t.runID, &t.stepID); err != nil {
+			return 0, fmt.Errorf("scan: %w", err)
+		}
+		targets = append(targets, t)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	for _, t := range targets {
+		stepKey := t.stepID
+		if _, err := s.Pool.Exec(ctx, `
+			INSERT INTO flow_signals (flow_run_id, step_key, name, payload)
+			VALUES ($1, $2, $3, $4)`,
+			t.runID, stepKey, name, payload,
+		); err != nil {
+			return 0, fmt.Errorf("insert signal for run %s: %w", t.runID, err)
+		}
+	}
+
+	return len(targets), nil
+}
+
+// WaitForSignal es un wrapper sobre Wait que traduce ErrSignalNotFound a
+// ErrSignalTimeout para integrar con retry policy (issue-09.4).
+func (s *SignalStore) WaitForSignal(ctx context.Context, runID uuid.UUID, stepKey *string, name string, timeout time.Duration) (*Signal, error) {
+	sig, err := s.Wait(ctx, runID, stepKey, name, timeout, 500*time.Millisecond)
+	if errors.Is(err, ErrSignalNotFound) {
+		return nil, ErrSignalTimeout
+	}
+	return sig, nil
+}
+
+// RemoveExpiredExpectations limpia expectativas vencidas.
+func (s *SignalStore) RemoveExpiredExpectations(ctx context.Context) (int64, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`DELETE FROM flow_run_signals_pending WHERE expires_at < NOW()`)
+	if err != nil {
+		return 0, fmt.Errorf("remove expired: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // List devuelve signals (delivered o pending) para un flow_run.
 func (s *SignalStore) List(ctx context.Context, flowRunID uuid.UUID, includeDelivered bool) ([]Signal, error) {
 	q := `SELECT id, flow_run_id, step_key, name, payload, delivered_at, created_at

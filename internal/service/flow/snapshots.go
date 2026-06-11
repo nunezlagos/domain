@@ -8,6 +8,7 @@ package flow
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// DefaultSnapshotRetention define cuánto tiempo se conservan snapshots antes
+// de ser podados por PruneSnapshots.
+const DefaultSnapshotRetention = 30 * 24 * time.Hour // 30 días
 
 // StepSnapshot captura el I/O exacto de un step ejecutado.
 type StepSnapshot struct {
@@ -40,6 +45,9 @@ var ErrSnapshotNotFound = errors.New("snapshot not found")
 
 // Save persiste el snapshot al completar (success o failure) de un step.
 func (s *SnapshotStore) Save(ctx context.Context, snap *StepSnapshot) error {
+	if s.Pool == nil {
+		return nil // no-op para tests
+	}
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO flow_run_step_snapshots
 		  (id, step_id, run_id, step_key, input, output, error, duration_ms)
@@ -120,4 +128,94 @@ func CompareForReplay(original, replay *StepSnapshot) (bool, string) {
 		return false, "output differs"
 	}
 	return true, ""
+}
+
+// snapshotOutputCompressed es la estructura interna para output comprimido
+// dentro del JSONB output.
+type snapshotOutputCompressed struct {
+	Compressed bool   `json:"compressed"`
+	Data       string `json:"data"` // base64 del gzip comprimido
+}
+
+// SaveSnapshot guarda el snapshot comprimiendo el output con gzip.
+// Reusa CompressOutput (definida en internal/runner/flow/durable.go).
+// El output comprimido se almacena como base64 dentro del JSONB.
+func (s *SnapshotStore) SaveSnapshot(ctx context.Context, snap *StepSnapshot, compressFn func(any) ([]byte, int, error)) error {
+	if snap.Output != nil && compressFn != nil {
+		var raw any
+		if err := json.Unmarshal(snap.Output, &raw); err == nil {
+			compressed, _, err := compressFn(raw)
+			if err == nil {
+				wrapped := snapshotOutputCompressed{
+					Compressed: true,
+					Data:       base64.StdEncoding.EncodeToString(compressed),
+				}
+				wrappedJSON, _ := json.Marshal(wrapped)
+				snap.Output = wrappedJSON
+			}
+		}
+	}
+	return s.Save(ctx, snap)
+}
+
+// GetSnapshot recupera el snapshot y descomprime el output si estaba comprimido.
+// Reusa DecompressOutput (definida en internal/runner/flow/durable.go).
+func (s *SnapshotStore) GetSnapshot(ctx context.Context, stepID uuid.UUID, decompressFn func([]byte) ([]byte, error)) (*StepSnapshot, error) {
+	snap, err := s.GetByStep(ctx, stepID)
+	if err != nil {
+		return nil, err
+	}
+	if snap.Output != nil && decompressFn != nil {
+		var wrapped snapshotOutputCompressed
+		if err := json.Unmarshal(snap.Output, &wrapped); err == nil && wrapped.Compressed {
+			decoded, err := base64.StdEncoding.DecodeString(wrapped.Data)
+			if err == nil {
+				decompressed, err := decompressFn(decoded)
+				if err == nil {
+					snap.Output = decompressed
+				}
+			}
+		}
+	}
+	return snap, nil
+}
+
+// ListSnapshots devuelve todos los snapshots de un run con outputs descomprimidos.
+func (s *SnapshotStore) ListSnapshots(ctx context.Context, runID uuid.UUID, decompressFn func([]byte) ([]byte, error)) ([]StepSnapshot, error) {
+	snapshots, err := s.ListByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range snapshots {
+		if snapshots[i].Output != nil && decompressFn != nil {
+			var wrapped snapshotOutputCompressed
+			if err := json.Unmarshal(snapshots[i].Output, &wrapped); err == nil && wrapped.Compressed {
+				decoded, err := base64.StdEncoding.DecodeString(wrapped.Data)
+				if err == nil {
+					decompressed, err := decompressFn(decoded)
+					if err == nil {
+						snapshots[i].Output = decompressed
+					}
+				}
+			}
+		}
+	}
+	return snapshots, nil
+}
+
+// PruneSnapshots elimina snapshots anteriores a la fecha dada.
+// Retorna la cantidad de filas eliminadas.
+func (s *SnapshotStore) PruneSnapshots(ctx context.Context, before time.Time) (int64, error) {
+	if s.Pool == nil {
+		return 0, nil // no-op para tests
+	}
+	tag, err := s.Pool.Exec(ctx, `
+		DELETE FROM flow_run_step_snapshots
+		WHERE captured_at < $1`,
+		before,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("prune snapshots: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

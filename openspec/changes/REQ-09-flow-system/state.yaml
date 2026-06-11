@@ -2,15 +2,15 @@ status: active
 created: 2026-06-07
 archived: ~
 hus:
-  09.10-step-heartbeats: proposed
-  09.11-reproducibility-snapshots: proposed
+  09.10-step-heartbeats: partially_implemented
+  09.11-reproducibility-snapshots: implemented
   09.12-dry-run-plan-mode: implemented
   09.1-flow-dag-definition: partially_implemented
-  09.2-step-types: partially_implemented
+  09.2-step-types: implemented
   09.3-flow-state-machine: partially_implemented
-   09.4-retry-error-handling: implemented
-  09.5-subflows-composition: implemented
-  09.6-durable-execution: partially_implemented
-  09.7-workflow-versioning: proposed
-  09.8-external-signals: proposed
-  09.9-saga-compensation: proposed
+  09.4-retry-error-handling: partially_implemented
+  09.5-subflows-composition: partially_implemented
+  09.6-durable-execution: implemented
+  09.7-workflow-versioning: partially_implemented
+  09.8-external-signals: partially_implemented
+  09.9-saga-compensation: implemented

@@ -66,10 +66,17 @@ type SearchResult struct {
 	VectorRank int     // 0 si no apareció en vector
 }
 
+// EventEmitter publica eventos de dominio hacia webhooks outbound
+// (issue-10.4 ow-002). Opcional.
+type EventEmitter interface {
+	EmitEntityEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any)
+}
+
 type Service struct {
 	Pool     *pgxpool.Pool
 	Audit    audit.Recorder
 	Embedder llm.Embedder
+	Events   EventEmitter // nil = sin webhooks
 }
 
 // Save crea observation con embedding generado en línea.
@@ -146,6 +153,14 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 			EntityType:     "observation",
 			EntityID:       &o.ID,
 			NewValues:      map[string]any{"redacted": redactedCount},
+		})
+	}
+	// issue-10.4 ow-002: webhook outbound (solo metadata, nunca el content)
+	if s.Events != nil {
+		s.Events.EmitEntityEvent(ctx, in.OrganizationID, "observation.created", map[string]any{
+			"observation_id": o.ID,
+			"project_id":     in.ProjectID,
+			"type":           o.ObservationType,
 		})
 	}
 	return &o, nil

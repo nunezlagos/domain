@@ -531,6 +531,9 @@ func runServer() {
 		Logger:      logger,
 		UsageAlerts: usageAlertsService.AsUsageAlerter(),
 	}
+	// issue-10.4 ow-002: hooks de entidad (observation.created, invite.created)
+	obsService.Events = outboundEmitter
+	inviteService.Events = outboundEmitter
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,

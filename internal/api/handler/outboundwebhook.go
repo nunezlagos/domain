@@ -134,6 +134,35 @@ func (a *API) deleteOutboundWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/outbound-webhooks/{id}/test → emite webhook.test_ping
+// POST /api/v1/outbound-webhooks/deliveries/{id}/replay — issue-10.4 ow-010:
+// re-encola un delivery (incluso dead_letter) con ciclo de reintentos fresco.
+func (a *API) replayOutboundDelivery(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	tag, err := a.OutboundWebhookService.Pool.Exec(r.Context(), `
+		UPDATE outbound_webhook_deliveries
+		SET status = 'pending', next_retry_at = NOW(), attempt = 1, error_message = NULL
+		WHERE id = $1 AND organization_id = $2`, id, orgID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "replay", err.Error())
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	writeData(w, http.StatusAccepted, map[string]any{"replayed": true, "delivery_id": id})
+}
+
 func (a *API) testOutboundWebhook(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

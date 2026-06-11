@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -166,6 +167,16 @@ func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID, _ uuid.UUID
 			 WHERE id=$2`, "subscription_not_found", deliveryID)
 		return
 	}
+	// ow-006: circuit breaker — endpoint en cooldown, reprogramar sin
+	// gastar intento ni golpear el receptor.
+	if d.circuitOpen(sub) {
+		retryAt := sub.LastFailureAt.Add(CBCooldown)
+		_, _ = d.Pool.Exec(ctx,
+			`UPDATE outbound_webhook_deliveries
+			 SET status='pending', next_retry_at=$1, error_message='circuit_open'
+			 WHERE id=$2`, retryAt, deliveryID)
+		return
+	}
 	secret, _ := d.Svc.DecryptSecret(ctx, subID)
 
 	deliveryUUID := uuid.New()
@@ -264,8 +275,9 @@ func truncate(s string, max int) string {
 	return s[:max]
 }
 
-// matchesFilters evalúa filtros simples top-level del payload data.
-// Solo soporta equality match por ahora ({"key":"value"} dentro de filters).
+// matchesFilters evalúa filtros sobre el payload data (ow-008).
+// Keys soportan paths anidados con punto ("flow.slug": "deploy") evaluados
+// de forma segura (sin eval); el match es por equality de representación.
 func matchesFilters(filters, data json.RawMessage) bool {
 	if len(filters) == 0 || bytes.Equal(filters, []byte("{}")) {
 		return true
@@ -278,8 +290,8 @@ func matchesFilters(filters, data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &d); err != nil {
 		return false
 	}
-	for k, want := range f {
-		got, ok := d[k]
+	for path, want := range f {
+		got, ok := lookupPath(d, path)
 		if !ok {
 			return false
 		}
@@ -288,4 +300,45 @@ func matchesFilters(filters, data json.RawMessage) bool {
 		}
 	}
 	return true
+}
+
+// lookupPath navega un path con puntos sobre maps anidados (y arrays por
+// índice numérico). Traversal puro de datos — nunca evalúa expresiones.
+func lookupPath(doc map[string]any, path string) (any, bool) {
+	var cur any = doc
+	for _, seg := range strings.Split(path, ".") {
+		switch v := cur.(type) {
+		case map[string]any:
+			next, ok := v[seg]
+			if !ok {
+				return nil, false
+			}
+			cur = next
+		case []any:
+			idx, err := strconv.Atoi(seg)
+			if err != nil || idx < 0 || idx >= len(v) {
+				return nil, false
+			}
+			cur = v[idx]
+		default:
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+// Circuit breaker (ow-006): tras CBThreshold fallos consecutivos, la
+// subscription queda en cooldown CBCooldown desde el último fallo — los
+// deliveries se reprograman sin gastar intentos ni golpear el endpoint.
+const (
+	CBThreshold = 10
+	CBCooldown  = 1 * time.Hour
+)
+
+// circuitOpen indica si la subscription está en cooldown.
+func (d *Dispatcher) circuitOpen(sub *Subscription) bool {
+	if sub.FailureCount < CBThreshold || sub.LastFailureAt == nil {
+		return false
+	}
+	return d.now().Sub(*sub.LastFailureAt) < CBCooldown
 }

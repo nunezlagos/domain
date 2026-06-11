@@ -480,6 +480,11 @@
     "handler": "createOutboundWebhook"
   },
   {
+    "method": "POST",
+    "path": "/api/v1/outbound-webhooks/deliveries/{id}/replay",
+    "handler": "replayOutboundDelivery"
+  },
+  {
     "method": "DELETE",
     "path": "/api/v1/outbound-webhooks/{id}",
     "handler": "deleteOutboundWebhook"

@@ -361,6 +361,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/outbound-webhooks/{id}", a.getOutboundWebhook)
 	mux.HandleFunc("DELETE /api/v1/outbound-webhooks/{id}", a.deleteOutboundWebhook)
 	mux.HandleFunc("POST /api/v1/outbound-webhooks/{id}/test", a.testOutboundWebhook)
+	mux.HandleFunc("POST /api/v1/outbound-webhooks/deliveries/{id}/replay", a.replayOutboundDelivery)
 
 	return mux
 }

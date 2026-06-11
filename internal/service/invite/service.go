@@ -67,12 +67,18 @@ type NopMailer struct{}
 func (NopMailer) Send(ctx context.Context, to, subject, body string) error { return nil }
 
 // Service expone API de invitaciones.
+// EventEmitter publica eventos hacia webhooks outbound (issue-10.4 ow-002).
+type EventEmitter interface {
+	EmitEntityEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any)
+}
+
 type Service struct {
 	Pool       *pgxpool.Pool
 	Audit      audit.Recorder
 	Mailer     Mailer
 	AcceptURL  string // base URL del frontend de aceptación
 	Now        func() time.Time
+	Events     EventEmitter // nil = sin webhooks
 }
 
 func (s *Service) now() time.Time {
@@ -123,6 +129,13 @@ func (s *Service) Create(ctx context.Context, orgID, invitedByUserID uuid.UUID, 
 			EntityType:     "invitation",
 			EntityID:       &inv.ID,
 			NewValues:      map[string]any{"email": email, "role": role},
+		})
+	}
+	// issue-10.4 ow-002: webhook outbound (sin email — PII per security.md)
+	if s.Events != nil {
+		s.Events.EmitEntityEvent(ctx, orgID, "invite.created", map[string]any{
+			"invitation_id": inv.ID,
+			"role":          role,
 		})
 	}
 	return &inv, nil

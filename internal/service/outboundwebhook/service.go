@@ -37,6 +37,7 @@ var AllowedEvents = map[string]bool{
 	"flow_run.failed":      true,
 	"observation.created":  true,
 	"invitation.accepted":  true,
+	"invite.created":       true,
 	"webhook.test_ping":    true,
 	"usage.alert_fired":    true,
 }

@@ -86,6 +86,26 @@ func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUI
 	}
 }
 
+// EmitEntityEvent emite un evento genérico de entidad (ow-002:
+// observation.created, invite.created, etc.). Best-effort.
+func (e *RunnerEmitter) EmitEntityEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	ev := Event{
+		ID:         uuid.New(),
+		Type:       eventType,
+		OccurredAt: time.Now().UTC(),
+		Data:       raw,
+	}
+	if err := e.Dispatcher.Emit(ctx, orgID, ev); err != nil && e.Logger != nil {
+		e.Logger.WarnContext(ctx, "entity event emit failed",
+			slog.String("event_type", eventType),
+			slog.String("error", err.Error()))
+	}
+}
+
 func (e *RunnerEmitter) EmitFlowRunFinished(ctx context.Context, orgID, runID uuid.UUID, flowSlug, status string) {
 	eventType := "flow_run.completed"
 	if status != "completed" {

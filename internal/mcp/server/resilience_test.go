@@ -107,3 +107,117 @@ func TestSabotage_RateLimitWindow_Compacts(t *testing.T) {
 	state.mu.Unlock()
 	require.LessOrEqual(t, windowSize, 3)
 }
+
+func failHandler(calls *atomic.Int64) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		calls.Add(1)
+		return nil, errors.New("invalid input: boom")
+	}
+}
+
+func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
+	r := NewResilientWrapper(ToolBudget{CBThreshold: 3, CBCooldown: time.Hour})
+	var calls atomic.Int64
+	wrapped := r.Wrap("cb_tool", failHandler(&calls))
+
+	// 3 fallos consecutivos → breaker abre
+	for i := 0; i < 3; i++ {
+		_, err := wrapped(context.Background(), mcp.CallToolRequest{})
+		require.Error(t, err)
+	}
+	// 4ta call: circuit open, handler NO se invoca
+	result, err := wrapped(context.Background(), mcp.CallToolRequest{})
+	require.NoError(t, err)
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "circuit open")
+	require.EqualValues(t, 3, calls.Load(), "handler no debe invocarse con breaker abierto")
+}
+
+func TestCircuitBreaker_HalfOpenRecovery(t *testing.T) {
+	r := NewResilientWrapper(ToolBudget{CBThreshold: 2, CBCooldown: time.Minute})
+	base := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	current := base
+	r.now = func() time.Time { return current }
+
+	var fails, oks atomic.Int64
+	failing := true
+	h := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if failing {
+			fails.Add(1)
+			return nil, errors.New("invalid input: boom")
+		}
+		oks.Add(1)
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
+	}
+	wrapped := r.Wrap("cb_recover", h)
+
+	// Abrir breaker
+	for i := 0; i < 2; i++ {
+		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+	}
+	result, _ := wrapped(context.Background(), mcp.CallToolRequest{})
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "circuit open")
+
+	// Avanzar reloj pasado el cooldown → half-open: la call pasa y el éxito resetea
+	current = base.Add(2 * time.Minute)
+	failing = false
+	result, err := wrapped(context.Background(), mcp.CallToolRequest{})
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+	require.EqualValues(t, 1, oks.Load())
+
+	// Breaker reseteado: siguientes calls pasan normal
+	result, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+	require.False(t, result.IsError)
+}
+
+func TestCircuitBreaker_HalfOpenFailureReopens(t *testing.T) {
+	r := NewResilientWrapper(ToolBudget{CBThreshold: 2, CBCooldown: time.Minute})
+	base := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	current := base
+	r.now = func() time.Time { return current }
+
+	var calls atomic.Int64
+	wrapped := r.Wrap("cb_reopen", failHandler(&calls))
+
+	for i := 0; i < 2; i++ {
+		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+	}
+	// Half-open trial falla → re-abre con UN solo fallo
+	current = base.Add(2 * time.Minute)
+	_, err := wrapped(context.Background(), mcp.CallToolRequest{})
+	require.Error(t, err)
+	require.EqualValues(t, 3, calls.Load())
+
+	result, _ := wrapped(context.Background(), mcp.CallToolRequest{})
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "circuit open")
+	require.EqualValues(t, 3, calls.Load(), "re-abierto: handler no se invoca")
+}
+
+// Sabotaje: un éxito intercalado resetea el contador — el breaker NUNCA debe
+// abrir si los fallos no son consecutivos.
+func TestSabotage_CircuitBreaker_NonConsecutiveFailuresDontOpen(t *testing.T) {
+	r := NewResilientWrapper(ToolBudget{CBThreshold: 3, CBCooldown: time.Hour})
+	var calls atomic.Int64
+	fail := true
+	h := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		calls.Add(1)
+		if fail {
+			return nil, errors.New("invalid input: boom")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
+	}
+	wrapped := r.Wrap("cb_mixed", h)
+
+	// fallo, fallo, ÉXITO, fallo, fallo, ÉXITO — nunca 3 consecutivos
+	for i := 0; i < 2; i++ {
+		fail = true
+		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+		fail = false
+		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
+	}
+	require.EqualValues(t, 6, calls.Load(), "breaker jamás debió abrir")
+}

@@ -1,6 +1,6 @@
 status: implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-11
 archived: ~
 notes: |
   internal/mcp/server/resilience.go ResilientWrapper.
@@ -29,9 +29,17 @@ notes: |
   - SetBudget per-tool override default
   - sabotaje: window compacts (no leak de timestamps)
 
-  Pending:
-  - Persistir rate limit state en Redis para multi-pod (horizontal scale)
-  - Métricas Prometheus: domain_mcp_tool_calls_total / rate_limit_total
-  - Distinct budget per org (no global) — actualmente shared entre orgs
-  - Circuit breaker tipo per-tool (5 fails seguidos → open 30s)
-  - Cliente recibe Retry-After header con sugerencia de espera
+  Cerrado 2026-06-11:
+  - Circuit breaker per-tool: cbState con CBThreshold fallos consecutivos →
+    open por CBCooldown; half-open implícito (fallo en half-open re-abre
+    directo, éxito resetea). Clock inyectable (r.now) para tests.
+  - defaultBudget ahora incluye CB(threshold 5, cooldown 30s); mutations ídem.
+  - Tests: OpensAfterThreshold (handler no invocado), HalfOpenRecovery,
+    HalfOpenFailureReopens + sabotaje NonConsecutiveFailuresDontOpen.
+
+  Diferido (decisión MCP-first 2026-06-10, ver tasks.md):
+  - mcp_tool_configs en BD + LISTEN/NOTIFY reload + seed + endpoint admin
+    (binario stdio de sesión única; budgets en código alcanzan)
+  - Cache LRU + degraded responses
+  - Métricas Prometheus / tracing (stdio sin endpoint /metrics)
+  - Rate limit multi-pod en Redis / budget per-org

@@ -25,6 +25,8 @@ type ToolBudget struct {
 	CallsPerMinute int           // 0 = unlimited
 	MaxRetries     int           // default 0 (sin retry)
 	RetryBackoff   time.Duration // default 100ms
+	CBThreshold    int           // fallos consecutivos para abrir el breaker; 0 = sin CB
+	CBCooldown     time.Duration // tiempo abierto antes de half-open; default 30s
 }
 
 // rateState tracking interno per-tool.
@@ -53,19 +55,53 @@ func (s *rateState) allow(maxPerMin int) bool {
 	return true
 }
 
-// ResilientWrapper agrega budget + retry a un mcpgo.ToolHandlerFunc.
+// cbState circuit breaker per-tool: tras CBThreshold fallos consecutivos
+// se abre por CBCooldown. Pasado el cooldown entra en half-open implícito:
+// la siguiente call pasa; si falla re-abre de inmediato, si funciona resetea.
+type cbState struct {
+	mu          sync.Mutex
+	consecutive int
+	openUntil   time.Time
+}
+
+func (s *cbState) allow(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !now.Before(s.openUntil)
+}
+
+func (s *cbState) record(failure bool, threshold int, cooldown time.Duration, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !failure {
+		s.consecutive = 0
+		s.openUntil = time.Time{}
+		return
+	}
+	s.consecutive++
+	// No se resetea consecutive al abrir: un fallo en half-open re-abre directo.
+	if s.consecutive >= threshold {
+		s.openUntil = now.Add(cooldown)
+	}
+}
+
+// ResilientWrapper agrega budget + retry + circuit breaker a un mcpgo.ToolHandlerFunc.
 type ResilientWrapper struct {
 	mu       sync.Mutex
 	states   map[string]*rateState
+	cbs      map[string]*cbState
 	budgets  map[string]ToolBudget
 	defaults ToolBudget
+	now      func() time.Time
 }
 
 func NewResilientWrapper(defaults ToolBudget) *ResilientWrapper {
 	return &ResilientWrapper{
 		states:   map[string]*rateState{},
+		cbs:      map[string]*cbState{},
 		budgets:  map[string]ToolBudget{},
 		defaults: defaults,
+		now:      time.Now,
 	}
 }
 
@@ -96,10 +132,32 @@ func (r *ResilientWrapper) budget(toolName string) ToolBudget {
 	return r.defaults
 }
 
+func (r *ResilientWrapper) breaker(toolName string) *cbState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s, ok := r.cbs[toolName]; ok {
+		return s
+	}
+	s := &cbState{}
+	r.cbs[toolName] = s
+	return s
+}
+
 // Wrap envuelve un handler con rate limiting + retry.
 func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		b := r.budget(toolName)
+
+		// Circuit breaker check (fail-fast sin invocar handler)
+		var cb *cbState
+		if b.CBThreshold > 0 {
+			cb = r.breaker(toolName)
+			if !cb.allow(r.now()) {
+				return mcp.NewToolResultError(
+					fmt.Sprintf("circuit open for tool '%s': too many consecutive failures, retry later",
+						toolName)), nil
+			}
+		}
 
 		// Rate limit check
 		if b.CallsPerMinute > 0 {
@@ -110,39 +168,53 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-		// Retry con backoff exponencial
-		maxRetries := b.MaxRetries
-		backoff := b.RetryBackoff
-		if backoff == 0 {
-			backoff = 100 * time.Millisecond
-		}
+		result, err := execWithRetry(ctx, b, handler, req)
 
-		var lastResult *mcp.CallToolResult
-		var lastErr error
-		for attempt := 0; attempt <= maxRetries; attempt++ {
-			if attempt > 0 {
-				select {
-				case <-ctx.Done():
-					return mcp.NewToolResultError("canceled"), nil
-				case <-time.After(backoff):
-				}
-				backoff *= 2
+		if cb != nil {
+			cooldown := b.CBCooldown
+			if cooldown == 0 {
+				cooldown = 30 * time.Second
 			}
-			result, err := handler(ctx, req)
-			lastResult, lastErr = result, err
-			if err == nil && (result == nil || !result.IsError) {
-				return result, nil
-			}
-			// Transient error? (connection reset, deadline, timeout)
-			if err != nil && !isTransient(err) {
-				return result, err
-			}
-			if result != nil && result.IsError && !isTransientResult(result) {
-				return result, err
-			}
+			failure := err != nil || (result != nil && result.IsError)
+			cb.record(failure, b.CBThreshold, cooldown, r.now())
 		}
-		return lastResult, lastErr
+		return result, err
 	}
+}
+
+// execWithRetry corre el handler con retry + backoff exponencial para
+// errores transitorios.
+func execWithRetry(ctx context.Context, b ToolBudget, handler mcpgo.ToolHandlerFunc, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	backoff := b.RetryBackoff
+	if backoff == 0 {
+		backoff = 100 * time.Millisecond
+	}
+
+	var lastResult *mcp.CallToolResult
+	var lastErr error
+	for attempt := 0; attempt <= b.MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return mcp.NewToolResultError("canceled"), nil
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+		}
+		result, err := handler(ctx, req)
+		lastResult, lastErr = result, err
+		if err == nil && (result == nil || !result.IsError) {
+			return result, nil
+		}
+		// Transient error? (connection reset, deadline, timeout)
+		if err != nil && !isTransient(err) {
+			return result, err
+		}
+		if result != nil && result.IsError && !isTransientResult(result) {
+			return result, err
+		}
+	}
+	return lastResult, lastErr
 }
 
 // isTransient detecta errores que tiene sentido reintentar.

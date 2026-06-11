@@ -82,6 +82,8 @@ var defaultBudget = ToolBudget{
 	CallsPerMinute: 120,
 	MaxRetries:     1,
 	RetryBackoff:   100 * time.Millisecond,
+	CBThreshold:    5,
+	CBCooldown:     30 * time.Second,
 }
 
 // Tools construye la lista de mcpgo.ServerTool del proyecto (todos prefijo
@@ -101,7 +103,10 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		"domain_sync_register_provider", "domain_sync_register_push",
 		"domain_sync_mark_drift", "domain_sync_mark_resolved",
 	} {
-		wrap.SetBudget(mutTool, ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: 100 * time.Millisecond})
+		wrap.SetBudget(mutTool, ToolBudget{
+			CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: 100 * time.Millisecond,
+			CBThreshold: 5, CBCooldown: 30 * time.Second,
+		})
 	}
 	tools := []mcpgo.ServerTool{
 		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", deps.handleMemSave)},

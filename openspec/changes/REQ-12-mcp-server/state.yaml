@@ -7,4 +7,4 @@ hus:
   12.3-mcp-agent-tools: implemented
   12.4-mcp-bidirectional: partially_implemented
   12.5-agent-setup: implemented
-  12.6-mcp-tool-resilience: partially_implemented
+  12.6-mcp-tool-resilience: implemented

@@ -245,6 +245,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/flows/{id}", a.updateFlow)
 	mux.HandleFunc("PUT /api/v1/flows/{id}", a.replaceFlow)
 	mux.HandleFunc("GET /api/v1/flows/{id}/export", a.exportFlow)
+	mux.HandleFunc("GET /api/v1/flows/{id}/parents", a.listFlowParents)
 	mux.HandleFunc("POST /api/v1/flows/import", a.importFlow)
 	mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow)
 	mux.HandleFunc("POST /api/v1/flows/{id}/run", a.runFlow)

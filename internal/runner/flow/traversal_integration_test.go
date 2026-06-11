@@ -104,6 +104,63 @@ func TestFlow_ParallelDiamond(t *testing.T) {
 	require.Len(t, results, 2, "ambas branches del diamante deben producir resultado")
 }
 
+// Lineage de sub-flows (issue-09.5): el run hijo persiste parent_run_id,
+// ancestor_slugs y depth; ListParents encuentra al padre por spec.
+func TestSubFlow_LineagePersisted(t *testing.T) {
+	f, cleanup := setup(t)
+	defer cleanup()
+	ctx := context.Background()
+	mkSkill(t, f, "lin-sub-skill")
+
+	_, err := f.flows.Create(ctx, flow.CreateInput{
+		OrganizationID: f.orgID, Slug: "lineage-child", Name: "Child",
+		Spec: flow.Spec{Version: 1, Steps: []flow.Step{
+			{ID: "c1", Type: flow.StepTypeSkillRun,
+				Config: map[string]any{"skill_slug": "lin-sub-skill", "args": map[string]any{}}},
+		}},
+		ActorID: f.userID,
+	})
+	require.NoError(t, err)
+
+	parent, err := f.flows.Create(ctx, flow.CreateInput{
+		OrganizationID: f.orgID, Slug: "lineage-parent", Name: "Parent",
+		Spec: flow.Spec{Version: 1, Steps: []flow.Step{
+			{ID: "p1", Type: flow.StepTypeSubFlow,
+				Config: map[string]any{"flow_slug": "lineage-child"}},
+		}},
+		ActorID: f.userID,
+	})
+	require.NoError(t, err)
+
+	res, err := f.runner.Run(ctx, flowrunner.RunInput{FlowID: parent.ID, TriggeredBy: &f.userID})
+	require.NoError(t, err)
+	require.Equal(t, flowrunner.StatusCompleted, res.Status)
+
+	// Run hijo con lineage completo
+	var parentRunID *string
+	var ancestors []string
+	var depth int
+	require.NoError(t, f.runner.Pool.QueryRow(ctx, `
+		SELECT parent_run_id::text, ancestor_slugs, depth
+		FROM flow_runs WHERE trigger_type = 'subflow' ORDER BY created_at DESC LIMIT 1`,
+	).Scan(&parentRunID, &ancestors, &depth))
+	require.NotNil(t, parentRunID)
+	require.Equal(t, res.RunID.String(), *parentRunID)
+	require.Equal(t, []string{"lineage-parent"}, ancestors)
+	require.Equal(t, 1, depth)
+
+	// ListParents: el padre referencia al hijo
+	parents, err := f.flows.ListParents(ctx, f.orgID, "lineage-child")
+	require.NoError(t, err)
+	require.Len(t, parents, 1)
+	require.Equal(t, "lineage-parent", parents[0].Slug)
+
+	// Un flow sin padres → vacío
+	none, err := f.flows.ListParents(ctx, f.orgID, "lineage-parent")
+	require.NoError(t, err)
+	require.Empty(t, none)
+}
+
 // Cancel en medio de step: un wait largo se cancela vía CancelRun y el run
 // termina cancelled/failed sin completar el step.
 func TestFlow_CancelMidStep(t *testing.T) {

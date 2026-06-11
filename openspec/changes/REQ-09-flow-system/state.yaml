@@ -9,7 +9,7 @@ hus:
   09.2-step-types: implemented
   09.3-flow-state-machine: implemented
   09.4-retry-error-handling: partially_implemented
-  09.5-subflows-composition: partially_implemented
+  09.5-subflows-composition: implemented
   09.6-durable-execution: implemented
   09.7-workflow-versioning: implemented
   09.8-external-signals: implemented

@@ -200,6 +200,11 @@
     "handler": "exportFlow"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/flows/{id}/parents",
+    "handler": "listFlowParents"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/flows/{id}/run",
     "handler": "runFlow"

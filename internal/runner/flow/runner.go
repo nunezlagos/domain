@@ -168,14 +168,26 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		versionID = &pinned.ID
 	}
 
+	// issue-09.5: lineage de sub-flows (parent_run_id, ancestor_slugs, depth)
+	var parentRunID *uuid.UUID
+	ancestorSlugs := []string{}
+	depth := 0
+	if lin, ok := ctx.Value(runLineageKey{}).(*runLineage); ok && lin != nil {
+		parentRunID = &lin.RunID
+		ancestorSlugs = lin.Slugs
+		depth = lin.Depth + 1
+	}
+
 	now := time.Now().UTC()
 	var runID uuid.UUID
 	err = r.Pool.QueryRow(ctx,
 		`INSERT INTO flow_runs
-		   (organization_id, flow_id, triggered_by, trigger_type, status, inputs, started_at, flow_version_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		   (organization_id, flow_id, triggered_by, trigger_type, status, inputs, started_at,
+		    flow_version_id, parent_run_id, ancestor_slugs, depth)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING id`,
-		f.OrganizationID, f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now, versionID,
+		f.OrganizationID, f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now,
+		versionID, parentRunID, ancestorSlugs, depth,
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create flow_run: %w", err)
@@ -183,6 +195,9 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 
 	// Crear context cancelable para pause/cancel externo
 	runCtx, runCancel := context.WithCancel(ctx)
+	// Lineage para hijos lanzados desde este run (issue-09.5)
+	runCtx = context.WithValue(runCtx, runLineageKey{},
+		&runLineage{RunID: runID, Slugs: append(append([]string{}, ancestorSlugs...), f.Slug), Depth: depth})
 	r.trackRun(runID, runCancel)
 	defer r.untrackRun(runID)
 	defer runCancel()
@@ -514,7 +529,21 @@ func (r *Runner) setRunStatus(ctx context.Context, runID uuid.UUID, status strin
 // referencias circulares (issue-09.5 escenario 6).
 type subflowCtxKey struct{}
 
-const maxSubflowDepth = 10
+// runLineageKey propaga la identidad del run padre a los sub-flows que
+// lanza, para persistir parent_run_id/ancestor_slugs/depth (issue-09.5).
+type runLineageKey struct{}
+
+type runLineage struct {
+	RunID uuid.UUID
+	Slugs []string // ancestros + slug propio
+	Depth int
+}
+
+// maxSubflowDepth — máximo 5 niveles de anidamiento (spec issue-09.5).
+const maxSubflowDepth = 5
+
+// maxSubflowOutputBytes limita el output que un sub-flow devuelve al padre.
+const maxSubflowOutputBytes = 1 << 20 // 1MB
 
 // execSubFlow ejecuta un flow anidado como step.
 //
@@ -568,6 +597,10 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 			"status":      res.Status,
 			"error":       res.Error,
 		}, fmt.Errorf("sub-flow %q ended with status %s: %s", flowSlug, res.Status, res.Error)
+	}
+	// issue-09.5: cap del output devuelto al padre (1MB)
+	if raw, err := json.Marshal(res.Outputs); err == nil && len(raw) > maxSubflowOutputBytes {
+		return nil, fmt.Errorf("sub-flow %q output exceeds %d bytes (validation)", flowSlug, maxSubflowOutputBytes)
 	}
 	return map[string]any{
 		"flow_run_id": res.RunID,

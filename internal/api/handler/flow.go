@@ -420,6 +420,41 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GET /api/v1/flows/{id}/parents — issue-09.5: flows que usan este flow
+// como sub_flow.
+func (a *API) listFlowParents(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	f, err := a.FlowService.GetByID(r.Context(), id)
+	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	parents, err := a.FlowService.ListParents(r.Context(), orgID, f.Slug)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "parents", err.Error())
+		return
+	}
+	out := make([]map[string]any, 0, len(parents))
+	for _, pf := range parents {
+		out = append(out, map[string]any{"id": pf.ID, "slug": pf.Slug, "name": pf.Name})
+	}
+	writeData(w, http.StatusOK, out)
+}
+
 const maxImportBytes = 1 << 20 // 1MB (issue-09.1)
 
 // POST /api/v1/flows/import — issue-09.1. Acepta JSON o YAML según

@@ -321,6 +321,38 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, limit int) ([]Flow,
 	return out, rows.Err()
 }
 
+// ListParents devuelve los flows de la org que referencian a slug como
+// sub_flow en su spec (issue-09.5, GET /flows/:id/parents).
+func (s *Service) ListParents(ctx context.Context, orgID uuid.UUID, slug string) ([]Flow, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, organization_id, slug, name, COALESCE(description,''),
+		       spec, is_active, deterministic_replay, seed_managed, seed_version,
+		       is_user_modified, created_at, updated_at
+		FROM flows
+		WHERE organization_id = $1 AND deleted_at IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM jsonb_array_elements(spec->'steps') st
+			WHERE st->>'type' = 'sub_flow'
+			  AND st->'config'->>'flow_slug' = $2
+		  )
+		ORDER BY slug ASC`, orgID, slug)
+	if err != nil {
+		return nil, fmt.Errorf("list parents: %w", err)
+	}
+	defer rows.Close()
+	var out []Flow
+	for rows.Next() {
+		var f Flow
+		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+			&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
+			&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	prev, err := s.GetByID(ctx, id)
 	if err != nil {

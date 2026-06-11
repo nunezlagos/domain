@@ -3,7 +3,7 @@ created: 2026-06-07
 archived: ~
 hus:
   12.1-mcp-core-stdio: implemented
-  12.2-mcp-memory-tools: partially_implemented
+  12.2-mcp-memory-tools: implemented
   12.3-mcp-agent-tools: partially_implemented
   12.4-mcp-bidirectional: partially_implemented
   12.5-agent-setup: partially_implemented

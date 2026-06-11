@@ -125,6 +125,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.handleFlowRun)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
+	tools = append(tools, registerMemoryTools(wrap, deps)...)
 	tools = append(tools, registerHUTools(wrap, deps)...)
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)

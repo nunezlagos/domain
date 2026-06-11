@@ -28,6 +28,7 @@ import (
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
 )
 
 type mcpFixture struct {
@@ -71,6 +72,8 @@ func setupMCP(t *testing.T) *mcpFixture {
 	deps := mcpserver.Deps{
 		Observations: obsS,
 		Projects:     projS,
+		Prompts:      &promptsvc.Service{Pool: pools.App, Audit: rec},
+		Pool:         pools.App,
 		Principal: &apikey.Principal{
 			UserID:         owner.UserID.String(),
 			OrganizationID: org.ID.String(),

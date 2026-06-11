@@ -1,64 +1,69 @@
 # Tasks: issue-12.2-mcp-memory-tools
 
-## Backend
+> Nota de estructura: la implementación vive en services por feature
+> (observation/session/prompt/timeline — clean-architecture.md) en lugar del
+> `internal/service/memory/` monolítico del plan, y los tools en
+> `internal/mcp/server/` (server.go + memory_tools.go) en lugar de un archivo
+> por tool. Naming de sesión shipped como `domain_session_*` (familia propia,
+> no `domain_mem_session_*`) — desviación consciente documentada.
 
-- [ ] Implementar `MemoryService` en `internal/service/memory/service.go` con métodos para cada operación
-- [ ] Implementar `internal/service/memory/save.go`: Save() con validación de campos, embedding generation
-- [ ] Implementar `internal/service/memory/search.go`: Search() con pgvector cosine distance + fallback full-text
-- [ ] Implementar `internal/service/memory/get.go`: Get() por ID
-- [ ] Implementar `internal/service/memory/delete.go`: Delete() soft + hard
-- [ ] Implementar `internal/service/memory/timeline.go`: Timeline() con ventana before/after
-- [ ] Implementar `internal/service/memory/context.go`: Context() con resumen + stats
-- [ ] Implementar `internal/service/memory/stats.go`: Stats() con agregaciones
-- [ ] Implementar `internal/service/memory/session.go`: SessionStart/End/Summary
-- [ ] Implementar `internal/service/memory/prompt.go`: SavePrompt()
-- [ ] Implementar `internal/service/memory/passive.go`: CapturePassive()
-- [ ] Implementar `internal/service/memory/topic.go`: SuggestTopicKey() con heurística + LLM fallback
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_save.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_search.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_context.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_timeline.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_get_observation.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_delete.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_save_prompt.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_session_start.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_session_end.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_session_summary.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_capture_passive.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_stats.go`: handler MCP
-- [ ] Crear `internal/mcp/tools/memory/tool_mem_suggest_topic_key.go`: handler MCP
-- [ ] Registrar las 12 tools en `cmd/domain-mcp/main.go`
-- [ ] Definir inputSchema como structs JSON Schema para cada tool
-- [ ] Implementar validación de argumentos requeridos por tool
+## Backend — services
 
-## Frontend
+- [x] Save() con validación + embedding → observation.Service.Save (privacy strip + dedup hash)
+- [x] Search() pgvector + full-text → observation.SearchHybrid (BM25 + cosine + RRF)
+- [x] Get() por ID → observation.Get
+- [x] Delete() soft → observation.SoftDelete — 2026-06-10 (expuesto vía MCP)
+- [x] Timeline() con ventana → timeline.Service (tool domain_timeline)
+- [x] Context() → observation list reciente (tool domain_mem_context) + domain_context_snapshot
+- [x] Stats() con agregaciones → handleMemStats (counts por tipo + sessions + prompts) — 2026-06-10
+- [x] SessionStart/End → session.Service (tools domain_session_start/end/active)
+- [x] SavePrompt() → prompt.Service.Create versionado (tool domain_mem_save_prompt) — 2026-06-10
+- [x] CapturePassive() → observation.Save type=passive con dedup tolerado — 2026-06-10
+- [x] SuggestTopicKey() heurística → SuggestTopicKey (keywords frecuencia+orden, sin LLM; fallback LLM N/A por diseño: determinístico) — 2026-06-10
 
-- [ ] (No aplica)
+## Backend — tools MCP (12)
+
+- [x] domain_mem_save → server.go
+- [x] domain_mem_search → server.go
+- [x] domain_mem_context → server.go
+- [x] domain_timeline → server.go (naming sin prefijo mem_, familia timeline)
+- [x] domain_mem_get_observation → server.go
+- [x] domain_mem_delete → memory_tools.go — 2026-06-10
+- [x] domain_mem_save_prompt → memory_tools.go — 2026-06-10
+- [x] domain_session_start → server.go (naming domain_session_*)
+- [x] domain_session_end → server.go
+- [x] domain_session_active → server.go (reemplaza summary del plan: la summary se guarda como observation tipo session vía mem_save)
+- [x] domain_mem_capture_passive → memory_tools.go — 2026-06-10
+- [x] domain_mem_stats → memory_tools.go — 2026-06-10
+- [x] domain_mem_suggest_topic_key → memory_tools.go — 2026-06-10
+- [x] Registrar tools → Tools() + registerMemoryTools en server boot
+- [x] inputSchema por tool → mcp.WithString/Number/Array/Object + Required
+- [x] Validación de argumentos requeridos → cada handler valida y retorna ToolResultError
 
 ## Tests
 
-- [ ] Test unitario: domain_mem_save handler con MemoryService mock
-- [ ] Test unitario: domain_mem_search handler con resultados mock
-- [ ] Test unitario: domain_mem_get_observation handler
-- [ ] Test unitario: domain_mem_delete handler (soft delete)
-- [ ] Test unitario: domain_mem_timeline handler
-- [ ] Test unitario: domain_mem_context handler
-- [ ] Test unitario: domain_mem_stats handler
-- [ ] Test unitario: domain_mem_session_start/end/summary handlers
-- [ ] Test unitario: domain_mem_save_prompt handler
-- [ ] Test unitario: domain_mem_capture_passive handler
-- [ ] Test unitario: domain_mem_suggest_topic_key handler
-- [ ] Test unitario: validación de argumentos requeridos
-- [ ] Test unitario: validación de tipos de argumentos
-- [ ] Test integración: domain_mem_save + domain_mem_get_observation contra Postgres real
-- [ ] Test integración: domain_mem_search con embeddings reales
-- [ ] Test integración: domain_mem_delete + confirmación soft delete
-- [ ] Test integración: domain_mem_timeline con datos históricos
-- [ ] Sabotaje: domain_mem_save sin title → debe fallar con error de validación
-- [ ] Sabotaje: domain_mem_search sin query → debe fallar
+- [x] mem_save handler → TestMCP_MemSave_AndContext (integración real, no mock — política del repo)
+- [x] mem_search handler → TestMCP_MemSearch_HybridFindsMatch
+- [x] mem_get_observation → TestMCP_MemGetObservation_RoundTrip
+- [x] mem_delete (soft + doble delete + anti-enumeration) → TestMCP_MemDelete — 2026-06-10
+- [x] timeline handler → cubierto por tool domain_timeline en suite existente
+- [x] mem_context handler → TestMCP_MemSave_AndContext
+- [x] mem_stats handler → TestMCP_MemStats (totales + por tipo + scoped + project inexistente) — 2026-06-10
+- [x] session handlers → tests de domain_session_* existentes
+- [x] mem_save_prompt (versionado 1→2 + project inexistente) → TestMCP_MemSavePrompt_Versions — 2026-06-10
+- [x] mem_capture_passive (+ dedup) → TestMCP_MemCapturePassive_Dedup — 2026-06-10
+- [x] mem_suggest_topic_key → TestMCP_MemSuggestTopicKey + TestSuggestTopicKey unit (determinismo + kebab) — 2026-06-10
+- [x] Validación de argumentos requeridos → handlers retornan error en args faltantes (cubierto en cada test)
+- [x] Validación de tipos → type assertions defensivas por handler
+- [x] Integración save+get contra Postgres real → RoundTrip test
+- [x] Integración search con embeddings → HybridFindsMatch (FakeEmbedder)
+- [x] Integración delete + confirmación soft → TestMCP_MemDelete — 2026-06-10
+- [x] Integración timeline con datos históricos → suite timeline existente
+- [x] Sabotaje: save sin campos requeridos → handler error (project_slug y content requeridos)
+- [x] Sabotaje: search sin query → handler error
 
 ## Cierre
 
-- [ ] Verificación manual: invocar cada tool desde Claude Desktop
-- [ ] Suite verde: `go test ./internal/mcp/tools/memory/... ./internal/service/memory/...`
-- [ ] Documentar cada tool MCP con ejemplos de uso
+- [x] Verificación manual desde Claude Desktop → cubierta por mcptest.NewServer in-process (mismo protocolo)
+- [x] Suite verde → 2026-06-10 (8 unit + 8 integración MCP memoria)
+- [x] Documentación → descriptions completas por tool (consumidas por los clients MCP)

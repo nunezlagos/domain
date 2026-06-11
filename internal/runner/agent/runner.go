@@ -30,6 +30,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
+	budgetmw "nunezlagos/domain/internal/llm/budget"
 	"nunezlagos/domain/internal/llm/registry"
 	"nunezlagos/domain/internal/llm/tokens"
 	"nunezlagos/domain/internal/metrics"
@@ -157,6 +158,30 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create run: %w", err)
+	}
+
+	// issue-07.4: token budget manager — soft warning (80%) + hard limit
+	// (clamp al context size del modelo según registry).
+	if agent.TokenBudget != nil && *agent.TokenBudget > 0 {
+		modelMax := 0
+		if r.Models != nil {
+			if m, merr := r.Models.Get(ctx, agent.Provider, agent.Model); merr == nil && m.ContextSize != nil {
+				modelMax = *m.ContextSize
+			}
+		}
+		hard := int(*agent.TokenBudget)
+		if modelMax > 0 && hard > modelMax {
+			hard = modelMax
+		}
+		if mgr, berr := tokens.NewTokenBudget(hard*80/100, hard, modelMax, tokens.ModeError); berr == nil {
+			mgr.OnSoftLimit = func(used, soft int) {
+				r.appendLog(ctx, runID, 0, "warning", map[string]any{
+					"stage": "token_budget", "message": "soft limit alcanzado",
+					"used": used, "soft": soft,
+				}, 0, 0, 0)
+			}
+			provider = budgetmw.New(provider, mgr)
+		}
 	}
 
 	// Loop completion + tool calls

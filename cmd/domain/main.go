@@ -761,7 +761,7 @@ func runServer() {
 	corsMW := middleware.DefaultCORS()
 	requestLogMW := middleware.RequestLog(logger)
 	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
-	authMW := &apikey.Middleware{Resolver: cachedResolver, Allowlist: handler.AuthAllowlist()}
+	authMW := &apikey.Middleware{Resolver: cachedResolver, Allowlist: handler.AuthAllowlist(), Pool: pools.App}
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
 	idempMW := &middleware.Idempotency{Pool: pools.App}

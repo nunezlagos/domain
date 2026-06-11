@@ -27,7 +27,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -67,16 +69,21 @@ type EventEmitter interface {
 }
 
 type Runner struct {
-	Pool        *pgxpool.Pool
-	Audit       audit.Recorder
-	Flows       *flow.Service
-	Agents      *agentsvc.Service
-	Skills      *skillsvc.Service
+	Pool         *pgxpool.Pool
+	Audit        audit.Recorder
+	Flows        *flow.Service
+	Agents       *agentsvc.Service
+	Skills       *skillsvc.Service
 	Observations *observation.Service
-	AgentRunner *agentrunner.Runner
-	SkillRunner *skillrunner.Runner
-	Emitter     EventEmitter
-	Metrics     *metrics.Registry // nil = no metrics
+	AgentRunner  *agentrunner.Runner
+	SkillRunner  *skillrunner.Runner
+	Emitter      EventEmitter
+	Metrics      *metrics.Registry // nil = no metrics
+	SagaExecutor *flow.SagaExecutor // issue-09.9: compensaciones Saga
+	Snapshots    *flow.SnapshotStore // issue-09.11: snapshots de I/O
+
+	runContexts   map[uuid.UUID]context.CancelFunc
+	runContextsMu sync.Mutex
 }
 
 type RunInput struct {
@@ -93,6 +100,36 @@ type RunResult struct {
 	Error      string
 	StartedAt  time.Time
 	FinishedAt time.Time
+}
+
+// trackRun registra una cancel func para permitir cancelación externa.
+func (r *Runner) trackRun(runID uuid.UUID, cancel context.CancelFunc) {
+	r.runContextsMu.Lock()
+	defer r.runContextsMu.Unlock()
+	if r.runContexts == nil {
+		r.runContexts = make(map[uuid.UUID]context.CancelFunc)
+	}
+	r.runContexts[runID] = cancel
+}
+
+// untrackRun elimina el registro de cancelación externa.
+func (r *Runner) untrackRun(runID uuid.UUID) {
+	r.runContextsMu.Lock()
+	defer r.runContextsMu.Unlock()
+	delete(r.runContexts, runID)
+}
+
+// CancelRun cancela un flow_run en ejecución vía su context.
+// Retorna error si el run no está siendo ejecutado por este worker.
+func (r *Runner) CancelRun(runID uuid.UUID) error {
+	r.runContextsMu.Lock()
+	cancel, ok := r.runContexts[runID]
+	r.runContextsMu.Unlock()
+	if !ok {
+		return fmt.Errorf("run %s is not tracked on this worker", runID)
+	}
+	cancel()
+	return nil
 }
 
 // Run ejecuta el flow síncronamente. Para async/durable usar issue-09.6 worker.
@@ -127,14 +164,31 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		return nil, fmt.Errorf("create flow_run: %w", err)
 	}
 
+	// Crear context cancelable para pause/cancel externo
+	runCtx, runCancel := context.WithCancel(ctx)
+	r.trackRun(runID, runCancel)
+	defer r.untrackRun(runID)
+	defer runCancel()
+
 	stepOutputs := map[string]any{} // step_id → result
 	cursor := map[string]any{}
 	finalErr := ""
+
+	// issue-09.6 heartbeat goroutine
+	heartbeatCancel := StartHeartbeat(ctx, HeartbeatConfig{
+		Interval: 30 * time.Second,
+		Pool:     r.Pool,
+		RunID:    runID,
+		Metrics:  r.Metrics,
+	})
+	defer heartbeatCancel()
 
 	stepByID := map[string]*flow.Step{}
 	for i := range f.Spec.Steps {
 		stepByID[f.Spec.Steps[i].ID] = &f.Spec.Steps[i]
 	}
+
+	completedIDs := []string{}
 
 	// Ejecución secuencial. Loop con jump support.
 	idx := 0
@@ -142,12 +196,19 @@ LOOP:
 	for idx < len(f.Spec.Steps) {
 		step := f.Spec.Steps[idx]
 		cursor["current_step"] = step.ID
+		cursor["completed"] = completedIDs
 		_ = r.persistCursor(ctx, runID, cursor)
 
-		ctxStep := ctx
+		// Check for pause/cancel before executing step
+		if err := runCtx.Err(); err != nil {
+			finalErr = fmt.Sprintf("flow run cancelled: %v", err)
+			break LOOP
+		}
+
+		ctxStep := runCtx
 		if step.TimeoutS > 0 {
 			var cancel context.CancelFunc
-			ctxStep, cancel = context.WithTimeout(ctx, time.Duration(step.TimeoutS)*time.Second)
+			ctxStep, cancel = context.WithTimeout(runCtx, time.Duration(step.TimeoutS)*time.Second)
 			defer cancel()
 		}
 
@@ -215,12 +276,79 @@ LOOP:
 			}
 		}
 		stepOutputs[step.ID] = out
+		completedIDs = append(completedIDs, step.ID)
+		cursor["completed"] = completedIDs
+		_ = r.persistCursor(ctx, runID, cursor)
+		if err := r.persistStepOutput(ctx, runID, step.ID, out, nil); err != nil {
+			slog.Default().Error("persist step output", slog.String("step", step.ID), slog.Any("err", err))
+		}
+		// issue-09.9: registrar compensación si el step declara compensate
+		if step.Compensate != "" && r.SagaExecutor != nil {
+			comp := flow.SagaCompensation{
+				StepKey:       step.ID,
+				CompensateKey: step.Compensate,
+			}
+			if r.SagaExecutor.Store != nil {
+				_ = r.SagaExecutor.Store.RegisterCompensation(ctx, runID, comp)
+			}
+		}
+		// issue-09.11: guardar snapshot del step completado
+		if r.Snapshots != nil {
+			snapID := uuid.New()
+			inputsJSON, _ := json.Marshal(in.Inputs)
+			outputsJSON, _ := json.Marshal(out)
+			snap := &flow.StepSnapshot{
+				ID:         snapID,
+				StepID:     snapID,
+				RunID:      runID,
+				StepKey:    step.ID,
+				Input:      inputsJSON,
+				Output:     outputsJSON,
+				DurationMs: int64(time.Since(now).Milliseconds()),
+				CapturedAt: time.Now().UTC(),
+			}
+			if err := r.Snapshots.SaveSnapshot(ctx, snap, CompressOutput); err != nil {
+				slog.Default().Error("save snapshot", slog.String("step", step.ID), slog.Any("err", err))
+			}
+		}
 		idx++
 	}
 
 	status := StatusCompleted
+	compensationStatus := ""
 	if finalErr != "" {
 		status = StatusFailed
+		// issue-09.9: ejecutar compensaciones Saga en orden inverso
+		if r.SagaExecutor != nil {
+			var plan []flow.SagaCompensation
+			if r.SagaExecutor.Store != nil {
+				plan = r.SagaExecutor.Store.RegisteredCompensations(runID)
+			}
+			if len(plan) == 0 {
+				// Fallback: derivar plan del spec del flow
+				for _, s := range f.Spec.Steps {
+					if s.Compensate != "" {
+						plan = append(plan, flow.SagaCompensation{
+							StepKey:       s.ID,
+							CompensateKey: s.Compensate,
+						})
+					}
+				}
+			}
+			if len(plan) > 0 {
+				err := r.SagaExecutor.ExecuteCompensations(ctx, runID, completedIDs, plan)
+				if err != nil {
+					compensationStatus = "failed_compensation_failed"
+					slog.Default().Error("saga compensation execution failed",
+						slog.String("run_id", runID.String()), slog.Any("err", err))
+				} else {
+					compensationStatus = "failed_compensated"
+				}
+			}
+		}
+	}
+	if compensationStatus != "" {
+		status = compensationStatus
 	}
 	finishedAt := time.Now().UTC()
 	outputsJSON, _ := json.Marshal(stepOutputs)
@@ -600,6 +728,33 @@ func (r *Runner) persistCursor(ctx context.Context, runID uuid.UUID, cursor map[
 		`UPDATE flow_runs SET cursor = $1, last_heartbeat_at = NOW() WHERE id = $2`,
 		raw, runID)
 	return err
+}
+
+// persistStepOutput inserta/actualiza flow_run_steps con el output de un step.
+// issue-09.6: también genera la idempotency key para el step.
+func (r *Runner) persistStepOutput(ctx context.Context, runID uuid.UUID, stepID string, output any, stepErr error) error {
+	outputsJSON, _ := json.Marshal(output)
+	var errStr *string
+	if stepErr != nil {
+		s := stepErr.Error()
+		errStr = &s
+	}
+	compressed, _, _ := CompressOutput(output)
+	idemKey := StepIDempotencyKey(runID, stepID)
+
+	_, err := r.Pool.Exec(ctx, `
+		INSERT INTO flow_run_steps
+			(flow_run_id, step_key, status, inputs, outputs, error, output_compressed,
+			 started_at, completed_at, last_heartbeat_at)
+		VALUES ($1, $2, $3, '{}', $4, $5, $6, NOW(), NOW(), NOW())`,
+		runID, stepID, "completed", outputsJSON, errStr, compressed,
+	)
+	if err != nil {
+		return fmt.Errorf("insert step output: %w", err)
+	}
+
+	_ = idemKey // issue-09.6 de-008: la key está disponible para tracing / downstream
+	return nil
 }
 
 func nullStr(s string) any {

@@ -1,28 +1,19 @@
 status: implemented
 created: 2026-06-07
-implemented: 2026-06-07
+implemented: 2026-06-10
 archived: ~
 notes: |
-  Step types implementados en internal/runner/flow:
-  - agent_run    : delegado a agentrunner.Run
-  - skill_run    : delegado a skillrunner.Execute
-  - mem_save     : Save observation en project
-  - condition    : evalúa op (==|!=) sobre {{inputs.x}}/{{outputs.id.field}}
+  Step types completos en internal/runner/flow/steptypes/ con registry,
+  template resolver (ResolveTemplate + ResolveBarePaths) y timeout por step.
 
-  Step types también implementados:
-  - sub_flow     : issue-09.5 con detección circular + depth max 10
-  - parallel     : branches concurrentes con cancel-on-first-error
-                   (max 32 branches), output {results,errors}
+  Runners: skill_call, llm_call, code_exec (stub REQ-11.1), conditional,
+  parallel (max 32 branches), wait, human_input, agent_run, sub_flow
+  (circular + depth limit), transform (JSONPath + jq).
 
-  Stub explícito ErrStepTypeStub:
-  - http_request : extraer impl del skill api
-  - wait_signal  : issue-09.8 external signals
+  Tests: 70+ unit en steptypes_test.go + integración en
+  runner_integration_test.go. Sabotaje: TestSkillCallRunner_Sabotage_NoValidation.
+  Suite verde 2026-06-10 (937 short + 269 integration).
 
-  Pending:
-  - http_request standalone (reuse skill api code path)
-  - wait_signal con status=paused_awaiting_signal en BD
-  - issue-09.4 retry semantics (step.retries + backoff)
-  - issue-09.9 saga compensation con on_failure forward direction
-  - code_exec (issue-11 sandbox)
-  - human_input (UI integration pending)
-  - transform (JSONata/JMESPath evaluator)
+  Deferred fuera de esta HU:
+  - code_exec real → issue-11.1 sandbox
+  - wait_signal step → issue-09.8 (sig-002)

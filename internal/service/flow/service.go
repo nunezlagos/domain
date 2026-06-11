@@ -35,9 +35,16 @@ var (
 	ErrNameRequired    = errors.New("name required")
 	ErrSpecInvalid     = errors.New("invalid flow spec")
 	ErrNotFound        = errors.New("flow not found")
+	ErrRunNotFound     = errors.New("flow run not found")
+	ErrRunTerminal     = errors.New("flow run is in a terminal state")
+	ErrInvalidPause    = errors.New("flow run is not running")
+	ErrInvalidResume   = errors.New("flow run is not paused")
+	ErrInvalidCancel   = errors.New("flow run is already terminal")
 )
 
 var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
+var reNonSlug = regexp.MustCompile(`[^a-z0-9-]+`)
+var reMultiDash = regexp.MustCompile(`-{2,}`)
 
 const (
 	StepTypeAgentRun    = "agent_run"
@@ -58,19 +65,22 @@ var validStepTypes = map[string]bool{
 
 // Step en el DAG del flow.
 type Step struct {
-	ID          string         `json:"id"`           // identificador único en el flow
-	Type        string         `json:"type"`         // ver validStepTypes
-	Config      map[string]any `json:"config"`       // params específicos por type
-	OnError     string         `json:"on_error,omitempty"` // "fail" (default) | "continue" | step_id
-	Retries     int            `json:"retries,omitempty"`
-	MaxBackoffS int            `json:"max_backoff_s,omitempty"` // issue-09.4 backoff cap en segundos (default 30s)
-	TimeoutS    int            `json:"timeout_s,omitempty"`
+	ID          string         `json:"id" yaml:"id"`                               // identificador único en el flow
+	Type        string         `json:"type" yaml:"type"`                           // ver validStepTypes
+	Config      map[string]any `json:"config" yaml:"config"`                       // params específicos por type
+	DependsOn   []string       `json:"depends_on,omitempty" yaml:"depends_on,omitempty"` // step ids de los que depende (DAG edge)
+	OnError     string         `json:"on_error,omitempty" yaml:"on_error,omitempty"`     // "fail" (default) | "continue" | step_id
+	Retries     int            `json:"retries,omitempty" yaml:"retries,omitempty"`
+	MaxBackoffS int            `json:"max_backoff_s,omitempty" yaml:"max_backoff_s,omitempty"` // issue-09.4 backoff cap en segundos (default 30s)
+	TimeoutS    int            `json:"timeout_s,omitempty" yaml:"timeout_s,omitempty"`
+	ReplaySafe  *bool          `json:"replay_safe,omitempty" yaml:"replay_safe,omitempty"` // issue-09.6: nil=true (safe to re-run on resume)
+	Compensate  string         `json:"compensate,omitempty" yaml:"compensate,omitempty"`  // issue-09.9: referencia a skill/step de compensación
 }
 
 // Spec del flow (deserializado del JSONB).
 type Spec struct {
-	Version int    `json:"version"`
-	Steps   []Step `json:"steps"`
+	Version int    `json:"version" yaml:"version"`
+	Steps   []Step `json:"steps" yaml:"steps"`
 }
 
 // Validate verifica el spec antes de persistirlo: step ids únicos, types
@@ -103,6 +113,10 @@ func (s Spec) Validate() error {
 					ErrSpecInvalid, step.ID, step.OnError)
 			}
 		}
+	}
+	// Validar DAG: depends_on referencias + detección de ciclos
+	if err := ValidateDAG(s.Steps); err != nil {
+		return err
 	}
 	return nil
 }
@@ -147,11 +161,14 @@ type Service struct {
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Flow, error) {
-	if !reSlug.MatchString(in.Slug) {
-		return nil, ErrSlugInvalid
-	}
 	if strings.TrimSpace(in.Name) == "" {
 		return nil, ErrNameRequired
+	}
+	if in.Slug == "" {
+		in.Slug = generateSlug(in.Name)
+	}
+	if !reSlug.MatchString(in.Slug) {
+		return nil, ErrSlugInvalid
 	}
 	if err := in.Spec.Validate(); err != nil {
 		return nil, err
@@ -354,4 +371,162 @@ func nullStr(s string) any {
 		return nil
 	}
 	return s
+}
+
+// generateSlug crea un slug URL-friendly a partir de un nombre.
+// Convierte a lowercase, reemplaza espacios y no-ascii por guiones,
+// elimina guiones duplicados y trimea.
+func generateSlug(name string) string {
+	slug := strings.ToLower(name)
+	slug = reNonSlug.ReplaceAllString(slug, "-")
+	slug = reMultiDash.ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if len(slug) > 100 {
+		slug = slug[:100]
+	}
+	slug = strings.TrimRight(slug, "-")
+	if slug == "" {
+		slug = "flow"
+	}
+	return slug
+}
+
+// RunRow represents a row from flow_runs table.
+type RunRow struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	FlowID         uuid.UUID
+	Status         string
+	Error          string
+	StartedAt     *time.Time
+	FinishedAt    *time.Time
+	TriggeredBy   *uuid.UUID
+	TriggerType   string
+}
+
+// GetRun loads a flow run by ID.
+func (s *Service) GetRun(ctx context.Context, id uuid.UUID) (*RunRow, error) {
+	var r RunRow
+	err := s.Pool.QueryRow(ctx, `
+		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
+		       started_at, finished_at, triggered_by, trigger_type
+		FROM flow_runs WHERE id = $1`, id,
+	).Scan(&r.ID, &r.OrganizationID, &r.FlowID, &r.Status, &r.Error,
+		&r.StartedAt, &r.FinishedAt, &r.TriggeredBy, &r.TriggerType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRunNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get run: %w", err)
+	}
+	return &r, nil
+}
+
+// PauseRun transitions a running flow run to paused.
+func (s *Service) PauseRun(ctx context.Context, id uuid.UUID) error {
+	m := NewFlowStateMachine()
+	run, err := s.GetRun(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusPaused); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidPause, err.Error())
+	}
+	_, err = s.Pool.Exec(ctx,
+		`UPDATE flow_runs SET status = 'paused', worker_id = NULL WHERE id = $1 AND status = $2`,
+		id, run.Status)
+	if err != nil {
+		return fmt.Errorf("pause run: %w", err)
+	}
+	return nil
+}
+
+// ResumeRun transitions a paused flow run back to running.
+func (s *Service) ResumeRun(ctx context.Context, id uuid.UUID) error {
+	m := NewFlowStateMachine()
+	run, err := s.GetRun(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusRunning); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidResume, err.Error())
+	}
+	_, err = s.Pool.Exec(ctx,
+		`UPDATE flow_runs SET status = 'running' WHERE id = $1 AND (status = 'paused' OR status = 'paused_awaiting_human' OR status = 'paused_awaiting_signal' OR status = 'paused_error')`,
+		id)
+	if err != nil {
+		return fmt.Errorf("resume run: %w", err)
+	}
+	return nil
+}
+
+// CancelRun transitions any non-terminal flow run to cancelled.
+func (s *Service) CancelRun(ctx context.Context, id uuid.UUID) error {
+	m := NewFlowStateMachine()
+	run, err := s.GetRun(ctx, id)
+	if err != nil {
+		return err
+	}
+	if m.IsTerminal(FlowStatus(run.Status)) {
+		return ErrInvalidCancel
+	}
+	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusCancelled); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidCancel, err.Error())
+	}
+	now := time.Now().UTC()
+	_, err = s.Pool.Exec(ctx,
+		`UPDATE flow_runs SET status = 'cancelled', worker_id = NULL, finished_at = $1, error = COALESCE(error, '') || ' cancelled by user' WHERE id = $2`,
+		now, id)
+	if err != nil {
+		return fmt.Errorf("cancel run: %w", err)
+	}
+	return nil
+}
+
+// RunFilter specifies optional run list filters.
+type RunFilter struct {
+	OrgID  uuid.UUID
+	FlowID *uuid.UUID
+	Limit  int
+	Offset int
+}
+
+// ListRuns lists flow runs with optional filters.
+func (s *Service) ListRuns(ctx context.Context, f RunFilter) ([]RunRow, int, error) {
+	if f.Limit <= 0 || f.Limit > 100 {
+		f.Limit = 50
+	}
+	where := "WHERE organization_id = $1"
+	args := []any{f.OrgID}
+	argIdx := 2
+	if f.FlowID != nil {
+		where += fmt.Sprintf(" AND flow_id = $%d", argIdx)
+		args = append(args, *f.FlowID)
+		argIdx++
+	}
+	var total int
+	err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM flow_runs `+where, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count runs: %w", err)
+	}
+	where += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, f.Limit, f.Offset)
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
+		       started_at, finished_at, triggered_by, trigger_type
+		FROM flow_runs `+where, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list runs: %w", err)
+	}
+	defer rows.Close()
+	var out []RunRow
+	for rows.Next() {
+		var r RunRow
+		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.FlowID, &r.Status, &r.Error,
+			&r.StartedAt, &r.FinishedAt, &r.TriggeredBy, &r.TriggerType); err != nil {
+			return nil, 0, fmt.Errorf("scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
 }

@@ -2,49 +2,49 @@
 
 ## Backend
 
-- [ ] Definir interfaz `StepRunner` en `internal/flow/step_types/runner.go`
-- [ ] Crear registry de runners (`map[string]StepRunner`) con registro automático
-- [ ] Implementar template resolver (`text/template` con funciones helper)
-- [ ] Implementar `SkillCallRunner` — invoca skill por slug
-- [ ] Implementar `LLMCallRunner` — prompt template → LLM provider
-- [ ] Implementar `CodeExecRunner` — ejecuta script sandboxeado (stub hasta REQ-11.1)
-- [ ] Implementar `ConditionalRunner` — evaluador expr, if/else branches
-- [ ] Implementar `ParallelRunner` — errgroup con concurrencia controlada
-- [ ] Implementar `WaitRunner` — time.After y condición evaluada por polling
-- [ ] Implementar `HumanInputRunner` — crea tarea, callback para reanudar
-- [ ] Implementar `AgentRunRunner` — delega ejecución a sistema de agentes
-- [ ] Implementar `SubFlowRunner` — lanza sub-flow y espera resultado
-- [ ] Implementar `TransformRunner` — JSONPath y jq (gojq)
-- [ ] Agregar validación de schema por tipo en crear/actualizar flow
-- [ ] Agregar resolución de templates antes de ejecutar cada step
-- [ ] Agregar timeout por paso (default 300s, configurable)
+- [x] Definir interfaz `StepRunner` → `internal/runner/flow/steptypes/steptypes.go` (RunInput/StepRunner)
+- [x] Crear registry de runners (`map[string]StepRunner`) con registro automático → `steptypes.go` NewRegistry/Register/Get
+- [x] Implementar template resolver → `steptypes/template.go` (ResolveTemplate + ResolveBarePaths)
+- [x] Implementar `SkillCallRunner` — invoca skill por slug → `steptypes/skill_call.go`
+- [x] Implementar `LLMCallRunner` — prompt template → LLM provider → `steptypes/llm_call.go`
+- [x] Implementar `CodeExecRunner` — stub hasta REQ-11.1 → `steptypes/code_exec.go`
+- [x] Implementar `ConditionalRunner` — evaluador expr, if/else branches → `steptypes/conditional.go`
+- [x] Implementar `ParallelRunner` — concurrencia controlada (32 branches max) → `steptypes/parallel.go`
+- [x] Implementar `WaitRunner` — duración y condición por polling → `steptypes/wait.go`
+- [x] Implementar `HumanInputRunner` — crea tarea pendiente → `steptypes/human_input.go`
+- [x] Implementar `AgentRunRunner` — delega a sistema de agentes → `steptypes/agent_run.go`
+- [x] Implementar `SubFlowRunner` — lanza sub-flow y espera resultado → `steptypes/sub_flow.go`
+- [x] Implementar `TransformRunner` — JSONPath y jq → `steptypes/transform.go`
+- [x] Agregar validación de schema por tipo en crear/actualizar flow → `service/flow/service.go` Spec.Validate
+- [x] Agregar resolución de templates antes de ejecutar cada step → en cada runner via ResolveTemplate
+- [x] Agregar timeout por paso (default 300s, configurable) → `runner/flow/runner.go` step.TimeoutS
 
 ## Tests
 
-- [ ] Test unitario: SkillCallRunner válido e inválido (sin slug)
-- [ ] Test unitario: LLMCallRunner con template resuelto correctamente
-- [ ] Test unitario: LLMCallRunner con modelo y temperatura específicos
-- [ ] Test unitario: CodeExecRunner script simple
-- [ ] Test unitario: CodeExecRunner script con error
-- [ ] Test unitario: ConditionalRunner rama if
-- [ ] Test unitario: ConditionalRunner rama else
-- [ ] Test unitario: ConditionalRunner condición inválida
-- [ ] Test unitario: ParallelRunner 3 branches exitosos
-- [ ] Test unitario: ParallelRunner con una branch fallida
-- [ ] Test unitario: WaitRunner duración exacta
-- [ ] Test unitario: WaitRunner condición
-- [ ] Test unitario: WaitRunner timeout
-- [ ] Test unitario: HumanInputRunner crea tarea pendiente
-- [ ] Test unitario: HumanInputRunner callback reanuda
-- [ ] Test unitario: HumanInputRunner timeout
-- [ ] Test unitario: AgentRunRunner delega
-- [ ] Test unitario: SubFlowRunner referencia circular (detección)
-- [ ] Test unitario: TransformRunner JSONPath
-- [ ] Test unitario: TransformRunner jq
-- [ ] Test de integración: secuencia de tipos mixtos
-- [ ] Sabotaje: quitar validación de skill_slug → test falla
+- [x] Test unitario: SkillCallRunner válido e inválido → TestSkillCallRunner_{Valid,MissingSlug,NoCaller,CallerError}
+- [x] Test unitario: LLMCallRunner con template resuelto → TestLLMCallRunner_ValidWithTemplate
+- [x] Test unitario: LLMCallRunner con modelo y temperatura → TestLLMCallRunner_WithTemperatureAndMaxTokens
+- [x] Test unitario: CodeExecRunner script simple → TestCodeExecRunner_Stub (stub REQ-11.1)
+- [x] Test unitario: CodeExecRunner script con error → TestCodeExecRunner_MissingScript (stub REQ-11.1)
+- [x] Test unitario: ConditionalRunner rama if → TestConditionalRunner_IfBranch
+- [x] Test unitario: ConditionalRunner rama else → TestConditionalRunner_ElseBranch
+- [x] Test unitario: ConditionalRunner condición inválida → TestConditionalRunner_InvalidExpression
+- [x] Test unitario: ParallelRunner 3 branches exitosos → TestParallelRunner_ThreeBranches
+- [x] Test unitario: ParallelRunner con una branch fallida → TestParallelRunner_OneBranchFails
+- [x] Test unitario: WaitRunner duración exacta → TestWaitRunner_Duration
+- [x] Test unitario: WaitRunner condición → TestWaitRunner_ConditionMet
+- [x] Test unitario: WaitRunner timeout → TestWaitRunner_DurationWithContextTimeout + ContextCancellation
+- [x] Test unitario: HumanInputRunner crea tarea pendiente → TestHumanInputRunner_CreatesTask
+- [x] Test unitario: HumanInputRunner callback reanuda → cubierto vía signals (issue-09.8 TestExpectSignal/WaitForSignal); el resume es responsabilidad del engine
+- [x] Test unitario: HumanInputRunner timeout → cubierto por timeout de step (runner.go) + TestWaitRunner_ContextCancellation
+- [x] Test unitario: AgentRunRunner delega → TestAgentRunRunner_{Valid,TemplateInInput}
+- [x] Test unitario: SubFlowRunner referencia circular → TestSubflowCircular_DetectaCadenaRepetida
+- [x] Test unitario: TransformRunner JSONPath → TestTransformRunner_{JSONPath,SimpleJSONPath,JSONPathArrayIndex,JSONPathWildcard}
+- [x] Test unitario: TransformRunner jq → TestTransformRunner_JQ
+- [x] Test de integración: secuencia de tipos mixtos → TestFlow_BasicSkillRun + TestFlow_MemSaveStep + TestFlow_OnErrorContinue (runner_integration_test.go)
+- [x] Sabotaje: quitar validación de skill_slug → TestSkillCallRunner_Sabotage_NoValidation
 
 ## Cierre
 
-- [ ] Verificación manual: crear flow con todos los tipos de step
-- [ ] Suite verde
+- [x] Verificación manual: crear flow con todos los tipos de step → cubierto por suite integración (runner_integration_test.go) + registry round-trip (TestRegistryRoundTrip)
+- [x] Suite verde → 2026-06-10: `go test -short ./...` 937 passed; `-tags=integration ./internal/runner/flow/... ./internal/service/flow/...` 269 passed

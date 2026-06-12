@@ -1,0 +1,10 @@
+status: proposed
+created: 2026-06-12
+priority: media
+estimated_effort: 1 semana
+hus:
+  33.1-rate-limit-per-org: proposed
+  33.2-cost-tracking-soft-alerts: proposed
+  33.3-max-flow-duration-per-org: proposed
+  33.4-quota-snapshot-dashboard-ready: proposed
+relates_to: archived REQ-21-org-billing (sin tiers premium ni Stripe)

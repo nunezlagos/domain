@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Depende de HU-28.1 para los 5 services con repository interfaces.
+  Los services sin repo pueden hacerse en paralelo.

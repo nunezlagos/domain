@@ -1,0 +1,9 @@
+status: proposed
+created: 2026-06-12
+priority: baja
+estimated_effort: 1 semana
+hus:
+  35.1-unified-dispatcher: proposed
+  35.2-skill-model-decision-record: proposed
+  35.3-setup-primary-memory-detect-engram: proposed
+  35.4-runners-coverage-audit: proposed

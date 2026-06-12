@@ -1,0 +1,163 @@
+- generic [active] [ref=e67]:
+  - generic [ref=e68]:
+    - region "Notifications alt+T"
+    - main [ref=e69]:
+      - generic [ref=e70]:
+        - button [ref=e72]:
+          - banner [ref=e73]:
+            - link "Try Mermaid Advanced Editor — OSS users get 10% off with code JS26 Get started" [ref=e75] [cursor=pointer]:
+              - /url: https://mermaid.ai/app/user/billing/checkout?utm_campaign=oss_coupon&utm_medium=banner_ad&utm_source=mermaid_live_editor&coupon=arDfyFT8&tier=plus
+              - generic [ref=e76]: Try Mermaid Advanced Editor — OSS users get 10% off with code JS26
+              - button "Get started" [ref=e77]
+            - button "Dismiss banner" [ref=e78]:
+              - img
+        - navigation [ref=e79]:
+          - generic [ref=e80]:
+            - button [ref=e81]:
+              - img [ref=e82]
+            - img [ref=e84]
+            - link "Mermaid Live Editor" [ref=e87] [cursor=pointer]:
+              - /url: /
+          - generic [ref=e88]:
+            - button [ref=e89]:
+              - button [ref=e90]:
+                - img
+            - separator [ref=e91]
+            - button "History" [ref=e92]:
+              - img
+            - button "Share" [ref=e93]
+            - button "Mermaid Chart Save diagram" [ref=e94]:
+              - link "Mermaid Chart Save diagram" [ref=e96] [cursor=pointer]:
+                - /url: https://mermaid.ai/app/plugin/save?state=pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug&utm_source=mermaid_live_editor&utm_medium=save_diagram
+                - img "Mermaid Chart" [ref=e97]
+                - text: Save diagram
+        - generic [ref=e100]:
+          - generic [ref=e102]:
+            - generic [ref=e103]:
+              - toolbar [ref=e104] [cursor=pointer]:
+                - list [ref=e106]:
+                  - tab "Code" [ref=e107]:
+                    - img
+                    - text: Code
+                  - separator [ref=e109]
+                  - tab "Config" [ref=e110]:
+                    - img
+                    - text: Config
+                - link "Docs" [ref=e111]:
+                  - /url: https://mermaid.js.org/syntax/flowchart.html
+                  - img
+                  - text: Docs
+              - code [ref=e116]:
+                - generic [ref=e117]:
+                  - textbox "Editor content"
+                  - textbox [ref=e118]
+                  - generic [ref=e121]:
+                    - generic [ref=e122]:
+                      - generic [ref=e123] [cursor=pointer]: 
+                      - generic [ref=e124]: "1"
+                    - generic [ref=e126]: "2"
+                    - generic [ref=e128]: "3"
+                    - generic [ref=e130]: "4"
+                    - generic [ref=e132]: "5"
+                    - generic [ref=e134]: "6"
+                    - generic [ref=e137]: "7"
+                  - generic [ref=e152]:
+                    - generic [ref=e154]: flowchart TD
+                    - generic [ref=e156]: A[Christmas] -->|Get money| B(Go shopping)
+                    - generic [ref=e158]: "B --> C{Let me think}"
+                    - generic [ref=e160]: C -->|One| D[Laptop]
+                    - generic [ref=e162]: C -->|Two| E[iPhone]
+                    - generic [ref=e164]: C -->|Three| F[fa:fa-car Car]
+            - generic [ref=e167]:
+              - generic [ref=e168]:
+                - toolbar [ref=e169] [cursor=pointer]:
+                  - menubar [ref=e170]:
+                    - img [ref=e171]
+                    - text: Sample Diagrams
+                  - img [ref=e173]
+                - generic [ref=e176]:
+                  - button "Flowchart" [ref=e178]
+                  - button "Class" [ref=e180]
+                  - button "Sequence" [ref=e182]
+                  - button "Entity Relationship" [ref=e184]
+                  - button "State" [ref=e186]
+                  - button "Mindmap" [ref=e188]
+                  - button "Architecture" [ref=e190]
+                  - button "Block" [ref=e192]
+                  - button "C4" [ref=e194]
+                  - button "Gantt" [ref=e196]
+                  - button "Git" [ref=e198]
+                  - button "Ishikawa" [ref=e200]
+                  - button "Kanban" [ref=e202]
+                  - button "Packet" [ref=e204]
+                  - button "Pie" [ref=e206]
+                  - button "Quadrant" [ref=e208]
+                  - button "Radar" [ref=e210]
+                  - button "Requirement" [ref=e212]
+                  - button "Sankey" [ref=e214]
+                  - button "Timeline" [ref=e216]
+                  - button "TreeView" [ref=e218]
+                  - button "Treemap" [ref=e220]
+                  - button "User Journey" [ref=e222]
+                  - button "Venn" [ref=e224]
+                  - generic [ref=e225]:
+                    - button "Wardley Maps" [ref=e226]
+                    - button "Choose a Wardley Maps example" [ref=e227]:
+                      - img
+                  - button "XY" [ref=e229]
+                  - button "ZenUML" [ref=e231]
+              - toolbar [ref=e233] [cursor=pointer]:
+                - menubar [ref=e234]:
+                  - img [ref=e235]
+                  - text: Actions
+          - separator [ref=e237]
+          - generic [ref=e238]:
+            - document [ref=e241]:
+              - generic [ref=e244]:
+                - generic [ref=e248]:
+                  - paragraph [ref=e254]: Get money
+                  - paragraph [ref=e260]: One
+                  - paragraph [ref=e266]: Two
+                  - paragraph [ref=e272]: Three
+                - generic [ref=e273]:
+                  - paragraph [ref=e280]: Christmas
+                  - paragraph [ref=e287]: Go shopping
+                  - paragraph [ref=e294]: Let me think
+                  - paragraph [ref=e301]: Laptop
+                  - paragraph [ref=e308]: iPhone
+                  - paragraph [ref=e315]: Car
+            - button "Mermaid Chart Edit with voice" [ref=e318]:
+              - link "Mermaid Chart Edit with voice" [ref=e320] [cursor=pointer]:
+                - /url: https://mermaid.ai/app/plugin/save?state=pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug&utm_source=mermaid_live_editor&utm_medium=voice_edit&utm_campaign=voice_1
+                - img "Mermaid Chart" [ref=e321]
+                - text: Edit
+                - generic [ref=e322]: with voice
+            - generic [ref=e324]:
+              - button "Reset view" [ref=e325]:
+                - img
+              - separator [ref=e326]
+              - button [ref=e327]:
+                - img
+              - button [ref=e328]:
+                - img
+              - separator [ref=e329]
+              - link "Full Screen" [ref=e330] [cursor=pointer]:
+                - /url: /view#pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug
+                - img
+            - generic [ref=e332]:
+              - generic [ref=e333]: v11.15.0
+              - button "Privacy & Security" [ref=e334]:
+                - button [ref=e335]:
+                  - img
+              - separator [ref=e336]
+              - button "Switch to dark theme" [ref=e337]:
+                - generic [ref=e339]:
+                  - img
+            - generic [ref=e341]:
+              - button "Hand-Drawn" [ref=e342]:
+                - img
+              - button "Background Grid" [pressed] [ref=e343]:
+                - img
+  - generic [ref=e345]:
+    - alert
+    - alert

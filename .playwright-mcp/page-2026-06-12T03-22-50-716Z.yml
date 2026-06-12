@@ -1,0 +1,1 @@
+- generic [ref=e2]: "Unknown serde type: sequenceDiagram participant H as HTTP Handler participant S as Service hoy participant S2 as Service manana participant R as Repository participant PG as pgRepository participant DB as Postgres Note over H,DB"

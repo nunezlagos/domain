@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Pendiente de implementar. Primera HU del REQ-28 por ser prerequisito
+  de las demás (HU-28.2, HU-28.3 se benefician de tener interfaces).

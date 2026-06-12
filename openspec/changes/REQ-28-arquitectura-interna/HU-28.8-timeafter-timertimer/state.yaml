@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Zero cambio de comportamiento. Solo optimización de memoria.
+  Más relevante bajo alta carga de fallos de LLM.

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="750" viewBox="0 0 800 750">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#64748b"/>
+    </marker>
+    <filter id="sh">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <rect width="800" height="750" fill="#f8fafc"/>
+
+  <!-- ===== TRIAGE SECTION ===== -->
+  <text x="20" y="25" fill="#94a3b8" font-size="12" font-family="sans-serif" font-weight="bold">TRIAGE</text>
+  <line x1="20" y1="30" x2="780" y2="30" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Incoming Request -->
+  <rect x="300" y="45" width="200" height="40" rx="8" fill="#e2e8f0" stroke="#64748b" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="70" text-anchor="middle" fill="#1e293b" font-size="14" font-family="sans-serif" font-weight="bold">Incoming Request</text>
+  <line x1="400" y1="85" x2="400" y2="110" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Triage diamond -->
+  <polygon points="400,110 530,150 400,190 270,150" fill="#fef9c3" stroke="#ca8a04" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="147" text-anchor="middle" fill="#854d0e" font-size="12" font-family="sans-serif" font-weight="bold">Triage</text>
+  <text x="400" y="161" text-anchor="middle" fill="#854d0e" font-size="11" font-family="sans-serif">? Tipo</text>
+
+  <!-- 4 branches from triage -->
+  <!-- Fix - leftmost -->
+  <line x1="270" y1="150" x2="100" y2="150" stroke="#64748b" stroke-width="2"/>
+  <line x1="100" y1="150" x2="100" y2="185" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="185" y="145" text-anchor="middle" fill="#64748b" font-size="11" font-family="sans-serif">Fix</text>
+  <rect x="20" y="185" width="160" height="36" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="2" filter="url(#sh)"/>
+  <text x="100" y="208" text-anchor="middle" fill="#dc2626" font-size="12" font-family="sans-serif" font-weight="bold">Bugfix</text>
+
+  <!-- Feature - center-left -->
+  <line x1="350" y1="190" x2="350" y2="215" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="370" y="208" text-anchor="middle" fill="#64748b" font-size="11" font-family="sans-serif">Feature</text>
+  <rect x="265" y="215" width="170" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <text x="350" y="238" text-anchor="middle" fill="#1d4ed8" font-size="12" font-family="sans-serif" font-weight="bold">Nueva Funcionalidad</text>
+
+  <!-- Refactor - center-right -->
+  <line x1="450" y1="190" x2="450" y2="215" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="430" y="208" text-anchor="middle" fill="#64748b" font-size="11" font-family="sans-serif">Refactor</text>
+  <rect x="365" y="215" width="170" height="36" rx="6" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" filter="url(#sh)"/>
+  <text x="450" y="238" text-anchor="middle" fill="#4338ca" font-size="12" font-family="sans-serif" font-weight="bold">Mejora / Refactor</text>
+
+  <!-- Chore - rightmost -->
+  <line x1="530" y1="150" x2="700" y2="150" stroke="#64748b" stroke-width="2"/>
+  <line x1="700" y1="150" x2="700" y2="185" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="615" y="145" text-anchor="middle" fill="#64748b" font-size="11" font-family="sans-serif">Chore</text>
+  <rect x="620" y="185" width="160" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="2" filter="url(#sh)"/>
+  <text x="700" y="208" text-anchor="middle" fill="#9333ea" font-size="12" font-family="sans-serif" font-weight="bold">Mantenimiento</text>
+
+  <!-- All 4 converge to "Refinar Issue" -->
+  <!-- Bugfix -->
+  <line x1="100" y1="221" x2="100" y2="280" stroke="#64748b" stroke-width="2"/>
+  <line x1="100" y1="280" x2="400" y2="280" stroke="#64748b" stroke-width="2"/>
+  <!-- Feature -->
+  <line x1="350" y1="251" x2="350" y2="280" stroke="#64748b" stroke-width="2"/>
+  <!-- Refactor -->
+  <line x1="450" y1="251" x2="450" y2="280" stroke="#64748b" stroke-width="2"/>
+  <!-- Chore -->
+  <line x1="700" y1="221" x2="700" y2="280" stroke="#64748b" stroke-width="2"/>
+  <line x1="700" y1="280" x2="400" y2="280" stroke="#64748b" stroke-width="2"/>
+  <line x1="400" y1="280" x2="400" y2="295" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- ===== TRACKING SECTION ===== -->
+  <text x="20" y="325" fill="#94a3b8" font-size="12" font-family="sans-serif" font-weight="bold">TRACKING</text>
+  <line x1="20" y1="330" x2="780" y2="330" stroke="#e2e8f0" stroke-width="1"/>
+
+  <rect x="300" y="295" width="200" height="40" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="320" text-anchor="middle" fill="#1d4ed8" font-size="13" font-family="sans-serif" font-weight="bold">Refinar Issue</text>
+
+  <line x1="400" y1="335" x2="400" y2="360" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="300" y="360" width="200" height="40" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="385" text-anchor="middle" fill="#1d4ed8" font-size="13" font-family="sans-serif" font-weight="bold">Crear Issue (Mirror)</text>
+
+  <line x1="400" y1="400" x2="400" y2="425" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="300" y="425" width="200" height="40" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="450" text-anchor="middle" fill="#1d4ed8" font-size="13" font-family="sans-serif" font-weight="bold">Jira + Estimación</text>
+
+  <line x1="400" y1="465" x2="400" y2="490" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="300" y="490" width="200" height="40" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="515" text-anchor="middle" fill="#1d4ed8" font-size="13" font-family="sans-serif" font-weight="bold">HU + Gherkin</text>
+
+  <!-- Cross-section arrow -->
+  <line x1="400" y1="530" x2="400" y2="560" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- ===== CONSTRUCCIÓN SECTION ===== -->
+  <text x="20" y="575" fill="#94a3b8" font-size="12" font-family="sans-serif" font-weight="bold">CONSTRUCCIÓN</text>
+  <line x1="20" y1="580" x2="780" y2="580" stroke="#e2e8f0" stroke-width="1"/>
+
+  <rect x="300" y="560" width="200" height="40" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="585" text-anchor="middle" fill="#15803d" font-size="13" font-family="sans-serif" font-weight="bold">SDD / Hard Spec</text>
+
+  <line x1="400" y1="600" x2="400" y2="625" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="300" y="625" width="200" height="40" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="2" filter="url(#sh)"/>
+  <text x="400" y="650" text-anchor="middle" fill="#15803d" font-size="13" font-family="sans-serif" font-weight="bold">TDD + Implementar</text>
+
+</svg>

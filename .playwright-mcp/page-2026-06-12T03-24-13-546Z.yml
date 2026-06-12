@@ -1,0 +1,5 @@
+- generic [active] [ref=e1]:
+  - heading "HU-28.1 — Strangler Fig Repository" [level=1] [ref=e2]
+  - img "Strangler Fig" [ref=e3]
+  - heading "HU-28.3 — Middleware Principal + Cross-org" [level=1] [ref=e4]
+  - img "Middleware Principal" [ref=e5]

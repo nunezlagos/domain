@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Cambio mínimo (1 línea efectiva). Puede cambiar comportamiento de prod:
+  breakers pueden abrirse antes porque ahora detectan errores mid-stream.
+  Eso es correcto pero monitorear después del deploy.

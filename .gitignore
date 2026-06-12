@@ -21,12 +21,22 @@ profile.out
 .env
 .env.local
 .env.*.local
+.env.bak.*
 *.local
 *.pem
 *.key
 *.crt
 /secrets/
 !/secrets/.gitkeep
+
+# Configs de agentes generadas por `domain setup` — son LOCALES del
+# usuario (paths absolutos de su home; .mcp.json puede llevar API key).
+# Commitearlas rompe el git pull del clon del instalador (untracked
+# local vs tracked en origin) y puede filtrar secretos.
+opencode.json
+opencode.json.backup-*
+.mcp.json
+.mcp.json.backup-*
 
 # IDE / Editor
 .idea/

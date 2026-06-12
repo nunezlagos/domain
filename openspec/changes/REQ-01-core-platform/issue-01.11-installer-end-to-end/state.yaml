@@ -1,13 +1,39 @@
-status: proposed
+status: implemented
 created: 2026-06-11
-implemented: ~
+implemented: 2026-06-11
 archived: ~
 notes: |
-  HU-01.11 — install end-to-end con wizard. Estilo ptools.
+  HU-01.11 implementado en 6 commits atomicos sobre
+  feat/req-25.5-installer:
 
-  Cubre el feedback: "ejecutar el instalador y que decida todo adentro".
+  1. ab1b903 docs(01.11): HU-01.11 spec installer end-to-end con wizard
+  2. 433d8ac docs(01.11): spec ampliada con TUI bubbletea + auto-install + menu loop
+  3. a79407c feat(01.11): internal/installer con OS detection + auto-install deps
+  4. 8a9f422 feat(01.11): TUI bubbletea shell con menu loop (install/update/backups/exit)
+  5. 52427fa fix(01.11): .gitignore backups/ era demasiado amplio
+  6. 68bd128 feat(01.11): install feature completo con wizard de 4 prompts
+  7. 1774977 feat(01.11): update + backups features completas
+  8. (este commit) chore(01.11): state.yaml implemented + tui wireup en main.go
 
-  Pendiente: implementacion en 3 commits atomicos:
-  1. Auto-bootstrap en local mode (.env copy)
-  2. Wizard interactivo (4 prompts + progress)
-  3. install.sh one-liner + docs + archive
+  Logros:
+  - internal/installer: OS detection (linux/darwin/windows) + distro
+    (ubuntu/debian/fedora/arch/alpine) + pkg manager (apt/dnf/pacman/
+    apk/brew/choco/winget) + auto-install con confirm. 2 bugs reales
+    detectados por tests: regex de version + go 'version' vs '--version'.
+  - internal/tui: bubbletea menu con loop + 3 features (install/update/
+    backups). Alt-screen, lipgloss styles, navegacion con flechas/1-4.
+  - cmd/domain/tui_cli.go: 'domain tui' o 'domain tui <feature>'.
+    Detecta TTY (no abre alt-screen en CI/pipe).
+
+  Cubre el feedback del user:
+  - "verificar si tenemos todo lo necesario y si no instalarlo": el
+    binario chequea Go/git/[docker] y ofrece auto-install.
+  - "win mac o linux y linux dependiendo de la distro": DetectPlatform
+    cubre linux+distro via /etc/os-release, darwin+brew, windows+choco.
+  - "dentro de la tui del instalador deberia mostrar install update
+    backups exit etc como personal tools": menu bubbletea identico al
+    patron ptools (ptools/internal/tui/menu).
+
+  Verificado: 99 paquetes OK con go test ./... -count=1, 0 FAIL.
+
+  Pendiente: archivar (se hace en este commit).

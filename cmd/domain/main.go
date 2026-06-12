@@ -154,6 +154,10 @@ func main() {
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
+	case "tui":
+		// Lanza TUI bubbletea con menu (install/update/backups/exit).
+		// Tambien accesible como 'domain' (sin args) → printUsage + tui.
+		os.Exit(runTUI(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "comando no implementado: %s\n", os.Args[1])
 		printUsage()

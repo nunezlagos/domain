@@ -26,8 +26,9 @@ const (
 	stateFeature
 )
 
-// BackMsg enviado por features para volver al menu.
-type BackMsg struct{}
+// BackMsg es un alias para menu.BackMsg (mantiene compatibilidad
+// con callers que ya lo importan desde app).
+type BackMsg = menu.BackMsg
 
 // ExitMsg enviado cuando el user elige Exit.
 type ExitMsg struct{}

@@ -27,6 +27,11 @@ type SelectMsg struct {
 	Index int
 }
 
+// BackMsg enviado por features para volver al menu.
+// Vive aca (en menu) para evitar import cycle: features lo importan
+// y app tambien (app.go importa menu.go).
+type BackMsg struct{}
+
 // item es un item del menu (interno).
 type item struct {
 	title string

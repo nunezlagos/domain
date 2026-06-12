@@ -82,15 +82,19 @@ func runInstall(args []string) int {
 	}
 
 	// 2b. Bootstrap .env (HU-01.13). Si .env falta y .env.example
-	// existe, lo copiamos. Asi, el siguiente config.Load() no falla
-	// por "DOMAIN_DATABASE_URL is required".
+	// existe, lo copiamos. Ademas, lo cargamos al environment
+	// (porque el binario no tiene dotenv loader).
 	progress.StartStep("Bootstrap .env")
 	if err := ensureLocalEnvFile(); err != nil {
 		progress.EndStep(StepFailed, err.Error())
 		progress.Summary()
 		return 1
 	}
-	progress.EndStep(StepOK, ".env present")
+	if err := loadEnvFile(".env"); err != nil {
+		progress.EndStep(StepWarning, "could not load .env: "+err.Error())
+	} else {
+		progress.EndStep(StepOK, ".env present and loaded")
+	}
 
 	// 3. Migrate
 	cfg, err := config.Load()
@@ -246,6 +250,40 @@ func ensureLocalEnvFile() error {
 	}
 	if err := os.WriteFile(".env", data, 0o600); err != nil {
 		return fmt.Errorf("write .env: %w", err)
+	}
+	return nil
+}
+
+// loadEnvFile parsea un archivo .env y setea las variables en el
+// environment del proceso. Implementacion minima: KEY=VALUE por
+// linea, ignora comentarios (#) y lineas vacias. NO soporta
+// quoting/escape (es suficiente para .env.example de domain).
+//
+// Esto evita depender de godotenv o similar. Si el archivo tiene
+// cosas raras, las ignora silenciosamente.
+func loadEnvFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		// Strip surrounding quotes si los tiene
+		val = strings.Trim(val, `"'`)
+		// NO pisar env vars que ya existen (el user podria haber
+		// seteado algo en su shell que queremos respetar).
+		if os.Getenv(key) == "" {
+			_ = os.Setenv(key, val)
+		}
 	}
 	return nil
 }

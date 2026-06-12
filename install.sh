@@ -67,8 +67,11 @@ fi
 # === Build ===
 step "Compilando"
 mkdir -p "$INSTALL_DIR"
-(cd "$SRC_DIR" && go build -o "$INSTALL_DIR/$BINARY" ./cmd/domain) || die "go build fallo"
+(cd "$SRC_DIR" && go build -o "$INSTALL_DIR/$BINARY" ./cmd/domain) || die "go build domain fallo"
 ok "Binario en $INSTALL_DIR/$BINARY"
+# Tambien compilamos domain-mcp (MCP server que el agente opencode usa).
+(cd "$SRC_DIR" && go build -o "$INSTALL_DIR/${BINARY}-mcp" ./cmd/domain-mcp) || die "go build domain-mcp fallo"
+ok "Binario en $INSTALL_DIR/${BINARY}-mcp"
 
 # === PATH warning ===
 case ":$PATH:" in
@@ -80,4 +83,5 @@ echo ""
 echo -e "  ${GREEN}${BOLD}Listo.${RESET} Ejecuta: ${BOLD}$BINARY${RESET}"
 echo -e "  TUI (install/update/backups): $BINARY tui"
 echo -e "  CLI no-interactivo: $BINARY install --mode local --non-interactive"
+echo -e "  MCP server (para opencode/claude): $INSTALL_DIR/${BINARY}-mcp"
 echo ""

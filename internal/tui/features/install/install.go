@@ -1,23 +1,29 @@
-// Package install — TUI feature para `domain install` (HU-01.11 + 01.13).
+// Package install — TUI feature para `domain install` (HU-01.11 + 01.13,
+// rediseño 2026-06-11: config completa primero, instalación automática
+// verbosa después).
 //
-// Flow con widgets visuales (HU-01.13):
+// Flow:
 //   1. welcome
-//   2. modePrompt: SELECTABLE [X] local / [ ] cloud / [-] hybrid
-//   3. depCheck: go/git/[docker] (segun mode)
-//   4. baseURLPrompt: textinput
-//   5. initPrompt: SELECTABLE [X] yes / [ ] no
-//   6. opencodePrompt: SELECTABLE [X] yes / [ ] no
-//   7. running: install via sub-process con error propagation
-//   8. done
+//   2. modePrompt:   (•) local / ( ) cloud / [-] hybrid  + Continuar
+//   3. depCheck:     resultados de go/git/[docker]; bloquea si falta algo
+//   4. portPrompt:   (local) puerto sugerido libre, editable
+//      dsnPrompt:    (cloud) DSN de Postgres
+//   5. initPrompt:   importar configs .md a la BD  + Continuar
+//   6. agentsPrompt: MULTI [X] opencode / [ ] claude-code + Continuar
+//   7. summary:      toda la config elegida → [ Instalar ]
+//   8. running:      sub-process con output en vivo (verboso)
+//   9. done
 //
-// Cualquier key en done → BackMsg → vuelve al menu.
+// Regla de navegación: enter/espacio ELIGE, nunca avanza. Se avanza con
+// el botón Continuar de cada vista (o enter en inputs de texto).
 
 package install
 
 import (
 	"context"
 	"fmt"
-	"os"
+	"net"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -33,9 +39,11 @@ const (
 	stateWelcome state = iota
 	stateModePrompt
 	stateDepCheck
-	stateBaseURLPrompt
+	statePortPrompt
+	stateDSNPrompt
 	stateInitPrompt
-	stateOpencodePrompt
+	stateAgentsPrompt
+	stateSummary
 	stateRunning
 	stateDone
 )
@@ -61,51 +69,55 @@ func (m modeSel) String() string {
 	return "?"
 }
 
-// Sub-models que la feature integra.
-type subModel interface {
-	Update(tea.Msg) (tea.Model, tea.Cmd)
-	View() string
-	Init() tea.Cmd
-}
+// agentLabels índices del multi-select de agentes.
+var agentLabels = []string{"opencode", "claude-code"}
 
 // Model bubbletea para la feature install.
 type Model struct {
 	state    state
 	platform installer.Platform
 	deps     []installer.CheckResult
-	mode     modeSel
-	baseURL  string
-	doInit   bool
-	doOpencode bool
-	confirm  installer.ConfirmFunc
-	err      error
-	// stderr del sub-process (para error propagation)
+	depsMissing bool
+
+	// Config elegida
+	mode   modeSel
+	port   string
+	dsn    string
+	doInit bool
+	agents []string
+
+	err    error
 	stderr string
-	// sub-models de los prompts
+
+	// Output en vivo del sub-process (running)
+	lines []string
+	runCh chan tea.Msg
+
+	// sub-models
 	modePrompt   selectable.Model
 	initPrompt   selectable.Model
-	opencodePrompt selectable.Model
+	agentsPrompt selectable.Model
 }
 
 func New() *Model {
 	return &Model{
-		state:   stateWelcome,
-		baseURL: "http://localhost:8000",
-		doOpencode: true,
-		confirm: defaultConfirm,
-		modePrompt: selectable.New("Deployment mode", []selectable.Item{
-			{Label: "local", Description: "docker compose (Postgres + S3 + SMTP)"},
-			{Label: "cloud", Description: "bring your own services (DSN)"},
-			{Label: "hybrid", Description: "mix per-service (falls back to local)", Disabled: true},
+		state:  stateWelcome,
+		port:   suggestPort(8000),
+		doInit: true,
+		agents: []string{"opencode"},
+		modePrompt: selectable.New("¿Dónde van a vivir los servicios?", []selectable.Item{
+			{Label: "local", Description: "Todo en esta máquina: Postgres + S3 + SMTP via Docker"},
+			{Label: "cloud", Description: "Servicios existentes: pegás la URL de tu Postgres (DSN)"},
+			{Label: "hybrid", Description: "Mezcla por servicio (todavía no disponible)", Disabled: true},
 		}),
-		initPrompt: selectable.New("Archive .md files to BD (init)?", []selectable.Item{
-			{Label: "yes", Description: "Backup CLAUDE.md, .claude/**, .opencode/** to BD"},
-			{Label: "no", Description: "Skip init step (faster install)"},
+		initPrompt: selectable.New("¿Importar tus configs de agentes a la base de datos?", []selectable.Item{
+			{Label: "sí, importar", Description: "Copia CLAUDE.md, .claude/** y .opencode/** a la BD como respaldo versionado"},
+			{Label: "no, saltear", Description: "Podés hacerlo después con: domain init"},
 		}),
-		opencodePrompt: selectable.New("Configure opencode MCP server?", []selectable.Item{
-			{Label: "yes", Description: "Run 'domain setup opencode' after install"},
-			{Label: "no", Description: "Skip agent setup (configure manually later)"},
-		}),
+		agentsPrompt: selectable.NewMulti("¿En qué agentes instalar el MCP server?", []selectable.Item{
+			{Label: "opencode", Description: "Agrega 'domain' a opencode.json del proyecto"},
+			{Label: "claude-code", Description: "Agrega 'domain' a .mcp.json del proyecto"},
+		}, []int{0}),
 	}
 }
 
@@ -132,6 +144,8 @@ type depsMsg struct {
 	deps []installer.CheckResult
 }
 
+type lineMsg string
+
 type runResultMsg struct {
 	err    error
 	stderr string
@@ -139,10 +153,9 @@ type runResultMsg struct {
 
 // Update implementa tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Si estamos en un sub-prompt, delegamos al sub-model primero.
+	// Sub-prompts: delegar primero.
 	switch m.state {
 	case stateModePrompt:
-		// Detectar SelectMsg del sub-prompt
 		if sel, ok := msg.(selectable.SelectMsg); ok {
 			m.setMode(sel.Index)
 			m.state = stateDepCheck
@@ -151,39 +164,46 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(selectable.CancelMsg); ok {
 			return m, backCmd()
 		}
-		// Delegar el resto de keys al sub-model
 		updated, cmd := m.modePrompt.Update(msg)
 		m.modePrompt = updated.(selectable.Model)
 		return m, cmd
 	case stateInitPrompt:
 		if sel, ok := msg.(selectable.SelectMsg); ok {
 			m.doInit = sel.Index == 0
-			m.state = stateOpencodePrompt
+			m.state = stateAgentsPrompt
 			return m, nil
 		}
 		if _, ok := msg.(selectable.CancelMsg); ok {
-			m.state = stateModePrompt // back to mode
+			if m.mode == modeCloud {
+				m.state = stateDSNPrompt
+			} else {
+				m.state = statePortPrompt
+			}
 			return m, nil
 		}
 		updated, cmd := m.initPrompt.Update(msg)
 		m.initPrompt = updated.(selectable.Model)
 		return m, cmd
-	case stateOpencodePrompt:
-		if sel, ok := msg.(selectable.SelectMsg); ok {
-			m.doOpencode = sel.Index == 0
-			m.state = stateRunning
-			return m, m.runInstallCmd()
-		}
-		if _, ok := msg.(selectable.CancelMsg); ok {
-			m.state = stateInitPrompt // back to init
+	case stateAgentsPrompt:
+		if sel, ok := msg.(selectable.MultiSelectMsg); ok {
+			m.agents = m.agents[:0]
+			for _, idx := range sel.Indices {
+				if idx >= 0 && idx < len(agentLabels) {
+					m.agents = append(m.agents, agentLabels[idx])
+				}
+			}
+			m.state = stateSummary
 			return m, nil
 		}
-		updated, cmd := m.opencodePrompt.Update(msg)
-		m.opencodePrompt = updated.(selectable.Model)
+		if _, ok := msg.(selectable.CancelMsg); ok {
+			m.state = stateInitPrompt
+			return m, nil
+		}
+		updated, cmd := m.agentsPrompt.Update(msg)
+		m.agentsPrompt = updated.(selectable.Model)
 		return m, cmd
 	}
 
-	// Top-level state messages
 	switch msg := msg.(type) {
 	case platformMsg:
 		if msg.err != nil {
@@ -196,8 +216,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case depsMsg:
 		m.deps = msg.deps
-		m.state = stateBaseURLPrompt
+		m.depsMissing = false
+		for _, r := range msg.deps {
+			if !r.Found || (r.Dep.MinVer != "" && !r.MinMet) {
+				m.depsMissing = true
+			}
+		}
 		return m, nil
+	case lineMsg:
+		m.lines = append(m.lines, string(msg))
+		if len(m.lines) > 200 {
+			m.lines = m.lines[len(m.lines)-200:]
+		}
+		return m, waitForRunMsg(m.runCh)
 	case runResultMsg:
 		m.err = msg.err
 		m.stderr = msg.stderr
@@ -215,8 +246,7 @@ func (m *Model) setMode(idx int) {
 		m.mode = modeLocal
 	case 1:
 		m.mode = modeCloud
-	case 2:
-		// hybrid disabled → fallback a local (no deberia llegar aca)
+	default:
 		m.mode = modeLocal
 	}
 }
@@ -232,22 +262,70 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if key == "esc" || key == "q" {
 			return m, backCmd()
 		}
-	case stateBaseURLPrompt:
-		if key == "enter" {
-			if m.baseURL == "" {
-				m.baseURL = "http://localhost:8000"
+	case stateDepCheck:
+		switch key {
+		case "enter", " ":
+			if m.depsMissing {
+				return m, nil // bloqueado hasta instalar la dep
+			}
+			if m.mode == modeCloud {
+				m.state = stateDSNPrompt
+			} else {
+				m.state = statePortPrompt
+			}
+			return m, nil
+		case "esc":
+			m.state = stateModePrompt
+			return m, nil
+		}
+	case statePortPrompt:
+		switch {
+		case key == "enter":
+			if m.port == "" {
+				m.port = suggestPort(8000)
 			}
 			m.state = stateInitPrompt
 			return m, nil
-		}
-		if key == "backspace" {
-			if len(m.baseURL) > 0 {
-				m.baseURL = m.baseURL[:len(m.baseURL)-1]
+		case key == "esc":
+			m.state = stateDepCheck
+			return m, nil
+		case key == "backspace":
+			if len(m.port) > 0 {
+				m.port = m.port[:len(m.port)-1]
 			}
 			return m, nil
+		case len(key) == 1 && key >= "0" && key <= "9" && len(m.port) < 5:
+			m.port += key
+			return m, nil
 		}
-		if len(key) == 1 {
-			m.baseURL += key
+	case stateDSNPrompt:
+		switch {
+		case key == "enter":
+			if strings.TrimSpace(m.dsn) == "" {
+				return m, nil // DSN obligatoria en cloud
+			}
+			m.state = stateInitPrompt
+			return m, nil
+		case key == "esc":
+			m.state = stateDepCheck
+			return m, nil
+		case key == "backspace":
+			if len(m.dsn) > 0 {
+				m.dsn = m.dsn[:len(m.dsn)-1]
+			}
+			return m, nil
+		case len(key) == 1:
+			m.dsn += key
+			return m, nil
+		}
+	case stateSummary:
+		switch key {
+		case "enter":
+			m.state = stateRunning
+			m.lines = nil
+			return m, m.startInstallCmd()
+		case "esc":
+			m.state = stateAgentsPrompt
 			return m, nil
 		}
 	case stateDone:
@@ -265,12 +343,16 @@ func (m *Model) View() string {
 		return m.modePrompt.View()
 	case stateDepCheck:
 		return m.viewDepCheck()
-	case stateBaseURLPrompt:
-		return m.viewBaseURLPrompt()
+	case statePortPrompt:
+		return m.viewPortPrompt()
+	case stateDSNPrompt:
+		return m.viewDSNPrompt()
 	case stateInitPrompt:
 		return m.initPrompt.View()
-	case stateOpencodePrompt:
-		return m.opencodePrompt.View()
+	case stateAgentsPrompt:
+		return m.agentsPrompt.View()
+	case stateSummary:
+		return m.viewSummary()
 	case stateRunning:
 		return m.viewRunning()
 	case stateDone:
@@ -281,62 +363,143 @@ func (m *Model) View() string {
 
 func (m *Model) viewWelcome() string {
 	s := "\n"
-	s += styles.Title.Render("  Domain Install") + "\n"
-	s += styles.ItemDesc.Render("  Press enter to start, esc to go back") + "\n"
-	s += "\n"
-	s += fmt.Sprintf("  Detected: %s/%s (%s)\n", m.platform.OS, m.platform.Distro, m.platform.PkgMgr)
+	s += styles.Title.Render("  Domain Install") + "\n\n"
+	s += styles.ItemDesc.Render("  Primero elegís toda la configuración; al final se instala solo.") + "\n\n"
+	s += fmt.Sprintf("  Detectado: %s\n", styles.Accent.Render(
+		fmt.Sprintf("%s/%s (%s)", m.platform.OS, m.platform.Distro, m.platform.PkgMgr)))
+	s += "\n" + styles.HelpText.Render("  [enter] empezar   [esc] volver al menú") + "\n"
 	return s
 }
 
 func (m *Model) viewDepCheck() string {
-	s := "\n  Checking dependencies...\n\n"
+	s := "\n  " + styles.Title.Render("Dependencias") + "\n\n"
+	if len(m.deps) == 0 {
+		return s + styles.ItemDesc.Render("  Chequeando dependencias...") + "\n"
+	}
 	for _, r := range m.deps {
 		var status string
 		switch {
 		case !r.Found:
-			status = styles.Fail.Render("[ MISSING ]")
+			status = styles.Fail.Render("[✗]")
 		case r.Dep.MinVer != "" && !r.MinMet:
-			status = styles.Warn.Render(fmt.Sprintf("[ %s < %s ]", r.Version, r.Dep.MinVer))
+			status = styles.Warn.Render(fmt.Sprintf("[!] %s < %s", r.Version, r.Dep.MinVer))
 		default:
-			status = styles.Ok.Render("[ ok ]")
+			status = styles.Ok.Render("[✓]")
 		}
 		s += fmt.Sprintf("  %s  %s (%s)\n", status, r.Dep.Name, r.Dep.Binary)
 		if !r.Found && r.Hint != "" {
-			s += fmt.Sprintf("           %s\n", styles.ItemDesc.Render(r.Hint))
+			s += "       " + styles.ItemDesc.Render(r.Hint) + "\n"
 		}
 	}
 	s += "\n"
+	if m.depsMissing {
+		s += styles.Fail.Render("  Faltan dependencias.") +
+			styles.ItemDesc.Render(" Instalalas y volvé a entrar.") + "\n"
+		s += styles.HelpText.Render("  [esc] volver") + "\n"
+	} else {
+		s += "  > " + styles.ButtonFocused.Render("[ Continuar ]") + "\n\n"
+		s += styles.HelpText.Render("  [enter] continuar   [esc] volver") + "\n"
+	}
 	return s
 }
 
-func (m *Model) viewBaseURLPrompt() string {
-	s := "\n  Domain server URL\n"
-	s += fmt.Sprintf("  > %s\n", m.baseURL)
-	s += "\n"
-	s += styles.HelpText.Render("  type to edit, [enter] confirm, [esc] back") + "\n"
+func (m *Model) viewPortPrompt() string {
+	s := "\n  " + styles.Title.Render("Puerto del server") + "\n\n"
+	s += styles.ItemDesc.Render("  El server HTTP de domain escucha en localhost. Sugerimos un") + "\n"
+	s += styles.ItemDesc.Render("  puerto libre (8000 si está disponible).") + "\n\n"
+	s += "  Puerto: " + styles.Accent.Render(m.port) + styles.Prompt.Render("▌") + "\n\n"
+	s += styles.HelpText.Render("  [0-9] editar   [backspace] borrar   [enter] continuar   [esc] volver") + "\n"
+	return s
+}
+
+func (m *Model) viewDSNPrompt() string {
+	s := "\n  " + styles.Title.Render("Base de datos (cloud)") + "\n\n"
+	s += styles.ItemDesc.Render("  Pegá la URL de tu Postgres:") + "\n"
+	s += styles.ItemDesc.Render("  postgres://user:pass@host:5432/domain?sslmode=require") + "\n\n"
+	s += "  DSN: " + styles.Accent.Render(m.dsn) + styles.Prompt.Render("▌") + "\n\n"
+	s += styles.HelpText.Render("  [enter] continuar   [esc] volver") + "\n"
+	return s
+}
+
+func (m *Model) viewSummary() string {
+	yesNo := func(b bool) string {
+		if b {
+			return styles.Ok.Render("sí")
+		}
+		return styles.ItemDesc.Render("no")
+	}
+	agents := strings.Join(m.agents, ", ")
+	if agents == "" {
+		agents = "ninguno"
+	}
+	s := "\n  " + styles.Title.Render("Resumen — revisá antes de instalar") + "\n\n"
+	s += fmt.Sprintf("  Modo:            %s\n", styles.Accent.Render(m.mode.String()))
+	if m.mode == modeCloud {
+		s += fmt.Sprintf("  DSN:             %s\n", styles.Accent.Render(redactDSN(m.dsn)))
+	} else {
+		s += fmt.Sprintf("  Puerto:          %s\n", styles.Accent.Render(m.port))
+	}
+	s += fmt.Sprintf("  Base URL:        %s\n", styles.Accent.Render(m.baseURL()))
+	s += fmt.Sprintf("  Importar .md:    %s\n", yesNo(m.doInit))
+	s += fmt.Sprintf("  Agentes MCP:     %s\n", styles.Accent.Render(agents))
+	s += "\n  > " + styles.ButtonFocused.Render("[ Instalar ]") + "\n\n"
+	s += styles.HelpText.Render("  [enter] instalar   [esc] volver") + "\n"
 	return s
 }
 
 func (m *Model) viewRunning() string {
-	return "\n  Running install (see output)...\n"
+	s := "\n  " + styles.Title.Render("Instalando...") + "\n\n"
+	// Mostrar las últimas líneas del output del sub-process.
+	tail := m.lines
+	const maxShown = 16
+	if len(tail) > maxShown {
+		tail = tail[len(tail)-maxShown:]
+	}
+	for _, line := range tail {
+		s += "  " + styleOutputLine(line) + "\n"
+	}
+	if len(m.lines) == 0 {
+		s += styles.ItemDesc.Render("  arrancando sub-proceso...") + "\n"
+	}
+	return s
+}
+
+// styleOutputLine colorea líneas conocidas del install progress.
+func styleOutputLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	switch {
+	case strings.HasPrefix(trimmed, "✓") || strings.Contains(trimmed, "[ok]"):
+		return styles.Ok.Render(line)
+	case strings.HasPrefix(trimmed, "✗") || strings.Contains(trimmed, "FAIL"):
+		return styles.Fail.Render(line)
+	case strings.HasPrefix(trimmed, "⚠") || strings.Contains(trimmed, "warn"):
+		return styles.Warn.Render(line)
+	default:
+		return styles.ItemDesc.Render(line)
+	}
 }
 
 func (m *Model) viewDone() string {
 	s := "\n"
 	if m.err != nil {
-		s += styles.Fail.Render("  Install failed:") + "\n"
-		s += "\n"
+		s += styles.Fail.Render("  ✗ La instalación falló") + "\n\n"
 		s += "  " + m.err.Error() + "\n"
-		// Si tenemos stderr del sub-process, mostrarlo verbatim
 		if m.stderr != "" {
-			s += "\n"
-			s += styles.ItemDesc.Render("  --- stderr del sub-process ---") + "\n"
+			s += "\n" + styles.ItemDesc.Render("  --- stderr del sub-proceso ---") + "\n"
 			s += m.stderr + "\n"
 		}
 	} else {
-		s += styles.Ok.Render("  Install complete.") + "\n"
+		s += styles.Ok.Render("  ✓ Instalación completa") + "\n\n"
+		// Recap final con el output completo reciente
+		tail := m.lines
+		if len(tail) > 10 {
+			tail = tail[len(tail)-10:]
+		}
+		for _, line := range tail {
+			s += "  " + styles.ItemDesc.Render(line) + "\n"
+		}
 	}
-	s += "\n  Press any key to return to menu.\n"
+	s += "\n" + styles.HelpText.Render("  [cualquier tecla] volver al menú") + "\n"
 	return s
 }
 
@@ -360,34 +523,86 @@ func depsForMode(m modeSel) []installer.Dep {
 	return base
 }
 
-func (m *Model) runInstallCmd() tea.Cmd {
-	mode := m.mode.String()
+// baseURL deriva la URL del server según el modo.
+func (m *Model) baseURL() string {
+	if m.mode == modeCloud {
+		return "http://localhost:8000"
+	}
+	port := m.port
+	if port == "" {
+		port = "8000"
+	}
+	return "http://localhost:" + port
+}
+
+// installFlags arma los flags del sub-process según la config elegida.
+func (m *Model) installFlags() []string {
 	flags := []string{
-		"--mode", mode,
-		"--base-url", m.baseURL,
+		"--mode", m.mode.String(),
+		"--base-url", m.baseURL(),
 		"--non-interactive",
+		"--agents", strings.Join(m.agents, ","),
 	}
 	if !m.doInit {
 		flags = append(flags, "--no-init")
 	}
-	if !m.doOpencode {
-		flags = append(flags, "--no-opencode")
+	if m.mode == modeCloud && m.dsn != "" {
+		flags = append(flags, "--dsn", m.dsn)
 	}
-	return func() tea.Msg {
-		err, stderr := runInstallWithFlags(context.Background(), flags)
-		return runResultMsg{err: err, stderr: stderr}
+	return flags
+}
+
+// startInstallCmd lanza el sub-process con streaming de líneas hacia la TUI.
+func (m *Model) startInstallCmd() tea.Cmd {
+	flags := m.installFlags()
+	ch := make(chan tea.Msg, 64)
+	m.runCh = ch
+	go func() {
+		err, stderr := runInstallStreaming(context.Background(), flags, func(line string) {
+			ch <- lineMsg(line)
+		})
+		ch <- runResultMsg{err: err, stderr: stderr}
+	}()
+	return waitForRunMsg(ch)
+}
+
+// waitForRunMsg espera el próximo mensaje del canal de streaming.
+func waitForRunMsg(ch chan tea.Msg) tea.Cmd {
+	if ch == nil {
+		return nil
 	}
+	return func() tea.Msg { return <-ch }
+}
+
+// suggestPort retorna el primer puerto libre desde start (start..start+20),
+// como string. Si ninguno está libre, retorna start igual.
+func suggestPort(start int) string {
+	for p := start; p < start+20; p++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		if err == nil {
+			_ = ln.Close()
+			return fmt.Sprintf("%d", p)
+		}
+	}
+	return fmt.Sprintf("%d", start)
+}
+
+// redactDSN oculta el password de una DSN para mostrarla en el summary.
+func redactDSN(dsn string) string {
+	at := strings.Index(dsn, "@")
+	scheme := strings.Index(dsn, "://")
+	if at < 0 || scheme < 0 || at < scheme {
+		return dsn
+	}
+	creds := dsn[scheme+3 : at]
+	if colon := strings.Index(creds, ":"); colon >= 0 {
+		return dsn[:scheme+3] + creds[:colon] + ":***" + dsn[at:]
+	}
+	return dsn
 }
 
 // --- helpers ---
 
 func backCmd() tea.Cmd {
 	return func() tea.Msg { return menu.BackMsg{} }
-}
-
-func defaultConfirm(prompt string) bool {
-	fmt.Fprint(os.Stderr, prompt)
-	var resp string
-	fmt.Scanln(&resp)
-	return resp == "" || resp == "y" || resp == "yes"
 }

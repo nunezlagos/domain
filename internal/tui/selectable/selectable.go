@@ -1,16 +1,21 @@
-// Selectable list component (HU-01.13 commit 2/3).
+// Selectable list component (HU-01.13, rediseño 2026-06-11).
 //
-// Reemplaza los prompts [1/2/3] y [y/n] de HU-01.11 con widgets
-// visuales tipo [X] (seleccionado) / [ ] (no seleccionado).
-// El user navega con ↑/↓ y confirma con Enter.
+// Semántica nueva: enter/espacio sobre un item lo SELECCIONA (o togglea
+// en modo multi) pero NO avanza. Para avanzar, el user baja al botón
+// [ Continuar ] y presiona enter ahí. Esto evita avances accidentales
+// con enter en todas las vistas del wizard.
 //
 // Diseño:
 //   - Cursor: >  (a la izquierda del item)
-//   - Item seleccionado: [X] ...texto
-//   - Item no seleccionado: [ ] ...texto
-//   - Items disabled: [-] ...texto (gris, no se puede elegir)
+//   - Single: (•) elegido / ( ) no elegido
+//   - Multi:  [X] marcado / [ ] desmarcado
+//   - Disabled: [-] (gris, no elegible)
+//   - Footer: botón [ Continuar ] (último slot navegable)
 //
-// El callback onSelect se invoca con el index del item elegido.
+// Mensajes emitidos:
+//   - SelectMsg{Index}        al confirmar en Continuar (modo single)
+//   - MultiSelectMsg{Indices} al confirmar en Continuar (modo multi)
+//   - CancelMsg               en esc/q/ctrl+c
 
 package selectable
 
@@ -19,7 +24,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"nunezlagos/domain/internal/tui/styles"
 )
@@ -34,72 +38,131 @@ type Item struct {
 // Model es el bubbletea Model del selectable list.
 type Model struct {
 	items    []Item
-	cursor   int
-	selected int            // -1 si no se ha elegido todavia
-	quitting bool
+	cursor   int // 0..len(items)-1 = items; len(items) = botón Continuar
+	selected int // single: índice elegido
+	checked  []bool
+	multi    bool
 	title    string
 	helpText string
 }
 
-// New crea un Model con los items dados y un titulo.
+// New crea un selectable single-choice. El primer item habilitado queda
+// pre-seleccionado para que Continuar siempre sea válido.
 func New(title string, items []Item) Model {
+	sel := -1
+	for i, it := range items {
+		if !it.Disabled {
+			sel = i
+			break
+		}
+	}
 	return Model{
 		items:    items,
-		cursor:   0,
-		selected: -1,
+		selected: sel,
+		checked:  make([]bool, len(items)),
 		title:    title,
-		helpText: "[↑/↓] move   [enter] select   [esc] cancel",
+		helpText: "[↑/↓] mover   [espacio/enter] elegir   [enter] en Continuar avanza   [esc] volver",
 	}
 }
+
+// NewMulti crea un selectable multi-choice. defaults son los índices
+// pre-marcados.
+func NewMulti(title string, items []Item, defaults []int) Model {
+	m := New(title, items)
+	m.multi = true
+	m.selected = -1
+	for _, idx := range defaults {
+		if idx >= 0 && idx < len(items) && !items[idx].Disabled {
+			m.checked[idx] = true
+		}
+	}
+	m.helpText = "[↑/↓] mover   [espacio/enter] marcar/desmarcar   [enter] en Continuar avanza   [esc] volver"
+	return m
+}
+
+// continueSlot es el índice del botón Continuar en el espacio de cursor.
+func (m Model) continueSlot() int { return len(m.items) }
 
 // Init implementa tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
 
 // Update implementa tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		key := msg.String()
-		// Number keys: jump directo al item
-		if len(key) == 1 && key >= "1" && key <= "9" {
-			n := int(key[0] - '0')
-			if n >= 1 && n <= len(m.items) {
-				idx := n - 1
-				if !m.items[idx].Disabled {
-					m.cursor = idx
-					m.selected = idx
-					return m, func() tea.Msg { return SelectMsg{Index: idx} }
-				}
-				// Disabled: no jump, no select
-				return m, nil
-			}
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	key := keyMsg.String()
+
+	// Number keys: jump + elegir/togglear el item (sin avanzar).
+	if len(key) == 1 && key >= "1" && key <= "9" {
+		n := int(key[0]-'0') - 1
+		if n >= 0 && n < len(m.items) && !m.items[n].Disabled {
+			m.cursor = n
+			m.pick(n)
 		}
-		switch key {
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			} else {
-				m.cursor = len(m.items) - 1 // wrap
-			}
-		case "down", "j":
-			if m.cursor < len(m.items)-1 {
-				m.cursor++
-			} else {
-				m.cursor = 0 // wrap
-			}
-		case "enter":
-			// Skip si el item es disabled
-			if m.items[m.cursor].Disabled {
-				return m, nil
-			}
-			m.selected = m.cursor
-			return m, func() tea.Msg { return SelectMsg{Index: m.cursor} }
-		case "q", "esc", "ctrl+c":
-			m.quitting = true
-			return m, func() tea.Msg { return CancelMsg{} }
+		return m, nil
+	}
+
+	switch key {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		} else {
+			m.cursor = m.continueSlot() // wrap al botón
 		}
+	case "down", "j":
+		if m.cursor < m.continueSlot() {
+			m.cursor++
+		} else {
+			m.cursor = 0 // wrap
+		}
+	case "tab":
+		// Atajo directo al botón Continuar.
+		m.cursor = m.continueSlot()
+	case " ", "space":
+		if m.cursor < len(m.items) {
+			m.pick(m.cursor)
+		}
+	case "enter":
+		if m.cursor == m.continueSlot() {
+			return m, m.confirmCmd()
+		}
+		m.pick(m.cursor)
+	case "q", "esc", "ctrl+c":
+		return m, func() tea.Msg { return CancelMsg{} }
 	}
 	return m, nil
+}
+
+// pick selecciona (single) o togglea (multi) el item idx.
+func (m *Model) pick(idx int) {
+	if idx < 0 || idx >= len(m.items) || m.items[idx].Disabled {
+		return
+	}
+	if m.multi {
+		m.checked[idx] = !m.checked[idx]
+		return
+	}
+	m.selected = idx
+}
+
+// confirmCmd emite el mensaje de confirmación según el modo.
+func (m Model) confirmCmd() tea.Cmd {
+	if m.multi {
+		var indices []int
+		for i, c := range m.checked {
+			if c {
+				indices = append(indices, i)
+			}
+		}
+		return func() tea.Msg { return MultiSelectMsg{Indices: indices} }
+	}
+	if m.selected < 0 {
+		return nil // nada elegido: Continuar no hace nada
+	}
+	idx := m.selected
+	return func() tea.Msg { return SelectMsg{Index: idx} }
 }
 
 // View implementa tea.Model.
@@ -111,39 +174,37 @@ func (m Model) View() string {
 	sb.WriteString("\n\n")
 
 	for i, item := range m.items {
-		cursor := "   "
-		var lineStyle lipgloss.Style
-
+		cursor := "    "
 		if i == m.cursor {
 			cursor = "  > "
-			lineStyle = styles.ItemSelected
-		} else {
-			lineStyle = styles.ItemTitle
 		}
 
-		// Checkbox icon
-		var check string
-		muted := lipgloss.NewStyle().Foreground(styles.Muted)
-		switch {
-		case item.Disabled:
-			check = muted.Render("[-]")
-		case i == m.selected:
-			check = styles.Ok.Render("[X]")
-		default:
-			check = muted.Render("[ ]")
-		}
+		check := m.checkbox(i, item)
 
-		label := lineStyle.Render(fmt.Sprintf("%s %s %s", cursor, check, item.Label))
+		label := fmt.Sprintf("%s%s %s", cursor, check, item.Label)
+		if i == m.cursor {
+			label = fmt.Sprintf("%s%s %s", cursor, check, styles.ItemSelected.Render(" "+item.Label+" "))
+		} else if item.Disabled {
+			label = styles.ItemDesc.Render(label)
+		}
 		sb.WriteString(label)
 		sb.WriteString("\n")
 
-		// Descripcion
 		if item.Description != "" {
-			desc := styles.ItemDesc.Render("      " + item.Description)
-			sb.WriteString(desc)
+			sb.WriteString(styles.ItemDesc.Render("        " + item.Description))
 			sb.WriteString("\n")
 		}
 	}
+
+	// Botón Continuar
+	sb.WriteString("\n")
+	btn := styles.Button.Render("[ Continuar ]")
+	prefix := "    "
+	if m.cursor == m.continueSlot() {
+		btn = styles.ButtonFocused.Render("[ Continuar ]")
+		prefix = "  > "
+	}
+	sb.WriteString(prefix + btn + "\n")
 
 	sb.WriteString("\n")
 	sb.WriteString("  ")
@@ -152,9 +213,35 @@ func (m Model) View() string {
 	return sb.String()
 }
 
-// SelectedIndex retorna el index seleccionado (-1 si no).
-func (m Model) SelectedIndex() int {
-	return m.selected
+// checkbox renderiza el indicador del item según modo y estado.
+func (m Model) checkbox(i int, item Item) string {
+	muted := styles.ItemDesc
+	switch {
+	case item.Disabled:
+		return muted.Render("[-]")
+	case m.multi && m.checked[i]:
+		return styles.Ok.Render("[X]")
+	case m.multi:
+		return muted.Render("[ ]")
+	case i == m.selected:
+		return styles.Ok.Render("(•)")
+	default:
+		return muted.Render("( )")
+	}
+}
+
+// SelectedIndex retorna el index seleccionado (-1 si no). Solo single.
+func (m Model) SelectedIndex() int { return m.selected }
+
+// CheckedIndices retorna los índices marcados (modo multi).
+func (m Model) CheckedIndices() []int {
+	var out []int
+	for i, c := range m.checked {
+		if c {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 // Items retorna los items (defensive copy).
@@ -164,9 +251,14 @@ func (m Model) Items() []Item {
 	return out
 }
 
-// SelectMsg emitido cuando el user elige un item.
+// SelectMsg emitido al confirmar en Continuar (modo single).
 type SelectMsg struct {
 	Index int
+}
+
+// MultiSelectMsg emitido al confirmar en Continuar (modo multi).
+type MultiSelectMsg struct {
+	Indices []int
 }
 
 // CancelMsg emitido cuando el user cancela (esc/q/ctrl+c).

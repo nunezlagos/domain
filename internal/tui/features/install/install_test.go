@@ -1,14 +1,12 @@
-// Tests para internal/tui/features/install (HU-01.11 commit 3/5).
-//
-// Cobertura: state transitions, prompt handling, view format,
-// mock runner. NO ejecutamos install real.
+// Tests para internal/tui/features/install (rediseño 2026-06-11):
+// config completa primero → summary → instalación automática con
+// streaming. NO ejecutamos install real (mock runner).
 
 package install
 
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,12 +16,26 @@ import (
 	"nunezlagos/domain/internal/tui/menu"
 )
 
+func TestUpdate_Done_AnyKeyReturnsToMenu(t *testing.T) {
+	m := New()
+	m.state = stateDone
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	_, isBack := cmd().(menu.BackMsg)
+	require.True(t, isBack)
+}
+
 func TestNew_Defaults(t *testing.T) {
 	m := New()
 	require.Equal(t, stateWelcome, m.state)
-	require.Equal(t, "http://localhost:8000", m.baseURL)
-	require.True(t, m.doOpencode)
-	require.False(t, m.doInit)
+	require.NotEmpty(t, m.port, "puerto sugerido no vacío")
+	require.True(t, m.doInit)
+	require.Equal(t, []string{"opencode"}, m.agents)
+}
+
+func TestSuggestPort_ReturnsNumeric(t *testing.T) {
+	p := suggestPort(8000)
+	require.Regexp(t, `^\d{4,5}$`, p)
 }
 
 func TestUpdate_PlatformMsg_AdvancesToModePrompt(t *testing.T) {
@@ -34,57 +46,225 @@ func TestUpdate_PlatformMsg_AdvancesToModePrompt(t *testing.T) {
 	}})
 	appM := updated.(*Model)
 	require.Equal(t, stateModePrompt, appM.state)
-	require.Nil(t, cmd, "platform detect does not trigger a command")
+	require.Nil(t, cmd)
 }
 
 func TestUpdate_PlatformErr_GoesToDone(t *testing.T) {
 	m := New()
 	updated, _ := m.Update(platformMsg{err: errFake{}})
-	appM := updated.(*Model)
-	require.Equal(t, stateDone, appM.state)
-	require.Error(t, appM.err)
+	require.Equal(t, stateDone, updated.(*Model).state)
+	require.Error(t, updated.(*Model).err)
 }
 
-func TestUpdate_DepsMsg_AdvancesToBaseURLPrompt(t *testing.T) {
-	m := New()
-	m.state = stateDepCheck
-	updated, _ := m.Update(depsMsg{deps: nil})
+// selectMode simula: elegir el item idx y confirmar con Continuar.
+func selectMode(t *testing.T, m *Model, idx int) *Model {
+	t.Helper()
+	// number key elige sin avanzar
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + idx)}})
+	require.Nil(t, cmd, "number key no avanza")
 	appM := updated.(*Model)
-	require.Equal(t, stateBaseURLPrompt, appM.state,
-		"after dep check, advance to baseURL prompt (not mode prompt)")
+	// tab → Continuar, enter → SelectMsg
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyTab})
+	appM = updated.(*Model)
+	updated, cmd = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM = updated.(*Model)
+	require.NotNil(t, cmd, "enter en Continuar emite SelectMsg")
+	updated, _ = appM.Update(cmd())
+	return updated.(*Model)
 }
 
-func TestUpdate_ModePrompt_OneSelectsLocal_GoesToDepCheck(t *testing.T) {
+func TestFlow_ModeLocal_RequiresContinueToAdvance(t *testing.T) {
 	m := New()
 	m.state = stateModePrompt
-	// '1' emite SelectMsg(0) async; ejecutamos el cmd
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
-	appM := updated.(*Model)
-	require.NotNil(t, cmd, "selectable must emit SelectMsg on number key")
-	appM2, _ := appM.Update(cmd())
-	appM = appM2.(*Model)
+	appM := selectMode(t, m, 0)
 	require.Equal(t, modeLocal, appM.mode)
 	require.Equal(t, stateDepCheck, appM.state)
 }
 
-func TestUpdate_ModePrompt_TwoSelectsCloud_GoesToDepCheck(t *testing.T) {
+func TestFlow_ModeCloud_GoesToDSNAfterDeps(t *testing.T) {
 	m := New()
 	m.state = stateModePrompt
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
-	appM := updated.(*Model)
-	require.NotNil(t, cmd)
-	appM2, _ := appM.Update(cmd())
-	appM = appM2.(*Model)
+	appM := selectMode(t, m, 1)
 	require.Equal(t, modeCloud, appM.mode)
 	require.Equal(t, stateDepCheck, appM.state)
+
+	// deps OK → enter → DSN prompt (cloud)
+	updated, _ := appM.Update(depsMsg{deps: nil})
+	appM = updated.(*Model)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, stateDSNPrompt, updated.(*Model).state)
 }
 
-func TestUpdate_ModePrompt_ThreeFallsBackToLocal(t *testing.T) {
+func TestDepCheck_MissingDepBlocksContinue(t *testing.T) {
 	m := New()
-	m.state = stateModePrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m.state = stateDepCheck
+	updated, _ := m.Update(depsMsg{deps: []installer.CheckResult{
+		{Dep: installer.DepDocker, Found: false, Hint: "pacman -S docker"},
+	}})
 	appM := updated.(*Model)
-	require.Equal(t, modeLocal, appM.mode, "hybrid falls back to local")
+	require.True(t, appM.depsMissing)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, stateDepCheck, updated.(*Model).state, "enter bloqueado con deps faltantes")
+}
+
+func TestDepCheck_AllOK_AdvancesToPort(t *testing.T) {
+	m := New()
+	m.mode = modeLocal
+	m.state = stateDepCheck
+	updated, _ := m.Update(depsMsg{deps: []installer.CheckResult{
+		{Dep: installer.DepGo, Found: true, MinMet: true},
+	}})
+	appM := updated.(*Model)
+	require.False(t, appM.depsMissing)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, statePortPrompt, updated.(*Model).state)
+}
+
+func TestPortPrompt_OnlyDigits(t *testing.T) {
+	m := New()
+	m.state = statePortPrompt
+	m.port = ""
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	appM := updated.(*Model)
+	require.Equal(t, "9", appM.port)
+	// Letra: ignorada
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	require.Equal(t, "9", updated.(*Model).port)
+}
+
+func TestPortPrompt_EnterAdvancesToInit(t *testing.T) {
+	m := New()
+	m.state = statePortPrompt
+	m.port = "8123"
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	require.Equal(t, stateInitPrompt, appM.state)
+	require.Equal(t, "http://localhost:8123", appM.baseURL())
+}
+
+func TestDSNPrompt_EmptyDSNDoesNotAdvance(t *testing.T) {
+	m := New()
+	m.mode = modeCloud
+	m.state = stateDSNPrompt
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, stateDSNPrompt, updated.(*Model).state, "DSN vacía no avanza")
+}
+
+func TestInitPrompt_SelectNoViaContinue(t *testing.T) {
+	m := New()
+	m.state = stateInitPrompt
+	// down → "no", espacio elige, tab+enter confirma
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	appM := updated.(*Model)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeySpace})
+	appM = updated.(*Model)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyTab})
+	appM = updated.(*Model)
+	updated, cmd := appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM = updated.(*Model)
+	require.NotNil(t, cmd)
+	updated, _ = appM.Update(cmd())
+	appM = updated.(*Model)
+	require.False(t, appM.doInit)
+	require.Equal(t, stateAgentsPrompt, appM.state)
+}
+
+func TestAgentsPrompt_MultiSelectBoth(t *testing.T) {
+	m := New()
+	m.state = stateAgentsPrompt
+	// opencode ya viene marcado; bajar a claude-code y marcarlo
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	appM := updated.(*Model)
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeySpace})
+	appM = updated.(*Model)
+	// confirmar
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyTab})
+	appM = updated.(*Model)
+	updated, cmd := appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM = updated.(*Model)
+	require.NotNil(t, cmd)
+	updated, _ = appM.Update(cmd())
+	appM = updated.(*Model)
+	require.Equal(t, []string{"opencode", "claude-code"}, appM.agents)
+	require.Equal(t, stateSummary, appM.state)
+}
+
+func TestSummary_EnterStartsInstallWithFlags(t *testing.T) {
+	var gotFlags []string
+	SetInstallRunner(func(ctx context.Context, flags []string, onLine func(string)) (error, string) {
+		gotFlags = flags
+		onLine("[1/9] Detecting state")
+		return nil, ""
+	})
+	defer SetInstallRunner(defaultInstallRunner)
+
+	m := New()
+	m.mode = modeLocal
+	m.port = "8042"
+	m.doInit = false
+	m.agents = []string{"opencode", "claude-code"}
+	m.state = stateSummary
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	require.Equal(t, stateRunning, appM.state)
+	require.NotNil(t, cmd)
+
+	// Drenar mensajes del canal: primero lineMsg, después runResultMsg
+	msg := cmd()
+	for {
+		updated, cmd = appM.Update(msg)
+		appM = updated.(*Model)
+		if appM.state == stateDone {
+			break
+		}
+		require.NotNil(t, cmd, "mientras corre, siempre hay próximo mensaje")
+		msg = cmd()
+	}
+	require.NoError(t, appM.err)
+	require.Contains(t, appM.lines, "[1/9] Detecting state", "output streameado visible")
+
+	require.Contains(t, gotFlags, "--mode")
+	require.Contains(t, gotFlags, "local")
+	require.Contains(t, gotFlags, "--base-url")
+	require.Contains(t, gotFlags, "http://localhost:8042")
+	require.Contains(t, gotFlags, "--agents")
+	require.Contains(t, gotFlags, "opencode,claude-code")
+	require.Contains(t, gotFlags, "--no-init")
+	require.Contains(t, gotFlags, "--non-interactive")
+}
+
+func TestRunning_StderrPropagatedOnFailure(t *testing.T) {
+	SetInstallRunner(func(ctx context.Context, flags []string, onLine func(string)) (error, string) {
+		onLine("[3/9] Applying migrations")
+		return fmt.Errorf("exit status 1"), "config validation: DOMAIN_DATABASE_URL is required"
+	})
+	defer SetInstallRunner(defaultInstallRunner)
+
+	m := New()
+	m.mode = modeLocal
+	m.state = stateSummary
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	msg := cmd()
+	for {
+		updated, cmd = appM.Update(msg)
+		appM = updated.(*Model)
+		if appM.state == stateDone {
+			break
+		}
+		msg = cmd()
+	}
+	require.Error(t, appM.err)
+	require.Equal(t, "config validation: DOMAIN_DATABASE_URL is required", appM.stderr)
+	view := appM.View()
+	require.Contains(t, view, "falló")
+	require.Contains(t, view, "DOMAIN_DATABASE_URL")
+}
+
+func TestRedactDSN(t *testing.T) {
+	require.Equal(t, "postgres://app:***@db:5432/x", redactDSN("postgres://app:secret@db:5432/x"))
+	require.Equal(t, "postgres://db:5432/x", redactDSN("postgres://db:5432/x"))
 }
 
 func TestDepsForMode_LocalIncludesDocker(t *testing.T) {
@@ -95,230 +275,42 @@ func TestDepsForMode_LocalIncludesDocker(t *testing.T) {
 			hasDocker = true
 		}
 	}
-	require.True(t, hasDocker, "local mode must check docker")
+	require.True(t, hasDocker)
 }
 
 func TestDepsForMode_CloudExcludesDocker(t *testing.T) {
-	deps := depsForMode(modeCloud)
-	for _, d := range deps {
-		require.NotEqual(t, "docker", d.Name, "cloud mode must NOT check docker")
+	for _, d := range depsForMode(modeCloud) {
+		require.NotEqual(t, "docker", d.Name)
 	}
-}
-
-func TestDepsForMode_HybridIncludesDocker(t *testing.T) {
-	// Hybrid incluye docker porque al menos 1 servicio sera local.
-	deps := depsForMode(modeHybrid)
-	hasDocker := false
-	for _, d := range deps {
-		if d.Name == "docker" {
-			hasDocker = true
-		}
-	}
-	require.True(t, hasDocker, "hybrid mode must check docker (at least 1 local service)")
-}
-
-func TestUpdate_BaseURLPrompt_TypingAppends(t *testing.T) {
-	m := New()
-	m.state = stateBaseURLPrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
-	appM := updated.(*Model)
-	require.Contains(t, appM.baseURL, "h")
-}
-
-func TestUpdate_BaseURLPrompt_BackspaceDeletes(t *testing.T) {
-	m := New()
-	m.state = stateBaseURLPrompt
-	m.baseURL = "http://x"
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	appM := updated.(*Model)
-	require.Equal(t, "http://", appM.baseURL)
-}
-
-func TestUpdate_BaseURLPrompt_EnterAdvances(t *testing.T) {
-	m := New()
-	m.state = stateBaseURLPrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	appM := updated.(*Model)
-	require.Equal(t, stateInitPrompt, appM.state)
-}
-
-func TestUpdate_InitPrompt_YesSetsTrue(t *testing.T) {
-	m := New()
-	m.state = stateInitPrompt
-	// Enter sobre selectable → emite SelectMsg async; ejecutamos el cmd
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	appM := updated.(*Model)
-	require.NotNil(t, cmd)
-	appM2, _ := appM.Update(cmd())
-	appM = appM2.(*Model)
-	require.True(t, appM.doInit)
-	require.Equal(t, stateOpencodePrompt, appM.state)
-}
-
-func TestUpdate_InitPrompt_NoSetsFalse(t *testing.T) {
-	m := New()
-	m.state = stateInitPrompt
-	// Down para seleccionar "no", luego enter
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	updated, _ = updated.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	appM := updated.(*Model)
-	require.False(t, appM.doInit)
-}
-
-func TestUpdate_OpencodePrompt_YesStartsRun(t *testing.T) {
-	// Mock runner para no ejecutar install real
-	called := false
-	SetInstallRunner(func(ctx context.Context, flags []string) (error, string) {
-		called = true
-		// Verificar flags correctos
-		require.Contains(t, flags, "--mode")
-		require.Contains(t, flags, "local")
-		require.Contains(t, flags, "--non-interactive")
-		return nil, ""
-	})
-	defer SetInstallRunner(defaultInstallRunner) // restore
-
-	m := New()
-	m.mode = modeLocal
-	m.state = stateOpencodePrompt
-	m.doInit = true
-	// Enter selecciona el primer item (yes) del selectable.
-	// Despues del Update, el state sigue en opencodePrompt
-	// (todavia no se proceso el SelectMsg). Necesitamos ejecutar
-	// el cmd retornado y hacer Update de nuevo.
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	appM := updated.(*Model)
-	require.NotNil(t, cmd)
-	// Ejecutar el cmd → SelectMsg → Update de nuevo
-	selectMsg := cmd()
-	appM2, _ := appM.Update(selectMsg); appM = appM2.(*Model)
-	require.Equal(t, stateRunning, appM.state,
-		"after SelectMsg from opencode prompt, must be in stateRunning")
-
-	// Ejecutar el runInstallCmd
-	res, ok := appM.runInstallCmd()().(runResultMsg)
-	require.True(t, ok)
-	require.NoError(t, res.err)
-	require.True(t, called, "runner must be called")
-}
-
-func TestUpdate_OpencodePrompt_StderrPropagated(t *testing.T) {
-	// Mock runner que falla con stderr real (HU-01.13 commit 2/3)
-	SetInstallRunner(func(ctx context.Context, flags []string) (error, string) {
-		return fmt.Errorf("exit status 1"), "config validation: DOMAIN_DATABASE_URL is required"
-	})
-	defer SetInstallRunner(defaultInstallRunner)
-
-	m := New()
-	m.mode = modeLocal
-	m.state = stateOpencodePrompt
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	appM := updated.(*Model)
-	require.NotNil(t, cmd)
-	selectMsg := cmd()
-	appM2, _ := appM.Update(selectMsg); appM = appM2.(*Model)
-	require.Equal(t, stateRunning, appM.state)
-	// Ejecutar runInstallCmd
-	res, ok := appM.runInstallCmd()().(runResultMsg)
-	require.True(t, ok)
-	require.Error(t, res.err)
-	require.Equal(t, "config validation: DOMAIN_DATABASE_URL is required", res.stderr,
-		"stderr should be propagated for error display")
-}
-
-func TestUpdate_RunResult_AdvancesToDone(t *testing.T) {
-	m := New()
-	m.state = stateRunning
-	updated, _ := m.Update(runResultMsg{err: nil})
-	appM := updated.(*Model)
-	require.Equal(t, stateDone, appM.state)
-	require.NoError(t, appM.err)
-}
-
-func TestUpdate_Done_AnyKeyReturnsToMenu(t *testing.T) {
-	m := New()
-	m.state = stateDone
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd)
-	msg := cmd()
-	_, isBack := msg.(menu.BackMsg)
-	require.True(t, isBack)
-}
-
-func TestView_Welcome(t *testing.T) {
-	m := New()
-	view := m.View()
-	require.Contains(t, view, "Domain Install")
-}
-
-func TestView_DepCheck_WithResults(t *testing.T) {
-	m := New()
-	m.state = stateDepCheck
-	// Inyectar deps manualmente (depsFake era inutil; usamos check real
-	// con un binary que SI existe).
-	m.deps = nil // vacio para no importar installer aqui
-	view := m.View()
-	// Sin deps, view deberia decir "Checking dependencies..."
-	require.Contains(t, view, "Checking dependencies")
-}
-
-func TestView_ModePrompt(t *testing.T) {
-	m := New()
-	m.state = stateModePrompt
-	view := m.View()
-	require.Contains(t, view, "local")
-	require.Contains(t, view, "cloud")
-}
-
-func TestView_Done_Success(t *testing.T) {
-	m := New()
-	m.state = stateDone
-	view := m.View()
-	require.Contains(t, view, "Install complete")
-}
-
-func TestView_Done_Failure(t *testing.T) {
-	m := New()
-	m.state = stateDone
-	m.err = errFake{}
-	view := m.View()
-	require.Contains(t, view, "Install failed")
-}
-
-// --- helpers ---
-
-func platformFake() struct {
-	OS, Distro, PkgMgr, Version string
-} {
-	return struct {
-		OS, Distro, PkgMgr, Version string
-	}{OS: "linux", Distro: "arch", PkgMgr: "pacman", Version: "rolling"}
-}
-
-type errFake struct{}
-
-func (errFake) Error() string { return "fake error" }
-
-func depsFake() []struct{} {
-	return nil
 }
 
 func TestView_AllStates_NotEmpty(t *testing.T) {
 	m := New()
 	for _, st := range []state{
-		stateWelcome, stateDepCheck, stateModePrompt,
-		stateBaseURLPrompt, stateInitPrompt, stateOpencodePrompt,
+		stateWelcome, stateModePrompt, stateDepCheck, statePortPrompt,
+		stateDSNPrompt, stateInitPrompt, stateAgentsPrompt, stateSummary,
 		stateRunning, stateDone,
 	} {
 		m.state = st
-		view := m.View()
-		require.NotEmpty(t, view, "view for state %d must not be empty", st)
+		require.NotEmpty(t, m.View(), "view del state %d vacía", st)
 	}
 }
 
-func TestView_ContainsHelpOnPrompts(t *testing.T) {
+func TestView_Summary_ShowsConfig(t *testing.T) {
 	m := New()
-	m.state = stateInitPrompt
+	m.mode = modeLocal
+	m.port = "8005"
+	m.agents = []string{"opencode"}
+	m.state = stateSummary
 	view := m.View()
-	require.True(t, strings.Contains(view, "y") || strings.Contains(view, "Y"))
+	require.Contains(t, view, "local")
+	require.Contains(t, view, "8005")
+	require.Contains(t, view, "opencode")
+	require.Contains(t, view, "Instalar")
 }
+
+// --- helpers ---
+
+type errFake struct{}
+
+func (errFake) Error() string { return "fake error" }

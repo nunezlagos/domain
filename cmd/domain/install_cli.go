@@ -81,6 +81,17 @@ func runInstall(args []string) int {
 		}
 	}
 
+	// 2b. Bootstrap .env (HU-01.13). Si .env falta y .env.example
+	// existe, lo copiamos. Asi, el siguiente config.Load() no falla
+	// por "DOMAIN_DATABASE_URL is required".
+	progress.StartStep("Bootstrap .env")
+	if err := ensureLocalEnvFile(); err != nil {
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
+		return 1
+	}
+	progress.EndStep(StepOK, ".env present")
+
 	// 3. Migrate
 	cfg, err := config.Load()
 	if err != nil {
@@ -210,6 +221,33 @@ func runBackupsCount() (int, int) {
 		}
 	}
 	return backed, skipped
+}
+
+// ensureLocalEnvFile se asegura de que .env exista en el cwd. Si
+// falta y .env.example existe, lo copia. Si falta ambos, error
+// claro: el user probablemente no esta en el root del proyecto.
+//
+// Llamar ANTES de config.Load() para evitar "DOMAIN_DATABASE_URL is
+// required" en fresh installs (HU-01.13).
+func ensureLocalEnvFile() error {
+	// .env ya existe: skip
+	if _, err := os.Stat(".env"); err == nil {
+		return nil
+	}
+	// .env.example no existe: error claro (no estamos en el root del proyecto)
+	if _, err := os.Stat(".env.example"); err != nil {
+		return fmt.Errorf(".env.example not found in current directory; " +
+			"are you in the domain project root? (try: cd ~/.local/share/domain)")
+	}
+	// Copiar .env.example → .env
+	data, err := os.ReadFile(".env.example")
+	if err != nil {
+		return fmt.Errorf("read .env.example: %w", err)
+	}
+	if err := os.WriteFile(".env", data, 0o600); err != nil {
+		return fmt.Errorf("write .env: %w", err)
+	}
+	return nil
 }
 
 // handleDeploymentMode ejecuta el bootstrap del mode seleccionado.

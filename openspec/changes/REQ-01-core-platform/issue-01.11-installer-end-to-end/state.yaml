@@ -1,0 +1,13 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+archived: ~
+notes: |
+  HU-01.11 — install end-to-end con wizard. Estilo ptools.
+
+  Cubre el feedback: "ejecutar el instalador y que decida todo adentro".
+
+  Pendiente: implementacion en 3 commits atomicos:
+  1. Auto-bootstrap en local mode (.env copy)
+  2. Wizard interactivo (4 prompts + progress)
+  3. install.sh one-liner + docs + archive

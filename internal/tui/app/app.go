@@ -101,6 +101,11 @@ func (m Model) updateFeature(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.current = nil
 		return m, nil
 	}
+	// ctrl+c SIEMPRE sale, esté donde esté la feature. Sin esto el user
+	// queda atrapado en features que no manejan la key.
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
 	if m.current == nil {
 		return m, nil
 	}

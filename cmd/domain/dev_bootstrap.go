@@ -115,11 +115,11 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	// 2) Admin user idempotente.
 	var userID string
 	err = pool.QueryRow(ctx,
-		`INSERT INTO users (email, full_name, last_organization_id)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (email) DO UPDATE SET last_organization_id = EXCLUDED.last_organization_id
+		`INSERT INTO users (organization_id, email, name, role)
+		 VALUES ($1, $2, $3, 'owner')
+		 ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner'
 		 RETURNING id`,
-		userEmail, "Admin Local", orgID,
+		orgID, userEmail, "Admin Local",
 	).Scan(&userID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)

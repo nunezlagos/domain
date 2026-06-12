@@ -255,10 +255,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch m.state {
 	case stateWelcome:
-		if key == "enter" || key == " " {
-			m.state = stateModePrompt
-			return m, nil
-		}
 		if key == "esc" || key == "q" {
 			return m, backCmd()
 		}
@@ -361,13 +357,12 @@ func (m *Model) View() string {
 	return ""
 }
 
+// viewWelcome es transitoria: detectPlatformCmd resuelve en ms y pasa
+// directo al modePrompt ("pum, entramos al instalador").
 func (m *Model) viewWelcome() string {
 	s := "\n"
 	s += styles.Title.Render("  Domain Install") + "\n\n"
-	s += styles.ItemDesc.Render("  Primero elegís toda la configuración; al final se instala solo.") + "\n\n"
-	s += fmt.Sprintf("  Detectado: %s\n", styles.Accent.Render(
-		fmt.Sprintf("%s/%s (%s)", m.platform.OS, m.platform.Distro, m.platform.PkgMgr)))
-	s += "\n" + styles.HelpText.Render("  [enter] empezar   [esc] volver al menú") + "\n"
+	s += styles.ItemDesc.Render("  Detectando plataforma...") + "\n"
 	return s
 }
 

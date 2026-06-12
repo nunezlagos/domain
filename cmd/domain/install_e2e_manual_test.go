@@ -1,0 +1,164 @@
+//go:build e2einstall
+
+// E2E manual del install local (HU-01.10/01.14). NO corre en CI:
+// requiere docker + mutará configs reales del user (credentials.json,
+// ~/.config/opencode/opencode.json, .env del repo). Correr explícito:
+//
+//	go test -tags=e2einstall -count=1 -run TestE2EInstall ./cmd/domain/ -args -e2e
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+var e2eFlag = flag.Bool("e2e", false, "habilita el E2E real del install")
+
+// chdirRepoRoot sube hasta encontrar go.mod (idempotente entre tests
+// del mismo proceso, que comparten cwd).
+func chdirRepoRoot(t *testing.T) {
+	t.Helper()
+	for i := 0; i < 5; i++ {
+		if _, err := os.Stat("go.mod"); err == nil {
+			return
+		}
+		require.NoError(t, os.Chdir(".."))
+	}
+	t.Fatal("go.mod no encontrado subiendo 5 niveles")
+}
+
+func TestE2EInstall_LocalReal(t *testing.T) {
+	if !*e2eFlag {
+		t.Skip("pasar -args -e2e para correr el E2E real")
+	}
+	// runInstall asume cwd = root del repo (busca .env.example y
+	// docker-compose.yml). go test corre con cwd = cmd/domain.
+	chdirRepoRoot(t)
+
+	// El setup de agentes resuelve domain-mcp por PATH (bajo go test no
+	// hay sibling). Compilar a ~/go/bin — la ubicación real de install.sh —
+	// para que el command escrito en opencode.json apunte a un binario
+	// estable, igual que en producción.
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	binDir := filepath.Join(home, "go", "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+	for _, target := range []struct{ out, pkg string }{
+		{filepath.Join(binDir, "domain-mcp"), "./cmd/domain-mcp"},
+		{filepath.Join(binDir, "domain"), "./cmd/domain"},
+	} {
+		build := exec.Command("go", "build", "-o", target.out, target.pkg)
+		out, buildErr := build.CombinedOutput()
+		require.NoError(t, buildErr, "build %s: %s", target.pkg, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	code := runInstall([]string{
+		"--mode", "local",
+		"--non-interactive",
+		"--agents", "opencode",
+		"--base-url", "http://localhost:8000",
+		"--no-init",
+	})
+	require.Equal(t, 0, code, "install debe terminar exit 0")
+
+	// credentials.json creado con API key
+	credPath := filepath.Join(home, ".config", "domain", "credentials.json")
+	data, err := os.ReadFile(credPath)
+	require.NoError(t, err, "credentials.json debe existir post-install")
+	var creds struct {
+		APIKey string `json:"api_key"`
+	}
+	require.NoError(t, json.Unmarshal(data, &creds))
+	require.NotEmpty(t, creds.APIKey, "API key generada automáticamente")
+
+	// env global para domain-mcp
+	envPath := filepath.Join(home, ".config", "domain", "env")
+	envData, err := os.ReadFile(envPath)
+	require.NoError(t, err, "~/.config/domain/env debe existir")
+	require.Contains(t, string(envData), "DOMAIN_DATABASE_URL=")
+	require.Contains(t, string(envData), "DOMAIN_BASE_URL=")
+
+	// opencode global config con el entry domain y command no vacío
+	ocPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	ocData, err := os.ReadFile(ocPath)
+	require.NoError(t, err, "opencode.json global debe existir")
+	var oc map[string]any
+	require.NoError(t, json.Unmarshal(ocData, &oc))
+	mcp, _ := oc["mcp"].(map[string]any)
+	require.NotNil(t, mcp["domain"], "entry mcp.domain presente")
+	entry := mcp["domain"].(map[string]any)
+	cmd, _ := entry["command"].([]any)
+	require.NotEmpty(t, cmd, "command no vacío")
+	first, _ := cmd[0].(string)
+	require.NotEmpty(t, first, "command[0] apunta al binario domain-mcp")
+	t.Logf("opencode command: %v", cmd)
+}
+
+// TestE2EInstall_MCPBootsWithoutEnv verifica el fix -32000: domain-mcp
+// arranca SIN env vars (toma config de ~/.config/domain/env +
+// credentials.json) y responde al handshake MCP initialize.
+func TestE2EInstall_MCPBootsWithoutEnv(t *testing.T) {
+	if !*e2eFlag {
+		t.Skip("pasar -args -e2e para correr el E2E real")
+	}
+	chdirRepoRoot(t)
+
+	bin := filepath.Join(t.TempDir(), "domain-mcp")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/domain-mcp")
+	build.Dir, _ = os.Getwd()
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "build domain-mcp: %s", out)
+
+	cmd := exec.Command(bin)
+	// Entorno mínimo: sin DOMAIN_* (simula cómo lo lanza opencode).
+	home, _ := os.UserHomeDir()
+	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+	require.NoError(t, cmd.Start())
+	defer func() { _ = cmd.Process.Kill() }()
+
+	initReq := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}`
+	_, err = fmt.Fprintln(stdin, initReq)
+	require.NoError(t, err)
+
+	type result struct {
+		line string
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		if scanner.Scan() {
+			ch <- result{line: scanner.Text()}
+			return
+		}
+		ch <- result{err: fmt.Errorf("EOF sin respuesta (stderr: %s)", stderrBuf.String())}
+	}()
+
+	select {
+	case res := <-ch:
+		require.NoError(t, res.err, "domain-mcp murió al boot — el -32000 sigue vivo")
+		require.Contains(t, res.line, `"jsonrpc"`, "respuesta JSON-RPC esperada")
+		require.Contains(t, res.line, `"result"`, "initialize debe responder result, no error")
+		t.Logf("initialize OK: %.120s...", res.line)
+	case <-time.After(20 * time.Second):
+		t.Fatalf("timeout esperando respuesta de initialize (stderr: %s)", stderrBuf.String())
+	}
+}

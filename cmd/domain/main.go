@@ -12,8 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -1571,9 +1572,17 @@ func runSetup(args []string) {
 		// el path tiene "/domain" adentro, e.g., /projects/domain/bin/domain).
 		if found, err := findDomainMCPSibling(ex); err == nil {
 			mcpBinary = found
+		} else if found, lpErr := exec.LookPath("domain-mcp"); lpErr == nil {
+			// Fallback: domain-mcp en PATH (install.sh lo deja en ~/go/bin).
+			mcpBinary = found
 		} else {
+			// NUNCA escribir un entry con command vacío (HU-01.14: eso
+			// deja al agente con "Connection closed" y requiere repair).
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			fmt.Fprintln(os.Stderr, "Continuando con el valor por defecto (puede fallar).")
+			fmt.Fprintln(os.Stderr, "domain-mcp tampoco está en PATH. Compilalo primero:")
+			fmt.Fprintln(os.Stderr, "  go build -o ~/go/bin/domain-mcp ./cmd/domain-mcp")
+			fmt.Fprintln(os.Stderr, "o pasá la ruta con --mcp-binary /ruta/a/domain-mcp")
+			os.Exit(1)
 		}
 	}
 
@@ -1640,8 +1649,11 @@ func runSetup(args []string) {
 	}
 
 	if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
+		// return (no os.Exit): runSetup también se invoca in-process desde
+		// `domain install` (configureAgents) — un Exit acá mataba el
+		// install entero a mitad del paso de agentes en re-runs.
 		fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
-		os.Exit(0)
+		return
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "setup falló: %v\n", err)

@@ -544,9 +544,9 @@ func ensureLocalAPIKey(cfg *config.Config, baseURL string) (bool, string, error)
 		return false, "", fmt.Errorf("create org: %w", err)
 	}
 	err = pool.QueryRow(ctx,
-		`INSERT INTO users (email, full_name, last_organization_id)
-		 VALUES ('admin@local.domain', 'Admin Local', $1)
-		 ON CONFLICT (email) DO UPDATE SET last_organization_id = EXCLUDED.last_organization_id
+		`INSERT INTO users (organization_id, email, name, role)
+		 VALUES ($1, 'admin@local.domain', 'Admin Local', 'owner')
+		 ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner'
 		 RETURNING id`, orgID).Scan(&userID)
 	if err != nil {
 		return false, "", fmt.Errorf("create user: %w", err)

@@ -105,6 +105,61 @@ curl -H "Authorization: Bearer $DOMAIN_API_KEY" \
 # {"data":{"outcome":"chat","intent":"chat","reply":"..."}}
 ```
 
+## 5.5) Install / Update / Restore (issue-01.10)
+
+Para flujo all-in-one (detectar estado + backups + migrate + seed +
+configurar agente), usar el wizard de install:
+
+```bash
+./bin/domain install                    # interactive (pregunta el deployment mode)
+./bin/domain install --mode local       # local: docker compose up Postgres+S3+SMTP
+./bin/domain install --mode cloud --dsn 'postgres://u:p@neon.tech/db?sslmode=require'
+./bin/domain install --non-interactive  # sin prompts (usa defaults)
+./bin/domain install --no-backup        # sin backups automáticos (no recomendado)
+```
+
+El wizard es **idempotente**: si Domain ya está bootstrapped, lo
+detecta y solo corre los pasos pendientes (skip de los que ya están
+hechos). Muestra un summary final con `ok=N skipped=N failed=N`.
+
+Para upgrades sin tocar configs del agente:
+
+```bash
+./bin/domain update                     # backups + migrate + seed
+./bin/domain update --no-migrate        # solo seed (skip migrations)
+./bin/domain update --no-seed           # solo migrate (skip seeders)
+./bin/domain seed all                    # alias de update --no-backup --no-migrate
+```
+
+Para rollback puntual de un archivo:
+
+```bash
+# 1) Listar backups disponibles
+ls -la ~/.config/domain/credentials.json.bak.*  # uno por update
+
+# 2) Restaurar
+./bin/domain restore ~/.config/domain/credentials.json.bak.20260611T120000Z
+# ✓ Restored .../credentials.json.bak.20260611T120000Z → .../credentials.json
+#   API key validated against server
+```
+
+**Backups automáticos:** install/update SIEMPRE crean `.bak.<RFC3339>`
+de credentials.json, .env y opencode.json antes de cualquier mutación
+(a menos que uses `--no-backup`). El prune es configurable vía
+`BackupFile(path, keepLast=N)`. Los seeders son idempotentes
+(skip-by-hash via `seed_versions`), por lo que `update` no duplica
+data — solo aplica lo que cambió desde la última versión.
+
+**Validación de DSN en cloud mode:** si el host es de un cloud
+provider conocido (neon.tech, rds.amazonaws.com, supabase.co,
+heroku.com, planetscale.com, googleapis.com, azure.com,
+digitalocean.com), `ValidateDSN` rechaza sslmode=disable|allow|prefer.
+Solo `require` o `verify-full` son aceptados.
+
+Ver `openspec/changes/REQ-01-core-platform/issue-01.10-deploy-modes-update/`
+para la spec completa de los modos de deployment, hybrid config y
+arquitectura de backups.
+
 ## 6) Conectar al agente IA (Claude Code)
 
 ```bash

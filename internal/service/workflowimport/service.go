@@ -105,7 +105,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 			INSERT INTO imported_workflow_files
 			  (organization_id, project_id, source_tool, rel_path, original_content,
 			   content_hash, size_bytes, status, replaced_with, replaced_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $8 = 'replaced' THEN now() ELSE NULL END)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8::varchar,$9::text, CASE WHEN $8::varchar = 'replaced' THEN now() ELSE NULL END)
 			ON CONFLICT (project_id, rel_path) DO UPDATE
 			SET original_content = EXCLUDED.original_content,
 			    content_hash     = EXCLUDED.content_hash,

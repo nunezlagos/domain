@@ -931,6 +931,7 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.ModelRegistrySeeder{})
 	registry.Register(&seeds.PlatformPoliciesSeeder{})
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
+	registry.Register(&seeds.MCPProvidersSeeder{})
 
 	reports, err := registry.RunAll(ctx, pool, seeds.Env(envStr))
 	if err != nil {

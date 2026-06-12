@@ -122,12 +122,12 @@ func main() {
 	loadEnvCascade()
 
 	if len(os.Args) < 2 {
-		// Sin args: si TTY → TUI bubbletea. Si no → printUsage.
+		// Sin args: detectar proyecto + mostrar capabilities (issue F2).
+		// Override: si --tui → bubbletea.
 		if isTerminal(os.Stdin) {
 			os.Exit(runTUI(nil))
 		}
-		printUsage()
-		os.Exit(0) // exit 0 en uso help; usuario probablemente typo
+		os.Exit(runDomainDetect(context.Background()))
 	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":
@@ -164,6 +164,10 @@ func main() {
 		os.Exit(runRestore(os.Args[2:]))
 	case "onboard", "bootstrap":
 		os.Exit(runOnboard(os.Args[2:]))
+	case "mcp":
+		os.Exit(runMCP(context.Background(), os.Args[2:]))
+	case "detect":
+		os.Exit(runDomainDetect(context.Background()))
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
 		// Delegar a CLI commands (REQ-14)
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
@@ -221,6 +225,10 @@ Plug-and-play:
                       Flags: --no-backup, --no-seed, --no-migrate
   seed all            Corre todos los seeders (skip-by-hash, idempotente)
   restore <bak-path>  Restaura un archivo desde un backup timestamped
+  mcp list|install|uninstall
+                      Catálogo de MCPs instalables (filesystem, fetch,
+                      github, git, memory, time) en opencode/claude-code.
+  detect              Auto-detect del proyecto en CWD + inventario + sesión.
 
 Common:
   version             Version + commit + build time
@@ -425,6 +433,7 @@ func runServer() {
 	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
+	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
 	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
 	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
 	// seeds.SeedAgentTemplatesForOrg (issue-21.1 org-management hook).

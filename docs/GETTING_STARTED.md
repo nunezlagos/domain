@@ -33,30 +33,57 @@ export DOMAIN_DATABASE_URL="postgres://app_admin:pass@localhost:5432/domain?sslm
 Salida esperada: `applied 72 migrations` (incluye seed initial + grants
 defensivos de la migration 000072).
 
-## 4) Bootstrap dev — crea org + api_key + .env
+
+## 4) Onboard — wizard first-run (issue-01.9)
 
 ```bash
-./bin/domain dev-bootstrap
+./bin/domain onboard
 ```
 
-Esto:
-- Crea org `dev` + user `admin@example.local`
-- Emite api_key fresh
-- Escribe `DOMAIN_API_KEY=...` en `.env`
+Este es el **unico comando** que necesitas para arrancar. Detecta
+first-run automaticamente:
 
-Output:
+- **Si la DB esta vacia** (sin users): auto-crea la primera org + user
+  + API key via `POST /api/v1/auth/bootstrap`. No necesitas conectarte
+  a la DB a mano.
+- **Si ya hay users**: usa el flujo OTP normal
+  (`POST /auth/request-otp` + `POST /auth/verify-otp`).
 
+Modos no-interactivos:
+
+```bash
+# CI/scripts: provee todo por flag
+./bin/domain onboard --non-interactive \
+    --base-url http://localhost:8000 \
+    --email admin@saargo.com \
+    --no-opencode
+
+# Desde el chat del agente (opencode o claude-code)
+/domain-login
 ```
-✓ org id=... slug=dev
-✓ user id=... email=admin@example.local
-✓ api_key id=... prefix=dom_dev_xxxxxx
 
-API KEY (guardalo, no se vuelve a mostrar):
+API key emitida por bootstrap:
+- `expires_at = NULL` → **no expira automáticamente**. La rotación es
+  manual via `POST /api/v1/api-keys/{id}/revoke` o `domain keys revoke`
+  (HU futura).
+- `environment = 'live'` (no `test`).
 
-  dom_dev_xxxxxx...
-
-✓ .env actualizado: DOMAIN_API_KEY=...
+**Si el agente intenta usar domain-mcp sin estar logueado**, el binario
+falla con exit 1 y mensaje claro:
 ```
+domain-mcp: DOMAIN_API_KEY is not set.
+To authenticate, run in your terminal:
+  domain onboard
+Or, if opencode is already connected, type:
+  /domain-login
+```
+
+El agente NO puede llamar tools hasta que se complete el flow de
+autenticación. Este enforcement es por diseño: si la herramienta está
+instalada, el user DEBE estar logueado para usarla.
+
+Ver `openspec/changes/REQ-01-core-platform/issue-01.9-first-run-onboard/`
+para la spec completa.
 
 ## 5) Levantar el server
 

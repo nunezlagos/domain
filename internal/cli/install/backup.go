@@ -240,11 +240,15 @@ func validateAPIKey(baseURL, apiKey string) (bool, error) {
 }
 
 // ListBackups retorna los backups existentes para un path dado,
-// ordenados del más viejo al más nuevo.
+// ordenados del más viejo al más nuevo. Retorna slice no-nil (puede
+// ser vacío) para que callers puedan usar len() sin nil-check.
 func ListBackups(originalPath string) ([]string, error) {
 	matches, err := filepath.Glob(originalPath + ".bak.*")
 	if err != nil {
 		return nil, err
+	}
+	if matches == nil {
+		matches = []string{}
 	}
 	// Ya vienen ordenados lexicograficamente (RFC3339 format).
 	return matches, nil

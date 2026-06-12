@@ -7,6 +7,7 @@ package install
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -130,6 +131,40 @@ func TestPortPrompt_OnlyDigits(t *testing.T) {
 	// Letra: ignorada
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	require.Equal(t, "9", updated.(*Model).port)
+}
+
+func TestPortPrompt_InvalidPortBlocksWithMessage(t *testing.T) {
+	m := New()
+	m.state = statePortPrompt
+
+	// Privilegiado (<1024): no avanza y muestra error
+	m.port = "80"
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	require.Equal(t, statePortPrompt, appM.state, "puerto inválido no avanza")
+	require.NotEmpty(t, appM.portErr)
+	require.Contains(t, appM.View(), "1024-65535")
+
+	// Editar limpia el error
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	require.Empty(t, updated.(*Model).portErr)
+}
+
+func TestValidatePort_OccupiedByForeignApp(t *testing.T) {
+	// Ocupamos un puerto nosotros (simula otra app: no responde /health)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	msg := validatePort(fmt.Sprintf("%d", port))
+	require.Contains(t, msg, "otra aplicación")
+	require.Contains(t, msg, "probá", "debe proponer alternativa")
+}
+
+func TestValidatePort_FreePortOK(t *testing.T) {
+	free := suggestPort(18000)
+	require.Empty(t, validatePort(free))
 }
 
 func TestPortPrompt_EnterAdvancesToInit(t *testing.T) {

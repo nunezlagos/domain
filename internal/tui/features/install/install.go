@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,11 +83,12 @@ type Model struct {
 	depsMissing bool
 
 	// Config elegida
-	mode   modeSel
-	port   string
-	dsn    string
-	doInit bool
-	agents []string
+	mode    modeSel
+	port    string
+	portErr string
+	dsn     string
+	doInit  bool
+	agents  []string
 
 	err    error
 	stderr string
@@ -302,6 +304,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.port == "" {
 				m.port = suggestPort(8000)
 			}
+			if msg := validatePort(m.port); msg != "" {
+				m.portErr = msg
+				return m, nil // no avanza con puerto inválido/ocupado
+			}
+			m.portErr = ""
 			m.state = stateInitPrompt
 			return m, nil
 		case key == "esc":
@@ -311,9 +318,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(m.port) > 0 {
 				m.port = m.port[:len(m.port)-1]
 			}
+			m.portErr = ""
 			return m, nil
 		case len(key) == 1 && key >= "0" && key <= "9" && len(m.port) < 5:
 			m.port += key
+			m.portErr = ""
 			return m, nil
 		}
 	case stateDSNPrompt:
@@ -422,11 +431,33 @@ func (m *Model) viewDepCheck() string {
 
 func (m *Model) viewPortPrompt() string {
 	s := "\n  " + styles.Title.Render("Puerto del server") + "\n\n"
-	s += styles.ItemDesc.Render("  El server HTTP de domain escucha en localhost. Sugerimos un") + "\n"
-	s += styles.ItemDesc.Render("  puerto libre (8000 si está disponible).") + "\n\n"
-	s += "  Puerto: " + styles.Accent.Render(m.port) + styles.Prompt.Render("▌") + "\n\n"
-	s += styles.HelpText.Render("  [0-9] editar   [backspace] borrar   [enter] continuar   [esc] volver") + "\n"
+	s += styles.ItemDesc.Render("  El server HTTP de domain escucha en localhost. Elegí el que") + "\n"
+	s += styles.ItemDesc.Render("  quieras (1024-65535); si ya hay un server domain ahí, se reusa.") + "\n\n"
+	s += "  Puerto: " + styles.Accent.Render(m.port) + styles.Prompt.Render("▌") + "\n"
+	if m.portErr != "" {
+		s += "\n  " + styles.Fail.Render("✗ "+m.portErr) + "\n"
+	}
+	s += "\n" + styles.HelpText.Render("  [0-9] editar   [backspace] borrar   [enter] continuar   [esc] volver") + "\n"
 	return s
+}
+
+// validatePort valida el puerto elegido: rango sano y, si está ocupado,
+// que sea por NUESTRO server (reusable) y no por otra app. Retorna ""
+// si es válido, o el mensaje de error.
+func validatePort(port string) string {
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1024 || p > 65535 {
+		return fmt.Sprintf("puerto inválido %q — usá 1024-65535 (sugerido: %s)", port, suggestPort(8000))
+	}
+	if isDomainServer(p) {
+		return "" // nuestro server ya corre ahí: se reusa/reconfigura
+	}
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+	if err != nil {
+		return fmt.Sprintf("el puerto %d lo ocupa otra aplicación — probá %s", p, suggestPort(p+1))
+	}
+	_ = ln.Close()
+	return ""
 }
 
 func (m *Model) viewDSNPrompt() string {

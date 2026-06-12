@@ -1,0 +1,32 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+archived: ~
+notes: |
+  HU-01.10 spec completo. Cubre los 3 puntos del feedback del usuario:
+
+  1. Selector de deployment mode (local / cloud / hybrid):
+     - local: docker compose up -d (Postgres + S3 + SMTP)
+     - cloud: pide DSN, valida, escribe .env
+     - hybrid: por servicio (Postgres / S3 / SMTP)
+
+  2. Instalacion NO destructiva:
+     - domain init archiva .md a BD (no elimina)
+     - flows del user no se tocan (viven en DB)
+     - custom .md del user no se tocan (init solo patterns conocidos)
+     - AGENTS.md injection con marker '<!-- domain-managed -->'
+       para prioridad MCP silently (el agente lee AGENTS.md primero)
+     - el .md stub sigue existiendo pero es ignorado en practice
+
+  3. Updates con backups automaticos:
+     - domain update: backups timestamped antes de mutate
+     - seeders idempotentes (skip-by-hash) corren en install Y update
+     - domain restore <path>: one-shot recovery de un archivo
+
+  Comandos nuevos:
+    - domain install [--mode local|cloud|hybrid] (alias de onboard)
+    - domain update [--no-backup] [--no-seed] [--no-migrate]
+    - domain restore <backup-path>
+    - domain seed all (expone los seeders idempotentes)
+
+  Pendiente: implementacion en ~8 commits atomicos.

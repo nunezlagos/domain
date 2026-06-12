@@ -158,6 +158,53 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 	return path, nil
 }
 
+// OpenCodeGlobalDir retorna el dir del config global de OpenCode
+// (~/.config/opencode). El opencode.json ahí aplica a todos los proyectos.
+func OpenCodeGlobalDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "opencode"), nil
+}
+
+// SetupClaudeCodeGlobal registra domain-mcp en ~/.claude.json (user scope
+// de Claude Code: mcpServers disponible en todos los proyectos).
+func SetupClaudeCodeGlobal(mcpBinaryPath, apiKey, baseURL string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(home, ".claude.json")
+	doc, original, err := readJSONFile(path)
+	if err != nil {
+		return "", err
+	}
+	servers, _ := doc["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	if _, ok := servers["domain"]; ok {
+		if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
+			return path, fmt.Errorf("install slash command: %w", err)
+		}
+		return path, ErrAlreadyConfigured
+	}
+	servers["domain"] = map[string]any{
+		"command": mcpBinaryPath,
+		"args":    []any{},
+		"env":     domainEnv(apiKey, baseURL),
+	}
+	doc["mcpServers"] = servers
+	if err := writeJSONWithBackup(path, original, doc); err != nil {
+		return "", err
+	}
+	if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
+		return path, fmt.Errorf("install slash command: %w", err)
+	}
+	return path, nil
+}
+
 // AgentStatus estado de configuración de un agente.
 type AgentStatus struct {
 	Agent      Agent  `json:"agent"`

@@ -1507,6 +1507,7 @@ func runSetup(args []string) {
 	baseURL := os.Getenv("DOMAIN_BASE_URL")
 	autoInit := false
 	skipInit := false
+	global := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "claude-code", "claude":
@@ -1519,6 +1520,8 @@ func runSetup(args []string) {
 			agent = "status"
 		case "uninstall":
 			agent = "uninstall"
+		case "--global":
+			global = true
 		case "--mcp-binary":
 			if i+1 >= len(args) {
 				fmt.Fprintln(os.Stderr, "missing value for --mcp-binary")
@@ -1581,12 +1584,29 @@ func runSetup(args []string) {
 	var restartHint string
 	switch agent {
 	case "claude-code":
-		// Project-scope: .mcp.json en el repo actual (commiteable).
-		path, err = setuppkg.SetupClaudeCode(cwd, mcpBinary, apiKey, baseURL)
-		restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprobá el server al primer uso)."
+		if global {
+			// User-scope: ~/.claude.json (disponible en todos los proyectos).
+			path, err = setuppkg.SetupClaudeCodeGlobal(mcpBinary, apiKey, baseURL)
+			restartHint = "Claude Code carga ~/.claude.json al iniciar (todos los proyectos)."
+		} else {
+			// Project-scope: .mcp.json en el repo actual (commiteable).
+			path, err = setuppkg.SetupClaudeCode(cwd, mcpBinary, apiKey, baseURL)
+			restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprobá el server al primer uso)."
+		}
 	case "opencode":
-		path, err = setuppkg.SetupOpenCode(cwd, mcpBinary, apiKey, baseURL)
+		dir := cwd
+		if global {
+			if gd, gerr := setuppkg.OpenCodeGlobalDir(); gerr == nil {
+				if mkErr := os.MkdirAll(gd, 0o755); mkErr == nil {
+					dir = gd
+				}
+			}
+		}
+		path, err = setuppkg.SetupOpenCode(dir, mcpBinary, apiKey, baseURL)
 		restartHint = "OpenCode carga opencode.json al iniciar en este proyecto."
+		if global {
+			restartHint = "OpenCode carga ~/.config/opencode/opencode.json al iniciar (todos los proyectos)."
+		}
 	case "claude-desktop":
 		path, err = setuppkg.SetupClaudeDesktop(mcpBinary, apiKey, baseURL)
 		restartHint = "Reinicia Claude Desktop para activar Domain."

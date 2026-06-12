@@ -29,20 +29,30 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/cli/install"
+	"nunezlagos/domain/internal/cli/onboard"
 	"nunezlagos/domain/internal/config"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/seeds"
 )
 
 // runInstall es el entrypoint de `domain install`. Retorna exit code.
+//
+// Orden (rediseño 2026-06-11): la infraestructura (docker/DSN) arranca
+// ANTES de migrate — en una máquina fresh la BD no existe hasta que
+// docker compose la levanta. Después de seed, si no hay credenciales,
+// se bootstrapea la API key local automáticamente para que domain-mcp
+// pueda arrancar desde los agentes sin pasos manuales.
 func runInstall(args []string) int {
 	flags, err := parseInstallFlags(args)
 	if err != nil {
@@ -54,8 +64,15 @@ func runInstall(args []string) int {
 		return 2
 	}
 
-	// 5 steps esperados: detect, backup, migrate, seed, deploy-mode.
-	progress := NewInstallProgress(5, os.Stderr)
+	mode := flags.mode
+	if mode == "" && !flags.nonInter {
+		mode = promptDeploymentMode()
+	}
+	if mode == "" {
+		mode = string(install.ModeLocal)
+	}
+
+	progress := NewInstallProgress(10, os.Stderr)
 	printBanner(os.Stderr)
 
 	// 1. Detección de estado
@@ -69,11 +86,10 @@ func runInstall(args []string) int {
 	progress.EndStep(StepOK, state.Summary())
 
 	// 2. Backups (idempotentes, skip si el archivo no existe)
+	progress.StartStep("Backing up configs")
 	if flags.noBackup {
-		progress.StartStep("Backing up configs")
 		progress.EndStep(StepSkipped, "--no-backup")
 	} else {
-		progress.StartStep("Backing up configs")
 		backed, skipped := runBackupsCount()
 		if backed == 0 && skipped == 0 {
 			progress.EndStep(StepWarning, "no files to backup")
@@ -82,22 +98,32 @@ func runInstall(args []string) int {
 		}
 	}
 
-	// 2b. Bootstrap .env (HU-01.13). Si .env falta y .env.example
-	// existe, lo copiamos. Ademas, lo cargamos al environment
-	// (porque el binario no tiene dotenv loader).
+	// 3. Bootstrap .env: copia .env.example si falta, carga al env,
+	// y persiste el puerto/base-url elegidos (DOMAIN_HTTP_PORT).
 	progress.StartStep("Bootstrap .env")
 	if err := ensureLocalEnvFile(); err != nil {
 		progress.EndStep(StepFailed, err.Error())
 		progress.Summary()
 		return 1
 	}
+	persistBaseURLEnv(flags.baseURL)
 	if err := loadEnvFile(".env"); err != nil {
 		progress.EndStep(StepWarning, "could not load .env: "+err.Error())
 	} else {
 		progress.EndStep(StepOK, ".env present and loaded")
 	}
 
-	// 3. Migrate
+	// 4. Infraestructura: docker (local) o DSN (cloud). ANTES de
+	// migrate — sin esto la BD no existe en fresh installs.
+	progress.StartStep(fmt.Sprintf("Starting services (%s)", mode))
+	if err := startInfra(mode, flags, state); err != nil {
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
+		return 1
+	}
+	progress.EndStep(StepOK, fmt.Sprintf("mode=%s ready", mode))
+
+	// 5. Migrate
 	cfg, err := config.Load()
 	if err != nil {
 		progress.StartStep("Applying migrations")
@@ -113,7 +139,7 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "schema up to date")
 
-	// 4. Seeders
+	// 6. Seeders
 	progress.StartStep("Running seeders")
 	if err := runSeedersViaRegistry(cfg.DatabaseURL, cfg.Env); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -122,43 +148,59 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "all catalogs at target version")
 
-	// 5. Deployment mode (solo si el server está fresh; sino, ya
-	//    está bootstrapped y no necesita re-bootstrap)
-	if state.FirstRun {
-		mode := flags.mode
-		if mode == "" && !flags.nonInter {
-			mode = promptDeploymentMode()
-		}
-		if mode == "" {
-			mode = string(install.ModeLocal)
-		}
-		progress.StartStep(fmt.Sprintf("Deployment mode: %s", mode))
-		if err := handleDeploymentMode(mode, flags, state); err != nil {
-			progress.EndStep(StepFailed, err.Error())
-			progress.Summary()
-			return 1
-		}
-		progress.EndStep(StepOK, fmt.Sprintf("mode=%s configured", mode))
-	} else {
-		progress.StartStep("Deployment mode")
-		progress.EndStep(StepSkipped, "already bootstrapped (use 'domain onboard' to re-auth)")
+	// 7. API key: si no hay credenciales, bootstrap local automático
+	// (org + user + key contra la BD ya migrada). Sin esto, domain-mcp
+	// muere al boot y el agente ve "Connection closed".
+	progress.StartStep("API key")
+	switch created, prefix, err := ensureLocalAPIKey(cfg, flags.baseURL); {
+	case err != nil:
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
+		return 1
+	case created:
+		progress.EndStep(StepOK, fmt.Sprintf("generated (prefix %s), saved to credentials.json", prefix))
+	default:
+		progress.EndStep(StepSkipped, "credentials.json already present")
 	}
 
-	// 6. opencode MCP setup (HU-01.14). Corre SIEMPRE, no solo fresh
-	// install. Es idempotente: si domain ya esta en opencode.json,
-	// setuppkg.SetupOpenCode retorna ErrAlreadyConfigured y no hace
-	// nada. La API key se setea despues con `domain setup opencode
-	// --api-key ...` si todavia no existe.
-	if !flags.noOpencode {
-		progress.StartStep("Configuring opencode MCP server")
-		configureOpencodeMCPServer(flags.baseURL)
-		progress.EndStep(StepOK, "opencode.json updated (idempotent)")
+	// 8. Env global para domain-mcp: ~/.config/domain/env con la DSN
+	// y base-url, para que el binario MCP arranque desde cualquier cwd.
+	progress.StartStep("Global MCP env")
+	envPath, err := writeGlobalMCPEnv(cfg, flags.baseURL)
+	if err != nil {
+		progress.EndStep(StepWarning, err.Error())
 	} else {
-		progress.StartStep("Configuring opencode MCP server")
-		progress.EndStep(StepSkipped, "--no-opencode")
+		progress.EndStep(StepOK, envPath)
+	}
+
+	// 9. Agentes MCP (multi: opencode y/o claude-code). Idempotente.
+	progress.StartStep("Configuring MCP agents")
+	if len(flags.agents) == 0 {
+		progress.EndStep(StepSkipped, "no agents selected")
+	} else {
+		detail := configureAgents(flags.agents, flags.baseURL)
+		progress.EndStep(StepOK, detail)
+	}
+
+	// 10. Init (.md → BD). Requiere el server HTTP corriendo.
+	progress.StartStep("Importing .md files")
+	switch {
+	case flags.noInit:
+		progress.EndStep(StepSkipped, "--no-init")
+	case !state.ServerReachable:
+		progress.EndStep(StepSkipped, "server not running (start 'domain server' and run 'domain init')")
+	default:
+		runInit(nil)
+		progress.EndStep(StepOK, "configs archived to BD")
 	}
 
 	progress.Summary()
+
+	if !state.ServerReachable {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "⚠ server not running. Start it with:")
+		fmt.Fprintln(os.Stderr, "    domain server")
+	}
 	return 0
 }
 
@@ -171,12 +213,20 @@ func runInstall(args []string) int {
 // Si lo esta (por un install previo que fallo al encontrar
 // domain-mcp), borra el entry y re-crea con el path correcto.
 func configureOpencodeMCPServer(baseURL string) {
-	if repairOpencodeEmptyCommand() {
-		fmt.Fprintln(os.Stderr, "  (reparado opencode.json con command vacio previo)")
+	// Reparar tanto el opencode.json del cwd como el global.
+	cwd, _ := os.Getwd()
+	for _, p := range []string{
+		filepath.Join(cwd, "opencode.json"),
+		openCodeConfigPath(),
+	} {
+		if repairOpencodeEmptyCommandAt(p) {
+			fmt.Fprintf(os.Stderr, "  (reparado %s con command vacio previo)\n", p)
+		}
 	}
 	key := readAPIKeyFromCredentials() // "" si fresh install
 	setupArgs := []string{
 		"opencode",
+		"--global",
 		"--base-url", baseURL,
 		"--skip-init",
 	}
@@ -186,12 +236,17 @@ func configureOpencodeMCPServer(baseURL string) {
 	runSetup(setupArgs)
 }
 
-// repairOpencodeEmptyCommand busca en opencode.json (cwd) el entry
-// "mcp.domain" y si su "command" es "" o ["", ...], lo borra.
-// Retorna true si reparo algo.
+// repairOpencodeEmptyCommand repara el opencode.json del cwd (compat
+// con tests de HU-01.14).
 func repairOpencodeEmptyCommand() bool {
 	cwd, _ := os.Getwd()
-	cfgPath := filepath.Join(cwd, "opencode.json")
+	return repairOpencodeEmptyCommandAt(filepath.Join(cwd, "opencode.json"))
+}
+
+// repairOpencodeEmptyCommandAt busca en el opencode.json dado el entry
+// "mcp.domain" y si su "command" es "" o ["", ...], lo borra.
+// Retorna true si reparo algo.
+func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return false
@@ -212,16 +267,18 @@ func repairOpencodeEmptyCommand() bool {
 	if !ok {
 		return false
 	}
-	// Slice vacio = roto
-	if len(cmd) == 0 {
-		return true
+	// Roto si: slice vacío, o primer elemento "" (install previo que no
+	// encontró domain-mcp). En ambos casos borramos el entry para que el
+	// setup lo recree con el path correcto.
+	broken := len(cmd) == 0
+	if !broken {
+		if first, ok := cmd[0].(string); ok && first == "" {
+			broken = true
+		}
 	}
-	// Check si el primer elemento es "" o vacio
-	first, ok := cmd[0].(string)
-	if !ok || first != "" {
+	if !broken {
 		return false
 	}
-	// Reparar: borrar el entry para que setup lo recree
 	delete(mcp, "domain")
 	out, _ := json.MarshalIndent(doc, "", "  ")
 	return os.WriteFile(cfgPath, out, 0o600) == nil
@@ -229,17 +286,20 @@ func repairOpencodeEmptyCommand() bool {
 
 // installFlags son los flags parseados de `domain install`.
 type installFlags struct {
-	mode      string
-	baseURL   string
-	dsn       string
-	nonInter  bool
-	noBackup  bool
-	noInit    bool
-	noOpencode bool
+	mode     string
+	baseURL  string
+	dsn      string
+	nonInter bool
+	noBackup bool
+	noInit   bool
+	agents   []string
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
-	f := installFlags{baseURL: envOr("DOMAIN_BASE_URL", "http://localhost:8000")}
+	f := installFlags{
+		baseURL: envOr("DOMAIN_BASE_URL", "http://localhost:8000"),
+		agents:  []string{"opencode"},
+	}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--mode":
@@ -260,6 +320,12 @@ func parseInstallFlags(args []string) (installFlags, error) {
 			}
 			f.dsn = args[i+1]
 			i++
+		case "--agents":
+			if i+1 >= len(args) {
+				return f, errors.New("missing value for --agents")
+			}
+			f.agents = parseAgentsCSV(args[i+1])
+			i++
 		case "--non-interactive", "-y":
 			f.nonInter = true
 		case "--no-backup":
@@ -267,7 +333,8 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		case "--no-init":
 			f.noInit = true
 		case "--no-opencode":
-			f.noOpencode = true
+			// compat HU-01.14: equivale a sacar opencode de --agents
+			f.agents = removeAgent(f.agents, "opencode")
 		case "--help", "-h":
 			printInstallHelp()
 			return f, errHelp
@@ -276,6 +343,30 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		}
 	}
 	return f, nil
+}
+
+// parseAgentsCSV parsea "opencode,claude-code" filtrando desconocidos
+// y vacíos. "" o "none" → lista vacía.
+func parseAgentsCSV(csv string) []string {
+	var out []string
+	for _, a := range strings.Split(csv, ",") {
+		a = strings.TrimSpace(a)
+		switch a {
+		case "opencode", "claude-code":
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func removeAgent(agents []string, target string) []string {
+	out := agents[:0]
+	for _, a := range agents {
+		if a != target {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // runBackups corre los 3 backups canonicos. No falla si un archivo
@@ -368,10 +459,9 @@ func loadEnvFile(path string) error {
 	return nil
 }
 
-// handleDeploymentMode ejecuta el bootstrap del mode seleccionado.
-// En fresh install (state.FirstRun), corre la logica de mode.
-// En install sobre server ya corriendo, solo emite advertencias.
-func handleDeploymentMode(mode string, f installFlags, state *install.InstallState) error {
+// startInfra levanta la infraestructura según el mode. Idempotente:
+// docker compose up -d no hace nada si los servicios ya corren.
+func startInfra(mode string, f installFlags, state *install.InstallState) error {
 	switch install.Mode(mode) {
 	case install.ModeLocal:
 		if !state.DockerAvailable {
@@ -401,34 +491,157 @@ func handleDeploymentMode(mode string, f installFlags, state *install.InstallSta
 		if err := install.ValidateDSN(dsn); err != nil {
 			return fmt.Errorf("DSN invalid: %w", err)
 		}
-		envContent := fmt.Sprintf("DOMAIN_DATABASE_URL=%s\nDOMAIN_BASE_URL=%s\n", dsn, f.baseURL)
-		if err := os.WriteFile(".env", []byte(envContent), 0o600); err != nil {
+		// upsert (NO sobrescribir el .env entero: preserva el resto)
+		if err := upsertEnvFile(".env", "DOMAIN_DATABASE_URL", dsn); err != nil {
 			return fmt.Errorf("write .env: %w", err)
 		}
-		fmt.Fprintln(os.Stderr, "  ✓ DSN valid, .env written")
+		_ = os.Setenv("DOMAIN_DATABASE_URL", dsn)
+		fmt.Fprintln(os.Stderr, "  ✓ DSN valid, .env updated")
 	case install.ModeHybrid:
-		return errors.New("hybrid mode requires per-service prompts; not yet wired in this commit; use --mode local or --mode cloud")
+		return errors.New("hybrid mode not available yet; use --mode local or --mode cloud")
 	default:
 		return fmt.Errorf("invalid mode: %q (expected local/cloud/hybrid)", mode)
 	}
-
-	if !state.ServerReachable {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "⚠ server not reachable. Start it in another terminal:")
-		fmt.Fprintln(os.Stderr, "    domain server")
-		fmt.Fprintln(os.Stderr, "  Then re-run install (idempotent).")
-	}
-
-	if !f.noInit {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Archiving .md files to BD (init)...")
-		runInit(nil) // nil = defaults
-		fmt.Fprintln(os.Stderr, "  ✓ init done")
-	}
-
-	// opencode MCP setup se hace en runInstall() como step 6
-	// (HU-01.14), no aca. Asi corre incluso en installs no-fresh.
 	return nil
+}
+
+// persistBaseURLEnv guarda DOMAIN_BASE_URL y deriva DOMAIN_HTTP_PORT
+// del --base-url elegido (para que 'domain server' escuche ahí).
+func persistBaseURLEnv(baseURL string) {
+	if baseURL == "" {
+		return
+	}
+	_ = upsertEnvFile(".env", "DOMAIN_BASE_URL", baseURL)
+	if u, err := url.Parse(baseURL); err == nil && u.Port() != "" {
+		_ = upsertEnvFile(".env", "DOMAIN_HTTP_PORT", u.Port())
+		_ = os.Setenv("DOMAIN_HTTP_PORT", u.Port())
+	}
+	_ = os.Setenv("DOMAIN_BASE_URL", baseURL)
+}
+
+// ensureLocalAPIKey bootstrapea org + user + API key contra la BD si
+// ~/.config/domain/credentials.json no existe todavía. Retorna
+// (created, prefix). La key plaintext NUNCA se imprime: va a
+// credentials.json (0600) y a .env como DOMAIN_API_KEY.
+func ensureLocalAPIKey(cfg *config.Config, baseURL string) (bool, string, error) {
+	if readAPIKeyFromCredentials() != "" {
+		return false, "", nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return false, "", fmt.Errorf("connect: %w", err)
+	}
+	defer pool.Close()
+
+	var orgID, userID uuid.UUID
+	err = pool.QueryRow(ctx,
+		`INSERT INTO organizations (name, slug) VALUES ('Local', 'local')
+		 ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+		 RETURNING id`).Scan(&orgID)
+	if err != nil {
+		return false, "", fmt.Errorf("create org: %w", err)
+	}
+	err = pool.QueryRow(ctx,
+		`INSERT INTO users (email, full_name, last_organization_id)
+		 VALUES ('admin@local.domain', 'Admin Local', $1)
+		 ON CONFLICT (email) DO UPDATE SET last_organization_id = EXCLUDED.last_organization_id
+		 RETURNING id`, orgID).Scan(&userID)
+	if err != nil {
+		return false, "", fmt.Errorf("create user: %w", err)
+	}
+
+	rawKey, prefix, hash, err := apikey.Generate("dev")
+	if err != nil {
+		return false, "", fmt.Errorf("generate api_key: %w", err)
+	}
+	var keyID uuid.UUID
+	err = pool.QueryRow(ctx,
+		`INSERT INTO api_keys (organization_id, user_id, name, key_prefix, key_hash)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		orgID, userID, "install-"+time.Now().UTC().Format("20060102-150405"), prefix, hash,
+	).Scan(&keyID)
+	if err != nil {
+		return false, "", fmt.Errorf("create api_key: %w", err)
+	}
+
+	creds := &onboard.Credentials{
+		APIKey:   rawKey,
+		APIKeyID: keyID,
+		UserID:   userID,
+		OrgID:    orgID,
+		Email:    "admin@local.domain",
+		BaseURL:  baseURL,
+		IssuedAt: time.Now().UTC(),
+	}
+	if err := onboard.SaveCredentialsDefault(creds); err != nil {
+		return false, "", fmt.Errorf("save credentials: %w", err)
+	}
+	if err := upsertEnvFile(".env", "DOMAIN_API_KEY", rawKey); err != nil {
+		return false, "", fmt.Errorf("update .env: %w", err)
+	}
+	_ = os.Setenv("DOMAIN_API_KEY", rawKey)
+	return true, prefix, nil
+}
+
+// writeGlobalMCPEnv escribe ~/.config/domain/env con la config que
+// domain-mcp necesita para arrancar desde cualquier cwd (los agentes
+// lanzan el binario fuera del repo). Sin esto, config.Load() falla y
+// el agente ve "MCP error -32000: Connection closed".
+func writeGlobalMCPEnv(cfg *config.Config, baseURL string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".config", "domain")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "env")
+	pairs := [][2]string{
+		{"DOMAIN_DATABASE_URL", cfg.DatabaseURL},
+		{"DOMAIN_BASE_URL", baseURL},
+	}
+	if cfg.DatabaseAuthURL != "" {
+		pairs = append(pairs, [2]string{"DOMAIN_DATABASE_AUTH_URL", cfg.DatabaseAuthURL})
+	}
+	for _, kv := range pairs {
+		if kv[1] == "" {
+			continue
+		}
+		if err := upsertEnvFile(path, kv[0], kv[1]); err != nil {
+			return "", err
+		}
+	}
+	return path, nil
+}
+
+// configureAgents corre el setup para cada agente elegido. Retorna un
+// detalle human-readable para el progress.
+func configureAgents(agents []string, baseURL string) string {
+	key := readAPIKeyFromCredentials()
+	var done []string
+	for _, agent := range agents {
+		switch agent {
+		case "opencode":
+			configureOpencodeMCPServer(baseURL)
+			done = append(done, "opencode")
+		case "claude-code":
+			args := []string{"claude-code", "--global", "--base-url", baseURL, "--skip-init"}
+			if key != "" {
+				args = append(args, "--api-key", key)
+			}
+			runSetup(args)
+			done = append(done, "claude-code")
+		default:
+			fmt.Fprintf(os.Stderr, "  (agente desconocido: %s, skipped)\n", agent)
+		}
+	}
+	if len(done) == 0 {
+		return "none"
+	}
+	return strings.Join(done, ", ")
 }
 
 // runUpdate: backups + migrate + seed. Idempotente.
@@ -680,10 +893,11 @@ func printInstallHelp() {
 	fmt.Println()
 	fmt.Println("  --mode {local|cloud|hybrid}    Deployment mode (default: interactive prompt)")
 	fmt.Println("  --base-url URL                  Domain server URL (default: $DOMAIN_BASE_URL or http://localhost:8000)")
+	fmt.Println("  --agents LIST                   MCP agents to configure, csv (default: opencode; e.g. opencode,claude-code)")
 	fmt.Println("  --non-interactive, -y           Skip prompts (use defaults or flags)")
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")
-	fmt.Println("  --no-opencode                   Skip opencode MCP config")
+	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
 	fmt.Println("  --dsn URL                       Database URL (cloud mode, non-interactive)")
 	fmt.Println("  --help, -h                      Show this help")
 }

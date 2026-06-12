@@ -80,8 +80,21 @@ case ":$PATH:" in
 esac
 
 echo ""
-echo -e "  ${GREEN}${BOLD}Listo.${RESET} Ejecuta: ${BOLD}$BINARY${RESET}"
-echo -e "  TUI (install/update/backups): $BINARY tui"
+echo -e "  ${GREEN}${BOLD}Compilado.${RESET}"
+echo ""
+
+# === Lanzar el instalador interactivo ===
+# Si hay terminal disponible, entramos directo al wizard (config primero,
+# instalación automática después). /dev/tty permite que funcione incluso
+# con `curl | bash` (stdin ocupado por el pipe).
+# Escape hatch: DOMAIN_NO_TUI=1 para solo compilar.
+if [ -z "${DOMAIN_NO_TUI:-}" ] && [ -e /dev/tty ] && [ -t 1 ]; then
+    step "Abriendo el instalador"
+    cd "$SRC_DIR"
+    exec "$INSTALL_DIR/$BINARY" tui < /dev/tty
+fi
+
+echo -e "  Siguiente paso: ${BOLD}cd $SRC_DIR && $BINARY tui${RESET}"
 echo -e "  CLI no-interactivo: $BINARY install --mode local --non-interactive"
 echo -e "  MCP server (para opencode/claude): $INSTALL_DIR/${BINARY}-mcp"
 echo ""

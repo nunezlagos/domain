@@ -17,11 +17,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/cli/install"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/llm"
@@ -76,12 +79,24 @@ func main() {
 		}
 	}
 
+	// Fallback de config (fix "MCP error -32000: Connection closed"):
+	// los agentes lanzan domain-mcp desde cualquier cwd y muchas veces
+	// sin env vars. Si faltan, las tomamos de ~/.config/domain/env
+	// (escrito por `domain install`) y de credentials.json.
+	loadGlobalEnvFallback()
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "domain-mcp: config: %v\n", err)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Hint: run 'domain install' to generate ~/.config/domain/env,")
+		fmt.Fprintln(os.Stderr, "or set DOMAIN_DATABASE_URL in the agent's MCP environment.")
 		os.Exit(1)
 	}
 	apiKey := os.Getenv("DOMAIN_API_KEY")
+	if apiKey == "" {
+		apiKey = apiKeyFromCredentials()
+	}
 	if apiKey == "" {
 		// issue-01.9: enforcement. Si el agente invoca el MCP server
 		// sin API key (porque no se logueo via /domain-login), el
@@ -272,6 +287,49 @@ func main() {
 		fmt.Fprintf(os.Stderr, "domain-mcp: serve: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// loadGlobalEnvFallback carga ~/.config/domain/env al environment del
+// proceso SIN pisar variables ya seteadas. Lo escribe `domain install`
+// (paso "Global MCP env"). Formato KEY=VALUE por línea, # comentarios.
+func loadGlobalEnvFallback() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".config", "domain", "env"))
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.Trim(strings.TrimSpace(line[eq+1:]), `"'`)
+		if os.Getenv(key) == "" {
+			_ = os.Setenv(key, val)
+		}
+	}
+}
+
+// apiKeyFromCredentials lee la API key de ~/.config/domain/credentials.json
+// (escrito por `domain install` / `domain onboard`). "" si no existe.
+func apiKeyFromCredentials() string {
+	data, err := os.ReadFile(install.CredentialsPath())
+	if err != nil {
+		return ""
+	}
+	creds, err := install.ParseCredentials(data)
+	if err != nil {
+		return ""
+	}
+	return creds.APIKey
 }
 
 // analysisAdapter puentea analysissvc.Input/Result → promptrouter.AnalysisInput/Result.

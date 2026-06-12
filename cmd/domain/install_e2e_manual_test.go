@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,6 +105,54 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	require.NotEmpty(t, first, "command[0] apunta al binario domain-mcp")
 	t.Logf("opencode command: %v", cmd)
 }
+
+// TestE2EInstall_ServerBootsWithoutEnv verifica plug-and-play del CLI:
+// `domain server` arranca SIN env vars y desde fuera del repo (toma la
+// config de ~/.config/domain/env vía loadEnvCascade) y responde /health.
+func TestE2EInstall_ServerBootsWithoutEnv(t *testing.T) {
+	if !*e2eFlag {
+		t.Skip("pasar -args -e2e para correr el E2E real")
+	}
+	chdirRepoRoot(t)
+
+	bin := filepath.Join(t.TempDir(), "domain")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/domain")
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "build domain: %s", out)
+
+	cmd := exec.Command(bin, "server")
+	cmd.Dir = t.TempDir() // cwd fuera del repo: sin .env local
+	home, _ := os.UserHomeDir()
+	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
+	var output strings.Builder
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	require.NoError(t, cmd.Start())
+	defer func() { _ = cmd.Process.Kill() }()
+
+	// Poll /health hasta 15s
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := httpGet("http://localhost:8000/health")
+		if err == nil && resp == 200 {
+			t.Log("server /health 200 sin env vars — plug-and-play OK")
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatalf("server no respondió /health en 15s. Output:\n%s", output.String())
+}
+
+func httpGet(url string) (int, error) {
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+var httpClient = &http.Client{Timeout: 2 * time.Second}
 
 // TestE2EInstall_MCPBootsWithoutEnv verifica el fix -32000: domain-mcp
 // arranca SIN env vars (toma config de ~/.config/domain/env +

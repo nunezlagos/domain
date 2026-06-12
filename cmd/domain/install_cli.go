@@ -425,6 +425,28 @@ func ensureLocalEnvFile() error {
 	return nil
 }
 
+// loadEnvCascade carga la config plug-and-play en orden de precedencia
+// (sin pisar nada ya exportado en el shell):
+//  1. env vars del proceso (ganan siempre)
+//  2. .env del cwd (desarrollo dentro del repo)
+//  3. ~/.config/domain/env (global, escrito por `domain install`)
+//  4. DOMAIN_API_KEY desde credentials.json si sigue faltando
+//
+// Se invoca al inicio de main() para que TODOS los subcomandos
+// (server, projects, onboard, etc.) funcionen desde cualquier
+// directorio sin `source .env` manual.
+func loadEnvCascade() {
+	_ = loadEnvFile(".env")
+	if home, err := os.UserHomeDir(); err == nil {
+		_ = loadEnvFile(filepath.Join(home, ".config", "domain", "env"))
+	}
+	if os.Getenv("DOMAIN_API_KEY") == "" {
+		if key := readAPIKeyFromCredentials(); key != "" {
+			_ = os.Setenv("DOMAIN_API_KEY", key)
+		}
+	}
+}
+
 // loadEnvFile parsea un archivo .env y setea las variables en el
 // environment del proceso. Implementacion minima: KEY=VALUE por
 // linea, ignora comentarios (#) y lineas vacias. NO soporta

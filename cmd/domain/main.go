@@ -115,6 +115,12 @@ var (
 )
 
 func main() {
+	// Plug-and-play: cargar config en cascada ANTES de cualquier
+	// subcomando, sin pisar env vars ya exportadas. Así `domain server`
+	// o `domain projects ls` funcionan desde cualquier directorio sin
+	// `source .env` manual — igual que domain-mcp.
+	loadEnvCascade()
+
 	if len(os.Args) < 2 {
 		// Sin args: si TTY → TUI bubbletea. Si no → printUsage.
 		if isTerminal(os.Stdin) {
@@ -275,6 +281,9 @@ func runServer() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Hint: corré 'domain install' (genera .env y ~/.config/domain/env),")
+		fmt.Fprintln(os.Stderr, "o exportá DOMAIN_DATABASE_URL manualmente.")
 		os.Exit(1)
 	}
 	logger := logging.Setup(logging.Config{

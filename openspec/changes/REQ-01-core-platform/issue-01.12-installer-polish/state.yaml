@@ -1,0 +1,8 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+archived: ~
+notes: |
+  HU-01.12 — installer polish: 4 gaps reales de HU-01.11 + tests E2E.
+
+  Pendiente: implementacion en 4 commits atomicos.

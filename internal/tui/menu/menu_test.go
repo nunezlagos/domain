@@ -29,20 +29,23 @@ func TestInit_ReturnsNilCmd(t *testing.T) {
 func TestUpdate_DownMovesCursor(t *testing.T) {
 	m := New()
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	require.Equal(t, 1, m2.cursor)
+	concrete := m2.(Model)
+	require.Equal(t, 1, concrete.cursor)
 }
 
 func TestUpdate_UpAtTopStays(t *testing.T) {
 	m := New()
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	require.Equal(t, 0, m2.cursor, "up at top must not wrap")
+	concrete := m2.(Model)
+	require.Equal(t, 0, concrete.cursor, "up at top must not wrap")
 }
 
 func TestUpdate_DownAtBottomStays(t *testing.T) {
 	m := New()
 	m.cursor = 3 // last
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	require.Equal(t, 3, m2.cursor, "down at bottom must not wrap")
+	concrete := m2.(Model)
+	require.Equal(t, 3, concrete.cursor, "down at bottom must not wrap")
 }
 
 func TestUpdate_EnterSendsSelectMsg(t *testing.T) {
@@ -54,6 +57,7 @@ func TestUpdate_EnterSendsSelectMsg(t *testing.T) {
 	selectMsg, ok := msg.(SelectMsg)
 	require.True(t, ok)
 	require.Equal(t, 1, selectMsg.Index)
+	_ = tea.KeyMsg{}
 }
 
 func TestUpdate_QuitKeysSelectExit(t *testing.T) {

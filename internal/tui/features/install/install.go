@@ -113,11 +113,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.platform = msg.platform
-		m.state = stateDepCheck
-		return m, m.checkDepsCmd()
+		m.state = stateModePrompt
+		return m, nil
 	case depsMsg:
 		m.deps = msg.deps
-		m.state = stateModePrompt
+		m.state = stateBaseURLPrompt
 		return m, nil
 	case runResultMsg:
 		if msg.err != nil {
@@ -136,30 +136,31 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateWelcome:
 		if key == "enter" || key == " " {
-			m.state = stateDepCheck
-			return m, m.checkDepsCmd()
+			m.state = stateModePrompt
+			return m, nil
 		}
 		if key == "esc" || key == "q" {
 			return m, backCmd()
 		}
 	case stateDepCheck:
+		// Legacy state (no se usa mas). Mantenido por compat.
 		// Auto-avanza al prompt de mode; sin interaccion.
 	case stateModePrompt:
 		switch key {
 		case "1":
 			m.mode = modeLocal
-			m.state = stateBaseURLPrompt
-			return m, nil
+			m.state = stateDepCheck
+			return m, m.checkDepsCmd()
 		case "2":
 			m.mode = modeCloud
-			m.state = stateBaseURLPrompt
-			return m, nil
+			m.state = stateDepCheck
+			return m, m.checkDepsCmd()
 		case "3":
 			m.mode = modeHybrid
 			// Hybrid no esta implementado end-to-end: caemos a local con warning.
 			m.mode = modeLocal
-			m.state = stateBaseURLPrompt
-			return m, nil
+			m.state = stateDepCheck
+			return m, m.checkDepsCmd()
 		}
 	case stateBaseURLPrompt:
 		// Manejado por el input prompt (no por keymap).
@@ -322,11 +323,24 @@ type depsMsg struct {
 }
 
 func (m *Model) checkDepsCmd() tea.Cmd {
-	// Solo chequeamos Go y git. Docker se chequea en runtime si mode=local.
+	deps := depsForMode(m.mode)
 	return func() tea.Msg {
-		results := installer.Check([]installer.Dep{installer.DepGo, installer.DepGit})
+		results := installer.Check(deps)
 		return depsMsg{deps: results}
 	}
+}
+
+// depsForMode retorna las deps a chequear segun el deployment mode.
+// - local: go, git, docker (docker lo necesita para compose)
+// - cloud: go, git (cloud trae su propio Postgres)
+// - hybrid: go, git, docker (hybrid suele incluir local en algun servicio)
+func depsForMode(m modeSel) []installer.Dep {
+	base := []installer.Dep{installer.DepGo, installer.DepGit}
+	switch m {
+	case modeLocal, modeHybrid:
+		base = append(base, installer.DepDocker)
+	}
+	return base
 }
 
 type runResultMsg struct {

@@ -25,15 +25,15 @@ func TestNew_Defaults(t *testing.T) {
 	require.False(t, m.doInit)
 }
 
-func TestUpdate_PlatformMsg_AdvancesToDepCheck(t *testing.T) {
+func TestUpdate_PlatformMsg_AdvancesToModePrompt(t *testing.T) {
 	m := New()
 	updated, cmd := m.Update(platformMsg{platform: installer.Platform{
 		OS: installer.OSLinux, Distro: installer.DistroArch,
 		PkgMgr: installer.PkgPacman, Version: "rolling",
 	}})
 	appM := updated.(*Model)
-	require.Equal(t, stateDepCheck, appM.state)
-	require.NotNil(t, cmd)
+	require.Equal(t, stateModePrompt, appM.state)
+	require.Nil(t, cmd, "platform detect does not trigger a command")
 }
 
 func TestUpdate_PlatformErr_GoesToDone(t *testing.T) {
@@ -44,29 +44,33 @@ func TestUpdate_PlatformErr_GoesToDone(t *testing.T) {
 	require.Error(t, appM.err)
 }
 
-func TestUpdate_DepsMsg_AdvancesToModePrompt(t *testing.T) {
+func TestUpdate_DepsMsg_AdvancesToBaseURLPrompt(t *testing.T) {
 	m := New()
 	m.state = stateDepCheck
 	updated, _ := m.Update(depsMsg{deps: nil})
 	appM := updated.(*Model)
-	require.Equal(t, stateModePrompt, appM.state)
+	require.Equal(t, stateBaseURLPrompt, appM.state,
+		"after dep check, advance to baseURL prompt (not mode prompt)")
 }
 
-func TestUpdate_ModePrompt_OneSelectsLocal(t *testing.T) {
+func TestUpdate_ModePrompt_OneSelectsLocal_GoesToDepCheck(t *testing.T) {
 	m := New()
 	m.state = stateModePrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	appM := updated.(*Model)
 	require.Equal(t, modeLocal, appM.mode)
-	require.Equal(t, stateBaseURLPrompt, appM.state)
+	require.Equal(t, stateDepCheck, appM.state)
+	require.NotNil(t, cmd, "must trigger dep-check after mode select")
 }
 
-func TestUpdate_ModePrompt_TwoSelectsCloud(t *testing.T) {
+func TestUpdate_ModePrompt_TwoSelectsCloud_GoesToDepCheck(t *testing.T) {
 	m := New()
 	m.state = stateModePrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 	appM := updated.(*Model)
 	require.Equal(t, modeCloud, appM.mode)
+	require.Equal(t, stateDepCheck, appM.state)
+	require.NotNil(t, cmd)
 }
 
 func TestUpdate_ModePrompt_ThreeFallsBackToLocal(t *testing.T) {
@@ -75,6 +79,36 @@ func TestUpdate_ModePrompt_ThreeFallsBackToLocal(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	appM := updated.(*Model)
 	require.Equal(t, modeLocal, appM.mode, "hybrid falls back to local")
+}
+
+func TestDepsForMode_LocalIncludesDocker(t *testing.T) {
+	deps := depsForMode(modeLocal)
+	hasDocker := false
+	for _, d := range deps {
+		if d.Name == "docker" {
+			hasDocker = true
+		}
+	}
+	require.True(t, hasDocker, "local mode must check docker")
+}
+
+func TestDepsForMode_CloudExcludesDocker(t *testing.T) {
+	deps := depsForMode(modeCloud)
+	for _, d := range deps {
+		require.NotEqual(t, "docker", d.Name, "cloud mode must NOT check docker")
+	}
+}
+
+func TestDepsForMode_HybridIncludesDocker(t *testing.T) {
+	// Hybrid incluye docker porque al menos 1 servicio sera local.
+	deps := depsForMode(modeHybrid)
+	hasDocker := false
+	for _, d := range deps {
+		if d.Name == "docker" {
+			hasDocker = true
+		}
+	}
+	require.True(t, hasDocker, "hybrid mode must check docker (at least 1 local service)")
 }
 
 func TestUpdate_BaseURLPrompt_TypingAppends(t *testing.T) {

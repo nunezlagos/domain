@@ -1539,7 +1539,14 @@ func runSetup(args []string) {
 			fmt.Fprintln(os.Stderr, "no pude detectar el binario actual; pasá --mcp-binary")
 			os.Exit(1)
 		}
-		mcpBinary = strings.Replace(ex, "/domain", "/domain-mcp", 1)
+		// issue-01.9: use os.Stat en vez de strings.Replace (que falla si
+		// el path tiene "/domain" adentro, e.g., /projects/domain/bin/domain).
+		if found, err := findDomainMCPSibling(ex); err == nil {
+			mcpBinary = found
+		} else {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			fmt.Fprintln(os.Stderr, "Continuando con el valor por defecto (puede fallar).")
+		}
 	}
 
 	cwd, _ := os.Getwd()

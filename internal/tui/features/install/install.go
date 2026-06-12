@@ -23,7 +23,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -442,36 +444,51 @@ func (m *Model) viewSummary() string {
 	return s
 }
 
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// viewRunning muestra UNA sola línea con el paso actual (estilo ptools):
+//
+//	⠹ [5/11] Applying migrations — schema up to date
+//
+// El spinner avanza con cada línea de output recibida. El log completo
+// queda en m.lines para el detalle en done.
 func (m *Model) viewRunning() string {
-	s := "\n  " + styles.Title.Render("Instalando...") + "\n\n"
-	// Mostrar las últimas líneas del output del sub-process.
-	tail := m.lines
-	const maxShown = 16
-	if len(tail) > maxShown {
-		tail = tail[len(tail)-maxShown:]
+	s := "\n  " + styles.Title.Render("Instalando") + "\n\n"
+
+	step, detail := lastStepAndDetail(m.lines)
+	if step == "" {
+		s += "  " + styles.Accent.Render(spinnerFrames[0]) +
+			" " + styles.ItemDesc.Render("arrancando...") + "\n"
+		return s
 	}
-	for _, line := range tail {
-		s += "  " + styleOutputLine(line) + "\n"
+	frame := spinnerFrames[len(m.lines)%len(spinnerFrames)]
+	line := "  " + styles.Accent.Render(frame) + " " + styles.ItemTitle.Render(step)
+	if detail != "" {
+		line += styles.ItemDesc.Render(" — " + detail)
 	}
-	if len(m.lines) == 0 {
-		s += styles.ItemDesc.Render("  arrancando sub-proceso...") + "\n"
-	}
+	s += line + "\n"
 	return s
 }
 
-// styleOutputLine colorea líneas conocidas del install progress.
-func styleOutputLine(line string) string {
-	trimmed := strings.TrimSpace(line)
-	switch {
-	case strings.HasPrefix(trimmed, "✓") || strings.Contains(trimmed, "[ok]"):
-		return styles.Ok.Render(line)
-	case strings.HasPrefix(trimmed, "✗") || strings.Contains(trimmed, "FAIL"):
-		return styles.Fail.Render(line)
-	case strings.HasPrefix(trimmed, "⚠") || strings.Contains(trimmed, "warn"):
-		return styles.Warn.Render(line)
-	default:
-		return styles.ItemDesc.Render(line)
+// lastStepAndDetail extrae del output el último step "[N/M] Title" y,
+// si ya llegó su resultado (✓/·/⚠/✗ summary), el detalle.
+func lastStepAndDetail(lines []string) (step, detail string) {
+	for i := len(lines) - 1; i >= 0; i-- {
+		t := strings.TrimSpace(lines[i])
+		if t == "" {
+			continue
+		}
+		if strings.HasPrefix(t, "[") {
+			return t, detail
+		}
+		if detail == "" {
+			r := []rune(t)
+			if len(r) > 0 && (r[0] == '✓' || r[0] == '·' || r[0] == '⚠' || r[0] == '✗') {
+				detail = strings.TrimSpace(string(r[1:]))
+			}
+		}
 	}
+	return "", detail
 }
 
 func (m *Model) viewDone() string {
@@ -569,10 +586,16 @@ func waitForRunMsg(ch chan tea.Msg) tea.Cmd {
 	return func() tea.Msg { return <-ch }
 }
 
-// suggestPort retorna el primer puerto libre desde start (start..start+20),
-// como string. Si ninguno está libre, retorna start igual.
+// suggestPort sugiere el puerto para el server:
+//   - si en `start` YA responde un domain server (/health 200), reusa ese
+//     puerto — es nuestro propio service corriendo, no un conflicto
+//   - si está libre, lo sugiere
+//   - si lo ocupa otra cosa, busca el siguiente libre (start..start+20)
 func suggestPort(start int) string {
 	for p := start; p < start+20; p++ {
+		if isDomainServer(p) {
+			return fmt.Sprintf("%d", p)
+		}
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
 		if err == nil {
 			_ = ln.Close()
@@ -580,6 +603,18 @@ func suggestPort(start int) string {
 		}
 	}
 	return fmt.Sprintf("%d", start)
+}
+
+// isDomainServer chequea si en el puerto responde /health con 200
+// (nuestro server corriendo, e.g. via domain.service).
+func isDomainServer(port int) bool {
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // redactDSN oculta el password de una DSN para mostrarla en el summary.

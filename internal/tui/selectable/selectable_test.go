@@ -45,12 +45,16 @@ func TestUpdate_UpWrapsToContinue(t *testing.T) {
 	require.Equal(t, 3, m2.(Model).cursor, "up en el tope wrappea al botón Continuar")
 }
 
-func TestUpdate_EnterOnItem_SelectsWithoutAdvancing(t *testing.T) {
+func TestUpdate_EnterOnItem_SelectsAndAdvances(t *testing.T) {
+	// Estilo ptools: enter sobre un item lo elige Y avanza en un paso.
 	m := New("x", items3())
 	m.cursor = 1
 	m2, cmd := m.Update(key(tea.KeyEnter))
-	require.Nil(t, cmd, "enter sobre un item NO emite mensaje de avance")
+	require.NotNil(t, cmd, "enter confirma y avanza")
 	require.Equal(t, 1, m2.(Model).selected)
+	sel, ok := cmd().(SelectMsg)
+	require.True(t, ok)
+	require.Equal(t, 1, sel.Index)
 }
 
 func TestUpdate_SpaceOnItem_Selects(t *testing.T) {
@@ -107,20 +111,26 @@ func TestUpdate_EscSendsCancel(t *testing.T) {
 
 // --- multi ---
 
-func TestMulti_SpaceToggles(t *testing.T) {
+func TestMulti_SpaceToggles_EnterConfirms(t *testing.T) {
 	m := NewMulti("Agentes", items3(), []int{0})
 	require.Equal(t, []int{0}, m.CheckedIndices())
 
-	// Toggle off el 0
+	// Espacio togglea off el 0
 	m2, cmd := m.Update(key(tea.KeySpace))
 	require.Nil(t, cmd)
 	require.Empty(t, m2.(Model).CheckedIndices())
 
-	// Bajar a 1 y togglearlo on con enter
+	// Bajar a 1, espacio lo marca; enter CONFIRMA desde cualquier lado
 	m3, _ := m2.Update(key(tea.KeyDown))
-	m4, cmd := m3.Update(key(tea.KeyEnter))
-	require.Nil(t, cmd, "enter sobre item multi togglea, no avanza")
+	m4, cmd := m3.Update(key(tea.KeySpace))
+	require.Nil(t, cmd)
 	require.Equal(t, []int{1}, m4.(Model).CheckedIndices())
+
+	_, cmd = m4.Update(key(tea.KeyEnter))
+	require.NotNil(t, cmd, "enter en multi confirma lo marcado y avanza")
+	msg, ok := cmd().(MultiSelectMsg)
+	require.True(t, ok)
+	require.Equal(t, []int{1}, msg.Indices)
 }
 
 func TestMulti_ContinueEmitsMultiSelectMsg(t *testing.T) {

@@ -6,16 +6,17 @@ package styles
 
 import "github.com/charmbracelet/lipgloss"
 
-// Paleta (espejo de personal-tools/internal/tui/styles).
+// Paleta (espejo de personal-tools, ajustada para terminal con fondo
+// negro: ningún gris por debajo de ~#8A para que el texto siempre se lea).
 var (
-	Primary   = lipgloss.Color("#9C4C7A") // púrpura ptools (selected bg, accents)
-	Secondary = lipgloss.Color("#5A9E6F") // verde success
-	Muted     = lipgloss.Color("#888888") // gris medio (descripciones)
+	Primary   = lipgloss.Color("#B05A8E") // púrpura ptools (un punto más claro para fondo negro)
+	Secondary = lipgloss.Color("#6FBF85") // verde success legible en negro
+	Muted     = lipgloss.Color("#9E9E9E") // gris descripciones (visible en negro)
 	Selected  = lipgloss.Color("#FFFFFF") // blanco (fg del item seleccionado)
-	Danger    = lipgloss.Color("#CC4444") // rojo suave
-	Help      = lipgloss.Color("#555555") // gris oscuro (help bar)
+	Danger    = lipgloss.Color("#E06C6C") // rojo legible en negro
+	Help      = lipgloss.Color("#8A8A8A") // help bar — antes #555, invisible en negro
 	TitleFg   = lipgloss.Color("#F0F0F0") // blanco grisáceo (títulos)
-	WarnColor = lipgloss.Color("#D7AF5F") // ámbar
+	WarnColor = lipgloss.Color("#E5C07B") // ámbar
 )
 
 // Title estilo para headers.
@@ -54,7 +55,7 @@ var HelpText = lipgloss.NewStyle().
 
 // Prompt estilo para prompts de input.
 var Prompt = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#999999")).
+	Foreground(lipgloss.Color("#B0B0B0")).
 	Italic(true)
 
 // Ok estilo para resultados exitosos.

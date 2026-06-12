@@ -1,9 +1,9 @@
-// Selectable list component (HU-01.13, rediseño 2026-06-11).
+// Selectable list component (HU-01.13, semántica ptools 2026-06-12).
 //
-// Semántica nueva: enter/espacio sobre un item lo SELECCIONA (o togglea
-// en modo multi) pero NO avanza. Para avanzar, el user baja al botón
-// [ Continuar ] y presiona enter ahí. Esto evita avances accidentales
-// con enter en todas las vistas del wizard.
+// Igual que personal-tools: ESPACIO selecciona/togglea sin avanzar;
+// ENTER confirma y AVANZA con la selección actual. En single, enter
+// sobre un item lo elige y avanza en un solo paso. El botón
+// [ Continuar ] queda como indicador visual (enter ahí también avanza).
 //
 // Diseño:
 //   - Cursor: >  (a la izquierda del item)
@@ -13,8 +13,8 @@
 //   - Footer: botón [ Continuar ] (último slot navegable)
 //
 // Mensajes emitidos:
-//   - SelectMsg{Index}        al confirmar en Continuar (modo single)
-//   - MultiSelectMsg{Indices} al confirmar en Continuar (modo multi)
+//   - SelectMsg{Index}        al confirmar con enter (modo single)
+//   - MultiSelectMsg{Indices} al confirmar con enter (modo multi)
 //   - CancelMsg               en esc/q/ctrl+c
 
 package selectable
@@ -61,7 +61,7 @@ func New(title string, items []Item) Model {
 		selected: sel,
 		checked:  make([]bool, len(items)),
 		title:    title,
-		helpText: "[↑/↓] mover   [espacio/enter] elegir   [enter] en Continuar avanza   [esc] volver",
+		helpText: "[↑/↓] mover   [espacio] elegir   [enter] continuar   [esc] volver",
 	}
 }
 
@@ -76,7 +76,7 @@ func NewMulti(title string, items []Item, defaults []int) Model {
 			m.checked[idx] = true
 		}
 	}
-	m.helpText = "[↑/↓] mover   [espacio/enter] marcar/desmarcar   [enter] en Continuar avanza   [esc] volver"
+	m.helpText = "[↑/↓] mover   [espacio] marcar/desmarcar   [enter] continuar   [esc] volver"
 	return m
 }
 
@@ -125,10 +125,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pick(m.cursor)
 		}
 	case "enter":
-		if m.cursor == m.continueSlot() {
-			return m, m.confirmCmd()
+		// Estilo ptools: enter confirma y AVANZA. En single, enter sobre
+		// un item lo elige primero (elegir + avanzar en un solo paso).
+		// En multi, enter confirma lo marcado desde cualquier posición.
+		if !m.multi && m.cursor < len(m.items) {
+			if m.items[m.cursor].Disabled {
+				return m, nil
+			}
+			m.pick(m.cursor)
 		}
-		m.pick(m.cursor)
+		return m, m.confirmCmd()
 	case "q", "esc", "ctrl+c":
 		return m, func() tea.Msg { return CancelMsg{} }
 	}

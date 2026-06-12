@@ -87,10 +87,20 @@ func installUserService(baseURL string) error {
 	if err != nil {
 		return err
 	}
+	content := serviceUnitContent(bin)
+
+	// Idempotencia sin downtime: si el unit no cambió y el server ya
+	// responde /health, no hay nada que reiniciar.
+	if existing, readErr := os.ReadFile(unitPath); readErr == nil && string(existing) == content {
+		if waitServerHealth(baseURL, 2*time.Second) == nil {
+			return nil
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(unitPath), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(unitPath, []byte(serviceUnitContent(bin)), 0o644); err != nil {
+	if err := os.WriteFile(unitPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write unit: %w", err)
 	}
 	for _, args := range [][]string{
@@ -103,7 +113,10 @@ func installUserService(baseURL string) error {
 			return fmt.Errorf("systemctl %s: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
-	return waitServerHealth(baseURL, 20*time.Second)
+	// 60s: el restart hace graceful shutdown del proceso viejo (drain
+	// ~5-25s) + boot completo del nuevo. Con 20s reportaba warning por
+	// una carrera aunque el server terminara de levantar bien.
+	return waitServerHealth(baseURL, 60*time.Second)
 }
 
 // waitServerHealth pollea GET /health hasta timeout.

@@ -20,11 +20,14 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mark3labs/mcp-go/mcp"
+	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/store/txctx"
@@ -70,6 +73,45 @@ func withOrgCtx(ctx context.Context, pool *pgxpool.Pool, principal *apikey.Princ
 	}
 	release := func() { _ = tx.Rollback(ctx) }
 	return txctx.WithTxContext(ctx, tx), tx, release
+}
+
+// withOrgTxHandler envuelve un tool handler con el wireup RLS completo
+// (issue-25.14 + cierre 25.5 Tier-1): abre tx con SET LOCAL
+// app.current_org_id/user_id, la inyecta en el ctx (los services la
+// toman vía txctx.TxFromContext) y COMMITEA si el tool terminó sin
+// error. Aplicar a todo tool que toque tablas con RLS FORCE
+// (observations, sessions y las de 000028).
+func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		txCtx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
+		defer release()
+		result, err := h(txCtx, req)
+		if tx != nil && err == nil && (result == nil || !result.IsError) {
+			if cerr := tx.Commit(txCtx); cerr != nil {
+				// ErrTxCommitRollback: la tx abortó por un error SQL que el
+				// handler ya manejó como caso esperado (e.g. dedup por unique
+				// violation en capture_passive → "captured: false"). El result
+				// del handler refleja el estado real; no es un fallo del tool.
+				if errors.Is(cerr, pgx.ErrTxCommitRollback) {
+					return result, nil
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("commit failed: %v", cerr)), nil
+			}
+		}
+		return result, err
+	}
+}
+
+// q retorna la tx del contexto (wireup activo) o el Pool como fallback.
+// Para queries directas de los handlers MCP sobre tablas con RLS.
+func (d *Deps) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return d.Pool
 }
 
 // commitOrRollback es un helper de uso común: si err es nil y tx no es nil,

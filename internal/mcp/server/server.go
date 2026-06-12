@@ -108,19 +108,24 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			CBThreshold: 5, CBCooldown: 30 * time.Second,
 		})
 	}
+	// rls envuelve los handlers de tools que tocan tablas con RLS FORCE
+	// (observations/sessions, migration 000085): tx + SET LOCAL + commit.
+	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, h)
+	}
 	tools := []mcpgo.ServerTool{
-		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", deps.handleMemSave)},
-		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", deps.handleMemSearch)},
-		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", deps.handleMemContext)},
-		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", deps.handleMemGetObservation)},
-		{Tool: toolSessionStart(), Handler: wrap.Wrap("domain_session_start", deps.handleSessionStart)},
-		{Tool: toolSessionEnd(), Handler: wrap.Wrap("domain_session_end", deps.handleSessionEnd)},
-		{Tool: toolSessionActive(), Handler: wrap.Wrap("domain_session_active", deps.handleSessionActive)},
+		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", rls(deps.handleMemSave))},
+		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", rls(deps.handleMemSearch))},
+		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", rls(deps.handleMemContext))},
+		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", rls(deps.handleMemGetObservation))},
+		{Tool: toolSessionStart(), Handler: wrap.Wrap("domain_session_start", rls(deps.handleSessionStart))},
+		{Tool: toolSessionEnd(), Handler: wrap.Wrap("domain_session_end", rls(deps.handleSessionEnd))},
+		{Tool: toolSessionActive(), Handler: wrap.Wrap("domain_session_active", rls(deps.handleSessionActive))},
 		{Tool: toolPromptGet(), Handler: wrap.Wrap("domain_prompt_get", deps.handlePromptGet)},
 		{Tool: toolPromptSearch(), Handler: wrap.Wrap("domain_prompt_search", deps.handlePromptSearch)},
-		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", deps.handleContext)},
-		{Tool: toolTimeline(), Handler: wrap.Wrap("domain_timeline", deps.handleTimeline)},
-		{Tool: toolGlobalSearch(), Handler: wrap.Wrap("domain_search_global", deps.handleGlobalSearch)},
+		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", rls(deps.handleContext))},
+		{Tool: toolTimeline(), Handler: wrap.Wrap("domain_timeline", rls(deps.handleTimeline))},
+		{Tool: toolGlobalSearch(), Handler: wrap.Wrap("domain_search_global", rls(deps.handleGlobalSearch))},
 		{Tool: toolKnowledgeSave(), Handler: wrap.Wrap("domain_knowledge_save", deps.handleKnowledgeSave)},
 		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", deps.handleKnowledgeSearch)},
 		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", deps.handleKnowledgeGet)},
@@ -138,6 +143,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	tools = append(tools, registerMemoryTools(wrap, deps)...)
 	tools = append(tools, registerCatalogTools(wrap, deps)...)
 	tools = append(tools, registerPolicyTools(wrap, deps)...)
+	tools = append(tools, registerProjectTools(wrap, deps)...)
 	tools = append(tools, registerHUTools(wrap, deps)...)
 	tools = append(tools, registerIntakeTools(wrap, deps)...)
 	tools = append(tools, registerSyncTools(wrap, deps)...)
@@ -146,12 +152,31 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	return tools
 }
 
+// ServerInstructions es el protocolo de uso que el agente recibe en el
+// initialize. Sin esto, agentes con varios MCP de memoria conectados
+// eligen otro server (sus instrucciones "ganan") y domain queda sin uso.
+const ServerInstructions = `Domain es la plataforma de memoria persistente, policies SDD, skills, agents y flows del usuario. Protocolo:
+
+MEMORIA (proactivo, no esperes a que te lo pidan):
+- domain_mem_save tras CADA decisión, bug resuelto, convención o descubrimiento. project_slug = nombre del repo/proyecto actual (se auto-crea si no existe).
+- domain_mem_search / domain_search_global cuando el usuario pida recordar algo o empieces trabajo que pudo hacerse antes.
+- domain_mem_context al inicio de sesión para recuperar contexto.
+
+POLICIES (antes de tocar código):
+- domain_policy_list para descubrir las rules vigentes; domain_policy_get(slug) para leer la rule del dominio que vas a tocar.
+
+CATÁLOGO:
+- domain_skill_search para encontrar skills relevantes a tu tarea; domain_project_list para ver projects existentes.
+
+Si el usuario menciona "memoria", "recordar", "guardar" o "policies" sin especificar herramienta, usá los tools domain_* de este server.`
+
 // New monta el servidor MCP con los tools del prefijo `domain_*`.
 func New(deps Deps) *mcpgo.MCPServer {
 	srv := mcpgo.NewMCPServer(
 		deps.ServerName,
 		deps.ServerVer,
 		mcpgo.WithToolCapabilities(true),
+		mcpgo.WithInstructions(ServerInstructions),
 	)
 	srv.AddTools(Tools(deps)...)
 	return srv
@@ -529,7 +554,17 @@ func (d *Deps) handleMemSave(ctx context.Context, req mcp.CallToolRequest) (*mcp
 
 	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found: %v", projectSlug, err)), nil
+		// Auto-crear el project (plug-and-play): en un install fresco no
+		// existe ninguno y sin esto el agente no puede guardar memorias.
+		proj, err = d.Projects.Create(ctx, projsvc.CreateInput{
+			OrganizationID: orgID,
+			Name:           projectSlug,
+			Slug:           projectSlug,
+			ActorID:        userID,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found and auto-create failed: %v", projectSlug, err)), nil
+		}
 	}
 
 	var tags []string

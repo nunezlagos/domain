@@ -18,12 +18,16 @@ import (
 )
 
 func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	// rls: tx + SET LOCAL para tablas con RLS FORCE (observations/sessions).
+	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, h)
+	}
 	return []mcpgo.ServerTool{
-		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", deps.handleMemDelete)},
+		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(deps.handleMemDelete))},
 		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", deps.handleMemSavePrompt)},
-		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", deps.handleMemCapturePassive)},
+		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(deps.handleMemCapturePassive))},
 		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", deps.handleMemSuggestTopicKey)},
-		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", deps.handleMemStats)},
+		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(deps.handleMemStats))},
 	}
 }
 
@@ -41,9 +45,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// issue-25.14: wireup tx con SET LOCAL para RLS
-	ctx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
-	defer release()
+	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
 	args := req.GetArguments()
 	idRaw, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idRaw)
@@ -64,7 +66,6 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err := d.Observations.SoftDelete(ctx, id, userID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
-	_ = commitOrRollback(ctx, tx, nil)
 	return toolResultJSON(map[string]any{"deleted": true, "observation_id": id})
 }
 
@@ -154,9 +155,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// issue-25.14: wireup tx con SET LOCAL para RLS
-	ctx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
-	defer release()
+	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
 	args := req.GetArguments()
 	projectSlug, _ := args["project_slug"].(string)
 	content, _ := args["content"].(string)
@@ -192,7 +191,6 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		}
 		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 	}
-	_ = commitOrRollback(ctx, tx, nil)
 	return toolResultJSON(map[string]any{"captured": true, "observation_id": obs.ID})
 }
 
@@ -294,7 +292,8 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	byType := map[string]int64{}
-	rows, err := d.Pool.Query(ctx, `
+	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyectó withOrgTxHandler.
+	rows, err := d.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM observations
 		WHERE organization_id = $1 AND deleted_at IS NULL`+projFilter+`
 		GROUP BY observation_type`, qArgs...)
@@ -318,9 +317,9 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	var sessions, prompts int64
-	_ = d.Pool.QueryRow(ctx,
+	_ = d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM sessions WHERE organization_id = $1`, orgID).Scan(&sessions)
-	_ = d.Pool.QueryRow(ctx,
+	_ = d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE organization_id = $1 AND deleted_at IS NULL`, orgID).Scan(&prompts)
 
 	return toolResultJSON(map[string]any{

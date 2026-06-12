@@ -33,30 +33,57 @@ export DOMAIN_DATABASE_URL="postgres://app_admin:pass@localhost:5432/domain?sslm
 Salida esperada: `applied 72 migrations` (incluye seed initial + grants
 defensivos de la migration 000072).
 
-## 4) Bootstrap dev — crea org + api_key + .env
+
+## 4) Onboard — wizard first-run (issue-01.9)
 
 ```bash
-./bin/domain dev-bootstrap
+./bin/domain onboard
 ```
 
-Esto:
-- Crea org `dev` + user `admin@example.local`
-- Emite api_key fresh
-- Escribe `DOMAIN_API_KEY=...` en `.env`
+Este es el **unico comando** que necesitas para arrancar. Detecta
+first-run automaticamente:
 
-Output:
+- **Si la DB esta vacia** (sin users): auto-crea la primera org + user
+  + API key via `POST /api/v1/auth/bootstrap`. No necesitas conectarte
+  a la DB a mano.
+- **Si ya hay users**: usa el flujo OTP normal
+  (`POST /auth/request-otp` + `POST /auth/verify-otp`).
 
+Modos no-interactivos:
+
+```bash
+# CI/scripts: provee todo por flag
+./bin/domain onboard --non-interactive \
+    --base-url http://localhost:8000 \
+    --email admin@saargo.com \
+    --no-opencode
+
+# Desde el chat del agente (opencode o claude-code)
+/domain-login
 ```
-✓ org id=... slug=dev
-✓ user id=... email=admin@example.local
-✓ api_key id=... prefix=dom_dev_xxxxxx
 
-API KEY (guardalo, no se vuelve a mostrar):
+API key emitida por bootstrap:
+- `expires_at = NULL` → **no expira automáticamente**. La rotación es
+  manual via `POST /api/v1/api-keys/{id}/revoke` o `domain keys revoke`
+  (HU futura).
+- `environment = 'live'` (no `test`).
 
-  dom_dev_xxxxxx...
-
-✓ .env actualizado: DOMAIN_API_KEY=...
+**Si el agente intenta usar domain-mcp sin estar logueado**, el binario
+falla con exit 1 y mensaje claro:
 ```
+domain-mcp: DOMAIN_API_KEY is not set.
+To authenticate, run in your terminal:
+  domain onboard
+Or, if opencode is already connected, type:
+  /domain-login
+```
+
+El agente NO puede llamar tools hasta que se complete el flow de
+autenticación. Este enforcement es por diseño: si la herramienta está
+instalada, el user DEBE estar logueado para usarla.
+
+Ver `openspec/changes/REQ-01-core-platform/issue-01.9-first-run-onboard/`
+para la spec completa.
 
 ## 5) Levantar el server
 
@@ -77,6 +104,61 @@ curl -H "Authorization: Bearer $DOMAIN_API_KEY" \
      http://localhost:8000/api/v1/prompt
 # {"data":{"outcome":"chat","intent":"chat","reply":"..."}}
 ```
+
+## 5.5) Install / Update / Restore (issue-01.10)
+
+Para flujo all-in-one (detectar estado + backups + migrate + seed +
+configurar agente), usar el wizard de install:
+
+```bash
+./bin/domain install                    # interactive (pregunta el deployment mode)
+./bin/domain install --mode local       # local: docker compose up Postgres+S3+SMTP
+./bin/domain install --mode cloud --dsn 'postgres://u:p@neon.tech/db?sslmode=require'
+./bin/domain install --non-interactive  # sin prompts (usa defaults)
+./bin/domain install --no-backup        # sin backups automáticos (no recomendado)
+```
+
+El wizard es **idempotente**: si Domain ya está bootstrapped, lo
+detecta y solo corre los pasos pendientes (skip de los que ya están
+hechos). Muestra un summary final con `ok=N skipped=N failed=N`.
+
+Para upgrades sin tocar configs del agente:
+
+```bash
+./bin/domain update                     # backups + migrate + seed
+./bin/domain update --no-migrate        # solo seed (skip migrations)
+./bin/domain update --no-seed           # solo migrate (skip seeders)
+./bin/domain seed all                    # alias de update --no-backup --no-migrate
+```
+
+Para rollback puntual de un archivo:
+
+```bash
+# 1) Listar backups disponibles
+ls -la ~/.config/domain/credentials.json.bak.*  # uno por update
+
+# 2) Restaurar
+./bin/domain restore ~/.config/domain/credentials.json.bak.20260611T120000Z
+# ✓ Restored .../credentials.json.bak.20260611T120000Z → .../credentials.json
+#   API key validated against server
+```
+
+**Backups automáticos:** install/update SIEMPRE crean `.bak.<RFC3339>`
+de credentials.json, .env y opencode.json antes de cualquier mutación
+(a menos que uses `--no-backup`). El prune es configurable vía
+`BackupFile(path, keepLast=N)`. Los seeders son idempotentes
+(skip-by-hash via `seed_versions`), por lo que `update` no duplica
+data — solo aplica lo que cambió desde la última versión.
+
+**Validación de DSN en cloud mode:** si el host es de un cloud
+provider conocido (neon.tech, rds.amazonaws.com, supabase.co,
+heroku.com, planetscale.com, googleapis.com, azure.com,
+digitalocean.com), `ValidateDSN` rechaza sslmode=disable|allow|prefer.
+Solo `require` o `verify-full` son aceptados.
+
+Ver `openspec/changes/REQ-01-core-platform/issue-01.10-deploy-modes-update/`
+para la spec completa de los modos de deployment, hybrid config y
+arquitectura de backups.
 
 ## 6) Conectar al agente IA (Claude Code)
 

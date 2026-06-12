@@ -2,35 +2,35 @@
 
 ## Backend
 
-- [ ] Crear `internal/auth/keygen.go` con generación de key usando `crypto/rand`
-- [ ] Crear `internal/auth/store.go` con interface APIKeyStore e implementación Postgres
-- [ ] Implementar `Create`: generar key, hashear bcrypt, guardar, retornar key original
-- [ ] Implementar `Authenticate`: lookup por key_prefix, bcrypt verify, check revoked/expired
-- [ ] Implementar `ListByOrganization`: listar sin key_hash ni key original
-- [ ] Implementar `Delete`: borrado físico
-- [ ] Implementar `Rotate`: nueva key + revocar anterior (transacción)
-- [ ] Implementar `Revoke`: set revoked_at = now()
-- [ ] Crear middleware HTTP `AuthMiddleware` en `internal/api/middleware/auth.go`
-- [ ] Agregar dependencia `golang.org/x/crypto/bcrypt`
-- [ ] Registrar endpoints CRUD en router
-- [ ] Sanitizar logs para no exponer keys
+- [x] Crear `internal/auth/keygen.go` con generación de key usando `crypto/rand`
+- [x] Crear `internal/auth/store.go` con interface APIKeyStore e implementación Postgres
+- [x] Implementar `Create`: generar key, hashear bcrypt, guardar, retornar key original
+- [x] Implementar `Authenticate`: lookup por key_prefix, bcrypt verify, check revoked/expired
+- [x] Implementar `ListByOrganization`: listar sin key_hash ni key original
+- [x] Implementar `Delete`: borrado físico
+- [x] Implementar `Rotate`: nueva key + revocar anterior (transacción)
+- [x] Implementar `Revoke`: set revoked_at = now()
+- [x] Crear middleware HTTP `AuthMiddleware` en `internal/api/middleware/auth.go`
+- [x] Agregar dependencia `golang.org/x/crypto/bcrypt`
+- [x] Registrar endpoints CRUD en router
+- [x] Sanitizar logs para no exponer keys
 
 ## Tests
 
-- [ ] Test unitario: keygen formato y largo
-- [ ] Test unitario: bcrypt hash/verify
-- [ ] Test unitario: Authenticate OK
-- [ ] Test unitario: Authenticate con key inválida
-- [ ] Test unitario: Authenticate con key expirada
-- [ ] Test unitario: Authenticate con key revocada
-- [ ] Test unitario: Create devuelve key original (una vez)
-- [ ] Test unitario: Rotate atómico
-- [ ] Test unitario: List sin datos sensibles
-- [ ] Test middleware: 401 en cada caso de error
-- [ ] Sabotaje: cambiar bcrypt.Compare para aceptar cualquier key → confirmar que test cae → restaurar
-- [ ] Sabotaje: no checkear revoked_at → confirmar que test cae → restaurar
+- [x] Test unitario: keygen formato y largo
+- [x] Test unitario: bcrypt hash/verify
+- [x] Test unitario: Authenticate OK
+- [x] Test unitario: Authenticate con key inválida
+- [x] Test unitario: Authenticate con key expirada
+- [x] Test unitario: Authenticate con key revocada
+- [x] Test unitario: Create devuelve key original (una vez)
+- [x] Test unitario: Rotate atómico
+- [x] Test unitario: List sin datos sensibles
+- [x] Test middleware: 401 en cada caso de error
+- [x] Sabotaje: cambiar bcrypt.Compare para aceptar cualquier key → confirmar que test cae → restaurar
+- [x] Sabotaje: no checkear revoked_at → confirmar que test cae → restaurar
 
 ## Cierre
 
-- [ ] Verificación manual con curl: crear key, autenticarse, listar, rotar
-- [ ] Suite verde
+- [x] Verificación manual con curl: crear key, autenticarse, listar, rotar
+- [x] Suite verde

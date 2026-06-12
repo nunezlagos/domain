@@ -11,13 +11,32 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // MemoriesAdmin maneja /admin/memories*.
 type MemoriesAdmin struct {
 	Pool      *pgxpool.Pool
 	AuthCheck func(*http.Request) bool
+}
+
+// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
+// (issue-25.14), o el pool como fallback.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (a *MemoriesAdmin) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return a.Pool
 }
 
 func (a *MemoriesAdmin) Register(mux *http.ServeMux) {

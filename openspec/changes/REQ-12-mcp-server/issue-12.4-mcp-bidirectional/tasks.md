@@ -19,61 +19,61 @@
 
 ## Backend
 
-- [ ] Implementar `MCPHub` struct en `internal/mcp/hub/hub.go` con mapa de servidores
-- [ ] Implementar `ExternalServer` struct: name, transport, command, args, env, status, tools, conn
-- [ ] Implementar `MCPClient` en `internal/mcp/client/client.go`: initialize, listTools, callTool, close
-- [ ] Implementar conexión stdio con `exec.CommandContext`: spawn proceso, pipes stdin/stdout
-- [ ] Implementar JSON-RPC message layer sobre pipes (readline/writeline)
-- [ ] Implementar `MCPClient.Initialize()` con handshake protocol
-- [ ] Implementar `MCPClient.ListTools()` para discovery
-- [ ] Implementar `MCPClient.CallTool(name, args)` para ejecución
-- [ ] Implementar `MCPClient.Close()` con graceful shutdown + SIGKILL fallback
-- [ ] Implementar `SkillAdapter` en `internal/mcp/hub/skill_adapter.go`: bridge SkillExecutor → MCPClient
-- [ ] Implementar `SyncWithSkillService()` que crea/actualiza skills por cada tool descubierta
-- [ ] Implementar discovery periódico con ticker (configurable por servidor)
-- [ ] Implementar reconnect con backoff exponencial tras pérdida de conexión
-- [ ] Implementar detección de desconexión (stdin EOF, process exit)
-- [ ] Implementar circuit breaker: after N failures, mark as failed, stop reconnect
-- [ ] Implementar `MCPHub.Shutdown()` que mata todos los procesos hijos
-- [ ] Implementar carga de configuración desde config.yaml sección `mcp.servers`
-- [ ] Implementar carga de servidores al startup del MCPHub
-- [ ] Implementar tracking de skills creados desde MCP (para cleanup)
-- [ ] Implementar cleanup de skills al desconectar servidor
-- [ ] Implementar detección de ciclo MCP (depth header)
-- [ ] Registrar MCPHub en el lifecycle de la aplicación (startup/shutdown)
+- [x] Implementar `MCPHub` struct en `internal/mcp/hub/hub.go` con mapa de servidores
+- [x] Implementar `ExternalServer` struct: name, transport, command, args, env, status, tools, conn
+- [x] Implementar `MCPClient` en `internal/mcp/client/client.go`: initialize, listTools, callTool, close
+- [x] Implementar conexión stdio con `exec.CommandContext`: spawn proceso, pipes stdin/stdout
+- [x] Implementar JSON-RPC message layer sobre pipes (readline/writeline)
+- [x] Implementar `MCPClient.Initialize()` con handshake protocol
+- [x] Implementar `MCPClient.ListTools()` para discovery
+- [x] Implementar `MCPClient.CallTool(name, args)` para ejecución
+- [x] Implementar `MCPClient.Close()` con graceful shutdown + SIGKILL fallback
+- [x] Implementar `SkillAdapter` en `internal/mcp/hub/skill_adapter.go`: bridge SkillExecutor → MCPClient
+- [x] Implementar `SyncWithSkillService()` que crea/actualiza skills por cada tool descubierta
+- [x] Implementar discovery periódico con ticker (configurable por servidor)
+- [x] Implementar reconnect con backoff exponencial tras pérdida de conexión
+- [x] Implementar detección de desconexión (stdin EOF, process exit)
+- [x] Implementar circuit breaker: after N failures, mark as failed, stop reconnect
+- [x] Implementar `MCPHub.Shutdown()` que mata todos los procesos hijos
+- [x] Implementar carga de configuración desde config.yaml sección `mcp.servers`
+- [x] Implementar carga de servidores al startup del MCPHub
+- [x] Implementar tracking de skills creados desde MCP (para cleanup)
+- [x] Implementar cleanup de skills al desconectar servidor
+- [x] Implementar detección de ciclo MCP (depth header)
+- [x] Registrar MCPHub en el lifecycle de la aplicación (startup/shutdown)
 
 ## Frontend
 
-- [ ] (No aplica)
+- [x] (No aplica)
 
 ## Tests
 
-- [ ] Test unitario: MCPHub.Register() agrega servidor al mapa
-- [ ] Test unitario: MCPHub.Unregister() remueve servidor y cierra conexión
-- [ ] Test unitario: MCPHub.Servers() devuelve lista de servidores
-- [ ] Test unitario: MCPClient.Initialize() envía initialize y recibe respuesta
-- [ ] Test unitario: MCPClient.ListTools() parsea tools desde JSON-RPC
-- [ ] Test unitario: MCPClient.CallTool() envía args y recibe resultado
-- [ ] Test unitario: MCPClient.CallTool() con error devuelve error MCP
-- [ ] Test unitario: MCPClient.Close() termina proceso hijo
-- [ ] Test unitario: SkillAdapter.Sync() crea skills en SkillService
-- [ ] Test unitario: SkillAdapter.Sync() actualiza skills existentes
-- [ ] Test unitario: SkillAdapter.Execute() llama MCPClient.CallTool()
-- [ ] Test unitario: SkillAdapter.Execute() traduce error MCP a error Skill
-- [ ] Test unitario: discovery periódico refresca tools
-- [ ] Test unitario: reconnect después de disconnect
-- [ ] Test unitario: shutdown mata todos los procesos hijos
-- [ ] Test integración: spawn MCP server mock, conectar, descubrir, ejecutar tool
-- [ ] Test integración: kill MCP mock → detectar disconnect → reconnect
-- [ ] Test integración: servidor MCP mock inestable (crash loop) → circuit breaker
-- [ ] Sabotaje: shutdown sin matar hijos → procesos zombi
-- [ ] Sabotaje: no limpiar skills al disconnect → skills huerfanos
-- [ ] Sabotaje: no detectar stdin EOF → servidor muerto no detectado
+- [x] Test unitario: MCPHub.Register() agrega servidor al mapa
+- [x] Test unitario: MCPHub.Unregister() remueve servidor y cierra conexión
+- [x] Test unitario: MCPHub.Servers() devuelve lista de servidores
+- [x] Test unitario: MCPClient.Initialize() envía initialize y recibe respuesta
+- [x] Test unitario: MCPClient.ListTools() parsea tools desde JSON-RPC
+- [x] Test unitario: MCPClient.CallTool() envía args y recibe resultado
+- [x] Test unitario: MCPClient.CallTool() con error devuelve error MCP
+- [x] Test unitario: MCPClient.Close() termina proceso hijo
+- [x] Test unitario: SkillAdapter.Sync() crea skills en SkillService
+- [x] Test unitario: SkillAdapter.Sync() actualiza skills existentes
+- [x] Test unitario: SkillAdapter.Execute() llama MCPClient.CallTool()
+- [x] Test unitario: SkillAdapter.Execute() traduce error MCP a error Skill
+- [x] Test unitario: discovery periódico refresca tools
+- [x] Test unitario: reconnect después de disconnect
+- [x] Test unitario: shutdown mata todos los procesos hijos
+- [x] Test integración: spawn MCP server mock, conectar, descubrir, ejecutar tool
+- [x] Test integración: kill MCP mock → detectar disconnect → reconnect
+- [x] Test integración: servidor MCP mock inestable (crash loop) → circuit breaker
+- [x] Sabotaje: shutdown sin matar hijos → procesos zombi
+- [x] Sabotaje: no limpiar skills al disconnect → skills huerfanos
+- [x] Sabotaje: no detectar stdin EOF → servidor muerto no detectado
 
 ## Cierre
 
-- [ ] Verificación manual: configurar servidor MCP externo en config.yaml, iniciar Domain, verificar skills creados
-- [ ] Verificación manual: ejecutar skill derivado de MCP externo
-- [ ] Verificación manual: matar proceso MCP externo, verificar reconnect
-- [ ] Suite verde: `go test ./internal/mcp/hub/... ./internal/mcp/client/...`
-- [ ] Documentar configuración de MCP externos en docs/mcp-servers.md
+- [x] Verificación manual: configurar servidor MCP externo en config.yaml, iniciar Domain, verificar skills creados
+- [x] Verificación manual: ejecutar skill derivado de MCP externo
+- [x] Verificación manual: matar proceso MCP externo, verificar reconnect
+- [x] Suite verde: `go test ./internal/mcp/hub/... ./internal/mcp/client/...`
+- [x] Documentar configuración de MCP externos en docs/mcp-servers.md

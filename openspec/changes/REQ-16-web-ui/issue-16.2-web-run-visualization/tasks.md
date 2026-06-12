@@ -2,42 +2,42 @@
 
 ## Backend
 
-- [ ] Implementar endpoint GET /api/v1/runs con status indicators (list)
-- [ ] Implementar endpoint GET /api/v1/runs/{id} con steps detail
-- [ ] Implementar endpoint SSE GET /api/v1/runs/{id}/stream
-- [ ] Implementar RunNotifier (pub/sub) para broadcasting de eventos
-- [ ] Emitir eventos de step_update desde runner system
-- [ ] Calcular duración y cost por paso server-side
-- [ ] Agregar índices en runs table para queries rápidas
+- [x] Implementar endpoint GET /api/v1/runs con status indicators (list)
+- [x] Implementar endpoint GET /api/v1/runs/{id} con steps detail
+- [x] Implementar endpoint SSE GET /api/v1/runs/{id}/stream
+- [x] Implementar RunNotifier (pub/sub) para broadcasting de eventos
+- [x] Emitir eventos de step_update desde runner system
+- [x] Calcular duración y cost por paso server-side
+- [x] Agregar índices en runs table para queries rápidas
 
 ## Frontend
 
-- [ ] Instalar React Flow + dagre para layout automático
-- [ ] Implementar FlowDAG component con nodos por status
-- [ ] Implementar StepNode custom component con colores/iconos/animaciones
-- [ ] Implementar StepDetailPanel (sidebar con input, output, metrics)
-- [ ] Implementar LogViewer con virtual scroll (react-window)
-- [ ] Implementar SSE connection con EventSource + auto-reconnect
-- [ ] Implementar actualización en tiempo real de DAG via SSE
-- [ ] Implementar RunTimeline component alternativo
-- [ ] Implementar RunListPage con status indicators
-- [ ] Implementar RunHeader con métricas agregadas
-- [ ] Manejar empty state: "No steps recorded"
-- [ ] Manejar error state: conexión perdida
+- [x] Instalar React Flow + dagre para layout automático
+- [x] Implementar FlowDAG component con nodos por status
+- [x] Implementar StepNode custom component con colores/iconos/animaciones
+- [x] Implementar StepDetailPanel (sidebar con input, output, metrics)
+- [x] Implementar LogViewer con virtual scroll (react-window)
+- [x] Implementar SSE connection con EventSource + auto-reconnect
+- [x] Implementar actualización en tiempo real de DAG via SSE
+- [x] Implementar RunTimeline component alternativo
+- [x] Implementar RunListPage con status indicators
+- [x] Implementar RunHeader con métricas agregadas
+- [x] Manejar empty state: "No steps recorded"
+- [x] Manejar error state: conexión perdida
 
 ## Tests
 
-- [ ] Test unitario: step status color mapping
-- [ ] Test unitario: SSE event parsing
-- [ ] Test unitario: LogViewer rendering
-- [ ] Test de integración: backend SSE endpoint
-- [ ] Test de integración: frontend actualiza nodos con SSE event
-- [ ] Test visual: DAG con diferentes layouts
-- [ ] Sabotaje: SSE desconectado → frontend reconecta
+- [x] Test unitario: step status color mapping
+- [x] Test unitario: SSE event parsing
+- [x] Test unitario: LogViewer rendering
+- [x] Test de integración: backend SSE endpoint
+- [x] Test de integración: frontend actualiza nodos con SSE event
+- [x] Test visual: DAG con diferentes layouts
+- [x] Sabotaje: SSE desconectado → frontend reconecta
 
 ## Cierre
 
-- [ ] Verificación manual: ejecutar flow, ver DAG en vivo
-- [ ] Suite backend: `go test ./internal/api/...`
-- [ ] Suite frontend: `npm run test`
-- [ ] Build: `npm run build` sin errores
+- [x] Verificación manual: ejecutar flow, ver DAG en vivo
+- [x] Suite backend: `go test ./internal/api/...`
+- [x] Suite frontend: `npm run test`
+- [x] Build: `npm run build` sin errores

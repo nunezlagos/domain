@@ -20,7 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"nunezlagos/domain/internal/auth/apikey"
 )
@@ -28,8 +28,17 @@ import (
 const HeaderIdempotencyKey = "Idempotency-Key"
 const HeaderReplayed = "Idempotent-Replayed"
 
+// DBPool es la interfaz minima de pgxpool.Pool que el middleware necesita.
+// Definida como interfaz para permitir mocking en tests sin DB real.
+// La implementacion de produccion es *pgxpool.Pool; los tests usan un fake
+// que satisface solo QueryRow + Exec.
+type DBPool interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
 type Idempotency struct {
-	Pool *pgxpool.Pool
+	Pool DBPool
 }
 
 // Wrap aplica idempotency check para POST/PATCH/DELETE. Skip si no hay key

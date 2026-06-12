@@ -2,32 +2,32 @@
 
 ## Backend
 
-- [ ] `migrations/XXXX_create_tasks.sql`: tabla + FK a issues + índices
-- [ ] `migrations/XXXX_create_verification_results.sql`: tabla + FK a tasks
-- [ ] `migrations/XXXX_create_sabotage_records.sql`: tabla + FK a tasks
-- [ ] `internal/opsx/task.go`: structs `Task`, `VerificationResult`, `SabotageRecord`, `ProgressReport`
-- [ ] `internal/store/pg/task.go`: interfaz `TaskStore`
-- [ ] Implementar `CreateTasks(huID uuid.UUID, tasks []Task) error` (batch con position auto)
-- [ ] Implementar `ListTasks(huID uuid.UUID) ([]Task, error)` con secciones ordenadas
-- [ ] Implementar `GetTask(id uuid.UUID) (*Task, error)` con joins a verification + sabotage
-- [ ] Implementar `UpdateTaskStatus(id uuid.UUID, status string) error` con validación de transición
-- [ ] Implementar `GetProgress(huID uuid.UUID) (*ProgressReport, error)`
-- [ ] Implementar `CreateVerification(verification VerificationResult) (uuid.UUID, error)`
-- [ ] Implementar `CreateSabotage(sabotage SabotageRecord) (uuid.UUID, error)`
-- [ ] Implementar `ListSabotages(taskID uuid.UUID) ([]SabotageRecord, error)`
-- [ ] `internal/opsx/task_service.go`: lógica de negocio, validaciones de transición
+- [x] `migrations/XXXX_create_tasks.sql`: tabla + FK a issues + índices
+- [x] `migrations/XXXX_create_verification_results.sql`: tabla + FK a tasks
+- [x] `migrations/XXXX_create_sabotage_records.sql`: tabla + FK a tasks
+- [x] `internal/opsx/task.go`: structs `Task`, `VerificationResult`, `SabotageRecord`, `ProgressReport`
+- [x] `internal/store/pg/task.go`: interfaz `TaskStore`
+- [x] Implementar `CreateTasks(huID uuid.UUID, tasks []Task) error` (batch con position auto)
+- [x] Implementar `ListTasks(huID uuid.UUID) ([]Task, error)` con secciones ordenadas
+- [x] Implementar `GetTask(id uuid.UUID) (*Task, error)` con joins a verification + sabotage
+- [x] Implementar `UpdateTaskStatus(id uuid.UUID, status string) error` con validación de transición
+- [x] Implementar `GetProgress(huID uuid.UUID) (*ProgressReport, error)`
+- [x] Implementar `CreateVerification(verification VerificationResult) (uuid.UUID, error)`
+- [x] Implementar `CreateSabotage(sabotage SabotageRecord) (uuid.UUID, error)`
+- [x] Implementar `ListSabotages(taskID uuid.UUID) ([]SabotageRecord, error)`
+- [x] `internal/opsx/task_service.go`: lógica de negocio, validaciones de transición
 
 ## Tests
 
-- [ ] Test unitario: status transitions (pending→in_progress ok, pending→completed error)
-- [ ] Test unitario: progress calculation
-- [ ] Test de integración: crear tareas batch → listar ordenadas
-- [ ] Test de integración: ciclo completo crear → progreso → completar → verificar
-- [ ] Test de integración: registrar sabotaje y verificar restored flag
-- [ ] Test de error: verificar tarea en status pending
-- [ ] Sabotaje: eliminar FK de tasks → create verification falla
+- [x] Test unitario: status transitions (pending→in_progress ok, pending→completed error)
+- [x] Test unitario: progress calculation
+- [x] Test de integración: crear tareas batch → listar ordenadas
+- [x] Test de integración: ciclo completo crear → progreso → completar → verificar
+- [x] Test de integración: registrar sabotaje y verificar restored flag
+- [x] Test de error: verificar tarea en status pending
+- [x] Sabotaje: eliminar FK de tasks → create verification falla
 
 ## Cierre
 
-- [ ] Verificación manual: crear HU>tareas>completar>verificar>sabotear
-- [ ] Suite verde
+- [x] Verificación manual: crear HU>tareas>completar>verificar>sabotear
+- [x] Suite verde

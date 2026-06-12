@@ -18,3 +18,14 @@ notes: |
   UserLookup integration: otpUserLookupAdapter en cmd/domain/main.go implementa
   otp.UserLookup vía consultas directas a users table (ByEmail + ByRUT).
   Rate-limit per identifier/IP cubierto por issue-02.5 (OTPRateLimiter en handlers).
+
+  Divergencia documentada (auditoria 2026-06-11):
+  - design.md declaraba tabla auth_rate_limits particionada por hora para
+    rate-limit persistente cross-instance. Implementacion real usa
+    OTPRateLimiter in-memory (issue-02.5) — suficiente para single-instance
+    MVP, NO sobrevive restart ni se comparte entre replicas. Migrar a tabla
+    persistida si deploy pasa a multi-replica.
+  - design.md hablaba de "key_encrypted" en api_keys. Implementacion real
+    usa key_hash con bcrypt cost 12 — semantica de "encrypted" se cumple
+    (no reversible sin暴力攻击), y bcrypt es MAS seguro que cifrado
+    reversible para credential storage. No es gap.

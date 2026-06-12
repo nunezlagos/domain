@@ -111,6 +111,16 @@
   },
   {
     "method": "POST",
+    "path": "/api/v1/auth/bootstrap",
+    "handler": "authBootstrap"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/first-run",
+    "handler": "authFirstRun"
+  },
+  {
+    "method": "POST",
     "path": "/api/v1/auth/request-otp",
     "handler": "requestOTP"
   },

@@ -14,9 +14,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -63,6 +65,23 @@ type Service struct {
 	Audit audit.Recorder
 }
 
+// querier retorna la tx con SET LOCAL si el middleware HTTP la inyectó
+// (issue-25.14), o el pool como fallback. End() NO usa este helper porque
+// necesita su propia tx con FOR UPDATE; en ese caso, si la tx del ctx
+// existe, se reutiliza; sino se abre una nueva.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Service) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
+}
+
 func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return nil, ErrTitleRequired
@@ -71,7 +90,7 @@ func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
 		in.Tags = []string{}
 	}
 	var sess Session
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`INSERT INTO sessions (organization_id, project_id, user_id, title, tags)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, organization_id, project_id, user_id, title, COALESCE(summary,''),
@@ -98,15 +117,29 @@ func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
 
 // End cierra una session. summary opcional (puede ser ""). Si ya estaba cerrada
 // retorna ErrAlreadyEnded (no idempotente — el caller decide qué hacer).
+//
+// Si el middleware HTTP (issue-25.14) ya inyectó una tx con SET LOCAL,
+// se reutiliza (no se abre una nueva). Si NO hay tx, se abre una propia
+// con FOR UPDATE (lock pesimista sobre la fila de la session).
 func (s *Service) End(ctx context.Context, id, actorID uuid.UUID, summary string) (*Session, error) {
-	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
+	// ownedTx = true si ESTA función abrió la tx (debe hacer Commit/Rollback).
+	// ownedTx = false si vino del middleware (defer Rollback del middleware la cierra).
+	var tx pgx.Tx
+	ownedTx := false
+	if existing := txctx.TxFromContext(ctx); existing != nil {
+		tx = existing
+	} else {
+		var err error
+		tx, err = s.Pool.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("begin tx: %w", err)
+		}
+		ownedTx = true
+		defer func() { _ = tx.Rollback(ctx) }()
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
 
 	var sess Session
-	err = tx.QueryRow(ctx,
+	err := tx.QueryRow(ctx,
 		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
 		        tags, started_at, ended_at, created_at
 		 FROM sessions WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id,
@@ -129,8 +162,10 @@ func (s *Service) End(ctx context.Context, id, actorID uuid.UUID, summary string
 	if err != nil {
 		return nil, fmt.Errorf("end session: %w", err)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
+	if ownedTx {
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("commit: %w", err)
+		}
 	}
 	sess.EndedAt = &now
 	sess.Summary = summary
@@ -173,7 +208,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID, limit int) ([]Sess
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.q(ctx).Query(ctx,
 		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
 		        tags, started_at, ended_at, created_at
 		 FROM sessions
@@ -199,7 +234,7 @@ func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Ses
 	var sess Session
 	q := `SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
 	        tags, started_at, ended_at, created_at FROM sessions ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
+	err := s.q(ctx).QueryRow(ctx, q, args...).Scan(
 		&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
 		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

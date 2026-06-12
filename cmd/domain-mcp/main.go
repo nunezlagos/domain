@@ -83,7 +83,20 @@ func main() {
 	}
 	apiKey := os.Getenv("DOMAIN_API_KEY")
 	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "domain-mcp: DOMAIN_API_KEY requerido")
+		// issue-01.9: enforcement. Si el agente invoca el MCP server
+		// sin API key (porque no se logueo via /domain-login), el
+		// binario exit 1 con mensaje claro al user. NO arranca el
+		// server, asi que el agente no puede llamar ninguna tool.
+		fmt.Fprintln(os.Stderr, "domain-mcp: DOMAIN_API_KEY is not set.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "To authenticate, run in your terminal:")
+		fmt.Fprintln(os.Stderr, "  domain onboard")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Or, if opencode is already connected, type:")
+		fmt.Fprintln(os.Stderr, "  /domain-login")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "The wizard will create an API key, save it to")
+		fmt.Fprintln(os.Stderr, "~/.config/domain/credentials.json, and reconfigure the MCP server.")
 		os.Exit(1)
 	}
 
@@ -98,7 +111,14 @@ func main() {
 	keys := &apikey.PGStore{Pool: pools.Auth}
 	principal, err := keys.Resolve(ctx, apiKey)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "domain-mcp: API key inválida o revocada")
+		// issue-01.9: enforcement. Key invalida o revocada.
+		fmt.Fprintln(os.Stderr, "domain-mcp: API key is invalid or has been revoked.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "To re-authenticate, run in your terminal:")
+		fmt.Fprintln(os.Stderr, "  domain onboard")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Or, if opencode is already connected, type:")
+		fmt.Fprintln(os.Stderr, "  /domain-login")
 		os.Exit(1)
 	}
 

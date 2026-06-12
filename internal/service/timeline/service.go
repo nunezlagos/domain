@@ -13,7 +13,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var ErrObservationNotFound = errors.New("anchor observation not found")
@@ -49,6 +52,21 @@ type Snapshot struct {
 
 type Service struct {
 	Pool *pgxpool.Pool
+}
+
+// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
+// (issue-25.14), o el pool como fallback. issue-25.14 wireup.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (s *Service) q(ctx context.Context) querier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
 }
 
 // Context arma un snapshot del project. Si projectID == uuid.Nil, scope =
@@ -116,7 +134,7 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 		anchorOrgID     uuid.UUID
 		anchorContent   string
 	)
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT created_at, project_id, organization_id, content
 		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, observationID,
 	).Scan(&anchorCreatedAt, &anchorProjectID, &anchorOrgID, &anchorContent)
@@ -176,7 +194,7 @@ func (s *Service) queryActiveSession(ctx context.Context, userID, projectID uuid
 		args = []any{userID, projectID}
 	}
 	var e Entry
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(&e.ID, &e.Title, &e.CreatedAt)
+	err := s.q(ctx).QueryRow(ctx, q, args...).Scan(&e.ID, &e.Title, &e.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -212,7 +230,7 @@ func (s *Service) querySessions(ctx context.Context, orgID, userID, projectID uu
 		     ORDER BY started_at DESC LIMIT $4`
 		args = []any{orgID, userID, projectID, limit}
 	}
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +265,7 @@ func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.U
 		     ORDER BY created_at DESC LIMIT $3`
 		args = []any{orgID, projectID, limit}
 	}
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +303,7 @@ func (s *Service) queryPrompts(ctx context.Context, orgID, projectID uuid.UUID, 
 		     ORDER BY created_at DESC LIMIT $3`
 		args = []any{orgID, projectID, limit}
 	}
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +348,7 @@ func (s *Service) queryEntriesAround(ctx context.Context, projectID uuid.UUID, t
 		WHERE project_id = $1 AND created_at %s $2 AND is_active = true AND deleted_at IS NULL
 		ORDER BY 5 %s LIMIT $3
 	`, cmp, cmp, order)
-	rows, err := s.Pool.Query(ctx, q, projectID, ts, limit)
+	rows, err := s.q(ctx).Query(ctx, q, projectID, ts, limit)
 	if err != nil {
 		return nil, fmt.Errorf("around: %w", err)
 	}

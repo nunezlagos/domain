@@ -41,6 +41,9 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
+	// issue-25.14: wireup tx con SET LOCAL para RLS
+	ctx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
+	defer release()
 	args := req.GetArguments()
 	idRaw, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idRaw)
@@ -52,6 +55,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
 	// Guard anti-enumeration: misma respuesta para no-existe y otra org.
+	// Con RLS, la query Get de otra org devuelve ErrNotFound (0 rows), no leak.
 	obs, err := d.Observations.Get(ctx, id)
 	if err != nil || obs.OrganizationID != orgID {
 		return mcp.NewToolResultError("observation not found"), nil
@@ -60,6 +64,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err := d.Observations.SoftDelete(ctx, id, userID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
+	_ = commitOrRollback(ctx, tx, nil)
 	return toolResultJSON(map[string]any{"deleted": true, "observation_id": id})
 }
 
@@ -149,6 +154,9 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
+	// issue-25.14: wireup tx con SET LOCAL para RLS
+	ctx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
+	defer release()
 	args := req.GetArguments()
 	projectSlug, _ := args["project_slug"].(string)
 	content, _ := args["content"].(string)
@@ -184,6 +192,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		}
 		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 	}
+	_ = commitOrRollback(ctx, tx, nil)
 	return toolResultJSON(map[string]any{"captured": true, "observation_id": obs.ID})
 }
 

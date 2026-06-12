@@ -1,0 +1,28 @@
+status: implemented
+created: 2026-06-11
+implemented: 2026-06-11
+notes: |
+  HU-25.14 implementada en 6 commits atomicos sobre branch
+  feat/req-25.5-rls-wiring.
+
+  Componentes entregados:
+    1. Migration 000085: RLS + FORCE en observations y sessions
+    2. internal/store/txctx/context.go: WithTxContext, TxFromContext,
+       MustTxFromContext + ErrNoTxInContext. 5/5 unit tests verde.
+    3. internal/auth/apikey/middleware.go: post-auth abre tx con
+       SET LOCAL via set_config, inyecta via txctx.WithTxContext,
+       defer Rollback. cmd/domain/main.go pasa pools.App al nuevo
+       campo Pool (opcional, backward-compat). 19/19 tests del
+       paquete verde.
+    4. Refactor 7 servicios (observation, session, timeline, search,
+       lifecycle, stitcher, webui/admin_memories) para usar helper
+       q(ctx) que retorna tx del ctx o pool. Service.session.End()
+       caso especial: reutiliza tx del middleware si existe (no
+       duplica SET LOCAL).
+    5. internal/mcp/server/wireup.go: withOrgCtx() para tools MCP
+       (handleMemDelete, handleMemCapturePassive wired).
+    6. Test E2E: TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation
+       + TestE2E_Sabotage_HandlerIgnoresTx (build tag integration,
+       requieren Docker).
+
+  Ver tasks.md para detalle por tarea.

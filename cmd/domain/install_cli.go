@@ -648,6 +648,13 @@ func writeGlobalMCPEnv(cfg *config.Config, baseURL string) (string, error) {
 		{"DOMAIN_DATABASE_URL", cfg.DatabaseURL},
 		{"DOMAIN_BASE_URL", baseURL},
 	}
+	// CRÍTICO: el server de systemd corre con cwd=$HOME y lee SOLO este
+	// archivo. Sin DOMAIN_HTTP_PORT acá, escucha en el default 8000
+	// aunque el user haya elegido otro puerto — y el health-check del
+	// install espera en el puerto elegido → warning falso.
+	if u, err := url.Parse(baseURL); err == nil && u.Port() != "" {
+		pairs = append(pairs, [2]string{"DOMAIN_HTTP_PORT", u.Port()})
+	}
 	if cfg.DatabaseAuthURL != "" {
 		pairs = append(pairs, [2]string{"DOMAIN_DATABASE_AUTH_URL", cfg.DatabaseAuthURL})
 	}

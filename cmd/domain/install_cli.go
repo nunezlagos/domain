@@ -53,48 +53,58 @@ func runInstall(args []string) int {
 		return 2
 	}
 
-	fmt.Fprintln(os.Stderr, "Domain Install Wizard (issue-01.10)")
-	fmt.Fprintln(os.Stderr, "======================================")
+	// 5 steps esperados: detect, backup, migrate, seed, deploy-mode.
+	progress := NewInstallProgress(5, os.Stderr)
+	printBanner(os.Stderr)
 
 	// 1. Detección de estado
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Detecting current state...")
+	progress.StartStep("Detecting state")
 	state, err := install.DetectState(flags.baseURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "detect: %v\n", err)
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
 		return 1
 	}
-	fmt.Fprintln(os.Stderr, "  ", state.Summary())
+	progress.EndStep(StepOK, state.Summary())
 
 	// 2. Backups (idempotentes, skip si el archivo no existe)
-	if !flags.noBackup {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Backing up configs...")
-		runBackups()
+	if flags.noBackup {
+		progress.StartStep("Backing up configs")
+		progress.EndStep(StepSkipped, "--no-backup")
 	} else {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "(skipping backups per --no-backup)")
+		progress.StartStep("Backing up configs")
+		backed, skipped := runBackupsCount()
+		if backed == 0 && skipped == 0 {
+			progress.EndStep(StepWarning, "no files to backup")
+		} else {
+			progress.EndStep(StepOK, fmt.Sprintf("%d backed up, %d skipped", backed, skipped))
+		}
 	}
 
 	// 3. Migrate
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		progress.StartStep("Applying migrations")
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
 		return 1
 	}
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Applying migrations...")
+	progress.StartStep("Applying migrations")
 	if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
-		fmt.Fprintf(os.Stderr, "migrate: %v\n", err)
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
 		return 1
 	}
-	fmt.Fprintln(os.Stderr, "  ✓ migrations up to date")
+	progress.EndStep(StepOK, "schema up to date")
 
 	// 4. Seeders
+	progress.StartStep("Running seeders")
 	if err := runSeedersViaRegistry(cfg.DatabaseURL, cfg.Env); err != nil {
-		fmt.Fprintf(os.Stderr, "seed: %v\n", err)
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
 		return 1
 	}
+	progress.EndStep(StepOK, "all catalogs at target version")
 
 	// 5. Deployment mode (solo si el server está fresh; sino, ya
 	//    está bootstrapped y no necesita re-bootstrap)
@@ -106,20 +116,19 @@ func runInstall(args []string) int {
 		if mode == "" {
 			mode = string(install.ModeLocal)
 		}
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintf(os.Stderr, "Deployment mode: %s\n", mode)
+		progress.StartStep(fmt.Sprintf("Deployment mode: %s", mode))
 		if err := handleDeploymentMode(mode, flags, state); err != nil {
-			fmt.Fprintf(os.Stderr, "deploy: %v\n", err)
+			progress.EndStep(StepFailed, err.Error())
+			progress.Summary()
 			return 1
 		}
+		progress.EndStep(StepOK, fmt.Sprintf("mode=%s configured", mode))
 	} else {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Domain already installed (users exist). Skipping bootstrap.")
-		fmt.Fprintln(os.Stderr, "Use 'domain onboard' if you need to re-authenticate.")
+		progress.StartStep("Deployment mode")
+		progress.EndStep(StepSkipped, "already bootstrapped (use 'domain onboard' to re-auth)")
 	}
 
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "✓ Install complete.")
+	progress.Summary()
 	return 0
 }
 
@@ -177,6 +186,13 @@ func parseInstallFlags(args []string) (installFlags, error) {
 // runBackups corre los 3 backups canonicos. No falla si un archivo
 // no existe (install.BackupFile retorna nil en ese caso).
 func runBackups() {
+	_, _ = runBackupsCount()
+}
+
+// runBackupsCount corre los backups y retorna (backed, skipped).
+// Sin efectos en output (eso lo hace InstallProgress).
+func runBackupsCount() (int, int) {
+	backed, skipped := 0, 0
 	for _, p := range []string{
 		install.CredentialsPath(),
 		".env",
@@ -184,15 +200,16 @@ func runBackups() {
 	} {
 		res, err := install.BackupFile(p)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  ⚠ %s: %v\n", p, err)
+			skipped++ // contamos como skipped (err no es fatal, continua)
 			continue
 		}
 		if res == nil {
-			fmt.Fprintf(os.Stderr, "  · %s (no existe, skip)\n", p)
+			skipped++
 		} else {
-			fmt.Fprintf(os.Stderr, "  ✓ %s → %s\n", p, res.Backup)
+			backed++
 		}
 	}
+	return backed, skipped
 }
 
 // handleDeploymentMode ejecuta el bootstrap del mode seleccionado.

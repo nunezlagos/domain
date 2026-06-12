@@ -93,6 +93,7 @@ type Model struct {
 
 	// Output en vivo del sub-process (running)
 	lines []string
+	steps []stepLine
 	runCh chan tea.Msg
 
 	// sub-models
@@ -230,6 +231,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.lines) > 200 {
 			m.lines = m.lines[len(m.lines)-200:]
 		}
+		m.feedLine(string(msg))
 		return m, waitForRunMsg(m.runCh)
 	case runResultMsg:
 		m.err = msg.err
@@ -446,49 +448,116 @@ func (m *Model) viewSummary() string {
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// viewRunning muestra UNA sola línea con el paso actual (estilo ptools):
+// stepLine es un paso del install parseado del stream: queda en
+// pantalla con su resultado en una palabra + path afectado (si hubo).
+type stepLine struct {
+	title  string // "1/11 Detecting state"
+	status string // "" (corriendo), "ok", "skip", "warn", "error"
+	path   string // path afectado extraído del summary, si hay
+}
+
+// feedLine parsea incrementalmente el output del sub-process:
 //
-//	⠹ [5/11] Applying migrations — schema up to date
+//	"[N/M] Title"   → abre un paso nuevo
+//	"   ✓ summary"  → cierra el último paso (palabra + path)
 //
-// El spinner avanza con cada línea de output recibida. El log completo
-// queda en m.lines para el detalle en done.
+// Cualquier otra línea (logs intermedios) se ignora para la lista.
+func (m *Model) feedLine(raw string) {
+	t := strings.TrimSpace(raw)
+	if t == "" {
+		return
+	}
+	if strings.HasPrefix(t, "[") && strings.Contains(t, "]") {
+		m.steps = append(m.steps, stepLine{
+			title: strings.TrimPrefix(strings.Replace(t, "]", "", 1), "["),
+		})
+		return
+	}
+	r := []rune(t)
+	if len(r) == 0 || len(m.steps) == 0 || m.steps[len(m.steps)-1].status != "" {
+		return
+	}
+	var word string
+	switch r[0] {
+	case '✓':
+		word = "ok"
+	case '·':
+		word = "skip"
+	case '⚠':
+		word = "warn"
+	case '✗':
+		word = "error"
+	default:
+		return
+	}
+	last := &m.steps[len(m.steps)-1]
+	last.status = word
+	last.path = extractPath(strings.TrimSpace(string(r[1:])))
+}
+
+// extractPath devuelve el primer token con pinta de path del summary
+// ("" si no hay): contiene "/", o empieza con ~, o es un archivo
+// conocido (.env, *.json, *.service).
+func extractPath(summary string) string {
+	for _, tok := range strings.Fields(summary) {
+		tok = strings.Trim(tok, "():,;")
+		switch {
+		case strings.HasPrefix(tok, "~"), strings.Contains(tok, "/"),
+			tok == ".env",
+			strings.HasSuffix(tok, ".json"),
+			strings.HasSuffix(tok, ".service"):
+			return tok
+		}
+	}
+	return ""
+}
+
+// viewRunning lista los pasos completados (una línea compacta c/u) y
+// el actual con spinner:
+//
+//	✓ 1/11 Detecting state       ok
+//	✓ 3/11 Bootstrap .env        ok    .env
+//	⠹ 4/11 Starting services (local)
 func (m *Model) viewRunning() string {
 	s := "\n  " + styles.Title.Render("Instalando") + "\n\n"
-
-	step, detail := lastStepAndDetail(m.lines)
-	if step == "" {
+	if len(m.steps) == 0 {
 		s += "  " + styles.Accent.Render(spinnerFrames[0]) +
 			" " + styles.ItemDesc.Render("arrancando...") + "\n"
 		return s
 	}
 	frame := spinnerFrames[len(m.lines)%len(spinnerFrames)]
-	line := "  " + styles.Accent.Render(frame) + " " + styles.ItemTitle.Render(step)
-	if detail != "" {
-		line += styles.ItemDesc.Render(" — " + detail)
-	}
-	s += line + "\n"
+	s += m.renderSteps(frame)
 	return s
 }
 
-// lastStepAndDetail extrae del output el último step "[N/M] Title" y,
-// si ya llegó su resultado (✓/·/⚠/✗ summary), el detalle.
-func lastStepAndDetail(lines []string) (step, detail string) {
-	for i := len(lines) - 1; i >= 0; i-- {
-		t := strings.TrimSpace(lines[i])
-		if t == "" {
-			continue
+// renderSteps renderiza la lista de pasos; el que no terminó lleva el
+// spinner del frame dado. El padding se hace ANTES de colorear (los
+// códigos ANSI rompen el ancho de fmt).
+func (m *Model) renderSteps(spinner string) string {
+	var sb strings.Builder
+	for _, st := range m.steps {
+		titlePad := fmt.Sprintf("%-38s", st.title)
+		wordPad := fmt.Sprintf("%-6s", st.status)
+		var glyph, word string
+		switch st.status {
+		case "ok":
+			glyph, word = styles.Ok.Render("✓"), styles.Ok.Render(wordPad)
+		case "skip":
+			glyph, word = styles.ItemDesc.Render("·"), styles.ItemDesc.Render(wordPad)
+		case "warn":
+			glyph, word = styles.Warn.Render("⚠"), styles.Warn.Render(wordPad)
+		case "error":
+			glyph, word = styles.Fail.Render("✗"), styles.Fail.Render(wordPad)
+		default:
+			glyph, word = styles.Accent.Render(spinner), wordPad
 		}
-		if strings.HasPrefix(t, "[") {
-			return t, detail
+		sb.WriteString("  " + glyph + " " + titlePad + " " + word)
+		if st.path != "" {
+			sb.WriteString(styles.ItemDesc.Render(" " + st.path))
 		}
-		if detail == "" {
-			r := []rune(t)
-			if len(r) > 0 && (r[0] == '✓' || r[0] == '·' || r[0] == '⚠' || r[0] == '✗') {
-				detail = strings.TrimSpace(string(r[1:]))
-			}
-		}
+		sb.WriteString("\n")
 	}
-	return "", detail
+	return sb.String()
 }
 
 func (m *Model) viewDone() string {
@@ -502,13 +571,9 @@ func (m *Model) viewDone() string {
 		}
 	} else {
 		s += styles.Ok.Render("  ✓ Instalación completa") + "\n\n"
-		// Recap final con el output completo reciente
-		tail := m.lines
-		if len(tail) > 10 {
-			tail = tail[len(tail)-10:]
-		}
-		for _, line := range tail {
-			s += "  " + styles.ItemDesc.Render(line) + "\n"
+		// Recap: la misma lista compacta de pasos (resultado + path).
+		if len(m.steps) > 0 {
+			s += m.renderSteps("·")
 		}
 	}
 	s += "\n" + styles.HelpText.Render("  [cualquier tecla] volver al menú") + "\n"

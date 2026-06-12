@@ -44,6 +44,7 @@ const (
 	stateDepCheck
 	statePortPrompt
 	stateDSNPrompt
+	stateEmailPrompt
 	stateInitPrompt
 	stateAgentsPrompt
 	stateSummary
@@ -83,12 +84,14 @@ type Model struct {
 	depsMissing bool
 
 	// Config elegida
-	mode    modeSel
-	port    string
-	portErr string
-	dsn     string
-	doInit  bool
-	agents  []string
+	mode     modeSel
+	port     string
+	portErr  string
+	dsn      string
+	email    string
+	emailErr string
+	doInit   bool
+	agents   []string
 
 	err    error
 	stderr string
@@ -191,11 +194,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if _, ok := msg.(selectable.CancelMsg); ok {
-			if m.mode == modeCloud {
-				m.state = stateDSNPrompt
-			} else {
-				m.state = statePortPrompt
-			}
+			m.state = stateEmailPrompt
 			return m, nil
 		}
 		updated, cmd := m.initPrompt.Update(msg)
@@ -309,7 +308,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil // no avanza con puerto inválido/ocupado
 			}
 			m.portErr = ""
-			m.state = stateInitPrompt
+			m.state = stateEmailPrompt
 			return m, nil
 		case key == "esc":
 			m.state = stateDepCheck
@@ -331,7 +330,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if strings.TrimSpace(m.dsn) == "" {
 				return m, nil // DSN obligatoria en cloud
 			}
-			m.state = stateInitPrompt
+			m.state = stateEmailPrompt
 			return m, nil
 		case key == "esc":
 			m.state = stateDepCheck
@@ -343,6 +342,35 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case len(key) == 1:
 			m.dsn += key
+			return m, nil
+		}
+	case stateEmailPrompt:
+		switch {
+		case key == "enter":
+			e := strings.TrimSpace(m.email)
+			if e == "" || !strings.Contains(e, "@") || strings.Contains(e, " ") {
+				m.emailErr = "email inválido — formato usuario@dominio"
+				return m, nil
+			}
+			m.emailErr = ""
+			m.state = stateInitPrompt
+			return m, nil
+		case key == "esc":
+			if m.mode == modeCloud {
+				m.state = stateDSNPrompt
+			} else {
+				m.state = statePortPrompt
+			}
+			return m, nil
+		case key == "backspace":
+			if len(m.email) > 0 {
+				m.email = m.email[:len(m.email)-1]
+			}
+			m.emailErr = ""
+			return m, nil
+		case len(key) == 1:
+			m.email += key
+			m.emailErr = ""
 			return m, nil
 		}
 	case stateSummary:
@@ -374,6 +402,8 @@ func (m *Model) View() string {
 		return m.viewPortPrompt()
 	case stateDSNPrompt:
 		return m.viewDSNPrompt()
+	case stateEmailPrompt:
+		return m.viewEmailPrompt()
 	case stateInitPrompt:
 		return m.initPrompt.View()
 	case stateAgentsPrompt:
@@ -469,6 +499,19 @@ func (m *Model) viewDSNPrompt() string {
 	return s
 }
 
+func (m *Model) viewEmailPrompt() string {
+	s := "\n  " + styles.Title.Render("Tu email") + "\n\n"
+	s += styles.ItemDesc.Render("  Es la cuenta admin de tu instalación. En el primer install se") + "\n"
+	s += styles.ItemDesc.Render("  crea con este email; en re-installs el código OTP llega acá") + "\n"
+	s += styles.ItemDesc.Render("  (en local lo buscamos solos en mailpit, sin pasos manuales).") + "\n\n"
+	s += "  Email: " + styles.Accent.Render(m.email) + styles.Prompt.Render("▌") + "\n"
+	if m.emailErr != "" {
+		s += "\n  " + styles.Fail.Render("✗ "+m.emailErr) + "\n"
+	}
+	s += "\n" + styles.HelpText.Render("  escribí tu email   [enter] continuar   [esc] volver") + "\n"
+	return s
+}
+
 func (m *Model) viewSummary() string {
 	yesNo := func(b bool) string {
 		if b {
@@ -488,6 +531,7 @@ func (m *Model) viewSummary() string {
 		s += fmt.Sprintf("  Puerto:          %s\n", styles.Accent.Render(m.port))
 	}
 	s += fmt.Sprintf("  Base URL:        %s\n", styles.Accent.Render(m.baseURL()))
+	s += fmt.Sprintf("  Email (cuenta):  %s\n", styles.Accent.Render(m.email))
 	s += fmt.Sprintf("  Importar .md:    %s\n", yesNo(m.doInit))
 	s += fmt.Sprintf("  Agentes MCP:     %s\n", styles.Accent.Render(agents))
 	s += "\n  > " + styles.ButtonFocused.Render("[ Instalar ]") + "\n\n"
@@ -723,6 +767,9 @@ func (m *Model) installFlags() []string {
 		"--base-url", m.baseURL(),
 		"--non-interactive",
 		"--agents", strings.Join(m.agents, ","),
+	}
+	if m.email != "" {
+		flags = append(flags, "--email", m.email)
 	}
 	if !m.doInit {
 		flags = append(flags, "--no-init")

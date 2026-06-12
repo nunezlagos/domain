@@ -73,6 +73,16 @@ ok "Binario en $INSTALL_DIR/$BINARY"
 (cd "$SRC_DIR" && go build -o "$INSTALL_DIR/${BINARY}-mcp" ./cmd/domain-mcp) || die "go build domain-mcp fallo"
 ok "Binario en $INSTALL_DIR/${BINARY}-mcp"
 
+# Instalaciones legacy: si quedaron binarios viejos en ~/.local/bin
+# (instalador anterior), refrescarlos tambien — configs de agentes
+# viejos pueden apuntar ahi y un binario desactualizado rompe el MCP.
+for legacy in "$HOME/.local/bin/$BINARY" "$HOME/.local/bin/${BINARY}-mcp"; do
+    if [ -f "$legacy" ]; then
+        pkg="./cmd/domain"; [ "${legacy##*/}" = "${BINARY}-mcp" ] && pkg="./cmd/domain-mcp"
+        (cd "$SRC_DIR" && go build -o "$legacy" "$pkg") && ok "Binario legacy refrescado: $legacy"
+    fi
+done
+
 # === PATH warning ===
 case ":$PATH:" in
     *":$INSTALL_DIR:"*) ;;

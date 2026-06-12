@@ -167,14 +167,43 @@ func TestValidatePort_FreePortOK(t *testing.T) {
 	require.Empty(t, validatePort(free))
 }
 
-func TestPortPrompt_EnterAdvancesToInit(t *testing.T) {
+func TestPortPrompt_EnterAdvancesToEmail(t *testing.T) {
 	m := New()
 	m.state = statePortPrompt
-	m.port = "8123"
+	m.port = suggestPort(18100) // libre garantizado
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
+	require.Equal(t, stateEmailPrompt, appM.state)
+	require.Equal(t, "http://localhost:"+appM.port, appM.baseURL())
+}
+
+func TestEmailPrompt_ValidatesAndAdvances(t *testing.T) {
+	m := New()
+	m.state = stateEmailPrompt
+
+	// Email inválido: no avanza, muestra error
+	m.email = "sin-arroba"
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	require.Equal(t, stateEmailPrompt, appM.state)
+	require.NotEmpty(t, appM.emailErr)
+
+	// Email válido: avanza a init
+	appM.email = "yo@example.com"
+	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM = updated.(*Model)
 	require.Equal(t, stateInitPrompt, appM.state)
-	require.Equal(t, "http://localhost:8123", appM.baseURL())
+	require.Empty(t, appM.emailErr)
+}
+
+func TestInstallFlags_IncludesEmail(t *testing.T) {
+	m := New()
+	m.mode = modeLocal
+	m.port = "8067"
+	m.email = "yo@example.com"
+	flags := m.installFlags()
+	require.Contains(t, flags, "--email")
+	require.Contains(t, flags, "yo@example.com")
 }
 
 func TestDSNPrompt_EmptyDSNDoesNotAdvance(t *testing.T) {
@@ -319,7 +348,7 @@ func TestView_AllStates_NotEmpty(t *testing.T) {
 	m := New()
 	for _, st := range []state{
 		stateWelcome, stateModePrompt, stateDepCheck, statePortPrompt,
-		stateDSNPrompt, stateInitPrompt, stateAgentsPrompt, stateSummary,
+		stateDSNPrompt, stateEmailPrompt, stateInitPrompt, stateAgentsPrompt, stateSummary,
 		stateRunning, stateDone,
 	} {
 		m.state = st

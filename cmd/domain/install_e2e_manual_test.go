@@ -168,6 +168,82 @@ func httpGet(url string) (int, error) {
 
 var httpClient = &http.Client{Timeout: 2 * time.Second}
 
+// TestE2EInstall_MCPBootsAsOpenCode reproduce 1:1 cómo OpenCode lanza
+// domain-mcp: lee del opencode.json global el command y el environment
+// del entry "domain", lanza ESE binario con ESE entorno y manda el
+// initialize MCP. Si esto falla, es exactamente el "-32000 Connection
+// closed" del agente — y acá capturamos el stderr con la causa real.
+func TestE2EInstall_MCPBootsAsOpenCode(t *testing.T) {
+	if !*e2eFlag {
+		t.Skip("pasar -args -e2e para correr el E2E real")
+	}
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	ocPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	data, err := os.ReadFile(ocPath)
+	require.NoError(t, err, "opencode.json global debe existir")
+	var oc struct {
+		MCP map[string]struct {
+			Command     []string          `json:"command"`
+			Environment map[string]string `json:"environment"`
+		} `json:"mcp"`
+	}
+	require.NoError(t, json.Unmarshal(data, &oc))
+	entry, ok := oc.MCP["domain"]
+	require.True(t, ok, "entry mcp.domain presente")
+	require.NotEmpty(t, entry.Command)
+
+	bin := entry.Command[0]
+	if _, statErr := os.Stat(bin); statErr != nil {
+		t.Fatalf("el command de opencode.json apunta a un binario inexistente: %s", bin)
+	}
+
+	cmd := exec.Command(bin, entry.Command[1:]...)
+	env := []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
+	for k, v := range entry.Environment {
+		env = append(env, k+"="+v)
+	}
+	cmd.Env = env
+	cmd.Dir = t.TempDir() // opencode lanza desde el proyecto del user (cualquier cwd)
+
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+	require.NoError(t, cmd.Start())
+	defer func() { _ = cmd.Process.Kill() }()
+
+	initReq := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e-opencode","version":"0"}}}`
+	_, err = fmt.Fprintln(stdin, initReq)
+	require.NoError(t, err)
+
+	type result struct {
+		line string
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		if scanner.Scan() {
+			ch <- result{line: scanner.Text()}
+			return
+		}
+		ch <- result{err: fmt.Errorf("EOF sin respuesta — esto ES el -32000. stderr del boot: %s", stderrBuf.String())}
+	}()
+
+	select {
+	case res := <-ch:
+		require.NoError(t, res.err)
+		require.Contains(t, res.line, `"result"`, "initialize debe responder result")
+		t.Log("domain-mcp lanzado como opencode: initialize OK")
+	case <-time.After(25 * time.Second):
+		t.Fatalf("timeout esperando initialize (stderr: %s)", stderrBuf.String())
+	}
+}
+
 // TestE2EInstall_MCPBootsWithoutEnv verifica el fix -32000: domain-mcp
 // arranca SIN env vars (toma config de ~/.config/domain/env +
 // credentials.json) y responde al handshake MCP initialize.

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "domain": {
+      "command": [
+        "/home/nunezlagos/go/bin/domain-mcp"
+      ],
+      "enabled": true,
+      "environment": {
+        "DOMAIN_BASE_URL": "http://localhost:8000"
+      },
+      "type": "local"
+    }
+  }
+}

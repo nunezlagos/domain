@@ -148,23 +148,8 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "all catalogs at target version")
 
-	// 7. API key: si no hay credenciales, bootstrap local automático
-	// (org + user + key contra la BD ya migrada). Sin esto, domain-mcp
-	// muere al boot y el agente ve "Connection closed".
-	progress.StartStep("API key")
-	switch created, prefix, err := ensureLocalAPIKey(cfg, flags.baseURL); {
-	case err != nil:
-		progress.EndStep(StepFailed, err.Error())
-		progress.Summary()
-		return 1
-	case created:
-		progress.EndStep(StepOK, fmt.Sprintf("generated (prefix %s), saved to credentials.json", prefix))
-	default:
-		progress.EndStep(StepSkipped, "credentials.json already present")
-	}
-
-	// 8. Env global para domain-mcp: ~/.config/domain/env con la DSN
-	// y base-url, para que el binario MCP arranque desde cualquier cwd.
+	// 7. Env global para domain-mcp y el server systemd: DSN, base-url y
+	// puerto. Va ANTES del server para que arranque en el puerto elegido.
 	progress.StartStep("Global MCP env")
 	envPath, err := writeGlobalMCPEnv(cfg, flags.baseURL)
 	if err != nil {
@@ -173,9 +158,10 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, envPath)
 	}
 
-	// 9. Server como systemd user service: queda corriendo siempre y
-	// arranca al login (plug-and-play). Skip limpio fuera de Linux o
-	// sin user manager (containers/macOS).
+	// 8. Server como systemd user service: queda corriendo siempre y
+	// arranca al login (plug-and-play). Va ANTES de la API key porque el
+	// flujo OTP de re-installs necesita el server arriba. Skip limpio
+	// fuera de Linux o sin user manager (containers/macOS).
 	progress.StartStep("Starting server (systemd)")
 	serverUp := state.ServerReachable
 	switch {
@@ -190,6 +176,25 @@ func runInstall(args []string) int {
 			serverUp = true
 			progress.EndStep(StepOK, "domain.service enabled + running (starts at login)")
 		}
+	}
+
+	// 9. API key: tres caminos según estado (sin pasos manuales):
+	//    - credentials.json existe → skip
+	//    - BD sin usuarios (first-run) → crea org + user con TU email +
+	//      key directo a la BD
+	//    - BD con usuarios pero sin credentials (re-install) → flujo OTP
+	//      real: request-otp → auto-fetch del código en mailpit (local
+	//      only) → verify-otp
+	progress.StartStep("API key")
+	switch how, err := ensureAPIKey(cfg, flags, mode, serverUp); {
+	case err != nil:
+		progress.EndStep(StepFailed, err.Error())
+		progress.Summary()
+		return 1
+	case how == "":
+		progress.EndStep(StepSkipped, "credentials.json already present")
+	default:
+		progress.EndStep(StepOK, how)
 	}
 
 	// 10. Agentes MCP (multi: opencode y/o claude-code). Idempotente.
@@ -287,13 +292,19 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 	if !ok {
 		return false
 	}
-	// Roto si: slice vacío, o primer elemento "" (install previo que no
-	// encontró domain-mcp). En ambos casos borramos el entry para que el
-	// setup lo recree con el path correcto.
+	// Roto si: slice vacío, primer elemento "" (install previo que no
+	// encontró domain-mcp), o el binario apuntado YA NO EXISTE (install
+	// legacy en otro dir, e.g. ~/.local/bin borrado). Borramos el entry
+	// para que el setup lo recree — sin esto el agente ve "-32000
+	// Connection closed" por ENOENT.
 	broken := len(cmd) == 0
 	if !broken {
-		if first, ok := cmd[0].(string); ok && first == "" {
-			broken = true
+		if first, ok := cmd[0].(string); ok {
+			if first == "" {
+				broken = true
+			} else if _, statErr := os.Stat(first); statErr != nil {
+				broken = true
+			}
 		}
 	}
 	if !broken {
@@ -309,6 +320,7 @@ type installFlags struct {
 	mode      string
 	baseURL   string
 	dsn       string
+	email     string
 	nonInter  bool
 	noBackup  bool
 	noInit    bool
@@ -346,6 +358,12 @@ func parseInstallFlags(args []string) (installFlags, error) {
 				return f, errors.New("missing value for --agents")
 			}
 			f.agents = parseAgentsCSV(args[i+1])
+			i++
+		case "--email":
+			if i+1 >= len(args) {
+				return f, errors.New("missing value for --email")
+			}
+			f.email = args[i+1]
 			i++
 		case "--non-interactive", "-y":
 			f.nonInter = true
@@ -564,42 +582,82 @@ func persistBaseURLEnv(baseURL string) {
 	_ = os.Setenv("DOMAIN_BASE_URL", baseURL)
 }
 
-// ensureLocalAPIKey bootstrapea org + user + API key contra la BD si
-// ~/.config/domain/credentials.json no existe todavía. Retorna
-// (created, prefix). La key plaintext NUNCA se imprime: va a
+// ensureAPIKey resuelve las credenciales sin pasos manuales. Retorna
+// (how, err): how=="" significa skip (credentials ya presentes); si no,
+// describe el camino usado. La key plaintext NUNCA se imprime: va a
 // credentials.json (0600) y a .env como DOMAIN_API_KEY.
-func ensureLocalAPIKey(cfg *config.Config, baseURL string) (bool, string, error) {
+func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp bool) (string, error) {
 	if readAPIKeyFromCredentials() != "" {
-		return false, "", nil
+		return "", nil
 	}
+	email := flags.email
+	if email == "" {
+		email = "admin@local.domain"
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return false, "", fmt.Errorf("connect: %w", err)
+		return "", fmt.Errorf("connect: %w", err)
 	}
 	defer pool.Close()
 
+	var userCount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&userCount); err != nil {
+		return "", fmt.Errorf("count users: %w", err)
+	}
+
+	// First-run: la BD está vacía → crear la cuenta con el email del
+	// user, directo a la BD (no hay nada que validar por OTP todavía).
+	if userCount == 0 {
+		prefix, err := bootstrapFirstAccount(ctx, pool, email, flags.baseURL)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("account created for %s (key prefix %s)", email, prefix), nil
+	}
+
+	// Re-install (hay usuarios pero no credentials): flujo OTP real.
+	// SOLO en local buscamos el código automáticamente en mailpit.
+	if install.Mode(mode) == install.ModeLocal && serverUp && mailpitAvailable() {
+		result, err := otpFlowViaServer(flags.baseURL, email)
+		if err != nil {
+			return "", fmt.Errorf("OTP flow: %w (alternativa: domain onboard)", err)
+		}
+		if err := saveCredentialsFromOTP(result, flags.baseURL); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("OTP verified via mailpit for %s", result.Email), nil
+	}
+
+	return "", fmt.Errorf("hay usuarios en la BD pero no credentials.json; "+
+		"corré 'domain onboard --base-url %s' para autenticarte (OTP por email)", flags.baseURL)
+}
+
+// bootstrapFirstAccount crea org + primer user (owner) + API key directo
+// a la BD. Retorna el prefix de la key.
+func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseURL string) (string, error) {
 	var orgID, userID uuid.UUID
-	err = pool.QueryRow(ctx,
+	err := pool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('Local', 'local')
 		 ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
 		 RETURNING id`).Scan(&orgID)
 	if err != nil {
-		return false, "", fmt.Errorf("create org: %w", err)
+		return "", fmt.Errorf("create org: %w", err)
 	}
 	err = pool.QueryRow(ctx,
 		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, 'admin@local.domain', 'Admin Local', 'owner')
+		 VALUES ($1, $2, 'Admin Local', 'owner')
 		 ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner'
-		 RETURNING id`, orgID).Scan(&userID)
+		 RETURNING id`, orgID, email).Scan(&userID)
 	if err != nil {
-		return false, "", fmt.Errorf("create user: %w", err)
+		return "", fmt.Errorf("create user: %w", err)
 	}
 
 	rawKey, prefix, hash, err := apikey.Generate("dev")
 	if err != nil {
-		return false, "", fmt.Errorf("generate api_key: %w", err)
+		return "", fmt.Errorf("generate api_key: %w", err)
 	}
 	var keyID uuid.UUID
 	err = pool.QueryRow(ctx,
@@ -608,7 +666,7 @@ func ensureLocalAPIKey(cfg *config.Config, baseURL string) (bool, string, error)
 		orgID, userID, "install-"+time.Now().UTC().Format("20060102-150405"), prefix, hash,
 	).Scan(&keyID)
 	if err != nil {
-		return false, "", fmt.Errorf("create api_key: %w", err)
+		return "", fmt.Errorf("create api_key: %w", err)
 	}
 
 	creds := &onboard.Credentials{
@@ -616,18 +674,45 @@ func ensureLocalAPIKey(cfg *config.Config, baseURL string) (bool, string, error)
 		APIKeyID: keyID,
 		UserID:   userID,
 		OrgID:    orgID,
-		Email:    "admin@local.domain",
+		Email:    email,
 		BaseURL:  baseURL,
 		IssuedAt: time.Now().UTC(),
 	}
+	return prefix, persistCredentials(creds)
+}
+
+// saveCredentialsFromOTP arma y persiste credentials desde el resultado
+// del verify-otp.
+func saveCredentialsFromOTP(r *otpVerifyResult, baseURL string) error {
+	creds := &onboard.Credentials{
+		APIKey:   r.APIKey,
+		Email:    r.Email,
+		BaseURL:  baseURL,
+		IssuedAt: time.Now().UTC(),
+	}
+	if id, err := uuid.Parse(r.APIKeyID); err == nil {
+		creds.APIKeyID = id
+	}
+	if id, err := uuid.Parse(r.UserID); err == nil {
+		creds.UserID = id
+	}
+	if id, err := uuid.Parse(r.OrgID); err == nil {
+		creds.OrgID = id
+	}
+	return persistCredentials(creds)
+}
+
+// persistCredentials guarda credentials.json (0600) + DOMAIN_API_KEY en
+// .env y en el env del proceso.
+func persistCredentials(creds *onboard.Credentials) error {
 	if err := onboard.SaveCredentialsDefault(creds); err != nil {
-		return false, "", fmt.Errorf("save credentials: %w", err)
+		return fmt.Errorf("save credentials: %w", err)
 	}
-	if err := upsertEnvFile(".env", "DOMAIN_API_KEY", rawKey); err != nil {
-		return false, "", fmt.Errorf("update .env: %w", err)
+	if err := upsertEnvFile(".env", "DOMAIN_API_KEY", creds.APIKey); err != nil {
+		return fmt.Errorf("update .env: %w", err)
 	}
-	_ = os.Setenv("DOMAIN_API_KEY", rawKey)
-	return true, prefix, nil
+	_ = os.Setenv("DOMAIN_API_KEY", creds.APIKey)
+	return nil
 }
 
 // writeGlobalMCPEnv escribe ~/.config/domain/env con la config que
@@ -946,6 +1031,7 @@ func printInstallHelp() {
 	fmt.Println("  --mode {local|cloud|hybrid}    Deployment mode (default: interactive prompt)")
 	fmt.Println("  --base-url URL                  Domain server URL (default: $DOMAIN_BASE_URL or http://localhost:8000)")
 	fmt.Println("  --agents LIST                   MCP agents to configure, csv (default: opencode; e.g. opencode,claude-code)")
+	fmt.Println("  --email ADDR                    Email de la cuenta (first-run la crea; re-installs reciben OTP ahí)")
 	fmt.Println("  --non-interactive, -y           Skip prompts (use defaults or flags)")
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")

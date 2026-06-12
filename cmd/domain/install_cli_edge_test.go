@@ -52,15 +52,39 @@ func TestRepairOpencodeEmptyCommand_ValidCommand_NoRepair(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
 
-	content := `{"mcp":{"domain":{"command":["/usr/bin/domain-mcp"],"enabled":true,"type":"local"}}}`
+	// El binario apuntado debe EXISTIR para considerarse válido.
+	binPath := dir + "/domain-mcp"
+	require.NoError(t, os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755))
+	content := `{"mcp":{"domain":{"command":["` + binPath + `"],"enabled":true,"type":"local"}}}`
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
 
-	// command tiene path valido: no repara
+	// command tiene path valido y existente: no repara
 	require.False(t, repairOpencodeEmptyCommand())
 
 	// opencode.json NO debe haber sido modificado
 	data, _ := os.ReadFile("opencode.json")
 	require.Equal(t, content, string(data))
+}
+
+func TestRepairOpencodeEmptyCommand_MissingBinary_Repairs(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer os.Chdir(oldWd)
+
+	// Path que no existe (install legacy borrado): debe reparar — esta
+	// es la causa del "-32000 Connection closed" por ENOENT.
+	content := `{"mcp":{"domain":{"command":["/home/x/.local/bin/domain-mcp"],"enabled":true,"type":"local"}}}`
+	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
+
+	require.True(t, repairOpencodeEmptyCommand())
+
+	data, _ := os.ReadFile("opencode.json")
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(data, &doc))
+	mcp := doc["mcp"].(map[string]any)
+	_, exists := mcp["domain"]
+	require.False(t, exists, "entry con binario inexistente debe borrarse")
 }
 
 func TestRepairOpencodeEmptyCommand_EmptyString_Repairs(t *testing.T) {

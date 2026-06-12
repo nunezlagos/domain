@@ -24,6 +24,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/agentprotocol"
 	"nunezlagos/domain/internal/auth/apikey"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
@@ -152,23 +153,11 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	return tools
 }
 
-// ServerInstructions es el protocolo de uso que el agente recibe en el
-// initialize. Sin esto, agentes con varios MCP de memoria conectados
-// eligen otro server (sus instrucciones "ganan") y domain queda sin uso.
-const ServerInstructions = `Domain es la plataforma de memoria persistente, policies SDD, skills, agents y flows del usuario. Protocolo:
-
-MEMORIA (proactivo, no esperes a que te lo pidan):
-- domain_mem_save tras CADA decisión, bug resuelto, convención o descubrimiento. project_slug = nombre del repo/proyecto actual (se auto-crea si no existe).
-- domain_mem_search / domain_search_global cuando el usuario pida recordar algo o empieces trabajo que pudo hacerse antes.
-- domain_mem_context al inicio de sesión para recuperar contexto.
-
-POLICIES (antes de tocar código):
-- domain_policy_list para descubrir las rules vigentes; domain_policy_get(slug) para leer la rule del dominio que vas a tocar.
-
-CATÁLOGO:
-- domain_skill_search para encontrar skills relevantes a tu tarea; domain_project_list para ver projects existentes.
-
-Si el usuario menciona "memoria", "recordar", "guardar" o "policies" sin especificar herramienta, usá los tools domain_* de este server.`
+// ServerInstructions es el protocolo que el agente recibe en el
+// initialize del MCP. Única fuente: internal/agentprotocol (el mismo
+// contenido se seedea en BD como policy 'agent-protocol' — la versión
+// viva que el agente debe preferir vía domain_policy_get).
+const ServerInstructions = agentprotocol.Full
 
 // New monta el servidor MCP con los tools del prefijo `domain_*`.
 func New(deps Deps) *mcpgo.MCPServer {

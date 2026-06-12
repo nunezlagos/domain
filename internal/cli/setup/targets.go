@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"nunezlagos/domain/internal/agentprotocol"
 )
 
 // Agent identifica un agente externo soportado.
@@ -132,10 +134,16 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		mcp = map[string]any{}
 	}
 	if _, ok := mcp["domain"]; ok {
-		// Ya configurado. Aun asi, asegura que el slash command este
-		// instalado (puede haberse eliminado manualmente).
+		// Ya configurado. Aun asi, asegura slash command + instrucciones
+		// del agente (pueden faltar en configs creados por versiones
+		// previas del setup — es el caso "engram gana en jerarquía").
 		if _, err := InstallSlashCommand(AgentOpenCode); err != nil {
 			return path, fmt.Errorf("install slash command: %w", err)
+		}
+		if changed, err := ensureOpenCodeInstructions(path, doc, original); err != nil {
+			return path, fmt.Errorf("install instructions: %w", err)
+		} else if changed {
+			return path, nil // hubo upgrade real, no "nada que hacer"
 		}
 		return path, ErrAlreadyConfigured
 	}
@@ -146,6 +154,9 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		"environment": domainEnv(apiKey, baseURL),
 	}
 	doc["mcp"] = mcp
+	if _, err := ensureOpenCodeInstructions(path, doc, nil); err != nil {
+		return "", fmt.Errorf("install instructions: %w", err)
+	}
 	if err := writeJSONWithBackup(path, original, doc); err != nil {
 		return "", err
 	}
@@ -156,6 +167,63 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		return path, fmt.Errorf("install slash command: %w", err)
 	}
 	return path, nil
+}
+
+// DomainProtocolInstructions es el STUB que se instala a nivel agente
+// (capa que el LLM prioriza; el handshake MCP es la capa débil). El
+// protocolo COMPLETO vive en BD como policy 'agent-protocol' (seedeada,
+// editable, versionada): el stub solo le dice al agente que la cargue
+// con domain_policy_get — editar la policy cambia el comportamiento de
+// todos los agentes sin tocar archivos.
+const DomainProtocolInstructions = agentprotocol.Stub
+
+// ensureOpenCodeInstructions escribe el protocolo en
+// ~/.config/opencode/instructions/domain.md y lo agrega al array
+// "instructions" del opencode.json dado (mutando doc). Retorna si hubo
+// cambio (para distinguir upgrade de no-op). Si doc venía de disco y
+// cambió, lo persiste.
+func ensureOpenCodeInstructions(cfgPath string, doc map[string]any, original []byte) (bool, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false, err
+	}
+	instrDir := filepath.Join(home, ".config", "opencode", "instructions")
+	if err := os.MkdirAll(instrDir, 0o755); err != nil {
+		return false, err
+	}
+	instrPath := filepath.Join(instrDir, "domain.md")
+	changed := false
+	if existing, readErr := os.ReadFile(instrPath); readErr != nil || string(existing) != DomainProtocolInstructions {
+		if err := os.WriteFile(instrPath, []byte(DomainProtocolInstructions), 0o644); err != nil {
+			return false, err
+		}
+		changed = true
+	}
+
+	// Merge en doc["instructions"] sin duplicar.
+	var list []any
+	if raw, ok := doc["instructions"].([]any); ok {
+		list = raw
+	}
+	for _, item := range list {
+		if s, ok := item.(string); ok && s == instrPath {
+			if changed && original != nil {
+				// El array ya estaba pero el .md cambió: nada que escribir
+				// en el json; el cambio del archivo alcanza.
+				return true, nil
+			}
+			return changed, nil
+		}
+	}
+	doc["instructions"] = append(list, instrPath)
+	if original != nil {
+		// doc venía de un config ya escrito (camino already-configured):
+		// persistir el agregado del array.
+		if err := writeJSONWithBackup(cfgPath, original, doc); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // OpenCodeGlobalDir retorna el dir del config global de OpenCode

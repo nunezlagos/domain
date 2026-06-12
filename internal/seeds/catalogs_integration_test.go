@@ -182,6 +182,14 @@ func TestPlatformPoliciesSeeder_PopulatesBaseline(t *testing.T) {
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT name FROM platform_policies WHERE slug='sdd-tdd-strict'`).Scan(&name))
 	require.Contains(t, name, "TDD")
+
+	// El protocolo de agente vive en BD (source-of-truth editable):
+	// los agentes lo cargan con domain_policy_get('agent-protocol').
+	var body string
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`SELECT body_md FROM platform_policies WHERE slug='agent-protocol'`).Scan(&body))
+	require.Contains(t, body, "domain tiene prioridad")
+	require.Contains(t, body, "domain_mem_save")
 }
 
 func TestPlatformPoliciesSeeder_PreservesUserModified(t *testing.T) {

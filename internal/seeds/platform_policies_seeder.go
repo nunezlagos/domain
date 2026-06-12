@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"nunezlagos/domain/internal/agentprotocol"
 )
 
 // PlatformPoliciesSeeder siembra las policies baseline de la plataforma
@@ -12,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 2 }
+func (s *PlatformPoliciesSeeder) Version() int    { return 3 }
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -24,6 +26,13 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 	var rep Report
 
 	policies := []policyEntry{
+		{
+			Slug: "agent-protocol",
+			Name: "Protocolo de agente IA (memoria + policies + tools domain_*)",
+			Kind: "convention",
+			SourceFile: "internal/agentprotocol/protocol.go",
+			BodyMD:     agentprotocol.Full,
+		},
 		{
 			Slug: "sdd-tdd-strict",
 			Name: "TDD estricto para toda HU",

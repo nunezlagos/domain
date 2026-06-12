@@ -133,7 +133,15 @@ func runInstall(args []string) int {
 	}
 	progress.StartStep("Applying migrations")
 	if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
-		progress.EndStep(StepFailed, err.Error())
+		msg := err.Error()
+		// Caso clásico: la BD tiene migraciones MÁS NUEVAS que este código
+		// (e.g. install.sh corrido desde un clon desactualizado mientras el
+		// repo de desarrollo ya aplicó versiones nuevas a la misma BD).
+		if strings.Contains(msg, "no migration found for version") {
+			msg += " — tu BD tiene migraciones más nuevas que este código; " +
+				"actualizá el código y reintentá (re-corré install.sh, que hace git pull)"
+		}
+		progress.EndStep(StepFailed, msg)
 		progress.Summary()
 		return 1
 	}

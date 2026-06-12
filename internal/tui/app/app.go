@@ -87,7 +87,10 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// Delegate key updates al menu
 	var cmd tea.Cmd
-	m.menu, cmd = m.menu.Update(msg)
+	updated, cmd := m.menu.Update(msg)
+	if concrete, ok := updated.(menu.Model); ok {
+		m.menu = concrete
+	}
 	return m, cmd
 }
 

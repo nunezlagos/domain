@@ -93,8 +93,9 @@ func New() Model {
 // Init implementa tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
 
-// Update implementa tea.Model.
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+// Update implementa tea.Model (interface). Retorna tea.Model para
+// cumplir la interfaz (no Model concreto).
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {

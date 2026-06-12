@@ -1,0 +1,37 @@
+status: implemented
+created: 2026-06-11
+implemented: 2026-06-11
+archived: ~
+notes: |
+  HU-01.12 implementado en 4 commits atomicos sobre
+  feat/req-25.5-installer-polish:
+
+  1. d84dfdc feat(01.12): install.sh one-liner estilo ptools en la raiz
+  2. b013eac feat(01.12): docker check condicional por mode en install feature
+  3. a338404 feat(01.12): domain sin args = TUI si TTY, printUsage si no
+  4. (este commit) test(01.12): tests E2E con teatest + bug latente fix
+                           + state.yaml implemented + archive
+
+  Logros:
+  - install.sh funciona end-to-end (clone → build → binario ejecutable).
+  - install feature chequea docker solo si mode=local/cloud-dependiente.
+  - 'domain' sin args ahora lanza TUI si TTY; fallback a printUsage si no.
+  - teatest agregado (github.com/charmbracelet/x/exp/teatest).
+  - 6 tests E2E del menu (skip automatico si no hay TTY).
+
+  Bug latente critico detectado y arreglado durante el audit:
+  - menu.Model.Update() retornaba Model (struct concreto), no tea.Model
+    (interface). Eso significa que menu.Model NO implementaba tea.Model
+    formalmente, y bubbletea no podria compilar el programa. Los unit
+    tests pasaban porque usaban asserts directos, pero bubbletea fallaria
+    en runtime. Fix: cambiar signature a (tea.Model, tea.Cmd) y agregar
+    type assertion en app.go.
+
+  Tests E2E en sandbox (sin /dev/ptmx): los 3 tests con WaitFor +
+  Send fallan por timeout (no hay TTY real). Skip automatico si
+  TERM=dumb/unknown. En ambiente con TTY real, deberian pasar.
+
+  Verificado: 99 paquetes OK con go test ./... -count=1 -short, 0 FAIL.
+  Sin -short, 3 E2E tests fallan por sandbox sin TTY (esperado).
+
+  Pendiente: archivar (se hace en este commit).

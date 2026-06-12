@@ -115,8 +115,12 @@ var (
 
 func main() {
 	if len(os.Args) < 2 {
+		// Sin args: si TTY → TUI bubbletea. Si no → printUsage.
+		if isTerminal(os.Stdin) {
+			os.Exit(runTUI(nil))
+		}
 		printUsage()
-		os.Exit(2)
+		os.Exit(0) // exit 0 en uso help; usuario probablemente typo
 	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":

@@ -210,17 +210,9 @@ func TestSummary_EnterStartsInstallWithFlags(t *testing.T) {
 	require.Equal(t, stateRunning, appM.state)
 	require.NotNil(t, cmd)
 
-	// Drenar mensajes del canal: primero lineMsg, después runResultMsg
-	msg := cmd()
-	for {
-		updated, cmd = appM.Update(msg)
-		appM = updated.(*Model)
-		if appM.state == stateDone {
-			break
-		}
-		require.NotNil(t, cmd, "mientras corre, siempre hay próximo mensaje")
-		msg = cmd()
-	}
+	// Drenar el canal directo (el cmd real es un tea.Batch con el tick
+	// de animación; en tests leemos los mensajes del runner nomás).
+	appM = drainRun(t, appM)
 	require.NoError(t, appM.err)
 	require.Contains(t, appM.lines, "[1/9] Detecting state", "output streameado visible")
 
@@ -244,22 +236,26 @@ func TestRunning_StderrPropagatedOnFailure(t *testing.T) {
 	m := New()
 	m.mode = modeLocal
 	m.state = stateSummary
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
-	msg := cmd()
-	for {
-		updated, cmd = appM.Update(msg)
-		appM = updated.(*Model)
-		if appM.state == stateDone {
-			break
-		}
-		msg = cmd()
-	}
+	appM = drainRun(t, appM)
 	require.Error(t, appM.err)
 	require.Equal(t, "config validation: DOMAIN_DATABASE_URL is required", appM.stderr)
 	view := appM.View()
 	require.Contains(t, view, "falló")
 	require.Contains(t, view, "DOMAIN_DATABASE_URL")
+}
+
+// drainRun consume mensajes del canal del runner hasta llegar a done.
+func drainRun(t *testing.T, appM *Model) *Model {
+	t.Helper()
+	require.NotNil(t, appM.runCh)
+	for appM.state != stateDone {
+		msg := waitForRunMsg(appM.runCh)()
+		updated, _ := appM.Update(msg)
+		appM = updated.(*Model)
+	}
+	return appM
 }
 
 func TestRedactDSN(t *testing.T) {

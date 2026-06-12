@@ -129,7 +129,27 @@ func installUserService(baseURL string) error {
 	// 60s: el restart hace graceful shutdown del proceso viejo (drain
 	// ~5-25s) + boot completo del nuevo. Con 20s reportaba warning por
 	// una carrera aunque el server terminara de levantar bien.
-	return waitServerHealth(baseURL, 60*time.Second)
+	if err := waitServerHealth(baseURL, 60*time.Second); err != nil {
+		// Auto-diagnóstico: adjuntar el journal para que el warning diga
+		// la CAUSA, no solo "no respondió".
+		if tail := journalTail(5); tail != "" {
+			return fmt.Errorf("%v | journal: %s", err, tail)
+		}
+		return err
+	}
+	return nil
+}
+
+// journalTail retorna las últimas n líneas del journal del service en
+// una sola línea ("" si journalctl no está disponible).
+func journalTail(n int) string {
+	out, err := exec.Command("journalctl", "--user", "-u", serviceName,
+		"-n", strconv.Itoa(n), "--no-pager", "-o", "cat").Output()
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return strings.Join(lines, " ⏎ ")
 }
 
 // portFromBaseURL extrae el puerto de la base URL ("8000" si no se puede).
@@ -318,14 +338,18 @@ func listenInodesForPort(data string, port int) []string {
 	return out
 }
 
-// waitServerHealth pollea GET /health hasta timeout.
+// waitServerHealth pollea GET /health hasta timeout. Emite un heartbeat
+// a stderr cada ~2s para que la TUI muestre qué está esperando (sin
+// esto, esperas largas se sienten como un cuelgue).
 func waitServerHealth(baseURL string, timeout time.Duration) error {
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(timeout)
+	start := time.Now()
+	deadline := start.Add(timeout)
 	var lastErr error
+	lastBeat := time.Time{}
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(baseURL + "/health")
 		if err == nil {
@@ -336,6 +360,11 @@ func waitServerHealth(baseURL string, timeout time.Duration) error {
 			lastErr = fmt.Errorf("health status %d", resp.StatusCode)
 		} else {
 			lastErr = err
+		}
+		if timeout > 5*time.Second && time.Since(lastBeat) >= 2*time.Second {
+			fmt.Fprintf(os.Stderr, "  esperando /health del server (%ds)\n",
+				int(time.Since(start).Seconds()))
+			lastBeat = time.Now()
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

@@ -92,9 +92,13 @@ type Model struct {
 	stderr string
 
 	// Output en vivo del sub-process (running)
-	lines []string
-	steps []stepLine
-	runCh chan tea.Msg
+	lines       []string
+	steps       []stepLine
+	runCh       chan tea.Msg
+	frame       int       // animación (avanza con tick, no con output)
+	stepStart   time.Time // inicio del paso activo (elapsed visible)
+	activeNote  string    // última línea informativa del paso activo
+	summaryLine string    // "ok=N skipped=N ..." parseada del stream
 
 	// sub-models
 	modePrompt   selectable.Model
@@ -149,9 +153,17 @@ type depsMsg struct {
 
 type lineMsg string
 
+type tickMsg struct{}
+
 type runResultMsg struct {
 	err    error
 	stderr string
+}
+
+// tickCmd anima la vista de running aunque el sub-process no emita
+// output (e.g. esperas largas como el health-check del server).
+func tickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 // Update implementa tea.Model.
@@ -233,6 +245,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.feedLine(string(msg))
 		return m, waitForRunMsg(m.runCh)
+	case tickMsg:
+		if m.state != stateRunning {
+			return m, nil // dejar de animar fuera de running
+		}
+		m.frame++
+		return m, tickCmd()
 	case runResultMsg:
 		m.err = msg.err
 		m.stderr = msg.stderr
@@ -467,10 +485,16 @@ func (m *Model) feedLine(raw string) {
 	if t == "" {
 		return
 	}
+	if strings.HasPrefix(t, "ok=") {
+		m.summaryLine = t // "ok=9 skipped=2 warning=0 failed=0 (total=11)"
+		return
+	}
 	if strings.HasPrefix(t, "[") && strings.Contains(t, "]") {
 		m.steps = append(m.steps, stepLine{
 			title: strings.TrimPrefix(strings.Replace(t, "]", "", 1), "["),
 		})
+		m.stepStart = time.Now()
+		m.activeNote = ""
 		return
 	}
 	r := []rune(t)
@@ -488,11 +512,15 @@ func (m *Model) feedLine(raw string) {
 	case '✗':
 		word = "error"
 	default:
+		// Línea informativa del paso en curso (e.g. "(terminando server
+		// huérfano...)", "… esperando /health (8s)"): mostrarla al lado.
+		m.activeNote = t
 		return
 	}
 	last := &m.steps[len(m.steps)-1]
 	last.status = word
 	last.path = extractPath(strings.TrimSpace(string(r[1:])))
+	m.activeNote = ""
 }
 
 // extractPath devuelve el primer token con pinta de path del summary
@@ -521,13 +549,45 @@ func extractPath(summary string) string {
 func (m *Model) viewRunning() string {
 	s := "\n  " + styles.Title.Render("Instalando") + "\n\n"
 	if len(m.steps) == 0 {
-		s += "  " + styles.Accent.Render(spinnerFrames[0]) +
+		s += "  " + styles.Accent.Render(spinnerFrames[m.frame%len(spinnerFrames)]) +
 			" " + styles.ItemDesc.Render("arrancando...") + "\n"
 		return s
 	}
-	frame := spinnerFrames[len(m.lines)%len(spinnerFrames)]
-	s += m.renderSteps(frame)
+	s += m.renderSteps(spinnerFrames[m.frame%len(spinnerFrames)])
+
+	// Barra de progreso indeterminada + elapsed del paso activo, para
+	// que NUNCA se sienta colgado (e.g. esperando /health del server).
+	if last := m.steps[len(m.steps)-1]; last.status == "" {
+		elapsed := int(time.Since(m.stepStart).Seconds())
+		bar := indeterminateBar(m.frame, 14)
+		s += "\n    " + styles.Accent.Render(bar) +
+			styles.ItemDesc.Render(fmt.Sprintf("  %ds", elapsed))
+		if m.activeNote != "" {
+			s += styles.ItemDesc.Render("  " + m.activeNote)
+		}
+		s += "\n"
+	}
 	return s
+}
+
+// indeterminateBar dibuja una barra animada tipo "▱▰▰▰▱..." con un
+// segmento de 4 que rebota de lado a lado según el frame.
+func indeterminateBar(frame, width int) string {
+	const seg = 4
+	span := width - seg
+	pos := frame % (2 * span)
+	if pos > span {
+		pos = 2*span - pos
+	}
+	var b strings.Builder
+	for i := 0; i < width; i++ {
+		if i >= pos && i < pos+seg {
+			b.WriteString("▰")
+		} else {
+			b.WriteString("▱")
+		}
+	}
+	return b.String()
 }
 
 // renderSteps renderiza la lista de pasos; el que no terminó lleva el
@@ -575,6 +635,19 @@ func (m *Model) viewDone() string {
 		if len(m.steps) > 0 {
 			s += m.renderSteps("·")
 		}
+		// Información de la instalación
+		s += "\n"
+		if m.summaryLine != "" {
+			s += "  Resumen:  " + styles.Accent.Render(m.summaryLine) + "\n"
+		}
+		s += "  Server:   " + styles.Accent.Render(m.baseURL()) +
+			styles.ItemDesc.Render("  (systemd: arranca al login, se reinicia solo)") + "\n"
+		agents := strings.Join(m.agents, ", ")
+		if agents == "" {
+			agents = "ninguno"
+		}
+		s += "  Agentes:  " + styles.Accent.Render(agents) + "\n"
+		s += "  Logs:     " + styles.ItemDesc.Render("journalctl --user -u domain -f") + "\n"
 	}
 	s += "\n" + styles.HelpText.Render("  [cualquier tecla] volver al menú") + "\n"
 	return s
@@ -634,13 +707,14 @@ func (m *Model) startInstallCmd() tea.Cmd {
 	flags := m.installFlags()
 	ch := make(chan tea.Msg, 64)
 	m.runCh = ch
+	m.stepStart = time.Now()
 	go func() {
 		err, stderr := runInstallStreaming(context.Background(), flags, func(line string) {
 			ch <- lineMsg(line)
 		})
 		ch <- runResultMsg{err: err, stderr: stderr}
 	}()
-	return waitForRunMsg(ch)
+	return tea.Batch(waitForRunMsg(ch), tickCmd())
 }
 
 // waitForRunMsg espera el próximo mensaje del canal de streaming.

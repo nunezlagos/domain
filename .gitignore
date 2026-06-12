@@ -73,7 +73,7 @@ deploy/helm/*/Chart.lock
 # pgBackRest / DB backups
 *.backup
 *.dump
-backups/
+/deploy/backups/
 
 # OS generated
 .DS_Store

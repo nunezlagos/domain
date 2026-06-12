@@ -13,12 +13,16 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -88,13 +92,22 @@ func installUserService(baseURL string) error {
 		return err
 	}
 	content := serviceUnitContent(bin)
+	port := portFromBaseURL(baseURL)
 
-	// Idempotencia sin downtime: si el unit no cambió y el server ya
-	// responde /health, no hay nada que reiniciar.
+	// Idempotencia sin downtime: unit sin cambios + health OK + el
+	// listener es realmente el proceso del service → no-op.
 	if existing, readErr := os.ReadFile(unitPath); readErr == nil && string(existing) == content {
-		if waitServerHealth(baseURL, 2*time.Second) == nil {
+		if waitServerHealth(baseURL, 2*time.Second) == nil && listenerIsService(port) {
 			return nil
 		}
+	}
+
+	// Huérfanos: si el puerto lo ocupa un proceso `domain` que NO es el
+	// del service (e.g. un `domain server` manual de una sesión vieja),
+	// lo terminamos acá — el user no tiene que matar nada a mano. Si lo
+	// ocupa OTRA app, error claro (no matamos procesos ajenos).
+	if err := reapOrphanOnPort(port); err != nil {
+		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(unitPath), 0o755); err != nil {
@@ -117,6 +130,192 @@ func installUserService(baseURL string) error {
 	// ~5-25s) + boot completo del nuevo. Con 20s reportaba warning por
 	// una carrera aunque el server terminara de levantar bien.
 	return waitServerHealth(baseURL, 60*time.Second)
+}
+
+// portFromBaseURL extrae el puerto de la base URL ("8000" si no se puede).
+func portFromBaseURL(baseURL string) int {
+	if u, err := neturl.Parse(baseURL); err == nil && u.Port() != "" {
+		if p, err := strconv.Atoi(u.Port()); err == nil {
+			return p
+		}
+	}
+	return 8000
+}
+
+// serviceMainPID retorna el MainPID del service (0 si no corre).
+func serviceMainPID() int {
+	out, err := exec.Command("systemctl", "--user", "show", serviceName, "-p", "MainPID", "--value").Output()
+	if err != nil {
+		return 0
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	return pid
+}
+
+// listenerIsService true si quien escucha el puerto es el MainPID del
+// service (o un hijo directo suyo).
+func listenerIsService(port int) bool {
+	lpid := portListenerPID(port)
+	if lpid == 0 {
+		return false
+	}
+	mpid := serviceMainPID()
+	return mpid != 0 && (lpid == mpid || procPPID(lpid) == mpid)
+}
+
+// reapOrphanOnPort libera el puerto si lo ocupa un proceso `domain`
+// ajeno al service. SIGTERM + corta espera + SIGKILL (los huérfanos
+// son desechables; su graceful shutdown puede demorar ~25s y no vale
+// la pena esperarlo). Si lo ocupa otra app → error claro, NO se mata.
+func reapOrphanOnPort(port int) error {
+	pid := portListenerPID(port)
+	if pid == 0 {
+		return nil // puerto libre
+	}
+	if mpid := serviceMainPID(); mpid != 0 && (pid == mpid || procPPID(pid) == mpid) {
+		return nil // es el propio service: systemctl restart lo maneja
+	}
+	comm := procComm(pid)
+	if comm != "domain" {
+		// Proceso ajeno (docker, otra app): NUNCA lo matamos. Informamos
+		// y proponemos el siguiente puerto libre.
+		return fmt.Errorf("puerto %d ocupado por otro proceso (%s, pid %d) — no lo toco; "+
+			"re-corré el install con --base-url http://localhost:%d (puerto libre sugerido)",
+			port, comm, pid, nextFreePort(port+1))
+	}
+	fmt.Fprintf(os.Stderr, "  (terminando server domain huérfano pid=%d en :%d)\n", pid, port)
+	_ = syscall.Kill(pid, syscall.SIGTERM)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if !pidAlive(pid) {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	// Esperar a que el kernel libere el puerto.
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if portListenerPID(port) == 0 {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return nil
+}
+
+// pidAlive chequea existencia con signal 0.
+func pidAlive(pid int) bool {
+	return syscall.Kill(pid, 0) == nil
+}
+
+// nextFreePort busca el primer puerto TCP libre desde start.
+func nextFreePort(start int) int {
+	for p := start; p < start+50; p++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		if err == nil {
+			_ = ln.Close()
+			return p
+		}
+	}
+	return start
+}
+
+// procComm lee /proc/pid/comm ("" si no accesible).
+func procComm(pid int) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// procPPID lee el PPid de /proc/pid/status (0 si no accesible).
+func procPPID(pid int) int {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "PPid:") {
+			p, _ := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "PPid:")))
+			return p
+		}
+	}
+	return 0
+}
+
+// portListenerPID retorna el PID (del user actual) que escucha en el
+// puerto TCP dado, o 0. Implementado vía /proc/net/tcp{,6} → inode del
+// socket → scan de /proc/*/fd. Solo ve procesos del mismo user, que es
+// exactamente el caso de los huérfanos `domain`.
+func portListenerPID(port int) int {
+	inodes := map[string]bool{}
+	for _, f := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		for _, ino := range listenInodesForPort(string(data), port) {
+			inodes[ino] = true
+		}
+	}
+	if len(inodes) == 0 {
+		return 0
+	}
+	procs, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0
+	}
+	for _, p := range procs {
+		pid, err := strconv.Atoi(p.Name())
+		if err != nil {
+			continue
+		}
+		fdDir := fmt.Sprintf("/proc/%d/fd", pid)
+		fds, err := os.ReadDir(fdDir)
+		if err != nil {
+			continue // proceso ajeno o ya muerto
+		}
+		for _, fd := range fds {
+			link, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
+			if err != nil {
+				continue
+			}
+			if strings.HasPrefix(link, "socket:[") {
+				ino := strings.TrimSuffix(strings.TrimPrefix(link, "socket:["), "]")
+				if inodes[ino] {
+					return pid
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// listenInodesForPort parsea el contenido de /proc/net/tcp{,6} y retorna
+// los inodes de sockets en LISTEN (st=0A) cuyo local port coincide.
+func listenInodesForPort(data string, port int) []string {
+	var out []string
+	wantHex := fmt.Sprintf("%04X", port)
+	lines := strings.Split(data, "\n")
+	for i, line := range lines {
+		if i == 0 {
+			continue // header
+		}
+		fields := strings.Fields(line)
+		// sl local_address rem_address st ... inode en field 9
+		if len(fields) < 10 || fields[3] != "0A" {
+			continue
+		}
+		local := fields[1]
+		colon := strings.LastIndex(local, ":")
+		if colon < 0 || local[colon+1:] != wantHex {
+			continue
+		}
+		out = append(out, fields[9])
+	}
+	return out
 }
 
 // waitServerHealth pollea GET /health hasta timeout.

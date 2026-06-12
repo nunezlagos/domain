@@ -95,9 +95,11 @@ func installUserService(baseURL string) error {
 	port := portFromBaseURL(baseURL)
 
 	// Idempotencia sin downtime: unit sin cambios + health OK + el
-	// listener es realmente el proceso del service → no-op.
+	// listener es realmente el proceso del service + el proceso corre el
+	// binario ACTUAL → no-op. Si el binario en disco fue recompilado
+	// (update), /proc/PID/exe queda "(deleted)" → reiniciamos para tomarlo.
 	if existing, readErr := os.ReadFile(unitPath); readErr == nil && string(existing) == content {
-		if waitServerHealth(baseURL, 2*time.Second) == nil && listenerIsService(port) {
+		if waitServerHealth(baseURL, 2*time.Second) == nil && listenerIsService(port) && !serviceRunsStaleBinary() {
 			return nil
 		}
 	}
@@ -227,6 +229,21 @@ func reapOrphanOnPort(port int) error {
 // pidAlive chequea existencia con signal 0.
 func pidAlive(pid int) bool {
 	return syscall.Kill(pid, 0) == nil
+}
+
+// serviceRunsStaleBinary detecta si el proceso del service corre un
+// binario que fue reemplazado en disco (go build sobre el mismo path):
+// el symlink /proc/PID/exe queda apuntando a "<path> (deleted)".
+func serviceRunsStaleBinary() bool {
+	pid := serviceMainPID()
+	if pid == 0 {
+		return false
+	}
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(exe, " (deleted)")
 }
 
 // nextFreePort busca el primer puerto TCP libre desde start.

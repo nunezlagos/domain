@@ -141,6 +141,14 @@ func main() {
 		runInit(os.Args[2:])
 	case "workflow":
 		runWorkflow(os.Args[2:])
+	case "install":
+		os.Exit(runInstall(os.Args[2:]))
+	case "update":
+		os.Exit(runUpdate(os.Args[2:]))
+	case "seed":
+		os.Exit(runSeed(os.Args[2:]))
+	case "restore":
+		os.Exit(runRestore(os.Args[2:]))
 	case "onboard", "bootstrap":
 		os.Exit(runOnboard(os.Args[2:]))
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
@@ -187,6 +195,15 @@ Plug-and-play:
   workflow list       Lista archivos importados con su status
   workflow restore <rel-path>
                       Restaura el .md original desde el backup en BD
+  install [flags]     Wizard idempotente de instalación (deploy mode +
+                      migrate + seed + opcional init + setup opencode).
+                      Flags: --mode {local|cloud|hybrid}, --base-url,
+                      --non-interactive, --no-backup, --no-init, --no-opencode,
+                      --dsn
+  update [flags]      Backups + migrate + seed (sin tocar configs del agente).
+                      Flags: --no-backup, --no-seed, --no-migrate
+  seed all            Corre todos los seeders (skip-by-hash, idempotente)
+  restore <bak-path>  Restaura un archivo desde un backup timestamped
 
 Common:
   version             Version + commit + build time

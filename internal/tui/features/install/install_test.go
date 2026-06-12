@@ -7,6 +7,7 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -56,11 +57,14 @@ func TestUpdate_DepsMsg_AdvancesToBaseURLPrompt(t *testing.T) {
 func TestUpdate_ModePrompt_OneSelectsLocal_GoesToDepCheck(t *testing.T) {
 	m := New()
 	m.state = stateModePrompt
+	// '1' emite SelectMsg(0) async; ejecutamos el cmd
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	appM := updated.(*Model)
+	require.NotNil(t, cmd, "selectable must emit SelectMsg on number key")
+	appM2, _ := appM.Update(cmd())
+	appM = appM2.(*Model)
 	require.Equal(t, modeLocal, appM.mode)
 	require.Equal(t, stateDepCheck, appM.state)
-	require.NotNil(t, cmd, "must trigger dep-check after mode select")
 }
 
 func TestUpdate_ModePrompt_TwoSelectsCloud_GoesToDepCheck(t *testing.T) {
@@ -68,9 +72,11 @@ func TestUpdate_ModePrompt_TwoSelectsCloud_GoesToDepCheck(t *testing.T) {
 	m.state = stateModePrompt
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 	appM := updated.(*Model)
+	require.NotNil(t, cmd)
+	appM2, _ := appM.Update(cmd())
+	appM = appM2.(*Model)
 	require.Equal(t, modeCloud, appM.mode)
 	require.Equal(t, stateDepCheck, appM.state)
-	require.NotNil(t, cmd)
 }
 
 func TestUpdate_ModePrompt_ThreeFallsBackToLocal(t *testing.T) {
@@ -139,8 +145,12 @@ func TestUpdate_BaseURLPrompt_EnterAdvances(t *testing.T) {
 func TestUpdate_InitPrompt_YesSetsTrue(t *testing.T) {
 	m := New()
 	m.state = stateInitPrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	// Enter sobre selectable → emite SelectMsg async; ejecutamos el cmd
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
+	require.NotNil(t, cmd)
+	appM2, _ := appM.Update(cmd())
+	appM = appM2.(*Model)
 	require.True(t, appM.doInit)
 	require.Equal(t, stateOpencodePrompt, appM.state)
 }
@@ -148,7 +158,9 @@ func TestUpdate_InitPrompt_YesSetsTrue(t *testing.T) {
 func TestUpdate_InitPrompt_NoSetsFalse(t *testing.T) {
 	m := New()
 	m.state = stateInitPrompt
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	// Down para seleccionar "no", luego enter
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = updated.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
 	require.False(t, appM.doInit)
 }
@@ -156,30 +168,62 @@ func TestUpdate_InitPrompt_NoSetsFalse(t *testing.T) {
 func TestUpdate_OpencodePrompt_YesStartsRun(t *testing.T) {
 	// Mock runner para no ejecutar install real
 	called := false
-	SetInstallRunner(func(ctx context.Context, flags []string) error {
+	SetInstallRunner(func(ctx context.Context, flags []string) (error, string) {
 		called = true
 		// Verificar flags correctos
 		require.Contains(t, flags, "--mode")
 		require.Contains(t, flags, "local")
 		require.Contains(t, flags, "--non-interactive")
-		return nil
+		return nil, ""
 	})
 	defer SetInstallRunner(defaultInstallRunner) // restore
 
 	m := New()
 	m.mode = modeLocal
 	m.state = stateOpencodePrompt
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m.doInit = true
+	// Enter selecciona el primer item (yes) del selectable.
+	// Despues del Update, el state sigue en opencodePrompt
+	// (todavia no se proceso el SelectMsg). Necesitamos ejecutar
+	// el cmd retornado y hacer Update de nuevo.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
-	require.Equal(t, stateRunning, appM.state)
 	require.NotNil(t, cmd)
+	// Ejecutar el cmd → SelectMsg → Update de nuevo
+	selectMsg := cmd()
+	appM2, _ := appM.Update(selectMsg); appM = appM2.(*Model)
+	require.Equal(t, stateRunning, appM.state,
+		"after SelectMsg from opencode prompt, must be in stateRunning")
 
-	// Ejecutar el cmd
-	msg := cmd()
-	res, ok := msg.(runResultMsg)
+	// Ejecutar el runInstallCmd
+	res, ok := appM.runInstallCmd()().(runResultMsg)
 	require.True(t, ok)
 	require.NoError(t, res.err)
 	require.True(t, called, "runner must be called")
+}
+
+func TestUpdate_OpencodePrompt_StderrPropagated(t *testing.T) {
+	// Mock runner que falla con stderr real (HU-01.13 commit 2/3)
+	SetInstallRunner(func(ctx context.Context, flags []string) (error, string) {
+		return fmt.Errorf("exit status 1"), "config validation: DOMAIN_DATABASE_URL is required"
+	})
+	defer SetInstallRunner(defaultInstallRunner)
+
+	m := New()
+	m.mode = modeLocal
+	m.state = stateOpencodePrompt
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	appM := updated.(*Model)
+	require.NotNil(t, cmd)
+	selectMsg := cmd()
+	appM2, _ := appM.Update(selectMsg); appM = appM2.(*Model)
+	require.Equal(t, stateRunning, appM.state)
+	// Ejecutar runInstallCmd
+	res, ok := appM.runInstallCmd()().(runResultMsg)
+	require.True(t, ok)
+	require.Error(t, res.err)
+	require.Equal(t, "config validation: DOMAIN_DATABASE_URL is required", res.stderr,
+		"stderr should be propagated for error display")
 }
 
 func TestUpdate_RunResult_AdvancesToDone(t *testing.T) {

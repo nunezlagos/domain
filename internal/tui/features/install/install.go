@@ -1,14 +1,16 @@
-// Package install — TUI feature para `domain install` (HU-01.11).
+// Package install — TUI feature para `domain install` (HU-01.11 + 01.13).
 //
-// Flow dentro de la TUI:
-//   1. Pantalla de bienvenida + chequeo de deps (Go/git, [docker si local])
-//      - Si falta algo critico, ofrece auto-install con confirm.
-//   2. Wizard de 4 prompts: mode / base-url / init y-n / opencode y-n
-//   3. Run install con InstallProgress (5 steps + summary)
-//   4. Vuelve al menu con BackMsg
+// Flow con widgets visuales (HU-01.13):
+//   1. welcome
+//   2. modePrompt: SELECTABLE [X] local / [ ] cloud / [-] hybrid
+//   3. depCheck: go/git/[docker] (segun mode)
+//   4. baseURLPrompt: textinput
+//   5. initPrompt: SELECTABLE [X] yes / [ ] no
+//   6. opencodePrompt: SELECTABLE [X] yes / [ ] no
+//   7. running: install via sub-process con error propagation
+//   8. done
 //
-// La TUI solo orquesta; la logica real vive en internal/installer
-// y cmd/domain/install_cli.go (reusado via runInstallFromFlags).
+// Cualquier key en done → BackMsg → vuelve al menu.
 
 package install
 
@@ -16,12 +18,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"nunezlagos/domain/internal/installer"
 	"nunezlagos/domain/internal/tui/menu"
+	"nunezlagos/domain/internal/tui/selectable"
 	"nunezlagos/domain/internal/tui/styles"
 )
 
@@ -29,8 +31,8 @@ type state int
 
 const (
 	stateWelcome state = iota
-	stateDepCheck
 	stateModePrompt
+	stateDepCheck
 	stateBaseURLPrompt
 	stateInitPrompt
 	stateOpencodePrompt
@@ -59,6 +61,13 @@ func (m modeSel) String() string {
 	return "?"
 }
 
+// Sub-models que la feature integra.
+type subModel interface {
+	Update(tea.Msg) (tea.Model, tea.Cmd)
+	View() string
+	Init() tea.Cmd
+}
+
 // Model bubbletea para la feature install.
 type Model struct {
 	state    state
@@ -70,20 +79,36 @@ type Model struct {
 	doOpencode bool
 	confirm  installer.ConfirmFunc
 	err      error
+	// stderr del sub-process (para error propagation)
+	stderr string
+	// sub-models de los prompts
+	modePrompt   selectable.Model
+	initPrompt   selectable.Model
+	opencodePrompt selectable.Model
 }
 
-// New crea un Model con confirm default (prompt via stdin/stdout).
 func New() *Model {
 	return &Model{
-		state:    stateWelcome,
-		baseURL:  "http://localhost:8000",
-		doInit:   false,
+		state:   stateWelcome,
+		baseURL: "http://localhost:8000",
 		doOpencode: true,
-		confirm:  defaultConfirm,
+		confirm: defaultConfirm,
+		modePrompt: selectable.New("Deployment mode", []selectable.Item{
+			{Label: "local", Description: "docker compose (Postgres + S3 + SMTP)"},
+			{Label: "cloud", Description: "bring your own services (DSN)"},
+			{Label: "hybrid", Description: "mix per-service (falls back to local)", Disabled: true},
+		}),
+		initPrompt: selectable.New("Archive .md files to BD (init)?", []selectable.Item{
+			{Label: "yes", Description: "Backup CLAUDE.md, .claude/**, .opencode/** to BD"},
+			{Label: "no", Description: "Skip init step (faster install)"},
+		}),
+		opencodePrompt: selectable.New("Configure opencode MCP server?", []selectable.Item{
+			{Label: "yes", Description: "Run 'domain setup opencode' after install"},
+			{Label: "no", Description: "Skip agent setup (configure manually later)"},
+		}),
 	}
 }
 
-// Init implementa tea.Model. Dispara la deteccion de platform.
 func (m *Model) Init() tea.Cmd {
 	return m.detectPlatformCmd()
 }
@@ -103,8 +128,62 @@ type platformMsg struct {
 	err      error
 }
 
+type depsMsg struct {
+	deps []installer.CheckResult
+}
+
+type runResultMsg struct {
+	err    error
+	stderr string
+}
+
 // Update implementa tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Si estamos en un sub-prompt, delegamos al sub-model primero.
+	switch m.state {
+	case stateModePrompt:
+		// Detectar SelectMsg del sub-prompt
+		if sel, ok := msg.(selectable.SelectMsg); ok {
+			m.setMode(sel.Index)
+			m.state = stateDepCheck
+			return m, m.checkDepsCmd()
+		}
+		if _, ok := msg.(selectable.CancelMsg); ok {
+			return m, backCmd()
+		}
+		// Delegar el resto de keys al sub-model
+		updated, cmd := m.modePrompt.Update(msg)
+		m.modePrompt = updated.(selectable.Model)
+		return m, cmd
+	case stateInitPrompt:
+		if sel, ok := msg.(selectable.SelectMsg); ok {
+			m.doInit = sel.Index == 0
+			m.state = stateOpencodePrompt
+			return m, nil
+		}
+		if _, ok := msg.(selectable.CancelMsg); ok {
+			m.state = stateModePrompt // back to mode
+			return m, nil
+		}
+		updated, cmd := m.initPrompt.Update(msg)
+		m.initPrompt = updated.(selectable.Model)
+		return m, cmd
+	case stateOpencodePrompt:
+		if sel, ok := msg.(selectable.SelectMsg); ok {
+			m.doOpencode = sel.Index == 0
+			m.state = stateRunning
+			return m, m.runInstallCmd()
+		}
+		if _, ok := msg.(selectable.CancelMsg); ok {
+			m.state = stateInitPrompt // back to init
+			return m, nil
+		}
+		updated, cmd := m.opencodePrompt.Update(msg)
+		m.opencodePrompt = updated.(selectable.Model)
+		return m, cmd
+	}
+
+	// Top-level state messages
 	switch msg := msg.(type) {
 	case platformMsg:
 		if msg.err != nil {
@@ -120,15 +199,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = stateBaseURLPrompt
 		return m, nil
 	case runResultMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		}
+		m.err = msg.err
+		m.stderr = msg.stderr
 		m.state = stateDone
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
+}
+
+func (m *Model) setMode(idx int) {
+	switch idx {
+	case 0:
+		m.mode = modeLocal
+	case 1:
+		m.mode = modeCloud
+	case 2:
+		// hybrid disabled → fallback a local (no deberia llegar aca)
+		m.mode = modeLocal
+	}
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -142,29 +232,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if key == "esc" || key == "q" {
 			return m, backCmd()
 		}
-	case stateDepCheck:
-		// Legacy state (no se usa mas). Mantenido por compat.
-		// Auto-avanza al prompt de mode; sin interaccion.
-	case stateModePrompt:
-		switch key {
-		case "1":
-			m.mode = modeLocal
-			m.state = stateDepCheck
-			return m, m.checkDepsCmd()
-		case "2":
-			m.mode = modeCloud
-			m.state = stateDepCheck
-			return m, m.checkDepsCmd()
-		case "3":
-			m.mode = modeHybrid
-			// Hybrid no esta implementado end-to-end: caemos a local con warning.
-			m.mode = modeLocal
-			m.state = stateDepCheck
-			return m, m.checkDepsCmd()
-		}
 	case stateBaseURLPrompt:
-		// Manejado por el input prompt (no por keymap).
-		// Si el user presiona enter sin texto, usa default.
 		if key == "enter" {
 			if m.baseURL == "" {
 				m.baseURL = "http://localhost:8000"
@@ -178,45 +246,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Append printable char.
 		if len(key) == 1 {
 			m.baseURL += key
 			return m, nil
 		}
-	case stateInitPrompt:
-		switch key {
-		case "y", "Y":
-			m.doInit = true
-			m.state = stateOpencodePrompt
-			return m, nil
-		case "n", "N":
-			m.doInit = false
-			m.state = stateOpencodePrompt
-			return m, nil
-		case "enter":
-			// Default: n
-			m.doInit = false
-			m.state = stateOpencodePrompt
-			return m, nil
-		}
-	case stateOpencodePrompt:
-		switch key {
-		case "y", "Y":
-			m.doOpencode = true
-			m.state = stateRunning
-			return m, m.runInstallCmd()
-		case "n", "N":
-			m.doOpencode = false
-			m.state = stateRunning
-			return m, m.runInstallCmd()
-		case "enter":
-			// Default: y
-			m.doOpencode = true
-			m.state = stateRunning
-			return m, m.runInstallCmd()
-		}
 	case stateDone:
-		// Cualquier key vuelve al menu.
 		return m, backCmd()
 	}
 	return m, nil
@@ -227,16 +261,16 @@ func (m *Model) View() string {
 	switch m.state {
 	case stateWelcome:
 		return m.viewWelcome()
+	case stateModePrompt:
+		return m.modePrompt.View()
 	case stateDepCheck:
 		return m.viewDepCheck()
-	case stateModePrompt:
-		return m.viewModePrompt()
 	case stateBaseURLPrompt:
 		return m.viewBaseURLPrompt()
 	case stateInitPrompt:
-		return m.viewInitPrompt()
+		return m.initPrompt.View()
 	case stateOpencodePrompt:
-		return m.viewOpencodePrompt()
+		return m.opencodePrompt.View()
 	case stateRunning:
 		return m.viewRunning()
 	case stateDone:
@@ -257,13 +291,14 @@ func (m *Model) viewWelcome() string {
 func (m *Model) viewDepCheck() string {
 	s := "\n  Checking dependencies...\n\n"
 	for _, r := range m.deps {
-		status := styles.Fail.Render("[ MISSING ]")
-		if r.Found {
-			if r.Dep.MinVer != "" && !r.MinMet {
-				status = styles.Warn.Render(fmt.Sprintf("[ %s < %s ]", r.Version, r.Dep.MinVer))
-			} else {
-				status = styles.Ok.Render("[ ok ]")
-			}
+		var status string
+		switch {
+		case !r.Found:
+			status = styles.Fail.Render("[ MISSING ]")
+		case r.Dep.MinVer != "" && !r.MinMet:
+			status = styles.Warn.Render(fmt.Sprintf("[ %s < %s ]", r.Version, r.Dep.MinVer))
+		default:
+			status = styles.Ok.Render("[ ok ]")
 		}
 		s += fmt.Sprintf("  %s  %s (%s)\n", status, r.Dep.Name, r.Dep.Binary)
 		if !r.Found && r.Hint != "" {
@@ -274,41 +309,30 @@ func (m *Model) viewDepCheck() string {
 	return s
 }
 
-func (m *Model) viewModePrompt() string {
-	s := "\n  Deployment mode:\n"
-	s += "    1) local   — docker compose (Postgres+S3+SMTP)\n"
-	s += "    2) cloud   — bring your own services (DSN)\n"
-	s += "    3) hybrid  — mix per-service (falls back to local)\n"
-	s += "  Choice [1]: "
-	return s
-}
-
 func (m *Model) viewBaseURLPrompt() string {
 	s := "\n  Domain server URL\n"
-	s += fmt.Sprintf("  [%s]: ", m.baseURL)
-	return s
-}
-
-func (m *Model) viewInitPrompt() string {
-	s := "\n  Archive .md files to BD (init)?\n"
-	s += "  [y/N]: "
-	return s
-}
-
-func (m *Model) viewOpencodePrompt() string {
-	s := "\n  Configure opencode MCP server?\n"
-	s += "  [Y/n]: "
+	s += fmt.Sprintf("  > %s\n", m.baseURL)
+	s += "\n"
+	s += styles.HelpText.Render("  type to edit, [enter] confirm, [esc] back") + "\n"
 	return s
 }
 
 func (m *Model) viewRunning() string {
-	return "\n  Running install (see install_cli.go output)...\n"
+	return "\n  Running install (see output)...\n"
 }
 
 func (m *Model) viewDone() string {
 	s := "\n"
 	if m.err != nil {
-		s += styles.Fail.Render("  Install failed: ") + m.err.Error() + "\n"
+		s += styles.Fail.Render("  Install failed:") + "\n"
+		s += "\n"
+		s += "  " + m.err.Error() + "\n"
+		// Si tenemos stderr del sub-process, mostrarlo verbatim
+		if m.stderr != "" {
+			s += "\n"
+			s += styles.ItemDesc.Render("  --- stderr del sub-process ---") + "\n"
+			s += m.stderr + "\n"
+		}
 	} else {
 		s += styles.Ok.Render("  Install complete.") + "\n"
 	}
@@ -317,10 +341,6 @@ func (m *Model) viewDone() string {
 }
 
 // --- Comandos async ---
-
-type depsMsg struct {
-	deps []installer.CheckResult
-}
 
 func (m *Model) checkDepsCmd() tea.Cmd {
 	deps := depsForMode(m.mode)
@@ -331,9 +351,6 @@ func (m *Model) checkDepsCmd() tea.Cmd {
 }
 
 // depsForMode retorna las deps a chequear segun el deployment mode.
-// - local: go, git, docker (docker lo necesita para compose)
-// - cloud: go, git (cloud trae su propio Postgres)
-// - hybrid: go, git, docker (hybrid suele incluir local en algun servicio)
 func depsForMode(m modeSel) []installer.Dep {
 	base := []installer.Dep{installer.DepGo, installer.DepGit}
 	switch m {
@@ -341,10 +358,6 @@ func depsForMode(m modeSel) []installer.Dep {
 		base = append(base, installer.DepDocker)
 	}
 	return base
-}
-
-type runResultMsg struct {
-	err error
 }
 
 func (m *Model) runInstallCmd() tea.Cmd {
@@ -360,13 +373,9 @@ func (m *Model) runInstallCmd() tea.Cmd {
 	if !m.doOpencode {
 		flags = append(flags, "--no-opencode")
 	}
-	// Aqui llamamos a la logica real. Para mantener la TUI testable
-	// sin ejecutar el install (que toca DB, docker, etc.), exportamos
-	// una funcion RunInstallWithFlags(flags) que retorna error.
-	// Ver install_runner.go en este paquete.
 	return func() tea.Msg {
-		err := runInstallWithFlags(context.Background(), flags)
-		return runResultMsg{err: err}
+		err, stderr := runInstallWithFlags(context.Background(), flags)
+		return runResultMsg{err: err, stderr: stderr}
 	}
 }
 
@@ -380,6 +389,5 @@ func defaultConfirm(prompt string) bool {
 	fmt.Fprint(os.Stderr, prompt)
 	var resp string
 	fmt.Scanln(&resp)
-	resp = strings.ToLower(strings.TrimSpace(resp))
 	return resp == "" || resp == "y" || resp == "yes"
 }

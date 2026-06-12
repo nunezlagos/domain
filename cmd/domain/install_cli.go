@@ -26,6 +26,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -143,8 +144,87 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "already bootstrapped (use 'domain onboard' to re-auth)")
 	}
 
+	// 6. opencode MCP setup (HU-01.14). Corre SIEMPRE, no solo fresh
+	// install. Es idempotente: si domain ya esta en opencode.json,
+	// setuppkg.SetupOpenCode retorna ErrAlreadyConfigured y no hace
+	// nada. La API key se setea despues con `domain setup opencode
+	// --api-key ...` si todavia no existe.
+	if !flags.noOpencode {
+		progress.StartStep("Configuring opencode MCP server")
+		configureOpencodeMCPServer(flags.baseURL)
+		progress.EndStep(StepOK, "opencode.json updated (idempotent)")
+	} else {
+		progress.StartStep("Configuring opencode MCP server")
+		progress.EndStep(StepSkipped, "--no-opencode")
+	}
+
 	progress.Summary()
 	return 0
+}
+
+// configureOpencodeMCPServer agrega el MCP server "domain" al opencode.json
+// del cwd actual. Es idempotente: si ya esta configurado, no hace nada.
+// La API key puede ser "" (fresh install) — el user la setea despues
+// con `domain setup opencode --api-key sk_xxx`.
+//
+// HU-01.14: tambien valida que el "command" del entry no este vacio.
+// Si lo esta (por un install previo que fallo al encontrar
+// domain-mcp), borra el entry y re-crea con el path correcto.
+func configureOpencodeMCPServer(baseURL string) {
+	if repairOpencodeEmptyCommand() {
+		fmt.Fprintln(os.Stderr, "  (reparado opencode.json con command vacio previo)")
+	}
+	key := readAPIKeyFromCredentials() // "" si fresh install
+	setupArgs := []string{
+		"opencode",
+		"--base-url", baseURL,
+		"--skip-init",
+	}
+	if key != "" {
+		setupArgs = append(setupArgs, "--api-key", key)
+	}
+	runSetup(setupArgs)
+}
+
+// repairOpencodeEmptyCommand busca en opencode.json (cwd) el entry
+// "mcp.domain" y si su "command" es "" o ["", ...], lo borra.
+// Retorna true si reparo algo.
+func repairOpencodeEmptyCommand() bool {
+	cwd, _ := os.Getwd()
+	cfgPath := filepath.Join(cwd, "opencode.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return false
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return false
+	}
+	mcp, ok := doc["mcp"].(map[string]any)
+	if !ok {
+		return false
+	}
+	entry, ok := mcp["domain"].(map[string]any)
+	if !ok {
+		return false
+	}
+	cmd, ok := entry["command"].([]any)
+	if !ok {
+		return false
+	}
+	// Slice vacio = roto
+	if len(cmd) == 0 {
+		return true
+	}
+	// Check si el primer elemento es "" o vacio
+	first, ok := cmd[0].(string)
+	if !ok || first != "" {
+		return false
+	}
+	// Reparar: borrar el entry para que setup lo recree
+	delete(mcp, "domain")
+	out, _ := json.MarshalIndent(doc, "", "  ")
+	return os.WriteFile(cfgPath, out, 0o600) == nil
 }
 
 // installFlags son los flags parseados de `domain install`.
@@ -346,25 +426,8 @@ func handleDeploymentMode(mode string, f installFlags, state *install.InstallSta
 		fmt.Fprintln(os.Stderr, "  ✓ init done")
 	}
 
-	if !f.noOpencode {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Configuring opencode MCP server...")
-		// runSetup esta en main.go (issue-14.1). Si la API key ya
-		// existe en credentials.json, la reusamos.
-		key := readAPIKeyFromCredentials()
-		if key == "" {
-			fmt.Fprintln(os.Stderr, "  (no credentials yet; run 'domain setup opencode' after onboarding)")
-		} else {
-			runSetup([]string{
-				"opencode",
-				"--api-key", key,
-				"--base-url", f.baseURL,
-				"--skip-init",
-			})
-			fmt.Fprintln(os.Stderr, "  ✓ opencode MCP server configured")
-		}
-	}
-
+	// opencode MCP setup se hace en runInstall() como step 6
+	// (HU-01.14), no aca. Asi corre incluso en installs no-fresh.
 	return nil
 }
 

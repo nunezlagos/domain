@@ -72,7 +72,7 @@ func runInstall(args []string) int {
 		mode = string(install.ModeLocal)
 	}
 
-	progress := NewInstallProgress(10, os.Stderr)
+	progress := NewInstallProgress(11, os.Stderr)
 	printBanner(os.Stderr)
 
 	// 1. Detección de estado
@@ -173,7 +173,26 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, envPath)
 	}
 
-	// 9. Agentes MCP (multi: opencode y/o claude-code). Idempotente.
+	// 9. Server como systemd user service: queda corriendo siempre y
+	// arranca al login (plug-and-play). Skip limpio fuera de Linux o
+	// sin user manager (containers/macOS).
+	progress.StartStep("Starting server (systemd)")
+	serverUp := state.ServerReachable
+	switch {
+	case flags.noService:
+		progress.EndStep(StepSkipped, "--no-service")
+	case !systemdUserAvailable():
+		progress.EndStep(StepSkipped, "systemd user manager not available (run 'domain server' manually)")
+	default:
+		if err := installUserService(flags.baseURL); err != nil {
+			progress.EndStep(StepWarning, err.Error())
+		} else {
+			serverUp = true
+			progress.EndStep(StepOK, "domain.service enabled + running (starts at login)")
+		}
+	}
+
+	// 10. Agentes MCP (multi: opencode y/o claude-code). Idempotente.
 	progress.StartStep("Configuring MCP agents")
 	if len(flags.agents) == 0 {
 		progress.EndStep(StepSkipped, "no agents selected")
@@ -182,12 +201,12 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, detail)
 	}
 
-	// 10. Init (.md → BD). Requiere el server HTTP corriendo.
+	// 11. Init (.md → BD). Requiere el server HTTP corriendo.
 	progress.StartStep("Importing .md files")
 	switch {
 	case flags.noInit:
 		progress.EndStep(StepSkipped, "--no-init")
-	case !state.ServerReachable:
+	case !serverUp:
 		progress.EndStep(StepSkipped, "server not running (start 'domain server' and run 'domain init')")
 	default:
 		runInit(nil)
@@ -196,10 +215,11 @@ func runInstall(args []string) int {
 
 	progress.Summary()
 
-	if !state.ServerReachable {
+	if !serverUp {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "⚠ server not running. Start it with:")
 		fmt.Fprintln(os.Stderr, "    domain server")
+		fmt.Fprintln(os.Stderr, "  (o instalalo como servicio: domain service install)")
 	}
 	return 0
 }
@@ -286,13 +306,14 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 
 // installFlags son los flags parseados de `domain install`.
 type installFlags struct {
-	mode     string
-	baseURL  string
-	dsn      string
-	nonInter bool
-	noBackup bool
-	noInit   bool
-	agents   []string
+	mode      string
+	baseURL   string
+	dsn       string
+	nonInter  bool
+	noBackup  bool
+	noInit    bool
+	noService bool
+	agents    []string
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
@@ -332,6 +353,8 @@ func parseInstallFlags(args []string) (installFlags, error) {
 			f.noBackup = true
 		case "--no-init":
 			f.noInit = true
+		case "--no-service":
+			f.noService = true
 		case "--no-opencode":
 			// compat HU-01.14: equivale a sacar opencode de --agents
 			f.agents = removeAgent(f.agents, "opencode")
@@ -919,6 +942,7 @@ func printInstallHelp() {
 	fmt.Println("  --non-interactive, -y           Skip prompts (use defaults or flags)")
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")
+	fmt.Println("  --no-service                    Skip systemd user service (server queda manual)")
 	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
 	fmt.Println("  --dsn URL                       Database URL (cloud mode, non-interactive)")
 	fmt.Println("  --help, -h                      Show this help")

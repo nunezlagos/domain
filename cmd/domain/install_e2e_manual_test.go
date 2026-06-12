@@ -104,6 +104,20 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	first, _ := cmd[0].(string)
 	require.NotEmpty(t, first, "command[0] apunta al binario domain-mcp")
 	t.Logf("opencode command: %v", cmd)
+
+	// Si hay systemd user manager, el install debe dejar el server
+	// corriendo como service (plug-and-play).
+	if systemdUserAvailable() {
+		out, _ := exec.Command("systemctl", "--user", "is-active", serviceName).CombinedOutput()
+		require.Equal(t, "active", strings.TrimSpace(string(out)),
+			"domain.service debe quedar activo post-install")
+		code, err := httpGet("http://localhost:8000/health")
+		require.NoError(t, err)
+		require.Equal(t, 200, code, "/health responde con el service corriendo")
+		t.Log("systemd: domain.service activo y /health 200")
+	} else {
+		t.Log("systemd user manager no disponible: paso de service skippeado")
+	}
 }
 
 // TestE2EInstall_ServerBootsWithoutEnv verifica plug-and-play del CLI:

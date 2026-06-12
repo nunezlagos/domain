@@ -154,6 +154,8 @@ func main() {
 		runWorkflow(os.Args[2:])
 	case "install":
 		os.Exit(runInstall(os.Args[2:]))
+	case "service":
+		os.Exit(runService(os.Args[2:]))
 	case "update":
 		os.Exit(runUpdate(os.Args[2:]))
 	case "seed":

@@ -55,10 +55,21 @@ ok "Go $GO_VERSION detectado"
 # === Clone o update ===
 step "Repositorio"
 if [ -d "$SRC_DIR/.git" ]; then
-    (cd "$SRC_DIR" && git pull --ff-only --quiet 2>/dev/null) || {
-        warn "git pull fallo (¿cambios locales?). Continuando con version actual."
+    # NO silenciar el pull: cuando falla y se "continúa con la versión
+    # actual", el install compila código viejo y rompe después de forma
+    # críptica (e.g. "no migration found for version N" contra una BD
+    # más nueva). Mostrar el motivo y FALLAR, salvo opt-in explícito.
+    PULL_OUT="$(cd "$SRC_DIR" && git pull --ff-only 2>&1)" || {
+        echo "$PULL_OUT" | sed 's/^/    /'
+        if [ -n "${DOMAIN_ALLOW_STALE:-}" ]; then
+            warn "git pull falló; DOMAIN_ALLOW_STALE=1 → continuando con la versión LOCAL (puede estar desactualizada)"
+        else
+            die "git pull falló en $SRC_DIR (motivo arriba).
+  Arreglalo (red/credenciales/cambios locales) y reintentá,
+  o forzá la versión local con: DOMAIN_ALLOW_STALE=1 bash install.sh"
+        fi
     }
-    ok "Source actualizado en $SRC_DIR"
+    ok "Source actualizado en $SRC_DIR ($(cd "$SRC_DIR" && git log -1 --format=%h))"
 else
     git clone --depth=1 "$REPO_URL" "$SRC_DIR" || die "clone fallo. Verificar REPO_URL: $REPO_URL"
     ok "Source clonado a $SRC_DIR"

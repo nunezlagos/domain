@@ -198,18 +198,23 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 	var ct CodeTrace
 	ct.File = filePath
 
+	// ct.HU es puntero: scanear a un struct local y asignar recién si hay
+	// match — &ct.HU.Slug con HU nil paniquea (y el panic dejaba la
+	// conexión adquirida, colgando pools.Close en los tests por 10 min).
 	var issueID uuid.UUID
+	var hu UserStorySummary
 	err := s.Pool.QueryRow(ctx,
 		`SELECT cr.issue_id, us.slug, us.title, us.status
 		 FROM code_references cr
 		 JOIN issues us ON us.id = cr.issue_id
 		 WHERE cr.file_path = $1
 		 LIMIT 1`, filePath,
-	).Scan(&issueID, &ct.HU.Slug, &ct.HU.Title, &ct.HU.Status)
+	).Scan(&issueID, &hu.Slug, &hu.Title, &hu.Status)
 	if err != nil {
 		return &ct, nil // no trace but no error
 	}
-	ct.HU.ID = issueID
+	hu.ID = issueID
+	ct.HU = &hu
 
 	var req RequirementNode
 	err = s.Pool.QueryRow(ctx,

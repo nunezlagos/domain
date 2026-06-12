@@ -217,18 +217,42 @@ func TestSabotage_MCP_CrossOrgGetReturnsNotFound(t *testing.T) {
 	require.True(t, result.IsError, "UUID inexistente debe devolver IsError=true")
 }
 
-// Sabotaje: project_slug inexistente → tool error sin panic.
-func TestSabotage_MCP_UnknownProjectSlug(t *testing.T) {
+// Semántica nueva (plug-and-play): project_slug inexistente se
+// AUTO-CREA en mem_save — en un install fresco no hay projects y el
+// agente debe poder guardar memoria igual. El sabotaje pasa a ser:
+// slug INVÁLIDO (no slugificable) → error limpio, sin panic ni project
+// basura.
+func TestMCP_MemSave_AutoCreatesProject(t *testing.T) {
+	f := setupMCP(t)
+	defer f.cleanup()
+	ctx := context.Background()
+
+	out := callTool(t, f.srv, "domain_mem_save", map[string]any{
+		"project_slug": "proyecto-nuevo",
+		"content":      "primera memoria del proyecto nuevo",
+	})
+	require.Contains(t, out, "id", "save con project nuevo debe funcionar (auto-create)")
+
+	// El project quedó creado y visible
+	listOut := callTool(t, f.srv, "domain_project_list", map[string]any{})
+	require.Contains(t, listOut, "proyecto-nuevo")
+
+	_ = ctx
+}
+
+// Sabotaje: slug inválido (mayúsculas/espacios) → el auto-create debe
+// rechazarlo con error de tool, no crear un project malformado.
+func TestSabotage_MCP_InvalidProjectSlug(t *testing.T) {
 	f := setupMCP(t)
 	defer f.cleanup()
 	ctx := context.Background()
 	req := mcp.CallToolRequest{}
 	req.Params.Name = "domain_mem_save"
 	req.Params.Arguments = map[string]any{
-		"project_slug": "no-existe",
+		"project_slug": "NO Válido!!",
 		"content":      "x",
 	}
 	result, err := f.srv.Client().CallTool(ctx, req)
 	require.NoError(t, err)
-	require.True(t, result.IsError)
+	require.True(t, result.IsError, "slug inválido debe fallar limpio")
 }

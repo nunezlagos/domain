@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -43,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -760,12 +762,21 @@ func (r *Runner) execMemSave(ctx context.Context, step *flow.Step, orgID uuid.UU
 	if r.Observations == nil {
 		return nil, errors.New("mem_save: Observations service not configured")
 	}
-	obs, err := r.Observations.Save(ctx, observation.SaveInput{
-		OrganizationID:  orgID,
-		ProjectID:       projectID,
-		CreatedBy:       userID,
-		Content:         content,
-		ObservationType: obsType,
+	// observations tiene RLS FORCE (migration 000085): el runner corre
+	// server-side sin middleware HTTP, así que envolvemos el Save con la
+	// tx de org (el service la toma del ctx vía TxFromContext).
+	var obs *observation.Observation
+	err = txctx.WithOrgTx(ctx, r.Pool, orgID, func(tx pgx.Tx) error {
+		txCtx := txctx.WithTxContext(ctx, tx)
+		var saveErr error
+		obs, saveErr = r.Observations.Save(txCtx, observation.SaveInput{
+			OrganizationID:  orgID,
+			ProjectID:       projectID,
+			CreatedBy:       userID,
+			Content:         content,
+			ObservationType: obsType,
+		})
+		return saveErr
 	})
 	if err != nil {
 		return nil, err

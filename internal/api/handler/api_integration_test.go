@@ -88,8 +88,10 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	plaintext, _, err := keys.Issue(ctx, org.ID, owner.UserID, "test-key", "test")
 	require.NoError(t, err)
 
-	// Middleware stack: auth → router
-	mw := &apikey.Middleware{Resolver: keys, Allowlist: handler.AuthAllowlist()}
+	// Middleware stack: auth + tx RLS → router. Pool es OBLIGATORIO desde
+	// migration 000085 (observations/sessions con RLS FORCE): sin él no
+	// se abre la tx con SET LOCAL y los writes devuelven 500.
+	mw := &apikey.Middleware{Resolver: keys, Allowlist: handler.AuthAllowlist(), Pool: pools.App}
 	handler := mw.Wrap(api.Router())
 
 	srv := httptest.NewServer(handler)

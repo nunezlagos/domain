@@ -54,14 +54,18 @@ func (c *ClaimRunClaims) ClaimRun(ctx context.Context) (*ClaimedRun, error) {
 		inputsRaw     []byte
 		recoveryCount int
 	)
+	// El RETURNING de un UPDATE devuelve los valores NUEVOS — para saber
+	// si esto es recovery necesitamos el status PREVIO, capturado en la
+	// subquery (sel.prev_status). Con RETURNING fr.status, IsRecovery era
+	// SIEMPRE true (status recién seteado a 'running').
 	err := c.Pool.QueryRow(ctx, `
-		UPDATE flow_runs
+		UPDATE flow_runs fr
 		SET status = 'running',
 		    worker_id = $1,
 		    last_heartbeat_at = NOW(),
 		    started_at = COALESCE(started_at, NOW())
-		WHERE id = (
-			SELECT id FROM flow_runs
+		FROM (
+			SELECT id, status AS prev_status FROM flow_runs
 			WHERE (status = 'pending'
 			   OR (status = 'running'
 			       AND last_heartbeat_at IS NOT NULL
@@ -69,8 +73,9 @@ func (c *ClaimRunClaims) ClaimRun(ctx context.Context) (*ClaimedRun, error) {
 			ORDER BY created_at ASC
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
-		)
-		RETURNING id, flow_id, status, cursor, outputs, inputs, recovery_count
+		) sel
+		WHERE fr.id = sel.id
+		RETURNING fr.id, fr.flow_id, sel.prev_status, fr.cursor, fr.outputs, fr.inputs, fr.recovery_count
 	`, c.WorkerID, c.StaleAfter).Scan(&runID, &flowID, &status,
 		&cursorRaw, &outputsRaw, &inputsRaw, &recoveryCount)
 

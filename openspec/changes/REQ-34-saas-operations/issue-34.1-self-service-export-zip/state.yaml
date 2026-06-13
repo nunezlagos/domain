@@ -1,0 +1,10 @@
+status: proposed
+created: 2026-06-12
+slug: self-service-export-zip
+issue: 34.1
+parent_req: REQ-34-saas-operations
+effort: M
+priority: media
+notes: >
+  GDPR data portability. Streaming zip con pgx.CopyTo para
+  memory-bounded. Filter por org SIEMPRE. Audit log obligatorio.

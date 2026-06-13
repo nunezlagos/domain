@@ -92,6 +92,7 @@ const (
 // Event datos a registrar en una entrada.
 type Event struct {
 	OrganizationID *uuid.UUID
+	OriginOrgID    *uuid.UUID // org where the action originated (for multi-tenant audit)
 	ActorID        *uuid.UUID
 	ActorType      ActorType
 	Action         string // "user.created", "api_key.rotated", etc.
@@ -157,11 +158,11 @@ func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 
 	_, err := r.Pool.Exec(ctx, `
 		INSERT INTO audit_log (
-			organization_id, actor_id, actor_type, action, entity_type, entity_id,
+			organization_id, origin_org_id, actor_id, actor_type, action, entity_type, entity_id,
 			old_values, new_values, ip_address, user_agent, request_id, trace_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`,
-		e.OrganizationID, e.ActorID, string(e.ActorType), e.Action,
+		e.OrganizationID, e.OriginOrgID, e.ActorID, string(e.ActorType), e.Action,
 		e.EntityType, e.EntityID,
 		oldJSON, newJSON,
 		nullIfEmpty(e.IPAddress), nullIfEmpty(e.UserAgent),

@@ -15,6 +15,7 @@ import (
 
 	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
 	"nunezlagos/domain/internal/auth/ratelimit"
@@ -81,6 +82,9 @@ type API struct {
 	FlowRunner       *flowrunner.Runner
 	CronService      *cronsvc.Service
 	WebhookService   *webhooksvc.Service
+	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega acá.
+	// Si nil, usa el switch legacy (compat).
+	Dispatcher *dispatch.Dispatcher
 	CostService      *cost.Service
 	BillingService   *billing.Service
 	OutboundWebhookService     *outboundwebhook.Service

@@ -76,6 +76,10 @@ type Registry struct {
 	// issue-26.3 distributed locks
 	DlockAcquireTotal *prometheus.CounterVec   // labels: key, result (acquired|busy|error)
 	DlockHeldSeconds  *prometheus.HistogramVec // labels: key
+
+	// issue-35.1 unified-dispatcher
+	DispatchTotal    *prometheus.CounterVec   // labels: source, target_type, result
+	DispatchDuration *prometheus.HistogramVec // labels: source, target_type
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -281,6 +285,23 @@ func New() *Registry {
 		[]string{"key"},
 	)
 
+	// issue-35.1 unified-dispatcher
+	r.DispatchTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_dispatch_total",
+			Help: "Total dispatches por source, target_type y result (success|failed)",
+		},
+		[]string{"source", "target_type", "result"},
+	)
+	r.DispatchDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "domain_dispatch_duration_seconds",
+			Help:    "Duración de dispatch en segundos",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 30, 60, 300},
+		},
+		[]string{"source", "target_type"},
+	)
+
 	// issue-25.9 read-replicas
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
@@ -365,6 +386,8 @@ func New() *Registry {
 		r.FlowRunCancelledByMaxDuration,
 		r.DlockAcquireTotal,
 		r.DlockHeldSeconds,
+		r.DispatchTotal,
+		r.DispatchDuration,
 	)
 	return r
 }
@@ -379,6 +402,41 @@ func (r *Registry) Handler() http.Handler {
 
 // Prometheus retorna el Registry crudo (para tests + advanced wiring).
 func (r *Registry) Prometheus() *prometheus.Registry { return r.reg }
+
+// RegisterDispatchTotal crea y registra DispatchTotal lazy.
+// Útil cuando un Registry se construyó sin esa métrica (e.g., un
+// Registry de test mínimo) y se necesita observarla después.
+func (r *Registry) RegisterDispatchTotal() *prometheus.CounterVec {
+	if r.DispatchTotal != nil {
+		return r.DispatchTotal
+	}
+	r.DispatchTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_dispatch_total",
+			Help: "Total dispatches (lazy-registered)",
+		},
+		[]string{"source", "target_type", "result"},
+	)
+	r.reg.MustRegister(r.DispatchTotal)
+	return r.DispatchTotal
+}
+
+// RegisterDispatchDuration crea y registra DispatchDuration lazy.
+func (r *Registry) RegisterDispatchDuration() *prometheus.HistogramVec {
+	if r.DispatchDuration != nil {
+		return r.DispatchDuration
+	}
+	r.DispatchDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "domain_dispatch_duration_seconds",
+			Help:    "Duración de dispatch (lazy-registered)",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 30, 60, 300},
+		},
+		[]string{"source", "target_type"},
+	)
+	r.reg.MustRegister(r.DispatchDuration)
+	return r.DispatchDuration
+}
 
 // Middleware HTTP que registra requests + duration.
 // Path normalization: usa template path (ej `/api/v1/users/:id`) NO el actual con UUID.

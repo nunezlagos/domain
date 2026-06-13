@@ -2,10 +2,19 @@
 //
 // Multi-worker safe (PickDue usa SELECT FOR UPDATE SKIP LOCKED).
 // Stop signal vía context cancel para graceful shutdown.
+//
+// issue-35.1: el switch de dispatchSync fue reemplazado por una
+// llamada a internal/dispatch.Dispatcher. Mantenemos los campos
+// legacy (Agents/Flows/SkillRunner/Skills) por compat: el boot puede
+// inyectar el dispatcher + los runners por separado, o solo el
+// dispatcher. Si Dispatcher == nil, dispatchSync cae al switch
+// legacy (mantiene los tests scheduler_test.go funcionando hasta
+// que se haga la limpieza final — phase 5 de REQ-35.1).
 package cronsched
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -13,6 +22,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/dispatch"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
@@ -29,6 +39,9 @@ type Scheduler struct {
 	Audit        audit.Recorder
 	Logger       *slog.Logger
 	PollInterval time.Duration // default 30s
+	// Dispatcher (issue-35.1): si no nil, dispatchSync delega acá.
+	// Si nil, usa el switch legacy (compat con tests existentes).
+	Dispatcher *dispatch.Dispatcher
 }
 
 // Run inicia el loop. Bloquea hasta que ctx se cancele.
@@ -130,7 +143,32 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 
 // dispatchSync ejecuta el target del cron y devuelve el error.
 // Separado de dispatch() para testing sincrónico.
+//
+// issue-35.1: si s.Dispatcher está configurado, delega al dispatcher
+// unificado (métricas + audit centralizados). Si no, usa el switch
+// legacy (compat con tests existentes que no setean Dispatcher).
 func (s *Scheduler) dispatchSync(ctx context.Context, c cron.Cron) error {
+	if s.Dispatcher != nil {
+		// Serializar inputs a json.RawMessage.
+		var inputsRaw json.RawMessage
+		if c.Inputs != nil {
+			b, err := json.Marshal(c.Inputs)
+			if err != nil {
+				return fmt.Errorf("marshal cron inputs: %w", err)
+			}
+			inputsRaw = b
+		}
+		_, err := s.Dispatcher.Dispatch(ctx, dispatch.Request{
+			OrgID:      c.OrganizationID,
+			Source:     dispatch.SourceCron,
+			TargetType: c.TargetType,
+			TargetID:   c.TargetID,
+			Inputs:     inputsRaw,
+		})
+		return err
+	}
+
+	// Legacy switch (mantenido hasta phase 5 de REQ-35.1).
 	switch c.TargetType {
 	case "flow":
 		if s.Flows == nil {

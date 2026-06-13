@@ -44,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
@@ -610,12 +611,34 @@ func runServer() {
 		DLQ:     &flow.DLQStore{Pool: pools.App},
 	}
 
+	// issue-35.1: unified dispatcher. Se inyecta en cron, webhook
+	// handler y (vía cmd/domain-mcp) los tools MCP. Centraliza
+	// métricas y audit del dispatch.
+	dispatcherAdapters := &dispatch.Adapters{
+		FlowRunner:  flowRunnerInst,
+		AgentRunner: agentRunnerInst,
+		SkillRunner: skillRunnerInst,
+		Agents:      agentService,
+		Skills:      skillService,
+	}
+	dispatcher := &dispatch.Dispatcher{
+		RunFlow:  dispatcherAdapters.RunFlowForDispatcher(),
+		RunAgent: dispatcherAdapters.RunAgentForDispatcher(),
+		RunSkill: dispatcherAdapters.RunSkillForDispatcher(),
+		Metrics:  &dispatch.PromMetricsRecorder{Reg: metricsReg},
+		Logger:   logger,
+		SourceValidator: func(s string) bool {
+			return s == dispatch.SourceCron || s == dispatch.SourceWebhook ||
+				s == dispatch.SourceMCP || s == dispatch.SourceManual
+		},
+	}
+
 	// Cron scheduler (issue-10.1): solo corre en el pod leader (issue-26.2)
 	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
 	scheduler := &cronsched.Scheduler{
 		Crons: cronService, Agents: agentRunnerInst, Flows: flowRunnerInst,
 		SkillRunner: skillRunnerInst, Skills: skillService,
-		Audit: recorder, Logger: logger,
+		Audit: recorder, Logger: logger, Dispatcher: dispatcher,
 	}
 	leaderElection := &leader.Election{
 		Pool: pools.App, LockKey: leader.LockKeyCronScheduler,
@@ -763,6 +786,7 @@ func runServer() {
 		FlowRunner:       flowRunnerInst,
 		CronService:      cronService,
 		WebhookService:   inboundWebhookService,
+		Dispatcher:       dispatcher, // issue-35.1
 		CostService:      costService,
 		BillingService:   billingService,
 		OutboundWebhookService:    outboundWebhookService,

@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/dispatch"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	skillsvc "nunezlagos/domain/internal/service/skill"
@@ -63,6 +64,27 @@ func (d *Deps) handleSkillExecute(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	params, _ := args["parameters"].(map[string]any)
 	mode, _ := args["mode"].(string)
+
+	// issue-35.1: si Dispatcher está seteado, delegamos.
+	if d.Dispatcher != nil {
+		inputsRaw, _ := json.Marshal(params)
+		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
+			TargetID: sk.ID, Inputs: inputsRaw,
+		})
+		out := map[string]any{
+			"execution_id": res.RunID.String(),
+			"status":       res.Status,
+			"mode":         mode,
+		}
+		if len(res.Output) > 0 {
+			out["output"] = string(res.Output)
+		}
+		if dispatchErr != nil {
+			out["error"] = dispatchErr.Error()
+		}
+		return toolResultJSON(out)
+	}
 
 	exec, err := d.SkillExecution.Execute(ctx, skillsvc.ExecuteInput{
 		OrganizationID: orgID, SkillID: sk.ID, Parameters: params, Mode: mode,

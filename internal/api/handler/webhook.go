@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/dispatch"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	"nunezlagos/domain/internal/service/webhook"
@@ -147,6 +149,41 @@ func (a *API) dispatchWebhook(ctx context.Context, hook *webhook.Webhook,
 	var errStr string
 	status := "triggered"
 
+	// issue-35.1: si Dispatcher está configurado, delegamos. Si no,
+	// usamos el switch legacy (compat con tests existentes).
+	if a.Dispatcher != nil {
+		inputsRaw, err := json.Marshal(inputs)
+		if err != nil {
+			errStr = fmt.Sprintf("marshal inputs: %v", err)
+			status = "failed"
+			_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
+				headers, sourceIP, status, triggeredID, errStr)
+			return
+		}
+		res, dispatchErr := a.Dispatcher.Dispatch(ctx, dispatch.Request{
+			OrgID:      hook.OrganizationID,
+			Source:     dispatch.SourceWebhook,
+			TargetType: hook.TargetType,
+			TargetID:   hook.TargetID,
+			Inputs:     inputsRaw,
+		})
+		if dispatchErr != nil {
+			errStr = dispatchErr.Error()
+			status = "failed"
+		}
+		// Si el dispatcher ya tiene target_id como RunID, lo asociamos
+		// para que el delivery quede linkeado. (El dispatcher actual
+		// retorna flow_run_id / agent_run_id / skill_exec_id.)
+		if res.RunID != uuid.Nil {
+			id := res.RunID
+			triggeredID = &id
+		}
+		_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
+			headers, sourceIP, status, triggeredID, errStr)
+		return
+	}
+
+	// Legacy switch.
 	switch hook.TargetType {
 	case "flow":
 		if a.FlowRunner == nil {

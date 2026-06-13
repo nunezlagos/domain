@@ -26,6 +26,7 @@ import (
 
 	"nunezlagos/domain/internal/agentprotocol"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/dispatch"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -73,6 +74,10 @@ type Deps struct {
 	WorkflowImport *workflowimport.Service    // issue-12.7 override de .md
 	Pool           *pgxpool.Pool // para queries de agent_run_logs
 	Principal      *apikey.Principal // resuelto al boot
+	// Dispatcher (issue-35.1): si no nil, handleFlowRun/handleAgentRun/
+	// handleSkillExecute delegan al dispatcher. Si nil, usan la lógica
+	// legacy (compat con tests existentes que no setean Dispatcher).
+	Dispatcher *dispatch.Dispatcher
 	ServerName   string
 	ServerVer    string
 }
@@ -909,6 +914,30 @@ func (d *Deps) handleAgentRun(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if v, ok := args["variables"].(map[string]any); ok {
 		vars = v
 	}
+	// Mantener variables en vars + input para que el dispatcher
+	// pase el prompt correctamente.
+	if vars == nil {
+		vars = map[string]any{}
+	}
+	vars["input"] = input
+
+	// issue-35.1: si Dispatcher está seteado, delegamos. Si no, usamos
+	// la lógica legacy (AgentRunner directo).
+	if d.Dispatcher != nil {
+		inputsRaw, _ := json.Marshal(vars)
+		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetAgent,
+			TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID,
+		})
+		if dispatchErr != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
+		}
+		return toolResultJSON(map[string]any{
+			"run_id": res.RunID.String(),
+			"status": res.Status,
+			"output": string(res.Output),
+		})
+	}
 	res, runErr := d.AgentRunner.Run(ctx, agentrunner.RunInput{
 		AgentID: ag.ID, UserID: &userID, UserPrompt: input, Variables: vars,
 	})
@@ -1017,10 +1046,28 @@ func (d *Deps) handleFlowRun(ctx context.Context, req mcp.CallToolRequest) (*mcp
 	if err != nil {
 		return mcp.NewToolResultError("flow_id inválido"), nil
 	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	userID, _ := uuid.Parse(d.Principal.UserID)
 	var inputs map[string]any
 	if v, ok := args["inputs"].(map[string]any); ok {
 		inputs = v
+	}
+	// issue-35.1: si Dispatcher está seteado, delegamos.
+	if d.Dispatcher != nil {
+		inputsRaw, _ := json.Marshal(inputs)
+		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetFlow,
+			TargetID: id, Inputs: inputsRaw, TriggeredBy: &userID,
+		})
+		if dispatchErr != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
+		}
+		return toolResultJSON(map[string]any{
+			"run_id":  res.RunID.String(),
+			"status":  res.Status,
+			"error":   "",
+			"outputs": map[string]any{"raw": string(res.Output)},
+		})
 	}
 	res, runErr := d.FlowRunner.Run(ctx, flowrunner.RunInput{
 		FlowID: id, TriggeredBy: &userID, TriggerType: "mcp", Inputs: inputs,

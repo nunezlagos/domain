@@ -27,6 +27,7 @@ import (
 	"nunezlagos/domain/internal/cli/install"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/google"
@@ -248,6 +249,26 @@ func main() {
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
 
+	// issue-35.1: unified dispatcher para los tools handleFlowRun /
+	// handleAgentRun / handleSkillExecute. Centraliza métricas + audit
+	// (los que se hacían inline antes, ahora viven en 1 lugar).
+	mcpDispatcherAdapters := &dispatch.Adapters{
+		FlowRunner:  flowRunnerInst,
+		AgentRunner: agentRunnerInst,
+		SkillRunner: skillRunnerInst,
+		Agents:      agents,
+		Skills:      skills,
+	}
+	mcpDispatcher := &dispatch.Dispatcher{
+		RunFlow:  mcpDispatcherAdapters.RunFlowForDispatcher(),
+		RunAgent: mcpDispatcherAdapters.RunAgentForDispatcher(),
+		RunSkill: mcpDispatcherAdapters.RunSkillForDispatcher(),
+		SourceValidator: func(s string) bool {
+			return s == dispatch.SourceCron || s == dispatch.SourceWebhook ||
+				s == dispatch.SourceMCP || s == dispatch.SourceManual
+		},
+	}
+
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations:   observations,
 		Projects:       projects,
@@ -276,6 +297,7 @@ func main() {
 		WorkflowImport: workflowImportSvc,
 		Pool:           pools.App,
 		Principal:      principal,
+		Dispatcher:     mcpDispatcher, // issue-35.1
 		ServerName:     "domain-mcp",
 		ServerVer:      Version,
 	})

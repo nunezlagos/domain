@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: setup-primary-memory-detect-engram
+issue: 35.3
+parent_req: REQ-35-architectural-debt
+effort: S
+priority: baja
+notes: >
+  Solución TÉCNICA al "domain prioritario" (en vez de pelear
+  instructions). Opt-in via --primary-memory. Disable (no
+  remove) + backup + reactivate.

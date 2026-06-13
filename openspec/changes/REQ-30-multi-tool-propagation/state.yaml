@@ -1,7 +1,7 @@
 status: proposed
 created: 2026-06-12
 priority: alta
-estimated_effort: 2-3 días
+estimated_effort: 1 semana
 hus:
   30.1-setup-auto-detect-command: proposed
   30.2-opencode-shell-wrapper-optin: proposed

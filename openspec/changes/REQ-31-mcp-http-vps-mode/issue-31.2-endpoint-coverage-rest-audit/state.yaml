@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: endpoint-coverage-rest-audit
+issue: 31.2
+parent_req: REQ-31-mcp-http-vps-mode
+effort: M
+priority: alta
+depends_on: 31.1
+notes: >
+  Test de regresión + tabla typeada. Bloquea releases al servidor
+  remoto sin paridad MCP↔REST.

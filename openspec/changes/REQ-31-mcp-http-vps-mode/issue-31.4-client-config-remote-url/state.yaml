@@ -1,0 +1,17 @@
+status: proposed
+created: 2026-06-12
+slug: client-config-remote-url
+issue: 31.4
+parent_req: REQ-31-mcp-http-vps-mode
+effort: S
+priority: alta
+depends_on:
+  - 29.3
+  - 31.1
+notes: >
+  Configuración del cliente para apuntar al server remoto.
+  Bloqueado por 29.3 (server HTTP listener) y 31.1 (refactor MCP
+  client) porque el modo remoto requiere que el server escuche Y
+  que el cliente sepa hablar HTTP. 31.3 (deploy VPS) es
+  paralelo: el cliente puede configurarse contra un server
+  existente o uno recién deployado.

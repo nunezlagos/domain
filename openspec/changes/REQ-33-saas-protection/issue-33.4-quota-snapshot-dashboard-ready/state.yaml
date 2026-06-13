@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: quota-snapshot-dashboard-ready
+issue: 33.4
+parent_req: REQ-33-saas-protection
+effort: S
+priority: media
+notes: >
+  Read-only endpoints para el dashboard futuro. Filtro por
+  org SIEMPRE desde principal. Materialized view para
+  performance histórica.

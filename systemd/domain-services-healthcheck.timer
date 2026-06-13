@@ -1,0 +1,11 @@
+[Unit]
+Description=domain-services healthcheck cada 5 minutos
+Documentation=https://github.com/nunezlagos/domain
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=domain-services-healthcheck.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,30 @@
+# Secretos — NUNCA committeable
+.env
+.env.local
+
+# Certs generados por gen-certs.sh
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+
+# Backups locales
+backups/
+*.sql.gz
+*.sql.gz.gpg
+*.dump
+*.tar.gz
+
+# Logs
+*.log
+logs/
+
+# Volumenes mounts si alguien usa bind por path
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

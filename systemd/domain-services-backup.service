@@ -1,0 +1,17 @@
+[Unit]
+Description=domain-services — backup diario (pg_dump cifrado + MinIO mirror)
+After=docker.service domain-services.service
+Requires=domain-services.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/services
+EnvironmentFile=/opt/services/.env
+ExecStart=/opt/services/scripts/backup.sh
+TimeoutStartSec=3600
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

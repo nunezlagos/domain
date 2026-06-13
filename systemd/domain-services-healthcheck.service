@@ -1,0 +1,13 @@
+[Unit]
+Description=domain-services — healthcheck periódico con notificación ntfy
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/services
+EnvironmentFile=/opt/services/.env
+ExecStart=/opt/services/scripts/healthcheck-alert.sh
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

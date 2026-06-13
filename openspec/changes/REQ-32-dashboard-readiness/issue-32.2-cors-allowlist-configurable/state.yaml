@@ -1,0 +1,12 @@
+status: proposed
+created: 2026-06-12
+slug: cors-allowlist-configurable
+issue: 32.2
+parent_req: REQ-32-dashboard-readiness
+effort: S
+priority: media
+depends_on: 32.1
+notes: >
+  Bloqueado por 32.1 (sesión web) porque el dashboard usará
+  cookies+CSRF; sin esa infra, CORS solo con Bearer no aporta
+  mucho.

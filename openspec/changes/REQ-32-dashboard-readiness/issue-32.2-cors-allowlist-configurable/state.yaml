@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-13
 slug: cors-allowlist-configurable
 issue: 32.2
 parent_req: REQ-32-dashboard-readiness
@@ -7,6 +8,11 @@ effort: S
 priority: media
 depends_on: 32.1
 notes: >
-  Bloqueado por 32.1 (sesión web) porque el dashboard usará
-  cookies+CSRF; sin esa infra, CORS solo con Bearer no aporta
-  mucho.
+  Implementado sin esperar 32.1: la dependencia era solo
+  conceptual (CORS aporta más con cookies). Bearer-only ya
+  funciona con CORS + Allow-Credentials cuando origin matchea.
+  DOMAIN_CORS_ORIGINS CSV, default deny, wildcard "*" sólo
+  dev. Middleware envuelve /api/ (no /health). Implementación
+  custom (no rs/cors dep) reutilizando la struct CORS existente
+  refactorizada con allowlist + Vary: Origin + denied origin
+  logging.

@@ -70,6 +70,11 @@ type Config struct {
 	RateLimitRequests  int
 	RateLimitWindow    string // e.g. "60s"
 
+	// CORS (issue-32.2). CSV de origins permitidos para /api/v1/*.
+	// Vacío = default deny (sin headers CORS).
+	// "*" único = wildcard dev (sin credentials).
+	CORSOrigins []string
+
 	// System crons (issue-08.11 heartbeat-watcher, issue-08.12 orphan-runs-audit)
 	HeartbeatWatcherEnabled        bool
 	HeartbeatWatcherTimeoutMinutes int    // default 5
@@ -125,6 +130,8 @@ func Load() (*Config, error) {
 
 		RateLimitRequests: getEnvInt("DOMAIN_RATE_LIMIT_REQUESTS", 100),
 		RateLimitWindow:   getEnv("DOMAIN_RATE_LIMIT_WINDOW", "60s"),
+
+		CORSOrigins: parseCSV(getEnv("DOMAIN_CORS_ORIGINS", "")),
 
 		HeartbeatWatcherEnabled:        getEnvBool("DOMAIN_HEARTBEAT_WATCHER_ENABLED", true),
 		HeartbeatWatcherTimeoutMinutes: getEnvInt("DOMAIN_HEARTBEAT_WATCHER_TIMEOUT_MINUTES", 5),
@@ -214,4 +221,20 @@ func getEnvFloat(k string, def float64) float64 {
 		}
 	}
 	return def
+}
+
+// parseCSV separa por comas, trimea espacios, descarta vacíos.
+func parseCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -838,7 +838,13 @@ func runServer() {
 
 	// API REST montada bajo /api/v1/*.
 	// Middleware order: CORS → versioning → request-log → auth → rate-limit → audit → activity → idempotency → handler.
-	corsMW := middleware.DefaultCORS()
+	// CORS (issue-32.2): allowlist desde DOMAIN_CORS_ORIGINS.
+	corsMW := middleware.NewCORS(cfg.CORSOrigins, logger)
+	if !corsMW.Enabled() {
+		logger.Info("CORS not configured; set DOMAIN_CORS_ORIGINS to enable cross-origin requests")
+	} else {
+		logger.Info("CORS enabled", slog.Int("origins_count", len(cfg.CORSOrigins)))
+	}
 	requestLogMW := middleware.RequestLog(logger)
 	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
 	authMW := &apikey.Middleware{Resolver: cachedResolver, Allowlist: handler.AuthAllowlist(), Pool: pools.App}

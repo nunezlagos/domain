@@ -70,6 +70,9 @@ type Registry struct {
 	// issue-09.6 durable-execution
 	FlowHeartbeatAgeSeconds prometheus.Gauge // age del heartbeat más reciente en flow_runs
 
+	// issue-33.3 max-flow-duration-per-org
+	FlowRunCancelledByMaxDuration *prometheus.CounterVec // labels: org_id
+
 	// issue-26.3 distributed locks
 	DlockAcquireTotal *prometheus.CounterVec   // labels: key, result (acquired|busy|error)
 	DlockHeldSeconds  *prometheus.HistogramVec // labels: key
@@ -253,6 +256,14 @@ func New() *Registry {
 		Help: "Edad del heartbeat más reciente entre flow_runs running (issue-09.6)",
 	})
 
+	r.FlowRunCancelledByMaxDuration = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_flow_run_cancelled_by_max_duration_total",
+			Help: "Flow runs cancelados por exceder max_flow_duration_seconds per-org (issue-33.3)",
+		},
+		[]string{"org_id"},
+	)
+
 	// issue-26.3 distributed locks — key es nombre lógico acotado (feature locks)
 	r.DlockAcquireTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -351,6 +362,7 @@ func New() *Registry {
 		r.OrchestratorConfirmsTotal,
 		r.OrchestratorRequiredSaveMissingTotal,
 		r.FlowHeartbeatAgeSeconds,
+		r.FlowRunCancelledByMaxDuration,
 		r.DlockAcquireTotal,
 		r.DlockHeldSeconds,
 	)

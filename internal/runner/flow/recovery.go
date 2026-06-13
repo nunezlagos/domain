@@ -10,8 +10,11 @@ package flowrunner
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // RecoveryConfig parámetros del scanner.
@@ -56,6 +59,16 @@ func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 				logger.Warn("released stale flow_runs for recovery",
 					slog.Int64("released", released),
 					slog.Int64("crash_loop_failed", failed))
+			}
+
+			cancelled, err := r.ReleaseMaxDurationRuns(ctx)
+			if err != nil {
+				logger.Error("max duration sweep failed", slog.Any("err", err))
+				continue
+			}
+			if cancelled > 0 {
+				logger.Warn("cancelled flow_runs exceeding max duration",
+					slog.Int64("cancelled", cancelled))
 			}
 		}
 	}
@@ -102,4 +115,74 @@ func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxR
 
 	// Log audit por cada run liberado (opcional, se podría hacer con RETURNING)
 	return tag.RowsAffected(), crashLoopCount, nil
+}
+
+type maxDurationRun struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	StartedAt      time.Time
+	MaxSeconds     int
+}
+
+// ReleaseMaxDurationRuns marca como failed los flow_runs que exceden el
+// max_flow_duration_seconds configurado per-org (issue-33.3).
+// Cancela el context de los runs que están siendo ejecutados localmente.
+// Retorna (cancelled, err).
+func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
+	rows, err := r.Pool.Query(ctx, `
+		UPDATE flow_runs fr
+		SET status = 'failed',
+		    error = COALESCE(error, '') || ' [max_duration_exceeded]',
+		    finished_at = NOW(),
+		    worker_id = NULL
+		FROM org_flow_config ofc
+		WHERE fr.organization_id = ofc.organization_id
+		  AND fr.status = 'running'
+		  AND fr.started_at IS NOT NULL
+		  AND fr.started_at < NOW() - (ofc.max_flow_duration_seconds * INTERVAL '1 second')
+		RETURNING fr.id, fr.organization_id, fr.started_at, ofc.max_flow_duration_seconds
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("max duration release query: %w", err)
+	}
+	defer rows.Close()
+
+	var cancelled int64
+	var runs []maxDurationRun
+	for rows.Next() {
+		var run maxDurationRun
+		if err := rows.Scan(&run.ID, &run.OrganizationID, &run.StartedAt, &run.MaxSeconds); err != nil {
+			return cancelled, fmt.Errorf("scan max duration run: %w", err)
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return cancelled, err
+	}
+
+	logger := slog.Default()
+	for _, run := range runs {
+		actualDuration := time.Since(run.StartedAt).Round(time.Second)
+		budgetDuration := time.Duration(run.MaxSeconds) * time.Second
+
+		logger.Warn("flow_run cancelled by max_duration",
+			slog.String("flow_run_id", run.ID.String()),
+			slog.String("org_id", run.OrganizationID.String()),
+			slog.String("duration_seconds", actualDuration.String()),
+			slog.String("budget_seconds", budgetDuration.String()),
+		)
+
+		r.runContextsMu.Lock()
+		cancel, ok := r.runContexts[run.ID]
+		r.runContextsMu.Unlock()
+		if ok {
+			cancel()
+		}
+
+		if r.Metrics != nil && r.Metrics.FlowRunCancelledByMaxDuration != nil {
+			r.Metrics.FlowRunCancelledByMaxDuration.WithLabelValues(run.OrganizationID.String()).Inc()
+		}
+		cancelled++
+	}
+	return cancelled, nil
 }

@@ -37,9 +37,10 @@ var ErrNoBackup = errors.New("not a domain backup (missing timestamp or marker)"
 
 // BackupResult resume una operacion de backup.
 type BackupResult struct {
-	Path   string // path del archivo original
-	Backup string // path del .bak creado
-	Bytes  int64  // tamaño del archivo
+	Path         string // path del archivo original
+	Backup       string // path del .bak creado (o del .bak previo si Deduplicated)
+	Bytes        int64  // tamaño del archivo
+	Deduplicated bool   // true si se skipeó la creación porque el último .bak tiene el mismo hash
 }
 
 // backupFile crea un .bak.<RFC3339> del archivo en path. Retorna el
@@ -47,6 +48,12 @@ type BackupResult struct {
 //
 // Si keepLast > 0, después de crear el backup prunea los backups
 // viejos (mantiene solo los últimos N). Default: 0 = mantener todos.
+//
+// DEDUP (issue-29.2): si el último .bak existente tiene el mismo
+// SHA-256 que el archivo actual, NO se crea un nuevo .bak — se
+// retorna el path del .bak previo con Deduplicated: true. Esto
+// evita el spam de backups idénticos cuando el install corre
+// múltiples veces sin cambios.
 func backupFile(path string, keepLast int) (*BackupResult, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -55,6 +62,17 @@ func backupFile(path string, keepLast int) (*BackupResult, error) {
 		}
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
+
+	// Dedup: si el último .bak tiene el mismo hash, skip.
+	if matches, prev := lastBackupMatchesHash(path, data); matches {
+		return &BackupResult{
+			Path:         path,
+			Backup:       prev,
+			Bytes:        int64(len(data)),
+			Deduplicated: true,
+		}, nil
+	}
+
 	ts := time.Now().UTC().Format("20060102T150405Z")
 	backupPath := path + ".bak." + ts
 	if err := os.WriteFile(backupPath, data, 0o600); err != nil {
@@ -68,10 +86,33 @@ func backupFile(path string, keepLast int) (*BackupResult, error) {
 		}
 	}
 	return &BackupResult{
-		Path:   path,
-		Backup: backupPath,
-		Bytes:  int64(len(data)),
+		Path:         path,
+		Backup:       backupPath,
+		Bytes:        int64(len(data)),
+		Deduplicated: false,
 	}, nil
+}
+
+// lastBackupMatchesHash compara el SHA-256 de data con el SHA-256
+// del .bak más reciente de path. Retorna (true, lastPath) si
+// matchean, (false, "") si difieren o no hay backup previo.
+//
+// ListBackups (línea 245) retorna los .bak.* ordenados
+// lexicograficamente, que para timestamps RFC3339 es el mismo
+// orden cronológico.
+func lastBackupMatchesHash(path string, data []byte) (bool, string) {
+	backups, err := ListBackups(path)
+	if err != nil || len(backups) == 0 {
+		return false, ""
+	}
+	last := backups[len(backups)-1]
+	prevHash, err := FileChecksum(last)
+	if err != nil {
+		return false, ""
+	}
+	sum := sha256.Sum256(data)
+	curHash := hex.EncodeToString(sum[:])
+	return prevHash == curHash, last
 }
 
 // pruneBackups mantiene solo los últimos keepLast backups (por timestamp

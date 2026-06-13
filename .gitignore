@@ -3,6 +3,7 @@
 /dist/
 /domain
 /domain-mcp
+/runners_usage
 *.exe
 *.dll
 *.so

@@ -64,6 +64,13 @@ func runInstall(args []string) int {
 		return 2
 	}
 
+	// Step 0: cwd guard. ANTES de cualquier side effect (loadEnv,
+	// backups, docker, etc). Si el cwd no es un root de repo válido
+	// y no se pasó --src, aborta con exit 1 y mensaje accionable.
+	if _, ok := checkProjectRootGuard(flags.src); !ok {
+		return 1
+	}
+
 	mode := flags.mode
 	if mode == "" && !flags.nonInter {
 		mode = promptDeploymentMode()
@@ -334,6 +341,7 @@ type installFlags struct {
 	noInit    bool
 	noService bool
 	agents    []string
+	src       string
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
@@ -384,6 +392,12 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		case "--no-opencode":
 			// compat HU-01.14: equivale a sacar opencode de --agents
 			f.agents = removeAgent(f.agents, "opencode")
+		case "--src":
+			if i+1 >= len(args) {
+				return f, errors.New("missing value for --src")
+			}
+			f.src = args[i+1]
+			i++
 		case "--help", "-h":
 			printInstallHelp()
 			return f, errHelp
@@ -1046,6 +1060,8 @@ func printInstallHelp() {
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")
 	fmt.Println("  --no-service                    Skip systemd user service (server queda manual)")
 	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
+	fmt.Println("  --src PATH                      Project root path (default: cwd). Si cwd no es un root de repo")
+	fmt.Println("                                  válido (faltan .env.example / docker-compose.yml), aborta con mensaje claro.")
 	fmt.Println("  --dsn URL                       Database URL (cloud mode, non-interactive)")
 	fmt.Println("  --help, -h                      Show this help")
 }

@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-06-12
+slug: install-cwd-guard
+issue: 29.1
+parent_req: REQ-29-install-quick-fixes
+effort: S
+priority: alta

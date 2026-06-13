@@ -41,6 +41,8 @@ import (
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/cli/install"
 	"nunezlagos/domain/internal/cli/onboard"
+	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
+	setuppkg "nunezlagos/domain/internal/cli/setup"
 	"nunezlagos/domain/internal/config"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/seeds"
@@ -221,6 +223,50 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, detail)
 	}
 
+	// 10.5 Shell wrapper (issue-30.2). Opt-in con confirm explícito.
+	progress.StartStep("Config shell wrapper")
+	if flags.withWrapper {
+		detail, wErr := installShellWrapperStep()
+		if wErr != nil {
+			progress.EndStep(StepWarning, wErr.Error())
+		} else {
+			progress.EndStep(StepOK, detail)
+		}
+	} else if !flags.nonInter {
+		detail, wErr := promptShellWrapper()
+		if wErr != nil {
+			progress.EndStep(StepWarning, wErr.Error())
+		} else if detail == "" {
+			progress.EndStep(StepSkipped, "user declined")
+		} else {
+			progress.EndStep(StepOK, detail)
+		}
+	} else {
+		progress.EndStep(StepSkipped, "--non-interactive (use --with-wrapper)")
+	}
+
+	// 10.6 Claude Code SessionStart hook (issue-30.3).
+	progress.StartStep("Claude Code SessionStart hook")
+	if flags.noClaudeHook {
+		progress.EndStep(StepSkipped, "--no-claude-hook")
+	} else if flags.withClaudeHook {
+		action, hErr := claudehook.InstallClaudeHook(false, true)
+		if hErr != nil {
+			progress.EndStep(StepWarning, hErr.Error())
+		} else {
+			progress.EndStep(StepOK, action)
+		}
+	} else if !flags.nonInter {
+		action, hErr := claudehook.InstallClaudeHook(false, false)
+		if hErr != nil {
+			progress.EndStep(StepWarning, hErr.Error())
+		} else {
+			progress.EndStep(StepOK, action)
+		}
+	} else {
+		progress.EndStep(StepSkipped, "--non-interactive (use --with-claude-hook)")
+	}
+
 	// 11. Init (.md → BD). Requiere el server HTTP corriendo.
 	progress.StartStep("Importing .md files")
 	switch {
@@ -332,16 +378,19 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 
 // installFlags son los flags parseados de `domain install`.
 type installFlags struct {
-	mode      string
-	baseURL   string
-	dsn       string
-	email     string
-	nonInter  bool
-	noBackup  bool
-	noInit    bool
-	noService bool
-	agents    []string
-	src       string
+	mode         string
+	baseURL      string
+	dsn          string
+	email        string
+	nonInter     bool
+	noBackup     bool
+	noInit       bool
+	noService    bool
+	agents       []string
+	src          string
+	withWrapper    bool
+	withClaudeHook bool
+	noClaudeHook   bool
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
@@ -389,6 +438,12 @@ func parseInstallFlags(args []string) (installFlags, error) {
 			f.noInit = true
 		case "--no-service":
 			f.noService = true
+		case "--with-wrapper":
+			f.withWrapper = true
+		case "--with-claude-hook":
+			f.withClaudeHook = true
+		case "--no-claude-hook":
+			f.noClaudeHook = true
 		case "--no-opencode":
 			// compat HU-01.14: equivale a sacar opencode de --agents
 			f.agents = removeAgent(f.agents, "opencode")
@@ -988,6 +1043,48 @@ func readLine() (string, error) {
 	return scanner.Text(), nil
 }
 
+// installShellWrapperStep agrega el shell wrapper al rcfile detectado.
+// Retorna detalle del resultado o error.
+func installShellWrapperStep() (string, error) {
+	shell, rcfile := setuppkg.DetectShell()
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if strings.HasPrefix(rcfile, home) {
+			rcfile = strings.Replace(rcfile, home, "~", 1)
+		}
+	}
+	installed, err := setuppkg.InstallShellWrapper(rcfile)
+	if err != nil {
+		return "", fmt.Errorf("install wrapper: %w", err)
+	}
+	if !installed {
+		return shell + " wrapper already installed in " + rcfile + " (skip)", nil
+	}
+	return shell + " wrapper added to " + rcfile, nil
+}
+
+// promptShellWrapper pregunta al user si quiere el shell wrapper.
+// Retorna detalle o "" si decline o error.
+func promptShellWrapper() (string, error) {
+	_, rcfile := setuppkg.DetectShell()
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if strings.HasPrefix(rcfile, home) {
+			rcfile = strings.Replace(rcfile, home, "~", 1)
+		}
+	}
+	fmt.Fprintf(os.Stderr, "  ¿Querés agregar el wrapper de shell para opencode+domain a %s? [y/N] ", rcfile)
+	line, err := readLine()
+	if err != nil {
+		return "", nil
+	}
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line != "y" && line != "yes" {
+		return "", nil
+	}
+	return installShellWrapperStep()
+}
+
 // readAPIKeyFromCredentials lee la API key actual de credentials.json.
 // Retorna "" si no existe o es invalido (caso: pre-bootstrap).
 func readAPIKeyFromCredentials() string {
@@ -1059,6 +1156,7 @@ func printInstallHelp() {
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")
 	fmt.Println("  --no-service                    Skip systemd user service (server queda manual)")
+	fmt.Println("  --with-wrapper                  Install shell wrapper for opencode+domain (auto-detect on open)")
 	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
 	fmt.Println("  --src PATH                      Project root path (default: cwd). Si cwd no es un root de repo")
 	fmt.Println("                                  válido (faltan .env.example / docker-compose.yml), aborta con mensaje claro.")

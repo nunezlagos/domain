@@ -1,0 +1,8 @@
+status: proposed
+created: 2026-06-12
+slug: claude-code-sessionstart-hook
+issue: 30.3
+parent_req: REQ-30-multi-tool-propagation
+effort: S
+priority: alta
+depends_on: 30.1

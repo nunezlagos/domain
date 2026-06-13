@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -31,6 +32,9 @@ import (
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
+	autodetect "nunezlagos/domain/internal/cli/setup/autodetect"
+	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
+	propagatepkg "nunezlagos/domain/internal/cli/setup/propagate"
 	"nunezlagos/domain/internal/cli/onboard"
 	"nunezlagos/domain/internal/auth/rbac"
 	"nunezlagos/domain/internal/crypto"
@@ -1555,7 +1559,260 @@ func envOr(key, defaultVal string) string {
 // Usage:
 //   domain setup claude-code
 //   domain setup --mcp-binary /usr/local/bin/domain-mcp --api-key sk_...
+func runAutoDetect(args []string) {
+	projectDir := "."
+	quiet := false
+	dryRun := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--quiet", "-q":
+			quiet = true
+		case "--dry-run":
+			dryRun = true
+		case "--help", "-h":
+			fmt.Println("Usage: domain setup auto-detect [path] [--quiet] [--dry-run]")
+			fmt.Println("  path          Project directory (default: .)")
+			fmt.Println("  --quiet, -q   Suppress non-error output")
+			fmt.Println("  --dry-run     Show what would be done without modifying files")
+			os.Exit(0)
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				projectDir = args[i]
+			} else {
+				fmt.Fprintf(os.Stderr, "unknown flag: %s\n", args[i])
+				os.Exit(2)
+			}
+		}
+	}
+
+	absDir, err := filepath.Abs(projectDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if dryRun {
+		actions, err := autodetect.ApplyDryRun(absDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(actions) == 0 {
+			if !quiet {
+				fmt.Println("no changes needed")
+			}
+			os.Exit(0)
+		}
+		if !quiet {
+			fmt.Printf("would apply %d action(s) to %s:\n", len(actions), absDir)
+			for _, a := range actions {
+				switch a.Type {
+				case autodetect.ActionSymlink:
+					fmt.Printf("  symlink %s → %s\n", a.Path, a.Target)
+				case autodetect.ActionJSONUpsert:
+					fmt.Printf("  upsert %s key=%s\n", a.Path, a.Key)
+				case autodetect.ActionOpenCodeGen:
+					fmt.Printf("  generate %s (minimal opencode.json)\n", a.Path)
+				}
+			}
+		}
+		os.Exit(0)
+	}
+
+	actions, err := autodetect.Apply(absDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(actions) == 0 {
+		if !quiet {
+			fmt.Println("no changes needed")
+		}
+		os.Exit(0)
+	}
+
+	if !quiet {
+		fmt.Printf("applied %d action(s) to %s:\n", len(actions), absDir)
+		for _, a := range actions {
+			switch a.Type {
+			case autodetect.ActionSymlink:
+				fmt.Printf("  linked %s → %s\n", a.Path, a.Target)
+			case autodetect.ActionJSONUpsert:
+				fmt.Printf("  added domain to %s\n", a.Path)
+			case autodetect.ActionOpenCodeGen:
+				fmt.Printf("  generated %s (minimal opencode.json)\n", a.Path)
+			}
+		}
+	}
+}
+
+func runWrapperSnippet(args []string) {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--shell":
+			if i+1 < len(args) {
+				i++
+			}
+		case "--help", "-h":
+			fmt.Println("Usage: domain setup wrapper-snippet [--shell zsh|bash]")
+			fmt.Println("  Prints the shell wrapper snippet for opencode + domain auto-detect.")
+			os.Exit(0)
+		}
+	}
+	fmt.Println("# Pegá esto en tu ~/.zshrc (o ~/.bashrc) y reiniciá la shell")
+	fmt.Println("# o corré: source ~/.zshrc")
+	fmt.Println()
+	fmt.Println(setuppkg.GenerateWrapperSnippet())
+}
+
+func runClaudeHook(args []string) {
+	apply := false
+	show := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--apply":
+			apply = true
+		case "--show":
+			show = true
+		case "--help", "-h":
+			fmt.Println("Usage: domain setup claude-hook [--apply | --show]")
+			fmt.Println("  --apply    Install the hook without prompt")
+			fmt.Println("  --show     Show diff without installing")
+			os.Exit(0)
+		}
+	}
+	if show {
+		doc, raw, err := claudehook.ReadSettings()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		if claudehook.HasDomainHook(doc) {
+			fmt.Println("Claude Code hook already configured.")
+			return
+		}
+		newDoc := claudehook.AddDomainHook(doc)
+		newRaw, _ := json.MarshalIndent(newDoc, "", "  ")
+		if raw != nil {
+			fmt.Printf("before: %s\n", string(raw))
+		} else {
+			fmt.Println("before: (file does not exist)")
+		}
+		fmt.Printf("after:  %s\n", string(newRaw))
+		return
+	}
+	action, err := claudehook.InstallClaudeHook(!apply, apply)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	switch action {
+	case "already_installed":
+		fmt.Println("Claude Code hook ya configurado (skip)")
+	case "installed":
+		fmt.Println("✓ Claude Code SessionStart hook installed")
+	case "skipped":
+		fmt.Println("Claude Code hook skipped (non-interactive)")
+	case "declined":
+		fmt.Println("Claude Code hook declined")
+	}
+}
+
+func runPropagate(args []string) {
+	scanPath := ""
+	all := false
+	yes := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--scan":
+			if i+1 < len(args) {
+				i++
+				scanPath = args[i]
+			}
+		case "--all":
+			all = true
+		case "--yes":
+			yes = true
+		case "--help", "-h":
+			fmt.Println("Usage: domain setup propagate [--scan <path>] [--all] [--yes]")
+			fmt.Println("  --scan <path>  Scan a directory (default: ~/Proyectos)")
+			fmt.Println("  --all          Propagate to all unconfigured projects")
+			fmt.Println("  --yes          Skip confirmation prompt")
+			os.Exit(0)
+		}
+	}
+
+	if scanPath == "" {
+		paths, err := propagatepkg.LoadPropagatePaths()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading paths: %v\n", err)
+			os.Exit(1)
+		}
+		if len(paths) == 0 {
+			fmt.Fprintln(os.Stderr, "no paths configured")
+			os.Exit(1)
+		}
+		scanPath = paths[0]
+	}
+
+	expandedPath := os.ExpandEnv(scanPath)
+	infos, err := propagatepkg.Scan(expandedPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error scanning %s: %v\n", scanPath, err)
+		os.Exit(1)
+	}
+
+	fmt.Print(propagatepkg.FormatTable(infos))
+
+	unconfigured := make([]propagatepkg.ProjectInfo, 0)
+	for _, info := range infos {
+		if !info.HasDomain {
+			unconfigured = append(unconfigured, info)
+		}
+	}
+
+	if len(unconfigured) == 0 {
+		fmt.Println("All projects already configured.")
+		return
+	}
+
+	if all || yes {
+		success, failed, errs := propagatepkg.Propagate(unconfigured, false)
+		fmt.Printf("propagated to %d projects", success)
+		if failed > 0 {
+			fmt.Printf(", %d failed:\n", failed)
+			for _, e := range errs {
+				fmt.Printf("  - %v\n", e)
+			}
+		} else {
+			fmt.Println()
+		}
+		return
+	}
+
+	fmt.Printf("\nFound %d unconfigured projects.\n", len(unconfigured))
+	fmt.Println("Run with --all --yes to propagate all, or --scan <path> for a different directory.")
+}
+
 func runSetup(args []string) {
+	if len(args) > 0 && args[0] == "auto-detect" {
+		runAutoDetect(args[1:])
+		return
+	}
+	if len(args) > 0 && args[0] == "wrapper-snippet" {
+		runWrapperSnippet(args[1:])
+		return
+	}
+	if len(args) > 0 && args[0] == "claude-hook" {
+		runClaudeHook(args[1:])
+		return
+	}
+	if len(args) > 0 && args[0] == "propagate" {
+		runPropagate(args[1:])
+		return
+	}
+
 	agent := "claude-code"
 	mcpBinary := ""
 	apiKey := os.Getenv("DOMAIN_API_KEY")

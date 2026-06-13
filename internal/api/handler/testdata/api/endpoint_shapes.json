@@ -891,6 +891,16 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/usage/current",
+    "handler": "usageCurrentSnapshot"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage/history",
+    "handler": "usageHistory"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/user-stories",
     "handler": "listUserStories"
   },

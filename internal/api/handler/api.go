@@ -41,6 +41,7 @@ import (
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
+	"nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/dbstats"
@@ -93,6 +94,7 @@ type API struct {
 	Backpressure               *backpressure.Limiter
 	DBMonCollector             *dbmon.Collector
 	UsageAlertsService         *usagealerts.Service
+	UsageSnapshot              *usage.Service
 	MCPServerService           *mcpserver.Service
 	ProjectTemplateService     *projecttemplate.Service
 	PolicyService              *policy.Service
@@ -338,6 +340,9 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/cost/budgets/{id}", a.deleteBudget)
 	mux.HandleFunc("GET /api/v1/cost/export", a.exportCost)
 	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 plan usage actual
+	// Quota snapshot read-only (issue-33.4)
+	mux.HandleFunc("GET /api/v1/usage/current", a.usageCurrentSnapshot)
+	mux.HandleFunc("GET /api/v1/usage/history", a.usageHistory)
 
 	// Admin DB stats (issue-25.12)
 	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)

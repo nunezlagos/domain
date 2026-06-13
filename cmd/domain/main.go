@@ -912,8 +912,42 @@ func runServer() {
 			slog.Bool("forced", forced))
 	}()
 
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("server failed", slog.Any("err", err))
+	// ListenAndServe en goroutine + canal. Si retorna error != nil
+	// (y != http.ErrServerClosed), log FATAL explícito + os.Exit(1).
+	// Esto evita el caso "proceso vivo pero listener no responde"
+	// (issue-29.3, bug detectado 2026-06-12).
+	//
+	// Helpers testeables: httpserver.ListenAndServeWithFatalLog y
+	// httpserver.RunPostBindWatchdog (en internal/httpserver/listen_wrap.go)
+	// encapsulan esta lógica. Aquí el patrón inline es equivalente.
+	listenErrCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			listenErrCh <- err
+		} else {
+			listenErrCh <- nil
+		}
+	}()
+
+	// Watchdog post-bind: después de 2s (deja al server armar
+	// el mux + DB pool), 3 intentos de GET /health. Si los 3
+	// fallan, el listener está zombie (proceso vivo pero
+	// respondiendo 000) — log FATAL + exit 1.
+	go func() {
+		time.Sleep(2 * time.Second)
+		for i := 0; i < 3; i++ {
+			if err := httpserver.ProbeHealth(cfg.HTTPPort); err == nil {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+		logger.Error("FATAL: health-check post-bind failed 3x — listener not responding",
+			slog.Int("port", cfg.HTTPPort))
+		os.Exit(1)
+	}()
+
+	if err := <-listenErrCh; err != nil {
+		logger.Error("FATAL: HTTP listener failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 }

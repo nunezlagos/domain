@@ -32,6 +32,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	intakesvc "nunezlagos/domain/internal/service/intake"
@@ -67,6 +68,7 @@ type Deps struct {
 	Crons        *cronsvc.Service // issue-12.3 domain_cron_list
 	Clients      *clientsvc.Service // clients/mandantes — consultoras gestionan proyectos por cliente
 	CapturedPrompts *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
+	ProjectRepos    *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
 	Policies     *policysvc.Service // issue-01.8 domain_policy_get/list
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner
@@ -160,6 +162,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	tools = append(tools, registerPromptTools(wrap, deps)...)
 	tools = append(tools, registerOrchestrateTools(wrap, deps)...)
 	tools = append(tools, registerCapturedPromptTools(wrap, deps)...)
+	tools = append(tools, registerProjectRepoTools(wrap, deps)...)
 	return tools
 }
 

@@ -44,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	"nunezlagos/domain/internal/service/extsync"
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -146,6 +147,7 @@ func main() {
 	// resuelve client_slug → client_id en Create/Update/List.
 	clients := clientsvc.NewService(pools.App, recorder, nil)
 	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
+	projectRepos := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
@@ -292,6 +294,7 @@ func main() {
 		Crons:          &cronsvc.Service{Pool: pools.App, Audit: recorder},
 		Clients:        clients,
 		CapturedPrompts: capturedPrompts,
+		ProjectRepos:   projectRepos,
 		Policies:       &policysvc.Service{Pool: pools.App},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,

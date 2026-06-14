@@ -93,6 +93,7 @@ import (
 	"nunezlagos/domain/internal/service/usagealerts"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -384,6 +385,7 @@ func runServer() {
 	// que internamente arman el pgRepository wrappeando pools.App.
 	clientService := clientsvc.NewService(pools.App, recorder, nil)
 	capturedPromptService := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
+	projectRepoService := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	// REQ-28.2: projectService recibe referencia a ClientService para
 	// resolver client_slug → client_id en Create/Update/List.
 	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
@@ -921,6 +923,7 @@ func runServer() {
 			Crons:          cronService,
 			Clients:        clientService,
 			CapturedPrompts: capturedPromptService,
+			ProjectRepos:   projectRepoService,
 			Policies:       policyService,
 			Flows:          flowService,
 			FlowRunner:     flowRunnerInst,

@@ -1,0 +1,42 @@
+---
+description: Domain MCP — usar tools domain_* con prioridad sobre alternativas
+alwaysApply: true
+---
+
+# Domain MCP rules
+
+Este proyecto tiene **Domain MCP** registrado. Sus tools tienen prefijo `domain_*`.
+
+## Regla principal
+
+**Usá tools `domain_*` SIEMPRE que apliquen, antes que alternativas locales.**
+
+## Mapeo conceptual
+
+| Si el user pide... | Usá... |
+|---|---|
+| Guardar contexto / memoria persistente | `domain_observations_save` |
+| Recuperar memoria previa | `domain_observations_search` |
+| Guardar un prompt para reutilizar | `domain_prompts_save` |
+| Renderizar prompt con variables | `domain_prompts_render` |
+| Iniciar tarea no trivial | `domain_sessions_start` + `domain_timeline_*` |
+| Invocar skill versionada | `domain_skill_execute` |
+| Orquestar agente multi-step | `domain_agent_run` |
+| Workflow DAG | `domain_flow_run` |
+| Leer/escribir secret | `domain_secret_get` / `domain_secret_set` |
+| Listar / crear API keys | `domain_apikey_*` |
+
+## Anti-patrones
+
+- NO crear archivos markdown locales para "notas" o "memoria".
+- NO duplicar prompts en cada conversación.
+- NO leer/escribir `.env` para secrets que Domain gestiona.
+
+## Antes de actuar
+
+Chequeá memoria con `domain_observations_search`. Evitá trabajo duplicado.
+
+## Al terminar tareas no triviales
+
+Guardá resumen con `domain_observations_save` para preservar contexto entre
+sesiones.

@@ -25,13 +25,13 @@ type saveObsBody struct {
 }
 
 func (a *API) saveObservation(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	userID, _ := uuid.Parse(p.UserID)
+	userID := a.userID(ctx)
 	var b saveObsBody
 	if err := decodeJSON(r, &b); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
@@ -83,12 +83,12 @@ func (a *API) getObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	o, err := a.ObsService.Get(r.Context(), id)
+	o, err := a.ObsService.Get(ctx, id)
 	if errors.Is(err, observation.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
@@ -97,8 +97,7 @@ func (a *API) getObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
 		return
 	}
-	// Cross-org leak guard
-	if o.OrganizationID.String() != p.OrganizationID {
+	if err := a.authorizeOrg(ctx, o.OrganizationID); err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -116,13 +115,13 @@ func (a *API) deleteObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	o, err := a.ObsService.Get(r.Context(), id)
-	if errors.Is(err, observation.ErrNotFound) || (err == nil && o.OrganizationID.String() != p.OrganizationID) {
+	o, err := a.ObsService.Get(ctx, id)
+	if errors.Is(err, observation.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -130,8 +129,12 @@ func (a *API) deleteObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	actorID, _ := uuid.Parse(p.UserID)
-	if err := a.ObsService.SoftDelete(r.Context(), id, actorID); err != nil {
+	if err := a.authorizeOrg(ctx, o.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	actorID := a.userID(ctx)
+	if err := a.ObsService.SoftDelete(ctx, id, actorID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete", err.Error())
 		return
 	}
@@ -139,12 +142,12 @@ func (a *API) deleteObservation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	slug := r.URL.Query().Get("project_slug")
 	if slug == "" {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "project_slug requerido")
@@ -165,7 +168,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	}
 	filtersHash := cursor.HashFilters(map[string]string{
 		"project_slug": slug,
-		"org":          p.OrganizationID,
+		"org":          orgID.String(),
 	})
 	in := observation.ListPageInput{
 		ProjectID: proj.ID,
@@ -228,12 +231,12 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 // Parámetros: q, limit, entity_type (csv: observation,prompt,session),
 // project_slug (csv), tags (csv), date_from, date_to (ISO 8601).
 func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	q := r.URL.Query().Get("q")
 	if q == "" {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "q requerido")

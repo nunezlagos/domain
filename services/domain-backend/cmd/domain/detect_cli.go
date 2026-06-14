@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	primarymem "nunezlagos/domain/internal/cli/setup/primary_memory"
 	"nunezlagos/domain/internal/service/inventory"
 	"nunezlagos/domain/internal/service/projectdetect"
 	"nunezlagos/domain/internal/service/projectlink"
@@ -57,13 +58,14 @@ func runDomainDetect(ctx context.Context) int {
 	}
 
 	out := map[string]any{
-		"project":       meta,
-		"project_id":    projectID,
-		"org_id":        orgID,
-		"resolved_slug": resolvedSlug,
-		"link_notes":    linkNotes,
-		"inventory":     inv,
-		"session":       sessionID,
+		"project":          meta,
+		"project_id":       projectID,
+		"org_id":           orgID,
+		"resolved_slug":    resolvedSlug,
+		"link_notes":       linkNotes,
+		"inventory":        inv,
+		"session":          sessionID,
+		"memory_providers": detectMemoryProvidersSummary(),
 	}
 	encoded, _ := json.MarshalIndent(out, "", "  ")
 	fmt.Println(string(encoded))
@@ -104,6 +106,49 @@ func lookupBySlug(ctx context.Context, pool *pgxpool.Pool, projectSlug string) (
 		LIMIT 1
 	`, projectSlug).Scan(&projectID, &orgID, &slug)
 	return
+}
+
+// detectMemoryProvidersSummary escanea ~/.config/opencode/opencode.json
+// y ~/.claude.json buscando MCP servers de memoria (engram, mem0, ...).
+// Devuelve un mapa agent→[]activos_no_disabled. Si el agente no tiene
+// config, no aparece en el output.
+//
+// Útil para que el cliente sepa que existen "competidores" de domain
+// como memory provider, sin tomar acción (issue-35.3 — read-only acá).
+func detectMemoryProvidersSummary() map[string]any {
+	catalog, _ := primarymem.LoadCatalog()
+	summary := map[string]any{}
+	for _, agent := range []string{"opencode", "claude-code"} {
+		path, err := primarymem.DefaultConfigPath(agent)
+		if err != nil {
+			continue
+		}
+		providers, err := primarymem.Detect(agent, path)
+		if err != nil || len(providers) == 0 {
+			continue
+		}
+		var active, disabled []string
+		for _, p := range providers {
+			if !catalog[p.Name] {
+				continue
+			}
+			isDisabled, _ := primarymem.IsAlreadyDisabled(agent, path, p.Name)
+			if isDisabled {
+				disabled = append(disabled, p.Name)
+			} else {
+				active = append(active, p.Name)
+			}
+		}
+		if len(active) == 0 && len(disabled) == 0 {
+			continue
+		}
+		summary[agent] = map[string]any{
+			"config_path":     path,
+			"active_memory":   active,
+			"disabled_memory": disabled,
+		}
+	}
+	return summary
 }
 
 func startSession(ctx context.Context, pool *pgxpool.Pool, projectID, projectSlug string) (string, error) {

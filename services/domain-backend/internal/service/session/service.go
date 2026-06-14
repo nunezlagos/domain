@@ -3,22 +3,21 @@
 // Una session agrupa observations + prompts de una conversación/run.
 // Lifecycle: Start → (durante) → End con summary.
 // Active = ended_at IS NULL AND deleted_at IS NULL.
+//
+// HU-28.1: Service depende de Repository (interfaz) en vez de *pgxpool.Pool
+// directo. Pool se mantiene público como deprecated para Strangler Fig.
 package session
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
-	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -61,25 +60,28 @@ type StartInput struct {
 }
 
 type Service struct {
+	// Pool — DEPRECATED (HU-28.1). Se mantiene público como Strangler Fig.
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
+
+	repo Repository
 }
 
-// querier retorna la tx con SET LOCAL si el middleware HTTP la inyectó
-// (issue-25.14), o el pool como fallback. End() NO usa este helper porque
-// necesita su propia tx con FOR UPDATE; en ese caso, si la tx del ctx
-// existe, se reutiliza; sino se abre una nueva.
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func (s *Service) q(ctx context.Context) querier {
-	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
+// NewService construye el Service. Si repo es nil, se construye un
+// pgRepository wrappeando pool (back-compat con struct literal).
+func NewService(pool *pgxpool.Pool, audit audit.Recorder, repo Repository) *Service {
+	if repo == nil && pool != nil {
+		repo = NewPgRepository(pool)
 	}
-	return s.Pool
+	return &Service{Pool: pool, Audit: audit, repo: repo}
+}
+
+func (s *Service) repository() Repository {
+	if s.repo != nil {
+		return s.repo
+	}
+	s.repo = NewPgRepository(s.Pool)
+	return s.repo
 }
 
 func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
@@ -89,20 +91,18 @@ func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
 	if in.Tags == nil {
 		in.Tags = []string{}
 	}
-	var sess Session
-	err := s.q(ctx).QueryRow(ctx,
-		`INSERT INTO sessions (organization_id, project_id, user_id, title, tags)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, organization_id, project_id, user_id, title, COALESCE(summary,''),
-		           tags, started_at, ended_at, created_at`,
-		in.OrganizationID, in.ProjectID, in.UserID, in.Title, in.Tags,
-	).Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
-		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
+	sess, err := s.repository().Insert(ctx, InsertParams{
+		OrganizationID: in.OrganizationID,
+		ProjectID:      in.ProjectID,
+		UserID:         in.UserID,
+		Title:          in.Title,
+		Tags:           in.Tags,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("insert session: %w", err)
+		return nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.UserID,
 			ActorType:      audit.ActorUser,
@@ -112,66 +112,21 @@ func (s *Service) Start(ctx context.Context, in StartInput) (*Session, error) {
 			NewValues:      map[string]any{"title": in.Title},
 		})
 	}
-	return &sess, nil
+	return sess, nil
 }
 
 // End cierra una session. summary opcional (puede ser ""). Si ya estaba cerrada
 // retorna ErrAlreadyEnded (no idempotente — el caller decide qué hacer).
 //
-// Si el middleware HTTP (issue-25.14) ya inyectó una tx con SET LOCAL,
-// se reutiliza (no se abre una nueva). Si NO hay tx, se abre una propia
-// con FOR UPDATE (lock pesimista sobre la fila de la session).
+// El repo maneja la tx con FOR UPDATE (reusa tx-context si existe).
 func (s *Service) End(ctx context.Context, id, actorID uuid.UUID, summary string) (*Session, error) {
-	// ownedTx = true si ESTA función abrió la tx (debe hacer Commit/Rollback).
-	// ownedTx = false si vino del middleware (defer Rollback del middleware la cierra).
-	var tx pgx.Tx
-	ownedTx := false
-	if existing := txctx.TxFromContext(ctx); existing != nil {
-		tx = existing
-	} else {
-		var err error
-		tx, err = s.Pool.BeginTx(ctx, pgx.TxOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("begin tx: %w", err)
-		}
-		ownedTx = true
-		defer func() { _ = tx.Rollback(ctx) }()
-	}
-
-	var sess Session
-	err := tx.QueryRow(ctx,
-		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
-		        tags, started_at, ended_at, created_at
-		 FROM sessions WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id,
-	).Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
-		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query session: %w", err)
-	}
-	if sess.EndedAt != nil {
-		return nil, ErrAlreadyEnded
-	}
-
 	now := time.Now().UTC()
-	_, err = tx.Exec(ctx,
-		`UPDATE sessions SET ended_at = $2, summary = $3 WHERE id = $1`,
-		id, now, nullStr(summary))
+	sess, err := s.repository().EndAndLoad(ctx, id, summary, now)
 	if err != nil {
-		return nil, fmt.Errorf("end session: %w", err)
+		return nil, err
 	}
-	if ownedTx {
-		if err := tx.Commit(ctx); err != nil {
-			return nil, fmt.Errorf("commit: %w", err)
-		}
-	}
-	sess.EndedAt = &now
-	sess.Summary = summary
-
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &sess.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -181,26 +136,18 @@ func (s *Service) End(ctx context.Context, id, actorID uuid.UUID, summary string
 			NewValues:      map[string]any{"summary_chars": len(summary)},
 		})
 	}
-	return &sess, nil
+	return sess, nil
 }
 
 // GetByID retorna sesión sin importar status.
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Session, error) {
-	return s.queryOne(ctx, `WHERE id = $1 AND deleted_at IS NULL`, id)
+	return s.repository().GetByID(ctx, id)
 }
 
 // GetActive devuelve la session activa más reciente del user en el project.
 // Si projectID == uuid.Nil devuelve la activa más reciente del user sin filtro.
 func (s *Service) GetActive(ctx context.Context, userID, projectID uuid.UUID) (*Session, error) {
-	if projectID == uuid.Nil {
-		return s.queryOne(ctx,
-			`WHERE user_id = $1 AND ended_at IS NULL AND deleted_at IS NULL
-			 ORDER BY started_at DESC LIMIT 1`, userID)
-	}
-	return s.queryOne(ctx,
-		`WHERE user_id = $1 AND project_id = $2 AND ended_at IS NULL
-		   AND deleted_at IS NULL
-		 ORDER BY started_at DESC LIMIT 1`, userID, projectID)
+	return s.repository().GetActive(ctx, userID, projectID)
 }
 
 // List devuelve sessions del user (más recientes primero).
@@ -208,69 +155,20 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID, limit int) ([]Sess
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.q(ctx).Query(ctx,
-		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
-		        tags, started_at, ended_at, created_at
-		 FROM sessions
-		 WHERE user_id = $1 AND deleted_at IS NULL
-		 ORDER BY started_at DESC LIMIT $2`, userID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list sessions: %w", err)
-	}
-	defer rows.Close()
-	var out []Session
-	for rows.Next() {
-		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
-			&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, sess)
-	}
-	return out, rows.Err()
-}
-
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Session, error) {
-	var sess Session
-	q := `SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
-	        tags, started_at, ended_at, created_at FROM sessions ` + where
-	err := s.q(ctx).QueryRow(ctx, q, args...).Scan(
-		&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
-		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query session: %w", err)
-	}
-	return &sess, nil
+	return s.repository().List(ctx, userID, limit)
 }
 
 // CloseInactive cierra sesiones activas que no tuvieron actividad en >idle.
 // Retorna IDs de sesiones cerradas. Usado por cron leader (issue-03.2).
 func (s *Service) CloseInactive(ctx context.Context, idle time.Duration) ([]uuid.UUID, error) {
-	cutoff := time.Now().UTC().Add(-idle)
-	rows, err := s.Pool.Query(ctx, `
-		UPDATE sessions SET ended_at = $2
-		WHERE ended_at IS NULL
-		  AND deleted_at IS NULL
-		  AND updated_at < $2
-		RETURNING id
-	`, cutoff, time.Now().UTC())
+	now := time.Now().UTC()
+	cutoff := now.Add(-idle)
+	ids, err := s.repository().CloseInactive(ctx, cutoff, now)
 	if err != nil {
-		return nil, fmt.Errorf("close inactive: %w", err)
-	}
-	defer rows.Close()
-	var ids []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		ids = append(ids, id)
+		return nil, err
 	}
 	if len(ids) > 0 && s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "session.auto-closed",
 			EntityType: "session",

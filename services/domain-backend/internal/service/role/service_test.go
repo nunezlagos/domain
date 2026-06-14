@@ -2,8 +2,11 @@ package role
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
 	"nunezlagos/domain/internal/auth/rbac"
@@ -132,22 +135,26 @@ func TestBehavior_ErrHasMembers_ContainsCount(t *testing.T) {
 }
 
 // isUniqueViolation detecta correctamente violation codes de Postgres.
+// HU-28.4: ahora usa errors.As + *pgconn.PgError en vez de matching de strings.
 func TestBehavior_IsUniqueViolation_DetectsPgCode(t *testing.T) {
+	pgUnique := &pgconn.PgError{Code: pgerrcode.UniqueViolation}
+	pgFK := &pgconn.PgError{Code: pgerrcode.ForeignKeyViolation}
 	cases := []struct {
+		name     string
 		err      error
 		expected bool
 	}{
-		{nil, false},
-		{errors.New("some random error"), false},
-		{errors.New(`ERROR: duplicate key value violates unique constraint (SQLSTATE 23505)`), true},
-		{errors.New("unique constraint violated"), true}, // lowercase "unique" per impl
-		{errors.New("UNIQUE"), false},                     // impl busca lowercase, no uppercase
-		{errors.New(""), false},
+		{"nil", nil, false},
+		{"random error", errors.New("some random error"), false},
+		{"empty", errors.New(""), false},
+		{"pg unique violation directo", pgUnique, true},
+		{"pg unique violation envuelto", fmt.Errorf("insert role: %w", pgUnique), true},
+		{"pg FK violation no califica", pgFK, false},
+		{"string contiene 23505 pero no es pg error", errors.New("23505 mentioned"), false},
 	}
 	for _, tc := range cases {
 		got := isUniqueViolation(tc.err)
-		require.Equal(t, tc.expected, got,
-			"isUniqueViolation(%v) = %v, want %v", tc.err, got, tc.expected)
+		require.Equal(t, tc.expected, got, "%s: isUniqueViolation = %v", tc.name, got)
 	}
 }
 

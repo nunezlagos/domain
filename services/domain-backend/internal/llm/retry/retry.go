@@ -4,11 +4,29 @@ package retry
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
 	"nunezlagos/domain/internal/llm"
 )
+
+// HTTP status codes que NO se reintentan (errores del cliente / auth).
+var clientErrorCodes = []int{400, 401, 403, 404}
+
+// HTTP status codes transient que SÍ se reintentan.
+var transientStatusCodes = []int{429, 500, 502, 503, 504, 529}
+
+// Substrings transient no-numéricos (network / timeout / overload semánticos).
+var transientKeywords = []string{
+	"rate limit", "overloaded", "timeout", "deadline",
+	"connection refused", "connection reset", "eof", "no such host",
+}
+
+// Substrings que indican error de cliente no-retryable.
+var clientErrorKeywords = []string{
+	"invalid api key", "unauthorized", "bad request",
+}
 
 type Config struct {
 	MaxRetries  int           // default 3 (intentos totales = MaxRetries+1)
@@ -43,18 +61,31 @@ func (p *provider) Name() string { return p.inner.Name() }
 
 // IsTransient clasifica errores retryables: rate limit, 5xx, overloaded,
 // network/timeout. Auth y 4xx de cliente NO reintentan.
+//
+// HU-28.4: los HTTP status codes se construyen vía strconv.Itoa en vez de
+// hardcodearse como string literal, para mantener la lista centralizada en
+// clientErrorCodes / transientStatusCodes.
 func IsTransient(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	for _, kw := range []string{"401", "403", "404", "invalid api key", "unauthorized", "bad request", "400"} {
+	for _, code := range clientErrorCodes {
+		if strings.Contains(msg, strconv.Itoa(code)) {
+			return false
+		}
+	}
+	for _, kw := range clientErrorKeywords {
 		if strings.Contains(msg, kw) {
 			return false
 		}
 	}
-	for _, kw := range []string{"429", "rate limit", "500", "502", "503", "504", "529", "overloaded",
-		"timeout", "deadline", "connection refused", "connection reset", "eof", "no such host"} {
+	for _, code := range transientStatusCodes {
+		if strings.Contains(msg, strconv.Itoa(code)) {
+			return true
+		}
+	}
+	for _, kw := range transientKeywords {
 		if strings.Contains(msg, kw) {
 			return true
 		}

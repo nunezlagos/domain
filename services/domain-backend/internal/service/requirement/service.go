@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -128,7 +130,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "requirement.created",
 			EntityType: "requirement",
@@ -268,7 +270,7 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType: audit.ActorSystem,
 			Action:    "requirement.updated",
 			EntityType: "requirement",
@@ -305,7 +307,7 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "requirement.archived",
 			EntityType: "requirement",
@@ -380,5 +382,9 @@ FROM req_tree ORDER BY depth, slug
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && (strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "23505"))
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation
 }

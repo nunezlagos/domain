@@ -10,10 +10,16 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"nunezlagos/domain/internal/activity"
+	"nunezlagos/domain/internal/api/ctxkeys"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/auth/apikey"
@@ -431,7 +437,12 @@ func AuthAllowlist() []string {
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	// HU-28.5: status ya escrito → best effort. Si encode rompe (cliente
+	// desconectado, stream cerrado), loggeamos pero no podemos cambiar el
+	// status code. No enmascaramos el error tragándolo en `_`.
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		slog.Error("failed to encode response", "error", err, "status", status)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
@@ -461,4 +472,56 @@ func decodeJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
+}
+
+// --- Principal / cross-org helpers (HU-28.3) ---
+//
+// Estos helpers reemplazan el patrón:
+//
+//   p, _ := principal(r)
+//   if p == nil { writeError(...) ; return }
+//   orgID, _ := uuid.Parse(p.OrganizationID)
+//   if resource.OrganizationID != orgID { writeError(404) ; return }
+//
+// El middleware middleware.PrincipalCtx (post-auth) ya parseó los UUIDs
+// y los inyectó en el ctx vía ctxkeys. Los handlers solo llaman a estos
+// accesores. Si el caller NO está autenticado (allowlist path), orgID(ctx)
+// devuelve uuid.Nil — los handlers de paths autenticados pueden asumir
+// no-nil porque apikey.Middleware bloquea antes.
+
+// ErrCrossOrg es el sentinel que devuelve authorizeOrg cuando el recurso
+// pertenece a otra org. Mismo trato que ErrNotFound de los services:
+// el handler responde 404, no 403 (anti-enumeration: no revela existencia
+// de recursos en otras orgs).
+var ErrCrossOrg = errors.New("handler: cross-org access denied")
+
+// orgID devuelve el OrganizationID del principal autenticado, parseado
+// como uuid.UUID por el middleware PrincipalCtx. Retorna uuid.Nil si
+// el request no pasó por auth (no debería ocurrir en paths /api/v1/*).
+func (a *API) orgID(ctx context.Context) uuid.UUID {
+	return ctxkeys.OrgID(ctx)
+}
+
+// userID devuelve el UserID del principal autenticado.
+func (a *API) userID(ctx context.Context) uuid.UUID {
+	return ctxkeys.UserID(ctx)
+}
+
+// authorizeOrg verifica que el recurso pertenezca a la org del request.
+// Retorna ErrCrossOrg si no coincide. El handler debe traducirlo a 404
+// (no 403) para no filtrar existencia de recursos cross-org.
+//
+// Uso típico:
+//
+//	flow, err := a.FlowService.GetByID(ctx, id)
+//	if err != nil { ... }
+//	if err := a.authorizeOrg(ctx, flow.OrganizationID); err != nil {
+//	    writeError(w, http.StatusNotFound, "not_found", "")
+//	    return
+//	}
+func (a *API) authorizeOrg(ctx context.Context, resourceOrgID uuid.UUID) error {
+	if a.orgID(ctx) == resourceOrgID {
+		return nil
+	}
+	return ErrCrossOrg
 }

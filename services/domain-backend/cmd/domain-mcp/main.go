@@ -139,17 +139,16 @@ func main() {
 	}
 
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
-	projects := &projsvc.Service{Pool: pools.App, Audit: recorder}
-	observations := &observation.Service{
-		Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{},
-	}
-	sessions := &sesssvc.Service{Pool: pools.App, Audit: recorder}
+	// HU-28.1: wireup via constructores nuevos para los 5 services migrados.
+	projects := projsvc.NewService(pools.App, recorder, nil, nil)
+	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
+	sessions := sesssvc.NewService(pools.App, recorder, nil)
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
 	search := &searchsvc.Service{Pool: pools.App}
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
-	agents := &agentsvc.Service{Pool: pools.App, Audit: recorder}
+	agents := agentsvc.NewService(pools.App, recorder, nil)
 	billingSvc := &billing.Service{Pool: pools.App}
 
 	// LLM factory: providers según env vars DOMAIN_*_KEY, con retry +

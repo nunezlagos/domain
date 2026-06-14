@@ -24,19 +24,19 @@ type createAgentBody struct {
 }
 
 func (a *API) createAgent(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	actorID, _ := uuid.Parse(p.UserID)
+	actorID := a.userID(ctx)
 	var b createAgentBody
 	if err := decodeJSON(r, &b); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	out, err := a.AgentService.Create(r.Context(), agent.CreateInput{
+	out, err := a.AgentService.Create(ctx, agent.CreateInput{
 		OrganizationID: orgID,
 		Slug:           b.Slug, Name: b.Name, Description: b.Description,
 		Provider: b.Provider, Model: b.Model, SystemPrompt: b.SystemPrompt,
@@ -70,13 +70,13 @@ func (a *API) getAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	out, err := a.AgentService.GetByID(r.Context(), id)
-	if errors.Is(err, agent.ErrNotFound) || (err == nil && out.OrganizationID.String() != p.OrganizationID) {
+	out, err := a.AgentService.GetByID(ctx, id)
+	if errors.Is(err, agent.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -84,18 +84,22 @@ func (a *API) getAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
 		return
 	}
+	if err := a.authorizeOrg(ctx, out.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
 	writeData(w, http.StatusOK, out)
 }
 
 func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := a.AgentService.List(r.Context(), orgID, limit)
+	list, err := a.AgentService.List(ctx, orgID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
@@ -121,13 +125,13 @@ func (a *API) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.AgentService.GetByID(r.Context(), id)
-	if errors.Is(err, agent.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.AgentService.GetByID(ctx, id)
+	if errors.Is(err, agent.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -135,13 +139,17 @@ func (a *API) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	actorID, _ := uuid.Parse(p.UserID)
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	actorID := a.userID(ctx)
 	var b updateAgentBody
 	if err := decodeJSON(r, &b); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	out, err := a.AgentService.Update(r.Context(), id, agent.UpdateInput{
+	out, err := a.AgentService.Update(ctx, id, agent.UpdateInput{
 		Name: b.Name, Description: b.Description, Provider: b.Provider,
 		Model: b.Model, SystemPrompt: b.SystemPrompt, SkillsSlugs: b.SkillsSlugs,
 		MaxIterations: b.MaxIterations, TokenBudget: b.TokenBudget,
@@ -167,13 +175,13 @@ func (a *API) listAgentVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	ag, err := a.AgentService.GetByID(r.Context(), id)
-	if errors.Is(err, agent.ErrNotFound) || (err == nil && ag.OrganizationID.String() != p.OrganizationID) {
+	ag, err := a.AgentService.GetByID(ctx, id)
+	if errors.Is(err, agent.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -181,7 +189,11 @@ func (a *API) listAgentVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	versions, err := a.AgentService.GetVersions(r.Context(), id, 0)
+	if err := a.authorizeOrg(ctx, ag.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	versions, err := a.AgentService.GetVersions(ctx, id, 0)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "versions", err.Error())
 		return
@@ -198,13 +210,13 @@ func (a *API) deleteAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.AgentService.GetByID(r.Context(), id)
-	if errors.Is(err, agent.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.AgentService.GetByID(ctx, id)
+	if errors.Is(err, agent.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -212,8 +224,12 @@ func (a *API) deleteAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	actorID, _ := uuid.Parse(p.UserID)
-	if err := a.AgentService.SoftDelete(r.Context(), id, actorID); err != nil {
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	actorID := a.userID(ctx)
+	if err := a.AgentService.SoftDelete(ctx, id, actorID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete", err.Error())
 		return
 	}

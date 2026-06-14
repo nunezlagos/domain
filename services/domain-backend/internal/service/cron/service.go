@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/robfig/cron/v3"
 
@@ -129,14 +131,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
 		&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "crons_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
 		return nil, fmt.Errorf("insert cron: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -282,7 +284,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID: &actorID, ActorType: audit.ActorUser,
 			Action: "cron.deleted", EntityType: "cron", EntityID: &id,
 		})

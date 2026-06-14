@@ -1,6 +1,21 @@
-status: proposed
+status: implemented
 created: 2026-06-11
-implemented: ~
+implemented: 2026-06-14
 notes: |
   Sin dependencias. Puede implementarse en paralelo.
   Impacto en prod: cambia de silencio a logging, pero nunca bloquea.
+
+  Scope ejecutado (limitado a handler/, service/, middleware/ por instrucción
+  del orquestador — llm/, webui/, mcp/server/ quedan pendientes para una HU
+  posterior si se decide ampliar):
+  - audit.RecordOrLog(ctx, recorder, event) agregado en internal/audit/audit.go
+    como abstracción strangler-fig: nil-safe, loggea slog.Warn con action +
+    entity_type + entity_id si Record retorna error.
+  - 63 callers de `_ = s.Audit.Record(...)` migrados (24 archivos de
+    internal/service/ + 1 de internal/api/handler/flow.go).
+  - writeJSON (handler/api.go) loggea slog.Error en encode failures.
+  - replayResponse, writeError en middleware/idempotency.go y RateLimitMiddleware
+    en middleware/ratelimit.go loggean slog.Warn en write failures.
+  - flow export (handler/flow.go yaml/json) loggea slog.Warn en write failures.
+  - Tests nuevos: TestWriteJSON_LogsEncodeError + TestRecordOrLog_*.
+  - Build pass, 663 tests pass.

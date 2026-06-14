@@ -23,7 +23,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -246,8 +247,32 @@ type UpdateInput struct {
 var ErrUpdateConflict = errors.New("flow modified concurrently")
 
 type Service struct {
+	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
+	// &Service{Pool: ...} siguen funcionando; otros archivos del package
+	// (saga.go, signals.go, snapshots.go, etc.) aún usan Pool directo y se
+	// migrarán en HUs futuras.
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
+
+	repo Repository
+}
+
+// NewService construye el Service con dependencias explícitas.
+func NewService(pool *pgxpool.Pool, audit audit.Recorder, repo Repository) *Service {
+	if repo == nil && pool != nil {
+		repo = NewPgRepository(pool)
+	}
+	return &Service{Pool: pool, Audit: audit, repo: repo}
+}
+
+// repository devuelve el repo inyectado o crea uno on-demand desde Pool
+// (compat con struct literal).
+func (s *Service) repository() Repository {
+	if s.repo != nil {
+		return s.repo
+	}
+	s.repo = NewPgRepository(s.Pool)
+	return s.repo
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Flow, error) {
@@ -265,28 +290,23 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Flow, error) {
 	}
 	specJSON, _ := json.Marshal(in.Spec)
 
-	var f Flow
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO flows
-		   (organization_id, slug, name, description, spec, deterministic_replay)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
-		           spec, is_active, deterministic_replay, seed_managed, seed_version,
-		           is_user_modified, created_at, updated_at`,
-		in.OrganizationID, in.Slug, in.Name, nullStr(in.Description), specJSON,
-		in.DeterministicReplay,
-	).Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
-		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
-		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
+	f, err := s.repository().InsertFlow(ctx, InsertFlowParams{
+		OrganizationID:      in.OrganizationID,
+		Slug:                in.Slug,
+		Name:                in.Name,
+		Description:         in.Description,
+		SpecJSON:            specJSON,
+		DeterministicReplay: in.DeterministicReplay,
+	})
 	if err != nil {
-		if strings.Contains(err.Error(), "flows_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
 		return nil, fmt.Errorf("insert flow: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -296,7 +316,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Flow, error) {
 			NewValues:      map[string]any{"slug": f.Slug, "steps_count": len(f.Spec.Steps)},
 		})
 	}
-	return &f, nil
+	return f, nil
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Flow, error) {
@@ -326,38 +346,22 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Fl
 	userMod := prev.IsUserModified || prev.SeedManaged
 	specJSON, _ := json.Marshal(spec)
 
-	// issue-09.1 optimistic locking: la condición updated_at garantiza que
-	// no pisamos una modificación concurrente.
-	where := `WHERE id = $1 AND deleted_at IS NULL`
-	args := []any{id, name, nullStr(desc), specJSON, isActive, userMod}
-	if in.ExpectedUpdatedAt != nil {
-		where += ` AND updated_at = $7`
-		args = append(args, *in.ExpectedUpdatedAt)
-	}
-
-	var f Flow
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE flows SET name = $2, description = $3, spec = $4, is_active = $5,
-		    is_user_modified = $6
-		 `+where+`
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
-		           spec, is_active, deterministic_replay, seed_managed, seed_version,
-		           is_user_modified, created_at, updated_at`,
-		args...,
-	).Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
-		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
-		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		if in.ExpectedUpdatedAt != nil {
-			return nil, ErrUpdateConflict
-		}
-		return nil, ErrNotFound
-	}
+	// issue-09.1 optimistic locking: la condición updated_at en repo garantiza
+	// que no pisamos una modificación concurrente.
+	f, err := s.repository().UpdateFlow(ctx, UpdateFlowParams{
+		ID:                id,
+		Name:              name,
+		Description:       desc,
+		SpecJSON:          specJSON,
+		IsActive:          isActive,
+		IsUserModified:    userMod,
+		ExpectedUpdatedAt: in.ExpectedUpdatedAt,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update flow: %w", err)
+		return nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &f.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -366,75 +370,28 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Fl
 			EntityID:       &f.ID,
 		})
 	}
-	return &f, nil
+	return f, nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Flow, error) {
-	return s.queryOne(ctx, `WHERE id = $1 AND deleted_at IS NULL`, id)
+	return s.repository().GetFlowByID(ctx, id)
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Flow, error) {
-	return s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+	return s.repository().GetFlowBySlug(ctx, orgID, slug)
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID, limit int) ([]Flow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
-		        spec, is_active, deterministic_replay, seed_managed, seed_version,
-		        is_user_modified, created_at, updated_at
-		 FROM flows WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, orgID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list: %w", err)
-	}
-	defer rows.Close()
-	var out []Flow
-	for rows.Next() {
-		var f Flow
-		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
-			&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
-			&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	return out, rows.Err()
+	return s.repository().ListFlows(ctx, orgID, limit)
 }
 
 // ListParents devuelve los flows de la org que referencian a slug como
 // sub_flow en su spec (issue-09.5, GET /flows/:id/parents).
 func (s *Service) ListParents(ctx context.Context, orgID uuid.UUID, slug string) ([]Flow, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, organization_id, slug, name, COALESCE(description,''),
-		       spec, is_active, deterministic_replay, seed_managed, seed_version,
-		       is_user_modified, created_at, updated_at
-		FROM flows
-		WHERE organization_id = $1 AND deleted_at IS NULL
-		  AND EXISTS (
-			SELECT 1 FROM jsonb_array_elements(spec->'steps') st
-			WHERE st->>'type' = 'sub_flow'
-			  AND st->'config'->>'flow_slug' = $2
-		  )
-		ORDER BY slug ASC`, orgID, slug)
-	if err != nil {
-		return nil, fmt.Errorf("list parents: %w", err)
-	}
-	defer rows.Close()
-	var out []Flow
-	for rows.Next() {
-		var f Flow
-		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
-			&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
-			&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	return out, rows.Err()
+	return s.repository().ListParents(ctx, orgID, slug)
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
@@ -442,13 +399,11 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE flows SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
-	if err != nil {
-		return fmt.Errorf("soft delete: %w", err)
+	if err := s.repository().SoftDeleteFlow(ctx, id); err != nil {
+		return err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -458,25 +413,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Flow, error) {
-	var f Flow
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
-	        spec, is_active, deterministic_replay, seed_managed, seed_version,
-	        is_user_modified, created_at, updated_at
-	      FROM flows ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
-		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
-		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
-	}
-	return &f, nil
 }
 
 // specJSONRaw helper scan: JSONB → Spec
@@ -540,20 +476,7 @@ type RunRow struct {
 
 // GetRun loads a flow run by ID.
 func (s *Service) GetRun(ctx context.Context, id uuid.UUID) (*RunRow, error) {
-	var r RunRow
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
-		       started_at, finished_at, triggered_by, trigger_type
-		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&r.ID, &r.OrganizationID, &r.FlowID, &r.Status, &r.Error,
-		&r.StartedAt, &r.FinishedAt, &r.TriggeredBy, &r.TriggerType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrRunNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get run: %w", err)
-	}
-	return &r, nil
+	return s.repository().GetRun(ctx, id)
 }
 
 // StepRow es la vista de un step para GET /flow-runs/:id (issue-09.3/09.10).
@@ -570,23 +493,7 @@ type StepRow struct {
 
 // GetRunSteps lista los steps de un run con su progreso.
 func (s *Service) GetRunSteps(ctx context.Context, runID uuid.UUID) ([]StepRow, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, step_key, status, progress, progress_message, error, started_at, completed_at
-		FROM flow_run_steps WHERE flow_run_id = $1 ORDER BY created_at ASC`, runID)
-	if err != nil {
-		return nil, fmt.Errorf("get run steps: %w", err)
-	}
-	defer rows.Close()
-	var out []StepRow
-	for rows.Next() {
-		var st StepRow
-		if err := rows.Scan(&st.ID, &st.StepKey, &st.Status, &st.Progress,
-			&st.ProgressMessage, &st.Error, &st.StartedAt, &st.CompletedAt); err != nil {
-			return nil, fmt.Errorf("scan step: %w", err)
-		}
-		out = append(out, st)
-	}
-	return out, rows.Err()
+	return s.repository().GetRunSteps(ctx, runID)
 }
 
 // PauseRun transitions a running flow run to paused.
@@ -599,13 +506,7 @@ func (s *Service) PauseRun(ctx context.Context, id uuid.UUID) error {
 	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusPaused); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidPause, err.Error())
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE flow_runs SET status = 'paused', worker_id = NULL WHERE id = $1 AND status = $2`,
-		id, run.Status)
-	if err != nil {
-		return fmt.Errorf("pause run: %w", err)
-	}
-	return nil
+	return s.repository().PauseRun(ctx, id, run.Status)
 }
 
 // ResumeRun transitions a paused flow run back to running.
@@ -618,13 +519,7 @@ func (s *Service) ResumeRun(ctx context.Context, id uuid.UUID) error {
 	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusRunning); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidResume, err.Error())
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE flow_runs SET status = 'running' WHERE id = $1 AND (status = 'paused' OR status = 'paused_awaiting_human' OR status = 'paused_awaiting_signal' OR status = 'paused_error')`,
-		id)
-	if err != nil {
-		return fmt.Errorf("resume run: %w", err)
-	}
-	return nil
+	return s.repository().ResumeRun(ctx, id)
 }
 
 // CancelRun transitions any non-terminal flow run to cancelled.
@@ -640,14 +535,7 @@ func (s *Service) CancelRun(ctx context.Context, id uuid.UUID) error {
 	if err := m.ValidateTransition(FlowStatus(run.Status), FlowStatusCancelled); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidCancel, err.Error())
 	}
-	now := time.Now().UTC()
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE flow_runs SET status = 'cancelled', worker_id = NULL, finished_at = $1, error = COALESCE(error, '') || ' cancelled by user' WHERE id = $2`,
-		now, id)
-	if err != nil {
-		return fmt.Errorf("cancel run: %w", err)
-	}
-	return nil
+	return s.repository().CancelRun(ctx, id, time.Now().UTC())
 }
 
 // RunFilter specifies optional run list filters.
@@ -663,37 +551,5 @@ func (s *Service) ListRuns(ctx context.Context, f RunFilter) ([]RunRow, int, err
 	if f.Limit <= 0 || f.Limit > 100 {
 		f.Limit = 50
 	}
-	where := "WHERE organization_id = $1"
-	args := []any{f.OrgID}
-	argIdx := 2
-	if f.FlowID != nil {
-		where += fmt.Sprintf(" AND flow_id = $%d", argIdx)
-		args = append(args, *f.FlowID)
-		argIdx++
-	}
-	var total int
-	err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM flow_runs `+where, args...).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count runs: %w", err)
-	}
-	where += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
-	args = append(args, f.Limit, f.Offset)
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
-		       started_at, finished_at, triggered_by, trigger_type
-		FROM flow_runs `+where, args...)
-	if err != nil {
-		return nil, 0, fmt.Errorf("list runs: %w", err)
-	}
-	defer rows.Close()
-	var out []RunRow
-	for rows.Next() {
-		var r RunRow
-		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.FlowID, &r.Status, &r.Error,
-			&r.StartedAt, &r.FinishedAt, &r.TriggeredBy, &r.TriggerType); err != nil {
-			return nil, 0, fmt.Errorf("scan: %w", err)
-		}
-		out = append(out, r)
-	}
-	return out, total, rows.Err()
+	return s.repository().ListRuns(ctx, f)
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,9 +67,16 @@ func TestCreateValidation(t *testing.T) {
 }
 
 // Sabotaje: unique violation debe detectarse por código postgres 23505
+// vía pgerrcode.UniqueViolation (HU-28.4: errors.As + *pgconn.PgError).
 func TestSabotage_UniqueViolationCheck(t *testing.T) {
 	require.False(t, isUniqueViolation(nil))
 	require.False(t, isUniqueViolation(ErrNotFound))
-	// PostgreSQL unique violation error message
-	require.True(t, isUniqueViolation(fmt.Errorf("ERROR: duplicate key value violates unique constraint \"requirements_slug_idx\" (SQLSTATE 23505)")))
+	// PgError envuelto con código UniqueViolation
+	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "requirements_slug_idx"}
+	require.True(t, isUniqueViolation(pgErr))
+	require.True(t, isUniqueViolation(fmt.Errorf("wrapped: %w", pgErr)))
+	// Errores no-pg no califican
+	require.False(t, isUniqueViolation(fmt.Errorf("generic error mentioning 23505 in text")))
+	// Otro código pg (ej FK) no califica
+	require.False(t, isUniqueViolation(&pgconn.PgError{Code: pgerrcode.ForeignKeyViolation}))
 }

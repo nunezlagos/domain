@@ -162,7 +162,7 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 		return nil, nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "hu_draft.started",
 			EntityType: "hu_draft",
@@ -343,7 +343,7 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "hu_draft.attached",
 			EntityType: "hu_draft",
@@ -387,7 +387,7 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "hu_draft.committed",
 			EntityType: "hu_draft",
@@ -419,7 +419,7 @@ func (s *Service) PromoteAttachmentsToHU(ctx context.Context, draftID, issueID u
 		return 0, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "hu_draft.attachments_promoted",
 			EntityType: "user_story",
@@ -450,7 +450,7 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 		return fmt.Errorf("abandon draft: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "hu_draft.abandoned",
 			EntityType: "hu_draft",

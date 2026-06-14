@@ -128,7 +128,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 
 	// 6. Audit log fuera de la tx (best-effort, no bloquea el erase)
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID:    &actorID,
 			ActorType:  audit.ActorUser,
 			Action:     "user.erased",

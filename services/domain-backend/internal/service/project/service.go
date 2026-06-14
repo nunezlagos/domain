@@ -2,19 +2,22 @@
 //
 // Project es el bucket donde viven observations, prompts, knowledge_docs.
 // Slug único por (organization_id, slug). Soft-delete con deleted_at.
+//
+// HU-28.1: Service depende de Repository (interfaz). Pool sigue siendo
+// público como deprecated para Strangler Fig.
 package project
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -55,9 +58,29 @@ type CreateInput struct {
 }
 
 type Service struct {
+	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
+	// &Service{Pool: ...} siguen funcionando.
 	Pool         *pgxpool.Pool
 	Audit        audit.Recorder
 	TemplateSvc  *projecttemplate.Service // opcional — issue-01.4 apply template on create
+
+	repo Repository
+}
+
+// NewService construye el Service con dependencias explícitas.
+func NewService(pool *pgxpool.Pool, audit audit.Recorder, tplSvc *projecttemplate.Service, repo Repository) *Service {
+	if repo == nil && pool != nil {
+		repo = NewPgRepository(pool)
+	}
+	return &Service{Pool: pool, Audit: audit, TemplateSvc: tplSvc, repo: repo}
+}
+
+func (s *Service) repository() Repository {
+	if s.repo != nil {
+		return s.repo
+	}
+	s.repo = NewPgRepository(s.Pool)
+	return s.repo
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) {
@@ -89,25 +112,24 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	}
 	settingsJSON, _ := json.Marshal(in.Settings)
 
-	var p Project
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO projects (organization_id, name, slug, description, repository_url, template_id, settings)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, organization_id, name, slug, COALESCE(description,''),
-		           COALESCE(repository_url,''), template_id, settings, created_at, updated_at, deleted_at`,
-		in.OrganizationID, in.Name, in.Slug, nullStr(in.Description), nullStr(in.RepositoryURL),
-		in.TemplateID, settingsJSON,
-	).Scan(&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description,
-		&p.RepositoryURL, &p.TemplateID, &p.Settings, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
+	p, err := s.repository().Insert(ctx, InsertParams{
+		OrganizationID: in.OrganizationID,
+		Name:           in.Name,
+		Slug:           in.Slug,
+		Description:    in.Description,
+		RepositoryURL:  in.RepositoryURL,
+		TemplateID:     in.TemplateID,
+		SettingsJSON:   settingsJSON,
+	})
 	if err != nil {
-		if strings.Contains(err.Error(), "projects_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
-		return nil, fmt.Errorf("insert project: %w", err)
+		return nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -117,39 +139,19 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 			NewValues:      map[string]any{"name": p.Name, "slug": p.Slug},
 		})
 	}
-	return &p, nil
+	return p, nil
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Project, error) {
-	return s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+	return s.repository().GetBySlug(ctx, orgID, slug)
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
-	return s.queryOne(ctx, `WHERE id = $1`, id)
+	return s.repository().GetByID(ctx, id)
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Project, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, slug, COALESCE(description,''),
-		        COALESCE(repository_url,''), template_id, settings, created_at, updated_at, deleted_at
-		 FROM projects
-		 WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC`, orgID)
-	if err != nil {
-		return nil, fmt.Errorf("list projects: %w", err)
-	}
-	defer rows.Close()
-	var out []Project
-	for rows.Next() {
-		var p Project
-		if err := rows.Scan(&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description,
-			&p.RepositoryURL, &p.TemplateID, &p.Settings, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return s.repository().List(ctx, orgID)
 }
 
 type UpdateInput struct {
@@ -183,24 +185,17 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 	}
 	settingsJSON, _ := json.Marshal(settings)
 
-	var p Project
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE projects
-		 SET name = $2, description = $3, repository_url = $4, settings = $5
-		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, organization_id, name, slug, COALESCE(description,''),
-		           COALESCE(repository_url,''), template_id, settings, created_at, updated_at, deleted_at`,
-		id, name, nullStr(desc), nullStr(repo), settingsJSON,
-	).Scan(&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description,
-		&p.RepositoryURL, &p.TemplateID, &p.Settings, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+	p, err := s.repository().Update(ctx, id, UpdateParams{
+		Name:          name,
+		Description:   desc,
+		RepositoryURL: repo,
+		SettingsJSON:  settingsJSON,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update project: %w", err)
+		return nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &p.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -209,7 +204,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 			EntityID:       &p.ID,
 		})
 	}
-	return &p, nil
+	return p, nil
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
@@ -220,13 +215,11 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	if prev.DeletedAt != nil {
 		return nil
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE projects SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
-	if err != nil {
-		return fmt.Errorf("soft delete: %w", err)
+	if err := s.repository().SoftDelete(ctx, id); err != nil {
+		return err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -236,23 +229,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Project, error) {
-	var p Project
-	q := `SELECT id, organization_id, name, slug, COALESCE(description,''),
-	        COALESCE(repository_url,''), template_id, settings, created_at, updated_at, deleted_at
-	      FROM projects ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description,
-		&p.RepositoryURL, &p.TemplateID, &p.Settings, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query project: %w", err)
-	}
-	return &p, nil
 }
 
 func nullStr(s string) any {

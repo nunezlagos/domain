@@ -20,17 +20,13 @@ type createProjectBody struct {
 }
 
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, err := uuid.Parse(p.OrganizationID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_principal", "")
-		return
-	}
-	actorID, _ := uuid.Parse(p.UserID)
+	actorID := a.userID(ctx)
 	var b createProjectBody
 	if err := decodeJSON(r, &b); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
@@ -40,7 +36,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "name y slug requeridos")
 		return
 	}
-	proj, err := a.ProjectService.Create(r.Context(), projsvc.CreateInput{
+	proj, err := a.ProjectService.Create(ctx, projsvc.CreateInput{
 		OrganizationID: orgID,
 		Name:           b.Name,
 		Slug:           b.Slug,
@@ -66,13 +62,13 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	list, err := a.ProjectService.List(r.Context(), orgID)
+	list, err := a.ProjectService.List(ctx, orgID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
@@ -81,13 +77,13 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getProject(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, r.PathValue("slug"))
+	proj, err := a.ProjectService.GetBySlug(ctx, orgID, r.PathValue("slug"))
 	if errors.Is(err, projsvc.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "project not found")
 		return
@@ -112,14 +108,14 @@ type updateProjectBody struct {
 }
 
 func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	actorID, _ := uuid.Parse(p.UserID)
-	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, r.PathValue("slug"))
+	actorID := a.userID(ctx)
+	proj, err := a.ProjectService.GetBySlug(ctx, orgID, r.PathValue("slug"))
 	if errors.Is(err, projsvc.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
@@ -133,7 +129,7 @@ func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	updated, err := a.ProjectService.Update(r.Context(), proj.ID, projsvc.UpdateInput{
+	updated, err := a.ProjectService.Update(ctx, proj.ID, projsvc.UpdateInput{
 		Name:          b.Name,
 		Description:   b.Description,
 		RepositoryURL: b.RepositoryURL,
@@ -148,14 +144,14 @@ func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	actorID, _ := uuid.Parse(p.UserID)
-	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, r.PathValue("slug"))
+	actorID := a.userID(ctx)
+	proj, err := a.ProjectService.GetBySlug(ctx, orgID, r.PathValue("slug"))
 	if errors.Is(err, projsvc.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
@@ -164,7 +160,7 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	if err := a.ProjectService.SoftDelete(r.Context(), proj.ID, actorID); err != nil {
+	if err := a.ProjectService.SoftDelete(ctx, proj.ID, actorID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete", err.Error())
 		return
 	}

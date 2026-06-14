@@ -1,6 +1,18 @@
-status: proposed
+status: implemented
 created: 2026-06-11
-implemented: ~
+implemented: 2026-06-14
 notes: |
   Puede implementarse en paralelo a HU-28.1 y HU-28.2 porque solo toca
   handler/api.go y middleware nuevo. No require cambios en services.
+
+  Implementación:
+  - Nuevo package internal/api/ctxkeys con WithOrgID/OrgID/WithUserID/UserID
+  - middleware.PrincipalCtx en internal/api/middleware/principal.go (post-auth)
+  - Helpers (a.orgID, a.userID, a.authorizeOrg) + sentinel ErrCrossOrg en handler/api.go
+  - Middleware insertado en chain de cmd/domain/main.go entre authMW y rateLimitMW
+  - 5 handlers migrados: observation, session, flow, agent, project
+    (todos sus métodos que usaban principal(r), no solo uno por handler)
+  - Tests unitarios: 3 para middleware (inyecta UUIDs, sin principal pasa, UUID inválido no crashea)
+    y 4 para helpers (orgID OK, orgID vacío, authorizeOrg same-org, cross-org)
+  - principal(r) y parseUUID(s) legacy permanecen en org.go (otros ~25 handlers
+    siguen usándolos; eliminación queda para HU futura cuando todos migren)

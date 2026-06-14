@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
+
+	"nunezlagos/domain/internal/cli/install"
 )
 
 // Disable marca los providers indicados como "disabled" en el config
@@ -39,10 +40,11 @@ func Disable(agent, configPath string, providers []string) error {
 		return nil // nada que hacer
 	}
 
-	// Backup ANTES de cualquier cambio.
-	backupPath := fmt.Sprintf("%s.bak.%s", configPath,
-		time.Now().UTC().Format("20060102T150405Z"))
-	if err := os.WriteFile(backupPath, body, 0o600); err != nil {
+	// Backup ANTES de cualquier cambio. Usa install.BackupFile
+	// (issue-29.2) — comparte formato y dedup con el resto del
+	// install. Sin esto perdemos el rollback del user que cambió
+	// de opinión.
+	if _, err := install.BackupFile(configPath); err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
 

@@ -126,7 +126,7 @@ func (s *Service) Create(ctx context.Context, name, slug, ownerEmail, ownerName 
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &org.ID,
 			ActorID:        &member.UserID,
 			ActorType:      audit.ActorUser,
@@ -181,7 +181,7 @@ func (s *Service) UpdateSettings(ctx context.Context, id, actorID uuid.UUID, set
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &id,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -265,7 +265,7 @@ func (s *Service) TransferOwnership(ctx context.Context, orgID, fromUserID, toUs
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        &fromUserID,
 			ActorType:      audit.ActorUser,
@@ -298,7 +298,7 @@ func (s *Service) SoftDelete(ctx context.Context, orgID, actorID uuid.UUID, conf
 		return fmt.Errorf("soft delete: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -404,7 +404,7 @@ func (s *Service) AddMemberWithAPIKey(
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,

@@ -378,8 +378,10 @@ func runServer() {
 			}
 		}()
 	}
-	projectService := &projsvc.Service{Pool: pools.App, Audit: recorder}
-	obsService := &observation.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	// HU-28.1: Service depende de Repository — usamos los constructores nuevos
+	// que internamente arman el pgRepository wrappeando pools.App.
+	projectService := projsvc.NewService(pools.App, recorder, nil, nil)
+	obsService := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
 	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop
 	var inviteMailer invite.Mailer = invite.NopMailer{}
 	var otpMailer otp.Mailer
@@ -400,15 +402,15 @@ func runServer() {
 		Pool: pools.App, Audit: recorder, Mailer: inviteMailer,
 		AcceptURL: "https://app.domain.sh/accept",
 	}
-	sessionService := &sesssvc.Service{Pool: pools.App, Audit: recorder}
+	sessionService := sesssvc.NewService(pools.App, recorder, nil)
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
 	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
-	flowService := &flow.Service{Pool: pools.App, Audit: recorder}
+	flowService := flow.NewService(pools.App, recorder, nil)
 	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
-	agentService := &agentsvc.Service{Pool: pools.App, Audit: recorder}
+	agentService := agentsvc.NewService(pools.App, recorder, nil)
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
 
@@ -640,8 +642,7 @@ func runServer() {
 	// Cron scheduler (issue-10.1): solo corre en el pod leader (issue-26.2)
 	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
 	scheduler := &cronsched.Scheduler{
-		Crons: cronService, Agents: agentRunnerInst, Flows: flowRunnerInst,
-		SkillRunner: skillRunnerInst, Skills: skillService,
+		Crons: cronService,
 		Audit: recorder, Logger: logger, Dispatcher: dispatcher,
 	}
 	leaderElection := &leader.Election{
@@ -841,7 +842,10 @@ func runServer() {
 	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
 
 	// API REST montada bajo /api/v1/*.
-	// Middleware order: CORS → versioning → request-log → auth → rate-limit → audit → activity → idempotency → handler.
+	// Middleware order: CORS → versioning → request-log → auth → principal-ctx → rate-limit → audit → activity → idempotency → handler.
+	// principal-ctx (HU-28.3) extrae Principal del ctx y reinyecta OrgID/UserID
+	// como uuid.UUID via ctxkeys, eliminando el `p, _ := principal(r); uuid.Parse(...)`
+	// repetido en cada handler.
 	// CORS (issue-32.2): allowlist desde DOMAIN_CORS_ORIGINS.
 	corsMW := middleware.NewCORS(cfg.CORSOrigins, logger)
 	if !corsMW.Enabled() {
@@ -879,8 +883,9 @@ func runServer() {
 		versionCatalog.Middleware(
 			requestLogMW(
 				authMW.Wrap(
-					rateLimitMW.Wrap(
-						auditMW(activityMW.Wrap(idempMW.Wrap(api.Router())))))))))
+					middleware.PrincipalCtx(
+						rateLimitMW.Wrap(
+							auditMW(activityMW.Wrap(idempMW.Wrap(api.Router()))))))))))
 
 	// REQ-31 (issue-31.1 mcp-http-vps-mode): expone las mismas tools MCP
 	// que `cmd/domain-mcp` (stdio) sobre HTTP Streamable transport. Clientes

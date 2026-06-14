@@ -9,11 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -106,7 +107,7 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "proposal.created",
 			EntityType: "proposal",
@@ -210,7 +211,7 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "proposal.status_changed",
 			EntityType: "proposal",
@@ -250,7 +251,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "design.created",
 			EntityType: "design",
@@ -310,7 +311,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "design.status_changed",
 			EntityType: "design",
@@ -370,5 +371,9 @@ func scanDesigns(rows pgx.Rows) ([]Design, error) {
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && (strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "23505"))
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation
 }

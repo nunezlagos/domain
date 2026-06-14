@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -110,14 +112,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) 
 	).Scan(&w.ID, &w.OrganizationID, &w.Slug, &w.Name, &w.SourceType, &w.TargetType, &w.TargetID,
 		&w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "webhooks_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
 		return nil, fmt.Errorf("insert webhook: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,

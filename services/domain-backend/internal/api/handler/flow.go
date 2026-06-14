@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,19 +31,19 @@ type createFlowBody struct {
 }
 
 func (a *API) createFlow(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	actorID, _ := uuid.Parse(p.UserID)
+	actorID := a.userID(ctx)
 	var b createFlowBody
 	if err := decodeJSON(r, &b); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	out, err := a.FlowService.Create(r.Context(), flow.CreateInput{
+	out, err := a.FlowService.Create(ctx, flow.CreateInput{
 		OrganizationID:      orgID,
 		Slug:                b.Slug,
 		Name:                b.Name,
@@ -69,14 +70,14 @@ func (a *API) createFlow(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listFlows(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := a.FlowService.List(r.Context(), orgID, limit)
+	list, err := a.FlowService.List(ctx, orgID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
@@ -90,18 +91,22 @@ func (a *API) getFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	out, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && out.OrganizationID.String() != p.OrganizationID) {
+	out, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
+		return
+	}
+	if err := a.authorizeOrg(ctx, out.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	writeData(w, http.StatusOK, out)
@@ -113,13 +118,13 @@ func (a *API) deleteFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -127,8 +132,12 @@ func (a *API) deleteFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	actorID, _ := uuid.Parse(p.UserID)
-	if err := a.FlowService.SoftDelete(r.Context(), id, actorID); err != nil {
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	actorID := a.userID(ctx)
+	if err := a.FlowService.SoftDelete(ctx, id, actorID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete", err.Error())
 		return
 	}
@@ -146,13 +155,14 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -160,11 +170,14 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	userID, _ := uuid.Parse(p.UserID)
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	userID := a.userID(ctx)
 	// issue-26.6 backpressure
 	if a.Backpressure != nil {
-		orgID, _ := uuid.Parse(p.OrganizationID)
-		if err := a.Backpressure.CheckQueue(r.Context(),
+		if err := a.Backpressure.CheckQueue(ctx,
 			backpressure.PredefinedQueues["flow_runs"], orgID); err != nil {
 			if errors.Is(err, backpressure.ErrQueueFull) || errors.Is(err, backpressure.ErrOrgQuotaExceeded) {
 				retry := backpressure.RetryAfterSeconds(err)
@@ -181,7 +194,7 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	var b runFlowBody
 	_ = decodeJSON(r, &b)
-	res, runErr := a.FlowRunner.Run(r.Context(), flowrunner.RunInput{
+	res, runErr := a.FlowRunner.Run(ctx, flowrunner.RunInput{
 		FlowID: id, TriggeredBy: &userID, TriggerType: "manual",
 		Inputs: b.Inputs,
 	})
@@ -210,8 +223,8 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
@@ -219,9 +232,8 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "runner_disabled", "")
 		return
 	}
-	// Cross-org guard
-	f, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+	f, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -229,9 +241,13 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
+	if err := a.authorizeOrg(ctx, f.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
+		return
+	}
 	var b runFlowBody
 	_ = decodeJSON(r, &b)
-	plan, err := a.FlowRunner.DryRun(r.Context(), id, b.Inputs)
+	plan, err := a.FlowRunner.DryRun(ctx, id, b.Inputs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "dryrun", err.Error())
 		return
@@ -253,18 +269,22 @@ func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 
@@ -286,9 +306,9 @@ func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(def)
 	hash := hex.EncodeToString(sum[:])
 
-	actorID, _ := uuid.Parse(p.UserID)
+	actorID := a.userID(ctx)
 	vs := &flow.VersioningStore{Pool: a.FlowService.Pool}
-	v, err := vs.NewVersion(r.Context(), id, def, hash, b.Note, &actorID)
+	v, err := vs.NewVersion(ctx, id, def, hash, b.Note, &actorID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "version_create", err.Error())
 		return
@@ -312,18 +332,22 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
+	prev, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 
@@ -332,7 +356,7 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "name and spec required")
 		return
 	}
-	actorID, _ := uuid.Parse(p.UserID)
+	actorID := a.userID(ctx)
 	in := flow.UpdateInput{
 		Name: &b.Name, Description: &b.Description, Spec: &b.Spec, ActorID: actorID,
 	}
@@ -353,7 +377,7 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	f, err := a.FlowService.Update(r.Context(), id, in)
+	f, err := a.FlowService.Update(ctx, id, in)
 	if errors.Is(err, flow.ErrUpdateConflict) {
 		writeError(w, http.StatusPreconditionFailed, "precondition_failed", "concurrent modification")
 		return
@@ -381,18 +405,22 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	if a.orgID(ctx) == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	f, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+	f, err := a.FlowService.GetByID(ctx, id)
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	if err := a.authorizeOrg(ctx, f.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	doc := flowExport{Slug: f.Slug, Name: f.Name, Description: f.Description, Spec: f.Spec}
@@ -405,7 +433,10 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/yaml")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", f.Slug))
-		_, _ = w.Write(raw)
+		// HU-28.5: best effort; headers ya escritos. Loggeamos write failures.
+		if _, err := w.Write(raw); err != nil {
+			slog.Warn("flow export write failed", "error", err, "format", "yaml", "slug", f.Slug)
+		}
 	case "", "json":
 		raw, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
@@ -414,7 +445,9 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", f.Slug))
-		_, _ = w.Write(raw)
+		if _, err := w.Write(raw); err != nil {
+			slog.Warn("flow export write failed", "error", err, "format", "json", "slug", f.Slug)
+		}
 	default:
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "format must be yaml or json")
 	}
@@ -460,11 +493,13 @@ const maxImportBytes = 1 << 20 // 1MB (issue-09.1)
 // POST /api/v1/flows/import — issue-09.1. Acepta JSON o YAML según
 // Content-Type; slug duplicado → 409.
 func (a *API) importFlow(w http.ResponseWriter, r *http.Request) {
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
+	actorID := a.userID(ctx)
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maxImportBytes+1))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "read_body", err.Error())
@@ -487,9 +522,7 @@ func (a *API) importFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID, _ := uuid.Parse(p.OrganizationID)
-	actorID, _ := uuid.Parse(p.UserID)
-	f, err := a.FlowService.Create(r.Context(), flow.CreateInput{
+	f, err := a.FlowService.Create(ctx, flow.CreateInput{
 		OrganizationID: orgID, Slug: doc.Slug, Name: doc.Name,
 		Description: doc.Description, Spec: doc.Spec, ActorID: actorID,
 	})
@@ -520,18 +553,23 @@ func (a *API) signalFlowRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	p, _ := principal(r)
-	if p == nil {
+	ctx := r.Context()
+	orgID := a.orgID(ctx)
+	if orgID == uuid.Nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	run, err := a.FlowService.GetRun(r.Context(), id)
-	if errors.Is(err, flow.ErrRunNotFound) || (err == nil && run.OrganizationID.String() != p.OrganizationID) {
+	run, err := a.FlowService.GetRun(ctx, id)
+	if errors.Is(err, flow.ErrRunNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
+		return
+	}
+	if err := a.authorizeOrg(ctx, run.OrganizationID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 
@@ -542,7 +580,7 @@ func (a *API) signalFlowRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	signals := &flow.SignalStore{Pool: a.FlowService.Pool}
-	pending, err := signals.HasPendingExpectation(r.Context(), id, b.Name)
+	pending, err := signals.HasPendingExpectation(ctx, id, b.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "pending_check", err.Error())
 		return
@@ -557,15 +595,14 @@ func (a *API) signalFlowRun(w http.ResponseWriter, r *http.Request) {
 	if b.StepKey != "" {
 		stepKey = &b.StepKey
 	}
-	sig, err := signals.Send(r.Context(), id, stepKey, b.Name, b.Payload)
+	sig, err := signals.Send(ctx, id, stepKey, b.Name, b.Payload)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "signal_send", err.Error())
 		return
 	}
 	if a.Audit != nil {
-		actorID, _ := uuid.Parse(p.UserID)
-		orgID, _ := uuid.Parse(p.OrganizationID)
-		_ = a.Audit.Record(r.Context(), audit.Event{
+		actorID := a.userID(ctx)
+		audit.RecordOrLog(ctx, a.Audit, audit.Event{
 			OrganizationID: &orgID, ActorID: &actorID,
 			Action: "flow.signal_delivered", EntityType: "flow_run", EntityID: &id,
 		})

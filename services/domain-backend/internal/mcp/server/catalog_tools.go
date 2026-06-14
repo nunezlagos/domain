@@ -14,12 +14,11 @@ import (
 	"nunezlagos/domain/internal/dispatch"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	flowsvc "nunezlagos/domain/internal/service/flow"
-	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	return []mcpgo.ServerTool{
-		{Tool: toolSkillExecute(), Handler: wrap.Wrap("domain_skill_execute", deps.handleSkillExecute)},
+		{Tool: toolSkillExecute(), Handler: wrap.Wrap("domain_skill_execute", deps.runSkillDispatch)},
 		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", deps.handleAgentCreate)},
 		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", deps.handleFlowCreate)},
 		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", deps.handleCronList)},
@@ -42,12 +41,19 @@ func toolSkillExecute() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleSkillExecute(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// runSkillDispatch (issue-35.1 phase 5): la ejecución de skills desde
+// MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
+// (SkillExecution.Execute directo) fue eliminado: 1 sola
+// implementación para cron, webhook y MCP.
+func (d *Deps) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.SkillExecution == nil {
-		return mcp.NewToolResultError("skill execution not configured"), nil
+	if d.Dispatcher == nil {
+		return mcp.NewToolResultError("dispatcher no configurado"), nil
+	}
+	if d.Skills == nil {
+		return mcp.NewToolResultError("skill service no configurado"), nil
 	}
 	args := req.GetArguments()
 	slug, _ := args["skill_slug"].(string)
@@ -65,43 +71,21 @@ func (d *Deps) handleSkillExecute(ctx context.Context, req mcp.CallToolRequest) 
 	params, _ := args["parameters"].(map[string]any)
 	mode, _ := args["mode"].(string)
 
-	// issue-35.1: si Dispatcher está seteado, delegamos.
-	if d.Dispatcher != nil {
-		inputsRaw, _ := json.Marshal(params)
-		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
-			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
-			TargetID: sk.ID, Inputs: inputsRaw,
-		})
-		out := map[string]any{
-			"execution_id": res.RunID.String(),
-			"status":       res.Status,
-			"mode":         mode,
-		}
-		if len(res.Output) > 0 {
-			out["output"] = string(res.Output)
-		}
-		if dispatchErr != nil {
-			out["error"] = dispatchErr.Error()
-		}
-		return toolResultJSON(out)
-	}
-
-	exec, err := d.SkillExecution.Execute(ctx, skillsvc.ExecuteInput{
-		OrganizationID: orgID, SkillID: sk.ID, Parameters: params, Mode: mode,
+	inputsRaw, _ := json.Marshal(params)
+	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
+		TargetID: sk.ID, Inputs: inputsRaw,
 	})
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("execute failed: %v", err)), nil
-	}
 	out := map[string]any{
-		"execution_id": exec.ID,
-		"status":       exec.Status,
-		"mode":         exec.Mode,
+		"execution_id": res.RunID.String(),
+		"status":       res.Status,
+		"mode":         mode,
 	}
-	if exec.Output != nil {
-		out["output"] = *exec.Output
+	if len(res.Output) > 0 {
+		out["output"] = string(res.Output)
 	}
-	if exec.Error != nil {
-		out["error"] = *exec.Error
+	if dispatchErr != nil {
+		out["error"] = dispatchErr.Error()
 	}
 	return toolResultJSON(out)
 }

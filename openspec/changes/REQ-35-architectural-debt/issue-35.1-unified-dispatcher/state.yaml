@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-14
 slug: unified-dispatcher
 issue: 35.1
 parent_req: REQ-35-architectural-debt
@@ -8,4 +9,8 @@ priority: baja
 notes: >
   Refactor mayor con migración en 4 phases (cron, webhook, mcp,
   delete-old). DRY del switch target_type→runner. Métricas y
-  audit unificados. Test de paridad por phase.
+  audit unificados. Test de paridad por phase. Phase 5
+  completada (2026-06-14): eliminados los switches legacy en
+  cronsched.dispatchSync, webhook.dispatchWebhook,
+  mcp.handleFlowRun/handleAgentRun/handleSkillExecute. Los
+  handlers ahora delegan EXCLUSIVAMENTE al dispatcher unificado.

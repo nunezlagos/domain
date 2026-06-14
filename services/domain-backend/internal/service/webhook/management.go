@@ -92,7 +92,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID: &actorID, ActorType: audit.ActorUser,
 			Action: "webhook.deleted", EntityType: "webhook", EntityID: &id,
 		})

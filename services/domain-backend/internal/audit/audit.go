@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,6 +110,29 @@ type Event struct {
 // Recorder graba eventos en `audit_log`. Implementaciones swappable para tests.
 type Recorder interface {
 	Record(ctx context.Context, e Event) error
+}
+
+// RecordOrLog persiste el evento via recorder y loggea el error si falla.
+// Audit es best-effort por diseño: no debe bloquear el flujo principal, pero
+// los misses deben quedar visibles en logs para alertas de compliance
+// (HU-28.5). Si recorder es nil, no hace nada (cubre tests/dev sin audit
+// configurado).
+func RecordOrLog(ctx context.Context, recorder Recorder, e Event) {
+	if recorder == nil {
+		return
+	}
+	if err := recorder.Record(ctx, e); err != nil {
+		entityID := ""
+		if e.EntityID != nil {
+			entityID = e.EntityID.String()
+		}
+		slog.WarnContext(ctx, "audit record failed",
+			"error", err,
+			"action", e.Action,
+			"entity_type", e.EntityType,
+			"entity_id", entityID,
+		)
+	}
 }
 
 // PGRecorder implementación Postgres con pgxpool.

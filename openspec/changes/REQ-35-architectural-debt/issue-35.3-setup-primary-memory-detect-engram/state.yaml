@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-14
 slug: setup-primary-memory-detect-engram
 issue: 35.3
 parent_req: REQ-35-architectural-debt

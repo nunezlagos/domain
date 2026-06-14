@@ -157,7 +157,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        in.CreatedBy,
 			ActorType:      audit.ActorUser,
@@ -213,7 +213,7 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 	p.IsActive = true
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &p.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -322,7 +322,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID:    &actorID,
 			ActorType:  audit.ActorUser,
 			Action:     "prompt.deleted",

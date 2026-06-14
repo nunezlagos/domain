@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -100,7 +101,7 @@ func (s *Service) CreateRole(ctx context.Context, orgID, actorID uuid.UUID, slug
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actor,
 			ActorType:      audit.ActorUser,
@@ -215,7 +216,7 @@ func (s *Service) UpdateRole(ctx context.Context, orgID, actorID uuid.UUID, slug
 		actor = &actorID
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actor,
 			ActorType:      audit.ActorUser,
@@ -262,7 +263,7 @@ func (s *Service) DeleteRole(ctx context.Context, orgID, actorID uuid.UUID, slug
 		actor = &actorID
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actor,
 			ActorType:      audit.ActorUser,
@@ -303,7 +304,7 @@ func (s *Service) AssignRole(ctx context.Context, orgID, actorID, targetUserID u
 		actor = &actorID
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actor,
 			ActorType:      audit.ActorUser,
@@ -339,5 +340,9 @@ func toResourceActionMap(raw map[string]interface{}) (map[rbac.Resource][]rbac.A
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && (strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "23505"))
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation
 }

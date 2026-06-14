@@ -165,7 +165,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorUser,
 			ActorID:    &actorID,
 			Action:     "project.merged",

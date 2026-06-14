@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/cli/onboard"
 	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
+	primarymem "nunezlagos/domain/internal/cli/setup/primary_memory"
 	"nunezlagos/domain/internal/config"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/seeds"
@@ -81,7 +83,7 @@ func runInstall(args []string) int {
 		mode = string(install.ModeLocal)
 	}
 
-	progress := NewInstallProgress(11, os.Stderr)
+	progress := NewInstallProgress(12, os.Stderr)
 	printBanner(os.Stderr)
 
 	// 1. Detección de estado
@@ -267,6 +269,24 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "--non-interactive (use --with-claude-hook)")
 	}
 
+	// 10.7 Primary memory (issue-35.3). Opt-in: detecta engram/mem0
+	// en opencode.json + .claude.json y los desactiva (con backup)
+	// para que domain sea la única memory provider visible al LLM.
+	progress.StartStep("Primary memory (engram/mem0 detect)")
+	if !flags.primaryMemory {
+		progress.EndStep(StepSkipped, "use --primary-memory para detectar")
+	} else {
+		detail, pmErr := runPrimaryMemoryStep(flags)
+		switch {
+		case pmErr != nil:
+			progress.EndStep(StepWarning, pmErr.Error())
+		case detail == "":
+			progress.EndStep(StepSkipped, "user declined")
+		default:
+			progress.EndStep(StepOK, detail)
+		}
+	}
+
 	// 11. Init (.md → BD). Requiere el server HTTP corriendo.
 	progress.StartStep("Importing .md files")
 	switch {
@@ -391,6 +411,9 @@ type installFlags struct {
 	withWrapper    bool
 	withClaudeHook bool
 	noClaudeHook   bool
+	primaryMemory  bool // opt-in: detecta engram/mem0 y los desactiva
+	pmReactivate   bool // restaurar desde backup en vez de disable
+	pmYes          bool // skip confirm en --primary-memory
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
@@ -444,6 +467,12 @@ func parseInstallFlags(args []string) (installFlags, error) {
 			f.withClaudeHook = true
 		case "--no-claude-hook":
 			f.noClaudeHook = true
+		case "--primary-memory":
+			f.primaryMemory = true
+		case "--reactivate-memory":
+			f.pmReactivate = true
+		case "--primary-memory-yes":
+			f.pmYes = true
 		case "--no-opencode":
 			// compat HU-01.14: equivale a sacar opencode de --agents
 			f.agents = removeAgent(f.agents, "opencode")
@@ -831,6 +860,113 @@ func writeGlobalMCPEnv(cfg *config.Config, baseURL string) (string, error) {
 	return path, nil
 }
 
+// runPrimaryMemoryStep ejecuta la lógica de --primary-memory: detecta
+// providers de memoria (engram, mem0, etc) en opencode.json y
+// ~/.claude.json y los desactiva con backup. Si --reactivate-memory,
+// restaura desde el último backup.
+//
+// Retorna (detalle, error). detalle="" significa que el user declinó.
+// El catalog efectivo viene de primarymem.LoadCatalog (hardcoded +
+// override en ~/.config/domain/primary-memory-catalog.json).
+func runPrimaryMemoryStep(flags installFlags) (string, error) {
+	catalog, _ := primarymem.LoadCatalog()
+	agents := []string{"opencode", "claude-code"}
+
+	if flags.pmReactivate {
+		return reactivateMemoryProviders(agents)
+	}
+
+	type hit struct {
+		agent      string
+		configPath string
+		names      []string
+	}
+	var hits []hit
+	for _, agent := range agents {
+		path, err := primarymem.DefaultConfigPath(agent)
+		if err != nil {
+			continue
+		}
+		providers, err := primarymem.Detect(agent, path)
+		if err != nil {
+			continue
+		}
+		var names []string
+		for _, p := range providers {
+			// Filtrar por el catalog efectivo (override permite override).
+			if !catalog[p.Name] {
+				continue
+			}
+			disabled, _ := primarymem.IsAlreadyDisabled(agent, path, p.Name)
+			if disabled {
+				continue
+			}
+			names = append(names, p.Name)
+		}
+		if len(names) > 0 {
+			sort.Strings(names)
+			hits = append(hits, hit{agent: agent, configPath: path, names: names})
+		}
+	}
+
+	if len(hits) == 0 {
+		return "no other memory providers detected", nil
+	}
+
+	// Preview
+	fmt.Fprintln(os.Stderr, "  found other memory MCP providers:")
+	for _, h := range hits {
+		fmt.Fprintf(os.Stderr, "    %s → %s: %s\n", h.agent, h.configPath, strings.Join(h.names, ", "))
+	}
+
+	// Confirm si no es --primary-memory-yes ni --non-interactive.
+	if !flags.pmYes && !flags.nonInter {
+		fmt.Fprint(os.Stderr, "  disable these (backup will be created)? [y/N] ")
+		line, err := readLine()
+		if err != nil {
+			return "", nil
+		}
+		ans := strings.ToLower(strings.TrimSpace(line))
+		if ans != "y" && ans != "yes" {
+			return "", nil
+		}
+	}
+
+	var done []string
+	for _, h := range hits {
+		if err := primarymem.Disable(h.agent, h.configPath, h.names); err != nil {
+			return "", fmt.Errorf("disable %s: %w", h.agent, err)
+		}
+		done = append(done, fmt.Sprintf("%s[%s]", h.agent, strings.Join(h.names, ",")))
+	}
+	return "disabled " + strings.Join(done, " "), nil
+}
+
+// reactivateMemoryProviders restaura desde el último backup para
+// cada agente. No falla si no hay backup en un agente — solo loggea.
+func reactivateMemoryProviders(agents []string) (string, error) {
+	var restored []string
+	var soft []string
+	for _, agent := range agents {
+		path, err := primarymem.DefaultConfigPath(agent)
+		if err != nil {
+			continue
+		}
+		if err := primarymem.Reactivate(agent, path); err != nil {
+			soft = append(soft, agent+": "+err.Error())
+			continue
+		}
+		restored = append(restored, agent)
+	}
+	if len(restored) == 0 {
+		if len(soft) > 0 {
+			return "", fmt.Errorf("%s", strings.Join(soft, "; "))
+		}
+		return "no backups to reactivate", nil
+	}
+	return "reactivated " + strings.Join(restored, ", "), nil
+}
+
 // configureAgents corre el setup para cada agente elegido. Retorna un
 // detalle human-readable para el progress.
 func configureAgents(agents []string, baseURL string) string {
@@ -1158,6 +1294,10 @@ func printInstallHelp() {
 	fmt.Println("  --no-service                    Skip systemd user service (server queda manual)")
 	fmt.Println("  --with-wrapper                  Install shell wrapper for opencode+domain (auto-detect on open)")
 	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
+	fmt.Println("  --primary-memory                Detect and disable other memory MCP providers (engram, mem0, ...)")
+	fmt.Println("                                  so domain queda como la única fuente de memoria visible al LLM")
+	fmt.Println("  --primary-memory-yes            Skip confirm prompt para --primary-memory")
+	fmt.Println("  --reactivate-memory             Restaurar providers desactivados (con --primary-memory) desde backup")
 	fmt.Println("  --src PATH                      Project root path (default: cwd). Si cwd no es un root de repo")
 	fmt.Println("                                  válido (faltan .env.example / docker-compose.yml), aborta con mensaje claro.")
 	fmt.Println("  --dsn URL                       Database URL (cloud mode, non-interactive)")

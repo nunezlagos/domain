@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -162,13 +163,20 @@ func replayResponse(w http.ResponseWriter, c *cachedResponse) {
 	}
 	w.Header().Set(HeaderReplayed, "true")
 	w.WriteHeader(c.Status)
-	_, _ = w.Write(c.Body)
+	// HU-28.5: status ya escrito → no podemos cambiar la respuesta. Loggeamos
+	// si la escritura falla (cliente desconectado, write parcial) en vez de
+	// tragar el error.
+	if _, err := w.Write(c.Body); err != nil {
+		slog.Warn("idempotency replay write failed", "error", err, "status", c.Status)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + msg + `"}}`))
+	if _, err := w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + msg + `"}}`)); err != nil {
+		slog.Warn("idempotency error write failed", "error", err, "status", status, "code", code)
+	}
 }
 
 // responseRecorder captura status + body para cachear.

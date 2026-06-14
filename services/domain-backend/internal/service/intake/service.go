@@ -143,7 +143,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "intake.submitted",
 			EntityType: "intake_payload",
@@ -230,7 +230,7 @@ func (s *Service) Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUI
 		return nil, fmt.Errorf("approve: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorUser,
 			Action:     "intake.approved",
 			EntityType: "intake_payload",

@@ -150,7 +150,7 @@ func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role str
 		if actorID == uuid.Nil {
 			actorPtr = nil
 		}
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actorPtr,
 			ActorType:      audit.ActorUser,
@@ -217,7 +217,7 @@ func (s *Service) Revoke(ctx context.Context, orgID, actorID uuid.UUID) error {
 		if actorID == uuid.Nil {
 			actorPtr = nil
 		}
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        actorPtr,
 			ActorType:      audit.ActorUser,
@@ -347,7 +347,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &matched.orgID,
 			ActorID:        &userID,
 			ActorType:      audit.ActorUser,

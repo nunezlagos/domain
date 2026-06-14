@@ -21,7 +21,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -200,18 +202,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
 		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "skills_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
-			return nil, ErrSlugTaken
-		}
-		if strings.Contains(err.Error(), "skills_skill_type_check") {
-			return nil, ErrInvalidType
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == pgerrcode.UniqueViolation {
+				return nil, ErrSlugTaken
+			}
+			if pgErr.Code == pgerrcode.CheckViolation && pgErr.ConstraintName == "skills_skill_type_check" {
+				return nil, ErrInvalidType
+			}
 		}
 		return nil, fmt.Errorf("insert skill: %w", err)
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -335,7 +339,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &sk.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -514,7 +518,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return fmt.Errorf("soft delete: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,

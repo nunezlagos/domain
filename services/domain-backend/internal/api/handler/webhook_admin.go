@@ -209,7 +209,7 @@ func (a *API) replayWebhookDelivery(w http.ResponseWriter, r *http.Request) {
 	body, _ := json.Marshal(d.Payload)
 	inputs := buildInputs(body, hook.InputsMapping)
 	headers := map[string]string{"X-Domain-Replay-Of": d.ID.String()}
-	go a.dispatchWebhook(context.Background(), hook, body, inputs, headers, "replay")
+	go a.runWebhookTarget(context.Background(), hook, body, inputs, headers, "replay")
 
 	writeData(w, http.StatusAccepted, map[string]any{
 		"replayed":   true,

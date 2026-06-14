@@ -74,9 +74,9 @@ type Deps struct {
 	WorkflowImport *workflowimport.Service    // issue-12.7 override de .md
 	Pool           *pgxpool.Pool // para queries de agent_run_logs
 	Principal      *apikey.Principal // resuelto al boot
-	// Dispatcher (issue-35.1): si no nil, handleFlowRun/handleAgentRun/
-	// handleSkillExecute delegan al dispatcher. Si nil, usan la lógica
-	// legacy (compat con tests existentes que no setean Dispatcher).
+	// Dispatcher (issue-35.1 phase 5): único path para ejecutar
+	// flow/agent/skill desde MCP. REQUERIDO en producción; los handlers
+	// retornan error si Dispatcher == nil.
 	Dispatcher *dispatch.Dispatcher
 	ServerName   string
 	ServerVer    string
@@ -140,10 +140,10 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolSkillGet(), Handler: wrap.Wrap("domain_skill_get", deps.handleSkillGet)},
 		{Tool: toolAgentList(), Handler: wrap.Wrap("domain_agent_list", deps.handleAgentList)},
 		{Tool: toolAgentGet(), Handler: wrap.Wrap("domain_agent_get", deps.handleAgentGet)},
-		{Tool: toolAgentRun(), Handler: wrap.Wrap("domain_agent_run", deps.handleAgentRun)},
+		{Tool: toolAgentRun(), Handler: wrap.Wrap("domain_agent_run", deps.runAgentDispatch)},
 		{Tool: toolAgentRunLogs(), Handler: wrap.Wrap("domain_agent_run_logs", deps.handleAgentRunLogs)},
 		{Tool: toolFlowList(), Handler: wrap.Wrap("domain_flow_list", deps.handleFlowList)},
-		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.handleFlowRun)},
+		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.runFlowDispatch)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
 	tools = append(tools, registerMemoryTools(wrap, deps)...)
@@ -894,9 +894,16 @@ func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-func (d *Deps) handleAgentRun(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Agents == nil || d.AgentRunner == nil {
-		return mcp.NewToolResultError("agent runner no configurado (LLM provider missing?)"), nil
+// runAgentDispatch (issue-35.1 phase 5): la ejecución de agents desde
+// MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
+// (AgentRunner.Run directo) fue eliminado: 1 sola implementación
+// compartida por cron, webhook y MCP.
+func (d *Deps) runAgentDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Agents == nil {
+		return mcp.NewToolResultError("agent service no configurado"), nil
+	}
+	if d.Dispatcher == nil {
+		return mcp.NewToolResultError("dispatcher no configurado"), nil
 	}
 	args := req.GetArguments()
 	slug, _ := args["agent_slug"].(string)
@@ -914,45 +921,23 @@ func (d *Deps) handleAgentRun(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if v, ok := args["variables"].(map[string]any); ok {
 		vars = v
 	}
-	// Mantener variables en vars + input para que el dispatcher
-	// pase el prompt correctamente.
 	if vars == nil {
 		vars = map[string]any{}
 	}
 	vars["input"] = input
 
-	// issue-35.1: si Dispatcher está seteado, delegamos. Si no, usamos
-	// la lógica legacy (AgentRunner directo).
-	if d.Dispatcher != nil {
-		inputsRaw, _ := json.Marshal(vars)
-		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
-			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetAgent,
-			TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID,
-		})
-		if dispatchErr != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
-		}
-		return toolResultJSON(map[string]any{
-			"run_id": res.RunID.String(),
-			"status": res.Status,
-			"output": string(res.Output),
-		})
-	}
-	res, runErr := d.AgentRunner.Run(ctx, agentrunner.RunInput{
-		AgentID: ag.ID, UserID: &userID, UserPrompt: input, Variables: vars,
+	inputsRaw, _ := json.Marshal(vars)
+	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetAgent,
+		TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID,
 	})
-	if res == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("run failed: %v", runErr)), nil
+	if dispatchErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"run_id":     res.RunID.String(),
-		"status":     res.Status,
-		"output":     res.Output,
-		"error":      res.Error,
-		"iterations": res.Iterations,
-		"tokens": map[string]int{
-			"input": res.TokensInput, "output": res.TokensOutput,
-		},
+		"run_id": res.RunID.String(),
+		"status": res.Status,
+		"output": string(res.Output),
 	})
 }
 
@@ -1036,9 +1021,14 @@ func (d *Deps) handleFlowList(ctx context.Context, req mcp.CallToolRequest) (*mc
 	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
 }
 
-func (d *Deps) handleFlowRun(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.FlowRunner == nil {
-		return mcp.NewToolResultError("flow runner no configurado"), nil
+// runFlowDispatch (issue-35.1 phase 5): la ejecución de flows desde
+// MCP se delega EXCLUSIVAMENTE al dispatcher unificado.
+func (d *Deps) runFlowDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Dispatcher == nil {
+		return mcp.NewToolResultError("dispatcher no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["flow_id"].(string)
@@ -1052,34 +1042,19 @@ func (d *Deps) handleFlowRun(ctx context.Context, req mcp.CallToolRequest) (*mcp
 	if v, ok := args["inputs"].(map[string]any); ok {
 		inputs = v
 	}
-	// issue-35.1: si Dispatcher está seteado, delegamos.
-	if d.Dispatcher != nil {
-		inputsRaw, _ := json.Marshal(inputs)
-		res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
-			OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetFlow,
-			TargetID: id, Inputs: inputsRaw, TriggeredBy: &userID,
-		})
-		if dispatchErr != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
-		}
-		return toolResultJSON(map[string]any{
-			"run_id":  res.RunID.String(),
-			"status":  res.Status,
-			"error":   "",
-			"outputs": map[string]any{"raw": string(res.Output)},
-		})
-	}
-	res, runErr := d.FlowRunner.Run(ctx, flowrunner.RunInput{
-		FlowID: id, TriggeredBy: &userID, TriggerType: "mcp", Inputs: inputs,
+	inputsRaw, _ := json.Marshal(inputs)
+	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetFlow,
+		TargetID: id, Inputs: inputsRaw, TriggeredBy: &userID,
 	})
-	if res == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("flow run: %v", runErr)), nil
+	if dispatchErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
 	}
 	return toolResultJSON(map[string]any{
 		"run_id":  res.RunID.String(),
 		"status":  res.Status,
-		"error":   res.Error,
-		"outputs": res.Outputs,
+		"error":   "",
+		"outputs": map[string]any{"raw": string(res.Output)},
 	})
 }
 

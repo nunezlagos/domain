@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -108,7 +110,8 @@ func (s *Service) Create(ctx context.Context, orgID, invitedByUserID uuid.UUID, 
 	).Scan(&inv.ID, &inv.OrganizationID, &inv.InvitedByUserID, &inv.Email, &inv.Role,
 		&inv.Token, &inv.Status, &inv.ExpiresAt, &inv.AcceptedUserID, &inv.CreatedAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "invitations_org_email_pending_uniq") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "invitations_org_email_pending_uniq" {
 			return nil, ErrAlreadyPending
 		}
 		return nil, fmt.Errorf("insert invitation: %w", err)
@@ -121,7 +124,7 @@ func (s *Service) Create(ctx context.Context, orgID, invitedByUserID uuid.UUID, 
 		_ = s.Mailer.Send(ctx, email, "Invitación a Domain", body)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        &invitedByUserID,
 			ActorType:      audit.ActorUser,
@@ -209,7 +212,7 @@ func (s *Service) Accept(ctx context.Context, token uuid.UUID, authedEmail, user
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &inv.OrganizationID,
 			ActorID:        &userID,
 			ActorType:      audit.ActorUser,
@@ -248,7 +251,7 @@ func (s *Service) Revoke(ctx context.Context, inviteID, actorID uuid.UUID) error
 		return ErrNotPending
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID:    &actorID,
 			ActorType:  audit.ActorUser,
 			Action:     "invitation.revoked",

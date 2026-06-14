@@ -251,7 +251,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "task.status_changed",
 			EntityType: "task",

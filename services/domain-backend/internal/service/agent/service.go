@@ -7,6 +7,9 @@
 //   - guardrails: max_iterations, token_budget, temperature
 //
 // La ejecución (run) vive en issue-08.2, separada. Aquí solo CRUD + validación.
+//
+// HU-28.1: Service depende de Repository (interfaz). Pool sigue público
+// como deprecated para Strangler Fig.
 package agent
 
 import (
@@ -18,7 +21,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -40,7 +44,7 @@ var (
 const maxVersionsKept = 50
 
 var (
-	reSlug      = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
+	reSlug         = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
 	validProviders = map[string]bool{
 		"anthropic": true, "openai": true, "google": true, "ollama": true,
 	}
@@ -95,8 +99,28 @@ type UpdateInput struct {
 }
 
 type Service struct {
+	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
+	// &Service{Pool: ...} siguen funcionando vía repository() lazy init.
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
+
+	repo Repository
+}
+
+// NewService construye el Service con dependencias explícitas.
+func NewService(pool *pgxpool.Pool, audit audit.Recorder, repo Repository) *Service {
+	if repo == nil && pool != nil {
+		repo = NewPgRepository(pool)
+	}
+	return &Service{Pool: pool, Audit: audit, repo: repo}
+}
+
+func (s *Service) repository() Repository {
+	if s.repo != nil {
+		return s.repo
+	}
+	s.repo = NewPgRepository(s.Pool)
+	return s.repo
 }
 
 // validateSkills verifica que todos los slugs existan en la org como skills
@@ -106,16 +130,11 @@ func (s *Service) validateSkills(ctx context.Context, orgID uuid.UUID, slugs []s
 	if len(slugs) == 0 {
 		return nil
 	}
-	var foundCount int
-	err := s.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM skills
-		 WHERE organization_id = $1 AND slug = ANY($2) AND deleted_at IS NULL`,
-		orgID, slugs,
-	).Scan(&foundCount)
+	found, err := s.repository().CountValidSkills(ctx, orgID, slugs)
 	if err != nil {
-		return fmt.Errorf("validate skills: %w", err)
+		return err
 	}
-	if foundCount != len(slugs) {
+	if found != len(slugs) {
 		return ErrSkillNotFound
 	}
 	return nil
@@ -135,14 +154,9 @@ func (s *Service) validateModel(ctx context.Context, provider, model string) err
 	if provider == "ollama" {
 		return nil
 	}
-	var exists bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT EXISTS (
-		   SELECT 1 FROM model_registry
-		   WHERE provider = $1 AND model = $2 AND modality = 'completion' AND is_active = TRUE)`,
-		provider, model).Scan(&exists)
+	exists, err := s.repository().ModelExists(ctx, provider, model)
 	if err != nil {
-		return fmt.Errorf("validate model: %w", err)
+		return err
 	}
 	if !exists {
 		return ErrModelUnknown
@@ -158,13 +172,9 @@ func (s *Service) generateSlug(ctx context.Context, orgID uuid.UUID, name string
 	}
 	candidate := base
 	for i := 2; i <= 50; i++ {
-		var taken bool
-		err := s.Pool.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM agents
-			 WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL)`,
-			orgID, candidate).Scan(&taken)
+		taken, err := s.repository().SlugTaken(ctx, orgID, candidate)
 		if err != nil {
-			return "", fmt.Errorf("check slug: %w", err)
+			return "", err
 		}
 		if !taken {
 			return candidate, nil
@@ -230,31 +240,28 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Agent, error) {
 		in.MaxIterations = 20
 	}
 
-	var a Agent
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO agents
-		   (organization_id, slug, name, description, provider, model, system_prompt,
-		    skills_slugs, max_iterations, token_budget, temperature)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
-		           provider, model, COALESCE(system_prompt,''), skills_slugs,
-		           max_iterations, token_budget, temperature,
-		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
-		in.OrganizationID, in.Slug, in.Name, nullStr(in.Description), in.Provider, in.Model,
-		nullStr(in.SystemPrompt), in.SkillsSlugs, in.MaxIterations, in.TokenBudget, in.Temperature,
-	).Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
-		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
-		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
-		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)
+	a, err := s.repository().Insert(ctx, InsertParams{
+		OrganizationID: in.OrganizationID,
+		Slug:           in.Slug,
+		Name:           in.Name,
+		Description:    in.Description,
+		Provider:       in.Provider,
+		Model:          in.Model,
+		SystemPrompt:   in.SystemPrompt,
+		SkillsSlugs:    in.SkillsSlugs,
+		MaxIterations:  in.MaxIterations,
+		TokenBudget:    in.TokenBudget,
+		Temperature:    in.Temperature,
+	})
 	if err != nil {
-		if strings.Contains(err.Error(), "agents_organization_id_slug_key") ||
-			strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
 		return nil, fmt.Errorf("insert agent: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -266,7 +273,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Agent, error) {
 			},
 		})
 	}
-	return &a, nil
+	return a, nil
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Agent, error) {
@@ -326,34 +333,26 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	}
 	userMod := prev.IsUserModified || prev.SeedManaged
 
-	var a Agent
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE agents
-		 SET name = $2, description = $3, provider = $4, model = $5,
-		     system_prompt = $6, skills_slugs = $7, max_iterations = $8,
-		     token_budget = $9, temperature = $10, is_user_modified = $11
-		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
-		           provider, model, COALESCE(system_prompt,''), skills_slugs,
-		           max_iterations, token_budget, temperature,
-		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
-		id, name, nullStr(desc), provider, model, nullStr(sp), skills,
-		maxIter, tokenBudget, temp, userMod,
-	).Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
-		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
-		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
-		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+	a, err := s.repository().Update(ctx, id, UpdateParams{
+		Name:           name,
+		Description:    desc,
+		Provider:       provider,
+		Model:          model,
+		SystemPrompt:   sp,
+		SkillsSlugs:    skills,
+		MaxIterations:  maxIter,
+		TokenBudget:    tokenBudget,
+		Temperature:    temp,
+		IsUserModified: userMod,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update agent: %w", err)
+		return nil, err
 	}
 	if err := s.archiveVersion(ctx, prev, in.ActorID); err != nil {
 		return nil, err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &a.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
@@ -362,7 +361,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 			EntityID:       &a.ID,
 		})
 	}
-	return &a, nil
+	return a, nil
 }
 
 // archiveVersion guarda snapshot de la config previa en agent_versions y
@@ -375,27 +374,17 @@ func (s *Service) archiveVersion(ctx context.Context, prev *Agent, actorID uuid.
 		"max_iterations": prev.MaxIterations, "token_budget": prev.TokenBudget,
 		"temperature": prev.Temperature,
 	}
-	var changedBy any
+	var changedBy *uuid.UUID
 	if actorID != uuid.Nil {
-		changedBy = actorID
+		a := actorID
+		changedBy = &a
 	}
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO agent_versions (agent_id, version, snapshot, changed_by)
-		 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3
-		 FROM agent_versions WHERE agent_id = $1`,
-		prev.ID, snapshot, changedBy)
-	if err != nil {
-		return fmt.Errorf("archive agent version: %w", err)
-	}
-	_, err = s.Pool.Exec(ctx,
-		`DELETE FROM agent_versions
-		 WHERE agent_id = $1 AND version <= (
-		   SELECT MAX(version) - $2 FROM agent_versions WHERE agent_id = $1)`,
-		prev.ID, maxVersionsKept)
-	if err != nil {
-		return fmt.Errorf("purge agent versions: %w", err)
-	}
-	return nil
+	return s.repository().ArchiveVersion(ctx, ArchiveVersionParams{
+		AgentID:         prev.ID,
+		Snapshot:        snapshot,
+		ChangedBy:       changedBy,
+		MaxVersionsKept: maxVersionsKept,
+	})
 }
 
 // AgentVersion entrada del historial.
@@ -414,62 +403,22 @@ func (s *Service) GetVersions(ctx context.Context, id uuid.UUID, limit int) ([]A
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT version, snapshot, changed_by, created_at
-		 FROM agent_versions WHERE agent_id = $1
-		 ORDER BY version DESC LIMIT $2`, id, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list versions: %w", err)
-	}
-	defer rows.Close()
-	var out []AgentVersion
-	for rows.Next() {
-		var v AgentVersion
-		if err := rows.Scan(&v.Version, &v.Snapshot, &v.ChangedBy, &v.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
+	return s.repository().ListVersions(ctx, id, limit)
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Agent, error) {
-	return s.queryOne(ctx, `WHERE id = $1 AND deleted_at IS NULL`, id)
+	return s.repository().GetByID(ctx, id)
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Agent, error) {
-	return s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+	return s.repository().GetBySlug(ctx, orgID, slug)
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID, limit int) ([]Agent, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
-		        provider, model, COALESCE(system_prompt,''), skills_slugs,
-		        max_iterations, token_budget, temperature,
-		        seed_managed, seed_version, is_user_modified, created_at, updated_at
-		 FROM agents
-		 WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, orgID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list: %w", err)
-	}
-	defer rows.Close()
-	var out []Agent
-	for rows.Next() {
-		var a Agent
-		if err := rows.Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
-			&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
-			&a.MaxIterations, &a.TokenBudget, &a.Temperature,
-			&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
+	return s.repository().List(ctx, orgID, limit)
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
@@ -477,13 +426,11 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE agents SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
-	if err != nil {
-		return fmt.Errorf("soft delete: %w", err)
+	if err := s.repository().SoftDelete(ctx, id); err != nil {
+		return err
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -493,27 +440,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Agent, error) {
-	var a Agent
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
-	        provider, model, COALESCE(system_prompt,''), skills_slugs,
-	        max_iterations, token_budget, temperature,
-	        seed_managed, seed_version, is_user_modified, created_at, updated_at
-	      FROM agents ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
-		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
-		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
-		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
-	}
-	return &a, nil
 }
 
 func nullStr(s string) any {

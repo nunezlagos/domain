@@ -162,7 +162,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	}
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
 			ActorID:        in.CreatedBy,
 			ActorType:      audit.ActorUser,
@@ -308,7 +308,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID:    &actorID,
 			ActorType:  audit.ActorUser,
 			Action:     "knowledge_doc.deleted",

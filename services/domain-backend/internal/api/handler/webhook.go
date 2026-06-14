@@ -12,8 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/dispatch"
-	agentrunner "nunezlagos/domain/internal/runner/agent"
-	flowrunner "nunezlagos/domain/internal/runner/flow"
 	"nunezlagos/domain/internal/service/webhook"
 )
 
@@ -60,7 +58,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	inputs := buildInputs(body, hook.InputsMapping)
 
 	// Dispatch en background (no block client; webhook devuelve 202 Accepted)
-	go a.dispatchWebhook(context.Background(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
+	go a.runWebhookTarget(context.Background(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
 
 	writeData(w, http.StatusAccepted, map[string]any{
 		"received": true, "webhook_id": hook.ID, "target_type": hook.TargetType,
@@ -142,92 +140,48 @@ func collectHeaders(r *http.Request) map[string]string {
 	return out
 }
 
-func (a *API) dispatchWebhook(ctx context.Context, hook *webhook.Webhook,
+// runWebhookTarget ejecuta el target del webhook delegando al dispatcher
+// unificado (issue-35.1 phase 5). El switch local fue eliminado: ahora
+// existe 1 sola implementación (dispatch.Dispatcher) compartida por
+// cron, webhook y MCP.
+func (a *API) runWebhookTarget(ctx context.Context, hook *webhook.Webhook,
 	body []byte, inputs map[string]any, headers map[string]string, sourceIP string) {
 
 	var triggeredID *uuid.UUID
 	var errStr string
 	status := "triggered"
 
-	// issue-35.1: si Dispatcher está configurado, delegamos. Si no,
-	// usamos el switch legacy (compat con tests existentes).
-	if a.Dispatcher != nil {
-		inputsRaw, err := json.Marshal(inputs)
-		if err != nil {
-			errStr = fmt.Sprintf("marshal inputs: %v", err)
-			status = "failed"
-			_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
-				headers, sourceIP, status, triggeredID, errStr)
-			return
-		}
-		res, dispatchErr := a.Dispatcher.Dispatch(ctx, dispatch.Request{
-			OrgID:      hook.OrganizationID,
-			Source:     dispatch.SourceWebhook,
-			TargetType: hook.TargetType,
-			TargetID:   hook.TargetID,
-			Inputs:     inputsRaw,
-		})
-		if dispatchErr != nil {
-			errStr = dispatchErr.Error()
-			status = "failed"
-		}
-		// Si el dispatcher ya tiene target_id como RunID, lo asociamos
-		// para que el delivery quede linkeado. (El dispatcher actual
-		// retorna flow_run_id / agent_run_id / skill_exec_id.)
-		if res.RunID != uuid.Nil {
-			id := res.RunID
-			triggeredID = &id
-		}
+	if a.Dispatcher == nil {
+		errStr = "dispatcher not configured"
+		status = "failed"
 		_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
 			headers, sourceIP, status, triggeredID, errStr)
 		return
 	}
 
-	// Legacy switch.
-	switch hook.TargetType {
-	case "flow":
-		if a.FlowRunner == nil {
-			errStr = "flow runner not configured"
-			status = "failed"
-			break
-		}
-		res, err := a.FlowRunner.Run(ctx, flowrunner.RunInput{
-			FlowID: hook.TargetID, TriggerType: "webhook", Inputs: inputs,
-		})
-		if err != nil {
-			errStr = err.Error()
-			status = "failed"
-		}
-		if res != nil {
-			triggeredID = &res.RunID
-		}
-	case "agent":
-		if a.AgentRunner == nil {
-			errStr = "agent runner not configured"
-			status = "failed"
-			break
-		}
-		input, _ := inputs["input"].(string)
-		if input == "" {
-			// Si no hay "input" mapeado, usa body raw
-			input = string(body)
-		}
-		res, err := a.AgentRunner.Run(ctx, agentrunner.RunInput{
-			AgentID: hook.TargetID, UserPrompt: input, Variables: inputs,
-		})
-		if err != nil {
-			errStr = err.Error()
-			status = "failed"
-		}
-		if res != nil {
-			triggeredID = &res.RunID
-		}
-	case "skill":
-		// Skills se ejecutan via agent stub o directly via SkillRunner — pending decisión
-		errStr = "skill webhook target pending implementation"
+	inputsRaw, err := json.Marshal(inputs)
+	if err != nil {
+		errStr = fmt.Sprintf("marshal inputs: %v", err)
+		status = "failed"
+		_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
+			headers, sourceIP, status, triggeredID, errStr)
+		return
+	}
+	res, dispatchErr := a.Dispatcher.Dispatch(ctx, dispatch.Request{
+		OrgID:      hook.OrganizationID,
+		Source:     dispatch.SourceWebhook,
+		TargetType: hook.TargetType,
+		TargetID:   hook.TargetID,
+		Inputs:     inputsRaw,
+	})
+	if dispatchErr != nil {
+		errStr = dispatchErr.Error()
 		status = "failed"
 	}
-
+	if res.RunID != uuid.Nil {
+		id := res.RunID
+		triggeredID = &id
+	}
 	_ = a.WebhookService.RecordDelivery(ctx, hook.ID, body,
 		headers, sourceIP, status, triggeredID, errStr)
 }

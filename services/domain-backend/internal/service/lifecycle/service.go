@@ -119,7 +119,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 		return fmt.Errorf("restore: %w", err)
 	}
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: orgID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
@@ -218,7 +218,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		 FROM audit_log WHERE actor_id = $1 ORDER BY occurred_at DESC LIMIT 5000`, userID)
 
 	if s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &orgID,
 			ActorID:        &userID,
 			ActorType:      audit.ActorUser,
@@ -326,7 +326,7 @@ func (s *Service) PurgeExpiredSoftDeleted(ctx context.Context) (int64, error) {
 		total += tag.RowsAffected()
 	}
 	if total > 0 && s.Audit != nil {
-		_ = s.Audit.Record(ctx, audit.Event{
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorType:  audit.ActorSystem,
 			Action:     "lifecycle.purge-soft-deleted",
 			EntityType: "lifecycle",

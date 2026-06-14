@@ -3,13 +3,11 @@
 // Multi-worker safe (PickDue usa SELECT FOR UPDATE SKIP LOCKED).
 // Stop signal vía context cancel para graceful shutdown.
 //
-// issue-35.1: el switch de dispatchSync fue reemplazado por una
-// llamada a internal/dispatch.Dispatcher. Mantenemos los campos
-// legacy (Agents/Flows/SkillRunner/Skills) por compat: el boot puede
-// inyectar el dispatcher + los runners por separado, o solo el
-// dispatcher. Si Dispatcher == nil, dispatchSync cae al switch
-// legacy (mantiene los tests scheduler_test.go funcionando hasta
-// que se haga la limpieza final — phase 5 de REQ-35.1).
+// issue-35.1 (phase 5): el switch local de target_type→runner fue
+// eliminado. Ahora runTarget delega EXCLUSIVAMENTE a
+// internal/dispatch.Dispatcher. La selección de runner vive en 1
+// solo lugar (el dispatcher), evitando que un nuevo target_type se
+// olvide en alguno de los 3 sources (cron, webhook, mcp).
 package cronsched
 
 import (
@@ -23,24 +21,16 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/dispatch"
-	agentrunner "nunezlagos/domain/internal/runner/agent"
-	flowrunner "nunezlagos/domain/internal/runner/flow"
-	skillrunner "nunezlagos/domain/internal/runner/skill"
 	"nunezlagos/domain/internal/service/cron"
-	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
 type Scheduler struct {
 	Crons        *cron.Service
-	Agents       *agentrunner.Runner
-	Flows        *flowrunner.Runner
-	SkillRunner  *skillrunner.Runner
-	Skills       *skillsvc.Service
 	Audit        audit.Recorder
 	Logger       *slog.Logger
 	PollInterval time.Duration // default 30s
-	// Dispatcher (issue-35.1): si no nil, dispatchSync delega acá.
-	// Si nil, usa el switch legacy (compat con tests existentes).
+	// Dispatcher (issue-35.1): único path para ejecutar target_type.
+	// REQUERIDO: si es nil, runTarget retorna error.
 	Dispatcher *dispatch.Dispatcher
 }
 
@@ -107,7 +97,7 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 			return
 		}
 
-		execErr := s.dispatchSync(dispatchCtx, c)
+		execErr := s.runTarget(dispatchCtx, c)
 
 		if histErr == nil {
 			if err := s.Crons.FinishExecution(dispatchCtx, execID, execErr); err != nil {
@@ -141,65 +131,29 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 	}()
 }
 
-// dispatchSync ejecuta el target del cron y devuelve el error.
-// Separado de dispatch() para testing sincrónico.
-//
-// issue-35.1: si s.Dispatcher está configurado, delega al dispatcher
-// unificado (métricas + audit centralizados). Si no, usa el switch
-// legacy (compat con tests existentes que no setean Dispatcher).
-func (s *Scheduler) dispatchSync(ctx context.Context, c cron.Cron) error {
-	if s.Dispatcher != nil {
-		// Serializar inputs a json.RawMessage.
-		var inputsRaw json.RawMessage
-		if c.Inputs != nil {
-			b, err := json.Marshal(c.Inputs)
-			if err != nil {
-				return fmt.Errorf("marshal cron inputs: %w", err)
-			}
-			inputsRaw = b
-		}
-		_, err := s.Dispatcher.Dispatch(ctx, dispatch.Request{
-			OrgID:      c.OrganizationID,
-			Source:     dispatch.SourceCron,
-			TargetType: c.TargetType,
-			TargetID:   c.TargetID,
-			Inputs:     inputsRaw,
-		})
-		return err
+// runTarget ejecuta el target del cron delegando al dispatcher unificado.
+// Si el Dispatcher no fue configurado al boot, retorna error explícito
+// (no hay path legacy: phase 5 de REQ-35.1 eliminó el switch local).
+func (s *Scheduler) runTarget(ctx context.Context, c cron.Cron) error {
+	if s.Dispatcher == nil {
+		return fmt.Errorf("cron scheduler: dispatcher not configured")
 	}
-
-	// Legacy switch (mantenido hasta phase 5 de REQ-35.1).
-	switch c.TargetType {
-	case "flow":
-		if s.Flows == nil {
-			return fmt.Errorf("flow runner not configured")
-		}
-		_, err := s.Flows.Run(ctx, flowrunner.RunInput{
-			FlowID: c.TargetID, TriggerType: "cron", Inputs: c.Inputs,
-		})
-		return err
-	case "agent":
-		if s.Agents == nil {
-			return fmt.Errorf("agent runner not configured")
-		}
-		input, _ := c.Inputs["input"].(string)
-		_, err := s.Agents.Run(ctx, agentrunner.RunInput{
-			AgentID: c.TargetID, UserPrompt: input, Variables: c.Inputs,
-		})
-		return err
-	case "skill":
-		if s.Skills == nil || s.SkillRunner == nil {
-			return fmt.Errorf("skill runner not configured")
-		}
-		sk, err := s.Skills.GetByID(ctx, c.TargetID)
+	var inputsRaw json.RawMessage
+	if c.Inputs != nil {
+		b, err := json.Marshal(c.Inputs)
 		if err != nil {
-			return fmt.Errorf("load skill: %w", err)
+			return fmt.Errorf("marshal cron inputs: %w", err)
 		}
-		_, err = s.SkillRunner.Execute(ctx, sk, c.Inputs)
-		return err
-	default:
-		return fmt.Errorf("unknown target_type: %s", c.TargetType)
+		inputsRaw = b
 	}
+	_, err := s.Dispatcher.Dispatch(ctx, dispatch.Request{
+		OrgID:      c.OrganizationID,
+		Source:     dispatch.SourceCron,
+		TargetType: c.TargetType,
+		TargetID:   c.TargetID,
+		Inputs:     inputsRaw,
+	})
+	return err
 }
 
 func errString(err error) string {

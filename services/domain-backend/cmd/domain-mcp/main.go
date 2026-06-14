@@ -44,6 +44,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	"nunezlagos/domain/internal/service/extsync"
 	"nunezlagos/domain/internal/service/promptrouter"
@@ -148,6 +149,7 @@ func main() {
 	clients := clientsvc.NewService(pools.App, recorder, nil)
 	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	projectRepos := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
+	projectPolicies := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
@@ -295,6 +297,7 @@ func main() {
 		Clients:        clients,
 		CapturedPrompts: capturedPrompts,
 		ProjectRepos:   projectRepos,
+		ProjectPolicies: projectPolicies,
 		Policies:       &policysvc.Service{Pool: pools.App},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,

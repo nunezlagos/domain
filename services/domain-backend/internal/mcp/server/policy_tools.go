@@ -1,28 +1,47 @@
-// issue-01.8 — tools MCP de platform policies: las rules SDD/conventions
-// viven en BD como source-of-truth y el agente las consulta por slug.
+// REQ-43 — tools MCP de policies:
+//   - domain_policy_get extiende para resolver jerárquico:
+//     project_policies → platform_policies (fallback). Si se pasa
+//     project_slug, devuelve la del proyecto (si existe) o la global.
+//   - domain_policy_list lista platform policies (sin scope).
+//   - domain_project_policy_* CRUD scoped a (org, project).
 package mcpserver
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 )
 
 func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	// project_policies tiene RLS FORCE — necesita tx con SET LOCAL.
+	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, h)
+	}
 	return []mcpgo.ServerTool{
-		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", deps.handlePolicyGet)},
+		// platform-level (sin scope project)
+		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", rls(deps.handlePolicyGet))},
 		{Tool: toolPolicyList(), Handler: wrap.Wrap("domain_policy_list", deps.handlePolicyList)},
+		// project-level
+		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(deps.handleProjectPolicySet))},
+		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(deps.handleProjectPolicyList))},
+		{Tool: toolProjectPolicyDelete(), Handler: wrap.Wrap("domain_project_policy_delete", rls(deps.handleProjectPolicyDelete))},
 	}
 }
 
 func toolPolicyGet() mcp.Tool {
 	return mcp.NewTool("domain_policy_get",
-		mcp.WithDescription("Obtiene una platform policy (rule SDD, convention, guideline) por slug desde la BD — source-of-truth versionado. Consultá la policy del dominio ANTES de tocar código relacionado."),
+		mcp.WithDescription("Obtiene una policy resolviendo jerárquicamente: si pasás project_slug y existe una project_policy con ese slug, la devuelve (con flag scope='project'). Si no, fallback a platform_policies (scope='platform'). Llamar ANTES de tocar código del dominio."),
 		mcp.WithString("slug",
-			mcp.Description("Slug de la policy (ej: 'go', 'db', 'testing', 'sdd', 'security')"),
+			mcp.Description("Slug de la policy (ej: 'go', 'db', 'testing', 'git_workflow', 'tech_stack')"),
 			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del proyecto en cuyo contexto se busca la policy. Si se omite, solo busca platform."),
 		),
 	)
 }
@@ -36,11 +55,47 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 	if slug == "" {
 		return mcp.NewToolResultError("slug es requerido"), nil
 	}
+
+	// 1. Si hay project_slug y servicios disponibles, intentar project-scope.
+	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil && d.ProjectPolicies != nil && d.Principal != nil {
+		orgID, perr := uuid.Parse(d.Principal.OrganizationID)
+		if perr == nil {
+			proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+			if perr == nil && proj != nil {
+				pol, perr := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+				if perr == nil && pol != nil {
+					// Si override_platform=true, devolver solo project.
+					// Si false, intentar también la platform y concatenar.
+					payload := map[string]any{
+						"scope":             "project",
+						"project_slug":      projSlug,
+						"slug":              pol.Slug,
+						"name":              pol.Name,
+						"kind":              pol.Kind,
+						"version":           pol.Version,
+						"body_md":           pol.BodyMD,
+						"override_platform": pol.OverridePlatform,
+					}
+					if !pol.OverridePlatform {
+						if base, berr := d.Policies.GetBySlug(ctx, slug); berr == nil && base != nil {
+							payload["platform_body_md"] = base.BodyMD
+							payload["platform_version"] = base.Version
+							payload["scope"] = "merged"
+						}
+					}
+					return toolResultJSON(payload)
+				}
+			}
+		}
+	}
+
+	// 2. Fallback platform.
 	p, err := d.Policies.GetBySlug(ctx, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("policy '%s' not found", slug)), nil
 	}
 	return toolResultJSON(map[string]any{
+		"scope":   "platform",
 		"slug":    p.Slug,
 		"name":    p.Name,
 		"kind":    p.Kind,
@@ -53,7 +108,7 @@ func toolPolicyList() mcp.Tool {
 	return mcp.NewTool("domain_policy_list",
 		mcp.WithDescription("Lista las platform policies activas (slug + nombre + kind + versión). Útil para descubrir qué rules existen antes de pedirlas con domain_policy_get."),
 		mcp.WithString("kind",
-			mcp.Description("Filtrar por kind (ej: 'rule', 'convention', 'template'); vacío = todas"),
+			mcp.Description("Filtrar por kind (ej: 'convention','security_rule','architecture','sdd_workflow'); vacío = todas"),
 		),
 	)
 }
@@ -75,4 +130,140 @@ func (d *Deps) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*
 		})
 	}
 	return toolResultJSON(map[string]any{"policies": out, "total": len(out)})
+}
+
+// --- project-scope tools ---
+
+func toolProjectPolicySet() mcp.Tool {
+	return mcp.NewTool("domain_project_policy_set",
+		mcp.WithDescription("Crea o actualiza una policy específica de un proyecto (override o extensión de la platform_policy del mismo slug). source='llm_generated' si fue auto-generada por el LLM aprendiendo del proyecto."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece"), mcp.Required()),
+		mcp.WithString("slug", mcp.Description("Slug de la policy (mismo namespace que platform — si coincide, este aplica para el proyecto)"), mcp.Required()),
+		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("convention|security_rule|architecture|sdd_workflow|observability|migration_rule|linter_config|agent_protocol|git_workflow|tech_stack|test_strategy"), mcp.Required()),
+		mcp.WithString("body_md", mcp.Description("Cuerpo Markdown"), mcp.Required()),
+		mcp.WithBoolean("override_platform", mcp.Description("Si true, reemplaza la platform_policy del mismo slug. Si false (default), el LLM ve ambas concatenadas.")),
+		mcp.WithString("source", mcp.Description("manual|llm_generated|seed_imported|dashboard. Default: manual")),
+	)
+}
+
+func (d *Deps) handleProjectPolicySet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.ProjectPolicies == nil || d.Projects == nil {
+		return mcp.NewToolResultError("project_policy service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	projSlug, _ := args["project_slug"].(string)
+	slug, _ := args["slug"].(string)
+	name, _ := args["name"].(string)
+	kind, _ := args["kind"].(string)
+	body, _ := args["body_md"].(string)
+	if projSlug == "" || slug == "" || name == "" || kind == "" || body == "" {
+		return mcp.NewToolResultError("project_slug, slug, name, kind y body_md son requeridos"), nil
+	}
+	override, _ := args["override_platform"].(bool)
+	source, _ := args["source"].(string)
+	if source == "" {
+		source = "manual"
+	}
+
+	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	if perr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
+	}
+
+	// Upsert: si existe activa con mismo slug, update; sino, create.
+	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+	if existing != nil {
+		upd := projectpolicysvc.UpdateInput{
+			Name:             &name,
+			Kind:             &kind,
+			BodyMD:           &body,
+			OverridePlatform: &override,
+		}
+		userID, _ := uuid.Parse(d.Principal.UserID)
+		updated, err := d.ProjectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
+		}
+		return toolResultJSON(updated)
+	}
+
+	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+		OrganizationID:   orgID,
+		ProjectID:        proj.ID,
+		Slug:             slug,
+		Name:             name,
+		Kind:             kind,
+		BodyMD:           body,
+		OverridePlatform: override,
+		Source:           source,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("create failed: %v", err)), nil
+	}
+	return toolResultJSON(created)
+}
+
+func toolProjectPolicyList() mcp.Tool {
+	return mcp.NewTool("domain_project_policy_list",
+		mcp.WithDescription("Lista las project_policies activas de un proyecto (opcional filtrar por kind)."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto a consultar"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("Filtrar por kind. Vacío = todas")),
+	)
+}
+
+func (d *Deps) handleProjectPolicyList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.ProjectPolicies == nil || d.Projects == nil {
+		return mcp.NewToolResultError("project_policy service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	projSlug, _ := args["project_slug"].(string)
+	kind, _ := args["kind"].(string)
+	if projSlug == "" {
+		return mcp.NewToolResultError("project_slug requerido"), nil
+	}
+	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	if perr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
+	}
+	list, err := d.ProjectPolicies.List(ctx, orgID, proj.ID, kind)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"policies": list, "total": len(list)})
+}
+
+func toolProjectPolicyDelete() mcp.Tool {
+	return mcp.NewTool("domain_project_policy_delete",
+		mcp.WithDescription("Soft-delete una project_policy. La policy queda inactiva — el resolver caerá al platform fallback."),
+		mcp.WithString("id", mcp.Description("UUID de la project_policy"), mcp.Required()),
+	)
+}
+
+func (d *Deps) handleProjectPolicyDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.ProjectPolicies == nil {
+		return mcp.NewToolResultError("project_policy service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id inválido"), nil
+	}
+	if err := d.ProjectPolicies.Delete(ctx, orgID, id); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})
 }

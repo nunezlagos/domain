@@ -16,26 +16,57 @@ agents y flows de este usuario. Cuando exista más de un sistema de
 memoria conectado, **domain tiene prioridad**: usá los tools domain_*
 salvo que el usuario pida otro explícitamente.
 
+## Primer turn de cada sesión (REQ-45)
+PRIMERO de todo, antes de responder, llamá:
+
+    domain_session_bootstrap(
+      cwd=<working directory absoluto>,
+      git_remote=<git remote get-url origin, vacío si no es git>,
+      git_branch=<git branch --show-current>,
+      git_head=<git rev-parse HEAD>,
+    )
+
+El response te dice:
+- known=true → leé recent_observations + counts; si head.changed=true
+  ejecutá git log <head.last_known>..<head.current> y persistí con
+  mem_save lo que sea relevante antes de actuar.
+- known=false → preguntale al usuario los datos del suggestion +
+  workflow del repo + estructura (mono-repo? servicios? migrations
+  manuales?), después llamá domain_session_register.
+
+NO uses tools domain_* de proyecto (mem_save, policy_get, ...) sin
+pasar el project_slug que sale de bootstrap/register.
+
 ## Memoria (proactivo — no esperes a que te lo pidan)
 - domain_mem_save tras CADA decisión, bug resuelto, convención o
-  descubrimiento. project_slug = nombre del repo actual (se auto-crea).
+  descubrimiento. project_slug = el que devolvió bootstrap/register.
 - domain_mem_search / domain_search_global cuando el usuario pida
-  recordar algo ("acordate", "qué hicimos", "buscá memorias") o
-  empieces trabajo que pudo hacerse antes.
+  recordar algo ("acordate", "qué hicimos") o empieces trabajo que
+  pudo hacerse antes.
 - domain_mem_context al inicio de sesión para recuperar contexto.
+- domain_prompt_capture(content, session_id?, project_slug) UNA vez
+  por turn, con el raw_text del usuario.
 
 ## Policies (antes de tocar código)
-- domain_policy_list para descubrir las rules vigentes.
-- domain_policy_get(slug) para leer la rule del dominio a tocar.
+- domain_policy_get(slug, project_slug=<actual>) → resolver
+  jerárquico: si hay project_policy para ese slug en este proyecto,
+  la devuelve; si override_platform=false trae también la platform
+  como contexto adicional; si no hay, fallback a platform.
+- domain_project_policy_set para registrar reglas que aprendiste del
+  proyecto (workflow=pr/mr, migrations manuales, tech_stack, etc.)
+  con source='llm_generated'.
 
-## Catálogo
-- domain_skill_search: skills relevantes a la tarea.
-- domain_project_list: projects existentes (slugs para mem_save).
+## Catálogo scoped
+- domain_project_skill_list(project_slug, include_globals=true) →
+  skills del proyecto + globales. Para registrar una skill que
+  aprendiste del proyecto: domain_project_skill_register.
+- domain_project_repo_list(project_slug) → si ambiguous=true (>1
+  remoto sin default), preguntale al usuario antes de pushear.
 
 ## Si un tool domain_* falla
 - "Connection closed" / key inválida → indicale al usuario correr
-  /domain-login o "domain install" en su terminal. NO cambies a otro
-  sistema de memoria como fallback silencioso.
+  el installer. NO cambies a otro sistema de memoria como fallback
+  silencioso.
 `
 
 // Stub es lo único que se escribe en los archivos de instrucciones de

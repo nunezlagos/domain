@@ -1,0 +1,31 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  cmd/domain runServer ejecuta shutdown sequenced al recibir SIGTERM/SIGINT,
+  budget total 28s (dentro del terminationGracePeriodSeconds=30 default).
+
+  Fases (con timing):
+  1. Flip httpserver.ShuttingDown=true → readiness probe responde 503 (ELB drain)
+  2. Sleep 5s grace para que ELB note el unhealthy y deje de rutear
+  3. srv.Shutdown(20s ctx) → in-flight HTTP requests completan o timeout
+  4. schedCancel() → leader workers (cron + flow recovery + outbound dispatcher) reciben ctx.Done()
+  5. defer pools.Close() drena DB pools al return
+
+  internal/httpserver/health.go:
+  - ShuttingDown atomic.Bool global flag
+  - ReadyHandler responde 503 con reason="shutting_down" si flag activo
+  - HealthHandler liveness sigue 200 mientras el process vive (escenario 5)
+
+  Test health_test.go cubre escenario 5:
+  - TestReady_ShuttingDown_Returns503 valida el flip
+
+  Pending:
+  Cierre 2026-06-11:
+  - Grace configurable: DOMAIN_SHUTDOWN_GRACE_SECONDS (default 5, cap 25).
+  - Worker mid-step checkpoint: CUBIERTO por issue-09.6 durable execution
+    (status por step persistido + heartbeats + recovery resume en otro pod)
+    — la nota previa era stale.
+  Diferido: métricas de shutdown (scrape durante drain poco confiable;
+  duración en logs), linter ctx.Done(), Helm preStop (infra MCP-first).

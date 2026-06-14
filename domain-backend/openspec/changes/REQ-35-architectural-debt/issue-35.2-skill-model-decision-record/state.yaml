@@ -1,0 +1,14 @@
+status: proposed
+created: 2026-06-12
+slug: skill-model-decision-record
+issue: 35.2
+parent_req: REQ-35-architectural-debt
+effort: M
+priority: baja
+depends_on:
+  - 35.4
+notes: >
+  ADR formal, no implementación. La decisión (A simplificar o
+  B implementar) depende de datos de 35.4. Review date en 6
+  meses. Opción A gana → migration; opción B gana → REQ-36
+  separado.

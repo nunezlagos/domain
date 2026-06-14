@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: unified-dispatcher
+issue: 35.1
+parent_req: REQ-35-architectural-debt
+effort: M
+priority: baja
+notes: >
+  Refactor mayor con migración en 4 phases (cron, webhook, mcp,
+  delete-old). DRY del switch target_type→runner. Métricas y
+  audit unificados. Test de paridad por phase.

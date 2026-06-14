@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Sin dependencias. Puede implementarse en paralelo.
+  Impacto en prod: cambia de silencio a logging, pero nunca bloquea.

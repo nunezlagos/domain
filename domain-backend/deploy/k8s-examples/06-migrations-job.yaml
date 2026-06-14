@@ -1,0 +1,39 @@
+# Job que aplica migrations. Ejecutar antes de cada release.
+# Helm chart lo wraps con hook pre-upgrade automático.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: domain-migrate
+  namespace: domain
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600  # cleanup automático en 1h
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: domain
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+      - name: migrate
+        image: ghcr.io/nunezlagos/domain:latest
+        command: ["/domain", "migrate", "up"]
+        env:
+        - name: DOMAIN_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: domain-db
+              key: DOMAIN_DATABASE_URL
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]

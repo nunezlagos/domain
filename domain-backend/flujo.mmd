@@ -1,0 +1,39 @@
+flowchart TD
+    subgraph Discovery
+        A[Idea / Bug / Feature] --> B{Existe REQ?}
+        B -->|No| C[Crear REQ-XX-slug\nopenspec/changes/]
+        B -->|Sí| D[Abrir REQ existente]
+        C --> E[Definir req.md + state.yaml\nstatus: active]
+        D --> F[Identificar HU faltante]
+    end
+
+    subgraph SDD["SDD First"]
+        F --> G{Existe HU?}
+        G -->|No| H[HU-Y.Z-slug/\nhu.md + proposal.md]
+        H --> I[design.md + tasks.md]
+        I --> J[state.yaml → proposed]
+        G -->|Sí| K[state.yaml → in_progress]
+        J --> K
+    end
+
+    subgraph Implementacion["Implementación (TDD)"]
+        K --> L[RED: escribir test que falla]
+        L --> M[GREEN: mínimo para que pase]
+        M --> N[REFACTOR: mejorar sin romper]
+        N --> O[SABOTAJE: romper fix]
+        O --> P{Test cae?}
+        P -->|Sí| Q[Restaurar fix]
+        P -->|No| R[Arreglar test primero]
+        R --> L
+        Q --> S[go test ./... ✅]
+    end
+
+    subgraph Cierre
+        S --> T[state.yaml → implemented]
+        T --> U[git commit]
+        U --> V{todo el REQ\nimplementado?}
+        V -->|No| F
+        V -->|Sí| W[state.yaml REQ → archived]
+    end
+
+    W --> X[Fin 🎯]

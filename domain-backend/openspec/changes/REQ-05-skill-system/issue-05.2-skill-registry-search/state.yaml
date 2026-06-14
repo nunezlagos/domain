@@ -1,0 +1,13 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  SearchHybrid con BM25 + pgvector cosine + RRF implementado en service.
+  tsvector column + GIN index en migration.
+  GET /api/v1/skills/search?q= handler.
+  Tests: TestSkill_SearchHybrid.
+  Cierre 2026-06-11: el híbrido RRF con default razonable es lo que consume
+  el agente (domain_skill_search). Diferidos por falta de demanda: mode
+  selector fts/semantic/hybrid, weights configurables, threshold, tag
+  filter en search, pagination metadata.

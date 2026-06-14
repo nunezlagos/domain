@@ -1,0 +1,23 @@
+status: implemented
+created: 2026-06-06
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/notifications/ package:
+  - Channel interface: Slug() + Send(ctx, msg) → DeliveryResult
+  - Registry thread-safe con Register/Get/Slugs (sync.RWMutex)
+  - Template wrapper sobre text/template con missingkey=error strict
+  - Sender persiste cada envío en notification_deliveries
+
+  migration 000044 con notification_deliveries (status enum + attempt + retry).
+
+  Canales: LogOnlyChannel + SlackChannel (issue-20.3).
+
+  9 tests cubren Registry + Template strict + Slack payload format + LogOnly.
+
+  Pending:
+  - Retry con backoff (escenario 4) — worker que lee pending + reintenta c/15s
+  - Email canal envuelve internal/mail/smtp (issue-20.2)
+  - Templates persistidos en DB con versioning
+  - Wire al usagealerts service para delivery automático
+  - Aplicar a invitations + run failures

@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Domain — panorama de arquitectura</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg:#0d1117; --bg2:#161b22; --bg3:#1c2230; --border:#30363d;
+    --fg:#e6edf3; --muted:#8b949e; --accent:#b05a8e; --ok:#6fbf85;
+    --warn:#e5c07b; --danger:#e06c6c; --link:#79c0ff;
+  }
+  * { box-sizing: border-box }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, sans-serif; line-height:1.55 }
+  body { padding: 32px 48px 80px; max-width: 1280px; margin: 0 auto }
+  h1 { margin:0 0 4px; font-size: 28px; letter-spacing:-.5px }
+  h2 { margin: 40px 0 12px; font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--fg) }
+  h3 { margin: 24px 0 8px; font-size: 16px; color: var(--accent) }
+  p { color: var(--fg) }
+  .sub { color: var(--muted); margin-top: 0 }
+  .grid { display:grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin: 16px 0 }
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px 16px }
+  .card h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); font-weight: 600 }
+  .card p { margin: 4px 0; font-size: 13px; color: var(--fg) }
+  .card code { font-size: 12px; color: var(--link) }
+  code, pre { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 13px }
+  pre { background: var(--bg2); border:1px solid var(--border); border-radius:6px; padding: 12px 14px; overflow:auto }
+  .mermaid { background:var(--bg2); border:1px solid var(--border); border-radius: 8px; padding: 16px; margin: 16px 0; overflow-x:auto }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--muted); margin: 8px 0 24px }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle }
+  .legend .agent::before { background:#b05a8e }
+  .legend .runner::before { background:#79c0ff }
+  .legend .data::before { background:#6fbf85 }
+  .legend .infra::before { background:#e5c07b }
+  .legend .external::before { background:#8b949e }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top }
+  th { background: var(--bg3); color: var(--accent) }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.02) }
+  .note { background: var(--bg3); border-left: 3px solid var(--accent); padding: 10px 14px; margin: 12px 0; border-radius: 4px; font-size: 13px }
+  .note.warn { border-color: var(--warn) }
+  .note.danger { border-color: var(--danger) }
+  .pill { display:inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--bg3); border:1px solid var(--border); color: var(--muted) }
+  .pill.ok { color: var(--ok); border-color: rgba(111,191,133,.4) }
+  .pill.warn { color: var(--warn); border-color: rgba(229,192,123,.4) }
+  .pill.danger { color: var(--danger); border-color: rgba(224,108,108,.4) }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0 }
+  a { color: var(--link) }
+  ol li, ul li { margin: 4px 0 }
+  .toc { background: var(--bg2); border: 1px solid var(--border); border-radius:8px; padding: 12px 18px; margin: 16px 0 }
+  .toc ol { columns: 2; column-gap: 32px; margin: 4px 0 }
+  .toc a { text-decoration: none }
+</style>
+</head>
+<body>
+
+<h1>Domain — panorama de arquitectura</h1>
+<p class="sub">Desde el saludo del usuario al agente hasta el guardado de la memoria — todas las aristas (MCP, runners, RLS, harness, policies). Generado el 2026-06-12 a partir de la base de código real.</p>
+
+<div class="toc">
+  <strong>Índice</strong>
+  <ol>
+    <li><a href="#big">El cuadro grande</a></li>
+    <li><a href="#bootstrap">Bootstrap del agente</a></li>
+    <li><a href="#triage">Triage del mensaje</a></li>
+    <li><a href="#agent-loop">Agent runner</a></li>
+    <li><a href="#skill">Solicitud y ejecución de skill</a></li>
+    <li><a href="#flow">Flow runner</a></li>
+    <li><a href="#cron">Crons</a></li>
+    <li><a href="#webhook">Webhooks inbound</a></li>
+    <li><a href="#harness">Harness de resiliencia + RLS</a></li>
+    <li><a href="#persistence">Capa de persistencia</a></li>
+    <li><a href="#policies">Policies vs harness</a></li>
+    <li><a href="#failures">Modos de falla típicos</a></li>
+  </ol>
+</div>
+
+<div class="legend">
+  <span class="agent">Agente IA externo (Claude/opencode)</span>
+  <span class="runner">Runners domain</span>
+  <span class="data">Persistencia (Postgres + S3)</span>
+  <span class="infra">Infra (systemd, docker, mailpit)</span>
+  <span class="external">Externo (LLM provider, webhooks)</span>
+</div>
+
+<h2 id="big">1. El cuadro grande</h2>
+<p>Domain tiene <strong>dos modos de operación</strong> según quién maneja el LLM:</p>
+<ul>
+  <li><strong>Modo MCP (lo que usás todo el día)</strong>: el LLM vive en el agente externo (Claude/opencode). Domain expone tools <code>domain_*</code> por stdio JSON-RPC. El agente decide qué tool llamar y cuándo guardar memoria.</li>
+  <li><strong>Modo runtime propio</strong>: agents/flows/crons del catálogo de domain ejecutan en server-side; el LLM se llama vía proveedores (Anthropic/OpenAI/Google/Ollama) y domain orquesta el loop tool-use.</li>
+</ul>
+<p>Los dos modos comparten Postgres, RLS, policies, memoria y skills. El usuario nunca elige uno explícitamente — el flujo cae naturalmente según qué tool llama.</p>
+
+<div class="mermaid">
+flowchart LR
+  subgraph U[Usuario]
+    H["💬 'hola, buscá mis memorias'"]
+  end
+
+  subgraph A[Agente IA externo]
+    direction TB
+    LLM1[LLM Claude/GPT]
+    INS[Instructions del agente<br/>~/.config/opencode/instructions/domain.md]
+    INS -->|protocolo<br/>SIEMPRE ACTIVO| LLM1
+  end
+
+  subgraph DMCP["domain-mcp (stdio JSON-RPC)"]
+    direction TB
+    TOOLS["Tools domain_*<br/>~40 registrados"]
+    RLS1[withOrgTxHandler<br/>SET LOCAL org_id]
+    TOOLS --> RLS1
+  end
+
+  subgraph DRT[Domain runtime — runners server-side]
+    direction TB
+    AR[Agent Runner]
+    SR[Skill Runner]
+    FR[Flow Runner]
+    AR -. tool_call .-> SR
+    FR -. step .-> AR
+    FR -. step .-> SR
+  end
+
+  subgraph DB[(Postgres + S3 + RLS FORCE)]
+    direction TB
+    OBS[observations<br/>+ embedding]
+    POL[platform_policies]
+    SK[skills + agents + flows]
+    HIST[agent_runs + flow_runs<br/>+ cron_executions]
+  end
+
+  H --> LLM1
+  LLM1 -->|tool_use| TOOLS
+  RLS1 --> DB
+
+  SCH[Cron scheduler<br/>polling 30s] -->|PickDue<br/>SKIP LOCKED| FR
+  SCH --> AR
+  SCH --> SR
+  WH[POST /webhooks/:slug<br/>HMAC] --> FR
+  WH --> AR
+
+  AR -->|LLM API| EXT[Anthropic/OpenAI/<br/>Google/Ollama]
+  AR --> DB
+  FR --> DB
+  SR --> DB
+
+  classDef agent fill:#b05a8e22,stroke:#b05a8e,color:#e6edf3
+  classDef runner fill:#79c0ff22,stroke:#79c0ff,color:#e6edf3
+  classDef data fill:#6fbf8522,stroke:#6fbf85,color:#e6edf3
+  classDef infra fill:#e5c07b22,stroke:#e5c07b,color:#e6edf3
+  classDef ext fill:#8b949e22,stroke:#8b949e,color:#e6edf3
+  class A,LLM1,INS agent
+  class DMCP,TOOLS,RLS1,AR,SR,FR runner
+  class DB,OBS,POL,SK,HIST data
+  class SCH infra
+  class EXT,WH,U,H ext
+</div>
+
+<h2 id="bootstrap">2. Bootstrap del agente — antes del primer saludo</h2>
+<p>Cuando abrís opencode, domain ya está peleando para ser el sistema de memoria elegido. Esto ocurre antes de cualquier interacción con el usuario:</p>
+<div class="mermaid">
+sequenceDiagram
+  participant OC as opencode
+  participant CFG as opencode.json (proyecto ⊳ global)
+  participant MCP as domain-mcp (subproceso stdio)
+  participant ENV as ~/.config/domain/env
+  participant CRED as ~/.config/domain/credentials.json
+  participant DB as Postgres
+
+  OC->>CFG: lee mcp.domain.command + environment
+  OC->>MCP: spawn binary (stdio)
+  MCP->>ENV: loadGlobalEnvFallback() — DOMAIN_DATABASE_URL, BASE_URL, HTTP_PORT
+  MCP->>CRED: apiKeyFromCredentials() si DOMAIN_API_KEY vacío
+  MCP->>DB: db.OpenProduction(App + Auth pools)
+  MCP->>DB: apikey.PGStore.Resolve(apiKey) → Principal{org_id, user_id}
+  MCP-->>OC: initialize response<br/>+ instructions (agentprotocol.Full)
+  OC->>OC: carga instructions/domain.md<br/>(STUB que ordena domain_policy_get)
+  OC->>MCP: domain_policy_get(slug='agent-protocol')
+  MCP->>DB: SELECT body_md FROM platform_policies
+  MCP-->>OC: protocolo COMPLETO (editable en BD)
+  Note over OC: LLM ahora sabe<br/>"domain tiene PRIORIDAD"<br/>sobre engram/otros
+</div>
+
+<div class="note">
+  <strong>Doble capa de protocolo</strong>: el <em>handshake MCP</em> (capa débil, el cliente decide cuánto inyecta) trae el protocolo completo; el <em>archivo de instructions</em> del agente (capa fuerte, va al system prompt) trae un STUB que ordena cargar la policy viva. Editar la policy <code>agent-protocol</code> en BD cambia el comportamiento de TODOS los agentes sin tocar archivos.
+</div>
+
+<h2 id="triage">3. Triage del mensaje — el agente decide qué hacer</h2>
+<p>El "triage" no vive en domain: es el LLM del agente externo aplicando las instructions. Domain solo provee el menú de tools y el contexto. Para un mensaje típico:</p>
+
+<table>
+<thead><tr><th>Mensaje del usuario</th><th>Tool elegido por el LLM</th><th>Por qué</th></tr></thead>
+<tbody>
+<tr><td>"hola, ¿qué hicimos ayer?"</td><td><code>domain_mem_context</code> + <code>domain_mem_search</code></td><td>protocolo: al inicio de sesión recuperar contexto</td></tr>
+<tr><td>"acordate que decidimos usar pgvector"</td><td><code>domain_mem_save</code></td><td>protocolo: proactivo tras CADA decisión</td></tr>
+<tr><td>"voy a tocar el schema de users"</td><td><code>domain_policy_list</code> + <code>domain_policy_get(slug='db')</code></td><td>protocolo: rules antes de tocar código</td></tr>
+<tr><td>"corré el flow de deploy"</td><td><code>domain_flow_run</code></td><td>tool de catálogo</td></tr>
+<tr><td>"resumí este texto"</td><td><code>domain_skill_search</code> → <code>domain_skill_execute</code></td><td>buscar skill relevante + ejecutar</td></tr>
+</tbody>
+</table>
+
+<h2 id="agent-loop">4. Agent runner — modo runtime propio</h2>
+<p>Cuando un flow, cron, webhook o el tool <code>domain_agent_run</code> dispara un Agent del catálogo, entra el runner server-side (<code>internal/runner/agent/runner.go</code>):</p>
+
+<div class="mermaid">
+flowchart TB
+  S([Run input]) --> A1["Crear agent_run<br/>status=running"]
+  A1 --> A2[loadSkillTools<br/>agent.skills_slugs → []ToolDef<br/>para el LLM API]
+  A2 --> L{Iteración<br/>i ≤ max_iterations}
+  L -->|sí| L1["LLM.Complete(messages, tools)<br/>provider = anthropic/openai/...<br/>+ retry + circuit breaker"]
+  L1 --> L2{finish_reason}
+  L2 -->|stop| OK["status=completed<br/>persist output + tokens"]
+  L2 -->|tool_use| T1["for tc := range ToolCalls"]
+  T1 --> T2[executeTool<br/>skillBySlug + arguments]
+  T2 --> T3[skillrunner.Execute]
+  T3 -->|result| T4["append Message{role: tool}"]
+  T4 --> L
+  L -->|no| FAIL["status=failed<br/>error=max iterations"]
+  L1 -->|provider error<br/>no transient| FAIL2[status=failed]
+
+  classDef ok fill:#6fbf8533,stroke:#6fbf85
+  classDef bad fill:#e06c6c33,stroke:#e06c6c
+  class OK ok
+  class FAIL,FAIL2 bad
+</div>
+
+<div class="grid">
+  <div class="card"><h4>Token budget</h4><p>Pre-flight valida que <code>token_budget</code> alcanza vs <code>context_size</code> del registry. Soft/hard limits clampean en runtime.</p></div>
+  <div class="card"><h4>Skill discovery</h4><p>El agent <em>solo ve</em> los skills que están en su <code>skills_slugs[]</code>. No puede llamar skills ajenos — defense-in-depth.</p></div>
+  <div class="card"><h4>Persistencia</h4><p>Cada call queda en <code>agent_runs</code> con tokens/cost; cada step en <code>agent_run_steps</code>; logs en S3 si exceden umbral.</p></div>
+  <div class="card"><h4>Recovery</h4><p>Heartbeats periódicos; si el worker muere, <code>ClaimRun</code> rescata el run vía <code>FOR UPDATE SKIP LOCKED</code> y resume desde el cursor.</p></div>
+</div>
+
+<h2 id="skill">5. Solicitud y ejecución de skill — el camino completo</h2>
+<p>Este es el flujo que pediste explícito. Lo trazo end-to-end desde que el LLM emite el tool_call hasta que el resultado vuelve para la próxima iteración:</p>
+
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant LLM as LLM provider
+  participant AR as agentrunner.Runner
+  participant SR as skillrunner.Runner
+  participant SK as skill.Service
+  participant DB as Postgres
+  participant HTTP as endpoint externo<br/>(solo TypeAPI)
+
+  AR->>LLM: Complete(messages, tools=[skill...])
+  LLM-->>AR: {tool_use: name='greet', args:{name:'Mario'}}
+  AR->>SK: GetBySlug('greet')<br/>+ verificar pertenece a skills_slugs
+  SK-->>AR: Skill{type, content, input_schema}
+  AR->>AR: validate(args, input_schema) JSON Schema
+  AR->>SR: Execute(skill, args)
+  alt TypePrompt
+    SR->>SR: strings.ReplaceAll {{var}} → args[var]
+  else TypeAPI
+    SR->>SR: render template URL+body
+    SR->>HTTP: POST con allowlist + SSRF guard
+    HTTP-->>SR: response.body
+  else TypeCode / TypeMCPTool
+    SR-->>AR: ErrNotImplemented<br/>(REQ-11, issue-12.4)
+  end
+  SR-->>AR: result (string)
+  AR->>DB: INSERT skill_executions<br/>(skill_id, status, duration_ms, output)
+  AR->>AR: append Message{role: tool,<br/>tool_call_id, content: result}
+  AR->>LLM: Complete(messages++) — siguiente iteración
+</div>
+
+<h3>5b. Recomendación de skill (auto-skill engine)</h3>
+<p>Lo que <em>parecía</em> "skill generator" se entrega vía búsqueda híbrida — no hay generación con LLM hoy (decisión MCP-first, ver <code>openspec/changes/REQ-05/issue-05.4</code>):</p>
+
+<div class="mermaid">
+flowchart LR
+  Q[Query del agente o usuario<br/>'necesito resumir texto'] -->|domain_skill_search| HY
+  subgraph HY[SearchHybrid — RRF k=60]
+    direction TB
+    BM[BM25 ts_rank<br/>description_tsv español]
+    VEC[pgvector cosine<br/>embedding del query]
+    BM --> RRF[Reciprocal Rank Fusion<br/>score = Σ 1/(60+rank_i)]
+    VEC --> RRF
+  end
+  HY --> TOP["top-N skills + scores"]
+
+  MCPSYNC[MCP server externo conectado] -.->|SyncTools| DISC[DiscoveredTool array]
+  CODE[code_annotation] -.-> DISC
+  DISC --> AE["auto-skill engine<br/>MaterializeAll()"]
+  AE -->|UPSERT por (org,slug)| SKDB[(skills table)]
+  SKDB --> HY
+</div>
+
+<h2 id="flow">6. Flow runner — orquestación de steps</h2>
+<p>Los flows son DAGs ejecutables. Cada step tiene un type, config, dependencias y manejo de error. <code>internal/runner/flow/steptypes/</code> registra los handlers:</p>
+
+<table>
+<thead><tr><th>Step type</th><th>Qué hace</th><th>Notas</th></tr></thead>
+<tbody>
+<tr><td><code>skill_call</code></td><td>Ejecuta un skill del catálogo por slug</td><td>delega a skillrunner</td></tr>
+<tr><td><code>domain_agent_run</code></td><td>Lanza un agent del catálogo</td><td>delega a agentrunner; tx anidada con WithOrgTx</td></tr>
+<tr><td><code>llm_call</code></td><td>LLM directo con prompt template</td><td>sin tool-use loop</td></tr>
+<tr><td><code>mem_save</code></td><td>Inserta observation en project</td><td>fix RLS reciente: envuelto en WithOrgTx</td></tr>
+<tr><td><code>conditional</code></td><td>If/else sobre outputs previos</td><td>expresión simple <code>field == value</code></td></tr>
+<tr><td><code>parallel</code></td><td>errgroup de N steps concurrentes</td><td>todos deben pasar o el flow falla</td></tr>
+<tr><td><code>wait</code></td><td>Pausa duración o polling URL</td><td>durable: persiste cursor</td></tr>
+<tr><td><code>human_input</code></td><td>Crea task y espera input</td><td>via tasks de issue-04.*</td></tr>
+<tr><td><code>sub_flow</code></td><td>Flow recursivo con lineage</td><td>parent_run_id traceable</td></tr>
+<tr><td><code>transform</code></td><td>JSONPath/jq sobre cursor</td><td>no I/O, puramente computacional</td></tr>
+</tbody>
+</table>
+
+<div class="mermaid">
+flowchart TB
+  T[Trigger<br/>cron / webhook / manual / MCP] --> CR["flow.Service.Create flow_run<br/>status=pending"]
+  CR --> CL["ClaimRunClaims.ClaimRun<br/>UPDATE ... FROM SELECT FOR UPDATE SKIP LOCKED<br/>RETURNING prev_status"]
+  CL --> RUN["Runner.Run loop steps"]
+  RUN --> STP{Step type}
+  STP -->|skill_call| SR2[skillrunner]
+  STP -->|domain_agent_run| AR2[agentrunner — anidado]
+  STP -->|mem_save| MS[obs.Save + WithOrgTx]
+  STP -->|conditional| BR[branch siguiente]
+  STP -->|parallel| PG[errgroup]
+  STP -->|wait| W[durable sleep / poll]
+
+  SR2 --> NX[persist step output<br/>+ cursor JSONB]
+  AR2 --> NX
+  MS --> NX
+  BR --> NX
+  PG --> NX
+  W --> NX
+
+  NX --> HB[heartbeat throttle<br/>NOTIFY flow_step_progress]
+  HB --> RUN
+  RUN -->|all done| OK([completed])
+  RUN -->|error + on_error=fail| DLQ[DLQ + audit]
+  RUN -->|crash worker| REC[recovery: ClaimRun stale<br/>resume desde cursor]
+
+  classDef ok fill:#6fbf8533,stroke:#6fbf85
+  classDef bad fill:#e06c6c33,stroke:#e06c6c
+  class OK ok
+  class DLQ bad
+</div>
+
+<h2 id="cron">7. Crons — disparo programado</h2>
+<p><code>internal/scheduler/cron/scheduler.go</code> corre un loop de polling cada 30s. La idea clave: <strong>idempotencia multi-worker</strong> vía <code>FOR UPDATE SKIP LOCKED</code>, <strong>overlap protection</strong> vía INSERT condicional, y dispatch genérico a flow/agent/skill runner.</p>
+
+<div class="mermaid">
+sequenceDiagram
+  participant TK as ticker (30s)
+  participant SCH as Scheduler
+  participant SVC as cron.Service
+  participant FR as flowrunner/agentrunner/skillrunner
+  participant DB as Postgres
+
+  loop cada 30s
+    TK->>SCH: tick
+    SCH->>SVC: PickDue(limit=50)
+    SVC->>DB: SELECT FOR UPDATE SKIP LOCKED<br/>WHERE next_run_at <= NOW()
+    DB-->>SVC: due_crons[]<br/>+ avanza next_run_at
+    SVC-->>SCH: due_crons
+    par per cron (goroutine)
+      SCH->>SVC: StartExecution(cron_id)<br/>INSERT...WHERE NOT EXISTS running
+      alt overlap detectado
+        SVC-->>SCH: skipped_overlap
+        Note over SCH: no dispatch, history queda
+      else OK
+        SCH->>FR: dispatchSync(target_type, target_id, inputs)
+        FR-->>SCH: result/error
+        SCH->>SVC: FinishExecution(completed/failed)
+      end
+    end
+  end
+</div>
+
+<h2 id="webhook">8. Webhooks inbound — disparo externo</h2>
+<div class="mermaid">
+flowchart LR
+  GH[GitHub / GitLab / generic] -->|POST /api/v1/webhooks/:slug| H[handler]
+  H --> RS[ResolveBySlug<br/>+ decrypt secret AES-GCM]
+  RS --> HMAC{HMAC verify<br/>X-Hub-Signature-256<br/>X-Gitlab-Token}
+  HMAC -->|invalid| ERR[401 signature_invalid<br/>+ delivery log]
+  HMAC -->|valid| MAP[inputs_mapping<br/>JSONPath '$.field.path']
+  MAP --> DISP{target_type}
+  DISP -->|flow| FR3[flowrunner.Run<br/>triggerType=webhook]
+  DISP -->|agent| AR3[agentrunner.Run]
+  DISP -->|skill| SR3[skillrunner.Execute]
+  FR3 --> LOG[webhook_deliveries<br/>status=triggered + run_id]
+  AR3 --> LOG
+  SR3 --> LOG
+
+  H -.->|cap 5MB| LIM[io.LimitReader]
+  H -.->|202 Accepted<br/>dispatch en goroutine| GH
+
+  classDef err fill:#e06c6c33,stroke:#e06c6c
+  class ERR err
+</div>
+
+<h2 id="harness">9. Harness de resiliencia + RLS</h2>
+<p>Toda call MCP pasa por dos capas antes de tocar el handler:</p>
+
+<div class="mermaid">
+flowchart LR
+  CLI[Agent llama domain_*] --> RES["ResilientWrapper.Wrap"]
+  RES --> RL{Rate limit<br/>120/min default<br/>60/min mutations}
+  RL -->|exceeded| RL_ERR[rate_limit_exceeded]
+  RL -->|ok| CB{Circuit breaker<br/>CBThreshold=5<br/>CBCooldown=30s}
+  CB -->|open| CB_ERR[circuit_open]
+  CB -->|closed/half| RT[Retry transient<br/>backoff 100ms × 2^n]
+  RT --> WRAP[withOrgTxHandler]
+  WRAP --> TX["BeginTx + SET LOCAL<br/>app.current_org_id, user_id"]
+  TX --> H[handler real]
+  H -->|ok| CM[COMMIT]
+  H -->|error| RB[ROLLBACK]
+  CM --> R([response])
+  RB --> R
+
+  classDef err fill:#e06c6c33,stroke:#e06c6c
+  class RL_ERR,CB_ERR err
+</div>
+
+<div class="note warn">
+  <strong>RLS FORCE (migration 000085)</strong>: <code>observations</code> y <code>sessions</code> tienen RLS forzado. Sin el wireup <code>SET LOCAL app.current_org_id</code>, Postgres rechaza con <em>"violates row-level security policy"</em>. Esto aplica a tools MCP, middleware HTTP, flow runner, agent runner. El bug clásico de hoy fue el flow runner sin tx — ya arreglado en commit <code>5244e58</code>.
+</div>
+
+<h2 id="persistence">10. Capa de persistencia</h2>
+
+<div class="grid">
+  <div class="card"><h4>Pool dual</h4>
+    <p><span class="pill ok">App</span> <code>app_user</code> NOBYPASSRLS — runtime queries</p>
+    <p><span class="pill warn">Auth</span> <code>app_admin</code> BYPASSRLS — solo apikey/otp/audit/intake</p>
+    <p>Separación de privilegios; un service NO puede tomar Auth para "evitar RLS".</p>
+  </div>
+  <div class="card"><h4>Tablas core</h4>
+    <p><code>observations</code> + content_tsv + embedding</p>
+    <p><code>sessions</code> + scope org</p>
+    <p><code>prompts</code> + versioned templates</p>
+    <p><code>platform_policies</code> + history</p>
+  </div>
+  <div class="card"><h4>Runtime tables</h4>
+    <p><code>agents</code>, <code>agent_runs</code>, <code>agent_run_steps</code>, <code>agent_versions</code></p>
+    <p><code>flows</code>, <code>flow_runs</code>, <code>flow_step_progress</code></p>
+    <p><code>skills</code>, <code>skill_executions</code>, <code>skill_versions</code></p>
+    <p><code>crons</code>, <code>cron_executions</code></p>
+  </div>
+  <div class="card"><h4>Búsqueda</h4>
+    <p>tsvector spanish + GIN per tabla</p>
+    <p>pgvector (1536d) ivfflat para skills/observations/knowledge</p>
+    <p>RRF k=60 fusion en services</p>
+  </div>
+</div>
+
+<h2 id="policies">11. Policies vs harness — quién manda qué</h2>
+
+<table>
+<thead><tr><th>Capa</th><th>Quién la edita</th><th>Qué controla</th><th>Cuándo se aplica</th></tr></thead>
+<tbody>
+<tr><td>Instructions del agente (stub)</td><td>El instalador (file)</td><td>"domain tiene prioridad"; cargá la policy viva</td><td>System prompt al inicio de cada conversación</td></tr>
+<tr><td>Policy <code>agent-protocol</code> (BD)</td><td>Vos editás en BD</td><td>Protocolo completo: cuándo mem_save, mem_search, policy_get</td><td>Cuando el agente llama domain_policy_get al inicio</td></tr>
+<tr><td>Policies por dominio (BD)</td><td>Seeder + vos</td><td>db.md, go.md, security.md, sdd.md, etc.</td><td>Antes de tocar código del dominio</td></tr>
+<tr><td>ResilientWrapper (código)</td><td>Solo en código Go</td><td>Rate limit, retry, CB por tool</td><td>Toda call MCP</td></tr>
+<tr><td>RLS Postgres (migración)</td><td>Migration 000085+</td><td>Aislamiento cross-org a nivel DB</td><td>Toda query a tablas con FORCE RLS</td></tr>
+<tr><td>Guardrails del agent (BD)</td><td>Vos en agent definition</td><td>max_iterations, token_budget, skills permitidos</td><td>Durante el loop del agent runner</td></tr>
+</tbody>
+</table>
+
+<h2 id="failures">12. Modos de falla típicos — qué busca, qué hacer</h2>
+
+<table>
+<thead><tr><th>Síntoma</th><th>Causa probable</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code>MCP error -32000: Connection closed</code></td><td>domain-mcp muere al boot (DOMAIN_API_KEY faltante, DB caída, binario stale)</td><td>Verificar <code>~/.config/domain/env</code> + <code>credentials.json</code>; recompilar; <code>domain install</code></td></tr>
+<tr><td><code>row-level security policy violated</code></td><td>Query sin wireup de tx (SET LOCAL)</td><td>Envolver con <code>WithOrgTx</code> o <code>withOrgTxHandler</code></td></tr>
+<tr><td><code>no migration found for version N</code></td><td>BD migrada por otro árbol más nuevo</td><td>git pull; el install.sh ahora aborta limpio si pull falla</td></tr>
+<tr><td>Tools <code>domain_*</code> ignorados, agente elige engram</td><td>Faltan instructions a nivel agente</td><td><code>domain setup opencode</code> regenera el stub</td></tr>
+<tr><td>Cron no dispara</td><td>Server systemd caído o overlap forever</td><td><code>journalctl --user -u domain</code>; <code>domain cron status</code></td></tr>
+<tr><td>Flow stuck en running</td><td>Worker murió sin liberar heartbeat</td><td>Heartbeat watcher rescata stale runs cada minuto</td></tr>
+<tr><td>Webhook 401 silencioso</td><td>HMAC inválido por secret rotado</td><td>Ver <code>webhook_deliveries.status='signature_invalid'</code></td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h3>Referencias al código</h3>
+<ul>
+  <li><code>internal/mcp/server/server.go</code> — registro de tools <code>domain_*</code></li>
+  <li><code>internal/mcp/server/wireup.go</code> — <code>withOrgTxHandler</code> (RLS)</li>
+  <li><code>internal/runner/agent/runner.go</code> — loop LLM + tools</li>
+  <li><code>internal/runner/skill/runner.go</code> — switch por SkillType</li>
+  <li><code>internal/runner/flow/runner.go</code> — orquestador DAG</li>
+  <li><code>internal/runner/flow/claim.go</code> — ClaimRun multi-worker</li>
+  <li><code>internal/scheduler/cron/scheduler.go</code> — polling 30s</li>
+  <li><code>internal/service/webhook/service.go</code> — HMAC + dispatch</li>
+  <li><code>internal/agentprotocol/protocol.go</code> — Full + Stub (source-of-truth del protocolo)</li>
+  <li><code>internal/seeds/platform_policies_seeder.go</code> — seed de policies en BD</li>
+  <li><code>internal/store/txctx/txctx.go</code> — <code>WithOrgTx</code> helper</li>
+</ul>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#161b22',
+      primaryColor: '#1c2230',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#b05a8e',
+      lineColor: '#8b949e',
+      secondaryColor: '#0d1117',
+      tertiaryColor: '#0d1117'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    sequence:  { useMaxWidth: true, mirrorActors: false, showSequenceNumbers: false, actorMargin: 50, boxMargin: 10, messageMargin: 30 }
+  });
+</script>
+</body>
+</html>

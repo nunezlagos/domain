@@ -1,0 +1,16 @@
+status: proposed
+created: 2026-06-12
+slug: mcp-http-client-mode
+issue: 31.1
+parent_req: REQ-31-mcp-http-vps-mode
+effort: L
+priority: alta
+depends_on:
+  - 29.3
+notes: >
+  Refactor mayor: introduce interface ToolHandler con dos
+  implementaciones. Es el cambio de seguridad más importante del
+  REQ-31. Bloqueado por 29.3 (HTTP listener fix) porque sin un
+  server que escuche, no hay modo remoto testeable. 31.2
+  (audit tabla) y 31.4 (config flag) DEPENDEN de este issue
+  (no al revés). 31.3 (deploy VPS) es paralelo.

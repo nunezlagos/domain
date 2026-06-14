@@ -1,0 +1,24 @@
+status: implemented
+created: 2026-06-10
+implemented: 2026-06-10
+archived: ~
+blocks:
+  - issue-08.10-sdd-pipeline-orchestrator
+rfc: docs/rfc/0006-sdd-pipeline-orchestrator.md
+notes: |
+  internal/scheduler/cron/system/heartbeat_watcher.go.
+  Detecta flow_run_steps status='running' + last_heartbeat_at > timeout (default 5min).
+  Marca failed con error='heartbeat_timeout', dispara saga_compensation_log según
+  retry_policy del agent_template (require-cleanup/re-emit/idempotent default).
+  Cierra flow_runs.status='failed' si todos los steps están terminales.
+
+  FOR UPDATE SKIP LOCKED para race-safety con clientes actualizando heartbeat.
+  NO maneja leader election propia: caller lo invoca dentro de RunAsLeader block
+  (patrón cron scheduler issue-10.1).
+
+  Métricas: domain_heartbeat_watcher_stuck_total{org_id, phase, reason},
+  domain_heartbeat_watcher_ticks_total{result}.
+
+  Config env: DOMAIN_HEARTBEAT_WATCHER_ENABLED (true), TIMEOUT_MINUTES (5), TICK_SECONDS (60).
+  Lock key: LockKeyHeartbeatWatcher = 1006.
+  Tests: 1 unit + 4 integration verdes.

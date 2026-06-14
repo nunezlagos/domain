@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Puede implementarse en paralelo a HU-28.1 y HU-28.2 porque solo toca
+  handler/api.go y middleware nuevo. No require cambios en services.

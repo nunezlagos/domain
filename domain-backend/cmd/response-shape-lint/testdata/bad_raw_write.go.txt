@@ -1,0 +1,9 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+func (a *API) leaksRawBytes(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello"))
+}

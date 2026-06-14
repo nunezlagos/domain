@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: openapi-spec-generation
+issue: 32.3
+parent_req: REQ-32-dashboard-readiness
+effort: M
+priority: media
+depends_on: 32.1
+notes: >
+  Base para 32.4 (SDK TS) y para clientes externos. Genera desde
+  annotations swaggo. Sirve en /api/v1/openapi.json (público).

@@ -1,0 +1,320 @@
+- generic:
+  - generic:
+    - region "Notifications alt+T"
+    - main:
+      - generic:
+        - generic:
+          - button:
+            - banner:
+              - generic:
+                - link "Try Mermaid Advanced Editor — OSS users get 10% off with code JS26 Get started":
+                  - /url: https://mermaid.ai/app/user/billing/checkout?utm_campaign=oss_coupon&utm_medium=banner_ad&utm_source=mermaid_live_editor&coupon=arDfyFT8&tier=plus
+                  - generic: Try Mermaid Advanced Editor — OSS users get 10% off with code JS26
+                  - button "Get started"
+              - button "Dismiss banner":
+                - img
+        - navigation:
+          - generic:
+            - button:
+              - img
+            - img
+            - link "Mermaid Live Editor":
+              - /url: /
+          - generic:
+            - button:
+              - button:
+                - img
+            - separator
+            - button "History":
+              - img
+            - button "Share"
+            - button "Mermaid Chart Save diagram":
+              - generic:
+                - link "Mermaid Chart Save diagram":
+                  - /url: https://mermaid.ai/app/plugin/save?state=pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug&utm_source=mermaid_live_editor&utm_medium=save_diagram
+                  - img "Mermaid Chart"
+                  - text: Save diagram
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - toolbar:
+                      - generic:
+                        - list:
+                          - tab "Code":
+                            - img
+                            - text: Code
+                          - generic:
+                            - separator
+                          - tab "Config":
+                            - img
+                            - text: Config
+                      - link "Docs":
+                        - /url: https://mermaid.js.org/syntax/flowchart.html
+                        - img
+                        - text: Docs
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - code:
+                              - generic:
+                                - textbox "Editor content"
+                                - textbox
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: 
+                                      - generic: "1"
+                                    - generic:
+                                      - generic: "2"
+                                    - generic:
+                                      - generic: "3"
+                                    - generic:
+                                      - generic: "4"
+                                    - generic:
+                                      - generic: "5"
+                                    - generic:
+                                      - generic: "6"
+                                    - generic:
+                                      - generic: "7"
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: flowchart TD
+                                    - generic:
+                                      - generic: A[Christmas] -->|Get money| B(Go shopping)
+                                    - generic:
+                                      - generic: "B --> C{Let me think}"
+                                    - generic:
+                                      - generic: C -->|One| D[Laptop]
+                                    - generic:
+                                      - generic: C -->|Two| E[iPhone]
+                                    - generic:
+                                      - generic: C -->|Three| F[fa:fa-car Car]
+                  - generic:
+                    - generic:
+                      - toolbar:
+                        - menubar:
+                          - img
+                          - text: Sample Diagrams
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - button "Flowchart"
+                          - generic:
+                            - button "Class"
+                          - generic:
+                            - button "Sequence"
+                          - generic:
+                            - button "Entity Relationship"
+                          - generic:
+                            - button "State"
+                          - generic:
+                            - button "Mindmap"
+                          - generic:
+                            - button "Architecture"
+                          - generic:
+                            - button "Block"
+                          - generic:
+                            - button "C4"
+                          - generic:
+                            - button "Gantt"
+                          - generic:
+                            - button "Git"
+                          - generic:
+                            - button "Ishikawa"
+                          - generic:
+                            - button "Kanban"
+                          - generic:
+                            - button "Packet"
+                          - generic:
+                            - button "Pie"
+                          - generic:
+                            - button "Quadrant"
+                          - generic:
+                            - button "Radar"
+                          - generic:
+                            - button "Requirement"
+                          - generic:
+                            - button "Sankey"
+                          - generic:
+                            - button "Timeline"
+                          - generic:
+                            - button "TreeView"
+                          - generic:
+                            - button "Treemap"
+                          - generic:
+                            - button "User Journey"
+                          - generic:
+                            - button "Venn"
+                          - generic:
+                            - button "Wardley Maps"
+                            - button "Choose a Wardley Maps example":
+                              - img
+                          - generic:
+                            - button "XY"
+                          - generic:
+                            - button "ZenUML"
+                    - generic:
+                      - toolbar:
+                        - menubar:
+                          - img
+                          - text: Actions
+              - separator
+              - generic:
+                - generic:
+                  - generic:
+                    - document:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Get money
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: One
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Two
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Three
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Christmas
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Go shopping
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Let me think
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Laptop
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: iPhone
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Car
+                - generic:
+                  - button "Mermaid Chart Edit visually":
+                    - generic:
+                      - link "Mermaid Chart Edit visually":
+                        - /url: https://mermaid.ai/app/plugin/save?state=pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug&utm_source=mermaid_live_editor&utm_medium=visual_edit&utm_campaign=visual_1
+                        - img "Mermaid Chart"
+                        - text: Edit
+                        - generic: visually
+                - generic:
+                  - generic:
+                    - button "Reset view":
+                      - img
+                    - separator
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - separator
+                    - link "Full Screen":
+                      - /url: /view#pako:eNpVjcFugzAQRH_F2lMrkQg7EBIfKjWkzSVSe8ipkIMVFowabGSM0hT49xqiqO2cdjRvZjs46QyBQ37Wl5MUxpLDNlXE6TmJpSkbW4nmSGazp36HllRa4bUnm4edJo3UdV2q4vHGb0aIxN1-xJBYWarP4RbFU_9NYU-2yV7UVtfHv8nhonvykpTv0s3_T6RB13pNcsFzMTsJQ2JhJgQ8KEyZAbemRQ8qNJUYLXRjmoKVWGEK3J0Z5qI92xRSNbhaLdSH1tW9aXRbSHDz58a5ts6ExW0pCiN-EVQZmli3ygKni2kCeAdfwBkN5zQIfRYES39Bl8yDK_BFOA_W6_WKRpT5dMUGD76nl_58FYW-E1v6UeSzkA4_SbB2Ug
+                      - img
+                - generic:
+                  - generic:
+                    - generic: v11.15.0
+                    - button "Privacy & Security":
+                      - button:
+                        - img
+                    - separator
+                    - button "Switch to dark theme":
+                      - generic:
+                        - generic:
+                          - img
+                - generic:
+                  - generic:
+                    - button "Hand-Drawn":
+                      - img
+                    - button "Background Grid" [pressed]:
+                      - img
+  - dialog "Try the full Mermaid experience" [ref=e2]:
+    - generic [ref=e3]:
+      - img "Mermaid Chart" [ref=e4]
+      - heading "Try the full Mermaid experience" [level=2] [ref=e5]
+      - generic [ref=e6]: Free forever, with Plus features free for 7 days.
+    - list [ref=e7]:
+      - listitem [ref=e8]:
+        - generic [ref=e10]:
+          - paragraph [ref=e11]: AI diagram generation
+          - paragraph [ref=e12]: Describe what you need, AI builds it
+      - listitem [ref=e13]:
+        - generic [ref=e15]:
+          - paragraph [ref=e16]: Visual drag-and-drop editor
+          - paragraph [ref=e17]: Edit diagrams without writing code
+      - listitem [ref=e18]:
+        - generic [ref=e20]:
+          - paragraph [ref=e21]: Unlimited diagram storage
+          - paragraph [ref=e22]: Save and organize all your diagrams
+      - listitem [ref=e23]:
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: Team collaboration
+          - paragraph [ref=e27]: Share, comment, and edit together in real-time
+    - generic [ref=e28]:
+      - button "Start free trial" [active] [ref=e29]:
+        - button "Start free trial" [ref=e31]
+      - generic "Your diagram will be sent to the external service" [ref=e34]:
+        - img [ref=e35]
+        - generic [ref=e37]:
+          - text: Opens
+          - generic [ref=e38]: mermaid.ai
+      - button "Stay on mermaid.live" [ref=e39]
+    - generic [ref=e40]:
+      - paragraph [ref=e41]: Trusted by 5M people and over 200k companies
+      - generic [ref=e42]:
+        - img "Google" [ref=e43]
+        - img "Microsoft" [ref=e50]
+        - img "Atlassian" [ref=e56]
+        - img "Amazon" [ref=e59]
+    - link "mermaid.ai Privacy Policy" [ref=e63] [cursor=pointer]:
+      - /url: https://mermaid.ai/privacy-policy
+    - button "Close" [ref=e64]:
+      - img [ref=e65]
+      - generic [ref=e66]: Close
+  - generic:
+    - alert
+    - alert

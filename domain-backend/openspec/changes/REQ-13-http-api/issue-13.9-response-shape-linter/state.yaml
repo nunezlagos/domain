@@ -1,0 +1,34 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-10
+archived: ~
+notes: |
+  Implementado linter AST estático en cmd/response-shape-lint que detecta usos
+  crudos del ResponseWriter dentro de handlers `func (a *API) X(w, r)` en
+  internal/api/handler/*.go. Cubre:
+    - w.Write(...) directo
+    - json.NewEncoder(w).Encode(...) directo
+    - fmt.Fprintf/Fprintln/Fprint(w, ...) directo
+    - io.WriteString(w, ...) / io.Copy(w, ...) directo
+    - w.WriteHeader(<status>) con status distinto a StatusNoContent / StatusNotModified
+  Acepta como happy-path: writeData, writeDataWithMeta, writeError, y
+  w.WriteHeader(StatusNoContent | StatusNotModified) standalone.
+
+  Tests en cmd/response-shape-lint/main_test.go con fixtures testdata/*.go.txt
+  (8 fixtures, 9 casos test: OK writeData, OK 204, OK 304, BAD raw Write,
+  BAD json.NewEncoder, BAD WriteHeader(StatusOK), BAD fmt.Fprintf,
+  non-handler skip, negative apiHandlerWriterName).
+  Todos passing.
+
+  Completado 2026-06-10 (snapshot.go):
+    - Snapshots endpoint_shapes.json + error_codes.json con drift detection
+      y modo -update (internal/api/handler/testdata/api/).
+    - Rutas: kebab-case enforcement + POST create* → http.StatusCreated.
+    - Makefile api-lint / api-snapshot-update + CI job response-shape-lint.
+    - TestRealAPI_SnapshotsUpToDate + TestRealAPI_HandlersUseCanonicalWriters
+      corren en cada go test (auto-bootstrap del snapshot inicial).
+    - Violations de webhook.go (receiveWebhook raw WriteHeader/Encoder)
+      corregidas a writeData.
+
+  Deferred consciente (requieren runtime, no AST — cubrir en tests E2E
+  de REQ-13 si se priorizan): X-Request-Id header check, Location en 201.

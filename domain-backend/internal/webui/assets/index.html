@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Domain — Admin Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/admin/style.css">
+</head>
+<body>
+<header>
+  <h1>Domain · Dashboard</h1>
+  <span class="muted" id="last-refresh">cargando…</span>
+</header>
+
+<main>
+  <section class="stats" id="stats-grid">
+    <!-- populated por dashboard.js -->
+  </section>
+
+  <section class="runs">
+    <h2>Runs recientes</h2>
+    <table id="runs-table">
+      <thead>
+        <tr><th>Tipo</th><th>ID</th><th>Status</th><th>Inicio</th><th>Duración</th></tr>
+      </thead>
+      <tbody id="runs-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="muted">
+  Domain web dashboard (HU-16.1 MVP). Para flow editor (16.3) y admin CRUD
+  (16.4 / 16.5) ver HUs pendientes — esta es vista read-only minimal.
+</footer>
+
+<script src="/admin/dashboard.js"></script>
+</body>
+</html>

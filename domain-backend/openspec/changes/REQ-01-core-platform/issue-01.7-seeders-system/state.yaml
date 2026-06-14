@@ -1,0 +1,9 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Framework Seeder/Registry/RunAll con advisory lock + version tracking + DevOnly env
+  filter implementado y testeado (unit + integration). Migration 000024 seed_versions
+  aplicada. Catálogos concretos embed (plans, models, agents, etc.) pendientes — vienen
+  con sus HUs respectivas (issue-21.3 plans, issue-06.4 models, issue-08.5 agent-templates, etc.).

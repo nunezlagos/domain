@@ -1,0 +1,147 @@
+## Domain Helm values — defaults para producción
+##
+## Override en values-prod.yaml / values-staging.yaml según ambiente.
+
+image:
+  repository: ghcr.io/nunezlagos/domain
+  tag: ""    # default a Chart.appVersion si vacío
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+## Env config (HU-26.1 stateless). Secrets via external-secrets operator
+## en prod. NO commitear values con secrets reales.
+env:
+  DOMAIN_ENV: prod
+  DOMAIN_LOG_LEVEL: info
+  DOMAIN_LOG_FORMAT: json
+  DOMAIN_HTTP_BIND: 0.0.0.0
+  DOMAIN_HTTP_PORT: "8000"
+  DOMAIN_METRICS_ENABLED: "true"
+  DOMAIN_METRICS_BIND: 127.0.0.1
+  DOMAIN_METRICS_PORT: "9090"
+
+## Secrets referenciados (creados externamente con external-secrets o sealed-secrets).
+existingSecrets:
+  database:
+    name: domain-db
+    keyURL: DOMAIN_DATABASE_URL          # app_user DSN
+    keyAuthURL: DOMAIN_DATABASE_AUTH_URL  # app_admin DSN
+  smtp:
+    name: domain-smtp        # opcional
+    keyUser: DOMAIN_SMTP_USER
+    keyPassword: DOMAIN_SMTP_PASSWORD
+  llm:
+    name: domain-llm-keys
+    keyAnthropic: DOMAIN_ANTHROPIC_KEY
+    keyOpenAI: DOMAIN_OPENAI_KEY
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+service:
+  type: ClusterIP
+  port: 8000
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: api.domain.example.com
+      paths: ["/"]
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+livenessProbe:
+  httpGet: { path: /health, port: 8000 }
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet: { path: /health/ready, port: 8000 }
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  httpGet: { path: /health, port: 8000 }
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 30   # 5 min para migrations
+
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: domain
+          topologyKey: kubernetes.io/hostname
+
+## Pre-upgrade hook que aplica migrations antes del rollout pods (HU-24.1).
+migrations:
+  enabled: true
+  hookPolicy: pre-upgrade
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+## NetworkPolicy (HU-25.* network isolation)
+networkPolicy:
+  enabled: true
+  ingressFromNamespaces: [] # solo dentro del mismo namespace por default
+  egressToCIDRs:
+    - 0.0.0.0/0  # llamadas a LLM providers + SMTP
+
+## Prometheus ServiceMonitor (HU-17.1)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+
+## DB password rotation CronJob (HU-25.10).
+## Requiere DOMAIN_DATABASE_AUTH_URL en el Secret referenciado.
+dbRotation:
+  enabled: false
+  schedule: "0 0 1 */3 *"  # cada 3 meses, dia 1
+  role: app_user
+  resources:
+    requests: { cpu: 100m, memory: 64Mi }
+    limits:   { cpu: 200m, memory: 128Mi }

@@ -1,0 +1,6 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Sin dependencias de otras HUs. Puede implementarse en cualquier momento.
+  pgerrcode ya está disponible en go.mod.

@@ -1,0 +1,20 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/cli/output.Render con formatos json + table.
+
+  --format json: encoding/json.NewEncoder.SetIndent("","  ") para indented.
+  --format table (default): text/tabwriter con columnas priorizadas
+  (id, slug, name, status, title, started_at, created_at, etc.), trunca
+  celdas > 50 chars.
+
+  --json es alias de --format json.
+
+  issue-14.2 completo:
+  - yaml format (gopkg.in/yaml.v3) con indent 2
+  - csv format (encoding/csv) para data scripts
+  - --no-headers flag para output piped (table y csv)
+  - --quiet (-q) flag (solo errores + status code)
+  - --yaml y --csv flags directos como alias

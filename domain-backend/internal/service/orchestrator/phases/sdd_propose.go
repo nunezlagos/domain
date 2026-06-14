@@ -1,0 +1,59 @@
+package phases
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// sddProposeHandler — fase sdd-propose. system_prompt en BD.
+
+type sddProposeHandler struct{}
+
+func NewSDDProposeHandler() Handler { return &sddProposeHandler{} }
+
+func (h *sddProposeHandler) Slug() PhaseSlug { return PhaseSlug("sdd-propose") }
+
+func (h *sddProposeHandler) Build(_ context.Context, in Input) (*Output, error) {
+	if in.RawText == "" {
+		return nil, errors.New("sdd-propose: RawText vacío")
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Tarea original:\n%s\n\n", in.RawText)
+	if spec, ok := in.PriorOutputs[PhaseSlug("sdd-spec")]; ok {
+		if slug, ok := spec["issue_slug"].(string); ok {
+			fmt.Fprintf(&b, "Issue slug: %s\n", slug)
+		}
+		if md, ok := spec["issue_md"].(string); ok && md != "" {
+			fmt.Fprintf(&b, "\nSpec previa:\n%s\n\n", md)
+		}
+	}
+	fmt.Fprintln(&b, "Genera proposal.md con scope formal del cambio + esfuerzo estimado.")
+	return &Output{
+		AgentTemplateSlug: "sdd-propose",
+		SystemPrompt:      "",
+		UserPrompt:        b.String(),
+		SuggestedSaves: []SuggestedSave{
+			{Type: "knowledge_doc", Required: false,
+				Hint: "guardar knowledge_doc apuntando al proposal en draft"},
+		},
+		SkillThreshold: 0,
+		RetryPolicy:    RetryReemit,
+	}, nil
+}
+
+func (h *sddProposeHandler) Validate(_ context.Context, _ *Output, result ClientResult) error {
+	if result.Output == nil {
+		return errors.New("sdd-propose: cliente devolvió Output nulo")
+	}
+	if md, _ := result.Output["proposal_md"].(string); md == "" {
+		return errors.New("sdd-propose: campo 'proposal_md' requerido")
+	}
+	if status, _ := result.Output["status"].(string); status != "draft" {
+		// Forzamos draft per RFC 0006 D5: el orquestador no auto-promueve
+		// proposals; eso requiere acción humana o judge approval.
+		return errors.New("sdd-propose: status debe ser 'draft' — promoción requiere paso explícito")
+	}
+	return nil
+}

@@ -1,0 +1,116 @@
+# Prometheus alerts — SDD pipeline orchestrator (issue-08.10 obs-004)
+#
+# Las series instrumentadas por internal/metrics + internal/service/orchestrator:
+#   - domain_orchestrator_runs_total{mode, status}
+#   - domain_orchestrator_phase_duration_seconds{phase, mode}
+#   - domain_orchestrator_phase_results_total{phase, mode, result}
+#   - domain_orchestrator_confirms_total{confirmed}
+#   - domain_orchestrator_required_save_missing_total{phase, save_type}
+#
+# Estas reglas se cargan vía Prometheus rule_files o vía Kubernetes
+# PrometheusRule operator (kube-prometheus-stack). En dev, se pueden
+# cargar con: prometheus --rule-files=deploy/prometheus/alerts/*.yml
+
+groups:
+  - name: orchestrator_failures
+    interval: 1m
+    rules:
+      # Tasa de runs failed > 20% en 10 min → algo está roto.
+      - alert: OrchestratorFailureRateHigh
+        expr: |
+          (
+            sum(rate(domain_orchestrator_runs_total{status="failed"}[10m]))
+            /
+            (sum(rate(domain_orchestrator_runs_total{status="failed"}[10m]))
+             + sum(rate(domain_orchestrator_runs_total{status="completed"}[10m])))
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          component: orchestrator
+        annotations:
+          summary: "Orchestrator SDD: tasa de failed > 20% en 10min"
+          description: |
+            La proporción de runs failed vs completed superó 20% durante
+            10 minutos. Revisar logs de phase_result_failed:
+            kubectl logs -l app=domain-mcp --since=15m | grep RequiredSaveError
+
+      # D5 enforcement: muchas required_save_missing → problema de UX
+      # en cliente IDE (no está guardando memrefs correctamente).
+      - alert: OrchestratorD5RequiredSaveMissingSpike
+        expr: |
+          sum(rate(domain_orchestrator_required_save_missing_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: orchestrator
+          contract: D5
+        annotations:
+          summary: "Clientes IDE no están guardando required saves D5"
+          description: |
+            Más de 0.1/s de required_save_missing en 5min. Revisar qué
+            phase + save_type están fallando con la query:
+            sum by (phase, save_type)(rate(domain_orchestrator_required_save_missing_total[5m]))
+
+      # Phase duration p95 alto → algún cliente está tardando demasiado.
+      - alert: OrchestratorPhaseSlow
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (phase, mode, le)(rate(domain_orchestrator_phase_duration_seconds_bucket[10m]))
+          ) > 600
+        for: 15m
+        labels:
+          severity: info
+          component: orchestrator
+        annotations:
+          summary: "Phase {{ $labels.phase }} ({{ $labels.mode }}) p95 > 10 min"
+          description: |
+            La fase {{ $labels.phase }} en modo {{ $labels.mode }} está
+            tardando más de 10 minutos en el percentil 95. Posible:
+            modelo lento, heartbeat-watcher debería estar marcando timeout.
+
+      # D1 confirm rate: muchos rechazos consecutivos → el threshold
+      # default 10 líneas puede no estar bien calibrado para esta org.
+      - alert: OrchestratorD1ConfirmsRejected
+        expr: |
+          (
+            sum(rate(domain_orchestrator_confirms_total{confirmed="false"}[15m]))
+            /
+            (sum(rate(domain_orchestrator_confirms_total{confirmed="false"}[15m]))
+             + sum(rate(domain_orchestrator_confirms_total{confirmed="true"}[15m])))
+          ) > 0.5
+        for: 15m
+        labels:
+          severity: info
+          component: orchestrator
+          contract: D1
+        annotations:
+          summary: "Más del 50% de D1 confirms son rechazados"
+          description: |
+            Los usuarios están rechazando consistentemente el confirm de
+            Express. Considerar ajustar express_max_lines para esta org
+            o promover a Full mode por default.
+
+  - name: orchestrator_runs_state
+    interval: 5m
+    rules:
+      # Ratio de runs "started" sin "completed/failed" en 1h → flows
+      # quedan colgados (puede ser cliente IDE que no reporta phase_result).
+      - alert: OrchestratorRunsStuck
+        expr: |
+          (
+            sum(increase(domain_orchestrator_runs_total{status="started"}[1h]))
+            -
+            sum(increase(domain_orchestrator_runs_total{status=~"completed|failed"}[1h]))
+          ) > 5
+        for: 30m
+        labels:
+          severity: warning
+          component: orchestrator
+        annotations:
+          summary: "Más de 5 runs del orquestador sin terminal en 1h"
+          description: |
+            Heartbeat-watcher (issue-08.11) debería estar barriendo flows
+            colgados. Verificar el cron está corriendo:
+            domain_heartbeat_watcher_ticks_total{result="ok"}

@@ -1,0 +1,21 @@
+# Tasks: issue-05.6-agent-skill-contract
+
+- [x] **sc-001**: Migración skills + skill_versions con schemas, timeout, idempotent, depends_on
+- [x] **sc-002**: Dep `santhosh-tekuri/jsonschema/v5`
+- [x] **sc-003**: Validator al register: schema valido + sin refs externos
+- [x] **sc-004**: Defaults applier antes de validation
+- [x] **sc-005**: Error taxonomy types en `internal/skills/errors.go`
+- [x] **sc-006**: Adapters tool-calling: anthropic, openai, gemini, ollama
+- [x] **sc-007**: ExecContext con InvokeSkill + ChainDepth max 5
+- [x] **sc-008**: Timeout enforcement con context cancellation
+- [x] **sc-009**: Audit invocation chain en skill_executions
+- [x] **test-001**: Schema valid/invalid
+- [x] **test-002**: Defaults pre-validate
+- [x] **test-003**: 4 translations
+- [x] **test-004**: 8 error codes mapeo
+- [x] **test-005**: Retry classifier
+- [x] **test-006**: Skill A invoke B chain
+- [x] **test-007**: Max depth 5
+- [x] **test-008**: Timeout cancela
+- [x] **sabotaje-001**: schema con $ref externo → reject
+- [x] **docs-001**: `docs/skills/contract.md` con error semantics + ejemplos

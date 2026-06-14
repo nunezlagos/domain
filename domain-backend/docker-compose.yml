@@ -1,0 +1,113 @@
+# HU-01.6 local-dev-environment
+# `make dev-up` levanta este stack completo.
+# Bind exclusivo 127.0.0.1; versiones fijas; healthchecks; volúmenes nombrados.
+
+name: domain
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: domain_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DOMAIN_DB_USER:-domain}
+      POSTGRES_PASSWORD: ${DOMAIN_DB_PASSWORD:-domain}
+      POSTGRES_DB: ${DOMAIN_DB_NAME:-domain}
+    ports:
+      - "127.0.0.1:${HOST_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - domain_pg_data:/var/lib/postgresql/data
+      - ./scripts/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DOMAIN_DB_USER:-domain} -d ${DOMAIN_DB_NAME:-domain}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+    networks: [domain_dev_net]
+
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    container_name: domain_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${DOMAIN_S3_ACCESS_KEY:-domain}
+      MINIO_ROOT_PASSWORD: ${DOMAIN_S3_SECRET_KEY:-domainsecret}
+    ports:
+      - "127.0.0.1:${HOST_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${HOST_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - domain_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+    networks: [domain_dev_net]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    container_name: domain_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$DOMAIN_S3_ACCESS_KEY" "$$DOMAIN_S3_SECRET_KEY" &&
+        mc mb --ignore-existing local/"$$DOMAIN_S3_BUCKET" &&
+        mc anonymous set none local/"$$DOMAIN_S3_BUCKET" &&
+        echo "MinIO bucket '$$DOMAIN_S3_BUCKET' ready"
+    environment:
+      DOMAIN_S3_ACCESS_KEY: ${DOMAIN_S3_ACCESS_KEY:-domain}
+      DOMAIN_S3_SECRET_KEY: ${DOMAIN_S3_SECRET_KEY:-domainsecret}
+      DOMAIN_S3_BUCKET: ${DOMAIN_S3_BUCKET:-domain-assets}
+    restart: "no"
+    logging: *default-logging
+    networks: [domain_dev_net]
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: domain_adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha-dark
+    ports:
+      - "127.0.0.1:${HOST_ADMINER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    networks: [domain_dev_net]
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: domain_mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HOST_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${HOST_MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    logging: *default-logging
+    networks: [domain_dev_net]
+
+volumes:
+  domain_pg_data:
+  domain_minio_data:
+
+networks:
+  domain_dev_net:
+    driver: bridge

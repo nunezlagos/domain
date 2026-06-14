@@ -1,0 +1,11 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-11
+archived: ~
+notes: |
+  Cerrada por absorción (decisión MCP-first): la recomendación contextual
+  la entrega SearchHybrid (BM25 + pgvector + RRF, issue-05.2) vía MCP tool
+  domain_skill_search y GET /api/v1/skills/search; el orchestrator
+  (issue-08.10) recomienda skills por fase. Diferidos: endpoint /recommend
+  dedicado, batch, cache LRU de embeddings, truncado 512 tokens.
+  Ver tasks.md.

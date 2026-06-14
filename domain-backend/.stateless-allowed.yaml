@@ -1,0 +1,20 @@
+# Whitelist HU-26.1 stateless-invariant
+# Cada entrada documenta por qué un global in-memory es aceptable.
+# Format: path relative al root + var name + reason no-trivial.
+allowed:
+  - path: internal/auth/ratelimit/bucket.go
+    var: buckets
+    reason: |
+      Token-bucket per API key. Cross-pod inconsistency es aceptable porque
+      cada pod tiene su propio rate-limit (margen ~N×limit con N pods).
+      Migración a Postgres-backed pendiente HU-26 horizontal scalability.
+  - path: internal/mcp/resilience/cache.go
+    var: lruCache
+    reason: |
+      Cache LRU policies con TTL 5 min. No es state crítico: si pod muere,
+      siguiente pod re-fetcha de DB. Aceptable trade-off de rendimiento.
+  - path: internal/api/cursor/cursor.go
+    var: hmacKey
+    reason: |
+      HMAC key del cursor pagination cargada al boot desde env.
+      Inmutable post-init; lectura concurrente safe.

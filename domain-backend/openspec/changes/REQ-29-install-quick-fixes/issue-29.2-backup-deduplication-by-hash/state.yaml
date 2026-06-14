@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-06-12
+slug: backup-deduplication-by-hash
+issue: 29.2
+parent_req: REQ-29-install-quick-fixes
+effort: S
+priority: alta

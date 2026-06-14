@@ -1,0 +1,10 @@
+status: proposed
+created: 2026-06-12
+slug: opencode-json-untracked-permanent
+issue: 29.4
+parent_req: REQ-29-install-quick-fixes
+effort: XS
+priority: alta
+notes: >
+  Las entradas en .gitignore ya están (commit revert del 2026-06-12).
+  Este issue solo blinda con test de regresión.

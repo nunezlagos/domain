@@ -1,0 +1,37 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/secrets/rotation.go:
+  - GeneratePassword(nBytes) → base64url-safe 32 bytes = 256 bits entropy
+  - Rotator.RotateRole(ctx, role) ejecuta ALTER ROLE <role> PASSWORD <new>
+  - isValidRoleName valida lowercase + digits + underscore (anti-injection)
+  - pgQuoteIdent escapa identifier con double-quote
+  - pgQuoteLiteral usa dollar-quoted $domain_pw$ para passwords con chars especiales
+
+  Subcomando CLI: domain rotate-db-password [--role app_user]
+  - Genera password
+  - Aplica ALTER ROLE
+  - Imprime password a stdout (pipe-friendly para Secret Manager)
+  - Mensaje a stderr con next steps
+
+  Tests rotation_test.go (5):
+  - GeneratePassword entropy + length
+  - Min 16 bytes enforced
+  - isValidRoleName rechaza space/dash/semi/upper/emoji
+  - pgQuoteIdent escapa "
+  - pgQuoteLiteral dollar-quoted
+
+  docs/runbooks/db-password-rotation.md:
+  - Procedimiento manual paso-a-paso
+  - K8s CronJob ejemplo para cron 3-meses
+  - Audit log entry recomendada
+  - Caveat PgBouncer userlist.txt sync
+
+  Pending:
+  - K8s CronJob real bajo deploy/helm/domain/templates/cronjob-db-rotation.yaml
+  - AWS Secrets Manager integration helper en cmd/domain
+  - Rollback automático si rolling deploy falla
+  - Audit log entry automática post-rotation (insert via internal/audit)
+  - Dual-password support (Postgres 16+ tendrá password_to_be_used_at_login)

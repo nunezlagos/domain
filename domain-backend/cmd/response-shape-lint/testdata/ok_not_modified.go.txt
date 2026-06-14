@@ -1,0 +1,12 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+func (a *API) getThingCached(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("If-None-Match") == "abc" {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+}

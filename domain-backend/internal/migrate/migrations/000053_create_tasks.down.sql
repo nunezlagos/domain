@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS sabotage_records CASCADE;
+DROP TABLE IF EXISTS verification_results CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;

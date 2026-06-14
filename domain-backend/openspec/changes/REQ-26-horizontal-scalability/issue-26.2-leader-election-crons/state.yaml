@@ -1,0 +1,42 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/scheduler/leader.Election usando pg_try_advisory_lock.
+
+  API:
+  - TryAcquire(ctx): obtiene lock o devuelve false. Idempotente (re-call
+    desde el mismo Election devuelve true sin re-adquirir).
+  - Release(ctx): pg_advisory_unlock + connection release.
+  - RunAsLeader(ctx, fn): polling hasta ganar lock, ejecuta fn(ctx) hasta
+    return o ctx cancel.
+
+  Lock keys registry:
+  - 1001 CronScheduler
+  - 1002 OutboundWebhooks
+  - 1003 IdempotencyCleanup
+  - 1004 InvitationsExpire
+  - 1005 DBStatsSnapshot
+
+  Comportamiento ante falla:
+  - Postgres libera advisory lock automáticamente cuando session muere
+  - Otro pod gana en su próximo poll (default 10s)
+  - No requiere coordinación externa (Redis/etcd)
+
+  Wire cmd/domain server:
+  - cronsched.Scheduler ahora corre dentro de leaderElection.RunAsLeader
+  - Solo el pod leader corre crons; los demás idle waiting
+  - Cuando leader shutdown → otro pod toma
+
+  Tests integration (3 escenarios + 1 sabotaje):
+  - First wins, second loses
+  - RunAsLeader ejecuta work + libera lock al return
+  - Keys distintos no compiten
+  - sabotaje: TryAcquire idempotente desde mismo Election
+
+  Pending:
+  - Métricas Prometheus: domain_leader_is_leader{lock_key="..."}
+  - Wire en outbound webhooks (issue-10.4)
+  - Wire en idempotency cleanup (issue-13.4 expired keys)
+  - Health endpoint que reporta leader status

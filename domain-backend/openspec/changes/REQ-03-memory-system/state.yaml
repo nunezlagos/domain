@@ -1,0 +1,11 @@
+status: active
+created: 2026-06-07
+archived: ~
+hus:
+  03.1-observations-crud-fts: implemented
+  03.2-sessions-lifecycle: implemented
+  03.3-prompts-storage: implemented
+  03.4-knowledge-documents: implemented
+  03.5-context-timeline: implemented
+  03.6-dedup-privacy: implemented
+  03.7-cross-project-global-search: implemented

@@ -1,0 +1,16 @@
+status: proposed
+created: 2026-06-12
+priority: alta
+estimated_effort: 2-3 semanas
+hus:
+  31.1-mcp-http-client-mode: proposed
+  31.2-endpoint-coverage-rest-audit: proposed
+  31.3-vps-deploy-caddy-https: proposed
+  31.4-client-config-remote-url: proposed
+blocked_by:
+  - 29.3-server-http-listener-boot-fail-loud
+execution_order:
+  - 31.1  # refactor mayor primero (interface ToolHandler)
+  - 31.2  # audit tabla depende de 31.1 (tools ya refactoreadas)
+  - 31.3  # deploy paralelo (solo depende de 29.3)
+  - 31.4  # config flag cliente (depende de 29.3 + 31.1)

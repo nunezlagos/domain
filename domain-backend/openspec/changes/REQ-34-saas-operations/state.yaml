@@ -1,0 +1,13 @@
+status: proposed
+created: 2026-06-12
+priority: media
+estimated_effort: 1-2 semanas
+hus:
+  34.1-self-service-export-zip: proposed
+  34.2-org-delete-gdpr-cascade: proposed
+  34.3-smtp-real-providers: proposed
+  34.4-backup-nightly-b2: proposed
+  34.5-audit-log-multi-tenant: proposed
+notes: >
+  Operacional sin tiers comerciales. GDPR (export, delete),
+  SMTP real, backups B2, audit multi-tenant.

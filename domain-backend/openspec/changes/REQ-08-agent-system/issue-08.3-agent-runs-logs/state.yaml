@@ -1,0 +1,35 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Migration 000035_create_agent_run_logs:
+  - BIGSERIAL id, FK agent_run_id CASCADE
+  - iteration INT, event_type CHECK (llm_call/tool_call/tool_result/error/final)
+  - payload JSONB, tokens_input/output, latency_ms, occurred_at
+  - Indexes (agent_run_id, iteration) y (occurred_at DESC)
+  - GRANTs explícitos a app_user/app_admin
+
+  Wiring agent runner (issue-08.2 extendido):
+  - Cada iteración del loop emite appendLog según evento:
+    * llm_call: model, content, finish_reason, tool_calls + tokens + latency
+    * tool_call: tool_name + arguments (antes de ejecutar)
+    * tool_result: tool_name + result_preview (truncado a 500 chars)
+    * error: stage (llm_call|tool_execute) + error string
+    * final: status + output + error + cost_usd
+  - Best-effort: failure de logging NO interrumpe el run principal
+
+  HTTP: GET /api/v1/agent-runs/{id}/logs
+  - Cross-org guard antes de devolver logs
+  - Devuelve hasta 1000 entries ordenadas (iteration ASC, occurred_at ASC)
+  - Payload deserializado de JSONB a object JSON
+
+  Tests existentes en agent runner integration pasan después de wire del log
+  (tests no rompen, agente sigue funcionando).
+
+  Pending:
+  - Streaming logs via SSE GET /api/v1/agent-runs/{id}/logs/stream
+  - MCP tool domain_agent_run_logs(run_id) para que IDE consulte trace
+  - Test dedicado verificando que cada iteración persiste su log entry
+  - Retention policy de agent_run_logs (drop > 90 días via cron)
+  - Cost breakdown por iteration en logs (cost_usd_step calc desde model_registry)

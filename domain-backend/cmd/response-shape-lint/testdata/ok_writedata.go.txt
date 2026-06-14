@@ -1,0 +1,12 @@
+package handler
+
+import "net/http"
+
+type API struct{}
+
+func writeData(w http.ResponseWriter, status int, data any) {}
+
+func (a *API) getThing(w http.ResponseWriter, r *http.Request) {
+	thing := map[string]string{"id": "123"}
+	writeData(w, http.StatusOK, thing)
+}

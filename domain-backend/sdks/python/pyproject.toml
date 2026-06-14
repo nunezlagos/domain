@@ -1,0 +1,39 @@
+[project]
+name = "domain-sdk"
+version = "0.1.0"
+description = "Cliente Python para Domain (memoria + orquestación AI agents)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "proprietary" }
+authors = [{ name = "nunezlagos", email = "mauricionunezlagos@gmail.com" }]
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

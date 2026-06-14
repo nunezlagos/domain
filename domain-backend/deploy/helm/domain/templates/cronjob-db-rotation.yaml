@@ -1,0 +1,39 @@
+{{- if .Values.dbRotation.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "domain.fullname" . }}-db-rotation
+  labels:
+    {{- include "domain.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.dbRotation.schedule }}"
+  concurrencyPolicy: Forbid
+  StartingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "domain.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: rotate
+              image: {{ include "domain.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args: ["rotate-db-password", "--role", "{{ .Values.dbRotation.role }}"]
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              env:
+                - name: DOMAIN_DATABASE_AUTH_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecrets.database.name }}
+                      key: {{ .Values.existingSecrets.database.keyAuthURL }}
+              resources:
+                {{- toYaml .Values.dbRotation.resources | nindent 16 }}
+{{- end }}

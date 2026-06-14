@@ -1,0 +1,31 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/dbmon/ package con Collector + Snapshot + Evaluate:
+
+  Collector.Collect(ctx) → Snapshot{Connections, Tables, Locks} con 3 queries:
+  - pg_stat_activity → active/idle/idle_in_transaction/longest_query_seconds
+  - pg_stat_user_tables → top 50 tables ordenadas por dead_tuples DESC
+  - pg_locks LEFT JOIN pg_stat_activity → waiting_count + longest_wait_seconds
+
+  Evaluate(snapshot) → []Alert evalúa reglas:
+  - idle_in_transaction_high (>10) → warning
+  - long_running_query (>60s) → warning
+  - lock_wait_high (>5s) → warning
+  - dead_tuples_high (dead/live >0.5 con >1000 live) → warning
+
+  HTTP: GET /api/v1/admin/db-stats devuelve {data: snapshot, alerts: [...]}.
+
+  6 tests cubren las 4 reglas Evaluate + healthy + tablas pequeñas ignoradas.
+
+  Pending:
+  - Métricas Prometheus exportadas (gauge + counter):
+    domain_db_connections_active/idle/idle_in_transaction
+    domain_db_longest_query_seconds, _lock_waits_total
+    _table_dead_tuples{table}, _table_bloat_ratio{table}
+  - Cron periódico 30s push metrics
+  - Bloat query estándar más precisa
+  - pg_qualstats integration para advisor de índices
+  - RBAC strict (require platform_admin role en /admin/*)

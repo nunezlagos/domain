@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS users_is_erased_idx;
+ALTER TABLE users DROP COLUMN IF EXISTS erased_at;
+ALTER TABLE users DROP COLUMN IF EXISTS is_erased;

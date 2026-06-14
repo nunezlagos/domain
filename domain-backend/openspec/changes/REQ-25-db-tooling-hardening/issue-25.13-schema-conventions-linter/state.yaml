@@ -1,0 +1,31 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-08
+archived: ~
+notes: |
+  ## Implementado (2026-06-08)
+
+  ### Modo --fix
+  - dbconvlint.Fix(src) -> (string, bool): transforma automáticamente:
+    - prefer-jsonb: JSON → JSONB (respeta comments, overrides, inline comments)
+    - prefer-timestamptz: TIMESTAMP → TIMESTAMPTZ (solo cuando NO es "WITH TIME ZONE")
+  - Respeta overrides (-- domain-lint-ignore-next)
+  - No modifica líneas comentadas
+
+  ### CLI
+  - --fix flag en cmd/db-conventions-lint
+  - Lee archivo, aplica Fix, escribe el resultado
+  - Corre lint post-fix para confirmar que los issues se resolvieron
+  - Reporta "N file(s) fixed" en stdout
+
+  ### Tests
+  - 7 tests nuevos: JSON→JSONB, JSONB unchanged, TIMESTAMP→TIMESTAMPTZ,
+    TIMESTAMP WITH TIME ZONE unchanged, multiple replacements,
+    override respected, comment ignored
+  - 1 sabotage: comment no falso
+
+  ## Pending (aún no implementado)
+  - Trigger set_updated_at_<table> auto-check
+  - Particionado para tablas log declarado
+  - Detector más fino de pluralización
+  - Integración CI step

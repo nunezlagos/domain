@@ -1,0 +1,21 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  API key auth via internal/auth/apikey/middleware.go (Middleware.Wrap).
+  RBAC via internal/auth/rbac/resolver.go (RequireRole, RequirePermission).
+  Rate limiter via internal/api/middleware/ratelimit.go (token bucket).
+  Auth allowlist en api.go para health y webhooks.
+
+  Cerrado:
+  - Request logging middleware (internal/api/middleware/requestlog.go):
+    loggea method, path, status, duration via slog.Info.
+  - CORS middleware (internal/api/middleware/cors.go):
+    DefaultCORS con Allow-Origin * + métodos/headers comunes,
+    maneja OPTIONS preflight con 204 No Content.
+  - Cache API keys con TTL (internal/auth/apikey/cache.go):
+    CachedResolver wrapping PGStore con TTL 5min y eviction automática.
+    Resuelve ~100 QPS sin saturar DB en cada request.
+  Todos wireados en cmd/domain/main.go: CORS externo, request-log interno,
+  cached resolver en authMW.

@@ -1,0 +1,13 @@
+status: proposed
+created: 2026-06-12
+slug: server-http-listener-boot-fail-loud
+issue: 29.3
+parent_req: REQ-29-install-quick-fixes
+effort: M
+priority: alta
+blocks: REQ-31-mcp-http-vps-mode
+notes: >
+  Bug serio detectado en producción local 2026-06-12: domain.service
+  "active" pero sin listener HTTP. Root cause hipotética: bind error
+  silenciado o panic recuperado antes del os.Exit. Fix: FATAL log
+  explícito + watchdog post-bind + panic recovery en handler root.

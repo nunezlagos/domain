@@ -1,0 +1,20 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-10
+archived: ~
+notes: |
+  Implementación completa de durable execution para flow runs.
+
+  Componentes:
+  - internal/runner/flow/claim.go: ClaimRun con FOR UPDATE SKIP LOCKED
+  - internal/runner/flow/heartbeat.go: Heartbeat goroutine cada 30s
+  - internal/runner/flow/recovery.go: Recovery scanner (libera worker_id, crash-loop detection)
+  - internal/runner/flow/resume.go: ResumeRun desde cursor con skip de completados
+  - internal/runner/flow/durable.go: Gzip compression, S3 spillover (>10MB),
+    idempotency keys (flow_run:uuid:step:key), replay_safe detection
+  - internal/metrics/metrics.go: FlowHeartbeatAgeSeconds gauge
+  - Migration 000076: output_compressed BYTEA, output_s3_key VARCHAR(500)
+
+  Tests: 8 unit + 5 integration (claim, recovery, race, compress, idempotency)
+  Build: go build + go vet + go test -short → PASS
+  Lock key: LockKeyFlowRecovery (existente)

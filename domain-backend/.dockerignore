@@ -1,0 +1,17 @@
+# Domain dockerignore
+.git
+.github
+.claude
+.idea
+.vscode
+*.md
+docs
+openspec
+testdata
+*_test.go
+.env*
+*.log
+node_modules
+dist
+bin
+.goreleaser.yml

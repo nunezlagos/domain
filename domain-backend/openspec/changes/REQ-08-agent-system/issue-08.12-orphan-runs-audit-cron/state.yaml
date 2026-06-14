@@ -1,0 +1,30 @@
+status: implemented
+created: 2026-06-10
+implemented: 2026-06-10
+archived: ~
+blocks:
+  - issue-08.10-sdd-pipeline-orchestrator
+rfc: docs/rfc/0006-sdd-pipeline-orchestrator.md
+notes: |
+  internal/scheduler/cron/system/orphan_runs_audit.go.
+  Cuenta agent_runs con flow_run_id IS NULL y sin metadata.standalone='true'.
+  Agrupa por organization_id e incrementa domain_agent_runs_orphan_total{org_id,
+  reason='bypass_service_layer'} con el count.
+
+  Idempotente via system_state.key='orphan_runs_audit' con last_ack_at JSONB.
+  Primera ejecución desde 24h atrás; ticks sucesivos desde last_ack_at persistido.
+
+  Tick default 24h con primera ejecución inmediata al startup (útil para detectar
+  bypass acumulado pre-deploy).
+
+  Migration 000074_system_state_and_run_metadata: agrega tabla system_state +
+  columna agent_runs.metadata JSONB (default '{}'). Cero schema destructivo.
+
+  Métricas: domain_agent_runs_orphan_total{org_id, reason},
+  domain_orphan_audit_ticks_total{result}.
+
+  Config env: DOMAIN_ORPHAN_AUDIT_ENABLED (true), DOMAIN_ORPHAN_AUDIT_SCHEDULE.
+
+  Lock key: LockKeyOrphanRunsAudit = 1007 (reservado, integrado via RunAsLeader).
+
+  Tests: 4 integration verdes (detection, standalone-ignored, idempotency, sabotage).

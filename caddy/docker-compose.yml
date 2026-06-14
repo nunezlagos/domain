@@ -1,0 +1,30 @@
+services:
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: domain-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - domain_internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  domain_internal:
+    name: domain_internal
+    external: true
+
+volumes:
+  caddy_data:
+    name: domain_caddy_data
+  caddy_config:
+    name: domain_caddy_config

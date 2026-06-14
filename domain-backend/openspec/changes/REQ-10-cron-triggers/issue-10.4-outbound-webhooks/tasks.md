@@ -1,0 +1,22 @@
+# Tasks: issue-10.4-outbound-webhooks
+
+- [x] **ow-001**: Migración subscriptions + deliveries → migration 000038
+- [x] **ow-002**: Event publisher hooks → RunnerEmitter (agent/flow/usage) + EmitEntityEvent genérico wireado en observation.Save (observation.created) e invite.Create (invite.created, sin email por PII) — 2026-06-10
+- [x] **ow-003**: Dispatcher worker pool → ProcessPending (FOR UPDATE SKIP LOCKED, multi-worker)
+- [x] **ow-004**: HMAC signer → X-Domain-Signature sha256=hmac(secret, ts.body) + timestamp anti-replay
+- [x] **ow-005**: Retry policy 8 attempts → RetryBackoff 10s..24h → dead_letter
+- [x] **ow-006**: Circuit breaker rolling 1h → circuitOpen (CBThreshold=10 fallos + cooldown 1h desde last_failure_at; reprograma sin golpear endpoint) — 2026-06-10
+- [x] **ow-007**: SSRF validator → ValidateURL (loopback + rfc1918 + link-local + .local/.internal; TLS-only opcional)
+- [x] **ow-008**: Filters eval seguro → matchesFilters con paths anidados por punto + índices de array (lookupPath, traversal puro sin eval) — 2026-06-10
+- [x] **ow-009**: Endpoint CRUD subscriptions → POST/GET/DELETE /api/v1/outbound-webhooks
+- [x] **ow-010**: Endpoint POST replay → /api/v1/outbound-webhooks/deliveries/{id}/replay (202, ciclo fresco) — 2026-06-10
+- [x] **ow-011**: Endpoint POST test → /{id}/test (webhook.test_ping)
+- [x] **ow-012**: Secret encryption issue-02.3 → secret_cipher AES-256-GCM
+- [x] **test-001**: Subscribe + event delivery → TestDelivery_HMACVerifiable (succeeded persistido) — 2026-06-10
+- [x] **test-002**: HMAC verifiable → mismo test (firma recomputada por el receptor) — 2026-06-10
+- [x] **test-003**: Retry 503 → TestDelivery_RetryAndReplay (pending + attempt 2 con backoff) — 2026-06-10
+- [x] **test-004**: Filter → TestDelivery_FiltersApplied + TestMatchesFilters_TopLevelAndNested + TestSabotage_Filters_NoEval — 2026-06-10
+- [x] **test-005**: SSRF blocked → TestValidateURL_* (service_test.go) + fixture documenta el bloqueo de loopback
+- [x] **test-006**: Circuit breaker → TestDelivery_CircuitBreakerSkips + TestCircuitOpen_Threshold — 2026-06-10
+- [x] **test-007**: Replay → TestDelivery_RetryAndReplay (dead_letter → pending → reprocesado) — 2026-06-10
+- [x] **docs-001**: `docs/webhooks/outbound.md` con receiver implementation (verificación HMAC + anti-replay) — 2026-06-10

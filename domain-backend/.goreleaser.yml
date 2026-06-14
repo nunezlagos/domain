@@ -1,0 +1,139 @@
+version: 2
+
+project_name: domain
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: domain
+    main: ./cmd/domain
+    binary: domain
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+      - -X main.BuildTime={{.Date}}
+
+  - id: domain-mcp
+    main: ./cmd/domain-mcp
+    binary: domain-mcp
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+      - -X main.BuildTime={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+dockers:
+  - image_templates:
+      - "ghcr.io/nunezlagos/domain:{{ .Version }}-amd64"
+      - "ghcr.io/nunezlagos/domain:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/nunezlagos/domain"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+    ids: [domain]
+
+  - image_templates:
+      - "ghcr.io/nunezlagos/domain:{{ .Version }}-arm64"
+      - "ghcr.io/nunezlagos/domain:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/nunezlagos/domain"
+    goarch: arm64
+    ids: [domain]
+
+docker_manifests:
+  - name_template: "ghcr.io/nunezlagos/domain:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/nunezlagos/domain:{{ .Version }}-amd64"
+      - "ghcr.io/nunezlagos/domain:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/nunezlagos/domain:latest"
+    image_templates:
+      - "ghcr.io/nunezlagos/domain:latest-amd64"
+      - "ghcr.io/nunezlagos/domain:latest-arm64"
+
+# SBOM via syft + firma cosign keyless (sigstore OIDC)
+sboms:
+  - artifacts: archive
+
+signs:
+  - cmd: cosign
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+
+docker_signs:
+  - cmd: cosign
+    args: ["sign", "--yes", "${artifact}"]
+    artifacts: all
+    output: true
+
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: Bug fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Performance
+      regexp: "^.*perf[(\\w)]*:+.*$"
+      order: 2
+    - title: Refactors
+      regexp: "^.*refactor[(\\w)]*:+.*$"
+      order: 3
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  github:
+    owner: nunezlagos
+    name: domain
+  draft: false
+  prerelease: auto
+  header: |
+    ## Domain {{ .Version }}
+
+    Plataforma de memoria + orquestación de agentes IA.
+  footer: |
+    ---
+    Verificación: `cosign verify-blob --signature ... checksums.txt`

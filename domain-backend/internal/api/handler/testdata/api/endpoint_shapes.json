@@ -1,0 +1,1012 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/activity-logs",
+    "handler": "listActivityLogs"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/db-stats",
+    "handler": "getDBStats"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/db/slow-queries",
+    "handler": "getSlowQueries"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/runtime-configs/{key}",
+    "handler": "getRuntimeConfig"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/runtime-configs/{key}",
+    "handler": "updateRuntimeConfig"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agent-runs/{id}/logs",
+    "handler": "getAgentRunLogs"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agents",
+    "handler": "listAgents"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/agents",
+    "handler": "createAgent"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/agents/{id}",
+    "handler": "deleteAgent"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agents/{id}",
+    "handler": "getAgent"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/agents/{id}",
+    "handler": "updateAgent"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/agents/{id}/run",
+    "handler": "runAgent"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/agents/{id}/versions",
+    "handler": "listAgentVersions"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/api-keys",
+    "handler": "listAPIKeys"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/api-keys",
+    "handler": "createAPIKey"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/api-keys/{id}",
+    "handler": "revokeAPIKey"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/attachments",
+    "handler": "listAttachments"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments",
+    "handler": "initUpload"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/attachments/{id}",
+    "handler": "deleteAttachment"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/{id}/confirm",
+    "handler": "confirmUpload"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/attachments/{id}/download",
+    "handler": "getAttachmentDownload"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/audit-logs",
+    "handler": "listAuditLogs"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/bootstrap",
+    "handler": "authBootstrap"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/enroll",
+    "handler": "enrollSelf"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/first-run",
+    "handler": "authFirstRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/request-otp",
+    "handler": "requestOTP"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/verify-otp",
+    "handler": "verifyOTP"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/context",
+    "handler": "getContext"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/breakdown/{dimension}",
+    "handler": "getCostBreakdown"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/budgets",
+    "handler": "listBudgets"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/cost/budgets",
+    "handler": "createBudget"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/cost/budgets/{id}",
+    "handler": "deleteBudget"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/daily",
+    "handler": "getCostDaily"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/export",
+    "handler": "exportCost"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/forecast",
+    "handler": "getCostForecast"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cost/spend/{granularity}",
+    "handler": "getCostSpend"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/crons",
+    "handler": "listCrons"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/crons",
+    "handler": "createCron"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/crons/{id}",
+    "handler": "deleteCron"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/crons/{id}",
+    "handler": "getCron"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/crons/{id}",
+    "handler": "patchCron"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/crons/{id}/history",
+    "handler": "cronHistory"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/designs/{id}/status",
+    "handler": "changeDesignStatus"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dlq",
+    "handler": "listDLQ"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/dlq/{id}",
+    "handler": "resolveDLQ"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/executions/{id}",
+    "handler": "getExecution"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flow-runs/{id}",
+    "handler": "getFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/cancel",
+    "handler": "cancelFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/pause",
+    "handler": "pauseFlowRun"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flow-runs/{id}/resume",
+    "handler": "resumeFlowRun"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flow-runs/{id}/stream",
+    "handler": "streamFlowRun"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flows",
+    "handler": "listFlows"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flows",
+    "handler": "createFlow"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flows/import",
+    "handler": "importFlow"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/flows/{id}",
+    "handler": "deleteFlow"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flows/{id}",
+    "handler": "getFlow"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/flows/{id}",
+    "handler": "updateFlow"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/flows/{id}",
+    "handler": "replaceFlow"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flows/{id}/dry-run",
+    "handler": "dryRunFlow"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flows/{id}/export",
+    "handler": "exportFlow"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/flows/{id}/parents",
+    "handler": "listFlowParents"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/flows/{id}/run",
+    "handler": "runFlow"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/hu-drafts",
+    "handler": "listHubDrafts"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/hu-drafts",
+    "handler": "startHubDraft"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/hu-drafts/{id}/abandon",
+    "handler": "abandonHubDraft"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/hu-drafts/{id}/answer",
+    "handler": "answerHubDraft"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/hu-drafts/{id}/commit",
+    "handler": "commitHubDraft"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/hu-drafts/{id}/preview",
+    "handler": "previewHubDraft"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks",
+    "handler": "listInboundWebhooks"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inbound-webhooks",
+    "handler": "createInboundWebhook"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inbound-webhooks/deliveries/{id}/replay",
+    "handler": "replayWebhookDelivery"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "deleteInboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "getInboundWebhook"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/inbound-webhooks/{id}",
+    "handler": "patchInboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inbound-webhooks/{id}/deliveries",
+    "handler": "listWebhookDeliveries"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/invitations/{id}/revoke",
+    "handler": "revokeInvite"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/invitations/{token}/accept",
+    "handler": "acceptInvite"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/invitations/{token}/decline",
+    "handler": "declineInvite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/knowledge",
+    "handler": "listKnowledge"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/knowledge",
+    "handler": "saveKnowledge"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/knowledge/search",
+    "handler": "searchKnowledge"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/knowledge/{id}",
+    "handler": "deleteKnowledge"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/knowledge/{id}",
+    "handler": "getKnowledge"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/mcp-servers",
+    "handler": "listMCPServers"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mcp-servers",
+    "handler": "createMCPServer"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/mcp-servers/{id}",
+    "handler": "deleteMCPServer"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/mcp-servers/{id}",
+    "handler": "getMCPServer"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mcp-servers/{id}/invoke",
+    "handler": "invokeMCPTool"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mcp-servers/{id}/sync-tools",
+    "handler": "syncMCPTools"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/mcp-servers/{id}/tools",
+    "handler": "listMCPTools"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/me/erase",
+    "handler": "eraseMyData"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/me/export",
+    "handler": "exportMyData"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/observations",
+    "handler": "listObservations"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/observations",
+    "handler": "saveObservation"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/observations/{id}",
+    "handler": "deleteObservation"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/observations/{id}",
+    "handler": "getObservation"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/observations/{id}/timeline",
+    "handler": "getTimeline"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations",
+    "handler": "createOrg"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/organizations/{id}",
+    "handler": "deleteOrg"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}",
+    "handler": "getOrg"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/organizations/{id}",
+    "handler": "updateOrg"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/organizations/{id}/enrollment-token",
+    "handler": "deleteEnrollmentToken"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/enrollment-token",
+    "handler": "getEnrollmentTokenMetadata"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/enrollment-token/rotate",
+    "handler": "rotateEnrollmentToken"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/invitations",
+    "handler": "listInvites"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/invitations",
+    "handler": "createInvite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/members",
+    "handler": "listMembers"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/members",
+    "handler": "addMemberWithKey"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/members/{user_id}/role",
+    "handler": "assignRole"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/roles",
+    "handler": "listRoles"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/roles",
+    "handler": "createRole"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/organizations/{id}/roles/{slug}",
+    "handler": "deleteRole"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/roles/{slug}",
+    "handler": "getRole"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/organizations/{id}/roles/{slug}",
+    "handler": "updateRole"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/transfer-ownership",
+    "handler": "transferOwnership"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/outbound-webhooks",
+    "handler": "listOutboundWebhooks"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/outbound-webhooks",
+    "handler": "createOutboundWebhook"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/outbound-webhooks/deliveries/{id}/replay",
+    "handler": "replayOutboundDelivery"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/outbound-webhooks/{id}",
+    "handler": "deleteOutboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/outbound-webhooks/{id}",
+    "handler": "getOutboundWebhook"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/outbound-webhooks/{id}/test",
+    "handler": "testOutboundWebhook"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/platform/policies",
+    "handler": "listPolicies"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/platform/policies",
+    "handler": "createPolicy"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/platform/policies/{id}",
+    "handler": "deletePolicy"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/platform/policies/{id}",
+    "handler": "updatePolicy"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/platform/policies/{slug}",
+    "handler": "getPolicyBySlug"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/project-templates",
+    "handler": "listProjectTemplates"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/project-templates",
+    "handler": "createProjectTemplate"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/project-templates/{id}",
+    "handler": "deleteProjectTemplate"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/project-templates/{id}",
+    "handler": "getProjectTemplate"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/projects",
+    "handler": "listProjects"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/projects",
+    "handler": "createProject"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/projects/{slug}",
+    "handler": "deleteProject"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/projects/{slug}",
+    "handler": "getProject"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/projects/{slug}",
+    "handler": "updateProject"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/prompts",
+    "handler": "createPrompt"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/prompts/by-slug/{slug}/versions",
+    "handler": "listPromptVersions"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/prompts/search",
+    "handler": "searchPrompts"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/prompts/{id}",
+    "handler": "deletePrompt"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/prompts/{id}",
+    "handler": "getPrompt"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/prompts/{id}/activate",
+    "handler": "setActivePrompt"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/proposals/{id}/status",
+    "handler": "changeProposalStatus"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/requirements",
+    "handler": "listRequirements"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/requirements",
+    "handler": "createRequirement"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/requirements/{slug}",
+    "handler": "getRequirement"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/requirements/{slug}",
+    "handler": "updateRequirement"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/requirements/{slug}/archive",
+    "handler": "archiveRequirement"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/requirements/{slug}/tree",
+    "handler": "getRequirementTree"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/restore",
+    "handler": "restoreEntity"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/runs/{id}/signals",
+    "handler": "signalFlowRun"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/search",
+    "handler": "searchObservations"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions",
+    "handler": "listSessions"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/sessions",
+    "handler": "startSession"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/active",
+    "handler": "activeSession"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/{id}",
+    "handler": "getSession"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/sessions/{id}/end",
+    "handler": "endSession"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/skills",
+    "handler": "listSkills"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/skills",
+    "handler": "createSkill"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/skills/search",
+    "handler": "searchSkills"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/skills/{id}",
+    "handler": "deleteSkill"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/skills/{id}",
+    "handler": "getSkill"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/skills/{id}",
+    "handler": "updateSkill"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/skills/{id}/execute",
+    "handler": "executeSkill"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tasks/{id}",
+    "handler": "getTask"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tasks/{id}/sabotage",
+    "handler": "createSabotage"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/tasks/{id}/status",
+    "handler": "updateTaskStatus"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tasks/{id}/verification",
+    "handler": "createVerification"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/code",
+    "handler": "getCodeTrace"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/traceability/code-refs",
+    "handler": "addCodeReference"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/traceability/code-refs/{id}",
+    "handler": "removeCodeReference"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/consolidated",
+    "handler": "getConsolidatedReport"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/coverage",
+    "handler": "getCoverageDashboard"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/gaps/incomplete-tasks",
+    "handler": "getHUsWithIncompleteTasks"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/gaps/no-design",
+    "handler": "getHUsWithoutDesigns"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/gaps/no-proposal",
+    "handler": "getHUsWithoutProposals"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/progress",
+    "handler": "getProgressReport"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/traceability/req/{slug}",
+    "handler": "getRequirementTrace"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage",
+    "handler": "getCurrentUsage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage-alerts",
+    "handler": "listUsageAlerts"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/usage-alerts",
+    "handler": "createUsageAlert"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/usage-alerts/{id}",
+    "handler": "deleteUsageAlert"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/usage-alerts/{id}",
+    "handler": "updateUsageAlert"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage-alerts/{id}/fires",
+    "handler": "listUsageAlertFires"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage/current",
+    "handler": "usageCurrentSnapshot"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/usage/history",
+    "handler": "usageHistory"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories",
+    "handler": "listUserStories"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/user-stories",
+    "handler": "createUserStory"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/user-stories/{slug}",
+    "handler": "deleteUserStory"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}",
+    "handler": "getUserStory"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/user-stories/{slug}",
+    "handler": "updateUserStory"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/designs",
+    "handler": "listDesigns"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/user-stories/{slug}/designs",
+    "handler": "createDesign"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/designs/latest",
+    "handler": "getLatestDesign"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/progress",
+    "handler": "getProgress"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/proposals",
+    "handler": "listProposalVersions"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/user-stories/{slug}/proposals",
+    "handler": "createProposal"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/proposals/latest",
+    "handler": "getLatestProposal"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/user-stories/{slug}/scenarios",
+    "handler": "addScenario"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/user-stories/{slug}/scenarios/{id}",
+    "handler": "removeScenario"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/user-stories/{slug}/tasks",
+    "handler": "listTasks"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/user-stories/{slug}/tasks",
+    "handler": "createTasks"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/webhooks/{slug}/receive",
+    "handler": "receiveWebhook"
+  }
+]

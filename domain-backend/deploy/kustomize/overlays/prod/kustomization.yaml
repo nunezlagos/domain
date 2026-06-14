@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Overlay prod: 3+ réplicas, HPA 3-12, PDB minAvailable=2.
+
+namespace: domain-prod
+namePrefix: prod-
+
+bases:
+  - ../../base
+
+commonAnnotations:
+  domain.io/environment: prod
+
+replicas:
+  - name: domain
+    count: 3
+
+resources:
+  - pdb.yaml
+
+patches:
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: domain
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 12
+
+configMapGenerator:
+  - name: domain-env-config
+    literals:
+      - DOMAIN_LOG_LEVEL=info
+      - DOMAIN_LOG_FORMAT=json
+      - DOMAIN_METRICS_ENABLED=true
+      - DOMAIN_OTEL_SAMPLE_RATIO=0.05

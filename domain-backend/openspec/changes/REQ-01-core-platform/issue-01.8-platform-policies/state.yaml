@@ -1,0 +1,42 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  migration 000045 con platform_policies (slug, name, kind enum, body_md,
+  body_structured JSONB, version, is_active, source_file) + platform_policy_versions
+  (history). UNIQUE (slug, is_active) — solo una activa por slug.
+
+  internal/service/policy/ package:
+  - 7 kinds: convention, security_rule, architecture, sdd_workflow,
+    observability, migration_rule, linter_config
+  - Create/GetBySlug/List/Update/Delete
+  - Update transaccional: archiva versión actual + bump + UPDATE (atómico)
+  - Delete = soft-delete (is_active=FALSE)
+  - GetBySlug retorna solo is_active=TRUE
+
+  HTTP /api/v1/platform/policies:
+  - POST create
+  - GET list (?kind= filtro opcional)
+  - GET /{slug}
+  - PATCH /{id} con ChangedBy del principal
+  - DELETE /{id} (soft)
+
+  Tests cubren validKinds + reSlug + invalid slug/kind + sentinel.
+
+  Cerrado 2026-06-11 (MCP-first):
+  - MCP tools domain_policy_get(slug) + domain_policy_list(kind) en
+    internal/mcp/server/policy_tools.go, wireados en cmd/domain-mcp
+    (TestMCP_PolicyGetAndList: get body completo, list, slug inexistente).
+  - CLI domain policies import-md/export-md (front matter, kind.slug.md,
+    --dry-run) en internal/cli/commands/policies.go.
+  - Seeder platform_policies (10 policies baseline desde .claude/rules/).
+  - is_user_modified: migration 000082 + guard CASE WHEN en seeder +
+    Update del service marca TRUE → TestPlatformPoliciesSeeder_PreservesUserModified.
+
+  Diferido (decisión MCP-first 2026-06-10, ver tasks.md):
+  - Parser md→body_structured + renderer (body_md es lo que consume el agente)
+  - FTS search + domain_policies_search (list cubre <30 policies)
+  - Cache LRU 5min (se evalúa con issue-12.6)
+  - GET versions history + rollback endpoint (history sí se persiste)
+  - Linters leyendo body_structured

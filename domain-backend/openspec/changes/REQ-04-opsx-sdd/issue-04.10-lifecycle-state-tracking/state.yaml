@@ -1,0 +1,12 @@
+status: implemented
+created: 2026-06-09
+implemented: 2026-06-09
+archived: ~
+notes: |
+  Core feature completa: state machines declarativas para 7 entity_kinds
+  (intake, req, hu, sync_state, proposal, design, task), tabla append-only
+  con trigger anti-UPDATE/DELETE + GRANT mínimo, vista v_stuck_entities
+  para detección de bloqueos.
+  Pendiente solo glue UI (dashboard endpoints / web view) y hooks que
+  llamen Record desde los services existentes (intake/extsync/issuebuilder)
+  — esos son seguimientos de adopción, no nuevo dominio.

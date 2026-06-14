@@ -1,0 +1,46 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  migration 000043: ALTER TABLE users ADD is_erased BOOLEAN + erased_at TIMESTAMPTZ
+  + partial index users_is_erased_idx WHERE is_erased=TRUE.
+
+  internal/service/lifecycle/erasure.go:
+  - EraseUser(ctx, userID, actorID, reason) → EraseResult{updated_rows, revoked_keys}
+  - Transaccional con pgx.BeginTx:
+    1. Lookup user + verify !is_erased → ErrAlreadyErased si ya está
+    2. Verify NO owner de orgs con miembros → ErrTransferOwnershipFirst
+    3. UPDATE users PII (email anonimizado, rut/phone/name NULL, is_erased=TRUE)
+    4. UPDATE observations/sessions/prompts/knowledge_docs/agent_runs:
+       created_by/user_id → NULL (preserva content por valor histórico)
+    5. UPDATE api_keys SET revoked_at=NOW WHERE user_id=$1 AND revoked_at IS NULL
+  - audit_log se mantiene intacto (legal hold)
+  - Sentinels: ErrAlreadyErased, ErrUserNotFound, ErrTransferOwnershipFirst
+
+  HTTP POST /api/v1/me/erase:
+  - Body: {confirmation: "DELETE_ME", reason?: "..."}
+  - Validation strict: confirmation != "DELETE_ME" → 422 confirmation_required
+  - 409 already_erased si ya pasó
+  - 409 transfer_ownership_first si bloqueado por org
+  - 200 EraseResult con counts
+
+  Audit "user.erased" persistido post-tx con actor_id + entity_id + reason +
+  updated_rows JSON.
+
+  Tests (4) erasure_test.go cubren sentinels + EraseResult shape.
+
+  Cobertura issue-23.4 escenarios:
+  - 1 self-service: ✓
+  - 2 idempotencia: ✓ (ErrAlreadyErased)
+  - 3 confirmation wrong: ✓ (422)
+  - 4 audit trail preserved: ✓
+  - 5 admin erase otro user: ✗ pendiente endpoint /admin/users/{id}/erase
+  - 6 owner transfer first: ✓
+
+  Pending:
+  - Endpoint POST /api/v1/admin/users/{id}/erase con RBAC platform_admin
+  - Cascade en outbound_webhook_subscriptions creadas por el user
+  - Notificación email "tu cuenta ha sido erased" (con SMTP)
+  - Cleanup S3 attachments del user
+  - 14-day grace period opcional para re-activación

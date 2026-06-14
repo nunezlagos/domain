@@ -1,0 +1,18 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/audit: Recorder interface + PGRecorder con pgxpool + NopRecorder
+  para tests. Event con OldValues/NewValues JSONB diff, actor_type enum,
+  ip/ua/request_id/trace_id opcionales (NULL si vacío).
+  Tests: 3 unit + 4 integration + sabotaje app_user UPDATE/DELETE denied
+  (cubre issue-25.6 REVOKE inmutabilidad).
+  Inmutabilidad enforced por DB grants (issue-25.6) + futuro pgaudit (issue-25.7).
+  AuditMiddleware HTTP inyecta IP/UA/RequestID en context para PGRecorder.
+  CLI: domain audit prune con --retention (default 90d) y --dry-run.
+  Retention purge cron: runAuditPruneScheduler ejecuta Prune cada 24h
+  desde el leader scheduler (retention 90d).
+  Auto-record en mutaciones HTTP: cubierto por service-layer Recording
+  en cada servicio (s.Audit.Record) — 73+ call sites en toda la codebase.
+  Middleware HTTP específico sería redundante.

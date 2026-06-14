@@ -1,0 +1,11 @@
+status: proposed
+created: 2026-06-12
+slug: opencode-shell-wrapper-optin
+issue: 30.2
+parent_req: REQ-30-multi-tool-propagation
+effort: S
+priority: alta
+depends_on: 30.1
+notes: >
+  El wrapper depende de 30.1 (auto-detect) para tener un comando al
+  cual llamar.

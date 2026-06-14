@@ -1,0 +1,27 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Cost analytics queries via internal/service/cost/service.go.
+
+  Endpoint:
+  - GET /api/v1/cost/daily?group_by=org → cost diario consolidado de la org
+  - GET /api/v1/cost/daily?group_by=agent → breakdown por agente
+
+  Schema:
+  - domain_cost_daily_by_org: organization_id, day, runs, tokens_input,
+    tokens_output, cost_usd, avg_duration_s
+  - domain_cost_daily_by_agent: + agent_id + agent_slug
+
+  Vistas se actualizan al vuelo (no materializadas) — performance OK por:
+  - Index implícito en (organization_id, finished_at) via tabla agent_runs
+  - Filtro de status='completed'|'failed' descarta runs en flight
+  - GROUP BY scoped por org
+
+  Pending:
+  - Endpoint per-skill cost breakdown (requiere skill_runs table extendida)
+  - Export CSV/JSON con rangos arbitrarios
+  - Comparativa M-1 vs M actual con %delta
+  - Materialized view + refresh cron si carga lo justifica
+  - GET /api/v1/usage devuelve usage actual + limits del plan (issue-21.3 ya implementado)

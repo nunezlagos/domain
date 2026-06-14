@@ -1,0 +1,21 @@
+# SLO targets per benchmark (issue-27.4).
+# CI fail si benchmark > target sin override.
+targets:
+  benchmark_compute:                 # internal/api/etag
+    target_ns: 500
+    p95_ns: 500
+  benchmark_last_modified:           # internal/api/etag
+    target_ns: 100
+    p95_ns: 100
+  benchmark_lock_lock_unlock:        # internal/dlock
+    target_ns: 2000
+    p95_ns: 5000
+  benchmark_encode_cursor:           # internal/api/cursor
+    target_ns: 500
+    p95_ns: 500
+  benchmark_decode_cursor:
+    target_ns: 500
+    p95_ns: 500
+  benchmark_anonymize:               # internal/anonymizer
+    target_ns: 10000
+    p95_ns: 50000

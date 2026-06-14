@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS mcp_server_tools CASCADE;
+DROP TABLE IF EXISTS mcp_servers CASCADE;

@@ -1,0 +1,22 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  Retry semantics implementadas en internal/runner/flow.Runner.
+
+  Por step:
+  - step.Retries: int, default 0 (sin retry)
+  - Total attempts = retries + 1
+  - Backoff exponencial: 200ms → 400ms → 800ms → ...
+  - Respeta ctx cancel (timeout step.TimeoutS o shutdown global)
+  - Si todos los retries fallan, aplica step.OnError (fail|continue|<step_id>)
+
+  Completado:
+  - Step.MaxBackoffS: campo en step definition (segundos, default 30s)
+  - max_backoff cap en retry loop: backoff *= 2 capped a maxBackoff (default 30s)
+  - FlowStepRetriesTotal: CounterVec (flow_slug, step_id) incrementado en cada retry
+  - metrics.FlowStepRetriesTotal registrado + wireado en flow Runner y main.go
+  - Retry por error class (transient vs non-transient): isTransientError()
+    detecta non-transient (auth, 4xx, validation, not found, etc.) y
+    skipea retry inmediatamente para evitar reintentos inútiles.

@@ -1,0 +1,33 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  deploy/pgbouncer/pgbouncer.ini config production-ready:
+  - pool_mode = transaction (compat con SET LOCAL issue-25.5 RLS)
+  - default_pool_size 25 + min 5 + reserve 5
+  - max_client_conn 1000 / max_db_connections 50 (relación 20:1)
+  - server_lifetime 1h + idle_timeout 10min para conn recycling
+  - query_timeout 60s + query_wait_timeout 30s (defensa runaway)
+  - TLS: server verify-full + client prefer
+  - SCRAM-SHA-256 auth
+  - Database routes: domain (primary) + domain_replica
+  - Admin + stats users separados
+
+  deploy/pgbouncer/README.md:
+  - Deploy K8s sidecar vs service externo
+  - Userlist generation desde pg_authid SCRAM hash
+  - DSN format para Domain (host=pgbouncer port=6432)
+  - Incompatibilidades transaction-pool listadas:
+    * SET sin LOCAL prohibido
+    * LISTEN/NOTIFY prohibido
+    * PREPARE explícito prohibido
+  - pgbouncer_exporter Prometheus sidecar
+  - Alertas sugeridas (cl_waiting, sv_active ratio)
+
+  Pending:
+  - Helm chart sub-template para PgBouncer sidecar opcional
+  - Integration test domain ↔ pgbouncer ↔ pg con docker compose
+  - Documentar tradeoffs session vs transaction vs statement pool
+  - Auto-fallback a primary si replica down (PgBouncer no lo hace nativo;
+    requiere health check externo + DNS swap)

@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Overlay dev: 1 réplica, logs verbose, sin HPA.
+
+namespace: domain-dev
+namePrefix: dev-
+
+bases:
+  - ../../base
+
+commonAnnotations:
+  domain.io/environment: dev
+
+replicas:
+  - name: domain
+    count: 1
+
+patches:
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: domain
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 1
+
+configMapGenerator:
+  - name: domain-env-config
+    literals:
+      - DOMAIN_LOG_LEVEL=debug
+      - DOMAIN_METRICS_ENABLED=true
+      - DOMAIN_OTEL_SAMPLE_RATIO=1.0

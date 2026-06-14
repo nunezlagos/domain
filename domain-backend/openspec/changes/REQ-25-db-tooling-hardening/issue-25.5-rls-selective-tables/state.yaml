@@ -1,0 +1,45 @@
+status: implemented
+created: 2026-06-06
+implemented: 2026-06-11
+archive_reason: |
+  Cierre formal: el alcance original de la HU (5 tablas Tier-1 + helper
+  txctx + tests + roles) se completo en su momento. Lo que quedaba
+  pendiente (extender RLS a observations/sessions + wireup HTTP) se
+  migro a la HU-25.14 (issue-25.14-rls-http-wiring) que ya esta
+  implemented. La 25.5 queda cerrada al 100%.
+
+  El duplicado issue-25.5-rls-sensitive-tables (creado el 2026-06-07
+  con scope "las 12 tablas Tier-1") queda archivado y la version
+  canonica es la "selective" (5 tablas reales existentes + helper + tests).
+  Si en el futuro se agregan tablas a las 12 Tier-1 que quedaron fuera
+  (knowledge, prompts, skills, agents, flows, crons, webhooks, audit_diffs,
+  api_key_scopes), abrir nuevas HUs siguiendo el patron de 25.14.
+notes: |
+  Migration 000028 (RLS en 5 tablas Tier-1: secrets, audit_log,
+  otp_codes, activity_log, api_keys) + helper internal/store/txctx +
+  tests de aislamiento (2 orgs, cross-org leak blocked, no SET LOCAL
+  -> 0 rows, INSERT wrong org rejected) + 9 escenarios + 3 sabotajes
+  todo verde desde 2026-06-10. Ver tests en txctx_integration_test.go.
+
+  Pendiente migrado a HU-25.14 (now implemented).
+
+  === BUG CRITICO ENCONTRADO EN TEST FUNCIONAL 2026-06-11 ===
+
+  El wireup HTTP del middleware (introducido en commit 3/6 de la HU-25.14)
+  abria una tx con SET LOCAL app.current_org_id pero hacia defer Rollback
+  SIEMPRE. Esto significaba que CUALQUIER write via HTTP (POST obs, etc)
+  se rolled back al final del request, retornando 201 al cliente pero sin
+  persistir nada en la DB.
+
+  FIX en commit 20f79fc: status-based commit usando statusRecorder.
+    - status < 500 (2xx, 3xx, 4xx) → Commit
+    - status >= 500 (5xx) → Rollback
+
+  Esto preserva la semantica RLS Y permite que los writes persistan.
+  Verificado end-to-end con curl + DB real:
+    - POST /api/v1/observations → 201 + row en DB ✓
+    - Cross-org RLS: org A ve sus 2 obs, org B ve 0 ✓
+
+  LECCION: 60+ unit tests del middleware pasaban porque testeaban
+  el path exitoso del wireup (status, response), no la persistencia.
+  Test funcional end-to-end con curl + DB real lo destapo.

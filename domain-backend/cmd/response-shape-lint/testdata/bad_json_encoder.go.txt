@@ -1,0 +1,13 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type API struct{}
+
+func (a *API) leaksJSON(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": "x"})
+}

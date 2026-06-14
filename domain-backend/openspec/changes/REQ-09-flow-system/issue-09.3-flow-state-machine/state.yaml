@@ -1,0 +1,49 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  internal/runner/flow.Runner state machine síncrono.
+
+  States persistidos en flow_runs.status (CHECK constraint en migration 14):
+  - pending: row creado, sin started_at
+  - running: started_at seteado, ejecutando steps
+  - completed: todos los steps OK + outputs persistidos
+  - failed: error con on_error=fail; persiste error + outputs parciales
+  - paused: pending issue-09.4 retry
+  - cancelled: pending issue-09.4 cancel signal
+  - paused_awaiting_signal: pending issue-09.8
+  - paused_awaiting_human: pending issue-09.8
+
+  Lifecycle implementado:
+  - Run(input): INSERT pending → UPDATE running started_at → loop steps
+    con cursor persistido (last_heartbeat_at) → UPDATE completed|failed
+    con outputs + finished_at + error si aplica
+  - Audit "flow.run_<status>" al finalizar
+
+  Cursor JSONB se actualiza por cada step con current_step → permite resume
+  parcial (issue-09.6 durable execution).
+
+  on_error semantics:
+  - "fail" (default): aborta loop, status=failed
+  - "continue": registra error en step.output y avanza al siguiente
+  - <step_id>: salta al step_id si existe en el DAG (jump)
+
+  HTTP: POST /api/v1/flows/{id}/run (síncrono — espera completar).
+
+  Tests integration (6 escenarios + 1 sabotaje):
+  - BasicSkillRun: 1 step skill_run → completed con output
+  - OnErrorContinue: step que falla + on_error=continue → segundo step ok
+  - OnErrorFailAborts: step fail default → status=failed
+  - MemSaveStep: persistencia de observation desde flow
+  - HTTPRequestNotImplemented: stub explícito
+  - InactiveFails: flow inactive → ErrFlowInactive
+  - Spec.Validate tests: version/duplicates/unknown_type/on_error_ref
+  - sabotaje: on_error=step_id inexistente rechazado en Validate
+
+  Pending:
+  - issue-09.6 durable execution: worker que recupera runs en running stale
+    (heartbeat > N min) y continúa desde cursor
+  - issue-09.4 retry con backoff por step
+  - issue-09.10 heartbeat watchdog
+  - Async/streaming /flows/{id}/run vs current síncrono

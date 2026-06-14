@@ -1,0 +1,13 @@
+status: proposed
+created: 2026-06-12
+slug: max-flow-duration-per-org
+issue: 33.3
+parent_req: REQ-33-saas-protection
+effort: S
+priority: media
+depends_on:
+  - 09.6
+  - 27.3
+notes: >
+  Extensión de RunRecovery existente. Reutiliza cancel map y
+  métricas del flow runner. Tabla nueva con constraint 10-86400s.

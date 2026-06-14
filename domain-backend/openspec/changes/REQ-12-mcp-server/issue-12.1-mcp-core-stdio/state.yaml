@@ -1,0 +1,39 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-07
+archived: ~
+notes: |
+  cmd/domain-mcp + internal/mcp/server cableados con mark3labs/mcp-go v0.54.1.
+
+  Bootstrap del proceso:
+   1. config.Load() (env vars DOMAIN_*)
+   2. db.OpenProduction(appDSN, authDSN) — dos pools tipados
+   3. APIKey resolver desde env DOMAIN_API_KEY → Principal
+   4. Services wired (Observations, Projects, Audit)
+   5. mcpserver.New(deps) → server.ServeStdio sobre stdin/stdout
+
+  Tools registrados (prefix domain_* per rule .claude/rules/go.md):
+  - domain_mem_save(project_slug, content, observation_type?, tags?, metadata?)
+  - domain_mem_search(query, limit?)
+  - domain_mem_context(project_slug, limit?)
+  - domain_mem_get_observation(id)
+
+  Cada tool valida args, llama service correspondiente, retorna JSON
+  serializado como mcp.TextContent. Cross-org guard en get_observation.
+
+  Tests integration (3 escenarios + 2 sabotaje) usando mcptest.NewServer
+  in-process con cliente:
+  - MemSave + MemContext round trip
+  - MemSearch híbrido encuentra match con FakeEmbedder
+  - MemGetObservation round-trip con ID retornado por save
+  - sabotaje cross-org get → IsError
+  - sabotaje project_slug desconocido → IsError
+
+  Refactor para testabilidad: mcpserver.Tools(deps) devuelve []ServerTool
+  para mcptest, mcpserver.New(deps) lo wrappea en MCPServer para producción.
+
+  Pending issue-12.2/3/4/5/6:
+  - tools de agents/skills/flows (REQ-08, REQ-09)
+  - tool budget enforcement (issue-12.6 resilience)
+  - bidirectional streaming notifications
+  - setup wizard (issue-12.5)

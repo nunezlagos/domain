@@ -1,0 +1,29 @@
+status: implemented
+created: 2026-06-07
+implemented: 2026-06-08
+archived: ~
+notes: |
+  ## Implementado (2026-06-08)
+
+  ### HTTP admin endpoints (issue-27.3)
+  - GET /api/v1/admin/runtime-configs/{key} — lee valor actual desde el snapshot
+  - POST /api/v1/admin/runtime-configs/{key} — actualiza valor + refresh snapshot
+  - is_hot_reloadable=false → 409 "not_hot_reloadable"
+  - Validation con ApplyValue exportado + error code específico por key
+  - Registrado en internal/api/handler/runtimeconfig.go
+
+  ### Registry enhancements
+  - Registry.Update(ctx, key, raw) — UPDATE en DB con rows affected check
+  - ValueJSON(snap, key) — extrae valor como tipo json-friendly
+  - ApplyValue exportado (capitalizado) para uso desde handler
+
+  ### Migration 000046
+  - Seed faltante de metrics_enabled (era solo 5/6 keys en 000041)
+
+  ### Inyección
+  - RuntimeConfigRegistry inyectado en handler.API desde cmd/domain/main.go
+
+  ## Pending (aún no implementado)
+  - LISTEN/NOTIFY push real-time (incompatible con PgBouncer transaction-pool)
+  - Aplicar dynamic a slog level / HTTP timeouts (requiere Current() en cada call site)
+  - Audit log entry tras cada cambio

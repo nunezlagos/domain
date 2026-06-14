@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-06-11
+implemented: ~
+notes: |
+  Cambia la semántica de "disparar y olvidar" a "cola acotada con backpressure".
+  Webhooks que excedan la cola recibirán 503 en vez de 202 Accepted.
+  Eso es aceptable — el emisor debe reintentar.

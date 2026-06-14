@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Domain — Run Visualization</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/admin/style.css">
+<style>
+.run-detail { background: var(--bg-card); padding: 16px; margin-top: 16px; border-radius: 8px; }
+.step { padding: 8px; border-left: 3px solid var(--accent); margin: 8px 0; background: var(--bg); border-radius: 4px; }
+.step.completed { border-color: var(--ok); }
+.step.failed { border-color: var(--err); }
+.step.running { border-color: var(--warn); }
+.step-key { font-weight: 600; }
+.step-meta { color: var(--fg-muted); font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Domain · Admin · Runs</h1>
+  <nav>
+    <a href="/admin/">Dashboard</a> ·
+    <a href="/admin/runs">Runs</a> ·
+    <a href="/admin/skills">Skills</a> ·
+    <a href="/admin/memories">Memories</a>
+  </nav>
+</header>
+
+<main>
+  <table>
+    <thead>
+      <tr><th>Type</th><th>ID</th><th>Status</th><th>Started</th><th>Duration</th><th></th></tr>
+    </thead>
+    <tbody id="runs-body"></tbody>
+  </table>
+
+  <section id="detail-section" style="display:none;">
+    <h2>Detalle</h2>
+    <div class="run-detail" id="run-detail"></div>
+  </section>
+</main>
+
+<script>
+let currentEventSource = null;
+
+async function loadRuns() {
+  const r = await fetch('/admin/api/runs');
+  const items = await r.json();
+  const body = document.getElementById('runs-body');
+  body.innerHTML = '';
+  for (const it of items) {
+    const tr = document.createElement('tr');
+    const dur = it.ended_at
+      ? Math.round((new Date(it.ended_at) - new Date(it.started_at))/1000) + 's'
+      : '—';
+    tr.innerHTML = `
+      <td>${it.type}</td>
+      <td><code>${it.id.slice(0,8)}…</code></td>
+      <td class="status-${it.status}">${it.status}</td>
+      <td>${new Date(it.started_at).toLocaleString('es-CL')}</td>
+      <td>${dur}</td>
+      <td><button onclick="showDetail('${it.type}','${it.id}')">Ver</button></td>`;
+    body.appendChild(tr);
+  }
+}
+
+async function showDetail(kind, id) {
+  if (currentEventSource) {
+    currentEventSource.close();
+    currentEventSource = null;
+  }
+  const r = await fetch(`/admin/api/runs/${kind}/${id}`);
+  const d = await r.json();
+  const sec = document.getElementById('detail-section');
+  const el = document.getElementById('run-detail');
+  sec.style.display = 'block';
+  if (d.steps) {
+    el.innerHTML = `<h3>${kind} <code>${id}</code></h3>` +
+      d.steps.map(s => `
+        <div class="step ${s.status}">
+          <div class="step-key">${s.step_key} <span class="muted">[${s.status}]</span></div>
+          <div class="step-meta">
+            ${s.started_at ? 'started: ' + new Date(s.started_at).toLocaleString('es-CL') : 'pending'}
+            ${s.completed_at ? ' · completed: ' + new Date(s.completed_at).toLocaleString('es-CL') : ''}
+            ${s.last_heartbeat ? ' · heartbeat: ' + new Date(s.last_heartbeat).toLocaleString('es-CL') : ''}
+            ${s.error ? '<br>error: <code>' + s.error + '</code>' : ''}
+          </div>
+        </div>`).join('');
+  } else if (d.logs) {
+    el.innerHTML = `<h3>${kind} <code>${id}</code> · logs</h3>` +
+      d.logs.map(l => `
+        <div class="step">
+          <span class="muted">${new Date(l.at).toLocaleTimeString('es-CL')}</span>
+          [${l.level}] ${l.message}
+        </div>`).join('');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadRuns();
+  setInterval(loadRuns, 10000);
+});
+</script>
+</body>
+</html>

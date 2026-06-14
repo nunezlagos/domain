@@ -84,7 +84,7 @@ func (s *Service) InitUpload(ctx context.Context, entityType, entityIDStr, filen
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at`,
 		entityType, entityID, filename, s3Key, size, mimeType, cb,
-	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt)
+	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert attachment: %w", err)
 	}

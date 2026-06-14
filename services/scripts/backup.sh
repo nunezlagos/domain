@@ -50,7 +50,7 @@ MINIO_OUT="$BACKUP_DIR/minio/$TODAY"
 mkdir -p "$MINIO_OUT"
 echo "MinIO → $MINIO_OUT"
 
-if ! docker run --rm --network minio_default \
+if ! docker run --rm --network domain_internal \
        -v "$MINIO_OUT:/backup" \
        -e MC_HOST_local="https://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio:9000" \
        minio/mc:RELEASE.2024-10-08T09-37-26Z \

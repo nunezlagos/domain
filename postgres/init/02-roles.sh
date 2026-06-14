@@ -1,15 +1,5 @@
 #!/bin/bash
-# ============================================================================
-# 02-roles.sh — least-privilege roles (.claude/rules/connection-pools.md)
-#
-# Ejecutado por docker-entrypoint-initdb.d en el primer boot del container.
-# Las env vars APP_USER_PASSWORD y APP_ADMIN_PASSWORD se pasan via compose.
-#
-# Roles:
-#   app_user     NOBYPASSRLS  → runtime queries con RLS enforced
-#   app_admin    BYPASSRLS    → auth/audit lookups (org_id aún no conocido)
-#   app_migrator NOBYPASSRLS  → golang-migrate, CREATE en schema public
-# ============================================================================
+# Roles: app_user (RLS), app_admin (BYPASSRLS), app_migrator (CREATE).
 set -euo pipefail
 
 : "${APP_USER_PASSWORD:?env var APP_USER_PASSWORD requerida}"
@@ -40,5 +30,3 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-S
   ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO app_user, app_admin;
 SQL
-
-echo "domain-services: roles app_user, app_admin, app_migrator creados"

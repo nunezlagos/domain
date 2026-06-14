@@ -1,6 +1,5 @@
 [Unit]
 Description=domain-services healthcheck cada 5 minutos
-Documentation=https://github.com/nunezlagos/domain
 
 [Timer]
 OnBootSec=2min

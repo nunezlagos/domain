@@ -1,5 +1,5 @@
 [Unit]
-Description=domain-services — healthcheck periódico con notificación ntfy
+Description=domain-services — healthcheck con notificación ntfy
 After=docker.service
 
 [Service]

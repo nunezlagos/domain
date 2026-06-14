@@ -1,6 +1,5 @@
 [Unit]
-Description=domain-services backup diario a las 02:00 UTC
-Documentation=https://github.com/nunezlagos/domain
+Description=domain-services backup diario 02:00 UTC
 
 [Timer]
 OnCalendar=*-*-* 02:00:00

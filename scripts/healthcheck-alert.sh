@@ -1,16 +1,5 @@
 #!/bin/bash
-# ============================================================================
-# healthcheck-alert.sh — chequea cada servicio del compose y notifica si está
-# unhealthy/down. Pensado para cron */5 minutos.
-#
-# Estados que dispara alert:
-#   - container no existe
-#   - status != running
-#   - health != healthy (si tiene healthcheck definido)
-#
-# Cooldown: si el mismo servicio ya tiene un fallo activo, no spamea.
-# State guardado en /var/run/domain-services-health/<svc>.state
-# ============================================================================
+# Chequea containers; notifica ntfy si down/unhealthy. Estado en /var/run/domain-services-health/.
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -18,22 +7,13 @@ ROOT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 STATE_DIR="${HEALTH_STATE_DIR:-/var/run/domain-services-health}"
 mkdir -p "$STATE_DIR"
 
-if [[ -f "$ROOT_DIR/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$ROOT_DIR/.env"
-  set +a
-fi
+[[ -f "$ROOT_DIR/.env" ]] && { set -a; source "$ROOT_DIR/.env"; set +a; }
 
 notify() {
-  local title="$1"
-  local msg="$2"
-  local prio="${3:-default}"
+  local title="$1" msg="$2" prio="${3:-default}"
   if [[ -n "${NTFY_TOPIC:-}" ]]; then
     curl -fsS -X POST \
-      -H "Title: $title" \
-      -H "Priority: $prio" \
-      -H "Tags: warning" \
+      -H "Title: $title" -H "Priority: $prio" -H "Tags: warning" \
       -d "$msg" \
       "${NTFY_SERVER:-https://ntfy.sh}/$NTFY_TOPIC" >/dev/null 2>&1 || true
   fi
@@ -41,8 +21,7 @@ notify() {
 }
 
 check_service() {
-  local svc="$1"
-  local container="$2"
+  local svc="$1" container="$2"
   local state_file="$STATE_DIR/$svc.state"
 
   if ! docker inspect "$container" >/dev/null 2>&1; then
@@ -73,7 +52,6 @@ check_service() {
     return
   fi
 
-  # Healthy → si había un estado anterior, notificar recovery
   if [[ -f "$state_file" ]]; then
     notify "domain-services" "$svc recuperado" "default"
     rm -f "$state_file"

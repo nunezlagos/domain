@@ -1,5 +1,5 @@
 [Unit]
-Description=domain-services — backup diario (pg_dump cifrado + MinIO mirror)
+Description=domain-services — backup diario
 After=docker.service domain-services.service
 Requires=domain-services.service
 

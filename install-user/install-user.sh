@@ -64,6 +64,30 @@ done
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
 
+# .env global: persiste VPS_URL/EMAIL entre re-ejecuciones para que el
+# usuario no tenga que tipearlos cada vez. API_KEY NO se persiste — solo
+# vive en los configs de cada cliente (encriptados o no según cliente).
+GLOBAL_ENV="$HOME/.config/domain/install.env"
+
+load_global_env() {
+  [[ -f "$GLOBAL_ENV" ]] || return 0
+  # shellcheck disable=SC1090
+  source "$GLOBAL_ENV"
+  [[ -z "$VPS_URL"    && -n "${DOMAIN_VPS_URL:-}" ]]     && VPS_URL="$DOMAIN_VPS_URL"
+  [[ -z "$USER_EMAIL" && -n "${DOMAIN_USER_EMAIL:-}" ]]  && USER_EMAIL="$DOMAIN_USER_EMAIL"
+}
+
+save_global_env() {
+  mkdir -p "$(dirname "$GLOBAL_ENV")"
+  cat > "$GLOBAL_ENV" <<ENV
+# domain install-user — generado por $0
+# API_KEY no se guarda acá por seguridad.
+DOMAIN_VPS_URL="$VPS_URL"
+DOMAIN_USER_EMAIL="$USER_EMAIL"
+ENV
+  chmod 600 "$GLOBAL_ENV"
+}
+
 case "$(uname -s)" in
   Darwin) OS="macos" ;;
   Linux)  OS="linux" ;;
@@ -337,6 +361,10 @@ uninstall_all() {
   rm -f "$GLOBAL_SKILL_PATH" "$GLOBAL_AGENT_PATH" 2>/dev/null
   rmdir "$(dirname "$GLOBAL_SKILL_PATH")" 2>/dev/null || true
   ok "skill + agent globales removidos"
+  # .env global
+  rm -f "$GLOBAL_ENV" 2>/dev/null
+  rmdir "$(dirname "$GLOBAL_ENV")" 2>/dev/null || true
+  ok ".env global removido"
   step "Listo"
   echo "  Reiniciá tus clientes MCP."
 }
@@ -347,6 +375,14 @@ uninstall_all() {
 install_all() {
   step "Domain MCP — install user"
 
+  load_global_env
+  if [[ -n "$VPS_URL" ]]; then
+    ok "URL del VPS (desde $GLOBAL_ENV): $VPS_URL"
+  fi
+  if [[ -n "$USER_EMAIL" ]]; then
+    ok "Email (desde $GLOBAL_ENV): $USER_EMAIL"
+  fi
+
   [[ -z "$VPS_URL" ]]    && read -rp "  URL del VPS (ej. http://1.2.3.4): " VPS_URL
   [[ -z "$USER_EMAIL" ]] && read -rp "  Email: " USER_EMAIL
   [[ -z "$API_KEY" ]]    && { read -rsp "  API key: " API_KEY; echo; }
@@ -355,6 +391,10 @@ install_all() {
   [[ -z "$USER_EMAIL" ]] && { fail "Email requerido"; exit 1; }
   [[ -z "$API_KEY" ]]    && { fail "API key requerida"; exit 1; }
   VPS_URL="${VPS_URL%/}"
+
+  # Persistir VPS_URL/EMAIL para re-ejecuciones futuras.
+  save_global_env
+  ok "guardado en $GLOBAL_ENV (modo 0600)"
 
   step "Verificando conexión al VPS"
   if curl -fsS --max-time 5 "$VPS_URL/healthz" >/dev/null 2>&1; then

@@ -8,13 +8,15 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BROWSER_REDIRECT_URL: http://${VPS_PUBLIC_IP:-localhost}:${MINIO_CONSOLE_PORT:-9001}
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    expose:
+      - "9000"
+      - "9001"
     volumes:
       - minio_data:/data
       - ../certs/minio:/root/.minio/certs:ro
     command: server /data --console-address ":9001"
+    networks:
+      - domain_internal
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:9000/minio/health/live"]
       interval: 30s
@@ -44,8 +46,15 @@ services:
         set -e
         mc alias set --insecure local https://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         mc mb --insecure --ignore-existing local/"$$MINIO_DEFAULT_BUCKET"
+    networks:
+      - domain_internal
     restart: "no"
 
 volumes:
   minio_data:
     name: domain_minio_data
+
+networks:
+  domain_internal:
+    name: domain_internal
+    external: true

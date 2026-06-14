@@ -9,8 +9,9 @@ certs/
 *.crt
 *.csr
 
-# Backups locales
-backups/
+# Backups locales (output de scripts/backup.sh — path específico, no cualquier carpeta llamada backups)
+services/backups/
+/backups/
 *.sql.gz
 *.sql.gz.gpg
 *.dump

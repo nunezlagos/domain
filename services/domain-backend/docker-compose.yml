@@ -13,7 +13,7 @@ services:
     container_name: domain-migrate
     command: ["migrate", "up"]
     environment:
-      DOMAIN_DATABASE_URL: postgres://app_migrator:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
+      DOMAIN_DATABASE_URL: postgres://${POSTGRES_USER:-domain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
     networks:
       - domain_internal
     restart: "no"
@@ -30,6 +30,7 @@ services:
         condition: service_completed_successfully
     environment:
       DOMAIN_HTTP_PORT: 8000
+      DOMAIN_HTTP_BIND: 0.0.0.0
       DOMAIN_DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
       DOMAIN_S3_ENDPOINT: http://minio:9000
       DOMAIN_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
@@ -42,7 +43,7 @@ services:
     networks:
       - domain_internal
     healthcheck:
-      test: ["CMD-SHELL", "/usr/local/bin/domain healthcheck || exit 1"]
+      test: ["CMD", "/usr/local/bin/domain", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3

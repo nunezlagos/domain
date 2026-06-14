@@ -1,5 +1,6 @@
 [Unit]
-Description=domain-services — Postgres + MinIO via docker compose
+Description=domain-services — orquestación de 5 servicios via docker compose
+Documentation=https://github.com/nunezlagos/domain/tree/services
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
@@ -9,9 +10,9 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/services
 EnvironmentFile=/opt/services/.env
-ExecStart=/usr/bin/make up
-ExecStop=/usr/bin/make down
-ExecReload=/usr/bin/make restart
+ExecStart=/usr/bin/make -C /opt/services up
+ExecStop=/usr/bin/make -C /opt/services down
+ExecReload=/usr/bin/make -C /opt/services restart SVC=all
 TimeoutStartSec=300
 TimeoutStopSec=120
 

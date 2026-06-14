@@ -1,40 +1,76 @@
 SHELL := /bin/bash
 SVC ?= all
-ENV_FILE := --env-file .env
-COMPOSE_PG := docker compose -f postgres/docker-compose.yml $(ENV_FILE)
-COMPOSE_MINIO := docker compose -f minio/docker-compose.yml $(ENV_FILE)
 
-.PHONY: help up down restart ps logs certs certs-force backup healthcheck psql mc clean
+ENV_FILE := --env-file .env
+COMPOSE_PG       := docker compose -f postgres/docker-compose.yml $(ENV_FILE)
+COMPOSE_MINIO    := docker compose -f minio/docker-compose.yml $(ENV_FILE)
+COMPOSE_BACKEND  := docker compose -f domain-backend/docker-compose.yml $(ENV_FILE)
+COMPOSE_FRONTEND := docker compose -f domain-frontend/docker-compose.yml $(ENV_FILE)
+COMPOSE_CADDY    := docker compose -f caddy/docker-compose.yml $(ENV_FILE)
+NETWORK := domain_internal
+
+.PHONY: help up down restart ps logs pull backup healthcheck \
+        psql mc clean ensure-network certs certs-force
 
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-up: ## Levanta servicios (SVC=postgres|minio|all)
+ensure-network: ## Crea la network domain_internal si no existe (idempotente)
+	@docker network inspect $(NETWORK) >/dev/null 2>&1 || docker network create $(NETWORK)
+
+up: ensure-network ## Levanta servicios (SVC=postgres|minio|backend|frontend|caddy|all)
 	@case "$(SVC)" in \
-	  postgres) $(COMPOSE_PG) up -d ;; \
-	  minio)    $(COMPOSE_MINIO) up -d ;; \
-	  all)      $(COMPOSE_PG) up -d && $(COMPOSE_MINIO) up -d ;; \
-	  *) echo "SVC inválido: $(SVC)"; exit 1 ;; \
+	  postgres) $(COMPOSE_PG) up -d --wait ;; \
+	  minio)    $(COMPOSE_MINIO) up -d --wait ;; \
+	  backend)  $(COMPOSE_BACKEND) up -d --wait ;; \
+	  frontend) $(COMPOSE_FRONTEND) up -d --wait ;; \
+	  caddy)    $(COMPOSE_CADDY) up -d --wait ;; \
+	  all)      $(COMPOSE_PG) up -d --wait && \
+	            $(COMPOSE_MINIO) up -d --wait && \
+	            $(COMPOSE_BACKEND) up -d --wait && \
+	            $(COMPOSE_FRONTEND) up -d --wait && \
+	            $(COMPOSE_CADDY) up -d --wait ;; \
+	  *) echo "SVC inválido: postgres|minio|backend|frontend|caddy|all"; exit 1 ;; \
 	esac
 
-down: ## Detiene containers (mantiene volumes)
-	-$(COMPOSE_PG) down
+down: ## Detiene containers en orden inverso (mantiene volumes y network)
+	-$(COMPOSE_CADDY) down
+	-$(COMPOSE_FRONTEND) down
+	-$(COMPOSE_BACKEND) down
 	-$(COMPOSE_MINIO) down
+	-$(COMPOSE_PG) down
 
-restart: ## Reinicia servicios
-	-$(COMPOSE_PG) restart
-	-$(COMPOSE_MINIO) restart
+restart: ## Reinicia servicio (SVC=postgres|minio|backend|frontend|caddy|all)
+	@case "$(SVC)" in \
+	  postgres) $(COMPOSE_PG) restart ;; \
+	  minio)    $(COMPOSE_MINIO) restart ;; \
+	  backend)  $(COMPOSE_BACKEND) pull && $(COMPOSE_BACKEND) up -d --wait ;; \
+	  frontend) $(COMPOSE_FRONTEND) pull && $(COMPOSE_FRONTEND) up -d --wait ;; \
+	  caddy)    $(COMPOSE_CADDY) restart ;; \
+	  all)      $(MAKE) down && $(MAKE) up ;; \
+	  *) echo "SVC inválido: postgres|minio|backend|frontend|caddy|all"; exit 1 ;; \
+	esac
 
-ps: ## Estado containers
+ps: ## Estado de los 5 containers
 	@$(COMPOSE_PG) ps
 	@$(COMPOSE_MINIO) ps
+	@$(COMPOSE_BACKEND) ps
+	@$(COMPOSE_FRONTEND) ps
+	@$(COMPOSE_CADDY) ps
 
-logs: ## Tail logs (SVC=postgres|minio)
+logs: ## Tail logs (requiere SVC=postgres|minio|backend|frontend|caddy)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) logs -f --tail=100 ;; \
 	  minio)    $(COMPOSE_MINIO) logs -f --tail=100 ;; \
-	  *) echo "Usá SVC=postgres o SVC=minio"; exit 1 ;; \
+	  backend)  $(COMPOSE_BACKEND) logs -f --tail=100 ;; \
+	  frontend) $(COMPOSE_FRONTEND) logs -f --tail=100 ;; \
+	  caddy)    $(COMPOSE_CADDY) logs -f --tail=100 ;; \
+	  *) echo "Usá SVC=postgres|minio|backend|frontend|caddy"; exit 1 ;; \
 	esac
+
+pull: ## Pull imágenes nuevas (solo backend y frontend; PG/MinIO/Caddy pinneados)
+	$(COMPOSE_BACKEND) pull
+	$(COMPOSE_FRONTEND) pull
 
 certs: ## Renueva certs TLS si están por expirar
 	./scripts/gen-certs.sh
@@ -54,12 +90,16 @@ psql: ## Shell SQL en postgres
 
 mc: ## Cliente mc contra MinIO local
 	@set -a; source .env; set +a; \
-	docker run --rm -it --network minio_default \
+	docker run --rm -it --network $(NETWORK) \
 		-e MC_HOST_local="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000" \
 		minio/mc:RELEASE.2024-10-08T09-37-26Z --insecure
 
-clean: ## DESTRUCTIVO: borra volumes
+clean: ## DESTRUCTIVO: borra volumes de PG y MinIO (conserva network y caddy_data)
 	@read -p "Escribí 'borrar todo' para confirmar: " confirm; \
 	if [ "$$confirm" = "borrar todo" ]; then \
-		$(COMPOSE_PG) down -v; $(COMPOSE_MINIO) down -v; \
+		$(COMPOSE_CADDY) down; \
+		$(COMPOSE_FRONTEND) down; \
+		$(COMPOSE_BACKEND) down; \
+		$(COMPOSE_MINIO) down -v; \
+		$(COMPOSE_PG) down -v; \
 	else echo "abort."; fi

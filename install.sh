@@ -33,7 +33,7 @@ fail() { echo "${RED}    ✗${RESET} $1" >&2; }
 
 SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-step "1/9  Preflight"
+step "1/10  Preflight"
 ok "root"
 
 [[ -r /etc/os-release ]] || { fail "/etc/os-release no encontrado — OS no soportado"; exit 1; }
@@ -54,12 +54,12 @@ case "$ARCH" in
   *) fail "arquitectura no soportada: $ARCH"; exit 1 ;;
 esac
 
-step "2/9  Dependencias"
+step "2/10  Dependencias"
 if [[ $SKIP_DEPS -eq 1 ]]; then
   warn "skip deps"
 else
   apt-get update -qq
-  apt-get install -y -qq ca-certificates curl gnupg lsb-release openssl gpg jq rsync >/dev/null
+  apt-get install -y -qq ca-certificates curl gnupg lsb-release openssl gpg jq rsync make >/dev/null
   ok "base"
 
   if ! command -v docker &>/dev/null; then
@@ -84,13 +84,18 @@ ok "docker daemon"
 docker compose version &>/dev/null || { fail "docker compose plugin no disponible"; exit 1; }
 ok "compose ($(docker compose version --short 2>/dev/null || echo presente))"
 
-(cd "$SOURCE_DIR" && docker compose -f postgres/docker-compose.yml --env-file .env.example config -q 2>/dev/null) \
-  || { fail "postgres/docker-compose.yml inválido"; exit 1; }
-(cd "$SOURCE_DIR" && docker compose -f minio/docker-compose.yml --env-file .env.example config -q 2>/dev/null) \
-  || { fail "minio/docker-compose.yml inválido"; exit 1; }
-ok "compose files válidos"
+for compose_file in \
+  postgres/docker-compose.yml \
+  minio/docker-compose.yml \
+  domain-backend/docker-compose.yml \
+  domain-frontend/docker-compose.yml \
+  caddy/docker-compose.yml; do
+  (cd "$SOURCE_DIR" && docker compose -f "$compose_file" --env-file .env.example config -q 2>/dev/null) \
+    || { fail "compose inválido: $compose_file"; exit 1; }
+done
+ok "5 composes válidos"
 
-step "3/9  $INSTALL_DIR"
+step "3/10  $INSTALL_DIR"
 if [[ "$SOURCE_DIR" == "$INSTALL_DIR" ]]; then
   ok "re-install"
   MOVED_FROM=""
@@ -102,7 +107,7 @@ else
 fi
 chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/postgres/init/"*.sh "$INSTALL_DIR/install.sh" 2>/dev/null || true
 
-step "4/9  .env"
+step "4/10  .env"
 cd "$INSTALL_DIR"
 if [[ ! -f .env ]]; then
   cp .env.example .env
@@ -116,11 +121,11 @@ fi
 grep -q "CHANGE_ME" .env && { fail ".env aún tiene CHANGE_ME"; exit 1; }
 ok ".env OK"
 
-step "5/9  Certs TLS"
+step "5/10  Certs TLS"
 ./scripts/gen-certs.sh
 ok "certs/"
 
-step "6/9  systemd units"
+step "6/10  systemd units"
 for unit in systemd/*.service systemd/*.timer; do
   cp "$unit" "/etc/systemd/system/$(basename "$unit")"
 done
@@ -130,32 +135,47 @@ systemctl enable domain-services-backup.timer >/dev/null 2>&1
 systemctl enable domain-services-healthcheck.timer >/dev/null 2>&1
 ok "habilitados"
 
-step "7/9  Servicios"
+step "7/10  Pull imágenes Docker"
+if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
+  warn "skip pull (--skip-compose-up activo)"
+else
+  docker compose -f domain-backend/docker-compose.yml --env-file .env pull \
+    || { fail "pull domain-backend falló — verificá .env (DOMAIN_BACKEND_VERSION) y conectividad a GHCR"; exit 1; }
+  docker compose -f domain-frontend/docker-compose.yml --env-file .env pull \
+    || { fail "pull domain-frontend falló — verificá .env (DOMAIN_FRONTEND_VERSION) y conectividad a GHCR"; exit 1; }
+  ok "imágenes actualizadas"
+fi
+
+step "8/10  Servicios"
 if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
   warn "skip (corré: make up)"
 else
-  systemctl start domain-services.service
+  make -C "$INSTALL_DIR" ensure-network
+  make -C "$INSTALL_DIR" up
+  ok "5 servicios up"
+
   systemctl start domain-services-backup.timer
   systemctl start domain-services-healthcheck.timer
-  ok "iniciados"
+  ok "timers iniciados"
 
   echo "    Esperando healthy..."
-  for i in {1..30}; do
+  for i in {1..45}; do
     sleep 2
-    healthy=$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE '^domain-(postgres|minio)$' || true)
-    [[ "$healthy" -ge 2 ]] && { ok "healthy"; break; }
-    [[ $i -eq 30 ]] && warn "timeout esperando healthy"
+    healthy=$(docker ps --filter health=healthy --format '{{.Names}}' \
+              | grep -cE '^domain-(postgres|minio|backend|frontend|caddy)$' || true)
+    [[ "$healthy" -ge 5 ]] && { ok "los 5 healthy"; break; }
+    [[ $i -eq 45 ]] && warn "timeout esperando healthy; revisar con: make ps && make logs SVC=<svc>"
   done
 fi
 
-step "8/9  Cleanup"
+step "9/10  Cleanup"
 if [[ -n "$MOVED_FROM" && $KEEP_CLONE -eq 0 && "$MOVED_FROM" != "$INSTALL_DIR" ]]; then
   rm -rf "$MOVED_FROM"; ok "clone eliminado: $MOVED_FROM"
 else
   ok "nada que limpiar"
 fi
 
-step "9/9  Resumen"
+step "10/10  Resumen"
 set -a; source "$INSTALL_DIR/.env"; set +a
 VPS_IP="${VPS_PUBLIC_IP:-$(curl -fsS --max-time 3 https://ifconfig.me 2>/dev/null || echo '<ip>')}"
 
@@ -163,12 +183,21 @@ cat <<RESUMEN
 
 ${GREEN}${BOLD}domain-services listo${RESET}
 
-  Postgres: $VPS_IP:${PG_PORT:-5432}  db=${POSTGRES_DB} user=${POSTGRES_USER}  sslmode=require
-  MinIO:    https://$VPS_IP:${MINIO_API_PORT:-9000}  console=http://$VPS_IP:${MINIO_CONSOLE_PORT:-9001}
-  Bucket:   ${MINIO_DEFAULT_BUCKET:-domain-attachments}
-  Backups:  diario 02:00 UTC → $INSTALL_DIR/backups/
-  Alerts:   ntfy.sh/${NTFY_TOPIC:-<no-configurado>}
+  Dashboard:  http://$VPS_IP/
+  API:        http://$VPS_IP/api/v1/...
+  MCP HTTP:   http://$VPS_IP/mcp
+  Healthz:    http://$VPS_IP/healthz
 
-  cd $INSTALL_DIR && make {ps,logs,backup,psql,certs-force}
+  Backups:    diario 02:00 UTC → $INSTALL_DIR/backups/
+  Alerts:     ntfy.sh/${NTFY_TOPIC:-<no-configurado>}
+
+  Comandos útiles:
+    cd $INSTALL_DIR
+    make ps                    # estado de los 5
+    make logs SVC=backend      # tail de uno
+    make pull                  # tira imágenes nuevas
+    make restart SVC=backend   # update sin tocar otros
+    make backup                # backup manual
+    make clean                 # DESTRUCTIVO
 
 RESUMEN

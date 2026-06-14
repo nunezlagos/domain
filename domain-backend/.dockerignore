@@ -1,17 +1,56 @@
-# Domain dockerignore
+# Domain backend dockerignore (HU-38.1)
+# Mantiene build context <20 MB excluyendo metadata, docs, tests y assets.
+
+# VCS / IDE
 .git
 .github
 .claude
 .idea
 .vscode
+
+# Markdown y docs
 *.md
 docs
+README.md
+CHANGELOG.md
+ROADMAP.md
+AGENTS.md
+
+# Specs y SDKs (no van en runtime)
 openspec
+openspec/
+sdks
+sdks/
+
+# Tests y testdata
 testdata
+testdata/
 *_test.go
+
+# Env y logs locales
 .env*
 *.log
+
+# Build artefactos locales
 node_modules
 dist
 bin
+
+# Diagramas y assets
+*.png
+*.svg
+*.mmd
+*.html
+
+# Reports y outputs locales
+reports
+reports/
+
+# Compose de dev local (no va en runtime image)
+docker-compose.yml
+
+# CI / release config (no va en imagen)
 .goreleaser.yml
+.squawk.toml
+.stateless-allowed.yaml
+.commitlintrc.json

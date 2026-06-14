@@ -1,8 +1,16 @@
 :80 {
-  handle /api/*    { reverse_proxy domain-backend:8080 }
-  handle /mcp*     { reverse_proxy domain-backend:8080 }
-  handle /healthz  { reverse_proxy domain-backend:8080 }
-  handle           { reverse_proxy domain-frontend:80  }
+  handle /api/* {
+    reverse_proxy domain-backend:8000
+  }
+  handle /mcp* {
+    reverse_proxy domain-backend:8000
+  }
+  handle /healthz {
+    reverse_proxy domain-backend:8000
+  }
+  handle {
+    reverse_proxy domain-frontend:80
+  }
 
   encode zstd gzip
 

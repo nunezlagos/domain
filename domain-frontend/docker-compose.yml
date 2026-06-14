@@ -1,14 +1,10 @@
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: domain-caddy
+  domain-frontend:
+    image: ghcr.io/nunezlagos/domain-frontend:${DOMAIN_FRONTEND_VERSION:-latest}
+    container_name: domain-frontend
     restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+    expose:
+      - "80"
     networks:
       - domain_internal
     healthcheck:
@@ -16,7 +12,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 5s
     logging:
       driver: json-file
       options:
@@ -27,9 +23,3 @@ networks:
   domain_internal:
     name: domain_internal
     external: true
-
-volumes:
-  caddy_data:
-    name: domain_caddy_data
-  caddy_config:
-    name: domain_caddy_config

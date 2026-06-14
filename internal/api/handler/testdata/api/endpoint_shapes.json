@@ -115,6 +115,11 @@
     "handler": "authBootstrap"
   },
   {
+    "method": "POST",
+    "path": "/api/v1/auth/enroll",
+    "handler": "enrollSelf"
+  },
+  {
     "method": "GET",
     "path": "/api/v1/auth/first-run",
     "handler": "authFirstRun"
@@ -498,6 +503,21 @@
     "method": "PATCH",
     "path": "/api/v1/organizations/{id}",
     "handler": "updateOrg"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/organizations/{id}/enrollment-token",
+    "handler": "deleteEnrollmentToken"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/organizations/{id}/enrollment-token",
+    "handler": "getEnrollmentTokenMetadata"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/organizations/{id}/enrollment-token/rotate",
+    "handler": "rotateEnrollmentToken"
   },
   {
     "method": "GET",

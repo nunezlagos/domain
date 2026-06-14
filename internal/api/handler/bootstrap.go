@@ -64,14 +64,17 @@ func (a *API) authBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeData(w, http.StatusOK, map[string]any{
-		"user_id":         res.UserID,
-		"organization_id": res.OrganizationID,
-		"api_key":         res.APIKey,
-		"api_key_id":      res.APIKeyID,
-		"email":           res.Email,
-		"org_name":        res.OrgName,
-		"method":          "bootstrap",
-		"note":            "guardá la API key — solo se muestra UNA vez. No expira automáticamente; rotala manualmente con /domain-login.",
+		"user_id":            res.UserID,
+		"organization_id":    res.OrganizationID,
+		"api_key":            res.APIKey,
+		"api_key_id":         res.APIKeyID,
+		"email":              res.Email,
+		"org_name":           res.OrgName,
+		"method":             "bootstrap",
+		"enrollment_token":   res.EnrollmentToken,
+		"enrollment_role":    res.EnrollmentRole,
+		"enrollment_note":    "compartí este enrollment_token con tu equipo; cualquiera con el token puede self-enrolarse via POST /api/v1/auth/enroll. Rotalo si se filtra.",
+		"note":               "guardá la API key — solo se muestra UNA vez. No expira automáticamente; rotala manualmente con /domain-login.",
 	})
 }
 

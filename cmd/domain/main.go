@@ -86,6 +86,7 @@ import (
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	"nunezlagos/domain/internal/service/policy"
 	"nunezlagos/domain/internal/service/projecttemplate"
+	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	usagesvc "nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/invite"
@@ -797,6 +798,7 @@ func runServer() {
 		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
 		UsageAlertsService:        usageAlertsService,
 		UsageSnapshot:             &usagesvc.Service{Pool: pools.App},
+		Enrollment:                &enrollsvc.Service{Pool: pools.App, Audit: recorder},
 		MCPServerService:          mcpServerService,
 		ProjectTemplateService:    projectTemplateService,
 		PolicyService:             policyService,

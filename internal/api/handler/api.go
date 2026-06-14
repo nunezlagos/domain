@@ -41,6 +41,7 @@ import (
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
+	"nunezlagos/domain/internal/service/enrollment"
 	"nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
 	"nunezlagos/domain/internal/service/mcpserver"
@@ -95,6 +96,7 @@ type API struct {
 	DBMonCollector             *dbmon.Collector
 	UsageAlertsService         *usagealerts.Service
 	UsageSnapshot              *usage.Service
+	Enrollment                 *enrollment.Service
 	MCPServerService           *mcpserver.Service
 	ProjectTemplateService     *projecttemplate.Service
 	PolicyService              *policy.Service
@@ -153,6 +155,11 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
 	// issue-36.1: onboarding sin email — admin/owner crea user + api_key directo
 	mux.HandleFunc("POST /api/v1/organizations/{id}/members", a.addMemberWithKey)
+	// issue-37.1: self-enrollment con token compartido (público + admin rotate)
+	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
+	mux.HandleFunc("POST /api/v1/organizations/{id}/enrollment-token/rotate", a.rotateEnrollmentToken)
+	mux.HandleFunc("GET /api/v1/organizations/{id}/enrollment-token", a.getEnrollmentTokenMetadata)
+	mux.HandleFunc("DELETE /api/v1/organizations/{id}/enrollment-token", a.deleteEnrollmentToken)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
 
 	// Requirements (issue-04.1) — SDD dogfood
@@ -413,6 +420,7 @@ func AuthAllowlist() []string {
 		"/health/startup",
 		"/api/v1/auth/request-otp",
 		"/api/v1/auth/verify-otp",
+		"/api/v1/auth/enroll", // issue-37.1: gating por X-Enrollment-Token, no Bearer
 		"/api/v1/webhooks/*", // webhooks usan HMAC, no Bearer
 		"/metrics",
 	}

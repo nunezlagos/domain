@@ -26,6 +26,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"nunezlagos/domain/internal/service/enrollment"
 )
 
 // BootstrapLockKey es el advisory lock key para serializar bootstraps.
@@ -61,6 +63,11 @@ type BootstrapResult struct {
 	APIKeyID       uuid.UUID
 	Email          string
 	OrgName        string
+	// issue-37.1: el bootstrap también emite un enrollment_token para que el
+	// primer owner pueda invitar a su equipo sin SMTP. Plaintext UNA sola vez.
+	EnrollmentToken     string
+	EnrollmentTokenID   uuid.UUID
+	EnrollmentRole      string
 }
 
 // Service ejecuta el bootstrap. Stateless: cada llamada abre su propia tx.
@@ -176,18 +183,38 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 		return nil, fmt.Errorf("insert api_key: %w", err)
 	}
 
-	// 8. Commit
+	// 8. issue-37.1: emitir primer enrollment_token con role_on_enroll="member"
+	enrollPlain, enrollPrefix, enrollHash, err := enrollment.GeneratePlaintext()
+	if err != nil {
+		return nil, fmt.Errorf("generate enrollment token: %w", err)
+	}
+	enrollTokenID := uuid.New()
+	_, err = tx.Exec(ctx,
+		`INSERT INTO org_enrollment_tokens
+		   (id, organization_id, token_hash, token_prefix, role_on_enroll,
+		    created_by_user_id)
+		 VALUES ($1, $2, $3, $4, 'member', $5)`,
+		enrollTokenID, orgID, enrollHash, enrollPrefix, userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert enrollment token: %w", err)
+	}
+
+	// 9. Commit
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	return &BootstrapResult{
-		UserID:         userID,
-		OrganizationID: orgID,
-		APIKey:         plaintext,
-		APIKeyID:       keyID,
-		Email:          email,
-		OrgName:        orgName,
+		UserID:            userID,
+		OrganizationID:    orgID,
+		APIKey:            plaintext,
+		APIKeyID:          keyID,
+		Email:             email,
+		OrgName:           orgName,
+		EnrollmentToken:   enrollPlain,
+		EnrollmentTokenID: enrollTokenID,
+		EnrollmentRole:    "member",
 	}, nil
 }
 

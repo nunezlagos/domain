@@ -9,7 +9,7 @@ COMPOSE_FRONTEND := docker compose -f domain-frontend/docker-compose.yml $(ENV_F
 COMPOSE_CADDY    := docker compose -f caddy/docker-compose.yml $(ENV_FILE)
 NETWORK := domain_internal
 
-.PHONY: help up down restart ps logs pull backup healthcheck \
+.PHONY: help up down restart ps logs build backup healthcheck \
         psql mc clean ensure-network certs certs-force
 
 help:
@@ -17,6 +17,10 @@ help:
 
 ensure-network: ## Crea la network domain_internal si no existe (idempotente)
 	@docker network inspect $(NETWORK) >/dev/null 2>&1 || docker network create $(NETWORK)
+
+build: ## Build imágenes locales (backend + frontend); migrate también queda buildeado
+	$(COMPOSE_BACKEND) build
+	$(COMPOSE_FRONTEND) build
 
 up: ensure-network ## Levanta servicios (SVC=postgres|minio|backend|frontend|caddy|all)
 	@case "$(SVC)" in \
@@ -40,25 +44,25 @@ down: ## Detiene containers en orden inverso (mantiene volumes y network)
 	-$(COMPOSE_MINIO) down
 	-$(COMPOSE_PG) down
 
-restart: ## Reinicia servicio (SVC=postgres|minio|backend|frontend|caddy|all)
+restart: ## Update + restart (SVC=backend|frontend rebuildean; otros solo restart)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) restart ;; \
 	  minio)    $(COMPOSE_MINIO) restart ;; \
-	  backend)  $(COMPOSE_BACKEND) pull && $(COMPOSE_BACKEND) up -d --wait ;; \
-	  frontend) $(COMPOSE_FRONTEND) pull && $(COMPOSE_FRONTEND) up -d --wait ;; \
+	  backend)  $(COMPOSE_BACKEND) build && $(COMPOSE_BACKEND) up -d --wait ;; \
+	  frontend) $(COMPOSE_FRONTEND) build && $(COMPOSE_FRONTEND) up -d --wait ;; \
 	  caddy)    $(COMPOSE_CADDY) restart ;; \
-	  all)      $(MAKE) down && $(MAKE) up ;; \
-	  *) echo "SVC inválido: postgres|minio|backend|frontend|caddy|all"; exit 1 ;; \
+	  all)      $(MAKE) down && $(MAKE) build && $(MAKE) up ;; \
+	  *) echo "SVC inválido"; exit 1 ;; \
 	esac
 
-ps: ## Estado de los 5 containers
+ps: ## Estado containers
 	@$(COMPOSE_PG) ps
 	@$(COMPOSE_MINIO) ps
 	@$(COMPOSE_BACKEND) ps
 	@$(COMPOSE_FRONTEND) ps
 	@$(COMPOSE_CADDY) ps
 
-logs: ## Tail logs (requiere SVC=postgres|minio|backend|frontend|caddy)
+logs: ## Tail logs (SVC=postgres|minio|backend|frontend|caddy)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) logs -f --tail=100 ;; \
 	  minio)    $(COMPOSE_MINIO) logs -f --tail=100 ;; \
@@ -67,10 +71,6 @@ logs: ## Tail logs (requiere SVC=postgres|minio|backend|frontend|caddy)
 	  caddy)    $(COMPOSE_CADDY) logs -f --tail=100 ;; \
 	  *) echo "Usá SVC=postgres|minio|backend|frontend|caddy"; exit 1 ;; \
 	esac
-
-pull: ## Pull imágenes nuevas (solo backend y frontend; PG/MinIO/Caddy pinneados)
-	$(COMPOSE_BACKEND) pull
-	$(COMPOSE_FRONTEND) pull
 
 certs: ## Renueva certs TLS si están por expirar
 	./scripts/gen-certs.sh
@@ -94,7 +94,7 @@ mc: ## Cliente mc contra MinIO local
 		-e MC_HOST_local="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000" \
 		minio/mc:RELEASE.2024-10-08T09-37-26Z --insecure
 
-clean: ## DESTRUCTIVO: borra volumes de PG y MinIO (conserva network y caddy_data)
+clean: ## DESTRUCTIVO: borra volumes de PG y MinIO
 	@read -p "Escribí 'borrar todo' para confirmar: " confirm; \
 	if [ "$$confirm" = "borrar todo" ]; then \
 		$(COMPOSE_CADDY) down; \

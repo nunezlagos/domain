@@ -1,6 +1,12 @@
+# Frontend deploy VPS: build local (nginx + dist).
+# Update: git pull + make build + make restart SVC=frontend.
+
 services:
   domain-frontend:
-    image: ghcr.io/nunezlagos/domain-frontend:${DOMAIN_FRONTEND_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: domain-frontend:local
     container_name: domain-frontend
     restart: unless-stopped
     expose:

@@ -136,15 +136,12 @@ systemctl enable domain-services-backup.timer >/dev/null 2>&1
 systemctl enable domain-services-healthcheck.timer >/dev/null 2>&1
 ok "habilitados"
 
-step "7/10  Pull imágenes Docker"
+step "7/10  Build imágenes locales (backend + frontend)"
 if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
-  warn "skip pull (--skip-compose-up activo)"
+  warn "skip build (--skip-compose-up activo)"
 else
-  docker compose -f domain-backend/docker-compose.yml --env-file .env pull \
-    || { fail "pull domain-backend falló — verificá .env (DOMAIN_BACKEND_VERSION) y conectividad a GHCR"; exit 1; }
-  docker compose -f domain-frontend/docker-compose.yml --env-file .env pull \
-    || { fail "pull domain-frontend falló — verificá .env (DOMAIN_FRONTEND_VERSION) y conectividad a GHCR"; exit 1; }
-  ok "imágenes actualizadas"
+  make -C "$INSTALL_DIR" build || { fail "make build falló — revisar logs"; exit 1; }
+  ok "imágenes buildeadas localmente"
 fi
 
 step "8/10  Servicios"

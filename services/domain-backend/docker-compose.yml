@@ -1,12 +1,33 @@
-# HU-38.2 backend-compose-vps
-# Deploy VPS: service unico `domain-backend` referenciando imagen GHCR pinned.
-# Sin puertos publicos (Caddy proxyea). Red interna compartida con postgres/minio.
+# Backend deploy VPS: build local + init container migrate.
+# Sin GHCR, sin tags. Update: git pull + make build + make restart SVC=backend.
 
 services:
+
+  # Init container: corre `domain migrate up` antes que el server arranque.
+  # Sale exit 0 si migraciones aplicaron OK; el backend espera service_completed_successfully.
+  domain-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: domain-backend:local
+    container_name: domain-migrate
+    command: ["migrate", "up"]
+    environment:
+      DOMAIN_DATABASE_URL: postgres://app_migrator:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
+    networks:
+      - domain_internal
+    restart: "no"
+
   domain-backend:
-    image: ghcr.io/nunezlagos/domain-backend:${DOMAIN_BACKEND_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: domain-backend:local
     container_name: domain-backend
     restart: unless-stopped
+    depends_on:
+      domain-migrate:
+        condition: service_completed_successfully
     environment:
       DOMAIN_HTTP_PORT: 8000
       DOMAIN_DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable

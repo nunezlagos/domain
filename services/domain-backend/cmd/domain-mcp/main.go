@@ -42,6 +42,7 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	"nunezlagos/domain/internal/service/extsync"
 	"nunezlagos/domain/internal/service/promptrouter"
@@ -144,6 +145,7 @@ func main() {
 	// REQ-28.2: clients service además del project, ya que el project ahora
 	// resuelve client_slug → client_id en Create/Update/List.
 	clients := clientsvc.NewService(pools.App, recorder, nil)
+	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
@@ -289,6 +291,7 @@ func main() {
 		},
 		Crons:          &cronsvc.Service{Pool: pools.App, Audit: recorder},
 		Clients:        clients,
+		CapturedPrompts: capturedPrompts,
 		Policies:       &policysvc.Service{Pool: pools.App},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,

@@ -91,6 +91,7 @@ import (
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	usagesvc "nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
+	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
@@ -382,6 +383,7 @@ func runServer() {
 	// HU-28.1: Service depende de Repository — usamos los constructores nuevos
 	// que internamente arman el pgRepository wrappeando pools.App.
 	clientService := clientsvc.NewService(pools.App, recorder, nil)
+	capturedPromptService := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	// REQ-28.2: projectService recibe referencia a ClientService para
 	// resolver client_slug → client_id en Create/Update/List.
 	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
@@ -918,6 +920,7 @@ func runServer() {
 			AgentRunner:    agentRunnerInst,
 			Crons:          cronService,
 			Clients:        clientService,
+			CapturedPrompts: capturedPromptService,
 			Policies:       policyService,
 			Flows:          flowService,
 			FlowRunner:     flowRunnerInst,

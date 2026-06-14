@@ -14,15 +14,178 @@ import (
 	"nunezlagos/domain/internal/dispatch"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	flowsvc "nunezlagos/domain/internal/service/flow"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	return []mcpgo.ServerTool{
+	// rls wrappea handlers que tocan tablas con RLS FORCE (projects desde
+	// migration 000101). Abre tx + SET LOCAL app.current_org_id/user_id.
+	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, h)
+	}
+	tools := []mcpgo.ServerTool{
 		{Tool: toolSkillExecute(), Handler: wrap.Wrap("domain_skill_execute", deps.runSkillDispatch)},
 		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", deps.handleAgentCreate)},
 		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", deps.handleFlowCreate)},
 		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", deps.handleCronList)},
+		// REQ-28.2: gestión de projects desde MCP, con asociación a client.
+		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(deps.handleProjectCreate))},
+		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(deps.handleProjectUpdate))},
 	}
+	// Clients (mandantes): CRUD + restore + set_status para consultoras.
+	tools = append(tools, registerClientTools(wrap, deps)...)
+	return tools
+}
+
+// toolProjectCreate (REQ-28.2): crea un project, opcionalmente asociado a un
+// client (mandante) vía client_slug. Si client_slug se omite, el project queda
+// como "interno" (client_id NULL).
+func toolProjectCreate() mcp.Tool {
+	return mcp.NewTool("domain_project_create",
+		mcp.WithDescription("Crea un project. Si client_slug se especifica, lo asocia al mandante correspondiente (consultoras gestionando proyectos por cliente)."),
+		mcp.WithString("slug",
+			mcp.Description("Slug único per-org (kebab-case)"),
+			mcp.Required(),
+		),
+		mcp.WithString("name",
+			mcp.Description("Nombre del project"),
+			mcp.Required(),
+		),
+		mcp.WithString("description",
+			mcp.Description("Descripción opcional"),
+		),
+		mcp.WithString("repository_url",
+			mcp.Description("URL del repositorio asociado (opcional)"),
+		),
+		mcp.WithString("client_slug",
+			mcp.Description("Opcional: slug del client (mandante) en la misma org al que pertenece este project."),
+		),
+	)
+}
+
+func (d *Deps) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if d.Projects == nil {
+		return mcp.NewToolResultError("project service not configured"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	name, _ := args["name"].(string)
+	if slug == "" || name == "" {
+		return mcp.NewToolResultError("slug y name son requeridos"), nil
+	}
+	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	if err != nil {
+		return mcp.NewToolResultError("invalid principal org_id"), nil
+	}
+	userID, _ := uuid.Parse(d.Principal.UserID)
+
+	desc, _ := args["description"].(string)
+	repoURL, _ := args["repository_url"].(string)
+	clientSlug, _ := args["client_slug"].(string)
+
+	p, err := d.Projects.Create(ctx, projsvc.CreateInput{
+		OrganizationID: orgID,
+		Name:           name,
+		Slug:           slug,
+		Description:    desc,
+		RepositoryURL:  repoURL,
+		ClientSlug:     clientSlug,
+		ActorID:        userID,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("create project failed: %v", err)), nil
+	}
+	out := map[string]any{
+		"id": p.ID, "slug": p.Slug, "name": p.Name,
+	}
+	if p.ClientSlug != "" {
+		out["client_slug"] = p.ClientSlug
+		out["client_name"] = p.ClientName
+	}
+	return toolResultJSON(out)
+}
+
+// toolProjectUpdate (REQ-28.2): patch + opcionalmente cambiar el client.
+// client_slug == "" → unset (proyecto pasa a interno); slug → reasigna.
+func toolProjectUpdate() mcp.Tool {
+	return mcp.NewTool("domain_project_update",
+		mcp.WithDescription("Actualiza name/description/repository_url y opcionalmente reasigna el client (mandante). Pasar client_slug='' (string vacío) para desasignar."),
+		mcp.WithString("slug",
+			mcp.Description("Slug actual del project a actualizar"),
+			mcp.Required(),
+		),
+		mcp.WithString("name",
+			mcp.Description("Nuevo nombre (opcional)"),
+		),
+		mcp.WithString("description",
+			mcp.Description("Nueva descripción (opcional)"),
+		),
+		mcp.WithString("repository_url",
+			mcp.Description("Nuevo repository_url (opcional)"),
+		),
+		mcp.WithString("client_slug",
+			mcp.Description("Opcional: slug del nuevo client. String vacío '' = desasignar."),
+		),
+	)
+}
+
+func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if d.Projects == nil {
+		return mcp.NewToolResultError("project service not configured"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return mcp.NewToolResultError("slug es requerido"), nil
+	}
+	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	if err != nil {
+		return mcp.NewToolResultError("invalid principal org_id"), nil
+	}
+	userID, _ := uuid.Parse(d.Principal.UserID)
+
+	prev, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+	}
+
+	upd := projsvc.UpdateInput{ActorID: userID}
+	if v, ok := args["name"].(string); ok {
+		upd.Name = &v
+	}
+	if v, ok := args["description"].(string); ok {
+		upd.Description = &v
+	}
+	if v, ok := args["repository_url"].(string); ok {
+		upd.RepositoryURL = &v
+	}
+	// client_slug: solo lo agregamos si fue provisto (key presente). El
+	// MCP framework devuelve "" si la key no vino → distinguimos chequeando
+	// la presencia en el map.
+	if raw, ok := args["client_slug"]; ok {
+		if s, ok := raw.(string); ok {
+			upd.ClientSlug = &s
+		}
+	}
+
+	p, err := d.Projects.Update(ctx, prev.ID, upd)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("update project failed: %v", err)), nil
+	}
+	out := map[string]any{
+		"id": p.ID, "slug": p.Slug, "name": p.Name,
+	}
+	if p.ClientSlug != "" {
+		out["client_slug"] = p.ClientSlug
+		out["client_name"] = p.ClientName
+	}
+	return toolResultJSON(out)
 }
 
 func toolSkillExecute() mcp.Tool {

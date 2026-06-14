@@ -1,0 +1,10 @@
+status: active
+created: 2026-06-14
+archived: ~
+hus:
+  39.1-clients-schema: implemented
+  39.2-projects-client-id-extension: implemented
+  39.3-clients-service-and-repo: proposed
+  39.4-clients-rest-handlers: proposed
+  39.5-clients-mcp-tools: proposed
+  39.6-projects-accept-client-slug: proposed

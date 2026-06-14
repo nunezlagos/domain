@@ -21,13 +21,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	clientsvc "nunezlagos/domain/internal/service/client"
 	"nunezlagos/domain/internal/service/projecttemplate"
 )
 
 var (
-	ErrSlugInvalid = errors.New("slug must be lowercase ascii, digits, dashes; 2-100 chars")
-	ErrSlugTaken   = errors.New("project slug already taken in this organization")
-	ErrNotFound    = errors.New("project not found")
+	ErrSlugInvalid    = errors.New("slug must be lowercase ascii, digits, dashes; 2-100 chars")
+	ErrSlugTaken      = errors.New("project slug already taken in this organization")
+	ErrNotFound       = errors.New("project not found")
+	ErrClientNotFound = errors.New("client_slug references a client that does not exist in this organization")
 )
 
 var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
@@ -41,9 +43,17 @@ type Project struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
+	// ClientID (REQ-28.2): asocia el project con un client (mandante). NULL
+	// = proyecto interno (no asignado a cliente). Migración 000100 agregó
+	// la FK con ON DELETE SET NULL.
+	ClientID *uuid.UUID
+	// ClientSlug / ClientName: read-only, populated via LEFT JOIN clients.
+	// "" si client_id IS NULL.
+	ClientSlug string
+	ClientName string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	DeletedAt  *time.Time
 }
 
 type CreateInput struct {
@@ -54,15 +64,21 @@ type CreateInput struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	ActorID        uuid.UUID
+	// ClientSlug (REQ-28.2): si non-empty, el Service resuelve slug → id vía
+	// ClientSvc y setea project.client_id. Si "" → proyecto interno (NULL).
+	ClientSlug string
+	ActorID    uuid.UUID
 }
 
 type Service struct {
 	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
 	// &Service{Pool: ...} siguen funcionando.
-	Pool         *pgxpool.Pool
-	Audit        audit.Recorder
-	TemplateSvc  *projecttemplate.Service // opcional — issue-01.4 apply template on create
+	Pool        *pgxpool.Pool
+	Audit       audit.Recorder
+	TemplateSvc *projecttemplate.Service // opcional — issue-01.4 apply template on create
+	// ClientSvc (REQ-28.2): opcional, resuelve client_slug → client_id en
+	// Create/Update/List. Si nil, los inputs con client_slug retornan error.
+	ClientSvc *clientsvc.Service
 
 	repo Repository
 }
@@ -73,6 +89,13 @@ func NewService(pool *pgxpool.Pool, audit audit.Recorder, tplSvc *projecttemplat
 		repo = NewPgRepository(pool)
 	}
 	return &Service{Pool: pool, Audit: audit, TemplateSvc: tplSvc, repo: repo}
+}
+
+// WithClientService inyecta el ClientService para resolver client_slug.
+// Fluent setter para no romper firmas de NewService existentes (Strangler Fig).
+func (s *Service) WithClientService(cs *clientsvc.Service) *Service {
+	s.ClientSvc = cs
+	return s
 }
 
 func (s *Service) repository() Repository {
@@ -112,6 +135,22 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	}
 	settingsJSON, _ := json.Marshal(in.Settings)
 
+	// REQ-28.2: resolver client_slug → client_id si viene presente.
+	var clientID *uuid.UUID
+	if strings.TrimSpace(in.ClientSlug) != "" {
+		if s.ClientSvc == nil {
+			return nil, errors.New("client_slug provided but ClientService not configured")
+		}
+		c, err := s.ClientSvc.Get(ctx, in.OrganizationID, in.ClientSlug)
+		if err != nil {
+			if errors.Is(err, clientsvc.ErrClientNotFound) {
+				return nil, ErrClientNotFound
+			}
+			return nil, err
+		}
+		clientID = &c.ID
+	}
+
 	p, err := s.repository().Insert(ctx, InsertParams{
 		OrganizationID: in.OrganizationID,
 		Name:           in.Name,
@@ -120,6 +159,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 		RepositoryURL:  in.RepositoryURL,
 		TemplateID:     in.TemplateID,
 		SettingsJSON:   settingsJSON,
+		ClientID:       clientID,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -151,7 +191,29 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Project, error) {
-	return s.repository().List(ctx, orgID)
+	return s.repository().List(ctx, orgID, ListFilter{})
+}
+
+// ListFiltered (REQ-28.2): variante con filtros (client_slug por ahora).
+// Mantiene List() retrocompatible para los callers existentes (MCP, etc).
+func (s *Service) ListFiltered(ctx context.Context, orgID uuid.UUID, clientSlug string) ([]Project, error) {
+	f := ListFilter{}
+	clientSlug = strings.TrimSpace(clientSlug)
+	if clientSlug != "" {
+		if s.ClientSvc == nil {
+			return nil, errors.New("client_slug filter provided but ClientService not configured")
+		}
+		c, err := s.ClientSvc.Get(ctx, orgID, clientSlug)
+		if err != nil {
+			if errors.Is(err, clientsvc.ErrClientNotFound) {
+				return nil, ErrClientNotFound
+			}
+			return nil, err
+		}
+		id := c.ID
+		f.ClientID = &id
+	}
+	return s.repository().List(ctx, orgID, f)
 }
 
 type UpdateInput struct {
@@ -159,7 +221,12 @@ type UpdateInput struct {
 	Description   *string
 	RepositoryURL *string
 	Settings      map[string]any
-	ActorID       uuid.UUID
+	// ClientSlug (REQ-28.2) — PATCH semantics:
+	//   nil          → no tocar
+	//   non-nil ""   → unset (NULL)
+	//   non-nil slug → resolver y setear
+	ClientSlug *string
+	ActorID    uuid.UUID
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Project, error) {
@@ -185,11 +252,36 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 	}
 	settingsJSON, _ := json.Marshal(settings)
 
+	// REQ-28.2: resolución de client_slug en update con PATCH semantics.
+	clientID := prev.ClientID
+	clientChanged := false
+	if in.ClientSlug != nil {
+		clientChanged = true
+		raw := strings.TrimSpace(*in.ClientSlug)
+		if raw == "" {
+			clientID = nil // unset explícito
+		} else {
+			if s.ClientSvc == nil {
+				return nil, errors.New("client_slug provided but ClientService not configured")
+			}
+			c, err := s.ClientSvc.Get(ctx, prev.OrganizationID, raw)
+			if err != nil {
+				if errors.Is(err, clientsvc.ErrClientNotFound) {
+					return nil, ErrClientNotFound
+				}
+				return nil, err
+			}
+			clientID = &c.ID
+		}
+	}
+
 	p, err := s.repository().Update(ctx, id, UpdateParams{
 		Name:          name,
 		Description:   desc,
 		RepositoryURL: repo,
 		SettingsJSON:  settingsJSON,
+		ClientID:      clientID,
+		ClientChanged: clientChanged,
 	})
 	if err != nil {
 		return nil, err

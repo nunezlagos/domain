@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS users_org_isolation ON users;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;

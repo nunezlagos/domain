@@ -17,6 +17,9 @@ type createProjectBody struct {
 	RepositoryURL string         `json:"repository_url,omitempty"`
 	TemplateID    *uuid.UUID     `json:"template_id,omitempty"`
 	Settings      map[string]any `json:"settings,omitempty"`
+	// ClientSlug (REQ-28.2): opcional. Si presente, asocia el project a un
+	// client (mandante) de la misma organization.
+	ClientSlug string `json:"client_slug,omitempty"`
 }
 
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +47,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		RepositoryURL:  b.RepositoryURL,
 		TemplateID:     b.TemplateID,
 		Settings:       b.Settings,
+		ClientSlug:     b.ClientSlug,
 		ActorID:        actorID,
 	})
 	if err != nil {
@@ -52,6 +56,8 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, "invalid_slug", err.Error())
 		case errors.Is(err, projsvc.ErrSlugTaken):
 			writeError(w, http.StatusConflict, "slug_taken", err.Error())
+		case errors.Is(err, projsvc.ErrClientNotFound):
+			writeError(w, http.StatusUnprocessableEntity, "client_not_found", err.Error())
 		default:
 			writeError(w, http.StatusInternalServerError, "create_project", err.Error())
 		}
@@ -68,8 +74,22 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	list, err := a.ProjectService.List(ctx, orgID)
+	// REQ-28.2: filtro opcional ?client_slug=<slug>.
+	clientSlug := r.URL.Query().Get("client_slug")
+	var (
+		list []projsvc.Project
+		err  error
+	)
+	if clientSlug != "" {
+		list, err = a.ProjectService.ListFiltered(ctx, orgID, clientSlug)
+	} else {
+		list, err = a.ProjectService.List(ctx, orgID)
+	}
 	if err != nil {
+		if errors.Is(err, projsvc.ErrClientNotFound) {
+			writeError(w, http.StatusUnprocessableEntity, "client_not_found", err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
 	}
@@ -105,6 +125,11 @@ type updateProjectBody struct {
 	Description   *string        `json:"description,omitempty"`
 	RepositoryURL *string        `json:"repository_url,omitempty"`
 	Settings      map[string]any `json:"settings,omitempty"`
+	// ClientSlug (REQ-28.2) — PATCH semantics:
+	//   ausente / null     → no toca
+	//   string vacío ""    → unset (project queda interno)
+	//   string con slug    → reasigna a ese client
+	ClientSlug *string `json:"client_slug,omitempty"`
 }
 
 func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
@@ -134,9 +159,14 @@ func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
 		Description:   b.Description,
 		RepositoryURL: b.RepositoryURL,
 		Settings:      b.Settings,
+		ClientSlug:    b.ClientSlug,
 		ActorID:       actorID,
 	})
 	if err != nil {
+		if errors.Is(err, projsvc.ErrClientNotFound) {
+			writeError(w, http.StatusUnprocessableEntity, "client_not_found", err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "update", err.Error())
 		return
 	}

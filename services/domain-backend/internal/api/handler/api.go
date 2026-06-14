@@ -39,6 +39,7 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	clientsvc "nunezlagos/domain/internal/service/client"
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
@@ -74,6 +75,7 @@ import (
 type API struct {
 	OrgService     *orgsvc.Service
 	ProjectService *projsvc.Service
+	ClientService  *clientsvc.Service
 	ObsService     *observation.Service
 	InviteService  *invite.Service
 	SessionService  *sesssvc.Service
@@ -244,6 +246,16 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/projects/{slug}", a.getProject)
 	mux.HandleFunc("PATCH /api/v1/projects/{slug}", a.updateProject)
 	mux.HandleFunc("DELETE /api/v1/projects/{slug}", a.deleteProject)
+
+	// Clients/mandantes — consultoras que gestionan proyectos por cliente.
+	// {id_or_slug} en GET admite ambos; mutaciones requieren UUID explícito.
+	mux.HandleFunc("POST /api/v1/clients", a.createClient)
+	mux.HandleFunc("GET /api/v1/clients", a.listClients)
+	mux.HandleFunc("GET /api/v1/clients/{id_or_slug}", a.getClient)
+	mux.HandleFunc("PUT /api/v1/clients/{id}", a.updateClient)
+	mux.HandleFunc("DELETE /api/v1/clients/{id}", a.deleteClient)
+	mux.HandleFunc("POST /api/v1/clients/{id}/restore", a.restoreClient)
+	mux.HandleFunc("POST /api/v1/clients/{id}/status", a.setClientStatus)
 
 	// Observations
 	mux.HandleFunc("POST /api/v1/observations", a.saveObservation)

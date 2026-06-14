@@ -30,6 +30,7 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	clientsvc "nunezlagos/domain/internal/service/client"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	intakesvc "nunezlagos/domain/internal/service/intake"
@@ -63,6 +64,7 @@ type Deps struct {
 	Agents       *agentsvc.Service
 	AgentRunner  *agentrunner.Runner
 	Crons        *cronsvc.Service // issue-12.3 domain_cron_list
+	Clients      *clientsvc.Service // clients/mandantes — consultoras gestionan proyectos por cliente
 	Policies     *policysvc.Service // issue-01.8 domain_policy_get/list
 	Flows        *flowsvc.Service
 	FlowRunner   *flowrunner.Runner

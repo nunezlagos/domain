@@ -42,6 +42,7 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	clientsvc "nunezlagos/domain/internal/service/client"
 	"nunezlagos/domain/internal/service/extsync"
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -140,7 +141,11 @@ func main() {
 
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
 	// HU-28.1: wireup via constructores nuevos para los 5 services migrados.
-	projects := projsvc.NewService(pools.App, recorder, nil, nil)
+	// REQ-28.2: clients service además del project, ya que el project ahora
+	// resuelve client_slug → client_id en Create/Update/List.
+	clients := clientsvc.NewService(pools.App, recorder, nil)
+	projects := projsvc.NewService(pools.App, recorder, nil, nil).
+		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
 	sessions := sesssvc.NewService(pools.App, recorder, nil)
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
@@ -283,6 +288,7 @@ func main() {
 			Runner:   skillRunnerInst,
 		},
 		Crons:          &cronsvc.Service{Pool: pools.App, Audit: recorder},
+		Clients:        clients,
 		Policies:       &policysvc.Service{Pool: pools.App},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,

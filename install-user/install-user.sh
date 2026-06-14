@@ -179,14 +179,17 @@ config_claude_code() {
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
 
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
-      '.mcpServers.domain = {url: $url, headers: {Authorization: ("Bearer " + $key)}}' \
-      "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+    # Migración: borrar entry legacy "domain" antes de plantar "domain-mcp"
+    # (evita duplicación si el usuario instaló con versión anterior).
+    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
+      (.mcpServers // {}) |= del(.["domain"])
+      | .mcpServers["domain-mcp"] = {url: $url, headers: {Authorization: ("Bearer " + $key)}}
+    ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
     cat > "$target" <<JSON
 {
   "mcpServers": {
-    "domain": {
+    "domain-mcp": {
       "url": "$VPS_URL/mcp",
       "headers": {
         "Authorization": "Bearer $API_KEY"
@@ -206,14 +209,15 @@ config_opencode() {
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
 
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
-      '.mcp.domain = {type: "remote", url: $url, headers: {Authorization: ("Bearer " + $key)}, enabled: true}' \
-      "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
+      (.mcp // {}) |= del(.["domain"])
+      | .mcp["domain-mcp"] = {type: "remote", url: $url, headers: {Authorization: ("Bearer " + $key)}, enabled: true}
+    ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
     cat > "$target" <<JSON
 {
   "mcp": {
-    "domain": {
+    "domain-mcp": {
       "type": "remote",
       "url": "$VPS_URL/mcp",
       "headers": {
@@ -237,14 +241,15 @@ config_cursor() {
   local target="$CURSOR_DIR/mcp.json"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
-      '.mcpServers.domain = {url: $url, headers: {Authorization: ("Bearer " + $key)}}' \
-      "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
+      (.mcpServers // {}) |= del(.["domain"])
+      | .mcpServers["domain-mcp"] = {url: $url, headers: {Authorization: ("Bearer " + $key)}}
+    ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
     cat > "$target" <<JSON
 {
   "mcpServers": {
-    "domain": {
+    "domain-mcp": {
       "url": "$VPS_URL/mcp",
       "headers": {
         "Authorization": "Bearer $API_KEY"
@@ -265,7 +270,7 @@ config_cline() {
   cat > "$target" <<JSON
 {
   "mcpServers": {
-    "domain": {
+    "domain-mcp": {
       "url": "$VPS_URL/mcp",
       "headers": {
         "Authorization": "Bearer $API_KEY"
@@ -298,14 +303,15 @@ config_claude_desktop() {
   mkdir -p "$CLAUDE_DESKTOP_DIR"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
-      '.mcpServers.domain = {url: $url, headers: {Authorization: ("Bearer " + $key)}}' \
-      "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
+      (.mcpServers // {}) |= del(.["domain"])
+      | .mcpServers["domain-mcp"] = {url: $url, headers: {Authorization: ("Bearer " + $key)}}
+    ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
     cat > "$target" <<JSON
 {
   "mcpServers": {
-    "domain": {
+    "domain-mcp": {
       "url": "$VPS_URL/mcp",
       "headers": {
         "Authorization": "Bearer $API_KEY"
@@ -328,16 +334,35 @@ uninstall_client_cfg() {
     info "$client_name: no config existente, skip"
     return
   fi
+  # Estrategia determinista: SIEMPRE eliminar solo la entry domain con jq.
+  # Restaurar el backup completo perdería ediciones que el usuario haya hecho
+  # entre install y uninstall — eso era peor.
+  # Borramos tanto "domain-mcp" (nombre actual) como "domain" (legacy de
+  # instalaciones previas) para que el unisntall sea idempotente y robusto.
+  if [[ $HAS_JQ -eq 1 ]]; then
+    # del() de un path inexistente es no-op (no crea la key intermedia),
+    # así que es seguro encadenar las 4 sin chequear shape del JSON.
+    if jq '
+      del(.mcpServers["domain-mcp"])
+      | del(.mcpServers["domain"])
+      | del(.mcp["domain-mcp"])
+      | del(.mcp["domain"])
+    ' "$config_path" > "$config_path.tmp" 2>/dev/null; then
+      mv "$config_path.tmp" "$config_path"
+      ok "$client_name: entries domain/domain-mcp removidas (resto del archivo intacto)"
+    else
+      rm -f "$config_path.tmp" 2>/dev/null
+      warn "$client_name: el archivo no es JSON parseable, no se modificó"
+    fi
+  else
+    warn "$client_name: requiere jq para uninstall determinista; o borrá la entry manualmente"
+  fi
+  # El backup más reciente queda en disco como red de seguridad — no se
+  # restaura automáticamente. Si el usuario quiere, puede revertir manualmente.
   local latest_backup
   latest_backup=$(ls -t "$config_path".backup-* 2>/dev/null | head -1 || true)
   if [[ -n "$latest_backup" ]]; then
-    cp "$latest_backup" "$config_path"
-    ok "$client_name: restaurado desde $latest_backup"
-    return
-  fi
-  if grep -q '"domain"' "$config_path" 2>/dev/null && [[ $HAS_JQ -eq 1 ]]; then
-    jq 'del(.mcpServers.domain) | del(.mcp.domain)' "$config_path" > "$config_path.tmp" && mv "$config_path.tmp" "$config_path"
-    ok "$client_name: entry 'domain' removida"
+    info "$client_name: backup disponible si necesitás revertir: $latest_backup"
   fi
 }
 

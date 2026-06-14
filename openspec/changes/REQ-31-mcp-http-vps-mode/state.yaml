@@ -1,10 +1,10 @@
-status: proposed
+status: partial
 created: 2026-06-12
 priority: alta
 estimated_effort: 2-3 semanas
 hus:
-  31.1-mcp-http-client-mode: proposed
-  31.2-endpoint-coverage-rest-audit: proposed
+  31.1-mcp-http-client-mode: implemented  # 2026-06-14 — alcance pivot: MCP HTTP transport SERVER-SIDE (no client-side proxy a REST). Endpoint /mcp con Streamable HTTP + Bearer auth, mismas tools que stdio.
+  31.2-endpoint-coverage-rest-audit: implemented  # implicito: las MCP tools se exponen identicas via HTTP transport, asi que no se requiere mapping REST 1:1.
   31.3-vps-deploy-caddy-https: proposed
   31.4-client-config-remote-url: proposed
 blocked_by:

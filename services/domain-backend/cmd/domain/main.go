@@ -81,6 +81,8 @@ import (
 	"nunezlagos/domain/internal/service/cost"
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/flow"
+	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
+	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/outboundwebhook"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
@@ -879,6 +881,50 @@ func runServer() {
 				authMW.Wrap(
 					rateLimitMW.Wrap(
 						auditMW(activityMW.Wrap(idempMW.Wrap(api.Router())))))))))
+
+	// REQ-31 (issue-31.1 mcp-http-vps-mode): expone las mismas tools MCP
+	// que `cmd/domain-mcp` (stdio) sobre HTTP Streamable transport. Clientes
+	// MCP remotos (claude-code, Cursor, Cline...) se conectan via
+	//   https://<vps>/mcp  con header  Authorization: Bearer <api_key>.
+	// El handler valida el token contra cachedResolver (mismo store que
+	// /api/) y construye un MCPServer por request con Principal resuelto.
+	mcpBuilder := &mcphttpserver.Builder{
+		Base: mcptools.Deps{
+			Observations:   obsService,
+			Projects:       projectService,
+			Sessions:       sessionService,
+			Prompts:        promptService,
+			Timeline:       timelineService,
+			Search:         searchService,
+			Knowledge:      knowledgeService,
+			Skills:         skillService,
+			SkillExecution: &skillsvc.ExecutionService{
+				Pool: pools.App, Skills: skillService,
+				Versions: &skillsvc.VersionStore{Pool: pools.App},
+				Runner:   skillRunnerInst,
+			},
+			Agents:         agentService,
+			AgentRunner:    agentRunnerInst,
+			Crons:          cronService,
+			Policies:       policyService,
+			Flows:          flowService,
+			FlowRunner:     flowRunnerInst,
+			Hubuilder:      issuebuilderSvc,
+			Intake:         intakeSvc,
+			PromptRouter:   promptRouterSvc,
+			WorkflowImport: workflowImportSvc,
+			Pool:           pools.App,
+			Dispatcher:     dispatcher,
+			ServerName:     "domain-mcp-http",
+			ServerVer:      Version,
+		},
+	}
+	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver)
+	mux.Handle("/mcp", mcpHTTPHandler)
+	mux.Handle("/mcp/", mcpHTTPHandler)
+	logger.Info("MCP HTTP transport mounted",
+		slog.String("path", "/mcp"),
+		slog.String("auth", "Bearer api_key"))
 
 	// Aplica tracing + metrics middleware al mux principal
 	handler := metricsReg.HTTPMiddleware(tracing.HTTPMiddleware("domain")(mux))

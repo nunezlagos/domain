@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-14
 slug: mcp-http-client-mode
 issue: 31.1
 parent_req: REQ-31-mcp-http-vps-mode
@@ -8,9 +9,18 @@ priority: alta
 depends_on:
   - 29.3
 notes: >
-  Refactor mayor: introduce interface ToolHandler con dos
-  implementaciones. Es el cambio de seguridad más importante del
-  REQ-31. Bloqueado por 29.3 (HTTP listener fix) porque sin un
-  server que escuche, no hay modo remoto testeable. 31.2
-  (audit tabla) y 31.4 (config flag) DEPENDEN de este issue
-  (no al revés). 31.3 (deploy VPS) es paralelo.
+  Pivot de alcance (2026-06-14): en vez de un refactor del CLIENT
+  domain-mcp con dos modos (local DSN vs HTTP), se implementa el
+  endpoint MCP HTTP SERVER-SIDE: `domain server` expone POST /mcp
+  con Streamable HTTP transport (spec MCP 2025+) reutilizando 100%
+  las tools del paquete internal/mcp/server. Esto cumple el objetivo
+  de seguridad (clientes remotos NO requieren DSN; usan Bearer API
+  key contra el VPS) sin tocar domain-mcp stdio (que sigue siendo
+  el modo dev local). El cliente domain-mcp con HTTP-only mode queda
+  como follow-up opcional bajo 31.4.
+  Archivos:
+    - services/domain-backend/internal/mcp/httpserver/handler.go
+    - services/domain-backend/internal/mcp/httpserver/handler_test.go
+    - services/domain-backend/cmd/domain/main.go (mount /mcp + /mcp/)
+  Tests: 5 unit tests passing — auth fail (missing/invalid bearer,
+  invalid token), initialize, tools/list devuelve domain_*.

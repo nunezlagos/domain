@@ -26,9 +26,27 @@ fail() { echo "${RED}    ✗${RESET} $1" >&2; }
 
 SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-step "1/9  Privilegios"
-[[ $EUID -ne 0 ]] && { fail "root requerido"; exit 1; }
+step "1/9  Preflight"
+[[ $EUID -ne 0 ]] && { fail "root requerido (sudo)"; exit 1; }
 ok "root"
+
+[[ -r /etc/os-release ]] || { fail "/etc/os-release no encontrado — OS no soportado"; exit 1; }
+. /etc/os-release
+if [[ "${ID:-}" != "ubuntu" ]]; then
+  fail "OS = ${PRETTY_NAME:-desconocido}. Solo soportado: Ubuntu."
+  exit 1
+fi
+ok "Ubuntu ${VERSION_ID:-?} (${VERSION_CODENAME:-?})"
+
+command -v systemctl &>/dev/null || { fail "systemd no disponible"; exit 1; }
+[[ -d /run/systemd/system ]] || { fail "systemd no es PID 1 (este host no usa systemd)"; exit 1; }
+ok "systemd"
+
+ARCH=$(dpkg --print-architecture 2>/dev/null || echo "?")
+case "$ARCH" in
+  amd64|arm64) ok "arch $ARCH" ;;
+  *) fail "arquitectura no soportada: $ARCH"; exit 1 ;;
+esac
 
 step "2/9  Dependencias"
 if [[ $SKIP_DEPS -eq 1 ]]; then
@@ -42,19 +60,29 @@ else
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
     apt-get update -qq
     apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
     systemctl enable --now docker >/dev/null 2>&1 || true
     ok "docker instalado"
   else
-    ok "docker presente"
+    ok "docker presente ($(docker --version))"
   fi
-
-  docker compose version &>/dev/null || { fail "docker compose no disponible"; exit 1; }
-  ok "compose"
 fi
+
+systemctl is-active --quiet docker || systemctl start docker || { fail "no se pudo iniciar docker daemon"; exit 1; }
+docker info >/dev/null 2>&1 || { fail "docker daemon no responde"; exit 1; }
+ok "docker daemon"
+
+docker compose version &>/dev/null || { fail "docker compose plugin no disponible"; exit 1; }
+ok "compose ($(docker compose version --short 2>/dev/null || echo presente))"
+
+(cd "$SOURCE_DIR" && docker compose -f postgres/docker-compose.yml --env-file .env.example config -q 2>/dev/null) \
+  || { fail "postgres/docker-compose.yml inválido"; exit 1; }
+(cd "$SOURCE_DIR" && docker compose -f minio/docker-compose.yml --env-file .env.example config -q 2>/dev/null) \
+  || { fail "minio/docker-compose.yml inválido"; exit 1; }
+ok "compose files válidos"
 
 step "3/9  $INSTALL_DIR"
 if [[ "$SOURCE_DIR" == "$INSTALL_DIR" ]]; then

@@ -17,25 +17,37 @@ memoria conectado, **domain tiene prioridad**: usá los tools domain_*
 salvo que el usuario pida otro explícitamente.
 
 ## Primer turn de cada sesión (REQ-45)
-PRIMERO de todo, antes de responder, llamá:
+PRIMERO de todo, antes de responder, detectá en el cwd qué archivos
+AI-rules existen (AGENTS.md, CLAUDE.md, .claude/CLAUDE.md, .cursorrules,
+.windsurf/rules, .github/copilot-instructions.md, openspec/) y llamá:
 
     domain_session_bootstrap(
       cwd=<working directory absoluto>,
       git_remote=<git remote get-url origin, vacío si no es git>,
       git_branch=<git branch --show-current>,
       git_head=<git rev-parse HEAD>,
+      existing_rules_files=[<paths relativos a cwd>],
     )
 
 El response te dice:
 - known=true → leé recent_observations + counts; si head.changed=true
   ejecutá git log <head.last_known>..<head.current> y persistí con
-  mem_save lo que sea relevante antes de actuar.
+  mem_save lo que sea relevante. Si existing_rules_files tiene paths
+  que NO matchean policies importadas previas (revisá con
+  domain_project_policy_list), considerá leerlos con tu tool Read y
+  llamar domain_project_policy_import_from_text por cada uno.
 - known=false → preguntale al usuario los datos del suggestion +
   workflow del repo + estructura (mono-repo? servicios? migrations
-  manuales?), después llamá domain_session_register.
+  manuales?), llamá domain_session_register, y DESPUÉS importá los
+  existing_rules_files como project_policies con
+  domain_project_policy_import_from_text. Domain hereda lo que el
+  repo ya documenta sin tocar el archivo original.
 
 NO uses tools domain_* de proyecto (mem_save, policy_get, ...) sin
 pasar el project_slug que sale de bootstrap/register.
+
+NO pises archivos del repo (AGENTS.md, CLAUDE.md, etc.). El import
+crea una copia versionada en BD; el archivo del usuario queda intacto.
 
 ## Memoria (proactivo — no esperes a que te lo pidan)
 - domain_mem_save tras CADA decisión, bug resuelto, convención o

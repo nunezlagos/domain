@@ -43,7 +43,7 @@ func registerSessionBootstrapTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Se
 
 func toolSessionBootstrap() mcp.Tool {
 	return mcp.NewTool("domain_session_bootstrap",
-		mcp.WithDescription("Llamar al PRIMER turn de cada sesión nueva. Manda cwd + git_remote + git_branch + git_head al server. Devuelve overlay con datos del proyecto (si es conocido) o un cuestionario para registrarlo (si no). El client debe seguir el next_step indicado."),
+		mcp.WithDescription("Llamar al PRIMER turn de cada sesión nueva. Manda cwd + git_remote + git_branch + git_head + (opcional) existing_rules_files al server. Devuelve overlay con datos del proyecto (si es conocido) o un cuestionario para registrarlo (si no). El client debe seguir el next_step indicado."),
 		mcp.WithString("cwd",
 			mcp.Description("Working directory absoluto del cliente (ej. /home/user/Proyectos/acme-web). El basename se usa como slug-candidate si no hay match."),
 			mcp.Required(),
@@ -56,6 +56,9 @@ func toolSessionBootstrap() mcp.Tool {
 		),
 		mcp.WithString("git_head",
 			mcp.Description("SHA1 del HEAD actual (`git rev-parse HEAD`)."),
+		),
+		mcp.WithArray("existing_rules_files",
+			mcp.Description("Lista de paths (relativos a cwd) de archivos AI-rules detectados por el cliente: AGENTS.md, CLAUDE.md, .claude/CLAUDE.md, .cursorrules, .windsurf/rules, .github/copilot-instructions.md, openspec/. El server los reporta en su response como suggested_imports — el LLM puede leerlos con su tool Read y llamar domain_project_policy_import_from_text para volcarlos como policies del proyecto sin perder lo que el repo ya documenta."),
 		),
 	)
 }
@@ -146,19 +149,38 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError("cwd requerido"), nil
 	}
 
+	// existing_rules_files: el cliente IDE lista qué archivos AI-rules existen
+	// en el cwd. El server NO lee el filesystem del cliente — solo reporta
+	// estos paths en el response para que el LLM los lea con su tool Read y
+	// (opcional) los importe como project_policies con
+	// domain_project_policy_import_from_text.
+	rulesFiles := []string{}
+	if v, ok := args["existing_rules_files"].([]any); ok {
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				rulesFiles = append(rulesFiles, s)
+			}
+		}
+	}
+
 	projID, projSlug, matched := d.matchProjectFromCwdOrRemote(ctx, orgID, cwd, gitRemote)
 	if !matched {
 		suggestionSlug := strings.ToLower(filepath.Base(strings.TrimRight(cwd, "/")))
-		return toolResultJSON(map[string]any{
+		resp := map[string]any{
 			"known": false,
 			"suggestion": map[string]any{
-				"slug":             suggestionSlug,
-				"remote_detected":  gitRemote,
-				"branch_detected":  gitBranch,
-				"cwd":              cwd,
+				"slug":            suggestionSlug,
+				"remote_detected": gitRemote,
+				"branch_detected": gitBranch,
+				"cwd":             cwd,
 			},
+			"existing_rules_files": rulesFiles,
 			"next_step": "Preguntale al usuario: (1) confirmá slug='" + suggestionSlug + "' o pasame otro; (2) confirmá remote=" + gitRemote + " (origin) o pasame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llamá domain_session_register.",
-		})
+		}
+		if len(rulesFiles) > 0 {
+			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Después de registrar el proyecto, leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno para que domain herede lo que el repo ya documenta sin pisar nada."
+		}
+		return toolResultJSON(resp)
 	}
 
 	// Proyecto conocido: leer estado previo + last_known_head
@@ -283,11 +305,13 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 			"last_cwd":     safeDeref(lastCwd),
 			"last_seen_at": safeDeref(lastSeen),
 		},
-		"recent_observations": recentObs,
+		"recent_observations":  recentObs,
+		"existing_rules_files": rulesFiles,
 		"counts": map[string]any{
 			"project_policies":  projPoliciesCount,
 			"platform_policies": platformPoliciesCount,
 			"project_repos":     projRepoCount,
+			"existing_rules":    len(rulesFiles),
 		},
 		"next_step": nextStep,
 	})

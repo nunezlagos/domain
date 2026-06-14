@@ -9,6 +9,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -30,6 +31,7 @@ func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(deps.handleProjectPolicySet))},
 		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(deps.handleProjectPolicyList))},
 		{Tool: toolProjectPolicyDelete(), Handler: wrap.Wrap("domain_project_policy_delete", rls(deps.handleProjectPolicyDelete))},
+		{Tool: toolProjectPolicyImport(), Handler: wrap.Wrap("domain_project_policy_import_from_text", rls(deps.handleProjectPolicyImport))},
 	}
 }
 
@@ -246,6 +248,101 @@ func toolProjectPolicyDelete() mcp.Tool {
 		mcp.WithDescription("Soft-delete una project_policy. La policy queda inactiva — el resolver caerá al platform fallback."),
 		mcp.WithString("id", mcp.Description("UUID de la project_policy"), mcp.Required()),
 	)
+}
+
+func toolProjectPolicyImport() mcp.Tool {
+	return mcp.NewTool("domain_project_policy_import_from_text",
+		mcp.WithDescription("Importa un AGENTS.md / CLAUDE.md / .cursorrules / openspec / etc. del repo como project_policy del proyecto, con source='seed_imported'. El LLM lee el archivo con su tool Read y pasa el body acá. Útil para que domain herede lo que el repo ya documenta SIN PISAR nada del archivo original — solo persiste una copia importada como policy versionada."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece"), mcp.Required()),
+		mcp.WithString("source_path", mcp.Description("Path relativo en el repo del archivo origen (ej. AGENTS.md, .claude/CLAUDE.md). Se usa para construir slug y name."), mcp.Required()),
+		mcp.WithString("body_md", mcp.Description("Contenido completo del archivo (lo que devolvió tu tool Read)"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("Tipo (default 'convention'). Valores: convention|architecture|sdd_workflow|git_workflow|tech_stack|test_strategy|agent_protocol")),
+	)
+}
+
+func slugFromSourcePath(p string) string {
+	// AGENTS.md → imported-agents
+	// .claude/CLAUDE.md → imported-claude
+	// .cursorrules → imported-cursorrules
+	// .windsurf/rules/foo.md → imported-windsurf-rules-foo
+	cleaned := strings.ReplaceAll(p, "/", "-")
+	cleaned = strings.TrimPrefix(cleaned, ".")
+	cleaned = strings.ReplaceAll(cleaned, ".md", "")
+	cleaned = strings.ToLower(cleaned)
+	return "imported-" + cleaned
+}
+
+func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.ProjectPolicies == nil || d.Projects == nil {
+		return mcp.NewToolResultError("project_policy service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	projSlug, _ := args["project_slug"].(string)
+	sourcePath, _ := args["source_path"].(string)
+	body, _ := args["body_md"].(string)
+	if projSlug == "" || sourcePath == "" || body == "" {
+		return mcp.NewToolResultError("project_slug, source_path y body_md son requeridos"), nil
+	}
+	kind, _ := args["kind"].(string)
+	if kind == "" {
+		kind = "convention"
+	}
+
+	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	if perr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
+	}
+
+	slug := slugFromSourcePath(sourcePath)
+	name := "Imported: " + sourcePath
+
+	// Upsert: si ya hay una imported con mismo slug, update (bumpea version
+	// con snapshot a project_policy_versions). Idempotente — re-importar
+	// el mismo archivo crea una versión nueva en lugar de duplicar.
+	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+	if existing != nil {
+		userID, _ := uuid.Parse(d.Principal.UserID)
+		upd := projectpolicysvc.UpdateInput{
+			Name:   &name,
+			Kind:   &kind,
+			BodyMD: &body,
+		}
+		updated, err := d.ProjectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("import update failed: %v", err)), nil
+		}
+		return toolResultJSON(map[string]any{
+			"action":      "updated",
+			"slug":        slug,
+			"source_path": sourcePath,
+			"version":     updated.Version,
+			"id":          updated.ID.String(),
+		})
+	}
+
+	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+		OrganizationID: orgID,
+		ProjectID:      proj.ID,
+		Slug:           slug,
+		Name:           name,
+		Kind:           kind,
+		BodyMD:         body,
+		Source:         "seed_imported",
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("import failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"action":      "created",
+		"slug":        slug,
+		"source_path": sourcePath,
+		"version":     created.Version,
+		"id":          created.ID.String(),
+	})
 }
 
 func (d *Deps) handleProjectPolicyDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

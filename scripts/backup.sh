@@ -14,7 +14,7 @@ set -a; source "$ROOT_DIR/.env"; set +a
 : "${POSTGRES_PASSWORD:?}"
 : "${BACKUP_GPG_PASSPHRASE:?}"
 
-DAILY_RETAIN="${BACKUP_DAILY_RETAIN:-7}"
+DAILY_RETAIN="${BACKUP_DAILY_RETAIN:-2}"
 TODAY=$(date -u +"%Y-%m-%d")
 
 notify() {
@@ -59,8 +59,13 @@ if ! docker run --rm --network minio_default \
 fi
 MINIO_SIZE=$(du -sh "$MINIO_OUT" 2>/dev/null | cut -f1 || echo "?")
 
-find "$BACKUP_DIR" -maxdepth 2 -name "*.sql.gz.gpg" -printf '%T@ %p\n' 2>/dev/null \
+# Retención: conservar solo los N más recientes (postgres dumps + carpetas MinIO).
+find "$BACKUP_DIR/postgres" -maxdepth 1 -name "*.sql.gz.gpg" -printf '%T@ %p\n' 2>/dev/null \
   | sort -rn | awk -v n="$DAILY_RETAIN" 'NR>n {print $2}' \
-  | while read -r f; do rm -rf "$f"; done
+  | while read -r f; do echo "rotate: $f"; rm -f "$f"; done
+
+find "$BACKUP_DIR/minio" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+  | sort -rn | awk -v n="$DAILY_RETAIN" 'NR>n {print $2}' \
+  | while read -r f; do echo "rotate: $f"; rm -rf "$f"; done
 
 notify info "Backup $TODAY OK (pg=$PG_SIZE, minio=$MINIO_SIZE)"

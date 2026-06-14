@@ -360,11 +360,28 @@ func wizardModeForIntent(in Intent) string {
 	return issuebuilder.ModeFeature
 }
 
+// defaultChatReply devuelve una respuesta-instrucción que GUÍA al cliente
+// IDE (Claude Code/OpenCode/Cursor) en lugar de cerrar el turno con un
+// mensaje template. El cliente lee este reply en el response del MCP tool
+// `domain_orchestrate` y ejecuta los pasos antes de respondle al usuario.
+//
+// Patrón: el LLM del IDE NO debe responder de memoria — debe primero
+// recuperar contexto vía domain_mem_search/domain_mem_context y solo
+// después generar respuesta. Si surge una decisión, guardarla con
+// domain_mem_save.
 func defaultChatReply(intent Intent, rawText string) string {
 	if intent == IntentIdea {
-		return "Anoté la idea. Si querés convertirla en feature concreto, pasame el alcance y arrancamos el wizard SDD."
+		return `[domain] Intent=idea. Protocolo:
+1. domain_mem_search(query="<keywords>", project_slug="<cwd-project>") — buscá decisiones/discoveries previos.
+2. Respondé al usuario con contexto recuperado + nueva idea integrada.
+3. Si el usuario confirma scope → domain_intake_submit + sugerile arrancar domain_orchestrate como feature.
+4. Al cerrar el turno: domain_mem_save type=discovery si hubo aprendizaje no obvio.`
 	}
-	return "Recibido. Si necesitás que esto se materialice en una HU, decime y arranco el wizard."
+	return `[domain] Intent=chat. Protocolo:
+1. domain_mem_search(query="<keywords>", project_slug="<cwd-project>") ANTES de responder.
+2. Si hay matches, integralos en la respuesta (no inventes contexto).
+3. Si la charla destapa un fix/feature → ofrecé al usuario escalar con domain_orchestrate.
+4. Al cerrar el turno: domain_mem_save (type=decision|discovery) si hubo algo no obvio.`
 }
 
 func fmtFloat(f float64) string {

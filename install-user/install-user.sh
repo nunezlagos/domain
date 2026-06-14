@@ -77,6 +77,7 @@ case "$OS" in
     CLINE_VSCODE="$HOME/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings"
     CONTINUE_DIR="$HOME/.continue"
     CLAUDE_DESKTOP_DIR="$HOME/Library/Application Support/Claude"
+    OPENCODE_DIR="$HOME/.config/opencode"
     ;;
   linux)
     CLAUDE_CODE_DIR="$HOME/.claude"
@@ -84,6 +85,7 @@ case "$OS" in
     CLINE_VSCODE="$HOME/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings"
     CONTINUE_DIR="$HOME/.continue"
     CLAUDE_DESKTOP_DIR="$HOME/.config/Claude"
+    OPENCODE_DIR="$HOME/.config/opencode"
     ;;
 esac
 
@@ -99,13 +101,17 @@ detect_clients() {
   [[ -d "$CLINE_VSCODE" ]]       && DETECTED+=("cline")
   [[ -d "$CONTINUE_DIR" ]]       && DETECTED+=("continue")
   [[ -d "$CLAUDE_DESKTOP_DIR" ]] && DETECTED+=("claude-desktop")
+  # opencode: si binario está en PATH o ya hay cfg dir
+  if command -v opencode >/dev/null 2>&1 || [[ -d "$OPENCODE_DIR" ]]; then
+    DETECTED+=("opencode")
+  fi
 }
 
 # ----------------------------------------------------------------------------
 # Configuración del MCP server por cliente
 # ----------------------------------------------------------------------------
 
-# claude-code: ~/.claude/mcp_servers.json
+# claude-code: ~/.claude/mcp_servers.json + skill + agent + rules
 config_claude_code() {
   local target="$CLAUDE_CODE_DIR/mcp_servers.json"
   mkdir -p "$(dirname "$target")"
@@ -131,11 +137,65 @@ JSON
   fi
   ok "claude-code: $target"
 
-  # Rules
+  # Rules (instructions/domain.md — siempre en context)
   local rules_dir="$CLAUDE_CODE_DIR/instructions"
   mkdir -p "$rules_dir"
   cp "$TEMPLATES_DIR/claude-code-rules.md" "$rules_dir/domain.md"
   ok "claude-code rules: $rules_dir/domain.md"
+
+  # Skill (on-demand vía SKILL.md)
+  local skill_dir="$CLAUDE_CODE_DIR/skills/domain"
+  mkdir -p "$skill_dir"
+  cp "$TEMPLATES_DIR/skill-domain/SKILL.md" "$skill_dir/SKILL.md"
+  ok "claude-code skill: $skill_dir/SKILL.md"
+
+  # Subagent (~/.claude/agents/domain-memory.md)
+  local agents_dir="$CLAUDE_CODE_DIR/agents"
+  mkdir -p "$agents_dir"
+  cp "$TEMPLATES_DIR/agents/domain-memory.md" "$agents_dir/domain-memory.md"
+  ok "claude-code agent: $agents_dir/domain-memory.md"
+}
+
+# opencode: ~/.config/opencode/opencode.json + skill + agent
+config_opencode() {
+  local cfg_dir="$HOME/.config/opencode"
+  local target="$cfg_dir/opencode.json"
+  mkdir -p "$cfg_dir"
+  [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
+
+  if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
+    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
+      '.mcp.domain = {type: "remote", url: $url, headers: {Authorization: ("Bearer " + $key)}, enabled: true}' \
+      "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+  else
+    cat > "$target" <<JSON
+{
+  "mcp": {
+    "domain": {
+      "type": "remote",
+      "url": "$VPS_URL/mcp",
+      "headers": {
+        "Authorization": "Bearer $API_KEY"
+      },
+      "enabled": true
+    }
+  }
+}
+JSON
+  fi
+  ok "opencode: $target"
+
+  # Skill (~/.config/opencode/skills/domain/SKILL.md)
+  local skill_dir="$cfg_dir/skills/domain"
+  mkdir -p "$skill_dir"
+  cp "$TEMPLATES_DIR/skill-domain/SKILL.md" "$skill_dir/SKILL.md"
+  ok "opencode skill: $skill_dir/SKILL.md"
+
+  # Subagent (~/.config/opencode/agents/domain-memory.md)
+  local agents_dir="$cfg_dir/agents"
+  mkdir -p "$agents_dir"
+  cp "$TEMPLATES_DIR/agents/domain-memory.md" "$agents_dir/domain-memory.md"
+  ok "opencode agent: $agents_dir/domain-memory.md"
 }
 
 # Cursor: ~/.cursor/mcp.json + ~/.cursor/rules/domain.mdc
@@ -282,6 +342,13 @@ uninstall_all() {
       claude-code)
         uninstall_client "$CLAUDE_CODE_DIR/mcp_servers.json" "claude-code"
         rm -f "$CLAUDE_CODE_DIR/instructions/domain.md" && ok "claude-code rules removidos"
+        rm -rf "$CLAUDE_CODE_DIR/skills/domain" && ok "claude-code skill removido"
+        rm -f "$CLAUDE_CODE_DIR/agents/domain-memory.md" && ok "claude-code agent removido"
+        ;;
+      opencode)
+        uninstall_client "$OPENCODE_DIR/opencode.json" "opencode"
+        rm -rf "$OPENCODE_DIR/skills/domain" && ok "opencode skill removido"
+        rm -f "$OPENCODE_DIR/agents/domain-memory.md" && ok "opencode agent removido"
         ;;
       cursor)
         uninstall_client "$CURSOR_DIR/mcp.json" "cursor"
@@ -355,6 +422,7 @@ install_all() {
       cline)          config_cline ;;
       continue)       config_continue ;;
       claude-desktop) config_claude_desktop ;;
+      opencode)       config_opencode ;;
     esac
   done
 

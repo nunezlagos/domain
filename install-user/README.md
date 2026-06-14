@@ -38,15 +38,18 @@ que hablar con tu VPS y que prefieran las tools `domain_*` sobre alternativas.
 
 ## Clientes soportados
 
-| Cliente | Path config | Rules path |
-|---|---|---|
-| **claude-code** | `~/.claude/mcp_servers.json` | `~/.claude/instructions/domain.md` |
-| **Cursor** | `~/.cursor/mcp.json` | `~/.cursor/rules/domain.mdc` |
-| **Cline** (VS Code ext) | `<vscode>/.../cline_mcp_settings.json` | `~/.clinerules-domain` |
-| **Continue** (VS Code ext) | `~/.continue/config.json` | embebido en config.json |
-| **Claude Desktop** | `~/Library/.../claude_desktop_config.json` (macOS) o `~/.config/Claude/...` (Linux) | embebido |
+| Cliente | MCP config | Rules path | Skill | Subagent |
+|---|---|---|---|---|
+| **claude-code** | `~/.claude/mcp_servers.json` | `~/.claude/instructions/domain.md` | `~/.claude/skills/domain/SKILL.md` | `~/.claude/agents/domain-memory.md` |
+| **opencode** | `~/.config/opencode/opencode.json` | (vía SKILL) | `~/.config/opencode/skills/domain/SKILL.md` | `~/.config/opencode/agents/domain-memory.md` |
+| **Cursor** | `~/.cursor/mcp.json` | `~/.cursor/rules/domain.mdc` | — | — |
+| **Cline** (VS Code ext) | `<vscode>/.../cline_mcp_settings.json` | `~/.clinerules-domain` | — | — |
+| **Continue** (VS Code ext) | `~/.continue/config.json` | embebido en config.json | — | — |
+| **Claude Desktop** | `~/Library/.../claude_desktop_config.json` (macOS) o `~/.config/Claude/...` (Linux) | embebido | — | — |
 
-Cada cliente detectado se configura solo si su path existe.
+Cada cliente detectado se configura solo si su path existe (o, para
+opencode, si el binario está en `$PATH`). Skills y subagents se plantan
+sólo en clientes que los soportan nativamente (claude-code, opencode).
 
 ## Qué hace el script
 

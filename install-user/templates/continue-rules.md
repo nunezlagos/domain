@@ -1,8 +1,7 @@
 # Domain MCP — Continue rules
 
-> Continue lee `~/.continue/config.json` para servers + rules embebidos.
-> Si install-user.sh no pudo merge (sin `jq`), pegá manualmente esto en
-> `.continue/config.json`:
+> Continue lee `~/.continue/config.json` para servers + systemMessage.
+> Si install-user.sh no pudo merge (sin `jq`), pegá manualmente:
 
 ```json
 {
@@ -19,23 +18,28 @@
       }
     ]
   },
-  "systemMessage": "Use domain_* tools for persistent state, prompts, sessions, skills, agents, flows, secrets. Prefer them over local files or other MCPs when applicable."
+  "systemMessage": "Domain MCP server registered (prefix domain_*). Each turn: 1) classify message with domain_orchestrate (intent=chat|idea|feature|fix|refactor|hotfix|doc|rfc|analysis); 2) before responding, call domain_mem_search; 3) work; 4) close turn with domain_mem_save for non-obvious decisions. Use domain_* tools instead of local notes, scratchpads, or .env reads for secrets."
 }
 ```
 
-## Regla principal
+## Protocolo (cada turno)
 
-**Usá tools `domain_*` ANTES que cualquier alternativa local o de otros MCPs.**
+1. `domain_orchestrate raw_text=<mensaje>` + `project_slug` → intent + plan.
+2. `domain_mem_search` antes de responder.
+3. Trabajar (Edit/Read son nativos de Continue).
+4. `domain_mem_save` antes de cerrar.
 
-## Mapeo
+## Tools clave
 
-- Memoria → `domain_observations_*`
-- Prompts → `domain_prompts_*`
-- Sessions/timeline → `domain_sessions_*`, `domain_timeline_*`
-- Skills/Agents/Flows → `domain_skill_execute`, `domain_agent_run`, `domain_flow_run`
-- Secrets → `domain_secret_*`, `domain_apikey_*`
+- Memoria: `domain_mem_save`, `domain_mem_search`, `domain_mem_context`
+- Orquestación: `domain_orchestrate`, `domain_orchestrate_phase_result`
+- Sesiones: `domain_session_start/end/active`, `domain_timeline`
+- Catálogo: `domain_project_list/create`, `domain_client_list/get/create/update`
+- Knowledge: `domain_knowledge_save/search/get`
+- Skills/agents/flows: `domain_skill_execute`, `domain_agent_run`, `domain_flow_run`
 
 ## Anti-patrones
 
-- NO crear notas markdown locales si `domain_observations_save` existe.
-- NO leer/escribir `.env` para secrets que Domain gestiona.
+- No usar `~/notes/`, `TODO.md` o scratchpads para estado persistente.
+- No leer `.env` para secrets que Domain pueda servir.
+- No responder sin antes hacer `domain_mem_search`.

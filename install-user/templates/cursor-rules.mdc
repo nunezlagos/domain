@@ -1,42 +1,48 @@
 ---
-description: Domain MCP — usar tools domain_* con prioridad sobre alternativas
+description: Domain MCP — clasificador + memoria + orquestación SDD como entry point
 alwaysApply: true
 ---
 
-# Domain MCP rules
+# Domain MCP — protocolo
 
-Este proyecto tiene **Domain MCP** registrado. Sus tools tienen prefijo `domain_*`.
+Server `domain` registrado en `~/.cursor/mcp.json`. Tools con prefijo `domain_*`.
 
-## Regla principal
+## Regla de oro (cada turno)
 
-**Usá tools `domain_*` SIEMPRE que apliquen, antes que alternativas locales.**
+1. **Clasificá** el mensaje con `domain_orchestrate raw_text=<mensaje>` (+ `project_slug` si lo conocés). El response trae `intent` (`chat | idea | feature | fix | hotfix | refactor | doc | rfc | analysis`) y, si aplica, un `plan` de steps.
+   - `intent=chat | idea` → seguí el protocolo inline del reply (mem_search → responder → mem_save).
+   - `intent=feature | fix | ...` → ejecutá los steps; reportá cada uno con `domain_orchestrate_phase_result`.
+2. **Contexto** antes de generar respuesta: `domain_mem_search` + opcional `domain_mem_context`.
+3. **Trabajá** (Edit/Bash son tuyos).
+4. **Persistí** lo no-obvio con `domain_mem_save` antes de cerrar el turno.
 
-## Mapeo conceptual
+## Tools por caso
 
-| Si el user pide... | Usá... |
+| Caso | Tools |
 |---|---|
-| Guardar contexto / memoria persistente | `domain_observations_save` |
-| Recuperar memoria previa | `domain_observations_search` |
-| Guardar un prompt para reutilizar | `domain_prompts_save` |
-| Renderizar prompt con variables | `domain_prompts_render` |
-| Iniciar tarea no trivial | `domain_sessions_start` + `domain_timeline_*` |
-| Invocar skill versionada | `domain_skill_execute` |
-| Orquestar agente multi-step | `domain_agent_run` |
-| Workflow DAG | `domain_flow_run` |
-| Leer/escribir secret | `domain_secret_get` / `domain_secret_set` |
-| Listar / crear API keys | `domain_apikey_*` |
+| Clasificar + pipeline SDD | `domain_orchestrate`, `domain_orchestrate_phase_result`, `domain_orchestrate_confirm` |
+| Memoria | `domain_mem_save`, `domain_mem_search`, `domain_mem_context`, `domain_mem_get_observation` |
+| Sesiones | `domain_session_start`, `domain_session_end`, `domain_session_active`, `domain_timeline` |
+| Proyectos / clientes | `domain_project_list/create/update`, `domain_client_list/get/create/update/delete/restore/set_status` |
+| Knowledge | `domain_knowledge_save`, `domain_knowledge_search`, `domain_knowledge_get` |
+| Skills / agents / flows | `domain_skill_execute`, `domain_agent_run`, `domain_flow_run` |
+| HU wizard | `domain_hu_create_start/answer/preview/commit` |
+| Intake | `domain_intake_submit/list_pending/approve/reject` |
+| Prompts | `domain_prompt`, `domain_prompt_get`, `domain_prompt_render` |
+
+## Patrón mem_save
+
+```
+**What**: ...
+**Why**: ...
+**Where**: paths/módulos
+**Learned**: gotchas (omitir si nada)
+```
+
+Type: `decision | bugfix | pattern | config | discovery | learning | architecture`.
 
 ## Anti-patrones
 
-- NO crear archivos markdown locales para "notas" o "memoria".
-- NO duplicar prompts en cada conversación.
-- NO leer/escribir `.env` para secrets que Domain gestiona.
-
-## Antes de actuar
-
-Chequeá memoria con `domain_observations_search`. Evitá trabajo duplicado.
-
-## Al terminar tareas no triviales
-
-Guardá resumen con `domain_observations_save` para preservar contexto entre
-sesiones.
+- No usar `~/notes/`, `TODO.md`, scratchpads. Eso es `domain_mem_save`.
+- No leer/escribir `.env` para secrets que Domain pueda servir.
+- No responder de memoria sin pasar antes por `domain_mem_search`.

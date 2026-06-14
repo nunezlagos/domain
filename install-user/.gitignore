@@ -1,0 +1,7 @@
+# Build artifacts del binario domain-install
+domain-install
+domain-install.exe
+dist/
+
+# Backups generados por re-ejecutar install
+*.backup-*

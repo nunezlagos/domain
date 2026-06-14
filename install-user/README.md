@@ -3,6 +3,48 @@
 Configurá tu laptop para usar Domain via MCP, apuntando al VPS donde corre
 `domain serve --mcp-http`.
 
+**Cross-platform**: Linux (Ubuntu/Debian/Arch), macOS (Intel + Apple
+Silicon), Windows (nativo), WSL2. Binario Go estático ~6 MB sin
+dependencias externas (no necesitás jq, python, ni nada más).
+
+## Uso
+
+### Opción A: binario Go (recomendado, todos los OS)
+
+```bash
+# build local (requiere Go 1.22+)
+cd install-user
+make            # binario domain-install nativo
+make install    # opcional: copiar a /usr/local/bin (sudo)
+
+# o cross-compile a los 5 targets
+make dist       # → dist/domain-install-linux-amd64, -arm64, -darwin-*, -windows-amd64.exe
+```
+
+Y después:
+
+```bash
+./domain-install                                    # interactivo
+./domain-install --url http://1.2.3.4 \
+                 --email u@x.cl \
+                 --api-key domk_live_xxx
+./domain-install --uninstall                        # deshacer todo
+./domain-install --dry-run                          # solo detectar
+```
+
+En Windows nativo, descargar `domain-install-windows-amd64.exe` y correrlo
+desde PowerShell o `cmd`.
+
+### Opción B: script bash (legacy, solo Linux/macOS/WSL2)
+
+```bash
+./install-user.sh
+./install-user.sh --uninstall
+```
+
+El bash se mantiene como fallback si no querés bajar el binario. Hace lo
+mismo, pero NO funciona en Windows nativo (use el `.exe`).
+
 ## Filosofía: 2 archivos en disco, el resto vive en la BD
 
 El protocolo de uso de domain (cuándo llamar `mem_save`, cómo manejar

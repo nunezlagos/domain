@@ -131,6 +131,21 @@ func (s *Service) dayWindow() (start, end time.Time) {
 	return
 }
 
+// runInOrgTx ejecuta fn con una pgx.Tx que tiene SET LOCAL app.current_org_id
+// y app.current_user_id seteados. Si ya hay una tx en ctx (inyectada por el
+// middleware apikey o el wireup MCP), la reutiliza sin abrir ni commitear
+// (el dueño se encarga). Si no hay tx, abre una nueva con WithOrgTx.
+//
+// Esto evita queries directas a tablas con RLS FORCE (organizations,
+// projects, users) vía s.Pool — sin SET LOCAL, la policy filtra a 0 rows
+// y aparecen falsos "not found".
+func (s *Service) runInOrgTx(ctx context.Context, orgID uuid.UUID, fn func(pgx.Tx) error) error {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return fn(tx)
+	}
+	return txctx.WithOrgTx(ctx, s.Pool, orgID, fn)
+}
+
 // Current calcula el snapshot del día UTC actual.
 func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, error) {
 	if orgID == uuid.Nil {
@@ -146,20 +161,20 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 		},
 	}
 
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id::text, name, slug FROM organizations
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		orgID,
-	).Scan(&snap.Organization.ID, &snap.Organization.Name, &snap.Organization.Slug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrOrgNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get org: %w", err)
-	}
+	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT id::text, name, slug FROM organizations
+			 WHERE id = $1 AND deleted_at IS NULL`,
+			orgID,
+		).Scan(&snap.Organization.ID, &snap.Organization.Name, &snap.Organization.Slug)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrOrgNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("get org: %w", err)
+		}
 
-	if err := txctx.WithOrgTx(ctx, s.Pool, orgID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT
 			  (SELECT COUNT(*) FROM observations
 			     WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL),
@@ -183,20 +198,23 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			&snap.Counters.CostUSDToday,
 			&snap.Counters.TokensInToday,
 			&snap.Counters.TokensOutToday,
-		)
-	}); err != nil {
-		return nil, fmt.Errorf("counters query: %w", err)
-	}
+		); err != nil {
+			return fmt.Errorf("counters query: %w", err)
+		}
 
-	var maxDur int
-	err = s.Pool.QueryRow(ctx,
-		`SELECT max_flow_duration_seconds FROM org_flow_config WHERE organization_id = $1`,
-		orgID,
-	).Scan(&maxDur)
-	if err == nil {
-		snap.Limits.MaxFlowDurationSeconds = maxDur
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("get org_flow_config: %w", err)
+		var maxDur int
+		err = tx.QueryRow(ctx,
+			`SELECT max_flow_duration_seconds FROM org_flow_config WHERE organization_id = $1`,
+			orgID,
+		).Scan(&maxDur)
+		if err == nil {
+			snap.Limits.MaxFlowDurationSeconds = maxDur
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("get org_flow_config: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return snap, nil
@@ -220,71 +238,70 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 	start := end.AddDate(0, 0, -days)
 
 	h := &History{}
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id::text, name, slug FROM organizations
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		orgID,
-	).Scan(&h.Organization.ID, &h.Organization.Name, &h.Organization.Slug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrOrgNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get org: %w", err)
-	}
-
-	rows, err := s.Pool.Query(ctx, `
-		WITH series AS (
-		  SELECT generate_series($2::timestamptz, $3::timestamptz - interval '1 day', interval '1 day')::date AS day
-		),
-		cost AS (
-		  SELECT date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS day,
-		         SUM(cost_usd)::float8 AS cost_usd
-		  FROM cost_logs
-		  WHERE organization_id = $1 AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY 1
-		),
-		ags AS (
-		  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
-		  FROM agent_runs
-		  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
-		  GROUP BY 1
-		),
-		flw AS (
-		  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
-		  FROM flow_runs
-		  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
-		  GROUP BY 1
-		)
-		SELECT s.day,
-		       COALESCE(c.cost_usd, 0)::float8 AS cost_usd,
-		       COALESCE(a.n, 0)::bigint AS agent_runs,
-		       COALESCE(f.n, 0)::bigint AS flow_runs
-		FROM series s
-		LEFT JOIN cost c ON c.day = s.day
-		LEFT JOIN ags a ON a.day = s.day
-		LEFT JOIN flw f ON f.day = s.day
-		ORDER BY s.day DESC
-	`, orgID, start, end)
-	if err != nil {
-		return nil, fmt.Errorf("history query: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var d DayAggregate
-		var t time.Time
-		if err := rows.Scan(&t, &d.CostUSD, &d.AgentRuns, &d.FlowRuns); err != nil {
-			return nil, fmt.Errorf("scan history row: %w", err)
+	obsByDay := make(map[string]int64)
+	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT id::text, name, slug FROM organizations
+			 WHERE id = $1 AND deleted_at IS NULL`,
+			orgID,
+		).Scan(&h.Organization.ID, &h.Organization.Name, &h.Organization.Slug)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrOrgNotFound
 		}
-		d.Date = t.UTC().Format("2006-01-02")
-		h.History = append(h.History, d)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("history rows: %w", err)
-	}
+		if err != nil {
+			return fmt.Errorf("get org: %w", err)
+		}
 
-	obsByDay := make(map[string]int64, len(h.History))
-	if err := txctx.WithOrgTx(ctx, s.Pool, orgID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			WITH series AS (
+			  SELECT generate_series($2::timestamptz, $3::timestamptz - interval '1 day', interval '1 day')::date AS day
+			),
+			cost AS (
+			  SELECT date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS day,
+			         SUM(cost_usd)::float8 AS cost_usd
+			  FROM cost_logs
+			  WHERE organization_id = $1 AND occurred_at >= $2 AND occurred_at < $3
+			  GROUP BY 1
+			),
+			ags AS (
+			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
+			  FROM agent_runs
+			  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
+			  GROUP BY 1
+			),
+			flw AS (
+			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
+			  FROM flow_runs
+			  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
+			  GROUP BY 1
+			)
+			SELECT s.day,
+			       COALESCE(c.cost_usd, 0)::float8 AS cost_usd,
+			       COALESCE(a.n, 0)::bigint AS agent_runs,
+			       COALESCE(f.n, 0)::bigint AS flow_runs
+			FROM series s
+			LEFT JOIN cost c ON c.day = s.day
+			LEFT JOIN ags a ON a.day = s.day
+			LEFT JOIN flw f ON f.day = s.day
+			ORDER BY s.day DESC
+		`, orgID, start, end)
+		if err != nil {
+			return fmt.Errorf("history query: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d DayAggregate
+			var t time.Time
+			if err := rows.Scan(&t, &d.CostUSD, &d.AgentRuns, &d.FlowRuns); err != nil {
+				return fmt.Errorf("scan history row: %w", err)
+			}
+			d.Date = t.UTC().Format("2006-01-02")
+			h.History = append(h.History, d)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("history rows: %w", err)
+		}
+
 		rs, qerr := tx.Query(ctx, `
 			SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
 			       COUNT(*)::bigint
@@ -293,20 +310,20 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 			GROUP BY 1
 		`, start, end)
 		if qerr != nil {
-			return qerr
+			return fmt.Errorf("observations history: %w", qerr)
 		}
 		defer rs.Close()
 		for rs.Next() {
 			var t time.Time
 			var n int64
 			if e := rs.Scan(&t, &n); e != nil {
-				return e
+				return fmt.Errorf("scan observations history: %w", e)
 			}
 			obsByDay[t.UTC().Format("2006-01-02")] = n
 		}
 		return rs.Err()
 	}); err != nil {
-		return nil, fmt.Errorf("observations history: %w", err)
+		return nil, err
 	}
 
 	for i := range h.History {

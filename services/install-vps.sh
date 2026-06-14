@@ -1,5 +1,6 @@
 #!/bin/bash
-# Bootstrap idempotente: ./install.sh [--keep-clone] [--skip-deps] [--skip-compose-up]
+# Bootstrap idempotente VPS: ./services/install-vps.sh [--keep-clone] [--skip-deps] [--skip-compose-up]
+# Vive en services/, sincroniza el contenido de services/ a /opt/services en el VPS.
 # Si no se corre como root, re-ejecuta con sudo (1 sola contraseña).
 set -euo pipefail
 

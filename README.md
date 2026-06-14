@@ -1,8 +1,52 @@
-# domain-services
+# domain
 
-Infra para [domain](https://github.com/nunezlagos/domain): **Postgres + MinIO + domain-backend + domain-frontend + Caddy** en VPS Ubuntu via Docker Compose. HTTP plano por IP (sin TLS).
+Monorepo del proyecto **domain** — sistema de memoria + orquestación para agentes IA,
+deployado en VPS Ubuntu y consumido desde laptops via MCP HTTP.
 
-## Topología
+## Estructura del repo
+
+```
+/
+├── services/          ← deploy del VPS (Postgres + MinIO + backend + frontend + Caddy)
+├── install-user/      ← script para configurar clientes MCP en laptops
+├── openspec/          ← especificaciones SDD (REQs + HUs)
+├── .ai/               ← directivas para agentes IA que tocan este repo
+├── AGENTS.md          ← config global de agentes
+└── .github/workflows/ ← CI (build de imágenes Docker + tests del backend)
+```
+
+## Para quién es cada parte
+
+### Soy operador del VPS
+Vas a `services/`. Levantás el stack completo en tu VPS Ubuntu:
+
+```bash
+git clone -b services <repo-url> /tmp/domain-services
+cd /tmp/domain-services
+./services/install-vps.sh
+```
+
+Resultado: stack corriendo, dashboard en `http://<vps-ip>/`, MCP HTTP en `/mcp`.
+Detalle completo: ver [`services/README.md`](services/README.md).
+
+### Soy usuario / dev que quiere usar `domain` desde su laptop
+Vas a `install-user/`. Configurás tus clientes MCP (claude-code, Cursor, Cline,
+Continue, Claude Desktop) para que apunten al VPS:
+
+```bash
+./install-user/install-user.sh
+# pide URL del VPS + tu email + tu API key
+```
+
+Resultado: las tools `domain_*` aparecen en tus clientes MCP, con rules que les
+indican preferirlas sobre alternativas locales.
+Detalle completo: ver [`install-user/README.md`](install-user/README.md).
+
+### Soy contributor del producto `domain`
+Vas a `openspec/changes/` para ver REQs activos y HUs propuestas. Convención SDD:
+toda implementación nace de una HU. Ver `AGENTS.md` para reglas de proyecto.
+
+## Componentes del stack (services/)
 
 ```
 INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-backend:8000
@@ -12,84 +56,47 @@ INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-backend:8000
                       postgres ─── minio
 ```
 
-PG y MinIO viven en la red interna `domain_internal`, sin puertos publicados al host.
+| Servicio | Imagen | Función |
+|---|---|---|
+| postgres | pgvector/pgvector:pg16 | DB + embeddings |
+| minio | minio/minio | object storage (S3-compatible) |
+| domain-backend | ghcr.io/nunezlagos/domain-backend | API HTTP + MCP HTTP |
+| domain-frontend | ghcr.io/nunezlagos/domain-frontend | dashboard SPA (placeholder por ahora) |
+| caddy | caddy:2-alpine | reverse proxy, único puerto público |
 
-## Instalación
+HTTP plano por IP (sin TLS, sin dominio). PG y MinIO no expuestos al público.
 
-```bash
-git clone -b services <repo-url> /tmp/domain-services
-cd /tmp/domain-services
-./install.sh
-```
+## CI / Releases
 
-Pide contraseña sudo una vez, valida Ubuntu + systemd + docker, pull imágenes desde GHCR (requiere internet en el VPS), levanta los 5 servicios, instala systemd timers de backup + healthcheck. Idempotente.
+Workflows en `.github/workflows/`:
 
-Flags: `--keep-clone` · `--skip-deps` · `--skip-compose-up`.
+- `build-backend.yml` — push tag `backend-v*` → publica `ghcr.io/nunezlagos/domain-backend:vX.Y.Z`
+- `build-frontend.yml` — push tag `frontend-v*` → publica `ghcr.io/nunezlagos/domain-frontend:vX.Y.Z`
+- `ci-backend.yml` — tests + lints del backend Go en PRs
+- `benchmarks-backend.yml` — benchmarks Go
+- `release-backend.yml` — push tag `v*` → goreleaser (binarios + Docker via .goreleaser.yml)
 
-## Layout
-
-```
-postgres/         docker-compose.yml + config + init scripts
-minio/            docker-compose.yml
-domain-backend/   código fuente + Dockerfile + compose (imagen GHCR)
-domain-frontend/  Dockerfile + nginx + web/ (imagen GHCR)
-caddy/            Caddyfile + docker-compose.yml (reverse proxy :80)
-scripts/          backup.sh · gen-certs.sh · healthcheck-alert.sh
-systemd/          units (boot · backup diario · healthcheck cada 5min)
-Makefile          targets de operación día-a-día
-install.sh        bootstrap del VPS (idempotente)
-.env.example      plantilla de passwords + versiones de imágenes
-```
-
-`.env` real vive en `/opt/services/.env` (chmod 600, nunca committear).
-
-## Operación
+## Update flow
 
 ```bash
+# 1. En la laptop dev: cambios en services/domain-backend/ + tag
+git tag backend-v1.2.4 && git push --tags
+# CI publica imagen en GHCR
+
+# 2. En el VPS: actualizar versión + restart selectivo
+ssh vps
 cd /opt/services
-make up                    # ensure-network + 5 servicios
-make up SVC=postgres       # solo uno (postgres|minio|backend|frontend|caddy)
-make ps                    # estado
-make logs SVC=backend      # tail logs (SVC requerido)
-make restart SVC=backend   # update sin tocar otros
-make pull                  # tira imágenes nuevas (backend + frontend)
-make backup                # backup manual
-make clean                 # DESTRUCTIVO (borra volúmenes)
+sed -i 's/DOMAIN_BACKEND_VERSION=.*/DOMAIN_BACKEND_VERSION=v1.2.4/' .env
+make pull
+make restart SVC=backend
 ```
 
-## Acceso
+Rollback: editar `.env` con versión anterior + `make restart`.
 
-- **Dashboard:** `http://<vps-ip>/`
-- **API:**       `http://<vps-ip>/api/v1/...`
-- **MCP HTTP:**  `http://<vps-ip>/mcp`
-- **Health:**    `http://<vps-ip>/healthz`
+## Convención
 
-PG y MinIO NO se acceden directo desde fuera del VPS. Acceso interno solo vía backend o `docker exec`.
-
-## Backups
-
-Diario 02:00 UTC vía systemd timer → `/opt/services/backups/` (pg_dump GPG-AES256 + mirror MinIO). Retención = 2 backups (configurable en `.env`). Healthcheck cada 5 min con notificación a ntfy.sh ante fallo. Manual: `make backup`.
-
-Restaurar Postgres:
-```bash
-gpg -d /opt/services/backups/postgres/YYYY-MM-DD.sql.gz.gpg | gunzip \
-  | docker exec -i domain-postgres psql -U postgres -d domain
-```
-
-## Update
-
-1. En tu laptop: tagear release del backend o frontend.
-   ```bash
-   git tag backend-v1.2.4 && git push --tags
-   # CI publica imagen en GHCR automáticamente
-   ```
-2. En el VPS: actualizar `.env` con la versión nueva.
-   ```bash
-   ssh vps
-   cd /opt/services
-   sed -i 's/DOMAIN_BACKEND_VERSION=.*/DOMAIN_BACKEND_VERSION=v1.2.4/' .env
-   make pull
-   make restart SVC=backend
-   ```
-   Mismo flujo para frontend (`frontend-vX.Y.Z` + `DOMAIN_FRONTEND_VERSION`). ~5s de downtime, sin tocar los otros servicios.
-3. Rollback: editar `.env` con versión anterior + `make restart`.
+- Rama principal: `services` (deploy + código + specs todo aquí).
+- Commits: español, Conventional Commits, sin `Co-Authored-By`.
+- Toda HU vive en `openspec/changes/REQ-XX-*/issue-XX.Y-slug/`.
+- Tools MCP siempre con prefijo `domain_`.
+- Sin TLS por ahora (HTTP plano por IP).

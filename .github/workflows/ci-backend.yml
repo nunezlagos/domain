@@ -1,9 +1,19 @@
-name: CI
+name: CI backend
 
 on:
   push:
-    branches: [main]
+    branches: [services]
+    paths:
+      - 'services/domain-backend/**'
+      - '.github/workflows/ci-backend.yml'
   pull_request:
+    paths:
+      - 'services/domain-backend/**'
+      - '.github/workflows/ci-backend.yml'
+
+defaults:
+  run:
+    working-directory: services/domain-backend
 
 jobs:
   lint-and-unit:
@@ -15,6 +25,7 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+          cache-dependency-path: services/domain-backend/go.sum
       - name: go vet
         run: go vet ./...
       - name: go build
@@ -32,6 +43,7 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+          cache-dependency-path: services/domain-backend/go.sum
       - name: Run integration suite
         run: go test -race -tags=integration -timeout=20m ./...
 
@@ -43,6 +55,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: services/domain-backend/go.sum
       - name: Build linter
         run: go build -o /tmp/db-conv-lint ./cmd/db-conventions-lint
       - name: Lint migrations
@@ -56,6 +69,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: services/domain-backend/go.sum
       - name: Build linter
         run: go build -o /tmp/response-shape-lint ./cmd/response-shape-lint
       - name: Lint API response shapes + snapshots
@@ -65,6 +79,9 @@ jobs:
     name: Conventional Commits
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v5
         with:
@@ -79,6 +96,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: services/domain-backend/go.sum
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest

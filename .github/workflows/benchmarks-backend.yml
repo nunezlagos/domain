@@ -1,9 +1,19 @@
-name: Benchmarks
+name: Benchmarks backend
 
 on:
   push:
-    branches: [main]
+    branches: [services]
+    paths:
+      - 'services/domain-backend/**'
+      - '.github/workflows/benchmarks-backend.yml'
   pull_request:
+    paths:
+      - 'services/domain-backend/**'
+      - '.github/workflows/benchmarks-backend.yml'
+
+defaults:
+  run:
+    working-directory: services/domain-backend
 
 jobs:
   bench:
@@ -15,6 +25,7 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+          cache-dependency-path: services/domain-backend/go.sum
       - name: Run benchmarks
         run: go test -bench=. -benchmem -count=3 ./... 2>&1 | tee /tmp/bench.txt
       - name: Upload results

@@ -5,7 +5,7 @@ on:
     tags:
       - 'backend-v*'
     paths:
-      - 'domain-backend/**'
+      - 'services/domain-backend/**'
 
 permissions:
   contents: read
@@ -44,8 +44,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: domain-backend
-          file: domain-backend/Dockerfile
+          context: services/domain-backend
+          file: services/domain-backend/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -7,43 +7,80 @@ Configurá tu laptop para usar Domain via MCP, apuntando al VPS donde corre
 Silicon), Windows (nativo), WSL2. Binario Go estático ~6 MB sin
 dependencias externas (no necesitás jq, python, ni nada más).
 
-## Uso
+## Uso — 1 comando
 
-### Opción A: binario Go (recomendado, todos los OS)
+### Linux / macOS / WSL2
 
 ```bash
-# build local (requiere Go 1.22+)
+git clone https://github.com/nunezlagos/domain.git -b services
+cd domain/install-user
+./bootstrap.sh
+```
+
+Eso es todo. El `bootstrap.sh`:
+
+1. Detecta si tenés Go (>= 1.22). Si **no** lo tenés, baja Go oficial a
+   `~/.local/go/` — **sin sudo, sin tocar `/usr`**, sin afectar tu PATH
+   global.
+2. Compila `domain-install` (~6 MB).
+3. Lo ejecuta. Te pregunta interactivamente la URL del VPS, email y API
+   key (o pasás los args).
+
+Re-ejecutar es instantáneo: si el Go ya está bajado y el binario ya está
+compilado, salta esas fases.
+
+### Windows nativo
+
+```powershell
+git clone https://github.com/nunezlagos/domain.git -b services
+cd domain\install-user
+.\bootstrap.ps1
+```
+
+Mismo flujo: detecta Go, lo baja a `%LOCALAPPDATA%\go-domain\` si falta
+(sin admin), compila `domain-install.exe`, lo ejecuta.
+
+Si Windows bloquea la ejecución del script:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+### Flags
+
+Los mismos para `bootstrap.sh` y `bootstrap.ps1`:
+
+```bash
+./bootstrap.sh                                       # interactive
+./bootstrap.sh --url http://1.2.3.4 \
+               --email u@x.cl \
+               --api-key domk_live_xxx
+./bootstrap.sh --uninstall                           # deshacer todo
+./bootstrap.sh --dry-run                             # solo detectar clientes
+```
+
+En PowerShell se pasan como parámetros nombrados: `.\bootstrap.ps1 -Url
+http://... -Email ... -ApiKey ...`.
+
+### Avanzado: build manual sin bootstrap
+
+Si ya tenés Go instalado y querés saltarte el bootstrap:
+
+```bash
 cd install-user
 make            # binario domain-install nativo
-make install    # opcional: copiar a /usr/local/bin (sudo)
-
-# o cross-compile a los 5 targets
-make dist       # → dist/domain-install-linux-amd64, -arm64, -darwin-*, -windows-amd64.exe
+make dist       # cross-compile a los 5 targets (linux/macOS/windows)
+./domain-install
 ```
 
-Y después:
-
-```bash
-./domain-install                                    # interactivo
-./domain-install --url http://1.2.3.4 \
-                 --email u@x.cl \
-                 --api-key domk_live_xxx
-./domain-install --uninstall                        # deshacer todo
-./domain-install --dry-run                          # solo detectar
-```
-
-En Windows nativo, descargar `domain-install-windows-amd64.exe` y correrlo
-desde PowerShell o `cmd`.
-
-### Opción B: script bash (legacy, solo Linux/macOS/WSL2)
+### Legacy: script bash sin Go
 
 ```bash
 ./install-user.sh
-./install-user.sh --uninstall
 ```
 
-El bash se mantiene como fallback si no querés bajar el binario. Hace lo
-mismo, pero NO funciona en Windows nativo (use el `.exe`).
+El bash original sigue funcionando como fallback, sin necesidad de Go ni
+de bootstrap, pero **NO funciona en Windows nativo** (use bootstrap.ps1
+en ese caso).
 
 ## Filosofía: 2 archivos en disco, el resto vive en la BD
 

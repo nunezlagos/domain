@@ -44,7 +44,13 @@ gen_cert() {
 if need_regen "$PG_CERTS/server.crt"; then
   gen_cert "$PG_CERTS/server.key" "$PG_CERTS/server.crt" postgres
   cp "$PG_CERTS/server.crt" "$PG_CERTS/ca.crt"
-  echo "  → postgres"
+  # PG container (pgvector/postgres oficial) corre como uid 999. El bind-mount
+  # del cert al container requiere que sea legible por ese uid. Sin esto, PG
+  # falla con "could not load private key file: Permission denied".
+  chown -R 999:999 "$PG_CERTS" 2>/dev/null || true
+  chmod 600 "$PG_CERTS/server.key"
+  chmod 644 "$PG_CERTS/server.crt" "$PG_CERTS/ca.crt"
+  echo "  → postgres (perms 999:999 aplicados)"
 else
   echo "postgres: cert válido"
 fi

@@ -10,7 +10,7 @@ COMPOSE_CADDY    := docker compose -f caddy/docker-compose.yml $(ENV_FILE)
 NETWORK := domain_internal
 
 .PHONY: help up down restart ps logs build backup healthcheck \
-        psql mc clean ensure-network certs certs-force
+        psql mc clean ensure-network certs certs-force wait-healthy
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -22,18 +22,32 @@ build: ## Build imágenes locales (backend + frontend); migrate también queda b
 	$(COMPOSE_BACKEND) build
 	$(COMPOSE_FRONTEND) build
 
+# Lista de containers long-running (excluye init containers como minio-bootstrap
+# y domain-migrate que salen exit 0 después de hacer su trabajo).
+LONG_RUNNING_COUNT := 5
+
+wait-healthy: ## Espera hasta 120s a que los 5 containers long-running estén healthy
+	@echo "Esperando healthy (timeout 120s)..."; \
+	for i in $$(seq 1 60); do \
+	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE '^domain-(postgres|minio|backend|frontend|caddy)$$' || true); \
+	  if [ "$$healthy" -ge $(LONG_RUNNING_COUNT) ]; then echo "  ✓ los $$healthy/$$healthy long-running están healthy"; exit 0; fi; \
+	  sleep 2; \
+	done; \
+	echo "  ! timeout esperando healthy. usar 'make ps' + 'make logs SVC=<svc>' para diagnosticar"; exit 1
+
 up: ensure-network ## Levanta servicios (SVC=postgres|minio|backend|frontend|caddy|all)
 	@case "$(SVC)" in \
-	  postgres) $(COMPOSE_PG) up -d --wait ;; \
-	  minio)    $(COMPOSE_MINIO) up -d --wait ;; \
-	  backend)  $(COMPOSE_BACKEND) up -d --wait ;; \
-	  frontend) $(COMPOSE_FRONTEND) up -d --wait ;; \
-	  caddy)    $(COMPOSE_CADDY) up -d --wait ;; \
-	  all)      $(COMPOSE_PG) up -d --wait && \
-	            $(COMPOSE_MINIO) up -d --wait && \
-	            $(COMPOSE_BACKEND) up -d --wait && \
-	            $(COMPOSE_FRONTEND) up -d --wait && \
-	            $(COMPOSE_CADDY) up -d --wait ;; \
+	  postgres) $(COMPOSE_PG) up -d ;; \
+	  minio)    $(COMPOSE_MINIO) up -d ;; \
+	  backend)  $(COMPOSE_BACKEND) up -d ;; \
+	  frontend) $(COMPOSE_FRONTEND) up -d ;; \
+	  caddy)    $(COMPOSE_CADDY) up -d ;; \
+	  all)      $(COMPOSE_PG) up -d && \
+	            $(COMPOSE_MINIO) up -d && \
+	            $(COMPOSE_BACKEND) up -d && \
+	            $(COMPOSE_FRONTEND) up -d && \
+	            $(COMPOSE_CADDY) up -d && \
+	            $(MAKE) wait-healthy ;; \
 	  *) echo "SVC inválido: postgres|minio|backend|frontend|caddy|all"; exit 1 ;; \
 	esac
 
@@ -48,8 +62,8 @@ restart: ## Update + restart (SVC=backend|frontend rebuildean; otros solo restar
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) restart ;; \
 	  minio)    $(COMPOSE_MINIO) restart ;; \
-	  backend)  $(COMPOSE_BACKEND) build && $(COMPOSE_BACKEND) up -d --wait ;; \
-	  frontend) $(COMPOSE_FRONTEND) build && $(COMPOSE_FRONTEND) up -d --wait ;; \
+	  backend)  $(COMPOSE_BACKEND) build && $(COMPOSE_BACKEND) up -d ;; \
+	  frontend) $(COMPOSE_FRONTEND) build && $(COMPOSE_FRONTEND) up -d ;; \
 	  caddy)    $(COMPOSE_CADDY) restart ;; \
 	  all)      $(MAKE) down && $(MAKE) build && $(MAKE) up ;; \
 	  *) echo "SVC inválido"; exit 1 ;; \

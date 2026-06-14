@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 # install-user.sh — configura clientes MCP de la laptop para apuntar al VPS de Domain.
 #
+# Filosofía: cero archivos de instrucciones/memoria/rules sueltos. El
+# protocolo de uso vive en BD como policy `agent-protocol` (editable,
+# versionada) y el MCP server lo inyecta a cada cliente en el `initialize`
+# handshake vía el campo estándar `instructions`. En disco solo quedan:
+#
+#   1. ~/.claude/skills/domain/SKILL.md   ← bootstrap on-demand
+#   2. ~/.claude/agents/domain-memory.md   ← subagent read-only
+#
+# Más el config del MCP server por cliente (mcp_servers.json o equivalente)
+# — eso es transport config, indispensable, no es "memoria".
+#
+# Para opencode, los skill/agent globales se exponen vía symlink (1 sola
+# copia en disco). Cursor/Cline/Continue/Claude Desktop reciben SOLO el
+# config del server; el protocolo les llega por el handshake MCP.
+#
 # Uso:
-#   ./install-user.sh                          # interactive (pide URL, email, API key)
-#   ./install-user.sh --url http://1.2.3.4 \   # no-interactive (flags)
+#   ./install-user.sh                          # interactive
+#   ./install-user.sh --url http://1.2.3.4 \   # no-interactive
 #                     --email u@x.cl \
 #                     --api-key domk_live_...
-#   ./install-user.sh --uninstall              # restaura configs originales
-#
-# Clientes soportados:
-#   claude-code, Cursor, Cline (VS Code ext), Continue (VS Code ext), Claude Desktop
-#
-# Idempotente: re-correr no rompe ni duplica config.
+#   ./install-user.sh --uninstall              # restaura backups y borra skill/agent
+#   ./install-user.sh --dry-run                # solo detecta
 
 set -euo pipefail
 
@@ -42,7 +53,7 @@ while [[ $# -gt 0 ]]; do
     --api-key)    API_KEY="$2"; shift 2 ;;
     --uninstall)  UNINSTALL=1; shift ;;
     --dry-run)    DRY_RUN=1; shift ;;
-    -h|--help)    sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help)    sed -n '2,25p' "$0"; exit 0 ;;
     *) fail "flag desconocida: $1"; exit 2 ;;
   esac
 done
@@ -53,23 +64,24 @@ done
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
 
-# Detectar OS
 case "$(uname -s)" in
   Darwin) OS="macos" ;;
   Linux)  OS="linux" ;;
-  *)      fail "OS no soportado: $(uname -s) (solo macOS/Linux por ahora)"; exit 1 ;;
+  *)      fail "OS no soportado: $(uname -s)"; exit 1 ;;
 esac
 
-# Verificar deps
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { fail "comando requerido no encontrado: $1"; exit 1; }
 }
 require_cmd curl
-# jq es preferible para JSON merge pero hay fallback sed
 HAS_JQ=0
 command -v jq >/dev/null 2>&1 && HAS_JQ=1
 
-# Paths de configs por cliente (según OS)
+# Paths globales (independientes del cliente)
+GLOBAL_SKILL_PATH="$HOME/.claude/skills/domain/SKILL.md"
+GLOBAL_AGENT_PATH="$HOME/.claude/agents/domain-memory.md"
+
+# Paths de configs por cliente
 case "$OS" in
   macos)
     CLAUDE_CODE_DIR="$HOME/.claude"
@@ -92,7 +104,7 @@ esac
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 
 # ----------------------------------------------------------------------------
-# Detección de clientes instalados
+# Detección
 # ----------------------------------------------------------------------------
 detect_clients() {
   DETECTED=()
@@ -101,17 +113,42 @@ detect_clients() {
   [[ -d "$CLINE_VSCODE" ]]       && DETECTED+=("cline")
   [[ -d "$CONTINUE_DIR" ]]       && DETECTED+=("continue")
   [[ -d "$CLAUDE_DESKTOP_DIR" ]] && DETECTED+=("claude-desktop")
-  # opencode: si binario está en PATH o ya hay cfg dir
   if command -v opencode >/dev/null 2>&1 || [[ -d "$OPENCODE_DIR" ]]; then
     DETECTED+=("opencode")
   fi
 }
 
 # ----------------------------------------------------------------------------
-# Configuración del MCP server por cliente
+# Skill + Agent global (una sola copia en disco)
+# ----------------------------------------------------------------------------
+install_global_skill_and_agent() {
+  mkdir -p "$(dirname "$GLOBAL_SKILL_PATH")" "$(dirname "$GLOBAL_AGENT_PATH")"
+  cp "$TEMPLATES_DIR/skill-domain/SKILL.md" "$GLOBAL_SKILL_PATH"
+  cp "$TEMPLATES_DIR/agents/domain-memory.md" "$GLOBAL_AGENT_PATH"
+  ok "skill: $GLOBAL_SKILL_PATH"
+  ok "agent: $GLOBAL_AGENT_PATH"
+}
+
+# Symlink (idempotente) — usar para clientes que tienen su propia path
+# pero comparten contenido con los archivos globales.
+link_to_global() {
+  local link="$1"; local target="$2"
+  mkdir -p "$(dirname "$link")"
+  # Si ya es symlink al mismo target, no hacer nada
+  if [[ -L "$link" ]] && [[ "$(readlink "$link")" = "$target" ]]; then
+    return
+  fi
+  # Si existe como archivo real, backup y reemplazo por symlink
+  if [[ -e "$link" && ! -L "$link" ]]; then
+    cp "$link" "$link.backup-$TIMESTAMP"
+  fi
+  ln -sf "$target" "$link"
+}
+
+# ----------------------------------------------------------------------------
+# Config del MCP server por cliente (transport config — NO rules)
 # ----------------------------------------------------------------------------
 
-# claude-code: ~/.claude/mcp_servers.json + skill + agent + rules
 config_claude_code() {
   local target="$CLAUDE_CODE_DIR/mcp_servers.json"
   mkdir -p "$(dirname "$target")"
@@ -136,31 +173,12 @@ config_claude_code() {
 JSON
   fi
   ok "claude-code: $target"
-
-  # Rules (instructions/domain.md — siempre en context)
-  local rules_dir="$CLAUDE_CODE_DIR/instructions"
-  mkdir -p "$rules_dir"
-  cp "$TEMPLATES_DIR/claude-code-rules.md" "$rules_dir/domain.md"
-  ok "claude-code rules: $rules_dir/domain.md"
-
-  # Skill (on-demand vía SKILL.md)
-  local skill_dir="$CLAUDE_CODE_DIR/skills/domain"
-  mkdir -p "$skill_dir"
-  cp "$TEMPLATES_DIR/skill-domain/SKILL.md" "$skill_dir/SKILL.md"
-  ok "claude-code skill: $skill_dir/SKILL.md"
-
-  # Subagent (~/.claude/agents/domain-memory.md)
-  local agents_dir="$CLAUDE_CODE_DIR/agents"
-  mkdir -p "$agents_dir"
-  cp "$TEMPLATES_DIR/agents/domain-memory.md" "$agents_dir/domain-memory.md"
-  ok "claude-code agent: $agents_dir/domain-memory.md"
+  # Skill + agent: ya plantados globalmente (los lee desde $CLAUDE_CODE_DIR)
 }
 
-# opencode: ~/.config/opencode/opencode.json + skill + agent
 config_opencode() {
-  local cfg_dir="$HOME/.config/opencode"
-  local target="$cfg_dir/opencode.json"
-  mkdir -p "$cfg_dir"
+  local target="$OPENCODE_DIR/opencode.json"
+  mkdir -p "$OPENCODE_DIR"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
 
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
@@ -185,24 +203,15 @@ JSON
   fi
   ok "opencode: $target"
 
-  # Skill (~/.config/opencode/skills/domain/SKILL.md)
-  local skill_dir="$cfg_dir/skills/domain"
-  mkdir -p "$skill_dir"
-  cp "$TEMPLATES_DIR/skill-domain/SKILL.md" "$skill_dir/SKILL.md"
-  ok "opencode skill: $skill_dir/SKILL.md"
-
-  # Subagent (~/.config/opencode/agents/domain-memory.md)
-  local agents_dir="$cfg_dir/agents"
-  mkdir -p "$agents_dir"
-  cp "$TEMPLATES_DIR/agents/domain-memory.md" "$agents_dir/domain-memory.md"
-  ok "opencode agent: $agents_dir/domain-memory.md"
+  # Symlinks al skill y agent globales (una sola copia en disco)
+  link_to_global "$OPENCODE_DIR/skills/domain/SKILL.md" "$GLOBAL_SKILL_PATH"
+  link_to_global "$OPENCODE_DIR/agents/domain-memory.md" "$GLOBAL_AGENT_PATH"
+  ok "opencode skill/agent: symlinks a globales"
 }
 
-# Cursor: ~/.cursor/mcp.json + ~/.cursor/rules/domain.mdc
 config_cursor() {
   local target="$CURSOR_DIR/mcp.json"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
-
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
     jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
       '.mcpServers.domain = {url: $url, headers: {Authorization: ("Bearer " + $key)}}' \
@@ -222,19 +231,13 @@ config_cursor() {
 JSON
   fi
   ok "cursor: $target"
-
-  local rules_dir="$CURSOR_DIR/rules"
-  mkdir -p "$rules_dir"
-  cp "$TEMPLATES_DIR/cursor-rules.mdc" "$rules_dir/domain.mdc"
-  ok "cursor rules: $rules_dir/domain.mdc"
+  info "cursor recibe el protocolo via MCP handshake instructions; no se planta rule file."
 }
 
-# Cline (VS Code ext): settings.json
 config_cline() {
   local target="$CLINE_VSCODE/cline_mcp_settings.json"
   mkdir -p "$(dirname "$target")"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
-
   cat > "$target" <<JSON
 {
   "mcpServers": {
@@ -249,37 +252,27 @@ config_cline() {
 }
 JSON
   ok "cline: $target"
-
-  # Cline rules: en .clinerules global o en cada workspace
-  local rules_target="$HOME/.clinerules-domain"
-  cp "$TEMPLATES_DIR/cline-rules.md" "$rules_target"
-  ok "cline rules: $rules_target"
+  info "cline recibe el protocolo via MCP handshake instructions; no se planta rule file."
 }
 
-# Continue (VS Code ext): ~/.continue/config.json
 config_continue() {
   local target="$CONTINUE_DIR/config.json"
   mkdir -p "$CONTINUE_DIR"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
-
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
     jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
       '.experimental.modelContextProtocolServers = [{transport: {type: "http", url: $url, headers: {Authorization: ("Bearer " + $key)}}}]' \
       "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+    ok "continue: $target"
   else
     warn "Continue requiere jq para merge — config NO modificada"
-    warn "Instalá jq o configurá manualmente desde $TEMPLATES_DIR/continue-rules.md"
-    return
   fi
-  ok "continue: $target"
 }
 
-# Claude Desktop: claude_desktop_config.json
 config_claude_desktop() {
   local target="$CLAUDE_DESKTOP_DIR/claude_desktop_config.json"
   mkdir -p "$CLAUDE_DESKTOP_DIR"
   [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
-
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
     jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" \
       '.mcpServers.domain = {url: $url, headers: {Authorization: ("Bearer " + $key)}}' \
@@ -304,69 +297,46 @@ JSON
 # ----------------------------------------------------------------------------
 # Uninstall: restaura backups
 # ----------------------------------------------------------------------------
-uninstall_client() {
+uninstall_client_cfg() {
   local config_path="$1"
   local client_name="$2"
-
   if [[ ! -f "$config_path" ]]; then
     info "$client_name: no config existente, skip"
     return
   fi
-
-  # Buscar backup más reciente
   local latest_backup
   latest_backup=$(ls -t "$config_path".backup-* 2>/dev/null | head -1 || true)
-
   if [[ -n "$latest_backup" ]]; then
     cp "$latest_backup" "$config_path"
     ok "$client_name: restaurado desde $latest_backup"
-  else
-    # Sin backup: el archivo lo creó este script, lo borramos
-    if grep -q '"domain"' "$config_path" 2>/dev/null; then
-      if [[ $HAS_JQ -eq 1 ]]; then
-        jq 'del(.mcpServers.domain)' "$config_path" > "$config_path.tmp" && mv "$config_path.tmp" "$config_path"
-        ok "$client_name: entry 'domain' removida"
-      else
-        warn "$client_name: requiere jq para remover entry; o borrá manualmente"
-      fi
-    fi
+    return
+  fi
+  if grep -q '"domain"' "$config_path" 2>/dev/null && [[ $HAS_JQ -eq 1 ]]; then
+    jq 'del(.mcpServers.domain) | del(.mcp.domain)' "$config_path" > "$config_path.tmp" && mv "$config_path.tmp" "$config_path"
+    ok "$client_name: entry 'domain' removida"
   fi
 }
 
 uninstall_all() {
-  step "Desinstalando configuración Domain MCP"
+  step "Desinstalando Domain MCP"
   detect_clients
-
   for client in "${DETECTED[@]}"; do
     case "$client" in
-      claude-code)
-        uninstall_client "$CLAUDE_CODE_DIR/mcp_servers.json" "claude-code"
-        rm -f "$CLAUDE_CODE_DIR/instructions/domain.md" && ok "claude-code rules removidos"
-        rm -rf "$CLAUDE_CODE_DIR/skills/domain" && ok "claude-code skill removido"
-        rm -f "$CLAUDE_CODE_DIR/agents/domain-memory.md" && ok "claude-code agent removido"
-        ;;
-      opencode)
-        uninstall_client "$OPENCODE_DIR/opencode.json" "opencode"
-        rm -rf "$OPENCODE_DIR/skills/domain" && ok "opencode skill removido"
-        rm -f "$OPENCODE_DIR/agents/domain-memory.md" && ok "opencode agent removido"
-        ;;
-      cursor)
-        uninstall_client "$CURSOR_DIR/mcp.json" "cursor"
-        rm -f "$CURSOR_DIR/rules/domain.mdc" && ok "cursor rules removidos"
-        ;;
-      cline)
-        uninstall_client "$CLINE_VSCODE/cline_mcp_settings.json" "cline"
-        rm -f "$HOME/.clinerules-domain" && ok "cline rules removidos"
-        ;;
-      continue)
-        warn "continue: revisión manual recomendada en ~/.continue/config.json"
-        ;;
-      claude-desktop)
-        uninstall_client "$CLAUDE_DESKTOP_DIR/claude_desktop_config.json" "claude-desktop"
-        ;;
+      claude-code)    uninstall_client_cfg "$CLAUDE_CODE_DIR/mcp_servers.json" "claude-code" ;;
+      opencode)       uninstall_client_cfg "$OPENCODE_DIR/opencode.json" "opencode"
+                      rm -f "$OPENCODE_DIR/skills/domain/SKILL.md" 2>/dev/null
+                      rm -f "$OPENCODE_DIR/agents/domain-memory.md" 2>/dev/null
+                      ok "opencode: symlinks limpiados" ;;
+      cursor)         uninstall_client_cfg "$CURSOR_DIR/mcp.json" "cursor" ;;
+      cline)          uninstall_client_cfg "$CLINE_VSCODE/cline_mcp_settings.json" "cline" ;;
+      continue)       warn "continue: revisión manual recomendada en ~/.continue/config.json" ;;
+      claude-desktop) uninstall_client_cfg "$CLAUDE_DESKTOP_DIR/claude_desktop_config.json" "claude-desktop" ;;
     esac
   done
-
+  # Skill + agent globales
+  rm -f "$GLOBAL_SKILL_PATH" "$GLOBAL_AGENT_PATH" 2>/dev/null
+  rmdir "$(dirname "$GLOBAL_SKILL_PATH")" 2>/dev/null || true
+  ok "skill + agent globales removidos"
   step "Listo"
   echo "  Reiniciá tus clientes MCP."
 }
@@ -377,52 +347,43 @@ uninstall_all() {
 install_all() {
   step "Domain MCP — install user"
 
-  # Pedir datos si faltan
-  if [[ -z "$VPS_URL" ]]; then
-    read -rp "  URL del VPS (ej. http://1.2.3.4): " VPS_URL
-  fi
-  if [[ -z "$USER_EMAIL" ]]; then
-    read -rp "  Email: " USER_EMAIL
-  fi
-  if [[ -z "$API_KEY" ]]; then
-    read -rsp "  API key: " API_KEY; echo
-  fi
+  [[ -z "$VPS_URL" ]]    && read -rp "  URL del VPS (ej. http://1.2.3.4): " VPS_URL
+  [[ -z "$USER_EMAIL" ]] && read -rp "  Email: " USER_EMAIL
+  [[ -z "$API_KEY" ]]    && { read -rsp "  API key: " API_KEY; echo; }
 
-  # Validar
   [[ -z "$VPS_URL" ]]    && { fail "URL del VPS requerida"; exit 1; }
   [[ -z "$USER_EMAIL" ]] && { fail "Email requerido"; exit 1; }
   [[ -z "$API_KEY" ]]    && { fail "API key requerida"; exit 1; }
-
-  # Sanitizar URL: quitar trailing slash
   VPS_URL="${VPS_URL%/}"
 
   step "Verificando conexión al VPS"
   if curl -fsS --max-time 5 "$VPS_URL/healthz" >/dev/null 2>&1; then
     ok "VPS responde en $VPS_URL"
   else
-    warn "VPS no responde en $VPS_URL/healthz (continuando igual; config se aplicará)"
+    warn "VPS no responde en $VPS_URL/healthz (continuando igual)"
   fi
 
   step "Detectando clientes MCP"
   detect_clients
   if [[ ${#DETECTED[@]} -eq 0 ]]; then
-    fail "Ningún cliente MCP detectado en este sistema."
-    fail "Clientes soportados: claude-code, Cursor, Cline (VS Code), Continue (VS Code), Claude Desktop"
+    fail "Ningún cliente MCP detectado. Clientes: claude-code, opencode, cursor, cline, continue, claude-desktop"
     exit 1
   fi
   for c in "${DETECTED[@]}"; do ok "$c"; done
-
   [[ $DRY_RUN -eq 1 ]] && { warn "DRY-RUN: terminando sin tocar configs"; exit 0; }
 
-  step "Configurando clientes"
+  step "Plantando skill + subagent globales"
+  install_global_skill_and_agent
+
+  step "Configurando clientes (MCP transport)"
   for client in "${DETECTED[@]}"; do
     case "$client" in
       claude-code)    config_claude_code ;;
+      opencode)       config_opencode ;;
       cursor)         config_cursor ;;
       cline)          config_cline ;;
       continue)       config_continue ;;
       claude-desktop) config_claude_desktop ;;
-      opencode)       config_opencode ;;
     esac
   done
 
@@ -433,12 +394,20 @@ install_all() {
 
   VPS:    $VPS_URL
   Email:  $USER_EMAIL
-  Tools:  domain_* disponibles tras reiniciar clientes
+
+  Archivos en disco (totales en este sistema):
+    · $GLOBAL_SKILL_PATH
+    · $GLOBAL_AGENT_PATH
+    · 1 archivo de config MCP por cliente detectado (transport-only)
+
+  Protocolo de uso: vive en BD como policy 'agent-protocol' (editable
+  con domain_policy_update). El MCP server lo inyecta en cada
+  initialize via instructions; no hay archivos rules sueltos.
 
   Próximos pasos:
-    1. Reiniciá tus clientes MCP (claude-code, Cursor, Cline, etc.)
-    2. Probá una tool: en claude-code escribí "lista mis observations"
-       → debería invocar domain_observations_list
+    1. Reiniciá tus clientes MCP.
+    2. Mandá un mensaje al LLM → debe llamar domain_policy_get('agent-protocol')
+       o seguir el handshake instructions y usar tools domain_*.
 
   Para desinstalar: $0 --uninstall
 

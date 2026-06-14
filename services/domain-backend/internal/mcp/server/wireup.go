@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
@@ -104,9 +105,11 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 
 // q retorna la tx del contexto (wireup activo) o el Pool como fallback.
 // Para queries directas de los handlers MCP sobre tablas con RLS.
+// Incluye Exec para INSERT/UPDATE/DELETE (REQ-45 session_bootstrap).
 func (d *Deps) q(ctx context.Context) interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 } {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return tx

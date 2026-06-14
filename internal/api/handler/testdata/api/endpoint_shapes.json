@@ -516,6 +516,11 @@
   },
   {
     "method": "POST",
+    "path": "/api/v1/organizations/{id}/members",
+    "handler": "addMemberWithKey"
+  },
+  {
+    "method": "POST",
     "path": "/api/v1/organizations/{id}/members/{user_id}/role",
     "handler": "assignRole"
   },

@@ -151,6 +151,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/organizations/{id}", a.updateOrg)
 	mux.HandleFunc("DELETE /api/v1/organizations/{id}", a.deleteOrg)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
+	// issue-36.1: onboarding sin email — admin/owner crea user + api_key directo
+	mux.HandleFunc("POST /api/v1/organizations/{id}/members", a.addMemberWithKey)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
 
 	// Requirements (issue-04.1) — SDD dogfood

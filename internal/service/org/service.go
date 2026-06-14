@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/auth/apikey"
 )
 
 // Role permitidos en users.role.
@@ -36,7 +38,22 @@ var (
 	ErrTargetNotMember = errors.New("target user is not a member of this organization")
 	ErrConfirmMismatch = errors.New("confirmation slug mismatch")
 	ErrUserNotFound    = errors.New("user not found in organization")
+	ErrInvalidEmail    = errors.New("email format invalid")
+	ErrInvalidRole     = errors.New("role must be one of: owner, admin, maintainer, member, viewer")
+	ErrEmailTaken      = errors.New("email already in use within the organization")
 )
+
+// emailRegex es una validación de formato simplificada (no DNS).
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+// allowedRoles cierra el conjunto de roles aceptados en AddMemberWithAPIKey.
+var allowedRoles = map[string]bool{
+	RoleOwner:      true,
+	RoleAdmin:      true,
+	RoleMaintainer: true,
+	RoleMember:     true,
+	RoleViewer:     true,
+}
 
 // Organization snapshot lectura.
 type Organization struct {
@@ -292,6 +309,136 @@ func (s *Service) SoftDelete(ctx context.Context, orgID, actorID uuid.UUID, conf
 		})
 	}
 	return nil
+}
+
+// MemberWithKey es el resultado de AddMemberWithAPIKey: user + key plaintext
+// emitida UNA sola vez al caller. El plaintext NUNCA se persiste; el hash
+// bcrypt vive en api_keys.key_hash.
+type MemberWithKey struct {
+	User      Member
+	APIKey    string    // plaintext (UNA sola vez, no se puede recuperar después)
+	APIKeyID  uuid.UUID
+	KeyPrefix string
+}
+
+// AddMemberWithAPIKey crea user + api_key atómicamente sin email/OTP
+// (issue-36.1). Flujo paralelo a invitations: el admin entrega la key al
+// invitado por el canal que tenga.
+//
+// Validación + RBAC:
+//   - Email se valida con emailRegex local; sin DNS check.
+//   - Role debe estar en allowedRoles.
+//   - Verificación de RBAC (caller es owner/admin de la org) la hace el handler.
+//
+// Atomicidad: todo dentro de una tx. Si INSERT api_keys falla, rollback
+// del INSERT users.
+//
+// Audit log: action "member.created_with_key" con key_prefix (NUNCA
+// plaintext — security.md prohíbe loggear secretos).
+func (s *Service) AddMemberWithAPIKey(
+	ctx context.Context,
+	orgID, actorID uuid.UUID,
+	email, name, role string,
+) (*MemberWithKey, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if !emailRegex.MatchString(email) {
+		return nil, ErrInvalidEmail
+	}
+	if !allowedRoles[role] {
+		return nil, ErrInvalidRole
+	}
+	if orgID == uuid.Nil {
+		return nil, ErrNotFound
+	}
+
+	plaintext, prefix, hash, err := apikey.Generate("live")
+	if err != nil {
+		return nil, fmt.Errorf("generate api key: %w", err)
+	}
+
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var orgExists bool
+	err = tx.QueryRow(ctx,
+		`SELECT TRUE FROM organizations WHERE id = $1 AND deleted_at IS NULL`,
+		orgID,
+	).Scan(&orgExists)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check org: %w", err)
+	}
+
+	var m Member
+	err = tx.QueryRow(ctx,
+		`INSERT INTO users (organization_id, email, name, role)
+		 VALUES ($1, $2, NULLIF($3, ''), $4)
+		 RETURNING id, email, COALESCE(name,''), role, created_at`,
+		orgID, email, name, role,
+	).Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt)
+	if err != nil {
+		if isEmailUniqueViolation(err) {
+			return nil, ErrEmailTaken
+		}
+		return nil, fmt.Errorf("insert user: %w", err)
+	}
+
+	keyID := uuid.New()
+	_, err = tx.Exec(ctx,
+		`INSERT INTO api_keys (id, organization_id, user_id, key_hash, key_prefix,
+		                        name, environment, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, 'default', 'live', NULL)`,
+		keyID, orgID, m.UserID, hash, prefix,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert api_key: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
+	if s.Audit != nil {
+		_ = s.Audit.Record(ctx, audit.Event{
+			OrganizationID: &orgID,
+			ActorID:        &actorID,
+			ActorType:      audit.ActorUser,
+			Action:         "member.created_with_key",
+			EntityType:     "user",
+			EntityID:       &m.UserID,
+			NewValues: map[string]any{
+				"email":      email,
+				"role":       role,
+				"key_prefix": prefix,
+			},
+		})
+	}
+
+	return &MemberWithKey{
+		User:      m,
+		APIKey:    plaintext,
+		APIKeyID:  keyID,
+		KeyPrefix: prefix,
+	}, nil
+}
+
+// isEmailUniqueViolation detecta error de unique constraint sobre users.email.
+// La constraint puede llamarse users_org_email_uniq o similar; matcheamos por
+// substrings robustos a renames.
+func isEmailUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if !contains(msg, "duplicate key") {
+		return false
+	}
+	return contains(msg, "email") || contains(msg, "users_") && contains(msg, "uniq")
 }
 
 // AddMember inserta user en org con el rol indicado (helper para tests; en prod

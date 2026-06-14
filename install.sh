@@ -1,6 +1,13 @@
 #!/bin/bash
-# Bootstrap idempotente: sudo ./install.sh [--keep-clone] [--skip-deps] [--skip-compose-up]
+# Bootstrap idempotente: ./install.sh [--keep-clone] [--skip-deps] [--skip-compose-up]
+# Si no se corre como root, re-ejecuta con sudo (1 sola contraseña).
 set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+  command -v sudo &>/dev/null || { echo "ERROR: sudo no instalado y no estás corriendo como root" >&2; exit 1; }
+  echo "Re-ejecutando con sudo (puede pedir contraseña una vez)..."
+  exec sudo -E bash "$0" "$@"
+fi
 
 INSTALL_DIR="/opt/services"
 KEEP_CLONE=0
@@ -27,7 +34,6 @@ fail() { echo "${RED}    ✗${RESET} $1" >&2; }
 SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 step "1/9  Preflight"
-[[ $EUID -ne 0 ]] && { fail "root requerido (sudo)"; exit 1; }
 ok "root"
 
 [[ -r /etc/os-release ]] || { fail "/etc/os-release no encontrado — OS no soportado"; exit 1; }

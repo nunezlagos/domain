@@ -7,10 +7,10 @@ Infra para [domain](https://github.com/nunezlagos/domain): **Postgres (pgvector)
 ```bash
 git clone -b services <repo-url> /tmp/domain-services
 cd /tmp/domain-services
-sudo ./install.sh
+./install.sh
 ```
 
-El script pide editar `/opt/services/.env` (passwords), genera certs TLS, instala units systemd y levanta los containers. Es idempotente.
+Si no se corre como root, el script re-ejecuta con `sudo` automáticamente (1 sola contraseña). Verifica Ubuntu + systemd + docker, pide editar `/opt/services/.env` (passwords), genera certs TLS, instala units systemd y levanta los containers. Es idempotente.
 
 Flags: `--keep-clone` · `--skip-deps` · `--skip-compose-up`.
 
@@ -57,5 +57,5 @@ gpg -d /opt/services/backups/postgres/YYYY-MM-DD.sql.gz.gpg | gunzip \
 ## Update
 
 ```bash
-cd /opt/services && git pull && sudo ./install.sh
+cd /opt/services && git pull && ./install.sh
 ```

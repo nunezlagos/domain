@@ -80,6 +80,15 @@ type Registry struct {
 	// issue-35.1 unified-dispatcher
 	DispatchTotal    *prometheus.CounterVec   // labels: source, target_type, result
 	DispatchDuration *prometheus.HistogramVec // labels: source, target_type
+
+	// REQ-70 MCP tools + cache + SSE.
+	MCPToolCallsTotal  *prometheus.CounterVec   // labels: tool, status
+	MCPToolDuration    *prometheus.HistogramVec // labels: tool
+	MCPCacheHitsTotal  prometheus.Counter
+	MCPCacheMissesTotal prometheus.Counter
+	MCPCacheSize       prometheus.Gauge
+	TicketsLockedActive prometheus.Gauge
+	SSESubscribers     prometheus.Gauge
 }
 
 // New crea Registry con todas las métricas registradas.
@@ -389,6 +398,7 @@ func New() *Registry {
 		r.DispatchTotal,
 		r.DispatchDuration,
 	)
+	r.initREQ70()
 	return r
 }
 
@@ -436,6 +446,51 @@ func (r *Registry) RegisterDispatchDuration() *prometheus.HistogramVec {
 	)
 	r.reg.MustRegister(r.DispatchDuration)
 	return r.DispatchDuration
+}
+
+// initREQ70 registra métricas custom para MCP tools + cache + SSE.
+// Se llama desde New() después del bloque principal.
+func (r *Registry) initREQ70() {
+	r.MCPToolCallsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_mcp_tool_calls_total",
+			Help: "Total MCP tool calls por tool y resultado (ok|error|cache_hit).",
+		},
+		[]string{"tool", "status"},
+	)
+	r.MCPToolDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "domain_mcp_tool_duration_seconds",
+			Help:    "Latencia de MCP tool handlers (sin contar cache hits).",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 5, 30},
+		},
+		[]string{"tool"},
+	)
+	r.MCPCacheHitsTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "domain_mcp_cache_hits_total",
+		Help: "Total hits del query cache MCP (REQ-67).",
+	})
+	r.MCPCacheMissesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "domain_mcp_cache_misses_total",
+		Help: "Total misses del query cache MCP (REQ-67).",
+	})
+	r.MCPCacheSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_mcp_cache_size",
+		Help: "Tamaño actual del query cache MCP (entries).",
+	})
+	r.TicketsLockedActive = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_tickets_locked_active",
+		Help: "Cantidad de tickets con lock vigente (no expirado).",
+	})
+	r.SSESubscribers = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "domain_sse_subscribers",
+		Help: "Cantidad actual de subscribers SSE conectados (REQ-69).",
+	})
+	r.reg.MustRegister(
+		r.MCPToolCallsTotal, r.MCPToolDuration,
+		r.MCPCacheHitsTotal, r.MCPCacheMissesTotal, r.MCPCacheSize,
+		r.TicketsLockedActive, r.SSESubscribers,
+	)
 }
 
 // Middleware HTTP que registra requests + duration.

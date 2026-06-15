@@ -1,0 +1,97 @@
+{
+  "title": "Domain Overview (REQ-70)",
+  "uid": "domain-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "15s",
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["domain"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Tool calls / sec",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "sum(rate(domain_mcp_tool_calls_total[1m]))",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cache hit ratio",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{
+        "expr": "sum(rate(domain_mcp_cache_hits_total[5m])) / (sum(rate(domain_mcp_cache_hits_total[5m])) + sum(rate(domain_mcp_cache_misses_total[5m])))",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Tickets lockeados",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "domain_tickets_locked_active",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "SSE subscribers",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{
+        "expr": "domain_sse_subscribers",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Top tools por throughput",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{
+        "expr": "topk(10, sum by (tool) (rate(domain_mcp_tool_calls_total[5m])))",
+        "refId": "A",
+        "legendFormat": "{{tool}}"
+      }]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Latencia p95 por tool (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(domain_mcp_tool_duration_seconds_bucket[5m])))",
+        "refId": "A",
+        "legendFormat": "{{tool}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "DB pool — connections in use",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [{
+        "expr": "domain_db_pool_in_use",
+        "refId": "A",
+        "legendFormat": "{{pool}}"
+      }]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Cache size (entries)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{
+        "expr": "domain_mcp_cache_size",
+        "refId": "A"
+      }]
+    }
+  ]
+}

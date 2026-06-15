@@ -37,10 +37,44 @@ func SkillCatalog() []SkillCatalogEntry {
 			Name:        "Intake Classify",
 			Description: "Clasifica un raw text en {type, severity, confidence} para el intake pipeline (issue-04.8).",
 			SkillType:   "prompt",
-			Content: `Sos un classifier de requerimientos.
-Input: texto libre del cliente.
-Output JSON estricto:
-{"type":"feat|fix|hotfix|chore|refactor|docs","severity":"low|medium|high|critical","confidence":0..1,"reasoning":"breve"}`,
+			Content: `<role>
+Sos un classifier de requerimientos del intake de domain. Recibís
+texto libre del cliente y producís una clasificación estructurada
+para que el pipeline interno decida cómo procesar el requerimiento.
+</role>
+
+<input>
+{{ .raw_text }}
+</input>
+
+<output_format>
+JSON estricto con esta forma:
+{
+  "type": "feat | fix | hotfix | chore | refactor | docs",
+  "severity": "low | medium | high | critical",
+  "confidence": 0.0,
+  "reasoning": "1 oración breve"
+}
+</output_format>
+
+<reglas>
+- type=hotfix solo si urgencia prod (servicio caído, security).
+- severity refleja impacto, no urgencia.
+- confidence: 0.0–1.0. <0.5 → el caller debe pedir aclaración al usuario.
+- reasoning conciso. No expliques los enums, justificá la elección.
+- Idioma del reasoning: igual al del input.
+</reglas>
+
+<examples>
+Input: "el botón de login no responde en Safari iOS"
+Output: {"type":"fix","severity":"high","confidence":0.9,"reasoning":"Bug con repro acotado a Safari iOS, impacto user-facing."}
+
+Input: "quiero exportar reportes a Excel"
+Output: {"type":"feat","severity":"medium","confidence":0.85,"reasoning":"Nueva capacidad de export, no urgente, scope acotado."}
+
+Input: "URGENTE production caída"
+Output: {"type":"hotfix","severity":"critical","confidence":0.95,"reasoning":"Incidente prod explícito, máxima prioridad."}
+</examples>`,
 			InputSchema: map[string]any{
 				"type":     "object",
 				"required": []string{"raw_text"},
@@ -67,8 +101,54 @@ Output JSON estricto:
 			Name:        "Intake Structure",
 			Description: "Genera {title, description, req_slug, hu_draft} desde raw text + classification.",
 			SkillType:   "prompt",
-			Content: `Sos un structurer de requerimientos. Recibís raw text + classification y producís:
-{"title":"...","description":"...","req_slug":"REQ-XX-…","hu_draft":{"slug":"...","goal":"..."}}`,
+			Content: `<role>
+Sos un structurer de requerimientos. Recibís el raw_text del cliente
+junto con la classification (type, severity) ya hecha, y producís
+una estructura formal con title, description completa, slug del REQ
+asociado y un draft inicial de HU/issue para el wizard.
+</role>
+
+<input>
+raw_text: {{ .raw_text }}
+classification: {{ .classification }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "title": "título corto (≤80 chars) imperativo",
+  "description": "2-4 oraciones explicando contexto + qué se quiere",
+  "req_slug": "REQ-NN-<kebab-case>",
+  "hu_draft": {
+    "slug": "issue-NN.N-<kebab>",
+    "goal": "como <rol> quiero <X> para <beneficio>"
+  }
+}
+</output_format>
+
+<reglas>
+- title imperativo: "Implementar X", "Arreglar Y". No descriptivo.
+- description en mismo idioma que el raw_text.
+- req_slug y hu_draft.slug en formato canónico de domain (kebab-case).
+- goal sigue formato user story estándar.
+</reglas>
+
+<example>
+Input:
+raw_text: "el botón de login no responde en Safari iOS"
+classification: {"type":"fix","severity":"high"}
+
+Output:
+{
+  "title": "Arreglar botón login no responsivo en Safari iOS",
+  "description": "El botón de submit del form de login no responde al primer tap en Safari iOS 17+. El usuario tiene que tappear dos veces. Posiblemente un preventDefault innecesario en el onClick handler.",
+  "req_slug": "REQ-XX-login-safari-fix",
+  "hu_draft": {
+    "slug": "issue-XX.1-login-safari-onclick",
+    "goal": "como usuario de Safari iOS quiero que el primer tap en login dispare submit para acceder al sistema sin doble interacción"
+  }
+}
+</example>`,
 			TimeoutSeconds: 45,
 			Idempotent:     true,
 			Tags:           []string{"intake", "structure", "platform"},
@@ -105,10 +185,37 @@ Output JSON estricto:
 			Name:        "Summarize",
 			Description: "Resume texto largo en N frases con bullets opcionales.",
 			SkillType:   "prompt",
-			Content: `Resumí el siguiente texto en {{ .max_sentences }} oraciones.
-Si {{ .bullets }} = true, formato bullet points.
-Texto:
-{{ .text }}`,
+			Content: `<role>
+Resumir texto manteniendo los datos clave y descartando el ruido.
+No inventar información que no esté en el texto original.
+</role>
+
+<input>
+texto: {{ .text }}
+max_oraciones: {{ .max_sentences }}
+formato_bullets: {{ .bullets }}
+</input>
+
+<output_format>
+Si formato_bullets=true: lista de bullet points (- item) con un dato por bullet.
+Si formato_bullets=false: prosa corrida de {{ .max_sentences }} oraciones máximo.
+NO uses headers ni comentarios meta. Solo el resumen.
+</output_format>
+
+<reglas>
+- Mantenete fiel al input. No inventes hechos.
+- Preservá nombres propios, fechas, números exactos.
+- Idioma del resumen: igual al del input.
+- Si el input ya es ≤ max_sentences, devolvelo tal cual.
+</reglas>
+
+<example>
+Input texto: "La reunión del lunes 14 de junio definió que vamos a usar Postgres 16 con pgvector. Juan Pérez liderará la migración desde MongoDB. Presupuesto aprobado: 5000 USD. Deadline: 30 de julio."
+max_oraciones: 2
+formato_bullets: false
+
+Output: "Reunión del 14/06 decidió migrar de MongoDB a Postgres 16 + pgvector, liderada por Juan Pérez con 5000 USD asignados. Deadline 30/07."
+</example>`,
 			TimeoutSeconds: 30,
 			Idempotent:     true,
 			Tags:           []string{"text", "summary", "platform"},
@@ -116,8 +223,58 @@ Texto:
 		{
 			Slug:        "extract-entities",
 			Name:        "Extract Entities",
-			Description: "Extrae entidades nombradas (persona, org, fecha, dinero) de texto.",
+			Description: "Extrae entidades nombradas (persona, org, fecha, dinero, ubicación, producto) de texto.",
 			SkillType:   "prompt",
+			Content: `<role>
+Extraer entidades nombradas de texto. NO inferir; solo lo que está
+explícito o claramente derivable.
+</role>
+
+<input>
+{{ .text }}
+</input>
+
+<entidades_a_extraer>
+- person: nombres propios de personas (con cargo si aparece)
+- org: empresas, organizaciones, equipos
+- date: fechas absolutas (2026-06-15) o relativas ("el lunes")
+- money: montos con moneda
+- location: lugares, ciudades, países
+- product: nombres de productos, herramientas, frameworks mencionados
+</entidades_a_extraer>
+
+<output_format>
+JSON estricto:
+{
+  "person":   [{"text": "...", "context": "1-5 palabras"}],
+  "org":      [...],
+  "date":     [...],
+  "money":    [{"text":"5000 USD","amount":5000,"currency":"USD"}],
+  "location": [...],
+  "product":  [...]
+}
+Si una categoría no tiene matches, devolvela como [].
+</output_format>
+
+<reglas>
+- NO duplicar. "Juan" y "Juan Pérez" en mismo texto → 1 entry con full name.
+- context: tokens cercanos que ayudan a desambiguar (ej. "Juan Pérez" context="lidera migración").
+- money.amount: número limpio. currency: ISO si conocible, sino tal cual.
+- NO inventes entidades. Si dudás, no incluyas.
+</reglas>
+
+<example>
+Input: "Juan Pérez de Acme Corp asignó 5000 USD para migración a Postgres el lunes 14 de junio en Santiago."
+Output:
+{
+  "person": [{"text":"Juan Pérez","context":"asignó presupuesto"}],
+  "org": [{"text":"Acme Corp","context":"empleador de Juan"}],
+  "date": [{"text":"lunes 14 de junio","context":"fecha asignación"}],
+  "money": [{"text":"5000 USD","amount":5000,"currency":"USD"}],
+  "location": [{"text":"Santiago","context":"ubicación"}],
+  "product": [{"text":"Postgres","context":"target migración"}]
+}
+</example>`,
 			TimeoutSeconds: 30,
 			Idempotent:     true,
 			Tags:           []string{"nlp", "ner", "platform"},

@@ -373,7 +373,7 @@ func runServer() {
 	// Sin esto, las orgs creadas en runtime no reciben skills/agents/flows
 	// built-in (solo se aplicarían a orgs creadas via tests).
 	orgService.PostCreateHook = func(ctx context.Context, orgID uuid.UUID) error {
-		if _, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1); err != nil {
+		if _, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 2); err != nil {
 			return fmt.Errorf("seed skills: %w", err)
 		}
 		if _, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID); err != nil {
@@ -2245,7 +2245,7 @@ func runSeedOrg(args []string) {
 	defer pool.Close()
 
 	fmt.Printf("Seedeando catálogos per-org en %s...\n", orgID)
-	rs, err := seeds.SeedSkillsForOrg(ctx, pool, orgID, 1)
+	rs, err := seeds.SeedSkillsForOrg(ctx, pool, orgID, 2)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "skills:", err)
 		os.Exit(1)

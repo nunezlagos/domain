@@ -25,6 +25,8 @@ import (
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
 	"nunezlagos/domain/internal/auth/ratelimit"
+	"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/events"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
 	tracesvc "nunezlagos/domain/internal/service/traceability"
@@ -141,6 +143,18 @@ type API struct {
 	IntakeService       *intakesvc.Service
 	PromptRouter        *promptrouter.Router
 	WorkflowImport      *workflowimport.Service
+	// REQ-69 SSE event bus para broadcast de cambios al dashboard /
+	// otros clientes. Si nil, el endpoint /api/v1/events devuelve 503.
+	EventBus            *events.Bus
+	// REQ-72 auth web (login + roles + sessions). Si nil, los endpoints
+	// /api/v1/auth/* devuelven 503.
+	AuthSessionService  *session.Service
+}
+
+// SessionFromContext re-export para que handlers fuera del package
+// session lean el Active sin importar session directamente. REQ-72.
+func SessionFromContext(ctx context.Context) (*session.Active, bool) {
+	return session.FromContext(ctx)
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -150,6 +164,11 @@ func (a *API) Router() http.Handler {
 	// Auth (sin Bearer requerido)
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
+	// REQ-72 auth web (login user+password con roles).
+	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
+	mux.HandleFunc("POST /api/v1/auth/select-role", a.authSelectRole)
+	mux.HandleFunc("GET /api/v1/auth/me", a.authMe)
+	mux.HandleFunc("POST /api/v1/auth/logout", a.authLogout)
 	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
 	// Tambien sin Bearer: la primera request al sistema no tiene user todavía.
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
@@ -280,6 +299,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/tickets/{id}/history", a.listTicketStatusHistory)
 	mux.HandleFunc("POST /api/v1/tickets/{id}/link-external", a.linkTicketExternal)
 	mux.HandleFunc("POST /api/v1/tickets/{id}/link-issue", a.linkTicketIssue)
+	// REQ-69 SSE stream — Bearer auth requerido (cae en el middleware)
+	mux.HandleFunc("GET /api/v1/events", a.sseEvents)
 	// REQ-58: bulk + webhook Jira (stub). Endpoint listo para cuando se
 	// conecte Jira; hoy responde si DOMAIN_JIRA_WEBHOOK_SECRET está set.
 	mux.HandleFunc("POST /api/v1/tickets/link-external-bulk", a.bulkLinkTicketsExternal)
@@ -482,6 +503,8 @@ func AuthAllowlist() []string {
 		"/health/startup",
 		"/api/v1/auth/request-otp",
 		"/api/v1/auth/verify-otp",
+		"/api/v1/auth/login",
+		"/api/v1/auth/select-role",
 		"/api/v1/auth/enroll", // issue-37.1: gating por X-Enrollment-Token, no Bearer
 		"/api/v1/webhooks/*", // webhooks usan HMAC, no Bearer
 		"/metrics",

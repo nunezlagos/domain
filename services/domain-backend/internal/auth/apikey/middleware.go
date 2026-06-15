@@ -69,7 +69,18 @@ type Middleware struct {
 	Resolver  Resolver
 	Allowlist []string // paths exactos que no requieren auth
 	Pool      *pgxpool.Pool // opcional; si nil, NO se abre tx (legacy auth-only)
+	// REQ-72: si está seteado, el middleware acepta también tokens
+	// de sesión web ("sess_*"). El callback devuelve un Principal
+	// equivalente + un ctx-mutator que el package session usa para
+	// guardar el Active completo (rol, etc) en el ctx.
+	SessionResolver SessionResolverFunc
 }
+
+// SessionResolverFunc resuelve un session token "sess_*". Devuelve
+// (principal, ctxAttach, err). ctxAttach es un closure que el
+// middleware llama para inyectar el Active completo en el ctx
+// (evitando import circular apikey ↔ session).
+type SessionResolverFunc func(ctx context.Context, plainToken string) (*Principal, func(context.Context) context.Context, error)
 
 // ServeHTTP wraps next con check de auth + (opcional) tx wireup.
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
@@ -95,18 +106,37 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 		token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
-		if !IsAPIKeyFormat(token) {
-			writeUnauthorized(w, "invalid_format", "invalid api key format")
-			return
-		}
 
-		p, err := m.Resolver.Resolve(r.Context(), token)
-		if err != nil {
-			writeUnauthorized(w, "invalid_credentials", "api key not found or revoked")
-			return
+		// REQ-72: aceptar dos formatos.
+		//   - "domk_*"  → API key (resolver existente)
+		//   - "sess_*"  → session token web (SessionResolver)
+		var ctx context.Context
+		var p *Principal
+		if m.SessionResolver != nil && strings.HasPrefix(token, "sess_") {
+			pp, attacher, err := m.SessionResolver(r.Context(), token)
+			if err != nil || pp == nil {
+				writeUnauthorized(w, "invalid_credentials", "session inválida o expirada")
+				return
+			}
+			p = pp
+			ctx = r.Context()
+			if attacher != nil {
+				ctx = attacher(ctx)
+			}
+		} else {
+			if !IsAPIKeyFormat(token) {
+				writeUnauthorized(w, "invalid_format", "invalid bearer token format")
+				return
+			}
+			var err error
+			p, err = m.Resolver.Resolve(r.Context(), token)
+			if err != nil {
+				writeUnauthorized(w, "invalid_credentials", "api key not found or revoked")
+				return
+			}
+			ctx = r.Context()
 		}
-
-		ctx := WithPrincipal(r.Context(), p)
+		ctx = WithPrincipal(ctx, p)
 
 		// issue-25.14: wireup tx con SET LOCAL post-auth.
 		// Si m.Pool es nil → modo legacy (solo Principal en ctx, sin tx).

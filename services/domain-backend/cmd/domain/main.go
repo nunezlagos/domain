@@ -99,6 +99,8 @@ import (
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
+	"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/events"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -173,6 +175,12 @@ func main() {
 		os.Exit(runInstall(os.Args[2:]))
 	case "seed-org":
 		runSeedOrg(os.Args[2:])
+	case "seed-demo":
+		runSeedDemo(os.Args[2:])
+	case "embed-backfill":
+		runEmbedBackfill(os.Args[2:])
+	case "admin-passwd":
+		runAdminPasswd(os.Args[2:])
 	case "service":
 		os.Exit(runService(os.Args[2:]))
 	case "update":
@@ -410,11 +418,36 @@ func runServer() {
 	projectRepoService := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	projectPolicyService := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
 	ticketService := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
+	// REQ-72: session service (login web). Necesario ya antes del wireup
+	// de api.API porque se inyecta en AuthSessionService.
+	sessionSvc := session.New(pools.Auth)
+	// REQ-69: SSE event bus singleton. Ticket service publica vía hook.
+	eventBus := events.NewBus()
+	ticketService.SetEventSink(func(topic string, t *ticketsvc.Ticket, actor uuid.UUID, payload map[string]any) {
+		if t == nil {
+			return
+		}
+		var actorPtr *uuid.UUID
+		if actor != uuid.Nil {
+			a := actor
+			actorPtr = &a
+		}
+		tid := t.ID
+		eventBus.Publish(events.Event{
+			OrgID:    t.OrganizationID,
+			Topic:    topic,
+			TicketID: &tid,
+			ActorID:  actorPtr,
+			Payload:  payload,
+		})
+	})
 	// REQ-28.2: projectService recibe referencia a ClientService para
 	// resolver client_slug → client_id en Create/Update/List.
 	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clientService)
-	obsService := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
+	// REQ-68: embedder elegido por env (DOMAIN_EMBEDDING_PROVIDER). Default noop.
+	embedder := chooseEmbedder(logger)
+	obsService := observation.NewService(pools.App, recorder, embedder, nil, nil)
 	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop
 	var inviteMailer invite.Mailer = invite.NopMailer{}
 	var otpMailer otp.Mailer
@@ -439,10 +472,10 @@ func runServer() {
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
-	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
 	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
 	flowService := flow.NewService(pools.App, recorder, nil)
-	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
 	agentService := agentsvc.NewService(pools.App, recorder, nil)
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
@@ -832,6 +865,8 @@ func runServer() {
 		ProjectService: projectService,
 		ClientService:  clientService,
 		TicketService:  ticketService,
+		EventBus:       eventBus,
+		AuthSessionService: sessionSvc,
 		CapturedPromptService: capturedPromptService,
 		ProjectRepoService:    projectRepoService,
 		ProjectPolicyService:  projectPolicyService,
@@ -920,7 +955,25 @@ func runServer() {
 	}
 	requestLogMW := middleware.RequestLog(logger)
 	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
-	authMW := &apikey.Middleware{Resolver: cachedResolver, Allowlist: handler.AuthAllowlist(), Pool: pools.App}
+	// REQ-72 session resolver (instancia ya creada antes).
+	sessionResolver := func(ctx context.Context, plain string) (*apikey.Principal, func(context.Context) context.Context, error) {
+		active, err := sessionSvc.Resolve(ctx, plain)
+		if err != nil {
+			return nil, nil, err
+		}
+		p := &apikey.Principal{
+			UserID:         active.UserID.String(),
+			OrganizationID: active.OrganizationID.String(),
+		}
+		attacher := func(c context.Context) context.Context { return session.ToContext(c, active) }
+		return p, attacher, nil
+	}
+	authMW := &apikey.Middleware{
+		Resolver:        cachedResolver,
+		Allowlist:       handler.AuthAllowlist(),
+		Pool:            pools.App,
+		SessionResolver: sessionResolver,
+	}
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
 	idempMW := &middleware.Idempotency{Pool: pools.App}
@@ -958,6 +1011,10 @@ func runServer() {
 	//   https://<vps>/mcp  con header  Authorization: Bearer <api_key>.
 	// El handler valida el token contra cachedResolver (mismo store que
 	// /api/) y construye un MCPServer por request con Principal resuelto.
+	queryCacheLRU := mcpQueryCache()
+	// REQ-70 reporter periódico (cache size, SSE subs, tickets locked).
+	go runReq70Reporter(ctx, metricsReg, queryCacheLRU, eventBus, pools.App, logger)
+
 	mcpBuilder := &mcphttpserver.Builder{
 		Base: mcptools.Deps{
 			Observations:   obsService,
@@ -993,6 +1050,19 @@ func runServer() {
 			Dispatcher:     dispatcher,
 			ServerName:     "domain-mcp-http",
 			ServerVer:      Version,
+			// REQ-67 LRU compartido entre todos los requests. 4096 entries ≈
+			// pocos MB. TTL por tool en server.Tools(). Si DOMAIN_DISABLE_CACHE=1
+			// queda nil (cache off).
+			SharedCache: queryCacheLRU,
+			// REQ-70 hooks de métricas Prometheus.
+			MetricsOnToolCall: func(tool, status string, dur float64) {
+				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
+				if status != "cache_hit" {
+					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
+				}
+			},
+			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
+			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
 		},
 	}
 	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver)

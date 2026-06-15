@@ -107,6 +107,23 @@ case "$ARCH" in
   *) fail "arquitectura no soportada: $ARCH"; exit 1 ;;
 esac
 
+step "1.5/12  Swap (red de seguridad para OOM)"
+SWAP_BYTES=$(free -b | awk '/^Swap:/ {print $2}')
+if [[ "$SWAP_BYTES" -ge $((2 * 1024 * 1024 * 1024)) ]]; then
+  ok "swap ya configurada ($(free -h | awk '/^Swap:/ {print $2}'))"
+elif [[ -f /swapfile ]]; then
+  ok "/swapfile existe (no se modifica)"
+else
+  if [[ -w /etc/fstab ]]; then
+    fallocate -l 2G /swapfile && chmod 600 /swapfile
+    mkswap /swapfile >/dev/null && swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    ok "swap 2G creada y persistente"
+  else
+    warn "no se pudo crear swap (fs /etc/fstab no escribible)"
+  fi
+fi
+
 step "2/12  Dependencias"
 if [[ $SKIP_DEPS -eq 1 ]]; then
   warn "skip deps"
@@ -149,6 +166,10 @@ done
 ok "5 composes válidos"
 
 step "3/12  $INSTALL_DIR"
+# El user real (no root, aunque corramos con sudo) sirve para los chown.
+INVOKER_USER="${SUDO_USER:-${USER:-root}}"
+INVOKER_GROUP=$(id -gn "$INVOKER_USER" 2>/dev/null || echo "$INVOKER_USER")
+
 if [[ "$SOURCE_DIR" == "$INSTALL_DIR" ]]; then
   ok "re-install"
   MOVED_FROM=""
@@ -159,6 +180,23 @@ else
   ok "sincronizado"
 fi
 chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/postgres/init/"*.sh "$INSTALL_DIR/install.sh" 2>/dev/null || true
+
+# Owner = user que ejecutó sudo, group = docker. Así el user puede
+# leer .env y docker buildx sin permission errors.
+chown -R "$INVOKER_USER:$INVOKER_GROUP" "$INSTALL_DIR"
+if getent group docker >/dev/null 2>&1; then
+  chgrp -R docker "$INSTALL_DIR" 2>/dev/null || true
+  # .env y backups solo legibles por el dueño + group docker.
+  [[ -f "$INSTALL_DIR/.env" ]] && chmod 640 "$INSTALL_DIR/.env"
+fi
+# El user debe estar en el grupo docker para no necesitar sudo en cada
+# comando docker.
+if [[ "$INVOKER_USER" != "root" ]] && ! id -nG "$INVOKER_USER" | grep -qw docker; then
+  usermod -aG docker "$INVOKER_USER" 2>/dev/null && warn "agregado a grupo docker (re-login para activar)"
+fi
+# Buildx cache puede quedar root-owned si docker corrió antes con sudo.
+[[ -d "/home/$INVOKER_USER/.docker" ]] && chown -R "$INVOKER_USER:$INVOKER_GROUP" "/home/$INVOKER_USER/.docker" 2>/dev/null || true
+ok "permisos OK"
 
 step "4/12  .env (auto-genera passwords)"
 cd "$INSTALL_DIR"
@@ -297,6 +335,23 @@ if [[ -n "$MOVED_FROM" && $KEEP_CLONE -eq 0 && "$MOVED_FROM" != "$INSTALL_DIR" ]
   rm -rf "$MOVED_FROM"; ok "clone eliminado: $MOVED_FROM"
 else
   ok "nada que limpiar"
+fi
+
+# domain-frontend legacy: el dashboard nuevo lo reemplaza. Si todavía
+# existe (de un install previo), lo bajamos para liberar RAM/disco.
+if docker ps -a --format '{{.Names}}' | grep -qx domain-frontend; then
+  docker stop domain-frontend >/dev/null 2>&1 || true
+  docker rm domain-frontend   >/dev/null 2>&1 || true
+  docker image rm domain-frontend:local >/dev/null 2>&1 || true
+  ok "domain-frontend legacy eliminado"
+fi
+
+# Build cache acumulado tras build/rebuild. Lo limpiamos automáticamente
+# si supera 1GB para no llenar el disco con capas viejas.
+CACHE_BYTES=$(docker buildx du 2>/dev/null | awk 'NR>1 {sum+=$2} END {print sum+0}')
+if [[ "${CACHE_BYTES:-0}" -gt 1073741824 ]]; then
+  docker builder prune -af --filter "unused-for=24h" >/dev/null 2>&1 || true
+  ok "build cache limpiado"
 fi
 
 step "12/12  Resumen"

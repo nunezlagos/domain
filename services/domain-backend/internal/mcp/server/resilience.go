@@ -86,6 +86,11 @@ func (s *cbState) record(failure bool, threshold int, cooldown time.Duration, no
 }
 
 // ResilientWrapper agrega budget + retry + circuit breaker a un mcpgo.ToolHandlerFunc.
+//
+// REQ-67 también encapsula un query cache opcional (cacheLRU). Tools
+// READ marcados via SetCacheable(name, ttl) cachean su resultado por
+// (org_id, tool, args_hash). Tools WRITE marcados via SetInvalidating
+// (name) limpian el cache del org tras handler exitoso.
 type ResilientWrapper struct {
 	mu       sync.Mutex
 	states   map[string]*rateState
@@ -93,16 +98,114 @@ type ResilientWrapper struct {
 	budgets  map[string]ToolBudget
 	defaults ToolBudget
 	now      func() time.Time
+
+	// REQ-67 cache
+	cacheLRU    CacheStore
+	cacheTTLs   map[string]time.Duration // tool -> ttl si es cacheable
+	invalidates map[string]bool          // tool -> true si invalida en escritura
+	orgIDFn     func() string            // accessor del orgID del principal vigente
+
+	// REQ-70 métricas. Hooks no-op si nil — el wrap sigue funcionando.
+	metricsOnCall  func(tool, status string, durationSeconds float64)
+	metricsOnCacheHit  func()
+	metricsOnCacheMiss func()
+}
+
+// CacheStore abstrae el LRU (interface para poder mockear en tests).
+// Exportado para que el wireup principal (cmd/domain) pueda inyectar
+// una implementación (cache.LRU del package internal/cache).
+type CacheStore interface {
+	Get(key string) ([]byte, bool)
+	Set(key string, value []byte, ttl time.Duration)
+	FlushPrefix(prefix string) int
 }
 
 func NewResilientWrapper(defaults ToolBudget) *ResilientWrapper {
 	return &ResilientWrapper{
-		states:   map[string]*rateState{},
-		cbs:      map[string]*cbState{},
-		budgets:  map[string]ToolBudget{},
-		defaults: defaults,
-		now:      time.Now,
+		states:      map[string]*rateState{},
+		cbs:         map[string]*cbState{},
+		budgets:     map[string]ToolBudget{},
+		defaults:    defaults,
+		now:         time.Now,
+		cacheTTLs:   map[string]time.Duration{},
+		invalidates: map[string]bool{},
 	}
+}
+
+// SetCache activa el cache LRU. Llamar una vez en bootstrap. Si no se
+// llama, los hooks de cacheable/invalidating son no-op.
+func (r *ResilientWrapper) SetCache(store CacheStore) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cacheLRU = store
+}
+
+// SetCacheable marca un tool como READ-cacheable con TTL específico.
+func (r *ResilientWrapper) SetCacheable(toolName string, ttl time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cacheTTLs[toolName] = ttl
+}
+
+// SetInvalidating marca un tool como WRITE que invalida el cache del
+// org tras ejecutar exitosamente.
+func (r *ResilientWrapper) SetInvalidating(toolName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.invalidates[toolName] = true
+}
+
+// SetMetricsHooks (REQ-70) inyecta callbacks para emitir métricas.
+// El wrapper no conoce de Prometheus; quien crea el wrapper (server.Tools)
+// pasa los hooks que tocan los Counter/Histogram del Registry.
+func (r *ResilientWrapper) SetMetricsHooks(
+	onCall func(tool, status string, dur float64),
+	onCacheHit func(),
+	onCacheMiss func(),
+) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.metricsOnCall = onCall
+	r.metricsOnCacheHit = onCacheHit
+	r.metricsOnCacheMiss = onCacheMiss
+}
+
+// SetOrgIDAccessor inyecta un closure que devuelve el orgID del
+// principal vigente. Necesario porque el wrap no tiene acceso directo
+// a Deps; quien crea el wrapper (server.Tools) sí.
+func (r *ResilientWrapper) SetOrgIDAccessor(fn func() string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.orgIDFn = fn
+}
+
+func (r *ResilientWrapper) cacheFor(toolName string) (CacheStore, time.Duration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cacheLRU == nil {
+		return nil, 0, false
+	}
+	ttl, ok := r.cacheTTLs[toolName]
+	if !ok {
+		return nil, 0, false
+	}
+	return r.cacheLRU, ttl, true
+}
+
+func (r *ResilientWrapper) isInvalidating(toolName string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.invalidates[toolName]
+}
+
+func (r *ResilientWrapper) invalidateOrg(orgID string) {
+	r.mu.Lock()
+	store := r.cacheLRU
+	r.mu.Unlock()
+	if store == nil || orgID == "" {
+		return
+	}
+	store.FlushPrefix(orgID + ":")
 }
 
 // SetBudget configura budget específico para un tool.
@@ -143,9 +246,10 @@ func (r *ResilientWrapper) breaker(toolName string) *cbState {
 	return s
 }
 
-// Wrap envuelve un handler con rate limiting + retry.
+// Wrap envuelve un handler con rate limiting + retry + cache + métricas.
 func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		start := r.now()
 		b := r.budget(toolName)
 
 		// Circuit breaker check (fail-fast sin invocar handler)
@@ -168,6 +272,39 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
+		// REQ-67 cache lookup (solo si el tool está marcado cacheable).
+		r.mu.Lock()
+		orgIDFn := r.orgIDFn
+		r.mu.Unlock()
+		orgID := ""
+		if orgIDFn != nil {
+			orgID = orgIDFn()
+		}
+		store, ttl, cacheable := r.cacheFor(toolName)
+		var cacheKey string
+		if cacheable && orgID != "" {
+			cacheKey = buildCacheKey(orgID, toolName, req)
+			if cached, hit := store.Get(cacheKey); hit {
+				r.mu.Lock()
+				h := r.metricsOnCacheHit
+				oc := r.metricsOnCall
+				r.mu.Unlock()
+				if h != nil {
+					h()
+				}
+				if oc != nil {
+					oc(toolName, "cache_hit", time.Since(start).Seconds())
+				}
+				return decodeCachedResult(cached), nil
+			}
+			r.mu.Lock()
+			m := r.metricsOnCacheMiss
+			r.mu.Unlock()
+			if m != nil {
+				m()
+			}
+		}
+
 		result, err := execWithRetry(ctx, b, handler, req)
 
 		if cb != nil {
@@ -177,6 +314,31 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 			failure := err != nil || (result != nil && result.IsError)
 			cb.record(failure, b.CBThreshold, cooldown, r.now())
+		}
+
+		// REQ-67 cache write / invalidation tras éxito del handler.
+		success := err == nil && (result == nil || !result.IsError)
+		if success {
+			if cacheable && orgID != "" && cacheKey != "" {
+				if enc, encErr := encodeCachedResult(result); encErr == nil {
+					store.Set(cacheKey, enc, ttl)
+				}
+			}
+			if r.isInvalidating(toolName) {
+				r.invalidateOrg(orgID)
+			}
+		}
+		// REQ-70 emit métrica del call (excepto cache_hits que ya
+		// se emitieron arriba con return).
+		r.mu.Lock()
+		oc := r.metricsOnCall
+		r.mu.Unlock()
+		if oc != nil {
+			status := "ok"
+			if err != nil || (result != nil && result.IsError) {
+				status = "error"
+			}
+			oc(toolName, status, time.Since(start).Seconds())
 		}
 		return result, err
 	}

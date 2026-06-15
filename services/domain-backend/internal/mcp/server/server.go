@@ -90,6 +90,13 @@ type Deps struct {
 	Dispatcher *dispatch.Dispatcher
 	ServerName   string
 	ServerVer    string
+	// SharedCache REQ-67: cache LRU compartido entre todos los requests
+	// (NO se clona por request). Si nil, cache desactivado.
+	SharedCache CacheStore
+	// REQ-70 métricas. Si nil, los hooks no se setean.
+	MetricsOnToolCall   func(tool, status string, dur float64)
+	MetricsOnCacheHit   func()
+	MetricsOnCacheMiss  func()
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).
@@ -108,6 +115,61 @@ var defaultBudget = ToolBudget{
 // Cada handler queda wrapped con ResilientWrapper (rate limit + retry).
 func Tools(deps Deps) []mcpgo.ServerTool {
 	wrap := NewResilientWrapper(defaultBudget)
+	// REQ-70 métricas — aplica con o sin cache.
+	if deps.MetricsOnToolCall != nil || deps.MetricsOnCacheHit != nil || deps.MetricsOnCacheMiss != nil {
+		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
+	}
+
+	// REQ-67 query cache. Si Deps.SharedCache está configurado (lo
+	// hace el wireup principal en cmd/domain), activamos lookup +
+	// invalidación. Si no, el wrap se comporta como antes.
+	if deps.SharedCache != nil {
+		wrap.SetCache(deps.SharedCache)
+		// Accessor del orgID del Principal vigente. Como deps se clona
+		// por request en httpserver/handler.go, este closure ve el
+		// Principal correcto para cada request.
+		wrap.SetOrgIDAccessor(func() string {
+			if deps.Principal == nil {
+				return ""
+			}
+			return deps.Principal.OrganizationID
+		})
+		// READs cacheables — TTL conservador para tolerar lag percibido
+		// tras una escritura (la invalidación es síncrona, no eventual).
+		readTTLs := map[string]time.Duration{
+			"domain_ticket_list":          5 * time.Second,
+			"domain_ticket_get":           5 * time.Second,
+			"domain_ticket_comment_list":  5 * time.Second,
+			"domain_ticket_status_history": 5 * time.Second,
+			"domain_policy_list":          15 * time.Second,
+			"domain_policy_get":           15 * time.Second,
+			"domain_project_list":         10 * time.Second,
+			"domain_project_get":          10 * time.Second,
+			"domain_client_list":          15 * time.Second,
+			"domain_knowledge_list":       10 * time.Second,
+			"domain_prompt_captured_list": 5 * time.Second,
+			"domain_health":               10 * time.Second,
+		}
+		for tool, ttl := range readTTLs {
+			wrap.SetCacheable(tool, ttl)
+		}
+		// WRITES que invalidan el cache completo del org (granularidad
+		// gruesa pero segura — el cache es chico y el TTL corto).
+		for _, w := range []string{
+			"domain_ticket_create", "domain_ticket_update", "domain_ticket_delete",
+			"domain_ticket_change_status", "domain_ticket_claim", "domain_ticket_release",
+			"domain_ticket_reassign", "domain_ticket_comment_add",
+			"domain_ticket_link_external", "domain_ticket_link_issue",
+			"domain_ticket_link_external_bulk",
+			"domain_policy_upsert", "domain_policy_delete",
+			"domain_project_create", "domain_project_update", "domain_project_delete",
+			"domain_client_create", "domain_client_update", "domain_client_delete",
+			"domain_knowledge_save",
+			"domain_prompt_capture", "domain_turn_complete",
+		} {
+			wrap.SetInvalidating(w)
+		}
+	}
 	// Tools que escriben (mutation): tope más bajo (60/min)
 	for _, mutTool := range []string{
 		"domain_mem_save", "domain_knowledge_save",

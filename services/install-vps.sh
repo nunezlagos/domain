@@ -71,19 +71,52 @@ ask() {
 }
 
 # Helper: prompt de password con confirmación.
+#
+# Si DOMAIN_ADMIN_PASSWORD viene por env, se usa.
+# Si NON_INTERACTIVE y no viene por env, se AUTO-GENERA una random
+#   y se exporta GENERATED_ADMIN_PW=1 para mostrarla al final.
+# Si interactivo, pide al user con confirmación.
+GENERATED_ADMIN_PW=0
 ask_password() {
-  if [[ $NON_INTERACTIVE -eq 1 ]]; then
-    [[ -n "${DOMAIN_ADMIN_PASSWORD:-}" ]] || { fail "DOMAIN_ADMIN_PASSWORD requerida con --non-interactive"; exit 2; }
+  if [[ -n "${DOMAIN_ADMIN_PASSWORD:-}" ]]; then
     echo "$DOMAIN_ADMIN_PASSWORD"; return
+  fi
+  if [[ $NON_INTERACTIVE -eq 1 ]]; then
+    local auto
+    auto=$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)
+    GENERATED_ADMIN_PW=1
+    DOMAIN_ADMIN_PASSWORD="$auto"
+    echo "$auto"; return
   fi
   local pw1 pw2
   while :; do
-    read -rsp "    Contraseña admin (≥8 chars): " pw1 </dev/tty; echo
+    read -rsp "    Contraseña admin (≥8 chars, vacío = autogenerar): " pw1 </dev/tty; echo
+    if [[ -z "$pw1" ]]; then
+      pw1=$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)
+      GENERATED_ADMIN_PW=1
+      DOMAIN_ADMIN_PASSWORD="$pw1"
+      echo "$pw1"; return
+    fi
     [[ ${#pw1} -ge 8 ]] || { warn "muy corta, repetir"; continue; }
     read -rsp "    Confirmar contraseña:       " pw2 </dev/tty; echo
     [[ "$pw1" == "$pw2" ]] || { warn "no coinciden, repetir"; continue; }
     echo "$pw1"; return
   done
+}
+
+# Escribir credenciales generadas a /root/.domain-admin-creds (perms 600).
+# Solo si la password fue auto-generada — si la dio el user, se asume
+# que ya la guarda donde necesite.
+save_generated_creds() {
+  local email="$1" password="$2" path="/root/.domain-admin-creds"
+  cat > "$path" <<EOF
+# Credenciales generadas por install-vps.sh el $(date -Iseconds)
+# Borrar este archivo después de copiarlas a un password manager.
+DOMAIN_ADMIN_EMAIL="$email"
+DOMAIN_ADMIN_PASSWORD="$password"
+EOF
+  chmod 600 "$path"
+  echo "$path"
 }
 
 step "1/12  Preflight"
@@ -315,6 +348,13 @@ else
     fail "admin-passwd falló (revisar: docker logs domain-backend)"
     exit 1
   fi
+
+  # Si la password fue auto-generada, persistirla a /root con perms 600
+  # para que el operador pueda recuperarla y luego eliminar el archivo.
+  if [[ $GENERATED_ADMIN_PW -eq 1 ]]; then
+    CREDS_FILE=$(save_generated_creds "$ADMIN_EMAIL" "$ADMIN_PW")
+    ok "credenciales guardadas en $CREDS_FILE (perms 600)"
+  fi
 fi
 
 step "10/12  Monitoring opcional"
@@ -379,10 +419,18 @@ cat <<CREDS
 
   ${BOLD}Login del dashboard${RESET}
     Email:     $ADMIN_EMAIL
-    Password:  (la que ingresaste durante la instalación)
     Org slug:  $ORG_SLUG
-
 CREDS
+  if [[ $GENERATED_ADMIN_PW -eq 1 ]]; then
+cat <<GENCREDS
+    Password:  ${BOLD}${YELLOW}$ADMIN_PW${RESET}   ${YELLOW}(auto-generada — copiala YA)${RESET}
+               también guardada en /root/.domain-admin-creds
+GENCREDS
+  else
+cat <<USERCREDS
+    Password:  (la que ingresaste durante la instalación)
+USERCREDS
+  fi
 fi
 
 cat <<TAIL

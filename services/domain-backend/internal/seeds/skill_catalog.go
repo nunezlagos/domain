@@ -279,6 +279,388 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"nlp", "ner", "platform"},
 		},
+		// ─────────── REQ-61: skills nuevas reduce-token ───────────
+		{
+			Slug:        "diff-summarize",
+			Name:        "Diff Summarize",
+			Description: "Convierte un git diff largo en un resumen estructurado (files_changed + lines + 3-5 bullets). Reduce el contexto del LLM al persistir/comparar diffs en lugar del diff completo.",
+			SkillType:   "prompt",
+			Content: `<role>
+Resumir un git diff. NO inventar cambios que no están. NO opinar sobre
+la calidad — solo reportar QUÉ cambió de forma estructurada.
+</role>
+
+<input>
+{{ .diff }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "files_changed": N,
+  "lines_added": N,
+  "lines_removed": N,
+  "files": [{"path":"...", "added":N, "removed":N, "category":"code|test|config|docs|migration"}],
+  "key_changes": ["bullet 1", "bullet 2", "..."],
+  "breaking_potential": "low | medium | high",
+  "test_coverage_change": "added | removed | unchanged"
+}
+key_changes: 3-5 bullets, cada uno 1 oración describiendo el cambio
+funcional (no "edité X líneas" sino "agregué endpoint POST /foo").
+</output_format>
+
+<reglas>
+- breaking_potential=high si: cambio de signatura pública, drop column,
+  rename de endpoint, cambio de behavior de API existente.
+- NO inventes paths ni nombres de funciones que no estén en el diff.
+- Si el diff es trivial (typo, comment), key_changes puede ser 1 bullet.
+</reglas>
+
+<example>
+Input: diff con +50 -10 en services/foo/handler.go añadiendo GET /api/v1/foo
+Output:
+{
+  "files_changed": 1,
+  "lines_added": 50, "lines_removed": 10,
+  "files": [{"path":"services/foo/handler.go","added":50,"removed":10,"category":"code"}],
+  "key_changes": ["Agregado endpoint GET /api/v1/foo con paginación", "Removida validación duplicada de auth"],
+  "breaking_potential": "low",
+  "test_coverage_change": "unchanged"
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"diff"},
+				"properties": map[string]any{
+					"diff": map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"git", "diff", "reduce-context", "platform"},
+		},
+		{
+			Slug:        "commit-message",
+			Name:        "Commit Message Generator",
+			Description: "Genera un Conventional Commit en español a partir de un diff. Respeta la policy no-co-authored-ia (sin Co-Authored-By).",
+			SkillType:   "prompt",
+			Content: `<role>
+Generar mensaje de commit en formato Conventional Commits (español)
+a partir de un diff. NO incluyas Co-Authored-By ni atribución a IA.
+</role>
+
+<input>
+diff: {{ .diff }}
+scope_hint: {{ .scope_hint }}
+</input>
+
+<types_validos>
+feat | fix | refactor | docs | test | chore | perf | style | build | ci | revert
+</types_validos>
+
+<output_format>
+JSON estricto:
+{
+  "subject": "feat(scope): hace X",
+  "body": "Explicación 2-4 oraciones sobre el WHY del cambio.\n\nDetalles técnicos relevantes.",
+  "type": "feat | fix | ...",
+  "scope": "scope corto sin espacios",
+  "breaking": boolean
+}
+subject: máximo 72 caracteres. Imperativo presente ("agrega", no "agregado").
+body: separado de subject por línea en blanco. Explica POR QUÉ, no qué (el diff ya dice qué).
+</output_format>
+
+<reglas>
+- Subject en español, imperativo: "agrega", "arregla", "refactoriza".
+- NUNCA incluyas "Co-Authored-By: Claude" ni similar — está prohibido por policy.
+- breaking=true → agregá "!" después del tipo: "feat(api)!: ..."
+- scope: 1-2 palabras kebab-case del área tocada. Si es ambiguo, omitilo.
+- Si hay BREAKING CHANGE en body, agregá línea "BREAKING CHANGE: ..." al final.
+</reglas>
+
+<example>
+Input diff: agrega columna due_date a project_tickets + index
+Output:
+{
+  "subject": "feat(tickets): agrega due_date + index para vencimientos",
+  "body": "Habilita queries de tickets próximos a vencer sin seq scan.\n\nIndex parcial sobre (org, due_date) con WHERE status NOT IN ('done','cancelled').",
+  "type": "feat",
+  "scope": "tickets",
+  "breaking": false
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"diff"},
+				"properties": map[string]any{
+					"diff":       map[string]string{"type": "string"},
+					"scope_hint": map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"git", "commit", "platform"},
+		},
+		{
+			Slug:        "error-classify",
+			Name:        "Error / Stack Trace Classifier",
+			Description: "Clasifica un stack trace o mensaje de error en {kind, severity, file_line, root_cause_hint, suggested_skill}. Reduce ruido para que el LLM sepa por dónde empezar.",
+			SkillType:   "prompt",
+			Content: `<role>
+Analizar un stack trace / error log y devolver una clasificación
+estructurada con la primera pista. NO resolver el bug; solo orientar.
+</role>
+
+<input>
+{{ .error_text }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "kind": "panic | exception | compile_error | network | timeout | db_error | auth_error | validation | unknown",
+  "severity": "low | medium | high | critical",
+  "file_line": "path/to/file.go:42",
+  "function": "Package.Function",
+  "root_cause_hint": "1 oración con la pista más probable",
+  "suggested_skill": "code-search | file-read | sql-explain-impact | null",
+  "confidence": 0.0
+}
+</output_format>
+
+<reglas>
+- file_line: extraer el frame MÁS PROFUNDO del código del usuario (no del runtime).
+- root_cause_hint: 1 oración. No inventes — si dudás, pista genérica + confidence<0.5.
+- suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno aplica.
+- critical solo si: data loss, exposed secrets, prod down, security breach.
+</reglas>
+
+<example>
+Input: "panic: runtime error: invalid memory address or nil pointer dereference\n  /app/internal/foo/svc.go:42 +0x2a"
+Output:
+{
+  "kind": "panic",
+  "severity": "high",
+  "file_line": "/app/internal/foo/svc.go:42",
+  "function": "",
+  "root_cause_hint": "Nil pointer dereference en internal/foo/svc.go:42. Probablemente falta nil-check antes de acceder a un puntero.",
+  "suggested_skill": "file-read",
+  "confidence": 0.85
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"error_text"},
+				"properties": map[string]any{
+					"error_text": map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"debug", "errors", "reduce-context", "platform"},
+		},
+		{
+			Slug:        "gherkin-from-bug",
+			Name:        "Gherkin Scenarios from Bug Report",
+			Description: "Convierte un reporte de bug en lenguaje natural a scenarios Gherkin estructurados (given/when/then). Para sdd-spec phase.",
+			SkillType:   "prompt",
+			Content: `<role>
+Convertir un reporte de bug en lenguaje natural a 1+ scenarios Gherkin
+estructurados (BDD). Cada scenario captura UNA invariante concreta y
+testeable. NO inventes contexto que no esté en el reporte.
+</role>
+
+<input>
+bug_report: {{ .bug_report }}
+context: {{ .context }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "feature": "nombre del feature/módulo afectado",
+  "scenarios": [
+    {
+      "title": "Subject_action_outcome",
+      "given": ["precondición 1", "precondición 2"],
+      "when": "acción concreta del usuario",
+      "then": ["resultado esperado 1", "resultado esperado 2"]
+    }
+  ],
+  "missing_info": ["dato faltante 1 que el QA debería confirmar"]
+}
+</output_format>
+
+<reglas>
+- given: ARRAY de strings. Cada item es una precondición independiente.
+- when: 1 acción concreta. Si el reporte tiene N acciones, son N scenarios.
+- then: ARRAY de strings. Cada item es una aserción verificable.
+- Si el reporte no dice repro steps claros, missing_info lo lista.
+- NO inventes valores específicos (URLs, usuarios) — usá placeholders <user> <url>.
+- title formato: "LoginForm_Submit_FailsInSafariIOS".
+</reglas>
+
+<example>
+Input bug_report: "el botón de login no responde en Safari iOS al primer tap"
+Output:
+{
+  "feature": "LoginForm",
+  "scenarios": [
+    {
+      "title": "LoginForm_FirstTapInSafariIOS_DoesNotSubmit",
+      "given": ["el usuario navega en Safari iOS 17+", "el form de login tiene credenciales válidas"],
+      "when": "el usuario tappea el botón submit una vez",
+      "then": ["el form NO se envía", "el usuario no ve cambio visual ni error", "el comportamiento esperado es que sí se envíe"]
+    }
+  ],
+  "missing_info": ["versión exacta de Safari iOS confirmada", "si pasa también en Safari macOS"]
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"bug_report"},
+				"properties": map[string]any{
+					"bug_report": map[string]string{"type": "string"},
+					"context":    map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 45,
+			Idempotent:     true,
+			Tags:           []string{"sdd", "bdd", "gherkin", "spec", "platform"},
+		},
+		{
+			Slug:        "sql-explain-impact",
+			Name:        "SQL Query Impact Analyzer",
+			Description: "Analiza una query SQL y devuelve tablas tocadas, joins, riesgos (seq scan, n+1, locks). Para revisar queries antes de mergearlas.",
+			SkillType:   "prompt",
+			Content: `<role>
+Analizar una query SQL y reportar su shape + riesgos de performance.
+NO ejecutar la query. Solo análisis estático.
+</role>
+
+<input>
+sql: {{ .sql }}
+table_context: {{ .table_context }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "operation": "SELECT | INSERT | UPDATE | DELETE | DDL",
+  "tables": ["tabla1", "tabla2"],
+  "joins_count": N,
+  "where_filters": ["col1", "col2"],
+  "uses_index_hint": "yes | no | unknown",
+  "risks": [
+    {"kind": "seq_scan | n_plus_1 | lock_escalation | missing_where | full_table_lock", "severity":"low|medium|high", "explanation":"..."}
+  ],
+  "recommendations": ["..."],
+  "estimated_complexity": "O(1) | O(log n) | O(n) | O(n log n) | O(n^2)"
+}
+</output_format>
+
+<reglas>
+- risks=[] si la query es trivial y segura.
+- n_plus_1: SELECT dentro de loop conceptual (no detectable solo del SQL, marcalo solo si hay subselects que probablemente sean por-row).
+- seq_scan: WHERE sobre columnas SIN index sugerido por table_context.
+- missing_where: UPDATE o DELETE SIN WHERE. severity=critical.
+- Recomendaciones concretas: "agregar index parcial WHERE deleted_at IS NULL".
+</reglas>
+
+<example>
+Input sql: "SELECT * FROM project_tickets WHERE labels @> ARRAY['urgente']"
+Output:
+{
+  "operation": "SELECT",
+  "tables": ["project_tickets"],
+  "joins_count": 0,
+  "where_filters": ["labels"],
+  "uses_index_hint": "yes",
+  "risks": [],
+  "recommendations": ["project_tickets tiene gin(labels) — query usa index. OK."],
+  "estimated_complexity": "O(log n)"
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"sql"},
+				"properties": map[string]any{
+					"sql":           map[string]string{"type": "string"},
+					"table_context": map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"sql", "performance", "review", "platform"},
+		},
+		{
+			Slug:        "text-redact-secrets",
+			Name:        "Text Secret Redactor",
+			Description: "Reemplaza secrets (API keys, tokens, passwords, emails de prod) en texto por <redacted>. Útil antes de persistir logs en mem_save sin filtrar credenciales.",
+			SkillType:   "prompt",
+			Content: `<role>
+Detectar y redactar credenciales / PII en texto. Devolver el texto
+con los matches reemplazados por <redacted:KIND> (KIND es el tipo
+detectado). Conservar la estructura y longitud aproximada.
+</role>
+
+<input>
+{{ .text }}
+</input>
+
+<patrones_a_redactar>
+- api_key: domk_*, sk-*, AKIA*, ghp_*, glpat-*, xoxb-*
+- bearer_token: Bearer <token>, Authorization: <token>
+- jwt: eyJ... con 3 segmentos base64
+- password: campos JSON 'password', 'passwd', 'pwd' (valor)
+- email: cualquier email completo (a@b.c)
+- ssh_key: -----BEGIN ... PRIVATE KEY----- ... -----END
+- aws_secret: 40-char base64 con prefix conocido
+- rut_chileno: NN.NNN.NNN-N (sensible en Chile)
+- credit_card: 13-19 dígitos con/sin espacios
+- db_connection: postgres://user:pwd@host
+</patrones_a_redactar>
+
+<output_format>
+JSON estricto:
+{
+  "redacted_text": "...texto con <redacted:api_key> en lugares apropiados...",
+  "redactions": [
+    {"kind":"api_key", "count": 2},
+    {"kind":"email", "count": 5}
+  ],
+  "had_secrets": boolean
+}
+</output_format>
+
+<reglas>
+- NO devolver el secret original en redactions ni en ningún log.
+- Si NO encontrás secrets, redacted_text=texto original sin cambios + had_secrets=false.
+- Preservar formato (JSON sigue siendo JSON parseable post-redact).
+- emails internos de devs (@saargo.com) también se redactan.
+</reglas>
+
+<example>
+Input: 'curl -H "Authorization: Bearer domk_live_xyz123" https://api/users'
+Output:
+{
+  "redacted_text": "curl -H \"Authorization: Bearer <redacted:api_key>\" https://api/users",
+  "redactions": [{"kind":"api_key","count":1}],
+  "had_secrets": true
+}
+</example>`,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []string{"text"},
+				"properties": map[string]any{
+					"text": map[string]string{"type": "string"},
+				},
+			},
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"security", "privacy", "redaction", "platform"},
+		},
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // REQ-72: endpoints REST de login web.
@@ -115,9 +116,16 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "endpoint requiere session token"})
 		return
 	}
-	// Cargar email/name del user desde DB (el ctx sólo trae los ids).
+	// Cargar email/name del user desde DB. Usar la tx del ctx para
+	// que herede el SET LOCAL app.current_org_id del middleware (sino
+	// RLS filtra el row porque a.Pool no tiene contexto multi-tenant).
 	u := session.User{ID: active.UserID, OrganizationID: active.OrganizationID}
-	if a.Pool != nil {
+	if tx := txctx.TxFromContext(r.Context()); tx != nil {
+		_ = tx.QueryRow(r.Context(),
+			`SELECT email, name FROM users WHERE id = $1 AND deleted_at IS NULL`,
+			active.UserID,
+		).Scan(&u.Email, &u.Name)
+	} else if a.Pool != nil {
 		_ = a.Pool.QueryRow(r.Context(),
 			`SELECT email, name FROM users WHERE id = $1 AND deleted_at IS NULL`,
 			active.UserID,

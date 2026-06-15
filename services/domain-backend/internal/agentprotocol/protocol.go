@@ -75,6 +75,18 @@ crea una copia versionada en BD; el archivo del usuario queda intacto.
 - domain_project_repo_list(project_slug) → si ambiguous=true (>1
   remoto sin default), preguntale al usuario antes de pushear.
 
+## Issues vs Tickets (REQ-56)
+- **issue** (workflow SDD formal con Gherkin): se crea con
+  domain_issue_create_start (alias legacy: domain_hu_create_start).
+  Usar para HUs/requirements que necesitan criterios de aceptación
+  estructurados (given/when/then).
+- **ticket** (operativo, tipo Jira/Linear): se crea con
+  domain_ticket_create. Para bugs, tasks, features simples, sin
+  Gherkin. Soporta status workflow kanban, comments, sync externo.
+- Si un ticket implementa una issue formal, vincularlos con
+  domain_ticket_link_issue(ticket_id, issue_id). La BD es source of
+  truth de ambos.
+
 ## Si un tool domain_* falla
 - "Connection closed" / key inválida → indicale al usuario correr
   el installer. NO cambies a otro sistema de memoria como fallback

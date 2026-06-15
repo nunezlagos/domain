@@ -130,3 +130,9 @@ func (s *Service) LinkExternal(ctx context.Context, orgID, id uuid.UUID, link Ex
 func (s *Service) UnlinkExternal(ctx context.Context, orgID, id uuid.UUID) error {
 	return s.repo.UnlinkExternal(ctx, orgID, id)
 }
+
+// LinkIssue vincula (o desvincula con issueID=nil) el ticket a una HU/issue
+// del workflow SDD. REQ-56 Opción A — puente sin migrar datos.
+func (s *Service) LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
+	return s.repo.LinkIssue(ctx, orgID, ticketID, issueID)
+}

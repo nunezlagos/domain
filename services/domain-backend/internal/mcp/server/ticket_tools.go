@@ -31,6 +31,7 @@ func registerTicketTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolTicketCommentList(), Handler: wrap.Wrap("domain_ticket_comment_list", rls(deps.handleTicketCommentList))},
 		{Tool: toolTicketStatusHistory(), Handler: wrap.Wrap("domain_ticket_status_history", rls(deps.handleTicketStatusHistory))},
 		{Tool: toolTicketLinkExternal(), Handler: wrap.Wrap("domain_ticket_link_external", rls(deps.handleTicketLinkExternal))},
+		{Tool: toolTicketLinkIssue(), Handler: wrap.Wrap("domain_ticket_link_issue", rls(deps.handleTicketLinkIssue))},
 	}
 }
 
@@ -506,6 +507,40 @@ func (d *Deps) handleTicketLinkExternal(ctx context.Context, req mcp.CallToolReq
 	})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("link failed: %v", err)), nil
+	}
+	return toolResultJSON(t)
+}
+
+func toolTicketLinkIssue() mcp.Tool {
+	return mcp.NewTool("domain_ticket_link_issue",
+		mcp.WithDescription("Vincula un ticket operativo con una HU/issue del workflow SDD (REQ-56). Pasar issue_id='' para desvincular. Útil cuando el ticket implementa una HU formal con Gherkin scenarios."),
+		mcp.WithString("ticket_id", mcp.Description("UUID del ticket"), mcp.Required()),
+		mcp.WithString("issue_id", mcp.Description("UUID del issue (issues.id) o vacío para desvincular")),
+	)
+}
+
+func (d *Deps) handleTicketLinkIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := d.requireTicketDeps(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	tStr, _ := args["ticket_id"].(string)
+	tID, err := uuid.Parse(tStr)
+	if err != nil {
+		return mcp.NewToolResultError("ticket_id inválido"), nil
+	}
+	var issuePtr *uuid.UUID
+	if iStr, _ := args["issue_id"].(string); iStr != "" {
+		iID, perr := uuid.Parse(iStr)
+		if perr != nil {
+			return mcp.NewToolResultError("issue_id inválido"), nil
+		}
+		issuePtr = &iID
+	}
+	t, err := d.Tickets.LinkIssue(ctx, orgID, tID, issuePtr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("link_issue failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }

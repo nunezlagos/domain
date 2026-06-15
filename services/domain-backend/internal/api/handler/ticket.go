@@ -448,3 +448,47 @@ func (a *API) linkTicketExternal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, http.StatusOK, t)
 }
+
+// POST /api/v1/tickets/{id}/link-issue
+// body: { issue_id: uuid }  o {} para desvincular
+type linkIssueReq struct {
+	IssueID string `json:"issue_id"`
+}
+
+func (a *API) linkTicketIssue(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	if a.TicketService == nil {
+		writeError(w, http.StatusServiceUnavailable, "ticket_service_unavailable", "")
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	var req linkIssueReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && r.ContentLength > 0 {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	var issuePtr *uuid.UUID
+	if strings.TrimSpace(req.IssueID) != "" {
+		iID, perr := uuid.Parse(req.IssueID)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "invalid_issue_id", "")
+			return
+		}
+		issuePtr = &iID
+	}
+	t, err := a.TicketService.LinkIssue(r.Context(), orgID, id, issuePtr)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "link_issue_failed", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, t)
+}

@@ -236,9 +236,20 @@ func (d *Deps) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) 
 	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
 }
 
-// registerHUTools agrega tools de HU builder al listado.
+// registerHUTools registra los tools del wizard de issues (HU → issue
+// rename del REQ-56). Se registran tanto los NUEVOS nombres
+// domain_issue_* como los LEGACY domain_hu_* para no romper clientes
+// que aún tipean los nombres viejos. Los handlers son los mismos.
 func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	return []mcpgo.ServerTool{
+		// Nuevos nombres (issue_create_*)
+		{Tool: toolIssueCreateStart(), Handler: wrap.Wrap("domain_issue_create_start", deps.handleHUCreateStart)},
+		{Tool: toolIssueCreateAnswer(), Handler: wrap.Wrap("domain_issue_create_answer", deps.handleHUCreateAnswer)},
+		{Tool: toolIssueCreatePreview(), Handler: wrap.Wrap("domain_issue_create_preview", deps.handleHUCreatePreview)},
+		{Tool: toolIssueCreateCommit(), Handler: wrap.Wrap("domain_issue_create_commit", deps.handleHUCreateCommit)},
+		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", deps.handleHUCreateAbandon)},
+		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", deps.handleHUDraftsList)},
+		// Aliases legacy domain_hu_* (deprecados pero funcionando)
 		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", deps.handleHUCreateStart)},
 		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", deps.handleHUCreateAnswer)},
 		{Tool: toolHUCreatePreview(), Handler: wrap.Wrap("domain_hu_create_preview", deps.handleHUCreatePreview)},
@@ -246,4 +257,52 @@ func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolHUCreateAbandon(), Handler: wrap.Wrap("domain_hu_create_abandon", deps.handleHUCreateAbandon)},
 		{Tool: toolHUDraftsList(), Handler: wrap.Wrap("domain_hu_drafts_list", deps.handleHUDraftsList)},
 	}
+}
+
+// --- Nuevos tool builders con nombres domain_issue_* (REQ-56).
+// Los descriptions hablan de "issue" en vez de "HU".
+
+func toolIssueCreateStart() mcp.Tool {
+	return mcp.NewTool("domain_issue_create_start",
+		mcp.WithDescription("Inicia un wizard de creación de issue (workflow SDD con Gherkin scenarios). Crea un borrador y devuelve la primera pregunta. NOTA: para tickets operativos (bug/task/feature básicos sin Gherkin) usar domain_ticket_create."),
+		mcp.WithString("mode", mcp.Description("Modo del wizard: feature"), mcp.Required()),
+		mcp.WithString("initial_idea", mcp.Description("Idea inicial del issue"), mcp.Required()),
+	)
+}
+
+func toolIssueCreateAnswer() mcp.Tool {
+	return mcp.NewTool("domain_issue_create_answer",
+		mcp.WithDescription("Responde la pregunta actual del wizard de issue y avanza al siguiente paso."),
+		mcp.WithString("draft_id", mcp.Description("UUID del draft"), mcp.Required()),
+		mcp.WithString("answer", mcp.Description("Respuesta a la pregunta actual"), mcp.Required()),
+	)
+}
+
+func toolIssueCreatePreview() mcp.Tool {
+	return mcp.NewTool("domain_issue_create_preview",
+		mcp.WithDescription("Genera preview de los archivos SDD a partir de las respuestas completadas."),
+		mcp.WithString("draft_id", mcp.Description("UUID del draft (debe estar en status finished)"), mcp.Required()),
+	)
+}
+
+func toolIssueCreateCommit() mcp.Tool {
+	return mcp.NewTool("domain_issue_create_commit",
+		mcp.WithDescription("Confirma el draft de issue como committed. Bloquea respuestas posteriores."),
+		mcp.WithString("draft_id", mcp.Description("UUID del draft"), mcp.Required()),
+	)
+}
+
+func toolIssueCreateAbandon() mcp.Tool {
+	return mcp.NewTool("domain_issue_create_abandon",
+		mcp.WithDescription("Abandona un draft de issue en progreso."),
+		mcp.WithString("draft_id", mcp.Description("UUID del draft"), mcp.Required()),
+		mcp.WithString("reason", mcp.Description("Motivo del abandono")),
+	)
+}
+
+func toolIssueDraftsList() mcp.Tool {
+	return mcp.NewTool("domain_issue_drafts_list",
+		mcp.WithDescription("Lista drafts de issue (workflow SDD), filtrables por status."),
+		mcp.WithString("status", mcp.Description("Filtrar: in_progress | finished | committed | abandoned")),
+	)
 }

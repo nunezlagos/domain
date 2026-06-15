@@ -97,6 +97,14 @@ func (m *mockRepo) LinkExternal(_ context.Context, _, id uuid.UUID, link Externa
 	t.ExternalURL = link.URL
 	return t, nil
 }
+func (m *mockRepo) LinkIssue(_ context.Context, _, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
+	t, ok := m.tickets[ticketID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	t.LinkedIssueID = issueID
+	return t, nil
+}
 func (m *mockRepo) UnlinkExternal(_ context.Context, _, id uuid.UUID) error {
 	t, ok := m.tickets[id]
 	if !ok {

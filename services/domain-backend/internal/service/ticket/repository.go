@@ -47,6 +47,7 @@ type Ticket struct {
 	ExternalURL      string     `json:"external_url,omitempty"`
 	ExternalSyncedAt *time.Time `json:"external_synced_at,omitempty"`
 	ParentID         *uuid.UUID `json:"parent_id,omitempty"`
+	LinkedIssueID    *uuid.UUID `json:"linked_issue_id,omitempty"`
 	EstimatedHours   *float64   `json:"estimated_hours,omitempty"`
 	ActualHours      *float64   `json:"actual_hours,omitempty"`
 	DueDate          *time.Time `json:"due_date,omitempty"`
@@ -129,6 +130,7 @@ type ExternalLink struct {
 }
 
 type Repository interface {
+	LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error)
 	Insert(ctx context.Context, in CreateInput) (*Ticket, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (*Ticket, error)
 	GetByKey(ctx context.Context, orgID, projectID uuid.UUID, key string) (*Ticket, error)

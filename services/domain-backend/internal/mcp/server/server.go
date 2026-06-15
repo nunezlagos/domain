@@ -115,6 +115,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		"domain_agent_run",
 		"domain_hu_create_start", "domain_hu_create_answer",
 		"domain_hu_create_preview", "domain_hu_create_commit", "domain_hu_create_abandon",
+		"domain_issue_create_start", "domain_issue_create_answer",
+		"domain_issue_create_preview", "domain_issue_create_commit", "domain_issue_create_abandon",
 		"domain_intake_submit", "domain_intake_approve", "domain_intake_reject",
 		"domain_sync_register_provider", "domain_sync_register_push",
 		"domain_sync_mark_drift", "domain_sync_mark_resolved",

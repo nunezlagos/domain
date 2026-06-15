@@ -40,7 +40,7 @@ const selectCols = `id, organization_id, project_id, client_id, key, number,
 		assignee_id, reporter_id, labels,
 		COALESCE(external_provider,''), COALESCE(external_id,''),
 		COALESCE(external_url,''), external_synced_at,
-		parent_id, estimated_hours, actual_hours,
+		parent_id, linked_issue_id, estimated_hours, actual_hours,
 		due_date, started_at, completed_at,
 		created_at, updated_at, deleted_at`
 
@@ -51,13 +51,28 @@ func scanTicket(row pgx.Row) (*Ticket, error) {
 		&t.Title, &t.DescriptionMD, &t.IssueType, &t.Status, &t.Priority,
 		&t.AssigneeID, &t.ReporterID, &t.Labels,
 		&t.ExternalProvider, &t.ExternalID, &t.ExternalURL, &t.ExternalSyncedAt,
-		&t.ParentID, &t.EstimatedHours, &t.ActualHours,
+		&t.ParentID, &t.LinkedIssueID, &t.EstimatedHours, &t.ActualHours,
 		&t.DueDate, &t.StartedAt, &t.CompletedAt,
 		&t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	); err != nil {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// LinkIssue setea o limpia linked_issue_id. issueID=nil → desvinculación.
+func (r *pgRepository) LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
+	row := r.q(ctx).QueryRow(ctx,
+		`UPDATE project_tickets SET linked_issue_id = $3
+		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   RETURNING `+selectCols,
+		orgID, ticketID, issueID,
+	)
+	t, err := scanTicket(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return t, err
 }
 
 func keyPrefix(projectSlug string) string {

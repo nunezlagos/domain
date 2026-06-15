@@ -933,7 +933,10 @@ func runServer() {
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
 	mux := http.NewServeMux()
 	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
-	mux.Handle("/health", &httpserver.HealthHandler{Info: info, StartedAt: time.Now()})
+	healthH := &httpserver.HealthHandler{Info: info, StartedAt: time.Now()}
+	mux.Handle("/health", healthH)
+	// REQ-76 alias /healthz (k8s/Caddy convention).
+	mux.Handle("/healthz", healthH)
 	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
 
 	// Versioning catalog (issue-13.8). Por ahora solo v1 active.

@@ -1,7 +1,22 @@
 #!/bin/bash
-# Bootstrap idempotente VPS: ./services/install-vps.sh [--keep-clone] [--skip-deps] [--skip-compose-up]
-# Vive en services/, sincroniza el contenido de services/ a /opt/services en el VPS.
-# Si no se corre como root, re-ejecuta con sudo (1 sola contraseña).
+# Bootstrap idempotente VPS — todo en uno.
+#
+# Uso típico:
+#   bash install-vps.sh
+#
+# Flags opcionales:
+#   --keep-clone        no borra /tmp/domain tras instalar (default: borra)
+#   --skip-deps         no instala docker ni paquetes apt
+#   --skip-compose-up   prepara archivos pero no levanta containers
+#   --with-monitoring   levanta también Prometheus + Grafana en :3000
+#   --non-interactive   no pregunta; requiere DOMAIN_ADMIN_EMAIL y
+#                       DOMAIN_ADMIN_PASSWORD en env (sino aborta)
+#
+# Env vars opcionales (skipean el prompt si están seteadas):
+#   DOMAIN_ORG_SLUG, DOMAIN_ORG_NAME
+#   DOMAIN_ADMIN_EMAIL, DOMAIN_ADMIN_NAME, DOMAIN_ADMIN_PASSWORD
+#
+# Si no se corre como root, se re-ejecuta con sudo.
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
@@ -14,13 +29,17 @@ INSTALL_DIR="/opt/services"
 KEEP_CLONE=0
 SKIP_DEPS=0
 SKIP_COMPOSE_UP=0
+WITH_MONITORING=0
+NON_INTERACTIVE=0
 
 for arg in "$@"; do
   case "$arg" in
     --keep-clone) KEEP_CLONE=1 ;;
     --skip-deps) SKIP_DEPS=1 ;;
     --skip-compose-up) SKIP_COMPOSE_UP=1 ;;
-    -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
+    --with-monitoring) WITH_MONITORING=1 ;;
+    --non-interactive) NON_INTERACTIVE=1 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "ERROR: flag desconocida: $arg" >&2; exit 2 ;;
   esac
 done
@@ -34,7 +53,40 @@ fail() { echo "${RED}    ✗${RESET} $1" >&2; }
 
 SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-step "1/10  Preflight"
+# Helper: contraseña aleatoria (32 chars alfanum URL-safe).
+gen_pw() { openssl rand -base64 48 | tr -d '/+=' | head -c 32; }
+
+# Helper: prompt con default. Si NON_INTERACTIVE=1 usa el default sin preguntar.
+ask() {
+  local prompt="$1" default="${2:-}" var
+  if [[ $NON_INTERACTIVE -eq 1 ]]; then
+    echo "$default"; return
+  fi
+  if [[ -n "$default" ]]; then
+    read -rp "    $prompt [$default]: " var </dev/tty
+  else
+    read -rp "    $prompt: " var </dev/tty
+  fi
+  echo "${var:-$default}"
+}
+
+# Helper: prompt de password con confirmación.
+ask_password() {
+  if [[ $NON_INTERACTIVE -eq 1 ]]; then
+    [[ -n "${DOMAIN_ADMIN_PASSWORD:-}" ]] || { fail "DOMAIN_ADMIN_PASSWORD requerida con --non-interactive"; exit 2; }
+    echo "$DOMAIN_ADMIN_PASSWORD"; return
+  fi
+  local pw1 pw2
+  while :; do
+    read -rsp "    Contraseña admin (≥8 chars): " pw1 </dev/tty; echo
+    [[ ${#pw1} -ge 8 ]] || { warn "muy corta, repetir"; continue; }
+    read -rsp "    Confirmar contraseña:       " pw2 </dev/tty; echo
+    [[ "$pw1" == "$pw2" ]] || { warn "no coinciden, repetir"; continue; }
+    echo "$pw1"; return
+  done
+}
+
+step "1/12  Preflight"
 ok "root"
 
 [[ -r /etc/os-release ]] || { fail "/etc/os-release no encontrado — OS no soportado"; exit 1; }
@@ -55,7 +107,7 @@ case "$ARCH" in
   *) fail "arquitectura no soportada: $ARCH"; exit 1 ;;
 esac
 
-step "2/10  Dependencias"
+step "2/12  Dependencias"
 if [[ $SKIP_DEPS -eq 1 ]]; then
   warn "skip deps"
 else
@@ -96,7 +148,7 @@ for compose_file in \
 done
 ok "5 composes válidos"
 
-step "3/10  $INSTALL_DIR"
+step "3/12  $INSTALL_DIR"
 if [[ "$SOURCE_DIR" == "$INSTALL_DIR" ]]; then
   ok "re-install"
   MOVED_FROM=""
@@ -108,25 +160,32 @@ else
 fi
 chmod +x "$INSTALL_DIR/scripts/"*.sh "$INSTALL_DIR/postgres/init/"*.sh "$INSTALL_DIR/install.sh" 2>/dev/null || true
 
-step "4/10  .env"
+step "4/12  .env (auto-genera passwords)"
 cd "$INSTALL_DIR"
 if [[ ! -f .env ]]; then
   cp .env.example .env
   chmod 600 .env
-  warn "Editá /opt/services/.env y poné passwords reales."
-  warn "Generar: openssl rand -base64 48 | tr -d '/+=' | head -c 32"
-  read -rp "  ENTER cuando esté listo... "
+  ok ".env creado desde example"
 else
-  ok ".env existe"
+  ok ".env existe (no se sobrescribe)"
 fi
+
+# Reemplazar cada CHANGE_ME por una password aleatoria distinta.
+# Idempotente: si ya no hay CHANGE_ME, no hace nada.
+while grep -q "CHANGE_ME" .env; do
+  PW=$(gen_pw)
+  sed -i "0,/CHANGE_ME/{s,CHANGE_ME,${PW},}" .env
+done
+ok "secretos autogenerados"
+
 grep -q "CHANGE_ME" .env && { fail ".env aún tiene CHANGE_ME"; exit 1; }
 ok ".env OK"
 
-step "5/10  Certs TLS"
+step "5/12  Certs TLS"
 ./scripts/gen-certs.sh
 ok "certs/"
 
-step "6/10  systemd units"
+step "6/12  systemd units"
 for unit in systemd/*.service systemd/*.timer; do
   cp "$unit" "/etc/systemd/system/$(basename "$unit")"
 done
@@ -136,7 +195,7 @@ systemctl enable domain-services-backup.timer >/dev/null 2>&1
 systemctl enable domain-services-healthcheck.timer >/dev/null 2>&1
 ok "habilitados"
 
-step "7/10  Build imágenes locales (backend + frontend)"
+step "7/12  Build imágenes locales"
 if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
   warn "skip build (--skip-compose-up activo)"
 else
@@ -144,7 +203,7 @@ else
   ok "imágenes buildeadas localmente"
 fi
 
-step "8/10  Servicios"
+step "8/12  Servicios"
 if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
   warn "skip (corré: make up)"
 else
@@ -160,20 +219,87 @@ else
   for i in {1..45}; do
     sleep 2
     healthy=$(docker ps --filter health=healthy --format '{{.Names}}' \
-              | grep -cE '^domain-(postgres|minio|backend|frontend|caddy)$' || true)
+              | grep -cE '^domain-(postgres|minio|backend|admin|caddy)$' || true)
     [[ "$healthy" -ge 5 ]] && { ok "los 5 healthy"; break; }
     [[ $i -eq 45 ]] && warn "timeout esperando healthy; revisar con: make ps && make logs SVC=<svc>"
   done
 fi
 
-step "9/10  Cleanup"
+step "9/12  Bootstrap organización + admin"
+ADMIN_EMAIL=""
+ORG_SLUG=""
+if [[ $SKIP_COMPOSE_UP -eq 1 ]]; then
+  warn "skip (servicios no arrancados)"
+else
+  set -a; source "$INSTALL_DIR/.env"; set +a
+  PG_USER="${POSTGRES_USER:-domain}"
+  PG_DB="${POSTGRES_DB:-domain}"
+  pg() { docker exec -i domain-postgres psql -U "$PG_USER" -d "$PG_DB" -tAq "$@"; }
+
+  ORG_SLUG="${DOMAIN_ORG_SLUG:-}"
+  [[ -z "$ORG_SLUG" ]] && ORG_SLUG=$(ask "Slug de la organización" "default")
+  ORG_NAME="${DOMAIN_ORG_NAME:-}"
+  [[ -z "$ORG_NAME" ]] && ORG_NAME=$(ask "Nombre legible de la org" "$ORG_SLUG")
+
+  ADMIN_EMAIL="${DOMAIN_ADMIN_EMAIL:-}"
+  [[ -z "$ADMIN_EMAIL" ]] && ADMIN_EMAIL=$(ask "Email del admin" "admin@${ORG_SLUG}.local")
+  ADMIN_NAME="${DOMAIN_ADMIN_NAME:-}"
+  [[ -z "$ADMIN_NAME" ]] && ADMIN_NAME=$(ask "Nombre del admin" "Admin")
+  ADMIN_PW=$(ask_password)
+
+  # Crear org si no existe; devolver id.
+  ORG_NAME_SQL=$(printf "%s" "$ORG_NAME" | sed "s/'/''/g")
+  ORG_ID=$(pg -c "
+    INSERT INTO organizations (slug, name)
+    VALUES ('$ORG_SLUG', '$ORG_NAME_SQL')
+    ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id;
+  " | tr -d '[:space:]')
+  [[ -n "$ORG_ID" ]] || { fail "no se pudo obtener org id"; exit 1; }
+  ok "org '$ORG_SLUG' ($ORG_ID)"
+
+  # Crear user si no existe (la password va aparte vía admin-passwd).
+  ADMIN_NAME_SQL=$(printf "%s" "$ADMIN_NAME" | sed "s/'/''/g")
+  pg -c "
+    INSERT INTO users (organization_id, email, name, role)
+    VALUES ('$ORG_ID', '$ADMIN_EMAIL', '$ADMIN_NAME_SQL', 'admin')
+    ON CONFLICT (organization_id, email) DO NOTHING;
+  " >/dev/null
+  ok "user $ADMIN_EMAIL"
+
+  # Setear password + asignar rol admin vía CLI.
+  DSN="postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/${PG_DB}?sslmode=disable"
+  if echo "$ADMIN_PW" | docker run --rm -i --network domain_internal \
+        -e DOMAIN_DATABASE_AUTH_URL="$DSN" \
+        domain-backend:local admin-passwd "$ADMIN_EMAIL" --role=admin >/dev/null 2>&1; then
+    ok "password seteada + rol admin asignado"
+  else
+    fail "admin-passwd falló (revisar: docker logs domain-backend)"
+    exit 1
+  fi
+fi
+
+step "10/12  Monitoring opcional"
+if [[ $WITH_MONITORING -eq 1 && $SKIP_COMPOSE_UP -eq 0 ]]; then
+  MON_COMPOSE="$INSTALL_DIR/domain-backend/deploy/monitoring/docker-compose.yml"
+  if [[ -f "$MON_COMPOSE" ]]; then
+    docker compose -f "$MON_COMPOSE" --env-file "$INSTALL_DIR/.env" up -d --wait >/dev/null
+    ok "prometheus + grafana up (Grafana en :3000)"
+  else
+    warn "monitoring compose no encontrado en $MON_COMPOSE"
+  fi
+else
+  ok "skip (--with-monitoring no activado)"
+fi
+
+step "11/12  Cleanup"
 if [[ -n "$MOVED_FROM" && $KEEP_CLONE -eq 0 && "$MOVED_FROM" != "$INSTALL_DIR" ]]; then
   rm -rf "$MOVED_FROM"; ok "clone eliminado: $MOVED_FROM"
 else
   ok "nada que limpiar"
 fi
 
-step "10/10  Resumen"
+step "12/12  Resumen"
 set -a; source "$INSTALL_DIR/.env"; set +a
 VPS_IP="${VPS_PUBLIC_IP:-$(curl -fsS --max-time 3 https://ifconfig.me 2>/dev/null || echo '<ip>')}"
 
@@ -181,21 +307,38 @@ cat <<RESUMEN
 
 ${GREEN}${BOLD}domain-services listo${RESET}
 
-  Dashboard:  http://$VPS_IP/
-  API:        http://$VPS_IP/api/v1/...
-  MCP HTTP:   http://$VPS_IP/mcp
-  Healthz:    http://$VPS_IP/healthz
+  Dashboard:   http://$VPS_IP/
+  API:         http://$VPS_IP/api/v1/...
+  MCP HTTP:    http://$VPS_IP/mcp
+  Healthz:     http://$VPS_IP/healthz
+RESUMEN
 
-  Backups:    diario 02:00 UTC → $INSTALL_DIR/backups/
-  Alerts:     ntfy.sh/${NTFY_TOPIC:-<no-configurado>}
+if [[ $WITH_MONITORING -eq 1 ]]; then
+cat <<MON
+  Grafana:     http://$VPS_IP:3000  (admin / ${GRAFANA_ADMIN_PASSWORD:-admin})
+MON
+fi
+
+if [[ -n "$ADMIN_EMAIL" ]]; then
+cat <<CREDS
+
+  ${BOLD}Login del dashboard${RESET}
+    Email:     $ADMIN_EMAIL
+    Password:  (la que ingresaste durante la instalación)
+    Org slug:  $ORG_SLUG
+
+CREDS
+fi
+
+cat <<TAIL
+  Backups:     diario 02:00 UTC → $INSTALL_DIR/backups/
+  Alerts:      ntfy.sh/${NTFY_TOPIC:-<no-configurado>}
 
   Comandos útiles:
     cd $INSTALL_DIR
-    make ps                    # estado de los 5
-    make logs SVC=backend      # tail de uno
-    make pull                  # tira imágenes nuevas
-    make restart SVC=backend   # update sin tocar otros
-    make backup                # backup manual
-    make clean                 # DESTRUCTIVO
+    make ps                       # estado de los 5
+    make logs SVC=backend         # tail de uno
+    make restart SVC=backend      # update sin tocar otros
+    make backup                   # backup manual
 
-RESUMEN
+TAIL

@@ -301,6 +301,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/tickets/{id}/link-issue", a.linkTicketIssue)
 	// REQ-69 SSE stream — Bearer auth requerido (cae en el middleware)
 	mux.HandleFunc("GET /api/v1/events", a.sseEvents)
+	// REQ-75 listado de users de la org (para el modal reasignar)
+	mux.HandleFunc("GET /api/v1/users", a.listUsers)
 	// REQ-58: bulk + webhook Jira (stub). Endpoint listo para cuando se
 	// conecte Jira; hoy responde si DOMAIN_JIRA_WEBHOOK_SECRET está set.
 	mux.HandleFunc("POST /api/v1/tickets/link-external-bulk", a.bulkLinkTicketsExternal)
@@ -499,6 +501,7 @@ func (a *API) Router() http.Handler {
 func AuthAllowlist() []string {
 	return []string{
 		"/health",
+		"/healthz",
 		"/health/ready",
 		"/health/startup",
 		"/api/v1/auth/request-otp",

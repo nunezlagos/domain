@@ -1,0 +1,336 @@
+// REQ-49 — proposals de policies/skills auto-generadas por el LLM.
+//
+// Workflow:
+//   1. LLM detecta un patrón recurrente del proyecto (workflow git,
+//      convention de migrations, tech stack constraint, etc).
+//   2. Llama domain_propose_policy o domain_propose_skill con
+//      source='llm_generated' + proposed=true. Queda invisible para los
+//      resolvers (policy_get, skill_search) hasta que el usuario apruebe.
+//   3. domain_proposal_list muestra las propuestas pendientes.
+//   4. domain_proposal_review(kind, id, action: accept|reject) decide.
+//
+// Por qué no aprobación automática: el LLM puede malinterpretar un
+// pattern. Mantener al humano en el loop evita reglas equivocadas que
+// después confunden al propio LLM.
+package mcpserver
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/mark3labs/mcp-go/mcp"
+	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+)
+
+func registerProposalsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, h)
+	}
+	return []mcpgo.ServerTool{
+		{Tool: toolProposePolicy(), Handler: wrap.Wrap("domain_propose_policy", rls(deps.handleProposePolicy))},
+		{Tool: toolProposeSkill(), Handler: wrap.Wrap("domain_propose_skill", rls(deps.handleProposeSkill))},
+		{Tool: toolProposalList(), Handler: wrap.Wrap("domain_proposal_list", rls(deps.handleProposalList))},
+		{Tool: toolProposalReview(), Handler: wrap.Wrap("domain_proposal_review", rls(deps.handleProposalReview))},
+	}
+}
+
+func toolProposePolicy() mcp.Tool {
+	return mcp.NewTool("domain_propose_policy",
+		mcp.WithDescription("LLM propone una nueva project_policy basada en lo que aprendió del proyecto. Queda en estado proposed=true — invisible para policy_get hasta que el usuario apruebe con domain_proposal_review. NO usar para reglas obvias (ej. 'usar git') — usar para patterns específicos del repo (workflow, migrations, convention)."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica"), mcp.Required()),
+		mcp.WithString("slug", mcp.Description("Slug de la policy propuesta"), mcp.Required()),
+		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("convention|security_rule|architecture|sdd_workflow|observability|migration_rule|linter_config|agent_protocol|git_workflow|tech_stack|test_strategy"), mcp.Required()),
+		mcp.WithString("body_md", mcp.Description("Cuerpo Markdown — qué es la regla y por qué"), mcp.Required()),
+		mcp.WithString("rationale", mcp.Description("Por qué proponés esta regla: qué pattern observaste, en cuántos archivos/turns lo viste. Esto le da contexto al humano que aprueba.")),
+	)
+}
+
+func toolProposeSkill() mcp.Tool {
+	return mcp.NewTool("domain_propose_skill",
+		mcp.WithDescription("LLM propone una nueva skill basada en una tarea recurrente del proyecto. Queda proposed=true — invisible hasta aprobación. Útil cuando hacés N veces el mismo comando con variantes (ej. 'php artisan migrate manual + reload cache + clear views' = una skill 'reset-db')."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica (null = global de la org)")),
+		mcp.WithString("slug", mcp.Description("Slug de la skill"), mcp.Required()),
+		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
+		mcp.WithString("description", mcp.Description("Para qué sirve, qué inputs/outputs espera"), mcp.Required()),
+		mcp.WithString("skill_type", mcp.Description("prompt|code|api|mcp_tool"), mcp.Required()),
+		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template, código, etc)"), mcp.Required()),
+		mcp.WithString("rationale", mcp.Description("Por qué la proponés: qué hiciste manualmente N veces.")),
+	)
+}
+
+func toolProposalList() mcp.Tool {
+	return mcp.NewTool("domain_proposal_list",
+		mcp.WithDescription("Lista proposals pendientes (proposed=true, sin review todavía). El usuario revisa y decide con domain_proposal_review."),
+		mcp.WithString("kind", mcp.Description("Filtrar: policy | skill | all (default)")),
+		mcp.WithString("project_slug", mcp.Description("Filtrar proposals de un proyecto específico (solo afecta policies)")),
+	)
+}
+
+func toolProposalReview() mcp.Tool {
+	return mcp.NewTool("domain_proposal_review",
+		mcp.WithDescription("Acepta o rechaza una proposal. accept → proposed=false (queda visible y activa). reject → soft-delete (deleted_at=NOW). El review queda en audit."),
+		mcp.WithString("kind", mcp.Description("policy | skill"), mcp.Required()),
+		mcp.WithString("id", mcp.Description("UUID del row a revisar"), mcp.Required()),
+		mcp.WithString("action", mcp.Description("accept | reject"), mcp.Required()),
+		mcp.WithString("reason", mcp.Description("Razón del review (opcional, queda como audit). Útil cuando rechazás para que el LLM aprenda.")),
+	)
+}
+
+func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.ProjectPolicies == nil || d.Projects == nil {
+		return mcp.NewToolResultError("project_policy service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	projSlug, _ := args["project_slug"].(string)
+	slug, _ := args["slug"].(string)
+	name, _ := args["name"].(string)
+	kind, _ := args["kind"].(string)
+	body, _ := args["body_md"].(string)
+	if projSlug == "" || slug == "" || name == "" || kind == "" || body == "" {
+		return mcp.NewToolResultError("project_slug, slug, name, kind y body_md requeridos"), nil
+	}
+	rationale, _ := args["rationale"].(string)
+	if rationale != "" {
+		body = body + "\n\n---\n_Rationale (propuesto por LLM)_: " + rationale
+	}
+
+	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	if perr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
+	}
+
+	// Crear como llm_generated. proposed=true se setea via SQL directo
+	// porque el service no expone ese flag — es contrato del workflow MCP.
+	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+		OrganizationID: orgID,
+		ProjectID:      proj.ID,
+		Slug:           slug,
+		Name:           name,
+		Kind:           kind,
+		BodyMD:         body,
+		Source:         "llm_generated",
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("create proposal failed: %v", err)), nil
+	}
+	// Marcar proposed=true.
+	if _, err := d.q(ctx).Exec(ctx,
+		`UPDATE project_policies SET proposed = true
+		   WHERE organization_id = $1 AND id = $2`,
+		orgID, created.ID,
+	); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("mark proposed failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"kind":      "policy",
+		"id":        created.ID.String(),
+		"slug":      created.Slug,
+		"project":   projSlug,
+		"proposed":  true,
+		"next_step": "Esta propuesta queda invisible para domain_policy_get hasta que el usuario la apruebe con domain_proposal_review.",
+	})
+}
+
+func (d *Deps) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Pool == nil {
+		return mcp.NewToolResultError("pool not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	name, _ := args["name"].(string)
+	desc, _ := args["description"].(string)
+	skillType, _ := args["skill_type"].(string)
+	content, _ := args["content"].(string)
+	if slug == "" || name == "" || desc == "" || skillType == "" || content == "" {
+		return mcp.NewToolResultError("slug, name, description, skill_type y content son requeridos"), nil
+	}
+	rationale, _ := args["rationale"].(string)
+	if rationale != "" {
+		desc = desc + "\n\nRationale (propuesto por LLM): " + rationale
+	}
+
+	var projectID *uuid.UUID
+	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil {
+		if proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
+			pid := proj.ID
+			projectID = &pid
+		}
+	}
+
+	var id uuid.UUID
+	err := d.q(ctx).QueryRow(ctx,
+		`INSERT INTO skills
+		   (organization_id, project_id, slug, name, description,
+		    skill_type, content, input_schema, output_schema, proposed)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,'{}','{}',true)
+		 RETURNING id`,
+		orgID, projectID, slug, name, desc, skillType, content,
+	).Scan(&id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("create skill proposal failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"kind":      "skill",
+		"id":        id.String(),
+		"slug":      slug,
+		"proposed":  true,
+		"next_step": "Esta propuesta queda invisible para domain_skill_search/list hasta que el usuario la apruebe.",
+	})
+}
+
+func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Pool == nil {
+		return mcp.NewToolResultError("pool not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	kind := strings.ToLower(strings.TrimSpace(asString(args["kind"])))
+	if kind == "" {
+		kind = "all"
+	}
+	projSlug, _ := args["project_slug"].(string)
+
+	var projectFilter *uuid.UUID
+	if projSlug != "" && d.Projects != nil {
+		if proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
+			pid := proj.ID
+			projectFilter = &pid
+		}
+	}
+
+	policies := []map[string]any{}
+	skills := []map[string]any{}
+
+	// to_char convierte timestamptz a string ISO. Sin esto, scan a string
+	// falla silenciosamente (pgx no auto-convierte timestamps).
+	const tsFmt = "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
+
+	if kind == "policy" || kind == "all" {
+		q := `SELECT id::text, slug, name, kind, ` + tsFmt + `
+		        FROM project_policies
+		        WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL`
+		queryArgs := []any{orgID}
+		if projectFilter != nil {
+			q += " AND project_id = $2"
+			queryArgs = append(queryArgs, *projectFilter)
+		}
+		q += " ORDER BY created_at DESC LIMIT 50"
+		if rows, err := d.q(ctx).Query(ctx, q, queryArgs...); err == nil {
+			for rows.Next() {
+				var id, slug, name, k, ts string
+				if err := rows.Scan(&id, &slug, &name, &k, &ts); err == nil {
+					policies = append(policies, map[string]any{
+						"id": id, "slug": slug, "name": name, "kind": k, "created_at": ts,
+					})
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	if kind == "skill" || kind == "all" {
+		if rows, err := d.q(ctx).Query(ctx,
+			`SELECT id::text, slug, name, skill_type, project_id, `+tsFmt+`
+			   FROM skills
+			   WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL
+			   ORDER BY created_at DESC LIMIT 50`,
+			orgID,
+		); err == nil {
+			for rows.Next() {
+				var id, slug, name, st, ts string
+				var pid *uuid.UUID
+				if err := rows.Scan(&id, &slug, &name, &st, &pid, &ts); err == nil {
+					item := map[string]any{
+						"id": id, "slug": slug, "name": name, "skill_type": st, "created_at": ts,
+					}
+					if pid != nil {
+						item["project_id"] = pid.String()
+					}
+					skills = append(skills, item)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	return toolResultJSON(map[string]any{
+		"policies": policies,
+		"skills":   skills,
+		"total":    len(policies) + len(skills),
+	})
+}
+
+func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Pool == nil {
+		return mcp.NewToolResultError("pool not configured"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	kind := strings.ToLower(strings.TrimSpace(asString(args["kind"])))
+	idStr, _ := args["id"].(string)
+	action := strings.ToLower(strings.TrimSpace(asString(args["action"])))
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+	}
+	if action != "accept" && action != "reject" {
+		return mcp.NewToolResultError("action debe ser 'accept' o 'reject'"), nil
+	}
+
+	table := ""
+	switch kind {
+	case "policy":
+		table = "project_policies"
+	case "skill":
+		table = "skills"
+	default:
+		return mcp.NewToolResultError("kind debe ser 'policy' o 'skill'"), nil
+	}
+
+	var sql string
+	if action == "accept" {
+		// Quitar proposed → queda activa
+		sql = "UPDATE " + table + ` SET proposed = false
+		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+	} else {
+		// reject → soft-delete
+		sql = "UPDATE " + table + ` SET deleted_at = NOW()
+		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+	}
+	tag, err := d.q(ctx).Exec(ctx, sql, orgID, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("review failed: %v", err)), nil
+	}
+	if tag.RowsAffected() == 0 {
+		return mcp.NewToolResultError("proposal no encontrada o ya revisada"), nil
+	}
+	return toolResultJSON(map[string]any{
+		"kind":   kind,
+		"id":     id.String(),
+		"action": action,
+	})
+}
+
+func asString(v any) string {
+	s, _ := v.(string)
+	return s
+}

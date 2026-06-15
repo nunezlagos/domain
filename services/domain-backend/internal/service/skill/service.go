@@ -357,7 +357,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Skill, error) {
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Skill, error) {
 	return s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL AND proposed = false`, orgID, slug)
 }
 
 type ListFilter struct {
@@ -374,7 +374,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Sk
 	        skill_type, COALESCE(content,''), input_schema, output_schema,
 	        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 	        seed_managed, seed_version, is_user_modified, created_at, updated_at
-	      FROM skills WHERE organization_id = $1 AND deleted_at IS NULL`
+	      FROM skills WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false`
 	args := []any{orgID}
 	if f.SkillType != "" {
 		q += fmt.Sprintf(" AND skill_type = $%d", len(args)+1)
@@ -429,13 +429,13 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(description_tsv, q) DESC) AS r
   FROM skills, plainto_tsquery('spanish', $2) AS q
-  WHERE organization_id = $1 AND deleted_at IS NULL AND description_tsv @@ q
+  WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false AND description_tsv @@ q
   LIMIT $4
 ),
 vec AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector ASC) AS r
   FROM skills
-  WHERE organization_id = $1 AND deleted_at IS NULL AND embedding IS NOT NULL
+  WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false AND embedding IS NOT NULL
   LIMIT $4
 ),
 fused AS (
@@ -463,7 +463,7 @@ SELECT s.id, s.organization_id, s.slug, s.name, COALESCE(s.description,''),
        s.seed_managed, s.seed_version, s.is_user_modified, s.created_at, s.updated_at,
        ts_rank(s.description_tsv, q)::float8 AS score, 0::bigint AS bm25_rank, 0::bigint AS vec_rank
 FROM skills s, plainto_tsquery('spanish', $2) AS q
-WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.description_tsv @@ q
+WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.proposed = false AND s.description_tsv @@ q
 ORDER BY score DESC LIMIT $3
 `, orgID, query, limit)
 	}

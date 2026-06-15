@@ -89,7 +89,7 @@ func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID, kin
 	q := `SELECT ` + selectCols + `
 		   FROM project_policies
 		   WHERE organization_id = $1 AND project_id = $2
-		     AND is_active = TRUE AND deleted_at IS NULL`
+		     AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`
 	args := []any{orgID, projectID}
 	if kind != "" {
 		q += " AND kind = $3"
@@ -117,7 +117,7 @@ func (r *pgRepository) GetBySlug(ctx context.Context, orgID, projectID uuid.UUID
 		`SELECT `+selectCols+`
 		 FROM project_policies
 		 WHERE organization_id = $1 AND project_id = $2 AND slug = $3
-		   AND is_active = TRUE AND deleted_at IS NULL`,
+		   AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`,
 		orgID, projectID, slug,
 	)
 	p, err := scanPolicy(row)

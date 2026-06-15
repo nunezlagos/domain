@@ -119,6 +119,7 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		   FROM skills
 		   WHERE organization_id = $1
 		     AND deleted_at IS NULL
+		     AND proposed = false
 		     AND (project_id = $2`
 	if includeGlobals {
 		q += ` OR project_id IS NULL`

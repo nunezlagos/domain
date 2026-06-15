@@ -93,6 +93,9 @@ import (
 	"nunezlagos/domain/internal/service/usagealerts"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	"nunezlagos/domain/internal/service/orchestrator"
+	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
+	"nunezlagos/domain/internal/service/orchestrator/phases"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
@@ -168,6 +171,8 @@ func main() {
 		runWorkflow(os.Args[2:])
 	case "install":
 		os.Exit(runInstall(os.Args[2:]))
+	case "seed-org":
+		runSeedOrg(os.Args[2:])
 	case "service":
 		os.Exit(runService(os.Args[2:]))
 	case "update":
@@ -364,6 +369,21 @@ func runServer() {
 	// Services: dependency wiring explícito.
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
 	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
+	// REQ-57: hook que seedea catalogs per-org al crear una org nueva.
+	// Sin esto, las orgs creadas en runtime no reciben skills/agents/flows
+	// built-in (solo se aplicarían a orgs creadas via tests).
+	orgService.PostCreateHook = func(ctx context.Context, orgID uuid.UUID) error {
+		if _, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1); err != nil {
+			return fmt.Errorf("seed skills: %w", err)
+		}
+		if _, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID); err != nil {
+			return fmt.Errorf("seed agent_templates: %w", err)
+		}
+		if _, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID); err != nil {
+			return fmt.Errorf("seed flows: %w", err)
+		}
+		return nil
+	}
 
 	// Debug pprof endpoints (issue-27.1) en puerto separado con basic auth
 	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
@@ -596,10 +616,36 @@ func runServer() {
 		Planner:  wizardPlanner,
 	}
 
+	// REQ-57: orchestrator SDD wireup. Sin esto domain_orchestrate falla
+	// con "orchestrator service not configured". El registry rechaza
+	// duplicados via MustRegister → boot panic si se repite slug.
+	orchPhases := phases.NewRegistry()
+	orchPhases.MustRegister(phases.NewSDDExploreHandler())
+	orchPhases.MustRegister(phases.NewSDDSpecHandler())
+	orchPhases.MustRegister(phases.NewSDDProposeHandler())
+	orchPhases.MustRegister(phases.NewSDDDesignHandler())
+	orchPhases.MustRegister(phases.NewSDDTasksHandler())
+	orchPhases.MustRegister(phases.NewSDDApplyHandler())
+	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
+	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
+	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
+	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
+	orchestratorSvc.LLM = llmFactory
+	orchestratorSvc.Skills = skillService
+
+	// REQ-57: analysis service para intent IntentAnalysis (read-only).
+	analysisSvc := &analysissvc.Service{
+		Pool: pools.App, Audit: recorder, LLM: llmFactory,
+		Knowledge: knowledgeService, Observation: obsService,
+	}
+
 	promptRouterSvc := &promptrouter.Router{
 		IntakeService:    intakeSvc,
 		IssueBuilderService: issuebuilderSvc,
 		Classifier:       promptClassifier,
+		Orchestrator:     orchestratorSvc,
+		AnalysisService:  &analysisRunnerAdapter{inner: analysisSvc},
 	}
 
 	// issue-12.7 workflow import (override de .md de IA en repo cliente).
@@ -940,6 +986,7 @@ func runServer() {
 			FlowRunner:     flowRunnerInst,
 			Hubuilder:      issuebuilderSvc,
 			Intake:         intakeSvc,
+			Orchestrator:   orchestratorSvc,
 			PromptRouter:   promptRouterSvc,
 			WorkflowImport: workflowImportSvc,
 			Pool:           pools.App,
@@ -2146,4 +2193,75 @@ func offerOrRunAutoInit(cwd string, autoInit bool) {
 		rep.BackedUp, rep.Replaced)
 	fmt.Println("  Originales en BD (tabla imported_workflow_files).")
 	fmt.Println("  Rollback: domain workflow restore <rel-path>")
+}
+
+// analysisRunnerAdapter adapta analysissvc.Service al
+// promptrouter.AnalysisRunner. Mismo patrón que cmd/domain-mcp/main.go.
+type analysisRunnerAdapter struct{ inner *analysissvc.Service }
+
+func (a *analysisRunnerAdapter) RunAnalysis(ctx context.Context, in promptrouter.AnalysisInput) (*promptrouter.AnalysisResult, error) {
+	result, err := a.inner.RunAnalysis(ctx, analysissvc.Input{
+		OrganizationID: in.OrganizationID,
+		UserID:         in.UserID,
+		RawText:        in.RawText,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &promptrouter.AnalysisResult{
+		KnowledgeDocID: result.KnowledgeDocID,
+		Title:          result.Title,
+		Body:           result.Body,
+	}, nil
+}
+
+// runSeedOrg: aplica los catálogos per-org (skills, agent_templates,
+// flows) a una org ya existente. Útil para retro-seedear orgs creadas
+// antes del PostCreateHook (REQ-57). Uso: domain seed-org <uuid>
+func runSeedOrg(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Uso: domain seed-org <organization-uuid>")
+		os.Exit(2)
+	}
+	orgID, err := uuid.Parse(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "UUID inválido:", err)
+		os.Exit(2)
+	}
+	ctx := context.Background()
+	dsn := os.Getenv("DOMAIN_DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	if dsn == "" {
+		fmt.Fprintln(os.Stderr, "DOMAIN_DATABASE_URL no seteado")
+		os.Exit(1)
+	}
+	pool, err := pgxpoolNew(ctx, dsn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "open pool:", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	fmt.Printf("Seedeando catálogos per-org en %s...\n", orgID)
+	rs, err := seeds.SeedSkillsForOrg(ctx, pool, orgID, 1)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "skills:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  ✓ skills: created=%d updated=%d skipped=%d\n", rs.Created, rs.Updated, rs.Skipped)
+	ra, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "agent_templates:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  ✓ agent_templates: created=%d updated=%d skipped=%d\n", ra.Created, ra.Updated, ra.Skipped)
+	rf, err := seeds.SeedFlowsForOrg(ctx, pool, orgID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "flows:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  ✓ flows: created=%d updated=%d skipped=%d\n", rf.Created, rf.Updated, rf.Skipped)
+	fmt.Println("Listo.")
 }

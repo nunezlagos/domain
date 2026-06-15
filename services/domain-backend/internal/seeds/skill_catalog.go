@@ -147,7 +147,7 @@ func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 			                    idempotent, has_side_effects, tags,
 			                    seed_managed, seed_version)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, TRUE, $13)
-			ON CONFLICT (organization_id, slug) DO UPDATE
+			ON CONFLICT (organization_id, slug) WHERE project_id IS NULL AND deleted_at IS NULL DO UPDATE
 			SET name             = EXCLUDED.name,
 			    description      = EXCLUDED.description,
 			    skill_type       = EXCLUDED.skill_type,

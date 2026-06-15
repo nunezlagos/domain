@@ -80,6 +80,14 @@ type Member struct {
 type Service struct {
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
+	// PostCreateHook se ejecuta DESPUÉS de la creación de la org +
+	// owner (post-commit). Recibe el orgID recién creado y debe
+	// ejecutar trabajo idempotente (typically: SeedSkillsForOrg,
+	// SeedAgentTemplatesForOrg, SeedFlowsForOrg). Si retorna error,
+	// se loggea como warning pero NO falla la creación de la org —
+	// la org ya está committed. Útil para que main.go inyecte la
+	// llamada a seeds/* sin crear ciclo de import org→seeds.
+	PostCreateHook func(ctx context.Context, orgID uuid.UUID) error
 }
 
 var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}[a-z0-9]$|^[a-z][a-z0-9]?$`)
@@ -136,7 +144,24 @@ func (s *Service) Create(ctx context.Context, name, slug, ownerEmail, ownerName 
 			NewValues:      map[string]any{"name": name, "slug": slug, "owner_email": ownerEmail},
 		})
 	}
+
+	// REQ-57: ejecutar hook post-create (typically seeds.SeedSkillsForOrg
+	// + SeedAgentTemplatesForOrg + SeedFlowsForOrg). Si falla, se loggea
+	// pero no se aborta — la org ya está committed.
+	if s.PostCreateHook != nil {
+		if err := s.PostCreateHook(ctx, org.ID); err != nil {
+			slogWarnPostCreate(org.ID, err)
+		}
+	}
 	return &org, &member, nil
+}
+
+// slogWarnPostCreate loggea warning si el hook post-create falla.
+// Variable separada para que tests puedan stubbearla.
+var slogWarnPostCreate = func(orgID uuid.UUID, err error) {
+	// Sin slog directo en este package para no acoplar — usar fmt es
+	// suficiente (lo verán en stderr del backend).
+	fmt.Printf("level=WARN msg=\"post_create_hook failed\" org_id=%s err=%v\n", orgID, err)
 }
 
 // GetByID devuelve org incluyendo soft-deleted (caller decide qué filtrar).

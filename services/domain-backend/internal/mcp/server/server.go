@@ -169,6 +169,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	tools = append(tools, registerSessionBootstrapTools(wrap, deps)...)
 	tools = append(tools, registerCronCRUDTools(wrap, deps)...)
 	tools = append(tools, registerProposalsTools(wrap, deps)...)
+	tools = append(tools, registerVerificationsTools(wrap, deps)...)
 	return tools
 }
 

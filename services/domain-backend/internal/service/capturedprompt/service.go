@@ -55,3 +55,24 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, filter ListFilter) 
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Prompt, error) {
 	return s.repo.Get(ctx, orgID, id)
 }
+
+// CompleteTurn (REQ-47): cierra el turn con el output del LLM, estima
+// tokens out y completa turn_completed_at. response_chars=0 es válido
+// (turn sin respuesta — útil para trackear timeouts/cancels).
+func (s *Service) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error) {
+	if in.ResponseChars < 0 {
+		in.ResponseChars = 0
+	}
+	in.Model = strings.TrimSpace(in.Model)
+	return s.repo.CompleteTurn(ctx, in)
+}
+
+// SummarizeBySession agrega tokens estimados de todos los turns de una session.
+func (s *Service) SummarizeBySession(ctx context.Context, orgID, sessionID uuid.UUID) (*SessionUsage, error) {
+	return s.repo.SummarizeBySession(ctx, orgID, sessionID)
+}
+
+// SummarizeByProject agrega tokens estimados de todos los turns de un project.
+func (s *Service) SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*SessionUsage, error) {
+	return s.repo.SummarizeByProject(ctx, orgID, projectID)
+}

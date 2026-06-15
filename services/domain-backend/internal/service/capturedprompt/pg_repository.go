@@ -36,34 +36,103 @@ func (r *pgRepository) q(ctx context.Context) querier {
 
 const selectCols = `id, organization_id, user_id, session_id, project_id,
 		content, COALESCE(client_kind,''), COALESCE(model,''),
-		char_count, captured_at`
+		char_count, response_chars, estimated_tokens_in, estimated_tokens_out,
+		captured_at, turn_completed_at`
 
 func scanPrompt(row pgx.Row) (*Prompt, error) {
 	var p Prompt
 	if err := row.Scan(
 		&p.ID, &p.OrganizationID, &p.UserID, &p.SessionID, &p.ProjectID,
-		&p.Content, &p.ClientKind, &p.Model, &p.CharCount, &p.CapturedAt,
+		&p.Content, &p.ClientKind, &p.Model, &p.CharCount,
+		&p.ResponseChars, &p.EstimatedTokensIn, &p.EstimatedTokensOut,
+		&p.CapturedAt, &p.TurnCompletedAt,
 	); err != nil {
 		return nil, err
 	}
 	return &p, nil
 }
 
+// estimateTokens: ratio chars:tokens ≈ 4:1 (proxy estándar para
+// español/inglés en modelos Anthropic/OpenAI). REQ-47.
+func estimateTokens(chars int) int {
+	if chars <= 0 {
+		return 0
+	}
+	return (chars + 3) / 4 // ceil(chars/4)
+}
+
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, error) {
+	estIn := estimateTokens(in.CharCount)
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO captured_prompts
 		   (organization_id, user_id, session_id, project_id,
-		    content, client_kind, model, char_count)
-		 VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),$8)
+		    content, client_kind, model, char_count, estimated_tokens_in)
+		 VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),$8,$9)
 		 RETURNING `+selectCols,
 		in.OrganizationID, in.UserID, in.SessionID, in.ProjectID,
-		in.Content, in.ClientKind, in.Model, in.CharCount,
+		in.Content, in.ClientKind, in.Model, in.CharCount, estIn,
 	)
 	p, err := scanPrompt(row)
 	if err != nil {
 		return nil, fmt.Errorf("insert captured_prompt: %w", err)
 	}
 	return p, nil
+}
+
+func (r *pgRepository) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error) {
+	estOut := estimateTokens(in.ResponseChars)
+	row := r.q(ctx).QueryRow(ctx,
+		`UPDATE captured_prompts
+		   SET response_chars       = $3,
+		       estimated_tokens_out = $4,
+		       model                = COALESCE(NULLIF($5,''), model),
+		       turn_completed_at    = NOW()
+		   WHERE organization_id = $1 AND id = $2
+		   RETURNING `+selectCols,
+		in.OrganizationID, in.PromptID, in.ResponseChars, estOut, in.Model,
+	)
+	p, err := scanPrompt(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("complete turn: %w", err)
+	}
+	return p, nil
+}
+
+func (r *pgRepository) summarize(ctx context.Context, where string, args ...any) (*SessionUsage, error) {
+	row := r.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*)::int,
+		        COALESCE(SUM(estimated_tokens_in),0)::bigint,
+		        COALESCE(SUM(estimated_tokens_out),0)::bigint,
+		        COALESCE(SUM(char_count + response_chars),0)::bigint
+		   FROM captured_prompts `+where, args...)
+	out := &SessionUsage{}
+	if err := row.Scan(&out.Turns, &out.EstimatedTokensIn, &out.EstimatedTokensOut, &out.TotalChars); err != nil {
+		return nil, fmt.Errorf("summarize: %w", err)
+	}
+	return out, nil
+}
+
+func (r *pgRepository) SummarizeBySession(ctx context.Context, orgID, sessionID uuid.UUID) (*SessionUsage, error) {
+	out, err := r.summarize(ctx, "WHERE organization_id = $1 AND session_id = $2", orgID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	sid := sessionID
+	out.SessionID = &sid
+	return out, nil
+}
+
+func (r *pgRepository) SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*SessionUsage, error) {
+	out, err := r.summarize(ctx, "WHERE organization_id = $1 AND project_id = $2", orgID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	pid := projectID
+	out.ProjectID = &pid
+	return out, nil
 }
 
 func (r *pgRepository) Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (*Prompt, error) {

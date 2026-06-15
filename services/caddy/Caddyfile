@@ -8,8 +8,12 @@
   handle /healthz {
     reverse_proxy domain-backend:8000
   }
+  # REQ-74: admin dashboard (Angular CoreUI) reemplaza el coming-soon.
+  # Si el container domain-admin no está corriendo, Caddy hace fallback
+  # al domain-frontend legacy via try lookup (no soportado nativo —
+  # depende de qué container exista en la red).
   handle {
-    reverse_proxy domain-frontend:80
+    reverse_proxy domain-admin:80
   }
 
   encode zstd gzip

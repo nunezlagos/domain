@@ -1,0 +1,92 @@
+<c-card>
+  <c-card-header>
+    <c-row class="align-items-center">
+      <c-col><strong>Tickets</strong></c-col>
+      <c-col class="d-flex justify-content-end gap-2">
+        <select cSelect
+                [ngModel]="filterStatus()"
+                (ngModelChange)="filterStatus.set($event); load()"
+                style="max-width: 220px">
+          <option value="">Todos los status</option>
+          <option value="backlog">Backlog</option>
+          <option value="todo">Todo</option>
+          <option value="in_progress">In progress</option>
+          <option value="in_review">In review</option>
+          <option value="blocked">Blocked</option>
+          <option value="done">Done</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button cButton color="secondary" (click)="load()">Refrescar</button>
+      </c-col>
+    </c-row>
+  </c-card-header>
+
+  <c-card-body>
+    <c-alert *ngIf="error()" color="danger">{{ error() }}</c-alert>
+    <p *ngIf="loading() && tickets().length === 0">Cargando…</p>
+
+    <table cTable hover responsive *ngIf="tickets().length > 0">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Título</th>
+          <th>Tipo</th>
+          <th>Prioridad</th>
+          <th>Status</th>
+          <th>Lock</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let t of tickets()">
+          <td><code>{{ t.display_key || t.key }}</code></td>
+          <td>{{ t.title }}</td>
+          <td><c-badge color="info">{{ t.issue_type }}</c-badge></td>
+          <td><c-badge [color]="priorityColor(t.priority)">{{ t.priority }}</c-badge></td>
+          <td><c-badge [color]="statusColor(t.status)">{{ t.status }}</c-badge></td>
+          <td>
+            <c-badge *ngIf="isLocked(t)" color="warning">locked</c-badge>
+            <span *ngIf="!isLocked(t)" class="text-body-secondary">—</span>
+          </td>
+          <td class="text-body-secondary">{{ t.updated_at | date:'short' }}</td>
+          <td>
+            <button cButton color="primary" size="sm" (click)="openReassign(t)">
+              Reasignar
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p *ngIf="!loading() && tickets().length === 0" class="text-body-secondary mb-0">
+      No hay tickets para el filtro actual.
+    </p>
+  </c-card-body>
+</c-card>
+
+<!-- Reassign modal -->
+<c-modal [visible]="!!reassignTarget()" (visibleChange)="$event ? null : closeReassign()">
+  <c-modal-header>
+    <h5 cModalTitle>Reasignar ticket</h5>
+    <button cButtonClose (click)="closeReassign()"></button>
+  </c-modal-header>
+  <c-modal-body>
+    <p>
+      <strong>{{ reassignTarget()?.display_key }}</strong>
+      — {{ reassignTarget()?.title }}
+    </p>
+    <p *ngIf="isLocked(reassignTarget()!)" class="text-warning">
+      Este ticket está lockeado por otro user. Reasignar lo libera.
+    </p>
+    <label class="form-label">Nuevo assignee</label>
+    <select cSelect [ngModel]="reassignTo()" (ngModelChange)="reassignTo.set($event)">
+      <option value="">— Sin asignar —</option>
+      <option *ngFor="let u of users()" [value]="u.id">{{ u.name }} ({{ u.email }})</option>
+    </select>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton color="secondary" (click)="closeReassign()">Cancelar</button>
+    <button cButton color="primary" (click)="submitReassign()">Reasignar</button>
+  </c-modal-footer>
+</c-modal>

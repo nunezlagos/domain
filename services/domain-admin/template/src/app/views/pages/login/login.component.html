@@ -1,0 +1,81 @@
+<div class="bg-light dark:bg-transparent min-vh-100 d-flex flex-row align-items-center">
+  <c-container breakpoint="md">
+    <c-row class="justify-content-center">
+      <c-col lg="6" xl="5">
+        <c-card class="p-4">
+          <c-card-body>
+
+            <ng-container *ngIf="!tempToken()">
+              <h1>Login</h1>
+              <p class="text-body-secondary">Ingresá con tu usuario</p>
+
+              <c-alert *ngIf="error()" color="danger" class="mb-3">{{ error() }}</c-alert>
+
+              <form cForm (ngSubmit)="submitLogin()">
+                <c-input-group class="mb-3">
+                  <span cInputGroupText>
+                    <svg cIcon name="cilUser"></svg>
+                  </span>
+                  <input cFormControl
+                         placeholder="Email"
+                         autocomplete="username"
+                         type="email"
+                         required
+                         [(ngModel)]="email" name="email" />
+                </c-input-group>
+
+                <c-input-group class="mb-4">
+                  <span cInputGroupText>
+                    <svg cIcon name="cilLockLocked"></svg>
+                  </span>
+                  <input cFormControl
+                         placeholder="Contraseña"
+                         autocomplete="current-password"
+                         type="password"
+                         required
+                         [(ngModel)]="password" name="password" />
+                </c-input-group>
+
+                <button cButton color="primary" class="px-4 w-100"
+                        type="submit" [disabled]="loading() || !email || !password">
+                  {{ loading() ? 'Ingresando…' : 'Ingresar' }}
+                </button>
+              </form>
+            </ng-container>
+
+            <ng-container *ngIf="tempToken()">
+              <h2>¿Con qué rol?</h2>
+              <p class="text-body-secondary">Tu cuenta tiene varios roles. Elegí cuál usar.</p>
+
+              <c-alert *ngIf="error()" color="danger" class="mb-3">{{ error() }}</c-alert>
+
+              <div class="list-group mb-3">
+                <button *ngFor="let r of roles()"
+                        type="button"
+                        class="list-group-item list-group-item-action"
+                        [class.active]="selectedRole() === r.slug"
+                        (click)="selectedRole.set(r.slug)">
+                  <strong>{{ r.name }}</strong>
+                  <small class="d-block text-body-secondary">{{ r.permissions.join(', ') }}</small>
+                </button>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button cButton color="secondary" type="button" (click)="back()">
+                  Volver
+                </button>
+                <button cButton color="primary"
+                        type="button"
+                        (click)="submitRole()"
+                        [disabled]="loading() || !selectedRole()">
+                  {{ loading() ? 'Confirmando…' : 'Continuar' }}
+                </button>
+              </div>
+            </ng-container>
+
+          </c-card-body>
+        </c-card>
+      </c-col>
+    </c-row>
+  </c-container>
+</div>

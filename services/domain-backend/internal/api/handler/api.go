@@ -168,6 +168,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
 	mux.HandleFunc("POST /api/v1/auth/select-role", a.authSelectRole)
 	mux.HandleFunc("GET /api/v1/auth/me", a.authMe)
+	mux.HandleFunc("POST /api/v1/auth/refresh", a.authRefresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", a.authLogout)
 	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
 	// Tambien sin Bearer: la primera request al sistema no tiene user todavía.

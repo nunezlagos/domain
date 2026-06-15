@@ -84,6 +84,15 @@ type LoginResult struct {
 	Roles      []Role
 }
 
+// LoginInput agrega metadatos del request (ip, user_agent) para el
+// audit log. REQ-79.
+type LoginInput struct {
+	Email     string
+	Password  string
+	IP        string
+	UserAgent string
+}
+
 // Login verifica email+password contra users.password_hash. Devuelve un
 // temp_token efímero (1 min) que el frontend canjeará por session
 // vía SelectRole(role_slug).
@@ -91,25 +100,36 @@ type LoginResult struct {
 // Defensa anti-enumeración: cualquier error (user no existe, password
 // inválido, sin password seteado) devuelve ErrInvalidCredentials.
 // El temp_token sale en logs SOLO con prefijo (no plano completo).
+//
+// REQ-79: cada intento (éxito o fallo) deja entry en auth_events.
 func (s *Service) Login(ctx context.Context, email, password string) (*LoginResult, error) {
+	return s.LoginWithMeta(ctx, LoginInput{Email: email, Password: password})
+}
+
+func (s *Service) LoginWithMeta(ctx context.Context, in LoginInput) (*LoginResult, error) {
 	var u User
 	var hash []byte
 	err := s.AuthPool.QueryRow(ctx,
 		`SELECT id, organization_id, email, name, password_hash
 		   FROM users
 		   WHERE email = $1 AND deleted_at IS NULL`,
-		email,
+		in.Email,
 	).Scan(&u.ID, &u.OrganizationID, &u.Email, &u.Name, &hash)
 	if errors.Is(err, pgx.ErrNoRows) || len(hash) == 0 {
 		// constant-time: hace bcrypt aunque no haya hash, para no leak
 		// timing.
-		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$dummyhashfortimingsafety"), []byte(password))
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$dummyhashfortimingsafety"), []byte(in.Password))
+		s.audit(ctx, authEvent{Kind: "login_attempt", EmailAttempted: in.Email,
+			Success: false, Reason: "invalid_credentials", IP: in.IP, UserAgent: in.UserAgent})
 		return nil, ErrInvalidCredentials
 	}
 	if err != nil {
 		return nil, err
 	}
-	if bcryptErr := bcrypt.CompareHashAndPassword(hash, []byte(password)); bcryptErr != nil {
+	if bcryptErr := bcrypt.CompareHashAndPassword(hash, []byte(in.Password)); bcryptErr != nil {
+		s.audit(ctx, authEvent{Kind: "login_attempt", UserID: &u.ID, OrgID: &u.OrganizationID,
+			EmailAttempted: in.Email, Success: false, Reason: "invalid_credentials",
+			IP: in.IP, UserAgent: in.UserAgent})
 		return nil, ErrInvalidCredentials
 	}
 
@@ -118,6 +138,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 		return nil, err
 	}
 	if len(roles) == 0 {
+		s.audit(ctx, authEvent{Kind: "login_attempt", UserID: &u.ID, OrgID: &u.OrganizationID,
+			EmailAttempted: in.Email, Success: false, Reason: "user_has_no_roles",
+			IP: in.IP, UserAgent: in.UserAgent})
 		return nil, ErrUserHasNoRoles
 	}
 
@@ -125,6 +148,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 	if err != nil {
 		return nil, err
 	}
+	s.audit(ctx, authEvent{Kind: "login_success", UserID: &u.ID, OrgID: &u.OrganizationID,
+		EmailAttempted: in.Email, Success: true, Reason: "ok",
+		IP: in.IP, UserAgent: in.UserAgent})
 	return &LoginResult{
 		TempToken: tempToken,
 		User:      u,
@@ -170,6 +196,8 @@ type SelectResult struct {
 func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent, ip string) (*SelectResult, error) {
 	userID, err := parseTempToken(tempToken, s.now())
 	if err != nil {
+		s.audit(ctx, authEvent{Kind: "role_select_failed", Success: false,
+			Reason: "token_invalid", IP: ip, UserAgent: userAgent})
 		return nil, ErrTokenInvalid
 	}
 	// Recargar user + verificar rol.
@@ -180,6 +208,8 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 		userID,
 	).Scan(&u.ID, &u.OrganizationID, &u.Email, &u.Name)
 	if err != nil {
+		s.audit(ctx, authEvent{Kind: "role_select_failed", UserID: &userID,
+			Success: false, Reason: "user_not_found", IP: ip, UserAgent: userAgent})
 		return nil, ErrTokenInvalid
 	}
 	var r Role
@@ -191,6 +221,10 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 		userID, roleSlug,
 	).Scan(&r.ID, &r.Slug, &r.Name, &r.Permissions)
 	if err != nil {
+		s.audit(ctx, authEvent{Kind: "role_select_failed", UserID: &userID,
+			OrgID: &u.OrganizationID, EmailAttempted: u.Email,
+			Success: false, Reason: "role_not_granted",
+			IP: ip, UserAgent: userAgent})
 		return nil, ErrRoleNotGranted
 	}
 
@@ -214,6 +248,9 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 	if err != nil {
 		return nil, err
 	}
+	s.audit(ctx, authEvent{Kind: "role_selected", UserID: &u.ID, OrgID: &u.OrganizationID,
+		EmailAttempted: u.Email, Success: true, Reason: "ok",
+		IP: ip, UserAgent: userAgent, SessionID: &sessID})
 	return &SelectResult{
 		Token:     plain,
 		SessionID: sessID,
@@ -263,15 +300,48 @@ func (s *Service) Resolve(ctx context.Context, plainToken string) (*Active, erro
 	return &a, nil
 }
 
+// Refresh extiende expires_at de la sesión activa por otro SessionTTL.
+// Idempotente: si el token está revocado o expirado, devuelve ErrTokenInvalid.
+// REQ-78.
+func (s *Service) Refresh(ctx context.Context, plainToken string) (*Active, time.Time, error) {
+	active, err := s.Resolve(ctx, plainToken)
+	if err != nil {
+		s.audit(ctx, authEvent{Kind: "refresh_failed", Success: false, Reason: "token_invalid"})
+		return nil, time.Time{}, err
+	}
+	newExpiry := s.now().Add(SessionTTL)
+	if _, err := s.AuthPool.Exec(ctx,
+		`UPDATE auth_sessions SET expires_at = $2, last_used_at = NOW()
+		   WHERE id = $1 AND revoked_at IS NULL`,
+		active.SessionID, newExpiry,
+	); err != nil {
+		return nil, time.Time{}, err
+	}
+	s.audit(ctx, authEvent{Kind: "refreshed", UserID: &active.UserID, OrgID: &active.OrganizationID,
+		Success: true, Reason: "ok", SessionID: &active.SessionID})
+	return active, newExpiry, nil
+}
+
 // Logout marca la sesión como revocada. Idempotente.
 func (s *Service) Logout(ctx context.Context, plainToken string) error {
 	hash := hashToken(plainToken)
+	// Tomamos los datos del session ANTES de revocar para que el audit
+	// log sepa quién hizo logout. Si el token ya no existe es no-op.
+	var sessID, userID, orgID uuid.UUID
+	_ = s.AuthPool.QueryRow(ctx,
+		`SELECT id, user_id, organization_id FROM auth_sessions WHERE token_hash = $1`,
+		hash,
+	).Scan(&sessID, &userID, &orgID)
 	_, err := s.AuthPool.Exec(ctx,
 		`UPDATE auth_sessions
 		   SET revoked_at = NOW()
 		   WHERE token_hash = $1 AND revoked_at IS NULL`,
 		hash,
 	)
+	if err == nil && sessID != uuid.Nil {
+		s.audit(ctx, authEvent{Kind: "logout", UserID: &userID, OrgID: &orgID,
+			Success: true, Reason: "ok", SessionID: &sessID})
+	}
 	return err
 }
 
@@ -315,6 +385,39 @@ func (s *Service) GrantRole(ctx context.Context, userEmail, roleSlug string, gra
 		userID, roleID, grantedBy,
 	)
 	return err
+}
+
+// --- audit log REQ-79 ---
+
+type authEvent struct {
+	Kind           string
+	UserID         *uuid.UUID
+	OrgID          *uuid.UUID
+	EmailAttempted string
+	Success        bool
+	Reason         string
+	IP             string
+	UserAgent      string
+	SessionID      *uuid.UUID
+}
+
+func (s *Service) audit(ctx context.Context, e authEvent) {
+	if s.AuthPool == nil {
+		return
+	}
+	// Best-effort: si falla la inserción no rompemos el login. Hacemos
+	// timeout corto para no bloquear el request principal.
+	c, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, _ = s.AuthPool.Exec(c,
+		`INSERT INTO auth_events
+		   (user_id, organization_id, kind, email_attempted, success,
+		    reason, ip, user_agent, session_id)
+		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),
+		         NULLIF($7,'')::inet,NULLIF($8,''),$9)`,
+		e.UserID, e.OrgID, e.Kind, e.EmailAttempted, e.Success,
+		e.Reason, e.IP, e.UserAgent, e.SessionID,
+	)
 }
 
 // --- helpers ---

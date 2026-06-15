@@ -47,7 +47,10 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email y password requeridos"})
 		return
 	}
-	res, err := a.AuthSessionService.Login(r.Context(), in.Email, in.Password)
+	res, err := a.AuthSessionService.LoginWithMeta(r.Context(), session.LoginInput{
+		Email: in.Email, Password: in.Password,
+		IP: realIP(r), UserAgent: r.Header.Get("User-Agent"),
+	})
 	if err != nil {
 		// Defensa anti-enumeración: mismo mensaje para todas las fallas.
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "credenciales inválidas"})
@@ -134,6 +137,38 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, meResp{
 		User:       u,
 		ActiveRole: active.Role,
+	})
+}
+
+// REQ-78 POST /api/v1/auth/refresh: extiende la sesión activa por otro
+// SessionTTL (8h). Útil para que el dashboard no obligue a re-login si
+// el usuario sigue activo. Devuelve el nuevo expires_at + datos del
+// usuario y rol activo.
+func (a *API) authRefresh(w http.ResponseWriter, r *http.Request) {
+	if a.AuthSessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session service no configurado"})
+		return
+	}
+	header := r.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Bearer token requerido"})
+		return
+	}
+	tok := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	if !strings.HasPrefix(tok, session.TokenPrefix) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no es un session token"})
+		return
+	}
+	active, expires, err := a.AuthSessionService.Refresh(r.Context(), tok)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token inválido o expirado"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"expires_at": expires.UTC().Format("2006-01-02T15:04:05Z"),
+		"user":       session.User{ID: active.UserID, OrganizationID: active.OrganizationID},
+		"active_role": active.Role,
 	})
 }
 

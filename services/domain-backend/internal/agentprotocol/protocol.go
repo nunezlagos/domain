@@ -38,10 +38,17 @@ El response te dice:
   llamar domain_project_policy_import_from_text por cada uno.
 - known=false → preguntale al usuario los datos del suggestion +
   workflow del repo + estructura (mono-repo? servicios? migrations
-  manuales?), llamá domain_session_register, y DESPUÉS importá los
-  existing_rules_files como project_policies con
-  domain_project_policy_import_from_text. Domain hereda lo que el
-  repo ya documenta sin tocar el archivo original.
+  manuales?), llamá domain_session_register, y DESPUÉS arrancá un
+  project index (REQ-62): domain_project_index_start →
+  domain_project_index_submit con los archivos del manifest. El
+  server clasifica y persiste como project_policies + knowledge_docs
+  con source='seed_imported'. Esto deja al repo "indexado" en BD,
+  estilo Cursor, y futuras sesiones tienen el contexto en memoria
+  persistente sin volver al filesystem.
+
+  Para projects ya conocidos: si domain_project_index_status devuelve
+  has_run=false o el último run es de >7 días o de git_head distinto
+  al actual, considerá re-indexar.
 
 NO uses tools domain_* de proyecto (mem_save, policy_get, ...) sin
 pasar el project_slug que sale de bootstrap/register.

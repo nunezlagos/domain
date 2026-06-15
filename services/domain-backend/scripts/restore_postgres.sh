@@ -74,9 +74,21 @@ docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 \
 
 # pg_restore en custom format. Sin --no-acl/--no-owner acá porque el
 # dump ya viene "limpio" desde backup_postgres.sh.
+# REQ-77: si el archivo termina en .gpg, lo desencriptamos con
+# BACKUP_GPG_PASSPHRASE antes de pasarlo a pg_restore.
 echo "[restore] aplicando dump (esto puede tardar)..."
-docker exec -i "$PG_CONTAINER" \
-  pg_restore -U "$PG_USER" -d "$TARGET" --no-owner --no-acl < "$DUMP"
+if [[ "$DUMP" == *.gpg ]]; then
+  command -v gpg >/dev/null || { echo "ERROR: gpg requerido para descifrar dumps encriptados" >&2; exit 1; }
+  [[ -n "${BACKUP_GPG_PASSPHRASE:-}" ]] || { echo "ERROR: BACKUP_GPG_PASSPHRASE requerida para dumps .gpg" >&2; exit 1; }
+  gpg --batch --yes --pinentry-mode loopback \
+      --passphrase "$BACKUP_GPG_PASSPHRASE" \
+      --decrypt "$DUMP" \
+    | docker exec -i "$PG_CONTAINER" \
+        pg_restore -U "$PG_USER" -d "$TARGET" --no-owner --no-acl
+else
+  docker exec -i "$PG_CONTAINER" \
+    pg_restore -U "$PG_USER" -d "$TARGET" --no-owner --no-acl < "$DUMP"
+fi
 
 # Smoke: contar algunas tablas core para confirmar que cargó algo.
 echo "[restore] smoke check tablas core:"

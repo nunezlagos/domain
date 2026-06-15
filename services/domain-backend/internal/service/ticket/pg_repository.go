@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,7 @@ const selectCols = `id, organization_id, project_id, client_id, key, number,
 		COALESCE(external_url,''), external_synced_at,
 		parent_id, linked_issue_id, estimated_hours, actual_hours,
 		due_date, started_at, completed_at,
+		locked_by, locked_until, version,
 		created_at, updated_at, deleted_at`
 
 func scanTicket(row pgx.Row) (*Ticket, error) {
@@ -53,6 +55,7 @@ func scanTicket(row pgx.Row) (*Ticket, error) {
 		&t.ExternalProvider, &t.ExternalID, &t.ExternalURL, &t.ExternalSyncedAt,
 		&t.ParentID, &t.LinkedIssueID, &t.EstimatedHours, &t.ActualHours,
 		&t.DueDate, &t.StartedAt, &t.CompletedAt,
+		&t.LockedBy, &t.LockedUntil, &t.Version,
 		&t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	); err != nil {
 		return nil, err
@@ -606,3 +609,70 @@ func (r *pgRepository) FindByExternal(ctx context.Context, orgID uuid.UUID, prov
 	}
 	return t, err
 }
+
+// REQ-63: Claim adquiere un soft lock sobre el ticket por ttlMinutes.
+// Si ya está lockeado por OTRO usuario y el lock no expiró, devuelve
+// ErrLockedByOther. Self-claim (refresh del propio lock) es idempotente.
+func (r *pgRepository) Claim(ctx context.Context, orgID, ticketID, userID uuid.UUID, ttlMinutes int) (*Ticket, error) {
+	if ttlMinutes <= 0 || ttlMinutes > 240 {
+		ttlMinutes = 30 // default 30 min
+	}
+	// Verificar si está lockeado por otro user.
+	curr, err := r.Get(ctx, orgID, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	if curr.LockedBy != nil && *curr.LockedBy != userID &&
+		curr.LockedUntil != nil && curr.LockedUntil.After(timeNow()) {
+		return nil, ErrLockedByOther
+	}
+	row := r.q(ctx).QueryRow(ctx,
+		`UPDATE project_tickets
+		   SET locked_by = $3,
+		       locked_until = NOW() + ($4 * INTERVAL '1 minute'),
+		       version = version + 1
+		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   RETURNING `+selectCols,
+		orgID, ticketID, userID, ttlMinutes,
+	)
+	t, err := scanTicket(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return t, err
+}
+
+// REQ-63: Release suelta el lock. Solo el holder puede liberarlo (o si
+// el lock ya expiró, cualquiera). Idempotente: liberar un ticket no
+// lockeado es no-op.
+func (r *pgRepository) Release(ctx context.Context, orgID, ticketID, userID uuid.UUID) (*Ticket, error) {
+	curr, err := r.Get(ctx, orgID, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	if curr.LockedBy == nil {
+		return curr, nil // ya no estaba lockeado
+	}
+	if *curr.LockedBy != userID &&
+		curr.LockedUntil != nil && curr.LockedUntil.After(timeNow()) {
+		// Lock activo de otro user — solo el owner puede liberarlo.
+		return nil, ErrLockedByOther
+	}
+	row := r.q(ctx).QueryRow(ctx,
+		`UPDATE project_tickets
+		   SET locked_by = NULL,
+		       locked_until = NULL,
+		       version = version + 1
+		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   RETURNING `+selectCols,
+		orgID, ticketID,
+	)
+	t, err := scanTicket(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return t, err
+}
+
+// timeNow centraliza el reloj para que tests puedan mockearlo.
+var timeNow = func() time.Time { return time.Now() }

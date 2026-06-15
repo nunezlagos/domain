@@ -26,6 +26,8 @@ var (
 	ErrProjectRequired     = errors.New("ticket: project_id requerido")
 	ErrSelfParent          = errors.New("ticket: parent_id no puede ser el propio ticket")
 	ErrExternalAlreadyLinked = errors.New("ticket: external_id ya está vinculado a otro ticket en esta org")
+	ErrLockedByOther         = errors.New("ticket: lockeado por otro usuario")
+	ErrStaleVersion          = errors.New("ticket: version stale (otro update se aplicó antes; recargá)")
 )
 
 type Ticket struct {
@@ -54,6 +56,10 @@ type Ticket struct {
 	ExternalSyncedAt *time.Time `json:"external_synced_at,omitempty"`
 	ParentID         *uuid.UUID `json:"parent_id,omitempty"`
 	LinkedIssueID    *uuid.UUID `json:"linked_issue_id,omitempty"`
+	// REQ-63 locking
+	LockedBy         *uuid.UUID `json:"locked_by,omitempty"`
+	LockedUntil      *time.Time `json:"locked_until,omitempty"`
+	Version          int        `json:"version"`
 	EstimatedHours   *float64   `json:"estimated_hours,omitempty"`
 	ActualHours      *float64   `json:"actual_hours,omitempty"`
 	DueDate          *time.Time `json:"due_date,omitempty"`
@@ -159,6 +165,8 @@ type Repository interface {
 	LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error)
 	BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error)
 	FindByExternal(ctx context.Context, orgID uuid.UUID, provider, externalID string) (*Ticket, error)
+	Claim(ctx context.Context, orgID, ticketID, userID uuid.UUID, ttlMinutes int) (*Ticket, error)
+	Release(ctx context.Context, orgID, ticketID, userID uuid.UUID) (*Ticket, error)
 	Insert(ctx context.Context, in CreateInput) (*Ticket, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (*Ticket, error)
 	GetByKey(ctx context.Context, orgID, projectID uuid.UUID, key string) (*Ticket, error)

@@ -33,7 +33,100 @@ func registerTicketTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolTicketLinkExternal(), Handler: wrap.Wrap("domain_ticket_link_external", rls(deps.handleTicketLinkExternal))},
 		{Tool: toolTicketLinkIssue(), Handler: wrap.Wrap("domain_ticket_link_issue", rls(deps.handleTicketLinkIssue))},
 		{Tool: toolTicketLinkExternalBulk(), Handler: wrap.Wrap("domain_ticket_link_external_bulk", rls(deps.handleTicketLinkExternalBulk))},
+		{Tool: toolTicketClaim(), Handler: wrap.Wrap("domain_ticket_claim", rls(deps.handleTicketClaim))},
+		{Tool: toolTicketRelease(), Handler: wrap.Wrap("domain_ticket_release", rls(deps.handleTicketRelease))},
+		{Tool: toolTicketReassign(), Handler: wrap.Wrap("domain_ticket_reassign", rls(deps.handleTicketReassign))},
 	}
+}
+
+// REQ-63 tool definitions
+func toolTicketClaim() mcp.Tool {
+	return mcp.NewTool("domain_ticket_claim",
+		mcp.WithDescription("Adquiere un soft-lock cooperativo sobre el ticket. Mientras lo tengas, otros users que intenten Update/ChangeStatus reciben 409 'lockeado por otro'. Self-renew es OK. El lock expira solo tras ttl_minutes (default 30, máx 240). Si querés tomarle el ticket a otro, llamá domain_ticket_reassign (no Claim)."),
+		mcp.WithString("id", mcp.Description("UUID del ticket"), mcp.Required()),
+		mcp.WithNumber("ttl_minutes", mcp.Description("Tiempo de vida del lock en minutos. Default 30, máx 240.")),
+	)
+}
+
+func toolTicketRelease() mcp.Tool {
+	return mcp.NewTool("domain_ticket_release",
+		mcp.WithDescription("Suelta el lock que tenés sobre el ticket. Idempotente — si no había lock, no-op. Si el lock es de otro y no expiró, falla con 'lockeado por otro'."),
+		mcp.WithString("id", mcp.Description("UUID del ticket"), mcp.Required()),
+	)
+}
+
+func toolTicketReassign() mcp.Tool {
+	return mcp.NewTool("domain_ticket_reassign",
+		mcp.WithDescription("Cambia el assignee del ticket bypaseando el lock (uso típico: dashboard reasignando un ticket retenido). assignee_id vacío o '00000000-...' = des-asignar."),
+		mcp.WithString("id", mcp.Description("UUID del ticket"), mcp.Required()),
+		mcp.WithString("assignee_id", mcp.Description("UUID del nuevo assignee, o '' para des-asignar")),
+	)
+}
+
+func (d *Deps) handleTicketClaim(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := d.requireTicketDeps(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id inválido"), nil
+	}
+	ttl := 0
+	if v, ok := args["ttl_minutes"].(float64); ok {
+		ttl = int(v)
+	}
+	t, err := d.Tickets.Claim(ctx, orgID, id, userID, ttl)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("claim failed: %v", err)), nil
+	}
+	return toolResultJSON(t)
+}
+
+func (d *Deps) handleTicketRelease(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := d.requireTicketDeps(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id inválido"), nil
+	}
+	t, err := d.Tickets.Release(ctx, orgID, id, userID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("release failed: %v", err)), nil
+	}
+	return toolResultJSON(t)
+}
+
+func (d *Deps) handleTicketReassign(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := d.requireTicketDeps(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id inválido"), nil
+	}
+	var assignee *uuid.UUID
+	if v, ok := args["assignee_id"].(string); ok && v != "" {
+		if aid, err := uuid.Parse(v); err == nil && aid != uuid.Nil {
+			assignee = &aid
+		}
+	}
+	t, err := d.Tickets.Reassign(ctx, orgID, id, assignee)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("reassign failed: %v", err)), nil
+	}
+	return toolResultJSON(t)
 }
 
 func toolTicketCreate() mcp.Tool {
@@ -347,6 +440,7 @@ func (d *Deps) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	userID, _ := uuid.Parse(d.Principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -394,7 +488,7 @@ func (d *Deps) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) 
 	if v, ok := args["due_date"].(string); ok && v != "" {
 		in.DueDate = parseDateYMD(v)
 	}
-	t, err := d.Tickets.Update(ctx, orgID, id, in)
+	t, err := d.Tickets.UpdateAs(ctx, orgID, id, userID, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 	}

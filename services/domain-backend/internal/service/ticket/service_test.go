@@ -128,6 +128,30 @@ func (m *mockRepo) LinkIssue(_ context.Context, _, ticketID uuid.UUID, issueID *
 	t.LinkedIssueID = issueID
 	return t, nil
 }
+func (m *mockRepo) Claim(_ context.Context, _, ticketID, userID uuid.UUID, _ int) (*Ticket, error) {
+	t, ok := m.tickets[ticketID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if t.LockedBy != nil && *t.LockedBy != userID {
+		return nil, ErrLockedByOther
+	}
+	uid := userID
+	t.LockedBy = &uid
+	return t, nil
+}
+func (m *mockRepo) Release(_ context.Context, _, ticketID, userID uuid.UUID) (*Ticket, error) {
+	t, ok := m.tickets[ticketID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if t.LockedBy != nil && *t.LockedBy != userID {
+		return nil, ErrLockedByOther
+	}
+	t.LockedBy = nil
+	t.LockedUntil = nil
+	return t, nil
+}
 func (m *mockRepo) UnlinkExternal(_ context.Context, _, id uuid.UUID) error {
 	t, ok := m.tickets[id]
 	if !ok {

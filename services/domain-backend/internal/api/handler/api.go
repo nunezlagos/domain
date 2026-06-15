@@ -39,13 +39,19 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
+	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/service/enrollment"
@@ -76,6 +82,11 @@ type API struct {
 	OrgService     *orgsvc.Service
 	ProjectService *projsvc.Service
 	ClientService  *clientsvc.Service
+	TicketService  *ticketsvc.Service // REQ-51 sistema de tickets internos
+	CapturedPromptService *capturedpromptsvc.Service // REQ-41+47 captura+token tracking
+	ProjectRepoService    *projectreposvc.Service    // REQ-42 multi-remotos
+	ProjectPolicyService  *projectpolicysvc.Service  // REQ-43 policies por proyecto
+	Pool           *pgxpool.Pool // REQ-49/50 — queries directas para proposals/verifications
 	ObsService     *observation.Service
 	InviteService  *invite.Service
 	SessionService  *sesssvc.Service
@@ -256,6 +267,34 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/clients/{id}", a.deleteClient)
 	mux.HandleFunc("POST /api/v1/clients/{id}/restore", a.restoreClient)
 	mux.HandleFunc("POST /api/v1/clients/{id}/status", a.setClientStatus)
+
+	// REQ-51 Tickets (sistema de issues internos por proyecto)
+	mux.HandleFunc("POST /api/v1/projects/{slug}/tickets", a.createTicket)
+	mux.HandleFunc("GET /api/v1/tickets", a.listTickets) // ?project_slug=&status=&assignee_id=...
+	mux.HandleFunc("GET /api/v1/tickets/{id_or_key}", a.getTicket)
+	mux.HandleFunc("PATCH /api/v1/tickets/{id}", a.updateTicket)
+	mux.HandleFunc("DELETE /api/v1/tickets/{id}", a.deleteTicket)
+	mux.HandleFunc("POST /api/v1/tickets/{id}/status", a.changeTicketStatus)
+	mux.HandleFunc("GET /api/v1/tickets/{id}/comments", a.listTicketComments)
+	mux.HandleFunc("POST /api/v1/tickets/{id}/comments", a.addTicketComment)
+	mux.HandleFunc("GET /api/v1/tickets/{id}/history", a.listTicketStatusHistory)
+	mux.HandleFunc("POST /api/v1/tickets/{id}/link-external", a.linkTicketExternal)
+
+	// REQ-52 REST endpoints adicionales para el dashboard
+	// Captured prompts + usage summary (REQ-41/47)
+	mux.HandleFunc("GET /api/v1/captured-prompts", a.listCapturedPrompts)
+	mux.HandleFunc("GET /api/v1/usage/turn-summary", a.usageTurnSummary)
+	// Project repositories (REQ-42)
+	mux.HandleFunc("GET /api/v1/projects/{slug}/repositories", a.listProjectRepos)
+	mux.HandleFunc("POST /api/v1/projects/{slug}/repositories", a.addProjectRepo)
+	mux.HandleFunc("DELETE /api/v1/project-repositories/{id}", a.deleteProjectRepo)
+	// Project policies (REQ-43) read-only desde REST
+	mux.HandleFunc("GET /api/v1/projects/{slug}/policies", a.listProjectPolicies)
+	// Proposals (REQ-49)
+	mux.HandleFunc("GET /api/v1/proposals", a.listProposals)
+	mux.HandleFunc("POST /api/v1/proposals/{kind}/{id}/review", a.reviewProposal)
+	// Verifications (REQ-50) read pending
+	mux.HandleFunc("GET /api/v1/projects/{slug}/verifications", a.listVerifications)
 
 	// Observations
 	mux.HandleFunc("POST /api/v1/observations", a.saveObservation)

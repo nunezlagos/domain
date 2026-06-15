@@ -46,6 +46,7 @@ import (
 	clientsvc "nunezlagos/domain/internal/service/client"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	"nunezlagos/domain/internal/service/extsync"
 	"nunezlagos/domain/internal/service/promptrouter"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -150,6 +151,7 @@ func main() {
 	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	projectRepos := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	projectPolicies := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
+	tickets := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
@@ -298,6 +300,7 @@ func main() {
 		CapturedPrompts: capturedPrompts,
 		ProjectRepos:   projectRepos,
 		ProjectPolicies: projectPolicies,
+		Tickets:        tickets,
 		Policies:       &policysvc.Service{Pool: pools.App},
 		Agents:         agents,
 		AgentRunner:    agentRunnerInst,

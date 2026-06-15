@@ -95,6 +95,7 @@ import (
 	clientsvc "nunezlagos/domain/internal/service/client"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -388,6 +389,7 @@ func runServer() {
 	capturedPromptService := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	projectRepoService := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	projectPolicyService := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
+	ticketService := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
 	// REQ-28.2: projectService recibe referencia a ClientService para
 	// resolver client_slug → client_id en Create/Update/List.
 	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
@@ -927,6 +929,7 @@ func runServer() {
 			CapturedPrompts: capturedPromptService,
 			ProjectRepos:   projectRepoService,
 			ProjectPolicies: projectPolicyService,
+			Tickets:        ticketService,
 			Policies:       policyService,
 			Flows:          flowService,
 			FlowRunner:     flowRunnerInst,

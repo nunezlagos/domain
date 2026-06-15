@@ -106,6 +106,18 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// isExternalUniqueViolation detecta específicamente el UNIQUE de
+// (org, provider, external_id). Diferenciar del UNIQUE de (org,
+// project, number) que es race-condition retry-able.
+func isExternalUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		return false
+	}
+	return strings.Contains(pgErr.ConstraintName, "external_unique") ||
+		strings.Contains(pgErr.Detail, "external_id")
+}
+
 func (r *pgRepository) nextNumber(ctx context.Context, q querier, orgID, projectID uuid.UUID) (int, error) {
 	var n int
 	err := q.QueryRow(ctx,
@@ -152,8 +164,11 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Ticket, err
 			in.ExternalProvider, in.ExternalID, in.ExternalURL, extSyncedAt,
 		)
 		t, err := scanTicket(row)
+		if isExternalUniqueViolation(err) {
+			return nil, ErrExternalAlreadyLinked
+		}
 		if isUniqueViolation(err) {
-			continue
+			continue // race en (org, project, number) — retry
 		}
 		if err != nil {
 			return nil, fmt.Errorf("insert ticket: %w", err)
@@ -461,6 +476,9 @@ func (r *pgRepository) LinkExternal(ctx context.Context, orgID, id uuid.UUID, li
 		orgID, id, link.Provider, link.ID, link.URL,
 	)
 	t, err := scanTicket(row)
+	if isExternalUniqueViolation(err) {
+		return nil, ErrExternalAlreadyLinked
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -493,11 +511,18 @@ func nullIfEmpty(s string) any {
 
 // BulkLinkExternal aplica N mappings ticket→external en una sola
 // transacción. Lookup por TicketID si está, sino por TicketKey.
-// Errors per-item se acumulan en el Report; no aborta el batch.
+// Errors per-item se acumulan en el Report; NO aborta el batch.
+// Cada item corre en SAVEPOINT (REQ-59) — si un item falla por
+// unique violation u otro error, ROLLBACK TO SAVEPOINT y sigue.
 // REQ-58 — preparación pre-Jira.
 func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error) {
 	out := &BulkLinkResult{}
-	for _, m := range mappings {
+	// Si estamos dentro de una tx (típicamente sí — el handler MCP/REST
+	// abre tx por request), usamos SAVEPOINTs por item para aislar
+	// fallos. Si no hay tx, los Exec corren en autocommit y cada
+	// fallo es independiente de los demás (sin necesidad de savepoint).
+	tx := txctx.TxFromContext(ctx)
+	for i, m := range mappings {
 		// Resolver ticket_id por id o por key
 		var tid uuid.UUID
 		if m.TicketID != uuid.Nil {
@@ -517,6 +542,15 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 			out.Errors = append(out.Errors, "mapping sin TicketID ni TicketKey")
 			continue
 		}
+		// Savepoint si estamos en tx — permite rollback per-item sin
+		// abortar el batch entero.
+		spName := fmt.Sprintf("bulk_link_%d", i)
+		if tx != nil {
+			if _, err := tx.Exec(ctx, "SAVEPOINT "+spName); err != nil {
+				out.Errors = append(out.Errors, fmt.Sprintf("savepoint: %v", err))
+				continue
+			}
+		}
 		tag, err := r.q(ctx).Exec(ctx,
 			`UPDATE project_tickets
 			   SET external_provider = $3,
@@ -527,12 +561,27 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 			orgID, tid, provider, m.ExternalID, m.ExternalURL,
 		)
 		if err != nil {
-			out.Errors = append(out.Errors, fmt.Sprintf("%s: %v", tid, err))
+			if tx != nil {
+				_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
+			}
+			if isExternalUniqueViolation(err) {
+				// REQ-59: el external_id ya está tomado por otro ticket.
+				out.Errors = append(out.Errors,
+					fmt.Sprintf("ticket %s: external_id %q ya está vinculado a otro ticket en esta org", tid, m.ExternalID))
+			} else {
+				out.Errors = append(out.Errors, fmt.Sprintf("%s: %v", tid, err))
+			}
 			continue
 		}
 		if tag.RowsAffected() == 0 {
+			if tx != nil {
+				_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
+			}
 			out.NotFound = append(out.NotFound, tid.String())
 			continue
+		}
+		if tx != nil {
+			_, _ = tx.Exec(ctx, "RELEASE SAVEPOINT "+spName)
 		}
 		out.Linked++
 	}

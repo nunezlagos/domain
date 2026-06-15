@@ -5,6 +5,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,6 +99,10 @@ func (a *API) createTicket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	t, err := a.TicketService.Create(r.Context(), in)
+	if errors.Is(err, ticketsvc.ErrExternalAlreadyLinked) {
+		writeError(w, http.StatusConflict, "external_already_linked", err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "create_failed", err.Error())
 		return
@@ -450,6 +455,10 @@ func (a *API) linkTicketExternal(w http.ResponseWriter, r *http.Request) {
 	t, err := a.TicketService.LinkExternal(r.Context(), orgID, id, ticketsvc.ExternalLink{
 		Provider: req.Provider, ID: req.ExternalID, URL: req.ExternalURL,
 	})
+	if errors.Is(err, ticketsvc.ErrExternalAlreadyLinked) {
+		writeError(w, http.StatusConflict, "external_already_linked", err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "link_failed", err.Error())
 		return

@@ -16,15 +16,16 @@ import (
 )
 
 var (
-	ErrNotFound        = errors.New("ticket not found")
-	ErrInvalidStatus   = errors.New("ticket: status inválido")
-	ErrInvalidType     = errors.New("ticket: type inválido")
-	ErrInvalidPriority = errors.New("ticket: priority inválida")
-	ErrInvalidProvider = errors.New("ticket: external provider inválido")
-	ErrTitleRequired   = errors.New("ticket: title requerido")
-	ErrBodyRequired    = errors.New("ticket: body requerido")
-	ErrProjectRequired = errors.New("ticket: project_id requerido")
-	ErrSelfParent      = errors.New("ticket: parent_id no puede ser el propio ticket")
+	ErrNotFound            = errors.New("ticket not found")
+	ErrInvalidStatus       = errors.New("ticket: status inválido")
+	ErrInvalidType         = errors.New("ticket: type inválido")
+	ErrInvalidPriority     = errors.New("ticket: priority inválida")
+	ErrInvalidProvider     = errors.New("ticket: external provider inválido")
+	ErrTitleRequired       = errors.New("ticket: title requerido")
+	ErrBodyRequired        = errors.New("ticket: body requerido")
+	ErrProjectRequired     = errors.New("ticket: project_id requerido")
+	ErrSelfParent          = errors.New("ticket: parent_id no puede ser el propio ticket")
+	ErrExternalAlreadyLinked = errors.New("ticket: external_id ya está vinculado a otro ticket en esta org")
 )
 
 type Ticket struct {

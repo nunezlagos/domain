@@ -235,3 +235,18 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	}
 	return r.ResponseWriter.Write(b)
 }
+
+// Flush implementa http.Flusher para que SSE (REQ-69) funcione a través
+// del middleware. Sin esto, el handler /api/v1/events recibe un writer
+// sin Flusher y devuelve "streaming no soportado por el writer".
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack passthrough — útil si en el futuro algún handler quiere usar
+// WebSocket. No rompe nada agregarlo.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}

@@ -44,6 +44,7 @@ services:
       DOMAIN_S3_FORCE_PATH_STYLE: "true"
       # REQ-70: expone /metrics en :9090 al network domain_internal
       # para que Prometheus pueda scrapear (mismo network).
+      DOMAIN_METRICS_ENABLED: "true"
       DOMAIN_METRICS_BIND: "0.0.0.0"
       DOMAIN_METRICS_PORT: "9090"
     expose:

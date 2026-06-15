@@ -33,6 +33,11 @@ type Ticket struct {
 	ProjectID        uuid.UUID  `json:"project_id"`
 	ClientID         *uuid.UUID `json:"client_id,omitempty"`
 	Key              string     `json:"key"`
+	// DisplayKey: external_id si existe (ej: MPS-12), sino key interno
+	// (ej: ACMEWEB-1). Calculado en runtime, no persistido. Permite que
+	// el dashboard muestre "el id que el usuario reconoce" sin lógica
+	// extra (REQ-58 preparación pre-Jira).
+	DisplayKey       string     `json:"display_key"`
 	Number           int        `json:"number"`
 	Title            string     `json:"title"`
 	DescriptionMD    string     `json:"description_md"`
@@ -94,6 +99,26 @@ type CreateInput struct {
 	ParentID       *uuid.UUID
 	EstimatedHours *float64
 	DueDate        *time.Time
+	// External (REQ-58): si se conocen al crear, el ticket queda
+	// linkeado en el mismo INSERT (evita 2 calls). Útil para sync
+	// inicial de Jira o creación reactiva desde webhook.
+	ExternalProvider string
+	ExternalID       string
+	ExternalURL      string
+}
+
+// BulkLinkMapping: 1 entrada del bulk link (REQ-58).
+type BulkLinkMapping struct {
+	TicketID    uuid.UUID // o usar TicketKey si se prefiere lookup
+	TicketKey   string    // alternativa a TicketID
+	ExternalID  string
+	ExternalURL string
+}
+
+type BulkLinkResult struct {
+	Linked   int      `json:"linked"`
+	NotFound []string `json:"not_found"`  // refs a tickets que no se encontraron
+	Errors   []string `json:"errors"`
 }
 
 type UpdateInput struct {
@@ -131,6 +156,8 @@ type ExternalLink struct {
 
 type Repository interface {
 	LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error)
+	BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error)
+	FindByExternal(ctx context.Context, orgID uuid.UUID, provider, externalID string) (*Ticket, error)
 	Insert(ctx context.Context, in CreateInput) (*Ticket, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (*Ticket, error)
 	GetByKey(ctx context.Context, orgID, projectID uuid.UUID, key string) (*Ticket, error)

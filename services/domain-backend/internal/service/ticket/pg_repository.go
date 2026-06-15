@@ -57,6 +57,11 @@ func scanTicket(row pgx.Row) (*Ticket, error) {
 	); err != nil {
 		return nil, err
 	}
+	// REQ-58: display_key = external_id si está, sino key interno.
+	t.DisplayKey = t.Key
+	if t.ExternalID != "" {
+		t.DisplayKey = t.ExternalID
+	}
 	return &t, nil
 }
 
@@ -123,18 +128,28 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Ticket, err
 			return nil, err
 		}
 		key := fmt.Sprintf("%s-%d", prefix, num)
+		// REQ-58: external_* opcional al crear. Si vienen, link en el
+		// mismo INSERT + external_synced_at=NOW(); sino, NULLs.
+		var extSyncedAt any
+		if in.ExternalProvider != "" {
+			extSyncedAt = "now"
+		}
 		row := r.q(ctx).QueryRow(ctx,
 			`INSERT INTO project_tickets
 			   (organization_id, project_id, client_id, key, number,
 			    title, description_md, issue_type, priority,
 			    assignee_id, reporter_id, labels, parent_id,
-			    estimated_hours, due_date)
-			 VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15)
+			    estimated_hours, due_date,
+			    external_provider, external_id, external_url, external_synced_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,
+			         NULLIF($16,''), NULLIF($17,''), NULLIF($18,''),
+			         CASE WHEN $19::text = 'now' THEN NOW() ELSE NULL END)
 			 RETURNING `+selectCols,
 			in.OrganizationID, in.ProjectID, in.ClientID, key, num,
 			in.Title, in.DescriptionMD, in.IssueType, in.Priority,
 			in.AssigneeID, in.ReporterID, in.Labels, in.ParentID,
 			in.EstimatedHours, in.DueDate,
+			in.ExternalProvider, in.ExternalID, in.ExternalURL, extSyncedAt,
 		)
 		t, err := scanTicket(row)
 		if isUniqueViolation(err) {
@@ -474,4 +489,71 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+// BulkLinkExternal aplica N mappings ticket→external en una sola
+// transacción. Lookup por TicketID si está, sino por TicketKey.
+// Errors per-item se acumulan en el Report; no aborta el batch.
+// REQ-58 — preparación pre-Jira.
+func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error) {
+	out := &BulkLinkResult{}
+	for _, m := range mappings {
+		// Resolver ticket_id por id o por key
+		var tid uuid.UUID
+		if m.TicketID != uuid.Nil {
+			tid = m.TicketID
+		} else if m.TicketKey != "" {
+			var found uuid.UUID
+			if err := r.q(ctx).QueryRow(ctx,
+				`SELECT id FROM project_tickets
+				   WHERE organization_id=$1 AND project_id=$2 AND key=$3 AND deleted_at IS NULL`,
+				orgID, projectID, m.TicketKey,
+			).Scan(&found); err != nil {
+				out.NotFound = append(out.NotFound, m.TicketKey)
+				continue
+			}
+			tid = found
+		} else {
+			out.Errors = append(out.Errors, "mapping sin TicketID ni TicketKey")
+			continue
+		}
+		tag, err := r.q(ctx).Exec(ctx,
+			`UPDATE project_tickets
+			   SET external_provider = $3,
+			       external_id       = NULLIF($4,''),
+			       external_url      = NULLIF($5,''),
+			       external_synced_at = NOW()
+			   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
+			orgID, tid, provider, m.ExternalID, m.ExternalURL,
+		)
+		if err != nil {
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: %v", tid, err))
+			continue
+		}
+		if tag.RowsAffected() == 0 {
+			out.NotFound = append(out.NotFound, tid.String())
+			continue
+		}
+		out.Linked++
+	}
+	return out, nil
+}
+
+// FindByExternal busca un ticket por (provider, external_id). Útil para
+// el webhook receiver de Jira: encuentra el ticket local que mapea al
+// issue externo. REQ-58.
+func (r *pgRepository) FindByExternal(ctx context.Context, orgID uuid.UUID, provider, externalID string) (*Ticket, error) {
+	row := r.q(ctx).QueryRow(ctx,
+		`SELECT `+selectCols+`
+		   FROM project_tickets
+		   WHERE organization_id = $1 AND external_provider = $2
+		     AND external_id = $3 AND deleted_at IS NULL
+		   LIMIT 1`,
+		orgID, provider, externalID,
+	)
+	t, err := scanTicket(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return t, err
 }

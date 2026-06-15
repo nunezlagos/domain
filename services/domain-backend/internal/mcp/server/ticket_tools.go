@@ -32,6 +32,7 @@ func registerTicketTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolTicketStatusHistory(), Handler: wrap.Wrap("domain_ticket_status_history", rls(deps.handleTicketStatusHistory))},
 		{Tool: toolTicketLinkExternal(), Handler: wrap.Wrap("domain_ticket_link_external", rls(deps.handleTicketLinkExternal))},
 		{Tool: toolTicketLinkIssue(), Handler: wrap.Wrap("domain_ticket_link_issue", rls(deps.handleTicketLinkIssue))},
+		{Tool: toolTicketLinkExternalBulk(), Handler: wrap.Wrap("domain_ticket_link_external_bulk", rls(deps.handleTicketLinkExternalBulk))},
 	}
 }
 
@@ -49,6 +50,9 @@ func toolTicketCreate() mcp.Tool {
 		mcp.WithString("parent_id", mcp.Description("UUID de epic/story padre (opcional)")),
 		mcp.WithNumber("estimated_hours", mcp.Description("Estimación en horas (decimal)")),
 		mcp.WithString("due_date", mcp.Description("YYYY-MM-DD opcional")),
+		mcp.WithString("external_provider", mcp.Description("REQ-58: si el ticket ya está en Jira/etc, vincular en el mismo INSERT (jira|github|gitlab|linear|azure_devops).")),
+		mcp.WithString("external_id", mcp.Description("Key externo (ej: MPS-12). Requiere external_provider.")),
+		mcp.WithString("external_url", mcp.Description("URL al ticket externo. Opcional.")),
 	)
 }
 
@@ -231,6 +235,15 @@ func (d *Deps) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	if v, ok := args["due_date"].(string); ok && v != "" {
 		in.DueDate = parseDateYMD(v)
+	}
+	if v, ok := args["external_provider"].(string); ok {
+		in.ExternalProvider = v
+	}
+	if v, ok := args["external_id"].(string); ok {
+		in.ExternalID = v
+	}
+	if v, ok := args["external_url"].(string); ok {
+		in.ExternalURL = v
 	}
 
 	t, err := d.Tickets.Create(ctx, in)
@@ -543,6 +556,62 @@ func (d *Deps) handleTicketLinkIssue(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("link_issue failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
+}
+
+// REQ-58: bulk link (sync inicial Jira→domain)
+func toolTicketLinkExternalBulk() mcp.Tool {
+	return mcp.NewTool("domain_ticket_link_external_bulk",
+		mcp.WithDescription("Vincula N tickets a sus externals en una operación. Para sync inicial cuando se enchufa Jira/GitHub/etc y hay que linkear tickets existentes en bulk. provider: jira|github|gitlab|linear|azure_devops. mappings: array de {ticket_key|ticket_id, external_id, external_url}."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto donde están los tickets"), mcp.Required()),
+		mcp.WithString("provider", mcp.Description("Proveedor externo"), mcp.Required()),
+		mcp.WithArray("mappings", mcp.Description("Array de mappings. Cada item: {ticket_key:'ACMEWEB-1', external_id:'MPS-12', external_url:'https://...'} o {ticket_id:UUID, ...}"), mcp.Required()),
+	)
+}
+
+func (d *Deps) handleTicketLinkExternalBulk(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := d.requireTicketDeps(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	args := req.GetArguments()
+	slug, _ := args["project_slug"].(string)
+	provider, _ := args["provider"].(string)
+	rawMappings, _ := args["mappings"].([]any)
+	if slug == "" || provider == "" || len(rawMappings) == 0 {
+		return mcp.NewToolResultError("project_slug, provider y mappings (no vacío) requeridos"), nil
+	}
+	proj, perr := d.Projects.GetBySlug(ctx, orgID, slug)
+	if perr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+	}
+	mappings := make([]ticketsvc.BulkLinkMapping, 0, len(rawMappings))
+	for _, raw := range rawMappings {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		mp := ticketsvc.BulkLinkMapping{}
+		if v, _ := m["ticket_id"].(string); v != "" {
+			if id, err := uuid.Parse(v); err == nil {
+				mp.TicketID = id
+			}
+		}
+		if v, _ := m["ticket_key"].(string); v != "" {
+			mp.TicketKey = v
+		}
+		if v, _ := m["external_id"].(string); v != "" {
+			mp.ExternalID = v
+		}
+		if v, _ := m["external_url"].(string); v != "" {
+			mp.ExternalURL = v
+		}
+		mappings = append(mappings, mp)
+	}
+	res, err := d.Tickets.BulkLinkExternal(ctx, orgID, proj.ID, provider, mappings)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("bulk link failed: %v", err)), nil
+	}
+	return toolResultJSON(res)
 }
 
 var _ context.Context

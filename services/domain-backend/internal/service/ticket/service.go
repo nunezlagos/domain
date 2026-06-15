@@ -136,3 +136,21 @@ func (s *Service) UnlinkExternal(ctx context.Context, orgID, id uuid.UUID) error
 func (s *Service) LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
 	return s.repo.LinkIssue(ctx, orgID, ticketID, issueID)
 }
+
+// BulkLinkExternal vincula N tickets a sus externals en una sola operación.
+// Ideal para sync inicial cuando se conecta un proveedor externo (Jira)
+// y hay que linkear 100+ tickets de una. REQ-58.
+func (s *Service) BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if _, ok := validProviders[provider]; !ok {
+		return nil, ErrInvalidProvider
+	}
+	return s.repo.BulkLinkExternal(ctx, orgID, projectID, provider, mappings)
+}
+
+// FindByExternal: lookup por (provider, external_id). Útil para el
+// webhook receiver de Jira/etc — encuentra el ticket local a actualizar.
+// REQ-58.
+func (s *Service) FindByExternal(ctx context.Context, orgID uuid.UUID, provider, externalID string) (*Ticket, error) {
+	return s.repo.FindByExternal(ctx, orgID, provider, externalID)
+}

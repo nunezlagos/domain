@@ -97,6 +97,29 @@ func (m *mockRepo) LinkExternal(_ context.Context, _, id uuid.UUID, link Externa
 	t.ExternalURL = link.URL
 	return t, nil
 }
+func (m *mockRepo) BulkLinkExternal(_ context.Context, _, _ uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error) {
+	out := &BulkLinkResult{}
+	for _, mp := range mappings {
+		t, ok := m.tickets[mp.TicketID]
+		if !ok {
+			out.NotFound = append(out.NotFound, mp.TicketID.String())
+			continue
+		}
+		t.ExternalProvider = provider
+		t.ExternalID = mp.ExternalID
+		t.ExternalURL = mp.ExternalURL
+		out.Linked++
+	}
+	return out, nil
+}
+func (m *mockRepo) FindByExternal(_ context.Context, _ uuid.UUID, provider, externalID string) (*Ticket, error) {
+	for _, t := range m.tickets {
+		if t.ExternalProvider == provider && t.ExternalID == externalID {
+			return t, nil
+		}
+	}
+	return nil, ErrNotFound
+}
 func (m *mockRepo) LinkIssue(_ context.Context, _, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
 	t, ok := m.tickets[ticketID]
 	if !ok {

@@ -280,6 +280,10 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/tickets/{id}/history", a.listTicketStatusHistory)
 	mux.HandleFunc("POST /api/v1/tickets/{id}/link-external", a.linkTicketExternal)
 	mux.HandleFunc("POST /api/v1/tickets/{id}/link-issue", a.linkTicketIssue)
+	// REQ-58: bulk + webhook Jira (stub). Endpoint listo para cuando se
+	// conecte Jira; hoy responde si DOMAIN_JIRA_WEBHOOK_SECRET está set.
+	mux.HandleFunc("POST /api/v1/tickets/link-external-bulk", a.bulkLinkTicketsExternal)
+	mux.HandleFunc("POST /api/v1/webhooks/jira/issue-updated", a.jiraWebhookIssueUpdated)
 
 	// REQ-52 REST endpoints adicionales para el dashboard
 	// Captured prompts + usage summary (REQ-41/47)

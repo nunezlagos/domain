@@ -27,6 +27,10 @@ type createTicketReq struct {
 	ParentID       string    `json:"parent_id"`
 	EstimatedHours *float64  `json:"estimated_hours"`
 	DueDate        string    `json:"due_date"` // YYYY-MM-DD
+	// REQ-58: external opcional al crear. Si vienen, link en mismo INSERT.
+	ExternalProvider string `json:"external_provider,omitempty"`
+	ExternalID       string `json:"external_id,omitempty"`
+	ExternalURL      string `json:"external_url,omitempty"`
 }
 
 func (a *API) createTicket(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +71,10 @@ func (a *API) createTicket(w http.ResponseWriter, r *http.Request) {
 		ReporterID:     userID,
 		Labels:         req.Labels,
 		EstimatedHours: req.EstimatedHours,
+		// REQ-58
+		ExternalProvider: req.ExternalProvider,
+		ExternalID:       req.ExternalID,
+		ExternalURL:      req.ExternalURL,
 	}
 	if req.ClientSlug != "" && a.ClientService != nil {
 		if cl, _ := a.ClientService.Get(r.Context(), orgID, req.ClientSlug); cl != nil {
@@ -491,4 +499,62 @@ func (a *API) linkTicketIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, t)
+}
+
+// REQ-58: bulk link external. POST /api/v1/tickets/link-external-bulk
+// body: { project_slug, provider, mappings: [{ticket_key|ticket_id, external_id, external_url}] }
+type bulkLinkExternalReq struct {
+	ProjectSlug string `json:"project_slug"`
+	Provider    string `json:"provider"`
+	Mappings    []struct {
+		TicketID    string `json:"ticket_id,omitempty"`
+		TicketKey   string `json:"ticket_key,omitempty"`
+		ExternalID  string `json:"external_id"`
+		ExternalURL string `json:"external_url,omitempty"`
+	} `json:"mappings"`
+}
+
+func (a *API) bulkLinkTicketsExternal(w http.ResponseWriter, r *http.Request) {
+	p, _ := principal(r)
+	if p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "")
+		return
+	}
+	if a.TicketService == nil {
+		writeError(w, http.StatusServiceUnavailable, "ticket_service_unavailable", "")
+		return
+	}
+	orgID, _ := uuid.Parse(p.OrganizationID)
+	var req bulkLinkExternalReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	if req.ProjectSlug == "" || req.Provider == "" || len(req.Mappings) == 0 {
+		writeError(w, http.StatusBadRequest, "missing_fields", "project_slug, provider, mappings (no vacío)")
+		return
+	}
+	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, req.ProjectSlug)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "project_not_found", req.ProjectSlug)
+		return
+	}
+	mappings := make([]ticketsvc.BulkLinkMapping, 0, len(req.Mappings))
+	for _, m := range req.Mappings {
+		mp := ticketsvc.BulkLinkMapping{
+			TicketKey: m.TicketKey, ExternalID: m.ExternalID, ExternalURL: m.ExternalURL,
+		}
+		if m.TicketID != "" {
+			if id, perr := uuid.Parse(m.TicketID); perr == nil {
+				mp.TicketID = id
+			}
+		}
+		mappings = append(mappings, mp)
+	}
+	res, err := a.TicketService.BulkLinkExternal(r.Context(), orgID, proj.ID, req.Provider, mappings)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "bulk_link_failed", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, res)
 }

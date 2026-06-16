@@ -443,6 +443,8 @@ func (a *API) Router() http.Handler {
 
 	// Admin DB stats (issue-25.12)
 	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
+	// HU-41.2: dashboard org overview (stats + top users + recent activity)
+	mux.HandleFunc("GET /api/v1/admin/org-overview", a.getOrgOverview)
 
 	// Runtime configs (issue-27.3)
 	mux.HandleFunc("GET /api/v1/admin/runtime-configs/{key}", a.getRuntimeConfig)

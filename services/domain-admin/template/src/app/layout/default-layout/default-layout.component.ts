@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { NgScrollbar } from 'ngx-scrollbar';
 
@@ -16,14 +16,8 @@ import {
 } from '@coreui/angular';
 
 import { DefaultFooterComponent, DefaultHeaderComponent } from './';
-import { navItems } from './_nav';
-
-function isOverflown(element: HTMLElement) {
-  return (
-    element.scrollHeight > element.clientHeight ||
-    element.scrollWidth > element.clientWidth
-  );
-}
+import { navAdminItems, navPlatformItems } from './_nav';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -48,5 +42,21 @@ function isOverflown(element: HTMLElement) {
   ]
 })
 export class DefaultLayoutComponent {
-  public navItems = [...navItems];
+  private readonly auth = inject(AuthService);
+
+  // HU-41.1: items del sidebar. Si el rol activo es super_admin, se
+  // agrega la sección "Plataforma" (Cross-org) al final.
+  readonly navItems = computed(() => {
+    const isSuperAdmin = this.auth.activeRole()?.slug === 'super_admin';
+    return isSuperAdmin
+      ? [...navAdminItems, ...navPlatformItems]
+      : [...navAdminItems];
+  });
+
+  constructor() {
+    // HU-41.1: al montar el layout, si hay token en localStorage, hidrata
+    // los signals del AuthService (user, activeRole, roles) desde el backend.
+    // Si el token está expirado, el interceptor maneja el 401.
+    void this.auth.refreshFromMe();
+  }
 }

@@ -1,12 +1,22 @@
-<!--<c-footer>-->
-<div>
-  <a href="https://coreui.io/" target="_blank">CoreUI</a>
-  <span> &copy; 2026 creativeLabs</span>
-</div>
-<div class="ms-auto">
-  Powered by
-  <a href="https://coreui.io/angular" target="_blank">
-    <span> CoreUI for Angular</span>
-  </a>
-</div>
-<!--</c-footer>-->
+<c-footer class="footer">
+  <div class="container-fluid">
+    <div class="d-flex flex-wrap justify-content-between align-items-center small text-body-secondary">
+      <div>
+        <span>Domain Admin</span>
+        <span class="mx-2">·</span>
+        <span>v{{ version }}</span>
+        <span class="mx-2">·</span>
+        <a [href]="statusUrl" target="_blank" rel="noopener" class="text-body-secondary text-decoration-none">
+          <svg cIcon name="cilPulse" size="sm"></svg> status
+        </a>
+      </div>
+      <div>
+        <a href="https://coreui.io" target="_blank" rel="noopener" class="text-body-secondary text-decoration-none">
+          CoreUI
+        </a>
+        <span class="mx-2">·</span>
+        <span>&copy; 2026</span>
+      </div>
+    </div>
+  </div>
+</c-footer>

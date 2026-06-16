@@ -195,6 +195,44 @@ func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// meRolesResp payload de GET /api/v1/me/roles. Devuelve el user + la
+// lista completa de roles disponibles (para el switcher del header).
+// HU-41.1: el header del admin necesita listar los roles del user para
+// permitir cambiar de contexto (ej: admin → owner → super_admin).
+type meRolesResp struct {
+	User  session.User   `json:"user"`
+	Roles []session.Role `json:"roles"`
+}
+
+// authMeRoles GET /api/v1/me/roles → {user, roles[]}. Requiere session token.
+// REQ-72 + HU-41.1: el switcher de rol del header llama este endpoint al boot
+// para popular el FormSelectDirective de "rol activo".
+func (a *API) authMeRoles(w http.ResponseWriter, r *http.Request) {
+	active, ok := SessionFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "endpoint requiere session token"})
+		return
+	}
+	if a.AuthSessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session service no configurado"})
+		return
+	}
+	roles, err := a.AuthSessionService.RolesOf(r.Context(), active.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no se pudieron cargar los roles"})
+		return
+	}
+	// Hidratar email/name del user
+	u := session.User{ID: active.UserID, OrganizationID: active.OrganizationID}
+	if tx := txctx.TxFromContext(r.Context()); tx != nil {
+		_ = tx.QueryRow(r.Context(),
+			`SELECT email, name FROM users WHERE id = $1 AND deleted_at IS NULL`,
+			active.UserID,
+		).Scan(&u.Email, &u.Name)
+	}
+	writeJSON(w, http.StatusOK, meRolesResp{User: u, Roles: roles})
+}
+
 func realIP(r *http.Request) string {
 	if v := r.Header.Get("X-Forwarded-For"); v != "" {
 		// solo la primera (la del cliente real, no la cadena de proxies).

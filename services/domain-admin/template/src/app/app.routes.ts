@@ -2,83 +2,87 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth.guard';
 
+// HU-41.1: reorganización del routing.
+//   - `path: 'admin'` envuelve DefaultLayoutComponent con authGuard.
+//   - Lazy load por feature (8 features; las HU 41.2-41.9 las implementan).
+//   - `/login` y `/register` quedan públicos (sin guard).
+//   - `/404` y `/500` como fallback.
+//   - Redirect: '' → 'admin/dashboard', '**' → '404'.
+
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: 'dashboard',
-    pathMatch: 'full'
+    redirectTo: 'admin/dashboard',
+    pathMatch: 'full',
   },
   {
-    path: '',
+    path: 'admin',
     canActivate: [authGuard],
     loadComponent: () => import('./layout').then(m => m.DefaultLayoutComponent),
-    data: { title: 'Home' },
+    data: { title: 'Admin' },
     children: [
       {
         path: 'dashboard',
-        loadChildren: () => import('./views/dashboard/routes').then((m) => m.routes)
+        loadChildren: () => import('./views/admin-dashboard/routes').then((m) => m.routes),
+      },
+      {
+        path: 'members',
+        loadChildren: () => import('./views/admin-members/routes').then((m) => m.routes),
+      },
+      {
+        path: 'settings',
+        loadChildren: () => import('./views/admin-settings/routes').then((m) => m.routes),
+      },
+      {
+        path: 'usage',
+        loadChildren: () => import('./views/admin-usage/routes').then((m) => m.routes),
+      },
+      {
+        path: 'audit',
+        loadChildren: () => import('./views/admin-audit/routes').then((m) => m.routes),
       },
       {
         path: 'tickets',
-        loadChildren: () => import('./views/tickets/routes').then((m) => m.routes),
+        loadChildren: () => import('./views/admin-tickets/routes').then((m) => m.routes),
       },
       {
-        path: 'theme',
-        loadChildren: () => import('./views/theme/routes').then((m) => m.routes)
+        path: 'cost',
+        loadChildren: () => import('./views/admin-cost/routes').then((m) => m.routes),
       },
       {
-        path: 'base',
-        loadChildren: () => import('./views/base/routes').then((m) => m.routes)
+        path: 'cross-org',
+        loadChildren: () => import('./views/admin-cross-org/routes').then((m) => m.routes),
       },
-      {
-        path: 'buttons',
-        loadChildren: () => import('./views/buttons/routes').then((m) => m.routes)
-      },
-      {
-        path: 'forms',
-        loadChildren: () => import('./views/forms/routes').then((m) => m.routes)
-      },
-      {
-        path: 'icons',
-        loadChildren: () => import('./views/icons/routes').then((m) => m.routes)
-      },
-      {
-        path: 'notifications',
-        loadChildren: () => import('./views/notifications/routes').then((m) => m.routes)
-      },
-      {
-        path: 'widgets',
-        loadChildren: () => import('./views/widgets/routes').then((m) => m.routes)
-      },
-      {
-        path: 'charts',
-        loadChildren: () => import('./views/charts/routes').then((m) => m.routes)
-      },
-      {
-        path: 'pages',
-        loadChildren: () => import('./views/pages/routes').then((m) => m.routes)
-      }
-    ]
+    ],
+  },
+  // HU-41.7: tickets mantiene su ruta legacy /tickets para deep-links
+  // existentes (el componente real está en views/tickets/ — la feature
+  // admin-tickets solo agrega el drill-down).
+  {
+    path: 'tickets',
+    canActivate: [authGuard],
+    loadComponent: () => import('./layout').then(m => m.DefaultLayoutComponent),
+    loadChildren: () => import('./views/tickets/routes').then((m) => m.routes),
   },
   {
     path: '404',
     loadComponent: () => import('./views/pages/page404/page404.component').then(m => m.Page404Component),
-    data: { title: 'Page 404' }
+    data: { title: 'Page 404' },
   },
   {
     path: '500',
     loadComponent: () => import('./views/pages/page500/page500.component').then(m => m.Page500Component),
-    data: { title: 'Page 500' }
+    data: { title: 'Page 500' },
   },
   {
     path: 'login',
     loadComponent: () => import('./views/pages/login/login.component').then(m => m.LoginComponent),
-    data: { title: 'Login' }
+    data: { title: 'Login' },
   },
   {
     path: 'register',
     loadComponent: () => import('./views/pages/register/register.component').then(m => m.RegisterComponent),
-    data: { title: 'Register Page' }
+    data: { title: 'Register Page' },
   },
-  { path: '**', redirectTo: 'dashboard' }
+  { path: '**', redirectTo: '404' },
 ];

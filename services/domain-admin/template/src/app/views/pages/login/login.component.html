@@ -1,81 +1,185 @@
-<div class="bg-light dark:bg-transparent min-vh-100 d-flex flex-row align-items-center">
-  <c-container breakpoint="md">
-    <c-row class="justify-content-center">
-      <c-col lg="6" xl="5">
-        <c-card class="p-4">
-          <c-card-body>
+<!--
+  HU-UX-LOGIN: split layout responsive.
+  - Mobile (<md): single column, full-width form
+  - Desktop (md+): 60/40 split (form left, branding right)
+-->
+<div class="login-shell">
 
-            <ng-container *ngIf="!tempToken()">
-              <h1>Login</h1>
-              <p class="text-body-secondary">Ingresá con tu usuario</p>
+  <!-- LEFT: Form column -->
+  <section class="login-form-col" aria-labelledby="login-title">
+    <div class="login-form-inner">
 
-              <c-alert *ngIf="error()" color="danger" class="mb-3">{{ error() }}</c-alert>
+      <!-- Mobile-only brand mark (desktop lo muestra a la derecha) -->
+      <div class="d-md-none login-brand-mobile">
+        <span class="login-logo-mark">◆</span>
+        <span class="login-logo-text">Domain</span>
+      </div>
 
-              <form cForm (ngSubmit)="submitLogin()">
-                <c-input-group class="mb-3">
-                  <span cInputGroupText>
-                    <svg cIcon name="cilUser"></svg>
-                  </span>
-                  <input cFormControl
-                         placeholder="Email"
-                         autocomplete="username"
-                         type="email"
-                         required
-                         [(ngModel)]="email" name="email" />
-                </c-input-group>
+      @if (!tempToken()) {
+        <!-- STEP 1: Login -->
+        <h1 id="login-title" class="login-title">Bienvenido a Domain</h1>
+        <p class="login-subtitle">Ingresá con tu email y contraseña para acceder al panel.</p>
 
-                <c-input-group class="mb-4">
-                  <span cInputGroupText>
-                    <svg cIcon name="cilLockLocked"></svg>
-                  </span>
-                  <input cFormControl
-                         placeholder="Contraseña"
-                         autocomplete="current-password"
-                         type="password"
-                         required
-                         [(ngModel)]="password" name="password" />
-                </c-input-group>
+        @if (error()) {
+          <c-alert color="danger" class="login-alert">
+            <svg cIcon name="cilWarning" class="me-2"></svg>
+            {{ error() }}
+          </c-alert>
+        }
 
-                <button cButton color="primary" class="px-4 w-100"
-                        type="submit" [disabled]="loading() || !email || !password">
-                  {{ loading() ? 'Ingresando…' : 'Ingresar' }}
-                </button>
-              </form>
-            </ng-container>
+        <form (ngSubmit)="submitLogin()" class="login-form" novalidate>
+          <div class="login-field">
+            <label for="email" class="login-label">Email</label>
+            <c-input-group>
+              <span cInputGroupText>
+                <svg cIcon name="cilUser"></svg>
+              </span>
+              <input
+                cFormControl
+                id="email"
+                type="email"
+                name="email"
+                autocomplete="username"
+                inputmode="email"
+                placeholder="tu@empresa.com"
+                required
+                [(ngModel)]="email" />
+            </c-input-group>
+          </div>
 
-            <ng-container *ngIf="tempToken()">
-              <h2>¿Con qué rol?</h2>
-              <p class="text-body-secondary">Tu cuenta tiene varios roles. Elegí cuál usar.</p>
+          <div class="login-field">
+            <label for="password" class="login-label d-flex justify-content-between align-items-center">
+              <span>Contraseña</span>
+              <!-- TODO HU-UX-PASSWORD-RECOVERY: link a flow de recuperación -->
+            </label>
+            <c-input-group>
+              <span cInputGroupText>
+                <svg cIcon name="cilLockLocked"></svg>
+              </span>
+              <input
+                cFormControl
+                id="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                name="password"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                required
+                [(ngModel)]="password" />
+              <button
+                type="button"
+                cInputGroupText
+                class="login-pw-toggle"
+                (click)="togglePassword()"
+                [attr.aria-label]="showPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="showPassword()">
+                <svg cIcon [name]="showPassword() ? 'cilEyeClosed' : 'cilEye'"></svg>
+              </button>
+            </c-input-group>
+          </div>
 
-              <c-alert *ngIf="error()" color="danger" class="mb-3">{{ error() }}</c-alert>
+          <button
+            cButton
+            color="primary"
+            type="submit"
+            class="login-submit w-100"
+            [disabled]="loading() || !email || !password">
+            @if (loading()) {
+              <c-spinner size="sm" aria-label="Ingresando"></c-spinner>
+              <span class="ms-2">Ingresando…</span>
+            } @else {
+              Ingresar
+            }
+          </button>
+        </form>
 
-              <div class="list-group mb-3">
-                <button *ngFor="let r of roles()"
-                        type="button"
-                        class="list-group-item list-group-item-action"
-                        [class.active]="selectedRole() === r.slug"
-                        (click)="selectedRole.set(r.slug)">
-                  <strong>{{ r.name }}</strong>
-                  <small class="d-block text-body-secondary">{{ r.permissions.join(', ') }}</small>
-                </button>
+        <p class="login-hint">
+          ¿Sos nuevo? Pedile a tu admin que te cree una cuenta en la org.
+        </p>
+      } @else {
+        <!-- STEP 2: Role selection -->
+        <h1 id="login-title" class="login-title">Elegí un rol</h1>
+        <p class="login-subtitle">
+          Tu cuenta tiene {{ roles().length }} roles. Elegí con cuál querés operar.
+        </p>
+
+        @if (error()) {
+          <c-alert color="danger" class="login-alert">
+            <svg cIcon name="cilWarning" class="me-2"></svg>
+            {{ error() }}
+          </c-alert>
+        }
+
+        <div class="role-list" role="radiogroup" aria-label="Roles disponibles">
+          @for (r of roles(); track r.slug) {
+            <button
+              type="button"
+              class="role-card"
+              [class.role-card-active]="selectedRole() === r.slug"
+              [attr.aria-checked]="selectedRole() === r.slug"
+              role="radio"
+              (click)="selectedRole.set(r.slug)">
+              <div class="role-card-header">
+                <div>
+                  <h2 class="role-card-name">{{ r.name }}</h2>
+                  <small class="role-card-count">
+                    {{ r.permissions.length }} {{ r.permissions.length === 1 ? 'permiso' : 'permisos' }}
+                  </small>
+                </div>
+                @if (selectedRole() === r.slug) {
+                  <svg cIcon name="cilCheckCircle" size="lg" class="role-card-check"></svg>
+                }
               </div>
+              @if (r.permissions.length > 0) {
+                <div class="role-perm-chips">
+                  @for (p of r.permissions.slice(0, 4); track p) {
+                    <span class="role-perm-chip">{{ p }}</span>
+                  }
+                  @if (r.permissions.length > 4) {
+                    <span class="role-perm-chip role-perm-chip-more">+{{ r.permissions.length - 4 }}</span>
+                  }
+                </div>
+              }
+            </button>
+          }
+        </div>
 
-              <div class="d-flex gap-2">
-                <button cButton color="secondary" type="button" (click)="back()">
-                  Volver
-                </button>
-                <button cButton color="primary"
-                        type="button"
-                        (click)="submitRole()"
-                        [disabled]="loading() || !selectedRole()">
-                  {{ loading() ? 'Confirmando…' : 'Continuar' }}
-                </button>
-              </div>
-            </ng-container>
+        <div class="d-flex gap-2 mt-4">
+          <button cButton color="secondary" variant="outline" type="button" (click)="back()">
+            Volver
+          </button>
+          <button
+            cButton
+            color="primary"
+            type="button"
+            class="flex-grow-1"
+            [disabled]="loading() || !selectedRole()"
+            (click)="submitRole()">
+            @if (loading()) {
+              <c-spinner size="sm" aria-label="Confirmando"></c-spinner>
+              <span class="ms-2">Confirmando…</span>
+            } @else {
+              Continuar
+            }
+          </button>
+        </div>
+      }
 
-          </c-card-body>
-        </c-card>
-      </c-col>
-    </c-row>
-  </c-container>
+    </div>
+  </section>
+
+  <!-- RIGHT: Branding column (hidden on mobile) -->
+  <aside class="login-brand-col d-none d-md-flex" aria-hidden="true">
+    <div class="login-brand-inner">
+      <img
+        src="assets/brand/login-hero.svg"
+        alt=""
+        role="presentation"
+        class="login-hero" />
+      <h2 class="login-brand-title">Memoria persistente para agentes IA</h2>
+      <p class="login-brand-tagline">
+        Skills, flows, memory y observability — en una sola plataforma multi-tenant.
+      </p>
+    </div>
+  </aside>
+
 </div>

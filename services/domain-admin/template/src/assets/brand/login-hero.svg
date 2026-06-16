@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" aria-hidden="true">
+  <defs>
+    <linearGradient id="domain-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <radialGradient id="node-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.95)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0.4)" />
+    </radialGradient>
+  </defs>
+
+  <!-- outer hex -->
+  <polygon
+    points="200,40 340,120 340,280 200,360 60,280 60,120"
+    fill="none"
+    stroke="url(#domain-grad)"
+    stroke-width="3"
+    stroke-linejoin="round"
+    opacity="0.9" />
+
+  <!-- inner hex -->
+  <polygon
+    points="200,90 300,150 300,250 200,310 100,250 100,150"
+    fill="none"
+    stroke="url(#domain-grad)"
+    stroke-width="2"
+    opacity="0.5" />
+
+  <!-- connections (center → 6 outer nodes) -->
+  <line x1="200" y1="200" x2="200" y2="100" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  <line x1="200" y1="200" x2="290" y2="150" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  <line x1="200" y1="200" x2="290" y2="250" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  <line x1="200" y1="200" x2="200" y2="300" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  <line x1="200" y1="200" x2="110" y2="250" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  <line x1="200" y1="200" x2="110" y2="150" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+
+  <!-- center node (memory) -->
+  <circle cx="200" cy="200" r="22" fill="url(#node-grad)" />
+  <circle cx="200" cy="200" r="22" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
+
+  <!-- outer nodes (agents / skills / flows) -->
+  <circle cx="200" cy="100" r="8" fill="rgba(255,255,255,0.7)" />
+  <circle cx="290" cy="150" r="8" fill="rgba(255,255,255,0.7)" />
+  <circle cx="290" cy="250" r="8" fill="rgba(255,255,255,0.7)" />
+  <circle cx="200" cy="300" r="8" fill="rgba(255,255,255,0.7)" />
+  <circle cx="110" cy="250" r="8" fill="rgba(255,255,255,0.7)" />
+  <circle cx="110" cy="150" r="8" fill="rgba(255,255,255,0.7)" />
+
+  <!-- sparkles -->
+  <circle cx="60" cy="60" r="2" fill="rgba(255,255,255,0.5)" />
+  <circle cx="340" cy="60" r="1.5" fill="rgba(255,255,255,0.4)" />
+  <circle cx="60" cy="340" r="1.5" fill="rgba(255,255,255,0.4)" />
+  <circle cx="340" cy="340" r="2" fill="rgba(255,255,255,0.5)" />
+</svg>

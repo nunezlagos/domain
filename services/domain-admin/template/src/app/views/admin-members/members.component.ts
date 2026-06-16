@@ -135,15 +135,24 @@ export class AdminMembersComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    // Load members, invitations y roles en paralelo
+    // Load members, invitations y roles en paralelo.
+    // El backend envuelve arrays en {data: [...]} (convención API v1).
     Promise.all([
-      this.http.get<Member[]>(`${apiBase()}/api/v1/organizations/${orgID}/members`).toPromise(),
-      this.http.get<Invitation[]>(`${apiBase()}/api/v1/organizations/${orgID}/invitations`).toPromise().catch(() => []),
-      this.http.get<Role[]>(`${apiBase()}/api/v1/organizations/${orgID}/roles`).toPromise().catch(() => []),
+      this.http.get<{ data: Member[] | null }>(`${apiBase()}/api/v1/organizations/${orgID}/members`).toPromise()
+        .then(r => r?.data ?? [])
+        .catch(() => [] as Member[]),
+      this.http.get<{ data: Invitation[] | null }>(`${apiBase()}/api/v1/organizations/${orgID}/invitations`).toPromise()
+        .then(r => r?.data ?? [])
+        .catch(() => [] as Invitation[]),
+      this.http.get<{ data: Role[] | null }>(`${apiBase()}/api/v1/organizations/${orgID}/roles`).toPromise()
+        .then(r => r?.data ?? [])
+        .catch(() => [] as Role[]),
     ]).then(([members, invitations, roles]) => {
-      this.members.set(members ?? []);
-      this.invitations.set(invitations ?? []);
-      this.roles.set(roles ?? []);
+      this.members.set(members);
+      this.invitations.set(invitations);
+      this.roles.set(roles);
+      this.inviteRole.set(roles[0]?.slug ?? 'member');
+      this.createRole.set(roles[0]?.slug ?? 'member');
       this.loading.set(false);
     }).catch(err => {
       this.error.set(err?.error?.error?.message || 'No se pudieron cargar los miembros');

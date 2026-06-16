@@ -53,6 +53,11 @@ export const routes: Routes = [
         path: 'cross-org',
         loadChildren: () => import('./views/admin-cross-org/routes').then((m) => m.routes),
       },
+      // HU-41.4: Mantenedores — subtabs con todos los resource-views del MCP.
+      {
+        path: 'maintainers',
+        loadChildren: () => import('./views/admin-maintainers/routes').then((m) => m.routes),
+      },
     ],
   },
   // HU-41.7: tickets mantiene su ruta legacy /tickets para deep-links

@@ -12,7 +12,7 @@
     </div>
     <div class="d-flex gap-2">
       <button cButton color="secondary" variant="outline" (click)="openCreate()">
-        <svg cIcon name="cilKey" class="me-1"></svg>
+        <svg cIcon name="cilFingerprint" class="me-1"></svg>
         Crear con API key
       </button>
       <button cButton color="primary" (click)="openInvite()">
@@ -132,7 +132,7 @@
                 <td class="text-end">
                   <div class="btn-group btn-group-sm" role="group">
                     <button cButton color="secondary" variant="outline" size="sm" (click)="openApiKeys(m)" title="Ver API keys">
-                      <svg cIcon name="cilKey"></svg>
+                      <svg cIcon name="cilFingerprint"></svg>
                     </button>
                     <button cButton color="primary" variant="outline" size="sm" (click)="openRoleChange(m)" title="Cambiar rol">
                       <svg cIcon name="cilUserFollow"></svg>
@@ -227,7 +227,7 @@
       } @else {
         <button cButton color="secondary" (click)="closeCreateModal()">Cancelar</button>
         <button cButton color="primary" (click)="submitCreate()">
-          <svg cIcon name="cilKey" class="me-1"></svg>Crear y generar API key
+          <svg cIcon name="cilFingerprint" class="me-1"></svg>Crear y generar API key
         </button>
       }
     </c-modal-footer>
@@ -242,7 +242,7 @@
     <c-modal-body>
       @if (selectedMemberKeys().length === 0) {
         <div class="empty-state-mini">
-          <svg cIcon name="cilKey" size="2xl"></svg>
+          <svg cIcon name="cilFingerprint" size="2xl"></svg>
           <p>Sin API keys. El user probablemente usa OTP/sesión web.</p>
         </div>
       } @else {

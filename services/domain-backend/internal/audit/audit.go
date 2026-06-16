@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -53,20 +54,20 @@ func auditReqID(ctx context.Context) string {
 
 // AuditEntry representa una fila de audit_log para queries.
 type AuditEntry struct {
-	ID             int64      `json:"id"`
-	OrganizationID *uuid.UUID `json:"organization_id,omitempty"`
-	ActorID        *uuid.UUID `json:"actor_id,omitempty"`
-	ActorType      string     `json:"actor_type"`
-	Action         string     `json:"action"`
-	EntityType     string     `json:"entity_type"`
-	EntityID       *uuid.UUID `json:"entity_id,omitempty"`
+	ID             int64          `json:"id"`
+	OrganizationID *uuid.UUID     `json:"organization_id,omitempty"`
+	ActorID        *uuid.UUID     `json:"actor_id,omitempty"`
+	ActorType      string         `json:"actor_type"`
+	Action         string         `json:"action"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       *uuid.UUID     `json:"entity_id,omitempty"`
 	OldValues      json.RawMessage `json:"old_values,omitempty"`
 	NewValues      json.RawMessage `json:"new_values,omitempty"`
-	IPAddress      string     `json:"ip_address,omitempty"`
-	UserAgent      string     `json:"user_agent,omitempty"`
-	RequestID      string     `json:"request_id,omitempty"`
-	TraceID        string     `json:"trace_id,omitempty"`
-	OccurredAt     time.Time  `json:"occurred_at"`
+	IPAddress      pgtype.Text    `json:"ip_address"`
+	UserAgent      pgtype.Text    `json:"user_agent"`
+	RequestID      pgtype.Text    `json:"request_id"`
+	TraceID        pgtype.Text    `json:"trace_id"`
+	OccurredAt     time.Time      `json:"occurred_at"`
 }
 
 // AuditFilter filtros opcionales para Query.

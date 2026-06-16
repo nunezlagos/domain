@@ -94,7 +94,22 @@ import {
   cilUser,
   cilUserFemale,
   cilUserFollow,
-  cilUserUnfollow
+  cilUserUnfollow,
+  // HU-41.4: icons adicionales para vistas del admin (mantenedores).
+  cilHistory,
+  cilSearch,
+  cilSend,
+  cilTag,
+  cilWarning,
+  cilCheckCircle,
+  cilClock,
+  cilCopy,
+  cilChartLine,
+  cilUserX,
+  cilFingerprint,
+  cilTerminal,
+  cilBolt,
+  cilGraph
 } from '@coreui/icons';
 
 import { signet } from './signet';
@@ -298,6 +313,23 @@ export enum IconSubset {
   cilUserFemale = 'cilUserFemale',
   cilUserFollow = 'cilUserFollow',
   cilUserUnfollow = 'cilUserUnfollow',
+  // HU-41.4: icons adicionales para vistas del admin (mantenedores).
+  cilHistory = 'cilHistory',
+  cilSearch = 'cilSearch',
+  cilSend = 'cilSend',
+  cilTag = 'cilTag',
+  cilWarning = 'cilWarning',
+  cilCheckCircle = 'cilCheckCircle',
+  cilClock = 'cilClock',
+  cilCopy = 'cilCopy',
+  cilChartLine = 'cilChartLine',
+  cilUserX = 'cilUserX',
+  cilFingerprint = 'cilFingerprint', // alias para "API key" (cilKey no existe)
+  cilTerminal = 'cilTerminal',       // alias para "Agents" (cilRobot no existe)
+  cilBolt = 'cilBolt',               // alias para "Sprint/Run" (cilSprint no existe)
+  cilGraph = 'cilGraph',             // alias para "Pulse/Activity" (cilPulse no existe)
+  cilApps = 'cilApps',               // HU-41.4 Projects
+  cilBook = 'cilBook',               // HU-41.4 Knowledge
   logo = 'logo',
   signet = 'signet'
 }

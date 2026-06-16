@@ -4,6 +4,23 @@ import { INavData } from '@coreui/angular';
 // template CoreUI). Los items de Platform (Cross-org) se renderizan
 // condicionalmente en el template del sidebar según `activeRole()?.slug`.
 
+// HU-41.4: submenú Mantenedores con todas las pantallas de mantenimiento
+// del MCP. CoreUI soporta `children` para submenús colapsables.
+const maintainersChildren: INavData[] = [
+  { name: 'API Keys', url: '/admin/maintainers/api-keys', iconComponent: { name: 'cilFingerprint' } },
+  { name: 'Skills', url: '/admin/maintainers/skills', iconComponent: { name: 'cilBolt' } },
+  { name: 'Agents', url: '/admin/maintainers/agents', iconComponent: { name: 'cilTerminal' } },
+  { name: 'Flows', url: '/admin/maintainers/flows', iconComponent: { name: 'cilShareAll' } },
+  { name: 'Crons', url: '/admin/maintainers/crons', iconComponent: { name: 'cilClock' } },
+  { name: 'Observations', url: '/admin/maintainers/observations', iconComponent: { name: 'cilList' } },
+  { name: 'Captured Prompts', url: '/admin/maintainers/prompts', iconComponent: { name: 'cilCopy' } },
+  { name: 'Audit Log', url: '/admin/maintainers/audit', iconComponent: { name: 'cilHistory' } },
+  { name: 'Proposals', url: '/admin/maintainers/proposals', iconComponent: { name: 'cilCheckCircle' } },
+  { name: 'Projects', url: '/admin/maintainers/projects', iconComponent: { name: 'cilApps' } },
+  { name: 'Knowledge', url: '/admin/maintainers/knowledge', iconComponent: { name: 'cilBook' } },
+  { name: 'System', url: '/admin/maintainers/system', iconComponent: { name: 'cilSpeedometer' } },
+];
+
 export const navAdminItems: INavData[] = [
   {
     name: 'Dashboard',
@@ -16,9 +33,15 @@ export const navAdminItems: INavData[] = [
     iconComponent: { name: 'cilPeople' },
   },
   {
+    name: 'Mantenedores',
+    url: '/admin/maintainers',
+    iconComponent: { name: 'cilSettings' },
+    children: maintainersChildren,
+  },
+  {
     name: 'Settings',
     url: '/admin/settings',
-    iconComponent: { name: 'cilSettings' },
+    iconComponent: { name: 'cilApplicationsSettings' },
   },
   {
     name: 'Usage',

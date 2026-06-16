@@ -5,13 +5,9 @@ import { CommonModule } from '@angular/common';
 import { IconDirective } from '@coreui/icons-angular';
 import {
   ButtonDirective,
-  CardBodyComponent,
-  ColComponent,
-  ContainerComponent,
   FormControlDirective,
   InputGroupComponent,
   InputGroupTextDirective,
-  RowComponent,
   AlertComponent,
   SpinnerComponent,
 } from '@coreui/angular';
@@ -30,10 +26,8 @@ import { AuthService, Role } from '../../../core/auth.service';
   styleUrls: ['./login.component.scss'],
   imports: [
     CommonModule, FormsModule,
-    ContainerComponent, RowComponent, ColComponent,
     FormControlDirective, InputGroupComponent, InputGroupTextDirective,
     IconDirective, ButtonDirective, AlertComponent, SpinnerComponent,
-    CardBodyComponent,
   ],
 })
 export class LoginComponent implements OnInit {

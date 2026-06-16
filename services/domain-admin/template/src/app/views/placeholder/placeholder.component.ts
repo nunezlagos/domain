@@ -5,8 +5,9 @@ import { map } from 'rxjs/operators';
 
 import {
   CardComponent, CardBodyComponent, CardHeaderComponent,
-  AlertComponent, ButtonDirective, IconDirective,
+  AlertComponent,
 } from '@coreui/angular';
+import { IconDirective } from '@coreui/icons-angular';
 
 // DOMAINSERV-2: PlaceholderComponent compartido para todas las features
 // admin-* que aún no están implementadas. Cuando se implemente la HU

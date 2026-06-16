@@ -113,6 +113,8 @@ Feature: Org Settings
 - `PATCH /api/v1/organizations/{id}/branding` con `{logo_url, primary_color, accent_color}` — **VERIFICAR** si el PATCH actual cubre branding. Si no, agregarlo al body del PATCH existente.
 - Si `branding` no está en la tabla `organizations`, agregar migración.
 
+> **Nota**: NO hay tab "Plan" porque el modelo es free total (sesión 2026-06-16). El org no tiene plan, no hay upgrade, no hay billing.
+
 ## Análisis breve
 
 - **Qué pide realmente:** Vista de settings con tabs, form de edición, preview en vivo para branding, y danger zone con confirmación.

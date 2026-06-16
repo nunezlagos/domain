@@ -22,15 +22,17 @@ Feature: Members Management
   Scenario: Lista de miembros con tabla
     When navego a /admin/members
     Then veo una tabla con TODOS los members de la org:
-      | columna     | fuente |
-      | Avatar      | name initials |
-      | Nombre      | user.name |
-      | Email       | user.email |
-      | Rol         | role.name |
-      | Estado      | active / pending (invitación sin aceptar) |
-      | Última actividad | last_sign_in_at (relativo) |
-      | Acciones    | menú: cambiar rol, revocar, ver API keys |
+      | columna           | fuente |
+      | Avatar            | name initials |
+      | Nombre            | user.name |
+      | Email             | user.email |
+      | Rol               | role.name |
+      | Estado            | active / pending (invitación sin aceptar) |
+      | Uso (mes)         | cost_usd del mes con badge (top 10%, top 50%, resto). Click → drill-down a /admin/usage/users/{id} (HU-41.6) |
+      | Última actividad  | last_sign_in_at (relativo) |
+      | Acciones          | menú: cambiar rol, revocar, ver API keys, ver uso |
     And la tabla tiene paginación (25/página), filtro por nombre/email, sort por columna
+    And la columna "Uso (mes)" ordena por cost_usd con flecha visual
 
   Scenario: Invitar miembro vía email
     When hago clic en "Invitar miembro"

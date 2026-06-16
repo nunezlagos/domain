@@ -41,15 +41,16 @@ Feature: Super Admin Cross-Org
       | columna    | descripción |
       | Name       | org.name + logo (si branding) |
       | Slug       | org.slug (link copiable) |
-      | Plan       | plan actual + badge |
       | Members    | count members activos |
+      | Prompts (mes) | count captured_prompts cross-org este mes |
+      | Tokens (mes) | sum tokens este mes |
       | Cost (mes) | $X.XX + sparkline 7d |
       | Status     | active / suspended / deleted |
       | Creada     | created_at relativo |
       | Acciones   | menú: Ver, Entrar (impersonar), Suspender, Eliminar |
-    Y filtros: name, plan, status, rango creación
-    Y sort por cualquier columna
+    Y filtros: name, status, rango creación, sort por cost/tokens/prompts
     Y paginación (50/página)
+    Y NO hay columna "Plan" (modelo es free total)
 
   Scenario: Entrar a una org (impersonation)
     When hago clic en "Entrar como admin" de una org

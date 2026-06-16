@@ -29,15 +29,17 @@ Feature: Org Dashboard (Admin Home)
       | Tokens consumidos (mes) | sum tokens this month para org |
     And cada card tiene icono CoreUI y link a la vista detalle correspondiente
 
-  Scenario: Widget de plan y uso
+  Scenario: Widget de top users por uso del mes
     When veo el dashboard
-    Then veo el plan actual (Free/Pro/Enterprise) con barra de uso:
-      | dimensión | usado / límite | barra |
-      | Tokens/mes | X / Y | progress bar |
-      | Runs/mes | X / Y | progress bar |
-      | Storage GB | X / Y | progress bar |
-      | Members | X / Y | progress bar |
-    And si alguna dimensión supera 80%, la barra se pone amarilla; si supera 100%, roja
+    Then veo un widget "Top 5 users del mes" con tabla compacta:
+      | columna | valor |
+      | User | avatar + name |
+      | Prompts | count |
+      | Tokens | tokens_in + tokens_out |
+      | Cost | $X.XX |
+    Y cada fila es clickeable → drill-down a /admin/usage/users/{id} (HU-41.6)
+    Y un link "Ver todos" lleva a /admin/usage
+    Y si la org tiene < 2 users, el widget no aparece
 
   Scenario: Widget de actividad reciente
     When veo el dashboard
@@ -54,6 +56,7 @@ Feature: Org Dashboard (Admin Home)
       | Database       | GET /api/v1/admin/db-stats (procesar err) |
       | LLM Providers  | endpoint a definir o derivar de /api/v1/admin/runtime-configs |
     And cada card tiene color: verde/amarillo/rojo + tooltip con detalle
+    And un stat adicional "Cost total plataforma (mes)": $X.XX cross-org
 
   Scenario: Acciones rápidas
     When veo el dashboard
@@ -114,13 +117,13 @@ Feature: Org Dashboard (Admin Home)
     "members_active": 12,
     "agents": 8,
     "runs_24h": 143,
-    "tokens_this_month": 1234567
+    "tokens_this_month": 1234567,
+    "cost_this_month_usd": 45.30
   },
-  "plan": {
-    "name": "pro",
-    "limits": { "tokens_per_month": 5000000, "runs_per_month": 10000, "storage_gb": 50, "members": 25 },
-    "usage": { "tokens_per_month": 1234567, "runs_per_month": 4521, "storage_gb": 12, "members": 12 }
-  },
+  "top_users_this_month": [
+    { "user_id": "uuid", "name": "...", "prompts": 142, "tokens": 123456, "cost_usd": 3.45 },
+    { "user_id": "uuid", "name": "...", "prompts": 98, "tokens": 89000, "cost_usd": 2.10 }
+  ],
   "recent_activity": [
     { "actor": "user@x.com", "action": "member.invited", "target": "user@y.com", "at": "2026-06-16T10:30:00Z" }
   ],

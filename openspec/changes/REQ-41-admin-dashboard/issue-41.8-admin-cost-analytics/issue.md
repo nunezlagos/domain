@@ -24,7 +24,7 @@ Feature: Cost Analytics
     Then veo la página con Tabs:
       | tab | contenido |
       | Overview | Cost summary + line chart de los últimos 30 días |
-      | Breakdown | Stacked bar chart de cost por dimensión (agent/project/model) |
+      | Breakdown | Stacked bar chart de cost por dimensión (agent/project/model/**user**) |
       | Forecast | Proyección del mes en curso + próximos 30 días |
       | Budgets | Lista de budgets configurados + creación |
 
@@ -40,10 +40,11 @@ Feature: Cost Analytics
 
   Scenario: Breakdown por dimensión
     When veo la tab Breakdown
-    Then veo un FormSelectDirective para elegir dimensión: agent / project / model / org
+    Then veo un FormSelectDirective para elegir dimensión: agent / project / model / org / **user**
     Y un stacked bar chart con el top 10 de la dimensión elegida
     Y una tabla con el detalle completo (top 50)
     Y columnas: nombre, cost total, % del total, trend (vs período anterior)
+    Y si la dimensión es "user", cada fila muestra name + email + link al drill-down de usage (HU-41.6)
 
   Scenario: Forecast
     When veo la tab Forecast

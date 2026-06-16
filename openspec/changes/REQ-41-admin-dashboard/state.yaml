@@ -15,7 +15,7 @@ hus:
   41.3-admin-members-management: proposed
   41.4-admin-org-settings: proposed
   41.5-admin-audit-log-viewer: proposed
-  41.6-admin-billing-and-usage: proposed
+  41.6-admin-usage-by-user: proposed
   41.7-admin-tickets-formalize: proposed
   41.8-admin-cost-analytics: proposed
   41.9-admin-super-admin-cross-org: proposed

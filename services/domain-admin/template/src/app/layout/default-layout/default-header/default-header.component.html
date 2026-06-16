@@ -11,16 +11,26 @@
       <svg cIcon name="cilMenu" size="lg"></svg>
     </button>
 
-    <c-header-nav class="ms-auto">
+    <!-- Search (decorativo por ahora; wire a /admin/search en HU futura) -->
+    <div class="header-search d-none d-md-flex ms-3">
+      <svg cIcon name="cilSearch" class="header-search-icon"></svg>
+      <input
+        type="search"
+        class="form-control header-search-input"
+        placeholder="Buscar agents, flows, tickets…"
+        aria-label="Search" />
+      <kbd class="header-search-kbd">⌘K</kbd>
+    </div>
+
+    <c-header-nav class="ms-auto ms-md-0">
+
       <!-- HU-41.1: org selector (solo super_admin) -->
       <c-nav-item *ngIf="isSuperAdmin()">
         <select
-          cSelect
+          class="form-select form-select-sm header-org-select"
           [value]="activeOrgId() ?? ''"
           (change)="onOrgChange($any($event.target).value)"
-          aria-label="Active organization"
-          class="form-select form-select-sm"
-        >
+          aria-label="Active organization">
           <option value="" disabled>— Org —</option>
           @for (org of availableOrgs(); track org.id) {
             <option [value]="org.id">{{ org.name }}</option>
@@ -28,10 +38,12 @@
         </select>
       </c-nav-item>
 
-      <!-- Active role chip -->
-      <c-nav-item *ngIf="activeRole() as role">
-        <span class="badge bg-primary ms-2">{{ role.name }}</span>
-      </c-nav-item>
+      <!-- Theme picker (light / dark / auto) -->
+      <ng-container *ngTemplateOutlet="themeDropdown" />
+
+      <div class="nav-item py-1 d-none d-md-flex">
+        <div class="vr h-100 mx-2 text-body text-opacity-75"></div>
+      </div>
 
       <!-- User avatar + dropdown -->
       <ng-container *ngTemplateOutlet="userDropdown" />
@@ -43,6 +55,28 @@
   </c-container>
 </c-header>
 
+<!-- Theme picker dropdown -->
+<ng-template #themeDropdown>
+  <c-dropdown alignment="end" variant="nav-item">
+    <button [caret]="false" cDropdownToggle aria-label="Cambiar tema">
+      <svg cIcon [name]="themeIcon()" size="lg"></svg>
+    </button>
+    <div cDropdownMenu>
+      @for (mode of colorModes; track mode.name) {
+        <button
+          (click)="setTheme(mode.name)"
+          [class.active]="colorMode() === mode.name"
+          cDropdownItem
+          class="d-flex align-items-center">
+          <svg cIcon class="me-2" [name]="mode.icon" size="lg"></svg>
+          {{ mode.text }}
+        </button>
+      }
+    </div>
+  </c-dropdown>
+</ng-template>
+
+<!-- User dropdown -->
 <ng-template #userDropdown>
   <c-dropdown [popperOptions]="{ placement: 'bottom-end' }" variant="nav-item">
     <button [caret]="true" cDropdownToggle class="py-0" aria-label="Open user menu">
@@ -51,20 +85,22 @@
         size="md"
         [textColor]="'primary'"
         [status]="'success'"
-        [alt]="user()?.name ?? 'User'"
-      >
+        [alt]="user()?.name ?? 'User'">
         {{ userInitials() }}
       </c-avatar>
     </button>
-    <ul cDropdownMenu class="pt-0" style="min-width: 220px;">
+    <ul cDropdownMenu class="pt-0" style="min-width: 240px;">
       <li>
         <h6 cDropdownHeader class="bg-body-secondary text-body-secondary fw-semibold py-2 rounded-top">
           {{ user()?.name ?? 'Sin sesión' }}
         </h6>
       </li>
       <li>
-        <h6 cDropdownHeader class="text-body-secondary small fw-normal py-1">
+        <h6 cDropdownHeader class="text-body-secondary small fw-normal py-1 d-flex align-items-center gap-2">
           {{ user()?.email }}
+          @if (activeRole(); as r) {
+            <span class="badge bg-primary">{{ r.name }}</span>
+          }
         </h6>
       </li>
       <li><hr cDropdownDivider /></li>

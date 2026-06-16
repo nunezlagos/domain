@@ -5,6 +5,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import {
   AvatarComponent,
   BreadcrumbRouterComponent,
+  ColorModeService,
   ContainerComponent,
   DropdownComponent,
   DropdownDividerDirective,
@@ -27,13 +28,19 @@ interface OrgOption {
   name: string;
 }
 
+interface ThemeMode {
+  name: string;
+  text: string;
+  icon: string;
+}
+
 @Component({
   selector: 'app-default-header',
   templateUrl: './default-header.component.html',
   imports: [
     NgTemplateOutlet, NgIf,
     ContainerComponent, HeaderTogglerDirective, SidebarToggleDirective, IconDirective,
-    HeaderNavComponent, NavItemComponent, RouterLink, RouterLinkActive,
+    HeaderComponent, HeaderNavComponent, NavItemComponent, RouterLink, RouterLinkActive,
     BreadcrumbRouterComponent, DropdownComponent, DropdownToggleDirective, AvatarComponent,
     DropdownMenuDirective, DropdownHeaderDirective, DropdownItemDirective, DropdownDividerDirective,
   ],
@@ -41,16 +48,14 @@ interface OrgOption {
 export class DefaultHeaderComponent extends HeaderComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly colorModeService = inject(ColorModeService);
 
-  // Signals re-exportados del AuthService (para que el template los lea).
   readonly user = this.auth.user;
   readonly activeRole = this.auth.activeRole;
   readonly activeOrgId = this.auth.activeOrgId;
   readonly isImpersonating = this.auth.isImpersonating;
+  readonly colorMode = this.colorModeService.colorMode;
 
-  // HU-41.1: super_admin puede cambiar el org activo. La lista de orgs
-  // disponibles se carga on-demand desde /api/v1/organizations (filtra
-  // por super_admin en backend). Por ahora, placeholder vacío hasta HU-41.9.
   readonly availableOrgs = signal<OrgOption[]>([]);
 
   readonly isSuperAdmin = computed(() => this.activeRole()?.slug === 'super_admin');
@@ -62,10 +67,26 @@ export class DefaultHeaderComponent extends HeaderComponent {
       .filter(Boolean)
       .slice(0, 2)
       .map(p => (p[0] ?? '').toUpperCase())
-      .join('');
+      .join('') || '?';
+  });
+
+  readonly colorModes: ThemeMode[] = [
+    { name: 'light', text: 'Light', icon: 'cilSun' },
+    { name: 'dark', text: 'Dark', icon: 'cilMoon' },
+    { name: 'auto', text: 'Auto', icon: 'cilContrast' },
+  ];
+
+  readonly themeIcon = computed(() => {
+    const mode = this.colorMode();
+    return this.colorModes.find(m => m.name === mode)?.icon ?? 'cilSun';
   });
 
   readonly sidebarId = input('sidebar1');
+
+  setTheme(mode: string): void {
+    this.colorModeService.colorMode.set(mode as 'light' | 'dark' | 'auto');
+    localStorage.setItem('domain.theme', mode);
+  }
 
   onOrgChange(orgId: string): void {
     if (!orgId) return;

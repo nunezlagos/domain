@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 
 	"nunezlagos/domain/internal/auth/apikey"
@@ -89,6 +90,28 @@ func runnerFromCtx(ctx context.Context, pool interface {
 	return pool
 }
 
+// connRunner: wrapper pgx.Tx que libera la conexión del pool al finalizar.
+// Necesario porque txctx.TxFromContext comparte la misma tx entre goroutines
+// (no goroutine-safe) — abrimos tx propia por goroutine.
+type connRunner struct {
+	tx   pgx.Tx
+	conn *pgxpool.Conn
+}
+
+func (c *connRunner) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return c.tx.QueryRow(ctx, sql, args...)
+}
+func (c *connRunner) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return c.tx.Query(ctx, sql, args...)
+}
+func (c *connRunner) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return c.tx.Exec(ctx, sql, args...)
+}
+func (c *connRunner) Close(ctx context.Context) {
+	_ = c.tx.Rollback(ctx)
+	c.conn.Release()
+}
+
 // ensureSlice: si el slice es nil, devuelve []Type{} para que el JSON
 // marshalice como [] en vez de null.
 func ensureSlice[T any](s []T) []T {
@@ -128,12 +151,40 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Usar el Pool directamente (cada query toma su propia conexión).
-	// RLS se convierte en defense-in-depth: el filtro `WHERE organization_id`
-	// en cada query es la fuente de verdad. Esto permite paralelizar
-	// con errgroup sin caer en "conn busy" (misma conexión usada
-	// concurrentemente).
+	// Detectar si hay tx en ctx (middleware API key la inyectó post-auth).
+	// pgx.Tx NO es goroutine-safe: si usamos esa misma tx en errgroup → conn busy.
+	// Solución: cada goroutine abre su PROPIA tx con WithOrgUserTx, scopeada a la org.
+	// Si NO hay tx en ctx, Pool directo (RLS como defense-in-depth).
+	hasTx := txctx.TxFromContext(ctx) != nil
 	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(4) // 3 queries + 1 DB health, paralelas
+
+	// Helper local: cada goroutine toma su propia conexión del pool
+	// y opcionalmente abre tx con SET LOCAL app.current_org_id.
+	openRunner := func() (queryRunner, error) {
+		if hasTx {
+			// Tomar una conexión del pool y abrir tx con SET LOCAL.
+			conn, err := a.Pool.Acquire(gctx)
+			if err != nil {
+				return nil, fmt.Errorf("acquire conn: %w", err)
+			}
+			tx, err := conn.BeginTx(gctx, pgx.TxOptions{})
+			if err != nil {
+				conn.Release()
+				return nil, fmt.Errorf("begin tx: %w", err)
+			}
+			// Setear RLS context en esta tx.
+			if _, err := tx.Exec(gctx, "SELECT set_config('app.current_org_id', $1, true)", targetOrgID.String()); err != nil {
+				_ = tx.Rollback(gctx)
+				conn.Release()
+				return nil, fmt.Errorf("set_config: %w", err)
+			}
+			// Wrapper que rollback al final + release.
+			return &connRunner{tx: tx, conn: conn}, nil
+		}
+		return a.Pool, nil
+	}
+	_ = openRunner // se usa en cada goroutine (defer release)
 
 	var (
 		stats          OrgOverviewStats
@@ -144,7 +195,14 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Stats agregados.
 	g.Go(func() error {
-		row := a.Pool.QueryRow(gctx, `
+		runner, err := openRunner()
+		if err != nil {
+			return err
+		}
+		if cr, ok := runner.(*connRunner); ok {
+			defer cr.Close(gctx)
+		}
+		row := runner.QueryRow(gctx, `
 			SELECT
 			  (SELECT count(*) FROM users WHERE organization_id = $1 AND deleted_at IS NULL),
 			  (SELECT count(*) FROM agents WHERE organization_id = $1 AND deleted_at IS NULL),
@@ -161,7 +219,14 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Top 5 users del mes (por cost USD desc).
 	g.Go(func() error {
-		rows, err := a.Pool.Query(gctx, `
+		runner, err := openRunner()
+		if err != nil {
+			return err
+		}
+		if cr, ok := runner.(*connRunner); ok {
+			defer cr.Close(gctx)
+		}
+		rows, err := runner.Query(gctx, `
 			SELECT
 			  u.id, COALESCE(u.name, ''), u.email,
 			  COALESCE(p.prompts, 0),
@@ -204,7 +269,14 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Recent activity (últimos 10 del audit_log).
 	g.Go(func() error {
-		rows, err := a.Pool.Query(gctx, `
+		runner, err := openRunner()
+		if err != nil {
+			return err
+		}
+		if cr, ok := runner.(*connRunner); ok {
+			defer cr.Close(gctx)
+		}
+		rows, err := runner.Query(gctx, `
 			SELECT
 			  COALESCE(actor.email, 'system'),
 			  al.action,

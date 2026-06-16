@@ -19,6 +19,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // Role permitidos en users.role.
@@ -46,7 +47,15 @@ var (
 // emailRegex es una validación de formato simplificada (no DNS).
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-// allowedRoles cierra el conjunto de roles aceptados en AddMemberWithAPIKey.
+// query: helper que respeta la tx del ctx (con SET LOCAL app.current_org_id)
+// si el middleware API key la inyectó. Sin tx → fallback a Pool.
+// Devuelve rows.Equivalente a pool.Query / tx.Query (mismo signature).
+func (s *Service) query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx.Query(ctx, sql, args...)
+	}
+	return s.Pool.Query(ctx, sql, args...)
+}// allowedRoles cierra el conjunto de roles aceptados en AddMemberWithAPIKey.
 var allowedRoles = map[string]bool{
 	RoleOwner:      true,
 	RoleAdmin:      true,
@@ -68,12 +77,12 @@ type Organization struct {
 
 // Member miembro de la org.
 type Member struct {
-	UserID     uuid.UUID
-	Email      string
-	Name       string
-	Role       string
-	JoinedAt   time.Time
-	LastActive *time.Time
+	UserID     uuid.UUID `json:"user_id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name"`
+	Role       string    `json:"role"`
+	JoinedAt   time.Time `json:"joined_at"`
+	LastActive *time.Time `json:"last_active,omitempty"`
 }
 
 // Service expone la API de aplicación de orgs.
@@ -221,8 +230,11 @@ func (s *Service) UpdateSettings(ctx context.Context, id, actorID uuid.UUID, set
 }
 
 // ListMembers retorna miembros activos (deleted_at IS NULL).
+// Si el middleware API key inyectó una tx con SET LOCAL app.current_org_id
+// en el ctx, la usa para que la RLS de users permita ver los rows. Si no,
+// cae al Pool (legacy path).
 func (s *Service) ListMembers(ctx context.Context, orgID uuid.UUID) ([]Member, error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, email, COALESCE(name,''), role, created_at
 		 FROM users
 		 WHERE organization_id = $1 AND deleted_at IS NULL
@@ -231,7 +243,7 @@ func (s *Service) ListMembers(ctx context.Context, orgID uuid.UUID) ([]Member, e
 		return nil, fmt.Errorf("list members: %w", err)
 	}
 	defer rows.Close()
-	var out []Member
+	out := []Member{}
 	for rows.Next() {
 		var m Member
 		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt); err != nil {

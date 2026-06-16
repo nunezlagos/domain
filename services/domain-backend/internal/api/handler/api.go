@@ -15,6 +15,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
 
 	"github.com/google/uuid"
 
@@ -521,6 +522,20 @@ func AuthAllowlist() []string {
 
 // --- JSON helpers ---
 
+// ensureJSONSlice: si data es un slice nil, devuelve un []T{} vacío para que
+// JSON serialice como [] en vez de null. Si data es otro tipo (struct, map, string),
+// lo devuelve tal cual.
+func ensureJSONSlice(data any) any {
+	if data == nil {
+		return []any{}
+	}
+	v := reflect.ValueOf(data)
+	if v.Kind() == reflect.Slice && v.IsNil() {
+		return reflect.MakeSlice(v.Type(), 0, 0).Interface()
+	}
+	return data
+}
+
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -539,13 +554,13 @@ func writeError(w http.ResponseWriter, status int, code, msg string) {
 }
 
 func writeData(w http.ResponseWriter, status int, data any) {
-	writeJSON(w, status, map[string]any{"data": data})
+	writeJSON(w, status, map[string]any{"data": ensureJSONSlice(data)})
 }
 
 // writeDataWithMeta envía {data, ...extra} para responses con pagination/warnings/etc.
 // Las keys de extra NO deben colisionar con "data".
 func writeDataWithMeta(w http.ResponseWriter, status int, data any, extra map[string]any) {
-	body := map[string]any{"data": data}
+	body := map[string]any{"data": ensureJSONSlice(data)}
 	for k, v := range extra {
 		if k == "data" {
 			continue

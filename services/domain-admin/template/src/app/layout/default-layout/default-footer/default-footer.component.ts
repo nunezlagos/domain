@@ -6,7 +6,7 @@ import { IconDirective } from '@coreui/icons-angular';
   selector: 'app-default-footer',
   templateUrl: './default-footer.component.html',
   styleUrls: ['./default-footer.component.scss'],
-  imports: [IconDirective],
+  imports: [FooterComponent, IconDirective],
 })
 export class DefaultFooterComponent extends FooterComponent {
   // HU-41.1: versión hardcodeada por ahora (matches package.json: 5.6.24).

@@ -99,7 +99,7 @@ interface SystemHealth {
     .display-6 { font-size: 1.5rem; }
   `],
 })
-export class SystemComponent implements OnInit {
+export class SystemHealthComponent implements OnInit {
   private readonly http = inject(HttpClient);
 
   readonly health = signal<SystemHealth | null>(null);

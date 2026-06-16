@@ -1,24 +1,26 @@
 import { INavData } from '@coreui/angular';
 
+import { MAINTAINERS, SPECIAL_MAINTAINERS } from '../../views/admin-maintainers/maintainer-registry';
+
 // HU-41.1: navItems administrativos (reemplaza los items de stock del
 // template CoreUI). Los items de Platform (Cross-org) se renderizan
 // condicionalmente en el template del sidebar según `activeRole()?.slug`.
 
-// HU-41.4: submenú Mantenedores con todas las pantallas de mantenimiento
-// del MCP. CoreUI soporta `children` para submenús colapsables.
+// HU-41.4: submenú Mantenedores — generado desde el registry.
+// Mantenibilidad: agregar un maintainer en maintainer-registry.ts lo
+// agrega automáticamente al sidebar.
 const maintainersChildren: INavData[] = [
-  { name: 'API Keys', url: '/admin/maintainers/api-keys', iconComponent: { name: 'cilFingerprint' } },
-  { name: 'Skills', url: '/admin/maintainers/skills', iconComponent: { name: 'cilBolt' } },
-  { name: 'Agents', url: '/admin/maintainers/agents', iconComponent: { name: 'cilTerminal' } },
-  { name: 'Flows', url: '/admin/maintainers/flows', iconComponent: { name: 'cilShareAll' } },
-  { name: 'Crons', url: '/admin/maintainers/crons', iconComponent: { name: 'cilClock' } },
-  { name: 'Observations', url: '/admin/maintainers/observations', iconComponent: { name: 'cilList' } },
-  { name: 'Captured Prompts', url: '/admin/maintainers/prompts', iconComponent: { name: 'cilCopy' } },
-  { name: 'Audit Log', url: '/admin/maintainers/audit', iconComponent: { name: 'cilHistory' } },
-  { name: 'Proposals', url: '/admin/maintainers/proposals', iconComponent: { name: 'cilCheckCircle' } },
-  { name: 'Projects', url: '/admin/maintainers/projects', iconComponent: { name: 'cilApps' } },
-  { name: 'Knowledge', url: '/admin/maintainers/knowledge', iconComponent: { name: 'cilBook' } },
-  { name: 'System', url: '/admin/maintainers/system', iconComponent: { name: 'cilSpeedometer' } },
+  ...MAINTAINERS.map(m => ({
+    name: m.title,
+    url: `/admin/maintainers/${m.path}`,
+    iconComponent: { name: m.icon },
+  })),
+  { name: '──────────', url: '#', attributes: { disabled: true, class: 'sidebar-divider' } },
+  ...SPECIAL_MAINTAINERS.map(m => ({
+    name: m.title,
+    url: `/admin/maintainers/${m.path}`,
+    iconComponent: { name: m.icon },
+  })),
 ];
 
 export const navAdminItems: INavData[] = [

@@ -297,7 +297,13 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	policiesCreated, knowledgeCreated, ignored := 0, 0, 0
 	ignoredPaths := []string{}
 
-	for _, raw := range rawFiles {
+	// DOMAINSERV-1: cada archivo se procesa dentro de su propio SAVEPOINT.
+	// Si un statement falla (ej: unique violation, subquery multi-row),
+	// la tx queda "aborted" (SQLSTATE 25P02) y mata todos los statements
+	// subsiguientes. Con SAVEPOINT/RELEASE/ROLLBACK TO, un fallo se
+	// revierte al punto pre-iteración y la tx sigue sana para los
+	// siguientes archivos.
+	for i, raw := range rawFiles {
 		m, ok := raw.(map[string]any)
 		if !ok {
 			continue
@@ -307,73 +313,132 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		if path == "" || content == "" {
 			continue
 		}
+
+		spName := fmt.Sprintf("sp_idx_%d", i)
+		if _, err := d.q(ctx).Exec(ctx, "SAVEPOINT "+spName); err != nil {
+			// Si ni el SAVEPOINT funciona, la tx está rota de verdad.
+			// Marcamos el archivo como ignored y continuamos con los
+			// siguientes (cada uno va a tener el mismo problema, pero
+			// al menos el handler no crashea).
+			ignored++
+			ignoredPaths = append(ignoredPaths, path+" (savepoint failed: "+err.Error()+")")
+			continue
+		}
+
 		cls := classifyFile(path, content)
+		var fileErr error
 		switch cls.Category {
 		case "policy":
-			// upsert via service.Create (si slug existe, falla — manejamos)
-			_, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+			// upsert via service.Create (si slug existe, falla — manejamos
+			// con ROLLBACK TO SAVEPOINT y luego UPDATE manual).
+			_, serr := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 				OrganizationID: orgID, ProjectID: projectID,
 				Slug: cls.Slug, Name: cls.Title, Kind: cls.Kind,
 				BodyMD: cls.Body, Source: "seed_imported",
 			})
-			if err == nil {
+			if serr == nil {
 				policiesCreated++
 			} else {
-				// Probable conflict: ya existe. Intentar UPDATE manual.
-				_, _ = d.q(ctx).Exec(ctx,
-					`UPDATE project_policies
-					   SET body_md=$3, name=$4, updated_at=NOW()
-					   WHERE organization_id=$1 AND id=(SELECT id FROM project_policies
-					     WHERE organization_id=$1 AND project_id=$2 AND slug=$5 AND is_active=true LIMIT 1)`,
-					orgID, projectID, cls.Body, cls.Title, cls.Slug,
-				)
-				policiesCreated++ // contar como touched
+				// Revertimos el Create fallido y probamos con UPDATE.
+				if _, rerr := d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName); rerr != nil {
+					fileErr = fmt.Errorf("create+rollback: %w / %v", serr, rerr)
+				} else {
+					// UPDATE usando CTE para evitar subquery multi-row que
+					// podía romper la tx con error de subquery.
+					ctag, uerr := d.q(ctx).Exec(ctx,
+						`WITH existing AS (
+						   SELECT id FROM project_policies
+						   WHERE organization_id = $1 AND project_id = $2
+						     AND slug = $3 AND is_active = true
+						   LIMIT 1
+						 )
+						 UPDATE project_policies
+						    SET body_md = $4, name = $5, updated_at = NOW()
+						   FROM existing
+						   WHERE project_policies.id = existing.id`,
+						orgID, projectID, cls.Slug, cls.Body, cls.Title,
+					)
+					if uerr != nil {
+						// Update falló — el savepoint sigue rolled back,
+						// marcamos ignored.
+						fileErr = fmt.Errorf("update policy: %w (create was: %v)", uerr, serr)
+					} else if ctag.RowsAffected() == 0 {
+						// No había policy previa — el Create falló por otra
+						// razón (ej: validation). Lo registramos como ignored.
+						fileErr = fmt.Errorf("policy create failed y no había previa: %v", serr)
+					} else {
+						policiesCreated++
+					}
+				}
 			}
 		case "knowledge":
-			// INSERT en knowledge_docs. metadata.slug se usa como key de
-			// idempotencia (re-import del mismo path UPDATE-a en lugar de
-			// duplicar). source='seed_imported' lo marca.
+			// INSERT en knowledge_docs con upsert manual por metadata->>'slug'.
 			metaJSON, _ := json.Marshal(map[string]any{
 				"slug":        cls.Slug,
 				"source_path": path,
 				"kind":        cls.Kind,
 			})
 			tags := []string{"seed_imported", cls.Kind}
-			// Buscar existente por metadata->>'slug' para upsert manual.
 			var existingID uuid.UUID
-			_ = d.q(ctx).QueryRow(ctx,
+			qerr := d.q(ctx).QueryRow(ctx,
 				`SELECT id FROM knowledge_docs
 				   WHERE organization_id = $1 AND project_id = $2
 				     AND metadata->>'slug' = $3 AND deleted_at IS NULL
 				   LIMIT 1`,
 				orgID, projectID, cls.Slug,
 			).Scan(&existingID)
-			var kerr error
-			if existingID != uuid.Nil {
-				_, kerr = d.q(ctx).Exec(ctx,
-					`UPDATE knowledge_docs
-					   SET title=$3, body=$4, metadata=$5, tags=$6, updated_at=NOW()
-					   WHERE organization_id=$1 AND id=$2`,
-					orgID, existingID, cls.Title, cls.Body, metaJSON, tags,
-				)
+			if qerr != nil && qerr.Error() != "no rows in result set" {
+				fileErr = fmt.Errorf("lookup knowledge: %w", qerr)
 			} else {
-				_, kerr = d.q(ctx).Exec(ctx,
-					`INSERT INTO knowledge_docs
-					   (organization_id, project_id, created_by, title, body,
-					    source, tags, metadata)
-					 VALUES ($1, $2, $3, $4, $5, 'seed_imported', $6, $7)`,
-					orgID, projectID, userID, cls.Title, cls.Body, tags, metaJSON,
-				)
-			}
-			if kerr == nil {
-				knowledgeCreated++
-			} else {
-				ignored++
-				ignoredPaths = append(ignoredPaths, path+" ("+kerr.Error()[:min(60, len(kerr.Error()))]+")")
+				if existingID != uuid.Nil {
+					_, uerr := d.q(ctx).Exec(ctx,
+						`UPDATE knowledge_docs
+						   SET title=$3, body=$4, metadata=$5, tags=$6, updated_at=NOW()
+						   WHERE organization_id=$1 AND id=$2`,
+						orgID, existingID, cls.Title, cls.Body, metaJSON, tags,
+					)
+					if uerr != nil {
+						fileErr = fmt.Errorf("update knowledge: %w", uerr)
+					} else {
+						knowledgeCreated++
+					}
+				} else {
+					_, ierr := d.q(ctx).Exec(ctx,
+						`INSERT INTO knowledge_docs
+						   (organization_id, project_id, created_by, title, body,
+						    source, tags, metadata)
+						 VALUES ($1, $2, $3, $4, $5, 'seed_imported', $6, $7)`,
+						orgID, projectID, userID, cls.Title, cls.Body, tags, metaJSON,
+					)
+					if ierr != nil {
+						fileErr = fmt.Errorf("insert knowledge: %w", ierr)
+					} else {
+						knowledgeCreated++
+					}
+				}
 			}
 		default:
 			ignored++
 			ignoredPaths = append(ignoredPaths, path)
+		}
+
+		// Si hubo error en este archivo, lo registramos como ignored
+		// pero la tx ya está en el savepoint (rolled back), lista
+		// para el siguiente archivo.
+		if fileErr != nil {
+			ignored++
+			errMsg := fileErr.Error()
+			if len(errMsg) > 60 {
+				errMsg = errMsg[:60]
+			}
+			ignoredPaths = append(ignoredPaths, path+" ("+errMsg+")")
+			// Asegurar que la tx está limpia para el próximo archivo.
+			// Si el savepoint sigue activo (caso CREATE OK que no fue),
+			// ROLLBACK. Si ya está rolled back, esto es no-op.
+			_, _ = d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
+		} else {
+			// Todo OK en este archivo — liberar el savepoint.
+			_, _ = d.q(ctx).Exec(ctx, "RELEASE SAVEPOINT "+spName)
 		}
 	}
 

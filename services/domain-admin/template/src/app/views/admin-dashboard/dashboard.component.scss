@@ -1,0 +1,165 @@
+// HU-41.2: dashboard home — stat cards + top users + recent activity + quick actions.
+
+:host {
+  display: block;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .stat-icon {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    opacity: 0.25;
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+    color: var(--cui-body-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--cui-body-color);
+  }
+
+  .stat-sub {
+    font-size: 0.8rem;
+    color: var(--cui-body-secondary);
+    margin-top: 0.25rem;
+  }
+}
+
+.stat-card-primary { border-left: 4px solid var(--cui-primary); }
+.stat-card-info    { border-left: 4px solid #39f; }
+.stat-card-warning { border-left: 4px solid #f9b115; }
+.stat-card-success { border-left: 4px solid #2eb85c; }
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.empty-state-mini {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--cui-body-secondary);
+
+  svg {
+    opacity: 0.4;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--cui-border-color-translucent);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.health-label {
+  font-size: 0.9rem;
+  color: var(--cui-body-color);
+}
+
+.activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.activity-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--cui-border-color-translucent);
+  font-size: 0.85rem;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.activity-actor {
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+
+.activity-action {
+  color: var(--cui-body-color);
+  margin-bottom: 0.25rem;
+
+  code {
+    background: var(--cui-tertiary-bg);
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+  }
+}
+
+.activity-time {
+  color: var(--cui-body-secondary);
+  font-size: 0.75rem;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1rem;
+  background: var(--cui-card-bg);
+  border: 1.5px solid var(--cui-border-color);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--cui-body-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--cui-primary);
+    background: color-mix(in srgb, var(--cui-primary) 4%, var(--cui-card-bg));
+    color: var(--cui-primary);
+    transform: translateY(-1px);
+  }
+}

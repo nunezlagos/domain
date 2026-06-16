@@ -1,0 +1,219 @@
+<!--
+  HU-41.2: dashboard home del admin. Consume /admin/org-overview.
+  Muestra: stat cards (members/agents/runs/cost del mes), top users del mes,
+  recent activity, y (si super_admin) system health.
+-->
+<section class="admin-dashboard">
+
+  @if (loading() && !overview()) {
+    <div class="text-center py-5">
+      <c-spinner color="primary" aria-label="Cargando"></c-spinner>
+      <p class="text-body-secondary mt-3">Cargando overview…</p>
+    </div>
+  }
+
+  @if (error()) {
+    <c-alert color="danger">
+      <svg cIcon name="cilWarning" class="me-2"></svg>
+      {{ error() }}
+    </c-alert>
+  }
+
+  @if (overview(); as o) {
+
+    <!-- Stat cards -->
+    <c-row class="mb-4">
+      <c-col xs="6" md="3" class="mb-3 mb-md-0">
+        <c-card class="stat-card stat-card-primary">
+          <c-card-body>
+            <div class="stat-icon">
+              <svg cIcon name="cilPeople" size="xl"></svg>
+            </div>
+            <div class="stat-label">Miembros activos</div>
+            <div class="stat-value">{{ o.stats.members_active }}</div>
+          </c-card-body>
+        </c-card>
+      </c-col>
+      <c-col xs="6" md="3" class="mb-3 mb-md-0">
+        <c-card class="stat-card stat-card-info">
+          <c-card-body>
+            <div class="stat-icon">
+              <svg cIcon name="cilRobot" size="xl"></svg>
+            </div>
+            <div class="stat-label">Agentes</div>
+            <div class="stat-value">{{ o.stats.agents }}</div>
+          </c-card-body>
+        </c-card>
+      </c-col>
+      <c-col xs="6" md="3" class="mb-3 mb-md-0">
+        <c-card class="stat-card stat-card-warning">
+          <c-card-body>
+            <div class="stat-icon">
+              <svg cIcon name="cilSprint" size="xl"></svg>
+            </div>
+            <div class="stat-label">Runs (24h)</div>
+            <div class="stat-value">{{ o.stats.runs_24h }}</div>
+          </c-card-body>
+        </c-card>
+      </c-col>
+      <c-col xs="6" md="3" class="mb-3 mb-md-0">
+        <c-card class="stat-card stat-card-success">
+          <c-card-body>
+            <div class="stat-icon">
+              <svg cIcon name="cilDollar" size="xl"></svg>
+            </div>
+            <div class="stat-label">Cost del mes</div>
+            <div class="stat-value">${{ o.stats.cost_this_month_usd | number:'1.2-2' }}</div>
+            <div class="stat-sub">
+              {{ o.stats.tokens_this_month | number }} tokens
+            </div>
+          </c-card-body>
+        </c-card>
+      </c-col>
+    </c-row>
+
+    <c-row>
+      <!-- Top users -->
+      <c-col xs="12" lg="7" class="mb-4">
+        <c-card>
+          <c-card-header>
+            <strong>Top 5 users del mes</strong>
+            <a routerLink="/admin/usage" class="ms-auto small text-body-secondary text-decoration-none">
+              Ver todos <svg cIcon name="cilArrowRight"></svg>
+            </a>
+          </c-card-header>
+          <c-card-body class="p-0">
+            @if (o.top_users_this_month.length === 0) {
+              <div class="empty-state-mini">
+                <svg cIcon name="cilUser" size="2xl"></svg>
+                <p>Sin actividad de usuarios este mes.</p>
+              </div>
+            } @else {
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th class="text-end">Prompts</th>
+                    <th class="text-end">Tokens</th>
+                    <th class="text-end">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (u of o.top_users_this_month; track u.user_id) {
+                    <tr>
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <div class="user-avatar me-2">
+                            {{ u.name?.[0] || u.email[0] }}
+                          </div>
+                          <div>
+                            <div class="fw-semibold">{{ u.name || u.email }}</div>
+                            <small class="text-body-secondary">{{ u.email }}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="text-end">{{ u.prompts }}</td>
+                      <td class="text-end">
+                        {{ (u.tokens_in + u.tokens_out) | number }}
+                      </td>
+                      <td class="text-end fw-semibold">
+                        ${{ u.cost_usd | number:'1.2-2' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </c-card-body>
+        </c-card>
+      </c-col>
+
+      <!-- Recent activity + system health -->
+      <c-col xs="12" lg="5">
+        <!-- System health (super_admin only) -->
+        @if (o.system_health && isSuperAdmin()) {
+          <c-card class="mb-4">
+            <c-card-header><strong>System health</strong></c-card-header>
+            <c-card-body>
+              <div class="health-row">
+                <span class="health-label">API</span>
+                <c-badge [color]="o.system_health!.api === 'ok' ? 'success' : 'danger'">
+                  {{ o.system_health!.api }}
+                </c-badge>
+              </div>
+              <div class="health-row">
+                <span class="health-label">Database</span>
+                <c-badge [color]="o.system_health!.database === 'ok' ? 'success' : 'danger'">
+                  {{ o.system_health!.database }}
+                </c-badge>
+              </div>
+              <div class="health-row">
+                <span class="health-label">LLM providers</span>
+                <c-badge color="secondary">
+                  {{ o.system_health!.llm_provider }}
+                </c-badge>
+              </div>
+            </c-card-body>
+          </c-card>
+        }
+
+        <!-- Recent activity -->
+        <c-card>
+          <c-card-header>
+            <strong>Actividad reciente</strong>
+            <a routerLink="/admin/audit" class="ms-auto small text-body-secondary text-decoration-none">
+              Ver todo <svg cIcon name="cilArrowRight"></svg>
+            </a>
+          </c-card-header>
+          <c-card-body class="p-0">
+            @if (o.recent_activity.length === 0) {
+              <div class="empty-state-mini">
+                <svg cIcon name="cilHistory" size="2xl"></svg>
+                <p>Sin actividad reciente.</p>
+              </div>
+            } @else {
+              <ul class="activity-list">
+                @for (a of o.recent_activity; track $index) {
+                  <li class="activity-item">
+                    <div class="activity-actor">{{ a.actor }}</div>
+                    <div class="activity-action">
+                      <code>{{ a.action }}</code>
+                      <span class="text-body-secondary"> · {{ a.target }}</span>
+                    </div>
+                    <div class="activity-time">{{ relativeTime(a.at) }}</div>
+                  </li>
+                }
+              </ul>
+            }
+          </c-card-body>
+        </c-card>
+      </c-col>
+    </c-row>
+
+    <!-- Acciones rápidas -->
+    <c-card class="mt-4">
+      <c-card-header><strong>Acciones rápidas</strong></c-card-header>
+      <c-card-body>
+        <div class="quick-actions">
+          <a routerLink="/admin/members" class="quick-action">
+            <svg cIcon name="cilUserFollow" size="lg"></svg>
+            <span>Invitar miembro</span>
+          </a>
+          <a routerLink="/admin/audit" class="quick-action">
+            <svg cIcon name="cilHistory" size="lg"></svg>
+            <span>Ver audit</span>
+          </a>
+          <a routerLink="/admin/cost" class="quick-action">
+            <svg cIcon name="cilChartLine" size="lg"></svg>
+            <span>Cost analytics</span>
+          </a>
+          <a routerLink="/admin/tickets" class="quick-action">
+            <svg cIcon name="cilTag" size="lg"></svg>
+            <span>Tickets</span>
+          </a>
+        </div>
+      </c-card-body>
+    </c-card>
+
+  }
+</section>

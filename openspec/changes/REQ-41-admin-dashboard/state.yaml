@@ -1,0 +1,22 @@
+status: active
+created: 2026-06-16
+phase: F4
+origin: >
+  App Angular 21 + CoreUI 5.6 ya implementada en services/domain-admin/template/
+  (commit ff0e0d5). Las vistas de stock (Theme/Colors/Buttons/Forms/Charts/Icons/
+  Widgets/Pages) son demos. El REQ formal documenta el panel real que las
+  sustituye. Auth web, CORS, OpenAPI y RBAC ya están en backend.
+notes: >
+  Convive con REQ-16 (user dashboard). Reusa el 100% de los 238 handlers Go
+  existentes; los 6 endpoints nuevos están justificados HU por HU.
+hus:
+  41.1-admin-shell-and-routing: proposed
+  41.2-admin-org-dashboard: proposed
+  41.3-admin-members-management: proposed
+  41.4-admin-org-settings: proposed
+  41.5-admin-audit-log-viewer: proposed
+  41.6-admin-billing-and-usage: proposed
+  41.7-admin-tickets-formalize: proposed
+  41.8-admin-cost-analytics: proposed
+  41.9-admin-super-admin-cross-org: proposed
+  41.10-admin-impersonation: proposed

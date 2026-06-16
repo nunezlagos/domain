@@ -89,6 +89,15 @@ func runnerFromCtx(ctx context.Context, pool interface {
 	return pool
 }
 
+// ensureSlice: si el slice es nil, devuelve []Type{} para que el JSON
+// marshalice como [] en vez de null.
+func ensureSlice[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
 // getOrgOverview es el handler HTTP montado en /api/v1/admin/org-overview.
 func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	principal, ok := apikey.FromContext(r.Context())
@@ -119,7 +128,11 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	q := runnerFromCtx(ctx, a.Pool)
+	// Usar el Pool directamente (cada query toma su propia conexión).
+	// RLS se convierte en defense-in-depth: el filtro `WHERE organization_id`
+	// en cada query es la fuente de verdad. Esto permite paralelizar
+	// con errgroup sin caer en "conn busy" (misma conexión usada
+	// concurrentemente).
 	g, gctx := errgroup.WithContext(ctx)
 
 	var (
@@ -131,24 +144,24 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Stats agregados.
 	g.Go(func() error {
-		row := q.QueryRow(gctx, `
+		row := a.Pool.QueryRow(gctx, `
 			SELECT
 			  (SELECT count(*) FROM users WHERE organization_id = $1 AND deleted_at IS NULL),
 			  (SELECT count(*) FROM agents WHERE organization_id = $1 AND deleted_at IS NULL),
 			  (SELECT count(*) FROM (
-			    SELECT id FROM agent_runs WHERE organization_id = $1 AND created_at > now() - interval '24 hours'
+			    SELECT id FROM agent_runs WHERE organization_id = $1 AND started_at > now() - interval '24 hours'
 			    UNION ALL
-			    SELECT id FROM flow_runs WHERE organization_id = $1 AND created_at > now() - interval '24 hours'
+			    SELECT id FROM flow_runs WHERE organization_id = $1 AND started_at > now() - interval '24 hours'
 			  ) r),
-			  COALESCE((SELECT sum(input_tokens + output_tokens) FROM token_usage WHERE organization_id = $1 AND created_at >= date_trunc('month', now())), 0)::bigint,
-			  COALESCE((SELECT sum(cost) FROM token_usage WHERE organization_id = $1 AND created_at >= date_trunc('month', now())), 0)
+			  COALESCE((SELECT sum(tokens_input + tokens_output) FROM cost_logs WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())), 0)::bigint,
+			  COALESCE((SELECT sum(cost_usd) FROM cost_logs WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())), 0)
 		`, targetOrgID)
 		return row.Scan(&stats.MembersActive, &stats.Agents, &stats.RunsLast24h, &stats.TokensThisMonth, &stats.CostThisMonthUSD)
 	})
 
 	// Top 5 users del mes (por cost USD desc).
 	g.Go(func() error {
-		rows, err := q.Query(gctx, `
+		rows, err := a.Pool.Query(gctx, `
 			SELECT
 			  u.id, COALESCE(u.name, ''), u.email,
 			  COALESCE(p.prompts, 0),
@@ -159,16 +172,16 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN (
 			  SELECT user_id, count(*) AS prompts
 			  FROM captured_prompts
-			  WHERE organization_id = $1 AND created_at >= date_trunc('month', now())
+			  WHERE organization_id = $1 AND captured_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) p ON p.user_id = u.id
 			LEFT JOIN (
 			  SELECT user_id,
-			         sum(input_tokens)  AS tokens_in,
-			         sum(output_tokens) AS tokens_out,
-			         sum(cost)         AS cost
-			  FROM token_usage
-			  WHERE organization_id = $1 AND created_at >= date_trunc('month', now())
+			         sum(tokens_input)  AS tokens_in,
+			         sum(tokens_output) AS tokens_out,
+			         sum(cost_usd)     AS cost
+			  FROM cost_logs
+			  WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) t ON t.user_id = u.id
 			WHERE u.organization_id = $1 AND u.deleted_at IS NULL
@@ -191,7 +204,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Recent activity (últimos 10 del audit_log).
 	g.Go(func() error {
-		rows, err := q.Query(gctx, `
+		rows, err := a.Pool.Query(gctx, `
 			SELECT
 			  COALESCE(actor.email, 'system'),
 			  al.action,
@@ -220,7 +233,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	// DB health.
 	g.Go(func() error {
 		var ok int
-		if err := q.QueryRow(gctx, `SELECT 1`).Scan(&ok); err != nil {
+		if err := a.Pool.QueryRow(gctx, `SELECT 1`).Scan(&ok); err != nil {
 			dbHealth = "error"
 		} else {
 			dbHealth = "ok"
@@ -236,8 +249,8 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	resp := OrgOverviewResponse{
 		OrgID:             targetOrgID,
 		Stats:             stats,
-		TopUsersThisMonth: topUsers,
-		RecentActivity:    recentActivity,
+		TopUsersThisMonth: ensureSlice(topUsers),
+		RecentActivity:    ensureSlice(recentActivity),
 	}
 
 	// System health solo si super_admin.

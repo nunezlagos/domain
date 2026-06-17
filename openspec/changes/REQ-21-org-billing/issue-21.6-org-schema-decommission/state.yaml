@@ -1,0 +1,9 @@
+status: proposed
+created: 2026-06-17
+implemented: ~
+archived: ~
+notes: |
+  Decommission destructivo del schema multi-tenant. Depende de issue-21.5 (surface ya
+  colapsado). Ejecución por fases A→D, cada una deployable. Fase C (DROP COLUMN/TABLE) es
+  irreversible: requiere backup verificado + dry-run en staging. NO ejecutado aún.
+  Esfuerzo estimado: 1-2 semanas.

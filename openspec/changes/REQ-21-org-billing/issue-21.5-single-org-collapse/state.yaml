@@ -1,0 +1,8 @@
+status: proposed
+created: 2026-06-17
+implemented: ~
+archived: ~
+notes: |
+  Collapse del surface multi-org → single-org. Reversible, no destructivo de datos.
+  Preserva plumbing single-tenant (org_id + RLS) y features dependientes (admin dashboard,
+  onboarding por enrollment-tokens). El drop destructivo del schema va en issue-21.6.

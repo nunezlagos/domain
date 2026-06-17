@@ -6,3 +6,5 @@ hus:
   21.2-user-invitations: implemented
   21.3-plans-limits: implemented
   21.4-billing-stripe: archived
+  21.5-single-org-collapse: proposed
+  21.6-org-schema-decommission: proposed

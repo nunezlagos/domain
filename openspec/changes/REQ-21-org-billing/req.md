@@ -24,3 +24,13 @@ Capa de gestión multi-tenant a nivel organización: invitar y administrar miemb
 | issue-21.2-user-invitations | proposed | Invitaciones email con token, expiración, accept/decline, audit |
 | issue-21.3-plans-limits | proposed | Plans con cuotas por dimensión, tracking, throttle/block al exceder |
 | issue-21.4-billing-stripe | proposed | Integración Stripe: Checkout, Webhooks, métodos de pago, invoices |
+| issue-21.5-single-org-collapse | proposed | **Deprecación org**: collapse del surface multi-org → single-org (reversible) |
+| issue-21.6-org-schema-decommission | proposed | **Deprecación org**: drop destructivo del schema multi-tenant (org_id, RLS, tabla) |
+
+## Nota de dirección (2026-06-17)
+
+Domain pasa a **single-org**: cada deployment self-hosted atiende a UNA organización.
+La gestión multi-tenant a nivel aplicación (crear/borrar/transferir orgs, invitaciones
+cross-org) se deprecia. Las HUs 21.5 (collapse de surface, reversible) y 21.6
+(decommission destructivo del schema, staged) implementan esta deprecación.
+Continúa la línea de issue-02.8 (drop custom_roles).

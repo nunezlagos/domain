@@ -101,7 +101,6 @@ import (
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/events"
-	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
@@ -447,8 +446,8 @@ func runServer() {
 	// REQ-68: embedder elegido por env (DOMAIN_EMBEDDING_PROVIDER). Default noop.
 	embedder := chooseEmbedder(logger)
 	obsService := observation.NewService(pools.App, recorder, embedder, nil, nil)
-	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop
-	var inviteMailer invite.Mailer = invite.NopMailer{}
+	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop (solo OTP; invitations
+	// se removió en issue-21.5 — onboarding single-org usa enrollment-tokens).
 	var otpMailer otp.Mailer
 	if cfg.SMTPHost != "" {
 		realMailer := smtpmail.New(smtpmail.Config{
@@ -456,17 +455,12 @@ func runServer() {
 			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
 			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
 		})
-		inviteMailer = realMailer
 		otpMailer = realMailer
 		logger.Info("SMTP mailer configured", slog.String("host", cfg.SMTPHost))
 	} else {
-		logger.Warn("SMTP not configured — invitations/OTP no enviarán mails reales (DOMAIN_SMTP_HOST missing)")
+		logger.Warn("SMTP not configured — OTP no enviará mails reales (DOMAIN_SMTP_HOST missing)")
 	}
 
-	inviteService := &invite.Service{
-		Pool: pools.App, Audit: recorder, Mailer: inviteMailer,
-		AcceptURL: "https://app.domain.sh/accept",
-	}
 	sessionService := sesssvc.NewService(pools.App, recorder, nil)
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
@@ -690,9 +684,8 @@ func runServer() {
 		Logger:      logger,
 		UsageAlerts: usageAlertsService.AsUsageAlerter(),
 	}
-	// issue-10.4 ow-002: hooks de entidad (observation.created, invite.created)
+	// issue-10.4 ow-002: hooks de entidad (observation.created)
 	obsService.Events = outboundEmitter
-	inviteService.Events = outboundEmitter
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
 		Agents: agentService, Skills: skillService, Billing: billingService,
@@ -866,7 +859,6 @@ func runServer() {
 		ProjectPolicyService:  projectPolicyService,
 		Pool:           pools.App,
 		ObsService:     obsService,
-		InviteService:  inviteService,
 		SessionService:  sessionService,
 		PromptService:   promptService,
 		TimelineService:  timelineService,

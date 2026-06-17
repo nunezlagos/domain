@@ -45,7 +45,6 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/flow"
-	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
@@ -133,7 +132,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 		OrgService:       orgS,
 		ProjectService:   projS,
 		ObsService:       obsS,
-		InviteService:    &invite.Service{Pool: pools.App, Audit: rec, Mailer: invite.NopMailer{}, AcceptURL: "http://test"},
 		SessionService:   &sesssvc.Service{Pool: pools.App, Audit: rec},
 		PromptService:   &promptsvc.Service{Pool: pools.App, Audit: rec},
 		TimelineService:  &timelinesvc.Service{Pool: pools.App},

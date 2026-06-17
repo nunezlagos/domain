@@ -21,7 +21,6 @@ import (
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/llm"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/observation"
 	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
@@ -66,7 +65,6 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	orgS := &orgsvc.Service{Pool: pool, Audit: rec}
 	projS := &projsvc.Service{Pool: pool, Audit: rec}
 	obsS := &observation.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{}}
-	invS := &invite.Service{Pool: pool, Audit: rec, Mailer: invite.NopMailer{}, AcceptURL: "http://test"}
 
 	// apikey store usa AuthPool: Resolve hace lookup global de api_keys por
 	// prefix (no conoce org_id aún) y necesita atravesar RLS.
@@ -77,7 +75,6 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 		OrgService:     orgS,
 		ProjectService: projS,
 		ObsService:     obsS,
-		InviteService:  invS,
 		SearchService:  searchS,
 		APIKeys:        keys,
 	}

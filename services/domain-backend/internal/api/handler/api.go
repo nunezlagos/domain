@@ -50,7 +50,6 @@ import (
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
-	"nunezlagos/domain/internal/service/invite"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -90,7 +89,6 @@ type API struct {
 	ProjectPolicyService  *projectpolicysvc.Service  // REQ-43 policies por proyecto
 	Pool           *pgxpool.Pool // REQ-49/50 — queries directas para proposals/verifications
 	ObsService     *observation.Service
-	InviteService  *invite.Service
 	SessionService  *sesssvc.Service
 	PromptService   *promptsvc.Service
 	TimelineService  *timelinesvc.Service
@@ -255,13 +253,6 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/attachments/{id}/download", a.getAttachmentDownload)
 	mux.HandleFunc("GET /api/v1/attachments", a.listAttachments)
 	mux.HandleFunc("DELETE /api/v1/attachments/{id}", a.deleteAttachment)
-
-	// Invitations
-	mux.HandleFunc("POST /api/v1/organizations/{id}/invitations", a.createInvite)
-	mux.HandleFunc("GET /api/v1/organizations/{id}/invitations", a.listInvites)
-	mux.HandleFunc("POST /api/v1/invitations/{token}/accept", a.acceptInvite)
-	mux.HandleFunc("POST /api/v1/invitations/{token}/decline", a.declineInvite)
-	mux.HandleFunc("POST /api/v1/invitations/{id}/revoke", a.revokeInvite)
 
 	// Projects (scoped by org via ?organization_id= o derivado del principal)
 	mux.HandleFunc("POST /api/v1/projects", a.createProject)

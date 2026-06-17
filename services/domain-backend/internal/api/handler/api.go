@@ -187,11 +187,11 @@ func (a *API) Router() http.Handler {
 	// Activity logs (issue-02.6)
 	mux.HandleFunc("GET /api/v1/activity-logs", a.listActivityLogs)
 
-	// Organizaciones (require auth)
-	mux.HandleFunc("POST /api/v1/organizations", a.createOrg)
+	// Organización (single-org, issue-21.5): solo lectura/ajuste de la única org
+	// y gestión de members. El lifecycle multi-org (create/delete/transfer) se
+	// removió: cada deployment atiende a UNA organización.
 	mux.HandleFunc("GET /api/v1/organizations/{id}", a.getOrg)
 	mux.HandleFunc("PATCH /api/v1/organizations/{id}", a.updateOrg)
-	mux.HandleFunc("DELETE /api/v1/organizations/{id}", a.deleteOrg)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
 	// issue-36.1: onboarding sin email — admin/owner crea user + api_key directo
 	mux.HandleFunc("POST /api/v1/organizations/{id}/members", a.addMemberWithKey)
@@ -200,7 +200,6 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/organizations/{id}/enrollment-token/rotate", a.rotateEnrollmentToken)
 	mux.HandleFunc("GET /api/v1/organizations/{id}/enrollment-token", a.getEnrollmentTokenMetadata)
 	mux.HandleFunc("DELETE /api/v1/organizations/{id}/enrollment-token", a.deleteEnrollmentToken)
-	mux.HandleFunc("POST /api/v1/organizations/{id}/transfer-ownership", a.transferOwnership)
 
 	// Requirements (issue-04.1) — SDD dogfood
 	mux.HandleFunc("POST /api/v1/requirements", a.createRequirement)

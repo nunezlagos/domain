@@ -54,5 +54,15 @@ notes: |
     CONCLUSIÓN: el drop total no es seguro de forma 100% automatizada (sin red de tests en rutas
     críticas como apikey, y SQL en strings que el compilador no ve). Hacer incremental por-consumidor
     con tests, empezando por apikey/store.go.
-  PENDIENTE: arreglar+testear apikey; refactor per-consumer de las 8 satélites; migración drop
-    columnas/tablas (NO con DO block ciego); Fase D (tests+SDK+seeds+docs); limpieza params orgID muertos.
+  PASO 1 HECHO (2026-06-17, commit f8f87dd) — apikey desacoplado de api_keys.organization_id:
+    - store.go: Issue/Rotate dejan de escribir organization_id; Resolve/List derivan el org
+      del user (users.organization_id vía JOIN). La columna queda huérfana → droppable.
+    - El org del Principal sigue fluyendo (desde users) → downstream intacto (no se rompió el
+      flujo apikey→ctxkeys→services).
+    - Migración 000134: api_keys.organization_id → nullable (reversible).
+    - NUEVO store_integration_test.go: ruta de AUTH (Issue→Resolve), List, Rotate, Revoke.
+    - build+vet verdes; integration apikey PASA (15s); migrate roundtrip PASA.
+  PENDIENTE: refactor per-consumer de las 8 satélites (billing/usage/cost-alerts/flow-config/
+    enrollment + organizations) volviéndolas globales, cada una con sus integration tests;
+    luego migración final drop columnas/tablas (explícita, NO DO block ciego); Fase D
+    (tests+SDK+seeds+docs); limpieza de params orgID muertos.

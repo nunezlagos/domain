@@ -24,18 +24,21 @@ type PGStore struct {
 	Pool *pgxpool.Pool
 }
 
-// Issue genera nueva key para user/org, persiste hash + prefix, retorna plaintext.
+// Issue genera nueva key para el user, persiste hash + prefix, retorna plaintext.
 // Plaintext SOLO disponible aquí; subsequente lookup retorna hash, no plaintext.
+// orgID se mantiene en la firma por compat de callers pero ya NO se persiste:
+// el org de una key se deriva de su user (users.organization_id) en Resolve/List.
 func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env string) (plaintext string, keyID uuid.UUID, err error) {
+	_ = orgID
 	plaintext, prefix, hash, err := Generate(env)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO api_keys (organization_id, user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+		 VALUES ($1, $2, $3, $4)
 		 RETURNING id`,
-		orgID, userID, hash, prefix, name,
+		userID, hash, prefix, name,
 	).Scan(&keyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert api_key: %w", err)
@@ -56,14 +59,16 @@ type APIKeyInfo struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
-// List retorna keys activas de una org (no revoked).
+// List retorna keys activas de una org (no revoked). El scope por org se deriva
+// del user dueño de la key (users.organization_id), no de api_keys.
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, organization_id, user_id, name, key_prefix,
-		       last_used_at, expires_at, revoked_at, created_at
-		FROM api_keys
-		WHERE organization_id = $1 AND revoked_at IS NULL
-		ORDER BY created_at DESC
+		SELECT k.id, u.organization_id, k.user_id, k.name, k.key_prefix,
+		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
+		FROM api_keys k
+		JOIN users u ON u.id = k.user_id
+		WHERE u.organization_id = $1 AND k.revoked_at IS NULL
+		ORDER BY k.created_at DESC
 	`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("list api keys: %w", err)
@@ -90,16 +95,17 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 	}
 	defer tx.Rollback(ctx)
 
+	_ = orgID // ya no se persiste en api_keys; el org se deriva del user.
 	newPlaintext, prefix, hash, err := Generate(env)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO api_keys (organization_id, user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+		 VALUES ($1, $2, $3, $4)
 		 RETURNING id`,
-		orgID, userID, hash, prefix, name,
+		userID, hash, prefix, name,
 	).Scan(&newKeyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert new key: %w", err)
@@ -143,7 +149,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 
 	// Buscar candidates por prefix (puede haber colision; prefix incluye 7 chars random)
 	rows, err := s.Pool.Query(ctx,
-		`SELECT k.id, k.organization_id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
+		`SELECT k.id, u.organization_id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
 		 FROM api_keys k
 		 JOIN users u ON u.id = k.user_id
 		 WHERE k.key_prefix = $1

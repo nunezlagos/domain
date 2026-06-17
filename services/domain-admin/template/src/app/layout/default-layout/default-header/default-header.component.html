@@ -11,18 +11,7 @@
       <svg cIcon name="cilMenu" size="lg"></svg>
     </button>
 
-    <!-- Search (decorativo por ahora; wire a /admin/search en HU futura) -->
-    <div class="header-search d-none d-md-flex ms-3">
-      <svg cIcon name="cilSearch" class="header-search-icon"></svg>
-      <input
-        type="search"
-        class="form-control header-search-input"
-        placeholder="Buscar agents, flows, tickets…"
-        aria-label="Search" />
-      <kbd class="header-search-kbd">⌘K</kbd>
-    </div>
-
-    <c-header-nav class="ms-auto ms-md-0">
+    <c-header-nav class="ms-auto">
 
       <!-- HU-41.1: org selector (solo super_admin) -->
       <c-nav-item *ngIf="isSuperAdmin()">
@@ -45,7 +34,7 @@
         <div class="vr h-100 mx-2 text-body text-opacity-75"></div>
       </div>
 
-      <!-- User avatar + dropdown -->
+      <!-- User avatar + dropdown (al final para que quede a la derecha del todo) -->
       <ng-container *ngTemplateOutlet="userDropdown" />
     </c-header-nav>
   </c-container>

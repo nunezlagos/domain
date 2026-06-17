@@ -1,9 +1,18 @@
-<c-header class="mb-4 d-print-none" position="sticky">
-  <c-container [fluid]="true" class="border-bottom px-4 d-flex align-items-center">
+<!-- Header plain (sin c-header para evitar la clase .header de CoreUI
+     que mete `display: flex; justify-content: space-between` y rompe
+     el layout. Usamos <header> nativo con clases Bootstrap. -->
+<header
+  class="bg-body border-bottom mb-4 d-print-none position-sticky top-0"
+  style="position: sticky; top: 0; z-index: 1020; display: block; width: 100%;"
+>
+  <div
+    class="px-4 w-100"
+    style="display: flex; align-items: center; gap: 0.5rem; height: 56px;"
+  >
     <button
       [cSidebarToggle]="sidebarId()"
       cHeaderToggler
-      class="btn"
+      class="btn flex-shrink-0"
       toggle="visible"
       style="margin-inline-start: -14px;"
       aria-label="Toggle sidebar navigation"
@@ -11,42 +20,32 @@
       <svg cIcon name="cilMenu" size="lg"></svg>
     </button>
 
-    <div class="flex-grow-1"></div>
+    <!-- Spacer que empuja el nav a la derecha -->
+    <div style="flex: 1 1 auto; min-width: 0;"></div>
 
-    <c-header-nav class="d-flex align-items-center gap-2">
-
-      <!-- HU-41.1: org selector (solo super_admin) -->
-      <c-nav-item *ngIf="isSuperAdmin()">
-        <select
-          class="form-select form-select-sm header-org-select"
-          [value]="activeOrgId() ?? ''"
-          (change)="onOrgChange($any($event.target).value)"
-          aria-label="Active organization">
-          <option value="" disabled>— Org —</option>
-          @for (org of availableOrgs(); track org.id) {
-            <option [value]="org.id">{{ org.name }}</option>
-          }
-        </select>
-      </c-nav-item>
-
+    <!-- Nav derecho: theme + avatar en línea -->
+    <ul
+      class="d-flex align-items-center list-unstyled mb-0"
+      style="gap: 0.5rem; flex: 0 0 auto;"
+    >
       <!-- Theme picker (light / dark / auto) -->
-      <ng-container *ngTemplateOutlet="themeDropdown" />
+      <li style="display: inline-flex; align-items: center;">
+        <ng-container *ngTemplateOutlet="themeDropdown" />
+      </li>
 
-      <div class="nav-item py-1 d-none d-md-flex">
+      <li class="nav-item py-1 d-none d-md-flex">
         <div class="vr h-100 mx-2 text-body text-opacity-75"></div>
-      </div>
+      </li>
 
-      <!-- User avatar + dropdown (al final para que quede a la derecha del todo) -->
-      <ng-container *ngTemplateOutlet="userDropdown" />
-    </c-header-nav>
-  </c-container>
+      <!-- User avatar + dropdown (al final = derecha del todo) -->
+      <li style="display: inline-flex; align-items: center;">
+        <ng-container *ngTemplateOutlet="userDropdown" />
+      </li>
+    </ul>
+  </div>
+</header>
 
-  <c-container [fluid]="true" class="px-4">
-    <c-breadcrumb-router />
-  </c-container>
-</c-header>
-
-<!-- Theme picker dropdown -->
+<!-- Theme picker dropdown (sin cambios) -->
 <ng-template #themeDropdown>
   <c-dropdown alignment="end" variant="nav-item">
     <button [caret]="false" cDropdownToggle aria-label="Cambiar tema">
@@ -67,7 +66,7 @@
   </c-dropdown>
 </ng-template>
 
-<!-- User dropdown -->
+<!-- User dropdown (sin cambios) -->
 <ng-template #userDropdown>
   <c-dropdown [popperOptions]="{ placement: 'bottom-end' }" variant="nav-item">
     <button [caret]="true" cDropdownToggle class="py-0" aria-label="Open user menu">

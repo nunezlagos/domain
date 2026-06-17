@@ -182,6 +182,10 @@ export class GenericMaintainerComponent implements OnInit {
       this.error.set('project_slug es requerido');
       return;
     }
+    if (def.hasSearch && !this.searchQuery().trim()) {
+      this.error.set('Escribí un query y apretá Buscar (los endpoints con hasSearch lo requieren)');
+      return;
+    }
     this.loading.set(true);
     this.error.set(null);
 

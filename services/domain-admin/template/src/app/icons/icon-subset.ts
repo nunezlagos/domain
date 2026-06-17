@@ -109,7 +109,14 @@ import {
   cilFingerprint,
   cilTerminal,
   cilBolt,
-  cilGraph
+  cilGraph,
+  cilApps,
+  cilBook,
+  cilStorage,
+  cilHeart,
+  cilBuilding,
+  cilBriefcase,
+  cilSync
 } from '@coreui/icons';
 
 import { signet } from './signet';
@@ -212,6 +219,33 @@ export const iconSubset = {
   cilUserFemale,
   cilUserFollow,
   cilUserUnfollow,
+  // HU-41.4: icons adicionales (admin maintainers). Sin estos en
+  // el const, IconService.icons no los registra y se renderean
+  // como texto plano en el DOM.
+  cilHistory,
+  cilSearch,
+  cilSend,
+  cilTag,
+  cilWarning,
+  cilCheckCircle,
+  cilClock,
+  cilCopy,
+  cilChartLine,
+  cilUserX,
+  cilFingerprint,
+  cilTerminal,
+  cilBolt,
+  cilGraph,
+  cilApps,
+  cilBook,
+  cilStorage,
+  cilHeart,
+  cilBuilding,
+  cilBriefcase,
+  // Aliases / reemplazos para icons que no existen en @coreui/icons.
+  // cilShield no existe, usamos cilLockLocked como "secure/policy" semántico.
+  // Si necesitás un shield real, usar coreui-pro.
+  // Para platform-policies en el registry.ts usar 'cilLockLocked'.
   logo,
   signet
 };

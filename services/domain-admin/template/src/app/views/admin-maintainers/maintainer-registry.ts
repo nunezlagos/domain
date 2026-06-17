@@ -113,8 +113,8 @@ export const MAINTAINERS: MaintainerDef[] = [
   },
   {
     path: 'prompts', title: 'Prompts', icon: 'cilCopy', category: 'resources',
-    description: 'Prompt templates versionados (búsqueda con ?q=).',
-    endpoint: '/api/v1/prompts/search?q=',
+    description: 'Prompt templates versionados. Escribí un query y apretá Buscar.',
+    endpoint: '/api/v1/prompts/search',
     hasSearch: true,
     columns: [
       { key: 'slug', label: 'Slug', nullable: false },
@@ -333,7 +333,7 @@ export const MAINTAINERS: MaintainerDef[] = [
     ],
   },
   {
-    path: 'platform-policies', title: 'Platform Policies', icon: 'cilShield', category: 'system',
+    path: 'platform-policies', title: 'Platform Policies', icon: 'cilLockLocked', category: 'system',
     description: 'Policies globales de la org (convención, security, architecture, etc).',
     endpoint: '/api/v1/platform/policies',
     columns: [

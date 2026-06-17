@@ -1,0 +1,41 @@
+-- Revertir issue-21.6 Fase A: re-habilitar RLS org (ENABLE + FORCE) en las
+-- tablas org-scoped. Las policies nunca se dropearon, así que vuelven a aplicar.
+
+ALTER TABLE activity_log                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_log                  FORCE  ROW LEVEL SECURITY;
+ALTER TABLE api_keys                      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys                      FORCE  ROW LEVEL SECURITY;
+ALTER TABLE audit_log                     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log                     FORCE  ROW LEVEL SECURITY;
+ALTER TABLE captured_prompts              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captured_prompts              FORCE  ROW LEVEL SECURITY;
+ALTER TABLE clients                       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients                       FORCE  ROW LEVEL SECURITY;
+ALTER TABLE observations                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE observations                  FORCE  ROW LEVEL SECURITY;
+ALTER TABLE organizations                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organizations                 FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_index_runs            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_index_runs            FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_policies              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_policies              FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_policy_versions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_policy_versions       FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_repositories          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_repositories          FORCE  ROW LEVEL SECURITY;
+ALTER TABLE projects                      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects                      FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_ticket_comments       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_ticket_comments       FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_tickets               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_tickets               FORCE  ROW LEVEL SECURITY;
+ALTER TABLE project_ticket_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_ticket_status_history FORCE  ROW LEVEL SECURITY;
+ALTER TABLE secrets                       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secrets                       FORCE  ROW LEVEL SECURITY;
+ALTER TABLE sessions                      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions                      FORCE  ROW LEVEL SECURITY;
+ALTER TABLE users                         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users                         FORCE  ROW LEVEL SECURITY;
+ALTER TABLE verifications                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE verifications                 FORCE  ROW LEVEL SECURITY;

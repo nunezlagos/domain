@@ -1,9 +1,16 @@
-status: proposed
+status: in_progress
 created: 2026-06-17
 implemented: ~
 archived: ~
 notes: |
   Decommission destructivo del schema multi-tenant. Depende de issue-21.5 (surface ya
   colapsado). Ejecución por fases A→D, cada una deployable. Fase C (DROP COLUMN/TABLE) es
-  irreversible: requiere backup verificado + dry-run en staging. NO ejecutado aún.
-  Esfuerzo estimado: 1-2 semanas.
+  irreversible: requiere backup verificado + dry-run en staging. Esfuerzo estimado: 1-2 semanas.
+
+  FASE A EJECUTADA (2026-06-17, decisión del operador "ejecutar solo Fase A"):
+    - Migración 000132_disable_org_rls: DISABLE ROW LEVEL SECURITY en 19 tablas org-scoped
+      (no otp_codes). Reversible (down = ENABLE+FORCE; policies no se dropearon).
+    - sd-001 (quitar GUC org del middleware) DIFERIDO a Fase B (hot path, sin beneficio con
+      RLS off, y current_user_id sigue requerido por otp RLS).
+    - go build verde, go vet default sin issues. Deploy diferido (decisión operador).
+  PENDIENTE: Fases B (threading queries), C (DROP COLUMN/TABLE — destructivo), D (periferia).

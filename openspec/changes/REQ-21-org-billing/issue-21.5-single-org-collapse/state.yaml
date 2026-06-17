@@ -1,4 +1,4 @@
-status: proposed
+status: in_progress
 created: 2026-06-17
 implemented: ~
 archived: ~
@@ -6,3 +6,17 @@ notes: |
   Collapse del surface multi-org → single-org. Reversible, no destructivo de datos.
   Preserva plumbing single-tenant (org_id + RLS) y features dependientes (admin dashboard,
   onboarding por enrollment-tokens). El drop destructivo del schema va en issue-21.6.
+
+  EJECUTADO (commit 881eea8, 2026-06-17):
+    - Removida exposición de gestión multi-org: rutas POST/DELETE/transfer-ownership,
+      handlers createOrg/deleteOrg/transferOwnership, endpoint admin delete (dead code),
+      CLI org delete (huérfano), DeleteService.
+    - Service Create/Transfer/SoftDelete RETENIDOS como helpers internos (23 integration
+      tests + bootstrap); su remoción definitiva va en issue-21.6.
+    - go build ./... verde; go vet default sin issues; 3 fallos de integración
+      pre-existentes (txctx/knowledge/e2e, no-org) confirmados en baseline.
+  PENDIENTE:
+    - sc-006 invitations, sc-007 SDK pruning.
+    - Deploy al VPS: bloqueado por mecanismo no verificable desde el repo (host `vps`
+      no está en ssh config visible; deploy = bump DOMAIN_BACKEND_VERSION + make pull
+      de imagen del registry). Requiere confirmación del operador.

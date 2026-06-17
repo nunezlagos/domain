@@ -12,7 +12,6 @@ import (
 )
 
 func TestChannelFor_NamingConvention(t *testing.T) {
-	require.Equal(t, "cache_invalidate_custom_roles", distributed.ChannelFor("custom_roles"))
 	require.Equal(t, "cache_invalidate_platform_policies", distributed.ChannelFor("platform_policies"))
 	require.Equal(t, "cache_invalidate_mcp_servers", distributed.ChannelFor("mcp_servers"))
 }

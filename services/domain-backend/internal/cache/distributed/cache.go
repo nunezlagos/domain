@@ -1,7 +1,7 @@
 // Package distributed — issue-26.7 patrón uniforme de invalidación de cache
 // in-memory cross-pod via Postgres LISTEN/NOTIFY.
 //
-// Casos de uso: custom_roles (issue-02.8), platform_policies (issue-01.8),
+// Casos de uso: platform_policies (issue-01.8),
 // mcp_servers (issue-12.6), plans+custom_limits (issue-21.3), model_registry
 // pricing, agent definitions LRU.
 //

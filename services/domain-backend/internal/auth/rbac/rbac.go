@@ -1,10 +1,7 @@
-// Package rbac — issue-02.2 RBAC (built-in roles) + issue-02.8 stub for custom roles.
+// Package rbac — issue-02.2 RBAC (built-in roles).
 //
 // Roles built-in (jerárquicos):
 //   owner > admin > maintainer > member > viewer
-//
-// Custom roles (issue-02.8) viven en tabla custom_roles (futuro). Esta API permite
-// override de built-in via Resolver interface.
 package rbac
 
 import (
@@ -42,7 +39,6 @@ func IsBuiltin(r Role) bool {
 }
 
 // AtLeast retorna true si actual cumple el role mínimo requerido (jerárquico).
-// Custom roles SIEMPRE retornan false acá (issue-02.8 implementa Resolver custom).
 func AtLeast(actual, required Role) bool {
 	a, ok1 := builtinHierarchy[actual]
 	r, ok2 := builtinHierarchy[required]
@@ -56,24 +52,23 @@ func AtLeast(actual, required Role) bool {
 type Resource string
 
 const (
-	ResProject       Resource = "project"
-	ResObservation   Resource = "observation"
-	ResSession       Resource = "session"
-	ResPrompt        Resource = "prompt"
-	ResKnowledgeDoc  Resource = "knowledge_doc"
-	ResSkill         Resource = "skill"
-	ResAgent         Resource = "agent"
-	ResFlow          Resource = "flow"
-	ResRun           Resource = "run"
-	ResSecret        Resource = "secret"
-	ResMember        Resource = "member"
-	ResPlan          Resource = "plan"
-	ResBilling       Resource = "billing"
-	ResAuditLog      Resource = "audit_log"
-	ResActivityLog   Resource = "activity_log"
-	ResRoleCustom    Resource = "role"
-	ResAPIKey        Resource = "api_key"
-	ResOrganization  Resource = "organization"
+	ResProject      Resource = "project"
+	ResObservation  Resource = "observation"
+	ResSession      Resource = "session"
+	ResPrompt       Resource = "prompt"
+	ResKnowledgeDoc Resource = "knowledge_doc"
+	ResSkill        Resource = "skill"
+	ResAgent        Resource = "agent"
+	ResFlow         Resource = "flow"
+	ResRun          Resource = "run"
+	ResSecret       Resource = "secret"
+	ResMember       Resource = "member"
+	ResPlan         Resource = "plan"
+	ResBilling      Resource = "billing"
+	ResAuditLog     Resource = "audit_log"
+	ResActivityLog  Resource = "activity_log"
+	ResAPIKey       Resource = "api_key"
+	ResOrganization Resource = "organization"
 )
 
 // Action operación específica.
@@ -93,7 +88,7 @@ var ErrForbidden = errors.New("forbidden")
 
 // matrix built-in: role → resource → set(actions).
 // Diseño: viewer puede read básicos; member CRUD propio + execute skills/agents;
-// maintainer + manage skills/agents/flows/projects; admin + members + custom_roles;
+// maintainer + manage skills/agents/flows/projects; admin + members;
 // owner + billing + plan + transfer.
 var matrix = map[Role]map[Resource][]Action{
 	RoleViewer: {
@@ -150,7 +145,6 @@ var matrix = map[Role]map[Resource][]Action{
 		ResPlan:         {ActRead},
 		ResAuditLog:     {ActRead},
 		ResActivityLog:  {ActRead},
-		ResRoleCustom:   {ActRead, ActWrite, ActDelete, ActAdmin},
 		ResAPIKey:       {ActRead, ActWrite, ActDelete, ActAdmin},
 	},
 	RoleOwner: {
@@ -171,49 +165,25 @@ var matrix = map[Role]map[Resource][]Action{
 		ResBilling:      {ActRead, ActWrite, ActAdmin},
 		ResAuditLog:     {ActRead},
 		ResActivityLog:  {ActRead},
-		ResRoleCustom:   {ActRead, ActWrite, ActDelete, ActAdmin},
 		ResAPIKey:       {ActRead, ActWrite, ActDelete, ActAdmin},
 	},
 }
 
 // Check verifica si role tiene permission sobre (resource, action) según matrix.
-// Custom roles (issue-02.8) override via CustomResolver.
-type Checker struct {
-	CustomResolver CustomResolver // optional; nil = solo built-in
-}
-
-// CustomResolver consulta custom_roles en BD para roles no built-in.
-type CustomResolver interface {
-	HasPermission(ctx context.Context, orgID, roleSlug string, res Resource, act Action) (bool, error)
-}
+type Checker struct{}
 
 // Check retorna nil si autorizado, ErrForbidden si no.
-// orgID se pasa para que CustomResolver pueda buscar custom_roles por org.
-func (c *Checker) Check(ctx context.Context, orgID string, role Role, res Resource, act Action) error {
-	if IsBuiltin(role) {
-		actions, ok := matrix[role][res]
-		if !ok {
-			return ErrForbidden
-		}
-		for _, a := range actions {
-			if a == act {
-				return nil
-			}
-		}
-		return ErrForbidden
-	}
-	// Custom role
-	if c.CustomResolver == nil {
-		return ErrForbidden
-	}
-	ok, err := c.CustomResolver.HasPermission(ctx, orgID, string(role), res, act)
-	if err != nil {
-		return err
-	}
+func (c *Checker) Check(ctx context.Context, role Role, res Resource, act Action) error {
+	actions, ok := matrix[role][res]
 	if !ok {
 		return ErrForbidden
 	}
-	return nil
+	for _, a := range actions {
+		if a == act {
+			return nil
+		}
+	}
+	return ErrForbidden
 }
 
 // RequireRole middleware: requiere que el principal tenga al menos `min` role.
@@ -244,7 +214,7 @@ func RequirePermission(checker *Checker, res Resource, act Action) func(http.Han
 				writeForbidden(w)
 				return
 			}
-			if err := checker.Check(r.Context(), p.OrganizationID, Role(p.Role), res, act); err != nil {
+			if err := checker.Check(r.Context(), Role(p.Role), res, act); err != nil {
 				writeForbidden(w)
 				return
 			}

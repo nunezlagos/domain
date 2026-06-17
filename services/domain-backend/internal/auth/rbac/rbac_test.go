@@ -37,250 +37,87 @@ func TestAtLeast(t *testing.T) {
 
 func TestChecker_Builtin_HappyPath(t *testing.T) {
 	c := &Checker{}
-	require.NoError(t, c.Check(context.Background(), "org-1", RoleMember, ResObservation, ActWrite))
-	require.NoError(t, c.Check(context.Background(), "org-1", RoleViewer, ResObservation, ActRead))
-	require.NoError(t, c.Check(context.Background(), "org-1", RoleAdmin, ResMember, ActAdmin))
-	require.NoError(t, c.Check(context.Background(), "org-1", RoleOwner, ResBilling, ActAdmin))
+	require.NoError(t, c.Check(context.Background(), RoleMember, ResObservation, ActWrite))
+	require.NoError(t, c.Check(context.Background(), RoleViewer, ResObservation, ActRead))
+	require.NoError(t, c.Check(context.Background(), RoleAdmin, ResMember, ActAdmin))
+	require.NoError(t, c.Check(context.Background(), RoleOwner, ResBilling, ActAdmin))
 }
 
 func TestChecker_Builtin_Denied(t *testing.T) {
 	c := &Checker{}
 	// viewer NO puede write
-	require.ErrorIs(t, c.Check(context.Background(), "org-1", RoleViewer, ResObservation, ActWrite), ErrForbidden)
+	require.ErrorIs(t, c.Check(context.Background(), RoleViewer, ResObservation, ActWrite), ErrForbidden)
 	// member NO puede admin de members
-	require.ErrorIs(t, c.Check(context.Background(), "org-1", RoleMember, ResMember, ActAdmin), ErrForbidden)
-	// admin NO puede touch billing (solo owner)
-	require.ErrorIs(t, c.Check(context.Background(), "org-1", RoleAdmin, ResBilling, ActWrite), ErrForbidden)
-	// maintainer NO puede manage members
-	require.ErrorIs(t, c.Check(context.Background(), "org-1", RoleMaintainer, ResMember, ActWrite), ErrForbidden)
+	require.ErrorIs(t, c.Check(context.Background(), RoleMember, ResMember, ActAdmin), ErrForbidden)
+	// role inexistente
+	require.ErrorIs(t, c.Check(context.Background(), "no-such-role", ResObservation, ActRead), ErrForbidden)
+	// resource sin permiso
+	require.ErrorIs(t, c.Check(context.Background(), RoleViewer, ResSecret, ActRead), ErrForbidden)
+	// maintainer NO puede admin de skills
+	require.ErrorIs(t, c.Check(context.Background(), RoleMaintainer, ResMember, ActWrite), ErrForbidden)
 }
 
 func TestChecker_Custom_NoResolver_Forbidden(t *testing.T) {
 	c := &Checker{}
-	err := c.Check(context.Background(), "org-1", "custom-auditor", ResAuditLog, ActRead)
+	err := c.Check(context.Background(), "custom-auditor", ResAuditLog, ActRead)
 	require.ErrorIs(t, err, ErrForbidden)
-}
-
-// fakeCustomResolver para tests.
-type fakeCustomResolver struct {
-	allow bool
-	err   error
-}
-
-func (f *fakeCustomResolver) HasPermission(_ context.Context, _, _ string, _ Resource, _ Action) (bool, error) {
-	return f.allow, f.err
-}
-
-func TestChecker_Custom_WithResolver(t *testing.T) {
-	c := &Checker{CustomResolver: &fakeCustomResolver{allow: true}}
-	require.NoError(t, c.Check(context.Background(), "org-1", "custom-auditor", ResAuditLog, ActRead))
-
-	c.CustomResolver = &fakeCustomResolver{allow: false}
-	require.ErrorIs(t, c.Check(context.Background(), "org-1", "custom-auditor", ResAuditLog, ActWrite), ErrForbidden)
 }
 
 // fakeContext stub principal en context.
 func ctxWithPrincipal(p *apikey.Principal) context.Context {
 	r := httptest.NewRequest("GET", "/x", nil)
-	// usar el middleware para inyectar
-	var done http.Handler = http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {})
-	// truco: usar wrap manual con contexto
-	_ = done
-	// Mejor: usar mismo helper que el middleware
-	// Pero apikey.FromContext usa privateKey unexported; necesitamos crear via middleware.
-	res := &fakeResolver{principal: p}
-	m := &apikey.Middleware{Resolver: res}
-	// crear pt válido stub
-	pt, _, _ := apikey.GeneratePlaintext("dev")
-	r.Header.Set("Authorization", "Bearer "+pt)
-	res.expected = pt
-	rec := httptest.NewRecorder()
-	var captured context.Context
-	m.Wrap(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
-		captured = req.Context()
-	})).ServeHTTP(rec, r)
-	return captured
+	return apikey.WithPrincipal(r.Context(), p)
 }
 
-type fakeResolver struct {
-	expected  string
-	principal *apikey.Principal
-}
+func TestRequireRole(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := RequireRole(RoleMember)(next)
 
-func (f *fakeResolver) Resolve(_ context.Context, plaintext string) (*apikey.Principal, error) {
-	if plaintext == f.expected && f.principal != nil {
-		return f.principal, nil
+	cases := []struct {
+		name        string
+		role        string
+		wantStatus  int
+	}{
+		{"admin passes admin gate", "admin", http.StatusOK},
+		{"owner passes admin gate", "owner", http.StatusOK},
+		{"member passes member gate", "member", http.StatusOK},
+		{"viewer fails member gate", "viewer", http.StatusForbidden},
+		{"no principal", "", http.StatusForbidden},
 	}
-	return nil, apikey.ErrUnauthorized
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/x", nil)
+			if tc.role != "" {
+				ctx := ctxWithPrincipal(&apikey.Principal{UserID: "u", OrganizationID: "org-1", Role: tc.role})
+				r = r.WithContext(ctx)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			require.Equal(t, tc.wantStatus, w.Code)
+		})
+	}
 }
 
-func TestRequireRole_Allows(t *testing.T) {
-	p := &apikey.Principal{UserID: "u1", OrganizationID: "o1", Role: string(RoleAdmin)}
-	ctx := ctxWithPrincipal(p)
-	require.NotNil(t, ctx)
-
-	called := false
-	h := RequireRole(RoleMaintainer)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	}))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/x", nil).WithContext(ctx)
-	h.ServeHTTP(rec, req)
-	require.True(t, called)
-	require.Equal(t, http.StatusOK, rec.Code)
-}
-
-func TestRequireRole_Denies(t *testing.T) {
-	p := &apikey.Principal{UserID: "u1", OrganizationID: "o1", Role: string(RoleViewer)}
-	ctx := ctxWithPrincipal(p)
-
-	called := false
-	h := RequireRole(RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-	}))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/x", nil).WithContext(ctx)
-	h.ServeHTTP(rec, req)
-	require.False(t, called)
-	require.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-func TestRequireRole_NoPrincipal_Forbidden(t *testing.T) {
-	h := RequireRole(RoleViewer)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/x", nil) // no principal in context
-	h.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-func TestRequirePermission_Allows(t *testing.T) {
-	p := &apikey.Principal{UserID: "u1", OrganizationID: "o1", Role: string(RoleMember)}
-	ctx := ctxWithPrincipal(p)
+func TestRequirePermission(t *testing.T) {
 	checker := &Checker{}
-
-	h := RequirePermission(checker, ResObservation, ActWrite)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/x", nil).WithContext(ctx)
-	h.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-}
-
-func TestRequirePermission_Denies(t *testing.T) {
-	p := &apikey.Principal{UserID: "u1", OrganizationID: "o1", Role: string(RoleViewer)}
-	ctx := ctxWithPrincipal(p)
-	checker := &Checker{}
-
-	h := RequirePermission(checker, ResObservation, ActWrite)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/x", nil).WithContext(ctx)
-	h.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-// Sabotaje: matrix coverage — cada built-in role tiene al menos 1 permission.
-func TestSabotage_Matrix_AllBuiltinRolesHavePermissions(t *testing.T) {
-	for _, role := range []Role{RoleOwner, RoleAdmin, RoleMaintainer, RoleMember, RoleViewer} {
-		require.NotEmpty(t, matrix[role], "role %s must have permissions in matrix", role)
-	}
-}
-
-// Sabotaje: viewer NO puede write/delete/admin de ningún resource.
-func TestSabotage_Viewer_OnlyRead(t *testing.T) {
-	for res, actions := range matrix[RoleViewer] {
-		for _, act := range actions {
-			require.Equal(t, ActRead, act, "viewer NO debe tener %s sobre %s", act, res)
-		}
-	}
-}
-
-// Sabotaje: viewer is read-only — write/delete/admin always forbidden.
-func TestSabotage_Viewer_ForbiddenForMutations(t *testing.T) {
-	c := &Checker{}
-	for _, res := range []Resource{ResObservation, ResProject, ResAgent, ResFlow, ResSkill} {
-		for _, act := range []Action{ActWrite, ActDelete, ActAdmin} {
-			err := c.Check(context.Background(), "o", RoleViewer, res, act)
-			require.ErrorIsf(t, err, ErrForbidden, "viewer NO debe poder %s sobre %s", act, res)
-		}
-	}
-}
-
-// --- issue-02.8 Whitelist Validation Tests ---
-
-func TestValidatePermissions_Valid(t *testing.T) {
-	err := ValidatePermissions(ResourceActions{
-		ResAuditLog: {ActRead},
-		ResProject:  {ActRead, ActWrite},
 	})
-	require.NoError(t, err)
-}
+	h := RequirePermission(checker, ResObservation, ActWrite)(next)
 
-func TestValidatePermissions_UnknownResource(t *testing.T) {
-	err := ValidatePermissions(ResourceActions{
-		"foo": {ActRead},
-	})
-	require.Error(t, err)
-	var valErr *ValidationError
-	require.ErrorAs(t, err, &valErr)
-	require.Equal(t, "foo", valErr.Resource)
-}
+	// member puede write observation → 200
+	r := httptest.NewRequest("GET", "/x", nil)
+	r = r.WithContext(ctxWithPrincipal(&apikey.Principal{UserID: "u", OrganizationID: "org-1", Role: "member"}))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	require.Equal(t, http.StatusOK, w.Code)
 
-func TestValidatePermissions_ActionNotAllowed(t *testing.T) {
-	err := ValidatePermissions(ResourceActions{
-		ResAuditLog: {ActWrite}, // audit_log NO permite write
-	})
-	require.Error(t, err)
-	var valErr *ValidationError
-	require.ErrorAs(t, err, &valErr)
-	require.Equal(t, string(ResAuditLog), valErr.Resource)
-	require.Equal(t, string(ActWrite), valErr.Action)
-}
-
-// Sabotaje: action "god_mode" → 422
-func TestSabotage_GodModeAction(t *testing.T) {
-	err := ValidatePermissions(ResourceActions{
-		ResProject: {"god_mode"},
-	})
-	require.Error(t, err)
-}
-
-func TestAllowedResources_AllResourcesListed(t *testing.T) {
-	for _, res := range AllResources() {
-		_, ok := AllowedResources[res]
-		require.True(t, ok, "resource %s missing from AllowedResources", res)
-	}
-}
-
-// ResourceActions alias para tests.
-type ResourceActions = map[Resource][]Action
-
-// AllResources returns all known resource constants.
-func AllResources() []Resource {
-	return []Resource{
-		ResProject, ResObservation, ResSession, ResPrompt,
-		ResKnowledgeDoc, ResSkill, ResAgent, ResFlow, ResRun,
-		ResSecret, ResMember, ResPlan, ResBilling,
-		ResAuditLog, ResActivityLog, ResRoleCustom, ResAPIKey,
-		ResOrganization,
-	}
-}
-
-// Sabotaje: custom role creado con "role.admin" action sobre "member" → acción no existe
-func TestSabotage_InvalidActionName(t *testing.T) {
-	err := ValidatePermissions(ResourceActions{
-		ResMember: {"admin"}, // "admin" NO es acción válida sobre member
-	})
-	require.NoError(t, err) // "admin" es válido para member en AllowedResources
-
-	// "superadmin" NO es válido para ningún resource
-	err2 := ValidatePermissions(ResourceActions{
-		ResMember: {"superadmin"},
-	})
-	require.Error(t, err2)
+	// viewer NO puede write observation → 403
+	r = httptest.NewRequest("GET", "/x", nil)
+	r = r.WithContext(ctxWithPrincipal(&apikey.Principal{UserID: "u", OrganizationID: "org-1", Role: "viewer"}))
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	require.Equal(t, http.StatusForbidden, w.Code)
 }

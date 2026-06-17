@@ -109,7 +109,6 @@ import (
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
-	rolesvc "nunezlagos/domain/internal/service/role"
 	usvc "nunezlagos/domain/internal/service/issue"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
@@ -816,9 +815,7 @@ func runServer() {
 		}
 	}()
 
-	customResolver := rbac.NewPGResolver(pools.App)
-	rbacChecker := &rbac.Checker{CustomResolver: customResolver}
-	roleService := &rolesvc.Service{Pool: pools.App, Audit: recorder}
+	rbacChecker := &rbac.Checker{}
 	requirementService := &reqsvc.Service{Pool: pools.App, Audit: recorder}
 	huService := &usvc.Service{Pool: pools.App, Audit: recorder}
 
@@ -856,9 +853,6 @@ func runServer() {
 	}
 
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
-	if err := customResolver.StartCacheListener(ctx); err != nil {
-		logger.Warn("custom roles cache listener", slog.String("error", err.Error()))
-	}
 
 	api := &handler.API{
 		OrgService:     orgService,
@@ -916,7 +910,6 @@ func runServer() {
 		APIKeys:        apiKeyStore,
 		Bootstrap:      bootstrapsvc.New(pools.App),
 		SecretsStore:   secretsStore,
-		RoleService:    roleService,
 		ReqService:     requirementService,
 		HUService:      huService,
 		SpecService:    specService,

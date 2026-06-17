@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS llm_semantic_cache (
     response         jsonb NOT NULL,
     tokens           integer NOT NULL DEFAULT 0,
     hit_count        integer NOT NULL DEFAULT 0,
-    prompt_embedding USER-DEFINED,
+    prompt_embedding vector(1536),
     created_at       timestamptz NOT NULL DEFAULT now(),
     last_used_at     timestamptz,
     updated_at       timestamptz NOT NULL DEFAULT now(),

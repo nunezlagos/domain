@@ -77,6 +77,21 @@ func Down(databaseURL string, steps int) error {
 	return nil
 }
 
+// MigrateTo migra (up o down según corresponda) hasta la versión exacta indicada.
+// Útil en tests para ejercitar el up/down de una migración específica sin asumir
+// que sea la última.
+func MigrateTo(databaseURL string, version uint) error {
+	m, err := open(databaseURL)
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+	if err := m.Migrate(version); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrate to %d: %w", version, err)
+	}
+	return nil
+}
+
 // Version (version, dirty, error).
 func Version(databaseURL string) (uint, bool, error) {
 	m, err := open(databaseURL)

@@ -22,7 +22,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- recreate triggers on custom_roles
-CREATE TRIGGER custom_roles_notify_trg
+-- recreate trigger con el nombre ORIGINAL de 000049 (custom_roles_notify_mod)
+-- para que el down de 000049 lo pueda dropear correctamente.
+CREATE TRIGGER custom_roles_notify_mod
   AFTER INSERT OR UPDATE OR DELETE ON custom_roles
   FOR EACH STATEMENT EXECUTE FUNCTION notify_custom_roles_changed();

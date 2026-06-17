@@ -80,7 +80,10 @@ func TestMigrate_Up_ProjectRulesDefaultEmpty(t *testing.T) {
 func TestMigrate_Down_ProjectRemovesColumns(t *testing.T) {
 	dsn, cleanup := setupPG(t)
 	defer cleanup()
-	require.NoError(t, dmigrate.Up(dsn))
+	// 000087 agrega current_branch + rules a projects. Migramos exactamente hasta
+	// 87 y hacemos rollback 1 para verificar que SU down quita ambas columnas
+	// (sin asumir que 87 sea la última migración).
+	require.NoError(t, dmigrate.MigrateTo(dsn, 87))
 	require.NoError(t, dmigrate.Down(dsn, 1))
 
 	ctx := context.Background()

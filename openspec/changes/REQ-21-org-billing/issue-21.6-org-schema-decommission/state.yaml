@@ -33,4 +33,26 @@ notes: |
     REANUDAR: Workflow({scriptPath: ".../org-decommission-wf_2a64adba-2d9.js", resumeFromRunId: "wf_2a64adba-2d9"})
       continúa desde Fase Migration (los agentes de strip ya hechos vuelven cacheados).
     Commit del checkpoint: ver git log (mensaje "WIP(req-21.6)").
-  PENDIENTE: Fase C (migración 000134 drop columnas+tablas), Fase D (tests+SDK+seeds+docs), limpieza de params orgID muertos.
+  INTENTO DE CIERRE (workflow org-decommission-finish, run wf_f4bac677-187) — REVERTIDO:
+    Se intentó completar strip + migración 000134 (DO block drop organization_id de TODAS
+    las base tables) + verificación por integration tests. El verify adversarial encontró
+    un BREAK BLOQUEANTE y se reverteó al checkpoint 5b4ad8d (no se commiteó nada roto).
+    LANDMINES confirmados (para el próximo intento):
+      1. internal/auth/apikey/store.go corre SQL REAL contra api_keys.organization_id en
+         Issue/List/Rotate/Resolve. Resolve es el PATH del middleware de auth. Dropear esa
+         columna rompe TODA la auth por API key con SQLSTATE 42703, EN SILENCIO: el paquete
+         NO tiene tests y las queries son strings (build no las chequea). → Arreglar apikey
+         PRIMERO, y agregarle tests antes de tocar el schema.
+      2. Un DROP COLUMN organization_id indiscriminado (DO block sobre information_schema) es
+         demasiado agresivo: rompe api_keys y las satélites donde org_id es parte de PK/identidad
+         (usage_counters PK (org_id, period), cost_alerts UNIQUE(org_id,date), enrollment).
+      3. Las 8 tablas org (organizations + invitations + usage_counters + plans + org_flow_config
+         + org_cost_alert_thresholds + cost_alerts_sent + org_enrollment_tokens) tienen consumidores
+         Go VIVOS (usage/lifecycle/billing/enrollment/handler/SDK). Cada uno necesita refactor
+         per-consumer antes de dropear su tabla.
+      4. ~33 refs restantes incluyen JSON struct tags inertes (benignos) — no confundir con SQL.
+    CONCLUSIÓN: el drop total no es seguro de forma 100% automatizada (sin red de tests en rutas
+    críticas como apikey, y SQL en strings que el compilador no ve). Hacer incremental por-consumidor
+    con tests, empezando por apikey/store.go.
+  PENDIENTE: arreglar+testear apikey; refactor per-consumer de las 8 satélites; migración drop
+    columnas/tablas (NO con DO block ciego); Fase D (tests+SDK+seeds+docs); limpieza params orgID muertos.

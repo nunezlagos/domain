@@ -48,7 +48,6 @@ import (
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
@@ -102,7 +101,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 
 	// Services
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
@@ -129,7 +127,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	}
 
 	api := &handler.API{
-		OrgService:       orgS,
 		ProjectService:   projS,
 		ObsService:       obsS,
 		SessionService:   &sesssvc.Service{Pool: pools.App, Audit: rec},
@@ -147,7 +144,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	}
 
 	// Setup inicial: org + user + API key (simula post-verify-OTP)
-	org, owner, err := orgS.Create(ctx, "Acme E2E", "acme-e2e", "owner@e2e.test", "Owner E2E")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme E2E", "acme-e2e", "owner@e2e.test", "Owner E2E")
 	require.NoError(t, err)
 	require.NoError(t, billS.AssignPlan(ctx, org.ID, "enterprise"))
 

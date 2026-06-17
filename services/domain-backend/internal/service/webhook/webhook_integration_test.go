@@ -20,7 +20,6 @@ import (
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	"nunezlagos/domain/internal/service/webhook"
 )
 
@@ -50,8 +49,7 @@ func setupWebhook(t *testing.T) (*whFixture, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "WHOrg", "whorg", "o@x.com", "O")
+	org, owner, err := seedOrgUser(ctx, pools.App, "WHOrg", "whorg", "o@x.com", "O")
 	require.NoError(t, err)
 
 	key := make([]byte, crypto.MasterKeySize)

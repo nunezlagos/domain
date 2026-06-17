@@ -12,11 +12,10 @@ import (
 )
 
 type CostAlert struct {
-	OrganizationID uuid.UUID
-	TotalUSD       float64
-	ThresholdUSD   float64
-	Breakdown      []CostBreakdownItem
-	AlertDate      time.Time
+	TotalUSD     float64
+	ThresholdUSD float64
+	Breakdown    []CostBreakdownItem
+	AlertDate    time.Time
 }
 
 type CostBreakdownItem struct {
@@ -28,15 +27,12 @@ type CostBreakdownItem struct {
 func CheckThresholds(ctx context.Context, pool *pgxpool.Pool) ([]CostAlert, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT
-			ocl.organization_id,
 			SUM(ocl.cost_usd) AS total,
-			COALESCE(t.daily_usd, 100.00) AS threshold
+			COALESCE((SELECT daily_usd FROM org_cost_alert_thresholds LIMIT 1), 100.00) AS threshold
 		FROM cost_logs ocl
-		LEFT JOIN org_cost_alert_thresholds t ON t.organization_id = ocl.organization_id
 		WHERE ocl.created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
 		  AND ocl.created_at < date_trunc('day', NOW() AT TIME ZONE 'UTC') + INTERVAL '1 day'
-		GROUP BY ocl.organization_id, t.daily_usd
-		HAVING SUM(ocl.cost_usd) >= COALESCE(t.daily_usd, 100.00)
+		HAVING SUM(ocl.cost_usd) >= COALESCE((SELECT daily_usd FROM org_cost_alert_thresholds LIMIT 1), 100.00)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("check thresholds query: %w", err)
@@ -46,7 +42,7 @@ func CheckThresholds(ctx context.Context, pool *pgxpool.Pool) ([]CostAlert, erro
 	var alerts []CostAlert
 	for rows.Next() {
 		var a CostAlert
-		if err := rows.Scan(&a.OrganizationID, &a.TotalUSD, &a.ThresholdUSD); err != nil {
+		if err := rows.Scan(&a.TotalUSD, &a.ThresholdUSD); err != nil {
 			return nil, fmt.Errorf("scan alert: %w", err)
 		}
 		a.AlertDate = time.Now().UTC().Truncate(24 * time.Hour)
@@ -57,9 +53,9 @@ func CheckThresholds(ctx context.Context, pool *pgxpool.Pool) ([]CostAlert, erro
 	}
 
 	for i := range alerts {
-		breakdown, err := fetchBreakdown(ctx, pool, alerts[i].OrganizationID, alerts[i].AlertDate)
+		breakdown, err := fetchBreakdown(ctx, pool, uuid.Nil, alerts[i].AlertDate)
 		if err != nil {
-			return nil, fmt.Errorf("breakdown for %s: %w", alerts[i].OrganizationID, err)
+			return nil, fmt.Errorf("breakdown: %w", err)
 		}
 		alerts[i].Breakdown = breakdown
 	}
@@ -70,12 +66,11 @@ func fetchBreakdown(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, da
 	rows, err := pool.Query(ctx, `
 		SELECT provider, model, SUM(cost_usd) AS sub
 		FROM cost_logs
-		WHERE organization_id = $1
-		  AND created_at >= $2
-		  AND created_at < $2 + INTERVAL '1 day'
+		WHERE created_at >= $1
+		  AND created_at < $1 + INTERVAL '1 day'
 		GROUP BY provider, model
 		ORDER BY provider, model
-	`, orgID, day)
+	`, day)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +91,12 @@ func SendAlerts(ctx context.Context, pool *pgxpool.Pool, alerts []CostAlert, sen
 	sent := 0
 	for _, a := range alerts {
 		tag, err := pool.Exec(ctx, `
-			INSERT INTO cost_alerts_sent (organization_id, alert_date, amount_usd)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (organization_id, alert_date) DO NOTHING
-		`, a.OrganizationID, a.AlertDate, a.TotalUSD)
+			INSERT INTO cost_alerts_sent (alert_date, amount_usd)
+			VALUES ($1, $2)
+			ON CONFLICT (alert_date) DO NOTHING
+		`, a.AlertDate, a.TotalUSD)
 		if err != nil {
-			return sent, fmt.Errorf("insert cost_alerts_sent for %s: %w", a.OrganizationID, err)
+			return sent, fmt.Errorf("insert cost_alerts_sent: %w", err)
 		}
 		if tag.RowsAffected() == 0 {
 			continue
@@ -110,8 +105,7 @@ func SendAlerts(ctx context.Context, pool *pgxpool.Pool, alerts []CostAlert, sen
 
 		if sender == nil {
 			if logger != nil {
-				logger.Warn("cost alert for org would be sent but no email sender configured",
-					"org_id", a.OrganizationID,
+				logger.Warn("cost alert would be sent but no email sender configured",
 					"total_usd", a.TotalUSD,
 					"threshold", a.ThresholdUSD,
 				)
@@ -122,14 +116,12 @@ func SendAlerts(ctx context.Context, pool *pgxpool.Pool, alerts []CostAlert, sen
 		subject, body := RenderEmail(a)
 		if logger != nil {
 			logger.Info("sending cost alert email",
-				"org_id", a.OrganizationID,
 				"subject", subject,
 			)
 		}
 		if err := sender.SendAlertEmail(ctx, nil, subject, body); err != nil {
 			if logger != nil {
 				logger.Warn("failed to send cost alert email",
-					"org_id", a.OrganizationID,
 					"error", err.Error(),
 				)
 			}
@@ -140,11 +132,10 @@ func SendAlerts(ctx context.Context, pool *pgxpool.Pool, alerts []CostAlert, sen
 
 func RenderEmail(a CostAlert) (subject, body string) {
 	date := a.AlertDate.Format("2006-01-02")
-	subject = fmt.Sprintf("[domain] cost alert: org %s exceeded $%.2f/day (now $%.2f)",
-		a.OrganizationID, a.ThresholdUSD, a.TotalUSD)
+	subject = fmt.Sprintf("[domain] cost alert: exceeded $%.2f/day (now $%.2f)",
+		a.ThresholdUSD, a.TotalUSD)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Organization: %s\n", a.OrganizationID))
 	b.WriteString(fmt.Sprintf("Date (UTC): %s\n", date))
 	b.WriteString(fmt.Sprintf("Threshold: $%.2f\n", a.ThresholdUSD))
 	b.WriteString(fmt.Sprintf("Current spend: $%.2f\n", a.TotalUSD))
@@ -172,20 +163,33 @@ func RenderEmail(a CostAlert) (subject, body string) {
 	return subject, body
 }
 
+// EnableCostThreshold setea el threshold de costo diario global (single-org,
+// sin organization_id). El param orgID se conserva por compat de signatura.
 func EnableCostThreshold(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, dailyUSD float64) error {
+	_ = orgID
 	_, err := pool.Exec(ctx, `
-		INSERT INTO org_cost_alert_thresholds (organization_id, daily_usd)
-		VALUES ($1, $2)
-		ON CONFLICT (organization_id) DO UPDATE SET daily_usd = $2, updated_at = NOW()
-	`, orgID, dailyUSD)
+		UPDATE org_cost_alert_thresholds SET daily_usd = $1, updated_at = NOW()
+	`, dailyUSD)
+	if err != nil {
+		return err
+	}
+	// Sin row aún: insertar uno (single-org global).
+	_, err = pool.Exec(ctx, `
+		INSERT INTO org_cost_alert_thresholds (daily_usd)
+		SELECT $1
+		WHERE NOT EXISTS (SELECT 1 FROM org_cost_alert_thresholds)
+	`, dailyUSD)
 	return err
 }
 
+// GetCostThreshold lee el threshold de costo diario global (single-org).
+// El param orgID se conserva por compat de signatura.
 func GetCostThreshold(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (float64, error) {
+	_ = orgID
 	var dailyUSD float64
 	err := pool.QueryRow(ctx,
-		`SELECT COALESCE(daily_usd, 100.00) FROM org_cost_alert_thresholds WHERE organization_id = $1`,
-		orgID).Scan(&dailyUSD)
+		`SELECT COALESCE(daily_usd, 100.00) FROM org_cost_alert_thresholds LIMIT 1`,
+	).Scan(&dailyUSD)
 	if err != nil {
 		return 100.00, nil
 	}

@@ -111,7 +111,7 @@ func TestIssueType_Chat_SkipsWizardAndReplies(t *testing.T) {
 	ctx := context.Background()
 
 	resp, err := f.router.Route(ctx,
-		"¿Cómo se configuran las migrations de postgres?", nil)
+		"¿Cómo se configuran las migrations de postgres?", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeChat, resp.Outcome)
 	require.Equal(t, promptrouter.IntentChat, resp.Intent)
@@ -136,7 +136,7 @@ func TestIssueType_Idea_SkipsWizardAndReplies(t *testing.T) {
 	ctx := context.Background()
 
 	resp, err := f.router.Route(ctx,
-		"Se me ocurre una idea: y si agregamos modo TUI offline", nil)
+		"Se me ocurre una idea: y si agregamos modo TUI offline", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeChat, resp.Outcome)
 	require.Equal(t, promptrouter.IntentIdea, resp.Intent)
@@ -174,7 +174,7 @@ func TestIssueType_Fix_PersistsClassificationAndDraft(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "El botón export no funciona, devuelve 500 al hacer click"
-	resp, err := f.router.Route(ctx, prompt, nil)
+	resp, err := f.router.Route(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeWizardStarted, resp.Outcome)
 	require.Equal(t, promptrouter.IntentFix, resp.Intent)
@@ -206,7 +206,7 @@ func TestIssueType_Hotfix_HighConfidenceCritical(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "URGENTE: producción caída, todos los logins fallan, esto es critical bug"
-	resp, err := f.router.Route(ctx, prompt, nil)
+	resp, err := f.router.Route(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.IntentHotfix, resp.Intent)
 	require.GreaterOrEqual(t, resp.Confidence, 0.8)
@@ -308,7 +308,7 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 	ctx := context.Background()
 
 	resp, err := f.router.Route(ctx,
-		"El endpoint POST /api/v1/observations falla con error 500 al hacer click — no funciona el bug que reportaron los devs", nil)
+		"El endpoint POST /api/v1/observations falla con error 500 al hacer click — no funciona el bug que reportaron los devs", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeWizardStarted, resp.Outcome)
 	draftID := *resp.DraftID
@@ -365,7 +365,7 @@ func TestSabotage_RouterRequiresValidPrompt(t *testing.T) {
 	f, cleanup := bootstrapForIssueTypes(t)
 	defer cleanup()
 
-	_, err := f.router.Route(context.Background(), "   ", nil)
+	_, err := f.router.Route(context.Background(), "   ", nil, nil)
 	require.Error(t, err)
 	require.ErrorIs(t, err, promptrouter.ErrEmptyPrompt)
 }

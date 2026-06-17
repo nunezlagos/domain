@@ -44,7 +44,6 @@ var AllowedEvents = map[string]bool{
 
 type Subscription struct {
 	ID             uuid.UUID       `json:"id"`
-	OrganizationID uuid.UUID       `json:"organization_id"`
 	Name           string          `json:"name"`
 	URL            string          `json:"url"`
 	Events         []string        `json:"events"`
@@ -146,12 +145,11 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 
 	row := s.Pool.QueryRow(ctx,
 		`INSERT INTO outbound_webhook_subscriptions
-			(organization_id, name, url, events, filters, secret_cipher)
-		 VALUES ($1,$2,$3,$4,$5,$6)
+			(name, url, events, filters, secret_cipher)
+		 VALUES ($1,$2,$3,$4,$5)
 		 RETURNING id, created_at, updated_at`,
-		orgID, in.Name, in.URL, in.Events, in.Filters, secretCipher)
+		in.Name, in.URL, in.Events, in.Filters, secretCipher)
 	sub := &Subscription{
-		OrganizationID: orgID,
 		Name:           in.Name,
 		URL:            in.URL,
 		Events:         in.Events,
@@ -168,12 +166,12 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 // La función dispatch verifica filtros adicionales por payload.
 func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType string) ([]Subscription, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, url, events, filters, active,
+		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
 		 FROM outbound_webhook_subscriptions
-		 WHERE organization_id = $1 AND active = TRUE
-		   AND $2 = ANY(events)`,
-		orgID, eventType)
+		 WHERE active = TRUE
+		   AND $1 = ANY(events)`,
+		eventType)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +179,7 @@ func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType st
 	var out []Subscription
 	for rows.Next() {
 		var sub Subscription
-		if err := rows.Scan(&sub.ID, &sub.OrganizationID, &sub.Name, &sub.URL,
+		if err := rows.Scan(&sub.ID, &sub.Name, &sub.URL,
 			&sub.Events, &sub.Filters, &sub.Active, &sub.FailureCount,
 			&sub.LastSuccessAt, &sub.LastFailureAt, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
 			return nil, err
@@ -193,12 +191,12 @@ func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType st
 
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Subscription, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, name, url, events, filters, active,
+		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
 		 FROM outbound_webhook_subscriptions
-		 WHERE id = $1 AND organization_id = $2`, id, orgID)
+		 WHERE id = $1`, id)
 	var sub Subscription
-	err := row.Scan(&sub.ID, &sub.OrganizationID, &sub.Name, &sub.URL, &sub.Events,
+	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Events,
 		&sub.Filters, &sub.Active, &sub.FailureCount, &sub.LastSuccessAt,
 		&sub.LastFailureAt, &sub.CreatedAt, &sub.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -212,10 +210,10 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Subscription, 
 
 func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, url, events, filters, active,
+		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
 		 FROM outbound_webhook_subscriptions
-		 WHERE organization_id = $1 ORDER BY created_at DESC`, orgID)
+		 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +221,7 @@ func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription,
 	var out []Subscription
 	for rows.Next() {
 		var sub Subscription
-		if err := rows.Scan(&sub.ID, &sub.OrganizationID, &sub.Name, &sub.URL, &sub.Events,
+		if err := rows.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Events,
 			&sub.Filters, &sub.Active, &sub.FailureCount, &sub.LastSuccessAt,
 			&sub.LastFailureAt, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
 			return nil, err
@@ -235,8 +233,8 @@ func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription,
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM outbound_webhook_subscriptions WHERE id=$1 AND organization_id=$2`,
-		id, orgID)
+		`DELETE FROM outbound_webhook_subscriptions WHERE id=$1`,
+		id)
 	if err != nil {
 		return err
 	}
@@ -249,11 +247,11 @@ func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 // getByID lookup interno sin scope de org (uso del dispatcher).
 func (s *Service) getByID(ctx context.Context, id uuid.UUID) (*Subscription, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, name, url, events, filters, active,
+		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
 		 FROM outbound_webhook_subscriptions WHERE id = $1`, id)
 	var sub Subscription
-	err := row.Scan(&sub.ID, &sub.OrganizationID, &sub.Name, &sub.URL, &sub.Events,
+	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Events,
 		&sub.Filters, &sub.Active, &sub.FailureCount, &sub.LastSuccessAt,
 		&sub.LastFailureAt, &sub.CreatedAt, &sub.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

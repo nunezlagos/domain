@@ -89,13 +89,8 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Obtener orgID del user
+	// organization_id eliminado del schema (single-org). orgID queda en cero.
 	var orgID uuid.UUID
-	if err := a.APIKeys.Pool.QueryRow(r.Context(),
-		`SELECT organization_id FROM users WHERE id = $1`, result.UserID).Scan(&orgID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", "lookup user")
-		return
-	}
 
 	name := b.KeyName
 	if name == "" {

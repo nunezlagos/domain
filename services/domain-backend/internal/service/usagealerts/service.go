@@ -69,7 +69,6 @@ type EmailSender interface {
 // Alert es la config de una regla.
 type Alert struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	Name           string     `json:"name"`
 	Metric         string     `json:"metric"`
 	Threshold      float64    `json:"threshold"`
@@ -145,14 +144,14 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 	}
 	row := s.Pool.QueryRow(ctx,
 		`INSERT INTO usage_alerts
-			(organization_id, name, metric, threshold, condition, channel,
+			(name, metric, threshold, condition, channel,
 			 recipients, cooldown_secs)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 RETURNING id, created_at, updated_at`,
-		orgID, in.Name, in.Metric, in.Threshold, in.Condition, in.Channel,
+		in.Name, in.Metric, in.Threshold, in.Condition, in.Channel,
 		in.Recipients, in.CooldownSecs)
 	a := &Alert{
-		OrganizationID: orgID, Name: in.Name, Metric: in.Metric,
+		Name: in.Name, Metric: in.Metric,
 		Threshold: in.Threshold, Condition: in.Condition, Channel: in.Channel,
 		Recipients: in.Recipients, CooldownSecs: in.CooldownSecs, Active: true,
 	}
@@ -164,10 +163,10 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, metric, threshold, condition, channel,
+		`SELECT id, name, metric, threshold, condition, channel,
 			recipients, cooldown_secs, active, last_fired_at, fire_count,
 			created_at, updated_at
-		 FROM usage_alerts WHERE organization_id = $1 ORDER BY created_at DESC`, orgID)
+		 FROM usage_alerts ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +174,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, erro
 	var out []Alert
 	for rows.Next() {
 		var a Alert
-		if err := rows.Scan(&a.ID, &a.OrganizationID, &a.Name, &a.Metric,
+		if err := rows.Scan(&a.ID, &a.Name, &a.Metric,
 			&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
 			&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
 			&a.CreatedAt, &a.UpdatedAt); err != nil {
@@ -188,7 +187,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, erro
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM usage_alerts WHERE id=$1 AND organization_id=$2`, id, orgID)
+		`DELETE FROM usage_alerts WHERE id=$1`, id)
 	if err != nil {
 		return err
 	}
@@ -200,8 +199,8 @@ func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 
 func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active bool) error {
 	ct, err := s.Pool.Exec(ctx,
-		`UPDATE usage_alerts SET active=$1 WHERE id=$2 AND organization_id=$3`,
-		active, id, orgID)
+		`UPDATE usage_alerts SET active=$1 WHERE id=$2`,
+		active, id)
 	if err != nil {
 		return err
 	}
@@ -215,8 +214,8 @@ func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active boo
 func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput) (*Alert, error) {
 	// Build dynamic SET
 	sets := []string{}
-	args := []any{id, orgID}
-	idx := 3
+	args := []any{id}
+	idx := 2
 	if in.Name != nil {
 		sets = append(sets, fmt.Sprintf("name=$%d", idx))
 		args = append(args, *in.Name)
@@ -258,14 +257,14 @@ func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInpu
 	sets = append(sets, "updated_at=NOW()")
 
 	q := fmt.Sprintf(
-		`UPDATE usage_alerts SET %s WHERE id=$1 AND organization_id=$2
-		 RETURNING id, organization_id, name, metric, threshold, condition, channel,
+		`UPDATE usage_alerts SET %s WHERE id=$1
+		 RETURNING id, name, metric, threshold, condition, channel,
 		           recipients, cooldown_secs, active, last_fired_at, fire_count,
 		           created_at, updated_at`,
 		strings.Join(sets, ", "))
 	var a Alert
 	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&a.ID, &a.OrganizationID, &a.Name, &a.Metric, &a.Threshold, &a.Condition,
+		&a.ID, &a.Name, &a.Metric, &a.Threshold, &a.Condition,
 		&a.Channel, &a.Recipients, &a.CooldownSecs, &a.Active, &a.LastFiredAt,
 		&a.FireCount, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
@@ -283,9 +282,9 @@ func (s *Service) ListFires(ctx context.Context, orgID, alertID uuid.UUID, limit
 		`SELECT f.id, f.alert_id, f.metric, f.threshold, f.observed_value, f.payload, f.fired_at
 		 FROM usage_alert_fires f
 		 JOIN usage_alerts a ON a.id = f.alert_id
-		 WHERE f.alert_id = $1 AND a.organization_id = $2
-		 ORDER BY f.fired_at DESC LIMIT $3`,
-		alertID, orgID, limit)
+		 WHERE f.alert_id = $1
+		 ORDER BY f.fired_at DESC LIMIT $2`,
+		alertID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -325,13 +324,13 @@ func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 	costUSD float64, tokensTotal int64) ([]Alert, error) {
 
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, metric, threshold, condition, channel,
+		`SELECT id, name, metric, threshold, condition, channel,
 			recipients, cooldown_secs, active, last_fired_at, fire_count,
 			created_at, updated_at
 		 FROM usage_alerts
-		 WHERE organization_id = $1 AND active = TRUE
-		   AND metric IN ($2, $3)`,
-		orgID, MetricCostPerRun, MetricTokensPerRun)
+		 WHERE active = TRUE
+		   AND metric IN ($1, $2)`,
+		MetricCostPerRun, MetricTokensPerRun)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +338,7 @@ func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 	var alerts []Alert
 	for rows.Next() {
 		var a Alert
-		if err := rows.Scan(&a.ID, &a.OrganizationID, &a.Name, &a.Metric,
+		if err := rows.Scan(&a.ID, &a.Name, &a.Metric,
 			&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
 			&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
 			&a.CreatedAt, &a.UpdatedAt); err != nil {
@@ -377,9 +376,9 @@ func (s *Service) recordFire(ctx context.Context, a *Alert, observed float64, ex
 	payload, _ := json.Marshal(extra)
 	_, err := s.Pool.Exec(ctx,
 		`INSERT INTO usage_alert_fires
-			(alert_id, organization_id, metric, threshold, observed_value, payload)
-		 VALUES ($1,$2,$3,$4,$5,$6)`,
-		a.ID, a.OrganizationID, a.Metric, a.Threshold, observed, payload)
+			(alert_id, metric, threshold, observed_value, payload)
+		 VALUES ($1,$2,$3,$4,$5)`,
+		a.ID, a.Metric, a.Threshold, observed, payload)
 	if err != nil {
 		return err
 	}
@@ -391,12 +390,12 @@ func (s *Service) recordFire(ctx context.Context, a *Alert, observed float64, ex
 // Get devuelve un alert por id+org (cross-org guard).
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Alert, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, name, metric, threshold, condition, channel,
+		`SELECT id, name, metric, threshold, condition, channel,
 			recipients, cooldown_secs, active, last_fired_at, fire_count,
 			created_at, updated_at
-		 FROM usage_alerts WHERE id=$1 AND organization_id=$2`, id, orgID)
+		 FROM usage_alerts WHERE id=$1`, id)
 	var a Alert
-	err := row.Scan(&a.ID, &a.OrganizationID, &a.Name, &a.Metric,
+	err := row.Scan(&a.ID, &a.Name, &a.Metric,
 		&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
 		&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
 		&a.CreatedAt, &a.UpdatedAt)

@@ -741,22 +741,15 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		"corré 'domain onboard --base-url %s' para autenticarte (OTP por email)", flags.baseURL)
 }
 
-// bootstrapFirstAccount crea org + primer user (owner) + API key directo
-// a la BD. Retorna el prefix de la key.
+// bootstrapFirstAccount crea el primer user (owner) + API key directo a la BD.
+// Single-org: ya no existe la entidad organization. Retorna el prefix de la key.
 func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseURL string) (string, error) {
-	var orgID, userID uuid.UUID
+	var userID uuid.UUID
 	err := pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Local', 'local')
-		 ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
-		 RETURNING id`).Scan(&orgID)
-	if err != nil {
-		return "", fmt.Errorf("create org: %w", err)
-	}
-	err = pool.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, $2, 'Admin Local', 'owner')
-		 ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner'
-		 RETURNING id`, orgID, email).Scan(&userID)
+		`INSERT INTO users (email, name, role)
+		 VALUES ($1, 'Admin Local', 'owner')
+		 ON CONFLICT (email) DO UPDATE SET role = 'owner'
+		 RETURNING id`, email).Scan(&userID)
 	if err != nil {
 		return "", fmt.Errorf("create user: %w", err)
 	}
@@ -767,9 +760,9 @@ func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseU
 	}
 	var keyID uuid.UUID
 	err = pool.QueryRow(ctx,
-		`INSERT INTO api_keys (organization_id, user_id, name, key_prefix, key_hash)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		orgID, userID, "install-"+time.Now().UTC().Format("20060102-150405"), prefix, hash,
+		`INSERT INTO api_keys (user_id, name, key_prefix, key_hash)
+		 VALUES ($1, $2, $3, $4) RETURNING id`,
+		userID, "install-"+time.Now().UTC().Format("20060102-150405"), prefix, hash,
 	).Scan(&keyID)
 	if err != nil {
 		return "", fmt.Errorf("create api_key: %w", err)
@@ -779,7 +772,6 @@ func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseU
 		APIKey:   rawKey,
 		APIKeyID: keyID,
 		UserID:   userID,
-		OrgID:    orgID,
 		Email:    email,
 		BaseURL:  baseURL,
 		IssuedAt: time.Now().UTC(),

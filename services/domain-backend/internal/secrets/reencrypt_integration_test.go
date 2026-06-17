@@ -16,9 +16,7 @@ import (
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	orgsvc "nunezlagos/domain/internal/service/org"
 
-	"nunezlagos/domain/internal/audit"
 
 	"github.com/google/uuid"
 )
@@ -54,9 +52,7 @@ func TestReEncryptAll_RotatesToCurrentVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer pools.Close()
 
-	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "SecOrg", "secorg", "s@x.com", "S")
+	org, owner, err := seedOrgUser(ctx, pools.App, "SecOrg", "secorg", "s@x.com", "S")
 	require.NoError(t, err)
 
 	b641, _ := b64key(t)

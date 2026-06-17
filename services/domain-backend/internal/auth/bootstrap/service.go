@@ -57,17 +57,15 @@ type BootstrapInput struct {
 
 // BootstrapResult es la respuesta exitosa.
 type BootstrapResult struct {
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	APIKey         string // plaintext, mostrado UNA sola vez
-	APIKeyID       uuid.UUID
-	Email          string
-	OrgName        string
-	// issue-37.1: el bootstrap también emite un enrollment_token para que el
-	// primer owner pueda invitar a su equipo sin SMTP. Plaintext UNA sola vez.
-	EnrollmentToken     string
-	EnrollmentTokenID   uuid.UUID
-	EnrollmentRole      string
+	UserID   uuid.UUID
+	APIKey   string // plaintext, mostrado UNA sola vez
+	APIKeyID uuid.UUID
+	Email    string
+	// issue-37.1: el bootstrap también emite un enrollment_token (global) para
+	// que el primer owner pueda invitar a su equipo sin SMTP. Plaintext UNA vez.
+	EnrollmentToken   string
+	EnrollmentTokenID uuid.UUID
+	EnrollmentRole    string
 }
 
 // Service ejecuta el bootstrap. Stateless: cada llamada abre su propia tx.
@@ -82,13 +80,13 @@ func New(pool *pgxpool.Pool) *Service {
 	return &Service{Pool: pool, Now: time.Now}
 }
 
-// Bootstrap ejecuta el flujo completo:
+// Bootstrap ejecuta el flujo completo (single-org: sin entidad organization):
 //   1. Lock advisory (evita race entre dos onboard simultáneos)
 //   2. Verifica first-run (COUNT(users) == 0)
-//   3. Crea organization (nombre derivado del email domain o user-supplied)
-//   4. Crea user (con bcrypt password dummy — el user no tiene password,
+//   3. Crea user owner (con bcrypt password dummy — el user no tiene password,
 //      usa API key + OTP)
-//   5. Crea api_key con bcrypt del plaintext generado
+//   4. Crea api_key con bcrypt del plaintext generado
+//   5. Emite enrollment_token global
 //   6. Commit (o rollback si algo falla)
 func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapResult, error) {
 	// Validar email
@@ -102,22 +100,6 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 	if keyName == "" {
 		keyName = "default"
 	}
-	orgName := in.OrgName
-	if orgName == "" {
-		// Derivar del email domain: admin@saargo.com → "Saargo"
-		parts := strings.Split(email, "@")
-		if len(parts) == 2 {
-			domain := parts[1]
-			// Tomar la parte antes del primer punto: saargo.com → saargo
-			base := strings.SplitN(domain, ".", 2)[0]
-			orgName = strings.Title(strings.ToLower(base))
-		}
-		if orgName == "" {
-			orgName = "Default Org"
-		}
-	}
-	// Sanitize slug: lowercase, alphanum + dash, max 50 chars
-	orgSlug := slugify(orgName)
 
 	// 1. Begin tx
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
@@ -140,50 +122,42 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 		return nil, ErrNotFirstRun
 	}
 
-	// 4. Crear organization
-	orgID := uuid.New()
 	now := s.Now()
-	_, err = tx.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $4)`,
-		orgID, orgName, orgSlug, now)
-	if err != nil {
-		return nil, fmt.Errorf("insert org: %w", err)
-	}
 
-	// 5. Crear user (owner role; password_hash dummy porque el user
-	// no usa password — usa API key + OTP)
+	// 4. Crear user owner (password_hash dummy porque el user no usa
+	// password — usa API key + OTP). Single-org: sin organization_id.
 	userID := uuid.New()
 	dummyHash, _ := bcrypt.GenerateFromPassword([]byte(uuid.New().String()), 10)
 	_, err = tx.Exec(ctx,
-		`INSERT INTO users (id, organization_id, email, role, password_hash,
-		                    last_organization_id, last_login_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, 'owner', $4, $2, $5, $5, $5)`,
-		userID, orgID, email, dummyHash, now)
+		`INSERT INTO users (id, email, role, password_hash,
+		                    last_login_at, created_at, updated_at)
+		 VALUES ($1, $2, 'owner', $3, $4, $4, $4)`,
+		userID, email, dummyHash, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
-	// 6. Generar API key: plaintext + bcrypt hash
+	// 5. Generar API key: plaintext + bcrypt hash
 	plaintext, keyHash, err := generateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 
-	// 7. Insertar api_key. expires_at = NULL (no expira automáticamente).
+	// 6. Insertar api_key. expires_at = NULL (no expira automáticamente).
 	//    environment = 'live' (no 'test' — bootstrap es para uso real).
+	//    Single-org: sin organization_id.
 	keyID := uuid.New()
 	keyPrefix := plaintext[:len("domk_")+8] // "domk_xxxxxxxx"
 	_, err = tx.Exec(ctx,
-		`INSERT INTO api_keys (id, organization_id, user_id, key_hash, key_prefix,
+		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
 		                    name, environment, expires_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, 'live', NULL, $7, $7)`,
-		keyID, orgID, userID, keyHash, keyPrefix, keyName, now)
+		 VALUES ($1, $2, $3, $4, $5, 'live', NULL, $6, $6)`,
+		keyID, userID, keyHash, keyPrefix, keyName, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert api_key: %w", err)
 	}
 
-	// 8. issue-37.1: emitir primer enrollment_token con role_on_enroll="member"
+	// 7. issue-37.1: emitir enrollment_token global con role_on_enroll="member"
 	enrollPlain, enrollPrefix, enrollHash, err := enrollment.GeneratePlaintext()
 	if err != nil {
 		return nil, fmt.Errorf("generate enrollment token: %w", err)
@@ -191,27 +165,24 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 	enrollTokenID := uuid.New()
 	_, err = tx.Exec(ctx,
 		`INSERT INTO org_enrollment_tokens
-		   (id, organization_id, token_hash, token_prefix, role_on_enroll,
-		    created_by_user_id)
-		 VALUES ($1, $2, $3, $4, 'member', $5)`,
-		enrollTokenID, orgID, enrollHash, enrollPrefix, userID,
+		   (id, token_hash, token_prefix, role_on_enroll, created_by_user_id)
+		 VALUES ($1, $2, $3, 'member', $4)`,
+		enrollTokenID, enrollHash, enrollPrefix, userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert enrollment token: %w", err)
 	}
 
-	// 9. Commit
+	// 8. Commit
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	return &BootstrapResult{
 		UserID:            userID,
-		OrganizationID:    orgID,
 		APIKey:            plaintext,
 		APIKeyID:          keyID,
 		Email:             email,
-		OrgName:           orgName,
 		EnrollmentToken:   enrollPlain,
 		EnrollmentTokenID: enrollTokenID,
 		EnrollmentRole:    "member",

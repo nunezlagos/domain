@@ -52,14 +52,8 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError("observation_id inválido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
-	if err != nil {
-		return mcp.NewToolResultError("invalid principal org_id"), nil
-	}
-	// Guard anti-enumeration: misma respuesta para no-existe y otra org.
-	// Con RLS, la query Get de otra org devuelve ErrNotFound (0 rows), no leak.
-	obs, err := d.Observations.Get(ctx, id)
-	if err != nil || obs.OrganizationID != orgID {
+	// Guard anti-enumeration: misma respuesta para no-existe.
+	if _, err := d.Observations.Get(ctx, id); err != nil {
 		return mcp.NewToolResultError("observation not found"), nil
 	}
 	userID, _ := uuid.Parse(d.Principal.UserID)
@@ -281,13 +275,13 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	args := req.GetArguments()
 
 	projFilter := ""
-	qArgs := []any{orgID}
+	qArgs := []any{}
 	if ps, _ := args["project_slug"].(string); ps != "" {
 		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
 		}
-		projFilter = " AND project_id = $2"
+		projFilter = " AND project_id = $1"
 		qArgs = append(qArgs, proj.ID)
 	}
 
@@ -295,7 +289,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyectó withOrgTxHandler.
 	rows, err := d.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM observations
-		WHERE organization_id = $1 AND deleted_at IS NULL`+projFilter+`
+		WHERE deleted_at IS NULL`+projFilter+`
 		GROUP BY observation_type`, qArgs...)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("stats query failed: %v", err)), nil
@@ -318,9 +312,9 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 
 	var sessions, prompts int64
 	_ = d.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM sessions WHERE organization_id = $1`, orgID).Scan(&sessions)
+		`SELECT COUNT(*) FROM sessions`).Scan(&sessions)
 	_ = d.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM prompts WHERE organization_id = $1 AND deleted_at IS NULL`, orgID).Scan(&prompts)
+		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)
 
 	return toolResultJSON(map[string]any{
 		"observations_total":   total,

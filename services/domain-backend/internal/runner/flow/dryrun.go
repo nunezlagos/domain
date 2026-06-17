@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/ctxkeys"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/flow"
 )
@@ -51,7 +52,7 @@ func (r *Runner) DryRun(ctx context.Context, flowID uuid.UUID, inputs map[string
 	}
 	for i := range f.Spec.Steps {
 		step := &f.Spec.Steps[i]
-		ps := analyzeStep(ctx, step, inputs, r.Agents, f.OrganizationID)
+		ps := analyzeStep(ctx, step, inputs, r.Agents, ctxkeys.OrgID(ctx))
 		out.Plan = append(out.Plan, ps)
 		out.TotalTokensIn += ps.EstimatedTokIn
 		out.TotalTokensOut += ps.EstimatedTokOut

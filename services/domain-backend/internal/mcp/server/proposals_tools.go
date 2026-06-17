@@ -125,8 +125,8 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 	// Marcar proposed=true.
 	if _, err := d.q(ctx).Exec(ctx,
 		`UPDATE project_policies SET proposed = true
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, created.ID,
+		   WHERE id = $1`,
+		created.ID,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("mark proposed failed: %v", err)), nil
 	}
@@ -173,11 +173,11 @@ func (d *Deps) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) 
 	var id uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
-		   (organization_id, project_id, slug, name, description,
+		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema, proposed)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,'{}','{}',true)
+		 VALUES ($1,$2,$3,$4,$5,$6,'{}','{}',true)
 		 RETURNING id`,
-		orgID, projectID, slug, name, desc, skillType, content,
+		projectID, slug, name, desc, skillType, content,
 	).Scan(&id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create skill proposal failed: %v", err)), nil
@@ -224,10 +224,10 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 	if kind == "policy" || kind == "all" {
 		q := `SELECT id::text, slug, name, kind, ` + tsFmt + `
 		        FROM project_policies
-		        WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL`
-		queryArgs := []any{orgID}
+		        WHERE proposed = true AND deleted_at IS NULL`
+		queryArgs := []any{}
 		if projectFilter != nil {
-			q += " AND project_id = $2"
+			q += " AND project_id = $1"
 			queryArgs = append(queryArgs, *projectFilter)
 		}
 		q += " ORDER BY created_at DESC LIMIT 50"
@@ -248,9 +248,8 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 		if rows, err := d.q(ctx).Query(ctx,
 			`SELECT id::text, slug, name, skill_type, project_id, `+tsFmt+`
 			   FROM skills
-			   WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL
+			   WHERE proposed = true AND deleted_at IS NULL
 			   ORDER BY created_at DESC LIMIT 50`,
-			orgID,
 		); err == nil {
 			for rows.Next() {
 				var id, slug, name, st, ts string
@@ -283,7 +282,6 @@ func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest
 	if d.Pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	args := req.GetArguments()
 	kind := strings.ToLower(strings.TrimSpace(asString(args["kind"])))
 	idStr, _ := args["id"].(string)
@@ -310,13 +308,13 @@ func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest
 	if action == "accept" {
 		// Quitar proposed → queda activa
 		sql = "UPDATE " + table + ` SET proposed = false
-		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	} else {
 		// reject → soft-delete
 		sql = "UPDATE " + table + ` SET deleted_at = NOW()
-		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	}
-	tag, err := d.q(ctx).Exec(ctx, sql, orgID, id)
+	tag, err := d.q(ctx).Exec(ctx, sql, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("review failed: %v", err)), nil
 	}

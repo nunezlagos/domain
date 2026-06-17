@@ -93,10 +93,10 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 			`SELECT p.id, p.slug
 			   FROM project_repositories pr
 			   JOIN projects p ON p.id = pr.project_id
-			   WHERE pr.organization_id = $1 AND pr.url = $2
+			   WHERE pr.url = $1
 			     AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
 			   LIMIT 1`,
-			orgID, gitRemote,
+			gitRemote,
 		).Scan(&pid, &pslug)
 		if err == nil {
 			return pid, pslug, true
@@ -108,8 +108,8 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 		var pid uuid.UUID
 		err := d.q(ctx).QueryRow(ctx,
 			`SELECT id FROM projects
-			   WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`,
-			orgID, base,
+			   WHERE slug = $1 AND deleted_at IS NULL`,
+			base,
 		).Scan(&pid)
 		if err == nil {
 			return pid, base, true
@@ -121,9 +121,9 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 		var pslug string
 		err := d.q(ctx).QueryRow(ctx,
 			`SELECT id, slug FROM projects
-			   WHERE organization_id = $1 AND repository_url = $2 AND deleted_at IS NULL
+			   WHERE repository_url = $1 AND deleted_at IS NULL
 			   LIMIT 1`,
-			orgID, gitRemote,
+			gitRemote,
 		).Scan(&pid, &pslug)
 		if err == nil {
 			return pid, pslug, true
@@ -197,8 +197,8 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		        last_seen_cwd, to_char(last_seen_at AT TIME ZONE 'UTC',
 		                               'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM projects
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, projID,
+		   WHERE id = $1`,
+		projID,
 	).Scan(&name, &desc, &lastHead, &lastBranch, &lastCwd, &lastSeen)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("read project state: %v", err)), nil
@@ -212,12 +212,12 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 	// Bump last_seen_*
 	if _, err := d.q(ctx).Exec(ctx,
 		`UPDATE projects
-		   SET last_known_head  = COALESCE(NULLIF($3,''), last_known_head),
-		       last_seen_branch = COALESCE(NULLIF($4,''), last_seen_branch),
-		       last_seen_cwd    = COALESCE(NULLIF($5,''), last_seen_cwd),
+		   SET last_known_head  = COALESCE(NULLIF($2,''), last_known_head),
+		       last_seen_branch = COALESCE(NULLIF($3,''), last_seen_branch),
+		       last_seen_cwd    = COALESCE(NULLIF($4,''), last_seen_cwd),
 		       last_seen_at     = NOW()
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, projID, gitHead, gitBranch, cwd,
+		   WHERE id = $1`,
+		projID, gitHead, gitBranch, cwd,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update last_seen: %v", err)), nil
 	}
@@ -236,10 +236,10 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		        to_char(created_at AT TIME ZONE 'UTC',
 		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM observations
-		   WHERE organization_id = $1 AND project_id = $2
+		   WHERE project_id = $1
 		     AND deleted_at IS NULL
 		   ORDER BY created_at DESC LIMIT 5`,
-		orgID, projID,
+		projID,
 	)
 	if qerr == nil {
 		for rows.Next() {
@@ -262,9 +262,9 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 	)
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM project_policies
-		   WHERE organization_id = $1 AND project_id = $2
+		   WHERE project_id = $1
 		     AND is_active = TRUE AND deleted_at IS NULL`,
-		orgID, projID,
+		projID,
 	).Scan(&projPoliciesCount); err != nil {
 		_ = err // count opcional, no abortar el bootstrap
 	}
@@ -278,8 +278,8 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM project_repositories
-		   WHERE organization_id = $1 AND project_id = $2 AND deleted_at IS NULL`,
-		orgID, projID,
+		   WHERE project_id = $1 AND deleted_at IS NULL`,
+		projID,
 	).Scan(&projRepoCount); err != nil {
 		_ = err
 	}
@@ -359,13 +359,13 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	var projID uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO projects
-		   (organization_id, slug, name, description,
+		   (slug, name, description,
 		    repository_url, last_known_head, last_seen_branch,
 		    last_seen_cwd, last_seen_at)
-		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),
-		         NULLIF($7,''),NULLIF($8,''),NOW())
+		 VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),
+		         NULLIF($6,''),NULLIF($7,''),NOW())
 		 RETURNING id`,
-		orgID, slug, name, desc, remoteURL, gitHead, gitBranch, cwd,
+		slug, name, desc, remoteURL, gitHead, gitBranch, cwd,
 	).Scan(&projID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create project failed: %v", err)), nil
@@ -379,10 +379,9 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 			remoteName = "origin"
 		}
 		repoIn := projectreposvc.AddInput{
-			OrganizationID: orgID,
-			ProjectID:      projID,
-			Name:           remoteName,
-			URL:            remoteURL,
+			ProjectID: projID,
+			Name:      remoteName,
+			URL:       remoteURL,
 		}
 		if v, _ := args["branch_default"].(string); v != "" {
 			repoIn.BranchDefault = v
@@ -401,13 +400,13 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	}
 
 	// Persistir observación inicial de registro (audit).
-	// observations schema: (organization_id, project_id, observation_type,
+	// observations schema: (project_id, observation_type,
 	// content). No tiene title — lo embebemos en content como first-line.
 	if _, oerr := d.q(ctx).Exec(ctx,
 		`INSERT INTO observations
-		   (organization_id, project_id, observation_type, content, tags)
-		 VALUES ($1, $2, 'discovery', $3, ARRAY['bootstrap','project_registered'])`,
-		orgID, projID,
+		   (project_id, observation_type, content, tags)
+		 VALUES ($1, 'discovery', $2, ARRAY['bootstrap','project_registered'])`,
+		projID,
 		fmt.Sprintf("# Proyecto registrado vía session_bootstrap\n\nProyecto %s creado desde sesión MCP.\n- cwd: %s\n- remote: %s\n- branch: %s\n- head: %s",
 			slug, cwd, remoteURL, gitBranch, gitHead),
 	); oerr != nil {

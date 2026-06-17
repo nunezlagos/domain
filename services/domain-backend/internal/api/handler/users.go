@@ -64,10 +64,10 @@ func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	sql := `SELECT id, email, name, role
 	          FROM users
-	         WHERE organization_id = $1 AND deleted_at IS NULL`
-	args := []any{orgID}
+	         WHERE deleted_at IS NULL`
+	args := []any{}
 	if roleFilter != "" {
-		sql += ` AND role = $2`
+		sql += ` AND role = $1`
 		args = append(args, roleFilter)
 	}
 	sql += ` ORDER BY name NULLS LAST, email LIMIT ` + strconv.Itoa(limit) +

@@ -33,7 +33,6 @@ const (
 // Server representa un MCP externo registrado.
 type Server struct {
 	ID              uuid.UUID         `json:"id"`
-	OrganizationID  uuid.UUID         `json:"organization_id"`
 	Name            string            `json:"name"`
 	Transport       string            `json:"transport"`
 	Command         string            `json:"command,omitempty"`
@@ -106,13 +105,13 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 
 	row := s.Pool.QueryRow(ctx,
 		`INSERT INTO mcp_servers
-			(organization_id, name, transport, command, args, env_cipher, url)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+			(name, transport, command, args, env_cipher, url)
+		 VALUES ($1,$2,$3,$4,$5,$6)
 		 RETURNING id, created_at, updated_at`,
-		orgID, in.Name, in.Transport, nullStr(in.Command), in.Args,
+		in.Name, in.Transport, nullStr(in.Command), in.Args,
 		envCipher, nullStr(in.URL))
 	srv := &Server{
-		OrganizationID: orgID, Name: in.Name, Transport: in.Transport,
+		Name: in.Name, Transport: in.Transport,
 		Command: in.Command, Args: in.Args, URL: in.URL,
 		Enabled: true, Status: "pending",
 	}
@@ -132,12 +131,12 @@ func nullStr(s string) any {
 // Get devuelve un server por id+org.
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Server, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, name, transport, COALESCE(command,''), args,
+		`SELECT id, name, transport, COALESCE(command,''), args,
 			COALESCE(url,''), enabled, status, last_connected_at, COALESCE(last_error,''),
 			retry_count, created_at, updated_at
-		 FROM mcp_servers WHERE id=$1 AND organization_id=$2`, id, orgID)
+		 FROM mcp_servers WHERE id=$1`, id)
 	var srv Server
-	err := row.Scan(&srv.ID, &srv.OrganizationID, &srv.Name, &srv.Transport,
+	err := row.Scan(&srv.ID, &srv.Name, &srv.Transport,
 		&srv.Command, &srv.Args, &srv.URL, &srv.Enabled, &srv.Status,
 		&srv.LastConnectedAt, &srv.LastError, &srv.RetryCount,
 		&srv.CreatedAt, &srv.UpdatedAt)
@@ -152,10 +151,10 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Server, error)
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, name, transport, COALESCE(command,''), args,
+		`SELECT id, name, transport, COALESCE(command,''), args,
 			COALESCE(url,''), enabled, status, last_connected_at, COALESCE(last_error,''),
 			retry_count, created_at, updated_at
-		 FROM mcp_servers WHERE organization_id=$1 ORDER BY created_at DESC`, orgID)
+		 FROM mcp_servers ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +162,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, err
 	var out []Server
 	for rows.Next() {
 		var srv Server
-		if err := rows.Scan(&srv.ID, &srv.OrganizationID, &srv.Name, &srv.Transport,
+		if err := rows.Scan(&srv.ID, &srv.Name, &srv.Transport,
 			&srv.Command, &srv.Args, &srv.URL, &srv.Enabled, &srv.Status,
 			&srv.LastConnectedAt, &srv.LastError, &srv.RetryCount,
 			&srv.CreatedAt, &srv.UpdatedAt); err != nil {
@@ -176,7 +175,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, err
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM mcp_servers WHERE id=$1 AND organization_id=$2`, id, orgID)
+		`DELETE FROM mcp_servers WHERE id=$1`, id)
 	if err != nil {
 		return err
 	}
@@ -274,8 +273,8 @@ func (s *Service) upsertTools(ctx context.Context, serverID, orgID uuid.UUID, to
 		}
 		row := s.Pool.QueryRow(ctx,
 			`INSERT INTO mcp_server_tools
-				(mcp_server_id, organization_id, tool_name, description, input_schema, discovered_at)
-			 VALUES ($1,$2,$3,$4,$5,NOW())
+				(mcp_server_id, tool_name, description, input_schema, discovered_at)
+			 VALUES ($1,$2,$3,$4,NOW())
 			 ON CONFLICT (mcp_server_id, tool_name) DO UPDATE
 			 SET description = EXCLUDED.description,
 				 input_schema = EXCLUDED.input_schema,
@@ -283,7 +282,7 @@ func (s *Service) upsertTools(ctx context.Context, serverID, orgID uuid.UUID, to
 				 updated_at = NOW()
 			 RETURNING id, mcp_server_id, tool_name, description, input_schema,
 				 enabled, discovered_at`,
-			serverID, orgID, t.Name, t.Description, schema)
+			serverID, t.Name, t.Description, schema)
 		var dst Tool
 		if err := row.Scan(&dst.ID, &dst.MCPServerID, &dst.ToolName,
 			&dst.Description, &dst.InputSchema, &dst.Enabled, &dst.DiscoveredAt); err != nil {
@@ -314,8 +313,8 @@ func (s *Service) ListTools(ctx context.Context, orgID, serverID uuid.UUID) ([]T
 		`SELECT id, mcp_server_id, tool_name, description, input_schema,
 			enabled, discovered_at
 		 FROM mcp_server_tools
-		 WHERE mcp_server_id=$1 AND organization_id=$2 AND enabled=TRUE
-		 ORDER BY tool_name`, serverID, orgID)
+		 WHERE mcp_server_id=$1 AND enabled=TRUE
+		 ORDER BY tool_name`, serverID)
 	if err != nil {
 		return nil, err
 	}

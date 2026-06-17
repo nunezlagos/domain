@@ -20,7 +20,6 @@ import (
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	"nunezlagos/domain/internal/service/promptrouter"
 )
 
@@ -71,8 +70,7 @@ func TestRouter_WithOrchestrator_FeaturePromptStartsFullOrchestrator(t *testing.
 	ctx := context.Background()
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
 	_, err = seeds.SeedAgentTemplatesForOrg(ctx, pools.App, org.ID)
 	require.NoError(t, err)
@@ -108,8 +106,7 @@ func TestRouter_WithOrchestrator_FixPromptStartsExpress(t *testing.T) {
 	ctx := context.Background()
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
 	_, err = seeds.SeedAgentTemplatesForOrg(ctx, pools.App, org.ID)
 	require.NoError(t, err)
@@ -141,8 +138,7 @@ func TestRouter_WithOrchestrator_ChatBypassesOrchestrator(t *testing.T) {
 	ctx := context.Background()
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
 
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: rec}

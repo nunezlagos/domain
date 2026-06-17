@@ -147,11 +147,10 @@ func (a *API) replayOutboundDelivery(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	tag, err := a.OutboundWebhookService.Pool.Exec(r.Context(), `
 		UPDATE outbound_webhook_deliveries
 		SET status = 'pending', next_retry_at = NOW(), attempt = 1, error_message = NULL
-		WHERE id = $1 AND organization_id = $2`, id, orgID)
+		WHERE id = $1`, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "replay", err.Error())
 		return

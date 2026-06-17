@@ -20,7 +20,7 @@ func newMockRepo() *mockRepo {
 func (m *mockRepo) Insert(_ context.Context, in InsertParams) (*Repo, error) {
 	id := uuid.New()
 	r := &Repo{
-		ID: id, OrganizationID: in.OrganizationID, ProjectID: in.ProjectID,
+		ID: id, ProjectID: in.ProjectID,
 		Name: in.Name, URL: in.URL, BranchDefault: in.BranchDefault,
 		Kind: in.Kind, IsDefault: in.IsDefault, Workflow: in.Workflow, Notes: in.Notes,
 	}
@@ -81,8 +81,8 @@ func (m *mockRepo) SoftDelete(_ context.Context, _, id uuid.UUID) error {
 func TestAdd_FirstRepoBecomesDefault(t *testing.T) {
 	svc := NewService(newMockRepo())
 	r, err := svc.Add(context.Background(), AddInput{
-		OrganizationID: uuid.New(), ProjectID: uuid.New(),
-		Name: "origin", URL: "https://github.com/x.git",
+		ProjectID: uuid.New(),
+		Name:      "origin", URL: "https://github.com/x.git",
 	})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -107,8 +107,8 @@ func TestAdd_RequiresNameAndURL(t *testing.T) {
 func TestAdd_RejectsInvalidWorkflow(t *testing.T) {
 	svc := NewService(newMockRepo())
 	_, err := svc.Add(context.Background(), AddInput{
-		OrganizationID: uuid.New(), ProjectID: uuid.New(),
-		Name: "origin", URL: "x", Workflow: "wild-west",
+		ProjectID: uuid.New(),
+		Name:      "origin", URL: "x", Workflow: "wild-west",
 	})
 	if !errors.Is(err, ErrInvalidWorkflow) {
 		t.Errorf("err = %v, want ErrInvalidWorkflow", err)
@@ -117,14 +117,14 @@ func TestAdd_RejectsInvalidWorkflow(t *testing.T) {
 
 func TestAdd_SecondRepoNotDefaultByDefault(t *testing.T) {
 	svc := NewService(newMockRepo())
-	orgID, projID := uuid.New(), uuid.New()
+	projID := uuid.New()
 	_, _ = svc.Add(context.Background(), AddInput{
-		OrganizationID: orgID, ProjectID: projID,
-		Name: "origin", URL: "https://github.com/x.git",
+		ProjectID: projID,
+		Name:      "origin", URL: "https://github.com/x.git",
 	})
 	r2, err := svc.Add(context.Background(), AddInput{
-		OrganizationID: orgID, ProjectID: projID,
-		Name: "mirror", URL: "git@gitlab:x.git",
+		ProjectID: projID,
+		Name:      "mirror", URL: "git@gitlab:x.git",
 	})
 	if err != nil {
 		t.Fatalf("Add mirror: %v", err)
@@ -139,12 +139,12 @@ func TestSetDefault_SwitchesAtomically(t *testing.T) {
 	svc := NewService(repo)
 	orgID, projID := uuid.New(), uuid.New()
 	r1, _ := svc.Add(context.Background(), AddInput{
-		OrganizationID: orgID, ProjectID: projID,
-		Name: "origin", URL: "https://github.com/x.git",
+		ProjectID: projID,
+		Name:      "origin", URL: "https://github.com/x.git",
 	})
 	r2, _ := svc.Add(context.Background(), AddInput{
-		OrganizationID: orgID, ProjectID: projID,
-		Name: "mirror", URL: "git@gitlab:x.git",
+		ProjectID: projID,
+		Name:      "mirror", URL: "git@gitlab:x.git",
 	})
 	if !r1.IsDefault || r2.IsDefault {
 		t.Fatalf("estado inicial mal: r1.default=%v r2.default=%v", r1.IsDefault, r2.IsDefault)

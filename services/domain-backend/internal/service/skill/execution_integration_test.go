@@ -17,7 +17,6 @@ import (
 	"nunezlagos/domain/internal/llm"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 
 	"github.com/google/uuid"
@@ -43,9 +42,8 @@ func setupExec(t *testing.T) (*skillsvc.ExecutionService, *skillsvc.Service, uui
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
-	org, owner, err := orgS.Create(ctx, "ExecOrg", "execorg", "e@x.com", "E")
+	org, owner, err := seedOrgUser(ctx, pools.App, "ExecOrg", "execorg", "e@x.com", "E")
 	require.NoError(t, err)
 
 	exec := &skillsvc.ExecutionService{

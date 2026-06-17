@@ -87,10 +87,6 @@ func (a *API) endSession(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := a.authorizeOrg(ctx, sess.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	writeData(w, http.StatusOK, sess)
 }
 
@@ -112,10 +108,6 @@ func (a *API) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, sess.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	writeData(w, http.StatusOK, sess)

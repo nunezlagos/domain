@@ -812,9 +812,6 @@ func (d *Deps) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("end: %v", err)), nil
 	}
-	if sess.OrganizationID.String() != d.Principal.OrganizationID {
-		return mcp.NewToolResultError("not found"), nil
-	}
 	return toolResultJSON(sess)
 }
 
@@ -1035,13 +1032,11 @@ func (d *Deps) handleAgentRunLogs(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError("run_id inválido"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-
-	// Cross-org guard
-	var runOrgID uuid.UUID
+	// Existence guard
+	var exists bool
 	err = d.Pool.QueryRow(ctx,
-		`SELECT organization_id FROM agent_runs WHERE id = $1`, id).Scan(&runOrgID)
-	if err != nil || runOrgID != orgID {
+		`SELECT EXISTS(SELECT 1 FROM agent_runs WHERE id = $1)`, id).Scan(&exists)
+	if err != nil || !exists {
 		return mcp.NewToolResultError("not found"), nil
 	}
 
@@ -1234,9 +1229,6 @@ func (d *Deps) handleAgentGet(ctx context.Context, req mcp.CallToolRequest) (*mc
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 		}
-		if ag.OrganizationID != orgID {
-			return mcp.NewToolResultError("not found"), nil
-		}
 		return toolResultJSON(ag)
 	}
 	slug, _ := args["slug"].(string)
@@ -1308,9 +1300,6 @@ func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mc
 		sk, err := d.Skills.GetByID(ctx, id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-		}
-		if sk.OrganizationID != orgID {
-			return mcp.NewToolResultError("not found"), nil
 		}
 		return toolResultJSON(sk)
 	}
@@ -1404,9 +1393,6 @@ func (d *Deps) handleKnowledgeGet(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 	}
-	if doc.OrganizationID.String() != d.Principal.OrganizationID {
-		return mcp.NewToolResultError("not found"), nil
-	}
 	return toolResultJSON(map[string]any{
 		"document": doc,
 		"chunks":   chunks,
@@ -1426,10 +1412,6 @@ func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequ
 	obs, err := d.Observations.Get(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get failed: %v", err)), nil
-	}
-	// Cross-org leak guard
-	if obs.OrganizationID.String() != d.Principal.OrganizationID {
-		return mcp.NewToolResultError("not found"), nil
 	}
 	return toolResultJSON(obs)
 }

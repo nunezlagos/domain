@@ -19,7 +19,6 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	"nunezlagos/domain/internal/service/billing"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	"nunezlagos/domain/internal/service/skill"
 )
 
@@ -73,8 +72,7 @@ func setup(t *testing.T, responses []*llm.Response) (*fix, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, _ := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 
 	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	agentSvc := &agentsvc.Service{Pool: pools.App, Audit: rec}

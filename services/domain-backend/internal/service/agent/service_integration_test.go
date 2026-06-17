@@ -17,7 +17,6 @@ import (
 	"nunezlagos/domain/internal/llm"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/service/agent"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	"nunezlagos/domain/internal/service/skill"
 )
 
@@ -49,8 +48,7 @@ func setup(t *testing.T) (*fix, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, _ := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 
 	svc := &agent.Service{Pool: pools.App, Audit: rec}
 	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}

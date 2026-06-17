@@ -168,7 +168,7 @@ func (a *API) runWebhookTarget(ctx context.Context, hook *webhook.Webhook,
 		return
 	}
 	res, dispatchErr := a.Dispatcher.Dispatch(ctx, dispatch.Request{
-		OrgID:      hook.OrganizationID,
+		OrgID:      uuid.Nil,
 		Source:     dispatch.SourceWebhook,
 		TargetType: hook.TargetType,
 		TargetID:   hook.TargetID,

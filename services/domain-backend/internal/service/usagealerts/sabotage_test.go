@@ -4,19 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSabotage_DedupPreventsDuplicateAlerts(t *testing.T) {
-	orgID := uuid.New()
 	date := time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC)
 
 	alert := CostAlert{
-		OrganizationID: orgID,
-		TotalUSD:       50.50,
-		ThresholdUSD:   50.00,
-		AlertDate:      date,
+		TotalUSD:     50.50,
+		ThresholdUSD: 50.00,
+		AlertDate:    date,
 	}
 
 	subject, body := RenderEmail(alert)

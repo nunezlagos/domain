@@ -41,11 +41,10 @@ var allowedRoles = map[string]bool{
 
 // RotateResult información que devolvemos al admin al rotar (plaintext UNA vez).
 type RotateResult struct {
-	Plaintext      string
-	Prefix         string
-	RoleOnEnroll   string
-	OrganizationID uuid.UUID
-	CreatedAt      time.Time
+	Plaintext    string
+	Prefix       string
+	RoleOnEnroll string
+	CreatedAt    time.Time
 }
 
 // Metadata estado del token activo de una org (sin plaintext).
@@ -58,16 +57,13 @@ type Metadata struct {
 
 // EnrollResult lo que recibe quien se auto-enrola: user + api key personal.
 type EnrollResult struct {
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	OrgName        string
-	OrgSlug        string
-	Email          string
-	Name           string
-	Role           string
-	APIKey         string // plaintext UNA vez
-	APIKeyID       uuid.UUID
-	KeyPrefix      string
+	UserID    uuid.UUID
+	Email     string
+	Name      string
+	Role      string
+	APIKey    string // plaintext UNA vez
+	APIKeyID  uuid.UUID
+	KeyPrefix string
 }
 
 // Service expone los flows de rotación/revoke/enrollment.
@@ -76,14 +72,12 @@ type Service struct {
 	Audit audit.Recorder
 }
 
-// Rotate revoca el token activo (si lo hay) y crea uno nuevo. Atomic en una tx.
-// El plaintext del nuevo token se devuelve UNA sola vez.
+// Rotate revoca el token activo global (si lo hay) y crea uno nuevo. Atomic
+// en una tx. El plaintext del nuevo token se devuelve UNA sola vez.
 //
-// `role` puede ser "" → default "member". Solo whitelisted (allowedRoles).
-func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role string) (*RotateResult, error) {
-	if orgID == uuid.Nil {
-		return nil, ErrOrgNotFound
-	}
+// Single-org (issue-37 global): un único token de enrollment activo, sin
+// organization_id. `role` puede ser "" → default "member". Solo whitelisted.
+func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*RotateResult, error) {
 	if role == "" {
 		role = "member"
 	}
@@ -102,23 +96,10 @@ func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role str
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var orgExists bool
-	err = tx.QueryRow(ctx,
-		`SELECT TRUE FROM organizations WHERE id = $1 AND deleted_at IS NULL`,
-		orgID,
-	).Scan(&orgExists)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrOrgNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("check org: %w", err)
-	}
-
 	if _, err := tx.Exec(ctx,
 		`UPDATE org_enrollment_tokens
 		 SET revoked_at = NOW()
-		 WHERE organization_id = $1 AND revoked_at IS NULL`,
-		orgID,
+		 WHERE revoked_at IS NULL`,
 	); err != nil {
 		return nil, fmt.Errorf("revoke previous: %w", err)
 	}
@@ -132,10 +113,10 @@ func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role str
 	}
 	err = tx.QueryRow(ctx,
 		`INSERT INTO org_enrollment_tokens
-		   (organization_id, token_hash, token_prefix, role_on_enroll, created_by_user_id)
-		 VALUES ($1, $2, $3, $4, $5)
+		   (token_hash, token_prefix, role_on_enroll, created_by_user_id)
+		 VALUES ($1, $2, $3, $4)
 		 RETURNING created_at`,
-		orgID, hash, prefix, role, actorParam,
+		hash, prefix, role, actorParam,
 	).Scan(&createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert token: %w", err)
@@ -151,11 +132,10 @@ func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role str
 			actorPtr = nil
 		}
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &orgID,
-			ActorID:        actorPtr,
-			ActorType:      audit.ActorUser,
-			Action:         "enrollment_token.rotated",
-			EntityType:     "enrollment_token",
+			ActorID:    actorPtr,
+			ActorType:  audit.ActorUser,
+			Action:     "enrollment_token.rotated",
+			EntityType: "enrollment_token",
 			NewValues: map[string]any{
 				"role_on_enroll": role,
 				"key_prefix":     prefix,
@@ -164,25 +144,21 @@ func (s *Service) Rotate(ctx context.Context, orgID, actorID uuid.UUID, role str
 	}
 
 	return &RotateResult{
-		Plaintext:      plaintext,
-		Prefix:         prefix,
-		RoleOnEnroll:   role,
-		OrganizationID: orgID,
-		CreatedAt:      createdAt,
+		Plaintext:    plaintext,
+		Prefix:       prefix,
+		RoleOnEnroll: role,
+		CreatedAt:    createdAt,
 	}, nil
 }
 
-// GetMetadata devuelve el estado del token activo (si existe), SIN el plaintext.
-func (s *Service) GetMetadata(ctx context.Context, orgID uuid.UUID) (*Metadata, error) {
-	if orgID == uuid.Nil {
-		return nil, ErrOrgNotFound
-	}
+// GetMetadata devuelve el estado del token activo global (si existe), SIN el
+// plaintext.
+func (s *Service) GetMetadata(ctx context.Context) (*Metadata, error) {
 	var m Metadata
 	err := s.Pool.QueryRow(ctx,
 		`SELECT token_prefix, role_on_enroll, created_at
 		 FROM org_enrollment_tokens
-		 WHERE organization_id = $1 AND revoked_at IS NULL`,
-		orgID,
+		 WHERE revoked_at IS NULL`,
 	).Scan(&m.Prefix, &m.RoleOnEnroll, &m.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return &Metadata{Exists: false}, nil
@@ -194,17 +170,13 @@ func (s *Service) GetMetadata(ctx context.Context, orgID uuid.UUID) (*Metadata, 
 	return &m, nil
 }
 
-// Revoke marca el token activo como revoked_at=NOW sin crear uno nuevo.
+// Revoke marca el token activo global como revoked_at=NOW sin crear uno nuevo.
 // Si no hay token activo, devuelve ErrNoActive.
-func (s *Service) Revoke(ctx context.Context, orgID, actorID uuid.UUID) error {
-	if orgID == uuid.Nil {
-		return ErrOrgNotFound
-	}
+func (s *Service) Revoke(ctx context.Context, actorID uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx,
 		`UPDATE org_enrollment_tokens
 		 SET revoked_at = NOW()
-		 WHERE organization_id = $1 AND revoked_at IS NULL`,
-		orgID,
+		 WHERE revoked_at IS NULL`,
 	)
 	if err != nil {
 		return fmt.Errorf("revoke: %w", err)
@@ -218,11 +190,10 @@ func (s *Service) Revoke(ctx context.Context, orgID, actorID uuid.UUID) error {
 			actorPtr = nil
 		}
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &orgID,
-			ActorID:        actorPtr,
-			ActorType:      audit.ActorUser,
-			Action:         "enrollment_token.revoked",
-			EntityType:     "enrollment_token",
+			ActorID:    actorPtr,
+			ActorType:  audit.ActorUser,
+			Action:     "enrollment_token.revoked",
+			EntityType: "enrollment_token",
 		})
 	}
 	return nil
@@ -249,7 +220,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	// Buscar candidatos (típicamente 0 o 1 por UNIQUE constraint)
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, token_hash, role_on_enroll
+		`SELECT id, token_hash, role_on_enroll
 		 FROM org_enrollment_tokens
 		 WHERE token_prefix = $1 AND revoked_at IS NULL`,
 		prefix,
@@ -259,14 +230,13 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	}
 	type candidate struct {
 		tokenID uuid.UUID
-		orgID   uuid.UUID
 		hash    []byte
 		role    string
 	}
 	var candidates []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.tokenID, &c.orgID, &c.hash, &c.role); err != nil {
+		if err := rows.Scan(&c.tokenID, &c.hash, &c.role); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan candidate: %w", err)
 		}
@@ -302,27 +272,13 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Verificar que la org sigue existiendo (defense-in-depth)
-	var orgName, orgSlug string
-	err = tx.QueryRow(ctx,
-		`SELECT name, slug FROM organizations
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		matched.orgID,
-	).Scan(&orgName, &orgSlug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrOrgNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query org: %w", err)
-	}
-
 	var userID uuid.UUID
 	var createdAt time.Time
 	err = tx.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, $2, NULLIF($3, ''), $4)
+		`INSERT INTO users (email, name, role)
+		 VALUES ($1, NULLIF($2, ''), $3)
 		 RETURNING id, created_at`,
-		matched.orgID, email, name, matched.role,
+		email, name, matched.role,
 	).Scan(&userID, &createdAt)
 	if err != nil {
 		if isEmailUniqueViolation(err) {
@@ -333,10 +289,10 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	keyID := uuid.New()
 	_, err = tx.Exec(ctx,
-		`INSERT INTO api_keys (id, organization_id, user_id, key_hash, key_prefix,
+		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
 		                        name, environment, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, 'default', 'live', NULL)`,
-		keyID, matched.orgID, userID, apiHash, apiPrefix,
+		 VALUES ($1, $2, $3, $4, 'default', 'live', NULL)`,
+		keyID, userID, apiHash, apiPrefix,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert api_key: %w", err)
@@ -348,32 +304,28 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &matched.orgID,
-			ActorID:        &userID,
-			ActorType:      audit.ActorUser,
-			Action:         "user.self_enrolled",
-			EntityType:     "user",
-			EntityID:       &userID,
+			ActorID:    &userID,
+			ActorType:  audit.ActorUser,
+			Action:     "user.self_enrolled",
+			EntityType: "user",
+			EntityID:   &userID,
 			NewValues: map[string]any{
-				"email":             email,
-				"role":              matched.role,
-				"enroll_token_id":   matched.tokenID,
-				"api_key_prefix":    apiPrefix,
+				"email":           email,
+				"role":            matched.role,
+				"enroll_token_id": matched.tokenID,
+				"api_key_prefix":  apiPrefix,
 			},
 		})
 	}
 
 	return &EnrollResult{
-		UserID:         userID,
-		OrganizationID: matched.orgID,
-		OrgName:        orgName,
-		OrgSlug:        orgSlug,
-		Email:          email,
-		Name:           name,
-		Role:           matched.role,
-		APIKey:         apiPlain,
-		APIKeyID:       keyID,
-		KeyPrefix:      apiPrefix,
+		UserID:    userID,
+		Email:     email,
+		Name:      name,
+		Role:      matched.role,
+		APIKey:    apiPlain,
+		APIKeyID:  keyID,
+		KeyPrefix: apiPrefix,
 	}, nil
 }
 

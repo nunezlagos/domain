@@ -105,10 +105,6 @@ func (a *API) getFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
 		return
 	}
-	if err := a.authorizeOrg(ctx, out.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	writeData(w, http.StatusOK, out)
 }
 
@@ -123,17 +119,12 @@ func (a *API) deleteFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(ctx, id)
-	if errors.Is(err, flow.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.FlowService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, flow.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	actorID := a.userID(ctx)
@@ -161,17 +152,12 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(ctx, id)
-	if errors.Is(err, flow.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.FlowService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, flow.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	userID := a.userID(ctx)
@@ -232,17 +218,12 @@ func (a *API) dryRunFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "runner_disabled", "")
 		return
 	}
-	f, err := a.FlowService.GetByID(ctx, id)
-	if errors.Is(err, flow.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.FlowService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, flow.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, f.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	var b runFlowBody
@@ -274,17 +255,12 @@ func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.FlowService.GetByID(ctx, id)
-	if errors.Is(err, flow.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.FlowService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, flow.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 
@@ -346,11 +322,6 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-
 	var b createFlowBody
 	if err := decodeJSON(r, &b); err != nil || b.Name == "" {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "name and spec required")
@@ -419,10 +390,6 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
-	if err := a.authorizeOrg(ctx, f.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	doc := flowExport{Slug: f.Slug, Name: f.Name, Description: f.Description, Spec: f.Spec}
 	switch r.URL.Query().Get("format") {
 	case "yaml":
@@ -467,7 +434,7 @@ func (a *API) listFlowParents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, err := a.FlowService.GetByID(r.Context(), id)
-	if errors.Is(err, flow.ErrNotFound) || (err == nil && f.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, flow.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -559,17 +526,12 @@ func (a *API) signalFlowRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	run, err := a.FlowService.GetRun(ctx, id)
-	if errors.Is(err, flow.ErrRunNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.FlowService.GetRun(ctx, id); err != nil {
+		if errors.Is(err, flow.ErrRunNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, run.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 

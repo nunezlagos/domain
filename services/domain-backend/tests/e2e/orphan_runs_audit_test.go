@@ -93,8 +93,7 @@ func TestOrphanAudit_DetectsBypass(t *testing.T) {
 
 	rows, _, err := auditor.Audit(ctx)
 	require.NoError(t, err)
-	require.Len(t, rows, 1, "debe haber 1 org agregada")
-	require.Equal(t, fx.orgID.String(), rows[0].OrgID)
+	require.Len(t, rows, 1, "debe haber 1 fila agregada")
 	require.Equal(t, int64(3), rows[0].Count)
 }
 

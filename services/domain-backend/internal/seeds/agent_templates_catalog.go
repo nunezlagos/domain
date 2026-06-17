@@ -702,11 +702,11 @@ func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uui
 		var inserted bool
 		err := pool.QueryRow(ctx, `
 			INSERT INTO agent_templates
-			  (organization_id, slug, name, system_prompt, personality, capabilities,
+			  (slug, name, system_prompt, personality, capabilities,
 			   model, temperature, max_tokens, handoff_policy, metadata, role,
 			   seed_managed, seed_version)
-			VALUES ($1,$2,$3,$4,NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,true,$13)
-			ON CONFLICT (organization_id, slug) DO UPDATE
+			VALUES ($1,$2,$3,NULLIF($4,''),$5,$6,$7,$8,$9,$10,$11,true,$12)
+			ON CONFLICT (slug) DO UPDATE
 			SET name           = EXCLUDED.name,
 			    system_prompt  = CASE WHEN agent_templates.is_user_modified THEN agent_templates.system_prompt ELSE EXCLUDED.system_prompt END,
 			    personality    = CASE WHEN agent_templates.is_user_modified THEN agent_templates.personality ELSE EXCLUDED.personality END,
@@ -719,7 +719,7 @@ func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uui
 			    role           = CASE WHEN agent_templates.is_user_modified THEN agent_templates.role ELSE EXCLUDED.role END,
 			    seed_version   = EXCLUDED.seed_version
 			RETURNING (xmax = 0)`,
-			orgID, e.Slug, e.Name, e.SystemPrompt, e.Personality, caps,
+			e.Slug, e.Name, e.SystemPrompt, e.Personality, caps,
 			e.Model, e.Temperature, e.MaxTokens, e.HandoffPolicy, metaJSON, role,
 			agentTemplatesSeedVersion,
 		).Scan(&inserted)
@@ -743,17 +743,15 @@ func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uui
 
 	cleanupTag, err := pool.Exec(ctx, `
 		DELETE FROM agent_templates t
-		WHERE t.organization_id = $1
-		  AND t.seed_managed = true
+		WHERE t.seed_managed = true
 		  AND t.is_user_modified = false
-		  AND NOT (t.slug = ANY($2))
+		  AND NOT (t.slug = ANY($1))
 		  AND NOT EXISTS (
 		    SELECT 1 FROM agents a
 		    JOIN agent_runs r ON r.agent_id = a.id
-		    WHERE a.organization_id = $1
-		      AND r.status IN ('pending','running')
+		    WHERE r.status IN ('pending','running')
 		  )
-	`, orgID, currentSlugs)
+	`, currentSlugs)
 	if err != nil {
 		return rep, fmt.Errorf("cleanup legacy templates: %w", err)
 	}

@@ -12,11 +12,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	costsvc "nunezlagos/domain/internal/service/cost"
-	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 func setupCost(t *testing.T) (*costsvc.Service, uuid.UUID, func()) {
@@ -38,9 +36,7 @@ func setupCost(t *testing.T) (*costsvc.Service, uuid.UUID, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, _, err := orgS.Create(ctx, "CostOrg", "costorg", "c@x.com", "C")
+	org, _, err := seedOrgUser(ctx, pools.App, "CostOrg", "costorg", "c@x.com", "C")
 	require.NoError(t, err)
 
 	svc := &costsvc.Service{Pool: pools.App}

@@ -46,7 +46,6 @@ var (
 
 type Webhook struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	Slug           string
 	Name           string
 	SourceType     string
@@ -102,14 +101,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) 
 	var w Webhook
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO webhooks
-		   (organization_id, created_by, slug, name, secret_encrypted, source_type,
+		   (created_by, slug, name, secret_encrypted, source_type,
 		    target_type, target_id, inputs_mapping)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, organization_id, slug, name, source_type, target_type, target_id,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, slug, name, source_type, target_type, target_id,
 		           inputs_mapping, enabled, last_delivery_at`,
-		in.OrganizationID, in.CreatedBy, in.Slug, in.Name, encSecret, in.SourceType,
+		in.CreatedBy, in.Slug, in.Name, encSecret, in.SourceType,
 		in.TargetType, in.TargetID, mappingJSON,
-	).Scan(&w.ID, &w.OrganizationID, &w.Slug, &w.Name, &w.SourceType, &w.TargetType, &w.TargetID,
+	).Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType, &w.TargetType, &w.TargetID,
 		&w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -137,10 +136,10 @@ func (s *Service) ResolveBySlug(ctx context.Context, slug string) (*Webhook, []b
 	var w Webhook
 	var encSecret []byte
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, slug, name, secret_encrypted, source_type,
+		`SELECT id, slug, name, secret_encrypted, source_type,
 		        target_type, target_id, inputs_mapping, enabled, last_delivery_at
 		 FROM webhooks WHERE slug = $1 AND deleted_at IS NULL`, slug,
-	).Scan(&w.ID, &w.OrganizationID, &w.Slug, &w.Name, &encSecret, &w.SourceType,
+	).Scan(&w.ID, &w.Slug, &w.Name, &encSecret, &w.SourceType,
 		&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound

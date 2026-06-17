@@ -208,7 +208,6 @@ func validateErrorHandling(step Step, ids map[string]bool, fallbackDepth int) er
 
 type Flow struct {
 	ID                  uuid.UUID
-	OrganizationID      uuid.UUID
 	Slug                string
 	Name                string
 	Description         string
@@ -362,7 +361,6 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Fl
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &f.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
 			Action:         "flow.updated",
@@ -395,8 +393,7 @@ func (s *Service) ListParents(ctx context.Context, orgID uuid.UUID, slug string)
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	prev, err := s.GetByID(ctx, id)
-	if err != nil {
+	if _, err := s.GetByID(ctx, id); err != nil {
 		return err
 	}
 	if err := s.repository().SoftDeleteFlow(ctx, id); err != nil {
@@ -404,7 +401,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
 			Action:         "flow.deleted",
@@ -464,7 +460,6 @@ func generateSlug(name string) string {
 // RunRow represents a row from flow_runs table.
 type RunRow struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	FlowID         uuid.UUID
 	Status         string
 	Error          string

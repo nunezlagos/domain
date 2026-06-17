@@ -156,10 +156,10 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 		var inserted bool
 		err = pool.QueryRow(ctx, `
 			INSERT INTO flows
-			  (organization_id, slug, name, description, spec, is_active,
+			  (slug, name, description, spec, is_active,
 			   deterministic_replay, seed_managed, seed_version)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8)
-			ON CONFLICT (organization_id, slug) DO UPDATE
+			VALUES ($1,$2,$3,$4,$5,$6,true,$7)
+			ON CONFLICT (slug) DO UPDATE
 			SET name                  = CASE WHEN flows.is_user_modified THEN flows.name ELSE EXCLUDED.name END,
 			    description           = CASE WHEN flows.is_user_modified THEN flows.description ELSE EXCLUDED.description END,
 			    spec                  = CASE WHEN flows.is_user_modified THEN flows.spec ELSE EXCLUDED.spec END,
@@ -167,7 +167,7 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 			    deterministic_replay  = CASE WHEN flows.is_user_modified THEN flows.deterministic_replay ELSE EXCLUDED.deterministic_replay END,
 			    seed_version          = EXCLUDED.seed_version
 			RETURNING (xmax = 0)`,
-			orgID, e.Slug, e.Name, nullStrSeed(e.Description), specJSON,
+			e.Slug, e.Name, nullStrSeed(e.Description), specJSON,
 			e.IsActive, e.DeterministicReplay, flowsSeedVersion,
 		).Scan(&inserted)
 		if err != nil {
@@ -181,8 +181,8 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 			// row: si is_user_modified=true → preserved, else updated.
 			var userModified bool
 			if scanErr := pool.QueryRow(ctx,
-				`SELECT is_user_modified FROM flows WHERE organization_id=$1 AND slug=$2`,
-				orgID, e.Slug,
+				`SELECT is_user_modified FROM flows WHERE slug=$1`,
+				e.Slug,
 			).Scan(&userModified); scanErr == nil && userModified {
 				rep.Preserved++
 			} else {
@@ -199,17 +199,16 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 	}
 	cleanupTag, err := pool.Exec(ctx, `
 		DELETE FROM flows f
-		WHERE f.organization_id = $1
-		  AND f.seed_managed = true
+		WHERE f.seed_managed = true
 		  AND f.is_user_modified = false
-		  AND NOT (f.slug = ANY($2))
+		  AND NOT (f.slug = ANY($1))
 		  AND NOT EXISTS (
 		    SELECT 1 FROM flow_runs r
 		    WHERE r.flow_id = f.id
 		      AND r.status IN ('pending','running','paused',
 		                       'paused_awaiting_signal','paused_awaiting_human')
 		  )`,
-		orgID, currentSlugs)
+		currentSlugs)
 	if err != nil {
 		return rep, fmt.Errorf("cleanup legacy flows: %w", err)
 	}

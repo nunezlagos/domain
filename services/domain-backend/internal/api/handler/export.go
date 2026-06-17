@@ -68,18 +68,22 @@ func StreamOrgExport(ctx context.Context, pool *pgxpool.Pool, orgID, userID uuid
 	}
 
 	tables := []exportTable{
-		{"observations", observationsQuery},
-		{"prompts", promptsQuery},
-		{"knowledge_docs", knowledgeDocsQuery},
-		{"skills", skillsQuery},
-		{"agents", agentsQuery},
-		{"flows", flowsQuery},
-		{"flow_runs", flowRunsQuery},
-		{"audit_log", auditLogQuery},
+		{"observations", observationsQuery, false},
+		{"prompts", promptsQuery, false},
+		{"knowledge_docs", knowledgeDocsQuery, false},
+		{"skills", skillsQuery, false},
+		{"agents", agentsQuery, false},
+		{"flows", flowsQuery, false},
+		{"flow_runs", flowRunsQuery, false},
+		{"audit_log", auditLogQuery, true},
 	}
 
 	for _, tbl := range tables {
-		if err := streamTable(ctx, pool, zw, tbl.name, tbl.query, orgID, userID); err != nil {
+		var args []any
+		if tbl.needsUser {
+			args = []any{userID}
+		}
+		if err := streamTable(ctx, pool, zw, tbl.name, tbl.query, args...); err != nil {
 			return fmt.Errorf("%s: %w", tbl.name, err)
 		}
 	}
@@ -87,20 +91,21 @@ func StreamOrgExport(ctx context.Context, pool *pgxpool.Pool, orgID, userID uuid
 }
 
 type exportTable struct {
-	name  string
-	query string
+	name      string
+	query     string
+	needsUser bool
 }
 
-const observationsQuery = `SELECT row_to_json(t) FROM observations t WHERE organization_id = $1 AND deleted_at IS NULL`
-const promptsQuery = `SELECT row_to_json(t) FROM prompts t WHERE organization_id = $1`
-const knowledgeDocsQuery = `SELECT row_to_json(t) FROM knowledge_docs t WHERE organization_id = $1`
-const skillsQuery = `SELECT row_to_json(t) FROM skills t WHERE organization_id = $1`
-const agentsQuery = `SELECT row_to_json(t) FROM agents t WHERE organization_id = $1 AND deleted_at IS NULL`
-const flowsQuery = `SELECT row_to_json(t) FROM flows t WHERE organization_id = $1 AND deleted_at IS NULL`
-const flowRunsQuery = `SELECT row_to_json(t) FROM flow_runs t WHERE organization_id = $1`
-const auditLogQuery = `SELECT row_to_json(t) FROM audit_log t WHERE actor_id = $1 OR organization_id = $2`
+const observationsQuery = `SELECT row_to_json(t) FROM observations t WHERE deleted_at IS NULL`
+const promptsQuery = `SELECT row_to_json(t) FROM prompts t`
+const knowledgeDocsQuery = `SELECT row_to_json(t) FROM knowledge_docs t`
+const skillsQuery = `SELECT row_to_json(t) FROM skills t`
+const agentsQuery = `SELECT row_to_json(t) FROM agents t WHERE deleted_at IS NULL`
+const flowsQuery = `SELECT row_to_json(t) FROM flows t WHERE deleted_at IS NULL`
+const flowRunsQuery = `SELECT row_to_json(t) FROM flow_runs t`
+const auditLogQuery = `SELECT row_to_json(t) FROM audit_log t WHERE actor_id = $1`
 
-func streamTable(ctx context.Context, pool *pgxpool.Pool, zw *zip.Writer, name, query string, orgID, userID uuid.UUID) error {
+func streamTable(ctx context.Context, pool *pgxpool.Pool, zw *zip.Writer, name, query string, args ...any) error {
 	fw, err := zw.CreateHeader(&zip.FileHeader{
 		Name:   name + ".jsonl.gz",
 		Method: zip.Deflate,
@@ -112,7 +117,7 @@ func streamTable(ctx context.Context, pool *pgxpool.Pool, zw *zip.Writer, name, 
 	gz := gzip.NewWriter(fw)
 	defer gz.Close()
 
-	rows, err := pool.Query(ctx, query, orgID, userID)
+	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("query %s: %w", name, err)
 	}

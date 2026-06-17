@@ -68,11 +68,11 @@ func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolR
 	var id uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
-		   (organization_id, project_id, slug, name, description,
+		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema)
-		 VALUES ($1,$2,$3,$4,NULLIF($5,''),$6,NULLIF($7,''),'{}','{}')
+		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),'{}','{}')
 		 RETURNING id`,
-		orgID, proj.ID, slug, name, desc, skillType, content,
+		proj.ID, slug, name, desc, skillType, content,
 	).Scan(&id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register failed: %v", err)), nil
@@ -117,16 +117,15 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 	q := `SELECT id, slug, name, COALESCE(description,''), skill_type,
 		    CASE WHEN project_id IS NULL THEN 'global' ELSE 'project' END AS scope
 		   FROM skills
-		   WHERE organization_id = $1
-		     AND deleted_at IS NULL
+		   WHERE deleted_at IS NULL
 		     AND proposed = false
-		     AND (project_id = $2`
+		     AND (project_id = $1`
 	if includeGlobals {
 		q += ` OR project_id IS NULL`
 	}
 	q += `) ORDER BY (project_id IS NULL) ASC, slug ASC`
 
-	rows, err := d.q(ctx).Query(ctx, q, orgID, proj.ID)
+	rows, err := d.q(ctx).Query(ctx, q, proj.ID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}

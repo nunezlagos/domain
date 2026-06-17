@@ -84,10 +84,6 @@ func (a *API) getAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
 		return
 	}
-	if err := a.authorizeOrg(ctx, out.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	writeData(w, http.StatusOK, out)
 }
 
@@ -130,17 +126,12 @@ func (a *API) updateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.AgentService.GetByID(ctx, id)
-	if errors.Is(err, agent.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.AgentService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, agent.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	actorID := a.userID(ctx)
@@ -180,17 +171,12 @@ func (a *API) listAgentVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	ag, err := a.AgentService.GetByID(ctx, id)
-	if errors.Is(err, agent.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.AgentService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, agent.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, ag.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	versions, err := a.AgentService.GetVersions(ctx, id, 0)
@@ -215,17 +201,12 @@ func (a *API) deleteAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.AgentService.GetByID(ctx, id)
-	if errors.Is(err, agent.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.AgentService.GetByID(ctx, id); err != nil {
+		if errors.Is(err, agent.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, prev.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	actorID := a.userID(ctx)

@@ -86,7 +86,7 @@ func (a *API) getSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sk, err := a.SkillService.GetByID(r.Context(), id)
-	if errors.Is(err, skill.ErrNotFound) || (err == nil && sk.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, skill.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -162,12 +162,11 @@ func (a *API) updateSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	prev, err := a.SkillService.GetByID(r.Context(), id)
-	if errors.Is(err, skill.ErrNotFound) || (err == nil && prev.OrganizationID.String() != p.OrganizationID) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.SkillService.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, skill.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
@@ -212,12 +211,11 @@ func (a *API) deleteSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	sk, err := a.SkillService.GetByID(r.Context(), id)
-	if errors.Is(err, skill.ErrNotFound) || (err == nil && sk.OrganizationID.String() != p.OrganizationID) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.SkillService.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, skill.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}

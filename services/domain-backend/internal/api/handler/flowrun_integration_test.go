@@ -25,7 +25,6 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
@@ -61,7 +60,6 @@ func setupFlowAPIFull(t *testing.T) (*flowAPIFixture, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
@@ -74,14 +72,13 @@ func setupFlowAPIFull(t *testing.T) (*flowAPIFixture, func()) {
 	}
 
 	api := &handler.API{
-		OrgService:  orgS,
 		FlowService: flowS,
 		FlowRunner:  runner,
 		APIKeys:     keys,
 		Audit:       rec,
 	}
 
-	org, owner, err := orgS.Create(ctx, "FlowOrg", "floworg", "f@x.com", "F")
+	org, owner, err := seedOrgUser(ctx, pools.App, "FlowOrg", "floworg", "f@x.com", "F")
 	require.NoError(t, err)
 	_, err = skillS.Create(ctx, skillsvc.CreateInput{
 		OrganizationID: org.ID, Slug: "fr-skill", Name: "FR",

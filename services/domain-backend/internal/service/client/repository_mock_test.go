@@ -32,7 +32,6 @@ func (m *mockRepo) Insert(ctx context.Context, in InsertParams) (*Client, error)
 	}
 	return &Client{
 		ID:             uuid.New(),
-		OrganizationID: in.OrganizationID,
 		Name:           in.Name,
 		Slug:           in.Slug,
 		TaxID:          in.TaxID,
@@ -72,7 +71,7 @@ func (m *mockRepo) Update(ctx context.Context, orgID, id uuid.UUID, in UpdatePar
 	if m.UpdateHook != nil {
 		return m.UpdateHook(ctx, orgID, id, in)
 	}
-	return &Client{ID: id, OrganizationID: orgID, Name: in.Name, Status: in.Status}, nil
+	return &Client{ID: id, Name: in.Name, Status: in.Status}, nil
 }
 
 func (m *mockRepo) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
@@ -96,5 +95,5 @@ func (m *mockRepo) SetStatus(ctx context.Context, orgID, id uuid.UUID, status st
 	if m.SetStatusHook != nil {
 		return m.SetStatusHook(ctx, orgID, id, status)
 	}
-	return &Client{ID: id, OrganizationID: orgID, Status: status}, nil
+	return &Client{ID: id, Status: status}, nil
 }

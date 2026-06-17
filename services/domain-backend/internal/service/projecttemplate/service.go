@@ -27,7 +27,6 @@ var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
 // Template definición declarativa.
 type Template struct {
 	ID             uuid.UUID       `json:"id"`
-	OrganizationID *uuid.UUID      `json:"organization_id,omitempty"`
 	Slug           string          `json:"slug"`
 	Name           string          `json:"name"`
 	Description    string          `json:"description"`
@@ -68,14 +67,14 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 	settingsJSON, _ := json.Marshal(in.Settings)
 	row := s.Pool.QueryRow(ctx,
 		`INSERT INTO project_templates
-			(organization_id, slug, name, description, is_default, is_public,
+			(slug, name, description, is_default, is_public,
 			 settings, default_skills, default_agents, default_flows)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		 RETURNING id, created_at, updated_at`,
-		orgID, in.Slug, in.Name, in.Description, in.IsDefault, in.IsPublic,
+		in.Slug, in.Name, in.Description, in.IsDefault, in.IsPublic,
 		settingsJSON, in.DefaultSkills, in.DefaultAgents, in.DefaultFlows)
 	t := &Template{
-		OrganizationID: &orgID, Slug: in.Slug, Name: in.Name,
+		Slug: in.Slug, Name: in.Name,
 		Description: in.Description, IsDefault: in.IsDefault, IsPublic: in.IsPublic,
 		Settings: settingsJSON, DefaultSkills: in.DefaultSkills,
 		DefaultAgents: in.DefaultAgents, DefaultFlows: in.DefaultFlows,
@@ -88,13 +87,13 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Template, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
+		`SELECT id, slug, name, COALESCE(description,''),
 			is_default, is_public, settings, default_skills, default_agents,
 			default_flows, created_at, updated_at
 		 FROM project_templates
-		 WHERE id=$1 AND (organization_id=$2 OR is_public=TRUE)`, id, orgID)
+		 WHERE id=$1`, id)
 	var t Template
-	err := row.Scan(&t.ID, &t.OrganizationID, &t.Slug, &t.Name, &t.Description,
+	err := row.Scan(&t.ID, &t.Slug, &t.Name, &t.Description,
 		&t.IsDefault, &t.IsPublic, &t.Settings, &t.DefaultSkills,
 		&t.DefaultAgents, &t.DefaultFlows, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -108,13 +107,13 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Template, erro
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Template, error) {
 	row := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
+		`SELECT id, slug, name, COALESCE(description,''),
 			is_default, is_public, settings, default_skills, default_agents,
 			default_flows, created_at, updated_at
 		 FROM project_templates
-		 WHERE slug=$1 AND (organization_id=$2 OR is_public=TRUE)`, slug, orgID)
+		 WHERE slug=$1`, slug)
 	var t Template
-	err := row.Scan(&t.ID, &t.OrganizationID, &t.Slug, &t.Name, &t.Description,
+	err := row.Scan(&t.ID, &t.Slug, &t.Name, &t.Description,
 		&t.IsDefault, &t.IsPublic, &t.Settings, &t.DefaultSkills,
 		&t.DefaultAgents, &t.DefaultFlows, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -128,12 +127,11 @@ func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Template, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
+		`SELECT id, slug, name, COALESCE(description,''),
 			is_default, is_public, settings, default_skills, default_agents,
 			default_flows, created_at, updated_at
 		 FROM project_templates
-		 WHERE organization_id=$1 OR is_public=TRUE
-		 ORDER BY is_default DESC, name`, orgID)
+		 ORDER BY is_default DESC, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +139,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Template, e
 	var out []Template
 	for rows.Next() {
 		var t Template
-		if err := rows.Scan(&t.ID, &t.OrganizationID, &t.Slug, &t.Name, &t.Description,
+		if err := rows.Scan(&t.ID, &t.Slug, &t.Name, &t.Description,
 			&t.IsDefault, &t.IsPublic, &t.Settings, &t.DefaultSkills,
 			&t.DefaultAgents, &t.DefaultFlows, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
@@ -153,7 +151,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Template, e
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM project_templates WHERE id=$1 AND organization_id=$2`, id, orgID)
+		`DELETE FROM project_templates WHERE id=$1`, id)
 	if err != nil {
 		return err
 	}

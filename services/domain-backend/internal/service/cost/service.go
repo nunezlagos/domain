@@ -47,10 +47,9 @@ func (s *Service) DailyByOrg(ctx context.Context, orgID uuid.UUID, days int) ([]
 		`SELECT day, runs, tokens_input, tokens_output, cost_usd, avg_duration_s,
 		        LAG(cost_usd) OVER (ORDER BY day) AS prev_cost_usd
 		 FROM domain_cost_daily_by_org
-		 WHERE organization_id = $1
-		   AND day >= CURRENT_DATE - $2::int
+		 WHERE day >= CURRENT_DATE - $1::int
 		 ORDER BY day DESC`,
-		orgID, days)
+		days)
 	if err != nil {
 		return nil, fmt.Errorf("query daily by org: %w", err)
 	}
@@ -79,10 +78,9 @@ func (s *Service) DailyByAgent(ctx context.Context, orgID uuid.UUID, days int) (
 	rows, err := s.Pool.Query(ctx,
 		`SELECT day, agent_id, agent_slug, runs, tokens_input, tokens_output, cost_usd
 		 FROM domain_cost_daily_by_agent
-		 WHERE organization_id = $1
-		   AND day >= CURRENT_DATE - $2::int
+		 WHERE day >= CURRENT_DATE - $1::int
 		 ORDER BY day DESC, cost_usd DESC`,
-		orgID, days)
+		days)
 	if err != nil {
 		return nil, fmt.Errorf("query daily by agent: %w", err)
 	}

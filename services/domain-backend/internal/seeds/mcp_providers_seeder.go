@@ -89,7 +89,7 @@ func (s *MCPProvidersSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Repor
 		var existingID string
 		err = tx.QueryRow(ctx, `
 			SELECT id::text FROM mcp_providers
-			WHERE name = $1 AND organization_id IS NULL
+			WHERE name = $1
 		`, p.Name).Scan(&existingID)
 
 		if err == nil {
@@ -108,8 +108,8 @@ func (s *MCPProvidersSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Repor
 
 		_, ierr := tx.Exec(ctx, `
 			INSERT INTO mcp_providers
-				(name, description, command, default_args, env_template, required_env, tags, is_built_in, is_public, organization_id)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, TRUE, TRUE, NULL)
+				(name, description, command, default_args, env_template, required_env, tags, is_built_in, is_public)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, TRUE, TRUE)
 		`, p.Name, p.Description, p.Command, p.DefaultArgs, string(envJSON), p.RequiredEnv, p.Tags)
 		if ierr != nil {
 			return rep, fmt.Errorf("insert provider %s: %w", p.Name, ierr)

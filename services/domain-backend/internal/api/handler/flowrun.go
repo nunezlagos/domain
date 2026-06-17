@@ -33,7 +33,7 @@ func (a *API) loadRunForOrg(w http.ResponseWriter, r *http.Request) (*flow.RunRo
 		return nil, false
 	}
 	run, err := a.FlowService.GetRun(r.Context(), id)
-	if errors.Is(err, flow.ErrRunNotFound) || (err == nil && run.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, flow.ErrRunNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return nil, false
 	}

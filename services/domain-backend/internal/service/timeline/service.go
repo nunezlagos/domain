@@ -131,21 +131,17 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 	var (
 		anchorCreatedAt time.Time
 		anchorProjectID uuid.UUID
-		anchorOrgID     uuid.UUID
 		anchorContent   string
 	)
 	err := s.q(ctx).QueryRow(ctx,
-		`SELECT created_at, project_id, organization_id, content
+		`SELECT created_at, project_id, content
 		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, observationID,
-	).Scan(&anchorCreatedAt, &anchorProjectID, &anchorOrgID, &anchorContent)
+	).Scan(&anchorCreatedAt, &anchorProjectID, &anchorContent)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrObservationNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("anchor lookup: %w", err)
-	}
-	if anchorOrgID != orgID {
-		return nil, ErrObservationNotFound
 	}
 
 	// Before: observaciones + prompts ANTERIORES
@@ -219,16 +215,16 @@ func (s *Service) querySessions(ctx context.Context, orgID, userID, projectID uu
 	if projectID == uuid.Nil {
 		q = `SELECT id, COALESCE(title,''), COALESCE(summary,''), started_at
 		     FROM sessions
-		     WHERE organization_id = $1 AND user_id = $2 AND deleted_at IS NULL ` + cond + `
-		     ORDER BY started_at DESC LIMIT $3`
-		args = []any{orgID, userID, limit}
+		     WHERE user_id = $1 AND deleted_at IS NULL ` + cond + `
+		     ORDER BY started_at DESC LIMIT $2`
+		args = []any{userID, limit}
 	} else {
 		q = `SELECT id, COALESCE(title,''), COALESCE(summary,''), started_at
 		     FROM sessions
-		     WHERE organization_id = $1 AND user_id = $2 AND project_id = $3
+		     WHERE user_id = $1 AND project_id = $2
 		       AND deleted_at IS NULL ` + cond + `
-		     ORDER BY started_at DESC LIMIT $4`
-		args = []any{orgID, userID, projectID, limit}
+		     ORDER BY started_at DESC LIMIT $3`
+		args = []any{userID, projectID, limit}
 	}
 	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
@@ -255,15 +251,15 @@ func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.U
 	if projectID == uuid.Nil {
 		q = `SELECT id, observation_type, content, created_at
 		     FROM observations
-		     WHERE organization_id = $1 AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $2`
-		args = []any{orgID, limit}
+		     WHERE deleted_at IS NULL
+		     ORDER BY created_at DESC LIMIT $1`
+		args = []any{limit}
 	} else {
 		q = `SELECT id, observation_type, content, created_at
 		     FROM observations
-		     WHERE organization_id = $1 AND project_id = $2 AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $3`
-		args = []any{orgID, projectID, limit}
+		     WHERE project_id = $1 AND deleted_at IS NULL
+		     ORDER BY created_at DESC LIMIT $2`
+		args = []any{projectID, limit}
 	}
 	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {
@@ -293,15 +289,15 @@ func (s *Service) queryPrompts(ctx context.Context, orgID, projectID uuid.UUID, 
 	var args []any
 	if projectID == uuid.Nil {
 		q = `SELECT id, slug, body, created_at FROM prompts
-		     WHERE organization_id = $1 AND is_active = true AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $2`
-		args = []any{orgID, limit}
+		     WHERE is_active = true AND deleted_at IS NULL
+		     ORDER BY created_at DESC LIMIT $1`
+		args = []any{limit}
 	} else {
 		q = `SELECT id, slug, body, created_at FROM prompts
-		     WHERE organization_id = $1 AND project_id = $2
+		     WHERE project_id = $1
 		       AND is_active = true AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $3`
-		args = []any{orgID, projectID, limit}
+		     ORDER BY created_at DESC LIMIT $2`
+		args = []any{projectID, limit}
 	}
 	rows, err := s.q(ctx).Query(ctx, q, args...)
 	if err != nil {

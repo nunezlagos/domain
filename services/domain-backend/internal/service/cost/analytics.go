@@ -40,12 +40,12 @@ func (s *Service) Spend(ctx context.Context, orgID uuid.UUID, granularity string
 		days = 30
 	}
 	rows, err := s.Pool.Query(ctx, `
-		SELECT date_trunc($3, occurred_at) AS bucket,
+		SELECT date_trunc($2, occurred_at) AS bucket,
 		       COUNT(*) AS runs, COALESCE(SUM(cost_usd), 0) AS cost_usd
 		FROM cost_logs
-		WHERE organization_id = $1 AND occurred_at >= NOW() - ($2 || ' days')::interval
+		WHERE occurred_at >= NOW() - ($1 || ' days')::interval
 		GROUP BY bucket ORDER BY bucket DESC`,
-		orgID, strconv.Itoa(days), trunc)
+		strconv.Itoa(days), trunc)
 	if err != nil {
 		return nil, fmt.Errorf("spend query: %w", err)
 	}
@@ -80,7 +80,7 @@ func (s *Service) Breakdown(ctx context.Context, orgID uuid.UUID, dimension stri
 		query = fmt.Sprintf(`
 			SELECT %s AS key, COUNT(*), COALESCE(SUM(cost_usd), 0)
 			FROM cost_logs
-			WHERE organization_id = $1 AND occurred_at >= NOW() - ($2 || ' days')::interval
+			WHERE occurred_at >= NOW() - ($1 || ' days')::interval
 			GROUP BY key ORDER BY 3 DESC`, dimension)
 	case "agent":
 		query = `
@@ -88,7 +88,7 @@ func (s *Service) Breakdown(ctx context.Context, orgID uuid.UUID, dimension stri
 			FROM cost_logs c
 			LEFT JOIN agent_runs ar ON ar.id = c.agent_run_id
 			LEFT JOIN agents a ON a.id = ar.agent_id
-			WHERE c.organization_id = $1 AND c.occurred_at >= NOW() - ($2 || ' days')::interval
+			WHERE c.occurred_at >= NOW() - ($1 || ' days')::interval
 			GROUP BY key ORDER BY 3 DESC`
 	case "flow":
 		query = `
@@ -96,13 +96,13 @@ func (s *Service) Breakdown(ctx context.Context, orgID uuid.UUID, dimension stri
 			FROM cost_logs c
 			LEFT JOIN flow_runs fr ON fr.id = c.flow_run_id
 			LEFT JOIN flows f ON f.id = fr.flow_id
-			WHERE c.organization_id = $1 AND c.occurred_at >= NOW() - ($2 || ' days')::interval
+			WHERE c.occurred_at >= NOW() - ($1 || ' days')::interval
 			GROUP BY key ORDER BY 3 DESC`
 	default:
 		return nil, fmt.Errorf("%w: %s (supported: provider, model, operation, agent, flow)",
 			ErrInvalidDimension, dimension)
 	}
-	rows, err := s.Pool.Query(ctx, query, orgID, strconv.Itoa(days))
+	rows, err := s.Pool.Query(ctx, query, strconv.Itoa(days))
 	if err != nil {
 		return nil, fmt.Errorf("breakdown query: %w", err)
 	}
@@ -155,11 +155,10 @@ func (s *Service) ForecastSMA(ctx context.Context, orgID uuid.UUID, windowDays i
 	rows, err := s.Pool.Query(ctx, `
 		SELECT COALESCE(SUM(cost_usd), 0)
 		FROM cost_logs
-		WHERE organization_id = $1
-		  AND occurred_at >= CURRENT_DATE - ($2 || ' days')::interval
+		WHERE occurred_at >= CURRENT_DATE - ($1 || ' days')::interval
 		  AND occurred_at < CURRENT_DATE
 		GROUP BY date_trunc('day', occurred_at)`,
-		orgID, strconv.Itoa(windowDays))
+		strconv.Itoa(windowDays))
 	if err != nil {
 		return nil, fmt.Errorf("forecast window: %w", err)
 	}
@@ -180,8 +179,8 @@ func (s *Service) ForecastSMA(ctx context.Context, orgID uuid.UUID, windowDays i
 	var monthToDate float64
 	if err := s.Pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(cost_usd), 0) FROM cost_logs
-		WHERE organization_id = $1 AND occurred_at >= date_trunc('month', NOW())`,
-		orgID).Scan(&monthToDate); err != nil {
+		WHERE occurred_at >= date_trunc('month', NOW())`,
+	).Scan(&monthToDate); err != nil {
 		return nil, fmt.Errorf("month to date: %w", err)
 	}
 
@@ -244,10 +243,10 @@ func (s *Service) CreateBudget(ctx context.Context, orgID uuid.UUID, name string
 	}
 	var b Budget
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO budgets (organization_id, name, amount_usd, period, warning_threshold_pct)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO budgets (name, amount_usd, period, warning_threshold_pct)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, name, amount_usd, period, warning_threshold_pct, created_at`,
-		orgID, name, amountUSD, period, warningPct,
+		name, amountUSD, period, warningPct,
 	).Scan(&b.ID, &b.Name, &b.AmountUSD, &b.Period, &b.WarningThresholdPct, &b.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create budget: %w", err)
@@ -260,8 +259,8 @@ func (s *Service) CreateBudget(ctx context.Context, orgID uuid.UUID, name string
 func (s *Service) ListBudgets(ctx context.Context, orgID uuid.UUID) ([]Budget, error) {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, name, amount_usd, period, warning_threshold_pct, created_at
-		FROM budgets WHERE organization_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at ASC`, orgID)
+		FROM budgets WHERE deleted_at IS NULL
+		ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list budgets: %w", err)
 	}
@@ -284,8 +283,8 @@ func (s *Service) ListBudgets(ctx context.Context, orgID uuid.UUID) ([]Budget, e
 		var spend float64
 		if err := s.Pool.QueryRow(ctx, fmt.Sprintf(`
 			SELECT COALESCE(SUM(cost_usd), 0) FROM cost_logs
-			WHERE organization_id = $1 AND occurred_at >= date_trunc('%s', NOW())`,
-			periodStart(out[i].Period)), orgID).Scan(&spend); err != nil {
+			WHERE occurred_at >= date_trunc('%s', NOW())`,
+			periodStart(out[i].Period))).Scan(&spend); err != nil {
 			return nil, fmt.Errorf("current spend: %w", err)
 		}
 		out[i].CurrentSpendUSD = spend
@@ -298,7 +297,7 @@ func (s *Service) ListBudgets(ctx context.Context, orgID uuid.UUID) ([]Budget, e
 func (s *Service) DeleteBudget(ctx context.Context, orgID, id uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx, `
 		UPDATE budgets SET deleted_at = NOW()
-		WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`, id, orgID)
+		WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return fmt.Errorf("delete budget: %w", err)
 	}

@@ -30,7 +30,6 @@ import (
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	policysvc "nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
@@ -68,11 +67,10 @@ func setupMCP(t *testing.T) *mcpFixture {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
 	proj, err := projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,

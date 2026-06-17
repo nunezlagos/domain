@@ -15,7 +15,6 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 )
 
@@ -39,8 +38,7 @@ func setupProj(t *testing.T) (*projsvc.Service, uuid.UUID, uuid.UUID, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pool}
-	orgS := &orgsvc.Service{Pool: pool, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, err := seedOrgUser(ctx, pool, "Acme", "acme", "o@x.com", "O")
 	require.NoError(t, err)
 
 	svc := &projsvc.Service{Pool: pool, Audit: rec}

@@ -22,9 +22,10 @@ import (
 	"nunezlagos/domain/internal/llm"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	searchsvc "nunezlagos/domain/internal/service/search"
+
+	"github.com/google/uuid"
 )
 
 func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
@@ -62,7 +63,6 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	// validan org_id en la query. Tablas con RLS (api_keys, audit_log,
 	// otp_codes, activity_log, secrets) las accede AuthPool o un flujo
 	// con txctx.WithOrgTx explícito.
-	orgS := &orgsvc.Service{Pool: pool, Audit: rec}
 	projS := &projsvc.Service{Pool: pool, Audit: rec}
 	obsS := &observation.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{}}
 
@@ -72,17 +72,24 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 
 	searchS := &searchsvc.Service{Pool: pool}
 	api := &handler.API{
-		OrgService:     orgS,
 		ProjectService: projS,
 		ObsService:     obsS,
 		SearchService:  searchS,
 		APIKeys:        keys,
 	}
 
-	// Crear org + user + emitir API key
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
-	require.NoError(t, err)
-	plaintext, _, err := keys.Issue(ctx, org.ID, owner.UserID, "test-key", "test")
+	// Insertar org + user directamente (el org.Service fue removido). El schema
+	// aún exige users.organization_id NOT NULL con FK a organizations, así que
+	// creamos ambas filas vía SQL sobre el AuthPool (BYPASSRLS) y emitimos la key.
+	var orgID, userID uuid.UUID
+	require.NoError(t, authPool.QueryRow(ctx,
+		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
+	).Scan(&orgID))
+	require.NoError(t, authPool.QueryRow(ctx,
+		`INSERT INTO users (organization_id, email, name, role) VALUES ($1, 'owner@acme.com', 'Owner', 'owner') RETURNING id`,
+		orgID,
+	).Scan(&userID))
+	plaintext, _, err := keys.Issue(ctx, orgID, userID, "test-key", "test")
 	require.NoError(t, err)
 
 	// Middleware stack: auth + tx RLS → router. Pool es OBLIGATORIO desde

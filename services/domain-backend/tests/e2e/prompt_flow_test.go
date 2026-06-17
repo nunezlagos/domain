@@ -88,7 +88,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 	// === ESCENARIO 1: prompt de chat NO arranca wizard ===
 	t.Run("chat_no_wizard", func(t *testing.T) {
 		resp, err := router.Route(ctx,
-			"Cómo se configuran las migrations de postgres?", nil)
+			"Cómo se configuran las migrations de postgres?", nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, promptrouter.OutcomeChat, resp.Outcome)
 		require.Equal(t, promptrouter.IntentChat, resp.Intent)
@@ -101,6 +101,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 	t.Run("bug_starts_wizard", func(t *testing.T) {
 		resp, err := router.Route(ctx,
 			"El director no puede descargar la ficha aunque haya completado las 4 tasas. No funciona el botón de export, ya pasé el screenshot.",
+			nil,
 			nil,
 		)
 		require.NoError(t, err)

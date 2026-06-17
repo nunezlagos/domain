@@ -36,11 +36,10 @@ type HeartbeatWatcher struct {
 
 // StuckStep representa un step detectado como stuck (para tests + logging).
 type StuckStep struct {
-	StepID       string
-	FlowRunID    string
-	StepKey      string
-	OrgID        string
-	RetryPolicy  string
+	StepID      string
+	FlowRunID   string
+	StepKey     string
+	RetryPolicy string
 }
 
 // Start corre el loop hasta que ctx se cancele. Sólo ejecuta tick si es leader.
@@ -105,11 +104,10 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 	query := `
 		SELECT
 			s.id, s.flow_run_id, s.step_key,
-			COALESCE(fr.organization_id::text, ''),
 			COALESCE(at.metadata->>'retry_policy', 'idempotent')
 		FROM flow_run_steps s
 		JOIN flow_runs fr ON fr.id = s.flow_run_id
-		LEFT JOIN agents a ON a.slug = s.step_key AND a.organization_id = fr.organization_id
+		LEFT JOIN agents a ON a.slug = s.step_key
 		LEFT JOIN agent_templates at ON at.slug = s.step_key
 		WHERE s.status = 'running'
 		  AND (
@@ -126,7 +124,7 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 	var stuck []StuckStep
 	for rows.Next() {
 		var s StuckStep
-		if err := rows.Scan(&s.StepID, &s.FlowRunID, &s.StepKey, &s.OrgID, &s.RetryPolicy); err != nil {
+		if err := rows.Scan(&s.StepID, &s.FlowRunID, &s.StepKey, &s.RetryPolicy); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan stuck step: %w", err)
 		}
@@ -225,12 +223,8 @@ func (w *HeartbeatWatcher) observeTick(result string) {
 
 func (w *HeartbeatWatcher) observeStuck(s StuckStep) {
 	if w.Metrics != nil && w.Metrics.HeartbeatWatcherStuckTotal != nil {
-		orgID := s.OrgID
-		if orgID == "" {
-			orgID = "unknown"
-		}
 		w.Metrics.HeartbeatWatcherStuckTotal.
-			WithLabelValues(orgID, s.StepKey, "heartbeat_timeout").Inc()
+			WithLabelValues("unknown", s.StepKey, "heartbeat_timeout").Inc()
 	}
 }
 

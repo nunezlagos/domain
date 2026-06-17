@@ -104,7 +104,6 @@ import (
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
@@ -374,22 +373,6 @@ func runServer() {
 
 	// Services: dependency wiring explícito.
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
-	orgService := &orgsvc.Service{Pool: pools.App, Audit: recorder}
-	// REQ-57: hook que seedea catalogs per-org al crear una org nueva.
-	// Sin esto, las orgs creadas en runtime no reciben skills/agents/flows
-	// built-in (solo se aplicarían a orgs creadas via tests).
-	orgService.PostCreateHook = func(ctx context.Context, orgID uuid.UUID) error {
-		if _, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 3); err != nil {
-			return fmt.Errorf("seed skills: %w", err)
-		}
-		if _, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID); err != nil {
-			return fmt.Errorf("seed agent_templates: %w", err)
-		}
-		if _, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID); err != nil {
-			return fmt.Errorf("seed flows: %w", err)
-		}
-		return nil
-	}
 
 	// Debug pprof endpoints (issue-27.1) en puerto separado con basic auth
 	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
@@ -432,7 +415,7 @@ func runServer() {
 		}
 		tid := t.ID
 		eventBus.Publish(events.Event{
-			OrgID:    t.OrganizationID,
+			OrgID:    uuid.Nil,
 			Topic:    topic,
 			TicketID: &tid,
 			ActorID:  actorPtr,
@@ -848,7 +831,6 @@ func runServer() {
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 
 	api := &handler.API{
-		OrgService:     orgService,
 		ProjectService: projectService,
 		ClientService:  clientService,
 		TicketService:  ticketService,

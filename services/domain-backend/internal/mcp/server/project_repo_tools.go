@@ -100,10 +100,9 @@ func (d *Deps) handleProjectRepoAdd(ctx context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	in := projectreposvc.AddInput{
-		OrganizationID: orgID,
-		ProjectID:      projID,
-		Name:           name,
-		URL:            url,
+		ProjectID: projID,
+		Name:      name,
+		URL:       url,
 	}
 	if v, ok := args["branch_default"].(string); ok {
 		in.BranchDefault = v

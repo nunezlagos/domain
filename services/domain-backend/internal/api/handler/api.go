@@ -66,7 +66,6 @@ import (
 	"nunezlagos/domain/internal/service/projecttemplate"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
@@ -80,7 +79,6 @@ import (
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
 type API struct {
-	OrgService     *orgsvc.Service
 	ProjectService *projsvc.Service
 	ClientService  *clientsvc.Service
 	TicketService  *ticketsvc.Service // REQ-51 sistema de tickets internos
@@ -185,14 +183,11 @@ func (a *API) Router() http.Handler {
 	// Activity logs (issue-02.6)
 	mux.HandleFunc("GET /api/v1/activity-logs", a.listActivityLogs)
 
-	// Organización (single-org, issue-21.5): solo lectura/ajuste de la única org
-	// y gestión de members. El lifecycle multi-org (create/delete/transfer) se
-	// removió: cada deployment atiende a UNA organización.
-	mux.HandleFunc("GET /api/v1/organizations/{id}", a.getOrg)
-	mux.HandleFunc("PATCH /api/v1/organizations/{id}", a.updateOrg)
-	mux.HandleFunc("GET /api/v1/organizations/{id}/members", a.listMembers)
-	// issue-36.1: onboarding sin email — admin/owner crea user + api_key directo
-	mux.HandleFunc("POST /api/v1/organizations/{id}/members", a.addMemberWithKey)
+	// Organización (single-org): la entidad organization se removió. Los
+	// endpoints de org settings (GET/PATCH /organizations/{id}) y member
+	// management (/organizations/{id}/members) ya no existen — los users se
+	// listan globalmente en GET /api/v1/users. Se conserva enrollment-token
+	// y /auth/enroll (onboarding global).
 	// issue-37.1: self-enrollment con token compartido (público + admin rotate)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 	mux.HandleFunc("POST /api/v1/organizations/{id}/enrollment-token/rotate", a.rotateEnrollmentToken)

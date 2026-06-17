@@ -115,11 +115,11 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	// 2) Admin user idempotente.
 	var userID string
 	err = pool.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, $2, $3, 'owner')
-		 ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner'
+		`INSERT INTO users (email, name, role)
+		 VALUES ($1, $2, 'owner')
+		 ON CONFLICT (email) DO UPDATE SET role = 'owner'
 		 RETURNING id`,
-		orgID, userEmail, "Admin Local",
+		userEmail, "Admin Local",
 	).Scan(&userID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
@@ -143,9 +143,9 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 
 	var apiKeyID string
 	err = pool.QueryRow(ctx,
-		`INSERT INTO api_keys (organization_id, user_id, name, key_prefix, key_hash)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		orgID, userID, keyName, prefix, hash,
+		`INSERT INTO api_keys (user_id, name, key_prefix, key_hash)
+		 VALUES ($1, $2, $3, $4) RETURNING id`,
+		userID, keyName, prefix, hash,
 	).Scan(&apiKeyID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create api_key: %v\n", err)

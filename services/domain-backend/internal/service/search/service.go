@@ -153,10 +153,10 @@ func (s *Service) searchObservations(ctx context.Context, orgID uuid.UUID, query
 	q := `
 SELECT o.id, o.observation_type, o.content, o.tags, o.project_id, o.created_at,
        ts_rank(o.content_tsv, qry)::float8 AS score
-FROM observations o, plainto_tsquery('spanish', $2) AS qry
-WHERE o.organization_id = $1 AND o.deleted_at IS NULL AND o.content_tsv @@ qry
+FROM observations o, plainto_tsquery('spanish', $1) AS qry
+WHERE o.deleted_at IS NULL AND o.content_tsv @@ qry
 `
-	args := []any{orgID, query}
+	args := []any{query}
 	if len(f.ProjectIDs) > 0 {
 		q += fmt.Sprintf(" AND o.project_id = ANY($%d)", len(args)+1)
 		args = append(args, f.ProjectIDs)
@@ -201,10 +201,10 @@ func (s *Service) searchPrompts(ctx context.Context, orgID uuid.UUID, query stri
 	q := `
 SELECT p.id, p.slug, p.body, p.tags, p.project_id, p.created_at,
        ts_rank(p.body_tsv, qry)::float8 AS score
-FROM prompts p, plainto_tsquery('spanish', $2) AS qry
-WHERE p.organization_id = $1 AND p.deleted_at IS NULL AND p.body_tsv @@ qry
+FROM prompts p, plainto_tsquery('spanish', $1) AS qry
+WHERE p.deleted_at IS NULL AND p.body_tsv @@ qry
 `
-	args := []any{orgID, query}
+	args := []any{query}
 	if len(f.ProjectIDs) > 0 {
 		q += fmt.Sprintf(" AND p.project_id = ANY($%d)", len(args)+1)
 		args = append(args, f.ProjectIDs)
@@ -245,10 +245,10 @@ func (s *Service) searchSessions(ctx context.Context, orgID uuid.UUID, query str
 	q := `
 SELECT s.id, COALESCE(s.title,''), COALESCE(s.summary,''), s.tags, s.project_id, s.started_at,
        ts_rank(s.summary_tsv, qry)::float8 AS score
-FROM sessions s, plainto_tsquery('spanish', $2) AS qry
-WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.summary_tsv @@ qry
+FROM sessions s, plainto_tsquery('spanish', $1) AS qry
+WHERE s.deleted_at IS NULL AND s.summary_tsv @@ qry
 `
-	args := []any{orgID, query}
+	args := []any{query}
 	if len(f.ProjectIDs) > 0 {
 		q += fmt.Sprintf(" AND s.project_id = ANY($%d)", len(args)+1)
 		args = append(args, f.ProjectIDs)
@@ -289,10 +289,10 @@ func (s *Service) searchKnowledgeDocs(ctx context.Context, orgID uuid.UUID, quer
 	q := `
 SELECT kd.id, kd.title, kd.body, kd.project_id, kd.created_at,
        ts_rank(kd.body_tsv, qry)::float8 AS score
-FROM knowledge_docs kd, plainto_tsquery('spanish', $2) AS qry
-WHERE kd.organization_id = $1 AND kd.deleted_at IS NULL AND kd.body_tsv @@ qry
+FROM knowledge_docs kd, plainto_tsquery('spanish', $1) AS qry
+WHERE kd.deleted_at IS NULL AND kd.body_tsv @@ qry
 `
-	args := []any{orgID, query}
+	args := []any{query}
 	if len(f.ProjectIDs) > 0 {
 		q += fmt.Sprintf(" AND kd.project_id = ANY($%d)", len(args)+1)
 		args = append(args, f.ProjectIDs)

@@ -236,7 +236,7 @@ func TestUpdate_PatchOnlyName(t *testing.T) {
 	id := uuid.New()
 	orgID := uuid.New()
 	prev := &Client{
-		ID: id, OrganizationID: orgID,
+		ID: id,
 		Name: "old", Slug: "acme",
 		Status:       StatusActive,
 		ContactEmail: "x@y.com",

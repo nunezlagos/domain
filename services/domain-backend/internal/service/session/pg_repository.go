@@ -39,12 +39,12 @@ func (r *pgRepository) q(ctx context.Context) querier {
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Session, error) {
 	var sess Session
 	err := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO sessions (organization_id, project_id, user_id, title, tags)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, organization_id, project_id, user_id, title, COALESCE(summary,''),
+		`INSERT INTO sessions (project_id, user_id, title, tags)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, project_id, user_id, title, COALESCE(summary,''),
 		           tags, started_at, ended_at, created_at`,
-		in.OrganizationID, in.ProjectID, in.UserID, in.Title, in.Tags,
-	).Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
+		in.ProjectID, in.UserID, in.Title, in.Tags,
+	).Scan(&sess.ID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
 		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert session: %w", err)
@@ -70,7 +70,7 @@ func (r *pgRepository) GetActive(ctx context.Context, userID, projectID uuid.UUI
 
 func (r *pgRepository) List(ctx context.Context, userID uuid.UUID, limit int) ([]Session, error) {
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
+		`SELECT id, project_id, user_id, title, COALESCE(summary,''),
 		        tags, started_at, ended_at, created_at
 		 FROM sessions
 		 WHERE user_id = $1 AND deleted_at IS NULL
@@ -82,7 +82,7 @@ func (r *pgRepository) List(ctx context.Context, userID uuid.UUID, limit int) ([
 	var out []Session
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
+		if err := rows.Scan(&sess.ID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
 			&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -110,10 +110,10 @@ func (r *pgRepository) EndAndLoad(ctx context.Context, id uuid.UUID, summary str
 
 	var sess Session
 	err := tx.QueryRow(ctx,
-		`SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
+		`SELECT id, project_id, user_id, title, COALESCE(summary,''),
 		        tags, started_at, ended_at, created_at
 		 FROM sessions WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id,
-	).Scan(&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
+	).Scan(&sess.ID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
 		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -171,10 +171,10 @@ func (r *pgRepository) CloseInactive(ctx context.Context, cutoff time.Time, now 
 
 func (r *pgRepository) queryOne(ctx context.Context, where string, args ...any) (*Session, error) {
 	var sess Session
-	q := `SELECT id, organization_id, project_id, user_id, title, COALESCE(summary,''),
+	q := `SELECT id, project_id, user_id, title, COALESCE(summary,''),
 	        tags, started_at, ended_at, created_at FROM sessions ` + where
 	err := r.q(ctx).QueryRow(ctx, q, args...).Scan(
-		&sess.ID, &sess.OrganizationID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
+		&sess.ID, &sess.ProjectID, &sess.UserID, &sess.Title, &sess.Summary,
 		&sess.Tags, &sess.StartedAt, &sess.EndedAt, &sess.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

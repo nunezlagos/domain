@@ -36,6 +36,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/api/ctxkeys"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/metrics"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
@@ -149,6 +150,10 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		return nil, ErrFlowInactive
 	}
 
+	// org se resuelve del context del request (issue-02.8: flows ya no
+	// portan organization_id; el tenant viaja en el ctx vía middleware).
+	orgID := ctxkeys.OrgID(ctx)
+
 	trigger := in.TriggerType
 	if trigger == "" {
 		trigger = "manual"
@@ -185,11 +190,11 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	var runID uuid.UUID
 	err = r.Pool.QueryRow(ctx,
 		`INSERT INTO flow_runs
-		   (organization_id, flow_id, triggered_by, trigger_type, status, inputs, started_at,
+		   (flow_id, triggered_by, trigger_type, status, inputs, started_at,
 		    flow_version_id, parent_run_id, ancestor_slugs, depth)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id`,
-		f.OrganizationID, f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now,
+		f.ID, in.TriggeredBy, trigger, StatusRunning, inputsJSON, now,
 		versionID, parentRunID, ancestorSlugs, depth,
 	).Scan(&runID)
 	if err != nil {
@@ -258,7 +263,7 @@ LOOP:
 
 		// issue-09.4: retry policy por step (rica o legacy) con backoff.
 		out, stepErr, attemptErrs, retryCount := r.runStepWithRetry(
-			ctxStep, runID, &step, in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy, f.Slug)
+			ctxStep, runID, &step, in.Inputs, stepOutputs, orgID, in.TriggeredBy, f.Slug)
 		// issue-09.10: cerrar fila del step con resultado final (éxito o fallo)
 		if err := r.completeStepRow(ctx, stepRowID, out, stepErr); err != nil {
 			slog.Default().Warn("complete step row", slog.String("step", step.ID), slog.Any("err", err))
@@ -282,9 +287,9 @@ LOOP:
 			case "fallback_step":
 				// Escenario 6: ejecutar el step alternativo
 				fbOut, fbErr := r.execFallback(ctxStep, runID, &step,
-					in.Inputs, stepOutputs, f.OrganizationID, in.TriggeredBy, f.Slug, 1)
+					in.Inputs, stepOutputs, orgID, in.TriggeredBy, f.Slug, 1)
 				if fbErr != nil {
-					r.pushDLQ(ctx, f.OrganizationID, runID, f.Slug, step.ID, fbErr, attemptErrs, retryCount)
+					r.pushDLQ(ctx, orgID, runID, f.Slug, step.ID, fbErr, attemptErrs, retryCount)
 					finalErr = fmt.Sprintf("step '%s': %v", step.ID, fbErr)
 					break LOOP
 				}
@@ -293,7 +298,7 @@ LOOP:
 				stepErr = nil
 			case "", "fail", "abort_flow":
 				// Escenario 7: fallo permanente → DLQ
-				r.pushDLQ(ctx, f.OrganizationID, runID, f.Slug, step.ID, stepErr, attemptErrs, retryCount)
+				r.pushDLQ(ctx, orgID, runID, f.Slug, step.ID, stepErr, attemptErrs, retryCount)
 				finalErr = fmt.Sprintf("step '%s' (retry_count=%d): %v", step.ID, retryCount, stepErr)
 				break LOOP
 			default:
@@ -394,12 +399,12 @@ LOOP:
 		 WHERE id = $5`, status, outputsJSON, nullStr(finalErr), finishedAt, runID)
 
 	if r.Emitter != nil {
-		r.Emitter.EmitFlowRunFinished(ctx, f.OrganizationID, runID, f.Slug, status)
+		r.Emitter.EmitFlowRunFinished(ctx, orgID, runID, f.Slug, status)
 	}
 
 	if r.Audit != nil {
 		_ = r.Audit.Record(ctx, audit.Event{
-			OrganizationID: &f.OrganizationID,
+			OrganizationID: &orgID,
 			ActorID:        in.TriggeredBy,
 			ActorType:      audit.ActorUser,
 			Action:         "flow.run_" + status,

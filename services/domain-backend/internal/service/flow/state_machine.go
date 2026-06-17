@@ -204,7 +204,6 @@ type StepRunState struct {
 // FlowRunModel is the domain model for a persisted flow run.
 type FlowRunModel struct {
 	ID             uuid.UUID              `json:"id"`
-	OrganizationID uuid.UUID              `json:"organization_id"`
 	FlowID         uuid.UUID              `json:"flow_id"`
 	Status         FlowStatus             `json:"status"`
 	Steps          map[string]StepRunState `json:"steps"`

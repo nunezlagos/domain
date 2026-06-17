@@ -17,7 +17,6 @@ import (
 // ImportedFile refleja una fila de imported_workflow_files.
 type ImportedFile struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  *uuid.UUID `json:"organization_id,omitempty"`
 	ProjectID       *uuid.UUID `json:"project_id,omitempty"`
 	SourceTool      string     `json:"source_tool"`
 	RelPath         string     `json:"rel_path"`
@@ -103,9 +102,9 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 
 		_, err = s.Pool.Exec(ctx, `
 			INSERT INTO imported_workflow_files
-			  (organization_id, project_id, source_tool, rel_path, original_content,
+			  (project_id, source_tool, rel_path, original_content,
 			   content_hash, size_bytes, status, replaced_with, replaced_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8::varchar,$9::text, CASE WHEN $8::varchar = 'replaced' THEN now() ELSE NULL END)
+			VALUES ($1,$2,$3,$4,$5,$6,$7::varchar,$8::text, CASE WHEN $7::varchar = 'replaced' THEN now() ELSE NULL END)
 			ON CONFLICT (project_id, rel_path) DO UPDATE
 			SET original_content = EXCLUDED.original_content,
 			    content_hash     = EXCLUDED.content_hash,
@@ -114,7 +113,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 			    replaced_with    = EXCLUDED.replaced_with,
 			    replaced_at      = EXCLUDED.replaced_at,
 			    updated_at       = now()`,
-			in.OrgID, in.ProjectID, df.SourceTool, df.RelPath, df.Content,
+			in.ProjectID, df.SourceTool, df.RelPath, df.Content,
 			df.ContentHash, df.SizeBytes, newStatus, stub,
 		)
 		if err != nil {
@@ -174,7 +173,7 @@ func (s *Service) Restore(ctx context.Context, projectID *uuid.UUID, relPath, pr
 // List devuelve los archivos importados de un proyecto.
 func (s *Service) List(ctx context.Context, projectID *uuid.UUID) ([]ImportedFile, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, organization_id, project_id, source_tool, rel_path,
+		SELECT id, project_id, source_tool, rel_path,
 		       original_content, content_hash, size_bytes, status,
 		       replaced_with, replaced_at, restored_at, created_at, updated_at
 		FROM imported_workflow_files
@@ -189,7 +188,7 @@ func (s *Service) List(ctx context.Context, projectID *uuid.UUID) ([]ImportedFil
 	var out []ImportedFile
 	for rows.Next() {
 		var f ImportedFile
-		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.ProjectID, &f.SourceTool,
+		if err := rows.Scan(&f.ID, &f.ProjectID, &f.SourceTool,
 			&f.RelPath, &f.OriginalContent, &f.ContentHash, &f.SizeBytes, &f.Status,
 			&f.ReplacedWith, &f.ReplacedAt, &f.RestoredAt, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)

@@ -44,7 +44,6 @@ type Variable struct {
 
 type Prompt struct {
 	ID              uuid.UUID
-	OrganizationID  uuid.UUID
 	ProjectID       *uuid.UUID
 	CreatedBy       *uuid.UUID
 	Slug            string
@@ -113,10 +112,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	err = tx.QueryRow(ctx,
 		`SELECT COALESCE(MAX(version), 0) + 1
 		 FROM prompts
-		 WHERE organization_id = $1 AND slug = $2
-		   AND project_id IS NOT DISTINCT FROM $3
+		 WHERE slug = $1
+		   AND project_id IS NOT DISTINCT FROM $2
 		   AND deleted_at IS NULL`,
-		in.OrganizationID, in.Slug, in.ProjectID,
+		in.Slug, in.ProjectID,
 	).Scan(&nextVersion)
 	if err != nil {
 		return nil, fmt.Errorf("calc version: %w", err)
@@ -126,10 +125,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	if in.SetActive {
 		_, err = tx.Exec(ctx,
 			`UPDATE prompts SET is_active = false
-			 WHERE organization_id = $1 AND slug = $2
-			   AND project_id IS NOT DISTINCT FROM $3
+			 WHERE slug = $1
+			   AND project_id IS NOT DISTINCT FROM $2
 			   AND is_active = true AND deleted_at IS NULL`,
-			in.OrganizationID, in.Slug, in.ProjectID)
+			in.Slug, in.ProjectID)
 		if err != nil {
 			return nil, fmt.Errorf("deactivate prior versions: %w", err)
 		}
@@ -137,15 +136,15 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 
 	var p Prompt
 	err = tx.QueryRow(ctx,
-		`INSERT INTO prompts (organization_id, project_id, created_by, slug, version,
+		`INSERT INTO prompts (project_id, created_by, slug, version,
 		                      body, variables, description, is_active, tags)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		 RETURNING id, organization_id, project_id, created_by, slug, version,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, project_id, created_by, slug, version,
 		           body, variables, COALESCE(description,''), is_active,
 		           parent_version_id, tags, created_at, updated_at`,
-		in.OrganizationID, in.ProjectID, in.CreatedBy, in.Slug, nextVersion,
+		in.ProjectID, in.CreatedBy, in.Slug, nextVersion,
 		in.Body, varsJSON, nullStr(in.Description), in.SetActive, in.Tags,
-	).Scan(&p.ID, &p.OrganizationID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
+	).Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
 		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
 		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
@@ -180,11 +179,11 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 
 	var p Prompt
 	err = tx.QueryRow(ctx,
-		`SELECT id, organization_id, project_id, created_by, slug, version,
+		`SELECT id, project_id, created_by, slug, version,
 		        body, variables, COALESCE(description,''), is_active,
 		        parent_version_id, tags, created_at, updated_at
 		 FROM prompts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id,
-	).Scan(&p.ID, &p.OrganizationID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
+	).Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
 		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
 		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -196,10 +195,10 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 
 	_, err = tx.Exec(ctx,
 		`UPDATE prompts SET is_active = false
-		 WHERE organization_id = $1 AND slug = $2
-		   AND project_id IS NOT DISTINCT FROM $3
-		   AND id <> $4 AND is_active = true AND deleted_at IS NULL`,
-		p.OrganizationID, p.Slug, p.ProjectID, p.ID)
+		 WHERE slug = $1
+		   AND project_id IS NOT DISTINCT FROM $2
+		   AND id <> $3 AND is_active = true AND deleted_at IS NULL`,
+		p.Slug, p.ProjectID, p.ID)
 	if err != nil {
 		return nil, fmt.Errorf("deactivate siblings: %w", err)
 	}
@@ -214,7 +213,6 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &p.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
 			Action:         "prompt.set_active",
@@ -228,11 +226,11 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 // GetActive devuelve la versión activa del slug en el project (o sin project).
 func (s *Service) GetActive(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, slug string) (*Prompt, error) {
 	p, err := s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2
-		   AND project_id IS NOT DISTINCT FROM $3
+		`WHERE slug = $1
+		   AND project_id IS NOT DISTINCT FROM $2
 		   AND is_active = true AND deleted_at IS NULL
 		 ORDER BY version DESC LIMIT 1`,
-		orgID, slug, projectID)
+		slug, projectID)
 	if errors.Is(err, ErrNotFound) {
 		return nil, ErrNoActiveVersion
 	}
@@ -247,15 +245,15 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Prompt, error) {
 // ListVersions devuelve todas las versiones de un slug (newest first).
 func (s *Service) ListVersions(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, slug string) ([]Prompt, error) {
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, project_id, created_by, slug, version,
+		`SELECT id, project_id, created_by, slug, version,
 		        body, variables, COALESCE(description,''), is_active,
 		        parent_version_id, tags, created_at, updated_at
 		 FROM prompts
-		 WHERE organization_id = $1 AND slug = $2
-		   AND project_id IS NOT DISTINCT FROM $3
+		 WHERE slug = $1
+		   AND project_id IS NOT DISTINCT FROM $2
 		   AND deleted_at IS NULL
 		 ORDER BY version DESC`,
-		orgID, slug, projectID)
+		slug, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list versions: %w", err)
 	}
@@ -263,7 +261,7 @@ func (s *Service) ListVersions(ctx context.Context, orgID uuid.UUID, projectID *
 	var out []Prompt
 	for rows.Next() {
 		var p Prompt
-		if err := rows.Scan(&p.ID, &p.OrganizationID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
+		if err := rows.Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
 			&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
 			&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
@@ -282,16 +280,16 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		limit = 20
 	}
 	rows, err := s.Pool.Query(ctx, `
-SELECT p.id, p.organization_id, p.project_id, p.created_by, p.slug, p.version,
+SELECT p.id, p.project_id, p.created_by, p.slug, p.version,
        p.body, p.variables, COALESCE(p.description,''), p.is_active,
        p.parent_version_id, p.tags, p.created_at, p.updated_at,
        ts_rank(p.body_tsv, q)::float8 AS score,
        ts_headline('spanish', p.body, q, 'StartSel=<mark>,StopSel=</mark>,MaxWords=20,MinWords=5') AS headline
-FROM prompts p, plainto_tsquery('spanish', $2) AS q
-WHERE p.organization_id = $1 AND p.deleted_at IS NULL AND p.body_tsv @@ q
+FROM prompts p, plainto_tsquery('spanish', $1) AS q
+WHERE p.deleted_at IS NULL AND p.body_tsv @@ q
 ORDER BY score DESC
-LIMIT $3
-`, orgID, query, limit)
+LIMIT $2
+`, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
@@ -299,7 +297,7 @@ LIMIT $3
 	var out []SearchResult
 	for rows.Next() {
 		var r SearchResult
-		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.ProjectID, &r.CreatedBy, &r.Slug, &r.Version,
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.CreatedBy, &r.Slug, &r.Version,
 			&r.Body, &varsRaw{&r.Variables}, &r.Description, &r.IsActive,
 			&r.ParentVersionID, &r.Tags, &r.CreatedAt, &r.UpdatedAt,
 			&r.Score, &r.Headline); err != nil {
@@ -335,11 +333,11 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 
 func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Prompt, error) {
 	var p Prompt
-	q := `SELECT id, organization_id, project_id, created_by, slug, version,
+	q := `SELECT id, project_id, created_by, slug, version,
 	        body, variables, COALESCE(description,''), is_active,
 	        parent_version_id, tags, created_at, updated_at FROM prompts ` + where
 	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&p.ID, &p.OrganizationID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
+		&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
 		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
 		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

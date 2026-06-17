@@ -53,17 +53,9 @@ func TestEnroll_RejectsInvalidEmail(t *testing.T) {
 	}
 }
 
-func TestRotate_RejectsNilOrgID(t *testing.T) {
-	s := &Service{}
-	_, err := s.Rotate(context.Background(), uuid.Nil, uuid.New(), "member")
-	if !errors.Is(err, ErrOrgNotFound) {
-		t.Errorf("err = %v, want ErrOrgNotFound", err)
-	}
-}
-
 func TestRotate_RejectsInvalidRole(t *testing.T) {
 	s := &Service{}
-	_, err := s.Rotate(context.Background(), uuid.New(), uuid.New(), "superadmin")
+	_, err := s.Rotate(context.Background(), uuid.New(), "superadmin")
 	if !errors.Is(err, ErrInvalidRole) {
 		t.Errorf("err = %v, want ErrInvalidRole", err)
 	}
@@ -75,22 +67,6 @@ func TestRotate_AcceptsBlankRoleAsDefaultMember(t *testing.T) {
 	// Para evitar el panic, comprobamos solo el dispatch de allowedRoles:
 	if !allowedRoles["member"] {
 		t.Fatal("member debería estar permitido como default")
-	}
-}
-
-func TestRevoke_RejectsNilOrgID(t *testing.T) {
-	s := &Service{}
-	err := s.Revoke(context.Background(), uuid.Nil, uuid.New())
-	if !errors.Is(err, ErrOrgNotFound) {
-		t.Errorf("err = %v, want ErrOrgNotFound", err)
-	}
-}
-
-func TestGetMetadata_RejectsNilOrgID(t *testing.T) {
-	s := &Service{}
-	_, err := s.GetMetadata(context.Background(), uuid.Nil)
-	if !errors.Is(err, ErrOrgNotFound) {
-		t.Errorf("err = %v, want ErrOrgNotFound", err)
 	}
 }
 

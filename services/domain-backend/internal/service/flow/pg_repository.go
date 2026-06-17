@@ -40,14 +40,14 @@ func (r *pgRepository) InsertFlow(ctx context.Context, in InsertFlowParams) (*Fl
 	var f Flow
 	err := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO flows
-		   (organization_id, slug, name, description, spec, deterministic_replay)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		   (slug, name, description, spec, deterministic_replay)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, slug, name, COALESCE(description,''),
 		           spec, is_active, deterministic_replay, seed_managed, seed_version,
 		           is_user_modified, created_at, updated_at`,
-		in.OrganizationID, in.Slug, in.Name, nullStr(in.Description), in.SpecJSON,
+		in.Slug, in.Name, nullStr(in.Description), in.SpecJSON,
 		in.DeterministicReplay,
-	).Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+	).Scan(&f.ID, &f.Slug, &f.Name, &f.Description,
 		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
@@ -68,11 +68,11 @@ func (r *pgRepository) UpdateFlow(ctx context.Context, in UpdateFlowParams) (*Fl
 		`UPDATE flows SET name = $2, description = $3, spec = $4, is_active = $5,
 		    is_user_modified = $6
 		 `+where+`
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		 RETURNING id, slug, name, COALESCE(description,''),
 		           spec, is_active, deterministic_replay, seed_managed, seed_version,
 		           is_user_modified, created_at, updated_at`,
 		args...,
-	).Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+	).Scan(&f.ID, &f.Slug, &f.Name, &f.Description,
 		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -93,16 +93,16 @@ func (r *pgRepository) GetFlowByID(ctx context.Context, id uuid.UUID) (*Flow, er
 
 func (r *pgRepository) GetFlowBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Flow, error) {
 	return r.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+		`WHERE slug = $1 AND deleted_at IS NULL`, slug)
 }
 
 func (r *pgRepository) ListFlows(ctx context.Context, orgID uuid.UUID, limit int) ([]Flow, error) {
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
+		`SELECT id, slug, name, COALESCE(description,''),
 		        spec, is_active, deterministic_replay, seed_managed, seed_version,
 		        is_user_modified, created_at, updated_at
-		 FROM flows WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, orgID, limit)
+		 FROM flows WHERE deleted_at IS NULL
+		 ORDER BY created_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
@@ -110,7 +110,7 @@ func (r *pgRepository) ListFlows(ctx context.Context, orgID uuid.UUID, limit int
 	var out []Flow
 	for rows.Next() {
 		var f Flow
-		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+		if err := rows.Scan(&f.ID, &f.Slug, &f.Name, &f.Description,
 			&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 			&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, err
@@ -122,17 +122,17 @@ func (r *pgRepository) ListFlows(ctx context.Context, orgID uuid.UUID, limit int
 
 func (r *pgRepository) ListParents(ctx context.Context, orgID uuid.UUID, slug string) ([]Flow, error) {
 	rows, err := r.q(ctx).Query(ctx, `
-		SELECT id, organization_id, slug, name, COALESCE(description,''),
+		SELECT id, slug, name, COALESCE(description,''),
 		       spec, is_active, deterministic_replay, seed_managed, seed_version,
 		       is_user_modified, created_at, updated_at
 		FROM flows
-		WHERE organization_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL
 		  AND EXISTS (
 			SELECT 1 FROM jsonb_array_elements(spec->'steps') st
 			WHERE st->>'type' = 'sub_flow'
-			  AND st->'config'->>'flow_slug' = $2
+			  AND st->'config'->>'flow_slug' = $1
 		  )
-		ORDER BY slug ASC`, orgID, slug)
+		ORDER BY slug ASC`, slug)
 	if err != nil {
 		return nil, fmt.Errorf("list parents: %w", err)
 	}
@@ -140,7 +140,7 @@ func (r *pgRepository) ListParents(ctx context.Context, orgID uuid.UUID, slug st
 	var out []Flow
 	for rows.Next() {
 		var f Flow
-		if err := rows.Scan(&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+		if err := rows.Scan(&f.ID, &f.Slug, &f.Name, &f.Description,
 			&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 			&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, err
@@ -162,10 +162,10 @@ func (r *pgRepository) SoftDeleteFlow(ctx context.Context, id uuid.UUID) error {
 func (r *pgRepository) GetRun(ctx context.Context, id uuid.UUID) (*RunRow, error) {
 	var rr RunRow
 	err := r.q(ctx).QueryRow(ctx, `
-		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
+		SELECT id, flow_id, status, COALESCE(error,''),
 		       started_at, finished_at, triggered_by, trigger_type
 		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&rr.ID, &rr.OrganizationID, &rr.FlowID, &rr.Status, &rr.Error,
+	).Scan(&rr.ID, &rr.FlowID, &rr.Status, &rr.Error,
 		&rr.StartedAt, &rr.FinishedAt, &rr.TriggeredBy, &rr.TriggerType)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRunNotFound
@@ -197,9 +197,9 @@ func (r *pgRepository) GetRunSteps(ctx context.Context, runID uuid.UUID) ([]Step
 }
 
 func (r *pgRepository) ListRuns(ctx context.Context, f RunFilter) ([]RunRow, int, error) {
-	where := "WHERE organization_id = $1"
-	args := []any{f.OrgID}
-	argIdx := 2
+	where := "WHERE 1=1"
+	args := []any{}
+	argIdx := 1
 	if f.FlowID != nil {
 		where += fmt.Sprintf(" AND flow_id = $%d", argIdx)
 		args = append(args, *f.FlowID)
@@ -213,7 +213,7 @@ func (r *pgRepository) ListRuns(ctx context.Context, f RunFilter) ([]RunRow, int
 	where += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, f.Limit, f.Offset)
 	rows, err := r.q(ctx).Query(ctx, `
-		SELECT id, organization_id, flow_id, status, COALESCE(error,''),
+		SELECT id, flow_id, status, COALESCE(error,''),
 		       started_at, finished_at, triggered_by, trigger_type
 		FROM flow_runs `+where, args...)
 	if err != nil {
@@ -223,7 +223,7 @@ func (r *pgRepository) ListRuns(ctx context.Context, f RunFilter) ([]RunRow, int
 	var out []RunRow
 	for rows.Next() {
 		var rr RunRow
-		if err := rows.Scan(&rr.ID, &rr.OrganizationID, &rr.FlowID, &rr.Status, &rr.Error,
+		if err := rows.Scan(&rr.ID, &rr.FlowID, &rr.Status, &rr.Error,
 			&rr.StartedAt, &rr.FinishedAt, &rr.TriggeredBy, &rr.TriggerType); err != nil {
 			return nil, 0, fmt.Errorf("scan: %w", err)
 		}
@@ -264,12 +264,12 @@ func (r *pgRepository) CancelRun(ctx context.Context, id uuid.UUID, finishedAt t
 
 func (r *pgRepository) queryOne(ctx context.Context, where string, args ...any) (*Flow, error) {
 	var f Flow
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
+	q := `SELECT id, slug, name, COALESCE(description,''),
 	        spec, is_active, deterministic_replay, seed_managed, seed_version,
 	        is_user_modified, created_at, updated_at
 	      FROM flows ` + where
 	err := r.q(ctx).QueryRow(ctx, q, args...).Scan(
-		&f.ID, &f.OrganizationID, &f.Slug, &f.Name, &f.Description,
+		&f.ID, &f.Slug, &f.Name, &f.Description,
 		&specJSONRaw{&f.Spec}, &f.IsActive, &f.DeterministicReplay,
 		&f.SeedManaged, &f.SeedVersion, &f.IsUserModified, &f.CreatedAt, &f.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

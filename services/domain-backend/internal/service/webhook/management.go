@@ -26,7 +26,7 @@ type Delivery struct {
 	ReceivedAt     time.Time      `json:"received_at"`
 }
 
-const webhookCols = `id, organization_id, slug, name, source_type,
+const webhookCols = `id, slug, name, source_type,
 	target_type, target_id, inputs_mapping, enabled, last_delivery_at`
 
 // GetByID lookup sin descifrar secret (para management; el secret nunca sale).
@@ -34,7 +34,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Webhook, error) {
 	var w Webhook
 	err := s.Pool.QueryRow(ctx,
 		`SELECT `+webhookCols+` FROM webhooks WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&w.ID, &w.OrganizationID, &w.Slug, &w.Name, &w.SourceType,
+	).Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType,
 		&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -49,8 +49,8 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Webhook, error) {
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Webhook, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT `+webhookCols+` FROM webhooks
-		 WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC`, orgID)
+		 WHERE deleted_at IS NULL
+		 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list webhooks: %w", err)
 	}
@@ -58,7 +58,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Webhook, error) 
 	var out []Webhook
 	for rows.Next() {
 		var w Webhook
-		if err := rows.Scan(&w.ID, &w.OrganizationID, &w.Slug, &w.Name, &w.SourceType,
+		if err := rows.Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType,
 			&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt); err != nil {
 			return nil, err
 		}

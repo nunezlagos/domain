@@ -100,10 +100,10 @@ func (d *Deps) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequ
 	var runID uuid.UUID
 	if err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_index_runs
-		   (organization_id, project_id, started_by, git_head)
-		 VALUES ($1,$2,$3,NULLIF($4,''))
+		   (project_id, started_by, git_head)
+		 VALUES ($1,$2,NULLIF($3,''))
 		 RETURNING id`,
-		orgID, proj.ID, userID, gitHead,
+		proj.ID, userID, gitHead,
 	).Scan(&runID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create run failed: %v", err)), nil
 	}
@@ -288,8 +288,8 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	var projectID uuid.UUID
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT project_id FROM project_index_runs
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, runID,
+		   WHERE id = $1`,
+		runID,
 	).Scan(&projectID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("run not found: %v", err)), nil
 	}
@@ -348,15 +348,15 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 					ctag, uerr := d.q(ctx).Exec(ctx,
 						`WITH existing AS (
 						   SELECT id FROM project_policies
-						   WHERE organization_id = $1 AND project_id = $2
-						     AND slug = $3 AND is_active = true
+						   WHERE project_id = $1
+						     AND slug = $2 AND is_active = true
 						   LIMIT 1
 						 )
 						 UPDATE project_policies
-						    SET body_md = $4, name = $5, updated_at = NOW()
+						    SET body_md = $3, name = $4, updated_at = NOW()
 						   FROM existing
 						   WHERE project_policies.id = existing.id`,
-						orgID, projectID, cls.Slug, cls.Body, cls.Title,
+						projectID, cls.Slug, cls.Body, cls.Title,
 					)
 					if uerr != nil {
 						// Update falló — el savepoint sigue rolled back,
@@ -382,10 +382,10 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			var existingID uuid.UUID
 			qerr := d.q(ctx).QueryRow(ctx,
 				`SELECT id FROM knowledge_docs
-				   WHERE organization_id = $1 AND project_id = $2
-				     AND metadata->>'slug' = $3 AND deleted_at IS NULL
+				   WHERE project_id = $1
+				     AND metadata->>'slug' = $2 AND deleted_at IS NULL
 				   LIMIT 1`,
-				orgID, projectID, cls.Slug,
+				projectID, cls.Slug,
 			).Scan(&existingID)
 			if qerr != nil && qerr.Error() != "no rows in result set" {
 				fileErr = fmt.Errorf("lookup knowledge: %w", qerr)
@@ -393,9 +393,9 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				if existingID != uuid.Nil {
 					_, uerr := d.q(ctx).Exec(ctx,
 						`UPDATE knowledge_docs
-						   SET title=$3, body=$4, metadata=$5, tags=$6, updated_at=NOW()
-						   WHERE organization_id=$1 AND id=$2`,
-						orgID, existingID, cls.Title, cls.Body, metaJSON, tags,
+						   SET title=$2, body=$3, metadata=$4, tags=$5, updated_at=NOW()
+						   WHERE id=$1`,
+						existingID, cls.Title, cls.Body, metaJSON, tags,
 					)
 					if uerr != nil {
 						fileErr = fmt.Errorf("update knowledge: %w", uerr)
@@ -405,10 +405,10 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				} else {
 					_, ierr := d.q(ctx).Exec(ctx,
 						`INSERT INTO knowledge_docs
-						   (organization_id, project_id, created_by, title, body,
+						   (project_id, created_by, title, body,
 						    source, tags, metadata)
-						 VALUES ($1, $2, $3, $4, $5, 'seed_imported', $6, $7)`,
-						orgID, projectID, userID, cls.Title, cls.Body, tags, metaJSON,
+						 VALUES ($1, $2, $3, $4, 'seed_imported', $5, $6)`,
+						projectID, userID, cls.Title, cls.Body, tags, metaJSON,
 					)
 					if ierr != nil {
 						fileErr = fmt.Errorf("insert knowledge: %w", ierr)
@@ -458,11 +458,11 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	}
 	if _, err := d.q(ctx).Exec(ctx,
 		`UPDATE project_index_runs
-		   SET files_submitted = files_submitted + $3,
-		       summary = $4::jsonb,
-		       status = $5`+completedClause+`
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, runID, len(rawFiles), summaryJSON, status,
+		   SET files_submitted = files_submitted + $2,
+		       summary = $3::jsonb,
+		       status = $4`+completedClause+`
+		   WHERE id = $1`,
+		runID, len(rawFiles), summaryJSON, status,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update run: %v", err)), nil
 	}
@@ -502,9 +502,9 @@ func (d *Deps) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolReq
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		        COALESCE(to_char(completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),'')
 		   FROM project_index_runs
-		   WHERE organization_id = $1 AND project_id = $2
+		   WHERE project_id = $1
 		   ORDER BY started_at DESC LIMIT 1`,
-		orgID, proj.ID,
+		proj.ID,
 	).Scan(&id, &status, &gitHead, &summaryRaw, &filesSubmitted, &startedAt, &completedAt)
 	if err != nil {
 		return toolResultJSON(map[string]any{

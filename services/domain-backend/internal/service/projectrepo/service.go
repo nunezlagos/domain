@@ -31,7 +31,6 @@ func NewService(repo Repository) *Service {
 }
 
 type AddInput struct {
-	OrganizationID uuid.UUID
 	ProjectID      uuid.UUID
 	Name           string
 	URL            string
@@ -55,12 +54,11 @@ func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
 		return nil, ErrInvalidWorkflow
 	}
 	// Si es el primer repo del proyecto, lo marcamos default por defecto.
-	existing, _ := s.repo.List(ctx, in.OrganizationID, in.ProjectID)
+	existing, _ := s.repo.List(ctx, uuid.Nil, in.ProjectID)
 	if len(existing) == 0 {
 		in.IsDefault = true
 	}
 	created, err := s.repo.Insert(ctx, InsertParams{
-		OrganizationID: in.OrganizationID,
 		ProjectID:      in.ProjectID,
 		Name:           in.Name,
 		URL:            in.URL,
@@ -75,7 +73,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
 	}
 	// Si IsDefault=true y había otros, hay que limpiar el previo via SetDefault.
 	if created.IsDefault && len(existing) > 0 {
-		updated, derr := s.repo.SetDefault(ctx, created.OrganizationID, created.ID)
+		updated, derr := s.repo.SetDefault(ctx, uuid.Nil, created.ID)
 		if derr == nil {
 			return updated, nil
 		}

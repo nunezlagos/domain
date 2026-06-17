@@ -99,14 +99,13 @@ func backfillTable(ctx context.Context, pool *pgxpool.Pool, emb llm.Embedder,
 	}
 	rows, err := pool.Query(ctx, fmt.Sprintf(
 		`SELECT %s, %s FROM %s
-		 WHERE organization_id=$1
-		   AND %s IS NULL
+		 WHERE %s IS NULL
 		   AND deleted_at IS NULL
 		   AND LENGTH(TRIM(%s)) > 0
 		 ORDER BY created_at ASC
-		 LIMIT $2`,
+		 LIMIT $1`,
 		idCol, textCol, table, embCol, textCol,
-	), orgID, limit)
+	), limit)
 	if err != nil {
 		return 0, fmt.Errorf("query %s: %w", table, err)
 	}

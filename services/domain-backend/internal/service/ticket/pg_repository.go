@@ -36,7 +36,7 @@ func (r *pgRepository) q(ctx context.Context) querier {
 	return r.pool
 }
 
-const selectCols = `id, organization_id, project_id, client_id, key, number,
+const selectCols = `id, project_id, client_id, key, number,
 		title, COALESCE(description_md,''), issue_type, status, priority,
 		assignee_id, reporter_id, labels,
 		COALESCE(external_provider,''), COALESCE(external_id,''),
@@ -49,7 +49,7 @@ const selectCols = `id, organization_id, project_id, client_id, key, number,
 func scanTicket(row pgx.Row) (*Ticket, error) {
 	var t Ticket
 	if err := row.Scan(
-		&t.ID, &t.OrganizationID, &t.ProjectID, &t.ClientID, &t.Key, &t.Number,
+		&t.ID, &t.ProjectID, &t.ClientID, &t.Key, &t.Number,
 		&t.Title, &t.DescriptionMD, &t.IssueType, &t.Status, &t.Priority,
 		&t.AssigneeID, &t.ReporterID, &t.Labels,
 		&t.ExternalProvider, &t.ExternalID, &t.ExternalURL, &t.ExternalSyncedAt,
@@ -71,10 +71,10 @@ func scanTicket(row pgx.Row) (*Ticket, error) {
 // LinkIssue setea o limpia linked_issue_id. issueID=nil → desvinculación.
 func (r *pgRepository) LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*Ticket, error) {
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE project_tickets SET linked_issue_id = $3
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		`UPDATE project_tickets SET linked_issue_id = $2
+		   WHERE id = $1 AND deleted_at IS NULL
 		   RETURNING `+selectCols,
-		orgID, ticketID, issueID,
+		ticketID, issueID,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -126,8 +126,8 @@ func (r *pgRepository) nextNumber(ctx context.Context, q querier, orgID, project
 	err := q.QueryRow(ctx,
 		`SELECT COALESCE(MAX(number), 0) + 1
 		   FROM project_tickets
-		   WHERE organization_id = $1 AND project_id = $2`,
-		orgID, projectID,
+		   WHERE project_id = $1`,
+		projectID,
 	).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("next number: %w", err)
@@ -151,16 +151,16 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Ticket, err
 		}
 		row := r.q(ctx).QueryRow(ctx,
 			`INSERT INTO project_tickets
-			   (organization_id, project_id, client_id, key, number,
+			   (project_id, client_id, key, number,
 			    title, description_md, issue_type, priority,
 			    assignee_id, reporter_id, labels, parent_id,
 			    estimated_hours, due_date,
 			    external_provider, external_id, external_url, external_synced_at)
-			 VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,
-			         NULLIF($16,''), NULLIF($17,''), NULLIF($18,''),
-			         CASE WHEN $19::text = 'now' THEN NOW() ELSE NULL END)
+			 VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),$7,$8,$9,$10,$11,$12,$13,$14,
+			         NULLIF($15,''), NULLIF($16,''), NULLIF($17,''),
+			         CASE WHEN $18::text = 'now' THEN NOW() ELSE NULL END)
 			 RETURNING `+selectCols,
-			in.OrganizationID, in.ProjectID, in.ClientID, key, num,
+			in.ProjectID, in.ClientID, key, num,
 			in.Title, in.DescriptionMD, in.IssueType, in.Priority,
 			in.AssigneeID, in.ReporterID, in.Labels, in.ParentID,
 			in.EstimatedHours, in.DueDate,
@@ -191,8 +191,8 @@ func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Ticket, e
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		   FROM project_tickets
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		   WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -205,8 +205,8 @@ func (r *pgRepository) GetByKey(ctx context.Context, orgID, projectID uuid.UUID,
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		   FROM project_tickets
-		   WHERE organization_id = $1 AND project_id = $2 AND key = $3 AND deleted_at IS NULL`,
-		orgID, projectID, strings.ToUpper(key),
+		   WHERE project_id = $1 AND key = $2 AND deleted_at IS NULL`,
+		projectID, strings.ToUpper(key),
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -216,9 +216,9 @@ func (r *pgRepository) GetByKey(ctx context.Context, orgID, projectID uuid.UUID,
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]*Ticket, int64, error) {
-	conds := []string{"organization_id = $1", "deleted_at IS NULL"}
-	args := []any{orgID}
-	idx := 2
+	conds := []string{"deleted_at IS NULL"}
+	args := []any{}
+	idx := 1
 	add := func(cond string, val any) {
 		conds = append(conds, fmt.Sprintf(cond, idx))
 		args = append(args, val)
@@ -287,8 +287,8 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFil
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput) (*Ticket, error) {
 	sets := []string{}
-	args := []any{orgID, id}
-	idx := 3
+	args := []any{id}
+	idx := 2
 	add := func(col string, v any) {
 		sets = append(sets, fmt.Sprintf("%s = $%d", col, idx))
 		args = append(args, v)
@@ -338,7 +338,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 		return r.Get(ctx, orgID, id)
 	}
 	q := `UPDATE project_tickets SET ` + strings.Join(sets, ", ") +
-		` WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		` WHERE id = $1 AND deleted_at IS NULL
 		  RETURNING ` + selectCols
 	row := r.q(ctx).QueryRow(ctx, q, args...)
 	t, err := scanTicket(row)
@@ -366,10 +366,10 @@ func (r *pgRepository) ChangeStatus(ctx context.Context, orgID, id uuid.UUID, to
 		completeSet = ", completed_at = NULL"
 	}
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE project_tickets SET status = $3`+startSet+completeSet+`
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		`UPDATE project_tickets SET status = $2`+startSet+completeSet+`
+		   WHERE id = $1 AND deleted_at IS NULL
 		   RETURNING `+selectCols,
-		orgID, id, toStatus,
+		id, toStatus,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -390,8 +390,8 @@ func (r *pgRepository) ChangeStatus(ctx context.Context, orgID, id uuid.UUID, to
 func (r *pgRepository) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
 		`UPDATE project_tickets SET deleted_at = NOW()
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		   WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("soft-delete ticket: %w", err)
@@ -470,13 +470,13 @@ func (r *pgRepository) StatusHistory(ctx context.Context, ticketID uuid.UUID) ([
 func (r *pgRepository) LinkExternal(ctx context.Context, orgID, id uuid.UUID, link ExternalLink) (*Ticket, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE project_tickets
-		   SET external_provider = NULLIF($3,''),
-		       external_id       = NULLIF($4,''),
-		       external_url      = NULLIF($5,''),
+		   SET external_provider = NULLIF($2,''),
+		       external_id       = NULLIF($3,''),
+		       external_url      = NULLIF($4,''),
 		       external_synced_at = NOW()
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   WHERE id = $1 AND deleted_at IS NULL
 		   RETURNING `+selectCols,
-		orgID, id, link.Provider, link.ID, link.URL,
+		id, link.Provider, link.ID, link.URL,
 	)
 	t, err := scanTicket(row)
 	if isExternalUniqueViolation(err) {
@@ -493,8 +493,8 @@ func (r *pgRepository) UnlinkExternal(ctx context.Context, orgID, id uuid.UUID) 
 		`UPDATE project_tickets
 		   SET external_provider = NULL, external_id = NULL,
 		       external_url = NULL, external_synced_at = NULL
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		   WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("unlink external: %w", err)
@@ -534,8 +534,8 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 			var found uuid.UUID
 			if err := r.q(ctx).QueryRow(ctx,
 				`SELECT id FROM project_tickets
-				   WHERE organization_id=$1 AND project_id=$2 AND key=$3 AND deleted_at IS NULL`,
-				orgID, projectID, m.TicketKey,
+				   WHERE project_id=$1 AND key=$2 AND deleted_at IS NULL`,
+				projectID, m.TicketKey,
 			).Scan(&found); err != nil {
 				out.NotFound = append(out.NotFound, m.TicketKey)
 				continue
@@ -556,12 +556,12 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 		}
 		tag, err := r.q(ctx).Exec(ctx,
 			`UPDATE project_tickets
-			   SET external_provider = $3,
-			       external_id       = NULLIF($4,''),
-			       external_url      = NULLIF($5,''),
+			   SET external_provider = $2,
+			       external_id       = NULLIF($3,''),
+			       external_url      = NULLIF($4,''),
 			       external_synced_at = NOW()
-			   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-			orgID, tid, provider, m.ExternalID, m.ExternalURL,
+			   WHERE id = $1 AND deleted_at IS NULL`,
+			tid, provider, m.ExternalID, m.ExternalURL,
 		)
 		if err != nil {
 			if tx != nil {
@@ -598,10 +598,10 @@ func (r *pgRepository) FindByExternal(ctx context.Context, orgID uuid.UUID, prov
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		   FROM project_tickets
-		   WHERE organization_id = $1 AND external_provider = $2
-		     AND external_id = $3 AND deleted_at IS NULL
+		   WHERE external_provider = $1
+		     AND external_id = $2 AND deleted_at IS NULL
 		   LIMIT 1`,
-		orgID, provider, externalID,
+		provider, externalID,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -628,12 +628,12 @@ func (r *pgRepository) Claim(ctx context.Context, orgID, ticketID, userID uuid.U
 	}
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE project_tickets
-		   SET locked_by = $3,
-		       locked_until = NOW() + ($4 * INTERVAL '1 minute'),
+		   SET locked_by = $2,
+		       locked_until = NOW() + ($3 * INTERVAL '1 minute'),
 		       version = version + 1
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   WHERE id = $1 AND deleted_at IS NULL
 		   RETURNING `+selectCols,
-		orgID, ticketID, userID, ttlMinutes,
+		ticketID, userID, ttlMinutes,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -663,9 +663,9 @@ func (r *pgRepository) Release(ctx context.Context, orgID, ticketID, userID uuid
 		   SET locked_by = NULL,
 		       locked_until = NULL,
 		       version = version + 1
-		   WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		   WHERE id = $1 AND deleted_at IS NULL
 		   RETURNING `+selectCols,
-		orgID, ticketID,
+		ticketID,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {

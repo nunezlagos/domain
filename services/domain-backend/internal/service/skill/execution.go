@@ -97,9 +97,6 @@ func (s *ExecutionService) Execute(ctx context.Context, in ExecuteInput) (*Execu
 	if err != nil {
 		return nil, err
 	}
-	if sk.OrganizationID != in.OrganizationID {
-		return nil, ErrNotFound
-	}
 	if in.Parameters == nil {
 		in.Parameters = map[string]any{}
 	}
@@ -158,11 +155,11 @@ func (s *ExecutionService) insertExecution(ctx context.Context, in ExecuteInput,
 	var paramsRaw []byte
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO skill_executions
-			(organization_id, skill_id, version_used, mode, status, parameters, started_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			(skill_id, version_used, mode, status, parameters, started_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
 		RETURNING id, skill_id, version_used, mode, status, parameters, output, error,
 		          execution_time_ms, started_at, completed_at, created_at`,
-		in.OrganizationID, sk.ID, versionUsed, in.Mode, status, scrubbed,
+		sk.ID, versionUsed, in.Mode, status, scrubbed,
 	).Scan(&e.ID, &e.SkillID, &e.VersionUsed, &e.Mode, &e.Status, &paramsRaw,
 		&e.Output, &e.Error, &e.ExecutionTimeMs, &e.StartedAt, &e.CompletedAt, &e.CreatedAt)
 	if err != nil {
@@ -212,8 +209,8 @@ func (s *ExecutionService) Get(ctx context.Context, orgID, id uuid.UUID) (*Execu
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, skill_id, version_used, mode, status, parameters, output, error,
 		       execution_time_ms, started_at, completed_at, created_at
-		FROM skill_executions WHERE id = $1 AND organization_id = $2`,
-		id, orgID,
+		FROM skill_executions WHERE id = $1`,
+		id,
 	).Scan(&e.ID, &e.SkillID, &e.VersionUsed, &e.Mode, &e.Status, &paramsRaw,
 		&e.Output, &e.Error, &e.ExecutionTimeMs, &e.StartedAt, &e.CompletedAt, &e.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

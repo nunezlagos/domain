@@ -135,11 +135,11 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	var id uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO verifications
-		   (organization_id, project_id, user_id, session_id,
+		   (project_id, user_id, session_id,
 		    kind, items, status, context)
-		 VALUES ($1,$2,$3,$4,$5,$6,'running',NULLIF($7,''))
+		 VALUES ($1,$2,$3,$4,$5,'running',NULLIF($6,''))
 		 RETURNING id`,
-		orgID, proj.ID, userID, sessionID, kind, itemsJSON, contextStr,
+		proj.ID, userID, sessionID, kind, itemsJSON, contextStr,
 	).Scan(&id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verify start failed: %v", err)), nil
@@ -159,7 +159,6 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 	if d.Pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["verification_id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -183,8 +182,8 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 	// Leer items actuales, actualizar el matching label, persistir.
 	var itemsRaw []byte
 	if err := d.q(ctx).QueryRow(ctx,
-		`SELECT items FROM verifications WHERE organization_id = $1 AND id = $2`,
-		orgID, id,
+		`SELECT items FROM verifications WHERE id = $1`,
+		id,
 	).Scan(&itemsRaw); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verification not found: %v", err)), nil
 	}
@@ -211,8 +210,8 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 	}
 	newRaw, _ := json.Marshal(items)
 	if _, err := d.q(ctx).Exec(ctx,
-		`UPDATE verifications SET items = $3 WHERE organization_id = $1 AND id = $2`,
-		orgID, id, newRaw,
+		`UPDATE verifications SET items = $2 WHERE id = $1`,
+		id, newRaw,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 	}
@@ -230,7 +229,6 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	if d.Pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["verification_id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -240,8 +238,8 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 
 	var itemsRaw []byte
 	if err := d.q(ctx).QueryRow(ctx,
-		`SELECT items FROM verifications WHERE organization_id = $1 AND id = $2`,
-		orgID, id,
+		`SELECT items FROM verifications WHERE id = $1`,
+		id,
 	).Scan(&itemsRaw); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verification not found: %v", err)), nil
 	}
@@ -277,9 +275,9 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	if _, err := d.q(ctx).Exec(ctx,
-		`UPDATE verifications SET status = $3, completed_at = NOW()
-		   WHERE organization_id = $1 AND id = $2`,
-		orgID, id, finalStatus,
+		`UPDATE verifications SET status = $2, completed_at = NOW()
+		   WHERE id = $1`,
+		id, finalStatus,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("complete failed: %v", err)), nil
 	}
@@ -319,10 +317,10 @@ func (d *Deps) handleVerifyPending(ctx context.Context, req mcp.CallToolRequest)
 		`SELECT id::text, kind, status, COALESCE(context,''),
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM verifications
-		   WHERE organization_id = $1 AND project_id = $2
+		   WHERE project_id = $1
 		     AND status IN ('pending','running','failed','partial')
-		   ORDER BY started_at DESC LIMIT $3`,
-		orgID, proj.ID, limit,
+		   ORDER BY started_at DESC LIMIT $2`,
+		proj.ID, limit,
 	)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("pending list failed: %v", err)), nil

@@ -88,12 +88,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	var entityOrg *uuid.UUID
 	var query string
 	args := []any{id}
-	if hasOrgColumn(table) {
-		query = fmt.Sprintf(
-			`SELECT deleted_at, organization_id FROM %s WHERE id = $1`, table)
-	} else {
-		query = fmt.Sprintf(`SELECT deleted_at, NULL::uuid FROM %s WHERE id = $1`, table)
-	}
+	query = fmt.Sprintf(`SELECT deleted_at, NULL::uuid FROM %s WHERE id = $1`, table)
 	err := s.q(ctx).QueryRow(ctx, query, args...).Scan(&deletedAt, &entityOrg)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
@@ -131,14 +126,6 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	return nil
 }
 
-// hasOrgColumn devuelve si la tabla incluye columna organization_id.
-// Tablas listadas en restorableEntities: todas tienen organization_id excepto users
-// (users.organization_id existe) — en realidad todas tienen.
-func hasOrgColumn(table string) bool {
-	// Tablas que SÍ tienen organization_id (todas en restorableEntities):
-	return table != "" // simplificación: todas tienen org_id en el schema actual
-}
-
 // --- GDPR Export ---
 
 // UserExport bundle con todos los datos del user en formato portable.
@@ -169,9 +156,9 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 
 	// 1. user record
 	usr, err := scanRow(ctx, s.q(ctx),
-		`SELECT id, organization_id, email, name, role, created_at, updated_at, deleted_at
-		 FROM users WHERE id = $1 AND organization_id = $2`,
-		userID, orgID)
+		`SELECT id, email, name, role, created_at, updated_at, deleted_at
+		 FROM users WHERE id = $1`,
+		userID)
 	if err != nil {
 		return nil, fmt.Errorf("user: %w", err)
 	}
@@ -191,7 +178,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	// 3-N. Tablas con created_by = userID
 	out.Projects, _ = scanRows(ctx, s.Pool,
 		`SELECT id, name, slug, description, created_at FROM projects
-		 WHERE organization_id = $1 ORDER BY created_at DESC`, orgID)
+		 ORDER BY created_at DESC`)
 	out.Observations, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, content, observation_type, tags, metadata, created_at
 		 FROM observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)

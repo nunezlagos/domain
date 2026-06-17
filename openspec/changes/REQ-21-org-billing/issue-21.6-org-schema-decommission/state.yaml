@@ -13,4 +13,24 @@ notes: |
     - sd-001 (quitar GUC org del middleware) DIFERIDO a Fase B (hot path, sin beneficio con
       RLS off, y current_user_id sigue requerido por otp RLS).
     - go build verde, go vet default sin issues. Deploy diferido (decisión operador).
-  PENDIENTE: Fases B (threading queries), C (DROP COLUMN/TABLE — destructivo), D (periferia).
+  CHECKPOINT WIP (2026-06-17, workflow org-decommission run wf_2a64adba-2d9, PAUSADO):
+    Fase B mayormente ejecutada por workflow multi-agente. Estado del working tree:
+      - internal/service/org REMOVIDO completo (entidad org eliminada).
+      - org_delete_log dropeado (migración 000133, commiteada antes del workflow).
+      - organization_id removido de queries SQL + campos de struct en ~servicios/handlers/mcp/runner.
+      - handler/org.go: addMemberWithKey + listMembers ahora globales (sin organization_id);
+        INSERT INTO users ya NO incluye organization_id.
+      - Firmas con param orgID se dejaron (sin usar, build verde — limpieza diferida).
+      - go build ./... VERDE, go vet ./... VERDE.
+      - Quedan ~138 archivos .go (no-test) con refs org (params sin usar, ctxkeys, middleware, comentarios).
+    ⚠️ NO COMPLETADO / NO DEPLOYABLE:
+      - NO se creó la migración 000134 (Fase C): columnas organization_id + tablas org
+        (organizations, plans, usage_counters, invitations, org_*) SIGUEN en la DB.
+      - INCONSISTENCIA código/schema: users.organization_id es NOT NULL pero el código ya
+        no lo provee → INSERT de users fallaría a runtime. Hay que correr Fase C (drop columnas)
+        ANTES de deployar.
+      - Fase D (tests _test.go bajo -tags=integration, SDK, seeds, docs) NO ejecutada.
+    REANUDAR: Workflow({scriptPath: ".../org-decommission-wf_2a64adba-2d9.js", resumeFromRunId: "wf_2a64adba-2d9"})
+      continúa desde Fase Migration (los agentes de strip ya hechos vuelven cacheados).
+    Commit del checkpoint: ver git log (mensaje "WIP(req-21.6)").
+  PENDIENTE: Fase C (migración 000134 drop columnas+tablas), Fase D (tests+SDK+seeds+docs), limpieza de params orgID muertos.

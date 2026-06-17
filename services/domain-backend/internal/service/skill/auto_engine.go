@@ -71,18 +71,18 @@ func (e *AutoEngine) Materialize(ctx context.Context, t DiscoveredTool) (*Materi
 
 	var existing uuid.UUID
 	err = tx.QueryRow(ctx,
-		`SELECT id FROM skills WHERE organization_id = $1 AND slug = $2`,
-		t.OrganizationID, slug,
+		`SELECT id FROM skills WHERE slug = $1`,
+		slug,
 	).Scan(&existing)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// create
 		var newID uuid.UUID
 		err = tx.QueryRow(ctx, `
-			INSERT INTO skills (organization_id, slug, name, description, input_schema, output_schema, source, source_ref)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO skills (slug, name, description, input_schema, output_schema, source, source_ref)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id`,
-			t.OrganizationID, slug, t.ToolName, t.Description,
+			slug, t.ToolName, t.Description,
 			t.InputSchema, t.OutputSchema, t.Source, t.SourceRef,
 		).Scan(&newID)
 		if err != nil {

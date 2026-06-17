@@ -179,18 +179,18 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			  (SELECT COUNT(*) FROM observations
 			     WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL),
 			  (SELECT COUNT(*) FROM agents
-			     WHERE organization_id = $3 AND deleted_at IS NULL),
+			     WHERE deleted_at IS NULL),
 			  (SELECT COUNT(*) FROM agent_runs
-			     WHERE organization_id = $3 AND created_at >= $1 AND created_at < $2),
+			     WHERE created_at >= $1 AND created_at < $2),
 			  (SELECT COUNT(*) FROM flow_runs
-			     WHERE organization_id = $3 AND created_at >= $1 AND created_at < $2),
+			     WHERE created_at >= $1 AND created_at < $2),
 			  (SELECT COALESCE(SUM(cost_usd), 0)::float8 FROM cost_logs
-			     WHERE organization_id = $3 AND occurred_at >= $1 AND occurred_at < $2),
+			     WHERE occurred_at >= $1 AND occurred_at < $2),
 			  (SELECT COALESCE(SUM(tokens_input), 0)::bigint FROM cost_logs
-			     WHERE organization_id = $3 AND occurred_at >= $1 AND occurred_at < $2),
+			     WHERE occurred_at >= $1 AND occurred_at < $2),
 			  (SELECT COALESCE(SUM(tokens_output), 0)::bigint FROM cost_logs
-			     WHERE organization_id = $3 AND occurred_at >= $1 AND occurred_at < $2)
-		`, start, end, orgID).Scan(
+			     WHERE occurred_at >= $1 AND occurred_at < $2)
+		`, start, end).Scan(
 			&snap.Counters.Observations,
 			&snap.Counters.Agents,
 			&snap.Counters.AgentRunsToday,
@@ -202,10 +202,10 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			return fmt.Errorf("counters query: %w", err)
 		}
 
+		// org_flow_config es config global (single-org, sin organization_id).
 		var maxDur int
 		err = tx.QueryRow(ctx,
-			`SELECT max_flow_duration_seconds FROM org_flow_config WHERE organization_id = $1`,
-			orgID,
+			`SELECT max_flow_duration_seconds FROM org_flow_config LIMIT 1`,
 		).Scan(&maxDur)
 		if err == nil {
 			snap.Limits.MaxFlowDurationSeconds = maxDur
@@ -254,25 +254,25 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 
 		rows, err := tx.Query(ctx, `
 			WITH series AS (
-			  SELECT generate_series($2::timestamptz, $3::timestamptz - interval '1 day', interval '1 day')::date AS day
+			  SELECT generate_series($1::timestamptz, $2::timestamptz - interval '1 day', interval '1 day')::date AS day
 			),
 			cost AS (
 			  SELECT date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS day,
 			         SUM(cost_usd)::float8 AS cost_usd
 			  FROM cost_logs
-			  WHERE organization_id = $1 AND occurred_at >= $2 AND occurred_at < $3
+			  WHERE occurred_at >= $1 AND occurred_at < $2
 			  GROUP BY 1
 			),
 			ags AS (
 			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
 			  FROM agent_runs
-			  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
+			  WHERE created_at >= $1 AND created_at < $2
 			  GROUP BY 1
 			),
 			flw AS (
 			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
 			  FROM flow_runs
-			  WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
+			  WHERE created_at >= $1 AND created_at < $2
 			  GROUP BY 1
 			)
 			SELECT s.day,
@@ -284,7 +284,7 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 			LEFT JOIN ags a ON a.day = s.day
 			LEFT JOIN flw f ON f.day = s.day
 			ORDER BY s.day DESC
-		`, orgID, start, end)
+		`, start, end)
 		if err != nil {
 			return fmt.Errorf("history query: %w", err)
 		}

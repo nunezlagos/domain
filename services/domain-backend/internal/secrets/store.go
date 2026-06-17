@@ -21,7 +21,6 @@ var (
 
 type Secret struct {
 	ID                  uuid.UUID  `json:"id"`
-	OrganizationID      uuid.UUID  `json:"organization_id"`
 	Slug                string     `json:"slug"`
 	Name                string     `json:"name"`
 	EncryptionKeyVer    int        `json:"encryption_key_version"`
@@ -56,14 +55,14 @@ type UpdateInput struct {
 	ExpiresAt   **time.Time
 }
 
-const _listSelectCols = `id, organization_id, slug, name, encryption_key_version, description, expires_at, rotated_at, created_by, created_at, updated_at, deleted_at`
+const _listSelectCols = `id, slug, name, encryption_key_version, description, expires_at, rotated_at, created_by, created_at, updated_at, deleted_at`
 
 func scanSecret(scanner interface {
 	Scan(dest ...any) error
 }) (Secret, error) {
 	var s Secret
 	err := scanner.Scan(
-		&s.ID, &s.OrganizationID, &s.Slug, &s.Name,
+		&s.ID, &s.Slug, &s.Name,
 		&s.EncryptionKeyVer, &s.Description, &s.ExpiresAt,
 		&s.RotatedAt, &s.CreatedBy, &s.CreatedAt, &s.UpdatedAt,
 		&s.DeletedAt,
@@ -78,10 +77,10 @@ func (s *PGStore) Create(ctx context.Context, in CreateInput) (*Secret, error) {
 	}
 
 	row := s.Pool.QueryRow(ctx, `
-		INSERT INTO secrets (organization_id, slug, name, encrypted_value, encryption_key_version, description, expires_at, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO secrets (slug, name, encrypted_value, encryption_key_version, description, expires_at, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING `+_listSelectCols,
-		in.OrganizationID, in.Slug, in.Name, encVal, int(s.Cipher.CurrentVersion()),
+		in.Slug, in.Name, encVal, int(s.Cipher.CurrentVersion()),
 		in.Description, in.ExpiresAt, in.CreatedBy,
 	)
 
@@ -129,13 +128,13 @@ func (s *PGStore) GetValue(ctx context.Context, id uuid.UUID) (string, error) {
 }
 
 func (s *PGStore) ListByOrg(ctx context.Context, orgID uuid.UUID, includeExpired bool) ([]Secret, error) {
-	q := `SELECT ` + _listSelectCols + ` FROM secrets WHERE organization_id = $1 AND deleted_at IS NULL`
+	q := `SELECT ` + _listSelectCols + ` FROM secrets WHERE deleted_at IS NULL`
 	if !includeExpired {
 		q += ` AND (expires_at IS NULL OR expires_at > NOW())`
 	}
 	q += ` ORDER BY name ASC`
 
-	rows, err := s.Pool.Query(ctx, q, orgID)
+	rows, err := s.Pool.Query(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list secrets: %w", err)
 	}
@@ -155,7 +154,7 @@ func (s *PGStore) ListByOrg(ctx context.Context, orgID uuid.UUID, includeExpired
 func (s *PGStore) GetByOrgAndSlug(ctx context.Context, orgID uuid.UUID, slug string) (*Secret, error) {
 	row := s.Pool.QueryRow(ctx, `
 		SELECT `+_listSelectCols+` FROM secrets
-		WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+		WHERE slug = $1 AND deleted_at IS NULL`, slug)
 	secret, err := scanSecret(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

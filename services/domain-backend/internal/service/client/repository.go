@@ -49,7 +49,6 @@ const (
 // Client es la representación in-memory de la row de clients.
 type Client struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	Name           string
 	Slug           string
 	TaxID          string // "" si NULL
@@ -78,7 +77,6 @@ type ClientUpdate struct {
 // InsertParams agrupa los campos requeridos por el INSERT, ya validados
 // por el Service.
 type InsertParams struct {
-	OrganizationID uuid.UUID
 	Name           string
 	Slug           string
 	TaxID          string

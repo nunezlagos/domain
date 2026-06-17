@@ -85,10 +85,10 @@ func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, ev Event) error 
 		}
 		_, err := d.Pool.Exec(ctx,
 			`INSERT INTO outbound_webhook_deliveries
-				(subscription_id, organization_id, event_id, event_type, payload,
+				(subscription_id, event_id, event_type, payload,
 				 status, next_retry_at)
-			 VALUES ($1,$2,$3,$4,$5,'pending', NOW())`,
-			sub.ID, orgID, ev.ID, ev.Type, payload)
+			 VALUES ($1,$2,$3,$4,'pending', NOW())`,
+			sub.ID, ev.ID, ev.Type, payload)
 		if err != nil && d.Logger != nil {
 			d.Logger.ErrorContext(ctx, "enqueue webhook delivery failed",
 				slog.String("subscription_id", sub.ID.String()),
@@ -112,7 +112,7 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx,
-		`SELECT id, subscription_id, organization_id, event_id, event_type, payload, attempt
+		`SELECT id, subscription_id, event_id, event_type, payload, attempt
 		 FROM outbound_webhook_deliveries
 		 WHERE status = 'pending' AND next_retry_at <= NOW()
 		 ORDER BY next_retry_at
@@ -122,15 +122,15 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 		return 0, err
 	}
 	type job struct {
-		ID, SubID, OrgID, EventID uuid.UUID
-		EventType                 string
-		Payload                   []byte
-		Attempt                   int
+		ID, SubID, EventID uuid.UUID
+		EventType          string
+		Payload            []byte
+		Attempt            int
 	}
 	var jobs []job
 	for rows.Next() {
 		var j job
-		if err := rows.Scan(&j.ID, &j.SubID, &j.OrgID, &j.EventID, &j.EventType, &j.Payload, &j.Attempt); err != nil {
+		if err := rows.Scan(&j.ID, &j.SubID, &j.EventID, &j.EventType, &j.Payload, &j.Attempt); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -151,14 +151,14 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 
 	processed := 0
 	for _, j := range jobs {
-		d.deliver(ctx, j.ID, j.SubID, j.OrgID, j.EventType, j.Payload, j.Attempt)
+		d.deliver(ctx, j.ID, j.SubID, j.EventType, j.Payload, j.Attempt)
 		processed++
 	}
 	return processed, nil
 }
 
 // deliver envía un delivery individual al endpoint con HMAC + actualiza estado.
-func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID, _ uuid.UUID, eventType string, payload []byte, attempt int) {
+func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID uuid.UUID, eventType string, payload []byte, attempt int) {
 	sub, err := d.Svc.GetByIDInternal(ctx, subID)
 	if err != nil {
 		// La subscription fue borrada; cancelar delivery.

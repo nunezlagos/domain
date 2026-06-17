@@ -17,7 +17,6 @@ import (
 	"nunezlagos/domain/internal/llm"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	obssvc "nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 )
 
@@ -48,10 +47,9 @@ func setup(t *testing.T) (*fixture, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pool}
-	orgS := &orgsvc.Service{Pool: pool, Audit: rec}
 	projS := &projsvc.Service{Pool: pool, Audit: rec}
 
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, err := seedOrgUser(ctx, pool, "Acme", "acme", "o@x.com", "O")
 	require.NoError(t, err)
 	proj, err := projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,
@@ -283,9 +281,8 @@ func TestSabotage_SearchHybrid_OrgIsolation(t *testing.T) {
 
 	// Crear segunda org y project
 	rec := &audit.PGRecorder{Pool: f.svc.Pool}
-	orgS := &orgsvc.Service{Pool: f.svc.Pool, Audit: rec}
 	projS := &projsvc.Service{Pool: f.svc.Pool, Audit: rec}
-	org2, owner2, err := orgS.Create(ctx, "Other", "other", "x@x.com", "X")
+	org2, owner2, err := seedOrgUser(ctx, f.svc.Pool, "Other", "other", "x@x.com", "X")
 	require.NoError(t, err)
 	_, err = projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org2.ID, Name: "P", Slug: "p", ActorID: owner2.UserID,

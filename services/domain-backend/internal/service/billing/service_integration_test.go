@@ -13,11 +13,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/service/billing"
-	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 type fix struct {
@@ -45,9 +43,7 @@ func setupBilling(t *testing.T) (*fix, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, _, err := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, _, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 	require.NoError(t, err)
 
 	svc := &billing.Service{Pool: pools.App}

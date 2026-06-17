@@ -20,7 +20,6 @@ var (
 
 type Repo struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	ProjectID      uuid.UUID  `json:"project_id"`
 	Name           string     `json:"name"`
 	URL            string     `json:"url"`
@@ -35,7 +34,6 @@ type Repo struct {
 }
 
 type InsertParams struct {
-	OrganizationID uuid.UUID
 	ProjectID      uuid.UUID
 	Name           string
 	URL            string

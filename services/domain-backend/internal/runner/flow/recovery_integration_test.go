@@ -21,7 +21,6 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
@@ -47,14 +46,13 @@ func recoverySetup(t *testing.T) (*flowrunner.Runner, *flow.Service, *skillsvc.S
 	require.NoError(t, err)
 
 	rec := &audit.NopRecorder{}
-	orgS := &orgsvc.Service{Pool: pools.Auth, Audit: rec}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
 	// NopEmbedder evita llamadas LLM reales en tests de recovery
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
 
-	org, owner, _ := orgS.Create(ctx, "RecoveryTestOrg", "recoverytest", "r@x.com", "R")
+	org, owner, _ := seedOrgUser(ctx, pools.Auth, "RecoveryTestOrg", "recoverytest", "r@x.com", "R")
 	proj, _ := projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org.ID, Name: "RecoveryProj", Slug: "rproj", ActorID: owner.UserID,
 	})

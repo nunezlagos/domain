@@ -15,7 +15,6 @@ import (
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	sesssvc "nunezlagos/domain/internal/service/session"
 )
@@ -48,9 +47,8 @@ func setupSession(t *testing.T) (*fix, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, _ := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 	proj, _ := projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,
 	})

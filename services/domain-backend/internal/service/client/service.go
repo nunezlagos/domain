@@ -128,7 +128,6 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 	metaJSON, _ := json.Marshal(in.Metadata)
 
 	c, err := s.repository().Insert(ctx, InsertParams{
-		OrganizationID: orgID,
 		Name:           name,
 		Slug:           slug,
 		TaxID:          taxID,

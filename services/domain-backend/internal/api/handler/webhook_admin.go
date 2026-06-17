@@ -102,7 +102,7 @@ func (a *API) lookupInboundWebhook(w http.ResponseWriter, r *http.Request) *webs
 		return nil
 	}
 	hook, err := a.WebhookService.GetByID(r.Context(), id)
-	if errors.Is(err, websvc.ErrNotFound) || (err == nil && hook.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, websvc.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return nil
 	}
@@ -197,7 +197,7 @@ func (a *API) replayWebhookDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hook, err := a.WebhookService.GetByID(r.Context(), d.WebhookID)
-	if errors.Is(err, websvc.ErrNotFound) || (err == nil && hook.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, websvc.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}

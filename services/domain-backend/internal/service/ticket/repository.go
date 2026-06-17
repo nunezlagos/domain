@@ -32,7 +32,6 @@ var (
 
 type Ticket struct {
 	ID               uuid.UUID  `json:"id"`
-	OrganizationID   uuid.UUID  `json:"organization_id"`
 	ProjectID        uuid.UUID  `json:"project_id"`
 	ClientID         *uuid.UUID `json:"client_id,omitempty"`
 	Key              string     `json:"key"`

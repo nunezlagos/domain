@@ -97,10 +97,6 @@ func (a *API) getObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get", err.Error())
 		return
 	}
-	if err := a.authorizeOrg(ctx, o.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	tag := etag.SetHeaders(w, o.ID.String(), o.UpdatedAt, "private, max-age=30")
 	if etag.IsNotModified(r, tag, o.UpdatedAt) {
 		w.WriteHeader(http.StatusNotModified)
@@ -120,17 +116,12 @@ func (a *API) deleteObservation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	o, err := a.ObsService.Get(ctx, id)
-	if errors.Is(err, observation.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.ObsService.Get(ctx, id); err != nil {
+		if errors.Is(err, observation.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
-		return
-	}
-	if err := a.authorizeOrg(ctx, o.OrganizationID); err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 	actorID := a.userID(ctx)

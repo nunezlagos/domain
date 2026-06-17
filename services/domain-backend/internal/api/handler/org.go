@@ -1,13 +1,17 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
+	"regexp"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
-	orgsvc "nunezlagos/domain/internal/service/org"
+	"nunezlagos/domain/internal/auth/rbac"
 )
 
 func principal(r *http.Request) (*apikey.Principal, bool) {
@@ -18,55 +22,33 @@ func parseUUID(s string) (uuid.UUID, error) {
 	return uuid.Parse(s)
 }
 
-func (a *API) getOrg(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
-	org, err := a.OrgService.GetByID(r.Context(), id)
-	if errors.Is(err, orgsvc.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get_org", err.Error())
-		return
-	}
-	writeData(w, http.StatusOK, org)
+// roleOwner / roleAdmin: single-org global roles. La entidad organization se
+// removió (single-org); los roles viven en users.role y se validan acá contra
+// el catálogo rbac.
+var (
+	roleOwner = string(rbac.RoleOwner)
+	roleAdmin = string(rbac.RoleAdmin)
+)
+
+// memberEmailRegex validación de formato (sin DNS).
+var memberEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+// allowedMemberRoles cierra el conjunto de roles aceptados al crear members.
+var allowedMemberRoles = map[string]bool{
+	"owner":      true,
+	"admin":      true,
+	"maintainer": true,
+	"member":     true,
+	"viewer":     true,
 }
 
-type updateOrgBody struct {
-	Settings map[string]any `json:"settings"`
-}
-
-func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
-	p, _ := principal(r)
-	if p == nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return
-	}
-	actorID, _ := uuid.Parse(p.UserID)
-	var b updateOrgBody
-	if err := decodeJSON(r, &b); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
-		return
-	}
-	org, err := a.OrgService.UpdateSettings(r.Context(), id, actorID, b.Settings)
-	if errors.Is(err, orgsvc.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "update", err.Error())
-		return
-	}
-	writeData(w, http.StatusOK, org)
+// member es el snapshot de lectura de un user (single-org global).
+type member struct {
+	UserID   uuid.UUID `json:"user_id"`
+	Email    string    `json:"email"`
+	Name     string    `json:"name"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 // addMemberWithKeyBody body de POST /api/v1/organizations/{id}/members (issue-36.1).
@@ -77,26 +59,18 @@ type addMemberWithKeyBody struct {
 }
 
 // addMemberWithKey crea user + api_key en una sola tx, sin pasar por
-// invitations/OTP/email. Solo accesible para admin/owner de la org del path.
+// invitations/OTP/email. Solo accesible para admin/owner.
 // El plaintext de la key se devuelve UNA SOLA VEZ en la response.
+//
+// Single-org: ya no existe la entidad organization. El user y la api_key se
+// crean globales (sin organization_id).
 func (a *API) addMemberWithKey(w http.ResponseWriter, r *http.Request) {
-	orgID, err := parseUUID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
 	p, _ := principal(r)
 	if p == nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	// Anti-enumeration: si principal no pertenece a esa org, 404 (igual que
-	// "no existe"). No revela existencia de otras orgs.
-	if p.OrganizationID != orgID.String() {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	}
-	if p.Role != orgsvc.RoleOwner && p.Role != orgsvc.RoleAdmin {
+	if p.Role != roleOwner && p.Role != roleAdmin {
 		writeError(w, http.StatusForbidden, "forbidden", "owners/admins only")
 		return
 	}
@@ -116,51 +90,133 @@ func (a *API) addMemberWithKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := a.OrgService.AddMemberWithAPIKey(r.Context(), orgID, actorID, b.Email, b.Name, b.Role)
-	switch {
-	case errors.Is(err, orgsvc.ErrInvalidEmail):
+	email := strings.ToLower(strings.TrimSpace(b.Email))
+	if !memberEmailRegex.MatchString(email) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "email format invalid")
 		return
-	case errors.Is(err, orgsvc.ErrInvalidRole):
-		writeError(w, http.StatusUnprocessableEntity, "invalid_role", err.Error())
+	}
+	if !allowedMemberRoles[b.Role] {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_role",
+			"role must be one of: owner, admin, maintainer, member, viewer")
 		return
-	case errors.Is(err, orgsvc.ErrEmailTaken):
-		writeError(w, http.StatusConflict, "email_taken", "email already in use within the organization")
-		return
-	case errors.Is(err, orgsvc.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return
-	case err != nil:
+	}
+
+	plaintext, prefix, hash, err := apikey.Generate("live")
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "create_member", err.Error())
 		return
 	}
 
-	w.Header().Set("Location", "/api/v1/users/"+out.User.UserID.String())
+	ctx := r.Context()
+	tx, err := a.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create_member", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var m member
+	err = tx.QueryRow(ctx,
+		`INSERT INTO users (email, name, role)
+		 VALUES ($1, NULLIF($2, ''), $3)
+		 RETURNING id, email, COALESCE(name,''), role, created_at`,
+		email, b.Name, b.Role,
+	).Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt)
+	if err != nil {
+		if isMemberEmailUniqueViolation(err) {
+			writeError(w, http.StatusConflict, "email_taken", "email already in use")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "create_member", err.Error())
+		return
+	}
+
+	keyID := uuid.New()
+	_, err = tx.Exec(ctx,
+		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
+		                        name, environment, expires_at)
+		 VALUES ($1, $2, $3, $4, 'default', 'live', NULL)`,
+		keyID, m.UserID, hash, prefix,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create_member", err.Error())
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeError(w, http.StatusInternalServerError, "create_member", err.Error())
+		return
+	}
+
+	if a.Audit != nil {
+		audit.RecordOrLog(ctx, a.Audit, audit.Event{
+			ActorID:    &actorID,
+			ActorType:  audit.ActorUser,
+			Action:     "member.created_with_key",
+			EntityType: "user",
+			EntityID:   &m.UserID,
+			NewValues: map[string]any{
+				"email":      email,
+				"role":       b.Role,
+				"key_prefix": prefix,
+			},
+		})
+	}
+
+	w.Header().Set("Location", "/api/v1/users/"+m.UserID.String())
 	writeData(w, http.StatusCreated, map[string]any{
 		"user": map[string]any{
-			"id":         out.User.UserID,
-			"email":      out.User.Email,
-			"name":       out.User.Name,
-			"role":       out.User.Role,
-			"joined_at":  out.User.JoinedAt,
+			"id":        m.UserID,
+			"email":     m.Email,
+			"name":      m.Name,
+			"role":      m.Role,
+			"joined_at": m.JoinedAt,
 		},
-		"api_key":    out.APIKey,
-		"api_key_id": out.APIKeyID,
-		"key_prefix": out.KeyPrefix,
+		"api_key":    plaintext,
+		"api_key_id": keyID,
+		"key_prefix": prefix,
 	})
 }
 
+// listMembers GET /api/v1/organizations/{id}/members — single-org: lista todos
+// los users activos directamente desde la tabla users (sin organization_id).
 func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	members, err := a.OrgService.ListMembers(r.Context(), id)
+	ctx := r.Context()
+	rows, err := a.Pool.Query(ctx,
+		`SELECT id, email, COALESCE(name,''), role, created_at
+		 FROM users
+		 WHERE deleted_at IS NULL
+		 ORDER BY created_at ASC`)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list", err.Error())
 		return
 	}
-	writeData(w, http.StatusOK, members)
+	defer rows.Close()
+	out := []member{}
+	for rows.Next() {
+		var m member
+		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt); err != nil {
+			writeError(w, http.StatusInternalServerError, "list", err.Error())
+			return
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "list", err.Error())
+		return
+	}
+	writeData(w, http.StatusOK, out)
 }
 
+// isMemberEmailUniqueViolation detecta unique constraint sobre users.email.
+func isMemberEmailUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "duplicate key") {
+		return false
+	}
+	return strings.Contains(msg, "email") ||
+		(strings.Contains(msg, "users_") && strings.Contains(msg, "uniq"))
+}

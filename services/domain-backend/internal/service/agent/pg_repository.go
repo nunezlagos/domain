@@ -39,16 +39,16 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Agent, err
 	var a Agent
 	err := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO agents
-		   (organization_id, slug, name, description, provider, model, system_prompt,
+		   (slug, name, description, provider, model, system_prompt,
 		    skills_slugs, max_iterations, token_budget, temperature)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id, slug, name, COALESCE(description,''),
 		           provider, model, COALESCE(system_prompt,''), skills_slugs,
 		           max_iterations, token_budget, temperature,
 		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
-		in.OrganizationID, in.Slug, in.Name, nullStr(in.Description), in.Provider, in.Model,
+		in.Slug, in.Name, nullStr(in.Description), in.Provider, in.Model,
 		nullStr(in.SystemPrompt), in.SkillsSlugs, in.MaxIterations, in.TokenBudget, in.Temperature,
-	).Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
+	).Scan(&a.ID, &a.Slug, &a.Name, &a.Description,
 		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
 		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
 		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)
@@ -66,13 +66,13 @@ func (r *pgRepository) Update(ctx context.Context, id uuid.UUID, in UpdateParams
 		     system_prompt = $6, skills_slugs = $7, max_iterations = $8,
 		     token_budget = $9, temperature = $10, is_user_modified = $11
 		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		 RETURNING id, slug, name, COALESCE(description,''),
 		           provider, model, COALESCE(system_prompt,''), skills_slugs,
 		           max_iterations, token_budget, temperature,
 		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
 		id, in.Name, nullStr(in.Description), in.Provider, in.Model, nullStr(in.SystemPrompt),
 		in.SkillsSlugs, in.MaxIterations, in.TokenBudget, in.Temperature, in.IsUserModified,
-	).Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
+	).Scan(&a.ID, &a.Slug, &a.Name, &a.Description,
 		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
 		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
 		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)
@@ -91,18 +91,18 @@ func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (*Agent, error
 
 func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Agent, error) {
 	return r.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`, orgID, slug)
+		`WHERE slug = $1 AND deleted_at IS NULL`, slug)
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, limit int) ([]Agent, error) {
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT id, organization_id, slug, name, COALESCE(description,''),
+		`SELECT id, slug, name, COALESCE(description,''),
 		        provider, model, COALESCE(system_prompt,''), skills_slugs,
 		        max_iterations, token_budget, temperature,
 		        seed_managed, seed_version, is_user_modified, created_at, updated_at
 		 FROM agents
-		 WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, orgID, limit)
+		 WHERE deleted_at IS NULL
+		 ORDER BY created_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
@@ -110,7 +110,7 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, limit int) ([]
 	var out []Agent
 	for rows.Next() {
 		var a Agent
-		if err := rows.Scan(&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
+		if err := rows.Scan(&a.ID, &a.Slug, &a.Name, &a.Description,
 			&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
 			&a.MaxIterations, &a.TokenBudget, &a.Temperature,
 			&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt); err != nil {
@@ -134,8 +134,8 @@ func (r *pgRepository) CountValidSkills(ctx context.Context, orgID uuid.UUID, sl
 	var foundCount int
 	err := r.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM skills
-		 WHERE organization_id = $1 AND slug = ANY($2) AND deleted_at IS NULL`,
-		orgID, slugs,
+		 WHERE slug = ANY($1) AND deleted_at IS NULL`,
+		slugs,
 	).Scan(&foundCount)
 	if err != nil {
 		return 0, fmt.Errorf("validate skills: %w", err)
@@ -160,8 +160,8 @@ func (r *pgRepository) SlugTaken(ctx context.Context, orgID uuid.UUID, slug stri
 	var taken bool
 	err := r.q(ctx).QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM agents
-		 WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL)`,
-		orgID, slug).Scan(&taken)
+		 WHERE slug = $1 AND deleted_at IS NULL)`,
+		slug).Scan(&taken)
 	if err != nil {
 		return false, fmt.Errorf("check slug: %w", err)
 	}
@@ -214,13 +214,13 @@ func (r *pgRepository) ListVersions(ctx context.Context, agentID uuid.UUID, limi
 
 func (r *pgRepository) queryOne(ctx context.Context, where string, args ...any) (*Agent, error) {
 	var a Agent
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
+	q := `SELECT id, slug, name, COALESCE(description,''),
 	        provider, model, COALESCE(system_prompt,''), skills_slugs,
 	        max_iterations, token_budget, temperature,
 	        seed_managed, seed_version, is_user_modified, created_at, updated_at
 	      FROM agents ` + where
 	err := r.q(ctx).QueryRow(ctx, q, args...).Scan(
-		&a.ID, &a.OrganizationID, &a.Slug, &a.Name, &a.Description,
+		&a.ID, &a.Slug, &a.Name, &a.Description,
 		&a.Provider, &a.Model, &a.SystemPrompt, &a.SkillsSlugs,
 		&a.MaxIterations, &a.TokenBudget, &a.Temperature,
 		&a.SeedManaged, &a.SeedVersion, &a.IsUserModified, &a.CreatedAt, &a.UpdatedAt)

@@ -1,7 +1,6 @@
 // Package inventory — issue F3 inventario de capacidades al iniciar sesión.
 // Devuelve el detalle completo de agents/skills/flows/mcp_providers/mcp_servers
-// /project_templates/policies, combinando built-ins (organization_id NULL)
-// y per-org del proyecto detectado.
+// /project_templates/policies disponibles en el proyecto detectado.
 //
 // Diseñado para alimentar `domain detect` con info útil al agente IA:
 // "qué tools/skills/agents tengo disponibles en este proyecto".
@@ -117,7 +116,6 @@ func (s *Service) loadMCPProviders(ctx context.Context, inv *Inventory) error {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT name, description, command, tags, required_env
 		FROM mcp_providers
-		WHERE organization_id IS NULL
 		ORDER BY name
 	`)
 	if err != nil {
@@ -137,10 +135,6 @@ func (s *Service) loadMCPProviders(ctx context.Context, inv *Inventory) error {
 func (s *Service) loadMCPServers(ctx context.Context, orgID *string, inv *Inventory) error {
 	q := `SELECT name, transport, status, enabled FROM mcp_servers WHERE enabled = TRUE`
 	args := []any{}
-	if orgID != nil {
-		q += ` AND organization_id = $1`
-		args = append(args, *orgID)
-	}
 	q += ` ORDER BY name`
 	rows, err := s.Pool.Query(ctx, q, args...)
 	if err != nil {
@@ -161,7 +155,6 @@ func (s *Service) loadTemplates(ctx context.Context, inv *Inventory) error {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT slug, name, COALESCE(description, '')
 		FROM project_templates
-		WHERE organization_id IS NULL
 		ORDER BY slug
 	`)
 	if err != nil {
@@ -207,9 +200,9 @@ func (s *Service) loadAgents(ctx context.Context, orgID *string, inv *Inventory)
 		SELECT slug, name, COALESCE(description, ''), COALESCE(model, ''),
 		       COALESCE(skills_slugs, '{}')
 		FROM agents
-		WHERE organization_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL
 		ORDER BY slug
-	`, *orgID)
+	`)
 	if err != nil {
 		return err
 	}
@@ -231,9 +224,9 @@ func (s *Service) loadSkills(ctx context.Context, orgID *string, inv *Inventory)
 	rows, err := s.Pool.Query(ctx, `
 		SELECT slug, name, COALESCE(description, ''), COALESCE(skill_type, 'prompt')
 		FROM skills
-		WHERE organization_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL
 		ORDER BY slug
-	`, *orgID)
+	`)
 	if err != nil {
 		return err
 	}
@@ -255,9 +248,9 @@ func (s *Service) loadFlows(ctx context.Context, orgID *string, inv *Inventory) 
 	rows, err := s.Pool.Query(ctx, `
 		SELECT slug, name, COALESCE(description, '')
 		FROM flows
-		WHERE organization_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL
 		ORDER BY slug
-	`, *orgID)
+	`)
 	if err != nil {
 		return err
 	}

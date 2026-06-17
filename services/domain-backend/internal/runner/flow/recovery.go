@@ -118,10 +118,9 @@ func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxR
 }
 
 type maxDurationRun struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	StartedAt      time.Time
-	MaxSeconds     int
+	ID         uuid.UUID
+	StartedAt  time.Time
+	MaxSeconds int
 }
 
 // ReleaseMaxDurationRuns marca como failed los flow_runs que exceden el
@@ -136,11 +135,10 @@ func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
 		    finished_at = NOW(),
 		    worker_id = NULL
 		FROM org_flow_config ofc
-		WHERE fr.organization_id = ofc.organization_id
-		  AND fr.status = 'running'
+		WHERE fr.status = 'running'
 		  AND fr.started_at IS NOT NULL
 		  AND fr.started_at < NOW() - (ofc.max_flow_duration_seconds * INTERVAL '1 second')
-		RETURNING fr.id, fr.organization_id, fr.started_at, ofc.max_flow_duration_seconds
+		RETURNING fr.id, fr.started_at, ofc.max_flow_duration_seconds
 	`)
 	if err != nil {
 		return 0, fmt.Errorf("max duration release query: %w", err)
@@ -151,7 +149,7 @@ func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
 	var runs []maxDurationRun
 	for rows.Next() {
 		var run maxDurationRun
-		if err := rows.Scan(&run.ID, &run.OrganizationID, &run.StartedAt, &run.MaxSeconds); err != nil {
+		if err := rows.Scan(&run.ID, &run.StartedAt, &run.MaxSeconds); err != nil {
 			return cancelled, fmt.Errorf("scan max duration run: %w", err)
 		}
 		runs = append(runs, run)
@@ -167,7 +165,6 @@ func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
 
 		logger.Warn("flow_run cancelled by max_duration",
 			slog.String("flow_run_id", run.ID.String()),
-			slog.String("org_id", run.OrganizationID.String()),
 			slog.String("duration_seconds", actualDuration.String()),
 			slog.String("budget_seconds", budgetDuration.String()),
 		)
@@ -180,7 +177,7 @@ func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
 		}
 
 		if r.Metrics != nil && r.Metrics.FlowRunCancelledByMaxDuration != nil {
-			r.Metrics.FlowRunCancelledByMaxDuration.WithLabelValues(run.OrganizationID.String()).Inc()
+			r.Metrics.FlowRunCancelledByMaxDuration.WithLabelValues("").Inc()
 		}
 		cancelled++
 	}

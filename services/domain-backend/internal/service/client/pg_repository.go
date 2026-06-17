@@ -45,7 +45,7 @@ func (r *pgRepository) q(ctx context.Context) querier {
 
 // selectCols centraliza la lista de columnas para SELECT (Scan también ordena
 // por este listado).
-const selectCols = `id, organization_id, name, slug,
+const selectCols = `id, name, slug,
 		COALESCE(tax_id, ''), COALESCE(contact_email, ''),
 		COALESCE(contact_phone, ''), COALESCE(address, ''),
 		metadata, status, created_at, updated_at, deleted_at`
@@ -53,7 +53,7 @@ const selectCols = `id, organization_id, name, slug,
 func scanClient(row pgx.Row) (*Client, error) {
 	var c Client
 	if err := row.Scan(
-		&c.ID, &c.OrganizationID, &c.Name, &c.Slug,
+		&c.ID, &c.Name, &c.Slug,
 		&c.TaxID, &c.ContactEmail, &c.ContactPhone, &c.Address,
 		&c.Metadata, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 	); err != nil {
@@ -65,11 +65,11 @@ func scanClient(row pgx.Row) (*Client, error) {
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO clients
-		   (organization_id, name, slug, tax_id, contact_email,
+		   (name, slug, tax_id, contact_email,
 		    contact_phone, address, metadata, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING `+selectCols,
-		in.OrganizationID, in.Name, in.Slug,
+		in.Name, in.Slug,
 		nullStr(in.TaxID), nullStr(in.ContactEmail),
 		nullStr(in.ContactPhone), nullStr(in.Address),
 		in.MetadataJSON, in.Status,
@@ -86,8 +86,8 @@ func (r *pgRepository) GetByID(ctx context.Context, orgID uuid.UUID, id uuid.UUI
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM clients
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	c, err := scanClient(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -103,8 +103,8 @@ func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug stri
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM clients
-		 WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL`,
-		orgID, slug,
+		 WHERE slug = $1 AND deleted_at IS NULL`,
+		slug,
 	)
 	c, err := scanClient(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -117,8 +117,8 @@ func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug stri
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]*Client, int64, error) {
-	args := []any{orgID}
-	conds := []string{"organization_id = $1"}
+	args := []any{}
+	conds := []string{}
 	if !f.IncludeDeleted {
 		conds = append(conds, "deleted_at IS NULL")
 	}
@@ -130,20 +130,23 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 		args = append(args, "%"+s+"%")
 		conds = append(conds, fmt.Sprintf("(name ILIKE $%d OR slug ILIKE $%d)", len(args), len(args)))
 	}
-	where := strings.Join(conds, " AND ")
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
 
 	// Count total (sin limit/offset) en query separada — más simple que
 	// window function y compatible con los planners de PG sin issues.
 	var total int64
 	if err := r.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM clients WHERE `+where, args...,
+		`SELECT COUNT(*) FROM clients`+where, args...,
 	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count clients: %w", err)
 	}
 
 	// Append limit/offset al final.
 	args = append(args, f.Limit, f.Offset)
-	q := `SELECT ` + selectCols + ` FROM clients WHERE ` + where +
+	q := `SELECT ` + selectCols + ` FROM clients` + where +
 		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 
 	rows, err := r.q(ctx).Query(ctx, q, args...)
@@ -169,11 +172,11 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 func (r *pgRepository) Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID, in UpdateParams) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE clients
-		 SET name = $3, tax_id = $4, contact_email = $5, contact_phone = $6,
-		     address = $7, metadata = $8, status = $9
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		 SET name = $2, tax_id = $3, contact_email = $4, contact_phone = $5,
+		     address = $6, metadata = $7, status = $8
+		 WHERE id = $1 AND deleted_at IS NULL
 		 RETURNING `+selectCols,
-		orgID, id,
+		id,
 		in.Name, nullStr(in.TaxID), nullStr(in.ContactEmail),
 		nullStr(in.ContactPhone), nullStr(in.Address),
 		in.MetadataJSON, in.Status,
@@ -191,8 +194,8 @@ func (r *pgRepository) Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID
 func (r *pgRepository) SoftDelete(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
 		`UPDATE clients SET deleted_at = NOW()
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("soft delete client: %w", err)
@@ -206,8 +209,8 @@ func (r *pgRepository) SoftDelete(ctx context.Context, orgID uuid.UUID, id uuid.
 func (r *pgRepository) Restore(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
 		`UPDATE clients SET deleted_at = NULL
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NOT NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NOT NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("restore client: %w", err)
@@ -220,10 +223,10 @@ func (r *pgRepository) Restore(ctx context.Context, orgID uuid.UUID, id uuid.UUI
 
 func (r *pgRepository) SetStatus(ctx context.Context, orgID uuid.UUID, id uuid.UUID, status string) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE clients SET status = $3
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		`UPDATE clients SET status = $2
+		 WHERE id = $1 AND deleted_at IS NULL
 		 RETURNING `+selectCols,
-		orgID, id, status,
+		id, status,
 	)
 	c, err := scanClient(row)
 	if errors.Is(err, pgx.ErrNoRows) {

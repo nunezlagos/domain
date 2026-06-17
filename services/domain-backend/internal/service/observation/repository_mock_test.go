@@ -33,7 +33,7 @@ func (m *mockRepo) Insert(ctx context.Context, in InsertParams) (*Observation, e
 	if m.InsertHook != nil {
 		return m.InsertHook(ctx, in)
 	}
-	return &Observation{ID: uuid.New(), OrganizationID: in.OrganizationID, ProjectID: in.ProjectID, Content: in.Content}, nil
+	return &Observation{ID: uuid.New(), ProjectID: in.ProjectID, Content: in.Content}, nil
 }
 func (m *mockRepo) Get(ctx context.Context, id uuid.UUID) (*Observation, error) {
 	m.GetCalls++

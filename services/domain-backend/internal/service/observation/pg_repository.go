@@ -49,14 +49,14 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observatio
 	var o Observation
 	err := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO observations
-		   (organization_id, project_id, created_by, session_id, content,
+		   (project_id, created_by, session_id, content,
 		    embedding, observation_type, tags, metadata, content_hash)
-		 VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10)
-		 RETURNING id, organization_id, project_id, created_by, session_id,
+		 VALUES ($1, $2, $3, $4, $5::vector, $6, $7, $8, $9)
+		 RETURNING id, project_id, created_by, session_id,
 		           content, observation_type, tags, metadata, created_at, updated_at`,
-		in.OrganizationID, in.ProjectID, in.CreatedBy, in.SessionID, in.Content,
+		in.ProjectID, in.CreatedBy, in.SessionID, in.Content,
 		in.EmbeddingLit, in.ObservationType, in.Tags, in.MetadataJSON, in.ContentHash,
-	).Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		// El service interpreta pgErr para mapear a ErrDuplicate/ErrProjectMismatch.
@@ -68,10 +68,10 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observatio
 func (r *pgRepository) Get(ctx context.Context, id uuid.UUID) (*Observation, error) {
 	var o Observation
 	err := r.q(ctx).QueryRow(ctx,
-		`SELECT id, organization_id, project_id, created_by, session_id,
+		`SELECT id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
 		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -84,7 +84,7 @@ func (r *pgRepository) Get(ctx context.Context, id uuid.UUID) (*Observation, err
 
 func (r *pgRepository) List(ctx context.Context, projectID uuid.UUID, limit int) ([]Observation, error) {
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT id, organization_id, project_id, created_by, session_id,
+		`SELECT id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
 		 FROM observations
 		 WHERE project_id = $1 AND deleted_at IS NULL
@@ -96,7 +96,7 @@ func (r *pgRepository) List(ctx context.Context, projectID uuid.UUID, limit int)
 	var out []Observation
 	for rows.Next() {
 		var o Observation
-		if err := rows.Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+		if err := rows.Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 			&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -114,7 +114,7 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 		cmp = ">"
 	}
 	args := []any{in.ProjectID}
-	q := `SELECT id, organization_id, project_id, created_by, session_id,
+	q := `SELECT id, project_id, created_by, session_id,
 	            content, observation_type, tags, metadata, created_at, updated_at
 	      FROM observations
 	      WHERE project_id = $1 AND deleted_at IS NULL`
@@ -133,7 +133,7 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 	var out []Observation
 	for rows.Next() {
 		var o Observation
-		if err := rows.Scan(&o.ID, &o.OrganizationID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+		if err := rows.Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 			&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, false, err
 		}
@@ -168,43 +168,43 @@ func (r *pgRepository) SearchHybrid(ctx context.Context, in SearchInput) ([]Sear
 		rows, err = r.q(ctx).Query(ctx, `
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, query) DESC) AS r
-  FROM observations, plainto_tsquery('spanish', $2) AS query
-  WHERE organization_id = $1 AND deleted_at IS NULL AND content_tsv @@ query
-  LIMIT $4
+  FROM observations, plainto_tsquery('spanish', $1) AS query
+  WHERE deleted_at IS NULL AND content_tsv @@ query
+  LIMIT $3
 ),
 vec AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector ASC) AS r
+  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector ASC) AS r
   FROM observations
-  WHERE organization_id = $1 AND deleted_at IS NULL AND embedding IS NOT NULL
-  LIMIT $4
+  WHERE deleted_at IS NULL AND embedding IS NOT NULL
+  LIMIT $3
 ),
 fused AS (
   SELECT id,
-         COALESCE(1.0 / ($5 + bm25.r), 0) + COALESCE(1.0 / ($5 + vec.r), 0) AS score,
+         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score,
          COALESCE(bm25.r, 0) AS bm25_rank,
          COALESCE(vec.r, 0) AS vec_rank
   FROM bm25 FULL OUTER JOIN vec USING (id)
 )
-SELECT o.id, o.organization_id, o.project_id, o.created_by, o.session_id,
+SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,
        f.score, f.bm25_rank, f.vec_rank
 FROM fused f
 JOIN observations o ON o.id = f.id
 ORDER BY f.score DESC
-LIMIT $6
-`, in.OrgID, in.Query, in.EmbeddingLit, in.Candidates, in.RRFK, in.Limit)
+LIMIT $5
+`, in.Query, in.EmbeddingLit, in.Candidates, in.RRFK, in.Limit)
 	} else {
 		rows, err = r.q(ctx).Query(ctx, `
-SELECT o.id, o.organization_id, o.project_id, o.created_by, o.session_id,
+SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,
        ts_rank(o.content_tsv, query)::float8 AS score,
        0::bigint AS bm25_rank,
        0::bigint AS vec_rank
-FROM observations o, plainto_tsquery('spanish', $2) AS query
-WHERE o.organization_id = $1 AND o.deleted_at IS NULL AND o.content_tsv @@ query
+FROM observations o, plainto_tsquery('spanish', $1) AS query
+WHERE o.deleted_at IS NULL AND o.content_tsv @@ query
 ORDER BY score DESC
-LIMIT $3
-`, in.OrgID, in.Query, in.Limit)
+LIMIT $2
+`, in.Query, in.Limit)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("hybrid search: %w", err)
@@ -214,7 +214,7 @@ LIMIT $3
 	for rows.Next() {
 		var r SearchResult
 		var bm25Rank, vecRank int64
-		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.ProjectID, &r.CreatedBy, &r.SessionID,
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.CreatedBy, &r.SessionID,
 			&r.Content, &r.ObservationType, &r.Tags, &r.Metadata, &r.CreatedAt, &r.UpdatedAt,
 			&r.Score, &bm25Rank, &vecRank); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)

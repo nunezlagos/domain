@@ -34,7 +34,7 @@ func (r *pgRepository) q(ctx context.Context) querier {
 	return r.pool
 }
 
-const selectCols = `id, organization_id, project_id, name, url,
+const selectCols = `id, project_id, name, url,
 		COALESCE(branch_default,''), COALESCE(kind,''), is_default,
 		COALESCE(workflow,''), COALESCE(notes,''),
 		created_at, updated_at, deleted_at`
@@ -42,7 +42,7 @@ const selectCols = `id, organization_id, project_id, name, url,
 func scanRepo(row pgx.Row) (*Repo, error) {
 	var r Repo
 	if err := row.Scan(
-		&r.ID, &r.OrganizationID, &r.ProjectID, &r.Name, &r.URL,
+		&r.ID, &r.ProjectID, &r.Name, &r.URL,
 		&r.BranchDefault, &r.Kind, &r.IsDefault, &r.Workflow, &r.Notes,
 		&r.CreatedAt, &r.UpdatedAt, &r.DeletedAt,
 	); err != nil {
@@ -59,11 +59,11 @@ func isUniqueViolation(err error) bool {
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Repo, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_repositories
-		   (organization_id, project_id, name, url, branch_default,
+		   (project_id, name, url, branch_default,
 		    kind, is_default, workflow, notes)
-		 VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,NULLIF($8,''),NULLIF($9,''))
+		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,NULLIF($7,''),NULLIF($8,''))
 		 RETURNING `+selectCols,
-		in.OrganizationID, in.ProjectID, in.Name, in.URL, in.BranchDefault,
+		in.ProjectID, in.Name, in.URL, in.BranchDefault,
 		in.Kind, in.IsDefault, in.Workflow, in.Notes,
 	)
 	repo, err := scanRepo(row)
@@ -80,9 +80,9 @@ func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID) ([]
 	rows, err := r.q(ctx).Query(ctx,
 		`SELECT `+selectCols+`
 		 FROM project_repositories
-		 WHERE organization_id = $1 AND project_id = $2 AND deleted_at IS NULL
+		 WHERE project_id = $1 AND deleted_at IS NULL
 		 ORDER BY is_default DESC, name ASC`,
-		orgID, projectID,
+		projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list project_repos: %w", err)
@@ -103,8 +103,8 @@ func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Repo, err
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM project_repositories
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	repo, err := scanRepo(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -120,8 +120,8 @@ func (r *pgRepository) GetByName(ctx context.Context, orgID, projectID uuid.UUID
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM project_repositories
-		 WHERE organization_id = $1 AND project_id = $2 AND name = $3 AND deleted_at IS NULL`,
-		orgID, projectID, name,
+		 WHERE project_id = $1 AND name = $2 AND deleted_at IS NULL`,
+		projectID, name,
 	)
 	repo, err := scanRepo(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -136,8 +136,8 @@ func (r *pgRepository) GetByName(ctx context.Context, orgID, projectID uuid.UUID
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateParams) (*Repo, error) {
 	// Build dinámico de SET — más simple que repetir COALESCE() para cada campo.
 	sets := []string{}
-	args := []any{orgID, id}
-	idx := 3
+	args := []any{id}
+	idx := 2
 	add := func(col string, v any) {
 		sets = append(sets, fmt.Sprintf("%s = $%d", col, idx))
 		args = append(args, v)
@@ -162,7 +162,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 		return r.Get(ctx, orgID, id)
 	}
 	q := `UPDATE project_repositories SET ` + joinCommas(sets) +
-		` WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+		` WHERE id = $1 AND deleted_at IS NULL
 		  RETURNING ` + selectCols
 	row := r.q(ctx).QueryRow(ctx, q, args...)
 	repo, err := scanRepo(row)
@@ -200,8 +200,8 @@ func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uu
 	var projectID uuid.UUID
 	if err := q.QueryRow(ctx,
 		`SELECT project_id FROM project_repositories
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	).Scan(&projectID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -211,17 +211,17 @@ func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uu
 	// 2. Limpiar default actual del proyecto
 	if _, err := q.Exec(ctx,
 		`UPDATE project_repositories SET is_default = false
-		 WHERE organization_id = $1 AND project_id = $2 AND id <> $3 AND is_default = true`,
-		orgID, projectID, id,
+		 WHERE project_id = $1 AND id <> $2 AND is_default = true`,
+		projectID, id,
 	); err != nil {
 		return nil, fmt.Errorf("clear previous default: %w", err)
 	}
 	// 3. Setear nuevo default
 	row := q.QueryRow(ctx,
 		`UPDATE project_repositories SET is_default = true
-		 WHERE organization_id = $1 AND id = $2
+		 WHERE id = $1
 		 RETURNING `+selectCols,
-		orgID, id,
+		id,
 	)
 	return scanRepo(row)
 }
@@ -230,8 +230,8 @@ func (r *pgRepository) SoftDelete(ctx context.Context, orgID, id uuid.UUID) erro
 	tag, err := r.q(ctx).Exec(ctx,
 		`UPDATE project_repositories
 		 SET deleted_at = NOW(), is_default = false
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("soft-delete project_repo: %w", err)

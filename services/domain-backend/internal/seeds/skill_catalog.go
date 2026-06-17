@@ -681,12 +681,12 @@ func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 		}
 
 		tag, err := pool.Exec(ctx, `
-			INSERT INTO skills (organization_id, slug, name, description, skill_type,
+			INSERT INTO skills (slug, name, description, skill_type,
 			                    content, input_schema, output_schema, timeout_seconds,
 			                    idempotent, has_side_effects, tags,
 			                    seed_managed, seed_version)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, TRUE, $13)
-			ON CONFLICT (organization_id, slug) WHERE project_id IS NULL AND deleted_at IS NULL DO UPDATE
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, TRUE, $12)
+			ON CONFLICT (slug) WHERE project_id IS NULL AND deleted_at IS NULL DO UPDATE
 			SET name             = EXCLUDED.name,
 			    description      = EXCLUDED.description,
 			    skill_type       = EXCLUDED.skill_type,
@@ -699,7 +699,7 @@ func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 			    tags             = EXCLUDED.tags,
 			    seed_version     = EXCLUDED.seed_version
 			WHERE skills.is_user_modified = FALSE`,
-			orgID, e.Slug, e.Name, e.Description, e.SkillType,
+			e.Slug, e.Name, e.Description, e.SkillType,
 			contentPtr, input, output, e.TimeoutSeconds,
 			e.Idempotent, e.HasSideEffects, tags, version)
 		if err != nil {

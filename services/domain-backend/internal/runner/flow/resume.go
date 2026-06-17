@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/api/ctxkeys"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/flow"
 )
@@ -52,6 +53,8 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 	if err != nil {
 		return nil, fmt.Errorf("flow not found: %w", err)
 	}
+	// org desde el context del request (issue-02.8: flows ya no portan org).
+	orgID := ctxkeys.OrgID(ctx)
 	// issue-09.7 fv-008: el engine lee la versión pinneada del run, no la
 	// definition actual del flow (que pudo cambiar mientras el run corría).
 	if versionID != nil {
@@ -86,7 +89,7 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 
 	if r.Audit != nil {
 		_ = r.Audit.Record(ctx, audit.Event{
-			OrganizationID: &f.OrganizationID,
+			OrganizationID: &orgID,
 			Action:         "flow_run.resumed_after_crash",
 			EntityType:     "flow_run",
 			EntityID:       &in.RunID,
@@ -147,7 +150,7 @@ LOOP:
 		}
 		maxAttempts := step.Retries + 1
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			out, stepErr = r.executeStep(ctxStep, in.RunID, &step, inputs, stepOutputs, f.OrganizationID, in.TriggeredBy)
+			out, stepErr = r.executeStep(ctxStep, in.RunID, &step, inputs, stepOutputs, orgID, in.TriggeredBy)
 			if stepErr == nil {
 				break
 			}
@@ -219,12 +222,12 @@ LOOP:
 		 WHERE id = $5`, statusFinal, outputsJSON, nullStr(finalErr), finishedAt, in.RunID)
 
 	if r.Emitter != nil {
-		r.Emitter.EmitFlowRunFinished(ctx, f.OrganizationID, in.RunID, f.Slug, statusFinal)
+		r.Emitter.EmitFlowRunFinished(ctx, orgID, in.RunID, f.Slug, statusFinal)
 	}
 
 	if r.Audit != nil {
 		_ = r.Audit.Record(ctx, audit.Event{
-			OrganizationID: &f.OrganizationID,
+			OrganizationID: &orgID,
 			ActorID:        in.TriggeredBy,
 			ActorType:      audit.ActorSystem,
 			Action:         "flow.run_" + statusFinal,

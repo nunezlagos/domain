@@ -75,7 +75,6 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	resp["db"] = dbStatus
 
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	userID, _ := uuid.Parse(d.Principal.UserID)
 
 	// Counts de objetos del usuario en su org (queries simples,
@@ -85,18 +84,18 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		key string
 		sql string
 	}{
-		{"projects", "SELECT COUNT(*) FROM projects WHERE organization_id=$1 AND deleted_at IS NULL"},
-		{"clients", "SELECT COUNT(*) FROM clients WHERE organization_id=$1 AND deleted_at IS NULL"},
-		{"tickets", "SELECT COUNT(*) FROM project_tickets WHERE organization_id=$1 AND deleted_at IS NULL"},
-		{"observations", "SELECT COUNT(*) FROM observations WHERE organization_id=$1 AND deleted_at IS NULL"},
-		{"sessions_open", "SELECT COUNT(*) FROM sessions WHERE organization_id=$1 AND ended_at IS NULL"},
-		{"crons", "SELECT COUNT(*) FROM crons WHERE organization_id=$1 AND deleted_at IS NULL"},
-		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE organization_id=$1 AND proposed=true AND deleted_at IS NULL"},
-		{"verifications_open", "SELECT COUNT(*) FROM verifications WHERE organization_id=$1 AND status IN ('pending','running','failed','partial')"},
+		{"projects", "SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL"},
+		{"clients", "SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL"},
+		{"tickets", "SELECT COUNT(*) FROM project_tickets WHERE deleted_at IS NULL"},
+		{"observations", "SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL"},
+		{"sessions_open", "SELECT COUNT(*) FROM sessions WHERE ended_at IS NULL"},
+		{"crons", "SELECT COUNT(*) FROM crons WHERE deleted_at IS NULL"},
+		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE proposed=true AND deleted_at IS NULL"},
+		{"verifications_open", "SELECT COUNT(*) FROM verifications WHERE status IN ('pending','running','failed','partial')"},
 	}
 	for _, q := range queries {
 		var n int
-		if err := d.q(ctx).QueryRow(ctx, q.sql, orgID).Scan(&n); err == nil {
+		if err := d.q(ctx).QueryRow(ctx, q.sql).Scan(&n); err == nil {
 			counts[q.key] = n
 		} else {
 			counts[q.key] = nil
@@ -105,8 +104,8 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	// Captured prompts del usuario (filtrado por user_id en lugar de org)
 	var promptCount int
 	if err := d.q(ctx).QueryRow(ctx,
-		"SELECT COUNT(*) FROM captured_prompts WHERE organization_id=$1 AND user_id=$2",
-		orgID, userID,
+		"SELECT COUNT(*) FROM captured_prompts WHERE user_id=$1",
+		userID,
 	).Scan(&promptCount); err == nil {
 		counts["my_captured_prompts"] = promptCount
 	}
@@ -117,9 +116,8 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT slug, to_char(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM projects
-		   WHERE organization_id = $1 AND last_seen_at IS NOT NULL
+		   WHERE last_seen_at IS NOT NULL
 		   ORDER BY last_seen_at DESC LIMIT 1`,
-		orgID,
 	).Scan(&lastSlug, &lastSeenStr); err == nil {
 		resp["last_active_project"] = map[string]any{
 			"slug":         lastSlug,

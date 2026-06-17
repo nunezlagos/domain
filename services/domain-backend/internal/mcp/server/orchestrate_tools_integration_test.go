@@ -27,7 +27,6 @@ import (
 	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
-	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 type orchFixture struct {
@@ -56,8 +55,7 @@ func setupOrchMCP(t *testing.T) *orchFixture {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, owner, err := orgS.Create(ctx, "Acme", "acme", "owner@acme.com", "Owner")
+	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
 	_, err = seeds.SeedAgentTemplatesForOrg(ctx, pools.App, org.ID)
 	require.NoError(t, err)

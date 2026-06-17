@@ -22,11 +22,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	ow "nunezlagos/domain/internal/service/outboundwebhook"
 )
 
@@ -56,9 +54,7 @@ func setupOW(t *testing.T) (*owFixture, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
-	org, _, err := orgS.Create(ctx, "OWOrg", "oworg", "o@x.com", "O")
+	org, _, err := seedOrgUser(ctx, pools.App, "OWOrg", "oworg", "o@x.com", "O")
 	require.NoError(t, err)
 
 	key := make([]byte, crypto.MasterKeySize)

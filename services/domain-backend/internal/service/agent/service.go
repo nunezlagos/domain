@@ -52,7 +52,6 @@ var (
 
 type Agent struct {
 	ID              uuid.UUID
-	OrganizationID  uuid.UUID
 	Slug            string
 	Name            string
 	Description     string
@@ -314,7 +313,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	}
 	skills := prev.SkillsSlugs
 	if in.SkillsSlugs != nil {
-		if err := s.validateSkills(ctx, prev.OrganizationID, in.SkillsSlugs); err != nil {
+		if err := s.validateSkills(ctx, uuid.Nil, in.SkillsSlugs); err != nil {
 			return nil, err
 		}
 		skills = in.SkillsSlugs
@@ -353,7 +352,6 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &a.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
 			Action:         "agent.updated",
@@ -422,8 +420,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, limit int) ([]Agent
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	prev, err := s.GetByID(ctx, id)
-	if err != nil {
+	if _, err := s.GetByID(ctx, id); err != nil {
 		return err
 	}
 	if err := s.repository().SoftDelete(ctx, id); err != nil {
@@ -431,7 +428,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
 			Action:         "agent.deleted",

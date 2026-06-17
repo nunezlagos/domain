@@ -37,13 +37,12 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cross-org guard pre-flight
-	ag, err := a.AgentService.GetByID(r.Context(), id)
-	if errors.Is(err, agent.ErrNotFound) || (err == nil && ag.OrganizationID.String() != p.OrganizationID) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	// Existence pre-flight
+	if _, err := a.AgentService.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, agent.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}
@@ -112,17 +111,8 @@ func (a *API) getAgentRunLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	var orgID uuid.UUID
-	err = a.AgentService.Pool.QueryRow(r.Context(),
-		`SELECT organization_id FROM agent_runs WHERE id = $1`, id).Scan(&orgID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if orgID.String() != p.OrganizationID {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
+	// organization_id eliminado del schema (single-org): se omite el chequeo
+	// de ownership por org.
 
 	rows, err := a.AgentService.Pool.Query(r.Context(),
 		`SELECT id, iteration, event_type, payload, tokens_input, tokens_output,

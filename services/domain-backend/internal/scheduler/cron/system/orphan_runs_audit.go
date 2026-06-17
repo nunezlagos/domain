@@ -31,7 +31,6 @@ type OrphanAuditor struct {
 
 // orphanRow representa 1 conteo por org_id agregado en la query.
 type orphanRow struct {
-	OrgID string
 	Count int64
 }
 
@@ -75,7 +74,6 @@ func (a *OrphanAuditor) runTick(ctx context.Context, logger *slog.Logger) {
 	}
 	for _, r := range rows {
 		logger.Warn("agent_runs orphan detected",
-			slog.String("org_id", r.OrgID),
 			slog.Int64("count", r.Count))
 		a.observeOrphan(r)
 	}
@@ -97,7 +95,6 @@ func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, erro
 
 	query := `
 		SELECT
-			organization_id::text,
 			COUNT(*),
 			COALESCE(MAX(created_at), NOW()) AS last_seen
 		FROM agent_runs
@@ -105,7 +102,6 @@ func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, erro
 		  AND (metadata->>'standalone' IS NULL OR metadata->>'standalone' != 'true')
 		  AND created_at > $1
 		  AND created_at <= NOW()
-		GROUP BY organization_id
 	`
 	rows, err := a.Pool.Query(ctx, query, since)
 	if err != nil {
@@ -118,7 +114,7 @@ func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, erro
 	for rows.Next() {
 		var r orphanRow
 		var lastSeen time.Time
-		if err := rows.Scan(&r.OrgID, &r.Count, &lastSeen); err != nil {
+		if err := rows.Scan(&r.Count, &lastSeen); err != nil {
 			return nil, time.Time{}, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)
@@ -176,6 +172,6 @@ func (a *OrphanAuditor) observeTick(result string) {
 func (a *OrphanAuditor) observeOrphan(r orphanRow) {
 	if a.Metrics != nil && a.Metrics.AgentRunsOrphanTotal != nil {
 		a.Metrics.AgentRunsOrphanTotal.
-			WithLabelValues(r.OrgID, "bypass_service_layer").Add(float64(r.Count))
+			WithLabelValues("", "bypass_service_layer").Add(float64(r.Count))
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
-	orgsvc "nunezlagos/domain/internal/service/org"
 )
 
 // enrollSelfBody body de POST /api/v1/auth/enroll.
@@ -47,10 +46,7 @@ func (a *API) enrollSelf(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "email format invalid")
 		return
 	case errors.Is(err, enrollsvc.ErrEmailTaken):
-		writeError(w, http.StatusConflict, "email_taken", "email already in use within the organization")
-		return
-	case errors.Is(err, enrollsvc.ErrOrgNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
+		writeError(w, http.StatusConflict, "email_taken", "email already in use")
 		return
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, "enroll", err.Error())
@@ -65,11 +61,6 @@ func (a *API) enrollSelf(w http.ResponseWriter, r *http.Request) {
 			"name":  out.Name,
 			"role":  out.Role,
 		},
-		"organization": map[string]any{
-			"id":   out.OrganizationID,
-			"name": out.OrgName,
-			"slug": out.OrgSlug,
-		},
 		"api_key":    out.APIKey,
 		"api_key_id": out.APIKeyID,
 		"key_prefix": out.KeyPrefix,
@@ -83,8 +74,9 @@ type rotateEnrollmentTokenBody struct {
 
 // rotateEnrollmentToken POST /api/v1/organizations/{id}/enrollment-token/rotate.
 // Admin/owner-only. Devuelve el plaintext UNA sola vez.
+// Single-org: token de enrollment global, sin organization_id.
 func (a *API) rotateEnrollmentToken(w http.ResponseWriter, r *http.Request) {
-	orgID, actorID, ok := a.authEnrollmentAdmin(w, r)
+	actorID, ok := a.authEnrollmentAdmin(w, r)
 	if !ok {
 		return
 	}
@@ -95,13 +87,10 @@ func (a *API) rotateEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	out, err := a.Enrollment.Rotate(r.Context(), orgID, actorID, b.RoleOnEnroll)
+	out, err := a.Enrollment.Rotate(r.Context(), actorID, b.RoleOnEnroll)
 	switch {
 	case errors.Is(err, enrollsvc.ErrInvalidRole):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_role", err.Error())
-		return
-	case errors.Is(err, enrollsvc.ErrOrgNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
 		return
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, "rotate", err.Error())
@@ -118,11 +107,11 @@ func (a *API) rotateEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 // getEnrollmentTokenMetadata GET /api/v1/organizations/{id}/enrollment-token.
 // Devuelve metadata sin plaintext.
 func (a *API) getEnrollmentTokenMetadata(w http.ResponseWriter, r *http.Request) {
-	orgID, _, ok := a.authEnrollmentAdmin(w, r)
+	_, ok := a.authEnrollmentAdmin(w, r)
 	if !ok {
 		return
 	}
-	m, err := a.Enrollment.GetMetadata(r.Context(), orgID)
+	m, err := a.Enrollment.GetMetadata(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "get_metadata", err.Error())
 		return
@@ -141,11 +130,11 @@ func (a *API) getEnrollmentTokenMetadata(w http.ResponseWriter, r *http.Request)
 // deleteEnrollmentToken DELETE /api/v1/organizations/{id}/enrollment-token.
 // Revoca el token activo sin crear uno nuevo. 204 si éxito, 404 si no había activo.
 func (a *API) deleteEnrollmentToken(w http.ResponseWriter, r *http.Request) {
-	orgID, actorID, ok := a.authEnrollmentAdmin(w, r)
+	actorID, ok := a.authEnrollmentAdmin(w, r)
 	if !ok {
 		return
 	}
-	err := a.Enrollment.Revoke(r.Context(), orgID, actorID)
+	err := a.Enrollment.Revoke(r.Context(), actorID)
 	switch {
 	case errors.Is(err, enrollsvc.ErrNoActive):
 		writeError(w, http.StatusNotFound, "no_active_token", "no active enrollment token to revoke")
@@ -157,35 +146,27 @@ func (a *API) deleteEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// authEnrollmentAdmin valida principal + RBAC owner/admin del path's org.
-// Devuelve (orgID, actorID, true) si pasa; escribe error y devuelve false si no.
-func (a *API) authEnrollmentAdmin(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
+// authEnrollmentAdmin valida principal + RBAC owner/admin.
+// Single-org: ya no valida pertenencia a una org. Devuelve (actorID, true)
+// si pasa; escribe error y devuelve false si no.
+func (a *API) authEnrollmentAdmin(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	if a.Enrollment == nil {
 		writeError(w, http.StatusServiceUnavailable, "enrollment_not_configured", "")
-		return uuid.Nil, uuid.Nil, false
-	}
-	orgID, err := parseUUID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, false
 	}
 	p, _ := principal(r)
 	if p == nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, false
 	}
-	if p.OrganizationID != orgID.String() {
-		writeError(w, http.StatusNotFound, "not_found", "organization not found")
-		return uuid.Nil, uuid.Nil, false
-	}
-	if p.Role != orgsvc.RoleOwner && p.Role != orgsvc.RoleAdmin {
+	if p.Role != roleOwner && p.Role != roleAdmin {
 		writeError(w, http.StatusForbidden, "forbidden", "owners/admins only")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, false
 	}
 	actorID, err := uuid.Parse(p.UserID)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid actor id")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, false
 	}
-	return orgID, actorID, true
+	return actorID, true
 }

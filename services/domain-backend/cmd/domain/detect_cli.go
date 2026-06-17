@@ -100,11 +100,11 @@ func resolveProject(ctx context.Context, link *projectlink.Service, pool *pgxpoo
 
 func lookupBySlug(ctx context.Context, pool *pgxpool.Pool, projectSlug string) (projectID, orgID, slug string, err error) {
 	err = pool.QueryRow(ctx, `
-		SELECT id::text, organization_id::text, slug
+		SELECT id::text, slug
 		FROM projects
 		WHERE slug = $1 AND deleted_at IS NULL
 		LIMIT 1
-	`, projectSlug).Scan(&projectID, &orgID, &slug)
+	`, projectSlug).Scan(&projectID, &slug)
 	return
 }
 
@@ -158,8 +158,8 @@ func startSession(ctx context.Context, pool *pgxpool.Pool, projectID, projectSlu
 	}
 	var sessionID string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO sessions (organization_id, project_id, user_id, title, tags)
-		SELECT organization_id, id, $2::uuid, $3, ARRAY['auto-detect']
+		INSERT INTO sessions (project_id, user_id, title, tags)
+		SELECT id, $2::uuid, $3, ARRAY['auto-detect']
 		FROM projects WHERE id = $1::uuid AND deleted_at IS NULL
 		RETURNING id::text
 	`, projectID, userID, "auto-detect: "+projectSlug).Scan(&sessionID)

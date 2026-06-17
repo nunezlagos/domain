@@ -57,7 +57,6 @@ var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
 
 type Skill struct {
 	ID              uuid.UUID
-	OrganizationID  uuid.UUID
 	Slug            string
 	Name            string
 	Description     string
@@ -186,18 +185,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 	var sk Skill
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO skills
-		   (organization_id, slug, name, description, skill_type, content,
+		   (slug, name, description, skill_type, content,
 		    input_schema, output_schema, timeout_seconds, idempotent,
 		    has_side_effects, depends_on, tags, embedding)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector)
-		 RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::vector)
+		 RETURNING id, slug, name, COALESCE(description,''),
 		           skill_type, COALESCE(content,''), input_schema, output_schema,
 		           timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
-		in.OrganizationID, in.Slug, in.Name, nullStr(in.Description), in.SkillType, in.Content,
+		in.Slug, in.Name, nullStr(in.Description), in.SkillType, in.Content,
 		inJSON, outJSON, in.TimeoutSeconds, in.Idempotent,
 		in.HasSideEffects, in.DependsOn, in.Tags, embedLit,
-	).Scan(&sk.ID, &sk.OrganizationID, &sk.Slug, &sk.Name, &sk.Description,
+	).Scan(&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
 		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
 		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
 		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
@@ -309,7 +308,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 		             has_side_effects = $9, depends_on = $10, tags = $11,
 		             is_user_modified = $12, embedding = $13::vector
 		         WHERE id = $1 AND deleted_at IS NULL
-		         RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		         RETURNING id, slug, name, COALESCE(description,''),
 		                   skill_type, COALESCE(content,''), input_schema, output_schema,
 		                   timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 		                   seed_managed, seed_version, is_user_modified, created_at, updated_at`
@@ -321,13 +320,13 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 		             has_side_effects = $9, depends_on = $10, tags = $11,
 		             is_user_modified = $12
 		         WHERE id = $1 AND deleted_at IS NULL
-		         RETURNING id, organization_id, slug, name, COALESCE(description,''),
+		         RETURNING id, slug, name, COALESCE(description,''),
 		                   skill_type, COALESCE(content,''), input_schema, output_schema,
 		                   timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 		                   seed_managed, seed_version, is_user_modified, created_at, updated_at`
 	}
 	err = s.Pool.QueryRow(ctx, query, args...).Scan(
-		&sk.ID, &sk.OrganizationID, &sk.Slug, &sk.Name, &sk.Description,
+		&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
 		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
 		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
 		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
@@ -340,7 +339,6 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &sk.OrganizationID,
 			ActorID:        &in.ActorID,
 			ActorType:      audit.ActorUser,
 			Action:         "skill.updated",
@@ -357,7 +355,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Skill, error) {
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Skill, error) {
 	return s.queryOne(ctx,
-		`WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL AND proposed = false`, orgID, slug)
+		`WHERE slug = $1 AND deleted_at IS NULL AND proposed = false`, slug)
 }
 
 type ListFilter struct {
@@ -370,12 +368,12 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Sk
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50
 	}
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
+	q := `SELECT id, slug, name, COALESCE(description,''),
 	        skill_type, COALESCE(content,''), input_schema, output_schema,
 	        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 	        seed_managed, seed_version, is_user_modified, created_at, updated_at
-	      FROM skills WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false`
-	args := []any{orgID}
+	      FROM skills WHERE deleted_at IS NULL AND proposed = false`
+	args := []any{}
 	if f.SkillType != "" {
 		q += fmt.Sprintf(" AND skill_type = $%d", len(args)+1)
 		args = append(args, f.SkillType)
@@ -395,7 +393,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Sk
 	var out []Skill
 	for rows.Next() {
 		var sk Skill
-		if err := rows.Scan(&sk.ID, &sk.OrganizationID, &sk.Slug, &sk.Name, &sk.Description,
+		if err := rows.Scan(&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
 			&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
 			&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
 			&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt); err != nil {
@@ -428,24 +426,24 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 		rows, err = s.Pool.Query(ctx, `
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(description_tsv, q) DESC) AS r
-  FROM skills, plainto_tsquery('spanish', $2) AS q
-  WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false AND description_tsv @@ q
-  LIMIT $4
+  FROM skills, plainto_tsquery('spanish', $1) AS q
+  WHERE deleted_at IS NULL AND proposed = false AND description_tsv @@ q
+  LIMIT $3
 ),
 vec AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector ASC) AS r
+  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector ASC) AS r
   FROM skills
-  WHERE organization_id = $1 AND deleted_at IS NULL AND proposed = false AND embedding IS NOT NULL
-  LIMIT $4
+  WHERE deleted_at IS NULL AND proposed = false AND embedding IS NOT NULL
+  LIMIT $3
 ),
 fused AS (
   SELECT id,
-         COALESCE(1.0 / ($5 + bm25.r), 0) + COALESCE(1.0 / ($5 + vec.r), 0) AS score,
+         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score,
          COALESCE(bm25.r, 0) AS bm25_rank,
          COALESCE(vec.r, 0) AS vec_rank
   FROM bm25 FULL OUTER JOIN vec USING (id)
 )
-SELECT s.id, s.organization_id, s.slug, s.name, COALESCE(s.description,''),
+SELECT s.id, s.slug, s.name, COALESCE(s.description,''),
        s.skill_type, COALESCE(s.content,''), s.input_schema, s.output_schema,
        s.timeout_seconds, s.idempotent, s.has_side_effects, s.depends_on, s.tags,
        s.seed_managed, s.seed_version, s.is_user_modified, s.created_at, s.updated_at,
@@ -453,19 +451,19 @@ SELECT s.id, s.organization_id, s.slug, s.name, COALESCE(s.description,''),
 FROM fused f
 JOIN skills s ON s.id = f.id
 ORDER BY f.score DESC
-LIMIT $6
-`, orgID, query, vectorLiteral(vec), candidates, rrfK, limit)
+LIMIT $5
+`, query, vectorLiteral(vec), candidates, rrfK, limit)
 	} else {
 		rows, err = s.Pool.Query(ctx, `
-SELECT s.id, s.organization_id, s.slug, s.name, COALESCE(s.description,''),
+SELECT s.id, s.slug, s.name, COALESCE(s.description,''),
        s.skill_type, COALESCE(s.content,''), s.input_schema, s.output_schema,
        s.timeout_seconds, s.idempotent, s.has_side_effects, s.depends_on, s.tags,
        s.seed_managed, s.seed_version, s.is_user_modified, s.created_at, s.updated_at,
        ts_rank(s.description_tsv, q)::float8 AS score, 0::bigint AS bm25_rank, 0::bigint AS vec_rank
-FROM skills s, plainto_tsquery('spanish', $2) AS q
-WHERE s.organization_id = $1 AND s.deleted_at IS NULL AND s.proposed = false AND s.description_tsv @@ q
-ORDER BY score DESC LIMIT $3
-`, orgID, query, limit)
+FROM skills s, plainto_tsquery('spanish', $1) AS q
+WHERE s.deleted_at IS NULL AND s.proposed = false AND s.description_tsv @@ q
+ORDER BY score DESC LIMIT $2
+`, query, limit)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
@@ -475,7 +473,7 @@ ORDER BY score DESC LIMIT $3
 	for rows.Next() {
 		var r SearchResult
 		var bm25Rank, vecRank int64
-		if err := rows.Scan(&r.ID, &r.OrganizationID, &r.Slug, &r.Name, &r.Description,
+		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.Description,
 			&r.SkillType, &r.Content, &r.InputSchema, &r.OutputSchema,
 			&r.TimeoutSeconds, &r.Idempotent, &r.HasSideEffects, &r.DependsOn, &r.Tags,
 			&r.SeedManaged, &r.SeedVersion, &r.IsUserModified, &r.CreatedAt, &r.UpdatedAt,
@@ -502,8 +500,8 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	var depCount int
 	err = s.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM skills
-		 WHERE organization_id = $1 AND deleted_at IS NULL AND $2 = ANY(depends_on)`,
-		prev.OrganizationID, prev.Slug,
+		 WHERE deleted_at IS NULL AND $1 = ANY(depends_on)`,
+		prev.Slug,
 	).Scan(&depCount)
 	if err != nil {
 		return fmt.Errorf("check deps: %w", err)
@@ -519,7 +517,6 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &prev.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
 			Action:         "skill.deleted",
@@ -556,13 +553,13 @@ func (s *Service) ValidateInput(ctx context.Context, skillID uuid.UUID, input ma
 
 func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Skill, error) {
 	var sk Skill
-	q := `SELECT id, organization_id, slug, name, COALESCE(description,''),
+	q := `SELECT id, slug, name, COALESCE(description,''),
 	        skill_type, COALESCE(content,''), input_schema, output_schema,
 	        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
 	        seed_managed, seed_version, is_user_modified, created_at, updated_at
 	      FROM skills ` + where
 	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&sk.ID, &sk.OrganizationID, &sk.Slug, &sk.Name, &sk.Description,
+		&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
 		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
 		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
 		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)

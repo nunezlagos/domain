@@ -30,10 +30,10 @@ func (s *TemplateStore) Upsert(ctx context.Context, orgID uuid.UUID, t AgentTemp
 	var out AgentTemplate
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO agent_templates
-		  (organization_id, slug, name, system_prompt, personality, capabilities,
+		  (slug, name, system_prompt, personality, capabilities,
 		   model, temperature, max_tokens, handoff_policy, metadata)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10, $11)
-		ON CONFLICT (organization_id, slug)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (slug)
 		DO UPDATE SET
 		  name = EXCLUDED.name,
 		  system_prompt = EXCLUDED.system_prompt,
@@ -47,7 +47,7 @@ func (s *TemplateStore) Upsert(ctx context.Context, orgID uuid.UUID, t AgentTemp
 		  updated_at = now()
 		RETURNING id, slug, name, system_prompt, COALESCE(personality, ''),
 		          capabilities, model, temperature, max_tokens, handoff_policy, metadata`,
-		orgID, t.Slug, t.Name, t.SystemPrompt, t.Personality, t.Capabilities,
+		t.Slug, t.Name, t.SystemPrompt, t.Personality, t.Capabilities,
 		t.Model, t.Temperature, t.MaxTokens, t.HandoffPolicy, meta,
 	).Scan(&out.ID, &out.Slug, &out.Name, &out.SystemPrompt, &out.Personality,
 		&out.Capabilities, &out.Model, &out.Temperature, &out.MaxTokens,
@@ -64,8 +64,8 @@ func (s *TemplateStore) GetBySlug(ctx context.Context, orgID uuid.UUID, slug str
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, slug, name, system_prompt, COALESCE(personality, ''),
 		       capabilities, model, temperature, max_tokens, handoff_policy, metadata
-		FROM agent_templates WHERE organization_id = $1 AND slug = $2`,
-		orgID, slug,
+		FROM agent_templates WHERE slug = $1`,
+		slug,
 	).Scan(&t.ID, &t.Slug, &t.Name, &t.SystemPrompt, &t.Personality,
 		&t.Capabilities, &t.Model, &t.Temperature, &t.MaxTokens,
 		&t.HandoffPolicy, &t.Metadata)
@@ -86,9 +86,9 @@ func (s *TemplateStore) List(ctx context.Context, orgID uuid.UUID, limit int) ([
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, slug, name, system_prompt, COALESCE(personality, ''),
 		       capabilities, model, temperature, max_tokens, handoff_policy, metadata
-		FROM agent_templates WHERE organization_id = $1
-		ORDER BY slug ASC LIMIT $2`,
-		orgID, limit,
+		FROM agent_templates
+		ORDER BY slug ASC LIMIT $1`,
+		limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
@@ -110,8 +110,8 @@ func (s *TemplateStore) List(ctx context.Context, orgID uuid.UUID, limit int) ([
 // Delete remove template; usado por admin tools.
 func (s *TemplateStore) Delete(ctx context.Context, orgID uuid.UUID, slug string) error {
 	tag, err := s.Pool.Exec(ctx,
-		`DELETE FROM agent_templates WHERE organization_id = $1 AND slug = $2`,
-		orgID, slug,
+		`DELETE FROM agent_templates WHERE slug = $1`,
+		slug,
 	)
 	if err != nil {
 		return fmt.Errorf("delete: %w", err)

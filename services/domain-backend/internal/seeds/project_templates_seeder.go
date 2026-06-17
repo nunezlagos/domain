@@ -81,7 +81,7 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 			SET name = $2, description = $3, is_default = $4, settings = $5,
 			    default_skills = $6, default_agents = $7, default_flows = $8,
 			    seed_version = $9
-			WHERE organization_id IS NULL AND slug = $1 AND NOT is_user_modified`,
+			WHERE slug = $1 AND NOT is_user_modified`,
 			t.Slug, t.Name, t.Description, t.IsDefault, settingsJSON,
 			t.DefaultSkills, t.DefaultAgents, t.DefaultFlows, s.Version())
 		if err != nil {
@@ -93,14 +93,14 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 		}
 		tag, err = tx.Exec(ctx, `
 			INSERT INTO project_templates
-			  (organization_id, slug, name, description, is_default, is_public,
+			  (slug, name, description, is_default, is_public,
 			   settings, default_skills, default_agents, default_flows,
 			   seed_managed, seed_version)
-			SELECT NULL, $1::varchar, $2::varchar, $3::text, $4::boolean, TRUE,
+			SELECT $1::varchar, $2::varchar, $3::text, $4::boolean, TRUE,
 			       $5::jsonb, $6::text[], $7::text[], $8::text[], TRUE, $9::int
 			WHERE NOT EXISTS (
 			  SELECT 1 FROM project_templates
-			  WHERE organization_id IS NULL AND slug = $1)`,
+			  WHERE slug = $1)`,
 			t.Slug, t.Name, t.Description, t.IsDefault, settingsJSON,
 			t.DefaultSkills, t.DefaultAgents, t.DefaultFlows, s.Version())
 		if err != nil {

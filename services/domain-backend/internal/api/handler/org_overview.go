@@ -204,16 +204,16 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		}
 		row := runner.QueryRow(gctx, `
 			SELECT
-			  (SELECT count(*) FROM users WHERE organization_id = $1 AND deleted_at IS NULL),
-			  (SELECT count(*) FROM agents WHERE organization_id = $1 AND deleted_at IS NULL),
+			  (SELECT count(*) FROM users WHERE deleted_at IS NULL),
+			  (SELECT count(*) FROM agents WHERE deleted_at IS NULL),
 			  (SELECT count(*) FROM (
-			    SELECT id FROM agent_runs WHERE organization_id = $1 AND started_at > now() - interval '24 hours'
+			    SELECT id FROM agent_runs WHERE started_at > now() - interval '24 hours'
 			    UNION ALL
-			    SELECT id FROM flow_runs WHERE organization_id = $1 AND started_at > now() - interval '24 hours'
+			    SELECT id FROM flow_runs WHERE started_at > now() - interval '24 hours'
 			  ) r),
-			  COALESCE((SELECT sum(tokens_input + tokens_output) FROM cost_logs WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())), 0)::bigint,
-			  COALESCE((SELECT sum(cost_usd) FROM cost_logs WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())), 0)
-		`, targetOrgID)
+			  COALESCE((SELECT sum(tokens_input + tokens_output) FROM cost_logs WHERE occurred_at >= date_trunc('month', now())), 0)::bigint,
+			  COALESCE((SELECT sum(cost_usd) FROM cost_logs WHERE occurred_at >= date_trunc('month', now())), 0)
+		`)
 		return row.Scan(&stats.MembersActive, &stats.Agents, &stats.RunsLast24h, &stats.TokensThisMonth, &stats.CostThisMonthUSD)
 	})
 
@@ -237,7 +237,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN (
 			  SELECT user_id, count(*) AS prompts
 			  FROM captured_prompts
-			  WHERE organization_id = $1 AND captured_at >= date_trunc('month', now())
+			  WHERE captured_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) p ON p.user_id = u.id
 			LEFT JOIN (
@@ -246,13 +246,13 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			         sum(tokens_output) AS tokens_out,
 			         sum(cost_usd)     AS cost
 			  FROM cost_logs
-			  WHERE organization_id = $1 AND occurred_at >= date_trunc('month', now())
+			  WHERE occurred_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) t ON t.user_id = u.id
-			WHERE u.organization_id = $1 AND u.deleted_at IS NULL
+			WHERE u.deleted_at IS NULL
 			ORDER BY COALESCE(t.cost, 0) DESC
 			LIMIT 5
-		`, targetOrgID)
+		`)
 		if err != nil {
 			return fmt.Errorf("top users query: %w", err)
 		}

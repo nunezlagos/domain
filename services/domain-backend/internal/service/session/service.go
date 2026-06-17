@@ -33,7 +33,6 @@ const (
 
 type Session struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	ProjectID      *uuid.UUID
 	UserID         uuid.UUID
 	Title          string
@@ -127,7 +126,6 @@ func (s *Service) End(ctx context.Context, id, actorID uuid.UUID, summary string
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			OrganizationID: &sess.OrganizationID,
 			ActorID:        &actorID,
 			ActorType:      audit.ActorUser,
 			Action:         "session.ended",

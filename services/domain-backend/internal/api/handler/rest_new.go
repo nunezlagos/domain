@@ -176,8 +176,8 @@ func (a *API) addProjectRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := a.ProjectRepoService.Add(r.Context(), projectreposvc.AddInput{
-		OrganizationID: orgID, ProjectID: proj.ID,
-		Name: req.Name, URL: req.URL, BranchDefault: req.BranchDefault,
+		ProjectID: proj.ID,
+		Name:      req.Name, URL: req.URL, BranchDefault: req.BranchDefault,
 		Kind: req.Kind, IsDefault: req.IsDefault, Workflow: req.Workflow, Notes: req.Notes,
 	})
 	if err != nil {
@@ -262,13 +262,13 @@ func (a *API) listProposals(w http.ResponseWriter, r *http.Request) {
 	const tsFmt = "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
 
 	if kind == "policy" || kind == "all" {
-		args := []any{orgID}
+		args := []any{}
 		q := `SELECT id::text, slug, name, kind, ` + tsFmt + `
 		        FROM project_policies
-		        WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL`
+		        WHERE proposed = true AND deleted_at IS NULL`
 		if slug := r.URL.Query().Get("project_slug"); slug != "" {
 			if proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, slug); err == nil {
-				q += " AND project_id = $2"
+				q += " AND project_id = $1"
 				args = append(args, proj.ID)
 			}
 		}
@@ -289,9 +289,8 @@ func (a *API) listProposals(w http.ResponseWriter, r *http.Request) {
 		if rows, err := a.Pool.Query(r.Context(),
 			`SELECT id::text, slug, name, skill_type, project_id, `+tsFmt+`
 			   FROM skills
-			   WHERE organization_id = $1 AND proposed = true AND deleted_at IS NULL
+			   WHERE proposed = true AND deleted_at IS NULL
 			   ORDER BY created_at DESC LIMIT 50`,
-			orgID,
 		); err == nil {
 			for rows.Next() {
 				var id, slug, name, st, ts string
@@ -334,7 +333,6 @@ func (a *API) reviewProposal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "pool_unavailable", "")
 		return
 	}
-	orgID, _ := uuid.Parse(p.OrganizationID)
 	kind := r.PathValue("kind")
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -363,12 +361,12 @@ func (a *API) reviewProposal(w http.ResponseWriter, r *http.Request) {
 	var sql string
 	if req.Action == "accept" {
 		sql = "UPDATE " + table + ` SET proposed = false
-		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	} else {
 		sql = "UPDATE " + table + ` SET deleted_at = NOW()
-		         WHERE organization_id = $1 AND id = $2 AND proposed = true AND deleted_at IS NULL`
+		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	}
-	tag, err := a.Pool.Exec(r.Context(), sql, orgID, id)
+	tag, err := a.Pool.Exec(r.Context(), sql, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "review_failed", err.Error())
 		return
@@ -413,10 +411,10 @@ func (a *API) listVerifications(w http.ResponseWriter, r *http.Request) {
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		        completed_at
 		   FROM verifications
-		   WHERE organization_id = $1 AND project_id = $2
-		     AND status = ANY (string_to_array($3, ','))
-		   ORDER BY started_at DESC LIMIT $4`,
-		orgID, proj.ID, statuses, limit,
+		   WHERE project_id = $1
+		     AND status = ANY (string_to_array($2, ','))
+		   ORDER BY started_at DESC LIMIT $3`,
+		proj.ID, statuses, limit,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list_failed", err.Error())

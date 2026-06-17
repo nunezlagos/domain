@@ -80,7 +80,7 @@ func (a *API) getPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := a.PromptService.GetByID(r.Context(), id)
-	if errors.Is(err, prompt.ErrNotFound) || (err == nil && out.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, prompt.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -137,10 +137,6 @@ func (a *API) setActivePrompt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "set_active", err.Error())
 		return
 	}
-	if out.OrganizationID.String() != p.OrganizationID {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
 	writeData(w, http.StatusOK, out)
 }
 
@@ -155,12 +151,11 @@ func (a *API) deletePrompt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	out, err := a.PromptService.GetByID(r.Context(), id)
-	if errors.Is(err, prompt.ErrNotFound) || (err == nil && out.OrganizationID.String() != p.OrganizationID) {
-		writeError(w, http.StatusNotFound, "not_found", "")
-		return
-	}
-	if err != nil {
+	if _, err := a.PromptService.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, prompt.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "lookup", err.Error())
 		return
 	}

@@ -27,7 +27,7 @@ func (m *mockRepo) Insert(_ context.Context, in CreateInput) (*Ticket, error) {
 	m.keySeq++
 	id := uuid.New()
 	t := &Ticket{
-		ID: id, OrganizationID: in.OrganizationID, ProjectID: in.ProjectID,
+		ID: id, ProjectID: in.ProjectID,
 		Key: "TEST-" + itoaT(m.keySeq), Number: m.keySeq,
 		Title: in.Title, DescriptionMD: in.DescriptionMD,
 		IssueType: in.IssueType, Status: "backlog", Priority: in.Priority,
@@ -242,7 +242,7 @@ func TestChangeStatus_RecordsHistory(t *testing.T) {
 		OrganizationID: uuid.New(), ProjectID: uuid.New(),
 		Title: "X", ReporterID: uuid.New(),
 	})
-	_, err := svc.ChangeStatus(context.Background(), tk.OrganizationID, tk.ID, "in_progress", tk.ReporterID, "starting")
+	_, err := svc.ChangeStatus(context.Background(), uuid.Nil, tk.ID, "in_progress", tk.ReporterID, "starting")
 	if err != nil {
 		t.Fatalf("ChangeStatus: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestChangeStatus_InvalidStatusErr(t *testing.T) {
 		OrganizationID: uuid.New(), ProjectID: uuid.New(),
 		Title: "X", ReporterID: uuid.New(),
 	})
-	_, err := svc.ChangeStatus(context.Background(), tk.OrganizationID, tk.ID, "yolo", tk.ReporterID, "")
+	_, err := svc.ChangeStatus(context.Background(), uuid.Nil, tk.ID, "yolo", tk.ReporterID, "")
 	if !errors.Is(err, ErrInvalidStatus) {
 		t.Errorf("err = %v, want ErrInvalidStatus", err)
 	}
@@ -275,14 +275,14 @@ func TestLinkExternal_ValidatesProvider(t *testing.T) {
 		OrganizationID: uuid.New(), ProjectID: uuid.New(),
 		Title: "X", ReporterID: uuid.New(),
 	})
-	_, err := svc.LinkExternal(context.Background(), tk.OrganizationID, tk.ID, ExternalLink{
+	_, err := svc.LinkExternal(context.Background(), uuid.Nil, tk.ID, ExternalLink{
 		Provider: "monday", ID: "MON-1",
 	})
 	if !errors.Is(err, ErrInvalidProvider) {
 		t.Errorf("err = %v, want ErrInvalidProvider", err)
 	}
 	// provider válido
-	out, err := svc.LinkExternal(context.Background(), tk.OrganizationID, tk.ID, ExternalLink{
+	out, err := svc.LinkExternal(context.Background(), uuid.Nil, tk.ID, ExternalLink{
 		Provider: "jira", ID: "ACME-1", URL: "https://x/ACME-1",
 	})
 	if err != nil {

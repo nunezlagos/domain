@@ -35,7 +35,6 @@ var (
 
 type Document struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	ProjectID      uuid.UUID
 	CreatedBy      *uuid.UUID
 	Title          string
@@ -127,15 +126,15 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	var doc Document
 	err = tx.QueryRow(ctx,
 		`INSERT INTO knowledge_docs
-		   (organization_id, project_id, created_by, title, body, source, source_url,
+		   (project_id, created_by, title, body, source, source_url,
 		    tags, metadata)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, organization_id, project_id, created_by, title, body,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, project_id, created_by, title, body,
 		           source, COALESCE(source_url,''), tags, metadata,
 		           has_attachments, created_at, updated_at`,
-		in.OrganizationID, in.ProjectID, in.CreatedBy, in.Title, in.Body,
+		in.ProjectID, in.CreatedBy, in.Title, in.Body,
 		in.Source, nullStr(in.SourceURL), in.Tags, metaJSON,
-	).Scan(&doc.ID, &doc.OrganizationID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
+	).Scan(&doc.ID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
 		&doc.Source, &doc.SourceURL, &doc.Tags, &doc.Metadata,
 		&doc.HasAttachments, &doc.CreatedAt, &doc.UpdatedAt)
 	if err != nil {
@@ -181,11 +180,11 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Document, []Chunk, error) {
 	var doc Document
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, project_id, created_by, title, body,
+		`SELECT id, project_id, created_by, title, body,
 		        source, COALESCE(source_url,''), tags, metadata,
 		        has_attachments, created_at, updated_at
 		 FROM knowledge_docs WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&doc.ID, &doc.OrganizationID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
+	).Scan(&doc.ID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
 		&doc.Source, &doc.SourceURL, &doc.Tags, &doc.Metadata,
 		&doc.HasAttachments, &doc.CreatedAt, &doc.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -239,22 +238,22 @@ WITH bm25 AS (
   SELECT c.id, ROW_NUMBER() OVER (ORDER BY ts_rank(c.content_tsv, q) DESC) AS r
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.organization_id = $1 AND d.deleted_at IS NULL,
-       plainto_tsquery('spanish', $2) AS q
+       AND d.deleted_at IS NULL,
+       plainto_tsquery('spanish', $1) AS q
   WHERE c.content_tsv @@ q
-  LIMIT $4
+  LIMIT $3
 ),
 vec AS (
-  SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $3::vector ASC) AS r
+  SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $2::vector ASC) AS r
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.organization_id = $1 AND d.deleted_at IS NULL
+       AND d.deleted_at IS NULL
   WHERE c.embedding IS NOT NULL
-  LIMIT $4
+  LIMIT $3
 ),
 fused AS (
   SELECT id,
-         COALESCE(1.0 / ($5 + bm25.r), 0) + COALESCE(1.0 / ($5 + vec.r), 0) AS score
+         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score
   FROM bm25 FULL OUTER JOIN vec USING (id)
 )
 SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
@@ -263,8 +262,8 @@ FROM fused f
 JOIN knowledge_chunks c ON c.id = f.id
 JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
 ORDER BY f.score DESC
-LIMIT $6
-`, orgID, query, vectorLiteral(vec), candidates, rrfK, limit)
+LIMIT $5
+`, query, vectorLiteral(vec), candidates, rrfK, limit)
 	} else {
 		rows, err = s.Pool.Query(ctx, `
 SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
@@ -272,12 +271,12 @@ SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
        ts_rank(c.content_tsv, q)::float8 AS score
 FROM knowledge_chunks c
 JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-     AND d.organization_id = $1 AND d.deleted_at IS NULL,
-     plainto_tsquery('spanish', $2) AS q
+     AND d.deleted_at IS NULL,
+     plainto_tsquery('spanish', $1) AS q
 WHERE c.content_tsv @@ q
 ORDER BY score DESC
-LIMIT $3
-`, orgID, query, limit)
+LIMIT $2
+`, query, limit)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("hybrid search: %w", err)
@@ -325,7 +324,7 @@ func (s *Service) ListByProject(ctx context.Context, projectID uuid.UUID, limit 
 		limit = 50
 	}
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, project_id, created_by, title, body,
+		`SELECT id, project_id, created_by, title, body,
 		        source, COALESCE(source_url,''), tags, metadata,
 		        has_attachments, created_at, updated_at
 		 FROM knowledge_docs
@@ -338,7 +337,7 @@ func (s *Service) ListByProject(ctx context.Context, projectID uuid.UUID, limit 
 	var out []Document
 	for rows.Next() {
 		var d Document
-		if err := rows.Scan(&d.ID, &d.OrganizationID, &d.ProjectID, &d.CreatedBy, &d.Title, &d.Body,
+		if err := rows.Scan(&d.ID, &d.ProjectID, &d.CreatedBy, &d.Title, &d.Body,
 			&d.Source, &d.SourceURL, &d.Tags, &d.Metadata,
 			&d.HasAttachments, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return nil, err

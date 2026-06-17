@@ -83,7 +83,7 @@ func (a *API) getKnowledge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	doc, chunks, err := a.KnowledgeService.Get(r.Context(), id)
-	if errors.Is(err, knowledge.ErrNotFound) || (err == nil && doc.OrganizationID.String() != p.OrganizationID) {
+	if errors.Is(err, knowledge.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -155,8 +155,8 @@ func (a *API) deleteKnowledge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	doc, _, err := a.KnowledgeService.Get(r.Context(), id)
-	if errors.Is(err, knowledge.ErrNotFound) || (err == nil && doc.OrganizationID.String() != p.OrganizationID) {
+	_, _, err = a.KnowledgeService.Get(r.Context(), id)
+	if errors.Is(err, knowledge.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}

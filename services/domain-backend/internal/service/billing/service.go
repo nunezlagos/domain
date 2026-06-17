@@ -187,19 +187,22 @@ func (s *Service) IncrementRuns(ctx context.Context, orgID uuid.UUID) (*Usage, e
 	return s.incrementCounter(ctx, orgID, period, 0, 1, 0)
 }
 
+// incrementCounter: single-org global. usage_counters keyed por period_start
+// (sin organization_id). El param orgID se conserva por compat de signatura.
 func (s *Service) incrementCounter(ctx context.Context, orgID uuid.UUID, period time.Time, tokens int64, runs int32, storage int64) (*Usage, error) {
+	_ = orgID
 	var u Usage
 	err := s.Pool.QueryRow(ctx, `
-INSERT INTO usage_counters (organization_id, period_start, tokens_used, runs_count, storage_bytes)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (organization_id, period_start) DO UPDATE
+INSERT INTO usage_counters (period_start, tokens_used, runs_count, storage_bytes)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (period_start) DO UPDATE
   SET tokens_used   = usage_counters.tokens_used + EXCLUDED.tokens_used,
       runs_count    = usage_counters.runs_count + EXCLUDED.runs_count,
       storage_bytes = usage_counters.storage_bytes + EXCLUDED.storage_bytes
-RETURNING organization_id, period_start, tokens_used, runs_count, storage_bytes,
+RETURNING period_start, tokens_used, runs_count, storage_bytes,
           cost_usd, warned_80pct, warned_100pct`,
-		orgID, period, tokens, runs, storage,
-	).Scan(&u.OrganizationID, &u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
+		period, tokens, runs, storage,
+	).Scan(&u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
 		&u.CostUSD, &u.Warned80, &u.Warned100)
 	if err != nil {
 		return nil, fmt.Errorf("upsert counter: %w", err)
@@ -207,20 +210,22 @@ RETURNING organization_id, period_start, tokens_used, runs_count, storage_bytes,
 	return &u, nil
 }
 
-// GetUsage del período actual (mes corriente).
+// GetUsage del período actual (mes corriente). Single-org global: keyed por
+// period_start. El param orgID se conserva por compat de signatura.
 func (s *Service) GetUsage(ctx context.Context, orgID uuid.UUID) (*Usage, error) {
+	_ = orgID
 	period := monthStart(s.now())
 	var u Usage
 	err := s.Pool.QueryRow(ctx,
-		`SELECT organization_id, period_start, tokens_used, runs_count, storage_bytes,
+		`SELECT period_start, tokens_used, runs_count, storage_bytes,
 		        cost_usd, warned_80pct, warned_100pct
 		 FROM usage_counters
-		 WHERE organization_id = $1 AND period_start = $2`,
-		orgID, period,
-	).Scan(&u.OrganizationID, &u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
+		 WHERE period_start = $1`,
+		period,
+	).Scan(&u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
 		&u.CostUSD, &u.Warned80, &u.Warned100)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return &Usage{OrganizationID: orgID, PeriodStart: period}, nil
+		return &Usage{PeriodStart: period}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get usage: %w", err)

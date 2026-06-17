@@ -4,15 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRenderEmail_HasBreakdown(t *testing.T) {
 	alert := CostAlert{
-		OrganizationID: uuid.New(),
-		TotalUSD:       50.50,
-		ThresholdUSD:   50.00,
+		TotalUSD:     50.50,
+		ThresholdUSD: 50.00,
 		AlertDate:      time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC),
 		Breakdown: []CostBreakdownItem{
 			{Provider: "Anthropic", Model: "Claude Sonnet", CostUSD: 30.00},
@@ -33,9 +31,8 @@ func TestRenderEmail_HasBreakdown(t *testing.T) {
 
 func TestRenderEmail_EmptyBreakdown(t *testing.T) {
 	alert := CostAlert{
-		OrganizationID: uuid.New(),
-		TotalUSD:       10.00,
-		ThresholdUSD:   5.00,
+		TotalUSD:     10.00,
+		ThresholdUSD: 5.00,
 		AlertDate:      time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC),
 	}
 	_, body := RenderEmail(alert)

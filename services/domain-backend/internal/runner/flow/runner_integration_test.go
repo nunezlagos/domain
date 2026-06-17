@@ -20,7 +20,6 @@ import (
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/observation"
-	orgsvc "nunezlagos/domain/internal/service/org"
 	projsvc "nunezlagos/domain/internal/service/project"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
@@ -56,13 +55,12 @@ func setup(t *testing.T) (*fix, func()) {
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	orgS := &orgsvc.Service{Pool: pools.App, Audit: rec}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 
-	org, owner, _ := orgS.Create(ctx, "Acme", "acme", "o@x.com", "O")
+	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 	proj, _ := projS.Create(ctx, projsvc.CreateInput{
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,
 	})

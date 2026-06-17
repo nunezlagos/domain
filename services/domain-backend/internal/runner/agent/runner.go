@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/api/ctxkeys"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
 	budgetmw "nunezlagos/domain/internal/llm/budget"
@@ -118,13 +119,17 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 		return nil, fmt.Errorf("get agent: %w", err)
 	}
 
+	// org se resuelve del context del request (issue-02.8: agents ya no
+	// portan organization_id; el tenant viaja en el ctx vía middleware).
+	orgID := ctxkeys.OrgID(ctx)
+
 	// Pre-flight: estimate tokens del input + system prompt y verificar quota
 	if r.Billing != nil {
 		estimated := tokens.EstimateMessages(agent.SystemPrompt,
 			[]llm.Message{{Role: "user", Content: in.UserPrompt}})
-		state, qerr := r.Billing.CheckTokens(ctx, agent.OrganizationID, int64(estimated))
+		state, qerr := r.Billing.CheckTokens(ctx, orgID, int64(estimated))
 		if qerr != nil {
-			return r.failedRun(ctx, agent.OrganizationID, in, ro, "quota_exceeded",
+			return r.failedRun(ctx, orgID, in, ro, "quota_exceeded",
 				fmt.Errorf("%w: estimated %d tokens would exceed (state: used=%d, limit=%d): %v",
 					ErrQuotaExceeded, estimated, state.Used, state.Limit, qerr))
 		}
@@ -132,14 +137,14 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 
 	provider, err := r.Factory.Get(agent.Provider)
 	if err != nil {
-		return r.failedRun(ctx, agent.OrganizationID, in, ro, "provider_missing",
+		return r.failedRun(ctx, orgID, in, ro, "provider_missing",
 			fmt.Errorf("%w: %v", ErrProviderMissing, err))
 	}
 
 	// Cargar skills asignadas como ToolDefs
 	tools, skillBySlug, err := r.loadSkillTools(ctx, agent)
 	if err != nil {
-		return r.failedRun(ctx, agent.OrganizationID, in, ro, "load_skills", err)
+		return r.failedRun(ctx, orgID, in, ro, "load_skills", err)
 	}
 
 	// Crear agent_run con status running
@@ -151,10 +156,10 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 	now := time.Now().UTC()
 	metadataJSON := buildRunMetadata(ro, "direct_invocation")
 	err = r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, flow_run_id, status, inputs, metadata, started_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO agent_runs (agent_id, user_id, flow_run_id, status, inputs, metadata, started_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id`,
-		agent.OrganizationID, agent.ID, in.UserID, ro.flowRunID, StatusRunning, inputsJSON, metadataJSON, now,
+		agent.ID, in.UserID, ro.flowRunID, StatusRunning, inputsJSON, metadataJSON, now,
 	).Scan(&runID)
 	if err != nil {
 		return nil, fmt.Errorf("create run: %w", err)
@@ -301,17 +306,17 @@ LOOP:
 	}, totalIn, totalOut, 0)
 
 	if r.Billing != nil && totalIn+totalOut > 0 {
-		_, _ = r.Billing.IncrementTokens(ctx, agent.OrganizationID, int64(totalIn+totalOut))
-		_, _ = r.Billing.IncrementRuns(ctx, agent.OrganizationID)
+		_, _ = r.Billing.IncrementTokens(ctx, orgID, int64(totalIn+totalOut))
+		_, _ = r.Billing.IncrementRuns(ctx, orgID)
 	}
 
 	if r.Emitter != nil {
-		r.Emitter.EmitAgentRunFinished(ctx, agent.OrganizationID, runID, agent.Slug, status, costUSD, int64(totalIn+totalOut))
+		r.Emitter.EmitAgentRunFinished(ctx, orgID, runID, agent.Slug, status, costUSD, int64(totalIn+totalOut))
 	}
 
 	if r.Audit != nil {
 		_ = r.Audit.Record(ctx, audit.Event{
-			OrganizationID: &agent.OrganizationID,
+			OrganizationID: &orgID,
 			ActorID:        in.UserID,
 			ActorType:      audit.ActorUser,
 			Action:         "agent.run_" + status,
@@ -365,7 +370,7 @@ func (r *Runner) loadSkillTools(ctx context.Context, agent *agentsvc.Agent) ([]l
 	out := make([]llm.ToolDef, 0, len(agent.SkillsSlugs))
 	bySlug := make(map[string]*skillsvc.Skill, len(agent.SkillsSlugs))
 	for _, slug := range agent.SkillsSlugs {
-		sk, err := r.Skills.GetBySlug(ctx, agent.OrganizationID, slug)
+		sk, err := r.Skills.GetBySlug(ctx, ctxkeys.OrgID(ctx), slug)
 		if err != nil {
 			return nil, nil, fmt.Errorf("load skill %s: %w", slug, err)
 		}
@@ -404,10 +409,10 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, ro
 	var runID uuid.UUID
 	metadataJSON := buildRunMetadata(ro, "direct_invocation_failed")
 	dbErr := r.Pool.QueryRow(ctx,
-		`INSERT INTO agent_runs (organization_id, agent_id, user_id, flow_run_id, status, inputs, metadata, error, started_at, finished_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+		`INSERT INTO agent_runs (agent_id, user_id, flow_run_id, status, inputs, metadata, error, started_at, finished_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
 		 RETURNING id`,
-		orgID, in.AgentID, in.UserID, ro.flowRunID, StatusFailed, inputsJSON, metadataJSON, err.Error(), now,
+		in.AgentID, in.UserID, ro.flowRunID, StatusFailed, inputsJSON, metadataJSON, err.Error(), now,
 	).Scan(&runID)
 	if dbErr != nil {
 		return nil, fmt.Errorf("create failed run: %w", dbErr)

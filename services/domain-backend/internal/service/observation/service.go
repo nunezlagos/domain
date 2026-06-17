@@ -42,7 +42,6 @@ var (
 
 type Observation struct {
 	ID              uuid.UUID
-	OrganizationID  uuid.UUID
 	ProjectID       uuid.UUID
 	CreatedBy       *uuid.UUID
 	SessionID       *uuid.UUID

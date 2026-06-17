@@ -41,10 +41,10 @@ func (s *DLQStore) Insert(ctx context.Context, orgID uuid.UUID, runID *uuid.UUID
 	var errorsRaw []byte
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO dead_letter_queue
-			(organization_id, flow_run_id, flow_slug, step_key, error, errors, retry_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+			(flow_run_id, flow_slug, step_key, error, errors, retry_count)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, flow_run_id, flow_slug, step_key, error, errors, retry_count, failed_at, resolved_at`,
-		orgID, runID, flowSlug, stepKey, errMsg, errorsJSON, retryCount,
+		runID, flowSlug, stepKey, errMsg, errorsJSON, retryCount,
 	).Scan(&e.ID, &e.FlowRunID, &e.FlowSlug, &e.StepKey, &e.Error, &errorsRaw,
 		&e.RetryCount, &e.FailedAt, &e.ResolvedAt)
 	if err != nil {
@@ -62,8 +62,8 @@ func (s *DLQStore) List(ctx context.Context, orgID uuid.UUID, limit int) ([]DLQE
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, flow_run_id, flow_slug, step_key, error, errors, retry_count, failed_at, resolved_at
 		FROM dead_letter_queue
-		WHERE organization_id = $1 AND resolved_at IS NULL
-		ORDER BY failed_at DESC LIMIT $2`, orgID, limit)
+		WHERE resolved_at IS NULL
+		ORDER BY failed_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("dlq list: %w", err)
 	}
@@ -86,7 +86,7 @@ func (s *DLQStore) List(ctx context.Context, orgID uuid.UUID, limit int) ([]DLQE
 func (s *DLQStore) Resolve(ctx context.Context, orgID, id uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx, `
 		UPDATE dead_letter_queue SET resolved_at = NOW()
-		WHERE id = $1 AND organization_id = $2 AND resolved_at IS NULL`, id, orgID)
+		WHERE id = $1 AND resolved_at IS NULL`, id)
 	if err != nil {
 		return fmt.Errorf("dlq resolve: %w", err)
 	}

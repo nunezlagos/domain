@@ -20,11 +20,11 @@
 - [x] **sc-005**: Borrar `cmd/domain/org_delete.go` (`runOrgCmd`/`runOrgDelete` — estaban huérfanos, sin dispatch en main.go)
 
 ## Invitations
-- [~] **sc-006**: DIFERIDO por decisión de producto. Reevaluado: invitations (issue-21.2,
-  implementada) es onboarding org-scoped, NO gestión multi-org — enrollment-tokens (issue-37)
-  e invitations pueden coexistir en single-org. Está entretejida en main.go (mailer compartido
-  con OTP + outbound events). NO se remueve una feature funcional sin confirmación explícita
-  del operador. Si se confirma, se trata como HU aparte.
+- [x] **sc-006**: Removido invitations end-to-end (commit ad81f5b): handler/invite.go +
+  service/invite/ borrados; 5 rutas /invitations y field InviteService quitados; main.go
+  desconectado (otpMailer conserva realMailer; hook Events removido); wiring de tests
+  (api_integration, e2e full_flow) limpiado. Onboarding single-org queda por enrollment-tokens.
+  go build verde, go vet default sin issues.
 
 ## SDK
 - [x] **sc-007**: Podados create/delete de Organizations en `sdks/go` (+ test repunteado a Update),

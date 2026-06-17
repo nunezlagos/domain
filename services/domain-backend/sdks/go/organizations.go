@@ -5,27 +5,14 @@ import (
 	"net/http"
 )
 
+// OrganizationsResource — single-org (issue-21.5): solo lectura/ajuste de la
+// única org y listado de members. El lifecycle multi-org (Create/Delete) se
+// removió del backend; aquí también.
 type OrganizationsResource struct{ c *Client }
-
-type OrganizationCreateInput struct {
-	Name       string `json:"name"`
-	Slug       string `json:"slug"`
-	OwnerEmail string `json:"owner_email"`
-	OwnerName  string `json:"owner_name,omitempty"`
-}
 
 type OrganizationUpdateInput struct {
 	Name     *string        `json:"name,omitempty"`
 	Settings map[string]any `json:"settings,omitempty"`
-}
-
-func (r *OrganizationsResource) Create(ctx context.Context, in OrganizationCreateInput) (*Organization, error) {
-	var out Organization
-	_, err := r.c.do(ctx, http.MethodPost, "/organizations", nil, in, &out)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
 }
 
 func (r *OrganizationsResource) Get(ctx context.Context, id string) (*Organization, error) {
@@ -44,11 +31,6 @@ func (r *OrganizationsResource) Update(ctx context.Context, id string, in Organi
 		return nil, err
 	}
 	return &out, nil
-}
-
-func (r *OrganizationsResource) Delete(ctx context.Context, id string) error {
-	_, err := r.c.do(ctx, http.MethodDelete, "/organizations/"+id, nil, nil, nil)
-	return err
 }
 
 func (r *OrganizationsResource) ListMembers(ctx context.Context, orgID string) ([]Member, error) {

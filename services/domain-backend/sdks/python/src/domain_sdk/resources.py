@@ -23,15 +23,7 @@ class _Base:
 
 
 class OrganizationsResource(_Base):
-    async def create(
-        self, *, name: str, slug: str, owner_email: str, owner_name: str = ""
-    ) -> dict[str, Any]:
-        return await self._c.request(
-            "POST", "/organizations",
-            json={"name": name, "slug": slug,
-                  "owner_email": owner_email, "owner_name": owner_name},
-        )
-
+    # single-org (issue-21.5): create/delete de orgs se removieron del backend.
     async def get(self, id: str) -> Organization:
         data = await self._c.request("GET", f"/organizations/{id}")
         return Organization.model_validate(data)

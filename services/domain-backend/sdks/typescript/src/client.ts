@@ -142,11 +142,9 @@ function translateError(
 
 // ===== Resources =====
 
+// single-org (issue-21.5): create/delete de orgs se removieron del backend.
 class OrganizationsResource {
   constructor(private c: DomainClient) {}
-  create(input: { name: string; slug: string; owner_email: string; owner_name?: string }) {
-    return this.c.request<{ organization: Organization }>("POST", "/organizations", { body: input });
-  }
   get(id: string) {
     return this.c.request<Organization>("GET", `/organizations/${id}`);
   }

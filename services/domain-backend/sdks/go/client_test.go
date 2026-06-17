@@ -64,11 +64,13 @@ func TestAuthHeaderAndContentType(t *testing.T) {
 	})
 
 	c := newTestClient(t, h)
-	org, err := c.Organizations.Create(context.Background(), OrganizationCreateInput{
-		Name: "Acme", Slug: "acme", OwnerEmail: "a@b.com",
-	})
+	// single-org (issue-21.5): Create/Delete del SDK se removieron. Verificamos
+	// la construcción del request (headers/UA/método/path/body) vía Update (PATCH).
+	const orgID = "00000000-0000-0000-0000-000000000001"
+	name := "Acme"
+	org, err := c.Organizations.Update(context.Background(), orgID, OrganizationUpdateInput{Name: &name})
 	if err != nil {
-		t.Fatalf("Create: %v", err)
+		t.Fatalf("Update: %v", err)
 	}
 	if want := "Bearer " + testKey; gotAuth != want {
 		t.Errorf("auth header = %q, want %q", gotAuth, want)
@@ -82,14 +84,14 @@ func TestAuthHeaderAndContentType(t *testing.T) {
 	if gotAccept != "application/json" {
 		t.Errorf("accept = %q", gotAccept)
 	}
-	if gotMethod != "POST" {
+	if gotMethod != "PATCH" {
 		t.Errorf("method = %q", gotMethod)
 	}
-	if gotPath != "/api/v1/organizations" {
+	if gotPath != "/api/v1/organizations/"+orgID {
 		t.Errorf("path = %q", gotPath)
 	}
-	if gotBody["slug"] != "acme" {
-		t.Errorf("body slug = %v", gotBody["slug"])
+	if gotBody["name"] != "Acme" {
+		t.Errorf("body name = %v", gotBody["name"])
 	}
 	if org.Slug != "acme" {
 		t.Errorf("response slug = %q", org.Slug)

@@ -19,11 +19,16 @@
 ## CLI
 - [x] **sc-005**: Borrar `cmd/domain/org_delete.go` (`runOrgCmd`/`runOrgDelete` — estaban huérfanos, sin dispatch en main.go)
 
-## Invitations (reemplazado por enrollment-tokens)
-- [ ] **sc-006**: Borrar `internal/service/invite/` + `handler/invite.go` + rutas `/organizations/{id}/invitations` — PENDIENTE (subsistema separado, se trata aparte)
+## Invitations
+- [~] **sc-006**: DIFERIDO por decisión de producto. Reevaluado: invitations (issue-21.2,
+  implementada) es onboarding org-scoped, NO gestión multi-org — enrollment-tokens (issue-37)
+  e invitations pueden coexistir en single-org. Está entretejida en main.go (mailer compartido
+  con OTP + outbound events). NO se remueve una feature funcional sin confirmación explícita
+  del operador. Si se confirma, se trata como HU aparte.
 
 ## SDK
-- [ ] **sc-007**: Podar Organizations create/update/delete en `sdks/go`, `sdks/python`, `sdks/typescript` — PENDIENTE
+- [x] **sc-007**: Podados create/delete de Organizations en `sdks/go` (+ test repunteado a Update),
+  `sdks/python`, `sdks/typescript`. Conservados get/update/list_members. SDK Go: build+vet+test verde.
 
 ## Verificación
 - [x] **sc-009**: `go build ./...` Success + `go vet ./...` (default) sin issues. Integration: solo 3 fallos PRE-EXISTENTES (txctx/knowledge/e2e, no-org, confirmados en baseline)

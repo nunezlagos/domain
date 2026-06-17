@@ -1,5 +1,5 @@
 <c-header class="mb-4 d-print-none" position="sticky">
-  <c-container [fluid]="true" class="border-bottom px-4">
+  <c-container [fluid]="true" class="border-bottom px-4 d-flex align-items-center">
     <button
       [cSidebarToggle]="sidebarId()"
       cHeaderToggler
@@ -11,7 +11,9 @@
       <svg cIcon name="cilMenu" size="lg"></svg>
     </button>
 
-    <c-header-nav class="ms-auto">
+    <div class="flex-grow-1"></div>
+
+    <c-header-nav class="d-flex align-items-center gap-2">
 
       <!-- HU-41.1: org selector (solo super_admin) -->
       <c-nav-item *ngIf="isSuperAdmin()">

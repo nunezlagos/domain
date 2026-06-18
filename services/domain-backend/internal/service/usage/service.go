@@ -162,17 +162,10 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 	}
 
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx,
-			`SELECT id::text, name, slug FROM organizations
-			 WHERE id = $1 AND deleted_at IS NULL`,
-			orgID,
-		).Scan(&snap.Organization.ID, &snap.Organization.Name, &snap.Organization.Slug)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrOrgNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("get org: %w", err)
-		}
+		// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea
+		// en Fase C. En single-org, hardcodeamos el OrgRef. Si orgID es
+		// uuid.Nil (single-org mode), usamos un UUID fijo canónico.
+		snap.Organization = singleOrgRef(orgID)
 
 		if err := tx.QueryRow(ctx, `
 			SELECT
@@ -240,17 +233,8 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 	h := &History{}
 	obsByDay := make(map[string]int64)
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx,
-			`SELECT id::text, name, slug FROM organizations
-			 WHERE id = $1 AND deleted_at IS NULL`,
-			orgID,
-		).Scan(&h.Organization.ID, &h.Organization.Name, &h.Organization.Slug)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrOrgNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("get org: %w", err)
-		}
+		// ISSUE-21.6 Fase D clean Round 3: ver singleOrgRef() en Current().
+		h.Organization = singleOrgRef(orgID)
 
 		rows, err := tx.Query(ctx, `
 			WITH series AS (
@@ -331,4 +315,29 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 	}
 
 	return h, nil
+}
+
+// singleOrgRef retorna el OrgRef para single-org. Si el orgID que llega
+// no es uuid.Nil, lo usamos tal cual (es el ID que el caller pasó);
+// en otro caso (single-org mode con uuid.Nil), usamos un UUID canónico
+// fijo para que los responses del API sean estables y los clients
+// puedan cachearlos.
+//
+// ISSUE-21.6: la tabla organizations se dropea en Fase C, así que este
+// helper reemplaza las queries `SELECT ... FROM organizations WHERE id = $1`.
+// Pre-C: este helper nunca se llamaba (las queries reales leían la tabla).
+// Post-C: este helper es la única fuente de OrgRef en respuestas.
+func singleOrgRef(orgID uuid.UUID) OrgRef {
+	if orgID == uuid.Nil {
+		return OrgRef{
+			ID:   "00000000-0000-0000-0000-000000000001",
+			Name: "default",
+			Slug: "default",
+		}
+	}
+	return OrgRef{
+		ID:   orgID.String(),
+		Name: "default",
+		Slug: "default",
+	}
 }

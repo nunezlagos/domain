@@ -154,21 +154,36 @@ func (b *Breaker) CompleteStream(ctx context.Context, opts llm.CompletionOptions
 		b.recordFailure()
 		return nil, err
 	}
-	// Wrap channel para detectar errores mid-stream (final chunk con error)
+	// Wrap channel para detectar errores mid-stream (final chunk con error).
+	// ISSUE-28.6 fix: si el stream terminó con error (sawError=true), registramos
+	// el failure en el breaker. Antes del fix, sawError se seteaba pero se
+	// descartaba con `_ = sawError` (línea 171 original) — los errores
+	// mid-stream NO abrían el breaker, solo los del handshake inicial.
 	out := make(chan llm.StreamChunk, 16)
 	go func() {
 		defer close(out)
 		var sawError bool
 		for chunk := range ch {
+			if chunk.Error != "" {
+				sawError = true
+			}
 			out <- chunk
 			if chunk.Done {
-				if !sawError {
+				if sawError {
+					b.recordFailure()
+				} else {
 					b.recordSuccess()
 				}
 				return
 			}
 		}
-		_ = sawError
+		// Stream terminó sin chunk Done (cerrado upstream). Si sawError,
+		// registramos failure; si no, success (stream completo limpio).
+		if sawError {
+			b.recordFailure()
+		} else {
+			b.recordSuccess()
+		}
 	}()
 	return out, nil
 }

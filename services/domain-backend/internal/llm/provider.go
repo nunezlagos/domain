@@ -72,6 +72,11 @@ type Response struct {
 type StreamChunk struct {
 	Delta string `json:"delta"`
 	Done  bool   `json:"done"`
+	// Error se setea cuando el provider aborta mid-stream (ej: timeout
+	// parcial, conexión cerrada). El chunk con Error=true debe tener
+	// Done=true también (es el último chunk). ISSUE-28.6: el circuit
+	// breaker usa este flag para detectar errores mid-stream y abrir.
+	Error string `json:"error,omitempty"`
 	// Usage solo en el último chunk (Done=true).
 	Usage *Usage `json:"usage,omitempty"`
 }

@@ -155,12 +155,15 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
+	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+	// El param orgID se ignora (_ = orgID) por compat de firma.
+	_ = orgID
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, organization_id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
-		 FROM crons WHERE organization_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT 200`, orgID)
+		 FROM crons WHERE deleted_at IS NULL
+		 ORDER BY created_at DESC LIMIT 200`)
 	if err != nil {
 		return nil, fmt.Errorf("list crons: %w", err)
 	}

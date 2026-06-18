@@ -110,15 +110,16 @@ func (s *PGStore) Record(ctx context.Context, e Event) (uuid.UUID, error) {
 		metaJSON = []byte(`{}`)
 	}
 
+	// ISSUE-21.6: INSERT sin organization_id.
 	var id uuid.UUID
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO activity_log (
-			organization_id, project_id, actor_id, action, entity_type, entity_id,
+			project_id, actor_id, action, entity_type, entity_id,
 			summary, metadata, visibility
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`,
-		e.OrganizationID, e.ProjectID, e.ActorID,
+		e.ProjectID, e.ActorID,
 		e.Action, e.EntityType, e.EntityID,
 		e.Summary, metaJSON, string(e.Visibility),
 	).Scan(&id)

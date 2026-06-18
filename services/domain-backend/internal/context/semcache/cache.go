@@ -114,18 +114,19 @@ func (c *Cache) Lookup(ctx context.Context, orgID, provider, model, paramsHash s
 }
 
 // Store persiste un (prompt, response) en cache. Idempotente: ON CONFLICT
-// (org, provider, model, params_hash, prompt_hash) actualiza response.
+// (provider, model, params_hash, prompt_hash) actualiza response.
+// ISSUE-21.6: organization_id se omite (single-org + Fase C).
 func (c *Cache) Store(ctx context.Context, e Entry, embedding []float32) error {
 	vecLit := vectorLiteral(embedding)
 	_, err := c.Pool.Exec(ctx, fmt.Sprintf(`
 		INSERT INTO llm_semantic_cache
-		  (id, organization_id, provider, model, params_hash, prompt_hash,
+		  (id, provider, model, params_hash, prompt_hash,
 		   prompt_preview, response, tokens, prompt_embedding)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, %s)
-		ON CONFLICT (organization_id, provider, model, params_hash, prompt_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, %s)
+		ON CONFLICT (provider, model, params_hash, prompt_hash)
 		DO UPDATE SET response = EXCLUDED.response, tokens = EXCLUDED.tokens,
 		              last_used_at = now()`, vecLit),
-		e.ID, e.OrgID, e.Provider, e.Model, e.ParamsHash, e.PromptHash,
+		e.ID, e.Provider, e.Model, e.ParamsHash, e.PromptHash,
 		e.PromptPreview, e.Response, e.Tokens,
 	)
 	if err != nil {

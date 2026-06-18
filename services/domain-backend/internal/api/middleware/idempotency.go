@@ -145,13 +145,16 @@ func (i *Idempotency) store(ctx context.Context, orgID uuid.UUID, p *apikey.Prin
 	if uid, err := uuid.Parse(p.UserID); err == nil {
 		userID = &uid
 	}
+	// ISSUE-21.6: INSERT + ON CONFLICT sin organization_id (single-org).
+	// La constraint UNIQUE (key) reemplaza a UNIQUE (organization_id, key)
+	// cuando se ejecute Fase C (migration 000142).
 	_, err := i.Pool.Exec(ctx,
 		`INSERT INTO idempotency_keys
-		   (organization_id, user_id, key, request_method, request_path,
+		   (user_id, key, request_method, request_path,
 		    request_body_hash, response_status, response_headers, response_body)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 ON CONFLICT (organization_id, key) DO NOTHING`,
-		orgID, userID, key, r.Method, r.URL.Path,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (key) DO NOTHING`,
+		userID, key, r.Method, r.URL.Path,
 		bodyHash, int16(rec.status), headerJSON, rec.body.Bytes(),
 	)
 	return err

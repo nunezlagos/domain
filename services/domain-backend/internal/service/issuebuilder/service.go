@@ -143,14 +143,15 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 	expires := time.Now().Add(s.ttl())
 
 	var d Draft
+	// ISSUE-21.6: RETURNING sin organization_id.
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO issue_drafts (created_by, mode, initial_idea, total_steps, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, organization_id, created_by, mode, initial_idea, answers,
+		RETURNING id, created_by, mode, initial_idea, answers,
 		          current_step, total_steps, status, pending_clarifications,
 		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
 		createdBy, mode, initialIdea, len(flow), expires,
-	).Scan(&d.ID, &d.OrganizationID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
+	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
@@ -223,11 +224,11 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 		UPDATE issue_drafts
 		SET answers = $1, current_step = $2, status = $3, updated_at = now()
 		WHERE id = $4
-		RETURNING id, organization_id, created_by, mode, initial_idea, answers,
+		RETURNING id, created_by, mode, initial_idea, answers,
 		          current_step, total_steps, status, pending_clarifications,
 		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
 		newAnswers, nextStep, newStatus, draftID,
-	).Scan(&d.ID, &d.OrganizationID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
+	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
@@ -376,11 +377,11 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 	err = s.Pool.QueryRow(ctx, `
 		UPDATE issue_drafts SET status = $1, committed_at = now(), updated_at = now()
 		WHERE id = $2
-		RETURNING id, organization_id, created_by, mode, initial_idea, answers,
+		RETURNING id, created_by, mode, initial_idea, answers,
 		          current_step, total_steps, status, pending_clarifications,
 		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
 		StatusCommitted, draftID,
-	).Scan(&d.ID, &d.OrganizationID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
+	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {

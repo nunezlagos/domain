@@ -417,13 +417,14 @@ func (s *Service) audit(ctx context.Context, e authEvent) {
 	// timeout corto para no bloquear el request principal.
 	c, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	// ISSUE-21.6: INSERT sin organization_id (la columna se dropea en Fase C).
 	_, _ = s.AuthPool.Exec(c,
 		`INSERT INTO auth_events
-		   (user_id, organization_id, kind, email_attempted, success,
+		   (user_id, kind, email_attempted, success,
 		    reason, ip, user_agent, session_id)
-		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),
-		         NULLIF($7,'')::inet,NULLIF($8,''),$9)`,
-		e.UserID, e.OrgID, e.Kind, e.EmailAttempted, e.Success,
+		 VALUES ($1,$2,NULLIF($3,''),$4,NULLIF($5,''),
+		         NULLIF($6,'')::inet,NULLIF($7,''),$8)`,
+		e.UserID, e.Kind, e.EmailAttempted, e.Success,
 		e.Reason, e.IP, e.UserAgent, e.SessionID,
 	)
 }

@@ -186,6 +186,121 @@ func TestFileChecksum_DifferentContent_DifferentHash(t *testing.T) {
 	require.NotEqual(t, ha, hb)
 }
 
+// === Dedup (issue-29.2) ===
+
+// TestBackup_DeduplicatesIfSameHash: si el archivo no cambió desde
+// el último backup, NO se crea uno nuevo — Deduplicated=true.
+func TestBackup_DeduplicatesIfSameHash(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(path, []byte("original"), 0o600))
+
+	// Primer backup: crea .bak.<ts>.
+	first, err := backupFile(path, 0)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.False(t, first.Deduplicated, "primer backup siempre crea archivo")
+
+	// Esperar 1s para que el segundo timestamp difiera.
+	time.Sleep(1100 * time.Millisecond)
+
+	// Segundo backup sin cambios: dedup.
+	second, err := backupFile(path, 0)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	require.True(t, second.Deduplicated, "segundo backup sin cambios debe dedupear")
+	require.Equal(t, first.Backup, second.Backup, "el backup path debe ser el mismo")
+
+	// Solo debe haber 1 .bak.* (no 2).
+	matches, _ := filepath.Glob(path + ".bak.*")
+	require.Len(t, matches, 1, "debe haber 1 solo backup, hay %d", len(matches))
+}
+
+// TestBackup_CreatesNewIfContentChanged: si el archivo cambió, SÍ se
+// crea un nuevo backup.
+func TestBackup_CreatesNewIfContentChanged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(path, []byte("v1"), 0o600))
+
+	first, err := backupFile(path, 0)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.False(t, first.Deduplicated)
+
+	time.Sleep(1100 * time.Millisecond)
+
+	// Cambiar el contenido.
+	require.NoError(t, os.WriteFile(path, []byte("v2"), 0o600))
+
+	second, err := backupFile(path, 0)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	require.False(t, second.Deduplicated, "contenido distinto debe crear nuevo backup")
+	require.NotEqual(t, first.Backup, second.Backup)
+
+	// 2 .bak.* ahora.
+	matches, _ := filepath.Glob(path + ".bak.*")
+	require.Len(t, matches, 2)
+}
+
+// TestBackup_TenRunsNoChange_OnlyOneBackup: spam de installs sin
+// cambios produce un solo .bak (no 10).
+func TestBackup_TenRunsNoChange_OnlyOneBackup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(path, []byte("unchanged"), 0o600))
+
+	// Primer backup.
+	_, err := backupFile(path, 0)
+	require.NoError(t, err)
+
+	// 9 backups más sin cambios.
+	for i := 0; i < 9; i++ {
+		_, err := backupFile(path, 0)
+		require.NoError(t, err)
+		time.Sleep(50 * time.Millisecond) // menos de 1s, ts puede coincidir pero Deduplicated=true de todos modos
+	}
+
+	// Solo 1 backup debe existir.
+	matches, _ := filepath.Glob(path + ".bak.*")
+	require.Len(t, matches, 1, "10 corridas sin cambios → 1 backup, hay %d", len(matches))
+}
+
+// TestBackup_NoPreviousBackup_CreatesFirst: edge case del primer
+// backup (no hay .bak previo con qué comparar).
+func TestBackup_NoPreviousBackup_CreatesFirst(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(path, []byte("first"), 0o600))
+
+	res, err := backupFile(path, 0)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.False(t, res.Deduplicated, "primer backup sin previous NO es dedup")
+	require.NotEmpty(t, res.Backup)
+}
+
+// TestBackup_KeepLastZero_NoPrune: con keepLast=0 (caso AGENTS.md
+// injection), la dedup SÍ aplica pero el prune NO.
+func TestBackup_KeepLastZero_NoPrune(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "AGENTS.md")
+	require.NoError(t, os.WriteFile(path, []byte("v1"), 0o600))
+
+	// 5 cambios + 5 backups con keepLast=0.
+	for i := 0; i < 5; i++ {
+		require.NoError(t, os.WriteFile(path, []byte("v"+string(rune('0'+i))), 0o600))
+		time.Sleep(1100 * time.Millisecond)
+		_, err := backupFile(path, 0) // keepLast=0
+		require.NoError(t, err)
+	}
+
+	// 5 .bak.* (sin prune).
+	matches, _ := filepath.Glob(path + ".bak.*")
+	require.Len(t, matches, 5, "con keepLast=0 se mantienen todos, hay %d", len(matches))
+}
+
 // === ListBackups ===
 
 func TestListBackups_ReturnsAllBackups(t *testing.T) {

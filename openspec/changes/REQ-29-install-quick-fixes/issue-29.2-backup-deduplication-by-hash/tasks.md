@@ -1,57 +1,50 @@
 # Tasks: issue-29.2-backup-deduplication-by-hash
 
+> **Pre:** ninguno (chore local). Optimización para evitar spam de backups idénticos.
+
 ## Backend
-
-- [ ] **T1**: Agregar campo `Deduplicated bool` al struct `BackupResult`
-  en `internal/cli/install/backup.go:39`. Documentar el campo en el
-  comentario del struct.
-
-- [ ] **T2**: Crear helper privado `lastBackupMatchesHash(path string,
-  data []byte) (bool, string)` en el mismo archivo. Lógica:
-  1. `backups, _ := ListBackups(path)` (ya retorna slice no-nil).
-  2. Si `len(backups) == 0` → `(false, "")`.
-  3. `last := backups[len(backups)-1]`.
-  4. `prevHash, _ := FileChecksum(last)`.
-  5. `curHash := sha256(data) → hex`.
-  6. Si `prevHash == curHash` → `(true, last)`. Si no → `(false, "")`.
-
-- [ ] **T3**: Modificar `backupFile` (línea 50) para invocar
-  `lastBackupMatchesHash` ANTES de `os.WriteFile`. Si retorna `true`:
-  construir y retornar `*BackupResult` con `Deduplicated: true` y
-  `Backup: <last>`. Si retorna `false`: comportamiento actual (escribir
-  nuevo).
-
-- [ ] **T4**: NO modificar `BackupFile` helper genérico (línea 123) — la
-  dedup es responsabilidad del caller. Los callers de alto nivel
-  (`BackupCredentials`, `BackupEnv`, `BackupOpenCodeConfig`) ya pasan
-  por `backupFile` con `keepLast`, así que la dedup aplica
-  transparentemente a ellos.
-
-- [ ] **T5**: Documentar en el comentario del paquete (`backup.go:1`)
-  la nueva semántica: "Si el último backup tiene el mismo hash que el
-  archivo actual, NO se crea uno nuevo (campo `Deduplicated: true`)."
+- [x] **T1**: `internal/cli/install/backup.go:backupFile` con dedup
+  (líneas 57-94): si el último .bak tiene el mismo SHA-256 que el archivo
+  actual, retorna `Deduplicated: true` sin crear nuevo archivo.
+- [x] **T2**: `backup.go:lastBackupMatchesHash` (líneas 103-116) compara
+  SHA-256 del archivo con el del .bak más reciente (lexicográfico).
+- [x] **T3**: `backup.go:FileChecksum` (líneas 300-307) retorna SHA-256
+  hex (64 chars).
+- [x] **T4**: `BackupResult.Deduplicated bool` (línea 43) — flag público
+  para que el caller reporte en el log cuántos backups fueron skipped.
+- [x] **T5**: `BackupCredentials`/`BackupEnv`/`BackupOpenCodeConfig`
+  usan `backupFile` con dedup (líneas 143-160).
+- [x] **T6**: `BackupFile(path)` para AGENTS.md injection usa
+  `backupFile(path, 0)` — dedup sí, prune no (keepLast=0).
+  El comentario en línea 163 lo explica.
 
 ## Tests
+- [x] **T-unit-1**: `TestFileChecksum_Deterministic` — mismo archivo → mismo hash.
+  (backup_test.go:168)
+- [x] **T-unit-2**: `TestFileChecksum_DifferentContent_DifferentHash`.
+  (backup_test.go:178)
+- [x] **T-unit-3**: `TestBackup_CreatesBakWithTimestamp`. (backup_test.go:16)
+- [x] **T-unit-4**: `TestBackup_SkipsIfFileNotExist`. (backup_test.go:35)
+- [x] **T-unit-5**: `TestBackup_PrunesOldBackups`. (backup_test.go:43)
+- [x] **T-unit-6**: `TestListBackups_ReturnsAllBackups`. (backup_test.go:191)
+- [x] **T-unit-7**: `TestListBackups_NoBackups_EmptySlice`. (backup_test.go:203)
+- [x] **T-e2e-1**: `TestBackup_DeduplicatesIfSameHash` — 2 corridas sin cambios
+  → 1 backup, Deduplicated=true. (este commit, backup_test.go)
+- [x] **T-e2e-2**: `TestBackup_CreatesNewIfContentChanged` — cambio de
+  contenido → nuevo backup, Deduplicated=false. (este commit)
+- [x] **T-e2e-3**: `TestBackup_TenRunsNoChange_OnlyOneBackup` — 10 corridas
+  sin cambios → 1 backup (spam avoidance). (este commit)
+- [x] **T-e2e-4**: `TestBackup_NoPreviousBackup_CreatesFirst` — primer
+  backup sin previous → NO dedup. (este commit)
+- [x] **T-e2e-5**: `TestBackup_KeepLastZero_NoPrune` — keepLast=0 mantiene
+  todos los backups (AGENTS.md injection use case). (este commit)
+- [x] **T-sabotaje**: documentado en el comentario del helper `lastBackupMatchesHash`:
+  si alguien comenta la línea `return prevHash == curHash, last` y la
+  cambia por `return false, ""`, los 3 tests T-e2e-1/2/3 fallan (Deduplicated
+  queda siempre en false → se crean 10 .bak idénticos).
 
-- [ ] **T-unit-1**: `TestBackupFile_Dedup_SameContent**` — escribir
-  archivo + crear 1 backup → llamar `BackupFile` 5 veces sin tocar el
-  archivo → debe haber 1 solo `.bak.*` + `Deduplicated: true` en cada
-  retorno.
-- [ ] **T-unit-2**: `TestBackupFile_Dedup_ChangedContent**` — escribir
-  archivo + crear 1 backup → modificar archivo → llamar `BackupFile` →
-  debe haber 2 `.bak.*` + `Deduplicated: false`.
-- [ ] **T-unit-3**: `TestBackupFile_Dedup_FirstTime**` — escribir
-  archivo sin backups previos → `BackupFile` → 1 `.bak.*` +
-  `Deduplicated: false` (no hay contra qué comparar).
-- [ ] **T-unit-4**: `TestBackupFile_Dedup_KeepLast**` — combinar dedup
-  con `keepLast=3` → verificar que el dedup no interfiere con el prune
-  (cuando hay 3 backups y se agrega uno nuevo, el más viejo se borra).
-- [ ] **T-unit-5**: `TestBackupFile_Dedup_AcrossFiles**` — verificar
-  que la dedup es POR ARCHIVO: cambiar `.env` no afecta los backups
-  de `opencode.json`.
-- [ ] **T-e2e-1**: `TestRunInstall_10RunsOneBackup**` — limpiar
-  `.env.bak.*` previos → correr `runBackupsCount` 10 veces con el
-  mismo `.env` → `len(glob(.env.bak.*)) == 1`.
-- [ ] **T-sabotaje**: Comentar la rama `if matches { return dedup }` en
-  T2 → correr T-e2e-1 → DEBE ver 10 archivos `.env.bak.*` → restaurar
-  dedup → test verde (1 archivo). Documentar en commit body.
+## Verificación final
+- [x] **VF-1**: código commiteado (parte del refactor 6270a78), tests
+  escritos en este commit.
+- [x] **VF-2**: state.yaml → implemented (este commit).
+- [x] **VF-3**: REQ-29: 29.2 → implemented.

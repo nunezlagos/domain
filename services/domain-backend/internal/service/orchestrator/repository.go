@@ -167,11 +167,13 @@ func NewPGRepository(pool *pgxpool.Pool) Repository {
 var ErrAgentTemplateNotFound = errors.New("orchestrator: agent_template not seeded for org")
 
 func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error) {
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	_ = orgID
 	var prompt string
 	err := r.pool.QueryRow(ctx, `
 		SELECT system_prompt FROM agent_templates
-		WHERE organization_id = $1 AND slug = $2
-		LIMIT 1`, orgID, slug,
+		WHERE slug = $1
+		LIMIT 1`, slug,
 	).Scan(&prompt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -183,14 +185,15 @@ func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID u
 }
 
 func (r *pgRepository) GetAgentTemplate(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error) {
+	_ = orgID
 	var t AgentTemplate
 	t.Slug = slug
 	var metaJSON []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT model, temperature, max_tokens, system_prompt, metadata
 		FROM agent_templates
-		WHERE organization_id = $1 AND slug = $2
-		LIMIT 1`, orgID, slug,
+		WHERE slug = $1
+		LIMIT 1`, slug,
 	).Scan(&t.Model, &t.Temperature, &t.MaxTokens, &t.SystemPrompt, &metaJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -205,11 +208,12 @@ func (r *pgRepository) GetAgentTemplate(ctx context.Context, orgID uuid.UUID, sl
 }
 
 func (r *pgRepository) GetFlowIDBySlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {
+	_ = orgID
 	var id uuid.UUID
 	err := r.pool.QueryRow(ctx, `
 		SELECT id FROM flows
-		WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL
-		LIMIT 1`, orgID, slug,
+		WHERE slug = $1 AND deleted_at IS NULL
+		LIMIT 1`, slug,
 	).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -27,7 +27,9 @@ DROP TRIGGER IF EXISTS projects_client_same_org_check ON projects;
 -- metadata. Como el código de billing NO usa organizations.plan_id ya
 -- (REQ-21.5 single-org), la dropeamos junto con la tabla).
 -- NOTA: ALTER en organizations antes del DROP TABLE.
-ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_plan_id_fkey;
+-- Idempotente: ALTER TABLE IF EXISTS permite que la migration sea no-op
+-- si la tabla organizations ya fue dropeada (e.g. re-aplicación post-Fase C).
+ALTER TABLE IF EXISTS organizations DROP CONSTRAINT IF EXISTS organizations_plan_id_fkey;
 
 -- Drop la tabla. CASCADE remueve indexes/triggers/policies dependientes.
 DROP TABLE IF EXISTS organizations CASCADE;

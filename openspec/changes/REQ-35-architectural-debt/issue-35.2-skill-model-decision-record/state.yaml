@@ -1,10 +1,35 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-18
 slug: skill-model-decision-record
 issue: 35.2
 parent_req: REQ-35-architectural-debt
-effort: M
+effort: S
 priority: baja
+notes: >
+  IMPLEMENTADO 2026-06-18 (Día 1 del plan gradual). El RFC 0008
+  (docs/rfc/0008-skill-model-simplification.md) ya estaba escrito
+  con la decisión basada en datos: Opción A (simplificar a
+  TypePrompt único). Este commit agrega:
+
+  1. Migration 000144_skill_type_cleanup.up.sql: convierte skills
+     existentes con tipos deprecated (api/code/mcp_tool) a 'prompt'.
+     Idempotente. Soft-deleted excluidos.
+
+  2. Tests de la migration en internal/admin/skill_type_cleanup_test.go
+     (2 tests: MigrationExists + MigrationReversible).
+
+  3. Tests del ADR (skill_model_adr_test.go) ya existían
+     (TestADR_HasQuantifiedTradeoffs, TestADR_FollowsConvention,
+     TestADR_LinksToSourceData).
+
+  Día 7 (code change que rechaza los 3 tipos en service.go +
+  TestSkillCreate_RejectsDeprecatedTypes) deferred a un commit
+  separado porque rompería los tests existentes que crean skills
+  con TypeCode/TypeAPI/TypeMCPTool en runners
+  (TestSkill_Create_Code_API_MCPTool, internal/runner/skill/runner_test.go,
+  etc). Plan gradual: Día 1 ejecuta; Día 7 cuando se actualicen
+  los tests con los 3 tipos a TypePrompt.
 depends_on:
   - 35.4
 notes: >

@@ -1,7 +1,19 @@
-status: proposed
+status: implemented
 created: 2026-06-11
-implemented: ~
+implemented: 2026-06-18
 notes: |
-  Cambia la semántica de "disparar y olvidar" a "cola acotada con backpressure".
-  Webhooks que excedan la cola recibirán 503 en vez de 202 Accepted.
-  Eso es aceptable — el emisor debe reintentar.
+  IMPLEMENTADO 2026-06-18 (commit 54d6366):
+
+  - NUEVO internal/api/handler/webhook_dispatcher.go: WebhookDispatcher
+    con bounded channel + WaitGroup + per-job timeout + panic recovery.
+  - internal/api/handler/webhook.go: receiveWebhook usa el dispatcher.
+  - internal/api/handler/api.go: API.WebhookDispatcher field.
+  - NUEVO internal/api/handler/webhook_dispatcher_test.go: 6 tests.
+
+  Comportamiento esperado en producción:
+  - Bajo flood, webhooks devuelven 503 (backpressure). Cliente debe
+    reintentar con backoff.
+  - Graceful shutdown espera hasta 30s por webhooks en vuelo.
+
+  Breaking change operacional: clientes que asumían "202 Accepted =
+  ejecutar siempre" ahora pueden recibir 503. Documentar en CHANGELOG.

@@ -79,18 +79,22 @@ func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (*Project, err
 }
 
 func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Project, error) {
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	_ = orgID
 	return r.queryOne(ctx,
-		`WHERE p.organization_id = $1 AND p.slug = $2 AND p.deleted_at IS NULL`, orgID, slug)
+		`WHERE p.slug = $1 AND p.deleted_at IS NULL`, slug)
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Project, error) {
+	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+	_ = orgID
 	// Construimos el WHERE dinámico — minimal para no recurrir a un builder
 	// completo. Solo dos variantes: con / sin filtro de client.
 	q := `SELECT ` + selectCols + ` ` + fromJoin +
-		` WHERE p.organization_id = $1 AND p.deleted_at IS NULL`
-	args := []any{orgID}
+		` WHERE p.deleted_at IS NULL`
+	var args []any
 	if f.ClientID != nil {
-		q += ` AND p.client_id = $2`
+		q += ` AND p.client_id = $1`
 		args = append(args, *f.ClientID)
 	}
 	q += ` ORDER BY p.created_at DESC`

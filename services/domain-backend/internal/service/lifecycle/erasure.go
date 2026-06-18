@@ -28,7 +28,9 @@ type EraseResult struct {
 //
 // Lógica:
 //   - Verifica que el user no esté ya erased
-//   - Verifica que NO sea owner de ninguna org con miembros (escenario 6)
+//   - (Fase D clean REQ-21.6) Se omite la validación de "owner de org
+//     con otros miembros": la tabla `organizations` y `organization_members`
+//     se dropean en Fase C. Single-org implica que no aplica esa lógica.
 //   - En una transacción:
 //     * users PII → NULL/anonimizado, is_erased=TRUE, erased_at=NOW
 //     * observations/sessions/prompts/knowledge_docs/agent_runs created_by/user_id → NULL
@@ -54,26 +56,6 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 	}
 	if isErased {
 		return nil, ErrAlreadyErased
-	}
-
-	// 2. Verificar que no sea owner de ninguna org con miembros
-	var ownedOrgsWithMembers int
-	err = tx.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM organizations o
-		WHERE o.owner_id = $1
-		  AND (
-		    SELECT COUNT(*) FROM organization_members om
-		    WHERE om.organization_id = o.id AND om.user_id <> $1
-		  ) > 0
-	`, userID).Scan(&ownedOrgsWithMembers)
-	if err != nil {
-		// Si la tabla organization_members no existe o el query falla,
-		// continuamos (no bloqueamos por validation soft). Log warn lo cubre.
-		ownedOrgsWithMembers = 0
-	}
-	if ownedOrgsWithMembers > 0 {
-		return nil, ErrTransferOwnershipFirst
 	}
 
 	res := &EraseResult{UserID: userID, UpdatedRows: make(map[string]int64)}

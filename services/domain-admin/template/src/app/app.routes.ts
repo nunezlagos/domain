@@ -58,6 +58,11 @@ export const routes: Routes = [
         path: 'maintainers',
         loadChildren: () => import('./views/admin-maintainers/routes').then((m) => m.routes),
       },
+      // HU-41.4: DB Explorer — schema completo en una página.
+      {
+        path: 'database',
+        loadChildren: () => import('./views/admin-database/routes').then((m) => m.routes),
+      },
     ],
   },
   // HU-41.7: tickets mantiene su ruta legacy /tickets para deep-links

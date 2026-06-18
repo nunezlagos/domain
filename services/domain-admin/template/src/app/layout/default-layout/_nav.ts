@@ -1,27 +1,12 @@
 import { INavData } from '@coreui/angular';
 
-import { MAINTAINERS, SPECIAL_MAINTAINERS } from '../../views/admin-maintainers/maintainer-registry';
-
 // HU-41.1: navItems administrativos (reemplaza los items de stock del
 // template CoreUI). Los items de Platform (Cross-org) se renderizan
 // condicionalmente en el template del sidebar según `activeRole()?.slug`.
 
-// HU-41.4: submenú Mantenedores — generado desde el registry.
-// Mantenibilidad: agregar un maintainer en maintainer-registry.ts lo
-// agrega automáticamente al sidebar.
-const maintainersChildren: INavData[] = [
-  ...MAINTAINERS.map(m => ({
-    name: m.title,
-    url: `/admin/maintainers/${m.path}`,
-    iconComponent: { name: m.icon },
-  })),
-  { name: '──────────', url: '#', attributes: { disabled: true, class: 'sidebar-divider' } },
-  ...SPECIAL_MAINTAINERS.map(m => ({
-    name: m.title,
-    url: `/admin/maintainers/${m.path}`,
-    iconComponent: { name: m.icon },
-  })),
-];
+// HU-41.4: Mantenedores en el sidebar = solo 1 entrada (link).
+// Las 35 vistas viven en /admin/maintainers y se navega con el search
+// (no inflamos el sidebar).
 
 export const navAdminItems: INavData[] = [
   {
@@ -30,7 +15,7 @@ export const navAdminItems: INavData[] = [
     iconComponent: { name: 'cilSpeedometer' },
   },
   {
-    name: 'Members',
+    name: 'Miembros',
     url: '/admin/members',
     iconComponent: { name: 'cilPeople' },
   },
@@ -38,7 +23,11 @@ export const navAdminItems: INavData[] = [
     name: 'Mantenedores',
     url: '/admin/maintainers',
     iconComponent: { name: 'cilSettings' },
-    children: maintainersChildren,
+  },
+  {
+    name: 'Base de datos',
+    url: '/admin/database',
+    iconComponent: { name: 'cilStorage' },
   },
   {
     name: 'Settings',

@@ -77,7 +77,7 @@
       <c-col xs="12" lg="7" class="mb-4">
         <c-card>
           <c-card-header>
-            <strong>Top 5 users del mes</strong>
+            <strong>Top 5 usuarios del mes</strong>
             <a routerLink="/admin/usage" class="ms-auto small text-body-secondary text-decoration-none">
               Ver todos <svg cIcon name="cilArrowRight"></svg>
             </a>
@@ -92,10 +92,10 @@
               <table class="table table-hover mb-0">
                 <thead>
                   <tr>
-                    <th>User</th>
+                    <th>Usuario</th>
                     <th class="text-end">Prompts</th>
                     <th class="text-end">Tokens</th>
-                    <th class="text-end">Cost</th>
+                    <th class="text-end">Costo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -133,7 +133,7 @@
         <!-- System health (super_admin only) -->
         @if (o.system_health && isSuperAdmin()) {
           <c-card class="mb-4">
-            <c-card-header><strong>System health</strong></c-card-header>
+            <c-card-header><strong>Salud del sistema</strong></c-card-header>
             <c-card-body>
               <div class="health-row">
                 <span class="health-label">API</span>
@@ -142,13 +142,13 @@
                 </c-badge>
               </div>
               <div class="health-row">
-                <span class="health-label">Database</span>
+                <span class="health-label">Base de datos</span>
                 <c-badge [color]="o.system_health!.database === 'ok' ? 'success' : 'danger'">
                   {{ o.system_health!.database }}
                 </c-badge>
               </div>
               <div class="health-row">
-                <span class="health-label">LLM providers</span>
+                <span class="health-label">Proveedores LLM</span>
                 <c-badge color="secondary">
                   {{ o.system_health!.llm_provider }}
                 </c-badge>
@@ -201,7 +201,7 @@
           </a>
           <a routerLink="/admin/audit" class="quick-action">
             <svg cIcon name="cilHistory" size="lg"></svg>
-            <span>Ver audit</span>
+            <span>Ver auditoría</span>
           </a>
           <a routerLink="/admin/cost" class="quick-action">
             <svg cIcon name="cilChartLine" size="lg"></svg>

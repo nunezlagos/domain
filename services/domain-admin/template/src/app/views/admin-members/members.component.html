@@ -103,7 +103,7 @@
         <table class="table table-hover mb-0">
           <thead>
             <tr>
-              <th>User</th>
+              <th>Usuario</th>
               <th>Email</th>
               <th>Rol</th>
               <th>Última actividad</th>
@@ -202,7 +202,7 @@
           </button>
         </div>
       } @else {
-        <p class="text-body-secondary small">Crea un user nuevo con un API key generado. Útil para integraciones server-to-server.</p>
+        <p class="text-body-secondary small">Crea un usuario nuevo con un API key generado. Útil para integraciones server-to-server.</p>
         <div class="mb-3">
           <label class="form-label">Email</label>
           <input cFormControl type="email" [value]="createEmail()" (input)="createEmail.set($any($event.target).value)" placeholder="service@empresa.com" />
@@ -243,7 +243,7 @@
       @if (selectedMemberKeys().length === 0) {
         <div class="empty-state-mini">
           <svg cIcon name="cilFingerprint" size="2xl"></svg>
-          <p>Sin API keys. El user probablemente usa OTP/sesión web.</p>
+          <p>Sin API keys. El usuario probablemente usa OTP/sesión web.</p>
         </div>
       } @else {
         <table class="table table-sm">

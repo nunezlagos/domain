@@ -40,8 +40,8 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 	)
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT slug, seed_managed, seed_version, is_user_modified, spec
-		   FROM flows WHERE organization_id=$1 AND slug=$2`,
-		orgID, seeds.SDDPipelineFlowSlug,
+		   FROM flows WHERE slug=$1`,
+		seeds.SDDPipelineFlowSlug,
 	).Scan(&slug, &seedManaged, &seedVersion, &userModified, &specRaw))
 	require.Equal(t, seeds.SDDPipelineFlowSlug, slug)
 	require.True(t, seedManaged, "flow seedeado debe estar marcado seed_managed=true")
@@ -79,7 +79,7 @@ func TestSeedFlowsForOrg_Idempotent(t *testing.T) {
 	// Sigue habiendo exactamente 1 row
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM flows WHERE organization_id=$1`, orgID).Scan(&count))
+		`SELECT COUNT(*) FROM flows`).Scan(&count))
 	require.Equal(t, 1, count)
 }
 
@@ -104,8 +104,8 @@ func TestSeedFlowsForOrg_PreservesUserModifications(t *testing.T) {
 		`UPDATE flows
 		   SET name = 'CUSTOM PIPELINE',
 		       is_user_modified = true
-		 WHERE organization_id=$1 AND slug=$2`,
-		orgID, seeds.SDDPipelineFlowSlug)
+		 WHERE slug=$1`,
+		seeds.SDDPipelineFlowSlug)
 	require.NoError(t, err)
 
 	rep, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -152,7 +152,7 @@ func TestSeedFlowsForOrg_CleansLegacySlugsWithoutActiveRuns(t *testing.T) {
 	// Verifica que legacy se borró y sdd-pipeline está
 	var slugs []string
 	rows, err := pools.App.Query(ctx,
-		`SELECT slug FROM flows WHERE organization_id=$1 ORDER BY slug`, orgID)
+		`SELECT slug FROM flows ORDER BY slug`)
 	require.NoError(t, err)
 	for rows.Next() {
 		var s string
@@ -201,7 +201,7 @@ func TestSeedFlowsForOrg_KeepsLegacyWithActiveRuns(t *testing.T) {
 	// Sigue existiendo
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM flows WHERE organization_id=$1 AND slug='legacy-running'`,
-		orgID).Scan(&count))
+		`SELECT COUNT(*) FROM flows WHERE slug='legacy-running'`,
+	).Scan(&count))
 	require.Equal(t, 1, count)
 }

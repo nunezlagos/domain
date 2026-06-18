@@ -68,7 +68,7 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	).Scan(&orgID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO projects (name, slug, organization_id) VALUES ('Demo', 'demo', $1) RETURNING id`, orgID,
+		`INSERT INTO projects (name, slug) VALUES ('Demo', 'demo') RETURNING id`,
 	).Scan(&projectID)
 	require.NoError(t, err)
 

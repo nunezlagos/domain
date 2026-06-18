@@ -68,24 +68,24 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 	// Verificar 1 orchestrator
 	var orchCount int
 	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM agent_templates WHERE organization_id=$1 AND role='orchestrator'`,
-		orgID).Scan(&orchCount)
+		`SELECT COUNT(*) FROM agent_templates WHERE role='orchestrator'`,
+	).Scan(&orchCount)
 	require.NoError(t, err)
 	require.Equal(t, 1, orchCount, "debe haber exactamente 1 orchestrator")
 
 	// Verificar 10 phase-workers (sdd-explore...sdd-onboard)
 	var workerCount int
 	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM agent_templates WHERE organization_id=$1 AND role='phase-worker' AND slug LIKE 'sdd-%'`,
-		orgID).Scan(&workerCount)
+		`SELECT COUNT(*) FROM agent_templates WHERE role='phase-worker' AND slug LIKE 'sdd-%'`,
+	).Scan(&workerCount)
 	require.NoError(t, err)
 	require.Equal(t, 10, workerCount, "debe haber 10 phase-workers sdd-*")
 
 	// Verificar el orchestrator slug
 	var orchSlug string
 	err = pool.QueryRow(ctx,
-		`SELECT slug FROM agent_templates WHERE organization_id=$1 AND role='orchestrator'`,
-		orgID).Scan(&orchSlug)
+		`SELECT slug FROM agent_templates WHERE role='orchestrator'`,
+	).Scan(&orchSlug)
 	require.NoError(t, err)
 	require.Equal(t, "sdd-orchestrator", orchSlug)
 }
@@ -127,7 +127,7 @@ func TestAgentTemplates_SeederIdempotent(t *testing.T) {
 	// Confirmar total = 11
 	var total int
 	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM agent_templates WHERE organization_id=$1`, orgID).Scan(&total)
+		`SELECT COUNT(*) FROM agent_templates`).Scan(&total)
 	require.NoError(t, err)
 	require.Equal(t, 11, total)
 }
@@ -155,8 +155,8 @@ func TestAgentTemplates_CleanupRemovesLegacy(t *testing.T) {
 	// Verificar que los legacy no están
 	var legacyCount int
 	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM agent_templates WHERE organization_id=$1 AND slug IN ('researcher','coder','tester')`,
-		orgID).Scan(&legacyCount)
+		`SELECT COUNT(*) FROM agent_templates WHERE slug IN ('researcher','coder','tester')`,
+	).Scan(&legacyCount)
 	require.NoError(t, err)
 	require.Equal(t, 0, legacyCount, "legacy borrados")
 }
@@ -182,8 +182,8 @@ func TestAgentTemplates_CleanupPreservesUserModified(t *testing.T) {
 	// Verificar que my-custom sigue ahí
 	var customCount int
 	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM agent_templates WHERE organization_id=$1 AND slug='my-custom'`,
-		orgID).Scan(&customCount)
+		`SELECT COUNT(*) FROM agent_templates WHERE slug='my-custom'`,
+	).Scan(&customCount)
 	require.NoError(t, err)
 	require.Equal(t, 1, customCount, "customización del user preservada")
 }

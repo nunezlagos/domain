@@ -82,6 +82,20 @@ BEGIN
         drop_count := drop_count + 1;
     END LOOP;
 
+    -- 5) VIEWS que mencionan organization_id en su definición. CASCADE
+    --    remueve dependencias en cascada (e.g. domain_cost_daily_by_org
+    --    depende de agent_runs.organization_id).
+    FOR r IN (
+        SELECT schemaname, viewname
+        FROM pg_views
+        WHERE schemaname = 'public'
+          AND definition ILIKE '%organization_id%'
+    ) LOOP
+        EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE',
+                       r.schemaname, r.viewname);
+        drop_count := drop_count + 1;
+    END LOOP;
+
     RAISE NOTICE 'pre-cleanup: dropped % dependent objects', drop_count;
 END $$;
 

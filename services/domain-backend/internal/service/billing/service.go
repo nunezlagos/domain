@@ -92,84 +92,42 @@ func (s *Service) GetPlan(ctx context.Context, slug string) (*Plan, error) {
 }
 
 // AssignPlan asocia un plan a una org. Crea el plan_started_at = now si era NULL.
+//
+// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
+// Fase C. En single-org, no hay org-level plan_id (los plans son
+// globales vía REQ-35.2 / issue-21.5). AssignPlan es ahora un no-op
+// silencioso: el planSlug se valida contra la tabla global de plans
+// (que sí existe) pero no se persiste en ninguna org.
 func (s *Service) AssignPlan(ctx context.Context, orgID uuid.UUID, planSlug string) error {
 	plan, err := s.GetPlan(ctx, planSlug)
 	if err != nil {
 		return err
 	}
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE organizations SET plan_id = $1, plan_started_at = COALESCE(plan_started_at, NOW())
-		 WHERE id = $2 AND deleted_at IS NULL`, plan.ID, orgID)
-	if err != nil {
-		return fmt.Errorf("assign plan: %w", err)
+	if plan == nil {
+		return ErrPlanNotFound
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrOrgNotFound
-	}
+	// No-op: plan_id era per-org pre-single-org. Ahora los plans son
+	// globales; "asignar un plan" no tiene sentido en una sola org.
+	// Mantenemos la firma para backward compat con callers existentes
+	// (tests admin que verifican que la llamada no falla).
+	_ = orgID
+	_ = plan
 	return nil
 }
 
 // ResolveLimits combina plan + custom_limits. Si custom tiene un campo,
 // gana sobre el del plan.
+//
+// ISSUE-21.6 Fase D clean Round 3: en single-org no hay plan_id ni
+// custom_limits por org. Devolvemos defaults (custom_limits vacío,
+// plan_id nil → caller usa plan global o defaults).
 func (s *Service) ResolveLimits(ctx context.Context, orgID uuid.UUID) (*Limits, *Plan, error) {
-	var (
-		planID       *uuid.UUID
-		customRaw    []byte
-	)
-	err := s.Pool.QueryRow(ctx,
-		`SELECT plan_id, custom_limits FROM organizations WHERE id = $1 AND deleted_at IS NULL`,
-		orgID,
-	).Scan(&planID, &customRaw)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, ErrOrgNotFound
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("get org: %w", err)
-	}
-
-	limits := &Limits{}
-	var plan *Plan
-	if planID != nil {
-		var p Plan
-		err = s.Pool.QueryRow(ctx,
-			`SELECT id, slug, name, tokens_per_month, runs_per_month, storage_gb_max,
-			        members_max, seats, soft_limit_ratio, monthly_price_usd, is_active
-			 FROM plans WHERE id = $1`, *planID,
-		).Scan(&p.ID, &p.Slug, &p.Name, &p.TokensPerMonth, &p.RunsPerMonth, &p.StorageGBMax,
-			&p.MembersMax, &p.Seats, &p.SoftLimitRatio, &p.MonthlyPriceUSD, &p.IsActive)
-		if err != nil {
-			return nil, nil, fmt.Errorf("get plan: %w", err)
-		}
-		plan = &p
-		limits.TokensPerMonth = p.TokensPerMonth
-		limits.RunsPerMonth = p.RunsPerMonth
-		limits.StorageGBMax = p.StorageGBMax
-		limits.MembersMax = p.MembersMax
-	}
-
-	// Aplicar custom_limits override
-	var custom map[string]any
-	if len(customRaw) > 0 {
-		_ = json.Unmarshal(customRaw, &custom)
-	}
-	if v, ok := custom["tokens_per_month"].(float64); ok {
-		i := int64(v)
-		limits.TokensPerMonth = &i
-	}
-	if v, ok := custom["runs_per_month"].(float64); ok {
-		i := int32(v)
-		limits.RunsPerMonth = &i
-	}
-	if v, ok := custom["storage_gb_max"].(float64); ok {
-		i := int32(v)
-		limits.StorageGBMax = &i
-	}
-	if v, ok := custom["members_max"].(float64); ok {
-		i := int32(v)
-		limits.MembersMax = &i
-	}
-
-	return limits, plan, nil
+	_ = ctx
+	_ = orgID
+	// Defaults single-org: sin custom_limits, sin plan específico
+	// (los plans globales se consultan via GetPlan cuando el caller los
+	// necesita explícitamente).
+	return &Limits{}, nil, nil
 }
 
 // IncrementTokens suma tokens al período actual; UPSERT idempotente.

@@ -22,7 +22,6 @@ from .resources import (
     FlowsResource,
     KnowledgeResource,
     ObservationsResource,
-    OrganizationsResource,
     ProjectsResource,
     SearchResource,
     SessionsResource,
@@ -64,7 +63,6 @@ class DomainClient:
         self._owns_http = http_client is None
 
         # Resources
-        self.organizations = OrganizationsResource(self)
         self.projects = ProjectsResource(self)
         self.observations = ObservationsResource(self)
         self.sessions = SessionsResource(self)

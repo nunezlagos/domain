@@ -1,4 +1,5 @@
 // DomainClient — cliente fetch-based (Node 20+ tiene fetch built-in).
+// issue-21.6: OrganizationsResource eliminado (single-org, tabla organizations se elimina).
 
 import {
   AuthError,
@@ -14,7 +15,6 @@ import type {
   Flow,
   FlowSpec,
   Observation,
-  Organization,
   Project,
   SearchResult,
   Session,
@@ -35,7 +35,6 @@ export class DomainClient {
   private readonly timeoutMs: number;
 
   // Resources
-  readonly organizations: OrganizationsResource;
   readonly projects: ProjectsResource;
   readonly observations: ObservationsResource;
   readonly sessions: SessionsResource;
@@ -58,7 +57,6 @@ export class DomainClient {
     this.fetch = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = opts.timeoutMs ?? 30_000;
 
-    this.organizations = new OrganizationsResource(this);
     this.projects = new ProjectsResource(this);
     this.observations = new ObservationsResource(this);
     this.sessions = new SessionsResource(this);
@@ -141,17 +139,6 @@ function translateError(
 }
 
 // ===== Resources =====
-
-// single-org (issue-21.5): create/delete de orgs se removieron del backend.
-class OrganizationsResource {
-  constructor(private c: DomainClient) {}
-  get(id: string) {
-    return this.c.request<Organization>("GET", `/organizations/${id}`);
-  }
-  listMembers(orgId: string) {
-    return this.c.request<Array<Record<string, unknown>>>("GET", `/organizations/${orgId}/members`);
-  }
-}
 
 class ProjectsResource {
   constructor(private c: DomainClient) {}

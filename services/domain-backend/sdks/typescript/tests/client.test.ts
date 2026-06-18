@@ -32,7 +32,6 @@ describe("DomainClient", () => {
       jsonResponse(201, {
         data: {
           id: "11111111-1111-1111-1111-111111111111",
-          organization_id: "22222222-2222-2222-2222-222222222222",
           name: "Demo",
           slug: "demo",
           description: "",
@@ -121,7 +120,6 @@ describe("DomainClient", () => {
       jsonResponse(201, {
         data: {
           id: "33333333-3333-3333-3333-333333333333",
-          organization_id: "22222222-2222-2222-2222-222222222222",
           project_id: "11111111-1111-1111-1111-111111111111",
           content: "hola",
           observation_type: "note",

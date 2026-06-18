@@ -26,21 +26,21 @@ const (
 )
 
 // Client es el handle principal. Es seguro para uso concurrente — net/http.Client lo es.
+// issue-21.6: Organizations removido (single-org, tabla organizations se elimina en Fase C).
 type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
 	userAgent  string
 
-	Organizations *OrganizationsResource
-	Projects      *ProjectsResource
-	Observations  *ObservationsResource
-	Sessions      *SessionsResource
-	Search        *SearchResource
-	Skills        *SkillsResource
-	Agents        *AgentsResource
-	Flows         *FlowsResource
-	Knowledge     *KnowledgeResource
+	Projects     *ProjectsResource
+	Observations *ObservationsResource
+	Sessions     *SessionsResource
+	Search       *SearchResource
+	Skills       *SkillsResource
+	Agents       *AgentsResource
+	Flows        *FlowsResource
+	Knowledge    *KnowledgeResource
 }
 
 // Option configura el Client al construirlo.
@@ -101,7 +101,6 @@ func New(opts ...Option) (*Client, error) {
 		return nil, errors.New("domain: api_key required (use WithAPIKey or set DOMAIN_API_KEY)")
 	}
 
-	c.Organizations = &OrganizationsResource{c: c}
 	c.Projects = &ProjectsResource{c: c}
 	c.Observations = &ObservationsResource{c: c}
 	c.Sessions = &SessionsResource{c: c}

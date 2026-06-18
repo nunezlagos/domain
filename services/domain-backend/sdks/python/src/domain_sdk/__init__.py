@@ -24,7 +24,6 @@ from .errors import (
     QuotaExceededError,
 )
 from .models import (
-    Organization,
     Project,
     Observation,
     Session,
@@ -43,7 +42,6 @@ __all__ = [
     "ConflictError",
     "RateLimitError",
     "QuotaExceededError",
-    "Organization",
     "Project",
     "Observation",
     "Session",

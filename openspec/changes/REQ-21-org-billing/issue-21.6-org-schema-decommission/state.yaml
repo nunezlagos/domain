@@ -7,6 +7,24 @@ notes: |
   colapsado). Ejecución por fases A→D, cada una deployable. Fase C (DROP COLUMN/TABLE) es
   irreversible: requiere backup verificado + dry-run en staging. Esfuerzo estimado: 1-2 semanas.
 
+  FASE B EJECUTADA (2026-06-18, commit bcc5196, ticket DOMAINSERV-3):
+    5 satélites desacoplados per-consumer con migraciones reversibles (sin DROP COLUMN/TABLE):
+    - 000135 cost_alerts_sent_org_nullable: org_id nullable + UNIQUE(alert_date) (era UNIQUE(org, date)).
+    - 000136 org_cost_alert_thresholds_pk_swap: PK(org_id) → PK(id BIGSERIAL) + UNIQUE(org_id).
+    - 000137 org_flow_config_pk_swap: mismo patrón (3 consumers: usage, flow, recovery).
+    - 000138 usage_counters_pk_swap: PK compuesta (org_id, period_start) → PK(id BIGSERIAL) + UNIQUE(period_start).
+    - 000139 org_enrollment_tokens_drop_org_fk: drop FK a organizations(id) + UNIQUE INDEX
+      partial (org_id) WHERE revoked_at IS NULL → UNIQUE INDEX partial ((TRUE)) WHERE revoked_at IS NULL.
+    4 integration tests nuevos (//go:build integration, testcontainers pgvector):
+    - threshold_checker_integration_test.go: cost_alerts_sent + org_cost_alert_thresholds.
+    - budget_integration_test.go: org_flow_config + cache invalidation.
+    - usage_integration_test.go: usage_counters + plans.
+    - service_integration_test.go: enrollment.Service (Rotate/Enroll/Revoke).
+    Total: +768 lines, 14 archivos. Consumers Go verificados sin organization_id en queries/inserts.
+    invitations ya removida por issue-21.5 (no requiere acción acá).
+    organizations (root) queda intacta para Fase C (DROP TABLE final).
+    PENDIENTE: Fase D (SDK + seeds + docs) y Fase C (DROP COLUMN/TABLE con backup+dry-run local).
+
   FASE A EJECUTADA (2026-06-17, decisión del operador "ejecutar solo Fase A"):
     - Migración 000132_disable_org_rls: DISABLE ROW LEVEL SECURITY en 19 tablas org-scoped
       (no otp_codes). Reversible (down = ENABLE+FORCE; policies no se dropearon).

@@ -1,4 +1,7 @@
-"""Resources del cliente: agrupan endpoints por entidad."""
+"""Resources del cliente: agrupan endpoints por entidad.
+
+issue-21.6: OrganizationsResource eliminado (single-org, tabla organizations se elimina).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from .models import (
     AgentRunResult,
     Observation,
-    Organization,
     Project,
     SearchResult,
     Session,
@@ -20,16 +22,6 @@ if TYPE_CHECKING:
 class _Base:
     def __init__(self, client: "DomainClient") -> None:
         self._c = client
-
-
-class OrganizationsResource(_Base):
-    # single-org (issue-21.5): create/delete de orgs se removieron del backend.
-    async def get(self, id: str) -> Organization:
-        data = await self._c.request("GET", f"/organizations/{id}")
-        return Organization.model_validate(data)
-
-    async def list_members(self, org_id: str) -> list[dict[str, Any]]:
-        return await self._c.request("GET", f"/organizations/{org_id}/members") or []
 
 
 class ProjectsResource(_Base):

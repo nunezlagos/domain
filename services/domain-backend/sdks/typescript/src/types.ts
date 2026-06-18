@@ -1,17 +1,8 @@
 // Tipos del API Domain (refleja el shape de los handlers Go).
-
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  settings: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
+// issue-21.6: Organization + organization_id removidos (single-org).
 
 export interface Project {
   id: string;
-  organization_id: string;
   name: string;
   slug: string;
   description?: string;
@@ -20,7 +11,6 @@ export interface Project {
 
 export interface Observation {
   id: string;
-  organization_id: string;
   project_id: string;
   content: string;
   observation_type: string;

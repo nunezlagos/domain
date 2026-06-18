@@ -4,15 +4,7 @@ import "time"
 
 // Tipos del API Domain. JSON tags reflejan snake_case del wire format.
 // UUIDs van como string para que el módulo no requiera dependencias externas.
-
-type Organization struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Slug      string                 `json:"slug"`
-	Settings  map[string]any         `json:"settings,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
-}
+// issue-21.6: Organization + organization_id removidos (single-org).
 
 type Member struct {
 	UserID    string    `json:"user_id"`
@@ -22,17 +14,15 @@ type Member struct {
 }
 
 type Project struct {
-	ID             string    `json:"id"`
-	OrganizationID string    `json:"organization_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
-	Description    string    `json:"description,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Observation struct {
 	ID              string         `json:"id"`
-	OrganizationID  string         `json:"organization_id"`
 	ProjectID       string         `json:"project_id"`
 	Content         string         `json:"content"`
 	ObservationType string         `json:"observation_type,omitempty"`

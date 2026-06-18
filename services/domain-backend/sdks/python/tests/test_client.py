@@ -21,7 +21,6 @@ async def test_create_project(client_factory):
     respx.post("http://test.local/api/v1/projects").mock(
         return_value=Response(201, json={"data": {
             "id": "11111111-1111-1111-1111-111111111111",
-            "organization_id": "22222222-2222-2222-2222-222222222222",
             "name": "Demo", "slug": "demo", "description": "",
             "created_at": "2026-06-07T00:00:00Z",
         }}),
@@ -36,7 +35,6 @@ async def test_observations_save(client_factory):
     respx.post("http://test.local/api/v1/observations").mock(
         return_value=Response(201, json={"data": {
             "id": "33333333-3333-3333-3333-333333333333",
-            "organization_id": "22222222-2222-2222-2222-222222222222",
             "project_id": "11111111-1111-1111-1111-111111111111",
             "content": "hola", "observation_type": "note",
             "tags": [], "metadata": {},

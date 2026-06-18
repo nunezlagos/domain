@@ -60,17 +60,15 @@ func TestAuthHeaderAndContentType(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","name":"Acme","slug":"acme","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"11111111-1111-1111-1111-111111111111","name":"Demo","slug":"demo","description":"","created_at":"2026-01-01T00:00:00Z"}}`))
 	})
 
 	c := newTestClient(t, h)
-	// single-org (issue-21.5): Create/Delete del SDK se removieron. Verificamos
-	// la construcción del request (headers/UA/método/path/body) vía Update (PATCH).
-	const orgID = "00000000-0000-0000-0000-000000000001"
-	name := "Acme"
-	org, err := c.Organizations.Update(context.Background(), orgID, OrganizationUpdateInput{Name: &name})
+	// issue-21.6: Organization resource eliminado. Verificamos la construcción
+	// del request (headers/UA/método/path/body) vía Projects.Create (POST).
+	proj, err := c.Projects.Create(context.Background(), ProjectCreateInput{Name: "Demo", Slug: "demo"})
 	if err != nil {
-		t.Fatalf("Update: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 	if want := "Bearer " + testKey; gotAuth != want {
 		t.Errorf("auth header = %q, want %q", gotAuth, want)
@@ -84,17 +82,17 @@ func TestAuthHeaderAndContentType(t *testing.T) {
 	if gotAccept != "application/json" {
 		t.Errorf("accept = %q", gotAccept)
 	}
-	if gotMethod != "PATCH" {
+	if gotMethod != "POST" {
 		t.Errorf("method = %q", gotMethod)
 	}
-	if gotPath != "/api/v1/organizations/"+orgID {
+	if gotPath != "/api/v1/projects" {
 		t.Errorf("path = %q", gotPath)
 	}
-	if gotBody["name"] != "Acme" {
-		t.Errorf("body name = %v", gotBody["name"])
+	if gotBody["name"] != "Demo" || gotBody["slug"] != "demo" {
+		t.Errorf("body = %v", gotBody)
 	}
-	if org.Slug != "acme" {
-		t.Errorf("response slug = %q", org.Slug)
+	if proj.Slug != "demo" {
+		t.Errorf("response slug = %q", proj.Slug)
 	}
 }
 
@@ -108,15 +106,15 @@ func TestCursorPaginationRoundtrip(t *testing.T) {
 		case "":
 			_, _ = w.Write([]byte(`{
 				"data":[
-					{"id":"id-1","organization_id":"org","project_id":"p","content":"a","created_at":"2026-01-01T00:00:00Z"},
-					{"id":"id-2","organization_id":"org","project_id":"p","content":"b","created_at":"2026-01-01T00:00:00Z"}
+					{"id":"id-1","project_id":"p","content":"a","created_at":"2026-01-01T00:00:00Z"},
+					{"id":"id-2","project_id":"p","content":"b","created_at":"2026-01-01T00:00:00Z"}
 				],
 				"pagination":{"next_cursor":"cur-2","has_more":true,"limit":2}
 			}`))
 		case "cur-2":
 			_, _ = w.Write([]byte(`{
 				"data":[
-					{"id":"id-3","organization_id":"org","project_id":"p","content":"c","created_at":"2026-01-01T00:00:00Z"}
+					{"id":"id-3","project_id":"p","content":"c","created_at":"2026-01-01T00:00:00Z"}
 				],
 				"pagination":{"next_cursor":"","has_more":false,"limit":2}
 			}`))

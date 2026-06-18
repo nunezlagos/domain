@@ -1,4 +1,7 @@
-"""Modelos Pydantic que reflejan el shape de Domain API."""
+"""Modelos Pydantic que reflejan el shape de Domain API.
+
+issue-21.6: Organization + organization_id removidos (single-org).
+"""
 
 from __future__ import annotations
 
@@ -9,18 +12,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-class Organization(BaseModel):
-    id: UUID
-    name: str
-    slug: str
-    settings: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime
-    updated_at: datetime
-
-
 class Project(BaseModel):
     id: UUID
-    organization_id: UUID
     name: str
     slug: str
     description: str = ""
@@ -29,7 +22,6 @@ class Project(BaseModel):
 
 class Observation(BaseModel):
     id: UUID
-    organization_id: UUID
     project_id: UUID
     content: str
     observation_type: str = "note"

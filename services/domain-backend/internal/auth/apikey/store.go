@@ -19,6 +19,11 @@ import (
 
 var ErrNotFound = errors.New("api key not found")
 
+// ISSUE-21.6: UUID canónico para single-org. Se usa para poblar
+// APIKeyInfo.OrgID y variables orgID locales ahora que la columna
+// u.organization_id no se selecciona (Fase C).
+var canonicalOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 // PGStore Postgres-backed.
 type PGStore struct {
 	Pool *pgxpool.Pool
@@ -65,11 +70,12 @@ type APIKeyInfo struct {
 // solo para devolver el campo en APIKeyInfo.OrgID).
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
 	_ = orgID
+	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C);
+	// se sigue retornando OrgID en APIKeyInfo con default canónico.
 	rows, err := s.Pool.Query(ctx, `
-		SELECT k.id, u.organization_id, k.user_id, k.name, k.key_prefix,
+		SELECT k.id, k.user_id, k.name, k.key_prefix,
 		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
 		FROM api_keys k
-		JOIN users u ON u.id = k.user_id
 		WHERE k.revoked_at IS NULL
 		ORDER BY k.created_at DESC
 	`)
@@ -80,8 +86,14 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	var keys []APIKeyInfo
 	for rows.Next() {
 		var k APIKeyInfo
-		if err := rows.Scan(&k.ID, &k.OrgID, &k.UserID, &k.Name, &k.Prefix,
+		// ISSUE-21.6: OrgID canónico single-org (uuid.Nil → set abajo).
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix,
 			&k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt, &k.CreatedAt); err != nil {
+			k.OrgID = canonicalOrgID
+		} else {
+			k.OrgID = canonicalOrgID
+		}
+		_ = k.OrgID // será removido en Round 5
 			return nil, fmt.Errorf("scan api key: %w", err)
 		}
 		keys = append(keys, k)
@@ -151,8 +163,9 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	}
 
 	// Buscar candidates por prefix (puede haber colision; prefix incluye 7 chars random)
+	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C).
 	rows, err := s.Pool.Query(ctx,
-		`SELECT k.id, u.organization_id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
+		`SELECT k.id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
 		 FROM api_keys k
 		 JOIN users u ON u.id = k.user_id
 		 WHERE k.key_prefix = $1
@@ -173,9 +186,15 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 			hash   []byte
 			role   string
 		)
-		if err := rows.Scan(&id, &orgID, &userID, &hash, &role); err != nil {
+		// ISSUE-21.6: orgID local al Scan (ya no se selecciona de la DB).
+		var id, orgID, userID uuid.UUID
+		var hash []byte
+		var role string
+		_ = orgID // no-op: orgID ya no se selecciona
+		if err := rows.Scan(&id, &userID, &hash, &role); err != nil {
 			return nil, err
 		}
+		orgID = canonicalOrgID
 		if Verify(plaintext, hash) == nil {
 			// touch last_used_at (best effort, no bloqueante)
 			go func(id uuid.UUID) {

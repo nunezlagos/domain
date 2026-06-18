@@ -127,7 +127,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		in.OrganizationID, in.CreatedBy, in.Slug, in.Name, nullStr(in.Description),
 		in.CronExpression, in.Timezone, in.TargetType, in.TargetID,
 		inputsJSON, in.Enabled, next,
-	).Scan(&c.ID, &c.OrganizationID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
+	).Scan(&c.ID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
 		&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
 		&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
@@ -159,7 +159,8 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
 	// El param orgID se ignora (_ = orgID) por compat de firma.
 	_ = orgID
 	rows, err := s.Pool.Query(ctx,
-		`SELECT id, organization_id, created_by, slug, name, COALESCE(description,''),
+		// ISSUE-21.6: organization_id omitido del SELECT.
+		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
 		 FROM crons WHERE deleted_at IS NULL
@@ -184,7 +185,8 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Cron, error) {
 	var c Cron
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, organization_id, created_by, slug, name, COALESCE(description,''),
+		// ISSUE-21.6: organization_id omitido del SELECT.
+		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
 		 FROM crons WHERE id = $1 AND deleted_at IS NULL`, id,
@@ -215,7 +217,8 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx,
-		`SELECT id, organization_id, created_by, slug, name, COALESCE(description,''),
+		// ISSUE-21.6: organization_id omitido del SELECT.
+		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
 		 FROM crons

@@ -110,11 +110,12 @@ func (s *Service) LoginWithMeta(ctx context.Context, in LoginInput) (*LoginResul
 	var u User
 	var hash []byte
 	err := s.AuthPool.QueryRow(ctx,
-		`SELECT id, organization_id, email, name, password_hash
+		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+		`SELECT id, email, name, password_hash
 		   FROM users
 		   WHERE email = $1 AND deleted_at IS NULL`,
 		in.Email,
-	).Scan(&u.ID, &u.OrganizationID, &u.Email, &u.Name, &hash)
+	).Scan(&u.ID, &u.Email, &u.Name, &hash)
 	if errors.Is(err, pgx.ErrNoRows) || len(hash) == 0 {
 		// constant-time: hace bcrypt aunque no haya hash, para no leak
 		// timing.
@@ -203,10 +204,11 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 	// Recargar user + verificar rol.
 	var u User
 	err = s.AuthPool.QueryRow(ctx,
-		`SELECT id, organization_id, email, name
+		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+		`SELECT id, email, name
 		   FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		userID,
-	).Scan(&u.ID, &u.OrganizationID, &u.Email, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.Name)
 	if err != nil {
 		s.audit(ctx, authEvent{Kind: "role_select_failed", UserID: &userID,
 			Success: false, Reason: "user_not_found", IP: ip, UserAgent: userAgent})
@@ -272,7 +274,8 @@ type Active struct {
 func (s *Service) Resolve(ctx context.Context, plainToken string) (*Active, error) {
 	hash := hashToken(plainToken)
 	row := s.AuthPool.QueryRow(ctx,
-		`SELECT s.id, s.user_id, s.organization_id, s.expires_at,
+		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+		`SELECT s.id, s.user_id, s.expires_at,
 		        r.id, r.slug, r.name, r.permissions
 		   FROM auth_sessions s
 		   JOIN roles r ON r.id = s.active_role_id
@@ -282,7 +285,7 @@ func (s *Service) Resolve(ctx context.Context, plainToken string) (*Active, erro
 	var a Active
 	var expiresAt time.Time
 	if err := row.Scan(
-		&a.SessionID, &a.UserID, &a.OrganizationID, &expiresAt,
+		&a.SessionID, &a.UserID, &expiresAt,
 		&a.Role.ID, &a.Role.Slug, &a.Role.Name, &a.Role.Permissions,
 	); err != nil {
 		return nil, ErrTokenInvalid
@@ -327,11 +330,12 @@ func (s *Service) Logout(ctx context.Context, plainToken string) error {
 	hash := hashToken(plainToken)
 	// Tomamos los datos del session ANTES de revocar para que el audit
 	// log sepa quién hizo logout. Si el token ya no existe es no-op.
-	var sessID, userID, orgID uuid.UUID
+	// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+	var sessID, userID uuid.UUID
 	_ = s.AuthPool.QueryRow(ctx,
-		`SELECT id, user_id, organization_id FROM auth_sessions WHERE token_hash = $1`,
+		`SELECT id, user_id FROM auth_sessions WHERE token_hash = $1`,
 		hash,
-	).Scan(&sessID, &userID, &orgID)
+	).Scan(&sessID, &userID)
 	_, err := s.AuthPool.Exec(ctx,
 		`UPDATE auth_sessions
 		   SET revoked_at = NOW()

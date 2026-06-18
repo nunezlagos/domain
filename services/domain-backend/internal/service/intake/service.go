@@ -158,8 +158,9 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
 	var p Payload
+	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
 	err := s.Pool.QueryRow(ctx, `
-		SELECT id, source, source_ref, organization_id, submitted_by, raw_text, raw_payload,
+		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
 		       status, classified_type, classified_severity, classified_confidence,
 		       classification_reasoning, needs_clarification, proposed_title,
 		       proposed_description, proposed_req_slug, proposed_hu_draft,
@@ -290,8 +291,9 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, source, source_ref, organization_id, submitted_by, raw_text, raw_payload,
+		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
 		       status, classified_type, classified_severity, classified_confidence,
 		       classification_reasoning, needs_clarification, proposed_title,
 		       proposed_description, proposed_req_slug, proposed_hu_draft,

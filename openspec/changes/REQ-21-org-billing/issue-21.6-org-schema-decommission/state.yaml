@@ -25,6 +25,39 @@ notes: |
     organizations (root) queda intacta para Fase C (DROP TABLE final).
     PENDIENTE: Fase D (SDK + seeds + docs) y Fase C (DROP COLUMN/TABLE con backup+dry-run local).
 
+  FASE D EJECUTADA (2026-06-18, commit 3ce3f94):
+    SDK go/python/typescript podados — Organization model + organization_id field removidos
+    del wire format. organizations.go (Go), OrganizationsResource (Python/TS) eliminados.
+    tests SDK actualizados (fixtures sin organization_id).
+    Docs:
+      - docs/db/rls.md reescrito para reflejar estado post-Fase-A.
+      - docs/single-org.md NUEVO: fuente-de-verdad del estado single-org.
+    Pendiente seeds/fixtures/tests (~189 refs con organization_id): la columna sigue
+    existiendo en DB hasta Fase C; los tests siguen funcionando con ella. Cleanup
+    simbólico se hace como parte de Fase C (cuando la columna ya no exista).
+
+  FASE C LISTA PARA EJECUTAR (2026-06-18, commit 106e021):
+    4 migraciones destructivas (000140-000143) + script deploy + helper dry-run +
+    runbook completo. NO se ejecuta automáticamente — el operador corre
+    scripts/req-21.6-fase-c-deploy.sh después de leer docs/runbooks/req-21.6-fase-c.md.
+    Pre-requisitos: pgBackRest backup reciente (<24h) + binario con Fase B+C deployado.
+    Pasos: pg_dump → dry-run testcontainers con diff de filas → apply en prod →
+    post-count → aborta si extra rows. Rollback quirúrgico (.down.sql) o completo
+    (pgBackRest restore). Migraciones:
+    - 000140: drop FKs hacia organizations (no destructivo de datos)
+    - 000141: drop organization_id en 5 satélites Fase B
+    - 000142: drop organization_id en ~49 tablas restantes
+    - 000143: drop current_org_id() + trigger + organizations table
+
+  RESUMEN FINAL al 2026-06-18 (3 commits para cerrar el requerimiento):
+    - bcc5196 (Fase B): 14 archivos, +768 lines. Per-consumer cleanup de 5 satélites.
+    - 3ce3f94 (Fase D): 15 archivos, +227/-184 lines. SDKs podados + docs.
+    - 106e021 (Fase C ready): 11 archivos, +828 lines. Migraciones + script + runbook.
+    Total: 40 archivos tocados, ~1823 insertions / ~184 deletions.
+    PENDIENTE EJECUCIÓN: Fase C requiere operador (script deploy + dry-run local).
+    Una vez ejecutada y verificada: status → implemented, ticket DOMAINSERV-3 → done,
+    REQ-21 → archived.
+
   FASE A EJECUTADA (2026-06-17, decisión del operador "ejecutar solo Fase A"):
     - Migración 000132_disable_org_rls: DISABLE ROW LEVEL SECURITY en 19 tablas org-scoped
       (no otp_codes). Reversible (down = ENABLE+FORCE; policies no se dropearon).

@@ -86,13 +86,15 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, err
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID, kind string) ([]*Policy, error) {
+	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+	_ = orgID
 	q := `SELECT ` + selectCols + `
 		   FROM project_policies
-		   WHERE organization_id = $1 AND project_id = $2
+		   WHERE project_id = $1
 		     AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`
-	args := []any{orgID, projectID}
+	args := []any{projectID}
 	if kind != "" {
-		q += " AND kind = $3"
+		q += " AND kind = $2"
 		args = append(args, kind)
 	}
 	q += " ORDER BY kind ASC, slug ASC"
@@ -113,12 +115,13 @@ func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID, kin
 }
 
 func (r *pgRepository) GetBySlug(ctx context.Context, orgID, projectID uuid.UUID, slug string) (*Policy, error) {
+	_ = orgID
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM project_policies
-		 WHERE organization_id = $1 AND project_id = $2 AND slug = $3
+		 WHERE project_id = $1 AND slug = $2
 		   AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`,
-		orgID, projectID, slug,
+		projectID, slug,
 	)
 	p, err := scanPolicy(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -128,11 +131,12 @@ func (r *pgRepository) GetBySlug(ctx context.Context, orgID, projectID uuid.UUID
 }
 
 func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Policy, error) {
+	_ = orgID
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM project_policies
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	p, err := scanPolicy(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -143,6 +147,7 @@ func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Policy, e
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput, changedBy *uuid.UUID) (*Policy, error) {
 	// Estrategia: leer actual, mergear, bumpear version, snapshot a versions, update.
+	_ = orgID
 	curr, err := r.Get(ctx, orgID, id)
 	if err != nil {
 		return nil, err
@@ -183,21 +188,22 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE project_policies
-		 SET name=$3, kind=$4, body_md=$5, body_structured=$6,
-		     override_platform=$7, version=$8
-		 WHERE organization_id=$1 AND id=$2 AND deleted_at IS NULL
+		 SET name=$2, kind=$3, body_md=$4, body_structured=$5,
+		     override_platform=$6, version=$7
+		 WHERE id=$1 AND deleted_at IS NULL
 		 RETURNING `+selectCols,
-		orgID, id, curr.Name, curr.Kind, curr.BodyMD, structuredBytes,
+		id, curr.Name, curr.Kind, curr.BodyMD, structuredBytes,
 		curr.OverridePlatform, newVersion,
 	)
 	return scanPolicy(row)
 }
 
 func (r *pgRepository) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
+	_ = orgID
 	tag, err := r.q(ctx).Exec(ctx,
 		`UPDATE project_policies SET deleted_at = NOW(), is_active = FALSE
-		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		orgID, id,
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("soft-delete project_policy: %w", err)

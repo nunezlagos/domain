@@ -116,8 +116,8 @@ func TestSeedFlowsForOrg_PreservesUserModifications(t *testing.T) {
 
 	var name string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT name FROM flows WHERE organization_id=$1 AND slug=$2`,
-		orgID, seeds.SDDPipelineFlowSlug).Scan(&name))
+		`SELECT name FROM flows WHERE slug=$1`,
+		seeds.SDDPipelineFlowSlug).Scan(&name))
 	require.Equal(t, "CUSTOM PIPELINE", name, "customización debe sobrevivir reseed")
 }
 

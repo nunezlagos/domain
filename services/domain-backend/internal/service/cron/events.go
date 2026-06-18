@@ -114,10 +114,13 @@ func (b *EventBus) runHandler(ctx context.Context, ev Event, h Handler) {
 }
 
 func (b *EventBus) persist(ctx context.Context, ev Event) error {
+	// ISSUE-21.6 Fase D clean Round 3: la columna organization_id se
+	// dropea en Fase C. single-org → NULL por default (compatible con
+	// el schema nullable post-Fase B).
 	_, err := b.Pool.Exec(ctx, `
-		INSERT INTO event_log (id, type, organization_id, project_id, payload, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		ev.ID, ev.Type, ev.OrganizationID, ev.ProjectID, ev.Payload, ev.CreatedAt,
+		INSERT INTO event_log (id, type, project_id, payload, created_at)
+		VALUES ($1, $2, $3, $4, $5)`,
+		ev.ID, ev.Type, ev.ProjectID, ev.Payload, ev.CreatedAt,
 	)
 	return err
 }
@@ -127,7 +130,9 @@ func (b *EventBus) Replay(ctx context.Context, typeFilter string, since time.Tim
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	q := `SELECT id, type, organization_id, project_id, payload, created_at
+	// ISSUE-21.6 Fase D clean Round 3: organization_id removido del SELECT
+	// (la columna se dropea en Fase C).
+	q := `SELECT id, type, project_id, payload, created_at
 	      FROM event_log WHERE created_at >= $1`
 	args := []any{since}
 	if typeFilter != "" {
@@ -146,7 +151,7 @@ func (b *EventBus) Replay(ctx context.Context, typeFilter string, since time.Tim
 	var out []Event
 	for rows.Next() {
 		var ev Event
-		if err := rows.Scan(&ev.ID, &ev.Type, &ev.OrganizationID, &ev.ProjectID,
+		if err := rows.Scan(&ev.ID, &ev.Type, &ev.ProjectID,
 			&ev.Payload, &ev.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}

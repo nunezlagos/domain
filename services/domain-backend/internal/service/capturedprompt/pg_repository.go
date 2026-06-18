@@ -34,15 +34,20 @@ func (r *pgRepository) q(ctx context.Context) querier {
 	return r.pool
 }
 
-const selectCols = `id, organization_id, user_id, session_id, project_id,
-		content, COALESCE(client_kind,''), COALESCE(model,''),
+// selectCols sin organization_id (Fase D clean — single-org, la columna
+// será dropeada en Fase C). El campo OrganizationID en el struct Prompt
+// se conserva por compat con código que lo lee, pero queda siempre uuid.Nil.
+const selectCols = `id, user_id, session_id, project_id,
+		content, organization_id,
+		COALESCE(client_kind,''), COALESCE(model,''),
 		char_count, response_chars, estimated_tokens_in, estimated_tokens_out,
 		captured_at, turn_completed_at`
 
 func scanPrompt(row pgx.Row) (*Prompt, error) {
 	var p Prompt
 	if err := row.Scan(
-		&p.ID, &p.OrganizationID, &p.UserID, &p.SessionID, &p.ProjectID,
+		&p.ID, &p.UserID, &p.SessionID, &p.ProjectID,
+		&p.OrganizationID,
 		&p.Content, &p.ClientKind, &p.Model, &p.CharCount,
 		&p.ResponseChars, &p.EstimatedTokensIn, &p.EstimatedTokensOut,
 		&p.CapturedAt, &p.TurnCompletedAt,
@@ -63,13 +68,16 @@ func estimateTokens(chars int) int {
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, error) {
 	estIn := estimateTokens(in.CharCount)
+	// ISSUE-21.6 Fase D clean: organization_id ya no se persiste en
+	// captured_prompts. La columna existe pero se omite del INSERT
+	// (queda NULL por default). Dropeada en Fase C (migration 000142).
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO captured_prompts
-		   (organization_id, user_id, session_id, project_id,
+		   (user_id, session_id, project_id,
 		    content, client_kind, model, char_count, estimated_tokens_in)
-		 VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),$8,$9)
+		 VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,$8)
 		 RETURNING `+selectCols,
-		in.OrganizationID, in.UserID, in.SessionID, in.ProjectID,
+		in.UserID, in.SessionID, in.ProjectID,
 		in.Content, in.ClientKind, in.Model, in.CharCount, estIn,
 	)
 	p, err := scanPrompt(row)
@@ -81,15 +89,17 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, er
 
 func (r *pgRepository) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error) {
 	estOut := estimateTokens(in.ResponseChars)
+	// ISSUE-21.6 Fase D clean: WHERE clause sin organization_id.
+	// El param in.OrganizationID se ignora (single-org).
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE captured_prompts
-		   SET response_chars       = $3,
-		       estimated_tokens_out = $4,
-		       model                = COALESCE(NULLIF($5,''), model),
+		   SET response_chars       = $2,
+		       estimated_tokens_out = $3,
+		       model                = COALESCE(NULLIF($4,''), model),
 		       turn_completed_at    = NOW()
-		   WHERE organization_id = $1 AND id = $2
+		   WHERE id = $1
 		   RETURNING `+selectCols,
-		in.OrganizationID, in.PromptID, in.ResponseChars, estOut, in.Model,
+		in.PromptID, in.ResponseChars, estOut, in.Model,
 	)
 	p, err := scanPrompt(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -115,8 +125,11 @@ func (r *pgRepository) summarize(ctx context.Context, where string, args ...any)
 	return out, nil
 }
 
+// ISSUE-21.6 Fase D clean: orgID se ignora. Las queries retornan TODOS
+// los rows (single-org, sin scope por org).
 func (r *pgRepository) SummarizeBySession(ctx context.Context, orgID, sessionID uuid.UUID) (*SessionUsage, error) {
-	out, err := r.summarize(ctx, "WHERE organization_id = $1 AND session_id = $2", orgID, sessionID)
+	_ = orgID // compat de firma
+	out, err := r.summarize(ctx, "WHERE session_id = $1", sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +139,8 @@ func (r *pgRepository) SummarizeBySession(ctx context.Context, orgID, sessionID 
 }
 
 func (r *pgRepository) SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*SessionUsage, error) {
-	out, err := r.summarize(ctx, "WHERE organization_id = $1 AND project_id = $2", orgID, projectID)
+	_ = orgID // compat de firma
+	out, err := r.summarize(ctx, "WHERE project_id = $1", projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,11 +150,12 @@ func (r *pgRepository) SummarizeByProject(ctx context.Context, orgID, projectID 
 }
 
 func (r *pgRepository) Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (*Prompt, error) {
+	_ = orgID // compat de firma
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
 		 FROM captured_prompts
-		 WHERE organization_id = $1 AND id = $2`,
-		orgID, id,
+		 WHERE id = $1`,
+		id,
 	)
 	p, err := scanPrompt(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -153,9 +168,10 @@ func (r *pgRepository) Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]*Prompt, int64, error) {
-	conds := []string{"organization_id = $1"}
-	args := []any{orgID}
-	idx := 2
+	_ = orgID // compat de firma
+	idx := 1
+	var conds []string
+	var args []any
 	if filter.SessionID != nil {
 		conds = append(conds, fmt.Sprintf("session_id = $%d", idx))
 		args = append(args, *filter.SessionID)
@@ -171,7 +187,10 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFil
 		args = append(args, *filter.UserID)
 		idx++
 	}
-	where := "WHERE " + joinAnd(conds)
+	var where string
+	if len(conds) > 0 {
+		where = "WHERE " + joinAnd(conds)
+	}
 
 	var total int64
 	if err := r.q(ctx).QueryRow(ctx,

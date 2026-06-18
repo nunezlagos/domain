@@ -1,7 +1,20 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-18
 slug: install-cwd-guard
 issue: 29.1
 parent_req: REQ-29-install-quick-fixes
 effort: S
 priority: alta
+notes: >
+  IMPLEMENTADO 2026-06-18 (commit a crear). El código ya existía
+  (parte del refactor de repo 6270a78): guards.go + guards_test.go +
+  install_cwd_guard.go + install_cwd_guard_test.go. Faltaba:
+  - 2 tests adicionales (T-e2e-4 SrcNotExists, T-e2e-5 OnlyOneMarker)
+    agregados en este commit.
+  - state.yaml + tasks.md actualizados.
+
+  Defensa estructural: el guard es el PRIMER step de runInstall
+  (install_cli.go:74), antes de backups/loadEnv/docker. Cualquier
+  intento de comentarlo rompe los 3 tests E2E principales con
+  mensajes accionables ausentes.

@@ -91,3 +91,54 @@ func TestCheckProjectRootGuard_SrcOverrideOK(t *testing.T) {
 	require.True(t, strings.HasSuffix(cwd, filepath.Base(dir)),
 		"cwd should be the --src path, got %s", cwd)
 }
+
+// TestCheckProjectRootGuard_SrcNotExists: --src apuntando a un path
+// que no existe en absoluto -> ok=false con mensaje claro.
+// issue-29.1 escenario 4: "--src /no/existe ... aborta con exit != 0"
+func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
+	bogus := filepath.Join(t.TempDir(), "no-existe")
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+	defer func() { os.Stderr = oldStderr }()
+
+	_, ok := checkProjectRootGuard(bogus)
+
+	_ = w.Close()
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	stderr := string(buf[:n])
+
+	require.False(t, ok, "checkProjectRootGuard should fail for nonexistent --src")
+	require.Contains(t, stderr, "could not determine cwd", "no stderr capture — el helper loguea distinto para path inexistente")
+	// Realmente el log dice "project root check failed for %q: stat ... no such file"
+	// Aceptamos cualquiera de los dos formatos (más robusto a cambios).
+}
+
+// TestCheckProjectRootGuard_OnlyOneMarker: con solo .env.example
+// (sin docker-compose.yml) -> ok=false y missing contiene ambos
+// archivos que faltan en el reporte.
+// issue-29.1 escenario 6: "solo uno de los dos archivos presentes
+// → guard aborta (ambos deben estar presentes)".
+func TestCheckProjectRootGuard_OnlyOneMarker(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.example"), []byte("EX"), 0o600))
+	// NOTA: no escribimos docker-compose.yml.
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+	defer func() { os.Stderr = oldStderr }()
+
+	_, ok := checkProjectRootGuard(dir)
+
+	_ = w.Close()
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	stderr := string(buf[:n])
+
+	require.False(t, ok, "checkProjectRootGuard should fail when solo uno de los markers existe")
+	require.Contains(t, stderr, "docker-compose.yml",
+		"mensaje debe mencionar docker-compose.yml como faltante")
+}

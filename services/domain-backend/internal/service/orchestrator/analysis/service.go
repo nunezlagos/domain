@@ -121,16 +121,19 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 	}, nil
 }
 
-// resolveProjectID busca un project activo en la organización. Usamos
-// el primero encontrado porque el análisis es org-scoped, no project-scoped.
-// Si la org no tiene projects, devuelve ErrNoProjectForOrg.
+// resolveProjectID busca un project activo. Usamos el primero encontrado
+// (single-org, no hay scope por org). Si no hay projects, devuelve
+// ErrNoProjectForOrg.
+//
+// ISSUE-21.6 Fase D clean: el param orgID se ignora (_ = orgID).
 func (s *Service) resolveProjectID(ctx context.Context, orgID uuid.UUID) (uuid.UUID, error) {
+	_ = orgID
 	var id uuid.UUID
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id FROM projects
-		WHERE organization_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL
 		ORDER BY created_at ASC
-		LIMIT 1`, orgID,
+		LIMIT 1`,
 	).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

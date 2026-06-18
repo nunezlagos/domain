@@ -347,7 +347,9 @@ func (s *Service) Logout(ctx context.Context, plainToken string) error {
 		hash,
 	)
 	if err == nil && sessID != uuid.Nil {
-		s.audit(ctx, authEvent{Kind: "logout", UserID: &userID, OrgID: &orgID,
+		// ISSUE-21.6: orgID se omite del audit (single-org, no se selecciona
+		// de auth_sessions.organization_id).
+		s.audit(ctx, authEvent{Kind: "logout", UserID: &userID, OrgID: nil,
 			Success: true, Reason: "ok", SessionID: &sessID})
 	}
 	return err

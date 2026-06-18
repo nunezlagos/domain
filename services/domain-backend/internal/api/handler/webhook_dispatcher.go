@@ -72,10 +72,8 @@ func NewWebhookDispatcher(cfg WebhookDispatcherConfig) *WebhookDispatcher {
 	if cfg.Dispatch == nil {
 		cfg.Dispatch = func(ctx context.Context, _ webhookJob) {
 			// Default no-op para que el dispatcher pueda existir
-			sin dispatch real (caso de test sin lógica de negocio).
+			// sin dispatch real (caso de test sin lógica de negocio).
 		}
-		// Reemplaza el default noop con el wrapper que cancela con ctx.
-		_ = cfg
 	}
 
 	d := &WebhookDispatcher{

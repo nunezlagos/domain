@@ -197,7 +197,7 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 
 		// org_flow_config es config global (single-org, sin organization_id).
 		var maxDur int
-		err = tx.QueryRow(ctx,
+		err := tx.QueryRow(ctx,
 			`SELECT max_flow_duration_seconds FROM org_flow_config LIMIT 1`,
 		).Scan(&maxDur)
 		if err == nil {

@@ -78,17 +78,11 @@ func (s *PlansSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Report, erro
 	// starter). Vienen tanto de la migration 000032 como del seeder v1.
 	// En single-org (ISSUE-21.6) NO se borra nada: los plans son globales
 	// y la columna organizations.plan_id se dropea en Fase C. El cleanup
-	// defensivo queda desactivado (se reactivaría en multi-tenant).
-	_ = cleanupSlugs // keep variable referenced for future multi-tenant reactivation
-	// cleanupSlugs := []string{"free", "pro", "starter", "team", "enterprise"}
-	// for _, slug := range cleanupSlugs {
-	//   _, err := tx.Exec(ctx, `
-	//       DELETE FROM plans WHERE slug = $1`, slug) // single-org: sin scope per-org
-	//   ...
-	// }
-			rep.Errors = append(rep.Errors, fmt.Sprintf("cleanup %s: %v", slug, err))
-		}
-	}
+	// defensivo queda desactivado (se reactivaría en multi-tenant con la
+	// variable cleanupSlugs redeclarada y el loop for comentado abajo).
+	//
+	// El bloque de cleanup queda comentado por single-org; ver git history
+	// (R3 commit 38e5c05) para el código multi-tenant que se reactivaría.
 
 	return rep, nil
 }

@@ -138,6 +138,7 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 
 	// ISSUE-21.6: SELECT sin organization_id.
 	_ = f.OrganizationID
+	args := []any{}
 	q := `
 		SELECT id, project_id, actor_id, action, entity_type, entity_id,
 		       summary, metadata, visibility, created_at

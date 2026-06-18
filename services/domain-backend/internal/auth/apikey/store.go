@@ -86,16 +86,13 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	var keys []APIKeyInfo
 	for rows.Next() {
 		var k APIKeyInfo
-		// ISSUE-21.6: OrgID canónico single-org (uuid.Nil → set abajo).
+		// ISSUE-21.6: OrgID canónico single-org (la columna
+		// u.organization_id no se selecciona de la DB).
 		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix,
 			&k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt, &k.CreatedAt); err != nil {
-			k.OrgID = canonicalOrgID
-		} else {
-			k.OrgID = canonicalOrgID
-		}
-		_ = k.OrgID // será removido en Round 5
 			return nil, fmt.Errorf("scan api key: %w", err)
 		}
+		k.OrgID = canonicalOrgID
 		keys = append(keys, k)
 	}
 	return keys, nil
@@ -179,22 +176,19 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	defer rows.Close()
 
 	for rows.Next() {
+		// ISSUE-21.6: orgID local al Scan (ya no se selecciona de la DB).
 		var (
 			id     uuid.UUID
-			orgID  uuid.UUID
 			userID uuid.UUID
 			hash   []byte
 			role   string
 		)
-		// ISSUE-21.6: orgID local al Scan (ya no se selecciona de la DB).
-		var id, orgID, userID uuid.UUID
-		var hash []byte
-		var role string
-		_ = orgID // no-op: orgID ya no se selecciona
+		_ = id // no-op: id local al Scan
 		if err := rows.Scan(&id, &userID, &hash, &role); err != nil {
 			return nil, err
 		}
-		orgID = canonicalOrgID
+		orgID := canonicalOrgID
+		_ = orgID
 		if Verify(plaintext, hash) == nil {
 			// touch last_used_at (best effort, no bloqueante)
 			go func(id uuid.UUID) {

@@ -9,4 +9,4 @@ hus:
   28.5-fix-ignored-errors: implemented  # state.yaml/HU ya implemented; sincronización REQ-28
   28.6-fix-circuit-breaker-stream: implemented  # 2026-06-18 — recordFailure mid-stream + 3 tests
   28.7-webhook-goroutine-lifecycle: implemented  # 2026-06-18 — WebhookDispatcher + 6 tests
-  28.8-timeafter-timertimer: proposed
+  28.8-timeafter-timertimer: implemented  # 2026-06-18 — refactor 6 retry/poll loops (los más críticos)

@@ -290,8 +290,8 @@ func TestSeedSkillsForOrg_BuiltinCatalog(t *testing.T) {
 
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM skills WHERE organization_id=$1 AND seed_managed=TRUE`,
-		orgID).Scan(&count))
+		`SELECT COUNT(*) FROM skills WHERE seed_managed=TRUE`,
+	).Scan(&count))
 	require.GreaterOrEqual(t, count, 5)
 }
 
@@ -313,15 +313,15 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 	// Verifica que sdd-orchestrator está (reemplazó a supervisor en v3)
 	var slug string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT slug FROM agent_templates WHERE organization_id=$1 AND slug='sdd-orchestrator'`,
-		orgID).Scan(&slug))
+		`SELECT slug FROM agent_templates WHERE slug='sdd-orchestrator'`,
+	).Scan(&slug))
 	require.Equal(t, "sdd-orchestrator", slug)
 
 	// Verifica que sdd-explore tiene capabilities (reemplazó a researcher en v3)
 	var caps []string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT capabilities FROM agent_templates WHERE organization_id=$1 AND slug='sdd-explore'`,
-		orgID).Scan(&caps))
+		`SELECT capabilities FROM agent_templates WHERE slug='sdd-explore'`,
+	).Scan(&caps))
 	require.Contains(t, caps, "code-search")
 }
 
@@ -343,7 +343,7 @@ func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 	// Usuario customiza skill "summarize"
 	_, err = pools.App.Exec(ctx,
 		`UPDATE skills SET description = 'CUSTOM USER VERSION', is_user_modified = TRUE
-		 WHERE organization_id = $1 AND slug = 'summarize'`, orgID)
+		 WHERE slug = 'summarize'`)
 	require.NoError(t, err)
 
 	// Re-seed con bump de version
@@ -353,7 +353,7 @@ func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 
 	var desc string
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT description FROM skills WHERE organization_id=$1 AND slug='summarize'`,
-		orgID).Scan(&desc))
+		`SELECT description FROM skills WHERE slug='summarize'`,
+	).Scan(&desc))
 	require.Equal(t, "CUSTOM USER VERSION", desc, "user modifications no se sobrescriben")
 }

@@ -29,3 +29,12 @@ data/
 Thumbs.db
 *.swp
 *.swo
+
+# Config local del IDE/MCP — paths absolutos del home del dev (rompen
+# `git pull` en otros clones) y pueden llevar API keys locales. Ver
+# services/domain-backend/.gitignore para detalle + issue-29.4 (test
+# que blinda que NUNCA vuelvan a trackearse).
+opencode.json
+opencode.json.backup-*
+.mcp.json
+.mcp.json.backup-*

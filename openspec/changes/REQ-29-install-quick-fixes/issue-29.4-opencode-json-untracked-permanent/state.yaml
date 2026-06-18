@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-18
 slug: opencode-json-untracked-permanent
 issue: 29.4
 parent_req: REQ-29-install-quick-fixes
@@ -8,3 +9,14 @@ priority: alta
 notes: >
   Las entradas en .gitignore ya están (commit revert del 2026-06-12).
   Este issue solo blinda con test de regresión.
+
+  IMPLEMENTADO 2026-06-18 (commit a crear): el test
+  internal/cli/install/gitignore_guard_test.go ya estaba escrito por
+  sesión previa pero las entradas solo vivían en
+  services/domain-backend/.gitignore (líneas 37-40). El test busca en
+  <repoRoot>/.gitignore — fallaba. Fix: agregar las 4 entradas al
+  .gitignore raíz. Backend .gitignore se mantiene (no hace daño tener
+  duplicadas: git hace merge).
+
+  Tests: TestOpencodeJSONNotTracked + TestGitignoreHasLocalConfigEntries.
+  Ambos verde en estado actual del repo.

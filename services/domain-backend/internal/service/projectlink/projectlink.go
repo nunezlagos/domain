@@ -34,14 +34,18 @@ func (s *Service) LinkByGitRemote(ctx context.Context, remote string) (projectID
 	if len(candidates) == 0 {
 		return "", "", "", fmt.Errorf("empty remote")
 	}
+	// ISSUE-21.6: SELECT sin organization_id (single-org, no se necesita
+	// discriminar por org al buscar por repository_url).
+	// orgID queda vacío en el retorno (compat de firma; callers que lo usen
+	// deben migrar a ignorar este valor).
 	err = s.Pool.QueryRow(ctx, `
-		SELECT id::text, organization_id::text, slug
+		SELECT id::text, slug
 		FROM projects
 		WHERE deleted_at IS NULL
 		  AND repository_url = ANY($1::text[])
 		ORDER BY array_position($1::text[], repository_url)
 		LIMIT 1
-	`, candidates).Scan(&projectID, &orgID, &slug)
+	`, candidates).Scan(&projectID, &slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", "", "", nil

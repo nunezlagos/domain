@@ -247,12 +247,13 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 // Get retrieve un draft por ID.
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Draft, error) {
 	var d Draft
+	// ISSUE-21.6: SELECT sin organization_id.
 	err := s.Pool.QueryRow(ctx, `
-		SELECT id, organization_id, created_by, mode, initial_idea, answers,
+		SELECT id, created_by, mode, initial_idea, answers,
 		       current_step, total_steps, status, pending_clarifications,
 		       preview, target_path, committed_at, expires_at, created_at, updated_at
 		FROM issue_drafts WHERE id = $1`, id,
-	).Scan(&d.ID, &d.OrganizationID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
+	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -463,7 +464,8 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 
 // List devuelve drafts filtrados por status (vacío = todos los activos).
 func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
-	q := `SELECT id, organization_id, created_by, mode, initial_idea, answers,
+	// ISSUE-21.6: SELECT sin organization_id.
+	q := `SELECT id, created_by, mode, initial_idea, answers,
 	             current_step, total_steps, status, pending_clarifications,
 	             preview, target_path, committed_at, expires_at, created_at, updated_at
 	      FROM issue_drafts`
@@ -483,7 +485,7 @@ func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
 	var out []Draft
 	for rows.Next() {
 		var d Draft
-		if err := rows.Scan(&d.ID, &d.OrganizationID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
+		if err := rows.Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 			&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 			&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan draft: %w", err)

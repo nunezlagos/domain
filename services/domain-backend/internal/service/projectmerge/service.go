@@ -77,12 +77,13 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	defer tx.Rollback(ctx)
 
 	// 1. Validar ambos existen + misma org + source not deleted
-	var sourceOrg, targetOrg uuid.UUID
+	// ISSUE-21.6: SELECT sin organization_id (single-org, no se necesita
+	// validar que source/target sean de la misma org). sourceOrg queda vacío.
 	var sourceDeleted *time.Time
 	var sourceSlug string
 	err = tx.QueryRow(ctx,
-		`SELECT organization_id, deleted_at, slug FROM projects WHERE id = $1`, sourceID,
-	).Scan(&sourceOrg, &sourceDeleted, &sourceSlug)
+		`SELECT deleted_at, slug FROM projects WHERE id = $1`, sourceID,
+	).Scan(&sourceDeleted, &sourceSlug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: source", ErrNotFound)
 	}
@@ -93,18 +94,19 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		return nil, ErrAlreadyMerged
 	}
 
+	// ISSUE-21.6: SELECT sin organization_id (single-org).
+	// targetOrg queda vacío (la validación cross-org ya no aplica).
 	err = tx.QueryRow(ctx,
-		`SELECT organization_id FROM projects WHERE id = $1 AND deleted_at IS NULL`, targetID,
-	).Scan(&targetOrg)
+		`SELECT 1 FROM projects WHERE id = $1 AND deleted_at IS NULL`, targetID,
+	).Scan(new(int))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: target", ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("lookup target: %w", err)
 	}
-	if sourceOrg != targetOrg {
-		return nil, ErrCrossOrg
-	}
+	// ISSUE-21.6: validación cross-org eliminada (single-org, sourceOrg y
+	// targetOrg son siempre la misma org canónica implícita).
 
 	// 2. Mover observations (no conflict — no UNIQUE en slug por project).
 	tag, err := tx.Exec(ctx,

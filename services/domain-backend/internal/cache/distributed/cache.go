@@ -106,12 +106,16 @@ func (l *Listener) Start(ctx context.Context) error {
 			slog.Duration("backoff", backoff),
 		)
 
+		// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+		bt := time.NewTimer(backoff)
 		select {
 		case <-l.stopCh:
+			bt.Stop()
 			return nil
 		case <-ctx.Done():
+			bt.Stop()
 			return ctx.Err()
-		case <-time.After(backoff):
+		case <-bt.C:
 		}
 
 		backoff *= 2

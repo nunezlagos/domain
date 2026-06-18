@@ -133,10 +133,14 @@ func (r *Runner) runStepWithRetry(ctx context.Context, runID uuid.UUID, step *fl
 		if r.Metrics != nil {
 			r.Metrics.FlowStepRetriesTotal.WithLabelValues(flowSlug, step.ID).Inc()
 		}
+		// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+		delay := plan.delay(attempt)
+		dt := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			dt.Stop()
 			return out, ctx.Err(), append(attemptErrors, ctx.Err().Error()), retryCount
-		case <-time.After(plan.delay(attempt)):
+		case <-dt.C:
 		}
 	}
 	return out, stepErr, attemptErrors, retryCount

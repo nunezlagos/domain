@@ -140,10 +140,13 @@ func (s *SignalStore) Wait(ctx context.Context, flowRunID uuid.UUID, stepKey *st
 		if time.Now().After(deadline) {
 			return nil, ErrSignalNotFound
 		}
+		// ISSUE-28.8: NewTimer reusable en poll loop (time.After leak).
+		t := time.NewTimer(pollInterval)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return nil, ctx.Err()
-		case <-time.After(pollInterval):
+		case <-t.C:
 		}
 	}
 }

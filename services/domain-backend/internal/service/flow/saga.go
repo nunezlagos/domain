@@ -175,10 +175,14 @@ func (s *SagaStore) runCompensateWithRetry(ctx context.Context, runID uuid.UUID,
 			break
 		}
 
+		// ISSUE-28.8: NewTimer reusable en loop (time.After leak).
+		backoff := time.Duration(attempt+1) * 500 * time.Millisecond
+		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return ctx.Err()
-		case <-time.After(time.Duration(attempt+1) * 500 * time.Millisecond):
+		case <-t.C:
 		}
 	}
 	return lastErr
@@ -433,10 +437,14 @@ func (s *SagaExecutor) runCompensateWithRetry(ctx context.Context, runID uuid.UU
 			break
 		}
 
+		// ISSUE-28.8: NewTimer reusable en loop (time.After leak).
+		backoff := time.Duration(attempt+1) * 500 * time.Millisecond
+		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return ctx.Err()
-		case <-time.After(time.Duration(attempt+1) * 500 * time.Millisecond):
+		case <-t.C:
 		}
 	}
 	return lastErr

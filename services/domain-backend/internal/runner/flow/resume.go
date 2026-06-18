@@ -161,11 +161,14 @@ LOOP:
 				if r.Metrics != nil {
 					r.Metrics.FlowStepRetriesTotal.WithLabelValues(f.Slug, step.ID).Inc()
 				}
+				// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+				bt := time.NewTimer(backoff)
 				select {
 				case <-ctxStep.Done():
+					bt.Stop()
 					stepErr = ctxStep.Err()
 					break
-				case <-time.After(backoff):
+				case <-bt.C:
 				}
 				backoff *= 2
 				if backoff > maxBackoff {

@@ -35,7 +35,8 @@ func (r *pgRepository) q(ctx context.Context) querier {
 	return r.pool
 }
 
-const selectCols = `id, organization_id, project_id, slug, name, kind,
+// ISSUE-21.6: selectCols sin organization_id (Fase C).
+const selectCols = `id, project_id, slug, name, kind,
 		body_md, body_structured, version, is_active, override_platform,
 		source, created_at, updated_at, deleted_at`
 
@@ -43,7 +44,7 @@ func scanPolicy(row pgx.Row) (*Policy, error) {
 	var p Policy
 	var structured []byte
 	if err := row.Scan(
-		&p.ID, &p.OrganizationID, &p.ProjectID, &p.Slug, &p.Name, &p.Kind,
+		&p.ID, &p.ProjectID, &p.Slug, &p.Name, &p.Kind,
 		&p.BodyMD, &structured, &p.Version, &p.IsActive, &p.OverridePlatform,
 		&p.Source, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 	); err != nil {
@@ -69,13 +70,14 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, err
 	if source == "" {
 		source = "manual"
 	}
+	// ISSUE-21.6: INSERT sin organization_id.
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_policies
-		   (organization_id, project_id, slug, name, kind,
+		   (project_id, slug, name, kind,
 		    body_md, body_structured, override_platform, source)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		 RETURNING `+selectCols,
-		in.OrganizationID, in.ProjectID, in.Slug, in.Name, in.Kind,
+		in.ProjectID, in.Slug, in.Name, in.Kind,
 		in.BodyMD, structuredBytes, in.OverridePlatform, source,
 	)
 	p, err := scanPolicy(row)

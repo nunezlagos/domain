@@ -181,13 +181,14 @@ func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 		newJSON = b
 	}
 
+	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
 	_, err := r.Pool.Exec(ctx, `
 		INSERT INTO audit_log (
-			organization_id, origin_org_id, actor_id, actor_type, action, entity_type, entity_id,
+			actor_id, actor_type, action, entity_type, entity_id,
 			old_values, new_values, ip_address, user_agent, request_id, trace_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`,
-		e.OrganizationID, e.OriginOrgID, e.ActorID, string(e.ActorType), e.Action,
+		e.ActorID, string(e.ActorType), e.Action,
 		e.EntityType, e.EntityID,
 		oldJSON, newJSON,
 		nullIfEmpty(e.IPAddress), nullIfEmpty(e.UserAgent),

@@ -35,10 +35,10 @@ func (r *pgRepository) q(ctx context.Context) querier {
 }
 
 // selectCols sin organization_id (Fase D clean — single-org, la columna
-// será dropeada en Fase C). El campo OrganizationID en el struct Prompt
+// se dropea en Fase C). El campo OrganizationID en el struct Prompt
 // se conserva por compat con código que lo lee, pero queda siempre uuid.Nil.
 const selectCols = `id, user_id, session_id, project_id,
-		content, organization_id,
+		content,
 		COALESCE(client_kind,''), COALESCE(model,''),
 		char_count, response_chars, estimated_tokens_in, estimated_tokens_out,
 		captured_at, turn_completed_at`
@@ -47,7 +47,6 @@ func scanPrompt(row pgx.Row) (*Prompt, error) {
 	var p Prompt
 	if err := row.Scan(
 		&p.ID, &p.UserID, &p.SessionID, &p.ProjectID,
-		&p.OrganizationID,
 		&p.Content, &p.ClientKind, &p.Model, &p.CharCount,
 		&p.ResponseChars, &p.EstimatedTokensIn, &p.EstimatedTokensOut,
 		&p.CapturedAt, &p.TurnCompletedAt,

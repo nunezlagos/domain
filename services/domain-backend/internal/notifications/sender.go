@@ -29,12 +29,13 @@ func (s *Sender) Send(ctx context.Context, channelSlug string, msg Message) (uui
 	}
 	deliveryID := uuid.New()
 
-	// Insert pre-envío con status=pending.
+	// Insert pre-envío con status=pending. ISSUE-21.6: organization_id
+	// se omite (la columna se dropea en Fase C via 000142).
 	if _, err := s.Pool.Exec(ctx,
 		`INSERT INTO notification_deliveries
-			(id, organization_id, channel_slug, recipient, template_slug, subject, body, status, attempt)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',1)`,
-		deliveryID, msg.OrganizationID, channelSlug, msg.Recipient,
+			(id, channel_slug, recipient, template_slug, subject, body, status, attempt)
+		 VALUES ($1,$2,$3,$4,$5,$6,'pending',1)`,
+		deliveryID, channelSlug, msg.Recipient,
 		nullableSlug(msg.TemplateSlug), nullableString(msg.Subject), msg.Body); err != nil {
 		return uuid.Nil, fmt.Errorf("insert delivery: %w", err)
 	}

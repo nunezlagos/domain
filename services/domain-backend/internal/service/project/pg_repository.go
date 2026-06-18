@@ -35,9 +35,8 @@ func (r *pgRepository) q(ctx context.Context) querier {
 	return r.pool
 }
 
-// selectCols centraliza el SELECT list que todas las queries leen — incluye
-// el LEFT JOIN clients (REQ-28.2) para popular ClientSlug / ClientName.
-const selectCols = `p.id, p.organization_id, p.name, p.slug,
+// ISSUE-21.6: selectCols sin p.organization_id.
+const selectCols = `p.id, p.name, p.slug,
 		COALESCE(p.description,''),
 		COALESCE(p.repository_url,''),
 		p.template_id, p.settings, p.client_id,
@@ -48,7 +47,7 @@ const fromJoin = `FROM projects p LEFT JOIN clients c ON c.id = p.client_id`
 
 func scanProject(row pgx.Row, p *Project) error {
 	var clientSlug, clientName string
-	if err := row.Scan(&p.ID, &p.OrganizationID, &p.Name, &p.Slug, &p.Description,
+	if err := row.Scan(&p.ID, &p.Name, &p.Slug, &p.Description,
 		&p.RepositoryURL, &p.TemplateID, &p.Settings, &p.ClientID,
 		&clientSlug, &clientName,
 		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt); err != nil {

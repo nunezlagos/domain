@@ -115,16 +115,19 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 	}
 	inputsJSON, _ := json.Marshal(in.Inputs)
 
+	// ISSUE-21.6: INSERT sin organization_id (la columna se dropea en
+	// Fase C via 000142). Hasta entonces, crons.organization_id queda NULL
+	// (la tabla acepta NULL post-000145).
 	var c Cron
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO crons
-		   (organization_id, created_by, slug, name, description, cron_expression,
+		   (created_by, slug, name, description, cron_expression,
 		    timezone, target_type, target_id, inputs, enabled, next_run_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		 RETURNING id, organization_id, created_by, slug, name, COALESCE(description,''),
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 RETURNING id, created_by, slug, name, COALESCE(description,''),
 		           cron_expression, timezone, target_type, target_id, inputs, enabled,
 		           last_run_at, next_run_at, created_at, updated_at`,
-		in.OrganizationID, in.CreatedBy, in.Slug, in.Name, nullStr(in.Description),
+		in.CreatedBy, in.Slug, in.Name, nullStr(in.Description),
 		in.CronExpression, in.Timezone, in.TargetType, in.TargetID,
 		inputsJSON, in.Enabled, next,
 	).Scan(&c.ID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,

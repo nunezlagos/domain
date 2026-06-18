@@ -101,6 +101,10 @@ type API struct {
 	FlowRunner       *flowrunner.Runner
 	CronService      *cronsvc.Service
 	WebhookService   *webhooksvc.Service
+	// ISSUE-28.7: dispatcher para webhooks inbound. Bounded queue +
+	// WaitGroup + per-job timeout. Si nil, el handler cae al fallback
+	// legacy (go func() directo).
+	WebhookDispatcher *WebhookDispatcher
 	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega acá.
 	// Si nil, usa el switch legacy (compat).
 	Dispatcher *dispatch.Dispatcher

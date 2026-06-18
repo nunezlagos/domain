@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -57,8 +58,29 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	// Construir inputs según mapping
 	inputs := buildInputs(body, hook.InputsMapping)
 
-	// Dispatch en background (no block client; webhook devuelve 202 Accepted)
-	go a.runWebhookTarget(context.Background(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
+	// ISSUE-28.7: dispatch vía WebhookDispatcher (bounded queue + WaitGroup +
+	// per-job timeout). Si la cola está llena o el dispatcher cerró → 503.
+	if a.WebhookDispatcher == nil {
+		// Fallback al comportamiento legacy si el dispatcher no está
+		// configurado (backward compat para tests que no inicializan
+		// el struct completo).
+		go a.runWebhookTarget(r.Context(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
+	} else {
+		job := webhookJob{
+			hookID:    hook.ID.String(),
+			hookSlug:  hook.Slug,
+			hook:      hook,
+			body:      body,
+			inputs:    inputs,
+			headers:   collectHeaders(r),
+			remote:    r.RemoteAddr,
+			startedAt: time.Now(),
+		}
+		if !a.WebhookDispatcher.Enqueue(r.Context(), job) {
+			writeError(w, http.StatusServiceUnavailable, "backpressure", "webhook queue full")
+			return
+		}
+	}
 
 	writeData(w, http.StatusAccepted, map[string]any{
 		"received": true, "webhook_id": hook.ID, "target_type": hook.TargetType,

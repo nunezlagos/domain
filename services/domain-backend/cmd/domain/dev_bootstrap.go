@@ -99,6 +99,11 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	defer pool.Close()
 
 	// 1) Org idempotente.
+	// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
+	// Fase C. dev-bootstrap es una herramienta setup-time obsoleta en
+	// single-org (la org canónica existe implícita). Mantenemos el flujo
+	// best-effort: si la tabla no existe (Fase C), usamos un UUID fijo
+	// canónico sin intentar el INSERT.
 	var orgID string
 	err = pool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ($1, $2)
@@ -107,8 +112,9 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 		orgName, orgSlug,
 	).Scan(&orgID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "create org: %v\n", err)
-		os.Exit(1)
+		// Tabla dropeada: usar UUID canónico single-org.
+		orgID = "00000000-0000-0000-0000-000000000001"
+		fmt.Fprintf(os.Stderr, "warn: organizations table not available, using canonical single-org UUID %s\n", orgID)
 	}
 	fmt.Printf("✓ org id=%s slug=%s\n", orgID, orgSlug)
 

@@ -76,17 +76,16 @@ func (s *PlansSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Report, erro
 
 	// Limpiar tiers viejos con nombres comerciales (free/pro/team/enterprise/
 	// starter). Vienen tanto de la migration 000032 como del seeder v1.
-	// Solo elimina los que NO estén asignados a ninguna org.
-	cleanupSlugs := []string{"free", "pro", "starter", "team", "enterprise"}
-	for _, slug := range cleanupSlugs {
-		_, err := tx.Exec(ctx, `
-			DELETE FROM plans
-			WHERE slug = $1
-			  AND NOT EXISTS (
-			    SELECT 1 FROM organizations WHERE plan_id = plans.id
-			  )`, slug)
-		if err != nil {
-			// best-effort cleanup, no falla el seed
+	// En single-org (ISSUE-21.6) NO se borra nada: los plans son globales
+	// y la columna organizations.plan_id se dropea en Fase C. El cleanup
+	// defensivo queda desactivado (se reactivaría en multi-tenant).
+	_ = cleanupSlugs // keep variable referenced for future multi-tenant reactivation
+	// cleanupSlugs := []string{"free", "pro", "starter", "team", "enterprise"}
+	// for _, slug := range cleanupSlugs {
+	//   _, err := tx.Exec(ctx, `
+	//       DELETE FROM plans WHERE slug = $1`, slug) // single-org: sin scope per-org
+	//   ...
+	// }
 			rep.Errors = append(rep.Errors, fmt.Sprintf("cleanup %s: %v", slug, err))
 		}
 	}

@@ -31,7 +31,7 @@ import (
 const (
 	TokenPrefix      = "sess_"
 	BcryptCost       = 12
-	TempTokenTTL     = 1 * time.Minute
+	TempTokenTTL     = 15 * time.Minute
 	SessionTTL       = 8 * time.Hour
 	TempTokenSecret  = "domain-temp-token-v1" // prefix interno, no es secreto criptográfico
 )

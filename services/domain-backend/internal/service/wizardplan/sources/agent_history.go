@@ -41,23 +41,24 @@ func (s *AgentHistorySource) Run(ctx context.Context, env *wizardplan.ContextEnv
 
 	// Query agent_runs recientes; usa ILIKE sobre nombre de agent + outputs
 	// JSONB. Sin embedding por ahora — heurística simple.
+	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+	_ = s // unused-org scoping
 	q := `
 		SELECT ar.id, COALESCE(a.slug, ''), ar.started_at,
 		       LEFT(COALESCE(ar.outputs::text, ''), 200) AS summary
 		FROM agent_runs ar
 		LEFT JOIN agents a ON a.id = ar.agent_id
-		WHERE ar.organization_id = $1
-		  AND ar.started_at >= now() - $2::INTERVAL`
-	args := []any{s.OrgID, days}
+		WHERE ar.started_at >= now() - $1::INTERVAL`
+	args := []any{days}
 	if s.UserID != nil {
-		q += ` AND ar.triggered_by = $3`
+		q += ` AND ar.triggered_by = $2`
 		args = append(args, *s.UserID)
 	}
 	q += ` ORDER BY ar.started_at DESC LIMIT $`
 	if s.UserID != nil {
-		q += "4"
-	} else {
 		q += "3"
+	} else {
+		q += "2"
 	}
 	args = append(args, limit*3) // sobre-fetch para filtrar después
 

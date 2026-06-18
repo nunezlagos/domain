@@ -147,16 +147,17 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	}
 
 	var t Task
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	_ = orgID
 	err = tx.QueryRow(ctx, `
 		SELECT id, organization_id, kind, required_labels, payload, status, created_at
 		FROM selfhosted_tasks
-		WHERE organization_id = $1
-		  AND status = 'queued'
-		  AND (required_labels = '{}' OR required_labels <@ $2::text[])
+		WHERE status = 'queued'
+		  AND (required_labels = '{}' OR required_labels <@ $1::text[])
 		ORDER BY created_at ASC
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
-		orgID, labels,
+		labels,
 	).Scan(&t.ID, &t.OrganizationID, &t.Kind, &t.RequiredLabels, &t.Payload, &t.Status, &t.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoTask

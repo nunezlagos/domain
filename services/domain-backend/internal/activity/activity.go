@@ -135,16 +135,17 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 		limit = 50
 	}
 
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	_ = f.OrganizationID
 	q := `
 		SELECT id, organization_id, project_id, actor_id, action, entity_type, entity_id,
 		       summary, metadata, visibility, created_at
 		FROM activity_log
-		WHERE organization_id = $1`
-	args := []any{f.OrganizationID}
+		WHERE TRUE`
 
 	if f.ProjectID != nil {
+		q += fmt.Sprintf(" AND project_id = $%d", len(args)+1)
 		args = append(args, *f.ProjectID)
-		q += fmt.Sprintf(" AND project_id = $%d", len(args))
 	}
 	if f.ActorID != nil {
 		args = append(args, *f.ActorID)

@@ -59,17 +59,20 @@ type APIKeyInfo struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
-// List retorna keys activas de una org (no revoked). El scope por org se deriva
-// del user dueño de la key (users.organization_id), no de api_keys.
+// List retorna keys activas (no revoked). ISSUE-21.6 Fase D clean:
+// single-org, WHERE sin organization_id (la tabla api_keys.organization_id
+// es nullable tras Fase B; el JOIN a users.organization_id se conserva
+// solo para devolver el campo en APIKeyInfo.OrgID).
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
+	_ = orgID
 	rows, err := s.Pool.Query(ctx, `
 		SELECT k.id, u.organization_id, k.user_id, k.name, k.key_prefix,
 		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
-		WHERE u.organization_id = $1 AND k.revoked_at IS NULL
+		WHERE k.revoked_at IS NULL
 		ORDER BY k.created_at DESC
-	`, orgID)
+	`)
 	if err != nil {
 		return nil, fmt.Errorf("list api keys: %w", err)
 	}

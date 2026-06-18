@@ -80,17 +80,17 @@ func (c *Cache) Lookup(ctx context.Context, orgID, provider, model, paramsHash s
 	var e Entry
 	var sim float64
 	vecLit := vectorLiteral(embedding)
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
 	err := c.Pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT id, organization_id, provider, model, params_hash, prompt_hash,
 		       prompt_preview, response, tokens, hit_count, created_at, last_used_at,
 		       1 - (prompt_embedding <=> %s) AS similarity
 		FROM llm_semantic_cache
-		WHERE organization_id = $1
-		  AND provider = $2
-		  AND model = $3
-		  AND params_hash = $4
-		  AND created_at >= $5
-		  AND (1 - (prompt_embedding <=> %s)) >= $6
+		WHERE provider = $1
+		  AND model = $2
+		  AND params_hash = $3
+		  AND created_at >= $4
+		  AND (1 - (prompt_embedding <=> %s)) >= $5
 		ORDER BY prompt_embedding <=> %s
 		LIMIT 1`, vecLit, vecLit, vecLit),
 		orgID, provider, model, paramsHash, cutoff, minSim,

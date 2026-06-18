@@ -117,11 +117,13 @@ func (i *Idempotency) lookup(ctx context.Context, orgID uuid.UUID, key string) (
 		body    []byte
 		hash    []byte
 	)
+	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	_ = orgID
 	err := i.Pool.QueryRow(ctx,
 		`SELECT response_status, response_headers, response_body, request_body_hash
 		 FROM idempotency_keys
-		 WHERE organization_id = $1 AND key = $2 AND expires_at > NOW()`,
-		orgID, key,
+		 WHERE key = $1 AND expires_at > NOW()`,
+		key,
 	).Scan(&status, &headers, &body, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, err

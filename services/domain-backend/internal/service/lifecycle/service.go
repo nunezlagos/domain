@@ -167,12 +167,19 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	}
 	out.User = usr
 
-	// 2. organization (one, the user's)
-	orgRow, _ := scanRow(ctx, s.q(ctx),
-		`SELECT id, name, slug, settings, created_at, plan_id, custom_limits
-		 FROM organizations WHERE id = $1`, orgID)
-	if orgRow != nil {
-		out.Organizations = []map[string]any{orgRow}
+	// 2. organization (one, the user's).
+	// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
+	// Fase C. En single-org mode, el user siempre pertenece a la org
+	// canónica. Devolvemos un placeholder con id/name/slug default.
+	out.Organizations = []map[string]any{
+		{
+			"id":         "00000000-0000-0000-0000-000000000001",
+			"name":       "default",
+			"slug":       "default",
+			"settings":   "{}",
+			"created_at": time.Now().UTC(),
+			"plan_id":    nil,
+		},
 	}
 
 	// 3-N. Tablas con created_by = userID

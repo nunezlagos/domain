@@ -1042,8 +1042,16 @@ func runServer() {
 		slog.String("path", "/mcp"),
 		slog.String("auth", "Bearer api_key"))
 
-	// Aplica tracing + metrics middleware al mux principal
-	handler := metricsReg.HTTPMiddleware(tracing.HTTPMiddleware("domain")(mux))
+	// Aplica middleware en orden OUTER→INNER:
+	//   recover (más externo) → metrics → tracing → mux
+	// recover va primero porque si el handler panics, queremos el
+	// stack trace en el log ANTES de que metrics lo cuente como
+	// request exitoso (issue-29.3 T5).
+	handler := httpserver.RecoverMiddleware(logger)(
+		metricsReg.HTTPMiddleware(
+			tracing.HTTPMiddleware("domain")(mux),
+		),
+	)
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),

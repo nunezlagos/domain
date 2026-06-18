@@ -1,5 +1,6 @@
-status: proposed
+status: implemented
 created: 2026-06-12
+implemented: 2026-06-18
 slug: server-http-listener-boot-fail-loud
 issue: 29.3
 parent_req: REQ-29-install-quick-fixes
@@ -11,3 +12,18 @@ notes: >
   "active" pero sin listener HTTP. Root cause hipotética: bind error
   silenciado o panic recuperado antes del os.Exit. Fix: FATAL log
   explícito + watchdog post-bind + panic recovery en handler root.
+
+  IMPLEMENTADO 2026-06-18 (commit a crear): el código de los helpers ya
+  existía (ListenAndServeWithFatalLog, RunPostBindWatchdog, ProbeHealth)
+  y los tests unit. Lo que faltaba: RecoverMiddleware (T5) + integración
+  en cmd/domain/main.go + 3 tests e2e (TestServerExitsOnBindError,
+  TestServerExitsOnHealthCheckFailure, TestServerExitsCleanlyOnSIGTERM).
+
+  Patrón aplicado en main.go:1045-1051:
+    handler := httpserver.RecoverMiddleware(logger)(
+      metricsReg.HTTPMiddleware(
+        tracing.HTTPMiddleware("domain")(mux),
+      ),
+    )
+  recover va más externo que metrics para que un panic no quede contado
+  como request exitoso en métricas.

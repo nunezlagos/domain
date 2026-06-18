@@ -253,10 +253,11 @@ func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRo
 		startedAt  *time.Time
 		finishedAt *time.Time
 	)
+	// ISSUE-21.6: organization_id omitido del SELECT.
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, organization_id, flow_id, status, cursor, started_at, finished_at
+		SELECT id, flow_id, status, cursor, started_at, finished_at
 		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&row.ID, &row.OrganizationID, &row.FlowID, &row.Status,
+	).Scan(&row.ID, &row.FlowID, &row.Status,
 		&cursorRaw, &startedAt, &finishedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -233,8 +233,9 @@ func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntr
 		limit = filter.Limit
 	}
 
+	// ISSUE-21.6: organization_id omitido del SELECT.
 	rows, err := r.Pool.Query(ctx, fmt.Sprintf(`
-		SELECT id, organization_id, actor_id, actor_type, action,
+		SELECT id, actor_id, actor_type, action,
 		       entity_type, entity_id, old_values, new_values,
 		       ip_address, user_agent, request_id, trace_id, occurred_at
 		FROM audit_log
@@ -251,7 +252,7 @@ func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntr
 	for rows.Next() {
 		var e AuditEntry
 		if err := rows.Scan(
-			&e.ID, &e.OrganizationID, &e.ActorID, &e.ActorType, &e.Action,
+			&e.ID, &e.ActorID, &e.ActorType, &e.Action,
 			&e.EntityType, &e.EntityID, &e.OldValues, &e.NewValues,
 			&e.IPAddress, &e.UserAgent, &e.RequestID, &e.TraceID, &e.OccurredAt,
 		); err != nil {

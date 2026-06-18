@@ -135,10 +135,10 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 		limit = 50
 	}
 
-	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+	// ISSUE-21.6: SELECT sin organization_id.
 	_ = f.OrganizationID
 	q := `
-		SELECT id, organization_id, project_id, actor_id, action, entity_type, entity_id,
+		SELECT id, project_id, actor_id, action, entity_type, entity_id,
 		       summary, metadata, visibility, created_at
 		FROM activity_log
 		WHERE TRUE`
@@ -182,7 +182,7 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 		var e Entry
 		var metaJSON []byte
 		var vis string
-		if err := rows.Scan(&e.ID, &e.OrganizationID, &e.ProjectID, &e.ActorID,
+		if err := rows.Scan(&e.ID, &e.ProjectID, &e.ActorID,
 			&e.Action, &e.EntityType, &e.EntityID,
 			&e.Summary, &metaJSON, &vis, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("activity scan: %w", err)

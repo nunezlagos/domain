@@ -137,12 +137,12 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	defer tx.Rollback(ctx)
 
 	// Carga labels del runner
-	var orgID uuid.UUID
+	// ISSUE-21.6: organization_id omitido del SELECT.
 	var labels []string
 	err = tx.QueryRow(ctx,
-		`SELECT organization_id, labels FROM selfhosted_runners WHERE id = $1`,
+		`SELECT labels FROM selfhosted_runners WHERE id = $1`,
 		runnerID,
-	).Scan(&orgID, &labels)
+	).Scan(&labels)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRunnerOffline
 	}
@@ -151,10 +151,9 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	}
 
 	var t Task
-	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
-	_ = orgID
+	// ISSUE-21.6 Fase D clean: single-org. SELECT sin organization_id.
 	err = tx.QueryRow(ctx, `
-		SELECT id, organization_id, kind, required_labels, payload, status, created_at
+		SELECT id, kind, required_labels, payload, status, created_at
 		FROM selfhosted_tasks
 		WHERE status = 'queued'
 		  AND (required_labels = '{}' OR required_labels <@ $1::text[])
@@ -162,7 +161,7 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
 		labels,
-	).Scan(&t.ID, &t.OrganizationID, &t.Kind, &t.RequiredLabels, &t.Payload, &t.Status, &t.CreatedAt)
+	).Scan(&t.ID, &t.Kind, &t.RequiredLabels, &t.Payload, &t.Status, &t.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoTask
 	}

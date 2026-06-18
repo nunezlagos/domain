@@ -211,9 +211,7 @@ func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntr
 		return fmt.Sprintf("$%d", argN)
 	}
 
-	if filter.OrganizationID != nil {
-		where += " AND organization_id = " + addArg(*filter.OrganizationID)
-	}
+	// ISSUE-21.6 Fase D clean: filter.OrganizationID se ignora (single-org).
 	if filter.ActorID != nil {
 		where += " AND actor_id = " + addArg(*filter.ActorID)
 	}

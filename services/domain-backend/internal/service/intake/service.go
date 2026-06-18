@@ -125,18 +125,20 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	}
 
 	var p Payload
+	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
+	// (single-org, nullable post-000145).
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO intake_payloads (source, source_ref, organization_id, submitted_by,
+		INSERT INTO intake_payloads (source, source_ref, submitted_by,
 		                             raw_text, raw_payload)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, source, source_ref, organization_id, submitted_by, raw_text, raw_payload,
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, source, source_ref, submitted_by, raw_text, raw_payload,
 		          status, classified_type, classified_severity, classified_confidence,
 		          classification_reasoning, needs_clarification, proposed_title,
 		          proposed_description, proposed_req_slug, proposed_hu_draft,
 		          dedup_candidates, merge_action, reviewer_id, reviewed_at,
 		          rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		          created_at, updated_at`,
-		in.Source, srcRef, in.OrganizationID, subBy, in.RawText, payloadJSON,
+		in.Source, srcRef, subBy, in.RawText, payloadJSON,
 	).Scan(scanPayloadCols(&p)...)
 	if err != nil {
 		return nil, fmt.Errorf("insert intake: %w", err)
@@ -316,8 +318,10 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 }
 
 func scanPayloadCols(p *Payload) []any {
+	// ISSUE-21.6 Fase D clean Round 3: OrganizationID removido del scan
+	// (la columna ya no se selecciona en INSERT/SELECT).
 	return []any{
-		&p.ID, &p.Source, &p.SourceRef, &p.OrganizationID, &p.SubmittedBy,
+		&p.ID, &p.Source, &p.SourceRef, &p.SubmittedBy,
 		&p.RawText, &p.RawPayload, &p.Status,
 		&p.ClassifiedType, &p.ClassifiedSeverity, &p.ClassifiedConfidence,
 		&p.ClassificationReason, &p.NeedsClarification,

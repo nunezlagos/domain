@@ -82,17 +82,20 @@ var (
 	ErrNoTask        = errors.New("no task available")
 )
 
-// RegisterRunner persiste un selfhosted runner. Idempotent por (org, name).
+// RegisterRunner persiste un selfhosted runner. Idempotent por name
+// (single-org: el UNIQUE (org, name) se dropeó en 000145, ahora es solo
+// name; el caller garantiza unicidad via app).
 func (s *Service) RegisterRunner(ctx context.Context, orgID uuid.UUID, name, apiKeyHash string, labels []string) (*Runner, error) {
+	_ = orgID
 	var r Runner
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO selfhosted_runners (organization_id, name, api_key_hash, labels)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (organization_id, name) DO UPDATE
+		INSERT INTO selfhosted_runners (name, api_key_hash, labels)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (name) DO UPDATE
 		  SET api_key_hash = EXCLUDED.api_key_hash, labels = EXCLUDED.labels
-		RETURNING id, organization_id, name, labels, last_heartbeat, created_at`,
-		orgID, name, apiKeyHash, labels,
-	).Scan(&r.ID, &r.OrganizationID, &r.Name, &r.Labels, &r.LastHeartbeat, &r.CreatedAt)
+		RETURNING id, name, labels, last_heartbeat, created_at`,
+		name, apiKeyHash, labels,
+	).Scan(&r.ID, &r.Name, &r.Labels, &r.LastHeartbeat, &r.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("register: %w", err)
 	}
@@ -110,13 +113,14 @@ func (s *Service) Heartbeat(ctx context.Context, runnerID uuid.UUID) error {
 
 // EnqueueTask agrega una task a la queue.
 func (s *Service) EnqueueTask(ctx context.Context, orgID uuid.UUID, kind string, requiredLabels []string, payload []byte) (*Task, error) {
+	_ = orgID
 	var t Task
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO selfhosted_tasks (organization_id, kind, required_labels, payload, status)
-		VALUES ($1, $2, $3, $4, 'queued')
-		RETURNING id, organization_id, kind, required_labels, payload, status, created_at`,
-		orgID, kind, requiredLabels, payload,
-	).Scan(&t.ID, &t.OrganizationID, &t.Kind, &t.RequiredLabels, &t.Payload, &t.Status, &t.CreatedAt)
+		INSERT INTO selfhosted_tasks (kind, required_labels, payload, status)
+		VALUES ($1, $2, $3, 'queued')
+		RETURNING id, kind, required_labels, payload, status, created_at`,
+		kind, requiredLabels, payload,
+	).Scan(&t.ID, &t.Kind, &t.RequiredLabels, &t.Payload, &t.Status, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue: %w", err)
 	}

@@ -61,11 +61,14 @@ func scanProject(row pgx.Row, p *Project) error {
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Project, error) {
 	var id uuid.UUID
+	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
+	// (single-org, nullable post-000145; UNIQUE (org, slug) dropeado en 000145).
+	_ = in.OrganizationID
 	err := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO projects (organization_id, name, slug, description, repository_url, template_id, settings, client_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO projects (name, slug, description, repository_url, template_id, settings, client_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id`,
-		in.OrganizationID, in.Name, in.Slug, nullStr(in.Description), nullStr(in.RepositoryURL),
+		in.Name, in.Slug, nullStr(in.Description), nullStr(in.RepositoryURL),
 		in.TemplateID, in.SettingsJSON, in.ClientID,
 	).Scan(&id)
 	if err != nil {

@@ -105,18 +105,22 @@ func (s *Service) RegisterProvider(ctx context.Context, orgID uuid.UUID, provide
 	}
 
 	var p Provider
+	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
+	// (la columna es nullable post-migration 000145; single-org = NULL).
+	// El UNIQUE constraint external_providers_org_provider_unique se dropeó
+	// en 000145 — el caller garantiza unicidad via app.
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO external_providers (organization_id, provider, display_name, base_url, project_key, config)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (organization_id, provider, project_key)
+		INSERT INTO external_providers (provider, display_name, base_url, project_key, config)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, project_key)
 		DO UPDATE SET display_name = EXCLUDED.display_name,
 		              base_url = EXCLUDED.base_url,
 		              config = EXCLUDED.config,
 		              updated_at = now()
-		RETURNING id, organization_id, provider, display_name, base_url, project_key,
+		RETURNING id, provider, display_name, base_url, project_key,
 		          config, enabled, created_at, updated_at`,
-		orgID, provider, displayName, baseURL, pk, cfgJSON,
-	).Scan(&p.ID, &p.OrganizationID, &p.Provider, &p.DisplayName, &p.BaseURL,
+		provider, displayName, baseURL, pk, cfgJSON,
+	).Scan(&p.ID, &p.Provider, &p.DisplayName, &p.BaseURL,
 		&p.ProjectKey, &p.Config, &p.Enabled, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("register provider: %w", err)

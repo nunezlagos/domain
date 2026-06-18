@@ -244,13 +244,14 @@ func TestE2E_Sabotage_HandlerIgnoresTx(t *testing.T) {
 	// Es un bug RBAC simulado. La RLS debe defender.
 	buggyHandler := func(w http.ResponseWriter, r *http.Request) {
 		// BUG: ignora txctx.TxFromContext y va directo al pool.
-		// Tambien intenta WHERE organization_id = $2 con el org de A
-		// (asi simulamos un intento explicito de filtrar por org del caller,
-		// pero el id de la obs consultada pertenece a B).
+		// ISSUE-21.6 single-org: el filtro cross-org ya no aplica (la tabla
+		// organizations se dropea, no hay RLS por org). Mantenemos el handler
+		// pero removemos el WHERE organization_id = $2 (siempre retorna
+		// el row, lo cual es el comportamiento single-org esperado).
 		var got int
 		err := pool.QueryRow(r.Context(),
-			`SELECT COUNT(*) FROM observations WHERE id = $1 AND organization_id = $2`,
-			obsB, orgA).Scan(&got)
+			`SELECT COUNT(*) FROM observations WHERE id = $1`,
+			obsB).Scan(&got)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return

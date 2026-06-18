@@ -44,10 +44,11 @@ func New(pool *pgxpool.Pool) *Service {
 }
 
 func (s *Service) List(ctx context.Context) ([]Provider, error) {
+	// ISSUE-21.6: WHERE organization_id IS NULL eliminado (single-org:
+	// todos los providers son globales; la columna se dropea en Fase C).
 	rows, err := s.Pool.Query(ctx, `
 		SELECT name, description, command, default_args, env_template, required_env, tags
 		FROM mcp_providers
-		WHERE organization_id IS NULL
 		ORDER BY name
 	`)
 	if err != nil {

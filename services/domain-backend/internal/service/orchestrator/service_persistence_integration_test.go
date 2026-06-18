@@ -136,8 +136,8 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	// flow_id debe matchear el seedeado
 	var seededID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT id FROM flows WHERE organization_id=$1 AND slug=$2`,
-		orgID, seeds.SDDPipelineFlowSlug).Scan(&seededID))
+		`SELECT id FROM flows WHERE slug=$1`,
+		seeds.SDDPipelineFlowSlug).Scan(&seededID))
 	require.Equal(t, seededID, flowID)
 
 	// Verifica metadata JSONB

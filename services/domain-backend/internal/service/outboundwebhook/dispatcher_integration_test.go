@@ -207,7 +207,7 @@ func TestDelivery_RetryAndReplay(t *testing.T) {
 	tag, err := f.pool.App.Exec(ctx, `
 		UPDATE outbound_webhook_deliveries
 		SET status='pending', next_retry_at=NOW(), attempt=1, error_message=NULL
-		WHERE id=$1 AND organization_id=$2`, deliveryID, f.orgID)
+		WHERE id=$1`, deliveryID)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, tag.RowsAffected())
 

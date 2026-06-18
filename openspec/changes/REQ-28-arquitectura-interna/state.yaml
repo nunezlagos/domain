@@ -7,6 +7,6 @@ hus:
   28.3-middleware-principal-crossorg: proposed
   28.4-pgerrcode-error-codes: implemented  # 2026-06-14 — state.yaml/HU ya implemented, REQ-28 desincronizado
   28.5-fix-ignored-errors: implemented  # state.yaml/HU ya implemented; sincronización REQ-28
-  28.6-fix-circuit-breaker-stream: proposed
+  28.6-fix-circuit-breaker-stream: implemented  # 2026-06-18 — recordFailure mid-stream + 3 tests
   28.7-webhook-goroutine-lifecycle: proposed
   28.8-timeafter-timertimer: proposed

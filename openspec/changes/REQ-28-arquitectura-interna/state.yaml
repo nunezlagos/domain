@@ -5,7 +5,7 @@ hus:
   28.1-repository-interfaces: proposed
   28.2-constructors-validation: proposed
   28.3-middleware-principal-crossorg: proposed
-  28.4-pgerrcode-error-codes: proposed
+  28.4-pgerrcode-error-codes: implemented  # 2026-06-14 — state.yaml/HU ya implemented, REQ-28 desincronizado
   28.5-fix-ignored-errors: proposed
   28.6-fix-circuit-breaker-stream: proposed
   28.7-webhook-goroutine-lifecycle: proposed

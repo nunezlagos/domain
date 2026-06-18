@@ -139,11 +139,12 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	vec = append(vec, ']')
 
 	var obsID string
+	// ISSUE-21.6 single-org: no se necesita JOIN con organizations.
 	err = conn.QueryRow(ctx, `
-		INSERT INTO observations (organization_id, project_id, content, embedding)
-		SELECT o.id, p.id, 'hola mundo', $1::vector(1536)
-		FROM organizations o, projects p
-		WHERE p.organization_id = o.id LIMIT 1
+		INSERT INTO observations (project_id, content, embedding)
+		SELECT p.id, 'hola mundo', $1::vector(1536)
+		FROM projects p
+		LIMIT 1
 		RETURNING id::text;
 	`, string(vec)).Scan(&obsID)
 	require.NoError(t, err)

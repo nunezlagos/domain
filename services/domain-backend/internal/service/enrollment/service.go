@@ -97,7 +97,7 @@ func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`UPDATE org_enrollment_tokens
+		`UPDATE enrollment_tokens
 		 SET revoked_at = NOW()
 		 WHERE revoked_at IS NULL`,
 	); err != nil {
@@ -112,7 +112,7 @@ func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*
 		actorParam = actorID
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO org_enrollment_tokens
+		`INSERT INTO enrollment_tokens
 		   (token_hash, token_prefix, role_on_enroll, created_by_user_id)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING created_at`,
@@ -157,7 +157,7 @@ func (s *Service) GetMetadata(ctx context.Context) (*Metadata, error) {
 	var m Metadata
 	err := s.Pool.QueryRow(ctx,
 		`SELECT token_prefix, role_on_enroll, created_at
-		 FROM org_enrollment_tokens
+		 FROM enrollment_tokens
 		 WHERE revoked_at IS NULL`,
 	).Scan(&m.Prefix, &m.RoleOnEnroll, &m.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -174,7 +174,7 @@ func (s *Service) GetMetadata(ctx context.Context) (*Metadata, error) {
 // Si no hay token activo, devuelve ErrNoActive.
 func (s *Service) Revoke(ctx context.Context, actorID uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx,
-		`UPDATE org_enrollment_tokens
+		`UPDATE enrollment_tokens
 		 SET revoked_at = NOW()
 		 WHERE revoked_at IS NULL`,
 	)
@@ -221,7 +221,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	// Buscar candidatos (típicamente 0 o 1 por UNIQUE constraint)
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, token_hash, role_on_enroll
-		 FROM org_enrollment_tokens
+		 FROM enrollment_tokens
 		 WHERE token_prefix = $1 AND revoked_at IS NULL`,
 		prefix,
 	)

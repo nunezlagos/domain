@@ -81,13 +81,13 @@ func New(pool *pgxpool.Pool) *Service {
 }
 
 // Bootstrap ejecuta el flujo completo (single-org: sin entidad organization):
-//   1. Lock advisory (evita race entre dos onboard simultáneos)
-//   2. Verifica first-run (COUNT(users) == 0)
-//   3. Crea user owner (con bcrypt password dummy — el user no tiene password,
-//      usa API key + OTP)
-//   4. Crea api_key con bcrypt del plaintext generado
-//   5. Emite enrollment_token global
-//   6. Commit (o rollback si algo falla)
+//  1. Lock advisory (evita race entre dos onboard simultáneos)
+//  2. Verifica first-run (COUNT(users) == 0)
+//  3. Crea user owner (con bcrypt password dummy — el user no tiene password,
+//     usa API key + OTP)
+//  4. Crea api_key con bcrypt del plaintext generado
+//  5. Emite enrollment_token global
+//  6. Commit (o rollback si algo falla)
 func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapResult, error) {
 	// Validar email
 	email := strings.ToLower(strings.TrimSpace(in.Email))
@@ -164,7 +164,7 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 	}
 	enrollTokenID := uuid.New()
 	_, err = tx.Exec(ctx,
-		`INSERT INTO org_enrollment_tokens
+		`INSERT INTO enrollment_tokens
 		   (id, token_hash, token_prefix, role_on_enroll, created_by_user_id)
 		 VALUES ($1, $2, $3, 'member', $4)`,
 		enrollTokenID, enrollHash, enrollPrefix, userID,

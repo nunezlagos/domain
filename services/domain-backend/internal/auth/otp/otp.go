@@ -2,15 +2,15 @@
 //
 // Flow:
 //  1. Request: identifier (RUT o email) → genera código 6 dígitos, bcrypt hash,
-//     persist en otp_codes, envía via canal email (issue-20.2)
+//     persist en auth_otp_codes, envía via canal email (issue-20.2)
 //  2. Verify: identifier + code + action (reveal | regenerate) → si OK devuelve
 //     API key del user (reveal: actual decifrada; regenerate: nueva).
 //
 // Características:
-//  - Anti-enumeration: response idéntica aunque user no exista
-//  - Bcrypt cost 10 (vs 12 de API keys; OTP es ephemeral 10min)
-//  - Max 5 attempts, single-use, TTL 10min
-//  - SELECT FOR UPDATE para evitar race en verify concurrente
+//   - Anti-enumeration: response idéntica aunque user no exista
+//   - Bcrypt cost 10 (vs 12 de API keys; OTP es ephemeral 10min)
+//   - Max 5 attempts, single-use, TTL 10min
+//   - SELECT FOR UPDATE para evitar race en verify concurrente
 package otp
 
 import (
@@ -77,8 +77,8 @@ type Service struct {
 	Pool          *pgxpool.Pool
 	Users         UserLookup
 	Mail          Mailer
-	TTL           time.Duration // 0 → DefaultTTL
-	MaxAttempts   int           // 0 → DefaultMaxAttempts
+	TTL           time.Duration     // 0 → DefaultTTL
+	MaxAttempts   int               // 0 → DefaultMaxAttempts
 	IdentifyAsRUT func(string) bool // hook custom; default: contiene "-" o todo dígitos
 }
 
@@ -133,7 +133,7 @@ func (s *Service) Request(ctx context.Context, identifier, ipAddress, userAgent 
 
 	expiresAt := time.Now().Add(ttl)
 	_, err = s.Pool.Exec(ctx, `
-		INSERT INTO otp_codes (user_id, code_hash, max_attempts, expires_at, ip_address, user_agent)
+		INSERT INTO auth_otp_codes (user_id, code_hash, max_attempts, expires_at, ip_address, user_agent)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, user.ID, hash, maxAtt, expiresAt, nullStr(ipAddress), nullStr(userAgent))
 	if err != nil {
@@ -150,10 +150,10 @@ func (s *Service) Request(ctx context.Context, identifier, ipAddress, userAgent 
 
 // VerifyResult contiene info para responder al cliente post-OTP.
 type VerifyResult struct {
-	UserID         uuid.UUID
-	Email          string
-	AttemptsLeft   int    // si falló y no llegó a límite
-	OTPID          uuid.UUID
+	UserID       uuid.UUID
+	Email        string
+	AttemptsLeft int // si falló y no llegó a límite
+	OTPID        uuid.UUID
 }
 
 // Verify chequea code, marca used_at, retorna resultado.
@@ -180,7 +180,7 @@ func (s *Service) Verify(ctx context.Context, identifier, code string) (*VerifyR
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT id, code_hash, attempts, max_attempts, expires_at, used_at
-		FROM otp_codes
+		FROM auth_otp_codes
 		WHERE user_id = $1 AND used_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT 1
@@ -204,7 +204,7 @@ func (s *Service) Verify(ctx context.Context, identifier, code string) (*VerifyR
 
 	if err := bcrypt.CompareHashAndPassword(hash, []byte(code)); err != nil {
 		// Increment attempts
-		_, e2 := tx.Exec(ctx, `UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`, otpID)
+		_, e2 := tx.Exec(ctx, `UPDATE auth_otp_codes SET attempts = attempts + 1 WHERE id = $1`, otpID)
 		if e2 == nil {
 			_ = tx.Commit(ctx)
 		}
@@ -217,7 +217,7 @@ func (s *Service) Verify(ctx context.Context, identifier, code string) (*VerifyR
 
 	// Match — mark used
 	now := time.Now()
-	_, err = tx.Exec(ctx, `UPDATE otp_codes SET used_at = $1 WHERE id = $2`, now, otpID)
+	_, err = tx.Exec(ctx, `UPDATE auth_otp_codes SET used_at = $1 WHERE id = $2`, now, otpID)
 	if err != nil {
 		return nil, fmt.Errorf("mark used: %w", err)
 	}

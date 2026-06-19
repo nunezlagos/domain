@@ -40,7 +40,7 @@ func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env 
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id`,
 		userID, hash, prefix, name,
@@ -53,19 +53,19 @@ func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env 
 
 // APIKeyInfo representación pública de una API key (sin hash ni plaintext).
 type APIKeyInfo struct {
-	ID          uuid.UUID  `json:"id"`
-	OrgID       uuid.UUID  `json:"organization_id"`
-	UserID      uuid.UUID  `json:"user_id"`
-	Name        string     `json:"name"`
-	Prefix      string     `json:"prefix"`
-	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID         uuid.UUID  `json:"id"`
+	OrgID      uuid.UUID  `json:"organization_id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	Name       string     `json:"name"`
+	Prefix     string     `json:"prefix"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 // List retorna keys activas (no revoked). ISSUE-21.6 Fase D clean:
-// single-org, WHERE sin organization_id (la tabla api_keys.organization_id
+// single-org, WHERE sin organization_id (la tabla auth_api_keys.organization_id
 // es nullable tras Fase B; el JOIN a users.organization_id se conserva
 // solo para devolver el campo en APIKeyInfo.OrgID).
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
@@ -75,7 +75,7 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	rows, err := s.Pool.Query(ctx, `
 		SELECT k.id, k.user_id, k.name, k.key_prefix,
 		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
-		FROM api_keys k
+		FROM auth_api_keys k
 		WHERE k.revoked_at IS NULL
 		ORDER BY k.created_at DESC
 	`)
@@ -107,14 +107,14 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 	}
 	defer tx.Rollback(ctx)
 
-	_ = orgID // ya no se persiste en api_keys; el org se deriva del user.
+	_ = orgID // ya no se persiste en auth_api_keys; el org se deriva del user.
 	newPlaintext, prefix, hash, err := Generate(env)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id`,
 		userID, hash, prefix, name,
@@ -124,7 +124,7 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 	}
 
 	tag, err := tx.Exec(ctx,
-		`UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, oldKeyID)
+		`UPDATE auth_api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, oldKeyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("revoke old key: %w", err)
 	}
@@ -141,7 +141,7 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 // Revoke marca soft-delete sobre la key.
 func (s *PGStore) Revoke(ctx context.Context, keyID uuid.UUID) error {
 	tag, err := s.Pool.Exec(ctx,
-		`UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, keyID)
+		`UPDATE auth_api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, keyID)
 	if err != nil {
 		return fmt.Errorf("revoke: %w", err)
 	}
@@ -163,7 +163,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C).
 	rows, err := s.Pool.Query(ctx,
 		`SELECT k.id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
-		 FROM api_keys k
+		 FROM auth_api_keys k
 		 JOIN users u ON u.id = k.user_id
 		 WHERE k.key_prefix = $1
 		   AND k.revoked_at IS NULL
@@ -171,7 +171,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		   AND u.deleted_at IS NULL`,
 		prefix)
 	if err != nil {
-		return nil, fmt.Errorf("query api_keys: %w", err)
+		return nil, fmt.Errorf("query auth_api_keys: %w", err)
 	}
 	defer rows.Close()
 
@@ -195,7 +195,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 				ctx2, cancel := context.WithTimeout(context.Background(), 1e9) // 1s
 				defer cancel()
 				_, _ = s.Pool.Exec(ctx2,
-					`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, id)
+					`UPDATE auth_api_keys SET last_used_at = NOW() WHERE id = $1`, id)
 			}(id)
 			return &Principal{
 				UserID:         userID.String(),

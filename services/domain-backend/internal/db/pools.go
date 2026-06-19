@@ -11,8 +11,8 @@
 //
 //	AuthPool → connection como app_admin (BYPASSRLS).
 //	           SOLO para queries del path de auth donde org_id aún no se conoce:
-//	           - apikey.PGStore.Resolve (lookup api_keys por prefix)
-//	           - apikey.PGStore.Issue   (INSERT api_keys post-verify-otp)
+//	           - apikey.PGStore.Resolve (lookup auth_api_keys por prefix)
+//	           - apikey.PGStore.Issue   (INSERT auth_api_keys post-verify-otp)
 //	           - otp.Service.Request    (lookup users por email)
 //	           - audit.PGRecorder       (audit_log INSERT — orto, INSERT policy
 //	                                     ya es WITH CHECK true, pero por consistencia
@@ -35,10 +35,10 @@ import (
 
 // Pools agrupa los pools del proceso.
 //
-// - App: primary read-write, user app_user (NOBYPASSRLS).
-// - Auth: primary read-write, user app_admin (BYPASSRLS) para auth+audit.
-// - ReadOnly: opcional, apunta a read replica para queries pesadas tolerantes
-//   de stale-read (issue-25.9). Si es nil, Read() fallback a App.
+//   - App: primary read-write, user app_user (NOBYPASSRLS).
+//   - Auth: primary read-write, user app_admin (BYPASSRLS) para auth+audit.
+//   - ReadOnly: opcional, apunta a read replica para queries pesadas tolerantes
+//     de stale-read (issue-25.9). Si es nil, Read() fallback a App.
 type Pools struct {
 	App        *pgxpool.Pool
 	Auth       *pgxpool.Pool

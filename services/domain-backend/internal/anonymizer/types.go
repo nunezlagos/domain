@@ -82,8 +82,8 @@ func DefaultConfig() Config {
 					"old_values": RuleJSONRedact,
 				},
 			},
-			"api_keys":                       {Skip: true},
-			"otp_codes":                      {Skip: true},
+			"auth_api_keys":                  {Skip: true},
+			"auth_otp_codes":                 {Skip: true},
 			"outbound_webhook_subscriptions": {Columns: map[string]Rule{"secret_cipher": RuleNullify}},
 		},
 	}

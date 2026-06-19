@@ -74,7 +74,7 @@ Opts:
   --env-file <path>      escribe DOMAIN_API_KEY=... en este file (default .env)
                          use --no-env para no escribir
   --env-var <NAME>       nombre de la var en .env (default DOMAIN_API_KEY)
-  --force                revoca dev-bootstrap api_keys previas
+  --force                revoca dev-bootstrap auth_api_keys previas
   -h, --help
 
 Requiere DOMAIN_DATABASE_URL apuntando a la BD ya migrada.
@@ -136,7 +136,7 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	// 3) Emite api key fresh. --force revoca las dev-bootstrap previas.
 	if envOverride {
 		_, _ = pool.Exec(ctx,
-			`UPDATE api_keys SET revoked_at = now()
+			`UPDATE auth_api_keys SET revoked_at = now()
 			 WHERE user_id = $1 AND name LIKE 'dev-bootstrap-%' AND revoked_at IS NULL`, userID)
 	}
 
@@ -149,7 +149,7 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 
 	var apiKeyID string
 	err = pool.QueryRow(ctx,
-		`INSERT INTO api_keys (user_id, name, key_prefix, key_hash)
+		`INSERT INTO auth_api_keys (user_id, name, key_prefix, key_hash)
 		 VALUES ($1, $2, $3, $4) RETURNING id`,
 		userID, keyName, prefix, hash,
 	).Scan(&apiKeyID)

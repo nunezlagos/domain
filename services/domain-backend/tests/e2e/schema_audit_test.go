@@ -40,7 +40,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 	// Lista canónica de tablas críticas para el flow plug-and-play.
 	expectedTables := []string{
 		// Core
-		"organizations", "users", "projects", "api_keys",
+		"organizations", "users", "projects", "auth_api_keys",
 		// Memory (REQ-42.3: sessions dropeada — feature legacy)
 		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
 		// SDD
@@ -66,7 +66,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		"notification_deliveries",
 		// Auth + RBAC (auth_rate_limits es in-memory issue-02.5;
 		// role_resource_limits es ALTER ROLE migration 000029, no tabla)
-		"otp_codes", "custom_roles", "invitations", "secrets",
+		"auth_otp_codes", "custom_roles", "auth_invitations", "auth_secrets",
 		// Policies + Templates (REQ-42.2: plans dropeada con billing/costos)
 		"platform_policies", "platform_policy_versions",
 		"project_templates", "project_links", "project_merges",

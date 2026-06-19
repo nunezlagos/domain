@@ -289,7 +289,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	keyID := uuid.New()
 	_, err = tx.Exec(ctx,
-		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
+		`INSERT INTO auth_api_keys (id, user_id, key_hash, key_prefix,
 		                        name, environment, expires_at)
 		 VALUES ($1, $2, $3, $4, 'default', 'live', NULL)`,
 		keyID, userID, apiHash, apiPrefix,

@@ -34,7 +34,7 @@ type EraseResult struct {
 //   - En una transacción:
 //   - users PII → NULL/anonimizado, is_erased=TRUE, erased_at=NOW
 //   - observations/sessions/prompts/knowledge_docs/agent_runs created_by/user_id → NULL
-//   - api_keys revoked_at = NOW
+//   - auth_api_keys revoked_at = NOW
 //   - audit_log se mantiene intacto (legal hold compliance)
 //   - actorID puede ser el mismo user (self-service) o admin
 func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reason string) (*EraseResult, error) {
@@ -95,9 +95,9 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 		res.UpdatedRows[q.table] = tag.RowsAffected()
 	}
 
-	// 5. Revocar api_keys del user
+	// 5. Revocar auth_api_keys del user
 	tag, err = tx.Exec(ctx,
-		`UPDATE api_keys SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+		`UPDATE auth_api_keys SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
 		userID)
 	if err == nil {
 		res.RevokedAPIKeys = tag.RowsAffected()

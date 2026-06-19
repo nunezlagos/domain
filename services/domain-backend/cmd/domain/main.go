@@ -427,7 +427,7 @@ func runServer() {
 	// REQ-68: embedder elegido por env (DOMAIN_EMBEDDING_PROVIDER). Default noop.
 	embedder := chooseEmbedder(logger)
 	obsService := observation.NewService(pools.App, recorder, embedder, nil, nil)
-	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop (solo OTP; invitations
+	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop (solo OTP; auth_invitations
 	// se removió en issue-21.5 — onboarding single-org usa enrollment-tokens).
 	var otpMailer otp.Mailer
 	if cfg.SMTPHost != "" {

@@ -106,16 +106,16 @@ func TestRedactContentTag_Determinístico(t *testing.T) {
 
 func TestDefaultConfig_TienePolicyParaTablasPII(t *testing.T) {
 	cfg := DefaultConfig()
-	required := []string{"users", "organizations", "observations", "audit_log", "api_keys"}
+	required := []string{"users", "organizations", "observations", "audit_log", "auth_api_keys"}
 	for _, table := range required {
 		if _, ok := cfg.Tables[table]; !ok {
 			t.Fatalf("DefaultConfig missing %s", table)
 		}
 	}
-	if !cfg.Tables["api_keys"].Skip {
-		t.Fatal("api_keys MUST be skipped")
+	if !cfg.Tables["auth_api_keys"].Skip {
+		t.Fatal("auth_api_keys MUST be skipped")
 	}
-	if !cfg.Tables["otp_codes"].Skip {
-		t.Fatal("otp_codes MUST be skipped")
+	if !cfg.Tables["auth_otp_codes"].Skip {
+		t.Fatal("auth_otp_codes MUST be skipped")
 	}
 }

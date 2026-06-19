@@ -69,11 +69,11 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 	}
 
 	expected := []string{
-		"organizations", "users", "api_keys", "projects", "observations",
+		"organizations", "users", "auth_api_keys", "projects", "observations",
 		"prompts", "knowledge_docs", "knowledge_chunks",
 		"skills", "skill_versions", "agents", "flows", "flow_runs",
 		"agent_runs", "crons", "webhooks", "webhook_deliveries", "audit_log",
-		"secrets", "project_templates", "project_merges",
+		"auth_secrets", "project_templates", "project_merges",
 		"schema_migrations",
 	}
 	// Nota: project_links, event_log, llm_semantic_cache, intake_attachments y

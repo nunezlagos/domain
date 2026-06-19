@@ -24,7 +24,7 @@ const (
 	PrefixLen = 19
 	// SecretBytes random del token (32 → 43 chars base64url).
 	SecretBytes = 32
-	// BcryptCost cost del hash. 12 = ~250ms en hardware moderno (mismo que api_keys).
+	// BcryptCost cost del hash. 12 = ~250ms en hardware moderno (mismo que auth_api_keys).
 	BcryptCost = 12
 )
 

@@ -90,7 +90,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	// Insert secret A en org A
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'apikey', 'OpenAI key', '\x00')`, orgA)
 		return err
 	})
@@ -99,7 +99,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	// Insert secret B en org B
 	err = txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'apikey', 'OpenAI key', '\x00')`, orgB)
 		return err
 	})
@@ -108,7 +108,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	// Query con context A: ve solo 1 (la suya)
 	var countA int
 	err = txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM secrets`).Scan(&countA)
+		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&countA)
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, countA, "org A debe ver solo SU secret")
@@ -116,7 +116,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	// Query con context B: ve solo 1 (la suya)
 	var countB int
 	err = txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM secrets`).Scan(&countB)
+		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&countB)
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, countB, "org B debe ver solo SU secret")
@@ -133,7 +133,7 @@ func TestSabotage_RLS_NoSetLocal_ZeroRows(t *testing.T) {
 	// Insert con SET LOCAL OK
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'k1', 'v1', '\x00')`, orgA)
 		return err
 	})
@@ -141,7 +141,7 @@ func TestSabotage_RLS_NoSetLocal_ZeroRows(t *testing.T) {
 
 	// Query directa SIN SET LOCAL → 0 rows (RLS deniega)
 	var count int
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM secrets`).Scan(&count)
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&count)
 	require.NoError(t, err)
 	require.Equal(t, 0, count, "query sin SET LOCAL DEBE devolver 0 rows")
 }
@@ -157,7 +157,7 @@ func TestSabotage_RLS_CrossOrgLeak_Blocked(t *testing.T) {
 	var secretIDB uuid.UUID
 	err := txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'secret-b', 'B', '\x00') RETURNING id`, orgB).Scan(&secretIDB)
 	})
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestSabotage_RLS_CrossOrgLeak_Blocked(t *testing.T) {
 	// App en context A intenta SELECT por id de B
 	var found int
 	err = txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM secrets WHERE id = $1`, secretIDB).Scan(&found)
+		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets WHERE id = $1`, secretIDB).Scan(&found)
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, found, "cross-org SELECT con id explícito DEBE devolver 0")
@@ -181,7 +181,7 @@ func TestSabotage_RLS_InsertWrongOrg_Rejected(t *testing.T) {
 	// App en context A intenta INSERT con organization_id=B (typo o bug)
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'leak', 'L', '\x00')`, orgB)
 		return err
 	})
@@ -212,7 +212,7 @@ func TestRLS_ActivityLog_OrgIsolation(t *testing.T) {
 	require.Equal(t, 1, countA)
 }
 
-// Escenario: api_keys también scoped.
+// Escenario: auth_api_keys también scoped.
 func TestRLS_APIKeys_OrgIsolation(t *testing.T) {
 	pool, cleanup := setupRLS(t)
 	defer cleanup()
@@ -233,20 +233,20 @@ func TestRLS_APIKeys_OrgIsolation(t *testing.T) {
 
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO api_keys (organization_id, user_id, key_hash, key_prefix, name)
+			`INSERT INTO auth_api_keys (organization_id, user_id, key_hash, key_prefix, name)
 			 VALUES ($1, $2, '\x00', 'domk_live_aaaaaaa', 'A1')`, orgA, uidA)
 		return err
 	}))
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO api_keys (organization_id, user_id, key_hash, key_prefix, name)
+			`INSERT INTO auth_api_keys (organization_id, user_id, key_hash, key_prefix, name)
 			 VALUES ($1, $2, '\x00', 'domk_live_bbbbbbb', 'B1')`, orgB, uidB)
 		return err
 	}))
 
 	var countA int
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM api_keys`).Scan(&countA)
+		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_api_keys`).Scan(&countA)
 	}))
 	require.Equal(t, 1, countA, "org A ve solo SU api_key")
 }
@@ -261,13 +261,13 @@ func TestRLS_SetLocalScopedToTx(t *testing.T) {
 	// Insert en tx con SET LOCAL
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO secrets (organization_id, slug, name, encrypted_value)
+			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
 			 VALUES ($1, 'k', 'v', '\x00')`, orgA)
 		return err
 	}))
 
 	// Después de commit, nueva query SIN SET LOCAL → 0 rows
 	var count int
-	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM secrets`).Scan(&count))
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&count))
 	require.Equal(t, 0, count, "post-tx sin SET LOCAL: RLS deniega")
 }

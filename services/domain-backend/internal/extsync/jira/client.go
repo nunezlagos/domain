@@ -6,7 +6,7 @@
 //   - AddComment, AddAttachment (futuro)
 //   - Webhook receiver: parsea changelog → detect drift en summary/description/AC
 //
-// Auth: basic auth (email + API token) via env vars o secrets table.
+// Auth: basic auth (email + API token) via env vars o auth_secrets table.
 // Otros providers (GitHub Issues, Linear, Asana) implementarían misma
 // interface ExternalProviderDriver en packages hermanos.
 package jira
@@ -29,7 +29,7 @@ import (
 
 // Client implementa el driver Jira.
 type Client struct {
-	BaseURL    string         // ej: https://acme.atlassian.net
+	BaseURL    string // ej: https://acme.atlassian.net
 	Email      string
 	APIToken   string
 	ProjectKey string
@@ -62,14 +62,14 @@ type CreateIssueRequest struct {
 	Summary     string
 	Description string
 	Type        IssueType
-	ParentKey   string   // para Story bajo Epic
+	ParentKey   string // para Story bajo Epic
 	Labels      []string
 }
 
 // CreateIssueResponse output.
 type CreateIssueResponse struct {
 	ID  string `json:"id"`
-	Key string `json:"key"`     // DIDE-100
+	Key string `json:"key"` // DIDE-100
 	URL string `json:"self"`
 }
 
@@ -251,8 +251,8 @@ func VerifyWebhookSignature(payload []byte, signatureHeader, secret string) bool
 
 // WebhookEvent es el shape relevante del payload Jira (subset).
 type WebhookEvent struct {
-	Event   string `json:"webhookEvent"`     // ej: jira:issue_updated
-	Issue   struct {
+	Event string `json:"webhookEvent"` // ej: jira:issue_updated
+	Issue struct {
 		ID  string `json:"id"`
 		Key string `json:"key"`
 	} `json:"issue"`

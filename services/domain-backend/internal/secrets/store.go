@@ -14,23 +14,23 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("secret not found")
-	ErrSlugExists  = errors.New("secret slug already exists in organization")
-	ErrExpired     = errors.New("secret has expired")
+	ErrNotFound   = errors.New("secret not found")
+	ErrSlugExists = errors.New("secret slug already exists in organization")
+	ErrExpired    = errors.New("secret has expired")
 )
 
 type Secret struct {
-	ID                  uuid.UUID  `json:"id"`
-	Slug                string     `json:"slug"`
-	Name                string     `json:"name"`
-	EncryptionKeyVer    int        `json:"encryption_key_version"`
-	Description         *string    `json:"description,omitempty"`
-	ExpiresAt           *time.Time `json:"expires_at,omitempty"`
-	RotatedAt           *time.Time `json:"rotated_at,omitempty"`
-	CreatedBy           *uuid.UUID `json:"created_by,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
+	ID               uuid.UUID  `json:"id"`
+	Slug             string     `json:"slug"`
+	Name             string     `json:"name"`
+	EncryptionKeyVer int        `json:"encryption_key_version"`
+	Description      *string    `json:"description,omitempty"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	RotatedAt        *time.Time `json:"rotated_at,omitempty"`
+	CreatedBy        *uuid.UUID `json:"created_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 }
 
 type PGStore struct {
@@ -77,7 +77,7 @@ func (s *PGStore) Create(ctx context.Context, in CreateInput) (*Secret, error) {
 	}
 
 	row := s.Pool.QueryRow(ctx, `
-		INSERT INTO secrets (slug, name, encrypted_value, encryption_key_version, description, expires_at, created_by)
+		INSERT INTO auth_secrets (slug, name, encrypted_value, encryption_key_version, description, expires_at, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING `+_listSelectCols,
 		in.Slug, in.Name, encVal, int(s.Cipher.CurrentVersion()),
@@ -96,7 +96,7 @@ func (s *PGStore) Create(ctx context.Context, in CreateInput) (*Secret, error) {
 
 func (s *PGStore) GetByID(ctx context.Context, id uuid.UUID) (*Secret, error) {
 	row := s.Pool.QueryRow(ctx, `
-		SELECT `+_listSelectCols+` FROM secrets WHERE id = $1 AND deleted_at IS NULL`, id)
+		SELECT `+_listSelectCols+` FROM auth_secrets WHERE id = $1 AND deleted_at IS NULL`, id)
 	secret, err := scanSecret(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -112,7 +112,7 @@ func (s *PGStore) GetValue(ctx context.Context, id uuid.UUID) (string, error) {
 	var ver int
 	err := s.Pool.QueryRow(ctx, `
 		SELECT encrypted_value, encryption_key_version
-		FROM secrets WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&encVal, &ver)
+		FROM auth_secrets WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&encVal, &ver)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrNotFound
@@ -128,7 +128,7 @@ func (s *PGStore) GetValue(ctx context.Context, id uuid.UUID) (string, error) {
 }
 
 func (s *PGStore) ListByOrg(ctx context.Context, orgID uuid.UUID, includeExpired bool) ([]Secret, error) {
-	q := `SELECT ` + _listSelectCols + ` FROM secrets WHERE deleted_at IS NULL`
+	q := `SELECT ` + _listSelectCols + ` FROM auth_secrets WHERE deleted_at IS NULL`
 	if !includeExpired {
 		q += ` AND (expires_at IS NULL OR expires_at > NOW())`
 	}
@@ -153,7 +153,7 @@ func (s *PGStore) ListByOrg(ctx context.Context, orgID uuid.UUID, includeExpired
 
 func (s *PGStore) GetByOrgAndSlug(ctx context.Context, orgID uuid.UUID, slug string) (*Secret, error) {
 	row := s.Pool.QueryRow(ctx, `
-		SELECT `+_listSelectCols+` FROM secrets
+		SELECT `+_listSelectCols+` FROM auth_secrets
 		WHERE slug = $1 AND deleted_at IS NULL`, slug)
 	secret, err := scanSecret(row)
 	if err != nil {
@@ -211,7 +211,7 @@ func (s *PGStore) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Se
 	args = append(args, id)
 
 	row := s.Pool.QueryRow(ctx, `
-		UPDATE secrets SET `+set+` WHERE id = $`+fmt.Sprintf("%d", argN)+` AND deleted_at IS NULL
+		UPDATE auth_secrets SET `+set+` WHERE id = $`+fmt.Sprintf("%d", argN)+` AND deleted_at IS NULL
 		RETURNING `+_listSelectCols,
 		args...,
 	)
@@ -232,7 +232,7 @@ func (s *PGStore) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Se
 func (s *PGStore) ReEncryptAll(ctx context.Context) (int, error) {
 	current := int(s.Cipher.CurrentVersion())
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, encrypted_value FROM secrets
+		SELECT id, encrypted_value FROM auth_secrets
 		WHERE encryption_key_version < $1 AND deleted_at IS NULL`, current)
 	if err != nil {
 		return 0, fmt.Errorf("select stale secrets: %w", err)
@@ -266,7 +266,7 @@ func (s *PGStore) ReEncryptAll(ctx context.Context) (int, error) {
 			return count, fmt.Errorf("re-encrypt secret %s: %w", it.id, err)
 		}
 		if _, err := s.Pool.Exec(ctx, `
-			UPDATE secrets SET encrypted_value = $2, encryption_key_version = $3,
+			UPDATE auth_secrets SET encrypted_value = $2, encryption_key_version = $3,
 			  rotated_at = NOW()
 			WHERE id = $1`, it.id, newEnc, current); err != nil {
 			return count, fmt.Errorf("update secret %s: %w", it.id, err)
@@ -277,7 +277,7 @@ func (s *PGStore) ReEncryptAll(ctx context.Context) (int, error) {
 }
 
 func (s *PGStore) Delete(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx, `UPDATE secrets SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE auth_secrets SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return fmt.Errorf("soft delete secret: %w", err)
 	}

@@ -760,7 +760,7 @@ func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseU
 	}
 	var keyID uuid.UUID
 	err = pool.QueryRow(ctx,
-		`INSERT INTO api_keys (user_id, name, key_prefix, key_hash)
+		`INSERT INTO auth_api_keys (user_id, name, key_prefix, key_hash)
 		 VALUES ($1, $2, $3, $4) RETURNING id`,
 		userID, "install-"+time.Now().UTC().Format("20060102-150405"), prefix, hash,
 	).Scan(&keyID)

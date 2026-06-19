@@ -18,8 +18,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/auth/otp"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 func setupOTP(t *testing.T) (*pgxpool.Pool, func()) {
@@ -131,10 +131,10 @@ func TestOTP_Request_HappyPath(t *testing.T) {
 	require.Equal(t, "alice@example.com", mail.lastTo)
 	require.Len(t, mail.lastCode, 6)
 
-	// Verifica que se persistió en otp_codes
+	// Verifica que se persistió en auth_otp_codes
 	var count int
 	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM otp_codes WHERE used_at IS NULL`,
+		`SELECT COUNT(*) FROM auth_otp_codes WHERE used_at IS NULL`,
 	).Scan(&count))
 	require.Equal(t, 1, count)
 }
@@ -172,7 +172,7 @@ func TestOTP_Verify_HappyPath(t *testing.T) {
 	// otp marked used
 	var used *time.Time
 	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT used_at FROM otp_codes WHERE id = $1`, result.OTPID,
+		`SELECT used_at FROM auth_otp_codes WHERE id = $1`, result.OTPID,
 	).Scan(&used))
 	require.NotNil(t, used)
 
@@ -201,7 +201,7 @@ func TestOTP_Verify_WrongCode_Attempts(t *testing.T) {
 	// Verifica que attempts incrementó
 	var attempts int
 	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT attempts FROM otp_codes WHERE user_id = (SELECT id FROM users WHERE email='alice@example.com')`,
+		`SELECT attempts FROM auth_otp_codes WHERE user_id = (SELECT id FROM users WHERE email='alice@example.com')`,
 	).Scan(&attempts))
 	require.Equal(t, 1, attempts)
 }
@@ -238,7 +238,7 @@ func TestOTP_Verify_Expired(t *testing.T) {
 
 	// Force expire
 	_, err := pool.Exec(context.Background(),
-		`UPDATE otp_codes SET expires_at = NOW() - interval '1 second' WHERE user_id = $1`, userID)
+		`UPDATE auth_otp_codes SET expires_at = NOW() - interval '1 second' WHERE user_id = $1`, userID)
 	require.NoError(t, err)
 
 	_, err = svc.Verify(context.Background(), "alice@example.com", mail.lastCode)

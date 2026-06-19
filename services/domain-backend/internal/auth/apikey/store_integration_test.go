@@ -4,7 +4,7 @@
 //
 // Cubre la ruta de AUTH (Issue → Resolve) que antes no tenía cobertura de DB, y
 // valida que el org del Principal se deriva de users.organization_id (no de
-// api_keys.organization_id, que se dejó de escribir/leer).
+// auth_api_keys.organization_id, que se dejó de escribir/leer).
 
 package apikey
 

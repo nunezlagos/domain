@@ -351,7 +351,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	require.NotEmpty(t, exp["organizations"])
 	require.NotEmpty(t, exp["projects"])
 	require.NotEmpty(t, exp["observations"])
-	// Sin secrets en api_keys
+	// Sin secrets en auth_api_keys
 	if apiKeys, ok := exp["api_keys_metadata"].([]any); ok {
 		for _, k := range apiKeys {
 			km := k.(map[string]any)

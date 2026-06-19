@@ -27,16 +27,16 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 
 	policies := []policyEntry{
 		{
-			Slug: "agent-protocol",
-			Name: "Protocolo de agente IA (memoria + policies + tools domain_*)",
-			Kind: "convention",
+			Slug:       "agent-protocol",
+			Name:       "Protocolo de agente IA (memoria + policies + tools domain_*)",
+			Kind:       "convention",
 			SourceFile: "internal/agentprotocol/protocol.go",
 			BodyMD:     agentprotocol.Full,
 		},
 		{
-			Slug: "sdd-tdd-strict",
-			Name: "TDD estricto para toda HU",
-			Kind: "sdd_workflow",
+			Slug:       "sdd-tdd-strict",
+			Name:       "TDD estricto para toda HU",
+			Kind:       "sdd_workflow",
 			SourceFile: ".claude/rules/sdd.md",
 			BodyMD: `Cada HU sigue el ciclo TDD obligatorio:
 1. Red: escribir test que falle por la razón correcta.
@@ -47,9 +47,9 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 NUNCA implementar sin test. NUNCA commitear sin tests verdes locales.`,
 		},
 		{
-			Slug: "conventional-commits-spanish",
-			Name: "Conventional Commits en español sin Co-Authored-By",
-			Kind: "convention",
+			Slug:       "conventional-commits-spanish",
+			Name:       "Conventional Commits en español sin Co-Authored-By",
+			Kind:       "convention",
 			SourceFile: ".claude/rules/git.md",
 			BodyMD: `Format: <type>(<scope>)?: <description>
 Types: feat, fix, perf, refactor, docs, test, build, ci, chore, style, revert.
@@ -57,9 +57,9 @@ Body en español. NUNCA Co-Authored-By IA. Un commit = una intención.
 Breaking changes: feat!: ... o body con BREAKING CHANGE.`,
 		},
 		{
-			Slug: "secrets-redaction",
-			Name: "Secretos NUNCA en logs/métricas/traces",
-			Kind: "security_rule",
+			Slug:       "secrets-redaction",
+			Name:       "Secretos NUNCA en logs/métricas/traces",
+			Kind:       "security_rule",
 			SourceFile: ".claude/rules/security.md",
 			BodyMD: `Lista bloqueada de keys en logs: password, secret, token, api_key,
 otp, email, rut, phone, dob, address, pan, cvc, content, payload.
@@ -67,20 +67,20 @@ Usar campos seguros: email_hash (sha256 first 8), key_prefix, user_id (UUID),
 content_length. PII redaction regex en issue-02.5.`,
 		},
 		{
-			Slug: "rls-defense-in-depth",
-			Name: "RLS obligatorio en tablas sensibles",
-			Kind: "security_rule",
+			Slug:       "rls-defense-in-depth",
+			Name:       "RLS obligatorio en tablas sensibles",
+			Kind:       "security_rule",
 			SourceFile: ".claude/rules/db.md",
-			BodyMD: `Tablas en migration 000028 (secrets, audit_log, otp_codes,
-activity_log, api_keys) tienen RLS FORCE. Queries DEBEN envolver en
+			BodyMD: `Tablas en migration 000028 (auth_secrets, audit_log, auth_otp_codes,
+activity_log, auth_api_keys) tienen RLS FORCE. Queries DEBEN envolver en
 db.WithOrgTx para set_config('app.current_org_id'). Sabotaje: query sin
 SET LOCAL → 0 rows. app_user es NOBYPASSRLS; app_admin BYPASSRLS solo
 para auth path.`,
 		},
 		{
-			Slug: "migration-safety",
-			Name: "Migration safety rules",
-			Kind: "migration_rule",
+			Slug:       "migration-safety",
+			Name:       "Migration safety rules",
+			Kind:       "migration_rule",
 			SourceFile: ".claude/rules/migrations.md",
 			BodyMD: `Reglas duras:
 - CREATE INDEX CONCURRENTLY siempre (override solo con squawk-ignore + reason)
@@ -91,9 +91,9 @@ para auth path.`,
 - Numeración secuencial 6 dígitos zero-padded; NUNCA renumerar`,
 		},
 		{
-			Slug: "low-cardinality-metrics",
-			Name: "Métricas Prometheus con baja cardinalidad",
-			Kind: "observability",
+			Slug:       "low-cardinality-metrics",
+			Name:       "Métricas Prometheus con baja cardinalidad",
+			Kind:       "observability",
 			SourceFile: ".claude/rules/observability.md",
 			BodyMD: `NUNCA labels con: user_id, request_id, run_id, observation_id,
 project_id, trace_id. org_id permitido solo si <10000 orgs.
@@ -101,9 +101,9 @@ issue-17.1 lint chequea regex _id="<uuid>" en /metrics response y falla CI.
 Path normalization UUID→:id, numeric→:n previene explosion.`,
 		},
 		{
-			Slug: "clean-architecture-by-feature",
-			Name: "Clean Architecture por feature (no por capa técnica)",
-			Kind: "architecture",
+			Slug:       "clean-architecture-by-feature",
+			Name:       "Clean Architecture por feature (no por capa técnica)",
+			Kind:       "architecture",
 			SourceFile: ".claude/rules/clean-architecture.md",
 			BodyMD: `Dirs por feature: internal/{domain,service,store/pg,api,mcp}/{memory,
 agent,flow,skill,...}/. NO "utils", NO "common", NO "helpers".
@@ -111,27 +111,27 @@ Dependency rule: domain ← service ← store/api/mcp. domain sin imports
 externos. Interfaces en el package que las CONSUME.`,
 		},
 		{
-			Slug: "no-co-authored-ia",
-			Name: "Sin atribución IA en commits",
-			Kind: "convention",
+			Slug:       "no-co-authored-ia",
+			Name:       "Sin atribución IA en commits",
+			Kind:       "convention",
 			SourceFile: ".claude/rules/git.md",
 			BodyMD: `NUNCA Co-Authored-By: Claude o similar. NUNCA "Generated by Claude
 Code". El humano que dirigió la generación es el autor; la IA es
 herramienta. Esta regla aplica a todos los commits del proyecto.`,
 		},
 		{
-			Slug: "local-only-repo",
-			Name: "Repo local-only hasta orden explícita",
-			Kind: "sdd_workflow",
+			Slug:       "local-only-repo",
+			Name:       "Repo local-only hasta orden explícita",
+			Kind:       "sdd_workflow",
 			SourceFile: ".claude/rules/git.md",
 			BodyMD: `NO push, NO git remote add, NO gh repo create sin orden explícita
 del usuario. Branch main solo en .git/ local. CI workflows están
 preparados pero no se ejecutarán hasta que exista remote.`,
 		},
 		{
-			Slug: "test-naming-convention",
-			Name: "Test naming Subject_Method_Scenario_Outcome",
-			Kind: "convention",
+			Slug:       "test-naming-convention",
+			Name:       "Test naming Subject_Method_Scenario_Outcome",
+			Kind:       "convention",
 			SourceFile: ".claude/rules/testing.md",
 			BodyMD: `Tests siguen: Test<Subject>_<Method>_<Scenario>_<ExpectedOutcome>.
 Ej: TestUserService_CreateUser_DuplicateEmail_Returns409.

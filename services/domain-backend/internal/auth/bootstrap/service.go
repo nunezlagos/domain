@@ -149,7 +149,7 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 	keyID := uuid.New()
 	keyPrefix := plaintext[:len("domk_")+8] // "domk_xxxxxxxx"
 	_, err = tx.Exec(ctx,
-		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
+		`INSERT INTO auth_api_keys (id, user_id, key_hash, key_prefix,
 		                    name, environment, expires_at, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, 'live', NULL, $6, $6)`,
 		keyID, userID, keyHash, keyPrefix, keyName, now)

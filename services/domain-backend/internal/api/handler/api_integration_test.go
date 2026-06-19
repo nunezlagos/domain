@@ -59,14 +59,14 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	rec := &audit.PGRecorder{Pool: authPool}
 
 	// Services domain usan AppPool. Sus tablas (organizations, users, projects,
-	// observations, invitations) NO tienen RLS habilitada — sus services
-	// validan org_id en la query. Tablas con RLS (api_keys, audit_log,
-	// otp_codes, activity_log, secrets) las accede AuthPool o un flujo
+	// observations, auth_invitations) NO tienen RLS habilitada — sus services
+	// validan org_id en la query. Tablas con RLS (auth_api_keys, audit_log,
+	// auth_otp_codes, activity_log, auth_secrets) las accede AuthPool o un flujo
 	// con txctx.WithOrgTx explícito.
 	projS := &projsvc.Service{Pool: pool, Audit: rec}
 	obsS := &observation.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{}}
 
-	// apikey store usa AuthPool: Resolve hace lookup global de api_keys por
+	// apikey store usa AuthPool: Resolve hace lookup global de auth_api_keys por
 	// prefix (no conoce org_id aún) y necesita atravesar RLS.
 	keys := &apikey.PGStore{Pool: authPool}
 

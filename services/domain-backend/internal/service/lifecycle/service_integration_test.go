@@ -61,12 +61,12 @@ func setup(t *testing.T) (*fix, func()) {
 
 	svc := &lifecycle.Service{Pool: pools.App, Audit: rec}
 	return &fix{
-		svc: svc, obs: obsS, proj: projS,
-		orgID: org.ID, projectID: proj.ID, userID: owner.UserID,
-	}, func() {
-		pools.Close()
-		_ = pgC.Terminate(ctx)
-	}
+			svc: svc, obs: obsS, proj: projS,
+			orgID: org.ID, projectID: proj.ID, userID: owner.UserID,
+		}, func() {
+			pools.Close()
+			_ = pgC.Terminate(ctx)
+		}
 }
 
 // issue-23.2 — Restore después de soft-delete dentro de window.
@@ -144,7 +144,7 @@ func TestSabotage_ExportUserData_NoSecrets(t *testing.T) {
 	exp, err := f.svc.ExportUserData(ctx, f.userID, f.orgID)
 	require.NoError(t, err)
 
-	// api_keys export: solo key_prefix, NUNCA key_hash
+	// auth_api_keys export: solo key_prefix, NUNCA key_hash
 	for _, k := range exp.APIKeys {
 		_, hasHash := k["key_hash"]
 		require.False(t, hasHash, "key_hash NO debe estar en export GDPR")

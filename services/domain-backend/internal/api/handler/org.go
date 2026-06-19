@@ -59,7 +59,7 @@ type addMemberWithKeyBody struct {
 }
 
 // addMemberWithKey crea user + api_key en una sola tx, sin pasar por
-// invitations/OTP/email. Solo accesible para admin/owner.
+// auth_invitations/OTP/email. Solo accesible para admin/owner.
 // El plaintext de la key se devuelve UNA SOLA VEZ en la response.
 //
 // Single-org: ya no existe la entidad organization. El user y la api_key se
@@ -133,7 +133,7 @@ func (a *API) addMemberWithKey(w http.ResponseWriter, r *http.Request) {
 
 	keyID := uuid.New()
 	_, err = tx.Exec(ctx,
-		`INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
+		`INSERT INTO auth_api_keys (id, user_id, key_hash, key_prefix,
 		                        name, environment, expires_at)
 		 VALUES ($1, $2, $3, $4, 'default', 'live', NULL)`,
 		keyID, m.UserID, hash, prefix,

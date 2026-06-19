@@ -5,7 +5,7 @@
 //
 // ExportUserData: genera un JSON con todos los datos persistidos asociados a un
 // user específico (organizations, projects, observations, sessions, prompts,
-// knowledge_docs, agent_runs, api_keys metadata sin secrets, audit_log entries).
+// knowledge_docs, agent_runs, auth_api_keys metadata sin secrets, audit_log entries).
 // Cumple Art. 15 GDPR (right of access) + Art. 20 (data portability).
 package lifecycle
 
@@ -43,7 +43,7 @@ var restorableEntities = map[string]string{
 	"knowledge_doc": "knowledge_docs",
 	"skill":         "skills",
 	"agent":         "agents",
-	"invitation":    "invitations",
+	"invitation":    "auth_invitations",
 }
 
 type Service struct {
@@ -201,10 +201,10 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		`SELECT id, agent_id, status, inputs, outputs, tokens_input, tokens_output,
 		        cost_usd, iterations, started_at, finished_at
 		 FROM agent_runs WHERE user_id = $1`, userID)
-	// api_keys: solo metadata (key_prefix), NUNCA key_hash ni secrets
+	// auth_api_keys: solo metadata (key_prefix), NUNCA key_hash ni secrets
 	out.APIKeys, _ = scanRows(ctx, s.Pool,
 		`SELECT id, name, key_prefix, last_used_at, expires_at, revoked_at, created_at
-		 FROM api_keys WHERE user_id = $1`, userID)
+		 FROM auth_api_keys WHERE user_id = $1`, userID)
 	// audit_log: entradas con actor=this user
 	out.AuditEntries, _ = scanRows(ctx, s.Pool,
 		`SELECT id, action, entity_type, entity_id, new_values, occurred_at

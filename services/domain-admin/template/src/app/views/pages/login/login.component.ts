@@ -12,7 +12,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 
-import { AuthService, Role } from '../../../core/auth.service';
+import { AuthService, Role, LoginResponse } from '../../../core/auth.service';
 
 // HU-UX-LOGIN: split layout 60/40 responsive, design system moderno.
 // - Mobile (<md): full-screen, solo el form, branding como header

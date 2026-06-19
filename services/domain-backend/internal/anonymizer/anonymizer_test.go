@@ -106,7 +106,7 @@ func TestRedactContentTag_Determinístico(t *testing.T) {
 
 func TestDefaultConfig_TienePolicyParaTablasPII(t *testing.T) {
 	cfg := DefaultConfig()
-	required := []string{"users", "organizations", "observations", "audit_log", "auth_api_keys"}
+	required := []string{"users", "organizations", "knowledge_observations", "audit_log", "auth_api_keys"}
 	for _, table := range required {
 		if _, ok := cfg.Tables[table]; !ok {
 			t.Fatalf("DefaultConfig missing %s", table)

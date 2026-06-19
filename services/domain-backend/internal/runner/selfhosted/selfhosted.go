@@ -33,9 +33,9 @@ import (
 type RunnerStatus string
 
 const (
-	StatusOnline      RunnerStatus = "online"
-	StatusDegraded    RunnerStatus = "degraded"   // misses heartbeats pero sigue activo
-	StatusOffline     RunnerStatus = "offline"
+	StatusOnline   RunnerStatus = "online"
+	StatusDegraded RunnerStatus = "degraded" // misses heartbeats pero sigue activo
+	StatusOffline  RunnerStatus = "offline"
 )
 
 // Runner es un selfhosted deployed por la org.
@@ -43,7 +43,7 @@ type Runner struct {
 	ID             uuid.UUID    `json:"id"`
 	OrganizationID uuid.UUID    `json:"organization_id"`
 	Name           string       `json:"name"`
-	Labels         []string     `json:"labels"`           // pool tags: gpu, eu-region, etc
+	Labels         []string     `json:"labels"` // pool tags: gpu, eu-region, etc
 	APIKeyHash     string       `json:"-"`
 	LastHeartbeat  *time.Time   `json:"last_heartbeat,omitempty"`
 	Status         RunnerStatus `json:"status"`
@@ -54,10 +54,10 @@ type Runner struct {
 type Task struct {
 	ID             uuid.UUID       `json:"id"`
 	OrganizationID uuid.UUID       `json:"organization_id"`
-	Kind           string          `json:"kind"`           // agent_run | flow_step | skill_call
+	Kind           string          `json:"kind"` // agent_run | flow_step | skill_call
 	RequiredLabels []string        `json:"required_labels,omitempty"`
 	Payload        json.RawMessage `json:"payload"`
-	Status         string          `json:"status"`         // queued | claimed | done | failed
+	Status         string          `json:"status"` // queued | claimed | done | failed
 	ClaimedBy      *uuid.UUID      `json:"claimed_by,omitempty"`
 	ClaimedAt      *time.Time      `json:"claimed_at,omitempty"`
 	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
@@ -89,7 +89,7 @@ func (s *Service) RegisterRunner(ctx context.Context, orgID uuid.UUID, name, api
 	_ = orgID
 	var r Runner
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO selfhosted_runners (name, api_key_hash, labels)
+		INSERT INTO runner_selfhosted (name, api_key_hash, labels)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (name) DO UPDATE
 		  SET api_key_hash = EXCLUDED.api_key_hash, labels = EXCLUDED.labels
@@ -106,7 +106,7 @@ func (s *Service) RegisterRunner(ctx context.Context, orgID uuid.UUID, name, api
 // Heartbeat actualiza last_heartbeat.
 func (s *Service) Heartbeat(ctx context.Context, runnerID uuid.UUID) error {
 	_, err := s.Pool.Exec(ctx,
-		`UPDATE selfhosted_runners SET last_heartbeat = now() WHERE id = $1`, runnerID,
+		`UPDATE runner_selfhosted SET last_heartbeat = now() WHERE id = $1`, runnerID,
 	)
 	return err
 }
@@ -116,7 +116,7 @@ func (s *Service) EnqueueTask(ctx context.Context, orgID uuid.UUID, kind string,
 	_ = orgID
 	var t Task
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO selfhosted_tasks (kind, required_labels, payload, status)
+		INSERT INTO runner_selfhosted_tasks (kind, required_labels, payload, status)
 		VALUES ($1, $2, $3, 'queued')
 		RETURNING id, kind, required_labels, payload, status, created_at`,
 		kind, requiredLabels, payload,
@@ -140,7 +140,7 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	// ISSUE-21.6: organization_id omitido del SELECT.
 	var labels []string
 	err = tx.QueryRow(ctx,
-		`SELECT labels FROM selfhosted_runners WHERE id = $1`,
+		`SELECT labels FROM runner_selfhosted WHERE id = $1`,
 		runnerID,
 	).Scan(&labels)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -154,7 +154,7 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	// ISSUE-21.6 Fase D clean: single-org. SELECT sin organization_id.
 	err = tx.QueryRow(ctx, `
 		SELECT id, kind, required_labels, payload, status, created_at
-		FROM selfhosted_tasks
+		FROM runner_selfhosted_tasks
 		WHERE status = 'queued'
 		  AND (required_labels = '{}' OR required_labels <@ $1::text[])
 		ORDER BY created_at ASC
@@ -170,7 +170,7 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	}
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE selfhosted_tasks
+		UPDATE runner_selfhosted_tasks
 		SET status = 'claimed', claimed_by = $1, claimed_at = now()
 		WHERE id = $2`,
 		runnerID, t.ID,
@@ -195,7 +195,7 @@ func (s *Service) ReturnResult(ctx context.Context, runnerID, taskID uuid.UUID, 
 		status = "failed"
 	}
 	tag, err := s.Pool.Exec(ctx, `
-		UPDATE selfhosted_tasks
+		UPDATE runner_selfhosted_tasks
 		SET status = $1, result = $2, error = NULLIF($3, ''), completed_at = now()
 		WHERE id = $4 AND claimed_by = $5`,
 		status, result, errMsg, taskID, runnerID,
@@ -218,7 +218,7 @@ func (s *Service) ReclaimExpiredTasks(ctx context.Context) (int, error) {
 	}
 	cutoff := time.Now().Add(-timeout)
 	tag, err := s.Pool.Exec(ctx, `
-		UPDATE selfhosted_tasks
+		UPDATE runner_selfhosted_tasks
 		SET status = 'queued', claimed_by = NULL, claimed_at = NULL
 		WHERE status = 'claimed' AND claimed_at < $1`,
 		cutoff,

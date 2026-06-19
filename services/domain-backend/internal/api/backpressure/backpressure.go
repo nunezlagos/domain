@@ -51,8 +51,8 @@ var PredefinedQueues = map[string]Queue{
 		PendingCondition: "status IN ('pending','running')",
 		GlobalCap:        5000, PerOrgCap: 100, OrgColumn: "organization_id",
 	},
-	"outbound_webhook_deliveries": {
-		Name: "outbound_webhook_deliveries", Table: "outbound_webhook_deliveries",
+	"webhook_outbound_deliveries": {
+		Name: "webhook_outbound_deliveries", Table: "webhook_outbound_deliveries",
 		PendingCondition: "status = 'pending'",
 		GlobalCap:        20000, PerOrgCap: 2000, OrgColumn: "organization_id",
 	},

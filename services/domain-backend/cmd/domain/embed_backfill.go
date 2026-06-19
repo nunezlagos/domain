@@ -74,7 +74,7 @@ func runEmbedBackfill(args []string) {
 
 	totObs, totKn := 0, 0
 	if n, err := backfillTable(ctx, pool, embedder, orgID,
-		"observations", "id", "content", "embedding", limit, dryRun); err != nil {
+		"knowledge_observations", "id", "content", "embedding", limit, dryRun); err != nil {
 		fmt.Fprintln(os.Stderr, "observations:", err)
 		os.Exit(1)
 	} else {

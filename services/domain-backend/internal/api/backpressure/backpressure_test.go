@@ -18,7 +18,7 @@ func TestRetryAfterSeconds(t *testing.T) {
 }
 
 func TestPredefinedQueues_Catalog(t *testing.T) {
-	for _, name := range []string{"agent_runs", "flow_runs", "outbound_webhook_deliveries"} {
+	for _, name := range []string{"agent_runs", "flow_runs", "webhook_outbound_deliveries"} {
 		q, ok := PredefinedQueues[name]
 		if !ok {
 			t.Fatalf("missing predefined queue %s", name)

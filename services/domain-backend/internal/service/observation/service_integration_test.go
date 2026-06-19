@@ -261,10 +261,10 @@ func TestSabotage_Dedup_DBConstraintEnforces(t *testing.T) {
 	// Intentar INSERT directo con mismo content_hash → DB rechaza
 	var hash []byte
 	require.NoError(t, f.svc.Pool.QueryRow(ctx,
-		`SELECT content_hash FROM observations WHERE id = $1`, o.ID).Scan(&hash))
+		`SELECT content_hash FROM knowledge_observations WHERE id = $1`, o.ID).Scan(&hash))
 
 	_, err = f.svc.Pool.Exec(ctx,
-		`INSERT INTO observations (organization_id, project_id, content, observation_type, content_hash)
+		`INSERT INTO knowledge_observations (organization_id, project_id, content, observation_type, content_hash)
 		 VALUES ($1, $2, 'bypass-app', 'note', $3)`,
 		f.orgID, f.projectID, hash)
 	require.Error(t, err, "DB UNIQUE PARTIAL debe rechazar duplicado aunque la app lo permita")

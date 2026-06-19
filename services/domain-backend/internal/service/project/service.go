@@ -47,7 +47,7 @@ type Project struct {
 	// = proyecto interno (no asignado a cliente). Migración 000100 agregó
 	// la FK con ON DELETE SET NULL.
 	ClientID *uuid.UUID
-	// ClientSlug / ClientName: read-only, populated via LEFT JOIN clients.
+	// ClientSlug / ClientName: read-only, populated via LEFT JOIN project_clients.
 	// "" si client_id IS NULL.
 	ClientSlug string
 	ClientName string

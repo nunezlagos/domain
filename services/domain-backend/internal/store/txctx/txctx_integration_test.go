@@ -198,7 +198,7 @@ func TestRLS_ActivityLog_OrgIsolation(t *testing.T) {
 	for _, org := range []uuid.UUID{orgA, orgB} {
 		err := txctx.WithOrgTx(ctx, pool, org, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx,
-				`INSERT INTO activity_log (organization_id, action, entity_type, summary)
+				`INSERT INTO audit_activity_log (organization_id, action, entity_type, summary)
 				 VALUES ($1, 'test', 'x', 'evento')`, org)
 			return err
 		})
@@ -207,7 +207,7 @@ func TestRLS_ActivityLog_OrgIsolation(t *testing.T) {
 
 	var countA int
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM activity_log`).Scan(&countA)
+		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM audit_activity_log`).Scan(&countA)
 	}))
 	require.Equal(t, 1, countA)
 }

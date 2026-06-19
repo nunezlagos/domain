@@ -43,7 +43,7 @@ const selectCols = `p.id, p.name, p.slug,
 		COALESCE(c.slug,''), COALESCE(c.name,''),
 		p.created_at, p.updated_at, p.deleted_at`
 
-const fromJoin = `FROM projects p LEFT JOIN clients c ON c.id = p.client_id`
+const fromJoin = `FROM projects p LEFT JOIN project_clients c ON c.id = p.client_id`
 
 func scanProject(row pgx.Row, p *Project) error {
 	var clientSlug, clientName string

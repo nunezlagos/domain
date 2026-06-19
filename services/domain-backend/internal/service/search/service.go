@@ -147,7 +147,7 @@ func (s *Service) searchObservations(ctx context.Context, orgID uuid.UUID, query
 	q := `
 SELECT o.id, o.observation_type, o.content, o.tags, o.project_id, o.created_at,
        ts_rank(o.content_tsv, qry)::float8 AS score
-FROM observations o, plainto_tsquery('spanish', $1) AS qry
+FROM knowledge_observations o, plainto_tsquery('spanish', $1) AS qry
 WHERE o.deleted_at IS NULL AND o.content_tsv @@ qry
 `
 	args := []any{query}

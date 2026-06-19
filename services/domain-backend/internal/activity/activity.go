@@ -33,11 +33,11 @@ type Event struct {
 	OrganizationID uuid.UUID
 	ProjectID      *uuid.UUID
 	ActorID        *uuid.UUID
-	Action         string  // "observation.created", "agent.invited", etc.
-	EntityType     string  // "observation", "agent", etc.
+	Action         string // "observation.created", "agent.invited", etc.
+	EntityType     string // "observation", "agent", etc.
 	EntityID       *uuid.UUID
-	Summary        string  // "Alice creó observation X"
-	Metadata       any     // shallow JSONB (sin PII full, ya redacted)
+	Summary        string // "Alice creó observation X"
+	Metadata       any    // shallow JSONB (sin PII full, ya redacted)
 	Visibility     Visibility
 }
 
@@ -113,7 +113,7 @@ func (s *PGStore) Record(ctx context.Context, e Event) (uuid.UUID, error) {
 	// ISSUE-21.6: INSERT sin organization_id.
 	var id uuid.UUID
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO activity_log (
+		INSERT INTO audit_activity_log (
 			project_id, actor_id, action, entity_type, entity_id,
 			summary, metadata, visibility
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -142,7 +142,7 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 	q := `
 		SELECT id, project_id, actor_id, action, entity_type, entity_id,
 		       summary, metadata, visibility, created_at
-		FROM activity_log
+		FROM audit_activity_log
 		WHERE TRUE`
 
 	if f.ProjectID != nil {

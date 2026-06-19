@@ -72,7 +72,7 @@ func TestPGStore_Record_HappyPath(t *testing.T) {
 
 	var count int
 	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM activity_log WHERE id = $1`, id,
+		`SELECT COUNT(*) FROM audit_activity_log WHERE id = $1`, id,
 	).Scan(&count))
 	require.Equal(t, 1, count)
 }
@@ -111,7 +111,7 @@ func TestPGStore_Record_DefaultVisibility(t *testing.T) {
 
 	var vis string
 	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT visibility FROM activity_log WHERE id = $1`, id,
+		`SELECT visibility FROM audit_activity_log WHERE id = $1`, id,
 	).Scan(&vis))
 	require.Equal(t, "org", vis)
 }

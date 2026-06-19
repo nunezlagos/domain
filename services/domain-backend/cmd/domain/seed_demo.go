@@ -143,7 +143,7 @@ func demoProjectID(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, slug string)
 func demoClientID(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, slug string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx,
-		`SELECT id FROM clients WHERE slug=$1 AND deleted_at IS NULL`,
+		`SELECT id FROM project_clients WHERE slug=$1 AND deleted_at IS NULL`,
 		slug,
 	).Scan(&id)
 	return id, err
@@ -188,7 +188,7 @@ func seedDemoClients(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t
 	return withOrg(ctx, pool, orgID, func(tx pgx.Tx) error {
 		for _, c := range demoClients {
 			ct, err := tx.Exec(ctx,
-				`INSERT INTO clients (slug, name, status)
+				`INSERT INTO project_clients (slug, name, status)
 				 VALUES ($1,$2,'active')
 				 ON CONFLICT (slug) DO NOTHING`,
 				c.slug, c.name,
@@ -480,13 +480,13 @@ func seedDemoPrompts(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t
 				turnComplete = base.Add(time.Duration(i) * time.Minute)
 			}
 			ct, err := tx.Exec(ctx,
-				`INSERT INTO captured_prompts
+				`INSERT INTO prompt_captured
 				   (user_id, project_id, content,
 				    client_kind, model, char_count, response_chars,
 				    estimated_tokens_in, estimated_tokens_out, turn_completed_at)
 				 SELECT $1,$2,$3,'claude-code','claude-opus-4-7',$4,$5,$6,$7,$8
 				 WHERE NOT EXISTS (
-				   SELECT 1 FROM captured_prompts
+				   SELECT 1 FROM prompt_captured
 				   WHERE content=$3
 				 )`,
 				userID, pid, content,
@@ -513,11 +513,11 @@ func seedDemoObservations(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UU
 		for i := 0; i < 12; i++ {
 			content := fmt.Sprintf("Demo observation #%d — pattern descubierto", i+1)
 			ct, err := tx.Exec(ctx,
-				`INSERT INTO observations
+				`INSERT INTO knowledge_observations
 				   (project_id, observation_type, content, tags)
 				 SELECT $1,$2,$3,$4
 				 WHERE NOT EXISTS (
-				   SELECT 1 FROM observations
+				   SELECT 1 FROM knowledge_observations
 				   WHERE content=$3 AND deleted_at IS NULL
 				 )`,
 				pid, types[i%len(types)], content, []string{"demo", "auto"},

@@ -85,9 +85,9 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		sql string
 	}{
 		{"projects", "SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL"},
-		{"clients", "SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL"},
+		{"clients", "SELECT COUNT(*) FROM project_clients WHERE deleted_at IS NULL"},
 		{"tickets", "SELECT COUNT(*) FROM project_tickets WHERE deleted_at IS NULL"},
-		{"observations", "SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL"},
+		{"observations", "SELECT COUNT(*) FROM knowledge_observations WHERE deleted_at IS NULL"},
 		// REQ-42.3: sessions_open removido (tabla sessions dropeada).
 		{"crons", "SELECT COUNT(*) FROM crons WHERE deleted_at IS NULL"},
 		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE proposed=true AND deleted_at IS NULL"},
@@ -104,7 +104,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	// Captured prompts del usuario (filtrado por user_id en lugar de org)
 	var promptCount int
 	if err := d.q(ctx).QueryRow(ctx,
-		"SELECT COUNT(*) FROM captured_prompts WHERE user_id=$1",
+		"SELECT COUNT(*) FROM prompt_captured WHERE user_id=$1",
 		userID,
 	).Scan(&promptCount); err == nil {
 		counts["my_captured_prompts"] = promptCount

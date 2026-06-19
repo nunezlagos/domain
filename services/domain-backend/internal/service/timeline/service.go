@@ -131,7 +131,7 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 	)
 	err := s.q(ctx).QueryRow(ctx,
 		`SELECT created_at, project_id, content
-		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, observationID,
+		 FROM knowledge_observations WHERE id = $1 AND deleted_at IS NULL`, observationID,
 	).Scan(&anchorCreatedAt, &anchorProjectID, &anchorContent)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrObservationNotFound
@@ -175,13 +175,13 @@ func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.U
 	var args []any
 	if projectID == uuid.Nil {
 		q = `SELECT id, observation_type, content, created_at
-		     FROM observations
+		     FROM knowledge_observations
 		     WHERE deleted_at IS NULL
 		     ORDER BY created_at DESC LIMIT $1`
 		args = []any{limit}
 	} else {
 		q = `SELECT id, observation_type, content, created_at
-		     FROM observations
+		     FROM knowledge_observations
 		     WHERE project_id = $1 AND deleted_at IS NULL
 		     ORDER BY created_at DESC LIMIT $2`
 		args = []any{projectID, limit}
@@ -261,7 +261,7 @@ func (s *Service) queryEntriesAround(ctx context.Context, projectID uuid.UUID, t
 	}
 	q := fmt.Sprintf(`
 		SELECT 'observation' AS kind, id, observation_type, content, created_at
-		FROM observations
+		FROM knowledge_observations
 		WHERE project_id = $1 AND created_at %s $2 AND deleted_at IS NULL
 		UNION ALL
 		SELECT 'prompt' AS kind, id, slug, body, created_at

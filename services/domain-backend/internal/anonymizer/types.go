@@ -70,7 +70,7 @@ func DefaultConfig() Config {
 					"name": RuleFakerName,
 				},
 			},
-			"observations": {
+			"knowledge_observations": {
 				Columns: map[string]Rule{
 					"content": RuleRedactContent,
 				},
@@ -84,7 +84,7 @@ func DefaultConfig() Config {
 			},
 			"auth_api_keys":                  {Skip: true},
 			"auth_otp_codes":                 {Skip: true},
-			"outbound_webhook_subscriptions": {Columns: map[string]Rule{"secret_cipher": RuleNullify}},
+			"webhook_outbound_subscriptions": {Columns: map[string]Rule{"secret_cipher": RuleNullify}},
 		},
 	}
 }

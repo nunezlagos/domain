@@ -82,7 +82,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 		var existingHash string
 		var existingStatus string
 		err := s.Pool.QueryRow(ctx,
-			`SELECT content_hash, status FROM imported_workflow_files
+			`SELECT content_hash, status FROM project_imported_workflow_files
 			 WHERE project_id = $1 AND rel_path = $2`,
 			in.ProjectID, df.RelPath,
 		).Scan(&existingHash, &existingStatus)
@@ -101,7 +101,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 		}
 
 		_, err = s.Pool.Exec(ctx, `
-			INSERT INTO imported_workflow_files
+			INSERT INTO project_imported_workflow_files
 			  (project_id, source_tool, rel_path, original_content,
 			   content_hash, size_bytes, status, replaced_with, replaced_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7::varchar,$8::text, CASE WHEN $7::varchar = 'replaced' THEN now() ELSE NULL END)
@@ -140,7 +140,7 @@ func (s *Service) Restore(ctx context.Context, projectID *uuid.UUID, relPath, pr
 	var f ImportedFile
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, source_tool, rel_path, original_content, status, replaced_at
-		FROM imported_workflow_files
+		FROM project_imported_workflow_files
 		WHERE ($1::uuid IS NULL AND project_id IS NULL OR project_id = $1)
 		  AND rel_path = $2`,
 		projectID, relPath,
@@ -162,7 +162,7 @@ func (s *Service) Restore(ctx context.Context, projectID *uuid.UUID, relPath, pr
 	}
 
 	_, err = s.Pool.Exec(ctx,
-		`UPDATE imported_workflow_files
+		`UPDATE project_imported_workflow_files
 		 SET status = $1, restored_at = now(), updated_at = now()
 		 WHERE id = $2`,
 		StatusRestored, f.ID,
@@ -176,7 +176,7 @@ func (s *Service) List(ctx context.Context, projectID *uuid.UUID) ([]ImportedFil
 		SELECT id, project_id, source_tool, rel_path,
 		       original_content, content_hash, size_bytes, status,
 		       replaced_with, replaced_at, restored_at, created_at, updated_at
-		FROM imported_workflow_files
+		FROM project_imported_workflow_files
 		WHERE ($1::uuid IS NULL AND project_id IS NULL OR project_id = $1)
 		ORDER BY rel_path ASC`,
 		projectID,

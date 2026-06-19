@@ -148,7 +148,7 @@ func (a *API) replayOutboundDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := a.OutboundWebhookService.Pool.Exec(r.Context(), `
-		UPDATE outbound_webhook_deliveries
+		UPDATE webhook_outbound_deliveries
 		SET status = 'pending', next_retry_at = NOW(), attempt = 1, error_message = NULL
 		WHERE id = $1`, id)
 	if err != nil {

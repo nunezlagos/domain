@@ -37,7 +37,7 @@ var restorableEntities = map[string]string{
 	"organization":  "organizations",
 	"user":          "users",
 	"project":       "projects",
-	"observation":   "observations",
+	"observation":   "knowledge_observations",
 	"session":       "sessions",
 	"prompt":        "prompts",
 	"knowledge_doc": "knowledge_docs",
@@ -188,7 +188,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		 ORDER BY created_at DESC`)
 	out.Observations, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, content, observation_type, tags, metadata, created_at
-		 FROM observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)
+		 FROM knowledge_observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)
 	// REQ-42.3: sessions dropeada — sin export de sesiones (campo queda vacío
 	// por compatibilidad de shape del export GDPR).
 	out.Prompts, _ = scanRows(ctx, s.Pool,

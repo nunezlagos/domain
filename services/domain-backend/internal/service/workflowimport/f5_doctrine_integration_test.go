@@ -109,7 +109,7 @@ func TestWorkflowImport_AGENTS_md_BackedUp(t *testing.T) {
 	var original string
 	var status string
 	err = pool.QueryRow(context.Background(), `
-		SELECT original_content, status FROM imported_workflow_files
+		SELECT original_content, status FROM project_imported_workflow_files
 		WHERE project_id = $1 AND rel_path = 'AGENTS.md'
 	`, projectID).Scan(&original, &status)
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestWorkflowImport_AGENTS_md_StubReplaces(t *testing.T) {
 
 	var status string
 	err = pool.QueryRow(context.Background(), `
-		SELECT status FROM imported_workflow_files
+		SELECT status FROM project_imported_workflow_files
 		WHERE project_id = $1 AND rel_path = 'AGENTS.md'
 	`, projectID).Scan(&status)
 	require.NoError(t, err)
@@ -172,10 +172,10 @@ func TestWorkflowImport_CLAUDE_md_AlsoHandled(t *testing.T) {
 
 	var agentStatus, claudeStatus string
 	pool.QueryRow(context.Background(),
-		`SELECT status FROM imported_workflow_files WHERE project_id=$1 AND rel_path='AGENTS.md'`,
+		`SELECT status FROM project_imported_workflow_files WHERE project_id=$1 AND rel_path='AGENTS.md'`,
 		projectID).Scan(&agentStatus)
 	pool.QueryRow(context.Background(),
-		`SELECT status FROM imported_workflow_files WHERE project_id=$1 AND rel_path='CLAUDE.md'`,
+		`SELECT status FROM project_imported_workflow_files WHERE project_id=$1 AND rel_path='CLAUDE.md'`,
 		projectID).Scan(&claudeStatus)
 	require.Equal(t, "replaced", agentStatus)
 	require.Equal(t, "replaced", claudeStatus)
@@ -206,7 +206,7 @@ func TestWorkflowImport_RestoreFromDB(t *testing.T) {
 
 	var status string
 	pool.QueryRow(context.Background(), `
-		SELECT status FROM imported_workflow_files
+		SELECT status FROM project_imported_workflow_files
 		WHERE project_id = $1 AND rel_path = 'AGENTS.md'
 	`, projectID).Scan(&status)
 	require.Equal(t, "restored", status)
@@ -240,7 +240,7 @@ func TestWorkflowImport_Idempotent_NoDuplicate(t *testing.T) {
 
 	var count int
 	pool.QueryRow(context.Background(), `
-		SELECT count(*) FROM imported_workflow_files
+		SELECT count(*) FROM project_imported_workflow_files
 		WHERE project_id = $1 AND rel_path = 'AGENTS.md'
 	`, projectID).Scan(&count)
 	require.Equal(t, 1, count, "segunda import del mismo path no debe duplicar")

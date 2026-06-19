@@ -96,7 +96,7 @@ type exportTable struct {
 	needsUser bool
 }
 
-const observationsQuery = `SELECT row_to_json(t) FROM observations t WHERE deleted_at IS NULL`
+const observationsQuery = `SELECT row_to_json(t) FROM knowledge_observations t WHERE deleted_at IS NULL`
 const promptsQuery = `SELECT row_to_json(t) FROM prompts t`
 const knowledgeDocsQuery = `SELECT row_to_json(t) FROM knowledge_docs t`
 const skillsQuery = `SELECT row_to_json(t) FROM skills t`
@@ -144,10 +144,10 @@ func writeMetadata(ctx context.Context, zw *zip.Writer, orgID uuid.UUID, version
 		return err
 	}
 	meta := map[string]any{
-		"domain_version": version,
-		"exported_at":    now.Format(time.RFC3339),
+		"domain_version":  version,
+		"exported_at":     now.Format(time.RFC3339),
 		"organization_id": orgID.String(),
-		"schema_version": "1",
+		"schema_version":  "1",
 		"tables_exported": []string{
 			"observations", "prompts", "knowledge_docs",
 			"skills", "agents", "flows", "flow_runs", "audit_log",

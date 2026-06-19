@@ -6,11 +6,11 @@
 // platform_policies/agent-protocol). El server detecta si el cwd +
 // git_remote corresponde a un project conocido y:
 //
-//   1. Conocido → devuelve overlay: { project, last_known_head, current_head,
-//      head_changed, recent_observations, policies_summary }.
-//      Si head_changed=true, sugiere refrescar memorias.
-//   2. Desconocido → known=false + suggestion: { slug, remote_detected }
-//      + next_step: "domain_session_register".
+//  1. Conocido → devuelve overlay: { project, last_known_head, current_head,
+//     head_changed, recent_observations, policies_summary }.
+//     Si head_changed=true, sugiere refrescar memorias.
+//  2. Desconocido → known=false + suggestion: { slug, remote_detected }
+//     + next_step: "domain_session_register".
 //
 // domain_session_register crea el project, registra el remoto en
 // project_repositories, persiste el HEAD inicial y graba una
@@ -175,7 +175,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 				"cwd":             cwd,
 			},
 			"existing_rules_files": rulesFiles,
-			"next_step": "Preguntale al usuario: (1) confirmá slug='" + suggestionSlug + "' o pasame otro; (2) confirmá remote=" + gitRemote + " (origin) o pasame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llamá domain_session_register.",
+			"next_step":            "Preguntale al usuario: (1) confirmá slug='" + suggestionSlug + "' o pasame otro; (2) confirmá remote=" + gitRemote + " (origin) o pasame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llamá domain_session_register.",
 		}
 		if len(rulesFiles) > 0 {
 			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Después de registrar el proyecto, leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno para que domain herede lo que el repo ya documenta sin pisar nada."
@@ -235,7 +235,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		        substring(content from 1 for 80),
 		        to_char(created_at AT TIME ZONE 'UTC',
 		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-		   FROM observations
+		   FROM knowledge_observations
 		   WHERE project_id = $1
 		     AND deleted_at IS NULL
 		   ORDER BY created_at DESC LIMIT 5`,
@@ -403,7 +403,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	// observations schema: (project_id, observation_type,
 	// content). No tiene title — lo embebemos en content como first-line.
 	if _, oerr := d.q(ctx).Exec(ctx,
-		`INSERT INTO observations
+		`INSERT INTO knowledge_observations
 		   (project_id, observation_type, content, tags)
 		 VALUES ($1, 'discovery', $2, ARRAY['bootstrap','project_registered'])`,
 		projID,
@@ -425,4 +425,3 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		"repo":    createdRepo,
 	})
 }
-

@@ -81,7 +81,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 		table string
 		sql   string
 	}{
-		{"observations", "UPDATE observations SET created_by = NULL WHERE created_by = $1"},
+		{"observations", "UPDATE knowledge_observations SET created_by = NULL WHERE created_by = $1"},
 		{"prompts", "UPDATE prompts SET created_by = NULL WHERE created_by = $1"},
 		{"knowledge_docs", "UPDATE knowledge_docs SET created_by = NULL WHERE created_by = $1"},
 		{"agent_runs", "UPDATE agent_runs SET user_id = NULL WHERE user_id = $1"},

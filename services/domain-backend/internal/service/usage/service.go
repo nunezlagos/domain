@@ -174,7 +174,7 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 		// producción: la tabla siempre estuvo vacía).
 		if err := tx.QueryRow(ctx, `
 			SELECT
-			  (SELECT COUNT(*) FROM observations
+			  (SELECT COUNT(*) FROM knowledge_observations
 			     WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL),
 			  (SELECT COUNT(*) FROM agents
 			     WHERE deleted_at IS NULL),
@@ -279,7 +279,7 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 		rs, qerr := tx.Query(ctx, `
 			SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
 			       COUNT(*)::bigint
-			FROM observations
+			FROM knowledge_observations
 			WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL
 			GROUP BY 1
 		`, start, end)

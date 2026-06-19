@@ -22,38 +22,38 @@ import (
 )
 
 var (
-	ErrInvalidURL    = errors.New("invalid_url")
-	ErrNoEvents      = errors.New("events_required")
-	ErrInvalidEvent  = errors.New("invalid_event")
-	ErrUnknown       = errors.New("not_found")
-	ErrSSRF          = errors.New("ssrf_blocked")
+	ErrInvalidURL   = errors.New("invalid_url")
+	ErrNoEvents     = errors.New("events_required")
+	ErrInvalidEvent = errors.New("invalid_event")
+	ErrUnknown      = errors.New("not_found")
+	ErrSSRF         = errors.New("ssrf_blocked")
 )
 
 // AllowedEvents catalog cerrado para evitar typos del cliente.
 var AllowedEvents = map[string]bool{
-	"agent_run.completed":  true,
-	"agent_run.failed":     true,
-	"flow_run.completed":   true,
-	"flow_run.failed":      true,
-	"observation.created":  true,
-	"invitation.accepted":  true,
-	"invite.created":       true,
-	"webhook.test_ping":    true,
-	"usage.alert_fired":    true,
+	"agent_run.completed": true,
+	"agent_run.failed":    true,
+	"flow_run.completed":  true,
+	"flow_run.failed":     true,
+	"observation.created": true,
+	"invitation.accepted": true,
+	"invite.created":      true,
+	"webhook.test_ping":   true,
+	"usage.alert_fired":   true,
 }
 
 type Subscription struct {
-	ID             uuid.UUID       `json:"id"`
-	Name           string          `json:"name"`
-	URL            string          `json:"url"`
-	Events         []string        `json:"events"`
-	Filters        json.RawMessage `json:"filters"`
-	Active         bool            `json:"active"`
-	FailureCount   int             `json:"failure_count"`
-	LastSuccessAt  *time.Time      `json:"last_success_at,omitempty"`
-	LastFailureAt  *time.Time      `json:"last_failure_at,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID            uuid.UUID       `json:"id"`
+	Name          string          `json:"name"`
+	URL           string          `json:"url"`
+	Events        []string        `json:"events"`
+	Filters       json.RawMessage `json:"filters"`
+	Active        bool            `json:"active"`
+	FailureCount  int             `json:"failure_count"`
+	LastSuccessAt *time.Time      `json:"last_success_at,omitempty"`
+	LastFailureAt *time.Time      `json:"last_failure_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type CreateInput struct {
@@ -144,17 +144,17 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 	}
 
 	row := s.Pool.QueryRow(ctx,
-		`INSERT INTO outbound_webhook_subscriptions
+		`INSERT INTO webhook_outbound_subscriptions
 			(name, url, events, filters, secret_cipher)
 		 VALUES ($1,$2,$3,$4,$5)
 		 RETURNING id, created_at, updated_at`,
 		in.Name, in.URL, in.Events, in.Filters, secretCipher)
 	sub := &Subscription{
-		Name:           in.Name,
-		URL:            in.URL,
-		Events:         in.Events,
-		Filters:        in.Filters,
-		Active:         true,
+		Name:    in.Name,
+		URL:     in.URL,
+		Events:  in.Events,
+		Filters: in.Filters,
+		Active:  true,
 	}
 	if err := row.Scan(&sub.ID, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("insert subscription: %w", err)
@@ -168,7 +168,7 @@ func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType st
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
-		 FROM outbound_webhook_subscriptions
+		 FROM webhook_outbound_subscriptions
 		 WHERE active = TRUE
 		   AND $1 = ANY(events)`,
 		eventType)
@@ -193,7 +193,7 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Subscription, 
 	row := s.Pool.QueryRow(ctx,
 		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
-		 FROM outbound_webhook_subscriptions
+		 FROM webhook_outbound_subscriptions
 		 WHERE id = $1`, id)
 	var sub Subscription
 	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Events,
@@ -212,7 +212,7 @@ func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription,
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
-		 FROM outbound_webhook_subscriptions
+		 FROM webhook_outbound_subscriptions
 		 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription,
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM outbound_webhook_subscriptions WHERE id=$1`,
+		`DELETE FROM webhook_outbound_subscriptions WHERE id=$1`,
 		id)
 	if err != nil {
 		return err
@@ -249,7 +249,7 @@ func (s *Service) getByID(ctx context.Context, id uuid.UUID) (*Subscription, err
 	row := s.Pool.QueryRow(ctx,
 		`SELECT id, name, url, events, filters, active,
 			failure_count, last_success_at, last_failure_at, created_at, updated_at
-		 FROM outbound_webhook_subscriptions WHERE id = $1`, id)
+		 FROM webhook_outbound_subscriptions WHERE id = $1`, id)
 	var sub Subscription
 	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Events,
 		&sub.Filters, &sub.Active, &sub.FailureCount, &sub.LastSuccessAt,
@@ -272,7 +272,7 @@ func (s *Service) GetByIDInternal(ctx context.Context, id uuid.UUID) (*Subscript
 func (s *Service) DecryptSecret(ctx context.Context, id uuid.UUID) ([]byte, error) {
 	var ct []byte
 	err := s.Pool.QueryRow(ctx,
-		`SELECT secret_cipher FROM outbound_webhook_subscriptions WHERE id=$1`, id).Scan(&ct)
+		`SELECT secret_cipher FROM webhook_outbound_subscriptions WHERE id=$1`, id).Scan(&ct)
 	if err != nil {
 		return nil, err
 	}

@@ -27,28 +27,28 @@ import (
 )
 
 var (
-	ErrSameProject  = errors.New("source and target must be different")
-	ErrCrossOrg     = errors.New("source and target must belong to same organization")
-	ErrNotFound     = errors.New("project not found")
+	ErrSameProject   = errors.New("source and target must be different")
+	ErrCrossOrg      = errors.New("source and target must belong to same organization")
+	ErrNotFound      = errors.New("project not found")
 	ErrAlreadyMerged = errors.New("source project already merged")
 )
 
 // MergeReport documenta qué se movió.
 type MergeReport struct {
-	MergeID            uuid.UUID         `json:"merge_id"`
-	SourceID           uuid.UUID         `json:"source_id"`
-	TargetID           uuid.UUID         `json:"target_id"`
-	ObservationsMoved  int               `json:"observations_moved"`
-	SkillsMoved        int               `json:"skills_moved"`
-	SkillsRenamed      []string          `json:"skills_renamed,omitempty"`
-	FlowsMoved         int               `json:"flows_moved"`
-	FlowsRenamed       []string          `json:"flows_renamed,omitempty"`
-	AgentsMoved        int               `json:"agents_moved"`
-	AgentsRenamed      []string          `json:"agents_renamed,omitempty"`
-	CronsMoved         int               `json:"crons_moved"`
-	CronsRenamed       []string          `json:"crons_renamed,omitempty"`
-	StartedAt          time.Time         `json:"started_at"`
-	CompletedAt        time.Time         `json:"completed_at"`
+	MergeID           uuid.UUID `json:"merge_id"`
+	SourceID          uuid.UUID `json:"source_id"`
+	TargetID          uuid.UUID `json:"target_id"`
+	ObservationsMoved int       `json:"observations_moved"`
+	SkillsMoved       int       `json:"skills_moved"`
+	SkillsRenamed     []string  `json:"skills_renamed,omitempty"`
+	FlowsMoved        int       `json:"flows_moved"`
+	FlowsRenamed      []string  `json:"flows_renamed,omitempty"`
+	AgentsMoved       int       `json:"agents_moved"`
+	AgentsRenamed     []string  `json:"agents_renamed,omitempty"`
+	CronsMoved        int       `json:"crons_moved"`
+	CronsRenamed      []string  `json:"crons_renamed,omitempty"`
+	StartedAt         time.Time `json:"started_at"`
+	CompletedAt       time.Time `json:"completed_at"`
 }
 
 // Service ejecuta merges atómicamente.
@@ -110,7 +110,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 
 	// 2. Mover observations (no conflict — no UNIQUE en slug por project).
 	tag, err := tx.Exec(ctx,
-		`UPDATE observations SET project_id = $1 WHERE project_id = $2 AND deleted_at IS NULL`,
+		`UPDATE knowledge_observations SET project_id = $1 WHERE project_id = $2 AND deleted_at IS NULL`,
 		targetID, sourceID,
 	)
 	if err != nil {
@@ -121,9 +121,9 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	// 3. Para tablas con UNIQUE(slug,project_id): skills, flows, agents, crons.
 	//    Por cada, renombrar slugs en conflict (sufijo -merged-<source_slug>).
 	for _, t := range []struct {
-		table     string
-		moved     *int
-		renamed   *[]string
+		table   string
+		moved   *int
+		renamed *[]string
 	}{
 		{"skills", &report.SkillsMoved, &report.SkillsRenamed},
 		{"flows", &report.FlowsMoved, &report.FlowsRenamed},

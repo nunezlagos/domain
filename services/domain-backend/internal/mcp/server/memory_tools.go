@@ -288,7 +288,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	byType := map[string]int64{}
 	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyectó withOrgTxHandler.
 	rows, err := d.q(ctx).Query(ctx, `
-		SELECT observation_type, COUNT(*) FROM observations
+		SELECT observation_type, COUNT(*) FROM knowledge_observations
 		WHERE deleted_at IS NULL`+projFilter+`
 		GROUP BY observation_type`, qArgs...)
 	if err != nil {

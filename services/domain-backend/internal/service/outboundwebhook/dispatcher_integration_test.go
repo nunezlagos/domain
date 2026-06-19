@@ -87,7 +87,7 @@ func (f *owFixture) subscribe(t *testing.T, url, event string, filters string) *
 	sub, err := f.svc.Create(ctx, f.orgID, in, false)
 	require.NoError(t, err)
 	_, err = f.pool.App.Exec(ctx,
-		`UPDATE outbound_webhook_subscriptions SET url = $1 WHERE id = $2`, url, sub.ID)
+		`UPDATE webhook_outbound_subscriptions SET url = $1 WHERE id = $2`, url, sub.ID)
 	require.NoError(t, err)
 	return sub
 }
@@ -143,7 +143,7 @@ func TestDelivery_HMACVerifiable(t *testing.T) {
 	// Delivery marcada succeeded
 	var status string
 	require.NoError(t, f.pool.App.QueryRow(ctx,
-		`SELECT status FROM outbound_webhook_deliveries WHERE subscription_id = $1`,
+		`SELECT status FROM webhook_outbound_deliveries WHERE subscription_id = $1`,
 		sub.ID).Scan(&status))
 	require.Equal(t, "succeeded", status)
 }
@@ -167,7 +167,7 @@ func TestDelivery_FiltersApplied(t *testing.T) {
 	f.emitAndProcess(t, "flow_run.completed", `{"flow_slug":"otro","status":"completed"}`)
 	var count int
 	require.NoError(t, f.pool.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM outbound_webhook_deliveries`).Scan(&count))
+		`SELECT COUNT(*) FROM webhook_outbound_deliveries`).Scan(&count))
 	require.Zero(t, count, "evento filtrado no debe encolar delivery")
 
 	// Evento que matchea → entrega
@@ -194,18 +194,18 @@ func TestDelivery_RetryAndReplay(t *testing.T) {
 	var attempt int
 	var deliveryID uuid.UUID
 	require.NoError(t, f.pool.App.QueryRow(ctx, `
-		SELECT id, status, attempt FROM outbound_webhook_deliveries
+		SELECT id, status, attempt FROM webhook_outbound_deliveries
 		WHERE subscription_id = $1`, sub.ID).Scan(&deliveryID, &status, &attempt))
 	require.Equal(t, "pending", status, "503 → sigue pending con backoff")
 	require.Equal(t, 2, attempt)
 
 	// Replay manual: resetea a pending NOW con ciclo fresco
 	_, err := f.pool.App.Exec(ctx, `
-		UPDATE outbound_webhook_deliveries
+		UPDATE webhook_outbound_deliveries
 		SET status='dead_letter', next_retry_at=NULL WHERE id=$1`, deliveryID)
 	require.NoError(t, err)
 	tag, err := f.pool.App.Exec(ctx, `
-		UPDATE outbound_webhook_deliveries
+		UPDATE webhook_outbound_deliveries
 		SET status='pending', next_retry_at=NOW(), attempt=1, error_message=NULL
 		WHERE id=$1`, deliveryID)
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestDelivery_CircuitBreakerSkips(t *testing.T) {
 
 	// Forzar estado de breaker abierto
 	_, err := f.pool.App.Exec(ctx, `
-		UPDATE outbound_webhook_subscriptions
+		UPDATE webhook_outbound_subscriptions
 		SET failure_count = $2, last_failure_at = NOW()
 		WHERE id = $1`, sub.ID, ow.CBThreshold)
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestDelivery_CircuitBreakerSkips(t *testing.T) {
 	require.Zero(t, hits.Load(), "breaker abierto → el endpoint NO se golpea")
 	var status, errMsg string
 	require.NoError(t, f.pool.App.QueryRow(ctx, `
-		SELECT status, COALESCE(error_message,'') FROM outbound_webhook_deliveries
+		SELECT status, COALESCE(error_message,'') FROM webhook_outbound_deliveries
 		WHERE subscription_id = $1`, sub.ID).Scan(&status, &errMsg))
 	require.Equal(t, "pending", status)
 	require.Equal(t, "circuit_open", errMsg)

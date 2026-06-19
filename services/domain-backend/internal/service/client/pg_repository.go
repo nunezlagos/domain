@@ -64,7 +64,7 @@ func scanClient(row pgx.Row) (*Client, error) {
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO clients
+		`INSERT INTO project_clients
 		   (name, slug, tax_id, contact_email,
 		    contact_phone, address, metadata, status)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -85,7 +85,7 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Client, er
 func (r *pgRepository) GetByID(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
-		 FROM clients
+		 FROM project_clients
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
@@ -102,7 +102,7 @@ func (r *pgRepository) GetByID(ctx context.Context, orgID uuid.UUID, id uuid.UUI
 func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
-		 FROM clients
+		 FROM project_clients
 		 WHERE slug = $1 AND deleted_at IS NULL`,
 		slug,
 	)
@@ -139,14 +139,14 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 	// window function y compatible con los planners de PG sin issues.
 	var total int64
 	if err := r.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM clients`+where, args...,
+		`SELECT COUNT(*) FROM project_clients`+where, args...,
 	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count clients: %w", err)
 	}
 
 	// Append limit/offset al final.
 	args = append(args, f.Limit, f.Offset)
-	q := `SELECT ` + selectCols + ` FROM clients` + where +
+	q := `SELECT ` + selectCols + ` FROM project_clients` + where +
 		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 
 	rows, err := r.q(ctx).Query(ctx, q, args...)
@@ -171,7 +171,7 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 
 func (r *pgRepository) Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID, in UpdateParams) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE clients
+		`UPDATE project_clients
 		 SET name = $2, tax_id = $3, contact_email = $4, contact_phone = $5,
 		     address = $6, metadata = $7, status = $8
 		 WHERE id = $1 AND deleted_at IS NULL
@@ -193,7 +193,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID
 
 func (r *pgRepository) SoftDelete(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE clients SET deleted_at = NOW()
+		`UPDATE project_clients SET deleted_at = NOW()
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
@@ -208,7 +208,7 @@ func (r *pgRepository) SoftDelete(ctx context.Context, orgID uuid.UUID, id uuid.
 
 func (r *pgRepository) Restore(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE clients SET deleted_at = NULL
+		`UPDATE project_clients SET deleted_at = NULL
 		 WHERE id = $1 AND deleted_at IS NOT NULL`,
 		id,
 	)
@@ -223,7 +223,7 @@ func (r *pgRepository) Restore(ctx context.Context, orgID uuid.UUID, id uuid.UUI
 
 func (r *pgRepository) SetStatus(ctx context.Context, orgID uuid.UUID, id uuid.UUID, status string) (*Client, error) {
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE clients SET status = $2
+		`UPDATE project_clients SET status = $2
 		 WHERE id = $1 AND deleted_at IS NULL
 		 RETURNING `+selectCols,
 		id, status,

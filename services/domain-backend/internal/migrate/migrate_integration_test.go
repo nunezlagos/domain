@@ -143,7 +143,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	var obsID string
 	// ISSUE-21.6 single-org: no se necesita JOIN con organizations.
 	err = conn.QueryRow(ctx, `
-		INSERT INTO observations (project_id, content, embedding)
+		INSERT INTO knowledge_observations (project_id, content, embedding)
 		SELECT p.id, 'hola mundo', $1::vector(1536)
 		FROM projects p
 		LIMIT 1
@@ -156,7 +156,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	var matched bool
 	err = conn.QueryRow(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM observations
+			SELECT 1 FROM knowledge_observations
 			WHERE content_tsv @@ plainto_tsquery('spanish', 'mundo')
 		)
 	`).Scan(&matched)

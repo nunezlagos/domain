@@ -110,9 +110,9 @@ func seedE2ECrossOrg(t *testing.T, pool *pgxpool.Pool) (uuid.UUID, uuid.UUID, uu
 	require.NoError(t, adminPool.QueryRow(ctx,
 		`INSERT INTO projects (id, organization_id, name, slug) VALUES (gen_random_uuid(), $1, 'PB', 'pb') RETURNING id`, orgB).Scan(&projectB))
 	require.NoError(t, adminPool.QueryRow(ctx,
-		`INSERT INTO observations (id, organization_id, project_id, content) VALUES (gen_random_uuid(), $1, $2, 'A obs') RETURNING id`, orgA, projectA).Scan(&obsA))
+		`INSERT INTO knowledge_observations (id, organization_id, project_id, content) VALUES (gen_random_uuid(), $1, $2, 'A obs') RETURNING id`, orgA, projectA).Scan(&obsA))
 	require.NoError(t, adminPool.QueryRow(ctx,
-		`INSERT INTO observations (id, organization_id, project_id, content) VALUES (gen_random_uuid(), $1, $2, 'B obs') RETURNING id`, orgB, projectB).Scan(&obsB))
+		`INSERT INTO knowledge_observations (id, organization_id, project_id, content) VALUES (gen_random_uuid(), $1, $2, 'B obs') RETURNING id`, orgB, projectB).Scan(&obsB))
 
 	return orgA, orgB, userA, userB, obsA, obsB
 }
@@ -137,7 +137,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 			http.Error(w, `{"error":"no tx in ctx"}`, 500)
 			return
 		}
-		rows, err := tx.Query(r.Context(), `SELECT id::text, content FROM observations ORDER BY created_at`)
+		rows, err := tx.Query(r.Context(), `SELECT id::text, content FROM knowledge_observations ORDER BY created_at`)
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":"query: %v"}`, err), 500)
 			return
@@ -161,7 +161,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 				return
 			}
 			var got uuid.UUID
-			err := tx.QueryRow(r.Context(), `SELECT id FROM observations WHERE id = $1`, idWanted).Scan(&got)
+			err := tx.QueryRow(r.Context(), `SELECT id FROM knowledge_observations WHERE id = $1`, idWanted).Scan(&got)
 			if err == pgx.ErrNoRows {
 				http.Error(w, `{"error":"not found"}`, 404)
 				return
@@ -250,7 +250,7 @@ func TestE2E_Sabotage_HandlerIgnoresTx(t *testing.T) {
 		// el row, lo cual es el comportamiento single-org esperado).
 		var got int
 		err := pool.QueryRow(r.Context(),
-			`SELECT COUNT(*) FROM observations WHERE id = $1`,
+			`SELECT COUNT(*) FROM knowledge_observations WHERE id = $1`,
 			obsB).Scan(&got)
 		if err != nil {
 			http.Error(w, err.Error(), 500)

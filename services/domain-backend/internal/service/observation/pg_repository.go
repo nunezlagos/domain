@@ -48,7 +48,7 @@ func (r *pgRepository) q(ctx context.Context) querier {
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observation, error) {
 	var o Observation
 	err := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO observations
+		`INSERT INTO knowledge_observations
 		   (project_id, created_by, session_id, content,
 		    embedding, observation_type, tags, metadata, content_hash)
 		 VALUES ($1, $2, $3, $4, $5::vector, $6, $7, $8, $9)
@@ -70,7 +70,7 @@ func (r *pgRepository) Get(ctx context.Context, id uuid.UUID) (*Observation, err
 	err := r.q(ctx).QueryRow(ctx,
 		`SELECT id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
-		 FROM observations WHERE id = $1 AND deleted_at IS NULL`, id,
+		 FROM knowledge_observations WHERE id = $1 AND deleted_at IS NULL`, id,
 	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -86,7 +86,7 @@ func (r *pgRepository) List(ctx context.Context, projectID uuid.UUID, limit int)
 	rows, err := r.q(ctx).Query(ctx,
 		`SELECT id, project_id, created_by, session_id,
 		        content, observation_type, tags, metadata, created_at, updated_at
-		 FROM observations
+		 FROM knowledge_observations
 		 WHERE project_id = $1 AND deleted_at IS NULL
 		 ORDER BY created_at DESC LIMIT $2`, projectID, limit)
 	if err != nil {
@@ -116,7 +116,7 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 	args := []any{in.ProjectID}
 	q := `SELECT id, project_id, created_by, session_id,
 	            content, observation_type, tags, metadata, created_at, updated_at
-	      FROM observations
+	      FROM knowledge_observations
 	      WHERE project_id = $1 AND deleted_at IS NULL`
 	if in.CursorTime != nil && in.CursorID != nil {
 		args = append(args, *in.CursorTime, *in.CursorID)
@@ -151,7 +151,7 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 
 func (r *pgRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE observations SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
+		`UPDATE knowledge_observations SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}
@@ -168,13 +168,13 @@ func (r *pgRepository) SearchHybrid(ctx context.Context, in SearchInput) ([]Sear
 		rows, err = r.q(ctx).Query(ctx, `
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, query) DESC) AS r
-  FROM observations, plainto_tsquery('spanish', $1) AS query
+  FROM knowledge_observations, plainto_tsquery('spanish', $1) AS query
   WHERE deleted_at IS NULL AND content_tsv @@ query
   LIMIT $3
 ),
 vec AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector ASC) AS r
-  FROM observations
+  FROM knowledge_observations
   WHERE deleted_at IS NULL AND embedding IS NOT NULL
   LIMIT $3
 ),
@@ -189,7 +189,7 @@ SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,
        f.score, f.bm25_rank, f.vec_rank
 FROM fused f
-JOIN observations o ON o.id = f.id
+JOIN knowledge_observations o ON o.id = f.id
 ORDER BY f.score DESC
 LIMIT $5
 `, in.Query, in.EmbeddingLit, in.Candidates, in.RRFK, in.Limit)
@@ -200,7 +200,7 @@ SELECT o.id, o.project_id, o.created_by, o.session_id,
        ts_rank(o.content_tsv, query)::float8 AS score,
        0::bigint AS bm25_rank,
        0::bigint AS vec_rank
-FROM observations o, plainto_tsquery('spanish', $1) AS query
+FROM knowledge_observations o, plainto_tsquery('spanish', $1) AS query
 WHERE o.deleted_at IS NULL AND o.content_tsv @@ query
 ORDER BY score DESC
 LIMIT $2

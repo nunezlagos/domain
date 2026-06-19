@@ -236,7 +236,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			FROM users u
 			LEFT JOIN (
 			  SELECT user_id, count(*) AS prompts
-			  FROM captured_prompts
+			  FROM prompt_captured
 			  WHERE captured_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) p ON p.user_id = u.id

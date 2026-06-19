@@ -73,7 +73,7 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, er
 	// captured_prompts. La columna existe pero se omite del INSERT
 	// (queda NULL por default). Dropeada en Fase C (migration 000142).
 	row := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO captured_prompts
+		`INSERT INTO prompt_captured
 		   (user_id, project_id,
 		    content, client_kind, model, char_count, estimated_tokens_in)
 		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7)
@@ -93,7 +93,7 @@ func (r *pgRepository) CompleteTurn(ctx context.Context, in CompleteTurnInput) (
 	// ISSUE-21.6 Fase D clean: WHERE clause sin organization_id.
 	// El param in.OrganizationID se ignora (single-org).
 	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE captured_prompts
+		`UPDATE prompt_captured
 		   SET response_chars       = $2,
 		       estimated_tokens_out = $3,
 		       model                = COALESCE(NULLIF($4,''), model),
@@ -118,7 +118,7 @@ func (r *pgRepository) summarize(ctx context.Context, where string, args ...any)
 		        COALESCE(SUM(estimated_tokens_in),0)::bigint,
 		        COALESCE(SUM(estimated_tokens_out),0)::bigint,
 		        COALESCE(SUM(char_count + response_chars),0)::bigint
-		   FROM captured_prompts `+where, args...)
+		   FROM prompt_captured `+where, args...)
 	out := &SessionUsage{}
 	if err := row.Scan(&out.Turns, &out.EstimatedTokensIn, &out.EstimatedTokensOut, &out.TotalChars); err != nil {
 		return nil, fmt.Errorf("summarize: %w", err)
@@ -143,7 +143,7 @@ func (r *pgRepository) Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (
 	_ = orgID // compat de firma
 	row := r.q(ctx).QueryRow(ctx,
 		`SELECT `+selectCols+`
-		 FROM captured_prompts
+		 FROM prompt_captured
 		 WHERE id = $1`,
 		id,
 	)
@@ -179,7 +179,7 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFil
 
 	var total int64
 	if err := r.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM captured_prompts `+where, args...,
+		`SELECT COUNT(*) FROM prompt_captured `+where, args...,
 	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count captured_prompts: %w", err)
 	}
@@ -191,7 +191,7 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFil
 	args = append(args, limit, filter.Offset)
 	rows, err := r.q(ctx).Query(ctx,
 		`SELECT `+selectCols+`
-		 FROM captured_prompts `+where+`
+		 FROM prompt_captured `+where+`
 		 ORDER BY captured_at DESC
 		 LIMIT $`+itoa(idx)+` OFFSET $`+itoa(idx+1),
 		args...,

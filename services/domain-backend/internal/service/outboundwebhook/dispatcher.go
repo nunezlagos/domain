@@ -84,7 +84,7 @@ func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, ev Event) error 
 			continue
 		}
 		_, err := d.Pool.Exec(ctx,
-			`INSERT INTO outbound_webhook_deliveries
+			`INSERT INTO webhook_outbound_deliveries
 				(subscription_id, event_id, event_type, payload,
 				 status, next_retry_at)
 			 VALUES ($1,$2,$3,$4,'pending', NOW())`,
@@ -113,7 +113,7 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 
 	rows, err := tx.Query(ctx,
 		`SELECT id, subscription_id, event_id, event_type, payload, attempt
-		 FROM outbound_webhook_deliveries
+		 FROM webhook_outbound_deliveries
 		 WHERE status = 'pending' AND next_retry_at <= NOW()
 		 ORDER BY next_retry_at
 		 LIMIT $1
@@ -141,7 +141,7 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 	// Marca como "in flight" extendiendo el next_retry_at para que otro worker no la tome.
 	for _, j := range jobs {
 		_, _ = tx.Exec(ctx,
-			`UPDATE outbound_webhook_deliveries
+			`UPDATE webhook_outbound_deliveries
 			 SET next_retry_at = NOW() + INTERVAL '5 minutes'
 			 WHERE id = $1`, j.ID)
 	}
@@ -163,7 +163,7 @@ func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID uuid.UUID, e
 	if err != nil {
 		// La subscription fue borrada; cancelar delivery.
 		_, _ = d.Pool.Exec(ctx,
-			`UPDATE outbound_webhook_deliveries SET status='failed', error_message=$1
+			`UPDATE webhook_outbound_deliveries SET status='failed', error_message=$1
 			 WHERE id=$2`, "subscription_not_found", deliveryID)
 		return
 	}
@@ -172,7 +172,7 @@ func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID uuid.UUID, e
 	if d.circuitOpen(sub) {
 		retryAt := sub.LastFailureAt.Add(CBCooldown)
 		_, _ = d.Pool.Exec(ctx,
-			`UPDATE outbound_webhook_deliveries
+			`UPDATE webhook_outbound_deliveries
 			 SET status='pending', next_retry_at=$1, error_message='circuit_open'
 			 WHERE id=$2`, retryAt, deliveryID)
 		return
@@ -223,12 +223,12 @@ func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID uuid.UUID, e
 
 func (d *Dispatcher) recordSuccess(ctx context.Context, deliveryID, subID uuid.UUID, code int, body string, duration int) {
 	_, _ = d.Pool.Exec(ctx,
-		`UPDATE outbound_webhook_deliveries
+		`UPDATE webhook_outbound_deliveries
 		 SET status='succeeded', response_code=$1, response_body=$2,
 			 duration_ms=$3, delivered_at=NOW(), next_retry_at=NULL
 		 WHERE id=$4`, code, truncate(body, 2000), duration, deliveryID)
 	_, _ = d.Pool.Exec(ctx,
-		`UPDATE outbound_webhook_subscriptions
+		`UPDATE webhook_outbound_subscriptions
 		 SET last_success_at=NOW(), failure_count=0
 		 WHERE id=$1`, subID)
 }
@@ -237,7 +237,7 @@ func (d *Dispatcher) recordFailure(ctx context.Context, deliveryID, subID uuid.U
 	nextAttempt := attempt + 1
 	if nextAttempt > MaxAttempts {
 		_, _ = d.Pool.Exec(ctx,
-			`UPDATE outbound_webhook_deliveries
+			`UPDATE webhook_outbound_deliveries
 			 SET status='dead_letter', response_code=$1, response_body=$2,
 				 duration_ms=$3, error_message=$4, attempt=$5, next_retry_at=NULL
 			 WHERE id=$6`,
@@ -249,14 +249,14 @@ func (d *Dispatcher) recordFailure(ctx context.Context, deliveryID, subID uuid.U
 		}
 		nextRetry := d.now().Add(backoff)
 		_, _ = d.Pool.Exec(ctx,
-			`UPDATE outbound_webhook_deliveries
+			`UPDATE webhook_outbound_deliveries
 			 SET status='pending', response_code=$1, response_body=$2,
 				 duration_ms=$3, error_message=$4, attempt=$5, next_retry_at=$6
 			 WHERE id=$7`,
 			nilIfZero(code), truncate(body, 2000), duration, errMsg, nextAttempt, nextRetry, deliveryID)
 	}
 	_, _ = d.Pool.Exec(ctx,
-		`UPDATE outbound_webhook_subscriptions
+		`UPDATE webhook_outbound_subscriptions
 		 SET last_failure_at=NOW(), failure_count=failure_count+1
 		 WHERE id=$1`, subID)
 }

@@ -231,10 +231,10 @@ func extractCreateTables(src string) []struct {
 }
 
 var commonNonPluralAllowed = map[string]bool{
-	"schema_migrations": true,
-	"audit_log":         true, // log es plural-like (lat. plural)
-	"activity_log":      true,
-	"feature_flags":     true,
+	"schema_migrations":  true,
+	"audit_log":          true, // log es plural-like (lat. plural)
+	"audit_activity_log": true,
+	"feature_flags":      true,
 }
 
 // Sufijos que ya implican colectivo (no requieren pluralización terminal en s).

@@ -22,9 +22,9 @@ import (
 )
 
 var (
-	ErrNotFound        = errors.New("intake not found")
-	ErrInvalidStatus   = errors.New("invalid status for operation")
-	ErrInvalidSource   = errors.New("invalid source")
+	ErrNotFound      = errors.New("intake not found")
+	ErrInvalidStatus = errors.New("invalid status for operation")
+	ErrInvalidSource = errors.New("invalid source")
 )
 
 const (
@@ -35,16 +35,16 @@ const (
 	SourceSheet   = "sheet"
 	SourceManual  = "manual"
 
-	StatusReceived       = "received"
-	StatusClassifying    = "classifying"
-	StatusClassified     = "classified"
-	StatusDeduping       = "deduping"
-	StatusStructuring    = "structuring"
-	StatusPendingReview  = "pending_review"
-	StatusApproved       = "approved"
-	StatusRejected       = "rejected"
-	StatusCommitted      = "committed"
-	StatusFailed         = "failed"
+	StatusReceived      = "received"
+	StatusClassifying   = "classifying"
+	StatusClassified    = "classified"
+	StatusDeduping      = "deduping"
+	StatusStructuring   = "structuring"
+	StatusPendingReview = "pending_review"
+	StatusApproved      = "approved"
+	StatusRejected      = "rejected"
+	StatusCommitted     = "committed"
+	StatusFailed        = "failed"
 
 	MergeActionCreateNew    = "create_new"
 	MergeActionAppendToHU   = "append_to_hu"
@@ -52,33 +52,33 @@ const (
 )
 
 type Payload struct {
-	ID                     uuid.UUID       `json:"id"`
-	Source                 string          `json:"source"`
-	SourceRef              *string         `json:"source_ref,omitempty"`
-	OrganizationID         *uuid.UUID      `json:"organization_id,omitempty"`
-	SubmittedBy            *string         `json:"submitted_by,omitempty"`
-	RawText                string          `json:"raw_text"`
-	RawPayload             json.RawMessage `json:"raw_payload"`
-	Status                 string          `json:"status"`
-	ClassifiedType         *string         `json:"classified_type,omitempty"`
-	ClassifiedSeverity     *string         `json:"classified_severity,omitempty"`
-	ClassifiedConfidence   *float64        `json:"classified_confidence,omitempty"`
-	ClassificationReason   *string         `json:"classification_reasoning,omitempty"`
-	NeedsClarification     bool            `json:"needs_clarification"`
-	ProposedTitle          *string         `json:"proposed_title,omitempty"`
-	ProposedDescription    *string         `json:"proposed_description,omitempty"`
-	ProposedReqSlug        *string         `json:"proposed_req_slug,omitempty"`
-	ProposedHUDraft        json.RawMessage `json:"proposed_hu_draft,omitempty"`
-	DedupCandidates        json.RawMessage `json:"dedup_candidates"`
-	MergeAction            *string         `json:"merge_action,omitempty"`
-	ReviewerID             *uuid.UUID      `json:"reviewer_id,omitempty"`
-	ReviewedAt             *time.Time      `json:"reviewed_at,omitempty"`
-	RejectionReason        *string         `json:"rejection_reason,omitempty"`
-	CommittedREQ           *uuid.UUID      `json:"committed_req_id,omitempty"`
-	CommittedHU            *uuid.UUID      `json:"committed_issue_id,omitempty"`
-	FailureReason          *string         `json:"failure_reason,omitempty"`
-	CreatedAt              time.Time       `json:"created_at"`
-	UpdatedAt              time.Time       `json:"updated_at"`
+	ID                   uuid.UUID       `json:"id"`
+	Source               string          `json:"source"`
+	SourceRef            *string         `json:"source_ref,omitempty"`
+	OrganizationID       *uuid.UUID      `json:"organization_id,omitempty"`
+	SubmittedBy          *string         `json:"submitted_by,omitempty"`
+	RawText              string          `json:"raw_text"`
+	RawPayload           json.RawMessage `json:"raw_payload"`
+	Status               string          `json:"status"`
+	ClassifiedType       *string         `json:"classified_type,omitempty"`
+	ClassifiedSeverity   *string         `json:"classified_severity,omitempty"`
+	ClassifiedConfidence *float64        `json:"classified_confidence,omitempty"`
+	ClassificationReason *string         `json:"classification_reasoning,omitempty"`
+	NeedsClarification   bool            `json:"needs_clarification"`
+	ProposedTitle        *string         `json:"proposed_title,omitempty"`
+	ProposedDescription  *string         `json:"proposed_description,omitempty"`
+	ProposedReqSlug      *string         `json:"proposed_req_slug,omitempty"`
+	ProposedHUDraft      json.RawMessage `json:"proposed_hu_draft,omitempty"`
+	DedupCandidates      json.RawMessage `json:"dedup_candidates"`
+	MergeAction          *string         `json:"merge_action,omitempty"`
+	ReviewerID           *uuid.UUID      `json:"reviewer_id,omitempty"`
+	ReviewedAt           *time.Time      `json:"reviewed_at,omitempty"`
+	RejectionReason      *string         `json:"rejection_reason,omitempty"`
+	CommittedREQ         *uuid.UUID      `json:"committed_req_id,omitempty"`
+	CommittedHU          *uuid.UUID      `json:"committed_issue_id,omitempty"`
+	FailureReason        *string         `json:"failure_reason,omitempty"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
 }
 
 type SubmitInput struct {
@@ -128,7 +128,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
 	// (single-org, nullable post-000145).
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO intake_payloads (source, source_ref, submitted_by,
+		INSERT INTO issue_intake_payloads (source, source_ref, submitted_by,
 		                             raw_text, raw_payload)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, source, source_ref, submitted_by, raw_text, raw_payload,
@@ -167,7 +167,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
 		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
 		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		       created_at, updated_at
-		FROM intake_payloads WHERE id = $1`, id,
+		FROM issue_intake_payloads WHERE id = $1`, id,
 	).Scan(scanPayloadCols(&p)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -181,7 +181,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
 // UpdateClassification persiste el resultado del paso classify.
 func (s *Service) UpdateClassification(ctx context.Context, id uuid.UUID, type_, severity string, confidence float64, reasoning string) (*Payload, error) {
 	_, err := s.Pool.Exec(ctx, `
-		UPDATE intake_payloads
+		UPDATE issue_intake_payloads
 		SET classified_type = $1, classified_severity = $2, classified_confidence = $3,
 		    classification_reasoning = $4, needs_clarification = $5,
 		    status = $6, updated_at = now()
@@ -200,7 +200,7 @@ func (s *Service) MarkPendingReview(ctx context.Context, id uuid.UUID, title, de
 	dedupJSON, _ := json.Marshal(dedup)
 
 	_, err := s.Pool.Exec(ctx, `
-		UPDATE intake_payloads
+		UPDATE issue_intake_payloads
 		SET proposed_title = $1, proposed_description = $2, proposed_req_slug = $3,
 		    proposed_hu_draft = $4, dedup_candidates = $5, merge_action = $6,
 		    status = $7, updated_at = now()
@@ -224,7 +224,7 @@ func (s *Service) Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUI
 		return nil, fmt.Errorf("%w: status=%s", ErrInvalidStatus, p.Status)
 	}
 	_, err = s.Pool.Exec(ctx, `
-		UPDATE intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
+		UPDATE issue_intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
 		                            updated_at = now()
 		WHERE id = $3`,
 		StatusApproved, reviewerID, id,
@@ -254,7 +254,7 @@ func (s *Service) Reject(ctx context.Context, id, reviewerID uuid.UUID, reason s
 		return nil, fmt.Errorf("%w: cannot reject committed", ErrInvalidStatus)
 	}
 	_, err = s.Pool.Exec(ctx, `
-		UPDATE intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
+		UPDATE issue_intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
 		                            rejection_reason = $3, updated_at = now()
 		WHERE id = $4`,
 		StatusRejected, reviewerID, reason, id,
@@ -275,7 +275,7 @@ func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, issueI
 		return nil, fmt.Errorf("%w: must be approved, got %s", ErrInvalidStatus, p.Status)
 	}
 	_, err = s.Pool.Exec(ctx, `
-		UPDATE intake_payloads SET status = $1, committed_req_id = $2,
+		UPDATE issue_intake_payloads SET status = $1, committed_req_id = $2,
 		                            committed_issue_id = $3, updated_at = now()
 		WHERE id = $4`,
 		StatusCommitted, reqID, issueID, id,
@@ -300,7 +300,7 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
 		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		       created_at, updated_at
-		FROM intake_payloads
+		FROM issue_intake_payloads
 		WHERE status NOT IN ('committed','rejected','failed')
 		ORDER BY created_at ASC LIMIT $1`, limit)
 	if err != nil {

@@ -44,12 +44,12 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Memory (REQ-42.3: sessions dropeada — feature legacy)
 		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
 		// SDD
-		"requirements", "issues", "gherkin_scenarios",
-		"proposals", "designs", "tasks", "verification_results", "sabotage_records",
-		"code_references", "file_attachments",
+		"sdd_requirements", "issues", "gherkin_scenarios",
+		"sdd_proposals", "sdd_designs", "issue_tasks", "tdd_verification_results", "tdd_sabotage_records",
+		"issue_code_references", "file_attachments",
 		// Wizard + Intake + ExtSync
 		"issue_drafts", "issue_draft_steps_log",
-		"intake_payloads", "intake_attachments",
+		"issue_intake_payloads", "intake_attachments",
 		"external_providers", "external_sync_state", "external_sync_events",
 		// Workflow override
 		"imported_workflow_files",
@@ -168,13 +168,13 @@ func TestSchemaAudit_CriticalForeignKeysPresent(t *testing.T) {
 		column      string
 		referencedT string
 	}{
-		{"issues", "req_id", "requirements"},
-		{"proposals", "issue_id", "issues"},
-		{"designs", "issue_id", "issues"},
-		{"tasks", "issue_id", "issues"},
+		{"issues", "req_id", "sdd_requirements"},
+		{"sdd_proposals", "issue_id", "issues"},
+		{"sdd_designs", "issue_id", "issues"},
+		{"issue_tasks", "issue_id", "issues"},
 		{"file_attachments", "entity_id", ""}, // polymorphic, no FK
 		{"issue_drafts", "organization_id", "organizations"},
-		{"intake_payloads", "committed_issue_id", "issues"},
+		{"issue_intake_payloads", "committed_issue_id", "issues"},
 		{"external_sync_state", "provider_id", "external_providers"},
 		{"projects", "organization_id", "organizations"},
 		{"observations", "project_id", "projects"},

@@ -19,7 +19,7 @@ import (
 )
 
 type fix struct {
-	svc  *specsvc.Service
+	svc     *specsvc.Service
 	issueID uuid.UUID
 }
 
@@ -49,7 +49,7 @@ func setupSpec(t *testing.T) (*fix, func()) {
 
 	var reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title) VALUES ('REQ-spec-test', 'Spec Test REQ') RETURNING id`,
+		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-spec-test', 'Spec Test REQ') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 
@@ -342,7 +342,7 @@ func TestSabotage_ProposalUniqueConstraint(t *testing.T) {
 
 	// Force-insert duplicado (issue_id + version violando UNIQUE)
 	_, err = f.svc.Pool.Exec(ctx,
-		`INSERT INTO proposals (issue_id, version, intention, scope, approach)
+		`INSERT INTO sdd_proposals (issue_id, version, intention, scope, approach)
 		 VALUES ($1, 1, 'dup', 'S', 'A')`, f.issueID)
 	require.ErrorContains(t, err, "unique")
 }

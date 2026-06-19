@@ -22,14 +22,14 @@ import (
 )
 
 const (
-	StatusProposed  = "proposed"
-	StatusActive    = "active"
+	StatusProposed    = "proposed"
+	StatusActive      = "active"
 	StatusImplemented = "implemented"
-	StatusArchived  = "archived"
+	StatusArchived    = "archived"
 
-	PriorityLow     = "low"
-	PriorityMedium  = "medium"
-	PriorityHigh    = "high"
+	PriorityLow      = "low"
+	PriorityMedium   = "medium"
+	PriorityHigh     = "high"
 	PriorityCritical = "critical"
 )
 
@@ -114,7 +114,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 	}
 
 	var reqID uuid.UUID
-	err := s.Pool.QueryRow(ctx, `SELECT id FROM requirements WHERE slug = $1`, reqSlug).Scan(&reqID)
+	err := s.Pool.QueryRow(ctx, `SELECT id FROM sdd_requirements WHERE slug = $1`, reqSlug).Scan(&reqID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrReqNotFound
@@ -231,7 +231,7 @@ func (s *Service) List(ctx context.Context, filter UserStoryFilter) ([]Issue, er
 
 	q := fmt.Sprintf(`SELECT us.id, us.slug, us.title, us.description, us.status, us.priority, us.req_id, us.created_at, us.updated_at
 		 FROM issues us
-		 LEFT JOIN requirements r ON r.id = us.req_id
+		 LEFT JOIN sdd_requirements r ON r.id = us.req_id
 		 WHERE %s ORDER BY us.slug LIMIT $%d OFFSET $%d`,
 		strings.Join(where, " AND "), idx, idx+1)
 	args = append(args, filter.Limit, filter.Offset)

@@ -172,7 +172,7 @@ func TestSabotage_ApproveOnCommittedRejected(t *testing.T) {
 
 	// Forzamos status=committed para verificar rechazo
 	_, err := svc.Pool.Exec(ctx,
-		`UPDATE intake_payloads SET status = 'committed' WHERE id = $1`, p.ID)
+		`UPDATE issue_intake_payloads SET status = 'committed' WHERE id = $1`, p.ID)
 	require.NoError(t, err)
 
 	_, err = svc.Approve(ctx, p.ID, uuid.New())

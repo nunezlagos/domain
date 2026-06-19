@@ -18,9 +18,9 @@ import (
 )
 
 type fix struct {
-	svc   *tracesvc.Service
-	reqID uuid.UUID
-	issueID  uuid.UUID
+	svc     *tracesvc.Service
+	reqID   uuid.UUID
+	issueID uuid.UUID
 }
 
 func setupTrace(t *testing.T) (*fix, func()) {
@@ -48,7 +48,7 @@ func setupTrace(t *testing.T) (*fix, func()) {
 
 	var reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title) VALUES ('REQ-trace-test', 'Trace Test REQ') RETURNING id`,
+		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-trace-test', 'Trace Test REQ') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,
@@ -99,7 +99,7 @@ func TestGetCodeTrace_Match(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := f.svc.Pool.Exec(ctx,
-		`INSERT INTO code_references (issue_id, file_path, repo) VALUES ($1, 'internal/x.go', 'domain')`,
+		`INSERT INTO issue_code_references (issue_id, file_path, repo) VALUES ($1, 'internal/x.go', 'domain')`,
 		f.issueID,
 	)
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestSabotage_OrphanCodeReference(t *testing.T) {
 
 	// Inserta con UUID inválido — ON DELETE CASCADE no aplica si se hace bypass
 	_, err := f.svc.Pool.Exec(ctx,
-		`INSERT INTO code_references (issue_id, file_path, repo) VALUES ($1, 'internal/y.go', 'domain')`,
+		`INSERT INTO issue_code_references (issue_id, file_path, repo) VALUES ($1, 'internal/y.go', 'domain')`,
 		f.issueID,
 	)
 	require.NoError(t, err)

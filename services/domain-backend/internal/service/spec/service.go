@@ -30,35 +30,35 @@ const (
 )
 
 var (
-	ErrNotFound         = errors.New("not found")
-	ErrInvalidStatus    = errors.New("invalid status")
+	ErrNotFound          = errors.New("not found")
+	ErrInvalidStatus     = errors.New("invalid status")
 	ErrInvalidTransition = errors.New("invalid status transition")
-	ErrHUNotFound       = errors.New("user story not found")
+	ErrHUNotFound        = errors.New("user story not found")
 )
 
 var validPropStatuses = map[string]bool{PropStatusDraft: true, PropStatusApproved: true, PropStatusRejected: true}
 var validDesignStatuses = map[string]bool{DesignStatusDraft: true, DesignStatusFinal: true}
 
 var allowedPropTransitions = map[string][]string{
-	PropStatusDraft:   {PropStatusApproved, PropStatusRejected},
+	PropStatusDraft:    {PropStatusApproved, PropStatusRejected},
 	PropStatusApproved: {},
 	PropStatusRejected: {},
 }
 
 // Proposal snapshot.
 type Proposal struct {
-	ID              uuid.UUID  `json:"id"`
-	HuID            uuid.UUID  `json:"issue_id"`
-	Version         int        `json:"version"`
-	Status          string     `json:"status"`
-	Intention       string     `json:"intention"`
-	Scope           string     `json:"scope"`
-	Approach        string     `json:"approach"`
-	Risks           *string    `json:"risks,omitempty"`
-	TestingNotes    *string    `json:"testing_notes,omitempty"`
-	RejectionReason *string    `json:"rejection_reason,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	HuID            uuid.UUID `json:"issue_id"`
+	Version         int       `json:"version"`
+	Status          string    `json:"status"`
+	Intention       string    `json:"intention"`
+	Scope           string    `json:"scope"`
+	Approach        string    `json:"approach"`
+	Risks           *string   `json:"risks,omitempty"`
+	TestingNotes    *string   `json:"testing_notes,omitempty"`
+	RejectionReason *string   `json:"rejection_reason,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // Design snapshot.
@@ -92,12 +92,12 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 	}
 
 	var version int
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM proposals WHERE issue_id = $1`, issueID).Scan(&version)
+	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM sdd_proposals WHERE issue_id = $1`, issueID).Scan(&version)
 	version++
 
 	var p Proposal
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO proposals (issue_id, version, status, intention, scope, approach, risks, testing_notes)
+		`INSERT INTO sdd_proposals (issue_id, version, status, intention, scope, approach, risks, testing_notes)
 		 VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7)
 		 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at`,
 		issueID, version, intention, scope, approach, nullStr(risks), nullStr(testingNotes),
@@ -123,7 +123,7 @@ func (s *Service) GetLatestProposal(ctx context.Context, issueID uuid.UUID) (*Pr
 	var p Proposal
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
+		 FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
 	).Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -139,7 +139,7 @@ func (s *Service) GetProposalVersion(ctx context.Context, issueID uuid.UUID, ver
 	var p Proposal
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM proposals WHERE issue_id = $1 AND version = $2`, issueID, version,
+		 FROM sdd_proposals WHERE issue_id = $1 AND version = $2`, issueID, version,
 	).Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -154,7 +154,7 @@ func (s *Service) GetProposalVersion(ctx context.Context, issueID uuid.UUID, ver
 func (s *Service) ListProposalVersions(ctx context.Context, issueID uuid.UUID) ([]Proposal, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM proposals WHERE issue_id = $1 ORDER BY version DESC`, issueID)
+		 FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list proposals: %w", err)
 	}
@@ -167,7 +167,7 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 	var current Proposal
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM proposals WHERE id = $1`, proposalID,
+		 FROM sdd_proposals WHERE id = $1`, proposalID,
 	).Scan(&current.ID, &current.HuID, &current.Version, &current.Status, &current.Intention, &current.Scope, &current.Approach, &current.Risks, &current.TestingNotes, &current.RejectionReason, &current.CreatedAt, &current.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -201,7 +201,7 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 
 	var updated Proposal
 	err = s.Pool.QueryRow(ctx,
-		`UPDATE proposals SET status = $2, rejection_reason = $3, updated_at = NOW()
+		`UPDATE sdd_proposals SET status = $2, rejection_reason = $3, updated_at = NOW()
 		 WHERE id = $1
 		 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at`,
 		proposalID, newStatus, reason,
@@ -232,7 +232,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 	}
 
 	var version int
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM designs WHERE issue_id = $1`, issueID).Scan(&version)
+	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM sdd_designs WHERE issue_id = $1`, issueID).Scan(&version)
 	version++
 
 	if proposalID != nil && *proposalID == uuid.Nil {
@@ -241,7 +241,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 
 	var d Design
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO designs (issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation)
+		`INSERT INTO sdd_designs (issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation)
 		 VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8)
 		 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at`,
 		issueID, proposalID, version, archDecisions, nullStr(alternatives), nullStr(dataFlow), nullStr(tddPlan), nullStr(risksMitigation),
@@ -267,7 +267,7 @@ func (s *Service) GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*Desi
 	var d Design
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
-		 FROM designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
+		 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
 	).Scan(&d.ID, &d.HuID, &d.ProposalID, &d.Version, &d.Status, &d.ArchDecisions, &d.Alternatives, &d.DataFlow, &d.TDDPlan, &d.RisksMitigation, &d.CreatedAt, &d.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -282,7 +282,7 @@ func (s *Service) GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*Desi
 func (s *Service) ListDesignsByHU(ctx context.Context, issueID uuid.UUID) ([]Design, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
-		 FROM designs WHERE issue_id = $1 ORDER BY version DESC`, issueID)
+		 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list designs: %w", err)
 	}
@@ -298,7 +298,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 
 	var updated Design
 	err := s.Pool.QueryRow(ctx,
-		`UPDATE designs SET status = $2, updated_at = NOW()
+		`UPDATE sdd_designs SET status = $2, updated_at = NOW()
 		 WHERE id = $1
 		 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at`,
 		designID, newStatus,

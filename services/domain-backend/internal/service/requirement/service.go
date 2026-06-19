@@ -26,17 +26,17 @@ const (
 	StatusActive   = "active"
 	StatusArchived = "archived"
 
-	PriorityLow     = "low"
-	PriorityMedium  = "medium"
-	PriorityHigh    = "high"
+	PriorityLow      = "low"
+	PriorityMedium   = "medium"
+	PriorityHigh     = "high"
 	PriorityCritical = "critical"
 )
 
 var (
-	ErrNotFound     = errors.New("requirement not found")
-	ErrSlugTaken    = errors.New("requirement slug already taken")
-	ErrSlugInvalid  = errors.New("slug must match REQ-XX pattern")
-	ErrParentNotFound = errors.New("parent requirement not found")
+	ErrNotFound        = errors.New("requirement not found")
+	ErrSlugTaken       = errors.New("requirement slug already taken")
+	ErrSlugInvalid     = errors.New("slug must match REQ-XX pattern")
+	ErrParentNotFound  = errors.New("parent requirement not found")
 	ErrInvalidStatus   = errors.New("invalid status")
 	ErrInvalidPriority = errors.New("invalid priority")
 )
@@ -117,7 +117,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 	var r Requirement
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title, description, status, priority, parent_id)
+		`INSERT INTO sdd_requirements (slug, title, description, status, priority, parent_id)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, slug, title, description, status, priority, parent_id, created_at, updated_at`,
 		slug, title, desc, status, priority, parentID,
@@ -146,7 +146,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*Requirement, err
 	var r Requirement
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM requirements WHERE slug = $1`, slug,
+		 FROM sdd_requirements WHERE slug = $1`, slug,
 	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -162,7 +162,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Requirement, erro
 	var r Requirement
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM requirements WHERE id = $1`, id,
+		 FROM sdd_requirements WHERE id = $1`, id,
 	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -200,7 +200,7 @@ func (s *Service) List(ctx context.Context, filter RequirementFilter) ([]Require
 	}
 
 	q := fmt.Sprintf(`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM requirements WHERE %s ORDER BY slug LIMIT $%d OFFSET $%d`,
+		 FROM sdd_requirements WHERE %s ORDER BY slug LIMIT $%d OFFSET $%d`,
 		strings.Join(where, " AND "), idx, idx+1)
 	args = append(args, filter.Limit, filter.Offset)
 
@@ -257,7 +257,7 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 
 	var updated Requirement
 	err = s.Pool.QueryRow(ctx,
-		`UPDATE requirements SET title = $2, description = $3, status = $4, priority = $5, updated_at = NOW()
+		`UPDATE sdd_requirements SET title = $2, description = $3, status = $4, priority = $5, updated_at = NOW()
 		 WHERE slug = $1
 		 RETURNING id, slug, title, description, status, priority, parent_id, created_at, updated_at`,
 		slug, newTitle, newDesc, newStatus, newPriority,
@@ -271,10 +271,10 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorType: audit.ActorSystem,
-			Action:    "requirement.updated",
+			ActorType:  audit.ActorSystem,
+			Action:     "requirement.updated",
 			EntityType: "requirement",
-			EntityID:  &updated.ID,
+			EntityID:   &updated.ID,
 			OldValues: map[string]any{
 				"title": existing.Title, "status": existing.Status, "priority": existing.Priority,
 			},
@@ -295,11 +295,11 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 
 	if recursive {
 		_, err = s.Pool.Exec(ctx,
-			`UPDATE requirements SET status = 'archived', updated_at = NOW()
+			`UPDATE sdd_requirements SET status = 'archived', updated_at = NOW()
 			 WHERE id = $1 OR parent_id = $1`, r.ID)
 	} else {
 		_, err = s.Pool.Exec(ctx,
-			`UPDATE requirements SET status = 'archived', updated_at = NOW()
+			`UPDATE sdd_requirements SET status = 'archived', updated_at = NOW()
 			 WHERE id = $1`, r.ID)
 	}
 	if err != nil {
@@ -324,10 +324,10 @@ func (s *Service) GetTree(ctx context.Context, slug string) (*RequirementTree, e
 	q := `
 WITH RECURSIVE req_tree AS (
     SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at, 0 AS depth
-    FROM requirements WHERE slug = $1
+    FROM sdd_requirements WHERE slug = $1
     UNION ALL
     SELECT r.id, r.slug, r.title, r.description, r.status, r.priority, r.parent_id, r.created_at, r.updated_at, rt.depth + 1
-    FROM requirements r
+    FROM sdd_requirements r
     INNER JOIN req_tree rt ON r.parent_id = rt.id
     WHERE rt.depth < 10
 )

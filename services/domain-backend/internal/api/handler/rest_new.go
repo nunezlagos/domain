@@ -388,7 +388,7 @@ func (a *API) listVerifications(w http.ResponseWriter, r *http.Request) {
 		`SELECT id::text, kind, status, COALESCE(context,''), items,
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		        completed_at
-		   FROM verifications
+		   FROM tdd_verifications
 		   WHERE project_id = $1
 		     AND status = ANY (string_to_array($2, ','))
 		   ORDER BY started_at DESC LIMIT $3`,

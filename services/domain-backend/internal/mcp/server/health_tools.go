@@ -91,7 +91,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		// REQ-42.3: sessions_open removido (tabla sessions dropeada).
 		{"crons", "SELECT COUNT(*) FROM crons WHERE deleted_at IS NULL"},
 		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE proposed=true AND deleted_at IS NULL"},
-		{"verifications_open", "SELECT COUNT(*) FROM verifications WHERE status IN ('pending','running','failed','partial')"},
+		{"verifications_open", "SELECT COUNT(*) FROM tdd_verifications WHERE status IN ('pending','running','failed','partial')"},
 	}
 	for _, q := range queries {
 		var n int

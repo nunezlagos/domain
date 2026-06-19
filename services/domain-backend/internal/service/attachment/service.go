@@ -23,8 +23,8 @@ var allowedMIMEPrefixes = []string{
 }
 
 var (
-	ErrNotFound     = errors.New("attachment not found")
-	ErrTooLarge     = errors.New("file too large: max 10MB")
+	ErrNotFound       = errors.New("attachment not found")
+	ErrTooLarge       = errors.New("file too large: max 10MB")
 	ErrTypeNotAllowed = errors.New("file type not allowed")
 	ErrInvalidEntity  = errors.New("invalid entity reference")
 )
@@ -196,7 +196,7 @@ func (s *Service) CleanupOrphans(ctx context.Context) (int, error) {
 	rows, err := s.Pool.Query(ctx, `
 		DELETE FROM file_attachments fa
 		WHERE NOT EXISTS (SELECT 1 FROM issues WHERE id = fa.entity_id AND entity_type = 'user_story')
-		  AND NOT EXISTS (SELECT 1 FROM requirements WHERE id = fa.entity_id AND entity_type = 'requirement')
+		  AND NOT EXISTS (SELECT 1 FROM sdd_requirements WHERE id = fa.entity_id AND entity_type = 'requirement')
 		RETURNING s3_key
 	`)
 	if err != nil {
@@ -241,11 +241,11 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 	case "user_story":
 		table = "issues"
 	case "requirement":
-		table = "requirements"
+		table = "sdd_requirements"
 	case "hu_draft":
 		table = "issue_drafts"
 	case "intake_payload":
-		table = "intake_payloads"
+		table = "issue_intake_payloads"
 	default:
 		return ErrInvalidEntity
 	}

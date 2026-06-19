@@ -19,7 +19,7 @@ import (
 )
 
 type fix struct {
-	svc  *tsvc.Service
+	svc     *tsvc.Service
 	issueID uuid.UUID
 }
 
@@ -49,7 +49,7 @@ func setupTask(t *testing.T) (*fix, func()) {
 
 	var reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title) VALUES ('REQ-task-test', 'Task Test REQ') RETURNING id`,
+		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-task-test', 'Task Test REQ') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 

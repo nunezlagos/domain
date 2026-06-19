@@ -13,31 +13,31 @@ import (
 
 // Forward trace: REQ → HU → Proposal/Design → Tasks → Code
 type RequirementTrace struct {
-	Req      RequirementNode    `json:"req"`
-	Children []HUTraceNode      `json:"children"`
+	Req      RequirementNode `json:"req"`
+	Children []HUTraceNode   `json:"children"`
 }
 
 type RequirementNode struct {
-	ID        uuid.UUID  `json:"id"`
-	Slug      string     `json:"slug"`
-	Title     string     `json:"title"`
-	Status    string     `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	Slug      string    `json:"slug"`
+	Title     string    `json:"title"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type HUTraceNode struct {
-	HU          UserStorySummary  `json:"hu"`
-	Proposal    *ProposalSummary  `json:"proposal,omitempty"`
-	Design      *DesignSummary    `json:"design,omitempty"`
-	TaskProgress *TaskProgress     `json:"task_progress,omitempty"`
-	CodeRefs    []CodeRefSummary  `json:"code_refs,omitempty"`
+	HU           UserStorySummary `json:"hu"`
+	Proposal     *ProposalSummary `json:"proposal,omitempty"`
+	Design       *DesignSummary   `json:"design,omitempty"`
+	TaskProgress *TaskProgress    `json:"task_progress,omitempty"`
+	CodeRefs     []CodeRefSummary `json:"code_refs,omitempty"`
 }
 
 type UserStorySummary struct {
-	ID    uuid.UUID `json:"id"`
-	Slug  string    `json:"slug"`
-	Title string    `json:"title"`
-	Status string   `json:"status"`
+	ID     uuid.UUID `json:"id"`
+	Slug   string    `json:"slug"`
+	Title  string    `json:"title"`
+	Status string    `json:"status"`
 }
 
 type ProposalSummary struct {
@@ -65,53 +65,53 @@ type CodeRefSummary struct {
 
 // Backward trace: Code → HU → REQ
 type CodeTrace struct {
-	File    string             `json:"file"`
-	HU      *UserStorySummary  `json:"hu,omitempty"`
-	REQ     *RequirementNode   `json:"req,omitempty"`
+	File string            `json:"file"`
+	HU   *UserStorySummary `json:"hu,omitempty"`
+	REQ  *RequirementNode  `json:"req,omitempty"`
 }
 
 // Dashboard
 type CoverageDashboard struct {
-	TotalHUs               int     `json:"total_hus"`
-	HUsWithProposal        int     `json:"hus_with_proposal"`
-	HUsWithDesign          int     `json:"hus_with_design"`
-	HUsWithCompletedTasks  int     `json:"hus_with_completed_tasks"`
-	HUsWithCodeRefs        int     `json:"hus_with_code_refs"`
-	ProposalPct            float64 `json:"proposal_pct"`
-	DesignPct              float64 `json:"design_pct"`
-	CompletedPct           float64 `json:"completed_pct"`
+	TotalHUs              int     `json:"total_hus"`
+	HUsWithProposal       int     `json:"hus_with_proposal"`
+	HUsWithDesign         int     `json:"hus_with_design"`
+	HUsWithCompletedTasks int     `json:"hus_with_completed_tasks"`
+	HUsWithCodeRefs       int     `json:"hus_with_code_refs"`
+	ProposalPct           float64 `json:"proposal_pct"`
+	DesignPct             float64 `json:"design_pct"`
+	CompletedPct          float64 `json:"completed_pct"`
 }
 
 // Progress by REQ
 type REQProgressRow struct {
-	ReqSlug       string  `json:"req_slug"`
-	ReqTitle      string  `json:"req_title"`
-	TotalHUs      int     `json:"total_hus"`
-	CompletedHUs  int     `json:"completed_hus"`
-	TotalTasks    int     `json:"total_tasks"`
-	CompletedTasks int    `json:"completed_tasks"`
-	TaskPct       float64 `json:"task_pct"`
+	ReqSlug        string  `json:"req_slug"`
+	ReqTitle       string  `json:"req_title"`
+	TotalHUs       int     `json:"total_hus"`
+	CompletedHUs   int     `json:"completed_hus"`
+	TotalTasks     int     `json:"total_tasks"`
+	CompletedTasks int     `json:"completed_tasks"`
+	TaskPct        float64 `json:"task_pct"`
 }
 
 // Cross-reference: HU without proposal
 type HUGap struct {
-	ID     uuid.UUID `json:"id"`
-	Slug   string    `json:"slug"`
-	Title  string    `json:"title"`
-	ReqSlug string   `json:"req_slug,omitempty"`
+	ID      uuid.UUID `json:"id"`
+	Slug    string    `json:"slug"`
+	Title   string    `json:"title"`
+	ReqSlug string    `json:"req_slug,omitempty"`
 }
 
 // Consolidated matrix
 type ConsolidatedRow struct {
-	ReqSlug       string  `json:"req_slug"`
-	ReqTitle      string  `json:"req_title"`
-	TotalHUs      int     `json:"total_hus"`
-	HUsWithProposal int   `json:"hus_with_proposal"`
-	HUsWithDesign   int   `json:"hus_with_design"`
-	CompletedHUs   int    `json:"completed_hus"`
-	TotalTasks     int    `json:"total_tasks"`
-	CompletedTasks int    `json:"completed_tasks"`
-	TaskPct        float64 `json:"task_pct"`
+	ReqSlug         string  `json:"req_slug"`
+	ReqTitle        string  `json:"req_title"`
+	TotalHUs        int     `json:"total_hus"`
+	HUsWithProposal int     `json:"hus_with_proposal"`
+	HUsWithDesign   int     `json:"hus_with_design"`
+	CompletedHUs    int     `json:"completed_hus"`
+	TotalTasks      int     `json:"total_tasks"`
+	CompletedTasks  int     `json:"completed_tasks"`
+	TaskPct         float64 `json:"task_pct"`
 }
 
 // Service provides read-only traceability queries.
@@ -123,7 +123,7 @@ type Service struct {
 func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*RequirementTrace, error) {
 	var req RequirementNode
 	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, title, status, created_at FROM requirements WHERE slug = $1`, reqSlug,
+		`SELECT id, slug, title, status, created_at FROM sdd_requirements WHERE slug = $1`, reqSlug,
 	).Scan(&req.ID, &req.Slug, &req.Title, &req.Status, &req.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("req not found: %w", err)
@@ -154,13 +154,13 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 		// Latest proposal
 		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
+			`SELECT version, status FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Proposal)
 
 		// Latest design
 		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
+			`SELECT version, status FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Design)
 
@@ -169,7 +169,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 		err := s.Pool.QueryRow(ctx,
 			`SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'completed'),
 			        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1), 0)
-			 FROM tasks WHERE issue_id = $1`, n.HU.ID,
+			 FROM issue_tasks WHERE issue_id = $1`, n.HU.ID,
 		).Scan(&tp.Total, &tp.Completed, &tp.Pct)
 		if err == nil && tp.Total > 0 {
 			n.TaskProgress = &tp
@@ -177,7 +177,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 		// Code refs
 		codeRows, err := s.Pool.Query(ctx,
-			`SELECT id, file_path, repo, branch FROM code_references WHERE issue_id = $1 ORDER BY file_path`, n.HU.ID)
+			`SELECT id, file_path, repo, branch FROM issue_code_references WHERE issue_id = $1 ORDER BY file_path`, n.HU.ID)
 		if err == nil {
 			for codeRows.Next() {
 				var cr CodeRefSummary
@@ -205,7 +205,7 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 	var hu UserStorySummary
 	err := s.Pool.QueryRow(ctx,
 		`SELECT cr.issue_id, us.slug, us.title, us.status
-		 FROM code_references cr
+		 FROM issue_code_references cr
 		 JOIN issues us ON us.id = cr.issue_id
 		 WHERE cr.file_path = $1
 		 LIMIT 1`, filePath,
@@ -219,7 +219,7 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 	var req RequirementNode
 	err = s.Pool.QueryRow(ctx,
 		`SELECT r.id, r.slug, r.title, r.status, r.created_at
-		 FROM requirements r
+		 FROM sdd_requirements r
 		 JOIN issues us ON us.req_id = r.id
 		 WHERE us.id = $1`, issueID,
 	).Scan(&req.ID, &req.Slug, &req.Title, &req.Status, &req.CreatedAt)
@@ -241,10 +241,10 @@ func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard,
 			COUNT(DISTINCT us.id) FILTER (WHERE t.id IS NOT NULL AND t.status = 'completed') AS hus_with_completed_tasks,
 			COUNT(DISTINCT us.id) FILTER (WHERE cr.issue_id IS NOT NULL) AS hus_with_code_refs
 		FROM issues us
-		LEFT JOIN LATERAL (SELECT issue_id FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT issue_id FROM designs WHERE issue_id = us.id LIMIT 1) d ON true
-		LEFT JOIN tasks t ON t.issue_id = us.id
-		LEFT JOIN LATERAL (SELECT issue_id FROM code_references WHERE issue_id = us.id LIMIT 1) cr ON true
+		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true
+		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true
+		LEFT JOIN issue_tasks t ON t.issue_id = us.id
+		LEFT JOIN LATERAL (SELECT issue_id FROM issue_code_references WHERE issue_id = us.id LIMIT 1) cr ON true
 	`).Scan(&d.TotalHUs, &d.HUsWithProposal, &d.HUsWithDesign, &d.HUsWithCompletedTasks, &d.HUsWithCodeRefs)
 	if err != nil {
 		return nil, fmt.Errorf("coverage dashboard: %w", err)
@@ -269,9 +269,9 @@ func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, erro
 				THEN ROUND(100.0 * COUNT(t.id) FILTER (WHERE t.status = 'completed') / COUNT(t.id), 1)
 				ELSE 0
 			END AS task_pct
-		FROM requirements r
+		FROM sdd_requirements r
 		LEFT JOIN issues us ON us.req_id = r.id
-		LEFT JOIN tasks t ON t.issue_id = us.id
+		LEFT JOIN issue_tasks t ON t.issue_id = us.id
 		WHERE r.status = 'active'
 		GROUP BY r.slug, r.title
 		ORDER BY task_pct ASC
@@ -294,12 +294,12 @@ func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, erro
 
 // GetHUsWithoutProposals returns HUs with no proposal.
 func (s *Service) GetHUsWithoutProposals(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true WHERE p.column1 IS NULL`)
+	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true WHERE p.column1 IS NULL`)
 }
 
 // GetHUsWithoutDesigns returns HUs with no design.
 func (s *Service) GetHUsWithoutDesigns(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM designs WHERE issue_id = us.id LIMIT 1) d ON true WHERE d.column1 IS NULL`)
+	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true WHERE d.column1 IS NULL`)
 }
 
 // GetHUsWithIncompleteTasks returns HUs where not all tasks completed.
@@ -307,9 +307,9 @@ func (s *Service) GetHUsWithIncompleteTasks(ctx context.Context) ([]HUGap, error
 	rows, err := s.Pool.Query(ctx, `
 		SELECT us.id, us.slug, us.title, r.slug
 		FROM issues us
-		LEFT JOIN requirements r ON r.id = us.req_id
+		LEFT JOIN sdd_requirements r ON r.id = us.req_id
 		WHERE us.id IN (
-			SELECT issue_id FROM tasks
+			SELECT issue_id FROM issue_tasks
 			GROUP BY issue_id
 			HAVING COUNT(*) FILTER (WHERE status = 'completed') < COUNT(*)
 		)
@@ -337,11 +337,11 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 				THEN ROUND(100.0 * COUNT(t.id) FILTER (WHERE t.status = 'completed') / COUNT(t.id), 1)
 				ELSE 0
 			END AS task_pct
-		FROM requirements r
+		FROM sdd_requirements r
 		LEFT JOIN issues us ON us.req_id = r.id
-		LEFT JOIN LATERAL (SELECT issue_id FROM proposals WHERE issue_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT issue_id FROM designs WHERE issue_id = us.id LIMIT 1) d ON true
-		LEFT JOIN tasks t ON t.issue_id = us.id
+		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true
+		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true
+		LEFT JOIN issue_tasks t ON t.issue_id = us.id
 		WHERE r.status = 'active'
 		GROUP BY r.slug, r.title
 		ORDER BY r.slug
@@ -369,7 +369,7 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, filePath, repo, branch string) (*CodeRefSummary, error) {
 	var cr CodeRefSummary
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO code_references (issue_id, file_path, repo, branch)
+		`INSERT INTO issue_code_references (issue_id, file_path, repo, branch)
 		 VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (issue_id, file_path) DO NOTHING
 		 RETURNING id, file_path, repo, branch`,
@@ -383,7 +383,7 @@ func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, fileP
 
 // RemoveCodeReference removes a code reference by ID.
 func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM code_references WHERE id = $1`, refID)
+	_, err := s.Pool.Exec(ctx, `DELETE FROM issue_code_references WHERE id = $1`, refID)
 	if err != nil {
 		return fmt.Errorf("remove code reference: %w", err)
 	}
@@ -394,7 +394,7 @@ func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) erro
 
 func (s *Service) gapQuery(ctx context.Context, joinClause string) ([]HUGap, error) {
 	q := `SELECT us.id, us.slug, us.title, COALESCE(r.slug, '') FROM issues us
-		  LEFT JOIN requirements r ON r.id = us.req_id ` + joinClause + ` ORDER BY us.slug`
+		  LEFT JOIN sdd_requirements r ON r.id = us.req_id ` + joinClause + ` ORDER BY us.slug`
 	rows, err := s.Pool.Query(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("gap query: %w", err)

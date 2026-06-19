@@ -74,7 +74,7 @@ func (s *IssueDedupSource) Run(ctx context.Context, env *wizardplan.ContextEnvel
 		err := s.Pool.QueryRow(ctx, `
 			SELECT r.slug
 			FROM issues us
-			JOIN requirements r ON r.id = us.req_id
+			JOIN sdd_requirements r ON r.id = us.req_id
 			WHERE us.id = $1`, candidates[0].HUID,
 		).Scan(&reqSlug)
 		if err == nil && reqSlug != "" {

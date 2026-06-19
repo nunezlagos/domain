@@ -271,9 +271,10 @@ func seedDemoRepos(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, tot
 }
 
 // project_policies kind debe estar en el CHECK:
-//   convention|security_rule|architecture|sdd_workflow|observability|
-//   migration_rule|linter_config|agent_protocol|git_workflow|tech_stack|
-//   test_strategy
+//
+//	convention|security_rule|architecture|sdd_workflow|observability|
+//	migration_rule|linter_config|agent_protocol|git_workflow|tech_stack|
+//	test_strategy
 func seedDemoPolicies(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, tot *seedTotals) error {
 	policies := []struct{ projectSlug, slug, name, kind, body string }{
 		{"acme-web", "tech-stack", "Stack frontend", "tech_stack", "React 19 + Vite + Tailwind"},
@@ -549,11 +550,11 @@ func seedDemoVerifications(ctx context.Context, pool *pgxpool.Pool, orgID uuid.U
 			items := fmt.Sprintf(`[{"label":"check-%d","status":"%s","duration_ms":%d}]`,
 				i+1, statuses[i], 100+i*50)
 			ct, err := tx.Exec(ctx,
-				`INSERT INTO verifications
+				`INSERT INTO tdd_verifications
 				   (project_id, user_id, kind, items, status, context)
 				 SELECT $1,$2,$3,$4::jsonb,$5,$6
 				 WHERE NOT EXISTS (
-				   SELECT 1 FROM verifications
+				   SELECT 1 FROM tdd_verifications
 				   WHERE context=$6
 				 )`,
 				pid, userID, kinds[i], items, statuses[i], ctxNote,

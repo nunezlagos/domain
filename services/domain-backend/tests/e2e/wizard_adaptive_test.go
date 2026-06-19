@@ -83,7 +83,7 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 	// Cuenta preguntas hasta llegar al "no more questions".
 	questions := []*wp.Question{q}
 	answers := map[string]any{
-		wp.SlotSeverity: "critical",
+		wp.SlotSeverity:  "critical",
 		wp.SlotComponent: "internal/api/handler/observations",
 		wp.SlotActual:    "POST /observations devuelve 500 con stacktrace nil pointer",
 		wp.SlotExpected:  "POST debe persistir observation y devolver 201",
@@ -124,7 +124,7 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 	// Sembrar HU existente con título en español que el FTS spanish detecte.
 	var reqID, issueID uuid.UUID
 	err := pools.App.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title) VALUES ('REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
+		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
 	).Scan(&reqID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,

@@ -25,11 +25,11 @@ const (
 )
 
 var (
-	ErrNotFound        = errors.New("task not found")
-	ErrInvalidStatus   = errors.New("invalid status")
+	ErrNotFound          = errors.New("task not found")
+	ErrInvalidStatus     = errors.New("invalid status")
 	ErrInvalidTransition = errors.New("invalid status transition")
-	ErrNotCompleted    = errors.New("task not completed")
-	ErrHUNotFound      = errors.New("user story not found")
+	ErrNotCompleted      = errors.New("task not completed")
+	ErrHUNotFound        = errors.New("user story not found")
 )
 
 var validStatuses = map[string]bool{StatusPending: true, StatusInProgress: true, StatusCompleted: true}
@@ -59,13 +59,13 @@ type Task struct {
 }
 
 type VerificationResult struct {
-	ID         uuid.UUID  `json:"id"`
-	TaskID     uuid.UUID  `json:"task_id"`
-	Result     string     `json:"result"`
-	Evidence   *string    `json:"evidence,omitempty"`
-	Notes      *string    `json:"notes,omitempty"`
-	VerifiedAt time.Time  `json:"verified_at"`
-	VerifiedBy *string    `json:"verified_by,omitempty"`
+	ID         uuid.UUID `json:"id"`
+	TaskID     uuid.UUID `json:"task_id"`
+	Result     string    `json:"result"`
+	Evidence   *string   `json:"evidence,omitempty"`
+	Notes      *string   `json:"notes,omitempty"`
+	VerifiedAt time.Time `json:"verified_at"`
+	VerifiedBy *string   `json:"verified_by,omitempty"`
 }
 
 type SabotageRecord struct {
@@ -119,7 +119,7 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 	for section := range posMap {
 		var maxPos int
 		_ = tx.QueryRow(ctx,
-			`SELECT COALESCE(MAX(position), 0) FROM tasks WHERE issue_id = $1 AND section = $2`,
+			`SELECT COALESCE(MAX(position), 0) FROM issue_tasks WHERE issue_id = $1 AND section = $2`,
 			issueID, section,
 		).Scan(&maxPos)
 		posMap[section] = maxPos + 1
@@ -132,7 +132,7 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 
 		var t Task
 		err := tx.QueryRow(ctx,
-			`INSERT INTO tasks (issue_id, section, description, position, status)
+			`INSERT INTO issue_tasks (issue_id, section, description, position, status)
 			 VALUES ($1, $2, $3, $4, 'pending')
 			 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
 			issueID, in.Section, in.Description, pos,
@@ -153,7 +153,7 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 func (s *Service) ListTasks(ctx context.Context, issueID uuid.UUID) ([]Task, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM tasks WHERE issue_id = $1 ORDER BY section, position`, issueID)
+		 FROM issue_tasks WHERE issue_id = $1 ORDER BY section, position`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
@@ -166,7 +166,7 @@ func (s *Service) GetTask(ctx context.Context, taskID uuid.UUID) (*Task, error) 
 	var t Task
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM tasks WHERE id = $1`, taskID,
+		 FROM issue_tasks WHERE id = $1`, taskID,
 	).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -201,7 +201,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 	var current Task
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM tasks WHERE id = $1`, taskID,
+		 FROM issue_tasks WHERE id = $1`, taskID,
 	).Scan(&current.ID, &current.HuID, &current.Section, &current.Description, &current.Status, &current.Position, &current.StartedAt, &current.CompletedAt, &current.CompletedBy, &current.CreatedAt, &current.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -240,7 +240,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 
 	var updated Task
 	err = s.Pool.QueryRow(ctx,
-		`UPDATE tasks
+		`UPDATE issue_tasks
 		 SET status = $2, started_at = COALESCE($3, started_at), completed_at = $4, completed_by = COALESCE($5, completed_by), updated_at = NOW()
 		 WHERE id = $1
 		 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
@@ -271,7 +271,7 @@ func (s *Service) GetProgress(ctx context.Context, issueID uuid.UUID) (*Progress
 		        COUNT(*) AS total,
 		        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
 		        ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1) AS pct
-		 FROM tasks WHERE issue_id = $1`, issueID,
+		 FROM issue_tasks WHERE issue_id = $1`, issueID,
 	).Scan(&r.HuID, &r.Total, &r.Completed, &r.ProgressPct)
 	if err != nil {
 		return nil, fmt.Errorf("get progress: %w", err)
@@ -287,7 +287,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 
 	// Verify task is completed
 	var taskStatus string
-	err := s.Pool.QueryRow(ctx, `SELECT status FROM tasks WHERE id = $1`, taskID).Scan(&taskStatus)
+	err := s.Pool.QueryRow(ctx, `SELECT status FROM issue_tasks WHERE id = $1`, taskID).Scan(&taskStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -300,7 +300,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 
 	var v VerificationResult
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO verification_results (task_id, result, evidence, notes, verified_by)
+		`INSERT INTO tdd_verification_results (task_id, result, evidence, notes, verified_by)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, task_id, result, evidence, notes, verified_at, verified_by`,
 		taskID, result, nullStr(evidence), nullStr(notes), nullStr(verifiedBy),
@@ -314,7 +314,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 // CreateSabotage records a sabotage action.
 func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, expectedFailure, actualResult string, restored bool) (*SabotageRecord, error) {
 	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1)`, taskID).Scan(&exists)
+	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM issue_tasks WHERE id = $1)`, taskID).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("check task: %w", err)
 	}
@@ -324,7 +324,7 @@ func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, 
 
 	var rec SabotageRecord
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO sabotage_records (task_id, action, expected_failure, actual_result, restored)
+		`INSERT INTO tdd_sabotage_records (task_id, action, expected_failure, actual_result, restored)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, task_id, action, expected_failure, actual_result, restored, performed_at`,
 		taskID, action, nullStr(expectedFailure), nullStr(actualResult), restored,
@@ -339,7 +339,7 @@ func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, 
 func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]SabotageRecord, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, task_id, action, expected_failure, actual_result, restored, performed_at
-		 FROM sabotage_records WHERE task_id = $1 ORDER BY performed_at`, taskID)
+		 FROM tdd_sabotage_records WHERE task_id = $1 ORDER BY performed_at`, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("list sabotages: %w", err)
 	}
@@ -365,7 +365,7 @@ func (s *Service) getVerification(ctx context.Context, taskID uuid.UUID) (*Verif
 	var v VerificationResult
 	err := s.Pool.QueryRow(ctx,
 		`SELECT id, task_id, result, evidence, notes, verified_at, verified_by
-		 FROM verification_results WHERE task_id = $1 ORDER BY verified_at DESC LIMIT 1`, taskID,
+		 FROM tdd_verification_results WHERE task_id = $1 ORDER BY verified_at DESC LIMIT 1`, taskID,
 	).Scan(&v.ID, &v.TaskID, &v.Result, &v.Evidence, &v.Notes, &v.VerifiedAt, &v.VerifiedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

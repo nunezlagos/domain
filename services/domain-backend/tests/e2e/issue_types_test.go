@@ -3,16 +3,16 @@
 // E2E del flow real plug-and-play para cada tipo de issue.
 //
 // Pattern por sub-test:
-//   1. Setup org + project + datos contextuales (HUs previas, etc.)
-//   2. Prompt típico del intent
-//   3. domain_prompt router → analyzer pipeline
-//   4. Verificar:
-//      - intake_payload persistido con classified_type correcto
-//      - issue_drafts persistido con envelope si arrancó wizard
-//      - slots inferidos (mínimos) o pendientes (esperados)
-//      - lifecycle transitions registradas
-//   5. Si entró al wizard: responder lo pendiente + verificar commit
-//   6. Verificar attachments persisten y promueven al final
+//  1. Setup org + project + datos contextuales (HUs previas, etc.)
+//  2. Prompt típico del intent
+//  3. domain_prompt router → analyzer pipeline
+//  4. Verificar:
+//     - intake_payload persistido con classified_type correcto
+//     - issue_drafts persistido con envelope si arrancó wizard
+//     - slots inferidos (mínimos) o pendientes (esperados)
+//     - lifecycle transitions registradas
+//  5. Si entró al wizard: responder lo pendiente + verificar commit
+//  6. Verificar attachments persisten y promueven al final
 package e2e_test
 
 import (
@@ -28,8 +28,8 @@ import (
 
 	"nunezlagos/domain/internal/db"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/promptrouter"
 	wp "nunezlagos/domain/internal/service/wizardplan"
 	"nunezlagos/domain/internal/service/wizardplan/sources"
@@ -87,9 +87,9 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	}
 	intakeSvc := &intake.Service{Pool: pools.App}
 	router := &promptrouter.Router{
-		IntakeService:    intakeSvc,
+		IntakeService:       intakeSvc,
 		IssueBuilderService: hbSvc,
-		Classifier:       promptrouter.HeuristicClassifier{},
+		Classifier:          promptrouter.HeuristicClassifier{},
 	}
 
 	cleanup := func() {
@@ -120,7 +120,7 @@ func TestIssueType_Chat_SkipsWizardAndReplies(t *testing.T) {
 	// Asserts BD: NO se debe haber creado intake ni hu_draft.
 	var intakeCount, draftCount int
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM intake_payloads`).Scan(&intakeCount))
+		`SELECT COUNT(*) FROM issue_intake_payloads`).Scan(&intakeCount))
 	require.Equal(t, 0, intakeCount)
 	require.NoError(t, f.pools.App.QueryRow(ctx,
 		`SELECT COUNT(*) FROM issue_drafts`).Scan(&draftCount))
@@ -269,7 +269,7 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 	// Sembrar HU existente que matche el prompt en spanish FTS.
 	var reqID uuid.UUID
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`INSERT INTO requirements (slug, title) VALUES ('REQ-13-http-api', 'API HTTP REST') RETURNING id`,
+		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-13-http-api', 'API HTTP REST') RETURNING id`,
 	).Scan(&reqID))
 	_, err := f.pools.App.Exec(ctx,
 		`INSERT INTO issues (req_id, slug, title, description)

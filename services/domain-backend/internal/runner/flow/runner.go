@@ -1,14 +1,14 @@
 // Package flowrunner — issue-09.3 state machine + issue-09.6 durable execution.
 //
 // Run(flowID, inputs) flow lifecycle:
-//   1. Resolve flow + validate active
-//   2. Crear flow_run con status=pending
-//   3. status=running + started_at
-//   4. Loop steps secuencial:
-//      a. Execute step según type
-//      b. Si error → on_error: fail (abort) | continue (next step) | <step_id> (jump)
-//      c. Persistir cursor JSONB con step actual + outputs intermedios
-//   5. status=completed | failed con outputs/error
+//  1. Resolve flow + validate active
+//  2. Crear flow_run con status=pending
+//  3. status=running + started_at
+//  4. Loop steps secuencial:
+//     a. Execute step según type
+//     b. Si error → on_error: fail (abort) | continue (next step) | <step_id> (jump)
+//     c. Persistir cursor JSONB con step actual + outputs intermedios
+//  5. status=completed | failed con outputs/error
 //
 // Step types implementados:
 //   - agent_run    : delega a agentrunner.Run con inputs interpolados
@@ -81,11 +81,10 @@ type Runner struct {
 	AgentRunner  *agentrunner.Runner
 	SkillRunner  *skillrunner.Runner
 	Emitter      EventEmitter
-	Metrics      *metrics.Registry // nil = no metrics
-	SagaExecutor *flow.SagaExecutor // issue-09.9: compensaciones Saga
+	Metrics      *metrics.Registry   // nil = no metrics
+	SagaExecutor *flow.SagaExecutor  // issue-09.9: compensaciones Saga
 	Snapshots    *flow.SnapshotStore // issue-09.11: snapshots de I/O
 	Signals      *flow.SignalStore   // issue-09.8: await_signal + wake LISTEN/NOTIFY
-	DLQ          *flow.DLQStore      // issue-09.4: dead letter queue (nil = sin DLQ)
 
 	runContexts   map[uuid.UUID]context.CancelFunc
 	runContextsMu sync.Mutex
@@ -289,7 +288,6 @@ LOOP:
 				fbOut, fbErr := r.execFallback(ctxStep, runID, &step,
 					in.Inputs, stepOutputs, orgID, in.TriggeredBy, f.Slug, 1)
 				if fbErr != nil {
-					r.pushDLQ(ctx, orgID, runID, f.Slug, step.ID, fbErr, attemptErrs, retryCount)
 					finalErr = fmt.Sprintf("step '%s': %v", step.ID, fbErr)
 					break LOOP
 				}
@@ -297,8 +295,8 @@ LOOP:
 					"retry_count": retryCount, "errors": attemptErrs}
 				stepErr = nil
 			case "", "fail", "abort_flow":
-				// Escenario 7: fallo permanente → DLQ
-				r.pushDLQ(ctx, orgID, runID, f.Slug, step.ID, stepErr, attemptErrs, retryCount)
+				// Escenario 7: fallo permanente.
+				// REQ-42.3: dead_letter_queue dropeada — sin push al DLQ.
 				finalErr = fmt.Sprintf("step '%s' (retry_count=%d): %v", step.ID, retryCount, stepErr)
 				break LOOP
 			default:
@@ -791,7 +789,9 @@ func (r *Runner) execMemSave(ctx context.Context, step *flow.Step, orgID uuid.UU
 
 // execCondition evalúa expresión simple "field == value" o "field != value".
 // Config:
-//   { "left": "{{inputs.status}}", "op": "==", "right": "ok", "if_true": "...", "if_false": "..." }
+//
+//	{ "left": "{{inputs.status}}", "op": "==", "right": "ok", "if_true": "...", "if_false": "..." }
+//
 // Devuelve {branch: "if_true"|"if_false"} para que steps siguientes lo usen.
 func (r *Runner) execCondition(step *flow.Step, inputs, outputs map[string]any) (any, error) {
 	left, _ := step.Config["left"].(string)

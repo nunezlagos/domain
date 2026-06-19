@@ -60,7 +60,6 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	"nunezlagos/domain/internal/service/promptrouter"
 	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
@@ -154,7 +153,7 @@ func main() {
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
-	sessions := sesssvc.NewService(pools.App, recorder, nil)
+	// REQ-42.3: session.Service removido (tabla sessions dropeada).
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
 	search := &searchsvc.Service{Pool: pools.App}
@@ -183,7 +182,8 @@ func main() {
 	}
 
 	skillRunnerInst := skillrunner.New()
-	modelRegistry := &llmregistry.Registry{Pool: pools.App}
+	// REQ-42.3: model_registry dropeada — pricing en código (sin Pool).
+	modelRegistry := llmregistry.New()
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: factory,
 		Agents: agents, Skills: skills,
@@ -200,7 +200,7 @@ func main() {
 		Agents: agents, Skills: skills, Observations: observations,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 		Signals: &flowsvc.SignalStore{Pool: pools.App},
-		DLQ:     &flowsvc.DLQStore{Pool: pools.App},
+		// REQ-42.3: dead_letter_queue dropeada — sin DLQStore.
 	}
 
 	// issue-08.10 sdd-pipeline-orchestrator. Registry con los 10 handlers
@@ -282,7 +282,6 @@ func main() {
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations: observations,
 		Projects:     projects,
-		Sessions:     sessions,
 		Prompts:      prompts,
 		Timeline:     timeline,
 		Search:       search,

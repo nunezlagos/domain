@@ -37,7 +37,6 @@ var (
 	ErrSkillNotFound    = errors.New("one or more skills_slugs do not exist in this organization")
 	ErrNotFound         = errors.New("agent not found")
 	ErrTemperatureRange = errors.New("temperature must be within [0, 2]")
-	ErrModelUnknown     = errors.New("model not found in model_registry for this provider")
 )
 
 // maxVersionsKept límite de snapshots en agent_versions por agent.
@@ -51,22 +50,22 @@ var (
 )
 
 type Agent struct {
-	ID              uuid.UUID
-	Slug            string
-	Name            string
-	Description     string
-	Provider        string
-	Model           string
-	SystemPrompt    string
-	SkillsSlugs     []string
-	MaxIterations   int
-	TokenBudget     *int64
-	Temperature     *float64
-	SeedManaged     bool
-	SeedVersion     *int
-	IsUserModified  bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID             uuid.UUID
+	Slug           string
+	Name           string
+	Description    string
+	Provider       string
+	Model          string
+	SystemPrompt   string
+	SkillsSlugs    []string
+	MaxIterations  int
+	TokenBudget    *int64
+	Temperature    *float64
+	SeedManaged    bool
+	SeedVersion    *int
+	IsUserModified bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type CreateInput struct {
@@ -147,22 +146,6 @@ func validateTemperature(t *float64) error {
 	return nil
 }
 
-// validateModel verifica que el modelo exista activo en model_registry.
-// ollama se exime: permite modelos locales arbitrarios (auto-pull issue-06.3).
-func (s *Service) validateModel(ctx context.Context, provider, model string) error {
-	if provider == "ollama" {
-		return nil
-	}
-	exists, err := s.repository().ModelExists(ctx, provider, model)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return ErrModelUnknown
-	}
-	return nil
-}
-
 // generateSlug deriva un slug desde el name y resuelve colisiones con -2..-N.
 func (s *Service) generateSlug(ctx context.Context, orgID uuid.UUID, name string) (string, error) {
 	base := slugify(name)
@@ -223,9 +206,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Agent, error) {
 	if !validProviders[in.Provider] {
 		return nil, ErrProviderInvalid
 	}
-	if err := s.validateModel(ctx, in.Provider, in.Model); err != nil {
-		return nil, err
-	}
+	// REQ-42.3: model_registry dropeada — sin gating de modelo por tabla.
 	if err := validateTemperature(in.Temperature); err != nil {
 		return nil, err
 	}
@@ -299,11 +280,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	if in.Model != nil {
 		model = *in.Model
 	}
-	if in.Model != nil || in.Provider != nil {
-		if err := s.validateModel(ctx, provider, model); err != nil {
-			return nil, err
-		}
-	}
+	// REQ-42.3: model_registry dropeada — sin gating de modelo por tabla.
 	if err := validateTemperature(in.Temperature); err != nil {
 		return nil, err
 	}
@@ -352,11 +329,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorID:        &in.ActorID,
-			ActorType:      audit.ActorUser,
-			Action:         "agent.updated",
-			EntityType:     "agent",
-			EntityID:       &a.ID,
+			ActorID:    &in.ActorID,
+			ActorType:  audit.ActorUser,
+			Action:     "agent.updated",
+			EntityType: "agent",
+			EntityID:   &a.ID,
 		})
 	}
 	return a, nil
@@ -428,11 +405,11 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorID:        &actorID,
-			ActorType:      audit.ActorUser,
-			Action:         "agent.deleted",
-			EntityType:     "agent",
-			EntityID:       &id,
+			ActorID:    &actorID,
+			ActorType:  audit.ActorUser,
+			Action:     "agent.deleted",
+			EntityType: "agent",
+			EntityID:   &id,
 		})
 	}
 	return nil

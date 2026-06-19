@@ -20,14 +20,12 @@ import (
 	"nunezlagos/domain/internal/service/observation"
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
 
 type fix struct {
 	tl        *timelinesvc.Service
 	obs       *observation.Service
-	sess      *sesssvc.Service
 	prompts   *promptsvc.Service
 	orgID     uuid.UUID
 	projectID uuid.UUID
@@ -64,7 +62,6 @@ func setupTimeline(t *testing.T) (*fix, func()) {
 	f := &fix{
 		tl:        &timelinesvc.Service{Pool: pools.App},
 		obs:       &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}},
-		sess:      &sesssvc.Service{Pool: pools.App, Audit: rec},
 		prompts:   &promptsvc.Service{Pool: pools.App, Audit: rec},
 		orgID:     org.ID,
 		projectID: proj.ID,
@@ -92,10 +89,7 @@ func TestContext_Snapshot_PopulatedProject(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear sesión activa
-	_, _ = f.sess.Start(ctx, sesssvc.StartInput{
-		OrganizationID: f.orgID, UserID: f.userID, ProjectID: &f.projectID, Title: "trabajo",
-	})
+	// REQ-42.3: sessions dropeada — el snapshot ya no incluye sesiones.
 	// Observations
 	for i, content := range []string{"obs uno", "obs dos", "obs tres"} {
 		_, _ = f.obs.Save(ctx, observation.SaveInput{
@@ -111,8 +105,8 @@ func TestContext_Snapshot_PopulatedProject(t *testing.T) {
 
 	snap, err := f.tl.Context(ctx, f.orgID, f.userID, f.projectID)
 	require.NoError(t, err)
-	require.NotNil(t, snap.ActiveSession, "active session debe estar presente")
-	require.Equal(t, "trabajo", snap.ActiveSession.Title)
+	require.Nil(t, snap.ActiveSession, "REQ-42.3: sessions dropeada — sin active session")
+	require.Empty(t, snap.RecentSessions)
 	require.Len(t, snap.RecentObservations, 3)
 	require.Len(t, snap.RecentPrompts, 1)
 }

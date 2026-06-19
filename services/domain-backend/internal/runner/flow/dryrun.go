@@ -14,14 +14,14 @@ import (
 
 // PlanStep describe una entrada del dry-run plan.
 type PlanStep struct {
-	StepID         string  `json:"step_id"`
-	Type           string  `json:"type"`
-	WillExecute    string  `json:"will_execute"`   // "yes" | "no" | "depends_on_runtime"
-	Reason         string  `json:"reason,omitempty"`
-	EstimatedTokIn  int     `json:"estimated_tokens_in,omitempty"`
-	EstimatedTokOut int     `json:"estimated_tokens_out,omitempty"`
-	EstimatedCostUSD float64 `json:"estimated_cost_usd,omitempty"`
-	Warnings       []string `json:"warnings,omitempty"`
+	StepID           string   `json:"step_id"`
+	Type             string   `json:"type"`
+	WillExecute      string   `json:"will_execute"` // "yes" | "no" | "depends_on_runtime"
+	Reason           string   `json:"reason,omitempty"`
+	EstimatedTokIn   int      `json:"estimated_tokens_in,omitempty"`
+	EstimatedTokOut  int      `json:"estimated_tokens_out,omitempty"`
+	EstimatedCostUSD float64  `json:"estimated_cost_usd,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"`
 }
 
 // DryRunResult es el output del plan.
@@ -89,8 +89,8 @@ func analyzeStep(ctx context.Context, step *flow.Step, inputs map[string]any,
 			}
 		}
 		// Cost USD estimación. Para evitar acoplamiento, usamos rate constante
-		// promedio: $0.000005/token (mid-tier). Caller con model_registry puede
-		// recalcular preciso.
+		// promedio: $0.000005/token (mid-tier). Caller con el catálogo de pricing
+		// (internal/llm/registry) puede recalcular preciso.
 		ps.EstimatedCostUSD = float64(ps.EstimatedTokIn+ps.EstimatedTokOut) * 0.000005
 
 	case flow.StepTypeSkillRun:

@@ -43,48 +43,10 @@ func setupSeedDB(t *testing.T) (pools *db.Pools, cleanup func()) {
 
 // REQ-42.2: TestPlansSeeder_* se removieron junto con el dominio billing/
 // costos (tabla plans dropeada en 000148, PlansSeeder eliminado).
-
-func TestModelRegistrySeeder_PopulatesCatalog(t *testing.T) {
-	pools, cleanup := setupSeedDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	reg := seeds.NewRegistry()
-	reg.Register(&seeds.ModelRegistrySeeder{})
-	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
-	require.NoError(t, err)
-	require.Greater(t, results["model_registry"].Created, 10)
-
-	var count int
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT COUNT(*) FROM model_registry WHERE is_active = TRUE`).Scan(&count))
-	require.GreaterOrEqual(t, count, 12, "al menos 12 modelos sembrados")
-
-	// Verifica que Claude Opus 4.7 está
-	var displayName string
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`SELECT display_name FROM model_registry
-		 WHERE provider='anthropic' AND model='claude-opus-4-7'`).Scan(&displayName))
-	require.Equal(t, "Claude Opus 4.7", displayName)
-}
-
-func TestModelRegistrySeeder_Idempotent(t *testing.T) {
-	pools, cleanup := setupSeedDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	reg := seeds.NewRegistry()
-	reg.Register(&seeds.ModelRegistrySeeder{})
-
-	_, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
-	require.NoError(t, err)
-
-	// Segunda corrida debe ser skip (mismo version)
-	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
-	require.NoError(t, err)
-	require.Equal(t, 1, results["model_registry"].Skipped,
-		"segunda corrida debe skipear por version match")
-}
+//
+// REQ-42.3: TestModelRegistrySeeder_* se removieron junto con la tabla
+// model_registry (dropeada en 000149, ModelRegistrySeeder eliminado; el pricing
+// de modelos vive ahora en código, internal/llm/registry).
 
 func TestPlatformPoliciesSeeder_PopulatesBaseline(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)

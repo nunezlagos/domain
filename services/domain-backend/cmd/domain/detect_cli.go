@@ -47,14 +47,11 @@ func runDomainDetect(ctx context.Context) int {
 		return 1
 	}
 
-	var sessionID string
+	// REQ-42.3: tabla sessions dropeada — auto-start de session removido.
 	if projectID != "" && meta.CurrentBranch != "" {
 		if uerr := link.UpdateBranch(ctx, projectID, meta.CurrentBranch); uerr != nil {
 			fmt.Fprintf(os.Stderr, "branch update: %v\n", uerr)
 		}
-	}
-	if projectID != "" {
-		sessionID, _ = startSession(ctx, pool, projectID, resolvedSlug)
 	}
 
 	out := map[string]any{
@@ -64,7 +61,7 @@ func runDomainDetect(ctx context.Context) int {
 		"resolved_slug":    resolvedSlug,
 		"link_notes":       linkNotes,
 		"inventory":        inv,
-		"session":          sessionID,
+		"session":          "",
 		"memory_providers": detectMemoryProvidersSummary(),
 	}
 	encoded, _ := json.MarshalIndent(out, "", "  ")
@@ -151,20 +148,4 @@ func detectMemoryProvidersSummary() map[string]any {
 	return summary
 }
 
-func startSession(ctx context.Context, pool *pgxpool.Pool, projectID, projectSlug string) (string, error) {
-	var userID string
-	if err := pool.QueryRow(ctx, `SELECT id::text FROM users LIMIT 1`).Scan(&userID); err != nil {
-		return "", fmt.Errorf("no users to attribute session: %w", err)
-	}
-	var sessionID string
-	err := pool.QueryRow(ctx, `
-		INSERT INTO sessions (project_id, user_id, title, tags)
-		SELECT id, $2::uuid, $3, ARRAY['auto-detect']
-		FROM projects WHERE id = $1::uuid AND deleted_at IS NULL
-		RETURNING id::text
-	`, projectID, userID, "auto-detect: "+projectSlug).Scan(&sessionID)
-	if err != nil {
-		return "", err
-	}
-	return sessionID, nil
-}
+// REQ-42.3: startSession removido (tabla sessions dropeada).

@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// sddArchiveHandler — fase sdd-archive. Marca el issue como implemented +
-// registra transición en entity_state_transitions. system_prompt en BD.
+// sddArchiveHandler — fase sdd-archive. Marca el issue como implemented.
+// system_prompt en BD.
 
 type sddArchiveHandler struct{}
 
@@ -27,8 +27,7 @@ func (h *sddArchiveHandler) Build(_ context.Context, in Input) (*Output, error) 
 			fmt.Fprintf(&b, "Issue a archivar: %s\n\n", slug)
 		}
 	}
-	fmt.Fprintln(&b, "Marca el issue como implemented y registra la transición en")
-	fmt.Fprintln(&b, "entity_state_transitions con to_state='archived' (issue-13.x).")
+	fmt.Fprintln(&b, "Marca el issue como implemented y archivado (issue-13.x).")
 	fmt.Fprintln(&b, "Actualiza el CHANGELOG.md Unreleased con entrada del issue.")
 	return &Output{
 		AgentTemplateSlug: "sdd-archive",

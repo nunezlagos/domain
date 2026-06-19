@@ -12,7 +12,7 @@ import (
 // HU-41.4: alimenta la página /admin/database (DB explorer) del admin.
 type SchemaInfo struct {
 	Tables     []TableInfo `json:"tables"`
-	TotalCount int          `json:"total_count"`
+	TotalCount int         `json:"total_count"`
 }
 
 type TableInfo struct {
@@ -39,16 +39,16 @@ type ColumnInfo struct {
 }
 
 type IndexInfo struct {
-	Name     string `json:"name"`
-	Columns  string `json:"columns"`
-	IsUnique bool   `json:"is_unique"`
-	IsPrimary bool  `json:"is_primary"`
+	Name      string `json:"name"`
+	Columns   string `json:"columns"`
+	IsUnique  bool   `json:"is_unique"`
+	IsPrimary bool   `json:"is_primary"`
 }
 
 type FKInfo struct {
 	Constraint string `json:"constraint"`
 	Columns    string `json:"columns"`
-	References  string `json:"references"`
+	References string `json:"references"`
 }
 
 // GET /api/v1/admin/db-schema — HU-41.4
@@ -225,11 +225,11 @@ func categorize(name string) string {
 		return "core"
 	case containsAny(name, "agent", "skill", "prompt", "flow", "crons", "webhook", "mcp"):
 		return "resources"
-	case containsAny(name, "audit", "log", "observation", "prompt_captured", "dlq", "dead_letter", "activity"):
+	case containsAny(name, "audit", "log", "observation", "prompt_captured", "activity"):
 		return "observability"
-	case containsAny(name, "project", "knowledge", "policy", "platform", "cost", "usage", "budget", "config", "system_state"):
+	case containsAny(name, "project", "knowledge", "policy", "platform", "cost", "usage", "budget", "config"):
 		return "system"
-	case containsAny(name, "requirement", "user_story", "hu_draft", "proposal", "design", "saga", "sabotage"):
+	case containsAny(name, "requirement", "user_story", "hu_draft", "proposal", "design", "sabotage"):
 		return "sdd"
 	default:
 		return "other"

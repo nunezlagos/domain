@@ -6,19 +6,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	"nunezlagos/domain/internal/service/flow"
 )
 
-// withDLQ habilita la DLQ en el runner del fixture.
-func withDLQ(f *fix) *flow.DLQStore {
-	store := &flow.DLQStore{Pool: f.runner.Pool}
-	f.runner.DLQ = store
-	return store
-}
+// REQ-42.3: withDLQ removido (dead_letter_queue dropeada, campo Runner.DLQ eliminado).
 
 // failingStep es un skill_run con slug inexistente: falla en todos los intentos.
 func failingStep(id string, extra func(*flow.Step)) flow.Step {
@@ -30,15 +24,16 @@ func failingStep(id string, extra func(*flow.Step)) flow.Step {
 	return st
 }
 
-// Escenario 7: fallo permanente (retries agotados, sin política) → DLQ.
-func TestErrorPolicy_PermanentFailure_GoesToDLQ(t *testing.T) {
+// Escenario 7: fallo permanente (retries agotados, sin política) → run failed.
+// REQ-42.3: dead_letter_queue dropeada — ya no hay DLQ; se verifica el estado
+// failed y el retry_count en el error del run.
+func TestErrorPolicy_PermanentFailure_RunFailed(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	dlq := withDLQ(f)
 
 	fl, err := f.flows.Create(ctx, flow.CreateInput{
-		OrganizationID: f.orgID, Slug: "dlq-flow", Name: "DLQ Flow",
+		OrganizationID: f.orgID, Slug: "fail-flow", Name: "Fail Flow",
 		Spec: flow.Spec{Version: 1, Steps: []flow.Step{
 			failingStep("s1", func(st *flow.Step) {
 				st.Retry = &flow.StepRetryPolicy{MaxRetries: 2, Backoff: "fixed", FixedDelayMs: 10}
@@ -52,21 +47,6 @@ func TestErrorPolicy_PermanentFailure_GoesToDLQ(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, flowrunner.StatusFailed, res.Status)
 	require.Contains(t, res.Error, "retry_count=2")
-
-	entries, err := dlq.List(ctx, f.orgID, 10)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	require.Equal(t, "dlq-flow", entries[0].FlowSlug)
-	require.Equal(t, "s1", entries[0].StepKey)
-	require.Equal(t, 2, entries[0].RetryCount)
-	require.Len(t, entries[0].Errors, 3, "un mensaje por intento (1 + 2 retries)")
-
-	// Resolve saca la entry de la lista
-	require.NoError(t, dlq.Resolve(ctx, f.orgID, entries[0].ID))
-	entries, err = dlq.List(ctx, f.orgID, 10)
-	require.NoError(t, err)
-	require.Empty(t, entries)
-	require.ErrorIs(t, dlq.Resolve(ctx, f.orgID, uuid.New()), flow.ErrDLQNotFound)
 }
 
 // Escenario 4: ignore_and_continue reemplaza el resultado con default_on_error.
@@ -133,7 +113,6 @@ func TestErrorPolicy_FallbackFails_Aborts(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	dlq := withDLQ(f)
 
 	fl, err := f.flows.Create(ctx, flow.CreateInput{
 		OrganizationID: f.orgID, Slug: "fb-fail", Name: "FB Fail",
@@ -152,10 +131,7 @@ func TestErrorPolicy_FallbackFails_Aborts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, flowrunner.StatusFailed, res.Status)
 	require.Contains(t, res.Error, "fallback")
-
-	entries, err := dlq.List(ctx, f.orgID, 10)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
+	// REQ-42.3: dead_letter_queue dropeada — sin assert sobre DLQ.
 }
 
 // Escenario 8: default_step_error_policy del flow aplica cuando el step no

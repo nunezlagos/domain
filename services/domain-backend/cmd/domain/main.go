@@ -49,7 +49,6 @@ import (
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
-	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/seeds"
 	s3client "nunezlagos/domain/internal/storage/s3"
@@ -108,7 +107,6 @@ import (
 	"nunezlagos/domain/internal/service/promptrouter"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
@@ -444,7 +442,7 @@ func runServer() {
 		logger.Warn("SMTP not configured — OTP no enviará mails reales (DOMAIN_SMTP_HOST missing)")
 	}
 
-	sessionService := sesssvc.NewService(pools.App, recorder, nil)
+	// REQ-42.3: session.Service (memoria, tabla sessions dropeada) removido.
 	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timelineService := &timelinesvc.Service{Pool: pools.App}
 	searchService := &searchsvc.Service{Pool: pools.App}
@@ -456,22 +454,23 @@ func runServer() {
 	billingService := &billing.Service{Pool: pools.App}
 	costService := &cost.Service{Pool: pools.App}
 
-	// Runtime config registry (issue-27.3) — refresca al boot + cada 30s + SIGHUP.
-	rtCfgRegistry := &runtimeconfig.Registry{Pool: pools.App, Logger: logger}
-	if err := rtCfgRegistry.Refresh(ctx); err != nil {
-		logger.Warn("initial runtime config refresh failed (defaults used)",
-			slog.String("error", err.Error()))
+	// REQ-42.3: feature hot-reload (runtime_configs) eliminado. El OTEL sample
+	// ratio se configura por env (DOMAIN_OTEL_SAMPLE_RATIO, default 0.1).
+	otelSampleRatio := 0.1
+	if v := os.Getenv("DOMAIN_OTEL_SAMPLE_RATIO"); v != "" {
+		if f, perr := strconv.ParseFloat(v, 64); perr == nil {
+			otelSampleRatio = f
+		}
 	}
-	go rtCfgRegistry.RunPolling(ctx, 30*time.Second)
 
-	// OpenTelemetry tracing (issue-17.2) — usa sample ratio del runtime config.
+	// OpenTelemetry tracing (issue-17.2).
 	otelShutdown, oTelErr := tracing.Setup(context.Background(), tracing.Config{
 		Enabled:      os.Getenv("DOMAIN_OTEL_ENABLED") == "true",
 		OTLPEndpoint: envOr("DOMAIN_OTEL_ENDPOINT", "localhost:4317"),
 		ServiceName:  "domain",
 		Version:      Version,
 		Environment:  cfg.Env,
-		SampleRatio:  rtCfgRegistry.Current().OTELSampleRatio,
+		SampleRatio:  otelSampleRatio,
 		Insecure:     envOr("DOMAIN_OTEL_INSECURE", "true") == "true",
 	})
 	if oTelErr != nil {
@@ -482,7 +481,7 @@ func runServer() {
 
 	// Seeders (issue-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
 	seedRegistry := seeds.NewRegistry()
-	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
+	// REQ-42.3: ModelRegistrySeeder removido (model_registry dropeada; pricing en código).
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
@@ -560,7 +559,8 @@ func runServer() {
 	}
 
 	skillRunnerInst := skillrunner.New()
-	modelRegistry := &llmregistry.Registry{Pool: pools.App}
+	// REQ-42.3: model_registry dropeada — pricing en código (sin Pool).
+	modelRegistry := llmregistry.New()
 	var alertEmailSender usagealerts.EmailSender
 	if cfg.SMTPHost != "" {
 		alertEmailSender = usagealerts.NewSMTPEmailSender(smtpmail.New(smtpmail.Config{
@@ -680,7 +680,7 @@ func runServer() {
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 		Emitter: outboundEmitter, Metrics: metricsReg,
 		Signals: &flow.SignalStore{Pool: pools.App},
-		DLQ:     &flow.DLQStore{Pool: pools.App},
+		// REQ-42.3: dead_letter_queue dropeada — sin DLQStore.
 	}
 
 	// issue-35.1: unified dispatcher. Se inyecta en cron, webhook
@@ -727,7 +727,7 @@ func runServer() {
 		go runOutboundDispatcher(leaderCtx, outboundDispatcher, logger)
 		go runDBStatsAnalyzer(leaderCtx, dbStatsService, metricsReg, logger)
 		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
-		go runSessionAutoClose(leaderCtx, sessionService, logger)
+		// REQ-42.3: runSessionAutoClose removido (tabla sessions dropeada).
 		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
 		go runAuditPruneScheduler(leaderCtx, recorder, logger)
 		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
@@ -840,7 +840,6 @@ func runServer() {
 		ProjectPolicyService:  projectPolicyService,
 		Pool:                  pools.App,
 		ObsService:            obsService,
-		SessionService:        sessionService,
 		PromptService:         promptService,
 		TimelineService:       timelineService,
 		SearchService:         searchService,
@@ -872,7 +871,6 @@ func runServer() {
 		MCPServerService:          mcpServerService,
 		ProjectTemplateService:    projectTemplateService,
 		PolicyService:             policyService,
-		RuntimeConfigRegistry:     rtCfgRegistry,
 		DBStatsService:            dbStatsService,
 		Hubuilder:                 issuebuilderSvc,
 		Audit:                     recorder,
@@ -945,7 +943,7 @@ func runServer() {
 	}
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
-	idempMW := &middleware.Idempotency{Pool: pools.App}
+	// REQ-42.3: idempotency middleware removido (idempotency_keys dropeada).
 	// issue-02.6: activity feed automático en mutaciones (post-auth)
 	activityMW := &activity.HTTPMiddleware{
 		Recorder: activityStore,
@@ -972,7 +970,7 @@ func runServer() {
 				authMW.Wrap(
 					middleware.PrincipalCtx(
 						rateLimitMW.Wrap(
-							auditMW(activityMW.Wrap(idempMW.Wrap(api.Router()))))))))))
+							auditMW(activityMW.Wrap(api.Router())))))))))
 
 	// REQ-31 (issue-31.1 mcp-http-vps-mode): expone las mismas tools MCP
 	// que `cmd/domain-mcp` (stdio) sobre HTTP Streamable transport. Clientes
@@ -988,7 +986,6 @@ func runServer() {
 		Base: mcptools.Deps{
 			Observations: obsService,
 			Projects:     projectService,
-			Sessions:     sessionService,
 			Prompts:      promptService,
 			Timeline:     timelineService,
 			Search:       searchService,
@@ -1067,18 +1064,7 @@ func runServer() {
 
 	// Graceful shutdown (issue-26.4): trap SIGINT/SIGTERM, drain sequenced
 	// con budget total ~28s (K8s terminationGracePeriodSeconds=30 default).
-	// issue-27.3 hot-reload SIGHUP handler.
-	hupCh := make(chan os.Signal, 1)
-	signal.Notify(hupCh, syscall.SIGHUP)
-	go func() {
-		for range hupCh {
-			if err := rtCfgRegistry.Refresh(context.Background()); err != nil {
-				logger.Warn("SIGHUP refresh failed", slog.Any("err", err))
-			} else {
-				logger.Info("config reloaded via SIGHUP")
-			}
-		}
-	}()
+	// REQ-42.3: SIGHUP hot-reload removido (runtime_configs dropeada).
 
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
@@ -1404,26 +1390,7 @@ func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slo
 	}
 }
 
-// runSessionAutoClose cierra sesiones inactivas >24h (issue-03.2).
-func runSessionAutoClose(ctx context.Context, svc *sesssvc.Service, logger *slog.Logger) {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			ids, err := svc.CloseInactive(ctx, 24*time.Hour)
-			if err != nil {
-				logger.Warn("session auto-close failed", slog.String("error", err.Error()))
-				continue
-			}
-			if len(ids) > 0 {
-				logger.Info("auto-closed inactive sessions", slog.Int("count", len(ids)))
-			}
-		}
-	}
-}
+// REQ-42.3: runSessionAutoClose removido (tabla sessions dropeada).
 
 // runDBStatsAnalyzer corre cada 5min: slow queries → métricas + snapshot weekly.
 // Solo en el pod leader (issue-26.2 + issue-25.2).

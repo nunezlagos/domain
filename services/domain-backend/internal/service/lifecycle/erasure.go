@@ -12,16 +12,16 @@ import (
 )
 
 var (
-	ErrAlreadyErased         = errors.New("already_erased")
-	ErrUserNotFound          = errors.New("user_not_found")
+	ErrAlreadyErased          = errors.New("already_erased")
+	ErrUserNotFound           = errors.New("user_not_found")
 	ErrTransferOwnershipFirst = errors.New("transfer_ownership_first")
 )
 
 // EraseResult cuenta rows afectadas por tabla.
 type EraseResult struct {
-	UserID         uuid.UUID         `json:"user_id"`
-	UpdatedRows    map[string]int64  `json:"updated_rows"`
-	RevokedAPIKeys int64             `json:"revoked_api_keys"`
+	UserID         uuid.UUID        `json:"user_id"`
+	UpdatedRows    map[string]int64 `json:"updated_rows"`
+	RevokedAPIKeys int64            `json:"revoked_api_keys"`
 }
 
 // EraseUser ejecuta el derecho al olvido GDPR Art. 17 sobre un user.
@@ -32,9 +32,9 @@ type EraseResult struct {
 //     con otros miembros": la tabla `organizations` y `organization_members`
 //     se dropean en Fase C. Single-org implica que no aplica esa lógica.
 //   - En una transacción:
-//     * users PII → NULL/anonimizado, is_erased=TRUE, erased_at=NOW
-//     * observations/sessions/prompts/knowledge_docs/agent_runs created_by/user_id → NULL
-//     * api_keys revoked_at = NOW
+//   - users PII → NULL/anonimizado, is_erased=TRUE, erased_at=NOW
+//   - observations/sessions/prompts/knowledge_docs/agent_runs created_by/user_id → NULL
+//   - api_keys revoked_at = NOW
 //   - audit_log se mantiene intacto (legal hold compliance)
 //   - actorID puede ser el mismo user (self-service) o admin
 func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reason string) (*EraseResult, error) {
@@ -82,7 +82,6 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 		sql   string
 	}{
 		{"observations", "UPDATE observations SET created_by = NULL WHERE created_by = $1"},
-		{"sessions", "UPDATE sessions SET user_id = NULL WHERE user_id = $1"},
 		{"prompts", "UPDATE prompts SET created_by = NULL WHERE created_by = $1"},
 		{"knowledge_docs", "UPDATE knowledge_docs SET created_by = NULL WHERE created_by = $1"},
 		{"agent_runs", "UPDATE agent_runs SET user_id = NULL WHERE user_id = $1"},
@@ -117,9 +116,9 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 			EntityType: "user",
 			EntityID:   &userID,
 			NewValues: map[string]any{
-				"reason":        reason,
-				"updated_rows":  res.UpdatedRows,
-				"revoked_keys":  res.RevokedAPIKeys,
+				"reason":       reason,
+				"updated_rows": res.UpdatedRows,
+				"revoked_keys": res.RevokedAPIKeys,
 			},
 		})
 	}

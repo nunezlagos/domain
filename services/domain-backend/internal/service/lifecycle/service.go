@@ -34,22 +34,22 @@ var (
 
 // restorableEntities mapea entity_type → tabla. Solo tablas con deleted_at.
 var restorableEntities = map[string]string{
-	"organization":   "organizations",
-	"user":           "users",
-	"project":        "projects",
-	"observation":    "observations",
-	"session":        "sessions",
-	"prompt":         "prompts",
-	"knowledge_doc":  "knowledge_docs",
-	"skill":          "skills",
-	"agent":          "agents",
-	"invitation":     "invitations",
+	"organization":  "organizations",
+	"user":          "users",
+	"project":       "projects",
+	"observation":   "observations",
+	"session":       "sessions",
+	"prompt":        "prompts",
+	"knowledge_doc": "knowledge_docs",
+	"skill":         "skills",
+	"agent":         "agents",
+	"invitation":    "invitations",
 }
 
 type Service struct {
-	Pool             *pgxpool.Pool
-	Audit            audit.Recorder
-	RetentionDays    int // default 30; restore falla si deleted_at < now()-RetentionDays
+	Pool          *pgxpool.Pool
+	Audit         audit.Recorder
+	RetentionDays int // default 30; restore falla si deleted_at < now()-RetentionDays
 }
 
 // q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
@@ -75,9 +75,9 @@ func (s *Service) retentionDays() int {
 }
 
 // Restore revierte deleted_at = NULL para entityType/id si:
-//   1. el entity existe en su tabla
-//   2. deleted_at IS NOT NULL (era soft-deleted)
-//   3. deleted_at >= NOW() - retention_days (dentro de ventana)
+//  1. el entity existe en su tabla
+//  2. deleted_at IS NOT NULL (era soft-deleted)
+//  3. deleted_at >= NOW() - retention_days (dentro de ventana)
 func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uuid.UUID, orgID *uuid.UUID) error {
 	table, ok := restorableEntities[entityType]
 	if !ok {
@@ -130,14 +130,14 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 
 // UserExport bundle con todos los datos del user en formato portable.
 type UserExport struct {
-	Version       string         `json:"export_version"`
-	ExportedAt    time.Time      `json:"exported_at"`
-	UserID        uuid.UUID      `json:"user_id"`
-	User          map[string]any `json:"user"`
+	Version       string           `json:"export_version"`
+	ExportedAt    time.Time        `json:"exported_at"`
+	UserID        uuid.UUID        `json:"user_id"`
+	User          map[string]any   `json:"user"`
 	Organizations []map[string]any `json:"organizations"`
 	Projects      []map[string]any `json:"projects"`
 	Observations  []map[string]any `json:"observations"`
-	Sessions      []map[string]any `json:"sessions"`
+	Sessions      []map[string]any `json:"sessions"` // REQ-42.3: siempre vacío (tabla sessions dropeada)
 	Prompts       []map[string]any `json:"prompts"`
 	KnowledgeDocs []map[string]any `json:"knowledge_docs"`
 	AgentRuns     []map[string]any `json:"agent_runs"`
@@ -189,9 +189,8 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	out.Observations, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, content, observation_type, tags, metadata, created_at
 		 FROM observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)
-	out.Sessions, _ = scanRows(ctx, s.Pool,
-		`SELECT id, project_id, title, summary, tags, started_at, ended_at
-		 FROM sessions WHERE user_id = $1 AND deleted_at IS NULL`, userID)
+	// REQ-42.3: sessions dropeada — sin export de sesiones (campo queda vacío
+	// por compatibilidad de shape del export GDPR).
 	out.Prompts, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, slug, version, body, is_active, created_at
 		 FROM prompts WHERE created_by = $1 AND deleted_at IS NULL`, userID)

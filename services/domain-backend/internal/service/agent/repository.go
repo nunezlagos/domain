@@ -9,7 +9,7 @@ import (
 )
 
 // Repository abstrae acceso a las tablas agents + agent_versions + tablas
-// referenciadas para validación (skills, model_registry).
+// referenciadas para validación (skills).
 type Repository interface {
 	Insert(ctx context.Context, in InsertParams) (*Agent, error)
 	Update(ctx context.Context, id uuid.UUID, in UpdateParams) (*Agent, error)
@@ -21,10 +21,6 @@ type Repository interface {
 	// CountValidSkills cuenta cuántos slugs existen en skills activos. Si
 	// retorna == len(slugs), todos son válidos.
 	CountValidSkills(ctx context.Context, orgID uuid.UUID, slugs []string) (int, error)
-
-	// ModelExists verifica que (provider, model) esté activo en model_registry
-	// con modality='completion'.
-	ModelExists(ctx context.Context, provider, model string) (bool, error)
 
 	// SlugTaken indica si un slug ya está usado en agents activos.
 	SlugTaken(ctx context.Context, orgID uuid.UUID, slug string) (bool, error)

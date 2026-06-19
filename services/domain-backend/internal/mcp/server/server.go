@@ -6,10 +6,11 @@
 // y formatea respuesta como mcp.CallToolResult.
 //
 // Principal:
-//   El proceso domain-mcp resuelve UN principal al boot vía API key
-//   (env var DOMAIN_API_KEY) y todas las tool calls de la sesión operan en
-//   nombre de ese principal. Esto coincide con el modelo MCP stdio: un
-//   proceso por sesión de cliente.
+//
+//	El proceso domain-mcp resuelve UN principal al boot vía API key
+//	(env var DOMAIN_API_KEY) y todas las tool calls de la sesión operan en
+//	nombre de ese principal. Esto coincide con el modelo MCP stdio: un
+//	proceso por sesión de cliente.
 package mcpserver
 
 import (
@@ -32,71 +33,69 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
-	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
+	cronsvc "nunezlagos/domain/internal/service/cron"
+	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
-	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	intakesvc "nunezlagos/domain/internal/service/intake"
+	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
-	projsvc "nunezlagos/domain/internal/service/project"
-	promptsvc "nunezlagos/domain/internal/service/prompt"
-	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
-	prouter "nunezlagos/domain/internal/service/promptrouter"
-	cronsvc "nunezlagos/domain/internal/service/cron"
 	policysvc "nunezlagos/domain/internal/service/policy"
+	projsvc "nunezlagos/domain/internal/service/project"
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	promptsvc "nunezlagos/domain/internal/service/prompt"
+	prouter "nunezlagos/domain/internal/service/promptrouter"
+	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
-	syncsvc "nunezlagos/domain/internal/service/extsync"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
 )
 
 // Deps colecciona las dependencias del servidor MCP.
 type Deps struct {
-	Observations *obssvc.Service
-	Projects     *projsvc.Service
-	Sessions     *sesssvc.Service
-	Prompts      *promptsvc.Service
-	Timeline     *timelinesvc.Service
-	Search       *searchsvc.Service
-	Knowledge    *knowsvc.Service
-	Skills       *skillsvc.Service
-	SkillExecution *skillsvc.ExecutionService // issue-12.3 domain_skill_execute
-	Agents       *agentsvc.Service
-	AgentRunner  *agentrunner.Runner
-	Crons        *cronsvc.Service // issue-12.3 domain_cron_list
-	Clients      *clientsvc.Service // clients/mandantes — consultoras gestionan proyectos por cliente
+	Observations    *obssvc.Service
+	Projects        *projsvc.Service
+	Prompts         *promptsvc.Service
+	Timeline        *timelinesvc.Service
+	Search          *searchsvc.Service
+	Knowledge       *knowsvc.Service
+	Skills          *skillsvc.Service
+	SkillExecution  *skillsvc.ExecutionService // issue-12.3 domain_skill_execute
+	Agents          *agentsvc.Service
+	AgentRunner     *agentrunner.Runner
+	Crons           *cronsvc.Service           // issue-12.3 domain_cron_list
+	Clients         *clientsvc.Service         // clients/mandantes — consultoras gestionan proyectos por cliente
 	CapturedPrompts *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
 	ProjectRepos    *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
 	ProjectPolicies *projectpolicysvc.Service  // REQ-43 policies por proyecto
 	Tickets         *ticketsvc.Service         // REQ-51 sistema de tickets internos
-	Policies     *policysvc.Service // issue-01.8 domain_policy_get/list
-	Flows        *flowsvc.Service
-	FlowRunner   *flowrunner.Runner
-	Orchestrator *orchsvc.Service // issue-08.10 sdd-pipeline-orchestrator
-	Hubuilder    *husvc.Service // issue-04.7 interactive HU wizard
-	Intake       *intakesvc.Service // issue-04.8 intake pipeline
-	ExtSync      *syncsvc.Service   // issue-04.9 external provider sync
-	PromptRouter   *prouter.Router            // issue-12.7 single-shot prompt router
-	WorkflowImport *workflowimport.Service    // issue-12.7 override de .md
-	Pool           *pgxpool.Pool // para queries de agent_run_logs
-	Principal      *apikey.Principal // resuelto al boot
+	Policies        *policysvc.Service         // issue-01.8 domain_policy_get/list
+	Flows           *flowsvc.Service
+	FlowRunner      *flowrunner.Runner
+	Orchestrator    *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
+	Hubuilder       *husvc.Service          // issue-04.7 interactive HU wizard
+	Intake          *intakesvc.Service      // issue-04.8 intake pipeline
+	ExtSync         *syncsvc.Service        // issue-04.9 external provider sync
+	PromptRouter    *prouter.Router         // issue-12.7 single-shot prompt router
+	WorkflowImport  *workflowimport.Service // issue-12.7 override de .md
+	Pool            *pgxpool.Pool           // para queries de agent_run_logs
+	Principal       *apikey.Principal       // resuelto al boot
 	// Dispatcher (issue-35.1 phase 5): único path para ejecutar
 	// flow/agent/skill desde MCP. REQUERIDO en producción; los handlers
 	// retornan error si Dispatcher == nil.
 	Dispatcher *dispatch.Dispatcher
-	ServerName   string
-	ServerVer    string
+	ServerName string
+	ServerVer  string
 	// SharedCache REQ-67: cache LRU compartido entre todos los requests
 	// (NO se clona por request). Si nil, cache desactivado.
 	SharedCache CacheStore
 	// REQ-70 métricas. Si nil, los hooks no se setean.
-	MetricsOnToolCall   func(tool, status string, dur float64)
-	MetricsOnCacheHit   func()
-	MetricsOnCacheMiss  func()
+	MetricsOnToolCall  func(tool, status string, dur float64)
+	MetricsOnCacheHit  func()
+	MetricsOnCacheMiss func()
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).
@@ -137,18 +136,18 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		// READs cacheables — TTL conservador para tolerar lag percibido
 		// tras una escritura (la invalidación es síncrona, no eventual).
 		readTTLs := map[string]time.Duration{
-			"domain_ticket_list":          5 * time.Second,
-			"domain_ticket_get":           5 * time.Second,
-			"domain_ticket_comment_list":  5 * time.Second,
+			"domain_ticket_list":           5 * time.Second,
+			"domain_ticket_get":            5 * time.Second,
+			"domain_ticket_comment_list":   5 * time.Second,
 			"domain_ticket_status_history": 5 * time.Second,
-			"domain_policy_list":          15 * time.Second,
-			"domain_policy_get":           15 * time.Second,
-			"domain_project_list":         10 * time.Second,
-			"domain_project_get":          10 * time.Second,
-			"domain_client_list":          15 * time.Second,
-			"domain_knowledge_list":       10 * time.Second,
-			"domain_prompt_captured_list": 5 * time.Second,
-			"domain_health":               10 * time.Second,
+			"domain_policy_list":           15 * time.Second,
+			"domain_policy_get":            15 * time.Second,
+			"domain_project_list":          10 * time.Second,
+			"domain_project_get":           10 * time.Second,
+			"domain_client_list":           15 * time.Second,
+			"domain_knowledge_list":        10 * time.Second,
+			"domain_prompt_captured_list":  5 * time.Second,
+			"domain_health":                10 * time.Second,
 		}
 		for tool, ttl := range readTTLs {
 			wrap.SetCacheable(tool, ttl)
@@ -173,7 +172,6 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	// Tools que escriben (mutation): tope más bajo (60/min)
 	for _, mutTool := range []string{
 		"domain_mem_save", "domain_knowledge_save",
-		"domain_session_start", "domain_session_end",
 		"domain_agent_run",
 		"domain_hu_create_start", "domain_hu_create_answer",
 		"domain_hu_create_preview", "domain_hu_create_commit", "domain_hu_create_abandon",
@@ -189,7 +187,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		})
 	}
 	// rls envuelve los handlers de tools que tocan tablas con RLS FORCE
-	// (observations/sessions, migration 000085): tx + SET LOCAL + commit.
+	// (observations, migration 000085): tx + SET LOCAL + commit.
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -198,9 +196,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", rls(deps.handleMemSearch))},
 		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", rls(deps.handleMemContext))},
 		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", rls(deps.handleMemGetObservation))},
-		{Tool: toolSessionStart(), Handler: wrap.Wrap("domain_session_start", rls(deps.handleSessionStart))},
-		{Tool: toolSessionEnd(), Handler: wrap.Wrap("domain_session_end", rls(deps.handleSessionEnd))},
-		{Tool: toolSessionActive(), Handler: wrap.Wrap("domain_session_active", rls(deps.handleSessionActive))},
+		// REQ-42.3: domain_session_start/end/active removidos (tabla sessions dropeada).
 		{Tool: toolPromptGet(), Handler: wrap.Wrap("domain_prompt_get", deps.handlePromptGet)},
 		{Tool: toolPromptSearch(), Handler: wrap.Wrap("domain_prompt_search", deps.handlePromptSearch)},
 		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", rls(deps.handleContext))},
@@ -312,44 +308,7 @@ func toolMemContext() mcp.Tool {
 	)
 }
 
-func toolSessionStart() mcp.Tool {
-	return mcp.NewTool("domain_session_start",
-		mcp.WithDescription("Inicia una nueva session (agrupador de observations) opcionalmente scoped a un project."),
-		mcp.WithString("title",
-			mcp.Description("Título descriptivo de la sesión"),
-			mcp.Required(),
-		),
-		mcp.WithString("project_slug",
-			mcp.Description("Slug del project (opcional)"),
-		),
-		mcp.WithArray("tags",
-			mcp.Description("Tags opcionales"),
-			mcp.Items(map[string]any{"type": "string"}),
-		),
-	)
-}
-
-func toolSessionEnd() mcp.Tool {
-	return mcp.NewTool("domain_session_end",
-		mcp.WithDescription("Finaliza una session activa con un resumen opcional."),
-		mcp.WithString("session_id",
-			mcp.Description("UUID de la session"),
-			mcp.Required(),
-		),
-		mcp.WithString("summary",
-			mcp.Description("Resumen de lo realizado en la sesión"),
-		),
-	)
-}
-
-func toolSessionActive() mcp.Tool {
-	return mcp.NewTool("domain_session_active",
-		mcp.WithDescription("Devuelve la session activa del user actual (opcional: filtrar por project)."),
-		mcp.WithString("project_slug",
-			mcp.Description("Filtrar por project (opcional)"),
-		),
-	)
-}
+// REQ-42.3: toolSessionStart/End/Active removidos (tabla sessions dropeada).
 
 func toolPromptGet() mcp.Tool {
 	return mcp.NewTool("domain_prompt_get",
@@ -379,7 +338,7 @@ func toolPromptSearch() mcp.Tool {
 
 func toolContext() mcp.Tool {
 	return mcp.NewTool("domain_context_snapshot",
-		mcp.WithDescription("Devuelve snapshot del contexto: active_session + recientes (sessions, observations, prompts) para un project."),
+		mcp.WithDescription("Devuelve snapshot del contexto: observations + prompts recientes para un project."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project (opcional; vacío = scope org-wide)"),
 		),
@@ -404,7 +363,7 @@ func toolTimeline() mcp.Tool {
 
 func toolGlobalSearch() mcp.Tool {
 	return mcp.NewTool("domain_search_global",
-		mcp.WithDescription("Búsqueda global cross-entity (observations + prompts + sessions) scoped por org del principal. Filtros opcionales."),
+		mcp.WithDescription("Búsqueda global cross-entity (observations + prompts) scoped por org del principal. Filtros opcionales."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
@@ -413,7 +372,7 @@ func toolGlobalSearch() mcp.Tool {
 			mcp.Description("Máximo resultados (default 20, max 200)"),
 		),
 		mcp.WithArray("entity_types",
-			mcp.Description("Filtrar a tipos específicos: observation, prompt, session"),
+			mcp.Description("Filtrar a tipos específicos: observation, prompt"),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
 		mcp.WithArray("tags",
@@ -755,89 +714,7 @@ func (d *Deps) handleMemContext(ctx context.Context, req mcp.CallToolRequest) (*
 	})
 }
 
-func (d *Deps) handleSessionStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Sessions == nil {
-		return mcp.NewToolResultError("session service no configurado"), nil
-	}
-	args := req.GetArguments()
-	title, _ := args["title"].(string)
-	if title == "" {
-		return mcp.NewToolResultError("title requerido"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-
-	var projectID *uuid.UUID
-	if slug, _ := args["project_slug"].(string); slug != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
-		}
-		projectID = &proj.ID
-	}
-	var tags []string
-	if v, ok := args["tags"].([]any); ok {
-		for _, t := range v {
-			if s, ok := t.(string); ok {
-				tags = append(tags, s)
-			}
-		}
-	}
-	sess, err := d.Sessions.Start(ctx, sesssvc.StartInput{
-		OrganizationID: orgID, UserID: userID, ProjectID: projectID, Title: title, Tags: tags,
-	})
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("start: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"id":         sess.ID.String(),
-		"started_at": sess.StartedAt,
-		"status":     sess.Status(),
-	})
-}
-
-func (d *Deps) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Sessions == nil {
-		return mcp.NewToolResultError("session service no configurado"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["session_id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("session_id inválido (UUID requerido)"), nil
-	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	summary, _ := args["summary"].(string)
-	sess, err := d.Sessions.End(ctx, id, userID, summary)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("end: %v", err)), nil
-	}
-	return toolResultJSON(sess)
-}
-
-func (d *Deps) handleSessionActive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Sessions == nil {
-		return mcp.NewToolResultError("session service no configurado"), nil
-	}
-	args := req.GetArguments()
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-
-	var projectID uuid.UUID
-	if slug, _ := args["project_slug"].(string); slug != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
-		}
-		projectID = proj.ID
-	}
-	sess, err := d.Sessions.GetActive(ctx, userID, projectID)
-	if err != nil {
-		// No hay sesión activa: devolvemos null en lugar de error
-		return toolResultJSON(nil)
-	}
-	return toolResultJSON(sess)
-}
+// REQ-42.3: handleSessionStart/End/Active removidos (tabla sessions dropeada).
 
 func (d *Deps) handlePromptGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Prompts == nil {

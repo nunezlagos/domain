@@ -10,9 +10,9 @@ import (
 
 // mockRepo implementa Repository en memoria para tests del Service.
 type mockRepo struct {
-	inserted     []InsertParams
-	completed    []CompleteTurnInput
-	byID         map[uuid.UUID]*Prompt
+	inserted  []InsertParams
+	completed []CompleteTurnInput
+	byID      map[uuid.UUID]*Prompt
 }
 
 func newMockRepo() *mockRepo { return &mockRepo{byID: map[uuid.UUID]*Prompt{}} }
@@ -51,9 +51,6 @@ func (m *mockRepo) CompleteTurn(_ context.Context, in CompleteTurnInput) (*Promp
 	}
 	return p, nil
 }
-func (m *mockRepo) SummarizeBySession(_ context.Context, _, sid uuid.UUID) (*SessionUsage, error) {
-	return &SessionUsage{SessionID: &sid, Turns: 2, EstimatedTokensIn: 50, EstimatedTokensOut: 200}, nil
-}
 func (m *mockRepo) SummarizeByProject(_ context.Context, _, pid uuid.UUID) (*SessionUsage, error) {
 	return &SessionUsage{ProjectID: &pid, Turns: 5, EstimatedTokensIn: 120, EstimatedTokensOut: 500}, nil
 }
@@ -64,7 +61,7 @@ func TestCapture_EstimatedTokensIn_RatioFourToOne(t *testing.T) {
 	in := CaptureInput{
 		OrganizationID: uuid.New(),
 		UserID:         uuid.New(),
-		Content:        "abcd efgh ijkl",  // 14 chars
+		Content:        "abcd efgh ijkl", // 14 chars
 	}
 	p, err := svc.Capture(context.Background(), in)
 	if err != nil {
@@ -134,13 +131,14 @@ func TestCompleteTurn_NegativeResponseClampedToZero(t *testing.T) {
 	}
 }
 
-func TestSummarizeBySession_DelegatesToRepo(t *testing.T) {
+// REQ-42.3: SummarizeBySession removido (columna session_id dropeada).
+func TestSummarizeByProject_DelegatesToRepo(t *testing.T) {
 	svc := NewService(newMockRepo())
-	u, err := svc.SummarizeBySession(context.Background(), uuid.New(), uuid.New())
+	u, err := svc.SummarizeByProject(context.Background(), uuid.New(), uuid.New())
 	if err != nil {
-		t.Fatalf("SummarizeBySession: %v", err)
+		t.Fatalf("SummarizeByProject: %v", err)
 	}
-	if u.Turns != 2 || u.EstimatedTokensIn != 50 {
+	if u.Turns != 5 || u.EstimatedTokensIn != 120 {
 		t.Errorf("unexpected summary: %+v", u)
 	}
 }

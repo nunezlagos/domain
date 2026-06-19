@@ -23,7 +23,8 @@ import (
 )
 
 // ----- Usage summary (REQ-47) -----
-// GET /api/v1/usage/turn-summary?session_id= o ?project_slug=
+// GET /api/v1/usage/turn-summary?project_slug=
+// REQ-42.3: el parámetro session_id se removió (tabla/columna session dropeada).
 func (a *API) usageTurnSummary(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -35,28 +36,9 @@ func (a *API) usageTurnSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	orgID, _ := uuid.Parse(p.OrganizationID)
-	sessStr := r.URL.Query().Get("session_id")
 	projSlug := r.URL.Query().Get("project_slug")
-	if sessStr == "" && projSlug == "" {
-		writeError(w, http.StatusBadRequest, "session_or_project_required", "")
-		return
-	}
-	if sessStr != "" && projSlug != "" {
-		writeError(w, http.StatusBadRequest, "mutually_exclusive", "session_id and project_slug")
-		return
-	}
-	if sessStr != "" {
-		sid, err := uuid.Parse(sessStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_session_id", "")
-			return
-		}
-		u, err := a.CapturedPromptService.SummarizeBySession(r.Context(), orgID, sid)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "summary_failed", err.Error())
-			return
-		}
-		writeData(w, http.StatusOK, u)
+	if projSlug == "" {
+		writeError(w, http.StatusBadRequest, "project_required", "project_slug")
 		return
 	}
 	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, projSlug)
@@ -72,7 +54,7 @@ func (a *API) usageTurnSummary(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, u)
 }
 
-// GET /api/v1/captured-prompts?project_slug=&session_id=&limit=&offset=
+// GET /api/v1/captured-prompts?project_slug=&limit=&offset=
 func (a *API) listCapturedPrompts(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -92,11 +74,7 @@ func (a *API) listCapturedPrompts(w http.ResponseWriter, r *http.Request) {
 			filter.ProjectID = &pid
 		}
 	}
-	if v := q.Get("session_id"); v != "" {
-		if sid, err := uuid.Parse(v); err == nil {
-			filter.SessionID = &sid
-		}
-	}
+	// REQ-42.3: filtro session_id removido (columna dropeada de captured_prompts).
 	if v := q.Get("limit"); v != "" {
 		filter.Limit, _ = strconv.Atoi(v)
 	}

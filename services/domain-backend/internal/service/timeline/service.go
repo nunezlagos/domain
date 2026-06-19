@@ -1,7 +1,10 @@
 // Package timeline — issue-03.5 cross-entity feed.
 //
-// Combina sessions + observations + prompts en respuestas estructuradas para
-// que un agente IA pueda recuperar contexto rápido sin múltiples roundtrips.
+// Combina observations + prompts en respuestas estructuradas para que un
+// agente IA pueda recuperar contexto rápido sin múltiples roundtrips.
+// REQ-42.3: la tabla sessions fue dropeada — el feed ya no incluye sesiones
+// (los campos ActiveSession/RecentSessions del snapshot quedan vacíos por
+// compatibilidad de API).
 package timeline
 
 import (
@@ -25,6 +28,8 @@ var ErrObservationNotFound = errors.New("anchor observation not found")
 type EntryKind string
 
 const (
+	// KindSession se conserva por compatibilidad histórica del enum, pero ya
+	// no se emite (REQ-42.3: tabla sessions dropeada).
 	KindSession     EntryKind = "session"
 	KindObservation EntryKind = "observation"
 	KindPrompt      EntryKind = "prompt"
@@ -32,11 +37,11 @@ const (
 
 // Entry registro abstracto en la timeline.
 type Entry struct {
-	Kind      EntryKind `json:"kind"`
-	ID        uuid.UUID `json:"id"`
-	Title     string    `json:"title,omitempty"`   // session.title, prompt.slug, observation type
-	Preview   string    `json:"preview,omitempty"` // content/body truncado
-	CreatedAt time.Time `json:"created_at"`
+	Kind      EntryKind  `json:"kind"`
+	ID        uuid.UUID  `json:"id"`
+	Title     string     `json:"title,omitempty"`   // session.title, prompt.slug, observation type
+	Preview   string     `json:"preview,omitempty"` // content/body truncado
+	CreatedAt time.Time  `json:"created_at"`
 	ProjectID *uuid.UUID `json:"project_id,omitempty"`
 	UserID    *uuid.UUID `json:"user_id,omitempty"`
 }
@@ -79,19 +84,10 @@ func (s *Service) Context(ctx context.Context, orgID, userID, projectID uuid.UUI
 		snap.ProjectID = &projectID
 	}
 
-	// Active session del user (filtrado por project si no es Nil)
-	active, err := s.queryActiveSession(ctx, userID, projectID)
-	if err != nil {
-		return nil, fmt.Errorf("active session: %w", err)
-	}
-	snap.ActiveSession = active
-
-	// Recent completed sessions
-	sessions, err := s.querySessions(ctx, orgID, userID, projectID, 5, true)
-	if err != nil {
-		return nil, fmt.Errorf("recent sessions: %w", err)
-	}
-	snap.RecentSessions = sessions
+	// REQ-42.3: sessions dropeada — sin active/recent sessions.
+	_ = userID
+	snap.ActiveSession = nil
+	snap.RecentSessions = nil
 
 	// Recent observations
 	obs, err := s.queryObservations(ctx, orgID, projectID, 10)
@@ -173,77 +169,6 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 }
 
 // --- helpers ---
-
-func (s *Service) queryActiveSession(ctx context.Context, userID, projectID uuid.UUID) (*Entry, error) {
-	var q string
-	var args []any
-	if projectID == uuid.Nil {
-		q = `SELECT id, COALESCE(title,''), started_at FROM sessions
-		     WHERE user_id = $1 AND ended_at IS NULL AND deleted_at IS NULL
-		     ORDER BY started_at DESC LIMIT 1`
-		args = []any{userID}
-	} else {
-		q = `SELECT id, COALESCE(title,''), started_at FROM sessions
-		     WHERE user_id = $1 AND project_id = $2
-		       AND ended_at IS NULL AND deleted_at IS NULL
-		     ORDER BY started_at DESC LIMIT 1`
-		args = []any{userID, projectID}
-	}
-	var e Entry
-	err := s.q(ctx).QueryRow(ctx, q, args...).Scan(&e.ID, &e.Title, &e.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	e.Kind = KindSession
-	e.UserID = &userID
-	if projectID != uuid.Nil {
-		e.ProjectID = &projectID
-	}
-	return &e, nil
-}
-
-func (s *Service) querySessions(ctx context.Context, orgID, userID, projectID uuid.UUID, limit int, completedOnly bool) ([]Entry, error) {
-	cond := ""
-	if completedOnly {
-		cond = " AND ended_at IS NOT NULL"
-	}
-	var q string
-	var args []any
-	if projectID == uuid.Nil {
-		q = `SELECT id, COALESCE(title,''), COALESCE(summary,''), started_at
-		     FROM sessions
-		     WHERE user_id = $1 AND deleted_at IS NULL ` + cond + `
-		     ORDER BY started_at DESC LIMIT $2`
-		args = []any{userID, limit}
-	} else {
-		q = `SELECT id, COALESCE(title,''), COALESCE(summary,''), started_at
-		     FROM sessions
-		     WHERE user_id = $1 AND project_id = $2
-		       AND deleted_at IS NULL ` + cond + `
-		     ORDER BY started_at DESC LIMIT $3`
-		args = []any{userID, projectID, limit}
-	}
-	rows, err := s.q(ctx).Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Entry
-	for rows.Next() {
-		var e Entry
-		var summary string
-		if err := rows.Scan(&e.ID, &e.Title, &summary, &e.CreatedAt); err != nil {
-			return nil, err
-		}
-		e.Kind = KindSession
-		e.Preview = truncate(summary, 200)
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
 
 func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.UUID, limit int) ([]Entry, error) {
 	var q string

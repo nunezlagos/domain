@@ -21,13 +21,11 @@ import (
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 )
 
 type fix struct {
 	search    *searchsvc.Service
 	obs       *observation.Service
-	sess      *sesssvc.Service
 	prompts   *promptsvc.Service
 	orgID     uuid.UUID
 	projectID uuid.UUID
@@ -62,15 +60,14 @@ func setupSearch(t *testing.T) (*fix, func()) {
 	})
 
 	return &fix{
-		search:    &searchsvc.Service{Pool: pools.App},
-		obs:       &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}},
-		sess:      &sesssvc.Service{Pool: pools.App, Audit: rec},
-		prompts:   &promptsvc.Service{Pool: pools.App, Audit: rec},
-		orgID:     org.ID, projectID: proj.ID, userID: owner.UserID,
-	}, func() {
-		pools.Close()
-		_ = pgC.Terminate(ctx)
-	}
+			search:  &searchsvc.Service{Pool: pools.App},
+			obs:     &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}},
+			prompts: &promptsvc.Service{Pool: pools.App, Audit: rec},
+			orgID:   org.ID, projectID: proj.ID, userID: owner.UserID,
+		}, func() {
+			pools.Close()
+			_ = pgC.Terminate(ctx)
+		}
 }
 
 func TestSearch_AllEntities(t *testing.T) {
@@ -78,7 +75,8 @@ func TestSearch_AllEntities(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear observation, prompt, session — todos mencionan "pgvector"
+	// REQ-42.3: sessions dropeada — el search ya no cubre sesiones.
+	// Crear observation y prompt — ambos mencionan "pgvector".
 	_, _ = f.obs.Save(ctx, observation.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Content: "Decidimos usar pgvector para embeddings",
@@ -87,24 +85,19 @@ func TestSearch_AllEntities(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: &f.projectID,
 		Slug: "embed", Body: "Genera embedding con pgvector ivfflat", SetActive: true,
 	})
-	sess, _ := f.sess.Start(ctx, sesssvc.StartInput{
-		OrganizationID: f.orgID, UserID: f.userID, ProjectID: &f.projectID,
-		Title: "pgvector setup",
-	})
-	_, _ = f.sess.End(ctx, sess.ID, f.userID, "Completamos setup de pgvector")
 
 	results, err := f.search.Search(ctx, f.orgID, "pgvector", 20, searchsvc.Filter{})
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
-	// Debe haber al menos una entrada de cada tipo
+	// Debe haber al menos una entrada de obs y prompt (no sessions).
 	seen := map[searchsvc.EntityType]bool{}
 	for _, r := range results {
 		seen[r.EntityType] = true
 	}
 	require.True(t, seen[searchsvc.EntityObservation], "obs presente")
 	require.True(t, seen[searchsvc.EntityPrompt], "prompt presente")
-	require.True(t, seen[searchsvc.EntitySession], "session presente")
+	require.False(t, seen[searchsvc.EntitySession], "REQ-42.3: sessions dropeada")
 }
 
 func TestSearch_EmptyQuery_Error(t *testing.T) {

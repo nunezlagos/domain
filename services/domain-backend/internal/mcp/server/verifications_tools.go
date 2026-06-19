@@ -1,15 +1,15 @@
 // REQ-50 — verify checkpoints post-cambios.
 //
 // Flujo:
-//   1. Tras un cambio de código no trivial, el LLM llama domain_verify_start
-//      con kind + lista de items (build/test/lint/etc). El server crea
-//      un checkpoint con status=running.
-//   2. El LLM ejecuta cada item con sus tools nativas (Bash, Read) y
-//      reporta cada resultado con domain_verify_update_item.
-//   3. Al terminar, domain_verify_complete cierra el checkpoint con
-//      status final (passed/failed/partial).
-//   4. domain_verify_pending lista checkpoints abiertos del proyecto
-//      — útil al re-abrir sesión, ver qué quedó sin verificar.
+//  1. Tras un cambio de código no trivial, el LLM llama domain_verify_start
+//     con kind + lista de items (build/test/lint/etc). El server crea
+//     un checkpoint con status=running.
+//  2. El LLM ejecuta cada item con sus tools nativas (Bash, Read) y
+//     reporta cada resultado con domain_verify_update_item.
+//  3. Al terminar, domain_verify_complete cierra el checkpoint con
+//     status final (passed/failed/partial).
+//  4. domain_verify_pending lista checkpoints abiertos del proyecto
+//     — útil al re-abrir sesión, ver qué quedó sin verificar.
 //
 // El server NO ejecuta nada. Solo persiste resultados estructurados
 // para audit y para que un próximo LLM pueda ver "el último cambio
@@ -46,7 +46,6 @@ func toolVerifyStart() mcp.Tool {
 		mcp.WithString("kind", mcp.Description("build | test | lint | smoke | typecheck | migration | custom"), mcp.Required()),
 		mcp.WithString("context", mcp.Description("Qué cambio gatilló esta verificación (1 línea, ej: 'agregué endpoint POST /api/v1/clients').")),
 		mcp.WithArray("items", mcp.Description("Array de items {label, command?}. label es obligatorio, command es informativo. Ej: [{label: 'go test ./internal/...', command: 'go test ./...'}, {label: 'go vet', command: 'go vet ./...'}]"), mcp.Required()),
-		mcp.WithString("session_id", mcp.Description("UUID de session si la verificación es parte de una")),
 	)
 }
 
@@ -120,12 +119,7 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	itemsJSON, _ := json.Marshal(items)
 	contextStr, _ := args["context"].(string)
 
-	var sessionID *uuid.UUID
-	if v, ok := args["session_id"].(string); ok && v != "" {
-		if sid, err := uuid.Parse(v); err == nil {
-			sessionID = &sid
-		}
-	}
+	// REQ-42.3: columna session_id dropeada de verifications (FK a sessions).
 
 	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
@@ -135,11 +129,11 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	var id uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO verifications
-		   (project_id, user_id, session_id,
+		   (project_id, user_id,
 		    kind, items, status, context)
-		 VALUES ($1,$2,$3,$4,$5,'running',NULLIF($6,''))
+		 VALUES ($1,$2,$3,$4,'running',NULLIF($5,''))
 		 RETURNING id`,
-		proj.ID, userID, sessionID, kind, itemsJSON, contextStr,
+		proj.ID, userID, kind, itemsJSON, contextStr,
 	).Scan(&id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verify start failed: %v", err)), nil

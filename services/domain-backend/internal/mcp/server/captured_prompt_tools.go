@@ -3,8 +3,8 @@
 //
 // El LLM cliente debe llamar domain_prompt_capture UNA vez por turn
 // (apenas reciba el mensaje del user), pasando content + opcionalmente
-// session_id + project_slug. char_count se computa server-side como
-// proxy de tokens hasta tener integración real.
+// project_slug. char_count se computa server-side como proxy de tokens
+// hasta tener integración real. (REQ-42.3: session_id removido.)
 package mcpserver
 
 import (
@@ -38,9 +38,6 @@ func toolPromptCapture() mcp.Tool {
 			mcp.Description("Texto plano del mensaje del usuario, tal cual lo escribió."),
 			mcp.Required(),
 		),
-		mcp.WithString("session_id",
-			mcp.Description("UUID de la session activa (opcional). Si se da, el prompt queda ligado a esa sesión para análisis temporal."),
-		),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del proyecto en cuyo contexto se mandó el mensaje (opcional)."),
 		),
@@ -55,10 +52,7 @@ func toolPromptCapture() mcp.Tool {
 
 func toolPromptCapturedList() mcp.Tool {
 	return mcp.NewTool("domain_prompt_captured_list",
-		mcp.WithDescription("Lista prompts del usuario capturados, filtrables por session/project/user. Para revisión y análisis."),
-		mcp.WithString("session_id",
-			mcp.Description("Filtrar por session_id (UUID)"),
-		),
+		mcp.WithDescription("Lista prompts del usuario capturados, filtrables por project/user. Para revisión y análisis."),
 		mcp.WithString("project_slug",
 			mcp.Description("Filtrar por slug de proyecto"),
 		),
@@ -97,11 +91,7 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 		UserID:         userID,
 		Content:        content,
 	}
-	if v, ok := args["session_id"].(string); ok && v != "" {
-		if sid, perr := uuid.Parse(v); perr == nil {
-			in.SessionID = &sid
-		}
-	}
+	// REQ-42.3: session_id removido (columna dropeada de captured_prompts).
 	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
 		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID
@@ -145,12 +135,9 @@ func toolTurnComplete() mcp.Tool {
 
 func toolUsageSummary() mcp.Tool {
 	return mcp.NewTool("domain_usage_summary",
-		mcp.WithDescription("Agrega tokens estimados (proxy chars/4) de todos los turns de una session o un project. Útil para mostrarle al usuario cuánto está consumiendo y detectar overengineering ('gastar más tokens no significa ser más productivo')."),
-		mcp.WithString("session_id",
-			mcp.Description("UUID de session (mutuamente excluyente con project_slug)"),
-		),
+		mcp.WithDescription("Agrega tokens estimados (proxy chars/4) de todos los turns de un project. Útil para mostrarle al usuario cuánto está consumiendo y detectar overengineering ('gastar más tokens no significa ser más productivo')."),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del proyecto (mutuamente excluyente con session_id)"),
+			mcp.Description("Slug del proyecto a resumir"),
 		),
 	)
 }
@@ -185,11 +172,11 @@ func (d *Deps) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) 
 		return mcp.NewToolResultError(fmt.Sprintf("complete turn failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"id":                    p.ID,
-		"response_chars":        p.ResponseChars,
-		"estimated_tokens_in":   p.EstimatedTokensIn,
-		"estimated_tokens_out":  p.EstimatedTokensOut,
-		"turn_completed_at":     p.TurnCompletedAt,
+		"id":                   p.ID,
+		"response_chars":       p.ResponseChars,
+		"estimated_tokens_in":  p.EstimatedTokensIn,
+		"estimated_tokens_out": p.EstimatedTokensOut,
+		"turn_completed_at":    p.TurnCompletedAt,
 	})
 }
 
@@ -202,26 +189,11 @@ func (d *Deps) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	args := req.GetArguments()
-	sessStr, _ := args["session_id"].(string)
 	projSlug, _ := args["project_slug"].(string)
 
-	if sessStr == "" && projSlug == "" {
-		return mcp.NewToolResultError("debe pasarse session_id o project_slug"), nil
-	}
-	if sessStr != "" && projSlug != "" {
-		return mcp.NewToolResultError("session_id y project_slug son mutuamente excluyentes"), nil
-	}
-
-	if sessStr != "" {
-		sid, err := uuid.Parse(sessStr)
-		if err != nil {
-			return mcp.NewToolResultError("session_id inválido"), nil
-		}
-		u, err := d.CapturedPrompts.SummarizeBySession(ctx, orgID, sid)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("summary failed: %v", err)), nil
-		}
-		return toolResultJSON(u)
+	// REQ-42.3: session_id removido (columna dropeada). Solo se resume por project.
+	if projSlug == "" {
+		return mcp.NewToolResultError("debe pasarse project_slug"), nil
 	}
 	if d.Projects == nil {
 		return mcp.NewToolResultError("projects service not configured"), nil
@@ -250,11 +222,7 @@ func (d *Deps) handlePromptCapturedList(ctx context.Context, req mcp.CallToolReq
 	}
 	args := req.GetArguments()
 	filter := capturedpromptsvc.ListFilter{}
-	if v, ok := args["session_id"].(string); ok && v != "" {
-		if sid, perr := uuid.Parse(v); perr == nil {
-			filter.SessionID = &sid
-		}
-	}
+	// REQ-42.3: filtro session_id removido (columna dropeada de captured_prompts).
 	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
 		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID

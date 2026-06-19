@@ -19,8 +19,9 @@ import (
 )
 
 // HeartbeatWatcher detecta flow_run_steps stuck (status=running + heartbeat>timeout)
-// y los marca como failed disparando saga_compensation_log según retry_policy.
-// issue-08.11.
+// y los marca como failed, clasificando la compensación según retry_policy.
+// REQ-42.3: la clasificación ya NO se persiste (saga_compensation_log dropeada);
+// se emite como traza estructurada. issue-08.11.
 //
 // Diseño: NO maneja leader election propia. Se asume que el caller lo invoca
 // dentro de un block RunAsLeader (ver internal/scheduler/leader). Esto sigue
@@ -190,18 +191,27 @@ func (w *HeartbeatWatcher) markFailed(ctx context.Context, tx pgx.Tx, s StuckSte
 		return fmt.Errorf("update step: %w", err)
 	}
 
-	// Saga event según retry policy
-	sagaEvent := sagaEventFor(s.RetryPolicy)
-	_, err = tx.Exec(ctx, `
-		INSERT INTO saga_compensation_log
-		  (run_id, original_step, compensate_ran, success, payload)
-		VALUES ($1, $2, $3, false, $4)
-	`, s.FlowRunID, s.StepKey, sagaEvent,
-		fmt.Sprintf(`{"reason":"heartbeat_timeout","retry_policy":"%s"}`, s.RetryPolicy))
-	if err != nil {
-		return fmt.Errorf("insert saga: %w", err)
-	}
+	// REQ-42.3: saga_compensation_log dropeada. El step se marca failed; la
+	// clasificación de retry policy se loggea para observabilidad (sin persistir).
+	w.logSagaEvent(ctx, s)
 	return nil
+}
+
+// logSagaEvent emite la clasificación de compensación como traza estructurada.
+// REQ-42.3: reemplaza el INSERT en saga_compensation_log (tabla dropeada).
+func (w *HeartbeatWatcher) logSagaEvent(ctx context.Context, s StuckStep) {
+	_ = ctx
+	logger := w.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Info("heartbeat saga event",
+		slog.String("flow_run_id", s.FlowRunID),
+		slog.String("step_key", s.StepKey),
+		slog.String("saga_event", sagaEventFor(s.RetryPolicy)),
+		slog.String("retry_policy", s.RetryPolicy),
+		slog.String("reason", "heartbeat_timeout"),
+	)
 }
 
 func sagaEventFor(retryPolicy string) string {

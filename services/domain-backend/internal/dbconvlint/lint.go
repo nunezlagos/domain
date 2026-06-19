@@ -235,7 +235,6 @@ var commonNonPluralAllowed = map[string]bool{
 	"audit_log":         true, // log es plural-like (lat. plural)
 	"activity_log":      true,
 	"feature_flags":     true,
-	"model_registry":    true, // registry es colectivo
 }
 
 // Sufijos que ya implican colectivo (no requieren pluralización terminal en s).

@@ -29,15 +29,15 @@ import (
 type RetryPolicy string
 
 const (
-	RetryIdempotent     RetryPolicy = "idempotent"       // safe to retry, standard backoff
-	RetryReEmit         RetryPolicy = "re-emit"           // must re-emit the compensation action
-	RetryRequireCleanup RetryPolicy = "require-cleanup"   // requires manual cleanup before retry
+	RetryIdempotent     RetryPolicy = "idempotent"      // safe to retry, standard backoff
+	RetryReEmit         RetryPolicy = "re-emit"         // must re-emit the compensation action
+	RetryRequireCleanup RetryPolicy = "require-cleanup" // requires manual cleanup before retry
 )
 
 // SagaCompensation describe la action que revierte un step exitoso.
 type SagaCompensation struct {
 	StepKey       string          `json:"step_key"`
-	CompensateKey string          `json:"compensate_key"`  // referencia a otro step
+	CompensateKey string          `json:"compensate_key"` // referencia a otro step
 	InputMapping  json.RawMessage `json:"input_mapping,omitempty"`
 	MaxRetries    int             `json:"max_retries,omitempty"`
 	RetryPolicy   RetryPolicy     `json:"retry_policy,omitempty"`
@@ -58,16 +58,16 @@ type CompensationLog struct {
 // CompensationFailure registra una compensación que falló incluso tras retries.
 // Estos registros requieren intervención manual (issue-09.9 escenario 2).
 type CompensationFailure struct {
-	ID            int64           `json:"id"`
-	RunID         uuid.UUID       `json:"run_id"`
-	OriginalStep  string          `json:"original_step"`
-	CompensateRan string          `json:"compensate_ran"`
-	Error         string          `json:"error"`
-	RetryPolicy   RetryPolicy     `json:"retry_policy"`
-	Attempts      int             `json:"attempts"`
-	Skipped       bool            `json:"skipped"`
-	SkippedReason *string         `json:"skipped_reason,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	ID            int64       `json:"id"`
+	RunID         uuid.UUID   `json:"run_id"`
+	OriginalStep  string      `json:"original_step"`
+	CompensateRan string      `json:"compensate_ran"`
+	Error         string      `json:"error"`
+	RetryPolicy   RetryPolicy `json:"retry_policy"`
+	Attempts      int         `json:"attempts"`
+	Skipped       bool        `json:"skipped"`
+	SkippedReason *string     `json:"skipped_reason,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
 }
 
 // SagaStore gestiona el registro, ejecución y consulta de compensaciones.
@@ -196,67 +196,40 @@ func (s *SagaStore) execOneCompensation(ctx context.Context, runID uuid.UUID, co
 	return fmt.Errorf("RunCompensate hook not configured for step %s", comp.StepKey)
 }
 
-// logCompensation inserta en saga_compensation_log.
+// logCompensation registra la ejecución de una compensación.
+// REQ-42.3: saga_compensation_log dropeada — el log ya no se persiste en DB;
+// queda como traza estructurada (passthrough en memoria/logger).
 func (s *SagaStore) logCompensation(ctx context.Context, runID uuid.UUID, origStep, compRan string, success bool, errMsg string, payload json.RawMessage) {
-	var em *string
-	if errMsg != "" {
-		em = &errMsg
-	}
-	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO saga_compensation_log
-		  (run_id, original_step, compensate_ran, success, error, payload)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		runID, origStep, compRan, success, em, payload,
+	_ = ctx
+	_ = payload
+	s.logger.Debug("compensation logged",
+		slog.String("run_id", runID.String()),
+		slog.String("original_step", origStep),
+		slog.String("compensate_ran", compRan),
+		slog.Bool("success", success),
+		slog.String("error", errMsg),
 	)
-	if err != nil {
-		s.logger.Warn("failed to log compensation",
-			slog.String("run_id", runID.String()), slog.Any("err", err))
-	}
 }
 
-// logCompensationFailure inserta en saga_compensation_log con error y además
-// registra en compensation_failures para tracking manual.
+// logCompensationFailure registra una compensación que falló tras retries.
+// REQ-42.3: saga_compensation_log dropeada — sin persistencia en DB.
 func (s *SagaStore) logCompensationFailure(ctx context.Context, runID uuid.UUID, comp SagaCompensation, errStr string, attempts int) {
-	var em *string
-	if errStr != "" {
-		em = &errStr
-	}
-	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO saga_compensation_log
-		  (run_id, original_step, compensate_ran, success, error, payload)
-		VALUES ($1, $2, $3, false, $4, $5)`,
-		runID, comp.StepKey, comp.CompensateKey, em, comp.InputMapping,
+	_ = ctx
+	s.logger.Warn("compensation failed (manual cleanup may be required)",
+		slog.String("run_id", runID.String()),
+		slog.String("original_step", comp.StepKey),
+		slog.String("compensate_ran", comp.CompensateKey),
+		slog.String("error", errStr),
+		slog.Int("attempts", attempts),
 	)
-	if err != nil {
-		s.logger.Warn("failed to log compensation failure",
-			slog.String("run_id", runID.String()), slog.Any("err", err))
-	}
 }
 
-// GetLog recupera todos los logs de compensación para un run.
+// GetLog devuelve los logs de compensación para un run.
+// REQ-42.3: saga_compensation_log dropeada — sin store persistente, devuelve vacío.
 func (s *SagaStore) GetLog(ctx context.Context, runID uuid.UUID) ([]CompensationLog, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, run_id, original_step, compensate_ran, success, error, payload, executed_at
-		FROM saga_compensation_log
-		WHERE run_id = $1
-		ORDER BY id ASC`,
-		runID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query compensation log: %w", err)
-	}
-	defer rows.Close()
-
-	var out []CompensationLog
-	for rows.Next() {
-		var l CompensationLog
-		if err := rows.Scan(&l.ID, &l.RunID, &l.OriginalStep, &l.CompensateRan,
-			&l.Success, &l.Error, &l.Payload, &l.ExecutedAt); err != nil {
-			return nil, fmt.Errorf("scan compensation log: %w", err)
-		}
-		out = append(out, l)
-	}
-	return out, rows.Err()
+	_ = ctx
+	_ = runID
+	return nil, nil
 }
 
 // RegisteredCompensations devuelve las compensaciones registradas para un run.
@@ -450,19 +423,16 @@ func (s *SagaExecutor) runCompensateWithRetry(ctx context.Context, runID uuid.UU
 	return lastErr
 }
 
+// logCompensation registra el resultado de una compensación.
+// REQ-42.3: saga_compensation_log dropeada — sin persistencia en DB.
 func (s *SagaExecutor) logCompensation(ctx context.Context, runID uuid.UUID, origStep, compRan string, success bool, errMsg string, payload json.RawMessage) {
-	var em *string
-	if errMsg != "" {
-		em = &errMsg
-	}
-	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO saga_compensation_log
-		  (run_id, original_step, compensate_ran, success, error, payload)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		runID, origStep, compRan, success, em, payload,
+	_ = ctx
+	_ = payload
+	s.Logger.Debug("compensation logged",
+		slog.String("run_id", runID.String()),
+		slog.String("original_step", origStep),
+		slog.String("compensate_ran", compRan),
+		slog.Bool("success", success),
+		slog.String("error", errMsg),
 	)
-	if err != nil {
-		s.Logger.Warn("failed to log compensation",
-			slog.String("run_id", runID.String()), slog.Any("err", err))
-	}
 }

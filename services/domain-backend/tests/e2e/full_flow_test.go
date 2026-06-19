@@ -33,7 +33,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"nunezlagos/domain/internal/api/handler"
-	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/db"
@@ -50,7 +49,6 @@ import (
 	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 )
@@ -127,7 +125,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	api := &handler.API{
 		ProjectService:   projS,
 		ObsService:       obsS,
-		SessionService:   &sesssvc.Service{Pool: pools.App, Audit: rec},
 		PromptService:    &promptsvc.Service{Pool: pools.App, Audit: rec},
 		TimelineService:  &timelinesvc.Service{Pool: pools.App},
 		SearchService:    &searchsvc.Service{Pool: pools.App},
@@ -149,9 +146,9 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	require.NoError(t, err)
 
 	// Middleware stack
+	// REQ-42.3: idempotency middleware removido (idempotency_keys dropeada).
 	authMW := &apikey.Middleware{Resolver: keys, Allowlist: handler.AuthAllowlist()}
-	idempMW := &middleware.Idempotency{Pool: pools.App}
-	srv := httptest.NewServer(authMW.Wrap(idempMW.Wrap(api.Router())))
+	srv := httptest.NewServer(authMW.Wrap(api.Router()))
 
 	return &e2eFixture{
 			srv: srv, apiKey: plaintext, orgID: org.ID, userID: owner.UserID,
@@ -252,24 +249,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	results := body["data"].([]any)
 	require.NotEmpty(t, results, "search debe encontrar la observation de pgvector")
 
-	// === FASE 2: Session lifecycle ===
-
-	st, body = f.req(t, "POST", "/api/v1/sessions", map[string]any{
-		"title": "Sesión de trabajo E2E", "project_slug": "demo",
-	})
-	require.Equal(t, 201, st)
-	sessID := pickID(body["data"])
-	require.NotEmpty(t, sessID, "session id presente en response")
-
-	// Active session
-	st, body = f.req(t, "GET", "/api/v1/sessions/active?project_slug=demo", nil)
-	require.Equal(t, 200, st)
-	require.NotNil(t, body["data"])
-
-	// End session
-	st, _ = f.req(t, "POST", "/api/v1/sessions/"+sessID+"/end",
-		map[string]any{"summary": "Se completaron las tareas"})
-	require.Equal(t, 200, st)
+	// === FASE 2: (REQ-42.3) sessions dropeada — fase de lifecycle de sesión removida ===
 
 	// === FASE 3: Skill + Agent + Run ===
 

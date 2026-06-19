@@ -310,16 +310,14 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	var sessions, prompts int64
-	_ = d.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM sessions`).Scan(&sessions)
+	// REQ-42.3: sessions dropeada — sin conteo de sesiones.
+	var prompts int64
 	_ = d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)
 
 	return toolResultJSON(map[string]any{
 		"observations_total":   total,
 		"observations_by_type": byType,
-		"sessions_total":       sessions,
 		"prompts_total":        prompts,
 	})
 }

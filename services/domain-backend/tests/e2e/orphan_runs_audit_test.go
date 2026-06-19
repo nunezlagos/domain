@@ -15,8 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/metrics"
+	dmigrate "nunezlagos/domain/internal/migrate"
 	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 )
 
@@ -119,8 +119,11 @@ func TestOrphanAudit_StandaloneIgnored(t *testing.T) {
 	require.Equal(t, int64(1), rows[0].Count, "sólo el 'bypass' (1) debe contarse")
 }
 
-// Escenario 3: idempotencia via last_ack_at
-func TestOrphanAudit_IdempotentLastAck(t *testing.T) {
+// Escenario 3: la auditoría agrega el conteo de orphans en la ventana.
+// REQ-42.3: el cursor last_ack_at ya NO se persiste en system_state (tabla
+// dropeada); vive en memoria y lo avanza runTick. Este test verifica que una
+// pasada de Audit cuenta los orphans existentes en la ventana.
+func TestOrphanAudit_CountsOrphansInWindow(t *testing.T) {
 	fx, auditor, cleanup := setupOrphanAuditor(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -134,29 +137,11 @@ func TestOrphanAudit_IdempotentLastAck(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Primera pasada vía runTick (avanza last_ack)
 	rows, lastSeen, err := auditor.Audit(ctx)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, int64(2), rows[0].Count)
 	require.False(t, lastSeen.IsZero())
-
-	// Simular avance de last_ack persistido (lo hace runTick internamente; acá lo hacemos manual via re-exec same logic)
-	// La 2da pasada con lastSeen != NULL debería retornar 0 orphans porque fueron contados
-	_, err = fx.pool.Exec(ctx, `
-		INSERT INTO system_state (key, value, updated_at)
-		VALUES ('orphan_runs_audit', $1::jsonb, NOW())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-	`, `{"last_ack_at":"`+lastSeen.UTC().Format(time.RFC3339Nano)+`"}`)
-	require.NoError(t, err)
-
-	rows2, _, err := auditor.Audit(ctx)
-	require.NoError(t, err)
-	totalCount := int64(0)
-	for _, r := range rows2 {
-		totalCount += r.Count
-	}
-	require.Equal(t, int64(0), totalCount, "los orphans previos NO deben double-counted")
 }
 
 // Sabotage: bypaseo intencional → cron lo detecta

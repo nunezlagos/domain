@@ -63,7 +63,7 @@ crea una copia versionada en BD; el archivo del usuario queda intacto.
   recordar algo ("acordate", "qué hicimos") o empieces trabajo que
   pudo hacerse antes.
 - domain_mem_context al inicio de sesión para recuperar contexto.
-- domain_prompt_capture(content, session_id?, project_slug) UNA vez
+- domain_prompt_capture(content, project_slug?) UNA vez
   por turn, con el raw_text del usuario.
 
 ## Policies (antes de tocar código)

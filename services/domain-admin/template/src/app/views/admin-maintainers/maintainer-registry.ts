@@ -80,20 +80,7 @@ export const MAINTAINERS: MaintainerDef[] = [
         format: 'badge', badgeColor: statusColor },
     ],
   },
-  {
-    path: 'sessions', title: 'Sessions', icon: 'cilClock', category: 'core',
-    description: 'Sessions de agentes (captura de prompts en flows multi-step).',
-    endpoint: '/api/v1/sessions',
-    defaultParams: { project_slug: COMMON_PROJECT },
-    requireProject: true,
-    columns: [
-      { key: 'id', label: 'ID', value: r => truncate(r.id, 12) },
-      { key: 'title', label: 'Título' },
-      { key: 'user_id', label: 'Usuario', value: r => truncate(r.user_id, 8) },
-      { key: 'started_at', label: 'Inicio', format: 'date' },
-      { key: 'ended_at', label: 'Fin', format: 'date' },
-    ],
-  },
+  // REQ-42.3: entry 'sessions' removida (tabla sessions dropeada, /api/v1/sessions eliminado).
 
   // === RESOURCES (skills, agents, flows, crons, prompts) ===
   {

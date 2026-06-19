@@ -292,18 +292,21 @@ func TestAgent_Versions_PurgeOver50(t *testing.T) {
 	require.Equal(t, 7, minVer, "las más viejas se purgaron")
 }
 
-// Sabotaje: modelo inexistente en model_registry → Create falla (excepto ollama).
-func TestSabotage_Agent_UnknownModelRejected(t *testing.T) {
+// REQ-42.3: model_registry dropeada — la creación de agentes ya NO valida el
+// modelo contra una tabla. Cualquier modelo no vacío es aceptado para cualquier
+// provider válido (el cliente LLM resuelve/valida el modelo en runtime).
+func TestAgent_CreateWithoutModelRegistryGating(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
+	// modelo arbitrario con provider válido → se crea sin gating por tabla
 	_, err := f.svc.Create(ctx, agent.CreateInput{
 		OrganizationID: f.orgID, Slug: "ghost", Name: "X",
 		Provider: "anthropic", Model: "claude-no-existe-99", ActorID: f.userID,
 	})
-	require.ErrorIs(t, err, agent.ErrModelUnknown)
+	require.NoError(t, err)
 
-	// ollama exento: modelos locales arbitrarios permitidos
+	// ollama: modelos locales arbitrarios permitidos (igual que antes)
 	_, err = f.svc.Create(ctx, agent.CreateInput{
 		OrganizationID: f.orgID, Slug: "local", Name: "X",
 		Provider: "ollama", Model: "mi-modelo-local", ActorID: f.userID,

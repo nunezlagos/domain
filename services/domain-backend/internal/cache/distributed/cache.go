@@ -2,7 +2,7 @@
 // in-memory cross-pod via Postgres LISTEN/NOTIFY.
 //
 // Casos de uso: platform_policies (issue-01.8),
-// mcp_servers (issue-12.6), model_registry pricing, agent definitions LRU.
+// mcp_servers (issue-12.6), agent definitions LRU.
 //
 // Convención naming de channels: cache_invalidate_<entity>.
 // Payload: {operation:"insert|update|delete", id:"<uuid>", organization_id:"<uuid>"}.

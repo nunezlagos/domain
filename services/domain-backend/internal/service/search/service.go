@@ -28,8 +28,10 @@ import (
 type EntityType string
 
 const (
-	EntityObservation  EntityType = "observation"
-	EntityPrompt       EntityType = "prompt"
+	EntityObservation EntityType = "observation"
+	EntityPrompt      EntityType = "prompt"
+	// EntitySession se conserva por compatibilidad del enum, pero ya no se
+	// busca (REQ-42.3: tabla sessions dropeada).
 	EntitySession      EntityType = "session"
 	EntityKnowledgeDoc EntityType = "knowledge_doc"
 )
@@ -90,7 +92,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		limit = 50
 	}
 
-	wantObs, wantPrompt, wantSession, wantKnowledge := entitySelection(f.EntityTypes)
+	wantObs, wantPrompt, wantKnowledge := entitySelection(f.EntityTypes)
 
 	var all []Result
 	if wantObs {
@@ -107,13 +109,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		}
 		all = append(all, r...)
 	}
-	if wantSession {
-		r, err := s.searchSessions(ctx, orgID, query, limit, f)
-		if err != nil {
-			return nil, fmt.Errorf("sessions: %w", err)
-		}
-		all = append(all, r...)
-	}
+	// REQ-42.3: sessions dropeada — sin búsqueda sobre sesiones.
 	if wantKnowledge {
 		r, err := s.searchKnowledgeDocs(ctx, orgID, query, limit, f)
 		if err != nil {
@@ -130,9 +126,9 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 	return all, nil
 }
 
-func entitySelection(types []EntityType) (obs, prompt, session, knowledge bool) {
+func entitySelection(types []EntityType) (obs, prompt, knowledge bool) {
 	if len(types) == 0 {
-		return true, true, true, true
+		return true, true, true
 	}
 	for _, t := range types {
 		switch t {
@@ -140,8 +136,6 @@ func entitySelection(types []EntityType) (obs, prompt, session, knowledge bool) 
 			obs = true
 		case EntityPrompt:
 			prompt = true
-		case EntitySession:
-			session = true
 		case EntityKnowledgeDoc:
 			knowledge = true
 		}
@@ -235,50 +229,6 @@ WHERE p.deleted_at IS NULL AND p.body_tsv @@ qry
 			return nil, err
 		}
 		r.Snippet = truncate(body, 200)
-		r.ProjectID = projectID
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
-func (s *Service) searchSessions(ctx context.Context, orgID uuid.UUID, query string, limit int, f Filter) ([]Result, error) {
-	q := `
-SELECT s.id, COALESCE(s.title,''), COALESCE(s.summary,''), s.tags, s.project_id, s.started_at,
-       ts_rank(s.summary_tsv, qry)::float8 AS score
-FROM sessions s, plainto_tsquery('spanish', $1) AS qry
-WHERE s.deleted_at IS NULL AND s.summary_tsv @@ qry
-`
-	args := []any{query}
-	if len(f.ProjectIDs) > 0 {
-		q += fmt.Sprintf(" AND s.project_id = ANY($%d)", len(args)+1)
-		args = append(args, f.ProjectIDs)
-	}
-	if f.DateFrom != nil {
-		q += fmt.Sprintf(" AND s.started_at >= $%d", len(args)+1)
-		args = append(args, *f.DateFrom)
-	}
-	if f.DateTo != nil {
-		q += fmt.Sprintf(" AND s.started_at < $%d", len(args)+1)
-		args = append(args, *f.DateTo)
-	}
-	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
-	args = append(args, limit)
-
-	rows, err := s.q(ctx).Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Result
-	for rows.Next() {
-		var r Result
-		r.EntityType = EntitySession
-		var summary string
-		var projectID *uuid.UUID
-		if err := rows.Scan(&r.ID, &r.Title, &summary, &r.Tags, &projectID, &r.CreatedAt, &r.Score); err != nil {
-			return nil, err
-		}
-		r.Snippet = truncate(summary, 200)
 		r.ProjectID = projectID
 		out = append(out, r)
 	}

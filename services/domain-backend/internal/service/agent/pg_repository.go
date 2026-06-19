@@ -143,19 +143,6 @@ func (r *pgRepository) CountValidSkills(ctx context.Context, orgID uuid.UUID, sl
 	return foundCount, nil
 }
 
-func (r *pgRepository) ModelExists(ctx context.Context, provider, model string) (bool, error) {
-	var exists bool
-	err := r.q(ctx).QueryRow(ctx,
-		`SELECT EXISTS (
-		   SELECT 1 FROM model_registry
-		   WHERE provider = $1 AND model = $2 AND modality = 'completion' AND is_active = TRUE)`,
-		provider, model).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("validate model: %w", err)
-	}
-	return exists, nil
-}
-
 func (r *pgRepository) SlugTaken(ctx context.Context, orgID uuid.UUID, slug string) (bool, error) {
 	var taken bool
 	err := r.q(ctx).QueryRow(ctx,

@@ -15,8 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/metrics"
+	dmigrate "nunezlagos/domain/internal/migrate"
 	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 )
 
@@ -114,12 +114,8 @@ func TestHeartbeatWatcher_DetectsAndMarksFailed(t *testing.T) {
 	require.Equal(t, "failed", stepStatus)
 	require.Equal(t, "heartbeat_timeout", stepError)
 
-	// Verificar saga_compensation_log
-	var sagaCount int
-	err = fx.pool.QueryRow(ctx, `SELECT COUNT(*) FROM saga_compensation_log WHERE run_id = $1`,
-		runID).Scan(&sagaCount)
-	require.NoError(t, err)
-	require.Equal(t, 1, sagaCount, "debe haber 1 row en saga_compensation_log")
+	// REQ-42.3: saga_compensation_log dropeada — la clasificación de compensación
+	// ya no se persiste (se emite como traza estructurada). No hay tabla que assertar.
 
 	// Verificar flow_runs.status = 'failed' (todos los steps terminados)
 	var runStatus string

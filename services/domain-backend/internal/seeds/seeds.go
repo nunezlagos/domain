@@ -40,11 +40,11 @@ type Report struct {
 
 // Seeder interface a implementar por cada catálogo.
 type Seeder interface {
-	// Name único, snake_case (e.g. "model_registry", "agent_templates").
+	// Name único, snake_case (e.g. "agent_templates", "skills").
 	Name() string
 	// Version se bumpea cuando el catalog cambia para forzar reseed.
 	Version() int
-	// Order para topological sort (model_registry antes que invitations, etc.). Lower first.
+	// Order para topological sort (catálogos base antes que dependientes). Lower first.
 	Order() int
 	// IsDevOnly true si solo corre en EnvDev (e.g. demo data).
 	IsDevOnly() bool

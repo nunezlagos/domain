@@ -1132,7 +1132,7 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	defer pool.Close()
 
 	registry := seeds.NewRegistry()
-	registry.Register(&seeds.ModelRegistrySeeder{})
+	// REQ-42.3: ModelRegistrySeeder removido (model_registry dropeada).
 	registry.Register(&seeds.PlatformPoliciesSeeder{})
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
 	registry.Register(&seeds.MCPProvidersSeeder{})

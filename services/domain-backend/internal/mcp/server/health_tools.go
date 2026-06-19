@@ -50,11 +50,11 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		return toolResultJSON(resp)
 	}
 	resp["auth"] = map[string]any{
-		"ok":           true,
-		"user_id":      d.Principal.UserID,
-		"org_id":       d.Principal.OrganizationID,
-		"role":         d.Principal.Role,
-		"api_key_id":   d.Principal.APIKeyID,
+		"ok":         true,
+		"user_id":    d.Principal.UserID,
+		"org_id":     d.Principal.OrganizationID,
+		"role":       d.Principal.Role,
+		"api_key_id": d.Principal.APIKeyID,
 	}
 
 	if d.Pool == nil {
@@ -88,7 +88,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		{"clients", "SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL"},
 		{"tickets", "SELECT COUNT(*) FROM project_tickets WHERE deleted_at IS NULL"},
 		{"observations", "SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL"},
-		{"sessions_open", "SELECT COUNT(*) FROM sessions WHERE ended_at IS NULL"},
+		// REQ-42.3: sessions_open removido (tabla sessions dropeada).
 		{"crons", "SELECT COUNT(*) FROM crons WHERE deleted_at IS NULL"},
 		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE proposed=true AND deleted_at IS NULL"},
 		{"verifications_open", "SELECT COUNT(*) FROM verifications WHERE status IN ('pending','running','failed','partial')"},

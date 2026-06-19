@@ -177,17 +177,3 @@ func (r *Runner) execFallback(ctx context.Context, runID uuid.UUID, failed *flow
 		return nil, fmt.Errorf("fallback '%s' failed: %w", fb.ID, err)
 	}
 }
-
-// pushDLQ registra el fallo permanente en la dead letter queue (best-effort).
-func (r *Runner) pushDLQ(ctx context.Context, orgID uuid.UUID, runID uuid.UUID,
-	flowSlug, stepKey string, stepErr error, attemptErrors []string, retryCount int) {
-	if r.DLQ == nil || stepErr == nil {
-		return
-	}
-	rid := runID
-	if _, err := r.DLQ.Insert(ctx, orgID, &rid, flowSlug, stepKey,
-		stepErr.Error(), attemptErrors, retryCount); err != nil {
-		// no romper el flujo de error por un fallo de DLQ
-		_ = err
-	}
-}

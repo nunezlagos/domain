@@ -57,7 +57,6 @@ import (
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/dbstats"
-	"nunezlagos/domain/internal/runtimeconfig"
 	"nunezlagos/domain/internal/service/enrollment"
 	usvc "nunezlagos/domain/internal/service/issue"
 	"nunezlagos/domain/internal/service/mcpserver"
@@ -69,7 +68,6 @@ import (
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
-	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/usage"
@@ -87,7 +85,6 @@ type API struct {
 	ProjectPolicyService  *projectpolicysvc.Service  // REQ-43 policies por proyecto
 	Pool                  *pgxpool.Pool              // REQ-49/50 — queries directas para proposals/verifications
 	ObsService            *observation.Service
-	SessionService        *sesssvc.Service
 	PromptService         *promptsvc.Service
 	TimelineService       *timelinesvc.Service
 	SearchService         *searchsvc.Service
@@ -121,7 +118,6 @@ type API struct {
 	MCPServerService          *mcpserver.Service
 	ProjectTemplateService    *projecttemplate.Service
 	PolicyService             *policy.Service
-	RuntimeConfigRegistry     *runtimeconfig.Registry
 	DBStatsService            *dbstats.Service
 	Audit                     *audit.PGRecorder
 	ActivityRecorder          activity.Recorder
@@ -314,12 +310,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/observations", a.listObservations) // ?project_slug=
 	mux.HandleFunc("GET /api/v1/search", a.searchObservations)     // ?q=
 
-	// Sessions
-	mux.HandleFunc("POST /api/v1/sessions", a.startSession)
-	mux.HandleFunc("GET /api/v1/sessions", a.listSessions)
-	mux.HandleFunc("GET /api/v1/sessions/active", a.activeSession) // ?project_slug=
-	mux.HandleFunc("GET /api/v1/sessions/{id}", a.getSession)
-	mux.HandleFunc("POST /api/v1/sessions/{id}/end", a.endSession)
+	// REQ-42.3: rutas /api/v1/sessions removidas (tabla sessions dropeada,
+	// feature legacy duplicada de auth_sessions).
 
 	// Agents
 	mux.HandleFunc("POST /api/v1/agents", a.createAgent)
@@ -367,8 +359,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/flow-runs/{id}/resume", a.resumeFlowRun)
 	mux.HandleFunc("POST /api/v1/flow-runs/{id}/cancel", a.cancelFlowRun)
 	mux.HandleFunc("GET /api/v1/flow-runs/{id}/stream", a.streamFlowRun)
-	mux.HandleFunc("GET /api/v1/dlq", a.listDLQ)
-	mux.HandleFunc("DELETE /api/v1/dlq/{id}", a.resolveDLQ)
+	// REQ-42.3: rutas /api/v1/dlq removidas (tabla dead_letter_queue dropeada).
 
 	// Webhooks inbound (público, HMAC auth — slug + secret en config)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
@@ -421,9 +412,8 @@ func (a *API) Router() http.Handler {
 	// HU-41.2: dashboard org overview (stats + top users + recent activity)
 	mux.HandleFunc("GET /api/v1/admin/org-overview", a.getOrgOverview)
 
-	// Runtime configs (issue-27.3)
-	mux.HandleFunc("GET /api/v1/admin/runtime-configs/{key}", a.getRuntimeConfig)
-	mux.HandleFunc("POST /api/v1/admin/runtime-configs/{key}", a.updateRuntimeConfig)
+	// REQ-42.3: rutas /api/v1/admin/runtime-configs removidas (tabla
+	// runtime_configs dropeada, feature hot-reload eliminado).
 
 	// Slow queries (issue-25.2)
 	mux.HandleFunc("GET /api/v1/admin/db/slow-queries", a.getSlowQueries)

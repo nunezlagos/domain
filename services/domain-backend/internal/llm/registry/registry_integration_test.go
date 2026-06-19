@@ -6,42 +6,18 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/registry"
-	dmigrate "nunezlagos/domain/internal/migrate"
 )
+
+// REQ-42.3: model_registry dropeada. El catálogo de pricing vive en código
+// (constantes), por lo que estos tests ya no requieren DB ni testcontainers.
 
 func setup(t *testing.T) (*registry.Registry, func()) {
 	t.Helper()
-	ctx := context.Background()
-	pgC, err := postgres.Run(ctx,
-		"pgvector/pgvector:pg16",
-		postgres.WithDatabase("test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2),
-		),
-	)
-	require.NoError(t, err)
-	dsn, _ := pgC.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, dmigrate.Up(dsn))
-
-	pool, err := pgxpool.New(ctx, dsn)
-	require.NoError(t, err)
-
-	r := &registry.Registry{Pool: pool}
-	return r, func() {
-		pool.Close()
-		_ = pgC.Terminate(ctx)
-	}
+	return registry.New(), func() {}
 }
 
 func TestRegistry_Seeds(t *testing.T) {
@@ -71,7 +47,7 @@ func TestRegistry_CostUSD(t *testing.T) {
 func TestRegistry_CostUSD_OllamaFree(t *testing.T) {
 	r, cleanup := setup(t)
 	defer cleanup()
-	cost, err := r.CostUSD(context.Background(), "ollama", "llama3.1", llm.Usage{
+	cost, err := r.CostUSD(context.Background(), "ollama", "llama3.2:3b", llm.Usage{
 		PromptTokens: 5000, CompletionTokens: 3000,
 	})
 	require.NoError(t, err)
@@ -90,7 +66,7 @@ func TestRegistry_List(t *testing.T) {
 	defer cleanup()
 	models, err := r.List(context.Background())
 	require.NoError(t, err)
-	require.True(t, len(models) >= 8, "al menos 8 modelos seedeados")
+	require.True(t, len(models) >= 8, "al menos 8 modelos en el catálogo")
 }
 
 // Embedding cost: solo input_per_million aplica (no hay output tokens).
@@ -103,23 +79,9 @@ func TestRegistry_CostUSD_EmbeddingModel(t *testing.T) {
 	require.InDelta(t, 0.02, cost, 0.0001)
 }
 
-// Sabotaje: cache TTL no causa lost updates si admin actualiza precio.
-func TestSabotage_Registry_RefreshAfterUpdate(t *testing.T) {
+// Refresh es no-op (catálogo estático en código); no debe romper.
+func TestRegistry_RefreshNoop(t *testing.T) {
 	r, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
-
-	// Read 1: cache fresh
-	_, err := r.Get(ctx, "openai", "gpt-4o")
-	require.NoError(t, err)
-
-	// Admin actualiza precio
-	_, err = r.Pool.Exec(ctx,
-		`UPDATE model_registry SET input_per_million = 99.99 WHERE provider='openai' AND model='gpt-4o'`)
-	require.NoError(t, err)
-
-	// Sin Refresh explicit, cache devuelve viejo. Llamamos Refresh:
-	require.NoError(t, r.Refresh(ctx))
-	m, _ := r.Get(ctx, "openai", "gpt-4o")
-	require.Equal(t, 99.99, *m.InputPerMillion)
+	require.NoError(t, r.Refresh(context.Background()))
 }

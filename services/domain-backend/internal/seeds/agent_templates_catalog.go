@@ -461,10 +461,10 @@ JSON estricto por task completada:
 			MaxTokens:     12288,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
-				"phase":           "sdd-apply",
-				"retry_policy":    "require-cleanup",
-				"skill_threshold": 0.7,
-				"required_saves":  []string{"code_reference"},
+				"phase":                        "sdd-apply",
+				"retry_policy":                 "require-cleanup",
+				"skill_threshold":              0.7,
+				"required_saves":               []string{"code_reference"},
 				"express_auto_apply_max_lines": 10, // D1 del RFC 0006
 			},
 		},
@@ -586,8 +586,7 @@ y completás el flow_run. Sin loose ends.
 
 <tareas>
 1. UPDATE issues SET status='implemented' WHERE id=$1.
-2. INSERT entity_state_transitions con from='active' to='implemented'.
-3. UPDATE flow_runs SET status='completed', completed_at=NOW().
+2. UPDATE flow_runs SET status='completed', completed_at=NOW().
 </tareas>
 
 <output_format>

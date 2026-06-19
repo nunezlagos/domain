@@ -1,7 +1,7 @@
 // Package flow — HU-28.1 Repository interface.
 //
 // Cubre las operaciones de Service.CRUD + flow_runs (list/pause/resume/cancel/get).
-// Otros stores del package (DLQStore, SignalStore, VersioningStore, SagaStore,
+// Otros stores del package (SignalStore, VersioningStore, SagaStore,
 // HeartbeatStore) NO se migran en esta HU; siguen usando *pgxpool.Pool directo.
 package flow
 

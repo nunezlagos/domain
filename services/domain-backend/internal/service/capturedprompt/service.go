@@ -22,11 +22,11 @@ func NewService(repo Repository) *Service {
 type CaptureInput struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
-	SessionID      *uuid.UUID
-	ProjectID      *uuid.UUID
-	Content        string
-	ClientKind     string
-	Model          string
+	// REQ-42.3: SessionID removido (columna session_id dropeada de captured_prompts).
+	ProjectID  *uuid.UUID
+	Content    string
+	ClientKind string
+	Model      string
 }
 
 // Capture persiste un prompt del usuario. char_count se computa server-side
@@ -39,7 +39,6 @@ func (s *Service) Capture(ctx context.Context, in CaptureInput) (*Prompt, error)
 	return s.repo.Insert(ctx, InsertParams{
 		OrganizationID: in.OrganizationID,
 		UserID:         in.UserID,
-		SessionID:      in.SessionID,
 		ProjectID:      in.ProjectID,
 		Content:        content,
 		ClientKind:     strings.TrimSpace(in.ClientKind),
@@ -65,11 +64,6 @@ func (s *Service) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prom
 	}
 	in.Model = strings.TrimSpace(in.Model)
 	return s.repo.CompleteTurn(ctx, in)
-}
-
-// SummarizeBySession agrega tokens estimados de todos los turns de una session.
-func (s *Service) SummarizeBySession(ctx context.Context, orgID, sessionID uuid.UUID) (*SessionUsage, error) {
-	return s.repo.SummarizeBySession(ctx, orgID, sessionID)
 }
 
 // SummarizeByProject agrega tokens estimados de todos los turns de un project.

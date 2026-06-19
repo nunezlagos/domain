@@ -7,9 +7,9 @@ package systemcron
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,16 +17,22 @@ import (
 	"nunezlagos/domain/internal/metrics"
 )
 
-const systemStateKeyOrphanAudit = "orphan_runs_audit"
-
 // OrphanAuditor cuenta agent_runs con flow_run_id IS NULL y sin metadata.standalone
 // (bypaseo del service-layer enforcement).
+//
+// REQ-42.3: el cursor last_ack_at ya NO se persiste en system_state (tabla
+// dropeada). Se mantiene en memoria; tras un reinicio del proceso la primera
+// pasada arranca desde 24h atrás (la auditoría es métrica best-effort, no
+// requiere durabilidad del cursor).
 type OrphanAuditor struct {
 	Pool    *pgxpool.Pool
 	Metrics *metrics.Registry
 	Tick    time.Duration // default 24h
 	Batch   int           // default 1000
 	Logger  *slog.Logger
+
+	mu        sync.Mutex
+	lastAckAt time.Time
 }
 
 // orphanRow representa 1 conteo por org_id agregado en la query.
@@ -78,9 +84,7 @@ func (a *OrphanAuditor) runTick(ctx context.Context, logger *slog.Logger) {
 		a.observeOrphan(r)
 	}
 	if !lastSeenAt.IsZero() {
-		if err := a.setLastAck(ctx, lastSeenAt); err != nil {
-			logger.Error("update last_ack_at failed", slog.Any("err", err))
-		}
+		a.setLastAck(lastSeenAt)
 	}
 	a.observeTick("ok")
 }
@@ -88,10 +92,7 @@ func (a *OrphanAuditor) runTick(ctx context.Context, logger *slog.Logger) {
 // Audit ejecuta una pasada. Devuelve agregado por org_id + último created_at procesado.
 // Exportado para tests + ejecución manual.
 func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, error) {
-	since, err := a.getLastAck(ctx)
-	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("get last_ack: %w", err)
-	}
+	since := a.getLastAck()
 
 	query := `
 		SELECT
@@ -132,35 +133,22 @@ func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, erro
 	return out, maxSeen, nil
 }
 
-func (a *OrphanAuditor) getLastAck(ctx context.Context) (time.Time, error) {
-	var raw []byte
-	err := a.Pool.QueryRow(ctx,
-		`SELECT value FROM system_state WHERE key = $1`,
-		systemStateKeyOrphanAudit).Scan(&raw)
-	if err != nil {
-		// no row: primera ejecución → desde 24h atrás
-		return time.Now().Add(-24 * time.Hour), nil
+// getLastAck devuelve el cursor en memoria. Primera pasada (cursor cero) →
+// arranca desde 24h atrás. REQ-42.3: ya no se lee de system_state.
+func (a *OrphanAuditor) getLastAck() time.Time {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.lastAckAt.IsZero() {
+		return time.Now().Add(-24 * time.Hour)
 	}
-	var v struct {
-		LastAckAt time.Time `json:"last_ack_at"`
-	}
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return time.Now().Add(-24 * time.Hour), nil
-	}
-	if v.LastAckAt.IsZero() {
-		return time.Now().Add(-24 * time.Hour), nil
-	}
-	return v.LastAckAt, nil
+	return a.lastAckAt
 }
 
-func (a *OrphanAuditor) setLastAck(ctx context.Context, ts time.Time) error {
-	payload, _ := json.Marshal(map[string]any{"last_ack_at": ts})
-	_, err := a.Pool.Exec(ctx, `
-		INSERT INTO system_state (key, value, updated_at)
-		VALUES ($1, $2::jsonb, NOW())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-	`, systemStateKeyOrphanAudit, string(payload))
-	return err
+// setLastAck avanza el cursor en memoria. REQ-42.3: ya no persiste en system_state.
+func (a *OrphanAuditor) setLastAck(ts time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.lastAckAt = ts
 }
 
 func (a *OrphanAuditor) observeTick(result string) {

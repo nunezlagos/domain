@@ -41,8 +41,8 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 	expectedTables := []string{
 		// Core
 		"organizations", "users", "projects", "api_keys",
-		// Memory
-		"observations", "sessions", "prompts", "knowledge_docs", "knowledge_chunks",
+		// Memory (REQ-42.3: sessions dropeada — feature legacy)
+		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
 		// SDD
 		"requirements", "issues", "gherkin_scenarios",
 		"proposals", "designs", "tasks", "verification_results", "sabotage_records",
@@ -51,14 +51,13 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		"issue_drafts", "issue_draft_steps_log",
 		"intake_payloads", "intake_attachments",
 		"external_providers", "external_sync_state", "external_sync_events",
-		"entity_state_transitions",
 		// Workflow override
 		"imported_workflow_files",
 		// Agents + Skills + Flows
 		"agents", "agent_runs", "agent_run_logs", "agent_templates",
 		"skills", "skill_versions",
 		"flows", "flow_runs", "flow_run_steps", "flow_versions",
-		"flow_signals", "flow_run_step_snapshots", "saga_compensation_log",
+		"flow_signals", "flow_run_step_snapshots",
 		// Crons + Webhooks
 		"crons", "webhooks", "outbound_webhook_subscriptions", "outbound_webhook_deliveries",
 		"event_log",
@@ -71,8 +70,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Policies + Templates (REQ-42.2: plans dropeada con billing/costos)
 		"platform_policies", "platform_policy_versions",
 		"project_templates", "project_links", "project_merges",
-		// Domain misc
-		"runtime_configs", "model_registry", "idempotency_keys",
+		// Domain misc (REQ-42.3: runtime_configs/model_registry/idempotency_keys dropeadas)
 		"seed_versions", "mcp_servers", "mcp_server_tools",
 		"selfhosted_runners", "selfhosted_tasks",
 		"domain_query_stats_history",
@@ -121,12 +119,12 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 	defer pools.Close()
 
 	// REQ-42.2: PlansSeeder se eliminó junto con el dominio billing/costos.
+	// REQ-42.3: ModelRegistrySeeder se eliminó (model_registry dropeada; el
+	// pricing vive en código, internal/llm/registry).
 	reg := seeds.NewRegistry()
-	reg.Register(&seeds.ModelRegistrySeeder{})
 	reg.Register(&seeds.PlatformPoliciesSeeder{})
 	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, results["model_registry"].Created, 10)
 	require.GreaterOrEqual(t, results["platform_policies"].Created, 5)
 
 	// Verifica counts en BD efectivos.
@@ -134,7 +132,6 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 		table   string
 		minRows int
 	}{
-		{"model_registry", 12},
 		{"platform_policies", 8},
 	}
 	for _, c := range checks {
@@ -144,12 +141,6 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 		require.GreaterOrEqual(t, n, c.minRows,
 			"%s debe tener al menos %d filas tras seed, tiene %d", c.table, c.minRows, n)
 	}
-
-	// model_registry con Claude 4.x family.
-	var anthropicCount int
-	require.NoError(t, pools.App.QueryRow(ctx,
-		"SELECT COUNT(*) FROM model_registry WHERE provider='anthropic'").Scan(&anthropicCount))
-	require.GreaterOrEqual(t, anthropicCount, 3, "claude opus/sonnet/haiku")
 }
 
 func TestSchemaAudit_CriticalForeignKeysPresent(t *testing.T) {

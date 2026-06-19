@@ -292,66 +292,21 @@ func (a *API) Router() http.Handler {
 //   - /api/v1/observations/{id}/timeline (GET)
 //   - /api/v1/prompts/* (POST/GET/{id}/activate/DELETE/by-slug/{slug}/versions/search)
 
-	// Cost analytics (issue-15.1). REQ-42.2: spend/breakdown/forecast/budgets/
-	// export se eliminaron junto con el dominio billing/costos (cost_logs/budgets).
-	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
-	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 usage actual
-	// Quota snapshot read-only (issue-33.4)
-	mux.HandleFunc("GET /api/v1/usage/current", a.usageCurrentSnapshot)
-	mux.HandleFunc("GET /api/v1/usage/history", a.usageHistory)
-
-	// Admin DB stats (issue-25.12)
-	mux.HandleFunc("GET /api/v1/admin/db-stats", a.getDBStats)
-	mux.HandleFunc("GET /api/v1/admin/db-schema", a.getDBSchema)
-	// HU-41.2: dashboard org overview (stats + top users + recent activity)
-	mux.HandleFunc("GET /api/v1/admin/org-overview", a.getOrgOverview)
-
-	// REQ-42.3: rutas /api/v1/admin/runtime-configs removidas (tabla
-	// runtime_configs dropeada, feature hot-reload eliminado).
-
-	// Slow queries (issue-25.2)
-	mux.HandleFunc("GET /api/v1/admin/db/slow-queries", a.getSlowQueries)
-
-	// Usage alerts (issue-15.3)
-	mux.HandleFunc("POST /api/v1/usage-alerts", a.createUsageAlert)
-	mux.HandleFunc("GET /api/v1/usage-alerts", a.listUsageAlerts)
-	mux.HandleFunc("PATCH /api/v1/usage-alerts/{id}", a.updateUsageAlert)
-	mux.HandleFunc("GET /api/v1/usage-alerts/{id}/fires", a.listUsageAlertFires)
-	mux.HandleFunc("DELETE /api/v1/usage-alerts/{id}", a.deleteUsageAlert)
-
-	// Platform policies (issue-01.8)
-	mux.HandleFunc("POST /api/v1/platform/policies", a.createPolicy)
-	mux.HandleFunc("GET /api/v1/platform/policies", a.listPolicies)
-	mux.HandleFunc("GET /api/v1/platform/policies/{slug}", a.getPolicyBySlug)
-	mux.HandleFunc("PATCH /api/v1/platform/policies/{id}", a.updatePolicy)
-	mux.HandleFunc("DELETE /api/v1/platform/policies/{id}", a.deletePolicy)
-
-	// Project templates (issue-01.4)
-	mux.HandleFunc("POST /api/v1/project-templates", a.createProjectTemplate)
-	mux.HandleFunc("GET /api/v1/project-templates", a.listProjectTemplates)
-	mux.HandleFunc("GET /api/v1/project-templates/{id}", a.getProjectTemplate)
-	mux.HandleFunc("DELETE /api/v1/project-templates/{id}", a.deleteProjectTemplate)
-
-	// REQ-43.4 (Ola 2): HU builder endpoints removidos.
-// Consumidos solo por el admin Angular (vista admin-hu-builder).
-// Removidos: /api/v1/hu-drafts/*
-
-	// MCP servers externos (issue-12.4)
-	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)
-	mux.HandleFunc("GET /api/v1/mcp-servers", a.listMCPServers)
-	mux.HandleFunc("GET /api/v1/mcp-servers/{id}", a.getMCPServer)
-	mux.HandleFunc("DELETE /api/v1/mcp-servers/{id}", a.deleteMCPServer)
-	mux.HandleFunc("POST /api/v1/mcp-servers/{id}/sync-tools", a.syncMCPTools)
-	mux.HandleFunc("GET /api/v1/mcp-servers/{id}/tools", a.listMCPTools)
-	mux.HandleFunc("POST /api/v1/mcp-servers/{id}/invoke", a.invokeMCPTool)
-
-	// Outbound webhooks (issue-10.4)
-	mux.HandleFunc("POST /api/v1/outbound-webhooks", a.createOutboundWebhook)
-	mux.HandleFunc("GET /api/v1/outbound-webhooks", a.listOutboundWebhooks)
-	mux.HandleFunc("GET /api/v1/outbound-webhooks/{id}", a.getOutboundWebhook)
-	mux.HandleFunc("DELETE /api/v1/outbound-webhooks/{id}", a.deleteOutboundWebhook)
-	mux.HandleFunc("POST /api/v1/outbound-webhooks/{id}/test", a.testOutboundWebhook)
-	mux.HandleFunc("POST /api/v1/outbound-webhooks/deliveries/{id}/replay", a.replayOutboundDelivery)
+	// REQ-43.9 (Ola 7): Admin + Platform + Crons + Project-Templates + MCP-servers mgmt + Outbound-webhooks mgmt + Cost/Usage + Usage-alerts + DB-stats/schema/slow-queries removidos.
+// Consumidos solo por admin Angular (vistas admin-cost, admin-platform, admin-mcp-servers, admin-templates, admin-db, etc.) Y mockeados en SDK tests. El MCP consume los Services directamente.
+//
+// Removidos (~40 endpoints):
+//   - /api/v1/cost/daily (GET)
+//   - /api/v1/usage (GET) + /api/v1/usage/current (GET) + /api/v1/usage/history (GET)
+//   - /api/v1/admin/db-stats (GET)
+//   - /api/v1/admin/db-schema (GET)
+//   - /api/v1/admin/db/slow-queries (GET)
+//   - /api/v1/admin/org-overview (GET)
+//   - /api/v1/usage-alerts (POST/GET/PATCH/DELETE + /{id}/fires)
+//   - /api/v1/platform/policies (POST/GET/{slug}/{id} PATCH/DELETE)
+//   - /api/v1/project-templates (POST/GET/{id}/DELETE)
+//   - /api/v1/mcp-servers (POST/GET/{id}/DELETE/{id}/sync-tools/{id}/tools/{id}/invoke)
+//   - /api/v1/outbound-webhooks (POST/GET/{id}/DELETE/{id}/test/deliveries/{id}/replay)
 
 	return mux
 }

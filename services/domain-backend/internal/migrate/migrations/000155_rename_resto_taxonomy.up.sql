@@ -48,7 +48,7 @@ ALTER INDEX captured_prompts_pkey       RENAME TO prompt_captured_pkey;
 ALTER INDEX captured_prompts_status_idx RENAME TO prompt_captured_status_idx;
 ALTER INDEX captured_prompts_tsv_idx    RENAME TO prompt_captured_tsv_idx;
 ALTER TABLE prompt_captured RENAME CONSTRAINT captured_prompts_project_id_fkey TO prompt_captured_project_id_fkey;
-ALTER TABLE prompt_captured RENAME CONSTRAINT captured_prompts_session_id_fkey TO prompt_captured_session_id_fkey;
+-- NOTA: session_id (FK + columna) fue dropeada en 000149 (sessions legacy) — no hay constraint que renombrar.
 ALTER TABLE prompt_captured RENAME CONSTRAINT captured_prompts_user_id_fkey    TO prompt_captured_user_id_fkey;
 
 -- 2) clients -> project_clients (2 FK entrantes preservadas por OID)

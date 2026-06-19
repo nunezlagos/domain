@@ -83,7 +83,7 @@ ALTER TABLE project_clients RENAME TO clients;
 
 -- 1) prompt_captured -> captured_prompts
 ALTER TABLE prompt_captured RENAME CONSTRAINT prompt_captured_user_id_fkey    TO captured_prompts_user_id_fkey;
-ALTER TABLE prompt_captured RENAME CONSTRAINT prompt_captured_session_id_fkey TO captured_prompts_session_id_fkey;
+-- NOTA: session_id fue dropeada en 000149 — no existe constraint que revertir.
 ALTER TABLE prompt_captured RENAME CONSTRAINT prompt_captured_project_id_fkey TO captured_prompts_project_id_fkey;
 ALTER INDEX prompt_captured_tsv_idx    RENAME TO captured_prompts_tsv_idx;
 ALTER INDEX prompt_captured_status_idx RENAME TO captured_prompts_status_idx;

@@ -72,7 +72,8 @@ ALTER INDEX IF EXISTS proposals_pkey                 RENAME TO sdd_proposals_pke
 ALTER INDEX IF EXISTS proposals_hu_id_version_key    RENAME TO sdd_proposals_issue_id_version_key;
 ALTER INDEX IF EXISTS proposals_status_idx           RENAME TO sdd_proposals_status_idx;
 
-ALTER TABLE sdd_proposals RENAME CONSTRAINT proposals_hu_id_version_key TO sdd_proposals_issue_id_version_key;
+-- NOTA: el UNIQUE(hu_id,version) es index-backed; ALTER INDEX (arriba) ya renombró
+-- también el constraint. Un RENAME CONSTRAINT adicional fallaría (nombre ya inexistente).
 ALTER TABLE sdd_proposals RENAME CONSTRAINT proposals_hu_id_fkey        TO sdd_proposals_issue_id_fkey;
 
 -- =====================================================================
@@ -86,20 +87,16 @@ ALTER INDEX IF EXISTS designs_pkey               RENAME TO sdd_designs_pkey;
 ALTER INDEX IF EXISTS designs_hu_id_version_key  RENAME TO sdd_designs_issue_id_version_key;
 ALTER INDEX IF EXISTS designs_status_idx         RENAME TO sdd_designs_status_idx;
 
-ALTER TABLE sdd_designs RENAME CONSTRAINT designs_hu_id_version_key  TO sdd_designs_issue_id_version_key;
+-- NOTA: designs_hu_id_version_key es index-backed (ya renombrado por ALTER INDEX).
 ALTER TABLE sdd_designs RENAME CONSTRAINT designs_hu_id_fkey         TO sdd_designs_issue_id_fkey;
 ALTER TABLE sdd_designs RENAME CONSTRAINT designs_proposal_id_fkey   TO sdd_designs_proposal_id_fkey;
 
 -- =====================================================================
 -- 4) ISSUE: gherkin_scenarios → issue_gherkin_scenarios
+--    MOVIDO a 000152 (HU 42.6, migration dedicada). NO se renombra acá para
+--    evitar doble-rename: 000152 corre después y fallaría con "relation
+--    gherkin_scenarios does not exist".
 -- =====================================================================
-ALTER TABLE IF EXISTS gherkin_scenarios RENAME TO issue_gherkin_scenarios;
-
-ALTER INDEX IF EXISTS gherkin_scenarios_pkey        RENAME TO issue_gherkin_scenarios_pkey;
-ALTER INDEX IF EXISTS gherkin_hu_id_idx             RENAME TO issue_gherkin_scenarios_issue_id_idx;
-ALTER INDEX IF EXISTS gherkin_scenarios_status_idx  RENAME TO issue_gherkin_scenarios_status_idx;
-
-ALTER TABLE issue_gherkin_scenarios RENAME CONSTRAINT gherkin_scenarios_hu_id_fkey TO issue_gherkin_scenarios_issue_id_fkey;
 
 -- =====================================================================
 -- 5) ISSUE: tasks → issue_tasks
@@ -123,7 +120,7 @@ ALTER INDEX IF EXISTS code_references_hu_id_file_path_key  RENAME TO issue_code_
 ALTER INDEX IF EXISTS code_references_file_path_idx        RENAME TO issue_code_references_file_path_idx;
 ALTER INDEX IF EXISTS code_references_status_idx           RENAME TO issue_code_references_status_idx;
 
-ALTER TABLE issue_code_references RENAME CONSTRAINT code_references_hu_id_file_path_key TO issue_code_references_issue_id_file_path_key;
+-- NOTA: code_references_hu_id_file_path_key es index-backed (ya renombrado por ALTER INDEX).
 ALTER TABLE issue_code_references RENAME CONSTRAINT code_references_hu_id_fkey          TO issue_code_references_issue_id_fkey;
 
 -- =====================================================================
@@ -163,7 +160,7 @@ ALTER INDEX IF EXISTS verifications_pending_idx             RENAME TO tdd_verifi
 ALTER TABLE tdd_verifications RENAME CONSTRAINT verifications_kind_check        TO tdd_verifications_kind_check;
 ALTER TABLE tdd_verifications RENAME CONSTRAINT verifications_status_check      TO tdd_verifications_status_check;
 ALTER TABLE tdd_verifications RENAME CONSTRAINT verifications_project_id_fkey   TO tdd_verifications_project_id_fkey;
-ALTER TABLE tdd_verifications RENAME CONSTRAINT verifications_session_id_fkey   TO tdd_verifications_session_id_fkey;
+-- NOTA: session_id (FK + columna) fue dropeada en 000149 (sessions legacy) — no hay constraint que renombrar.
 ALTER TABLE tdd_verifications RENAME CONSTRAINT verifications_user_id_fkey      TO tdd_verifications_user_id_fkey;
 
 -- limpiar flag FORCE residual (sin policy es inerte; cosmético)
@@ -202,7 +199,7 @@ DECLARE
 BEGIN
   FOR tbl IN SELECT unnest(ARRAY[
     'sdd_requirements', 'sdd_proposals', 'sdd_designs',
-    'issue_gherkin_scenarios', 'issue_tasks', 'issue_code_references', 'issue_intake_payloads',
+    'issue_tasks', 'issue_code_references', 'issue_intake_payloads',
     'tdd_verifications', 'tdd_verification_results', 'tdd_sabotage_records'
   ]) LOOP
     BEGIN

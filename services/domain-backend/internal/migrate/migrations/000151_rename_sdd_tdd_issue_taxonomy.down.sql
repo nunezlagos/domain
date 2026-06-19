@@ -45,7 +45,7 @@ ALTER INDEX IF EXISTS tdd_verifications_pending_idx         RENAME TO verificati
 ALTER TABLE verifications RENAME CONSTRAINT tdd_verifications_kind_check       TO verifications_kind_check;
 ALTER TABLE verifications RENAME CONSTRAINT tdd_verifications_status_check     TO verifications_status_check;
 ALTER TABLE verifications RENAME CONSTRAINT tdd_verifications_project_id_fkey  TO verifications_project_id_fkey;
-ALTER TABLE verifications RENAME CONSTRAINT tdd_verifications_session_id_fkey  TO verifications_session_id_fkey;
+-- NOTA: session_id fue dropeada en 000149 — no existe constraint que revertir.
 ALTER TABLE verifications RENAME CONSTRAINT tdd_verifications_user_id_fkey     TO verifications_user_id_fkey;
 
 -- =====================================================================
@@ -81,7 +81,7 @@ ALTER INDEX IF EXISTS issue_code_references_issue_id_file_path_key RENAME TO cod
 ALTER INDEX IF EXISTS issue_code_references_file_path_idx        RENAME TO code_references_file_path_idx;
 ALTER INDEX IF EXISTS issue_code_references_status_idx           RENAME TO code_references_status_idx;
 
-ALTER TABLE code_references RENAME CONSTRAINT issue_code_references_issue_id_file_path_key TO code_references_hu_id_file_path_key;
+-- NOTA: el UNIQUE es index-backed; ALTER INDEX (arriba) ya renombró el constraint.
 ALTER TABLE code_references RENAME CONSTRAINT issue_code_references_issue_id_fkey          TO code_references_hu_id_fkey;
 
 -- =====================================================================
@@ -95,14 +95,9 @@ ALTER TABLE tasks RENAME CONSTRAINT issue_tasks_issue_id_fkey TO tasks_hu_id_fke
 
 -- =====================================================================
 -- 4) ISSUE: issue_gherkin_scenarios → gherkin_scenarios
+--    MOVIDO a 000152 (HU 42.6). El down de 000152 corre antes que este y ya
+--    revierte el rename de gherkin; acá no se toca.
 -- =====================================================================
-ALTER TABLE IF EXISTS issue_gherkin_scenarios RENAME TO gherkin_scenarios;
-
-ALTER INDEX IF EXISTS issue_gherkin_scenarios_pkey         RENAME TO gherkin_scenarios_pkey;
-ALTER INDEX IF EXISTS issue_gherkin_scenarios_issue_id_idx RENAME TO gherkin_hu_id_idx;
-ALTER INDEX IF EXISTS issue_gherkin_scenarios_status_idx   RENAME TO gherkin_scenarios_status_idx;
-
-ALTER TABLE gherkin_scenarios RENAME CONSTRAINT issue_gherkin_scenarios_issue_id_fkey TO gherkin_scenarios_hu_id_fkey;
 
 -- =====================================================================
 -- 3) SDD: sdd_designs → designs
@@ -113,7 +108,7 @@ ALTER INDEX IF EXISTS sdd_designs_pkey               RENAME TO designs_pkey;
 ALTER INDEX IF EXISTS sdd_designs_issue_id_version_key RENAME TO designs_hu_id_version_key;
 ALTER INDEX IF EXISTS sdd_designs_status_idx         RENAME TO designs_status_idx;
 
-ALTER TABLE designs RENAME CONSTRAINT sdd_designs_issue_id_version_key TO designs_hu_id_version_key;
+-- NOTA: sdd_designs_issue_id_version_key es index-backed (ya renombrado por ALTER INDEX).
 ALTER TABLE designs RENAME CONSTRAINT sdd_designs_issue_id_fkey        TO designs_hu_id_fkey;
 ALTER TABLE designs RENAME CONSTRAINT sdd_designs_proposal_id_fkey     TO designs_proposal_id_fkey;
 
@@ -126,7 +121,7 @@ ALTER INDEX IF EXISTS sdd_proposals_pkey                 RENAME TO proposals_pke
 ALTER INDEX IF EXISTS sdd_proposals_issue_id_version_key RENAME TO proposals_hu_id_version_key;
 ALTER INDEX IF EXISTS sdd_proposals_status_idx           RENAME TO proposals_status_idx;
 
-ALTER TABLE proposals RENAME CONSTRAINT sdd_proposals_issue_id_version_key TO proposals_hu_id_version_key;
+-- NOTA: sdd_proposals_issue_id_version_key es index-backed (ya renombrado por ALTER INDEX).
 ALTER TABLE proposals RENAME CONSTRAINT sdd_proposals_issue_id_fkey        TO proposals_hu_id_fkey;
 
 -- =====================================================================

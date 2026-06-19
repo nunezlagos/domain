@@ -155,15 +155,8 @@ func TestServerExitsCleanlyOnSIGTERM(t *testing.T) {
 	cmd.Stderr = nil
 	require.NoError(t, cmd.Start())
 
-	// Esperar a que abra el puerto (poll hasta 5s).
-	var port int
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		// El binario no expone el puerto exacto. Asumimos un puerto
-		// conocido de env o lo saltamos.
-		// Para este test, asumimos que --http-port=8080 si no se pasa random.
-		break
-	}
+	// Dar tiempo a que el proceso levante antes de enviar SIGTERM.
+	time.Sleep(500 * time.Millisecond)
 
 	// Enviar SIGTERM.
 	require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))

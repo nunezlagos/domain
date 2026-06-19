@@ -195,15 +195,16 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			return fmt.Errorf("counters query: %w", err)
 		}
 
-		// org_flow_config es config global (single-org, sin organization_id).
+		// flow_config es config global (single-org). Antes llamada
+		// org_flow_config (legacy pre-Fase C); renombrada en 000146.
 		var maxDur int
 		err := tx.QueryRow(ctx,
-			`SELECT max_flow_duration_seconds FROM org_flow_config LIMIT 1`,
+			`SELECT max_flow_duration_seconds FROM flow_config LIMIT 1`,
 		).Scan(&maxDur)
 		if err == nil {
 			snap.Limits.MaxFlowDurationSeconds = maxDur
 		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("get org_flow_config: %w", err)
+			return fmt.Errorf("get flow_config: %w", err)
 		}
 		return nil
 	}); err != nil {

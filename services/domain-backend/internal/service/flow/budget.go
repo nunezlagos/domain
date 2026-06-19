@@ -61,7 +61,7 @@ func (c *BudgetCache) fetchFromDB(ctx context.Context, orgID uuid.UUID) (time.Du
 	_ = orgID
 	var seconds int
 	err := c.pool.QueryRow(ctx,
-		`SELECT max_flow_duration_seconds FROM org_flow_config LIMIT 1`,
+		`SELECT max_flow_duration_seconds FROM flow_config LIMIT 1`,
 	).Scan(&seconds)
 	if err != nil {
 		return 5 * time.Minute, nil

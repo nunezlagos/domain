@@ -134,7 +134,7 @@ func (r *Runner) ReleaseMaxDurationRuns(ctx context.Context) (int64, error) {
 		    error = COALESCE(error, '') || ' [max_duration_exceeded]',
 		    finished_at = NOW(),
 		    worker_id = NULL
-		FROM org_flow_config ofc
+		FROM flow_config ofc
 		WHERE fr.status = 'running'
 		  AND fr.started_at IS NOT NULL
 		  AND fr.started_at < NOW() - (ofc.max_flow_duration_seconds * INTERVAL '1 second')

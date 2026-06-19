@@ -184,53 +184,20 @@ func (a *API) Router() http.Handler {
 	// issue-37.1: self-enrollment con token compartido (público)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 
-	// Requirements (issue-04.1) — SDD dogfood
-	mux.HandleFunc("POST /api/v1/requirements", a.createRequirement)
-	mux.HandleFunc("GET /api/v1/requirements", a.listRequirements)
-	mux.HandleFunc("GET /api/v1/requirements/{slug}", a.getRequirement)
-	mux.HandleFunc("PATCH /api/v1/requirements/{slug}", a.updateRequirement)
-	mux.HandleFunc("POST /api/v1/requirements/{slug}/archive", a.archiveRequirement)
-	mux.HandleFunc("GET /api/v1/requirements/{slug}/tree", a.getRequirementTree)
-
-	// User stories (issue-04.2)
-	mux.HandleFunc("POST /api/v1/user-stories", a.createUserStory)
-	mux.HandleFunc("GET /api/v1/user-stories", a.listUserStories)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}", a.getUserStory)
-	mux.HandleFunc("PATCH /api/v1/user-stories/{slug}", a.updateUserStory)
-	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}", a.deleteUserStory)
-	mux.HandleFunc("POST /api/v1/user-stories/{slug}/scenarios", a.addScenario)
-	mux.HandleFunc("DELETE /api/v1/user-stories/{slug}/scenarios/{id}", a.removeScenario)
-
-	// Proposals & Designs (issue-04.3)
-	mux.HandleFunc("POST /api/v1/user-stories/{slug}/proposals", a.createProposal)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals", a.listProposalVersions)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/proposals/latest", a.getLatestProposal)
-	mux.HandleFunc("PATCH /api/v1/proposals/{id}/status", a.changeProposalStatus)
-	mux.HandleFunc("POST /api/v1/user-stories/{slug}/designs", a.createDesign)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/designs", a.listDesigns)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/designs/latest", a.getLatestDesign)
-	mux.HandleFunc("PATCH /api/v1/designs/{id}/status", a.changeDesignStatus)
-
-	// Tasks (issue-04.4)
-	mux.HandleFunc("POST /api/v1/user-stories/{slug}/tasks", a.createTasks)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/tasks", a.listTasks)
-	mux.HandleFunc("GET /api/v1/tasks/{id}", a.getTask)
-	mux.HandleFunc("PATCH /api/v1/tasks/{id}/status", a.updateTaskStatus)
-	mux.HandleFunc("POST /api/v1/tasks/{id}/verification", a.createVerification)
-	mux.HandleFunc("POST /api/v1/tasks/{id}/sabotage", a.createSabotage)
-	mux.HandleFunc("GET /api/v1/user-stories/{slug}/progress", a.getProgress)
-
-	// Traceability (issue-04.5)
-	mux.HandleFunc("GET /api/v1/traceability/req/{slug}", a.getRequirementTrace)
-	mux.HandleFunc("GET /api/v1/traceability/code", a.getCodeTrace)
-	mux.HandleFunc("GET /api/v1/traceability/coverage", a.getCoverageDashboard)
-	mux.HandleFunc("GET /api/v1/traceability/progress", a.getProgressReport)
-	mux.HandleFunc("GET /api/v1/traceability/consolidated", a.getConsolidatedReport)
-	mux.HandleFunc("GET /api/v1/traceability/gaps/no-proposal", a.getHUsWithoutProposals)
-	mux.HandleFunc("GET /api/v1/traceability/gaps/no-design", a.getHUsWithoutDesigns)
-	mux.HandleFunc("GET /api/v1/traceability/gaps/incomplete-tasks", a.getHUsWithIncompleteTasks)
-	mux.HandleFunc("POST /api/v1/traceability/code-refs", a.addCodeReference)
-	mux.HandleFunc("DELETE /api/v1/traceability/code-refs/{id}", a.removeCodeReference)
+	// REQ-43.4 (Ola 2): endpoints SDD/TDD removidos. Consumidos solo por el admin
+	// Angular archivado (vistas admin-requirements, admin-user-stories, admin-proposals,
+//	admin-designs, admin-tasks, admin-traceability, admin-hu-builder). Mantener
+	// handlers en struct API como dead code hasta HU-43.13 (cleanup).
+//
+//	Removidos en esta ola:
+//	  - /api/v1/requirements/* (POST/GET/{slug}/PATCH/archive/tree)
+//	  - /api/v1/user-stories/* (POST/GET/{slug}/PATCH/DELETE/scenarios)
+//	  - /api/v1/user-stories/{slug}/{proposals,designs}/*
+//	  - /api/v1/proposals/{id}/status
+//	  - /api/v1/designs/{id}/status
+//	  - /api/v1/user-stories/{slug}/tasks
+//	  - /api/v1/tasks/{id} y sub-rutas (status, verification, sabotage, progress)
+//	  - /api/v1/traceability/* (req/{slug}, code, coverage, progress, consolidated, gaps/*, code-refs)
 
 	// Attachments / S3 (issue-04.6)
 	mux.HandleFunc("POST /api/v1/attachments", a.initUpload)
@@ -419,13 +386,9 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/project-templates/{id}", a.getProjectTemplate)
 	mux.HandleFunc("DELETE /api/v1/project-templates/{id}", a.deleteProjectTemplate)
 
-	// HU builder (issue-04.7)
-	mux.HandleFunc("POST /api/v1/hu-drafts", a.startHubDraft)
-	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/answer", a.answerHubDraft)
-	mux.HandleFunc("GET /api/v1/hu-drafts/{id}/preview", a.previewHubDraft)
-	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/commit", a.commitHubDraft)
-	mux.HandleFunc("POST /api/v1/hu-drafts/{id}/abandon", a.abandonHubDraft)
-	mux.HandleFunc("GET /api/v1/hu-drafts", a.listHubDrafts)
+	// REQ-43.4 (Ola 2): HU builder endpoints removidos.
+// Consumidos solo por el admin Angular (vista admin-hu-builder).
+// Removidos: /api/v1/hu-drafts/*
 
 	// MCP servers externos (issue-12.4)
 	mux.HandleFunc("POST /api/v1/mcp-servers", a.createMCPServer)

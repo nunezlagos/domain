@@ -254,43 +254,17 @@ func (a *API) Router() http.Handler {
 //   - /api/v1/agents/* (POST/GET/{id}/PATCH/{id}/versions/DELETE/{id}/run)
 //   - /api/v1/agent-runs/{id}/logs (GET)
 
-	// Inbound webhooks management (issue-10.2). El receive público vive en
-	// /api/v1/webhooks/{slug}/receive (sin Bearer; HMAC).
-	mux.HandleFunc("POST /api/v1/inbound-webhooks", a.createInboundWebhook)
-	mux.HandleFunc("GET /api/v1/inbound-webhooks", a.listInboundWebhooks)
-	mux.HandleFunc("GET /api/v1/inbound-webhooks/{id}", a.getInboundWebhook)
-	mux.HandleFunc("PATCH /api/v1/inbound-webhooks/{id}", a.patchInboundWebhook)
-	mux.HandleFunc("DELETE /api/v1/inbound-webhooks/{id}", a.deleteInboundWebhook)
-	mux.HandleFunc("GET /api/v1/inbound-webhooks/{id}/deliveries", a.listWebhookDeliveries)
-	mux.HandleFunc("POST /api/v1/inbound-webhooks/deliveries/{id}/replay", a.replayWebhookDelivery)
-
-	// Crons (issue-10.1)
-	mux.HandleFunc("POST /api/v1/crons", a.createCron)
-	mux.HandleFunc("GET /api/v1/crons", a.listCrons)
-	mux.HandleFunc("GET /api/v1/crons/{id}", a.getCron)
-	mux.HandleFunc("PATCH /api/v1/crons/{id}", a.patchCron)
-	mux.HandleFunc("DELETE /api/v1/crons/{id}", a.deleteCron)
-	mux.HandleFunc("GET /api/v1/crons/{id}/history", a.cronHistory)
-
-	// Flows
-	mux.HandleFunc("POST /api/v1/flows", a.createFlow)
-	mux.HandleFunc("GET /api/v1/flows", a.listFlows)
-	mux.HandleFunc("GET /api/v1/flows/{id}", a.getFlow)
-	mux.HandleFunc("PATCH /api/v1/flows/{id}", a.updateFlow)
-	mux.HandleFunc("PUT /api/v1/flows/{id}", a.replaceFlow)
-	mux.HandleFunc("GET /api/v1/flows/{id}/export", a.exportFlow)
-	mux.HandleFunc("GET /api/v1/flows/{id}/parents", a.listFlowParents)
-	mux.HandleFunc("POST /api/v1/flows/import", a.importFlow)
-	mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow)
-	mux.HandleFunc("POST /api/v1/flows/{id}/run", a.runFlow)
-	mux.HandleFunc("POST /api/v1/flows/{id}/dry-run", a.dryRunFlow)
-	mux.HandleFunc("POST /api/v1/runs/{id}/signals", a.signalFlowRun)
-	mux.HandleFunc("GET /api/v1/flow-runs/{id}", a.getFlowRun)
-	mux.HandleFunc("POST /api/v1/flow-runs/{id}/pause", a.pauseFlowRun)
-	mux.HandleFunc("POST /api/v1/flow-runs/{id}/resume", a.resumeFlowRun)
-	mux.HandleFunc("POST /api/v1/flow-runs/{id}/cancel", a.cancelFlowRun)
-	mux.HandleFunc("GET /api/v1/flow-runs/{id}/stream", a.streamFlowRun)
-	// REQ-42.3: rutas /api/v1/dlq removidas (tabla dead_letter_queue dropeada).
+	// REQ-43.7/43.8 (Ola 4/6): Inbound webhooks management + Crons + Flows + Flow-Runs removidos.
+// Consumidos solo por admin Angular (vistas admin-webhooks, admin-crons, admin-flows) Y mockeados
+// en SDK tests. El MCP consume WebhookService/CronService/FlowService/FlowRunner directamente.
+// El endpoint público HMAC /api/v1/webhooks/{slug}/receive se mantiene (integraciones externas).
+//
+// Removidos:
+//   - /api/v1/inbound-webhooks/* (POST/GET/{id}/PATCH/DELETE/deliveries/replay)
+//   - /api/v1/crons/* (POST/GET/{id}/PATCH/DELETE/history)
+//   - /api/v1/flows/* (POST/GET/{id}/PATCH/PUT/DELETE/export/parents/import/run/dry-run)
+//   - /api/v1/runs/{id}/signals (POST)
+//   - /api/v1/flow-runs/{id} (GET/POST pause/resume/cancel/stream)
 
 	// Webhooks inbound (público, HMAC auth — slug + secret en config)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)

@@ -5,10 +5,12 @@
 // SIEMPRE proviene del principal autenticado (no de query params).
 //
 // Phase 1: queries directas con GROUP BY. La materialized view propuesta en
-// design.md queda como optimización futura (migration 000098) si las
-// queries no escalan; con los índices existentes (cost_logs_org_occurred_idx,
-// agent_runs_agent_idx, flow_runs_flow_idx) la perf objetivo (<500ms a
-// 1M cost_logs / 30d) es alcanzable sin matview.
+// design.md queda como optimización futura si las queries no escalan; con los
+// índices existentes (agent_runs_agent_idx, flow_runs_flow_idx) la perf
+// objetivo es alcanzable sin matview.
+//
+// REQ-42.2: el dominio billing/costos se eliminó; los agregados de cost_usd/
+// tokens quedan en 0 (ya no se consulta ninguna tabla de costos).
 package usage
 
 import (
@@ -167,6 +169,9 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 		// uuid.Nil (single-org mode), usamos un UUID fijo canónico.
 		snap.Organization = singleOrgRef(orgID)
 
+		// REQ-42.2: cost_logs se dropeó (dominio billing/costos eliminado).
+		// Los counters de costo/tokens quedan en 0 (no había writer de
+		// producción: la tabla siempre estuvo vacía).
 		if err := tx.QueryRow(ctx, `
 			SELECT
 			  (SELECT COUNT(*) FROM observations
@@ -176,21 +181,12 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			  (SELECT COUNT(*) FROM agent_runs
 			     WHERE created_at >= $1 AND created_at < $2),
 			  (SELECT COUNT(*) FROM flow_runs
-			     WHERE created_at >= $1 AND created_at < $2),
-			  (SELECT COALESCE(SUM(cost_usd), 0)::float8 FROM cost_logs
-			     WHERE occurred_at >= $1 AND occurred_at < $2),
-			  (SELECT COALESCE(SUM(tokens_input), 0)::bigint FROM cost_logs
-			     WHERE occurred_at >= $1 AND occurred_at < $2),
-			  (SELECT COALESCE(SUM(tokens_output), 0)::bigint FROM cost_logs
-			     WHERE occurred_at >= $1 AND occurred_at < $2)
+			     WHERE created_at >= $1 AND created_at < $2)
 		`, start, end).Scan(
 			&snap.Counters.Observations,
 			&snap.Counters.Agents,
 			&snap.Counters.AgentRunsToday,
 			&snap.Counters.FlowRunsToday,
-			&snap.Counters.CostUSDToday,
-			&snap.Counters.TokensInToday,
-			&snap.Counters.TokensOutToday,
 		); err != nil {
 			return fmt.Errorf("counters query: %w", err)
 		}
@@ -237,16 +233,11 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 		// ISSUE-21.6 Fase D clean Round 3: ver singleOrgRef() en Current().
 		h.Organization = singleOrgRef(orgID)
 
+		// REQ-42.2: cost_logs se dropeó; el agregado de cost_usd ya no se
+		// consulta (CostUSD queda en 0 en cada fila).
 		rows, err := tx.Query(ctx, `
 			WITH series AS (
 			  SELECT generate_series($1::timestamptz, $2::timestamptz - interval '1 day', interval '1 day')::date AS day
-			),
-			cost AS (
-			  SELECT date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS day,
-			         SUM(cost_usd)::float8 AS cost_usd
-			  FROM cost_logs
-			  WHERE occurred_at >= $1 AND occurred_at < $2
-			  GROUP BY 1
 			),
 			ags AS (
 			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
@@ -261,11 +252,9 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 			  GROUP BY 1
 			)
 			SELECT s.day,
-			       COALESCE(c.cost_usd, 0)::float8 AS cost_usd,
 			       COALESCE(a.n, 0)::bigint AS agent_runs,
 			       COALESCE(f.n, 0)::bigint AS flow_runs
 			FROM series s
-			LEFT JOIN cost c ON c.day = s.day
 			LEFT JOIN ags a ON a.day = s.day
 			LEFT JOIN flw f ON f.day = s.day
 			ORDER BY s.day DESC
@@ -277,7 +266,7 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 		for rows.Next() {
 			var d DayAggregate
 			var t time.Time
-			if err := rows.Scan(&t, &d.CostUSD, &d.AgentRuns, &d.FlowRuns); err != nil {
+			if err := rows.Scan(&t, &d.AgentRuns, &d.FlowRuns); err != nil {
 				return fmt.Errorf("scan history row: %w", err)
 			}
 			d.Date = t.UTC().Format("2006-01-02")

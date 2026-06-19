@@ -22,28 +22,29 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
-	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/api/versioning"
-	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
-	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/auth/apikey"
 	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
+	"nunezlagos/domain/internal/auth/otp"
+	"nunezlagos/domain/internal/auth/ratelimit"
+	"nunezlagos/domain/internal/auth/rbac"
+	clicommands "nunezlagos/domain/internal/cli/commands"
+	"nunezlagos/domain/internal/cli/onboard"
+	setuppkg "nunezlagos/domain/internal/cli/setup"
 	autodetect "nunezlagos/domain/internal/cli/setup/autodetect"
 	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
 	propagatepkg "nunezlagos/domain/internal/cli/setup/propagate"
-	"nunezlagos/domain/internal/cli/onboard"
-	"nunezlagos/domain/internal/auth/rbac"
+	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/crypto"
+	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/dbstats"
 	debugpkg "nunezlagos/domain/internal/debug"
-	"nunezlagos/domain/internal/auth/otp"
-	"nunezlagos/domain/internal/auth/ratelimit"
-	"nunezlagos/domain/internal/config"
-	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/httpserver"
 	"nunezlagos/domain/internal/llm"
@@ -53,14 +54,12 @@ import (
 	"nunezlagos/domain/internal/seeds"
 	s3client "nunezlagos/domain/internal/storage/s3"
 	"nunezlagos/domain/internal/tracing"
-	setuppkg "nunezlagos/domain/internal/cli/setup"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"nunezlagos/domain/internal/logging"
-	"nunezlagos/domain/internal/metrics"
-	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/events"
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/google"
 	"nunezlagos/domain/internal/llm/ollama"
@@ -68,7 +67,12 @@ import (
 	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	llmretry "nunezlagos/domain/internal/llm/retry"
+	"nunezlagos/domain/internal/logging"
 	smtpmail "nunezlagos/domain/internal/mail/smtp"
+	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
+	mcptools "nunezlagos/domain/internal/mcp/server"
+	"nunezlagos/domain/internal/metrics"
+	dmigrate "nunezlagos/domain/internal/migrate"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
@@ -76,51 +80,47 @@ import (
 	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 	"nunezlagos/domain/internal/scheduler/leader"
 	agentsvc "nunezlagos/domain/internal/service/agent"
-	cronsvc "nunezlagos/domain/internal/service/cron"
+	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/service/billing"
-	"nunezlagos/domain/internal/service/cost"
-	"nunezlagos/domain/internal/service/issuebuilder"
-	"nunezlagos/domain/internal/service/flow"
-	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
-	mcptools "nunezlagos/domain/internal/mcp/server"
-	"nunezlagos/domain/internal/service/mcpserver"
-	"nunezlagos/domain/internal/service/outboundwebhook"
-	webhooksvc "nunezlagos/domain/internal/service/webhook"
-	"nunezlagos/domain/internal/service/policy"
-	"nunezlagos/domain/internal/service/projecttemplate"
-	enrollsvc "nunezlagos/domain/internal/service/enrollment"
-	usagesvc "nunezlagos/domain/internal/service/usage"
-	"nunezlagos/domain/internal/service/usagealerts"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	"nunezlagos/domain/internal/service/cost"
+	cronsvc "nunezlagos/domain/internal/service/cron"
+	enrollsvc "nunezlagos/domain/internal/service/enrollment"
+	"nunezlagos/domain/internal/service/flow"
+	intakesvc "nunezlagos/domain/internal/service/intake"
+	usvc "nunezlagos/domain/internal/service/issue"
+	"nunezlagos/domain/internal/service/issuebuilder"
+	"nunezlagos/domain/internal/service/knowledge"
+	"nunezlagos/domain/internal/service/lifecycle"
+	"nunezlagos/domain/internal/service/mcpserver"
+	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	"nunezlagos/domain/internal/service/outboundwebhook"
+	"nunezlagos/domain/internal/service/policy"
+	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
-	"nunezlagos/domain/internal/auth/session"
-	"nunezlagos/domain/internal/events"
-	"nunezlagos/domain/internal/service/knowledge"
-	"nunezlagos/domain/internal/service/lifecycle"
-	"nunezlagos/domain/internal/service/observation"
-	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/service/projecttemplate"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	"nunezlagos/domain/internal/service/promptrouter"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
-	usvc "nunezlagos/domain/internal/service/issue"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
+	skillsvc "nunezlagos/domain/internal/service/skill"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
-	tracesvc "nunezlagos/domain/internal/service/traceability"
-	attSvc "nunezlagos/domain/internal/service/attachment"
-	intakesvc "nunezlagos/domain/internal/service/intake"
-	"nunezlagos/domain/internal/service/promptrouter"
-	skillsvc "nunezlagos/domain/internal/service/skill"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
-	"nunezlagos/domain/internal/service/workflowimport"
+	tracesvc "nunezlagos/domain/internal/service/traceability"
+	usagesvc "nunezlagos/domain/internal/service/usage"
+	"nunezlagos/domain/internal/service/usagealerts"
+	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	wp "nunezlagos/domain/internal/service/wizardplan"
 	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
+	"nunezlagos/domain/internal/service/workflowimport"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (issue-19.2).
@@ -379,13 +379,13 @@ func runServer() {
 		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
 		go func() {
 			err := debugpkg.Serve(debugpkg.Config{
-				Enabled:        true,
-				Bind:           os.Getenv("DOMAIN_DEBUG_BIND"),
-				Port:           port,
-				AuthUser:       os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
-				AuthPass:       os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
-				AuditRecorder:  recorder,
-				Metrics:        metricsReg,
+				Enabled:       true,
+				Bind:          os.Getenv("DOMAIN_DEBUG_BIND"),
+				Port:          port,
+				AuthUser:      os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
+				AuthPass:      os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
+				AuditRecorder: recorder,
+				Metrics:       metricsReg,
 			}, logger)
 			if err != nil && err != http.ErrServerClosed {
 				logger.Error("debug server failed", slog.Any("err", err))
@@ -482,7 +482,6 @@ func runServer() {
 
 	// Seeders (issue-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
 	seedRegistry := seeds.NewRegistry()
-	seedRegistry.Register(&seeds.PlansSeeder{})
 	seedRegistry.Register(&seeds.ModelRegistrySeeder{})
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
@@ -650,11 +649,11 @@ func runServer() {
 	}
 
 	promptRouterSvc := &promptrouter.Router{
-		IntakeService:    intakeSvc,
+		IntakeService:       intakeSvc,
 		IssueBuilderService: issuebuilderSvc,
-		Classifier:       promptClassifier,
-		Orchestrator:     orchestratorSvc,
-		AnalysisService:  &analysisRunnerAdapter{inner: analysisSvc},
+		Classifier:          promptClassifier,
+		Orchestrator:        orchestratorSvc,
+		AnalysisService:     &analysisRunnerAdapter{inner: analysisSvc},
 	}
 
 	// issue-12.7 workflow import (override de .md de IA en repo cliente).
@@ -671,7 +670,7 @@ func runServer() {
 	obsService.Events = outboundEmitter
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: llmFactory,
-		Agents: agentService, Skills: skillService, Billing: billingService,
+		Agents: agentService, Skills: skillService,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
 		Emitter: outboundEmitter, Metrics: metricsReg,
 	}
@@ -831,37 +830,37 @@ func runServer() {
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 
 	api := &handler.API{
-		ProjectService: projectService,
-		ClientService:  clientService,
-		TicketService:  ticketService,
-		EventBus:       eventBus,
-		AuthSessionService: sessionSvc,
+		ProjectService:        projectService,
+		ClientService:         clientService,
+		TicketService:         ticketService,
+		EventBus:              eventBus,
+		AuthSessionService:    sessionSvc,
 		CapturedPromptService: capturedPromptService,
 		ProjectRepoService:    projectRepoService,
 		ProjectPolicyService:  projectPolicyService,
-		Pool:           pools.App,
-		ObsService:     obsService,
-		SessionService:  sessionService,
-		PromptService:   promptService,
-		TimelineService:  timelineService,
-		SearchService:    searchService,
-		KnowledgeService: knowledgeService,
-		LifecycleService: lifecycleService,
-		SkillService:     skillService,
+		Pool:                  pools.App,
+		ObsService:            obsService,
+		SessionService:        sessionService,
+		PromptService:         promptService,
+		TimelineService:       timelineService,
+		SearchService:         searchService,
+		KnowledgeService:      knowledgeService,
+		LifecycleService:      lifecycleService,
+		SkillService:          skillService,
 		SkillExecution: &skillsvc.ExecutionService{
 			Pool: pools.App, Skills: skillService,
 			Versions: &skillsvc.VersionStore{Pool: pools.App},
 			Runner:   skillRunnerInst,
 		},
-		AgentService:     agentService,
-		AgentRunner:      agentRunnerInst,
-		FlowService:      flowService,
-		FlowRunner:       flowRunnerInst,
-		CronService:      cronService,
-		WebhookService:   inboundWebhookService,
-		Dispatcher:       dispatcher, // issue-35.1
-		CostService:      costService,
-		BillingService:   billingService,
+		AgentService:              agentService,
+		AgentRunner:               agentRunnerInst,
+		FlowService:               flowService,
+		FlowRunner:                flowRunnerInst,
+		CronService:               cronService,
+		WebhookService:            inboundWebhookService,
+		Dispatcher:                dispatcher, // issue-35.1
+		CostService:               costService,
+		BillingService:            billingService,
 		OutboundWebhookService:    outboundWebhookService,
 		OutboundWebhookDispatcher: outboundDispatcher,
 		OutboundWebhookRequireTLS: outboundRequireTLS,
@@ -873,28 +872,28 @@ func runServer() {
 		MCPServerService:          mcpServerService,
 		ProjectTemplateService:    projectTemplateService,
 		PolicyService:             policyService,
-		RuntimeConfigRegistry:    rtCfgRegistry,
-		DBStatsService:           dbStatsService,
-		Hubuilder:                issuebuilderSvc,
-		Audit:          recorder,
-		ActivityRecorder: activityStore,
-		ActivityQuerier:  activityStore,
-		OTPService:     otpService,
-		OTPRateLimiter: otpRateLimiter,
-		APIKeys:        apiKeyStore,
-		Bootstrap:      bootstrapsvc.New(pools.App),
-		SecretsStore:   secretsStore,
-		ReqService:     requirementService,
-		HUService:      huService,
-		SpecService:    specService,
-		TaskService:         taskService,
-		TraceService:        traceService,
-		AttachmentService:   attachmentService,
+		RuntimeConfigRegistry:     rtCfgRegistry,
+		DBStatsService:            dbStatsService,
+		Hubuilder:                 issuebuilderSvc,
+		Audit:                     recorder,
+		ActivityRecorder:          activityStore,
+		ActivityQuerier:           activityStore,
+		OTPService:                otpService,
+		OTPRateLimiter:            otpRateLimiter,
+		APIKeys:                   apiKeyStore,
+		Bootstrap:                 bootstrapsvc.New(pools.App),
+		SecretsStore:              secretsStore,
+		ReqService:                requirementService,
+		HUService:                 huService,
+		SpecService:               specService,
+		TaskService:               taskService,
+		TraceService:              traceService,
+		AttachmentService:         attachmentService,
 		// issue-04.7 v2 (wizard adaptive) + issue-04.8 intake + issue-12.7 plug-and-play.
 		IssueBuilderAdaptive: issuebuilderAdaptive,
-		IntakeService:    intakeSvc,
-		PromptRouter:     promptRouterSvc,
-		WorkflowImport:   workflowImportSvc,
+		IntakeService:        intakeSvc,
+		PromptRouter:         promptRouterSvc,
+		WorkflowImport:       workflowImportSvc,
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
@@ -987,39 +986,39 @@ func runServer() {
 
 	mcpBuilder := &mcphttpserver.Builder{
 		Base: mcptools.Deps{
-			Observations:   obsService,
-			Projects:       projectService,
-			Sessions:       sessionService,
-			Prompts:        promptService,
-			Timeline:       timelineService,
-			Search:         searchService,
-			Knowledge:      knowledgeService,
-			Skills:         skillService,
+			Observations: obsService,
+			Projects:     projectService,
+			Sessions:     sessionService,
+			Prompts:      promptService,
+			Timeline:     timelineService,
+			Search:       searchService,
+			Knowledge:    knowledgeService,
+			Skills:       skillService,
 			SkillExecution: &skillsvc.ExecutionService{
 				Pool: pools.App, Skills: skillService,
 				Versions: &skillsvc.VersionStore{Pool: pools.App},
 				Runner:   skillRunnerInst,
 			},
-			Agents:         agentService,
-			AgentRunner:    agentRunnerInst,
-			Crons:          cronService,
-			Clients:        clientService,
+			Agents:          agentService,
+			AgentRunner:     agentRunnerInst,
+			Crons:           cronService,
+			Clients:         clientService,
 			CapturedPrompts: capturedPromptService,
-			ProjectRepos:   projectRepoService,
+			ProjectRepos:    projectRepoService,
 			ProjectPolicies: projectPolicyService,
-			Tickets:        ticketService,
-			Policies:       policyService,
-			Flows:          flowService,
-			FlowRunner:     flowRunnerInst,
-			Hubuilder:      issuebuilderSvc,
-			Intake:         intakeSvc,
-			Orchestrator:   orchestratorSvc,
-			PromptRouter:   promptRouterSvc,
-			WorkflowImport: workflowImportSvc,
-			Pool:           pools.App,
-			Dispatcher:     dispatcher,
-			ServerName:     "domain-mcp-http",
-			ServerVer:      Version,
+			Tickets:         ticketService,
+			Policies:        policyService,
+			Flows:           flowService,
+			FlowRunner:      flowRunnerInst,
+			Hubuilder:       issuebuilderSvc,
+			Intake:          intakeSvc,
+			Orchestrator:    orchestratorSvc,
+			PromptRouter:    promptRouterSvc,
+			WorkflowImport:  workflowImportSvc,
+			Pool:            pools.App,
+			Dispatcher:      dispatcher,
+			ServerName:      "domain-mcp-http",
+			ServerVer:       Version,
 			// REQ-67 LRU compartido entre todos los requests. 4096 entries ≈
 			// pocos MB. TTL por tool en server.Tools(). Si DOMAIN_DISABLE_CACHE=1
 			// queda nil (cache off).
@@ -1761,8 +1760,9 @@ func envOr(key, defaultVal string) string {
 // issue-12.5 setup — wizard CLI para configurar agentes externos.
 //
 // Usage:
-//   domain setup claude-code
-//   domain setup --mcp-binary /usr/local/bin/domain-mcp --api-key sk_...
+//
+//	domain setup claude-code
+//	domain setup --mcp-binary /usr/local/bin/domain-mcp --api-key sk_...
 func runAutoDetect(args []string) {
 	projectDir := "."
 	quiet := false

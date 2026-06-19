@@ -19,135 +19,135 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/api/ctxkeys"
 	"nunezlagos/domain/internal/audit"
-	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
+	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/events"
-	specsvc "nunezlagos/domain/internal/service/spec"
-	tsvc "nunezlagos/domain/internal/service/task"
-	tracesvc "nunezlagos/domain/internal/service/traceability"
-	attSvc "nunezlagos/domain/internal/service/attachment"
-	"nunezlagos/domain/internal/auth/otp"
-	"nunezlagos/domain/internal/secrets"
-	"nunezlagos/domain/internal/service/issuebuilder"
-	intakesvc "nunezlagos/domain/internal/service/intake"
-	"nunezlagos/domain/internal/service/promptrouter"
-	"nunezlagos/domain/internal/service/workflowimport"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
+	"nunezlagos/domain/internal/secrets"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/service/billing"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
-	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
+	intakesvc "nunezlagos/domain/internal/service/intake"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
-	"github.com/jackc/pgx/v5/pgxpool"
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	"nunezlagos/domain/internal/service/promptrouter"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tsvc "nunezlagos/domain/internal/service/task"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
+	tracesvc "nunezlagos/domain/internal/service/traceability"
+	"nunezlagos/domain/internal/service/workflowimport"
 
 	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/dbmon"
-	"nunezlagos/domain/internal/service/enrollment"
-	"nunezlagos/domain/internal/service/usage"
-	"nunezlagos/domain/internal/service/usagealerts"
-	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/dbstats"
 	"nunezlagos/domain/internal/runtimeconfig"
-	"nunezlagos/domain/internal/service/policy"
-	"nunezlagos/domain/internal/service/projecttemplate"
+	"nunezlagos/domain/internal/service/enrollment"
+	usvc "nunezlagos/domain/internal/service/issue"
+	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/outboundwebhook"
+	"nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/service/projecttemplate"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	reqsvc "nunezlagos/domain/internal/service/requirement"
-	usvc "nunezlagos/domain/internal/service/issue"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/service/usage"
+	"nunezlagos/domain/internal/service/usagealerts"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 )
 
 // API agrupa todas las dependencias y monta el router /api/v1/*.
 type API struct {
-	ProjectService *projsvc.Service
-	ClientService  *clientsvc.Service
-	TicketService  *ticketsvc.Service // REQ-51 sistema de tickets internos
+	ProjectService        *projsvc.Service
+	ClientService         *clientsvc.Service
+	TicketService         *ticketsvc.Service         // REQ-51 sistema de tickets internos
 	CapturedPromptService *capturedpromptsvc.Service // REQ-41+47 captura+token tracking
 	ProjectRepoService    *projectreposvc.Service    // REQ-42 multi-remotos
 	ProjectPolicyService  *projectpolicysvc.Service  // REQ-43 policies por proyecto
-	Pool           *pgxpool.Pool // REQ-49/50 — queries directas para proposals/verifications
-	ObsService     *observation.Service
-	SessionService  *sesssvc.Service
-	PromptService   *promptsvc.Service
-	TimelineService  *timelinesvc.Service
-	SearchService    *searchsvc.Service
-	KnowledgeService *knowledge.Service
-	LifecycleService *lifecycle.Service
-	SkillService     *skillsvc.Service
-	SkillExecution   *skillsvc.ExecutionService
-	AgentService     *agentsvc.Service
-	AgentRunner      *agentrunner.Runner
-	FlowService      *flow.Service
-	FlowRunner       *flowrunner.Runner
-	CronService      *cronsvc.Service
-	WebhookService   *webhooksvc.Service
+	Pool                  *pgxpool.Pool              // REQ-49/50 — queries directas para proposals/verifications
+	ObsService            *observation.Service
+	SessionService        *sesssvc.Service
+	PromptService         *promptsvc.Service
+	TimelineService       *timelinesvc.Service
+	SearchService         *searchsvc.Service
+	KnowledgeService      *knowledge.Service
+	LifecycleService      *lifecycle.Service
+	SkillService          *skillsvc.Service
+	SkillExecution        *skillsvc.ExecutionService
+	AgentService          *agentsvc.Service
+	AgentRunner           *agentrunner.Runner
+	FlowService           *flow.Service
+	FlowRunner            *flowrunner.Runner
+	CronService           *cronsvc.Service
+	WebhookService        *webhooksvc.Service
 	// ISSUE-28.7: dispatcher para webhooks inbound. Bounded queue +
 	// WaitGroup + per-job timeout. Si nil, el handler cae al fallback
 	// legacy (go func() directo).
 	WebhookDispatcher *WebhookDispatcher
 	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega acá.
 	// Si nil, usa el switch legacy (compat).
-	Dispatcher *dispatch.Dispatcher
-	CostService      *cost.Service
-	BillingService   *billing.Service
-	OutboundWebhookService     *outboundwebhook.Service
-	OutboundWebhookDispatcher  *outboundwebhook.Dispatcher
-	OutboundWebhookRequireTLS  bool
-	Backpressure               *backpressure.Limiter
-	DBMonCollector             *dbmon.Collector
-	UsageAlertsService         *usagealerts.Service
-	UsageSnapshot              *usage.Service
-	Enrollment                 *enrollment.Service
-	MCPServerService           *mcpserver.Service
-	ProjectTemplateService     *projecttemplate.Service
-	PolicyService              *policy.Service
+	Dispatcher                *dispatch.Dispatcher
+	CostService               *cost.Service
+	BillingService            *billing.Service
+	OutboundWebhookService    *outboundwebhook.Service
+	OutboundWebhookDispatcher *outboundwebhook.Dispatcher
+	OutboundWebhookRequireTLS bool
+	Backpressure              *backpressure.Limiter
+	DBMonCollector            *dbmon.Collector
+	UsageAlertsService        *usagealerts.Service
+	UsageSnapshot             *usage.Service
+	Enrollment                *enrollment.Service
+	MCPServerService          *mcpserver.Service
+	ProjectTemplateService    *projecttemplate.Service
+	PolicyService             *policy.Service
 	RuntimeConfigRegistry     *runtimeconfig.Registry
 	DBStatsService            *dbstats.Service
-	Audit          *audit.PGRecorder
-	ActivityRecorder activity.Recorder
-	ActivityQuerier  activity.Querier
-	OTPService     *otp.Service
-	OTPRateLimiter *ratelimit.Limiter
-	APIKeys        *apikey.PGStore
-	Bootstrap      *bootstrap.Service
-	SecretsStore   *secrets.PGStore
-	ReqService     *reqsvc.Service
-	HUService      *usvc.Service
-	SpecService    *specsvc.Service
-	TaskService    *tsvc.Service
-	TraceService        *tracesvc.Service
-	AttachmentService   *attSvc.Service
-	Hubuilder           *issuebuilder.Service
-	IssueBuilderAdaptive   *issuebuilder.AdaptiveService
-	IntakeService       *intakesvc.Service
-	PromptRouter        *promptrouter.Router
-	WorkflowImport      *workflowimport.Service
+	Audit                     *audit.PGRecorder
+	ActivityRecorder          activity.Recorder
+	ActivityQuerier           activity.Querier
+	OTPService                *otp.Service
+	OTPRateLimiter            *ratelimit.Limiter
+	APIKeys                   *apikey.PGStore
+	Bootstrap                 *bootstrap.Service
+	SecretsStore              *secrets.PGStore
+	ReqService                *reqsvc.Service
+	HUService                 *usvc.Service
+	SpecService               *specsvc.Service
+	TaskService               *tsvc.Service
+	TraceService              *tracesvc.Service
+	AttachmentService         *attSvc.Service
+	Hubuilder                 *issuebuilder.Service
+	IssueBuilderAdaptive      *issuebuilder.AdaptiveService
+	IntakeService             *intakesvc.Service
+	PromptRouter              *promptrouter.Router
+	WorkflowImport            *workflowimport.Service
 	// REQ-69 SSE event bus para broadcast de cambios al dashboard /
 	// otros clientes. Si nil, el endpoint /api/v1/events devuelve 503.
-	EventBus            *events.Bus
+	EventBus *events.Bus
 	// REQ-72 auth web (login + roles + sessions). Si nil, los endpoints
 	// /api/v1/auth/* devuelven 503.
-	AuthSessionService  *session.Service
+	AuthSessionService *session.Service
 }
 
 // SessionFromContext re-export para que handlers fuera del package
@@ -375,7 +375,7 @@ func (a *API) Router() http.Handler {
 
 	// Skills
 	mux.HandleFunc("POST /api/v1/skills", a.createSkill)
-	mux.HandleFunc("GET /api/v1/skills", a.listSkills)       // ?type= &tag= &limit=
+	mux.HandleFunc("GET /api/v1/skills", a.listSkills)          // ?type= &tag= &limit=
 	mux.HandleFunc("GET /api/v1/skills/search", a.searchSkills) // ?q=
 	mux.HandleFunc("GET /api/v1/skills/{id}", a.getSkill)
 	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
@@ -390,14 +390,14 @@ func (a *API) Router() http.Handler {
 
 	// Knowledge documents
 	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)
-	mux.HandleFunc("GET /api/v1/knowledge", a.listKnowledge)        // ?project_slug=
+	mux.HandleFunc("GET /api/v1/knowledge", a.listKnowledge)          // ?project_slug=
 	mux.HandleFunc("GET /api/v1/knowledge/search", a.searchKnowledge) // ?q=
 	mux.HandleFunc("GET /api/v1/knowledge/{id}", a.getKnowledge)
 	mux.HandleFunc("DELETE /api/v1/knowledge/{id}", a.deleteKnowledge)
 
 	// Context + Timeline (cross-entity feeds)
-	mux.HandleFunc("GET /api/v1/context", a.getContext)                          // ?project_slug=
-	mux.HandleFunc("GET /api/v1/observations/{id}/timeline", a.getTimeline)      // ?before= &after=
+	mux.HandleFunc("GET /api/v1/context", a.getContext)                     // ?project_slug=
+	mux.HandleFunc("GET /api/v1/observations/{id}/timeline", a.getTimeline) // ?before= &after=
 
 	// Prompts (templates versionados)
 	mux.HandleFunc("POST /api/v1/prompts", a.createPrompt)
@@ -407,16 +407,10 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/prompts/by-slug/{slug}/versions", a.listPromptVersions)
 	mux.HandleFunc("GET /api/v1/prompts/search", a.searchPrompts)
 
-	// Cost analytics (issue-15.1 + issue-15.2)
+	// Cost analytics (issue-15.1). REQ-42.2: spend/breakdown/forecast/budgets/
+	// export se eliminaron junto con el dominio billing/costos (cost_logs/budgets).
 	mux.HandleFunc("GET /api/v1/cost/daily", a.getCostDaily) // ?days=N&group_by=org|agent
-	mux.HandleFunc("GET /api/v1/cost/spend/{granularity}", a.getCostSpend)
-	mux.HandleFunc("GET /api/v1/cost/breakdown/{dimension}", a.getCostBreakdown)
-	mux.HandleFunc("GET /api/v1/cost/forecast", a.getCostForecast)
-	mux.HandleFunc("POST /api/v1/cost/budgets", a.createBudget)
-	mux.HandleFunc("GET /api/v1/cost/budgets", a.listBudgets)
-	mux.HandleFunc("DELETE /api/v1/cost/budgets/{id}", a.deleteBudget)
-	mux.HandleFunc("GET /api/v1/cost/export", a.exportCost)
-	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 plan usage actual
+	mux.HandleFunc("GET /api/v1/usage", a.getCurrentUsage)   // issue-21.3 usage actual
 	// Quota snapshot read-only (issue-33.4)
 	mux.HandleFunc("GET /api/v1/usage/current", a.usageCurrentSnapshot)
 	mux.HandleFunc("GET /api/v1/usage/history", a.usageHistory)
@@ -495,7 +489,7 @@ func AuthAllowlist() []string {
 		"/api/v1/auth/login",
 		"/api/v1/auth/select-role",
 		"/api/v1/auth/enroll", // issue-37.1: gating por X-Enrollment-Token, no Bearer
-		"/api/v1/webhooks/*", // webhooks usan HMAC, no Bearer
+		"/api/v1/webhooks/*",  // webhooks usan HMAC, no Bearer
 		"/metrics",
 	}
 }

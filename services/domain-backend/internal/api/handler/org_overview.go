@@ -202,6 +202,8 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
+		// REQ-42.2: cost_logs se dropeó; tokens/cost del mes quedan en 0
+		// (no había writer de producción para esa tabla).
 		row := runner.QueryRow(gctx, `
 			SELECT
 			  (SELECT count(*) FROM users WHERE deleted_at IS NULL),
@@ -210,11 +212,9 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			    SELECT id FROM agent_runs WHERE started_at > now() - interval '24 hours'
 			    UNION ALL
 			    SELECT id FROM flow_runs WHERE started_at > now() - interval '24 hours'
-			  ) r),
-			  COALESCE((SELECT sum(tokens_input + tokens_output) FROM cost_logs WHERE occurred_at >= date_trunc('month', now())), 0)::bigint,
-			  COALESCE((SELECT sum(cost_usd) FROM cost_logs WHERE occurred_at >= date_trunc('month', now())), 0)
+			  ) r)
 		`)
-		return row.Scan(&stats.MembersActive, &stats.Agents, &stats.RunsLast24h, &stats.TokensThisMonth, &stats.CostThisMonthUSD)
+		return row.Scan(&stats.MembersActive, &stats.Agents, &stats.RunsLast24h)
 	})
 
 	// Top 5 users del mes (por cost USD desc).
@@ -226,13 +226,13 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
+		// REQ-42.2: cost_logs se dropeó; el ranking por cost/tokens ya no
+		// aplica. Top users se ordena por prompts capturados del mes;
+		// tokens_in/out y cost_usd quedan en 0.
 		rows, err := runner.Query(gctx, `
 			SELECT
 			  u.id, COALESCE(u.name, ''), u.email,
-			  COALESCE(p.prompts, 0),
-			  COALESCE(t.tokens_in, 0),
-			  COALESCE(t.tokens_out, 0),
-			  COALESCE(t.cost, 0)
+			  COALESCE(p.prompts, 0)
 			FROM users u
 			LEFT JOIN (
 			  SELECT user_id, count(*) AS prompts
@@ -240,17 +240,8 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 			  WHERE captured_at >= date_trunc('month', now())
 			  GROUP BY user_id
 			) p ON p.user_id = u.id
-			LEFT JOIN (
-			  SELECT user_id,
-			         sum(tokens_input)  AS tokens_in,
-			         sum(tokens_output) AS tokens_out,
-			         sum(cost_usd)     AS cost
-			  FROM cost_logs
-			  WHERE occurred_at >= date_trunc('month', now())
-			  GROUP BY user_id
-			) t ON t.user_id = u.id
 			WHERE u.deleted_at IS NULL
-			ORDER BY COALESCE(t.cost, 0) DESC
+			ORDER BY COALESCE(p.prompts, 0) DESC
 			LIMIT 5
 		`)
 		if err != nil {
@@ -259,7 +250,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var u TopUserEntry
-			if err := rows.Scan(&u.UserID, &u.Name, &u.Email, &u.Prompts, &u.TokensIn, &u.TokensOut, &u.CostUSD); err != nil {
+			if err := rows.Scan(&u.UserID, &u.Name, &u.Email, &u.Prompts); err != nil {
 				return err
 			}
 			topUsers = append(topUsers, u)

@@ -358,17 +358,6 @@ export const MAINTAINERS: MaintainerDef[] = [
     ],
   },
   {
-    path: 'cost-budgets', title: 'Cost Budgets', icon: 'cilChart', category: 'system',
-    description: 'Presupuestos mensuales con alertas.',
-    endpoint: '/api/v1/cost/budgets',
-    columns: [
-      { key: 'name', label: 'Nombre' },
-      { key: 'monthly_limit_usd', label: 'Limit USD', value: r => `$${(r.monthly_limit_usd ?? 0).toFixed(2)}` },
-      { key: 'current_spend_usd', label: 'Actual', value: r => `$${(r.current_spend_usd ?? 0).toFixed(2)}` },
-      { key: 'alert_threshold', label: 'Alert %' },
-    ],
-  },
-  {
     path: 'usage-alerts', title: 'Usage Alerts', icon: 'cilBell', category: 'system',
     description: 'Alertas configuradas para uso de tokens/cost.',
     endpoint: '/api/v1/usage-alerts',

@@ -41,31 +41,30 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
-	"nunezlagos/domain/internal/service/billing"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
-	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/extsync"
-	"nunezlagos/domain/internal/service/promptrouter"
-	"nunezlagos/domain/internal/service/workflowimport"
 	flowsvc "nunezlagos/domain/internal/service/flow"
-	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/intake"
+	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
-	cronsvc "nunezlagos/domain/internal/service/cron"
 	policysvc "nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
+	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	"nunezlagos/domain/internal/service/promptrouter"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	sesssvc "nunezlagos/domain/internal/service/session"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	"nunezlagos/domain/internal/service/workflowimport"
 )
 
 var (
@@ -162,7 +161,6 @@ func main() {
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agents := agentsvc.NewService(pools.App, recorder, nil)
-	billingSvc := &billing.Service{Pool: pools.App}
 
 	// LLM factory: providers según env vars DOMAIN_*_KEY, con retry +
 	// rate limit (issue-06.2).
@@ -188,7 +186,7 @@ func main() {
 	modelRegistry := &llmregistry.Registry{Pool: pools.App}
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: factory,
-		Agents: agents, Skills: skills, Billing: billingSvc,
+		Agents: agents, Skills: skills,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
 		// issue-08.10 enforcement híbrido: checkOrphanPolicy sólo bloquea
 		// cuando Env="prod"; dev/staging permiten runs sin flow_run_id
@@ -282,41 +280,41 @@ func main() {
 	}
 
 	srv := mcpserver.New(mcpserver.Deps{
-		Observations:   observations,
-		Projects:       projects,
-		Sessions:       sessions,
-		Prompts:        prompts,
-		Timeline:       timeline,
-		Search:         search,
-		Knowledge:      knowledgeSvc,
-		Skills:         skills,
+		Observations: observations,
+		Projects:     projects,
+		Sessions:     sessions,
+		Prompts:      prompts,
+		Timeline:     timeline,
+		Search:       search,
+		Knowledge:    knowledgeSvc,
+		Skills:       skills,
 		SkillExecution: &skillsvc.ExecutionService{
 			Pool: pools.App, Skills: skills,
 			Versions: &skillsvc.VersionStore{Pool: pools.App},
 			Runner:   skillRunnerInst,
 		},
-		Crons:          &cronsvc.Service{Pool: pools.App, Audit: recorder},
-		Clients:        clients,
+		Crons:           &cronsvc.Service{Pool: pools.App, Audit: recorder},
+		Clients:         clients,
 		CapturedPrompts: capturedPrompts,
-		ProjectRepos:   projectRepos,
+		ProjectRepos:    projectRepos,
 		ProjectPolicies: projectPolicies,
-		Tickets:        tickets,
-		Policies:       &policysvc.Service{Pool: pools.App},
-		Agents:         agents,
-		AgentRunner:    agentRunnerInst,
-		Flows:          flowService,
-		FlowRunner:     flowRunnerInst,
-		Orchestrator:   orchestratorSvc,
-		Hubuilder:      issuebuilderSvc,
-		Intake:         intakeSvc,
-		ExtSync:        extsyncSvc,
-		PromptRouter:   promptRouterSvc,
-		WorkflowImport: workflowImportSvc,
-		Pool:           pools.App,
-		Principal:      principal,
-		Dispatcher:     mcpDispatcher, // issue-35.1
-		ServerName:     "domain-mcp",
-		ServerVer:      Version,
+		Tickets:         tickets,
+		Policies:        &policysvc.Service{Pool: pools.App},
+		Agents:          agents,
+		AgentRunner:     agentRunnerInst,
+		Flows:           flowService,
+		FlowRunner:      flowRunnerInst,
+		Orchestrator:    orchestratorSvc,
+		Hubuilder:       issuebuilderSvc,
+		Intake:          intakeSvc,
+		ExtSync:         extsyncSvc,
+		PromptRouter:    promptRouterSvc,
+		WorkflowImport:  workflowImportSvc,
+		Pool:            pools.App,
+		Principal:       principal,
+		Dispatcher:      mcpDispatcher, // issue-35.1
+		ServerName:      "domain-mcp",
+		ServerVer:       Version,
 	})
 
 	fmt.Fprintf(os.Stderr, "domain-mcp %s ready (org=%s user=%s)\n",

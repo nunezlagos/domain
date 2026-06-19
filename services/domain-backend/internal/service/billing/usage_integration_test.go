@@ -1,9 +1,10 @@
 //go:build integration
 
 // issue-21.6 Fase B: integration test del billing.Service que cubre S1.4
-// usage_counters (PK swap a id BIGSERIAL + UNIQUE period_start) y S1.5 plans
-// (sin cambios de schema, pero verificamos que GetPlan/ResolveLimits siguen
-// funcionando con la FK organizations.plan_id que se dropeará en Fase C).
+// usage_counters (PK swap a id BIGSERIAL + UNIQUE period_start).
+//
+// REQ-42.2: la tabla plans se dropeó (dominio billing/costos eliminado);
+// los tests de GetPlan/ResolveLimits con plans se removieron.
 
 package billing
 
@@ -91,26 +92,4 @@ func TestGetUsage_NoRowReturnsZeroUsage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.Equal(t, int64(0), usage.TokensUsed)
-}
-
-// --- plans ---
-
-func TestGetPlan_ReturnsPlanBySlug(t *testing.T) {
-	pool, _, cleanup := setupBillingDB(t)
-	defer cleanup()
-	svc := &Service{Pool: pool}
-
-	plan, err := svc.GetPlan(context.Background(), "trial")
-	require.NoError(t, err)
-	require.NotNil(t, plan)
-	require.Equal(t, "trial", plan.Slug)
-}
-
-func TestGetPlan_NotFound(t *testing.T) {
-	pool, _, cleanup := setupBillingDB(t)
-	defer cleanup()
-	svc := &Service{Pool: pool}
-
-	_, err := svc.GetPlan(context.Background(), "does-not-exist")
-	require.ErrorIs(t, err, ErrPlanNotFound)
 }

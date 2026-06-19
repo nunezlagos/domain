@@ -8,7 +8,7 @@ export const routes: Routes = [
     data: {
       title: 'Cost',
       issue: '41.8',
-      description: 'Cost analytics: summary, breakdown por agent/project/model/user, forecast, budgets.',
+      description: 'Cost analytics: summary, breakdown por agent/project/model/user, forecast.',
     },
   },
 ];

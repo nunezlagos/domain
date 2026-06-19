@@ -18,7 +18,6 @@ import (
 	dmigrate "nunezlagos/domain/internal/migrate"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	agentsvc "nunezlagos/domain/internal/service/agent"
-	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/skill"
 )
 
@@ -42,13 +41,12 @@ func (s *stubProvider) CompleteStream(ctx context.Context, opts llm.CompletionOp
 }
 
 type fix struct {
-	runner    *agentrunner.Runner
-	agents    *agentsvc.Service
-	skills    *skill.Service
-	billing   *billing.Service
-	orgID     uuid.UUID
-	userID    uuid.UUID
-	provider  *stubProvider
+	runner   *agentrunner.Runner
+	agents   *agentsvc.Service
+	skills   *skill.Service
+	orgID    uuid.UUID
+	userID   uuid.UUID
+	provider *stubProvider
 }
 
 func setup(t *testing.T, responses []*llm.Response) (*fix, func()) {
@@ -76,8 +74,6 @@ func setup(t *testing.T, responses []*llm.Response) (*fix, func()) {
 
 	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	agentSvc := &agentsvc.Service{Pool: pools.App, Audit: rec}
-	billSvc := &billing.Service{Pool: pools.App}
-	_ = billSvc.AssignPlan(ctx, org.ID, "enterprise") // unlimited tokens
 
 	provider := &stubProvider{responses: responses}
 	factory := llm.NewFactory()
@@ -85,11 +81,11 @@ func setup(t *testing.T, responses []*llm.Response) (*fix, func()) {
 
 	runner := &agentrunner.Runner{
 		Pool: pools.App, Audit: rec, Factory: factory,
-		Agents: agentSvc, Skills: skillSvc, Billing: billSvc,
+		Agents: agentSvc, Skills: skillSvc,
 	}
 
 	return &fix{
-			runner: runner, agents: agentSvc, skills: skillSvc, billing: billSvc,
+			runner: runner, agents: agentSvc, skills: skillSvc,
 			orgID: org.ID, userID: owner.UserID, provider: provider,
 		}, func() {
 			pools.Close()
@@ -149,9 +145,9 @@ func TestRunner_ToolCallLoop(t *testing.T) {
 	// Crear skill "search-greet" tipo prompt
 	_, err := f.skills.Create(ctx, skill.CreateInput{
 		OrganizationID: f.orgID, Slug: "search-greet", Name: "Saludador",
-		Description:   "saluda al nombre dado",
-		SkillType:     skill.TypePrompt,
-		Content:       "Hola {{name}}!",
+		Description: "saluda al nombre dado",
+		SkillType:   skill.TypePrompt,
+		Content:     "Hola {{name}}!",
 		InputSchema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"name": map[string]any{"type": "string"}},
@@ -204,7 +200,7 @@ func TestRunner_FailsIfProviderNotRegistered(t *testing.T) {
 func TestRunner_MaxIterationsBreak(t *testing.T) {
 	// Cada respuesta pide tool_use, nunca termina con stop → debe alcanzar max
 	infiniteTool := &llm.Response{
-		Content: "más",
+		Content:      "más",
 		FinishReason: "tool_use",
 		ToolCalls: []llm.ToolCall{
 			{ID: "tu", Name: "loop", Arguments: map[string]any{}},

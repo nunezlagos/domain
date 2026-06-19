@@ -3,7 +3,7 @@
 // query la BD y genera reporte JSON + tabla ASCII.
 //
 // Aislado del runtime: solo lee tablas (agent_runs, flow_runs,
-// skill_executions, cost_logs), no escribe. Idempotente.
+// skill_executions), no escribe. Idempotente.
 //
 // El reporte NO contiene PII: solo UUIDs + counts + promedios. Esto lo
 // hace commiteable a git.

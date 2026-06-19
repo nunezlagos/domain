@@ -1,9 +1,9 @@
 // Package seeds — issue-01.7 seeders-system.
 //
 // Framework Go de seeders idempotente con go:embed. Cada Seeder:
-//  - tiene Name único + Version int
-//  - Run(ctx, tx, env) ejecuta UPSERT idempotente
-//  - reporta Report con counts (created/updated/skipped/preserved/errors)
+//   - tiene Name único + Version int
+//   - Run(ctx, tx, env) ejecuta UPSERT idempotente
+//   - reporta Report con counts (created/updated/skipped/preserved/errors)
 //
 // Orchestrator usa advisory lock Postgres para safe concurrent boot (N pods).
 package seeds
@@ -33,18 +33,18 @@ type Report struct {
 	Created   int      `json:"created"`
 	Updated   int      `json:"updated"`
 	Skipped   int      `json:"skipped"`
-	Preserved int      `json:"preserved"` // user-modified, no sobrescrito
+	Preserved int      `json:"preserved"`         // user-modified, no sobrescrito
 	Deleted   int      `json:"deleted,omitempty"` // cleanup defensivo (issue-08.10)
 	Errors    []string `json:"errors,omitempty"`
 }
 
 // Seeder interface a implementar por cada catálogo.
 type Seeder interface {
-	// Name único, snake_case (e.g. "plans", "model_registry", "agent_templates").
+	// Name único, snake_case (e.g. "model_registry", "agent_templates").
 	Name() string
 	// Version se bumpea cuando el catalog cambia para forzar reseed.
 	Version() int
-	// Order para topological sort (plans antes que invitations, etc.). Lower first.
+	// Order para topological sort (model_registry antes que invitations, etc.). Lower first.
 	Order() int
 	// IsDevOnly true si solo corre en EnvDev (e.g. demo data).
 	IsDevOnly() bool

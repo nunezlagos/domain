@@ -73,11 +73,12 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 		"sessions", "prompts", "knowledge_docs", "knowledge_chunks",
 		"skills", "skill_versions", "agents", "flows", "flow_runs",
 		"agent_runs", "crons", "webhooks", "webhook_deliveries", "audit_log",
-		"secrets", "cost_logs", "project_templates", "project_merges",
+		"secrets", "project_templates", "project_merges",
 		"schema_migrations",
 	}
 	// Nota: project_links, event_log, llm_semantic_cache, intake_attachments y
 	// domain_query_stats_history fueron dropeadas por 000130_drop_unused_tables.
+	// cost_logs fue dropeada por 000148 (REQ-42.2, dominio billing/costos).
 	for _, table := range expected {
 		require.Truef(t, got[table], "tabla %s no creada", table)
 	}

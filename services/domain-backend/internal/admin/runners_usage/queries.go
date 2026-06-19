@@ -208,39 +208,8 @@ func QueryHighFailureAgents(ctx context.Context, pool *pgxpool.Pool, days, limit
 	return out, nil
 }
 
-// QueryCostByRunner suma cost_usd desde cost_logs agrupado por runner
-// type. Si la tabla no existe retorna mapa vacío.
-func QueryCostByRunner(ctx context.Context, pool *pgxpool.Pool, days int) (map[string]float64, error) {
-	out := map[string]float64{}
-	var exists bool
-	err := pool.QueryRow(ctx, `
-		SELECT EXISTS (
-		  SELECT 1 FROM information_schema.tables
-		  WHERE table_schema = 'public' AND table_name = 'cost_logs'
-		)
-	`).Scan(&exists)
-	if err != nil || !exists {
-		return out, nil
-	}
-	rows, err := pool.Query(ctx, `
-		SELECT runner_type, COALESCE(SUM(cost_usd), 0)::float8
-		FROM cost_logs
-		WHERE occurred_at >= NOW() - ($1 || ' days')::interval
-		GROUP BY runner_type
-	`, fmt.Sprintf("%d", days))
-	if err != nil {
-		return out, fmt.Errorf("query cost by runner: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var runner string
-		var cost float64
-		if err := rows.Scan(&runner, &cost); err == nil {
-			out[runner] = cost
-		}
-	}
-	return out, nil
-}
+// REQ-42.2: QueryCostByRunner se eliminó junto con cost_logs (dominio
+// billing/costos). El campo CostByRunner del Report queda como mapa vacío.
 
 // BuildReportFromData construye un Report a partir de las métricas pre-collectadas.
 // Útil para tests con fake data o para cuando se quiere generar el reporte

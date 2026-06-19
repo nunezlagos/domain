@@ -2,8 +2,7 @@
 // in-memory cross-pod via Postgres LISTEN/NOTIFY.
 //
 // Casos de uso: platform_policies (issue-01.8),
-// mcp_servers (issue-12.6), plans+custom_limits (issue-21.3), model_registry
-// pricing, agent definitions LRU.
+// mcp_servers (issue-12.6), model_registry pricing, agent definitions LRU.
 //
 // Convención naming de channels: cache_invalidate_<entity>.
 // Payload: {operation:"insert|update|delete", id:"<uuid>", organization_id:"<uuid>"}.
@@ -33,10 +32,10 @@ type Cache interface {
 
 // Payload es el shape JSON que viaja por el channel.
 type Payload struct {
-	Operation      string     `json:"operation"`                  // insert | update | delete
-	ID             string     `json:"id"`                         // entity primary key
-	OrganizationID *string    `json:"organization_id,omitempty"`  // scope opcional
-	Extra          map[string]any `json:"extra,omitempty"`        // metadata libre
+	Operation      string         `json:"operation"`                 // insert | update | delete
+	ID             string         `json:"id"`                        // entity primary key
+	OrganizationID *string        `json:"organization_id,omitempty"` // scope opcional
+	Extra          map[string]any `json:"extra,omitempty"`           // metadata libre
 }
 
 // ChannelFor devuelve el nombre canónico de channel para una entidad.
@@ -53,10 +52,10 @@ type Listener struct {
 	Logger  *slog.Logger
 	Cache   Cache // cache a invalidar cuando llega un payload
 
-	mu        sync.Mutex
-	handlers  []func(context.Context, Payload)
-	stopCh    chan struct{}
-	stopped   bool
+	mu       sync.Mutex
+	handlers []func(context.Context, Payload)
+	stopCh   chan struct{}
+	stopped  bool
 }
 
 // NewListener construye un Listener sobre un Pool + channel + cache local.

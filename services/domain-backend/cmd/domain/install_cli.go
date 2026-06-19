@@ -42,8 +42,8 @@ import (
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/cli/install"
 	"nunezlagos/domain/internal/cli/onboard"
-	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
+	claudehook "nunezlagos/domain/internal/cli/setup/claudehook"
 	primarymem "nunezlagos/domain/internal/cli/setup/primary_memory"
 	"nunezlagos/domain/internal/config"
 	dmigrate "nunezlagos/domain/internal/migrate"
@@ -398,16 +398,16 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 
 // installFlags son los flags parseados de `domain install`.
 type installFlags struct {
-	mode         string
-	baseURL      string
-	dsn          string
-	email        string
-	nonInter     bool
-	noBackup     bool
-	noInit       bool
-	noService    bool
-	agents       []string
-	src          string
+	mode           string
+	baseURL        string
+	dsn            string
+	email          string
+	nonInter       bool
+	noBackup       bool
+	noInit         bool
+	noService      bool
+	agents         []string
+	src            string
 	withWrapper    bool
 	withClaudeHook bool
 	noClaudeHook   bool
@@ -1132,7 +1132,6 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	defer pool.Close()
 
 	registry := seeds.NewRegistry()
-	registry.Register(&seeds.PlansSeeder{})
 	registry.Register(&seeds.ModelRegistrySeeder{})
 	registry.Register(&seeds.PlatformPoliciesSeeder{})
 	registry.Register(&seeds.ProjectTemplatesSeeder{})

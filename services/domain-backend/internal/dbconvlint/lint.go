@@ -261,7 +261,7 @@ func checkCreateTableConventions(src string, lines []string, add func(int, strin
 				fmt.Sprintf("table '%s' should be plural (e.g. '%ss')", name, name))
 		}
 		// required created_at (o equivalente: cualquier *_at TIMESTAMPTZ NOT NULL DEFAULT NOW
-		// — audit_log usa 'occurred_at', cost_logs usa 'recorded_at', etc.).
+		// — audit_log usa 'occurred_at', agent_runs usa 'started_at', etc.).
 		if !hasTimestamptzDefaultNow(body) {
 			add(line, "require-created-at",
 				fmt.Sprintf("table '%s' missing required column 'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()' (or equivalent *_at)", name))
@@ -397,20 +397,20 @@ func Fix(src string) (string, bool) {
 //   * ALTER TABLE ADD FOREIGN KEY sin NOT VALID → table-wide lock durante validación
 
 var (
-	reCreateIndex     = regexp.MustCompile(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX\s`)
+	reCreateIndex = regexp.MustCompile(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX\s`)
 	// reCreateIndexStmt captura el statement completo CREATE INDEX ... ON table
 	// (multilínea, hasta ;) — el grupo capturado es el nombre de la tabla.
-	reCreateIndexStmt = regexp.MustCompile(`(?is)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*)[^;]*;`)
-	reConcurrently    = regexp.MustCompile(`(?i)\bCONCURRENTLY\b`)
+	reCreateIndexStmt  = regexp.MustCompile(`(?is)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*)[^;]*;`)
+	reConcurrently     = regexp.MustCompile(`(?i)\bCONCURRENTLY\b`)
 	reAddColumnNotNull = regexp.MustCompile(`(?i)\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?[a-z_]+\s+[a-zA-Z_(),0-9]+(?:\s+[a-zA-Z_(),0-9 ]+?)?\s+NOT\s+NULL\b`)
-	reDefaultClause   = regexp.MustCompile(`(?i)\bDEFAULT\b`)
-	reDropTable       = regexp.MustCompile(`(?i)^\s*DROP\s+TABLE\s`)
-	reDropColumn      = regexp.MustCompile(`(?i)\bDROP\s+COLUMN\s`)
-	reIfExists        = regexp.MustCompile(`(?i)\bIF\s+EXISTS\b`)
-	reVacuumFull      = regexp.MustCompile(`(?i)^\s*VACUUM\s+FULL\b`)
-	reLockTable       = regexp.MustCompile(`(?i)^\s*LOCK\s+(TABLE\s+)?`)
-	reAddFK           = regexp.MustCompile(`(?i)\bADD\s+(CONSTRAINT\s+\S+\s+)?FOREIGN\s+KEY\b`)
-	reNotValid        = regexp.MustCompile(`(?i)\bNOT\s+VALID\b`)
+	reDefaultClause    = regexp.MustCompile(`(?i)\bDEFAULT\b`)
+	reDropTable        = regexp.MustCompile(`(?i)^\s*DROP\s+TABLE\s`)
+	reDropColumn       = regexp.MustCompile(`(?i)\bDROP\s+COLUMN\s`)
+	reIfExists         = regexp.MustCompile(`(?i)\bIF\s+EXISTS\b`)
+	reVacuumFull       = regexp.MustCompile(`(?i)^\s*VACUUM\s+FULL\b`)
+	reLockTable        = regexp.MustCompile(`(?i)^\s*LOCK\s+(TABLE\s+)?`)
+	reAddFK            = regexp.MustCompile(`(?i)\bADD\s+(CONSTRAINT\s+\S+\s+)?FOREIGN\s+KEY\b`)
+	reNotValid         = regexp.MustCompile(`(?i)\bNOT\s+VALID\b`)
 )
 
 func checkMigrationSafety(src string, lines []string, add func(int, string, string)) {

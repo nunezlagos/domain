@@ -1,13 +1,13 @@
-// Package billing — issue-21.3 plans + usage tracking + limit enforcement.
+// Package billing — issue-21.3 usage tracking sobre usage_counters.
 //
-// Plans son globales (Free/Pro/Enterprise + custom). Cada org tiene plan_id +
-// custom_limits JSONB que pueden override. usage_counters tracks consumo por
-// período mensual (period_start = primer día del mes UTC).
+// REQ-42.2: el dominio de planes/cuotas (tabla plans) se eliminó — producto
+// single-org sin facturación. Este paquete conserva SOLO la observabilidad de
+// uso sobre usage_counters (consumo por período mensual, period_start = primer
+// día del mes UTC).
 //
 // Lifecycle:
 //   - IncrementTokens / IncrementRuns: actualiza contador atómico
-//   - CheckLimit: lee plan + custom + usage actual; devuelve estado
-//   - ResetMonthly: cron job el día 1 del mes — no-op si ya hay row del mes
+//   - GetUsage: lee el contador del período actual
 package billing
 
 import (
@@ -22,24 +22,9 @@ import (
 )
 
 var (
-	ErrPlanNotFound  = errors.New("plan not found")
 	ErrOrgNotFound   = errors.New("organization not found")
 	ErrQuotaExceeded = errors.New("quota exceeded")
 )
-
-type Plan struct {
-	ID                uuid.UUID
-	Slug              string
-	Name              string
-	TokensPerMonth    *int64 // NULL = ilimitado
-	RunsPerMonth      *int32
-	StorageGBMax      *int32
-	MembersMax        *int32
-	Seats             *int32
-	SoftLimitRatio    float64
-	MonthlyPriceUSD   float64
-	IsActive          bool
-}
 
 type Usage struct {
 	OrganizationID uuid.UUID
@@ -72,61 +57,14 @@ func (s *Service) now() time.Time {
 	return time.Now().UTC()
 }
 
-// GetPlan por slug.
-func (s *Service) GetPlan(ctx context.Context, slug string) (*Plan, error) {
-	var p Plan
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, name, tokens_per_month, runs_per_month, storage_gb_max,
-		        members_max, seats, soft_limit_ratio, monthly_price_usd, is_active
-		 FROM plans WHERE slug = $1`, slug,
-	).Scan(&p.ID, &p.Slug, &p.Name, &p.TokensPerMonth, &p.RunsPerMonth, &p.StorageGBMax,
-		&p.MembersMax, &p.Seats, &p.SoftLimitRatio, &p.MonthlyPriceUSD, &p.IsActive)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrPlanNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get plan: %w", err)
-	}
-	return &p, nil
-}
-
-// AssignPlan asocia un plan a una org. Crea el plan_started_at = now si era NULL.
+// ResolveLimits devuelve las cuotas vigentes.
 //
-// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
-// Fase C. En single-org, no hay org-level plan_id (los plans son
-// globales vía REQ-35.2 / issue-21.5). AssignPlan es ahora un no-op
-// silencioso: el planSlug se valida contra la tabla global de plans
-// (que sí existe) pero no se persiste en ninguna org.
-func (s *Service) AssignPlan(ctx context.Context, orgID uuid.UUID, planSlug string) error {
-	plan, err := s.GetPlan(ctx, planSlug)
-	if err != nil {
-		return err
-	}
-	if plan == nil {
-		return ErrPlanNotFound
-	}
-	// No-op: plan_id era per-org pre-single-org. Ahora los plans son
-	// globales; "asignar un plan" no tiene sentido en una sola org.
-	// Mantenemos la firma para backward compat con callers existentes
-	// (tests admin que verifican que la llamada no falla).
-	_ = orgID
-	_ = plan
-	return nil
-}
-
-// ResolveLimits combina plan + custom_limits. Si custom tiene un campo,
-// gana sobre el del plan.
-//
-// ISSUE-21.6 Fase D clean Round 3: en single-org no hay plan_id ni
-// custom_limits por org. Devolvemos defaults (custom_limits vacío,
-// plan_id nil → caller usa plan global o defaults).
-func (s *Service) ResolveLimits(ctx context.Context, orgID uuid.UUID) (*Limits, *Plan, error) {
+// REQ-42.2: el dominio de planes se eliminó (single-org sin facturación).
+// Sin plans ni custom_limits, devolvemos límites vacíos (sin caps).
+func (s *Service) ResolveLimits(ctx context.Context, orgID uuid.UUID) (*Limits, error) {
 	_ = ctx
 	_ = orgID
-	// Defaults single-org: sin custom_limits, sin plan específico
-	// (los plans globales se consultan via GetPlan cuando el caller los
-	// necesita explícitamente).
-	return &Limits{}, nil, nil
+	return &Limits{}, nil
 }
 
 // IncrementTokens suma tokens al período actual; UPSERT idempotente.
@@ -192,19 +130,19 @@ func (s *Service) GetUsage(ctx context.Context, orgID uuid.UUID) (*Usage, error)
 
 // LimitState resultado de CheckLimit.
 type LimitState struct {
-	Dimension     string  // "tokens" | "runs" | "storage" | "members"
-	Used          int64
-	Limit         int64   // 0 si ilimitado
-	Unlimited     bool
-	RatioUsed     float64 // 0..1+
-	SoftLimitHit  bool    // ratio >= soft_limit_ratio
-	HardLimitHit  bool    // ratio >= 1.0
+	Dimension    string // "tokens" | "runs" | "storage" | "members"
+	Used         int64
+	Limit        int64 // 0 si ilimitado
+	Unlimited    bool
+	RatioUsed    float64 // 0..1+
+	SoftLimitHit bool    // ratio >= soft_limit_ratio
+	HardLimitHit bool    // ratio >= 1.0
 }
 
 // CheckTokens valida si la org puede consumir N tokens más.
 // Si HardLimitHit, retorna ErrQuotaExceeded además del state.
 func (s *Service) CheckTokens(ctx context.Context, orgID uuid.UUID, additional int64) (*LimitState, error) {
-	limits, plan, err := s.ResolveLimits(ctx, orgID)
+	limits, err := s.ResolveLimits(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,11 +159,7 @@ func (s *Service) CheckTokens(ctx context.Context, orgID uuid.UUID, additional i
 	if state.Limit > 0 {
 		state.RatioUsed = float64(state.Used) / float64(state.Limit)
 	}
-	softRatio := 0.8
-	if plan != nil && plan.SoftLimitRatio > 0 {
-		softRatio = plan.SoftLimitRatio
-	}
-	state.SoftLimitHit = state.RatioUsed >= softRatio
+	state.SoftLimitHit = state.RatioUsed >= 0.8
 	state.HardLimitHit = state.RatioUsed >= 1.0
 	if state.HardLimitHit {
 		return state, ErrQuotaExceeded

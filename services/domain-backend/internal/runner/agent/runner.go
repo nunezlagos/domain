@@ -1,17 +1,17 @@
 // Package agentrunner — issue-08.2 motor de ejecución de agents.
 //
 // Flow:
-//   1. Crear agent_run con status=pending
-//   2. Cargar agent + sus skills + system_prompt
-//   3. Loop:
-//      a. status=running
-//      b. Llamar Provider.Complete con messages + tools (skills como function defs)
-//      c. Si finish_reason=tool_use → ejecutar skill correspondiente → append result
-//         como tool message → iterar
-//      d. Si finish_reason=stop → finalizar
-//      e. Si iterations > max_iterations → finalizar con error
-//   4. Persistir tokens + cost + outputs
-//   5. status=completed | failed
+//  1. Crear agent_run con status=pending
+//  2. Cargar agent + sus skills + system_prompt
+//  3. Loop:
+//     a. status=running
+//     b. Llamar Provider.Complete con messages + tools (skills como function defs)
+//     c. Si finish_reason=tool_use → ejecutar skill correspondiente → append result
+//     como tool message → iterar
+//     d. Si finish_reason=stop → finalizar
+//     e. Si iterations > max_iterations → finalizar con error
+//  4. Persistir tokens + cost + outputs
+//  5. status=completed | failed
 //
 // Skill execution: actualmente solo skill_type "prompt" se ejecuta sustituyendo
 // variables en content. Otros types (code/api/mcp_tool) requieren issue-05.5.
@@ -37,15 +37,13 @@ import (
 	"nunezlagos/domain/internal/metrics"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
-	"nunezlagos/domain/internal/service/billing"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
 var (
-	ErrAgentNotFound       = errors.New("agent not found")
-	ErrProviderMissing     = errors.New("LLM provider not registered for agent.provider")
-	ErrQuotaExceeded       = errors.New("organization quota exceeded")
-	ErrMaxIterations       = errors.New("max iterations reached")
+	ErrAgentNotFound   = errors.New("agent not found")
+	ErrProviderMissing = errors.New("LLM provider not registered for agent.provider")
+	ErrMaxIterations   = errors.New("max iterations reached")
 	// issue-08.10: enforcement híbrido. En prod un run sin flow_run_id requiere
 	// WithStandalone(true) explícito. El cron orphan-runs-audit (issue-08.12)
 	// audita en métricas el caso ya admitido; este error bloquea proactivo.
@@ -68,16 +66,15 @@ type EventEmitter interface {
 
 // Runner orquesta ejecución de agents.
 type Runner struct {
-	Pool         *pgxpool.Pool
-	Audit        audit.Recorder
-	Factory      *llm.Factory
-	Agents       *agentsvc.Service
-	Skills       *skillsvc.Service
-	Billing      *billing.Service
-	SkillRunner  *skillrunner.Runner // si nil, se crea uno default por Run()
-	Models       *registry.Registry  // si nil, costo siempre 0
-	Emitter      EventEmitter        // si nil, no emite eventos outbound
-	Metrics      *metrics.Registry   // opcional, si nil no genera métricas
+	Pool        *pgxpool.Pool
+	Audit       audit.Recorder
+	Factory     *llm.Factory
+	Agents      *agentsvc.Service
+	Skills      *skillsvc.Service
+	SkillRunner *skillrunner.Runner // si nil, se crea uno default por Run()
+	Models      *registry.Registry  // si nil, costo siempre 0
+	Emitter     EventEmitter        // si nil, no emite eventos outbound
+	Metrics     *metrics.Registry   // opcional, si nil no genera métricas
 	// Env es el entorno deployado (dev|staging|prod). En prod, runs sin
 	// flow_run_id requieren WithStandalone(true) explícito (issue-08.10).
 	// Si vacío, se asume dev (no enforcement).
@@ -92,15 +89,15 @@ type RunInput struct {
 }
 
 type RunResult struct {
-	RunID         uuid.UUID
-	Status        string
-	Output        string
-	Error         string
-	TokensInput   int
-	TokensOutput  int
-	Iterations    int
-	StartedAt     time.Time
-	FinishedAt    time.Time
+	RunID        uuid.UUID
+	Status       string
+	Output       string
+	Error        string
+	TokensInput  int
+	TokensOutput int
+	Iterations   int
+	StartedAt    time.Time
+	FinishedAt   time.Time
 }
 
 // Run ejecuta el agente con el prompt del usuario y devuelve resultado.
@@ -122,18 +119,6 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 	// org se resuelve del context del request (issue-02.8: agents ya no
 	// portan organization_id; el tenant viaja en el ctx vía middleware).
 	orgID := ctxkeys.OrgID(ctx)
-
-	// Pre-flight: estimate tokens del input + system prompt y verificar quota
-	if r.Billing != nil {
-		estimated := tokens.EstimateMessages(agent.SystemPrompt,
-			[]llm.Message{{Role: "user", Content: in.UserPrompt}})
-		state, qerr := r.Billing.CheckTokens(ctx, orgID, int64(estimated))
-		if qerr != nil {
-			return r.failedRun(ctx, orgID, in, ro, "quota_exceeded",
-				fmt.Errorf("%w: estimated %d tokens would exceed (state: used=%d, limit=%d): %v",
-					ErrQuotaExceeded, estimated, state.Used, state.Limit, qerr))
-		}
-	}
 
 	provider, err := r.Factory.Get(agent.Provider)
 	if err != nil {
@@ -299,16 +284,11 @@ LOOP:
 
 	// Log final entry con resumen
 	r.appendLog(ctx, runID, iterations, "final", map[string]any{
-		"status":  status,
-		"output":  finalText,
-		"error":   errStr,
+		"status":   status,
+		"output":   finalText,
+		"error":    errStr,
 		"cost_usd": costUSD,
 	}, totalIn, totalOut, 0)
-
-	if r.Billing != nil && totalIn+totalOut > 0 {
-		_, _ = r.Billing.IncrementTokens(ctx, orgID, int64(totalIn+totalOut))
-		_, _ = r.Billing.IncrementRuns(ctx, orgID)
-	}
 
 	if r.Emitter != nil {
 		r.Emitter.EmitAgentRunFinished(ctx, orgID, runID, agent.Slug, status, costUSD, int64(totalIn+totalOut))

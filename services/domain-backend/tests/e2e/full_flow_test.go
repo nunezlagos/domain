@@ -3,15 +3,15 @@
 // Package e2e — tests end-to-end que validan flujos cliente completos.
 //
 // NO duplica unit tests granulares; cubre el HAPPY PATH del cliente:
-//   1. Crear org + user owner
-//   2. Emitir API key (simula post-verify-OTP)
-//   3. Crear project
-//   4. Save observations (con privacy + dedup verificado en service)
-//   5. Search global cross-entity
-//   6. Crear skill + agent
-//   7. Ejecutar agent → verificar agent_run + logs persistidos
-//   8. Crear flow → ejecutar
-//   9. Soft-delete + restore
+//  1. Crear org + user owner
+//  2. Emitir API key (simula post-verify-OTP)
+//  3. Crear project
+//  4. Save observations (con privacy + dedup verificado en service)
+//  5. Search global cross-entity
+//  6. Crear skill + agent
+//  7. Ejecutar agent → verificar agent_run + logs persistidos
+//  8. Crear flow → ejecutar
+//  9. Soft-delete + restore
 //  10. GDPR export incluye todo el data del user
 //
 // Si este test pasa, las APIs públicas funcionan end-to-end.
@@ -43,7 +43,6 @@ import (
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
 	agentsvc "nunezlagos/domain/internal/service/agent"
-	"nunezlagos/domain/internal/service/billing"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -62,9 +61,9 @@ type stubProvider struct{}
 func (stubProvider) Name() string { return "stub" }
 func (stubProvider) Complete(ctx context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
 	return &llm.Response{
-		Content: "Respuesta simulada del agente",
-		Model:   opts.Model,
-		Usage:   llm.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
+		Content:      "Respuesta simulada del agente",
+		Model:        opts.Model,
+		Usage:        llm.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
 		FinishReason: "stop",
 	}, nil
 }
@@ -106,7 +105,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	agentS := &agentsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
-	billS := &billing.Service{Pool: pools.App}
 	lifeS := &lifecycle.Service{Pool: pools.App, Audit: rec}
 	keys := &apikey.PGStore{Pool: pools.Auth}
 
@@ -117,7 +115,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	skillR := skillrunner.New()
 	agentR := &agentrunner.Runner{
 		Pool: pools.App, Audit: rec, Factory: factory,
-		Agents: agentS, Skills: skillS, Billing: billS,
+		Agents: agentS, Skills: skillS,
 		SkillRunner: skillR,
 	}
 	flowR := &flowrunner.Runner{
@@ -130,7 +128,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 		ProjectService:   projS,
 		ObsService:       obsS,
 		SessionService:   &sesssvc.Service{Pool: pools.App, Audit: rec},
-		PromptService:   &promptsvc.Service{Pool: pools.App, Audit: rec},
+		PromptService:    &promptsvc.Service{Pool: pools.App, Audit: rec},
 		TimelineService:  &timelinesvc.Service{Pool: pools.App},
 		SearchService:    &searchsvc.Service{Pool: pools.App},
 		KnowledgeService: &knowledge.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}},
@@ -146,7 +144,6 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	// Setup inicial: org + user + API key (simula post-verify-OTP)
 	org, owner, err := seedOrgUser(ctx, pools.App, "Acme E2E", "acme-e2e", "owner@e2e.test", "Owner E2E")
 	require.NoError(t, err)
-	require.NoError(t, billS.AssignPlan(ctx, org.ID, "enterprise"))
 
 	plaintext, _, err := keys.Issue(ctx, org.ID, owner.UserID, "e2e-key", "test")
 	require.NoError(t, err)
@@ -293,12 +290,12 @@ func TestE2E_FullClientFlow(t *testing.T) {
 
 	// Crear agent que usa el skill
 	st, body = f.req(t, "POST", "/api/v1/agents", map[string]any{
-		"slug":         "summarizer",
-		"name":         "Summarizer Agent",
-		"provider":     "ollama",
-		"model":        "llama3.1",
+		"slug":          "summarizer",
+		"name":          "Summarizer Agent",
+		"provider":      "ollama",
+		"model":         "llama3.1",
 		"system_prompt": "Eres un asistente que resume textos.",
-		"skills_slugs": []string{"summarize"},
+		"skills_slugs":  []string{"summarize"},
 	})
 	require.Equalf(t, 201, st, "create agent: %+v", body)
 	agentID := pickID(body["data"])

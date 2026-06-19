@@ -63,7 +63,7 @@ func (a *API) getCurrentUsage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "usage", err.Error())
 		return
 	}
-	limits, plan, err := a.BillingService.ResolveLimits(r.Context(), orgID)
+	limits, err := a.BillingService.ResolveLimits(r.Context(), orgID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "limits", err.Error())
 		return
@@ -71,13 +71,6 @@ func (a *API) getCurrentUsage(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"usage":  usage,
 		"limits": limits,
-	}
-	if plan != nil {
-		resp["plan"] = map[string]any{
-			"slug":             plan.Slug,
-			"name":             plan.Name,
-			"soft_limit_ratio": plan.SoftLimitRatio,
-		}
 	}
 	writeData(w, http.StatusOK, resp)
 }

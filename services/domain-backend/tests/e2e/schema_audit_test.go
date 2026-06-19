@@ -62,14 +62,14 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Crons + Webhooks
 		"crons", "webhooks", "outbound_webhook_subscriptions", "outbound_webhook_deliveries",
 		"event_log",
-		// Audit + Cost
-		"audit_log", "activity_log", "cost_logs", "usage_counters", "usage_alerts",
+		// Audit + Usage (REQ-42.2: cost_logs dropeada con el dominio billing/costos)
+		"audit_log", "activity_log", "usage_counters", "usage_alerts",
 		"notification_deliveries",
 		// Auth + RBAC (auth_rate_limits es in-memory issue-02.5;
 		// role_resource_limits es ALTER ROLE migration 000029, no tabla)
 		"otp_codes", "custom_roles", "invitations", "secrets",
-		// Plans + Policies + Templates
-		"plans", "platform_policies", "platform_policy_versions",
+		// Policies + Templates (REQ-42.2: plans dropeada con billing/costos)
+		"platform_policies", "platform_policy_versions",
 		"project_templates", "project_links", "project_merges",
 		// Domain misc
 		"runtime_configs", "model_registry", "idempotency_keys",
@@ -120,13 +120,12 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 	require.NoError(t, err)
 	defer pools.Close()
 
+	// REQ-42.2: PlansSeeder se eliminó junto con el dominio billing/costos.
 	reg := seeds.NewRegistry()
-	reg.Register(&seeds.PlansSeeder{})
 	reg.Register(&seeds.ModelRegistrySeeder{})
 	reg.Register(&seeds.PlatformPoliciesSeeder{})
 	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, results["plans"].Created+results["plans"].Updated, 4)
 	require.GreaterOrEqual(t, results["model_registry"].Created, 10)
 	require.GreaterOrEqual(t, results["platform_policies"].Created, 5)
 
@@ -135,7 +134,6 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 		table   string
 		minRows int
 	}{
-		{"plans", 4},
 		{"model_registry", 12},
 		{"platform_policies", 8},
 	}
@@ -146,12 +144,6 @@ func TestSchemaAudit_SeedersPopulateCatalogs(t *testing.T) {
 		require.GreaterOrEqual(t, n, c.minRows,
 			"%s debe tener al menos %d filas tras seed, tiene %d", c.table, c.minRows, n)
 	}
-
-	// Verifica invariante open-source.
-	var maxPrice int
-	require.NoError(t, pools.App.QueryRow(ctx,
-		"SELECT COALESCE(MAX(monthly_price_usd), 0) FROM plans").Scan(&maxPrice))
-	require.Equal(t, 0, maxPrice, "plans NO debe tener pricing comercial")
 
 	// model_registry con Claude 4.x family.
 	var anthropicCount int

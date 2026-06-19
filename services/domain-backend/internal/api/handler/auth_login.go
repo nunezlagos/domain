@@ -27,9 +27,16 @@ type loginReq struct {
 }
 
 type loginResp struct {
-	TempToken string          `json:"temp_token"`
-	User      session.User    `json:"user"`
-	Roles     []session.Role  `json:"roles"`
+	// ISSUE-21.6 + REQ-UX: en single-org, el login devuelve el session_token
+	// directamente. En multi-tenant (futuro) se puede revertir al flow
+	// temp_token + select-role. Por ahora exponemos AMBOS campos para
+	// backward compat: el Angular actual puede usar session_token o
+	// seguir con select-role (legacy).
+	TempToken    string         `json:"temp_token"`
+	SessionToken string         `json:"session_token,omitempty"`
+	ExpiresAt    string         `json:"expires_at,omitempty"`
+	User         session.User   `json:"user"`
+	Roles        []session.Role `json:"roles"`
 }
 
 func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
@@ -56,11 +63,29 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "credenciales inválidas"})
 		return
 	}
-	writeJSON(w, http.StatusOK, loginResp{
+	resp := loginResp{
 		TempToken: res.TempToken,
 		User:      res.User,
 		Roles:     res.Roles,
-	})
+	}
+	// ISSUE-21.6 single-org: si el user tiene 1 solo rol, generar el
+	// session_token directamente (skip select-role). El dashboard single-org
+	// no tiene role switcher, así que el flow de 2 pasos es overhead.
+	if len(res.Roles) == 1 {
+		sel, selErr := a.AuthSessionService.SelectRole(
+			r.Context(),
+			res.TempToken, res.Roles[0].Slug,
+			r.Header.Get("User-Agent"), realIP(r),
+		)
+		if selErr == nil {
+			resp.SessionToken = sel.Token
+			resp.ExpiresAt = sel.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
+		}
+		// Si SelectRole falla, devolvemos temp_token + roles y dejamos
+		// que el cliente decida. El Angular va a usar session_token si
+		// está presente.
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type selectRoleReq struct {

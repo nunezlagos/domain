@@ -31,6 +31,11 @@ export interface Role {
 
 export interface LoginResponse {
   temp_token: string;
+  // ISSUE-21.6 + REQ-UX: en single-org, el login devuelve el session_token
+  // directamente. El cliente usa session_token si está presente; si no,
+  // sigue el flow temp_token + select-role (multi-tenant legacy).
+  session_token?: string;
+  expires_at?: string;
   user: User;
   roles: Role[];
 }

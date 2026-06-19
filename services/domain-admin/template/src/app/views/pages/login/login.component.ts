@@ -75,7 +75,16 @@ export class LoginComponent implements OnInit {
         this.roles.set(res.roles);
         // Persistir email (recordar entre sesiones)
         localStorage.setItem(this.REMEMBERED_EMAIL_KEY, this.email);
-        // Auto-skip si solo hay 1 rol
+        // ISSUE-21.6 + REQ-UX: si el backend devuelve session_token
+        // directo (single-org), persistir y navegar. Si no, seguir el
+        // flow de select-role (multi-tenant legacy).
+        if (res.session_token) {
+          this.persistDirectSession(res);
+          const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/admin/dashboard';
+          this.router.navigateByUrl(returnUrl);
+          return;
+        }
+        // Auto-skip si solo hay 1 rol (multi-tenant legacy)
         if (res.roles.length === 1) {
           this.selectedRole.set(res.roles[0].slug);
           this.submitRole();
@@ -86,6 +95,16 @@ export class LoginComponent implements OnInit {
         this.error.set(err?.error?.error?.message || err?.error?.error || 'Credenciales inválidas');
       },
     });
+  }
+
+  private persistDirectSession(res: LoginResponse): void {
+    if (!res.session_token || !res.roles[0]) return;
+    const role = res.roles[0];
+    const user = res.user;
+    localStorage.setItem('domain.session_token', res.session_token);
+    localStorage.setItem('domain.user', JSON.stringify(user));
+    localStorage.setItem('domain.active_role', JSON.stringify(role));
+    localStorage.setItem('domain.roles', JSON.stringify(res.roles));
   }
 
   submitRole(): void {

@@ -46,7 +46,10 @@ interface TableInfo {
   columns: ColumnInfo[];
   indexes: IndexInfo[];
   foreign_keys: FKInfo[];
+  /** @deprecated legacy hint del backend (6 buckets). REQ-42.10 agrupa por prefijo; este campo ya no se usa. */
   category: string;
+  /** Override opcional de agrupamiento (table_catalog, HU 42.1). Ausente hoy: la rama queda inerte. */
+  group_key?: string;
 }
 
 interface SchemaResponse {
@@ -56,14 +59,48 @@ interface SchemaResponse {
   };
 }
 
-const CATEGORY_META: Record<string, { label: string; color: string; icon: string }> = {
-  core:          { label: 'Identidad & Auth',     color: 'primary',   icon: 'cilUser' },
-  resources:     { label: 'Recursos',              color: 'info',      icon: 'cilApps' },
-  observability: { label: 'Observabilidad',        color: 'warning',   icon: 'cilList' },
-  system:        { label: 'Sistema',               color: 'success',   icon: 'cilStorage' },
-  sdd:           { label: 'SDD / Specs',          color: 'secondary', icon: 'cilFile' },
-  other:         { label: 'Otros',                 color: 'dark',      icon: 'cilSettings' },
-};
+// ---- Agrupamiento por PREFIJO (taxonomia REQ-42) ----
+// El orden del array = orden de render. schema_migrations -> HIDDEN.
+interface GroupMeta { label: string; color: string; icon: string; }
+
+const PREFIX_GROUPS: { prefix: string; meta: GroupMeta }[] = [
+  { prefix: 'users',        meta: { label: 'Usuarios y RBAC',         color: 'primary',   icon: 'cilUser' } },
+  { prefix: 'auth',         meta: { label: 'Autenticacion',           color: 'primary',   icon: 'cilLockLocked' } },
+  { prefix: 'agent',        meta: { label: 'Agentes',                 color: 'info',      icon: 'cilTerminal' } }, // cilRobot no existe en @coreui/icons; alias del proyecto
+  { prefix: 'flow',         meta: { label: 'Flujos',                  color: 'info',      icon: 'cilFork' } },
+  { prefix: 'skill',        meta: { label: 'Skills',                  color: 'info',      icon: 'cilLightbulb' } },
+  { prefix: 'mcp',          meta: { label: 'Servidores MCP',          color: 'info',      icon: 'cilLan' } },
+  { prefix: 'prompt',       meta: { label: 'Prompts',                 color: 'info',      icon: 'cilSpeech' } },
+  { prefix: 'project',      meta: { label: 'Proyectos y tickets',     color: 'success',   icon: 'cilFolder' } },
+  { prefix: 'sdd',          meta: { label: 'SDD (especificacion)',    color: 'secondary', icon: 'cilFile' } },
+  { prefix: 'tdd',          meta: { label: 'TDD y verificacion',      color: 'secondary', icon: 'cilCheckCircle' } },
+  { prefix: 'issue',        meta: { label: 'Issues / Historias',      color: 'secondary', icon: 'cilTask' } },
+  { prefix: 'knowledge',    meta: { label: 'Base de conocimiento',    color: 'warning',   icon: 'cilLibrary' } },
+  { prefix: 'webhook',      meta: { label: 'Webhooks',                color: 'warning',   icon: 'cilBolt' } },
+  { prefix: 'external',     meta: { label: 'Integraciones externas',  color: 'warning',   icon: 'cilCloud' } },
+  { prefix: 'cron',         meta: { label: 'Tareas programadas',      color: 'warning',   icon: 'cilClock' } },
+  { prefix: 'usage',        meta: { label: 'Uso y cuotas',            color: 'warning',   icon: 'cilChartLine' } },
+  { prefix: 'notification', meta: { label: 'Notificaciones',          color: 'warning',   icon: 'cilBell' } },
+  { prefix: 'runner',       meta: { label: 'Runners self-hosted',     color: 'dark',      icon: 'cilTerminal' } },
+  { prefix: 'platform',     meta: { label: 'Politicas de plataforma', color: 'dark',      icon: 'cilShieldAlt' } },
+  { prefix: 'file',         meta: { label: 'Archivos adjuntos',       color: 'dark',      icon: 'cilPaperclip' } },
+  { prefix: 'audit',        meta: { label: 'Auditoria y actividad',   color: 'dark',      icon: 'cilList' } },
+  { prefix: 'seed',         meta: { label: 'Seeders corridos',        color: 'success',   icon: 'cilStorage' } },
+];
+const GROUP_INDEX = new Map(PREFIX_GROUPS.map((g, i) => [g.prefix, i]));
+const OTHER: GroupMeta = { label: 'Otros', color: 'dark', icon: 'cilSettings' };
+
+// schema_migrations no deberia llegar (lo filtra el SQL en dbschema.go:84),
+// pero lo ocultamos defensivamente por si alguien quita ese WHERE.
+const HIDDEN_TABLES = new Set<string>(['schema_migrations']);
+
+// grupo por: (1) override table_catalog si viene (42.1), (2) prefijo, (3) '__other__'
+function groupKeyFor(tbl: TableInfo): string {
+  const override = tbl.group_key;
+  if (override) return override;                       // override DB opcional (42.1)
+  const prefix = tbl.name.split('_', 1)[0];
+  return GROUP_INDEX.has(prefix) ? prefix : '__other__';
+}
 
 // HU-41.4: DB Explorer — vista del schema completo con tablas, columnas, FKs, índices, row counts.
 // Alimentado por GET /api/v1/admin/db-schema (admin only).
@@ -280,14 +317,22 @@ export class DatabaseExplorerComponent implements OnInit {
   });
 
   readonly groupedTables = computed(() => {
-    const grouped: Record<string, { key: string; meta: typeof CATEGORY_META[string]; tables: TableInfo[] }> = {};
-    for (const [key, meta] of Object.entries(CATEGORY_META)) {
-      grouped[key] = { key, meta, tables: [] };
-    }
+    const buckets = new Map<string, { key: string; meta: GroupMeta; tables: TableInfo[] }>();
     for (const tbl of this.filteredTables()) {
-      if (grouped[tbl.category]) grouped[tbl.category].tables.push(tbl);
+      if (HIDDEN_TABLES.has(tbl.name)) continue;          // oculta schema_migrations
+      const key = groupKeyFor(tbl);
+      const meta = key === '__other__'
+        ? OTHER
+        : PREFIX_GROUPS[GROUP_INDEX.get(key)!].meta;
+      if (!buckets.has(key)) buckets.set(key, { key, meta, tables: [] });
+      buckets.get(key)!.tables.push(tbl);
     }
-    return Object.values(grouped).filter(g => g.tables.length > 0);
+    // ordenar por la taxonomia; 'Otros' (no indexado) al final
+    return [...buckets.values()].sort((a, b) => {
+      const ai = GROUP_INDEX.has(a.key) ? GROUP_INDEX.get(a.key)! : 999;
+      const bi = GROUP_INDEX.has(b.key) ? GROUP_INDEX.get(b.key)! : 999;
+      return ai - bi;
+    });
   });
 
   ngOnInit() { this.load(); }

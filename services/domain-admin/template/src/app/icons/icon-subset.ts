@@ -119,7 +119,15 @@ import {
   cilHeart,
   cilBuilding,
   cilBriefcase,
-  cilSync
+  cilSync,
+  // REQ-42.10: icons para los grupos de /admin/database (taxonomia por prefijo).
+  cilLan,
+  cilFork,
+  cilLightbulb,
+  cilFolder,
+  cilLibrary,
+  cilShieldAlt,
+  cilCloud
 } from '@coreui/icons';
 
 import { signet } from './signet';
@@ -249,6 +257,14 @@ export const iconSubset = {
   cilHeart,
   cilBuilding,
   cilBriefcase,
+  // REQ-42.10: icons para los grupos de /admin/database (taxonomia por prefijo).
+  cilLan,
+  cilFork,
+  cilLightbulb,
+  cilFolder,
+  cilLibrary,
+  cilShieldAlt,
+  cilCloud,
   // Aliases / reemplazos para icons que no existen en @coreui/icons.
   // cilShield no existe, usamos cilLockLocked como "secure/policy" semántico.
   // Si necesitás un shield real, usar coreui-pro.
@@ -371,6 +387,14 @@ export enum IconSubset {
   cilGraph = 'cilGraph',             // alias para "Pulse/Activity" (cilPulse no existe)
   cilApps = 'cilApps',               // HU-41.4 Projects
   cilBook = 'cilBook',               // HU-41.4 Knowledge
+  // REQ-42.10: icons para los grupos de /admin/database (taxonomia por prefijo).
+  cilLan = 'cilLan',
+  cilFork = 'cilFork',
+  cilLightbulb = 'cilLightbulb',
+  cilFolder = 'cilFolder',
+  cilLibrary = 'cilLibrary',
+  cilShieldAlt = 'cilShieldAlt',
+  cilCloud = 'cilCloud',
   logo = 'logo',
   signet = 'signet'
 }

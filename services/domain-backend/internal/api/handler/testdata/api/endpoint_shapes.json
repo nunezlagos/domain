@@ -6,6 +6,11 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/admin/db-schema",
+    "handler": "getDBSchema"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/admin/db-stats",
     "handler": "getDBStats"
   },
@@ -16,13 +21,8 @@
   },
   {
     "method": "GET",
-    "path": "/api/v1/admin/runtime-configs/{key}",
-    "handler": "getRuntimeConfig"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/admin/runtime-configs/{key}",
-    "handler": "updateRuntimeConfig"
+    "path": "/api/v1/admin/org-overview",
+    "handler": "getOrgOverview"
   },
   {
     "method": "GET",
@@ -126,8 +126,33 @@
   },
   {
     "method": "POST",
+    "path": "/api/v1/auth/login",
+    "handler": "authLogin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/logout",
+    "handler": "authLogout"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/me",
+    "handler": "authMe"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/refresh",
+    "handler": "authRefresh"
+  },
+  {
+    "method": "POST",
     "path": "/api/v1/auth/request-otp",
     "handler": "requestOTP"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/select-role",
+    "handler": "authSelectRole"
   },
   {
     "method": "POST",
@@ -136,48 +161,53 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/captured-prompts",
+    "handler": "listCapturedPrompts"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/clients",
+    "handler": "listClients"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/clients",
+    "handler": "createClient"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/clients/{id_or_slug}",
+    "handler": "getClient"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/clients/{id}",
+    "handler": "deleteClient"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/clients/{id}",
+    "handler": "updateClient"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/clients/{id}/restore",
+    "handler": "restoreClient"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/clients/{id}/status",
+    "handler": "setClientStatus"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/context",
     "handler": "getContext"
   },
   {
     "method": "GET",
-    "path": "/api/v1/cost/breakdown/{dimension}",
-    "handler": "getCostBreakdown"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/cost/budgets",
-    "handler": "listBudgets"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/cost/budgets",
-    "handler": "createBudget"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v1/cost/budgets/{id}",
-    "handler": "deleteBudget"
-  },
-  {
-    "method": "GET",
     "path": "/api/v1/cost/daily",
     "handler": "getCostDaily"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/cost/export",
-    "handler": "exportCost"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/cost/forecast",
-    "handler": "getCostForecast"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/cost/spend/{granularity}",
-    "handler": "getCostSpend"
   },
   {
     "method": "GET",
@@ -216,13 +246,8 @@
   },
   {
     "method": "GET",
-    "path": "/api/v1/dlq",
-    "handler": "listDLQ"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v1/dlq/{id}",
-    "handler": "resolveDLQ"
+    "path": "/api/v1/events",
+    "handler": "sseEvents"
   },
   {
     "method": "GET",
@@ -375,21 +400,6 @@
     "handler": "listWebhookDeliveries"
   },
   {
-    "method": "POST",
-    "path": "/api/v1/invitations/{id}/revoke",
-    "handler": "revokeInvite"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/invitations/{token}/accept",
-    "handler": "acceptInvite"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/invitations/{token}/decline",
-    "handler": "declineInvite"
-  },
-  {
     "method": "GET",
     "path": "/api/v1/knowledge",
     "handler": "listKnowledge"
@@ -461,6 +471,11 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/me/roles",
+    "handler": "authMeRoles"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/observations",
     "handler": "listObservations"
   },
@@ -485,26 +500,6 @@
     "handler": "getTimeline"
   },
   {
-    "method": "POST",
-    "path": "/api/v1/organizations",
-    "handler": "createOrg"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v1/organizations/{id}",
-    "handler": "deleteOrg"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/organizations/{id}",
-    "handler": "getOrg"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/v1/organizations/{id}",
-    "handler": "updateOrg"
-  },
-  {
     "method": "DELETE",
     "path": "/api/v1/organizations/{id}/enrollment-token",
     "handler": "deleteEnrollmentToken"
@@ -518,61 +513,6 @@
     "method": "POST",
     "path": "/api/v1/organizations/{id}/enrollment-token/rotate",
     "handler": "rotateEnrollmentToken"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/organizations/{id}/invitations",
-    "handler": "listInvites"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/organizations/{id}/invitations",
-    "handler": "createInvite"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/organizations/{id}/members",
-    "handler": "listMembers"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/organizations/{id}/members",
-    "handler": "addMemberWithKey"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/organizations/{id}/members/{user_id}/role",
-    "handler": "assignRole"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/organizations/{id}/roles",
-    "handler": "listRoles"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/organizations/{id}/roles",
-    "handler": "createRole"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v1/organizations/{id}/roles/{slug}",
-    "handler": "deleteRole"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/organizations/{id}/roles/{slug}",
-    "handler": "getRole"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/v1/organizations/{id}/roles/{slug}",
-    "handler": "updateRole"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/organizations/{id}/transfer-ownership",
-    "handler": "transferOwnership"
   },
   {
     "method": "GET",
@@ -630,6 +570,11 @@
     "handler": "getPolicyBySlug"
   },
   {
+    "method": "DELETE",
+    "path": "/api/v1/project-repositories/{id}",
+    "handler": "deleteProjectRepo"
+  },
+  {
     "method": "GET",
     "path": "/api/v1/project-templates",
     "handler": "listProjectTemplates"
@@ -675,6 +620,31 @@
     "handler": "updateProject"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/projects/{slug}/policies",
+    "handler": "listProjectPolicies"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/projects/{slug}/repositories",
+    "handler": "listProjectRepos"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/projects/{slug}/repositories",
+    "handler": "addProjectRepo"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/projects/{slug}/tickets",
+    "handler": "createTicket"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/projects/{slug}/verifications",
+    "handler": "listVerifications"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/prompts",
     "handler": "createPrompt"
@@ -705,9 +675,19 @@
     "handler": "setActivePrompt"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/proposals",
+    "handler": "listProposals"
+  },
+  {
     "method": "PATCH",
     "path": "/api/v1/proposals/{id}/status",
     "handler": "changeProposalStatus"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/proposals/{kind}/{id}/review",
+    "handler": "reviewProposal"
   },
   {
     "method": "GET",
@@ -753,31 +733,6 @@
     "method": "GET",
     "path": "/api/v1/search",
     "handler": "searchObservations"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/sessions",
-    "handler": "listSessions"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/sessions",
-    "handler": "startSession"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/sessions/active",
-    "handler": "activeSession"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/sessions/{id}",
-    "handler": "getSession"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/sessions/{id}/end",
-    "handler": "endSession"
   },
   {
     "method": "GET",
@@ -833,6 +788,61 @@
     "method": "POST",
     "path": "/api/v1/tasks/{id}/verification",
     "handler": "createVerification"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tickets",
+    "handler": "listTickets"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tickets/link-external-bulk",
+    "handler": "bulkLinkTicketsExternal"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tickets/{id_or_key}",
+    "handler": "getTicket"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/tickets/{id}",
+    "handler": "deleteTicket"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/tickets/{id}",
+    "handler": "updateTicket"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tickets/{id}/comments",
+    "handler": "listTicketComments"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tickets/{id}/comments",
+    "handler": "addTicketComment"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tickets/{id}/history",
+    "handler": "listTicketStatusHistory"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tickets/{id}/link-external",
+    "handler": "linkTicketExternal"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tickets/{id}/link-issue",
+    "handler": "linkTicketIssue"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tickets/{id}/status",
+    "handler": "changeTicketStatus"
   },
   {
     "method": "GET",
@@ -926,6 +936,11 @@
   },
   {
     "method": "GET",
+    "path": "/api/v1/usage/turn-summary",
+    "handler": "usageTurnSummary"
+  },
+  {
+    "method": "GET",
     "path": "/api/v1/user-stories",
     "handler": "listUserStories"
   },
@@ -1003,6 +1018,16 @@
     "method": "POST",
     "path": "/api/v1/user-stories/{slug}/tasks",
     "handler": "createTasks"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/users",
+    "handler": "listUsers"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/webhooks/jira/issue-updated",
+    "handler": "jiraWebhookIssueUpdated"
   },
   {
     "method": "POST",

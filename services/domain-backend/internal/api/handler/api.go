@@ -172,27 +172,17 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 
-	// Audit logs (issue-02.4, requiere auth)
-	mux.HandleFunc("GET /api/v1/audit-logs", a.listAuditLogs)
-
-	// API keys CRUD (issue-02.1)
-	mux.HandleFunc("GET /api/v1/api-keys", a.listAPIKeys)
-	mux.HandleFunc("POST /api/v1/api-keys", a.createAPIKey)
-	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", a.revokeAPIKey)
-
-	// Activity logs (issue-02.6)
-	mux.HandleFunc("GET /api/v1/activity-logs", a.listActivityLogs)
+	// REQ-43.3 (Ola 1): endpoints solo-Angular removidos. Consumidos únicamente
+	// por el admin Angular archivado en openspec/archive/2026-06-19-domain-admin-angular/.
+	// Removidos: /audit-logs, /api-keys, /activity-logs, enrollment-token admin.
+	// Mantenidos: /auth/enroll (CLI installer consume).
 
 	// Organización (single-org): la entidad organization se removió. Los
 	// endpoints de org settings (GET/PATCH /organizations/{id}) y member
-	// management (/organizations/{id}/members) ya no existen — los users se
-	// listan globalmente en GET /api/v1/users. Se conserva enrollment-token
-	// y /auth/enroll (onboarding global).
-	// issue-37.1: self-enrollment con token compartido (público + admin rotate)
+	// management (/organizations/{id}/members) ya no existen. Se conserva
+	// solo /auth/enroll (onboarding global, consumido por CLI).
+	// issue-37.1: self-enrollment con token compartido (público)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
-	mux.HandleFunc("POST /api/v1/organizations/{id}/enrollment-token/rotate", a.rotateEnrollmentToken)
-	mux.HandleFunc("GET /api/v1/organizations/{id}/enrollment-token", a.getEnrollmentTokenMetadata)
-	mux.HandleFunc("DELETE /api/v1/organizations/{id}/enrollment-token", a.deleteEnrollmentToken)
 
 	// Requirements (issue-04.1) — SDD dogfood
 	mux.HandleFunc("POST /api/v1/requirements", a.createRequirement)
@@ -266,26 +256,17 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/clients/{id}/restore", a.restoreClient)
 	mux.HandleFunc("POST /api/v1/clients/{id}/status", a.setClientStatus)
 
-	// REQ-51 Tickets (sistema de issues internos por proyecto)
-	mux.HandleFunc("POST /api/v1/projects/{slug}/tickets", a.createTicket)
-	mux.HandleFunc("GET /api/v1/tickets", a.listTickets) // ?project_slug=&status=&assignee_id=...
-	mux.HandleFunc("GET /api/v1/tickets/{id_or_key}", a.getTicket)
-	mux.HandleFunc("PATCH /api/v1/tickets/{id}", a.updateTicket)
-	mux.HandleFunc("DELETE /api/v1/tickets/{id}", a.deleteTicket)
-	mux.HandleFunc("POST /api/v1/tickets/{id}/status", a.changeTicketStatus)
-	mux.HandleFunc("GET /api/v1/tickets/{id}/comments", a.listTicketComments)
-	mux.HandleFunc("POST /api/v1/tickets/{id}/comments", a.addTicketComment)
-	mux.HandleFunc("GET /api/v1/tickets/{id}/history", a.listTicketStatusHistory)
-	mux.HandleFunc("POST /api/v1/tickets/{id}/link-external", a.linkTicketExternal)
-	mux.HandleFunc("POST /api/v1/tickets/{id}/link-issue", a.linkTicketIssue)
-	// REQ-69 SSE stream — Bearer auth requerido (cae en el middleware)
-	mux.HandleFunc("GET /api/v1/events", a.sseEvents)
-	// REQ-75 listado de users de la org (para el modal reasignar)
-	mux.HandleFunc("GET /api/v1/users", a.listUsers)
-	// REQ-58: bulk + webhook Jira (stub). Endpoint listo para cuando se
-	// conecte Jira; hoy responde si DOMAIN_JIRA_WEBHOOK_SECRET está set.
-	mux.HandleFunc("POST /api/v1/tickets/link-external-bulk", a.bulkLinkTicketsExternal)
-	mux.HandleFunc("POST /api/v1/webhooks/jira/issue-updated", a.jiraWebhookIssueUpdated)
+	// REQ-43.3 (Ola 1): endpoints Tickets, Users, Events SSE y Jira webhook removidos.
+// Consumidos únicamente por el admin Angular archivado. Mantener handler en código
+// (caller methods quedan en struct API) evita romper referencias en tests; el borrado
+// físico de handlers + sus tests se difiere a la HU-43.13 (cleanup post-sunset).
+//
+// Removidos en esta ola:
+//   - /api/v1/projects/{slug}/tickets, /api/v1/tickets/*
+//   - /api/v1/users (modal reasignar)
+//   - /api/v1/events (SSE dashboard)
+//   - /api/v1/tickets/link-external-bulk
+//   - /api/v1/webhooks/jira/issue-updated
 
 	// REQ-52 REST endpoints adicionales para el dashboard
 	// Captured prompts + usage summary (REQ-41/47)

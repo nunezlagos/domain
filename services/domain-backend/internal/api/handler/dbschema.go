@@ -27,6 +27,10 @@ type TableInfo struct {
 	Indexes      []IndexInfo  `json:"indexes"`
 	ForeignKeys  []FKInfo     `json:"foreign_keys"`
 	Category     string       `json:"category"`
+	// REQ-42.10: agrupamiento por FUNCIONALIDAD leído de table_catalog (HU 42.1).
+	GroupKey   string `json:"group_key"`   // grupo funcional, p.ej. "auth", "sdd" ("" si no está en el catálogo)
+	GroupLabel string `json:"group_label"` // etiqueta legible del grupo
+	SortOrder  int    `json:"sort_order"`  // orden de presentación (catálogo)
 }
 
 type ColumnInfo struct {
@@ -75,25 +79,36 @@ func (a *API) getDBSchema(w http.ResponseWriter, r *http.Request) {
 func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) {
 	info := &SchemaInfo{}
 
-	// 1. Tablas operativas (excluyendo schema_migrations y pg_*)
+	// 1. Tablas operativas (excluyendo schema_migrations y pg_*).
+	//    REQ-42.10: LEFT JOIN table_catalog para traer grupo/label/orden
+	//    funcional (HU 42.1). Las tablas sin entrada en el catálogo quedan
+	//    con group_key vacío (el front las agrupa por prefijo como fallback).
 	rows, err := pool.Query(ctx, `
-		SELECT t.table_name
+		SELECT t.table_name,
+		       COALESCE(c.grupo, ''),
+		       COALESCE(c.label, ''),
+		       COALESCE(c.sort_order, 99999)
 		FROM information_schema.tables t
+		LEFT JOIN table_catalog c ON c.table_name = t.table_name
 		WHERE t.table_schema = 'public'
 		  AND t.table_type = 'BASE TABLE'
 		  AND t.table_name <> 'schema_migrations'
-		ORDER BY t.table_name
+		ORDER BY COALESCE(c.sort_order, 99999), t.table_name
 	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var name, grupo, label string
+		var sortOrder int
+		if err := rows.Scan(&name, &grupo, &label, &sortOrder); err != nil {
 			return nil, err
 		}
-		info.Tables = append(info.Tables, TableInfo{Name: name, Schema: "public", Category: categorize(name)})
+		info.Tables = append(info.Tables, TableInfo{
+			Name: name, Schema: "public", Category: categorize(name),
+			GroupKey: grupo, GroupLabel: label, SortOrder: sortOrder,
+		})
 	}
 	info.TotalCount = len(info.Tables)
 

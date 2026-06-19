@@ -46,10 +46,14 @@ interface TableInfo {
   columns: ColumnInfo[];
   indexes: IndexInfo[];
   foreign_keys: FKInfo[];
-  /** @deprecated legacy hint del backend (6 buckets). REQ-42.10 agrupa por prefijo; este campo ya no se usa. */
+  /** @deprecated legacy hint del backend (6 buckets). REQ-42.10 agrupa por funcionalidad (table_catalog). */
   category: string;
-  /** Override opcional de agrupamiento (table_catalog, HU 42.1). Ausente hoy: la rama queda inerte. */
+  /** Grupo FUNCIONAL desde table_catalog (HU 42.1): "auth", "sdd", "tdd", ... Vacío si la tabla no está catalogada. */
   group_key?: string;
+  /** Etiqueta legible del grupo funcional (table_catalog). */
+  group_label?: string;
+  /** Orden de presentación del catálogo (bloque de 100 por grupo). */
+  sort_order?: number;
 }
 
 interface SchemaResponse {
@@ -317,22 +321,28 @@ export class DatabaseExplorerComponent implements OnInit {
   });
 
   readonly groupedTables = computed(() => {
-    const buckets = new Map<string, { key: string; meta: GroupMeta; tables: TableInfo[] }>();
+    const buckets = new Map<string, { key: string; meta: GroupMeta; order: number; tables: TableInfo[] }>();
     for (const tbl of this.filteredTables()) {
       if (HIDDEN_TABLES.has(tbl.name)) continue;          // oculta schema_migrations
       const key = groupKeyFor(tbl);
-      const meta = key === '__other__'
-        ? OTHER
-        : PREFIX_GROUPS[GROUP_INDEX.get(key)!].meta;
-      if (!buckets.has(key)) buckets.set(key, { key, meta, tables: [] });
-      buckets.get(key)!.tables.push(tbl);
+      if (key === 'internal') continue;                   // grupo interno (table_catalog) oculto
+      // color+icono por grupo (PREFIX_GROUPS); etiqueta preferentemente del
+      // catálogo (group_label = FUNCIONALIDAD, fuente de verdad HU 42.1).
+      const base = key !== '__other__' && GROUP_INDEX.has(key)
+        ? PREFIX_GROUPS[GROUP_INDEX.get(key)!].meta
+        : OTHER;
+      const meta: GroupMeta = { label: tbl.group_label || base.label, color: base.color, icon: base.icon };
+      const order = tbl.sort_order ?? 99999;
+      const existing = buckets.get(key);
+      if (!existing) {
+        buckets.set(key, { key, meta, order, tables: [tbl] });
+      } else {
+        existing.tables.push(tbl);
+        if (order < existing.order) existing.order = order;
+      }
     }
-    // ordenar por la taxonomia; 'Otros' (no indexado) al final
-    return [...buckets.values()].sort((a, b) => {
-      const ai = GROUP_INDEX.has(a.key) ? GROUP_INDEX.get(a.key)! : 999;
-      const bi = GROUP_INDEX.has(b.key) ? GROUP_INDEX.get(b.key)! : 999;
-      return ai - bi;
-    });
+    // ordenar por sort_order del catálogo (funcionalidad); sin catálogo al final
+    return [...buckets.values()].sort((a, b) => a.order - b.order);
   });
 
   ngOnInit() { this.load(); }

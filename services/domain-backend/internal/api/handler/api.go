@@ -205,29 +205,16 @@ func (a *API) Router() http.Handler {
 //	  - /api/v1/tasks/{id} y sub-rutas (status, verification, sabotage, progress)
 //	  - /api/v1/traceability/* (req/{slug}, code, coverage, progress, consolidated, gaps/*, code-refs)
 
-	// Attachments / S3 (issue-04.6)
-	mux.HandleFunc("POST /api/v1/attachments", a.initUpload)
-	mux.HandleFunc("POST /api/v1/attachments/{id}/confirm", a.confirmUpload)
-	mux.HandleFunc("GET /api/v1/attachments/{id}/download", a.getAttachmentDownload)
-	mux.HandleFunc("GET /api/v1/attachments", a.listAttachments)
-	mux.HandleFunc("DELETE /api/v1/attachments/{id}", a.deleteAttachment)
-
-	// Projects (scoped by org via ?organization_id= o derivado del principal)
-	mux.HandleFunc("POST /api/v1/projects", a.createProject)
-	mux.HandleFunc("GET /api/v1/projects", a.listProjects)
-	mux.HandleFunc("GET /api/v1/projects/{slug}", a.getProject)
-	mux.HandleFunc("PATCH /api/v1/projects/{slug}", a.updateProject)
-	mux.HandleFunc("DELETE /api/v1/projects/{slug}", a.deleteProject)
-
-	// Clients/mandantes — consultoras que gestionan proyectos por cliente.
-	// {id_or_slug} en GET admite ambos; mutaciones requieren UUID explícito.
-	mux.HandleFunc("POST /api/v1/clients", a.createClient)
-	mux.HandleFunc("GET /api/v1/clients", a.listClients)
-	mux.HandleFunc("GET /api/v1/clients/{id_or_slug}", a.getClient)
-	mux.HandleFunc("PUT /api/v1/clients/{id}", a.updateClient)
-	mux.HandleFunc("DELETE /api/v1/clients/{id}", a.deleteClient)
-	mux.HandleFunc("POST /api/v1/clients/{id}/restore", a.restoreClient)
-	mux.HandleFunc("POST /api/v1/clients/{id}/status", a.setClientStatus)
+	// REQ-43.6 (Ola 3): Projects + Clients + Project-Templates + Attachments removidos.
+// Consumidos solo por el admin Angular archivado Y mockeados en SDK tests (breaking
+// change en SDKs publicados aceptado por el dueño del proyecto, junio 2026).
+// El MCP no usa estos endpoints (consume Services directamente), asi que el sunset
+// del HTTP no afecta tools MCP.
+//
+// Removidos:
+//   - /api/v1/attachments/* (POST/POST confirm/GET download/GET list/DELETE)
+//   - /api/v1/projects/* (POST/GET/{slug}/PATCH/DELETE)
+//   - /api/v1/clients/* (POST/GET/{id_or_slug}/PUT/DELETE/restore/status)
 
 	// REQ-43.3 (Ola 1): endpoints Tickets, Users, Events SSE y Jira webhook removidos.
 // Consumidos únicamente por el admin Angular archivado. Mantener handler en código
@@ -243,37 +230,29 @@ func (a *API) Router() http.Handler {
 
 	// REQ-43.10 (Ola 8): captured-prompts + usage/turn-summary removidos
 // (eran vistas admin-captured-prompts y admin-usage).
-	// Project repositories (REQ-42)
-	mux.HandleFunc("GET /api/v1/projects/{slug}/repositories", a.listProjectRepos)
-	mux.HandleFunc("POST /api/v1/projects/{slug}/repositories", a.addProjectRepo)
-	mux.HandleFunc("DELETE /api/v1/project-repositories/{id}", a.deleteProjectRepo)
-	// Project policies (REQ-43) read-only desde REST
-	mux.HandleFunc("GET /api/v1/projects/{slug}/policies", a.listProjectPolicies)
-	// Proposals (REQ-49)
-	mux.HandleFunc("GET /api/v1/proposals", a.listProposals)
-	mux.HandleFunc("POST /api/v1/proposals/{kind}/{id}/review", a.reviewProposal)
-	// Verifications (REQ-50) read pending
-	mux.HandleFunc("GET /api/v1/projects/{slug}/verifications", a.listVerifications)
 
-	// Observations
-	mux.HandleFunc("POST /api/v1/observations", a.saveObservation)
-	mux.HandleFunc("GET /api/v1/observations/{id}", a.getObservation)
-	mux.HandleFunc("DELETE /api/v1/observations/{id}", a.deleteObservation)
-	mux.HandleFunc("GET /api/v1/observations", a.listObservations) // ?project_slug=
-	mux.HandleFunc("GET /api/v1/search", a.searchObservations)     // ?q=
+	// REQ-43.7 (Ola 4/5): Project-Repositories + Project-Policies + Proposals + Verifications + Observations + Search removidos.
+// Consumidos solo por admin Angular Y mockeados en SDK tests. El MCP consume los Services
+// directamente (project_repo_tools.go, verifications_tools.go, etc.).
+//
+// Removidos:
+//   - /api/v1/projects/{slug}/repositories (GET/POST)
+//   - /api/v1/project-repositories/{id} (DELETE)
+//   - /api/v1/projects/{slug}/policies (GET)
+//   - /api/v1/proposals (GET) + /api/v1/proposals/{kind}/{id}/review (POST)
+//   - /api/v1/projects/{slug}/verifications (GET)
+//   - /api/v1/observations (POST/GET/{id}/DELETE/GET list/search)
 
-	// REQ-42.3: rutas /api/v1/sessions removidas (tabla sessions dropeada,
-	// feature legacy duplicada de auth_sessions).
+// REQ-42.3: rutas /api/v1/sessions removidas (tabla sessions dropeada,
+// feature legacy duplicada de auth_sessions).
 
-	// Agents
-	mux.HandleFunc("POST /api/v1/agents", a.createAgent)
-	mux.HandleFunc("GET /api/v1/agents", a.listAgents)
-	mux.HandleFunc("GET /api/v1/agents/{id}", a.getAgent)
-	mux.HandleFunc("PATCH /api/v1/agents/{id}", a.updateAgent)
-	mux.HandleFunc("GET /api/v1/agents/{id}/versions", a.listAgentVersions)
-	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.deleteAgent)
-	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.runAgent)
-	mux.HandleFunc("GET /api/v1/agent-runs/{id}/logs", a.getAgentRunLogs)
+	// REQ-43.7 (Ola 4): Agents + Agent Runs endpoints removidos.
+// Consumidos solo por admin Angular (vistas admin-agents, admin-runs) Y mockeados
+// en SDK tests. El MCP consume AgentService/AgentRunner directamente.
+//
+// Removidos:
+//   - /api/v1/agents/* (POST/GET/{id}/PATCH/{id}/versions/DELETE/{id}/run)
+//   - /api/v1/agent-runs/{id}/logs (GET)
 
 	// Inbound webhooks management (issue-10.2). El receive público vive en
 	// /api/v1/webhooks/{slug}/receive (sin Bearer; HMAC).
@@ -316,37 +295,28 @@ func (a *API) Router() http.Handler {
 	// Webhooks inbound (público, HMAC auth — slug + secret en config)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
 
-	// Skills
-	mux.HandleFunc("POST /api/v1/skills", a.createSkill)
-	mux.HandleFunc("GET /api/v1/skills", a.listSkills)          // ?type= &tag= &limit=
-	mux.HandleFunc("GET /api/v1/skills/search", a.searchSkills) // ?q=
-	mux.HandleFunc("GET /api/v1/skills/{id}", a.getSkill)
-	mux.HandleFunc("PATCH /api/v1/skills/{id}", a.updateSkill)
-	mux.HandleFunc("DELETE /api/v1/skills/{id}", a.deleteSkill)
-	mux.HandleFunc("POST /api/v1/skills/{id}/execute", a.executeSkill)
-	mux.HandleFunc("GET /api/v1/executions/{id}", a.getExecution)
+	// REQ-43.7 (Ola 4): Skills + Prompts endpoints removidos.
+// Consumidos solo por admin Angular (vistas admin-skills, admin-prompts) Y mockeados
+// en SDK tests (breaking change aceptado). El MCP consume SkillService/PromptService
+// directamente, asi que tools MCP domain_skill_* y domain_prompt_* siguen funcionando.
+//
+// Removidos:
+//   - /api/v1/skills/* (POST/GET/search/{id}/PATCH/DELETE/execute)
+//   - /api/v1/executions/{id} (GET)
+//   - /api/v1/prompts/* (POST/GET/{id}/activate/DELETE/by-slug/{slug}/versions/search)
 
 	// REQ-43.10 (Ola 8): lifecycle endpoints (restore, GDPR export/erase) removidos.
 // Consumidos solo por admin Angular (vistas admin-lifecycle y admin-account).
 
-	// Knowledge documents
-	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)
-	mux.HandleFunc("GET /api/v1/knowledge", a.listKnowledge)          // ?project_slug=
-	mux.HandleFunc("GET /api/v1/knowledge/search", a.searchKnowledge) // ?q=
-	mux.HandleFunc("GET /api/v1/knowledge/{id}", a.getKnowledge)
-	mux.HandleFunc("DELETE /api/v1/knowledge/{id}", a.deleteKnowledge)
-
-	// Context + Timeline (cross-entity feeds)
-	mux.HandleFunc("GET /api/v1/context", a.getContext)                     // ?project_slug=
-	mux.HandleFunc("GET /api/v1/observations/{id}/timeline", a.getTimeline) // ?before= &after=
-
-	// Prompts (templates versionados)
-	mux.HandleFunc("POST /api/v1/prompts", a.createPrompt)
-	mux.HandleFunc("GET /api/v1/prompts/{id}", a.getPrompt)
-	mux.HandleFunc("POST /api/v1/prompts/{id}/activate", a.setActivePrompt)
-	mux.HandleFunc("DELETE /api/v1/prompts/{id}", a.deletePrompt)
-	mux.HandleFunc("GET /api/v1/prompts/by-slug/{slug}/versions", a.listPromptVersions)
-	mux.HandleFunc("GET /api/v1/prompts/search", a.searchPrompts)
+	// REQ-43.7 (Ola 4/5): Knowledge + Context + Timeline + Prompts removidos.
+// Consumidos solo por admin Angular (vistas admin-knowledge, admin-prompts, admin-context)
+// Y mockeados en SDK tests. El MCP consume KnowledgeService/PromptService directamente.
+//
+// Removidos:
+//   - /api/v1/knowledge/* (POST/GET/search/{id}/DELETE)
+//   - /api/v1/context (GET)
+//   - /api/v1/observations/{id}/timeline (GET)
+//   - /api/v1/prompts/* (POST/GET/{id}/activate/DELETE/by-slug/{slug}/versions/search)
 
 	// Cost analytics (issue-15.1). REQ-42.2: spend/breakdown/forecast/budgets/
 	// export se eliminaron junto con el dominio billing/costos (cost_logs/budgets).

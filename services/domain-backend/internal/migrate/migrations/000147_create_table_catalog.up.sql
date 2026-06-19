@@ -105,7 +105,7 @@ INSERT INTO table_catalog (table_name, grupo, label, sort_order) VALUES
   ('issues',                         'issue',        'Issues / Historias de usuario',   1101),
   ('issue_drafts',                   'issue',        'Issues / Historias de usuario',   1102),
   ('issue_draft_steps_log',          'issue',        'Issues / Historias de usuario',   1103),
-  ('gherkin_scenarios',              'issue',        'Issues / Historias de usuario',   1104),
+  ('issue_gherkin_scenarios',        'issue',        'Issues / Historias de usuario',   1104),
   ('tasks',                          'issue',        'Issues / Historias de usuario',   1105),
   ('code_references',                'issue',        'Issues / Historias de usuario',   1106),
   ('intake_payloads',                'issue',        'Issues / Historias de usuario',   1107),

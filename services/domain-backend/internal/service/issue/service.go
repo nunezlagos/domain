@@ -1,6 +1,6 @@
 // Package userstory — issue-04.2 user stories with Gherkin scenarios.
 //
-// Una HU pertenece a un REQ (requirements) y tiene 1..N gherkin_scenarios
+// Una HU pertenece a un REQ (requirements) y tiene 1..N issue_gherkin_scenarios
 // con campos estructurados (feature, scenario, given[], when, then[]).
 package issue
 
@@ -360,12 +360,12 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 
 	// Auto-assign position
 	var maxPos int
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(position), -1) FROM gherkin_scenarios WHERE issue_id = $1`, hu.ID).Scan(&maxPos)
+	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(position), -1) FROM issue_gherkin_scenarios WHERE issue_id = $1`, hu.ID).Scan(&maxPos)
 	sc.Position = maxPos + 1
 
 	var inserted Scenario
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO gherkin_scenarios (issue_id, feature, scenario, given, when_text, then_rows, position)
+		`INSERT INTO issue_gherkin_scenarios (issue_id, feature, scenario, given, when_text, then_rows, position)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, issue_id, feature, scenario, given, when_text, then_rows, position, created_at`,
 		hu.ID, sc.Feature, sc.Scenario, sc.Given, sc.When, sc.Then, sc.Position,
@@ -378,7 +378,7 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 
 // RemoveScenario elimina un escenario por ID.
 func (s *Service) RemoveScenario(ctx context.Context, scenarioID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM gherkin_scenarios WHERE id = $1`, scenarioID)
+	tag, err := s.Pool.Exec(ctx, `DELETE FROM issue_gherkin_scenarios WHERE id = $1`, scenarioID)
 	if err != nil {
 		return fmt.Errorf("delete scenario: %w", err)
 	}
@@ -408,7 +408,7 @@ func (s *Service) getBySlug(ctx context.Context, slug string) (*Issue, error) {
 func (s *Service) listScenarios(ctx context.Context, issueID uuid.UUID) ([]Scenario, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, issue_id, feature, scenario, given, when_text, then_rows, position, created_at
-		 FROM gherkin_scenarios WHERE issue_id = $1 ORDER BY position`, issueID)
+		 FROM issue_gherkin_scenarios WHERE issue_id = $1 ORDER BY position`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list scenarios: %w", err)
 	}
@@ -422,7 +422,7 @@ func (s *Service) listScenariosByHuIDs(ctx context.Context, huIDs []uuid.UUID) (
 	}
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, issue_id, feature, scenario, given, when_text, then_rows, position, created_at
-		 FROM gherkin_scenarios WHERE issue_id = ANY($1) ORDER BY issue_id, position`, huIDs)
+		 FROM issue_gherkin_scenarios WHERE issue_id = ANY($1) ORDER BY issue_id, position`, huIDs)
 	if err != nil {
 		return nil, fmt.Errorf("list scenarios by ids: %w", err)
 	}
@@ -459,7 +459,7 @@ func insertScenariosTx(ctx context.Context, tx pgx.Tx, issueID uuid.UUID, scenar
 		sc.HuID = issueID
 		sc.Position = i
 		err := tx.QueryRow(ctx,
-			`INSERT INTO gherkin_scenarios (issue_id, feature, scenario, given, when_text, then_rows, position)
+			`INSERT INTO issue_gherkin_scenarios (issue_id, feature, scenario, given, when_text, then_rows, position)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)
 			 RETURNING id, issue_id, feature, scenario, given, when_text, then_rows, position, created_at`,
 			issueID, sc.Feature, sc.Scenario, sc.Given, sc.When, sc.Then, i,

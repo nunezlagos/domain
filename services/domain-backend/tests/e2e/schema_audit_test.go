@@ -44,7 +44,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		// Memory (REQ-42.3: sessions dropeada — feature legacy)
 		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
 		// SDD
-		"sdd_requirements", "issues", "gherkin_scenarios",
+		"sdd_requirements", "issues", "issue_gherkin_scenarios",
 		"sdd_proposals", "sdd_designs", "issue_tasks", "tdd_verification_results", "tdd_sabotage_records",
 		"issue_code_references", "file_attachments",
 		// Wizard + Intake + ExtSync

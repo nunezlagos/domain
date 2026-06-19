@@ -156,17 +156,23 @@ func SessionFromContext(ctx context.Context) (*session.Active, bool) {
 func (a *API) Router() http.Handler {
 	mux := http.NewServeMux()
 
-	// Auth (sin Bearer requerido)
+	// REQ-43.10 (Ola 8): endpoints auth web + misc + lifecycle removidos.
+// Consumidos solo por el admin Angular archivado. Mantener handlers como dead code.
+//
+//	Removidos:
+//	  - /api/v1/auth/{login,select-role,me,refresh,logout} (vistas admin login/session)
+//	  - /api/v1/me/roles (switcher de rol del header)
+//	  - /api/v1/captured-prompts (vista admin-captured-prompts)
+//	  - /api/v1/usage/turn-summary (vista admin-usage)
+//	  - /api/v1/restore (admin restore UI)
+//	  - /api/v1/me/export, /api/v1/me/erase (GDPR endpoints del admin)
+//
+// Mantenidos (consumidos por CLI installer): /auth/request-otp, /auth/verify-otp, /auth/first-run, /auth/bootstrap, /auth/login
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
-	// REQ-72 auth web (login user+password con roles).
+	// REQ-72 auth web (login user+password con roles). /auth/login se mantiene
+	// por compat con CLI installer; el resto del flujo web se removió en Ola 8.
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
-	mux.HandleFunc("POST /api/v1/auth/select-role", a.authSelectRole)
-	mux.HandleFunc("GET /api/v1/auth/me", a.authMe)
-	// HU-41.1: lista de roles del user autenticado (para el switcher del header).
-	mux.HandleFunc("GET /api/v1/me/roles", a.authMeRoles)
-	mux.HandleFunc("POST /api/v1/auth/refresh", a.authRefresh)
-	mux.HandleFunc("POST /api/v1/auth/logout", a.authLogout)
 	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
 	// Tambien sin Bearer: la primera request al sistema no tiene user todavía.
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
@@ -235,10 +241,8 @@ func (a *API) Router() http.Handler {
 //   - /api/v1/tickets/link-external-bulk
 //   - /api/v1/webhooks/jira/issue-updated
 
-	// REQ-52 REST endpoints adicionales para el dashboard
-	// Captured prompts + usage summary (REQ-41/47)
-	mux.HandleFunc("GET /api/v1/captured-prompts", a.listCapturedPrompts)
-	mux.HandleFunc("GET /api/v1/usage/turn-summary", a.usageTurnSummary)
+	// REQ-43.10 (Ola 8): captured-prompts + usage/turn-summary removidos
+// (eran vistas admin-captured-prompts y admin-usage).
 	// Project repositories (REQ-42)
 	mux.HandleFunc("GET /api/v1/projects/{slug}/repositories", a.listProjectRepos)
 	mux.HandleFunc("POST /api/v1/projects/{slug}/repositories", a.addProjectRepo)
@@ -322,10 +326,8 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/skills/{id}/execute", a.executeSkill)
 	mux.HandleFunc("GET /api/v1/executions/{id}", a.getExecution)
 
-	// Lifecycle (issue-23.2 restore + issue-23.3 GDPR export)
-	mux.HandleFunc("POST /api/v1/restore", a.restoreEntity)
-	mux.HandleFunc("GET /api/v1/me/export", a.exportMyData)
-	mux.HandleFunc("POST /api/v1/me/erase", a.eraseMyData)
+	// REQ-43.10 (Ola 8): lifecycle endpoints (restore, GDPR export/erase) removidos.
+// Consumidos solo por admin Angular (vistas admin-lifecycle y admin-account).
 
 	// Knowledge documents
 	mux.HandleFunc("POST /api/v1/knowledge", a.saveKnowledge)

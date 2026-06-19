@@ -59,7 +59,7 @@ jobs:
       - name: Build linter
         run: go build -o /tmp/db-conv-lint ./cmd/db-conventions-lint
       - name: Lint migrations
-        run: /tmp/db-conv-lint --dir internal/migrate/migrations
+        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 146
 
   response-shape-lint:
     name: response-shape-lint

@@ -239,6 +239,61 @@ CREATE TABLE foos (
 	require.NotContains(t, issueRules(Lint("000099_foo.up.sql", src)), "prefer-jsonb")
 }
 
+// issue-42.11 require-table-prefix --------------------------------------------
+
+// CREATE TABLE sin prefijo válido falla.
+func TestLint_RequireTablePrefix_FailsUnprefixed(t *testing.T) {
+	src := validHeader + `CREATE TABLE budgets (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`
+	require.Contains(t, issueRules(Lint("000147_b.up.sql", src)), "require-table-prefix")
+}
+
+// CREATE TABLE con prefijo válido pasa.
+func TestLint_RequireTablePrefix_AllowsPrefixed(t *testing.T) {
+	src := validHeader + `CREATE TABLE agent_runs (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE flow_config (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`
+	require.NotContains(t, issueRules(Lint("000147_a.up.sql", src)), "require-table-prefix")
+}
+
+// Nombres canónicos resueltos (allowlist) no requieren prefijo.
+func TestLint_RequireTablePrefix_CanonicalException(t *testing.T) {
+	src := validHeader + `CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE roles (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE user_roles (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE issues (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`
+	require.NotContains(t, issueRules(Lint("000147_c.up.sql", src)), "require-table-prefix")
+}
+
+// El override silencia la regla en una línea puntual.
+func TestLint_RequireTablePrefix_Override(t *testing.T) {
+	src := validHeader + `-- domain-lint-ignore-next: require-table-prefix
+CREATE TABLE budgets (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);`
+	require.NotContains(t, issueRules(Lint("000147_b.up.sql", src)), "require-table-prefix")
+}
+
 // issue-25.3 Migration Safety rules ----------------------------------------
 
 func TestSafety_CreateIndexConcurrent(t *testing.T) {

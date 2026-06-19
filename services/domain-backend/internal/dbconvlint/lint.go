@@ -11,6 +11,7 @@
 //	header-required        — header completo (issue, author, description, breaking)
 //	naming-snake-case      — tablas y columnas snake_case
 //	naming-plural-table    — nombre de tabla en plural
+//	require-table-prefix   — CREATE TABLE debe empezar con prefijo de dominio (taxonomía)
 //	fk-on-delete-strategy  — REFERENCES debe declarar ON DELETE
 package dbconvlint
 
@@ -243,6 +244,37 @@ var pluralEquivalentSuffixes = []string{
 	"_settings", "_audit",
 }
 
+// Prefijos de funcionalidad válidos (taxonomía objetivo). Incluye el underscore
+// final para forzar agrupación real (flow_, no que pase "flowers"). Mantener
+// sincronizado con la taxonomía del proyecto.
+var validTablePrefixes = []string{
+	"agent_", "audit_", "auth_", "cron_", "external_", "file_",
+	"flow_", "issue_", "knowledge_", "mcp_", "notification_",
+	"platform_", "project_", "prompt_", "runner_", "sdd_", "seed_",
+	"skill_", "tdd_", "usage_", "users_", "webhook_",
+	"enrollment_", // enrollment_tokens (single-org; ver risks)
+}
+
+// Nombres canónicos RESUELTOS (allowlist del lint): nombre = grupo, excepción
+// documentada a la regla "toda tabla lleva prefijo" (estilo Rails/Postgres).
+// Decisión CANÓNICA RESUELTA de REQ-42 (no open_question). NO requieren prefijo.
+var canonicalTableExceptions = map[string]bool{
+	"users":             true, // grupo users_, nombre canónico (REQ-42.8)
+	"roles":             true, // grupo users_, catálogo RBAC (REQ-42.8)
+	"user_roles":        true, // grupo users_, tabla puente (REQ-42.8)
+	"issues":            true, // grupo issue_, nombre canónico
+	"schema_migrations": true, // tooling interno golang-migrate
+}
+
+func hasValidTablePrefix(name string) bool {
+	for _, p := range validTablePrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkCreateTableConventions(src string, lines []string, add func(int, string, string)) {
 	for _, t := range extractCreateTables(src) {
 		name := t.Name
@@ -258,6 +290,14 @@ func checkCreateTableConventions(src string, lines []string, add func(int, strin
 		if !commonNonPluralAllowed[name] && !looksPlural(name) {
 			add(line, "naming-plural-table",
 				fmt.Sprintf("table '%s' should be plural (e.g. '%ss')", name, name))
+		}
+		// require-table-prefix: la tabla debe agruparse por dominio
+		if !canonicalTableExceptions[name] && !hasValidTablePrefix(name) {
+			add(line, "require-table-prefix",
+				fmt.Sprintf("table '%s' must start with a functional-domain prefix (%s) "+
+					"or be a documented canonical name. "+
+					"Override: -- domain-lint-ignore-next: require-table-prefix",
+					name, strings.Join(validTablePrefixes, ", ")))
 		}
 		// required created_at (o equivalente: cualquier *_at TIMESTAMPTZ NOT NULL DEFAULT NOW
 		// — audit_log usa 'occurred_at', agent_runs usa 'started_at', etc.).

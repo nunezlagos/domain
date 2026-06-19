@@ -239,17 +239,15 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 	expires := s.now().Add(SessionTTL)
 	var sessID uuid.UUID
 	ipVal := parseIP(ip)
-	// ISSUE-21.6: auth_sessions.organization_id sigue NOT NULL hasta Fase C
-	// (migration 000142). Usamos canonicalOrgID para single-org. Post-Fase C
-	// este INSERT se reduce a 6 columnas (sin organization_id).
-	canonicalOrgID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	// ISSUE-21.6 Fase C: organization_id dropeado de auth_sessions
+	// (migration 000142). INSERT sin la columna.
 	err = s.AuthPool.QueryRow(ctx,
 		`INSERT INTO auth_sessions
-		   (user_id, organization_id, active_role_id, token_hash,
+		   (user_id, active_role_id, token_hash,
 		    user_agent, ip, expires_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 VALUES ($1,$2,$3,$4,$5,$6)
 		 RETURNING id`,
-		u.ID, canonicalOrgID, r.ID, hash, userAgent, ipVal, expires,
+		u.ID, r.ID, hash, userAgent, ipVal, expires,
 	).Scan(&sessID)
 	if err != nil {
 		return nil, err

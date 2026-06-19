@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -80,10 +81,12 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		if selErr == nil {
 			resp.SessionToken = sel.Token
 			resp.ExpiresAt = sel.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
+		} else {
+			// ISSUE-21.6: log el error para visibilidad. Si SelectRole
+			// falla (e.g. bug en INSERT), el flow de temp_token permite
+			// al cliente seguir intentando.
+			fmt.Printf("WARN authLogin SelectRole failed: %v\n", selErr)
 		}
-		// Si SelectRole falla, devolvemos temp_token + roles y dejamos
-		// que el cliente decida. El Angular va a usar session_token si
-		// está presente.
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -199,6 +199,11 @@ LOOP:
 			}
 		}
 
+		// snapshot del prompt efectivo que cae al agente en esta iteracion
+		// (issue-42.4). Best-effort: un error de persistencia NO debe abortar
+		// el run (mismo patron que appendLog).
+		r.appendPromptSnapshot(ctx, runID, iterations, opts, tools)
+
 		callStart := time.Now()
 		resp, err := provider.Complete(ctx, opts)
 		latencyMS := int(time.Since(callStart).Milliseconds())
@@ -418,6 +423,39 @@ func (r *Runner) appendLog(ctx context.Context, runID uuid.UUID, iteration int,
 		    tokens_input, tokens_output, latency_ms)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		runID, iteration, eventType, raw, tokensIn, tokensOut, latencyMS)
+}
+
+// appendPromptSnapshot persiste el prompt efectivo enviado al LLM en una
+// iteracion (issue-42.4: agent_run_prompts). Captura el lado ENTRADA del
+// modelo (system_prompt resuelto + messages serializados + tools expuestas),
+// distinto de agent_run_logs que registra lo que SALIO del LLM. Best-effort:
+// errores de persistencia silenciados, igual que appendLog.
+func (r *Runner) appendPromptSnapshot(ctx context.Context, runID uuid.UUID,
+	iteration int, opts llm.CompletionOptions, tools []llm.ToolDef) {
+	if r.Pool == nil {
+		return
+	}
+	msgsJSON, _ := json.Marshal(opts.Messages)
+	slugs := make([]string, 0, len(tools))
+	for _, t := range tools {
+		slugs = append(slugs, t.Name)
+	}
+	est := tokens.EstimateMessages(opts.SystemPrompt, opts.Messages)
+	cc := len(opts.SystemPrompt)
+	for _, m := range opts.Messages {
+		cc += len(m.Content)
+	}
+	_, _ = r.Pool.Exec(ctx,
+		`INSERT INTO agent_run_prompts
+		   (agent_run_id, iteration, model, system_prompt, messages, tool_slugs, char_count, estimated_tokens)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (agent_run_id, iteration) DO UPDATE
+		   SET messages = EXCLUDED.messages,
+		       char_count = EXCLUDED.char_count,
+		       estimated_tokens = EXCLUDED.estimated_tokens,
+		       updated_at = NOW()`,
+		runID, iteration, opts.Model, opts.SystemPrompt, msgsJSON,
+		slugs, cc, est)
 }
 
 func truncate(s string, n int) string {

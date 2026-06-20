@@ -1,6 +1,7 @@
 # Secretos — NUNCA committeable
 .env
 .env.local
+.env.vps
 
 # Certs generados por gen-certs.sh
 certs/

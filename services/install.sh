@@ -69,11 +69,12 @@ gen_uuid() {
     "${hex:20:12}"
 }
 
-# Lee un valor de un .env existente (sin importar quoting)
+# Lee un valor de un .env existente (sin importar quoting).
+# Siempre retorna 0 (echo vacío si no encuentra) — necesario para set -e.
 env_get() {
   local key="$1" file="$2"
-  [[ -f "$file" ]] || return 1
-  grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | sed -E "s/^['\"]//; s/['\"]$//"
+  [[ -f "$file" ]] || { echo ""; return 0; }
+  grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | sed -E "s/^['\"]//; s/['\"]$//" || echo ""
 }
 
 # Aplica un valor al .env (preserva quoting)

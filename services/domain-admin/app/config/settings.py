@@ -18,15 +18,15 @@ SECRET_KEY = "hu-47.1-rotate-me-before-prod-3f8a9b2c1d4e5f6a"
 DEBUG = False
 ALLOWED_HOSTS = ["*"]
 
+# HU-47.1: minimal apps. django.contrib.sessions requiere DB accesible
+# (su ready() hace SELECT 1). Usamos SQLite file-based, no necesita servicio.
 INSTALLED_APPS = [
-    "django.contrib.contenttypes",
-    "django.contrib.auth",
     "django.contrib.sessions",      # HU-47.1: para SessionMiddleware
     "django.contrib.staticfiles",
 ]
 
 # HU-47.1: solo SessionMiddleware (sin auth middleware porque no usamos
-# django.contrib.auth.User todavía). Cookie firmada por SECRET_KEY.
+# django.contrib.auth.User). Cookie firmada por SECRET_KEY.
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
 ]
@@ -37,8 +37,19 @@ TEMPLATES: list[dict] = []
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Sin DB. Signed cookie sessions (default) no requieren backend.
-DATABASES: dict = {}
+# HU-47.1: SQLite file-based. django.contrib.sessions.ready() hace un
+# SELECT 1 al DB; con signed_cookies no se usa para storage pero igual
+# necesita DB accesible. SQLite es lo más liviano (no requiere servicio).
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
+# HU-47.1: sessions via signed cookies (default). No se usa DB para storage,
+# solo para que el ready() no falle.
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

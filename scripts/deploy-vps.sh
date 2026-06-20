@@ -155,6 +155,8 @@ log "  - make -C ${VPS_DEPLOY_PATH} up (5 servicios)"
 if [[ "$DRY_RUN" == true ]]; then
   log "dry-run: saltando restart"
 else
+  # El VPS tiene /opt/services/services/Makefile (anidado, NO flat).
+  # cd a services/ antes de make.
   # sudo -S lee password de stdin. Combinamos todos los makes en una sola
   # sesión SSH para no pedir el password 4 veces.
   sshpass -p "$VPS_PASSWORD" ssh \
@@ -162,7 +164,7 @@ else
     -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
     -o LogLevel=ERROR \
     "${VPS_USER}@${VPS_HOST}" \
-    "cd ${VPS_DEPLOY_PATH} && \
+    "cd ${VPS_DEPLOY_PATH}/services && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make down && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make build && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make up && \

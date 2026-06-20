@@ -4,10 +4,10 @@ SVC ?= all
 ENV_FILE := --env-file .env
 COMPOSE_PG       := docker compose -f postgres/docker-compose.yml $(ENV_FILE)
 COMPOSE_MINIO    := docker compose -f minio/docker-compose.yml $(ENV_FILE)
-COMPOSE_BACKEND  := docker compose -f domain-backend/docker-compose.yml $(ENV_FILE)
+COMPOSE_MCP  := docker compose -f domain-mcp/docker-compose.yml $(ENV_FILE)
 COMPOSE_ADMIN    := docker compose -f domain-admin/docker-compose.yml $(ENV_FILE)
 COMPOSE_CADDY    := docker compose -f caddy/docker-compose.yml $(ENV_FILE)
-COMPOSE_MONITORING := docker compose -f domain-backend/deploy/monitoring/docker-compose.yml $(ENV_FILE)
+COMPOSE_MONITORING := docker compose -f domain-mcp/deploy/monitoring/docker-compose.yml $(ENV_FILE)
 NETWORK := domain_internal
 
 .PHONY: help up down restart ps logs build backup healthcheck \
@@ -20,8 +20,8 @@ help:
 ensure-network: ## Crea la network domain_internal si no existe (idempotente)
 	@docker network inspect $(NETWORK) >/dev/null 2>&1 || docker network create $(NETWORK)
 
-build: ## Build imágenes locales (backend + admin)
-	$(COMPOSE_BACKEND) build
+build: ## Build imágenes locales (mcp + admin)
+	$(COMPOSE_MCP) build
 	$(COMPOSE_ADMIN) build
 
 # Containers long-running esperados (excluye init containers como
@@ -31,40 +31,40 @@ LONG_RUNNING_COUNT := 5
 wait-healthy: ## Espera hasta 120s a que los 5 containers long-running estén healthy
 	@echo "Esperando healthy (timeout 120s)..."; \
 	for i in $$(seq 1 60); do \
-	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE '^domain-(postgres|minio|backend|admin|caddy)$$' || true); \
+	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE '^domain-(postgres|minio|mcp|admin|caddy)$$' || true); \
 	  if [ "$$healthy" -ge $(LONG_RUNNING_COUNT) ]; then echo "  ✓ los $$healthy/$$healthy long-running están healthy"; exit 0; fi; \
 	  sleep 2; \
 	done; \
 	echo "  ! timeout esperando healthy. usar 'make ps' + 'make logs SVC=<svc>' para diagnosticar"; exit 1
 
-up: ensure-network ## Levanta servicios (SVC=postgres|minio|backend|admin|caddy|all)
+up: ensure-network ## Levanta servicios (SVC=postgres|minio|mcp|admin|caddy|all)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) up -d ;; \
 	  minio)    $(COMPOSE_MINIO) up -d ;; \
-	  backend)  $(COMPOSE_BACKEND) up -d ;; \
+	  mcp)  $(COMPOSE_MCP) up -d ;; \
 	  admin)    $(COMPOSE_ADMIN) up -d ;; \
 	  caddy)    $(COMPOSE_CADDY) up -d ;; \
 	  all)      $(COMPOSE_PG) up -d && \
 	            $(COMPOSE_MINIO) up -d && \
-	            $(COMPOSE_BACKEND) up -d && \
+	            $(COMPOSE_MCP) up -d && \
 	            $(COMPOSE_ADMIN) up -d && \
 	            $(COMPOSE_CADDY) up -d && \
 	            $(MAKE) wait-healthy ;; \
-	  *) echo "SVC inválido: postgres|minio|backend|admin|caddy|all"; exit 1 ;; \
+	  *) echo "SVC inválido: postgres|minio|mcp|admin|caddy|all"; exit 1 ;; \
 	esac
 
 down: ## Detiene containers en orden inverso (mantiene volumes y network)
 	-$(COMPOSE_CADDY) down
 	-$(COMPOSE_ADMIN) down
-	-$(COMPOSE_BACKEND) down
+	-$(COMPOSE_MCP) down
 	-$(COMPOSE_MINIO) down
 	-$(COMPOSE_PG) down
 
-restart: ## Update + restart (SVC=backend|admin rebuildean; otros solo restart)
+restart: ## Update + restart (SVC=mcp|admin rebuildean; otros solo restart)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) restart ;; \
 	  minio)    $(COMPOSE_MINIO) restart ;; \
-	  backend)  $(COMPOSE_BACKEND) build && $(COMPOSE_BACKEND) up -d ;; \
+	  mcp)  $(COMPOSE_MCP) build && $(COMPOSE_MCP) up -d ;; \
 	  admin)    $(COMPOSE_ADMIN) build && $(COMPOSE_ADMIN) up -d ;; \
 	  caddy)    $(COMPOSE_CADDY) restart ;; \
 	  all)      $(MAKE) down && $(MAKE) build && $(MAKE) up ;; \
@@ -74,18 +74,18 @@ restart: ## Update + restart (SVC=backend|admin rebuildean; otros solo restart)
 ps: ## Estado containers
 	@$(COMPOSE_PG) ps
 	@$(COMPOSE_MINIO) ps
-	@$(COMPOSE_BACKEND) ps
+	@$(COMPOSE_MCP) ps
 	@$(COMPOSE_ADMIN) ps
 	@$(COMPOSE_CADDY) ps
 
-logs: ## Tail logs (SVC=postgres|minio|backend|admin|caddy)
+logs: ## Tail logs (SVC=postgres|minio|mcp|admin|caddy)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) logs -f --tail=100 ;; \
 	  minio)    $(COMPOSE_MINIO) logs -f --tail=100 ;; \
-	  backend)  $(COMPOSE_BACKEND) logs -f --tail=100 ;; \
+	  mcp)  $(COMPOSE_MCP) logs -f --tail=100 ;; \
 	  admin)    $(COMPOSE_ADMIN) logs -f --tail=100 ;; \
 	  caddy)    $(COMPOSE_CADDY) logs -f --tail=100 ;; \
-	  *) echo "Usá SVC=postgres|minio|backend|admin|caddy"; exit 1 ;; \
+	  *) echo "Usá SVC=postgres|minio|mcp|admin|caddy"; exit 1 ;; \
 	esac
 
 certs: ## Renueva certs TLS si están por expirar
@@ -121,7 +121,7 @@ clean: ## DESTRUCTIVO: borra volumes de PG y MinIO
 	if [ "$$confirm" = "borrar todo" ]; then \
 		$(COMPOSE_CADDY) down; \
 		$(COMPOSE_ADMIN) down; \
-		$(COMPOSE_BACKEND) down; \
+		$(COMPOSE_MCP) down; \
 		$(COMPOSE_MINIO) down -v; \
 		$(COMPOSE_PG) down -v; \
 	else echo "abort."; fi

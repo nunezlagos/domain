@@ -1,7 +1,7 @@
 # REQ-70: stack de monitoring (Prometheus + Grafana) en la red domain_internal.
 # Monta como sidecar: `docker compose -f monitoring/docker-compose.yml --env-file ../../.env up -d`
 #
-# Prometheus scrapea domain-backend:9090/metrics. El backend debe exponer
+# Prometheus scrapea domain-mcp:9090/metrics. El backend debe exponer
 # 9090 en domain_internal (env DOMAIN_METRICS_BIND=0.0.0.0).
 #
 # Grafana en :3000 (LAN, sin TLS — IP-only).

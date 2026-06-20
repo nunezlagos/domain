@@ -9,7 +9,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: domain-backend:local
+    image: domain-mcp:local
     container_name: domain-migrate
     command: ["migrate", "up"]
     environment:
@@ -18,12 +18,12 @@ services:
       - domain_internal
     restart: "no"
 
-  domain-backend:
+  domain-mcp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: domain-backend:local
-    container_name: domain-backend
+    image: domain-mcp:local
+    container_name: domain-mcp
     restart: unless-stopped
     depends_on:
       domain-migrate:

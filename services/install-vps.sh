@@ -190,7 +190,7 @@ ok "compose ($(docker compose version --short 2>/dev/null || echo presente))"
 for compose_file in \
   postgres/docker-compose.yml \
   minio/docker-compose.yml \
-  domain-backend/docker-compose.yml \
+  domain-mcp/docker-compose.yml \
   domain-frontend/docker-compose.yml \
   caddy/docker-compose.yml; do
   (cd "$SOURCE_DIR" && docker compose -f "$compose_file" --env-file .env.example config -q 2>/dev/null) \
@@ -290,7 +290,7 @@ else
   for i in {1..45}; do
     sleep 2
     healthy=$(docker ps --filter health=healthy --format '{{.Names}}' \
-              | grep -cE '^domain-(postgres|minio|backend|admin|caddy)$' || true)
+              | grep -cE '^domain-(postgres|minio|mcp|admin|caddy)$' || true)
     [[ "$healthy" -ge 5 ]] && { ok "los 5 healthy"; break; }
     [[ $i -eq 45 ]] && warn "timeout esperando healthy; revisar con: make ps && make logs SVC=<svc>"
   done
@@ -342,10 +342,10 @@ else
   DSN="postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/${PG_DB}?sslmode=disable"
   if echo "$ADMIN_PW" | docker run --rm -i --network domain_internal \
         -e DOMAIN_DATABASE_AUTH_URL="$DSN" \
-        domain-backend:local admin-passwd "$ADMIN_EMAIL" --role=admin >/dev/null 2>&1; then
+        domain-mcp:local admin-passwd "$ADMIN_EMAIL" --role=admin >/dev/null 2>&1; then
     ok "password seteada + rol admin asignado"
   else
-    fail "admin-passwd falló (revisar: docker logs domain-backend)"
+    fail "admin-passwd falló (revisar: docker logs domain-mcp)"
     exit 1
   fi
 
@@ -359,7 +359,7 @@ fi
 
 step "10/12  Monitoring opcional"
 if [[ $WITH_MONITORING -eq 1 && $SKIP_COMPOSE_UP -eq 0 ]]; then
-  MON_COMPOSE="$INSTALL_DIR/domain-backend/deploy/monitoring/docker-compose.yml"
+  MON_COMPOSE="$INSTALL_DIR/domain-mcp/deploy/monitoring/docker-compose.yml"
   if [[ -f "$MON_COMPOSE" ]]; then
     docker compose -f "$MON_COMPOSE" --env-file "$INSTALL_DIR/.env" up -d --wait >/dev/null
     ok "prometheus + grafana up (Grafana en :3000)"
@@ -440,8 +440,8 @@ cat <<TAIL
   Comandos útiles:
     cd $INSTALL_DIR
     make ps                       # estado de los 5
-    make logs SVC=backend         # tail de uno
-    make restart SVC=backend      # update sin tocar otros
+    make logs SVC=mcp         # tail de uno
+    make restart SVC=mcp      # update sin tocar otros
     make backup                   # backup manual
 
 TAIL

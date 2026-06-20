@@ -10,7 +10,7 @@
 2. **Ventana de mantenimiento acordada**: Fase C hace 4 migraciones, cada una toma
    <5s pero con el `ALTER TABLE ... DROP COLUMN` sobre 54 tablas el tiempo total puede
    llegar a 30-60s. Lock exclusivo sobre las tablas afectadas.
-3. **Operador con acceso**: SSH al VPS + acceso a `domain-backend` binary + `pgBackRest`.
+3. **Operador con acceso**: SSH al VPS + acceso a `domain-mcp` binary + `pgBackRest`.
 4. **Smoke tests post-deploy**: el script `verify-fase-c-smoke.sh` debe pasar antes de
    declarar el deploy completo.
 
@@ -108,13 +108,13 @@ Caveats:
 
 ```bash
 # Stop binario del backend
-ssh vps "systemctl stop domain-backend"
+ssh vps "systemctl stop domain-mcp"
 
 # Restore
 ssh vps "pgbackrest restore --stanza=domain --type=time --target='2026-06-18T12:00:00'"
 
 # Restart binario
-ssh vps "systemctl start domain-backend"
+ssh vps "systemctl start domain-mcp"
 
 # Verificar schema
 psql $DATABASE_URL -c "\dt organizations"  # debe existir

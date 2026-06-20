@@ -49,7 +49,7 @@ toda implementación nace de una HU. Ver `AGENTS.md` para reglas de proyecto.
 ## Componentes del stack (services/)
 
 ```
-INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-backend:8000
+INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-mcp:8000
                       └─ /*                     → domain-frontend:80
                               │
                   red interna domain_internal:
@@ -60,7 +60,7 @@ INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-backend:8000
 |---|---|---|
 | postgres | pgvector/pgvector:pg16 | DB + embeddings |
 | minio | minio/minio | object storage (S3-compatible) |
-| domain-backend | ghcr.io/nunezlagos/domain-backend | API HTTP + MCP HTTP |
+| domain-mcp | ghcr.io/nunezlagos/domain-mcp | API HTTP + MCP HTTP |
 | domain-frontend | ghcr.io/nunezlagos/domain-frontend | dashboard SPA (placeholder por ahora) |
 | caddy | caddy:2-alpine | reverse proxy, único puerto público |
 
@@ -70,7 +70,7 @@ HTTP plano por IP (sin TLS, sin dominio). PG y MinIO no expuestos al público.
 
 Workflows en `.github/workflows/`:
 
-- `build-backend.yml` — push tag `backend-v*` → publica `ghcr.io/nunezlagos/domain-backend:vX.Y.Z`
+- `build-backend.yml` — push tag `backend-v*` → publica `ghcr.io/nunezlagos/domain-mcp:vX.Y.Z`
 - `build-frontend.yml` — push tag `frontend-v*` → publica `ghcr.io/nunezlagos/domain-frontend:vX.Y.Z`
 - `ci-backend.yml` — tests + lints del backend Go en PRs
 - `benchmarks-backend.yml` — benchmarks Go
@@ -79,7 +79,7 @@ Workflows en `.github/workflows/`:
 ## Update flow
 
 ```bash
-# 1. En la laptop dev: cambios en services/domain-backend/ + tag
+# 1. En la laptop dev: cambios en services/domain-mcp/ + tag
 git tag backend-v1.2.4 && git push --tags
 # CI publica imagen en GHCR
 

@@ -2,8 +2,8 @@
 # - builder: compila binarios domain + domain-mcp con flags optimizados
 # - runtime: distroless con HEALTHCHECK, nonroot, 2 stages, <30 MB
 #
-# Tags: ghcr.io/nunezlagos/domain-backend:<version>
-# Build local: docker buildx build -t domain-backend:dev --load .
+# Tags: ghcr.io/nunezlagos/domain-mcp:<version>
+# Build local: docker buildx build -t domain-mcp:dev --load .
 
 FROM golang:1.25-alpine AS builder
 
@@ -42,8 +42,8 @@ FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.source="https://github.com/nunezlagos/domain"
 LABEL org.opencontainers.image.description="Domain backend — multi-tenant context API + MCP HTTP server"
 LABEL org.opencontainers.image.licenses="proprietary"
-LABEL org.opencontainers.image.title="domain-backend"
-LABEL org.opencontainers.image.url="ghcr.io/nunezlagos/domain-backend"
+LABEL org.opencontainers.image.title="domain-mcp"
+LABEL org.opencontainers.image.url="ghcr.io/nunezlagos/domain-mcp"
 
 COPY --from=builder /out/domain /usr/local/bin/domain
 COPY --from=builder /out/domain-mcp /usr/local/bin/domain-mcp

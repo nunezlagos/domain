@@ -301,7 +301,7 @@ cmd_install() {
   sleep 5
 
   step "Colectando logs de los containers"
-  for svc in domain-postgres domain-minio domain-minio-bootstrap domain-migrate domain-backend domain-frontend domain-caddy; do
+  for svc in domain-postgres domain-minio domain-minio-bootstrap domain-migrate domain-mcp domain-caddy; do
     ssh_vm "$ip" "sudo docker logs $svc 2>&1" > "$LOG_DIR/03-logs-${svc}.log" 2>&1 || true
   done
   ok "logs en $LOG_DIR"

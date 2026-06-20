@@ -178,8 +178,12 @@ log "5/8  Generando certs autofirmados..."
 mkdir -p "$INSTALL_DIR/certs/postgres" "$INSTALL_DIR/certs/minio"
 # Los compose files usan paths relativos tipo ../certs/minio que resuelven
 # a /opt/services/services/certs/minio. Symlink para que apunte a los certs
-# reales en /opt/services/certs/.
-[[ -L "$INSTALL_DIR/services/certs" ]] || ln -sfn ../certs "$INSTALL_DIR/services/certs"
+# reales en /opt/services/certs/. Si existe un directorio viejo (de deploys
+# previos), lo borramos primero.
+if [[ -d "$INSTALL_DIR/services/certs" && ! -L "$INSTALL_DIR/services/certs" ]]; then
+  rm -rf "$INSTALL_DIR/services/certs"
+fi
+ln -sfn ../certs "$INSTALL_DIR/services/certs"
 if [[ ! -f "$INSTALL_DIR/certs/postgres/server.crt" ]]; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
     -keyout "$INSTALL_DIR/certs/postgres/server.key" \

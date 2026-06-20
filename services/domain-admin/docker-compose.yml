@@ -16,6 +16,10 @@ services:
       # HU-45.1 sin DB todavía. HU-45.2 sumará DATABASES + read replica config.
       DJANGO_SETTINGS_MODULE: config.settings
       PYTHONUNBUFFERED: "1"
+      # HU-47.1: credenciales master del admin. Defaults para dev/demo.
+      # Override via /opt/services/.env en producción.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@admin.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
     networks:
       - domain_internal
     expose:

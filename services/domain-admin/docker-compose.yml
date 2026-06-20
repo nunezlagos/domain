@@ -1,0 +1,40 @@
+# HU-45.1: deploy del admin Django placeholder.
+# Build local. Reemplaza el sunset de REQ-41 (Angular CoreUI) en commit 5d03726.
+#
+# Caddy (services/caddy/Caddyfile) ya rutea /* → domain-admin:80.
+# Makefile (services/Makefile) ya tiene SVC=admin que mapea a este compose.
+
+services:
+  domain-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: domain-admin:local
+    container_name: domain-admin
+    restart: unless-stopped
+    environment:
+      # HU-45.1 sin DB todavía. HU-45.2 sumará DATABASES + read replica config.
+      DJANGO_SETTINGS_MODULE: config.settings
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - domain_internal
+    expose:
+      - "80"
+    healthcheck:
+      # gunicorn responde HTTP en /; usamos wget (presente en python:3.12-slim? no,
+      # viene busybox-like). Mejor usar python -c para no asumir binarios extra.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost/', timeout=2).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  domain_internal:
+    name: domain_internal
+    external: true

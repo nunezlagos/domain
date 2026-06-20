@@ -1,0 +1,17 @@
+# REQ-70: scrape config para Prometheus.
+# Target: domain-mcp:9090 (en red domain_internal).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: domain-mcp
+    static_configs:
+      - targets: ['domain-mcp:9090']
+    metrics_path: /metrics
+
+  # Prometheus self-monitoring (útil para alertar si se cae).
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

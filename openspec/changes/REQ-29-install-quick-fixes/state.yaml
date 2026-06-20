@@ -1,9 +1,0 @@
-status: proposed
-created: 2026-06-12
-priority: alta
-estimated_effort: 1-2 días
-hus:
-  29.1-install-cwd-guard: implemented  # 2026-06-18 — guards + cwd guard + 7 tests
-  29.2-backup-deduplication-by-hash: implemented  # 2026-06-18 — dedup + 12 tests (7 nuevos)
-  29.3-server-http-listener-boot-fail-loud: implemented  # 2026-06-18 — RecoverMiddleware + e2e tests
-  29.4-opencode-json-untracked-permanent: implemented  # 2026-06-18 — gitignore root entries + test verde

@@ -1,7 +1,0 @@
-status: active
-created: 2026-06-07
-archived: ~
-hus:
-  24.1-helm-chart: implemented
-  24.2-kustomize-overlays: proposed
-  24.3-k8s-deployment-examples: partially_implemented

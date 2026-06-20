@@ -1,0 +1,103 @@
+name: CI mcp
+
+on:
+  push:
+    branches: [services]
+    paths:
+      - 'services/domain-mcp/**'
+      - '.github/workflows/ci-mcp.yml'
+  pull_request:
+    paths:
+      - 'services/domain-mcp/**'
+      - '.github/workflows/ci-mcp.yml'
+
+defaults:
+  run:
+    working-directory: services/domain-mcp
+
+jobs:
+  lint-and-unit:
+    name: Lint + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: go vet
+        run: go vet ./...
+      - name: go build
+        run: go build ./...
+      - name: go test unit
+        run: go test -race -timeout=5m ./...
+
+  integration-tests:
+    name: Integration tests (testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: Run integration suite
+        run: go test -race -tags=integration -timeout=20m ./...
+
+  db-conventions-lint:
+    name: db-conventions-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: Build linter
+        run: go build -o /tmp/db-conv-lint ./cmd/db-conventions-lint
+      - name: Lint migrations
+        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 146
+
+  response-shape-lint:
+    name: response-shape-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: Build linter
+        run: go build -o /tmp/response-shape-lint ./cmd/response-shape-lint
+      - name: Lint API response shapes + snapshots
+        run: /tmp/response-shape-lint -verbose
+
+  commitlint:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+
+  govulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

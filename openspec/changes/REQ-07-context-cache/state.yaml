@@ -1,8 +1,0 @@
-status: active
-created: 2026-06-07
-archived: ~
-hus:
-  07.1-context-optimizer: proposed
-  07.2-cross-session-stitch: proposed
-  07.3-llm-semantic-cache: proposed
-  07.4-token-budget: implemented

@@ -1,17 +1,16 @@
 :80 {
   handle /api/* {
-    reverse_proxy domain-backend:8000
+    reverse_proxy domain-mcp:8000
   }
   handle /mcp* {
-    reverse_proxy domain-backend:8000
+    reverse_proxy domain-mcp:8000
   }
   handle /healthz {
-    reverse_proxy domain-backend:8000
+    reverse_proxy domain-mcp:8000
   }
-  # REQ-74: admin dashboard (Angular CoreUI) reemplaza el coming-soon.
-  # Si el container domain-admin no está corriendo, Caddy hace fallback
-  # al domain-frontend legacy via try lookup (no soportado nativo —
-  # depende de qué container exista en la red).
+  # REQ-45: admin dashboard (Django placeholder en HU-45.1, vistas reales
+  # en HU-45.2+). Si el container domain-admin no está corriendo, Caddy
+  # responde 502 (no hay fallback).
   handle {
     reverse_proxy domain-admin:80
   }

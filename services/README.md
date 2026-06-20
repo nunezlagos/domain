@@ -1,11 +1,11 @@
 # domain-services
 
-Infra para [domain](https://github.com/nunezlagos/domain): **Postgres + MinIO + domain-backend + domain-frontend + Caddy** en VPS Ubuntu via Docker Compose. HTTP plano por IP (sin TLS).
+Infra para [domain](https://github.com/nunezlagos/domain): **Postgres + MinIO + domain-mcp + domain-frontend + Caddy** en VPS Ubuntu via Docker Compose. HTTP plano por IP (sin TLS).
 
 ## Topología
 
 ```
-INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-backend:8000
+INTERNET → Caddy :80 ─┬─ /api/* /mcp* /healthz → domain-mcp:8000
                       └─ /*                     → domain-frontend:80
                               │
                   red interna domain_internal:
@@ -31,7 +31,7 @@ Flags: `--keep-clone` · `--skip-deps` · `--skip-compose-up`.
 ```
 postgres/         docker-compose.yml + config + init scripts
 minio/            docker-compose.yml
-domain-backend/   código fuente + Dockerfile + compose (imagen GHCR)
+domain-mcp/   código fuente + Dockerfile + compose (imagen GHCR)
 domain-frontend/  Dockerfile + nginx + web/ (imagen GHCR)
 caddy/            Caddyfile + docker-compose.yml (reverse proxy :80)
 scripts/          backup.sh · gen-certs.sh · healthcheck-alert.sh

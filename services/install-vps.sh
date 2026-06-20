@@ -372,7 +372,11 @@ fi
 
 step "11/12  Cleanup"
 if [[ -n "$MOVED_FROM" && $KEEP_CLONE -eq 0 && "$MOVED_FROM" != "$INSTALL_DIR" ]]; then
-  rm -rf "$MOVED_FROM"; ok "clone eliminado: $MOVED_FROM"
+  # HU-deploy-automation: rm comentado para que re-installs / re-deploys
+  # puedan reusar el clone en /tmp/domain. Si querés borrar explícitamente,
+  # pasá --keep-clone=0 o descomentá esta línea.
+  # rm -rf "$MOVED_FROM"; ok "clone eliminado: $MOVED_FROM"
+  ok "clone conservado en $MOVED_FROM (re-deploy friendly)"
 else
   ok "nada que limpiar"
 fi

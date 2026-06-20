@@ -57,8 +57,10 @@ USE_TZ = True
 LANGUAGE_CODE = "es-ar"
 TIME_ZONE = "UTC"
 
-# HU-47.1: cookies seguras (HTTPS-only cuando DEBUG=False).
-SESSION_COOKIE_SECURE = not DEBUG
+# HU-47.1: cookie config. Por defecto HTTP-only, SameSite=Lax, NO secure.
+# Si activás HTTPS (Let's Encrypt via Caddy), setear SESSION_COOKIE_SECURE=1
+# en .env para que el cookie requiera HTTPS (más seguro contra MITM).
+SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 # 8 horas de sesión.

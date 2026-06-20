@@ -103,7 +103,12 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
   (cd "$INSTALL_DIR" && git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
   ok "Repo actualizado a origin/$REPO_BRANCH"
 elif [[ -d "$INSTALL_DIR" ]] && [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-  fail "$INSTALL_DIR existe pero no es un git repo. Backup manual requerido."
+  # Existe pero no es git (ej: archivos copiados por rsync o install viejo).
+  # Inicializamos git apuntando al repo oficial y sincronizamos.
+  log "$INSTALL_DIR existe sin .git, inicializando + pulling..."
+  (cd "$INSTALL_DIR" && git init -q && git remote add origin "$REPO_URL" && \
+    git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
+  ok "Git inicializado y sincronizado con origin/$REPO_BRANCH"
 else
   mkdir -p "$INSTALL_DIR"
   git clone -b "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"

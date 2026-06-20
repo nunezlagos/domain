@@ -39,3 +39,10 @@ opencode.json
 opencode.json.backup-*
 .mcp.json
 .mcp.json.backup-*
+
+# Tooling/dev (NO en repo, solo local)
+.ai/
+.claude/
+
+# SDD specs (NO en repo, solo local)
+openspec/

@@ -1,7 +1,0 @@
-status: active
-created: 2026-06-07
-archived: ~
-hus:
-  11.1-sandbox-execution: proposed
-  11.2-selfhosted-runner: proposed
-  11.3-execution-streaming: proposed

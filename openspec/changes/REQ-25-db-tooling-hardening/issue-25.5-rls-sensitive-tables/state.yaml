@@ -1,7 +1,0 @@
-status: archived
-created: 2026-06-07
-archived: 2026-06-09
-archive_reason: |
-  Duplicado de issue-25.5-rls-selective-tables. Placeholder de rename que
-  nunca completó. La spec real con código (migration 000028 +
-  internal/store/txctx) vive en issue-25.5-rls-selective-tables (canónica).

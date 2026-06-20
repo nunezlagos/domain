@@ -78,13 +78,21 @@ ssh_run() {
 rsync_run() {
   local args=(
     -az --delete
+    # Source-side excludes: no copiar estos desde local.
     --exclude='.git'
     --exclude='.env'
     --exclude='.env.local'
     --exclude='.env.vps'
-    --exclude='backups/'
     --exclude='*.log'
     --exclude='.DS_Store'
+    # Dest-side protects: estos existen SOLO en VPS (generados, no en source).
+    # Sin protect, --delete los borraría por no estar en source.
+    --filter='protect .env'
+    --filter='protect .env.local'
+    --filter='protect .env.vps'
+    --filter='protect certs/'
+    --filter='protect backups/'
+    --filter='protect .git'
   )
   if [[ "$DRY_RUN" == true ]]; then
     args+=(--dry-run)

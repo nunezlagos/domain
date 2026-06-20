@@ -179,9 +179,9 @@ mkdir -p "$INSTALL_DIR/certs/postgres" "$INSTALL_DIR/certs/minio"
 # Los compose files usan paths relativos tipo ../certs/minio que resuelven
 # a /opt/services/services/certs/minio. Symlink para que apunte a los certs
 # reales en /opt/services/certs/. Si existe un directorio viejo (de deploys
-# previos), lo borramos primero.
+# previos, posiblemente root-owned), lo borramos con sudo.
 if [[ -d "$INSTALL_DIR/services/certs" && ! -L "$INSTALL_DIR/services/certs" ]]; then
-  rm -rf "$INSTALL_DIR/services/certs"
+  sudo_run rm -rf "$INSTALL_DIR/services/certs"
 fi
 ln -sfn ../certs "$INSTALL_DIR/services/certs"
 if [[ ! -f "$INSTALL_DIR/certs/postgres/server.crt" ]]; then

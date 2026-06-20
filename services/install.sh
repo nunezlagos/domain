@@ -198,6 +198,9 @@ fi
 # === STEP 6: Build + Up ===
 log "6/8  Building + starting services (esto puede tardar 1-3 min)..."
 cd "$INSTALL_DIR/services"
+# Makefile usa --env-file .env (relativo al CWD). El .env real está en
+# $INSTALL_DIR/.env (parent). Symlink para que make lo encuentre.
+[[ -L .env ]] || ln -sf ../.env .env
 make down 2>/dev/null || true
 make build
 make up

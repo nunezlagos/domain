@@ -97,9 +97,13 @@ rsync_run() {
   if [[ "$DRY_RUN" == true ]]; then
     args+=(--dry-run)
   fi
+  # FLATTEN: rsync de services/ a /opt/services/. Los compose files usan
+  # paths relativos tipo ../certs/postgres que asumen estructura flat.
+  # Sin flatten, los paths se rompen (ej: postgres busca certs en
+  # /opt/services/services/certs/postgres que está vacío).
   sshpass -p "$VPS_PASSWORD" rsync "${args[@]}" \
     -e "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o LogLevel=ERROR" \
-    "$REPO_ROOT/" \
+    "$REPO_ROOT/services/" \
     "${VPS_USER}@${VPS_HOST}:${VPS_DEPLOY_PATH}/"
 }
 
@@ -155,9 +159,7 @@ log "  - make -C ${VPS_DEPLOY_PATH} up (5 servicios)"
 if [[ "$DRY_RUN" == true ]]; then
   log "dry-run: saltando restart"
 else
-  # El VPS tiene /opt/services/services/Makefile (anidado, NO flat).
-  # cd a services/ antes de make. .env está en /opt/services/.env (parent),
-  # lo symlinkeamos a services/.env para que el Makefile lo encuentre.
+  # Estructura FLAT en VPS: Makefile en /opt/services/Makefile.
   # sudo -S lee password de stdin. Combinamos todos los makes en una sola
   # sesión SSH para no pedir el password 4 veces.
   sshpass -p "$VPS_PASSWORD" ssh \
@@ -166,8 +168,6 @@ else
     -o LogLevel=ERROR \
     "${VPS_USER}@${VPS_HOST}" \
     "cd ${VPS_DEPLOY_PATH} && \
-     ln -sf ../.env services/.env && \
-     cd services && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make down && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make build && \
      echo '${VPS_PASSWORD}' | sudo -S -p '' make up && \

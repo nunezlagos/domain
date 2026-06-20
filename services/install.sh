@@ -26,6 +26,20 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/services}"
 REPO_URL="${REPO_URL:-https://github.com/nunezlagos/domain.git}"
 REPO_BRANCH="${REPO_BRANCH:-services}"
 
+# Si el script no se corre como root pero SUDO_PASSWORD está seteada,
+# usamos sudo -S (lee password de stdin). Útil para VPS donde el user
+# no tiene NOPASSWD. Si corrés como root, este helper es no-op.
+sudo_run() {
+  if [[ $EUID -eq 0 ]]; then
+    "$@"
+  elif [[ -n "${SUDO_PASSWORD:-}" ]]; then
+    echo "$SUDO_PASSWORD" | sudo -S -p '' "$@"
+  else
+    # Último intento: sudo sin password (NOPASSWD configurado)
+    sudo "$@"
+  fi
+}
+
 # === Logging ===
 log()  { printf '\033[36m[install]\033[0m %s\n' "$*" >&2; }
 ok()   { log "✓ $*"; }
@@ -188,10 +202,10 @@ ok "5 servicios healthy"
 # === STEP 7: Systemd timers ===
 log "7/8  Configurando systemd timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
-  cp "$INSTALL_DIR/services/systemd/"*.service /etc/systemd/system/ 2>/dev/null || true
-  cp "$INSTALL_DIR/services/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
-  systemctl daemon-reload
-  systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
+  sudo_run cp "$INSTALL_DIR/services/systemd/"*.service /etc/systemd/system/ 2>/dev/null || true
+  sudo_run cp "$INSTALL_DIR/services/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
+  sudo_run systemctl daemon-reload
+  sudo_run systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
   ok "Timers systemd activos"
 else
   warn "no se encontró $INSTALL_DIR/services/systemd/, saltando timers"

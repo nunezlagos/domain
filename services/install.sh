@@ -93,7 +93,12 @@ log "1/8  Validating OS..."
 command -v systemctl &>/dev/null || fail "systemd no disponible"
 [[ -d /run/systemd/system ]] || fail "systemd no es PID 1"
 ARCH="$(uname -m)"
-[[ "$ARCH" == "amd64" || "$ARCH" == "arm64" ]] || fail "arquitectura no soportada: $ARCH"
+# Linux reporta x86_64 o amd64 según distro; aceptamos ambos
+case "$ARCH" in
+  amd64|x86_64) ARCH=amd64 ;;
+  arm64|aarch64) ARCH=arm64 ;;
+  *) fail "arquitectura no soportada: $ARCH" ;;
+esac
 ok "Ubuntu ${VERSION_ID} (${VERSION_CODENAME}) — ${ARCH}"
 
 # === STEP 2: Docker ===

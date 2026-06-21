@@ -103,6 +103,12 @@ CSRF_TRUSTED_ORIGINS = [
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# W342: UserRole usa un FK con primary_key=True (db_column user_id) como
+# workaround a la PK COMPUESTA de user_roles, que Django 5.1 no soporta nativo.
+# Django sugiere OneToOneField, pero sería semánticamente incorrecto (un user
+# tiene muchos roles). El warning es esperado y no aplica acá.
+SILENCED_SYSTEM_CHECKS = ["fields.W342"]
+
 USE_TZ = True
 LANGUAGE_CODE = "es-ar"
 TIME_ZONE = "UTC"

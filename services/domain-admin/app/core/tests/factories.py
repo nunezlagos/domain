@@ -24,5 +24,8 @@ def make(model, /, **kwargs):
 
     Ej.: make(Project, name="X", slug="x")
     """
-    kwargs.setdefault("id", new_id())
+    # Solo inyectar id si el modelo TIENE columna id (ej. UserRole no la tiene:
+    # PK compuesta user_id+role_id).
+    if "id" not in kwargs and any(f.name == "id" for f in model._meta.fields):
+        kwargs["id"] = new_id()
     return model.objects.create(**kwargs)

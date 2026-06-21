@@ -36,12 +36,10 @@ MAINTAINER_APPS = (
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "real_schema.json"
 
-# Tablas excluidas del guard:
-# - user_roles: pivote con PK COMPUESTA (user_id, role_id) y SIN columna `id`.
-#   Django 5.1 no soporta CompositePrimaryKey (llegó en 5.2). Además el área de
-#   roles/permisos quedó reservada (la maneja Django / pedido del usuario). El
-#   model UserRole queda como deuda conocida hasta rever roles.
-_SKIP_TABLES = {"user_roles"}
+# Tablas excluidas del guard. user_roles ya NO se excluye: el model UserRole se
+# reconcilió (sin columna `id`, user como primary_key db_column user_id), así que
+# sus columnas calzan con la tabla real y el guard lo valida.
+_SKIP_TABLES: set[str] = set()
 
 
 def _load_real_schema() -> dict[str, set[str]]:

@@ -93,19 +93,20 @@ class User(SoftDeleteModel):
 class UserRole(models.Model):
     """Pivote: asigna roles a users (many-to-many con metadata).
 
-    NO migrado a core: PK compuesta (user_id, role_id) sin columna `id` usable
-    en Django 5.1; excluido del guard de schema drift. Se mueve tal cual.
+    La tabla real user_roles tiene PK COMPUESTA (user_id, role_id) y NO tiene
+    columna `id`. Django 5.1 no soporta CompositePrimaryKey, así que usamos
+    `user` como primary_key (db_column user_id). Alcanza para lo que hace el app:
+    leer (filter por user/role), asignar (create) y revocar (delete por filter).
+    El INSERT no manda `id` (no existe) y la unicidad real (user_id, role_id) la
+    impone la BD.
 
-    Schema:
-        id          uuid PK
-        user_id     uuid FK -> users.id
-        role_id     uuid FK -> roles.id
-        granted_at  timestamptz
-        granted_by  uuid (nullable)
+    Schema real:
+        user_id     uuid  (FK -> users.id)
+        role_id     uuid  (FK -> roles.id)
+        granted_at / granted_by / created_at / updated_at / status
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column="user_id", related_name="roles")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column="user_id", related_name="roles", primary_key=True)
     role = models.ForeignKey(Role, on_delete=models.CASCADE, db_column="role_id", related_name="users")
     granted_at = models.DateTimeField(auto_now_add=True)
     granted_by = models.UUIDField(null=True, blank=True)

@@ -11,6 +11,19 @@ con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% block create_label %}+ Usuario{% endblock %}
 {% block search_placeholder %}Email o nombre...{% endblock %}
 
+{% comment %}
+header_actions: dos botones del mismo tamaño. "+ Usuario" abre el form de
+creación (data-action="create" usa el data-base-url del contenedor de tabla);
+"Gestionar API Keys" abre el modal con el listado compacto (data-action="modal"
+hace fetch de /usuarios/api-keys/ e inyecta el partial en el modal dinámico).
+{% endcomment %}
+{% block header_actions %}
+  <button class="btn btn-outline-primary" data-action="create">+ Usuario</button>
+  <button class="btn btn-secondary" data-action="modal" data-url="/usuarios/api-keys/">
+    Gestionar API Keys
+  </button>
+{% endblock %}
+
 {% block table_area_id %}users-table-area{% endblock %}
 {% block base_url %}/usuarios/{% endblock %}
 {% block signal_url %}{% url 'users:signal' %}{% endblock %}

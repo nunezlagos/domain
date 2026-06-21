@@ -1,0 +1,89 @@
+{% comment %}
+Modal "Gestionar API Keys" (consolidado dentro del mantenedor de Usuarios).
+
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js vía fetch a
+/usuarios/api-keys/ con data-action="modal"). NO extiende base.html: es un
+fragmento de modal (header + body + footer), igual contrato que _detail_base.
+
+Las acciones por fila NO apuntan a /usuarios/: el wrapper [data-base-url="/api-keys/"]
+hace que modals.js resuelva edit/create/delete contra el mantenedor existente de
+API Keys. Así reusamos su CRUD (form/modales) sin duplicar nada.
+{% endcomment %}
+<div class="modal-header">
+  <h3 class="modal-title">API Keys</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body" data-base-url="/api-keys/">
+  <div class="d-flex" style="justify-content: space-between; align-items: center; margin-bottom: var(--space-md);">
+    <span class="text-secondary" style="font-size: var(--fs-sm);">
+      {{ total }} API key{{ total|pluralize:",s" }} en total.
+    </span>
+    <button type="button" class="btn btn-sm btn-outline-primary" data-action="create">
+      + API Key
+    </button>
+  </div>
+
+  <table class="table" style="font-size: var(--fs-sm);">
+    <thead>
+      <tr>
+        <th>Prefijo</th>
+        <th>Nombre</th>
+        <th>Usuario</th>
+        <th>Estado</th>
+        <th>Último uso</th>
+        <th>Expira</th>
+        <th style="width: 1%; white-space: nowrap;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in api_keys %}
+        <tr>
+          <td><code>{{ k.key_prefix }}…</code></td>
+          <td>{{ k.name }}</td>
+          <td>
+            {{ k.user.display_name }}
+            <br><code class="text-muted" style="font-size: var(--fs-xs);">{{ k.user.email }}</code>
+          </td>
+          <td>
+            {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
+            {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
+            {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td>{{ k.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+          <td>{{ k.expires_at|date:"d/m/Y"|default:"Nunca" }}</td>
+          <td>
+            <div class="d-flex gap-1" style="justify-content: flex-end;">
+              <button class="btn btn-icon btn-sm btn-ghost" title="Editar"
+                      data-action="edit" data-id="{{ k.pk }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 20h9"/>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              </button>
+              <button class="btn btn-icon btn-sm btn-ghost" title="Revocar"
+                      style="color: var(--color-danger);"
+                      data-action="delete" data-id="{{ k.pk }}" data-name="{{ k.display_name }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="7" style="text-align: center; padding: var(--space-lg); color: var(--color-text-muted);">
+            No hay API Keys.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+</div>

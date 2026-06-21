@@ -61,6 +61,32 @@
       if (modalToClose) modalToClose.classList.remove('open');
       return;
     }
+    // Copiar al portapapeles: data-copy="#selector" copia el value/text del
+    // elemento referenciado. Delegado para que funcione dentro de partials
+    // inyectados en el modal dinámico (donde un <script> inline no correría).
+    var copyBtn = e.target.closest('[data-copy]');
+    if (copyBtn) {
+      e.preventDefault();
+      var target = document.querySelector(copyBtn.dataset.copy);
+      if (target) {
+        var text = 'value' in target ? target.value : target.textContent;
+        var done = function () {
+          var prev = copyBtn.textContent;
+          copyBtn.textContent = 'Copiado';
+          setTimeout(function () { copyBtn.textContent = prev; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () {
+            target.select && target.select();
+          });
+        } else if (target.select) {
+          target.select();
+          document.execCommand('copy');
+          done();
+        }
+      }
+      return;
+    }
     // Action handlers (AJAX → modal dinámico)
     var btn = e.target.closest('[data-action]');
     if (btn) {
@@ -71,7 +97,22 @@
       // base SIEMPRE termina en "/" (ej "/usuarios/").
       var base = btn.dataset.url ? null : resolveBase(btn);
       try {
-        if (action === 'view' || action === 'edit' || action === 'create') {
+        if (action === 'modal') {
+          // Acción genérica: hace fetch de data-url (o data-modal-url) e
+          // inyecta el HTML en el modal dinámico. Reutilizable por cualquier
+          // botón que quiera abrir un partial arbitrario en el modal.
+          var modalUrl = btn.dataset.url || btn.dataset.modalUrl;
+          if (!modalUrl) { alert('Falta data-url'); return; }
+          var mr = await fetch(modalUrl, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'fetch' },
+          });
+          if (mr.ok) {
+            openDynamicModal(await mr.text());
+          } else {
+            alert('Error al cargar (' + mr.status + ')');
+          }
+        } else if (action === 'view' || action === 'edit' || action === 'create') {
           var fetchUrl;
           if (action === 'create') {
             fetchUrl = btn.dataset.url || base + 'nuevo/?partial=1';

@@ -19,4 +19,7 @@ app_name = "users"
 urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="user_id") + [
     path("<uuid:user_id>/roles/asignar/", views.role_assign, name="role_assign"),
     path("<uuid:user_id>/roles/<uuid:role_id>/revocar/", views.role_revoke, name="role_revoke"),
+    # Consolidación: API Keys (modal de gestión) + invitación (preview) viven acá.
+    path("api-keys/", views.apikeys_modal, name="apikeys_modal"),
+    path("<uuid:user_id>/invitar/", views.invite_preview, name="invite_preview"),
 ]

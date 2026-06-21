@@ -52,6 +52,43 @@ Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.ht
   {% else %}
     <p class="text-muted">Este usuario no tiene roles asignados.</p>
   {% endif %}
+
+  {% comment %}
+  Sección API Keys del usuario. Las acciones (editar/crear) apuntan al
+  mantenedor existente de API Keys vía data-base-url="/api-keys/", reusando su
+  CRUD. api_keys viene del detail_context de users.views (filter user_id=pk).
+  {% endcomment %}
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">API Keys</h4>
+  <div data-base-url="/api-keys/">
+    {% if api_keys %}
+      <table class="table" style="font-size: var(--fs-sm);">
+        <tbody>
+          {% for k in api_keys %}
+            <tr>
+              <td><code>{{ k.key_prefix }}…</code></td>
+              <td>{{ k.name }}</td>
+              <td>
+                {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
+                {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
+                {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td class="text-muted">{{ k.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+              <td style="width: 1%; white-space: nowrap;">
+                <button type="button" class="btn btn-sm btn-ghost"
+                        data-action="edit" data-id="{{ k.pk }}">Editar</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="text-muted" style="margin-bottom: var(--space-sm);">Sin API keys.</p>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-action="create">
+        + Crear API Key
+      </button>
+    {% endif %}
+  </div>
 {% endblock %}
 
 {% block detail_actions %}

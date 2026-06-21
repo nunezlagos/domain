@@ -50,6 +50,7 @@ def user_list(request):
         "total": data["total"],
         "page": data["page"],
         "per_page": data["per_page"],
+        "total_pages": data["total_pages"],
         "has_next": data["has_next"],
         "has_prev": data["has_prev"],
         "search": search,

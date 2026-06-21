@@ -20,7 +20,7 @@ class UserError(Exception):
 def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
     """Lista usuarios con búsqueda opcional + paginación.
 
-    Retorna dict con: users (lista), total, page, per_page, has_next, has_prev.
+    Retorna dict con: users, total, page, per_page, total_pages, has_next, has_prev.
     """
     qs = User.objects.all()
     if search:
@@ -28,6 +28,7 @@ def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
     qs = qs.distinct().order_by("-created_at")
 
     total = qs.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
     start = (page - 1) * per_page
     end = start + per_page
     users = list(qs[start:end])
@@ -37,6 +38,7 @@ def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
         "total": total,
         "page": page,
         "per_page": per_page,
+        "total_pages": total_pages,
         "has_next": end < total,
         "has_prev": page > 1,
     }

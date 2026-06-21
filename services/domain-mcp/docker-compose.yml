@@ -46,10 +46,11 @@ services:
     image: domain-mcp:local
     container_name: domain-mcp
     restart: unless-stopped
+    # Depende SOLO de migrate (schema listo). NO de domain-seed: el seed es
+    # data de catálogo no-crítica; si falla, el server igual debe arrancar
+    # (un seed roto NO debe tirar el backend). El seed corre igual en cada up.
     depends_on:
       domain-migrate:
-        condition: service_completed_successfully
-      domain-seed:
         condition: service_completed_successfully
     environment:
       DOMAIN_HTTP_PORT: 8000

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Dashboard" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="subtitle">Resumen operacional del stack domain-services</p>
+  </div>
+  <span class="badge badge-primary">HU-47.2</span>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="number">0</div>
+    <div class="label">Members</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">0</div>
+    <div class="label">Usage events</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">0</div>
+    <div class="label">Audit logs</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">0</div>
+    <div class="label">Open tickets</div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <h3>Estado del stack</h3>
+  <p class="text-secondary mt-2 mb-3">Servicios corriendo en el VPS.</p>
+  <table class="table">
+    <thead>
+      <tr><th>Servicio</th><th>Función</th><th>Imagen</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>domain-mcp</td><td>API HTTP + MCP HTTP server</td><td>domain-mcp:local</td><td><span class="badge badge-success">healthy</span></td></tr>
+      <tr><td>domain-admin</td><td>Django admin dashboard</td><td>domain-admin:local</td><td><span class="badge badge-success">healthy</span></td></tr>
+      <tr><td>domain-postgres</td><td>PostgreSQL 15+ + pgvector</td><td>pgvector/pgvector:pg16</td><td><span class="badge badge-success">healthy</span></td></tr>
+      <tr><td>domain-minio</td><td>S3-compatible storage</td><td>minio/minio</td><td><span class="badge badge-success">healthy</span></td></tr>
+      <tr><td>domain-caddy</td><td>Reverse proxy</td><td>caddy:2-alpine</td><td><span class="badge badge-success">healthy</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card mt-4">
+  <h3>HUs abiertas</h3>
+  <p class="text-secondary mt-2 mb-3">Próximas features del admin.</p>
+  <div class="d-flex gap-2" style="flex-wrap: wrap;">
+    <span class="badge">HU-45.2: ORM + multi-user</span>
+    <span class="badge">HU-47.3: HTTPS + Let's Encrypt</span>
+    <span class="badge">HU-48: Members management</span>
+    <span class="badge">HU-49: Usage analytics</span>
+    <span class="badge">HU-50: Audit log viewer</span>
+    <span class="badge">HU-51: Cost reports</span>
+  </div>
+</div>
+{% endblock %}

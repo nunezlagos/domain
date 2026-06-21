@@ -1,0 +1,77 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Domain Admin{% endblock %}</title>
+
+  <link rel="stylesheet" href="{% static 'css/variables.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'css/components.css' %}">
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-layout">
+    {% block sidebar %}{% include "components/_sidebar.html" %}{% endblock %}
+
+    <div class="app-main">
+      {% block navbar %}{% include "components/_navbar.html" %}{% endblock %}
+
+      <main class="content">
+        {% if messages %}
+          <div class="mb-3">
+            {% for message in messages %}
+              {% include "components/_alert.html" with message=message %}
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      {% include "components/_footer.html" %}
+    </div>
+  </div>
+
+  {% block modals %}{% endblock %}
+
+  <script>
+    // Vanilla JS: modal open/close + auto-dismiss alerts
+    document.addEventListener('click', function(e) {
+      // Open modal: data-modal-open="modal-id"
+      var opener = e.target.closest('[data-modal-open]');
+      if (opener) {
+        e.preventDefault();
+        var id = opener.getAttribute('data-modal-open');
+        var modal = document.getElementById(id);
+        if (modal) modal.classList.add('open');
+        return;
+      }
+      // Close modal: data-modal-close (on backdrop or button)
+      var closer = e.target.closest('[data-modal-close]');
+      if (closer) {
+        e.preventDefault();
+        var modal = closer.closest('.modal-backdrop');
+        if (modal) modal.classList.remove('open');
+        return;
+      }
+    });
+    // Close modal clicking backdrop (but not modal content)
+    document.addEventListener('click', function(e) {
+      if (e.target.classList && e.target.classList.contains('modal-backdrop')) {
+        e.target.classList.remove('open');
+      }
+    });
+    // Auto-dismiss alerts after 5s
+    document.querySelectorAll('.alert[data-auto-dismiss]').forEach(function(a) {
+      setTimeout(function() {
+        a.style.transition = 'opacity 0.3s';
+        a.style.opacity = '0';
+        setTimeout(function() { a.remove(); }, 300);
+      }, 5000);
+    });
+  </script>
+</body>
+</html>

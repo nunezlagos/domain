@@ -1,0 +1,15 @@
+{% comment %}
+Navbar partial. Variable esperada: title (string).
+Muestra email del usuario desde session.
+{% endcomment %}
+<header class="navbar">
+  <div class="navbar-title">{{ title|default:"Domain Admin" }}</div>
+
+  <div class="navbar-actions">
+    <span class="navbar-user">
+      <span class="avatar">{{ request.session.email|slice:":2"|upper|default:"AD" }}</span>
+      <span>{{ request.session.email|default:"admin" }}</span>
+    </span>
+    <a href="/logout/" class="btn btn-ghost btn-sm">Logout</a>
+  </div>
+</header>

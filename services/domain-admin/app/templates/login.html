@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<form method="post" action="/login/" class="card" style="max-width: 420px; width: 100%;">
+  {% csrf_token %}
+  <h1 class="mb-1" style="font-size: var(--fs-2xl);">Domain Admin</h1>
+  <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">Iniciá sesión para continuar</p>
+
+  <div class="form-group">
+    <label class="form-label" for="email">Email</label>
+    <input type="email" name="email" id="email" required autofocus autocomplete="username"
+           class="form-control" placeholder="admin@admin.com">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="password">Password</label>
+    <input type="password" name="password" id="password" required autocomplete="current-password"
+           class="form-control" placeholder="••••••••">
+  </div>
+
+  <button type="submit" class="btn btn-primary btn-block btn-lg mt-2">Entrar</button>
+</form>
+{% endblock %}

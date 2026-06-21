@@ -10,7 +10,7 @@ from django.contrib.auth.hashers import make_password
 
 from core.forms import EmailNormalizationMixin
 
-from .models import Role, User
+from .models import Role, User, UserRole
 
 
 class UserForm(EmailNormalizationMixin, forms.Form):
@@ -94,6 +94,25 @@ class UserForm(EmailNormalizationMixin, forms.Form):
         if not pw:
             return None
         return make_password(pw).encode("utf-8")
+
+
+class UserRoleAssignForm(forms.Form):
+    """Form para asignar un rol a un user."""
+
+    role = forms.ModelChoiceField(
+        label="Rol",
+        queryset=Role.objects.filter(status="active").order_by("slug"),
+        widget=forms.Select(attrs={"class": "form-control form-select"}),
+    )
+
+    def __init__(self, *args, user: User | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user is not None:
+            assigned = UserRole.objects.filter(user=user).values_list("role_id", flat=True)
+            self.fields["role"].queryset = (
+                Role.objects.filter(status="active").exclude(id__in=assigned).order_by("slug")
+            )
 
 
 class UserSearchForm(forms.Form):

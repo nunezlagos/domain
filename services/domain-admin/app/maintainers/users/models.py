@@ -1,8 +1,9 @@
 """Modelos del mantenedor de usuarios (migrado a core).
 
-2 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
+3 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
 - users:      usuarios de la plataforma  -> hereda de core.SoftDeleteModel
-- roles:      roles fijos/seeded          -> model propio (alimenta el dropdown del form)
+- roles:      roles fijos/seeded          -> model propio (NO se toca el área roles)
+- user_roles: pivote many-to-many         -> model propio (PK compuesta, excluido del guard)
 
 User reusa los campos comunes (id/created_at/updated_at/deleted_at/status) de
 core.models.SoftDeleteModel y declara SOLO sus columnas propias. Las columnas
@@ -87,3 +88,35 @@ class User(SoftDeleteModel):
     @property
     def is_active(self) -> bool:
         return self.status == "active" and not self.is_erased and self.deleted_at is None
+
+
+class UserRole(models.Model):
+    """Pivote: asigna roles a users (many-to-many con metadata).
+
+    NO migrado a core: PK compuesta (user_id, role_id) sin columna `id` usable
+    en Django 5.1; excluido del guard de schema drift. Se mueve tal cual.
+
+    Schema:
+        id          uuid PK
+        user_id     uuid FK -> users.id
+        role_id     uuid FK -> roles.id
+        granted_at  timestamptz
+        granted_by  uuid (nullable)
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column="user_id", related_name="roles")
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, db_column="role_id", related_name="users")
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.UUIDField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, default="active")
+
+    class Meta:
+        db_table = "user_roles"
+        managed = False
+        unique_together = [("user", "role")]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} → {self.role.slug}"

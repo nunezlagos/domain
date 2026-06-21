@@ -1,14 +1,14 @@
 """Factories del mantenedor de usuarios.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). Solo agrega los helpers específicos de las
-tablas del dominio (users, roles).
+prod los genera domain-mcp). Solo agrega los helpers específicos de las 3
+tablas del dominio (users, roles, user_roles).
 """
 from __future__ import annotations
 
 from core.tests.factories import make
 
-from maintainers.users.models import Role, User
+from maintainers.users.models import Role, User, UserRole
 
 
 def make_role(slug: str = "viewer", *, name: str | None = None, status: str = "active",
@@ -31,3 +31,7 @@ def make_user(email: str, *, name: str = "", role: str = "viewer",
         u.status = "revoked"
         u.save()
     return u
+
+
+def make_user_role(user: User, role: Role, *, status: str = "active") -> UserRole:
+    return make(UserRole, user=user, role=role, status=status)

@@ -15,7 +15,7 @@ from django.db import transaction
 
 from core.service import MaintainerService
 
-from .models import Role, User
+from .models import Role, User, UserRole
 
 
 # Error de dominio (la view lo traduce a messages.error).
@@ -54,6 +54,14 @@ def get_user(user_id: str) -> User:
         return User.objects.get(pk=user_id)
     except User.DoesNotExist as exc:
         raise UserError(f"Usuario {user_id} no existe.") from exc
+
+
+def get_user_roles(user: User) -> list[UserRole]:
+    return list(
+        UserRole.objects.filter(user=user, status="active")
+        .select_related("role")
+        .order_by("role__slug")
+    )
 
 
 def list_available_roles() -> list[Role]:
@@ -134,6 +142,26 @@ def toggle_user_status(user: User) -> str:
         user.status = "suspended"
     user.save()
     return user.status
+
+
+@transaction.atomic
+def assign_role(user: User, role_id: str, granted_by: str | None = None) -> UserRole:
+    """Asigna un rol al user. Idempotente (no duplica)."""
+    role = Role.objects.get(pk=role_id)
+    existing = UserRole.objects.filter(user=user, role=role).first()
+    if existing:
+        if existing.status != "active":
+            existing.status = "active"
+            existing.save()
+        return existing
+    return UserRole.objects.create(user=user, role=role, granted_by=granted_by)
+
+
+@transaction.atomic
+def revoke_role(user: User, role_id: str) -> bool:
+    """Revoca un rol del user. Retorna True si se eliminó."""
+    deleted_count, _ = UserRole.objects.filter(user=user, role_id=role_id).delete()
+    return deleted_count > 0
 
 
 def get_stats() -> dict:

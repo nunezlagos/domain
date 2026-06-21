@@ -6,18 +6,26 @@ arma core.views.MaintainerViews. Acá solo:
   1. Se configura la instancia `views` (model/form/service/templates/labels).
   2. Se sobreescriben los hooks específicos de users:
        - _form_payload: mapea role -> role_slug y agrega hashed_password().
-       - form_context / detail_context: exponen `user_obj` que los templates
-         de users ya consumen.
+       - form_context / detail_context: exponen `user_obj` (+ roles en detail)
+         que los templates de users ya consumen.
+  3. Se agregan las 2 vistas propias del dominio roles (asignar / revocar),
+     que NO son parte del CRUD estándar.
 
 El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
 
+from django.contrib import messages
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from django.views.decorators.http import require_http_methods
+
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
-from .forms import UserForm
+from .forms import UserForm, UserRoleAssignForm
 from .models import User
 
 
@@ -54,6 +62,9 @@ class UserViews(MaintainerViews):
         return {
             "user_obj": instance,
             "object": instance,
+            "user_roles": services.get_user_roles(instance),
+            "available_roles": services.list_available_roles(),
+            "assign_form": UserRoleAssignForm(user=instance),
         }
 
 
@@ -72,3 +83,44 @@ views = UserViews(
     per_page=20,
     search_param="q",
 )
+
+
+# === Vistas propias del dominio roles (fuera del CRUD estándar) ===
+
+@require_http_methods(["POST"])
+def role_assign(request, user_id: str):
+    if (redir := require_auth(request)):
+        return redir
+
+    try:
+        user = services.get_user(user_id)
+        form = UserRoleAssignForm(request.POST, user=user)
+        if form.is_valid():
+            role = form.cleaned_data["role"]
+            services.assign_role(user, role.pk)
+            messages.success(request, f"Rol '{role.slug}' asignado a {user.email}.")
+        else:
+            messages.error(request, "Formulario inválido.")
+    except services.UserError as exc:
+        messages.error(request, str(exc))
+    except Exception as exc:  # noqa: BLE001 — feedback al usuario, no swallow silencioso
+        messages.error(request, f"Error: {exc}")
+
+    return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
+
+
+@require_http_methods(["POST"])
+def role_revoke(request, user_id: str, role_id: str):
+    if (redir := require_auth(request)):
+        return redir
+
+    try:
+        user = services.get_user(user_id)
+        if services.revoke_role(user, role_id):
+            messages.success(request, "Rol revocado.")
+        else:
+            messages.warning(request, "El rol no estaba asignado.")
+    except services.UserError as exc:
+        messages.error(request, str(exc))
+
+    return HttpResponseRedirect(reverse("users:detail", args=[user_id]))

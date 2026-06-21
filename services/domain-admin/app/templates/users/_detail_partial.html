@@ -37,6 +37,21 @@ Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.ht
       </tr>
     </tbody>
   </table>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Roles asignados</h4>
+  {% if user_roles %}
+    <div class="d-flex gap-2" style="flex-wrap: wrap;">
+      {% for ur in user_roles %}
+        <span class="badge badge-primary">{{ ur.role.slug }}</span>
+      {% endfor %}
+    </div>
+    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+      {{ user_roles|length }} activo(s).
+      Para asignar/quitar roles usá el panel de edición.
+    </p>
+  {% else %}
+    <p class="text-muted">Este usuario no tiene roles asignados.</p>
+  {% endif %}
 {% endblock %}
 
 {% block detail_actions %}

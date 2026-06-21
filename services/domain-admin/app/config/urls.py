@@ -12,4 +12,9 @@ urlpatterns = [
 
     # Mantenedor de usuarios (HU-48)
     path("usuarios/", include("users.urls")),
+
+    # Mantenedores de clientes, proyectos y API keys
+    path("clientes/", include("clients.urls")),
+    path("proyectos/", include("projects.urls")),
+    path("api-keys/", include("apikeys.urls")),
 ]

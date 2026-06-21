@@ -3,6 +3,19 @@ Navbar partial. Variable esperada: title (string).
 Muestra email del usuario desde session.
 {% endcomment %}
 <header class="navbar">
+  <button type="button"
+          class="btn btn-ghost btn-icon sidebar-toggle"
+          data-sidebar-toggle
+          aria-label="Abrir menú"
+          aria-controls="app-sidebar"
+          aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+
   <div class="navbar-title">{{ title|default:"Domain Admin" }}</div>
 
   <div class="navbar-actions">

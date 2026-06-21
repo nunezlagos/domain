@@ -1,0 +1,268 @@
+/* ============================================================
+   responsive.css — media queries del admin (mobile / tablet /
+   desktop). Desktop-first: el resto de los CSS define la base
+   de escritorio; acá adaptamos hacia abajo.
+
+   Breakpoints:
+     mobile   : < 768px   (sidebar = drawer off-canvas)
+     tablet   : 768–1024px (sidebar lateral más angosto)
+     desktop  : > 1024px   (layout completo, sin overrides)
+
+   Reusa SIEMPRE los tokens de variables.css. No redefine
+   componentes; solo ajusta su comportamiento por viewport.
+   ============================================================ */
+
+/* Salvaguarda global: el body NUNCA scrollea horizontal.
+   El contenido ancho (tablas, diagramas) scrollea dentro de su
+   propio contenedor (.table-wrapper, .sdd-diagram, etc.). */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* El botón hamburguesa solo existe en mobile (oculto en >= tablet). */
+.sidebar-toggle { display: none; }
+
+/* Backdrop del drawer: oculto por defecto; se muestra en mobile
+   cuando body.sidebar-open. */
+.sidebar-backdrop { display: none; }
+
+/* ============================================================
+   TABLET  (768px – 1024px)
+   Sidebar lateral pero más angosto para dar aire al contenido.
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .app-layout {
+    grid-template-columns: var(--sidebar-collapsed-width-lg, 200px) 1fr;
+  }
+  .content {
+    padding: var(--space-md);
+  }
+}
+
+/* ============================================================
+   MOBILE  (< 768px)
+   Sidebar = drawer off-canvas. El layout pasa a una sola
+   columna full-width; el sidebar se posiciona fixed fuera de
+   pantalla y se desliza al abrir.
+   ============================================================ */
+@media (max-width: 767.98px) {
+
+  /* --- Layout: una sola columna, contenido full-width --- */
+  .app-layout {
+    display: block;
+    grid-template-columns: none;
+  }
+  .app-main {
+    min-height: 100vh;
+  }
+
+  /* --- Sidebar como drawer off-canvas --- */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: min(80vw, 280px);
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+    z-index: var(--z-modal); /* por encima del navbar y el contenido */
+    box-shadow: 4px 0 24px var(--color-shadow-lg);
+  }
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Backdrop oscuro detrás del drawer */
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: calc(var(--z-modal) - 1);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-base);
+  }
+  body.sidebar-open .sidebar-backdrop {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Evitar scroll del fondo mientras el drawer está abierto */
+  body.sidebar-open {
+    overflow: hidden;
+  }
+
+  /* --- Hamburguesa visible en el navbar --- */
+  .sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-right: var(--space-sm);
+    flex-shrink: 0;
+  }
+
+  /* --- Navbar: hamburguesa + título a la izq, acciones a la der --- */
+  .navbar {
+    padding: 0 var(--space-md);
+    gap: var(--space-sm);
+  }
+  .navbar-title {
+    font-size: var(--fs-base);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .navbar-actions {
+    gap: var(--space-sm);
+    flex-shrink: 0;
+  }
+  /* En pantallas muy chicas el email ocupa demasiado: dejar solo
+     el avatar y el botón logout. */
+  .navbar-user span:not(.avatar) {
+    display: none;
+  }
+
+  /* --- Content: padding reducido, full-width --- */
+  .content {
+    padding: var(--space-md);
+    max-width: 100%;
+  }
+
+  /* --- Content header: apilar título y acciones --- */
+  .content-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+  }
+  .content-header h1 {
+    font-size: var(--fs-xl);
+  }
+  /* La zona de acciones (2º hijo directo del header) ocupa todo el ancho. */
+  .content-header > :last-child {
+    width: 100%;
+  }
+  /* Botón de acción suelto (ej. "+ Nuevo" del mantenedor) full-width. */
+  .content-header > button.btn,
+  .content-header > .btn {
+    width: 100%;
+  }
+  /* Grupo de botones (ej. Editar + Eliminar en detail): comparten la fila. */
+  .content-header .d-flex .btn {
+    flex: 1;
+  }
+
+  /* --- Footer: apilar y permitir wrap --- */
+  .footer {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  /* --- Tablas: scroll horizontal dentro del wrapper (no rompe layout).
+     .table-wrapper ya trae overflow-x:auto; reforzamos el mínimo de la
+     tabla para que las columnas no se compriman ilegibles y aseguramos
+     el momentum scroll en iOS. --- */
+  .table-wrapper {
+    -webkit-overflow-scrolling: touch;
+  }
+  .table {
+    min-width: 640px;
+  }
+
+  /* --- Paginación: wrap centrado --- */
+  .pagination,
+  .table-wrapper + .d-flex {
+    flex-wrap: wrap;
+  }
+
+  /* --- Modales: casi fullscreen, con scroll interno --- */
+  .modal-backdrop {
+    padding: var(--space-sm);
+    align-items: flex-end; /* hoja inferior: acciones al alcance del pulgar */
+  }
+  /* !important para ganarle al style="max-width:NNNpx" inline que traen
+     los modales page-level (users/detail.html, etc.) y el dinámico. */
+  .modal,
+  .modal-dynamic,
+  .modal-confirm {
+    max-width: 100% !important;
+    width: 100%;
+    max-height: 92vh;
+  }
+  .modal-body {
+    padding: var(--space-md);
+  }
+  .modal-header,
+  .modal-footer {
+    padding: var(--space-md);
+  }
+  /* Footer de modal: botones full-width apilados, acción primaria
+     arriba (más cerca del pulgar al estar la hoja abajo). */
+  .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modal-footer .btn,
+  .modal-footer form .btn {
+    width: 100%;
+  }
+  /* El form de confirmación trae display:inline inline-style; en mobile
+     lo forzamos a bloque full-width para que su botón ocupe el ancho. */
+  .modal-footer form {
+    display: block;
+    width: 100%;
+  }
+
+  /* --- Forms: campos full-width (ya lo son via .form-control) y
+     stacks de campos en columna --- */
+  .form-row,
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    flex-direction: column;
+  }
+
+  /* --- Stats grid: una columna cómoda --- */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* --- Card: padding reducido y full-width (gana al inline
+     style="max-width:720px" de los form.html page-level) --- */
+  .card {
+    padding: var(--space-md);
+    max-width: 100% !important;
+  }
+  /* form-group con max-width inline (ej. flows/form.html) también full-width */
+  .form-group[style*="max-width"] {
+    max-width: 100% !important;
+  }
+
+  /* --- Toasts: ancho disponible, pegados a los bordes --- */
+  .toast-container {
+    left: var(--space-sm);
+    right: var(--space-sm);
+    top: var(--space-sm);
+  }
+  .toast {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* En desktop/tablet (>= 768px) el botón hamburguesa y el backdrop
+   nunca se muestran, y cualquier estado sidebar-open colgado no
+   afecta el layout fijo. */
+@media (min-width: 768px) {
+  .sidebar-toggle,
+  .sidebar-backdrop { display: none !important; }
+  body.sidebar-open { overflow: visible; }
+}

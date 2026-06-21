@@ -10,12 +10,16 @@
   <link rel="stylesheet" href="{% static 'css/layout.css' %}">
   <link rel="stylesheet" href="{% static 'css/components.css' %}">
   <link rel="stylesheet" href="{% static 'css/maintainers.css' %}">
+  <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
 
   {% block extra_head %}{% endblock %}
 </head>
 <body>
   <div class="app-layout">
     {% block sidebar %}{% include "components/_sidebar.html" %}{% endblock %}
+
+    {# Backdrop del drawer mobile (solo visible en mobile via responsive.css) #}
+    <div class="sidebar-backdrop" aria-hidden="true"></div>
 
     <div class="app-main">
       {% block navbar %}{% include "components/_navbar.html" %}{% endblock %}
@@ -43,6 +47,7 @@
 
   <script src="{% static 'js/csrf.js' %}"></script>
   <script src="{% static 'js/modals.js' %}"></script>
+  <script src="{% static 'js/sidebar.js' %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

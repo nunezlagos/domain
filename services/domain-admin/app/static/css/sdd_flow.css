@@ -1,21 +1,22 @@
-/* sdd_flow.css — diagrama del pipeline SDD (vista general).
+/* sdd_flow.css — DIAGRAMA DE FLUJO del pipeline SDD (vista general).
    ---------------------------------------------------------------------------
    Approach visual:
-   - Cada fase es una tarjeta/nodo pulido: ícono + nº de paso, nombre, slug y
-     descripción, con acento de color por GRUPO (spec/exec/tdd/close) tomado de
-     variables.css.
-   - El flujo se arma con un grid que envuelve (wrap). Los CONECTORES entre
-     nodos son pseudo-elementos CSS (.sdd-cell::after = flecha horizontal hacia
-     el siguiente nodo), no un SVG absoluto: sobreviven al reflow y al wrap.
-   - El LOOP (onboard -> explore) se comunica con un banner superior (.sdd-loop-
-     banner) + el conector de retorno punteado del último nodo.
-   - RESPONSIVE: desktop = grid horizontal-con-wrap; tablet = 2 columnas;
-     mobile = timeline vertical (los conectores horizontales se ocultan y se
-     dibuja una línea vertical a la izquierda con .sdd-cell::before).
-   Reusa SIEMPRE los tokens de variables.css. */
+   - El diagrama es UN SVG con viewBox fijo (760x1700). width:100% + height:auto
+     => escala proporcional en cualquier pantalla, como un flowchart de internet.
+   - Layout vertical top->bottom: terminador INICIO -> procesos (explore..apply)
+     -> decisiones (verify, judge) -> procesos (archive, onboard) -> FIN.
+   - Las flechas son <path> SVG con <marker> (cabeza). Branches etiquetados
+     Sí/No. Loops de retorno verify->apply y judge->apply. Camino "lite"
+     punteado a la izquierda (explore -> apply).
+   - Cada FASE clickeable es un <button> HTML real dentro de <foreignObject>,
+     así conserva data-action/data-id/data-base-url y modals.js lo intercepta
+     (closest('[data-action]')) igual que en las tablas. El shape (caja
+     redondeada / rombo) lo dibuja el propio botón vía CSS.
+   - Color por GRUPO (spec/exec/tdd/close) tomado de variables.css.
+   Reusa SIEMPRE los tokens del design system. */
 
 .sdd-flow-page {
-  max-width: 1100px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
@@ -30,13 +31,14 @@
   line-height: 1.5;
 }
 
-/* Grupos (concern): cada clase define el acento del grupo --------------------*/
+/* Grupos (concern): cada clase define el acento del grupo ------------------- */
 .sdd-g-spec  { --g-color: var(--color-info);    --g-soft: var(--color-info-soft); }
 .sdd-g-exec  { --g-color: var(--color-warning); --g-soft: var(--color-warning-soft); }
 .sdd-g-tdd   { --g-color: var(--color-success); --g-soft: var(--color-success-soft); }
 .sdd-g-close { --g-color: var(--color-accent);  --g-soft: var(--color-accent-soft); }
+.sdd-g-lite  { --g-color: var(--color-text-muted); --g-soft: transparent; }
 
-/* Leyenda: chips de color ----------------------------------------------------*/
+/* Leyenda: chips de color --------------------------------------------------- */
 .sdd-legend {
   display: flex;
   flex-wrap: wrap;
@@ -71,303 +73,205 @@
   box-shadow: 0 0 0 3px var(--g-soft);
 }
 
-/* Contenedor del diagrama ----------------------------------------------------*/
+/* Contenedor del diagrama --------------------------------------------------- */
 .sdd-diagram {
   position: relative;
   background:
     radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0)
-      0 0 / 22px 22px,
+      0 0 / 24px 24px,
     var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-xl);
+  padding: var(--space-lg);
 }
 
-/* Banner de loop -------------------------------------------------------------*/
-.sdd-loop-banner {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
-  padding: var(--space-xs) var(--space-md);
-  font-size: var(--fs-sm);
-  color: var(--color-text-secondary);
-  background: var(--color-accent-soft);
-  border: 1px dashed var(--color-accent);
-  border-radius: var(--radius-full);
+/* SVG: escala proporcional. No scroll horizontal nunca. -------------------- */
+.sdd-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  overflow: visible;
 }
-.sdd-loop-banner strong {
-  color: var(--color-text-primary);
+
+/* ============================ FLECHAS / EDGES ============================ */
+.sdd-edge {
+  stroke: var(--color-border-light);
+  stroke-width: 2;
+}
+.sdd-arrow-head { fill: var(--color-border-light); }
+
+/* Loop de retorno (verify/judge -> apply) */
+.sdd-edge-loop {
+  stroke: var(--color-warning);
+  stroke-width: 2;
+  stroke-dasharray: 1 0;
+  opacity: 0.85;
+}
+.sdd-arrow-head-loop { fill: var(--color-warning); }
+
+/* Camino lite (atajo punteado explore -> apply) */
+.sdd-edge-lite {
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  opacity: 0.8;
+}
+.sdd-arrow-head-lite { fill: var(--color-text-muted); }
+
+/* ====================== ETIQUETAS DE RAMA (Sí / No / lite) ================ */
+.sdd-branch-labels text {
+  font-family: var(--font-base);
+  font-size: 15px;
+  font-weight: var(--fw-bold);
+  text-anchor: middle;
+}
+.sdd-branch-yes  { fill: var(--color-success); }
+.sdd-branch-no   { fill: var(--color-warning); }
+.sdd-branch-lite {
+  fill: var(--color-text-muted);
+  font-size: 13px;
+  font-style: italic;
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.05em;
+}
+
+/* ====================== TERMINADORES (Inicio / Fin) ====================== */
+.sdd-terminator rect {
+  fill: var(--color-bg-elevated);
+  stroke: var(--color-border-light);
+  stroke-width: 2;
+}
+.sdd-term-text {
+  fill: var(--color-text-primary);
+  font-family: var(--font-base);
+  font-size: 15px;
   font-weight: var(--fw-semibold);
-}
-.sdd-loop-icon {
-  display: inline-flex;
-  color: var(--color-accent);
+  text-anchor: middle;
 }
 
-/* Pista del pipeline: grid con wrap -----------------------------------------*/
-.sdd-track {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-xl) var(--space-lg);
-}
+/* ====================== NODOS DE FASE (foreignObject) ==================== */
+/* El <foreignObject> es solo el lienzo; el <button> ocupa el 100% y ES el
+   shape. pointer-events sobre el botón => el click llega a modals.js. */
+.sdd-fo { overflow: visible; }
 
-/* Cada celda contiene un nodo + su conector hacia el siguiente ---------------*/
-.sdd-cell {
-  position: relative;
-  display: flex;
-}
-
-/* Conector horizontal: flecha desde la celda hacia la de su derecha.
-   Se dibuja en el gap entre nodos (línea + cabeza de flecha con bordes). */
-.sdd-cell::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 100%;
-  width: var(--space-lg);
-  height: 2px;
-  transform: translateY(-50%);
-  background: linear-gradient(
-    to right,
-    var(--color-border-light) 60%,
-    transparent 60%
-  );
-  background-size: 8px 2px;
-  z-index: 0;
-}
-/* Cabeza de la flecha horizontal */
-.sdd-cell::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: calc(100% + var(--space-lg) - 5px);
-  width: 7px;
-  height: 7px;
-  border-top: 2px solid var(--color-border-light);
-  border-right: 2px solid var(--color-border-light);
-  transform: translateY(-50%) rotate(45deg);
-  z-index: 1;
-}
-
-/* La última celda de cada fila (5,10) y la última absoluta no llevan conector
-   horizontal: el wrap salta de fila. */
-.sdd-cell:nth-child(5n)::after,
-.sdd-cell:nth-child(5n)::before,
-.sdd-cell:last-child::after,
-.sdd-cell:last-child::before {
-  display: none;
-}
-
-/* Nodo de fase ---------------------------------------------------------------*/
 .sdd-node {
-  position: relative;
-  z-index: 2;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
-  width: 100%;
-  text-align: left;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-light);
-  border-top: 3px solid var(--g-color, var(--color-border-light));
-  border-radius: var(--radius-lg);
-  padding: var(--space-md);
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  font-family: var(--font-base);
   color: var(--color-text-primary);
-  font: inherit;
+  background: var(--color-bg-elevated);
+  border: 2px solid var(--g-color, var(--color-border-light));
   cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
   transition: transform var(--transition-fast),
     box-shadow var(--transition-fast),
+    filter var(--transition-fast),
     border-color var(--transition-fast);
 }
 
-.sdd-node:hover {
-  transform: translateY(-3px);
+/* Acento de grupo: una franja izquierda sutil + sombra tinte */
+.sdd-shape-process {
+  border-radius: var(--radius-lg);
+  border-left-width: 5px;
+  box-shadow: 0 6px 16px var(--color-shadow-md);
+}
+
+/* Decisión = ROMBO. El botón se recorta en diamante con clip-path; el texto
+   queda en el cuadrante central, upright. El padding extra evita que el texto
+   toque los vértices del rombo. */
+.sdd-shape-decision {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  border: none;
+  border-radius: 0;
+  background:
+    linear-gradient(var(--color-bg-elevated), var(--color-bg-elevated))
+      padding-box,
+    var(--g-color, var(--color-border-light)) border-box;
+  padding: 0 var(--space-2xl);
+  position: relative;
+  /* El "borde" del rombo se simula con un segundo plano (outline interior). */
+  outline: 2px solid var(--g-color, var(--color-border-light));
+  outline-offset: -2px;
+}
+
+/* Hover (solo nodos clickeables) ------------------------------------------- */
+.sdd-node:not(.is-disabled):hover {
+  transform: translateY(-2px);
   border-color: var(--g-color, var(--color-border-light));
   box-shadow:
-    0 8px 22px var(--color-shadow-md),
-    0 0 0 1px var(--g-color);
+    0 10px 24px var(--color-shadow-lg),
+    0 0 0 2px var(--g-color);
+}
+.sdd-shape-decision:not(.is-disabled):hover {
+  /* el rombo no puede mostrar box-shadow externo por el clip; usa brillo */
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: none;
+  filter: brightness(1.12);
 }
 
 .sdd-node:focus-visible {
-  outline: 2px solid var(--g-color, var(--color-accent));
-  outline-offset: 3px;
+  outline: 3px solid var(--g-color, var(--color-accent));
+  outline-offset: 2px;
 }
 
-.sdd-node-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-xs);
-}
-
-.sdd-node-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md);
+/* Contenido del nodo -------------------------------------------------------- */
+.sdd-n-step {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-full);
   background: var(--g-soft, var(--color-bg-hover));
   color: var(--g-color, var(--color-text-secondary));
-}
-
-.sdd-node-step {
-  flex: 0 0 auto;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 var(--space-xs);
-  border-radius: var(--radius-full);
-  background: var(--color-bg-surface);
-  color: var(--color-text-muted);
   font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  line-height: 1.4;
 }
-
-.sdd-node-name {
+.sdd-n-name {
   font-size: var(--fs-base);
   font-weight: var(--fw-semibold);
-  line-height: 1.2;
+  line-height: 1.15;
 }
-
-.sdd-node-slug {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--color-text-muted);
-}
-
-.sdd-node-desc {
+.sdd-n-desc {
   font-size: var(--fs-xs);
   color: var(--color-text-secondary);
-  line-height: 1.4;
-  margin-top: var(--space-xs);
+  line-height: 1.3;
 }
 
-/* Nodo no seedeado: deshabilitado -------------------------------------------*/
-.sdd-node.is-disabled {
+/* Nodo no seedeado: deshabilitado ------------------------------------------ */
+.sdd-node.is-disabled,
+.sdd-node:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
-}
-.sdd-node.is-disabled:hover {
-  transform: none;
-  box-shadow: none;
-  border-color: var(--color-border-light);
-}
-
-.sdd-node-flag {
-  align-self: flex-start;
-  margin-top: var(--space-xs);
-  padding: 1px var(--space-xs);
-  font-size: var(--fs-xs);
-  font-style: italic;
-  color: var(--color-warning);
-  background: var(--color-warning-soft);
-  border-radius: var(--radius-sm);
+  opacity: 0.5;
+  filter: grayscale(0.4);
 }
 
 /* ============================================================
-   TABLET (768–1024): 2 columnas. El conector horizontal se
-   mantiene entre pares; se corta en la 2ª columna (par).
+   RESPONSIVE
+   El SVG escala solo por viewBox; en mobile el flowchart vertical
+   se ve completo y más chico (OK). Permitimos scroll vertical
+   natural, NUNCA horizontal.
    ============================================================ */
-@media (min-width: 768px) and (max-width: 1024px) {
-  .sdd-track {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  /* anular regla de 5 columnas y recortar conector en columna par */
-  .sdd-cell:nth-child(5n)::after,
-  .sdd-cell:nth-child(5n)::before {
-    display: block;
-  }
-  .sdd-cell:nth-child(2n)::after,
-  .sdd-cell:nth-child(2n)::before {
-    display: none;
-  }
-  .sdd-cell:last-child::after,
-  .sdd-cell:last-child::before {
-    display: none;
-  }
+.sdd-flow-page,
+.sdd-diagram {
+  overflow-x: hidden;
 }
 
-/* ============================================================
-   MOBILE (<768): TIMELINE VERTICAL.
-   Una sola columna; los conectores horizontales se ocultan y se
-   dibuja una línea vertical continua a la izquierda (::before de
-   cada celda), con un punto del color del grupo en cada nodo.
-   Sin scroll horizontal.
-   ============================================================ */
-@media (max-width: 767.98px) {
+@media (max-width: 600px) {
   .sdd-diagram {
-    padding: var(--space-lg) var(--space-md);
+    padding: var(--space-sm);
   }
-
-  .sdd-track {
-    grid-template-columns: 1fr;
-    gap: 0;
-    padding-left: var(--space-xl);
-  }
-
-  .sdd-cell {
-    padding-bottom: var(--space-lg);
-  }
-
-  /* Línea vertical del timeline (tramo entre nodos) */
-  .sdd-cell::after {
-    content: "";
-    display: block;
-    position: absolute;
-    top: 18px;
-    bottom: 0;
-    left: calc(-1 * var(--space-lg));
-    width: 2px;
-    height: auto;
-    transform: none;
-    background: linear-gradient(
-      to bottom,
-      var(--color-border-light) 60%,
-      transparent 60%
-    );
-    background-size: 2px 8px;
-  }
-
-  /* Punto del timeline a la altura del nodo */
-  .sdd-cell::before {
-    content: "";
-    display: block;
-    position: absolute;
-    top: 14px;
-    left: calc(-1 * var(--space-lg) - 4px);
-    width: 10px;
-    height: 10px;
-    border: 2px solid var(--color-bg-surface);
-    border-radius: var(--radius-full);
-    background: var(--g-color, var(--color-border-light));
-    transform: none;
-    z-index: 2;
-  }
-
-  /* Restaurar línea+punto en las celdas que desktop cortaba (5n, último);
-     en el timeline TODAS las celdas llevan punto y tramo de línea. */
-  .sdd-cell:nth-child(5n)::after,
-  .sdd-cell:nth-child(5n)::before,
-  .sdd-cell:last-child::before {
-    display: block;
-  }
-  /* última celda absoluta: punto sí, tramo de línea no (cierra el timeline) */
-  .sdd-cell:last-child::after {
-    display: none;
-  }
-
-  .sdd-node {
-    border-top: 1px solid var(--color-border-light);
-    border-left: 3px solid var(--g-color, var(--color-border-light));
-  }
-  .sdd-node:hover {
-    transform: none;
+  /* En pantallas muy chicas el texto del SVG ya escaló; reducimos el
+     padding lateral del rombo para que el texto no se apriete. */
+  .sdd-shape-decision {
+    padding: 0 var(--space-xl);
   }
 }

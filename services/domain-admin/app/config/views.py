@@ -131,7 +131,12 @@ def sdd_flow(request):
             }
         )
 
-    return render(request, "sdd_flow.html", {"phases": phases})
+    # pmap: mismo dato indexado por nombre corto de fase (sin prefijo "sdd-"),
+    # para que el flowchart SVG ubique cada fase en su shape por clave estable
+    # (ej. {{ pmap.verify }}) en vez de depender del orden de la lista.
+    pmap = {p["slug"].removeprefix("sdd-"): p for p in phases}
+
+    return render(request, "sdd_flow.html", {"phases": phases, "pmap": pmap})
 
 
 def logout_view(request):

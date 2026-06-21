@@ -25,6 +25,11 @@ INSTALLED_APPS = [
     "clients",                      # mantenedor de clientes (mandantes)
     "projects",                     # mantenedor de proyectos
     "apikeys",                      # mantenedor de API keys
+    "agents",                       # mantenedor de agentes
+    "skills",                       # mantenedor de skills
+    "flows",                        # mantenedor de flows
+    "crons",                        # mantenedor de crons (schedules)
+    "prompts",                      # mantenedor de prompts
 ]
 
 MIDDLEWARE = [

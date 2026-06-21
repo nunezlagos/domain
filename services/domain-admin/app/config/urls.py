@@ -17,4 +17,11 @@ urlpatterns = [
     path("clientes/", include("clients.urls")),
     path("proyectos/", include("projects.urls")),
     path("api-keys/", include("apikeys.urls")),
+
+    # Mantenedores de agentes, skills, flows, crons y prompts
+    path("agentes/", include("agents.urls")),
+    path("skills/", include("skills.urls")),
+    path("flows/", include("flows.urls")),
+    path("crons/", include("crons.urls")),
+    path("prompts/", include("prompts.urls")),
 ]

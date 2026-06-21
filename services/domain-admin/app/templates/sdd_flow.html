@@ -16,254 +16,286 @@
   <header class="sdd-flow-header">
     <h1>Flujo SDD</h1>
     <p class="sdd-flow-intro">
-      Diagrama de flujo del pipeline SDD: 10 fases que van del prompt del usuario
-      al issue implementado, con decisiones verify / judge y loops de retorno.
-      Hacé click en una fase para editar su prompt.
+      Diagrama de secuencia del pipeline SDD: del prompt del usuario al issue
+      implementado. El Orchestrator delega cada fase al Agente; apply / verify /
+      judge reintentan hasta que los tests pasen. Hacé click en una fase para
+      editar su prompt.
     </p>
   </header>
 
-  {% comment %} Leyenda de grupos: chips de color por concern {% endcomment %}
-  <div class="sdd-legend" role="list" aria-label="Grupos del pipeline">
-    <span class="sdd-legend-item sdd-g-spec" role="listitem">
-      <span class="sdd-legend-dot"></span> Spec
-    </span>
-    <span class="sdd-legend-item sdd-g-exec" role="listitem">
-      <span class="sdd-legend-dot"></span> Exec
-    </span>
-    <span class="sdd-legend-item sdd-g-tdd" role="listitem">
-      <span class="sdd-legend-dot"></span> TDD
-    </span>
-    <span class="sdd-legend-item sdd-g-close" role="listitem">
-      <span class="sdd-legend-dot"></span> Close
-    </span>
-    <span class="sdd-legend-item sdd-g-lite" role="listitem">
-      <span class="sdd-legend-dot"></span> Camino lite
-    </span>
-  </div>
-
   {% comment %}
-    Diagrama de flujo SVG horizontal: viewBox fijo -> escala proporcional.
-    Fila principal izquierda -> derecha. Cada fase clickeable = foreignObject
-    con button HTML (conserva data-action/data-id/data-base-url; modals.js lo
-    intercepta). Inicio/Fin no son clickeables. Loops de retorno por debajo,
-    camino lite punteado por arriba. Posiciones por clave estable pmap.<slug>.
+    DIAGRAMA DE SECUENCIA UML (SVG vertical). viewBox 0 0 1240 1180.
+    width:100% height:auto -> escala. En mobile el contenedor .sdd-diagram
+    scrollea en X (nunca el body). 5 participantes con lifeline punteada:
+    Usuario, Router, Orchestrator, Agente, Datos. Mensajes (flechas) de arriba
+    hacia abajo en el tiempo. Cada mensaje de fase (Orchestrator -> Agente) es un
+    <button> dentro de <foreignObject> con data-action/data-id/data-base-url;
+    modals.js lo intercepta (closest('[data-action]')). Lifelines x:
+    Usuario=120, Router=360, Orchestrator=600, Agente=860, Datos=1120.
   {% endcomment %}
   <div class="sdd-diagram">
-    <svg class="sdd-svg" viewBox="0 0 1840 360" role="img"
-         aria-label="Diagrama de flujo del pipeline SDD"
+    <svg class="sdd-svg" viewBox="0 0 1240 1180" role="img"
+         aria-label="Diagrama de secuencia del pipeline SDD"
          xmlns="http://www.w3.org/2000/svg">
       <defs>
-        {% comment %} Cabeza de flecha estándar {% endcomment %}
+        {% comment %} Cabeza de flecha para llamadas (sólidas) {% endcomment %}
         <marker id="sdd-arrow" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head"/>
         </marker>
-        {% comment %} Cabeza de flecha para loops {% endcomment %}
+        {% comment %} Cabeza de flecha para retornos (punteadas, open) {% endcomment %}
+        <marker id="sdd-arrow-ret" viewBox="0 0 12 12" refX="10" refY="6"
+                markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+          <path d="M1 1 L11 6 L1 11" class="sdd-arrow-head-ret"/>
+        </marker>
+        {% comment %} Cabeza de flecha para el loop de reintento {% endcomment %}
         <marker id="sdd-arrow-loop" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head-loop"/>
         </marker>
-        {% comment %} Cabeza de flecha para el camino lite {% endcomment %}
-        <marker id="sdd-arrow-lite" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head-lite"/>
-        </marker>
-        {% comment %} Sombra sutil para los nodos {% endcomment %}
+        {% comment %} Sombra sutil para las cajas de participante {% endcomment %}
         <filter id="sdd-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="3" stdDeviation="4"
-                        flood-color="#000000" flood-opacity="0.3"/>
+                        flood-color="#000000" flood-opacity="0.35"/>
         </filter>
       </defs>
 
-      {% comment %}
-        FLECHAS primero (debajo de los nodos). Fila principal en y=160.
-        Pitch horizontal de 150px. Cada nodo proceso mide 124x64 (centro y=160).
-        Rombos miden 116x116 (centro y=160). Inicio en x=10, Fin en x=1700.
-      {% endcomment %}
-      <g class="sdd-edges" fill="none">
-        {% comment %} Inicio -> Explore {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M120 160 H134"/>
-        {% comment %} Explore -> Spec {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M258 160 H284"/>
-        {% comment %} Spec -> Propose {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M408 160 H434"/>
-        {% comment %} Propose -> Design {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M558 160 H584"/>
-        {% comment %} Design -> Tasks {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M708 160 H734"/>
-        {% comment %} Tasks -> Apply {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M858 160 H884"/>
-        {% comment %} Apply -> Verify {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1008 160 H1041"/>
-        {% comment %} Verify Sí -> Judge {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1157 160 H1191"/>
-        {% comment %} Judge Sí -> Archive {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1307 160 H1334"/>
-        {% comment %} Archive -> Onboard {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1458 160 H1484"/>
-        {% comment %} Onboard -> Fin {% endcomment %}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1608 160 H1694"/>
-
-        {% comment %} LOOP verify "No" -> vuelve a Apply (curva por debajo) {% endcomment %}
-        <path class="sdd-edge sdd-edge-loop" marker-end="url(#sdd-arrow-loop)"
-              d="M1100 218 C1100 290 950 300 950 232"/>
-        {% comment %} LOOP judge "No" -> vuelve a Apply (curva más baja) {% endcomment %}
-        <path class="sdd-edge sdd-edge-loop" marker-end="url(#sdd-arrow-loop)"
-              d="M1250 218 C1250 335 946 335 946 234"/>
-
-        {% comment %} CAMINO LITE punteado: Explore -> Apply directo (curva por arriba) {% endcomment %}
-        <path class="sdd-edge sdd-edge-lite" marker-end="url(#sdd-arrow-lite)"
-              d="M196 128 C196 50 946 50 946 86"/>
+      {% comment %} LIFELINES (líneas verticales punteadas hacia abajo) {% endcomment %}
+      <g class="sdd-lifelines">
+        <line class="sdd-lifeline" x1="120"  y1="84" x2="120"  y2="1120"/>
+        <line class="sdd-lifeline" x1="360"  y1="84" x2="360"  y2="1120"/>
+        <line class="sdd-lifeline" x1="600"  y1="84" x2="600"  y2="1120"/>
+        <line class="sdd-lifeline" x1="860"  y1="84" x2="860"  y2="1120"/>
+        <line class="sdd-lifeline" x1="1120" y1="84" x2="1120" y2="1120"/>
       </g>
 
-      {% comment %} ETIQUETAS DE RAMA {% endcomment %}
-      <g class="sdd-branch-labels">
-        {% comment %} Verify: Sí (sigue) / No (loop) {% endcomment %}
-        <text class="sdd-branch-yes" x="1174" y="150">Sí</text>
-        <text class="sdd-branch-no"  x="1112" y="262">No</text>
-        {% comment %} Judge: Sí (sigue) / No (loop) {% endcomment %}
-        <text class="sdd-branch-yes" x="1324" y="150">Sí</text>
-        <text class="sdd-branch-no"  x="1262" y="308">No</text>
-        {% comment %} Lite {% endcomment %}
-        <text class="sdd-branch-lite" x="560" y="42">lite</text>
-      </g>
+      {% comment %} ACTIVATION BAR del Orchestrator (gobierna toda la secuencia) {% endcomment %}
+      <rect class="sdd-activation" x="592" y="150" width="16" height="930"/>
+      {% comment %} ACTIVATION BAR del Agente (durante las fases) {% endcomment %}
+      <rect class="sdd-activation" x="852" y="316" width="16" height="690"/>
 
-      {% comment %} TERMINADOR: INICIO {% endcomment %}
-      <g class="sdd-terminator">
-        <rect x="10" y="134" width="110" height="52" rx="26" ry="26"
-              filter="url(#sdd-shadow)"/>
-        <text x="65" y="165" class="sdd-term-text">Prompt</text>
+      {% comment %} FRAGMENTO COMBINADO "loop" (apply -> verify -> judge) {% endcomment %}
+      <g class="sdd-fragment">
+        <rect class="sdd-frag-box" x="560" y="608" width="600" height="300"/>
+        <path class="sdd-frag-tab" d="M560 608 H636 L636 632 L624 644 H560 Z"/>
+        <text class="sdd-frag-kind" x="572" y="627">loop</text>
+        <text class="sdd-frag-cond" x="648" y="627">[hasta que tests pasen]</text>
       </g>
 
       {% comment %}
-        PROCESOS Y DECISIONES. Cada nodo clickeable = foreignObject con button
-        HTML; el shape (rect/rombo) lo da el CSS. Pitch 150px desde x=134.
+        MENSAJES (flechas horizontales, eje del tiempo de arriba a abajo).
+        Llamadas = línea sólida + sdd-arrow. Retornos = punteada + sdd-arrow-ret.
+      {% endcomment %}
+      <g class="sdd-msgs" fill="none">
+        {% comment %} 1. Usuario -> Router: prompt {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="120" y1="180" x2="360" y2="180"/>
+        {% comment %} 2. Router -> Orchestrator: intent {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="360" y1="240" x2="592" y2="240"/>
+        {% comment %} 3. Orchestrator -> Datos: crea flow_run + steps {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="608" y1="296" x2="1120" y2="296"/>
+        {% comment %} retorno Datos -> Orchestrator {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="1120" y1="318" x2="608" y2="318"/>
+
+        {% comment %}
+          Las flechas de las 10 fases (Orchestrator -> Agente) NO se dibujan acá:
+          cada una es el borde inferior del <button> en foreignObject (abajo). El
+          retorno punteado de cada fase sí va acá, debajo de su botón.
+        {% endcomment %}
+        {% comment %} ret explore: Agente -> Orchestrator {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="386" x2="608" y2="386"/>
+        {% comment %} ret spec {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="450" x2="608" y2="450"/>
+        {% comment %} ret propose {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="514" x2="608" y2="514"/>
+        {% comment %} ret design {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="578" x2="608" y2="578"/>
+        {% comment %} ret tasks {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="664" x2="608" y2="664"/>
+        {% comment %} apply: Agente -> Datos persiste {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="728" x2="1120" y2="728"/>
+        {% comment %} ret verify {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="792" x2="608" y2="792"/>
+        {% comment %} ret judge {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="856" x2="608" y2="856"/>
+        {% comment %} ret archive: Agente -> Datos {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="976" x2="1120" y2="976"/>
+        {% comment %} ret onboard {% endcomment %}
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="1040" x2="608" y2="1040"/>
+
+        {% comment %} LOOP de reintento: judge -> apply (punteada hacia arriba) {% endcomment %}
+        <path class="sdd-msg sdd-msg-loop" marker-end="url(#sdd-arrow-loop)"
+              d="M608 868 H720 V714 H612"/>
+
+        {% comment %} Mensaje final: Orchestrator -> Usuario {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="1098" x2="120" y2="1098"/>
+      </g>
+
+      {% comment %} ETIQUETAS de mensajes (texto sobre la flecha) {% endcomment %}
+      <g class="sdd-msg-labels">
+        <text class="sdd-lbl"     x="240" y="172">prompt</text>
+        <text class="sdd-lbl"     x="476" y="232">intent: feature/fix</text>
+        <text class="sdd-lbl"     x="640" y="288">crea flow_run + steps</text>
+        <text class="sdd-lbl-ret" x="864" y="312">ok</text>
+
+        <text class="sdd-lbl-ret" x="730" y="380">resultado</text>
+        <text class="sdd-lbl-ret" x="730" y="444">resultado</text>
+        <text class="sdd-lbl-ret" x="730" y="508">resultado</text>
+        <text class="sdd-lbl-ret" x="730" y="572">resultado</text>
+        <text class="sdd-lbl-ret" x="730" y="658">resultado</text>
+        <text class="sdd-lbl-ret" x="930" y="722">persiste</text>
+        <text class="sdd-lbl-ret" x="730" y="786">resultado</text>
+        <text class="sdd-lbl-ret" x="730" y="850">resultado</text>
+        <text class="sdd-lbl-ret" x="930" y="970">persiste</text>
+        <text class="sdd-lbl-ret" x="730" y="1034">onboarding</text>
+
+        <text class="sdd-lbl-loop" x="724" y="708">reintento</text>
+        <text class="sdd-lbl"      x="356" y="1090">issue implementado</text>
+      </g>
+
+      {% comment %} NOTA al margen: modo lite {% endcomment %}
+      <g class="sdd-note">
+        <path class="sdd-note-box" d="M16 332 H196 L208 344 V404 H16 Z"/>
+        <text class="sdd-note-t" x="28" y="358">modo lite</text>
+        <text class="sdd-note-t sdd-note-sub" x="28" y="378">explore -&gt; apply</text>
+        <text class="sdd-note-t sdd-note-sub" x="28" y="396">-&gt; verify</text>
+      </g>
+
+      {% comment %} ============== PARTICIPANTES (cajas arriba) ============== {% endcomment %}
+      <g class="sdd-actors">
+        <rect class="sdd-actor-box" x="50"   y="44" width="140" height="40" rx="6" filter="url(#sdd-shadow)"/>
+        <text class="sdd-actor-t"   x="120"  y="69">Usuario</text>
+
+        <rect class="sdd-actor-box" x="288"  y="44" width="144" height="40" rx="6" filter="url(#sdd-shadow)"/>
+        <text class="sdd-actor-t"   x="360"  y="69">Router</text>
+
+        <rect class="sdd-actor-box" x="514"  y="44" width="172" height="40" rx="6" filter="url(#sdd-shadow)"/>
+        <text class="sdd-actor-t"   x="600"  y="69">Orchestrator</text>
+
+        <rect class="sdd-actor-box" x="788"  y="44" width="144" height="40" rx="6" filter="url(#sdd-shadow)"/>
+        <text class="sdd-actor-t"   x="860"  y="69">Agente</text>
+
+        <rect class="sdd-actor-box" x="1048" y="44" width="144" height="40" rx="6" filter="url(#sdd-shadow)"/>
+        <text class="sdd-actor-t"   x="1120" y="69">Datos</text>
+      </g>
+
+      {% comment %}
+        ============== MENSAJES DE FASE (clickeables) ==============
+        Cada fase = una flecha de llamada Orchestrator -> Agente. El <button>
+        (foreignObject) ES la flecha + label: una barra fina que arranca en la
+        lifeline del Orchestrator (x~608) y llega a la del Agente (x~852), con la
+        cabeza de flecha al final. Conserva data-action/data-id/data-base-url.
+        Fo: x=608 width=252 (608+252=860), alto 26, centrado en la y del mensaje.
       {% endcomment %}
 
-      {% comment %} --- explore (process) --- {% endcomment %}
+      {% comment %} --- 1. explore --- {% endcomment %}
       {% with p=pmap.explore %}
-      <foreignObject x="134" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="358" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">1</span>
+          <span class="sdd-ph-label">1. Explore</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- spec (process) --- {% endcomment %}
+      {% comment %} --- 2. spec --- {% endcomment %}
       {% with p=pmap.spec %}
-      <foreignObject x="284" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="422" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">2</span>
+          <span class="sdd-ph-label">2. Spec</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- propose (process) --- {% endcomment %}
+      {% comment %} --- 3. propose --- {% endcomment %}
       {% with p=pmap.propose %}
-      <foreignObject x="434" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="486" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">3</span>
+          <span class="sdd-ph-label">3. Propose</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- design (process) --- {% endcomment %}
+      {% comment %} --- 4. design --- {% endcomment %}
       {% with p=pmap.design %}
-      <foreignObject x="584" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="550" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">4</span>
+          <span class="sdd-ph-label">4. Design</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- tasks (process) --- {% endcomment %}
+      {% comment %} --- 5. tasks --- {% endcomment %}
       {% with p=pmap.tasks %}
-      <foreignObject x="734" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="636" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">5</span>
+          <span class="sdd-ph-label">5. Tasks</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- apply (process) --- {% endcomment %}
+      {% comment %} --- 6. apply --- {% endcomment %}
       {% with p=pmap.apply %}
-      <foreignObject x="884" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="700" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · RED GREEN REFACTOR"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">6</span>
+          <span class="sdd-ph-label">6. Apply</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- verify (DECISIÓN / rombo) --- {% endcomment %}
+      {% comment %} --- 7. verify --- {% endcomment %}
       {% with p=pmap.verify %}
-      <foreignObject x="1042" y="102" width="116" height="116" class="sdd-fo">
+      <foreignObject x="608" y="764" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-decision sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · ¿Tests Gherkin pasan?"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
+          <span class="sdd-ph-label">7. Verify</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- judge (DECISIÓN / rombo) --- {% endcomment %}
+      {% comment %} --- 8. judge --- {% endcomment %}
       {% with p=pmap.judge %}
-      <foreignObject x="1192" y="102" width="116" height="116" class="sdd-fo">
+      <foreignObject x="608" y="828" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-decision sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · ¿Sabotaje detectado?"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
+          <span class="sdd-ph-label">8. Judge</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- archive (process) --- {% endcomment %}
+      {% comment %} --- 9. archive --- {% endcomment %}
       {% with p=pmap.archive %}
-      <foreignObject x="1334" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="948" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">9</span>
+          <span class="sdd-ph-label">9. Archive</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {% comment %} --- onboard (process) --- {% endcomment %}
+      {% comment %} --- 10. onboard --- {% endcomment %}
       {% with p=pmap.onboard %}
-      <foreignObject x="1484" y="128" width="124" height="64" class="sdd-fo">
+      <foreignObject x="608" y="1012" width="252" height="26" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
-                class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+                class="sdd-phase sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
                 {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-step">10</span>
+          <span class="sdd-ph-label">10. Onboard</span>
         </button>
       </foreignObject>
       {% endwith %}
-
-      {% comment %} TERMINADOR: FIN {% endcomment %}
-      <g class="sdd-terminator">
-        <rect x="1700" y="134" width="130" height="52" rx="26" ry="26"
-              filter="url(#sdd-shadow)"/>
-        <text x="1765" y="165" class="sdd-term-text">Issue listo</text>
-      </g>
     </svg>
   </div>
 </div>

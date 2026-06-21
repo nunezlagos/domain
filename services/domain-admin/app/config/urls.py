@@ -10,6 +10,9 @@ urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
     path("componentes/", views.components_demo, name="components"),
 
+    # Flujo SDD: vista general (diagrama de loop) del pipeline de 10 fases.
+    path("flujo-sdd/", views.sdd_flow, name="sdd_flow"),
+
     # Mantenedor de usuarios (HU-48)
     path("usuarios/", include("maintainers.users.urls")),
 

@@ -73,6 +73,74 @@ def components_demo(request):
     return render(request, "components_demo.html")
 
 
+# --- Flujo SDD (vista general, no-CRUD) --------------------------------------
+# Orden canónico de las 10 fases del pipeline SDD + el grupo (concern) de cada
+# una para colorear el diagrama. El grupo ata visualmente la fase a la taxonomía
+# sdd_/tdd_: spec (explore->tasks), exec (apply), tdd (verify/judge),
+# close (archive/onboard).
+_SDD_PHASES = [
+    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el código existente."),
+    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptación."),
+    ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs."),
+    ("sdd-design", "Design", "spec", "Diseña la solución y la arquitectura."),
+    ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables."),
+    ("sdd-apply", "Apply", "exec", "Implementa el código de las tareas."),
+    ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato."),
+    ("sdd-judge", "Judge", "tdd", "Revisión adversarial de la implementación."),
+    ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos."),
+    ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio."),
+]
+
+
+@csrf_protect
+def sdd_flow(request):
+    """Vista general del pipeline SDD como diagrama de loop.
+
+    Resuelve los agent_templates por slug sdd-* (una sola query) y arma la lista
+    ordenada de las 10 fases. Cada fase lleva el id del template si está seedeado
+    (el nodo abre el modal de edición del prompt reusando agenttemplates); si no,
+    el nodo se muestra deshabilitado.
+    """
+    redir = _require_auth(request)
+    if redir:
+        return redir
+
+    # Import local: evita acoplar config a un app de mantenedor en import-time.
+    from maintainers.agenttemplates.models import AgentTemplate
+
+    slugs = [slug for slug, *_ in _SDD_PHASES]
+    by_slug = {
+        t.slug: t
+        for t in AgentTemplate.objects.filter(slug__in=slugs).only("id", "slug", "name")
+    }
+
+    phases = []
+    for index, (slug, name, group, desc) in enumerate(_SDD_PHASES):
+        tpl = by_slug.get(slug)
+        # Serpentina 5x2: fila 1 (idx 0-4) L->R; fila 2 (idx 5-9) R->L para que
+        # el flujo continúe sin saltar. col 1-5; en fila 2 col = 10 - index.
+        if index < 5:
+            row, col = 1, index + 1
+        else:
+            row, col = 2, 10 - index
+        phases.append(
+            {
+                "index": index,
+                "step": index + 1,
+                "slug": slug,
+                "name": name,
+                "group": group,
+                "desc": desc,
+                "id": str(tpl.id) if tpl else None,
+                "seeded": tpl is not None,
+                "row": row,
+                "col": col,
+            }
+        )
+
+    return render(request, "sdd_flow.html", {"phases": phases})
+
+
 def logout_view(request):
     request.session.flush()
     messages.info(request, "Sesión cerrada.")

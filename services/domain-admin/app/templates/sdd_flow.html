@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Flujo SDD - Domain Admin{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/sdd_flow.css' %}">
+{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Flujo SDD" %}
+{% endblock %}
+
+{% block content %}
+<div class="sdd-flow-page">
+  <h1>Flujo SDD</h1>
+  <p class="sdd-flow-intro">
+    Pipeline de 10 fases. Hacé click en una fase para editar su prompt
+    (plantilla de agente). El color indica el concern de cada fase.
+  </p>
+
+  {# Leyenda de colores por grupo (concern) #}
+  <div class="sdd-legend">
+    <span class="sdd-legend-item">
+      <span class="sdd-legend-dot sdd-g-spec"></span> Spec (explore - tasks)
+    </span>
+    <span class="sdd-legend-item">
+      <span class="sdd-legend-dot sdd-g-exec"></span> Exec (apply)
+    </span>
+    <span class="sdd-legend-item">
+      <span class="sdd-legend-dot sdd-g-tdd"></span> TDD (verify / judge)
+    </span>
+    <span class="sdd-legend-item">
+      <span class="sdd-legend-dot sdd-g-close"></span> Close (archive / onboard)
+    </span>
+  </div>
+
+  {# Diagrama: serpentina de 2 filas (fila 1 L->R, fila 2 R->L) = loop continuo.
+     Las flechas SVG conectan los nodos en orden; la flecha de retorno (dashed)
+     cierra el ciclo onboard -> explore. #}
+  <div class="sdd-diagram">
+    <div class="sdd-diagram-inner">
+
+      {# SVG overlay: marcador de flecha + conectores serpentina + retorno.
+         viewBox en % via preserveAspectRatio="none" para seguir al grid. #}
+      <svg class="sdd-arrows" viewBox="0 0 1000 360" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <marker id="sdd-ah" markerWidth="8" markerHeight="8" refX="6" refY="4"
+                  orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L8,4 L0,8 Z" fill="var(--color-border-light)"/>
+          </marker>
+          <marker id="sdd-ah-ret" markerWidth="8" markerHeight="8" refX="6" refY="4"
+                  orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L8,4 L0,8 Z" fill="var(--color-accent)"/>
+          </marker>
+        </defs>
+        {# Fila 1: explore -> spec -> propose -> design -> tasks (L->R) #}
+        <path d="M180,90 H210"  marker-end="url(#sdd-ah)"/>
+        <path d="M380,90 H410"  marker-end="url(#sdd-ah)"/>
+        <path d="M580,90 H610"  marker-end="url(#sdd-ah)"/>
+        <path d="M780,90 H810"  marker-end="url(#sdd-ah)"/>
+        {# Bajada tasks -> apply (wrap a fila 2) #}
+        <path d="M900,130 V270" marker-end="url(#sdd-ah)"/>
+        {# Fila 2: apply -> verify -> judge -> archive -> onboard (R->L) #}
+        <path d="M820,270 H790" marker-end="url(#sdd-ah)"/>
+        <path d="M620,270 H590" marker-end="url(#sdd-ah)"/>
+        <path d="M420,270 H390" marker-end="url(#sdd-ah)"/>
+        <path d="M220,270 H190" marker-end="url(#sdd-ah)"/>
+        {# Retorno onboard -> explore: cierra el loop #}
+        <path class="sdd-arrow-return"
+              d="M100,250 V130" marker-end="url(#sdd-ah-ret)"/>
+      </svg>
+
+      {% for p in phases %}
+      <button type="button"
+              class="sdd-node sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+              {% if p.seeded %}
+                data-action="edit"
+                data-id="{{ p.id }}"
+                data-base-url="/plantillas-agentes/"
+                title="Editar prompt: {{ p.name }}"
+              {% else %}
+                disabled
+                title="Fase no seedeada (sin plantilla de agente)"
+              {% endif %}
+              style="grid-row: {{ p.row }}; grid-column: {{ p.col }};">
+        <span class="sdd-node-head">
+          <span class="sdd-node-step">{{ p.step }}</span>
+          <span class="sdd-node-name">{{ p.name }}</span>
+        </span>
+        <span class="sdd-node-slug">{{ p.slug }}</span>
+        <span class="sdd-node-desc">{{ p.desc }}</span>
+        {% if not p.seeded %}<span class="sdd-node-flag">no seedeado</span>{% endif %}
+      </button>
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

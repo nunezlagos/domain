@@ -1,0 +1,173 @@
+/* sdd_flow.css — diagrama del pipeline SDD (vista general).
+   Layout: serpentina de 2 filas (fila 1 L->R, fila 2 R->L) que evoca un loop
+   continuo; la flecha de retorno cierra el ciclo (onboard -> explore). Colores
+   por grupo (concern) atan la fase a la taxonomía sdd_/tdd_. */
+
+.sdd-flow-page {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.sdd-flow-intro {
+  color: var(--color-text-secondary);
+  margin: var(--space-xs) 0 var(--space-lg);
+}
+
+/* Leyenda de colores ------------------------------------------------------- */
+.sdd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.sdd-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--fs-sm);
+  color: var(--color-text-secondary);
+}
+
+.sdd-legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+/* Grupos (concern) --------------------------------------------------------- */
+.sdd-g-spec  { --g-color: var(--color-info);    --g-soft: var(--color-info-soft); }
+.sdd-g-exec  { --g-color: var(--color-warning); --g-soft: var(--color-warning-soft); }
+.sdd-g-tdd   { --g-color: var(--color-success); --g-soft: var(--color-success-soft); }
+.sdd-g-close { --g-color: var(--color-accent);  --g-soft: var(--color-accent-soft); }
+
+.sdd-legend-dot.sdd-g-spec  { background: var(--color-info); }
+.sdd-legend-dot.sdd-g-exec  { background: var(--color-warning); }
+.sdd-legend-dot.sdd-g-tdd   { background: var(--color-success); }
+.sdd-legend-dot.sdd-g-close { background: var(--color-accent); }
+
+/* Diagrama: contenedor con scroll horizontal en pantallas chicas ----------- */
+.sdd-diagram {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-lg);
+  overflow-x: auto;
+}
+
+.sdd-diagram-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: var(--space-2xl) var(--space-lg);
+  min-width: 860px;
+}
+
+/* Nodo de fase ------------------------------------------------------------- */
+.sdd-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  text-align: left;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-left: 4px solid var(--g-color, var(--color-border-light));
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  font: inherit;
+  width: 100%;
+}
+
+.sdd-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px var(--color-shadow-md);
+  border-color: var(--g-color, var(--color-border-light));
+}
+
+.sdd-node:focus-visible {
+  outline: 2px solid var(--g-color, var(--color-accent));
+  outline-offset: 2px;
+}
+
+.sdd-node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sdd-node-step {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--g-soft, var(--color-bg-hover));
+  color: var(--g-color, var(--color-text-secondary));
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sdd-node-name {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.sdd-node-slug {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.sdd-node-desc {
+  font-size: var(--fs-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+/* Nodo no seedeado: deshabilitado ------------------------------------------ */
+.sdd-node.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  border-left-color: var(--color-border);
+}
+
+.sdd-node.is-disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--color-border-light);
+}
+
+.sdd-node-flag {
+  font-size: var(--fs-xs);
+  color: var(--color-warning);
+  font-style: italic;
+}
+
+/* Flechas entre nodos (SVG overlay) ---------------------------------------- */
+.sdd-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sdd-arrows path {
+  fill: none;
+  stroke: var(--color-border-light);
+  stroke-width: 2;
+}
+
+.sdd-arrows .sdd-arrow-return {
+  stroke: var(--color-accent);
+  stroke-dasharray: 5 4;
+}

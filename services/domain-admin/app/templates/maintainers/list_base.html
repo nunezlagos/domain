@@ -56,16 +56,8 @@ Variables esperadas en el contexto (de la view):
 {% endblock %}
 
 {% block content %}
-<div class="content-header">
-  <div>
-    <h1>{% block header_title %}Mantenedor{% endblock %}</h1>
-    <p class="subtitle">
-      {% block page_subtitle %}Gestión de registros{% endblock %}
-      <span class="text-muted" style="font-size: var(--fs-xs); margin-left: var(--space-sm);">
-        (se actualiza al detectar cambios en BD)
-      </span>
-    </p>
-  </div>
+<div class="content-header content-header--actions-only">
+  {% comment %} El nombre de la sección ya lo muestra el navbar; no duplicamos h1/subtítulo. {% endcomment %}
   {% block header_actions %}
   <button class="btn btn-primary" data-action="create">
     {% block create_label %}+ Nuevo{% endblock %}

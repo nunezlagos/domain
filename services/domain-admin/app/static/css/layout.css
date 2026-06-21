@@ -162,6 +162,11 @@
   gap: var(--space-md);
 }
 
+/* Sin título (el nombre va en el navbar): solo acciones, alineadas a la derecha. */
+.content-header--actions-only {
+  justify-content: flex-end;
+}
+
 .content-header h1 {
   font-size: var(--fs-2xl);
   font-weight: var(--fw-bold);

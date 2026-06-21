@@ -5,8 +5,8 @@ modelo vive acá. La tabla `flows` la administra domain-mcp (managed=False);
 Django solo lee/escribe vía ORM.
 
 Particularidades de `flows` respecto del patrón base:
-- NO tiene columna `status`: el estado habilitado/deshabilitado es el
-  boolean `is_active`. El toggle alterna ese boolean.
+- El estado habilitado/deshabilitado es el boolean `is_active`. El toggle
+  alterna ese boolean.
 - Soft-delete vía deleted_at (+ is_active=false al eliminar).
 - flow_versions es un sub-recurso READ-ONLY (sin CRUD); se expone solo
   un getter para mostrarlo en el detalle del flow.
@@ -73,7 +73,6 @@ def get_flow_versions(flow: Flow) -> list[FlowVersion]:
 @transaction.atomic
 def create_flow(
     *,
-    organization_id: str,
     name: str,
     slug: str,
     description: str = "",
@@ -83,14 +82,11 @@ def create_flow(
     seed_managed: bool = False,
     seed_version: int | None = None,
 ) -> Flow:
-    """Crea un flow nuevo. slug debe ser único dentro de la organización."""
-    if Flow.objects.filter(organization_id=organization_id, slug=slug).exists():
-        raise FlowError(
-            f"Ya existe un flow con slug '{slug}' en esta organización."
-        )
+    """Crea un flow nuevo. slug debe ser único."""
+    if Flow.objects.filter(slug=slug).exists():
+        raise FlowError(f"Ya existe un flow con slug '{slug}'.")
 
     flow = Flow.objects.create(
-        organization_id=organization_id,
         name=name,
         slug=slug,
         description=description or "",
@@ -116,13 +112,11 @@ def update_flow(
     seed_managed: bool = False,
     seed_version: int | None = None,
 ) -> Flow:
-    """Actualiza un flow. El slug sigue siendo único per-organización."""
+    """Actualiza un flow. El slug sigue siendo único."""
     if slug != flow.slug and Flow.objects.filter(
-        organization_id=flow.organization_id, slug=slug
+        slug=slug
     ).exclude(pk=flow.pk).exists():
-        raise FlowError(
-            f"Ya existe otro flow con slug '{slug}' en esta organización."
-        )
+        raise FlowError(f"Ya existe otro flow con slug '{slug}'.")
 
     flow.name = name
     flow.slug = slug

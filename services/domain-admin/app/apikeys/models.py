@@ -6,9 +6,8 @@ Tabla existente en domain-mcp:
 
 Django NO migra esta tabla (managed=False). Solo lee/escribe via ORM.
 
-Schema real (post-migraciones 000004 + 000120 + 000134 + 000154):
+Schema real (information_schema de la BD viva):
     id               uuid PK        DEFAULT gen_random_uuid()
-    organization_id  uuid           NULLABLE (DROP NOT NULL en 000134)
     user_id          uuid NOT NULL  FK -> users.id ON DELETE CASCADE
     key_hash         bytea NOT NULL
     key_prefix       varchar(20) NOT NULL
@@ -18,8 +17,10 @@ Schema real (post-migraciones 000004 + 000120 + 000134 + 000154):
     revoked_at       timestamptz    NULLABLE  (soft-delete)
     created_at       timestamptz NOT NULL DEFAULT NOW()
     updated_at       timestamptz NOT NULL DEFAULT NOW()  (trigger set_updated_at)
-    status           text NOT NULL  DEFAULT 'active'      (ADD en 000120)
-    UNIQUE (organization_id, name)
+    status           text NOT NULL  DEFAULT 'active'
+
+NOTA: organization_id fue dropeada (al eliminar la tabla organizations).
+NO existe en la tabla real; NO se declara acá.
 
 Soft-delete: revocar setea revoked_at + status='revoked' (NO borra fila).
 """
@@ -44,7 +45,6 @@ class ApiKey(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField(null=True, blank=True)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

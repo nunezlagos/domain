@@ -73,7 +73,6 @@ def get_agent(agent_id: str) -> Agent:
 @transaction.atomic
 def create_agent(
     *,
-    organization_id: str,
     name: str,
     slug: str,
     provider: str,
@@ -85,14 +84,11 @@ def create_agent(
     token_budget: int | None = None,
     temperature=None,
 ) -> Agent:
-    """Crea un agente nuevo. slug debe ser único dentro de la organización."""
-    if Agent.objects.filter(organization_id=organization_id, slug=slug).exists():
-        raise AgentError(
-            f"Ya existe un agente con slug '{slug}' en esta organización."
-        )
+    """Crea un agente nuevo. El slug debe ser único (ya no hay organización)."""
+    if Agent.objects.filter(slug=slug).exists():
+        raise AgentError(f"Ya existe un agente con slug '{slug}'.")
 
     agent = Agent.objects.create(
-        organization_id=organization_id,
         name=name,
         slug=slug,
         provider=provider,
@@ -122,13 +118,11 @@ def update_agent(
     token_budget: int | None = None,
     temperature=None,
 ) -> Agent:
-    """Actualiza un agente. El slug sigue siendo único per-organización."""
+    """Actualiza un agente. El slug sigue siendo único (sin organización)."""
     if slug != agent.slug and Agent.objects.filter(
-        organization_id=agent.organization_id, slug=slug
+        slug=slug
     ).exclude(pk=agent.pk).exists():
-        raise AgentError(
-            f"Ya existe otro agente con slug '{slug}' en esta organización."
-        )
+        raise AgentError(f"Ya existe otro agente con slug '{slug}'.")
 
     agent.name = name
     agent.slug = slug

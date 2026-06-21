@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from agents.models import Agent
 
-from .factories import DEFAULT_ORG, make_agent, make_agent_version
+from .factories import make_agent, make_agent_version
 
 
 class AuthGuardTests(TestCase):
@@ -108,7 +108,6 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
 
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Creado Bot",
             "slug": "creado",
             "provider": "anthropic",
@@ -157,7 +156,6 @@ class EditViewTests(AuthenticatedMixin, TestCase):
     def test_post_edita_agente(self):
         a = make_agent("Original", slug="orig", provider="anthropic")
         r = self.client.post(reverse("agents:edit", args=[a.pk]), {
-            "organization_id": str(a.organization_id),
             "name": "Editado",
             "slug": "orig",
             "provider": "openai",

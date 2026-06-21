@@ -42,13 +42,6 @@
     {% endif %}
 
     <div class="form-group">
-      <label class="form-label" for="{{ form.organization_id.id_for_label }}">Organización (UUID) *</label>
-      {{ form.organization_id }}
-      {% if form.organization_id.help_text %}<div class="form-help">{{ form.organization_id.help_text }}</div>{% endif %}
-      {% if form.organization_id.errors %}<div class="form-help text-danger">{{ form.organization_id.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
       <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
       {{ form.name }}
       {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}

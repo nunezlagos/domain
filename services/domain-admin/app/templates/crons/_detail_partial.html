@@ -23,7 +23,6 @@
       <tr><th>Tipo de target</th><td>{{ cron_obj.get_target_type_display }}</td></tr>
       <tr><th>Target</th><td><code>{{ cron_obj.target_id }}</code></td></tr>
       <tr><th>Inputs</th><td><code>{{ cron_obj.inputs }}</code></td></tr>
-      <tr><th>Organización</th><td><code>{{ cron_obj.organization_id }}</code></td></tr>
       <tr><th>Última ejecución</th><td>{{ cron_obj.last_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
       <tr><th>Próxima ejecución</th><td>{{ cron_obj.next_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
       <tr><th>Creado</th><td>{{ cron_obj.created_at|date:"d/m/Y H:i" }}</td></tr>

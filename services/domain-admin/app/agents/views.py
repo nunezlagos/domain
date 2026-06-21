@@ -140,7 +140,6 @@ def agent_create(request):
         if form.is_valid():
             try:
                 agent = services.create_agent(
-                    organization_id=form.cleaned_data["organization_id"],
                     name=form.cleaned_data["name"],
                     slug=form.cleaned_data["slug"],
                     provider=form.cleaned_data["provider"],

@@ -3,8 +3,7 @@
 ================================ SDD ================================
 HU: Como administrador de la organización quiero un mantenedor de
     Prompts para crear, listar, editar, activar/desactivar y dar de baja
-    (soft) los prompts versionados que la organización usa en sus agentes
-    y flujos.
+    (soft) los prompts versionados que se usan en los agentes y flujos.
 
 Criterios de aceptación:
   1. El listado muestra los prompts NO eliminados, paginado, con búsqueda
@@ -17,7 +16,7 @@ Criterios de aceptación:
   4. El detalle se abre en modal (?partial=1).
   5. Toggle alterna is_active true <-> false (POST). Eliminar es soft-delete
      (POST): marca deleted_at + is_active=False, NO borra la fila.
-  6. La unicidad es (organization_id, project_id, slug, version).
+  6. La unicidad es (project_id, slug, version).
   7. Toda acción exige sesión autenticada; si no, redirige a /login/.
 ====================================================================
 
@@ -135,7 +134,6 @@ def prompt_create(request):
         if form.is_valid():
             try:
                 prompt = services.create_prompt(
-                    organization_id=form.cleaned_data["organization_id"],
                     project_id=form.cleaned_data.get("project_id"),
                     slug=form.cleaned_data["slug"],
                     version=form.cleaned_data["version"],

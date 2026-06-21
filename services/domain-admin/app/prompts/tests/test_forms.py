@@ -1,8 +1,8 @@
 """Tests de PromptForm (validaciones del mantenedor de Prompts).
 
 Verifican reglas reales: campos requeridos, normalización de slug, parseo
-de tags, unicidad de la cuádrupla (org, project, slug, version) y exclusión
-del propio registro en edición.
+de tags, unicidad de la tripleta (project, slug, version) y exclusión del
+propio registro en edición.
 """
 from __future__ import annotations
 
@@ -10,13 +10,12 @@ from django.test import TestCase
 
 from prompts.forms import PromptForm
 
-from .factories import DEFAULT_ORG, make_prompt
+from .factories import make_prompt
 
 
 class PromptFormCreateTests(TestCase):
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "project_id": "",
             "slug": "form",
             "version": "1",
@@ -41,11 +40,6 @@ class PromptFormCreateTests(TestCase):
         form = PromptForm(data=self._data(body=""))
         self.assertFalse(form.is_valid())
         self.assertIn("body", form.errors)
-
-    def test_organization_id_requerido_en_alta(self):
-        form = PromptForm(data=self._data(organization_id=""))
-        self.assertFalse(form.is_valid())
-        self.assertIn("organization_id", form.errors)
 
     def test_slug_invalido_falla(self):
         form = PromptForm(data=self._data(slug="con espacios"))
@@ -84,7 +78,6 @@ class PromptFormCreateTests(TestCase):
 class PromptFormEditTests(TestCase):
     def _edit_data(self, p, **over):
         base = {
-            "organization_id": str(p.organization_id),
             "project_id": "",
             "slug": p.slug,
             "version": str(p.version),

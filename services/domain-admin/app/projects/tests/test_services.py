@@ -10,7 +10,7 @@ from django.test import TestCase
 from projects import services
 from projects.models import Project, ProjectRepository
 
-from .factories import DEFAULT_ORG, make_project, make_repository, make_template
+from .factories import make_project, make_repository, make_template
 
 
 class ListProjectsTests(TestCase):
@@ -67,36 +67,26 @@ class ListProjectsTests(TestCase):
 
 class CreateProjectTests(TestCase):
     def test_crea_proyecto_ok(self):
-        project = services.create_project(
-            organization_id=str(DEFAULT_ORG), name="Nuevo", slug="nuevo",
-        )
+        project = services.create_project(name="Nuevo", slug="nuevo")
         self.assertIsNotNone(project.pk)
         self.assertTrue(Project.objects.filter(slug="nuevo").exists())
 
-    def test_slug_duplicado_misma_org_falla(self):
+    def test_slug_duplicado_falla(self):
         make_project("Dup", slug="dup")
         with self.assertRaises(services.ProjectError):
-            services.create_project(organization_id=str(DEFAULT_ORG), name="Otro", slug="dup")
-
-    def test_slug_duplicado_otra_org_permitido(self):
-        make_project("Dup", slug="dup")
-        otra_org = "22222222-2222-2222-2222-222222222222"
-        project = services.create_project(organization_id=otra_org, name="Otro", slug="dup")
-        self.assertIsNotNone(project.pk)
+            services.create_project(name="Otro", slug="dup")
 
     def test_template_inexistente_falla(self):
         import uuid
         with self.assertRaises(services.ProjectError):
             services.create_project(
-                organization_id=str(DEFAULT_ORG), name="X", slug="x",
-                template_id=str(uuid.uuid4()),
+                name="X", slug="x", template_id=str(uuid.uuid4()),
             )
 
     def test_template_valido_ok(self):
         tpl = make_template("django")
         project = services.create_project(
-            organization_id=str(DEFAULT_ORG), name="Con tpl", slug="con-tpl",
-            template_id=str(tpl.pk),
+            name="Con tpl", slug="con-tpl", template_id=str(tpl.pk),
         )
         # template_id es UUIDField; recién coacciona a UUID tras round-trip a BD.
         project.refresh_from_db()
@@ -169,16 +159,13 @@ class RepositoriesTests(TestCase):
 
 
 class TemplatesTests(TestCase):
-    def test_publicos_y_de_la_org(self):
-        make_template("publico", is_public=True, organization_id=None)
-        make_template("de-mi-org", organization_id=DEFAULT_ORG)
-        make_template("otra-org", organization_id=
-                      __import__("uuid").UUID("99999999-9999-9999-9999-999999999999"))
-        tpls = services.list_available_templates(str(DEFAULT_ORG))
-        slugs = {t.slug for t in tpls}
-        self.assertIn("publico", slugs)
-        self.assertIn("de-mi-org", slugs)
-        self.assertNotIn("otra-org", slugs)
+    def test_lista_todos_ordenados_por_slug(self):
+        make_template("zeta")
+        make_template("alpha", is_public=True)
+        make_template("mid")
+        tpls = services.list_available_templates()
+        slugs = [t.slug for t in tpls]
+        self.assertEqual(slugs, ["alpha", "mid", "zeta"])
 
 
 class ListSignalTests(TestCase):

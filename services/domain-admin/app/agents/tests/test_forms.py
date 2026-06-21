@@ -10,13 +10,12 @@ from django.test import TestCase
 
 from agents.forms import AgentForm
 
-from .factories import DEFAULT_ORG, make_agent
+from .factories import make_agent
 
 
 class AgentFormCreateTests(TestCase):
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Form Bot",
             "slug": "form",
             "provider": "anthropic",
@@ -65,11 +64,6 @@ class AgentFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("model", form.errors)
 
-    def test_organization_id_requerido_en_alta(self):
-        form = AgentForm(data=self._data(organization_id=""))
-        self.assertFalse(form.is_valid())
-        self.assertIn("organization_id", form.errors)
-
     def test_slug_invalido_falla(self):
         # SlugField rechaza espacios.
         form = AgentForm(data=self._data(slug="con espacios"))
@@ -81,7 +75,7 @@ class AgentFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("max_iterations", form.errors)
 
-    def test_slug_duplicado_en_misma_org(self):
+    def test_slug_duplicado(self):
         make_agent("Ocupado", slug="ocupado")
         form = AgentForm(data=self._data(slug="ocupado"))
         self.assertFalse(form.is_valid())
@@ -91,7 +85,6 @@ class AgentFormCreateTests(TestCase):
 class AgentFormEditTests(TestCase):
     def _edit_data(self, a, **over):
         base = {
-            "organization_id": str(a.organization_id),
             "name": a.name,
             "slug": a.slug,
             "provider": a.provider,

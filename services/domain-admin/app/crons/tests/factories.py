@@ -1,8 +1,7 @@
 """Helpers para crear filas reales en la DB de test.
 
 Los PKs son UUID (en prod los genera domain-mcp), así que en tests hay
-que pasarlos explícitamente. organization_id y target_id también son
-uuid explícitos.
+que pasarlos explícitamente. target_id también es uuid explícito.
 """
 from __future__ import annotations
 
@@ -10,9 +9,6 @@ import uuid
 
 from crons.models import Cron
 
-# Org por defecto compartida entre helpers, para que los slugs choquen
-# (la unicidad real es por (organization_id, slug)).
-DEFAULT_ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
 DEFAULT_TARGET = uuid.UUID("22222222-2222-2222-2222-222222222222")
 
 
@@ -20,7 +16,6 @@ def make_cron(
     name: str,
     *,
     slug: str | None = None,
-    organization_id: uuid.UUID | str = DEFAULT_ORG,
     cron_expression: str = "0 9 * * *",
     target_type: str = "flow",
     target_id: uuid.UUID | str = DEFAULT_TARGET,
@@ -34,7 +29,6 @@ def make_cron(
         slug = name.lower().replace(" ", "-")
     c = Cron.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         created_by=None,
         name=name,
         slug=slug,

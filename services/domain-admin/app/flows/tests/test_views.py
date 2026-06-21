@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from flows.models import Flow
 
-from .factories import DEFAULT_ORG, make_flow, make_flow_version
+from .factories import make_flow, make_flow_version
 
 
 class AuthGuardTests(TestCase):
@@ -109,7 +109,6 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
 
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Creado Flow",
             "slug": "creado",
             "description": "",
@@ -151,7 +150,6 @@ class EditViewTests(AuthenticatedMixin, TestCase):
     def test_post_edita_flow(self):
         f = make_flow("Original", slug="orig", is_active=True)
         r = self.client.post(reverse("flows:edit", args=[f.pk]), {
-            "organization_id": str(f.organization_id),
             "name": "Editado",
             "slug": "orig",
             "description": "",

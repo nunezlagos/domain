@@ -12,7 +12,7 @@ from django.test import TestCase
 from prompts import services
 from prompts.models import Prompt
 
-from .factories import DEFAULT_ORG, make_prompt
+from .factories import make_prompt
 
 
 class ListPromptsTests(TestCase):
@@ -72,7 +72,7 @@ class ListPromptsTests(TestCase):
 class CreatePromptTests(TestCase):
     def test_crea_prompt_ok(self):
         prompt = services.create_prompt(
-            organization_id=DEFAULT_ORG, slug="nuevo", body="Cuerpo.",
+            slug="nuevo", body="Cuerpo.",
             version=1, description="desc", tags=["a", "b"],
         )
         self.assertIsNotNone(prompt.pk)
@@ -81,26 +81,22 @@ class CreatePromptTests(TestCase):
         self.assertEqual(prompt.tags, ["a", "b"])
         self.assertTrue(prompt.is_active)
 
-    def test_cuadrupla_duplicada_falla(self):
+    def test_tripleta_duplicada_falla(self):
         make_prompt("dup", version=1)
         with self.assertRaises(services.PromptError):
-            services.create_prompt(
-                organization_id=DEFAULT_ORG, slug="dup", body="x", version=1,
-            )
+            services.create_prompt(slug="dup", body="x", version=1)
 
     def test_mismo_slug_otra_version_ok(self):
         make_prompt("ver", version=1)
-        prompt = services.create_prompt(
-            organization_id=DEFAULT_ORG, slug="ver", body="v2", version=2,
-        )
+        prompt = services.create_prompt(slug="ver", body="v2", version=2)
         self.assertIsNotNone(prompt.pk)
         self.assertEqual(Prompt.objects.filter(slug="ver").count(), 2)
 
-    def test_mismo_slug_otra_org_ok(self):
-        make_prompt("shared", version=1)
-        other_org = uuid.uuid4()
+    def test_mismo_slug_otro_proyecto_ok(self):
+        make_prompt("shared", version=1)  # project_id NULL
+        other_project = uuid.uuid4()
         prompt = services.create_prompt(
-            organization_id=other_org, slug="shared", body="x", version=1,
+            project_id=other_project, slug="shared", body="x", version=1,
         )
         self.assertIsNotNone(prompt.pk)
         self.assertEqual(Prompt.objects.filter(slug="shared").count(), 2)

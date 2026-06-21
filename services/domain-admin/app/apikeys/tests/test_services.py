@@ -54,7 +54,7 @@ class CreateApiKeyTests(TestCase):
         with self.assertRaises(services.ApiKeyError):
             services.create_api_key(user=owner, name="   ")
 
-    def test_nombre_duplicado_misma_org_falla(self):
+    def test_nombre_duplicado_falla(self):
         owner = make_user("c3@example.com")
         services.create_api_key(user=owner, name="Dup")
         with self.assertRaises(services.ApiKeyError):

@@ -1,12 +1,11 @@
 """Modelos del mantenedor de Flows.
 
 Tablas existentes en domain-mcp:
-- flows (migración 000013_create_flows): DAGs declarativos con spec JSONB,
-  aislados por organization_id (multi-tenant). Soft-delete vía deleted_at;
-  habilitado/deshabilitado vía is_active (boolean). NO tiene columna `status`.
-- flow_versions (migración 000061_create_flow_versions): snapshots inmutables
-  de la definición del flow por versión. READ-ONLY desde el admin (sin CRUD):
-  se listan en el detalle del flow padre.
+- flows: DAGs declarativos con spec JSONB. Soft-delete vía deleted_at;
+  habilitado/deshabilitado vía is_active (boolean). Tiene además una columna
+  `status` (string) en el schema real. NO tiene `organization_id`.
+- flow_versions: snapshots inmutables de la definición del flow por versión.
+  READ-ONLY desde el admin (sin CRUD): se listan en el detalle del flow padre.
 
 Django NO migra estas tablas (managed=False). Solo lee/escribe vía ORM;
 las filas (incluido el PK uuid) las genera domain-mcp en producción.
@@ -21,8 +20,7 @@ class Flow(models.Model):
 
     Schema real (flows):
         id                   uuid PK default gen_random_uuid()
-        organization_id      uuid NOT NULL FK organizations(id) ON DELETE CASCADE
-        slug                 varchar(100) NOT NULL   (unique per organization_id)
+        slug                 varchar(100) NOT NULL
         name                 varchar(255) NOT NULL
         description          text NULL
         spec                 jsonb NOT NULL
@@ -34,15 +32,14 @@ class Flow(models.Model):
         created_at           timestamptz NOT NULL default now()
         updated_at           timestamptz NOT NULL default now()  (trigger set_updated_at)
         deleted_at           timestamptz NULL
-        UNIQUE (organization_id, slug)
+        status               varchar
 
-    NO tiene columna `status`: el estado habilitado/deshabilitado es el
-    boolean `is_active`. El toggle alterna ese boolean. La baja es soft
-    (deleted_at) y además deshabilita (is_active=false).
+    El estado habilitado/deshabilitado es el boolean `is_active`; el toggle
+    alterna ese boolean. La baja es soft (deleted_at) y además deshabilita
+    (is_active=false). NO existe `organization_id` en la tabla real.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField()
     slug = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -55,6 +52,7 @@ class Flow(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="active")
 
     class Meta:
         db_table = "flows"

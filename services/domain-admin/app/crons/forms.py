@@ -10,18 +10,13 @@ class CronForm(forms.Form):
     """Form para crear/editar crons.
 
     Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-    El slug es único dentro de la organización; en edición se excluye
-    el propio registro de la validación de unicidad.
+    El slug es único; en edición se excluye el propio registro de la
+    validación de unicidad.
 
     `inputs` (jsonb) se ingresa como texto JSON y se parsea en clean_inputs.
     `enabled` es un checkbox booleano (toggle on/off del schedule).
     """
 
-    organization_id = forms.UUIDField(
-        label="Organización (UUID)",
-        widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="UUID de la organización dueña de este cron.",
-    )
     name = forms.CharField(
         label="Nombre",
         max_length=255,
@@ -31,7 +26,7 @@ class CronForm(forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único dentro de la organización (minúsculas, guiones).",
+        help_text="Identificador único (minúsculas, guiones).",
     )
     description = forms.CharField(
         label="Descripción",
@@ -83,12 +78,8 @@ class CronForm(forms.Form):
         # clean_slug() consulta self.instance para excluirse en edición.
         self.instance = instance
         if instance is not None:
-            # organization_id no se edita una vez creado el cron.
-            self.fields["organization_id"].required = False
-            self.fields["organization_id"].widget.attrs["readonly"] = True
             # Valores iniciales solo al renderizar (unbound).
             if not self.is_bound:
-                self.fields["organization_id"].initial = instance.organization_id
                 self.fields["name"].initial = instance.name
                 self.fields["slug"].initial = instance.slug
                 self.fields["description"].initial = instance.description
@@ -101,21 +92,14 @@ class CronForm(forms.Form):
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
-        # La unicidad real es (organization_id, slug). En edición la org no
-        # cambia, así que validamos contra la org del instance; en alta usamos
-        # el organization_id enviado en el form.
+        # La unicidad real es por slug. En edición se excluye el propio registro.
+        qs = Cron.objects.filter(slug=slug)
         if self.instance is not None:
-            org_id = self.instance.organization_id
-        else:
-            org_id = self.data.get("organization_id")
-        if org_id:
-            qs = Cron.objects.filter(organization_id=org_id, slug=slug)
-            if self.instance is not None:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise forms.ValidationError(
-                    "Ya existe un cron con ese slug en esta organización."
-                )
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                "Ya existe un cron con ese slug."
+            )
         return slug
 
     def clean_inputs(self):

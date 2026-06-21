@@ -9,13 +9,12 @@ from django.test import TestCase
 
 from projects.forms import ProjectForm
 
-from .factories import DEFAULT_ORG, make_project, make_template
+from .factories import make_project, make_template
 
 
 class ProjectFormCreateTests(TestCase):
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Form",
             "slug": "form",
             "description": "",
@@ -45,7 +44,7 @@ class ProjectFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)
 
-    def test_slug_duplicado_misma_org(self):
+    def test_slug_duplicado(self):
         make_project("Ocupado", slug="ocupado")
         form = ProjectForm(data=self._data(slug="ocupado"))
         self.assertFalse(form.is_valid())
@@ -68,7 +67,6 @@ class ProjectFormEditTests(TestCase):
         p = make_project("Mismo", slug="mismo")
         form = ProjectForm(
             data={
-                "organization_id": str(p.organization_id),
                 "name": "Mismo v2",
                 "slug": "mismo",
                 "description": "",
@@ -85,7 +83,6 @@ class ProjectFormEditTests(TestCase):
         p = make_project("Mio", slug="mio")
         form = ProjectForm(
             data={
-                "organization_id": str(p.organization_id),
                 "name": "Mio",
                 "slug": "otro",
                 "description": "",

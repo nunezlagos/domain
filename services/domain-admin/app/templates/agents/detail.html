@@ -46,7 +46,7 @@
       </tr>
       <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
       <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Organización</th><td><code>{{ agent_obj.organization_id }}</code></td></tr>
+      <tr><th>Estado</th><td>{{ agent_obj.get_status_display }}</td></tr>
       <tr><th>Creado</th><td>{{ agent_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ agent_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
     </tbody>

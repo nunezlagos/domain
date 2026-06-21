@@ -1,7 +1,7 @@
 """Forms del mantenedor de Proyectos.
 
 Se usa forms.Form (no ModelForm) porque el modelo es managed=False.
-El slug es único per-organización; clean_slug excluye el propio pk en edición.
+El slug es único globalmente; clean_slug excluye el propio pk en edición.
 """
 import re
 
@@ -15,10 +15,6 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 class ProjectForm(forms.Form):
     """Form para crear/editar proyectos."""
 
-    organization_id = forms.UUIDField(
-        label="Organización",
-        widget=forms.HiddenInput(),
-    )
     name = forms.CharField(
         label="Nombre",
         max_length=255,
@@ -28,7 +24,7 @@ class ProjectForm(forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único dentro de la organización (minúsculas, guiones).",
+        help_text="Identificador único global (minúsculas, guiones).",
     )
     description = forms.CharField(
         label="Descripción",
@@ -60,18 +56,13 @@ class ProjectForm(forms.Form):
         # clean_slug() consulta self.instance para excluirse en edición.
         self.instance = instance
 
-        org_id = None
-        if instance is not None:
-            org_id = instance.organization_id
-        # Choices de templates: vacío + los aplicables a la organización.
+        # Choices de templates: vacío + todos los disponibles.
         self.fields["template"].choices = [("", "— Sin template —")] + [
             (str(t.pk), f"{t.name} ({t.slug})")
-            for t in ProjectTemplate.objects.filter().order_by("slug")
+            for t in ProjectTemplate.objects.all().order_by("slug")
         ]
 
-        # En edición, organization_id no se cambia: viene del propio proyecto.
         if instance is not None and not self.is_bound:
-            self.fields["organization_id"].initial = instance.organization_id
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
             self.fields["description"].initial = instance.description
@@ -85,17 +76,11 @@ class ProjectForm(forms.Form):
             raise forms.ValidationError(
                 "El slug solo admite minúsculas, números y guiones (sin espacios)."
             )
-        org_id = self.data.get("organization_id") or (
-            self.instance.organization_id if self.instance else None
-        )
-        if org_id:
-            qs = Project.objects.filter(organization_id=org_id, slug=slug)
-            if self.instance is not None:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise forms.ValidationError(
-                    "Ya existe un proyecto con ese slug en esta organización."
-                )
+        qs = Project.objects.filter(slug=slug)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Ya existe un proyecto con ese slug.")
         return slug
 
     def clean_template(self):

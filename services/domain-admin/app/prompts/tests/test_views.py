@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from prompts.models import Prompt
 
-from .factories import DEFAULT_ORG, make_prompt
+from .factories import make_prompt
 
 
 class AuthGuardTests(TestCase):
@@ -100,7 +100,6 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
 
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "project_id": "",
             "slug": "creado",
             "version": "1",
@@ -141,7 +140,6 @@ class EditViewTests(AuthenticatedMixin, TestCase):
     def test_post_edita_prompt(self):
         p = make_prompt("orig", body="antes")
         r = self.client.post(reverse("prompts:edit", args=[p.pk]), {
-            "organization_id": str(p.organization_id),
             "project_id": "",
             "slug": "orig",
             "version": "1",

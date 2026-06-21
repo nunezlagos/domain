@@ -134,7 +134,6 @@ def cron_create(request):
         if form.is_valid():
             try:
                 cron = services.create_cron(
-                    organization_id=form.cleaned_data["organization_id"],
                     name=form.cleaned_data["name"],
                     slug=form.cleaned_data["slug"],
                     description=form.cleaned_data["description"],

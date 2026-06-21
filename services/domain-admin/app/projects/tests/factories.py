@@ -1,8 +1,8 @@
 """Helpers para crear filas reales en la DB de test.
 
 Los PKs son UUID; en prod los genera domain-mcp, así que en tests los pasamos
-explícitamente. organization_id es obligatorio en `projects` /
-`project_repositories`, por eso cada factory tiene un default.
+explícitamente. La columna organization_id fue dropeada del schema real, por
+eso ningún factory la setea.
 """
 from __future__ import annotations
 
@@ -10,16 +10,11 @@ import uuid
 
 from projects.models import Project, ProjectRepository, ProjectTemplate
 
-# org fija reutilizable: simula la organización "actual" del admin.
-DEFAULT_ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
-
 
 def make_template(slug: str = "base", *, name: str | None = None,
-                  organization_id: uuid.UUID | None = DEFAULT_ORG,
                   is_public: bool = False, is_default: bool = False) -> ProjectTemplate:
     return ProjectTemplate.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         slug=slug,
         name=name or slug.capitalize(),
         is_public=is_public,
@@ -28,13 +23,11 @@ def make_template(slug: str = "base", *, name: str | None = None,
 
 
 def make_project(name: str = "Demo", *, slug: str | None = None,
-                 organization_id: uuid.UUID = DEFAULT_ORG,
                  description: str = "", repository_url: str = "",
                  template_id: uuid.UUID | None = None,
                  current_branch: str = "", archived: bool = False) -> Project:
     p = Project.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         name=name,
         slug=slug or name.lower().replace(" ", "-"),
         description=description,
@@ -45,6 +38,7 @@ def make_project(name: str = "Demo", *, slug: str | None = None,
     if archived:
         from django.utils import timezone
         p.deleted_at = timezone.now()
+        p.status = Project.STATUS_ARCHIVED
         p.save()
     return p
 
@@ -55,7 +49,6 @@ def make_repository(project: Project, name: str = "origin", *,
                     deleted: bool = False) -> ProjectRepository:
     r = ProjectRepository.objects.create(
         id=uuid.uuid4(),
-        organization_id=project.organization_id,
         project=project,
         name=name,
         url=url,

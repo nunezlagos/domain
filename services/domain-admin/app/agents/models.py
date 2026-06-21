@@ -4,16 +4,19 @@ Tablas existentes en domain-mcp (managed=False; Django NO las migra, solo
 lee/escribe vía ORM). Las filas (incluido el PK uuid) las genera domain-mcp
 en producción.
 
-- agents (migración 000012_create_agents): definición de un agente LLM
-  (provider/model/system_prompt/skills/límites). Soft-delete vía deleted_at.
-  NO tiene columna `status` → no hay toggle de estado; `is_active` deriva
-  solo de deleted_at IS NULL.
+- agents (migración 000012 + 000120 + 000142): definición de un agente LLM
+  (provider/model/system_prompt/skills/límites). 000142 DROPEÓ
+  organization_id (la tabla organizations ya no existe). 000120 agregó
+  `status` (TEXT NOT NULL DEFAULT 'active'). Soft-delete vía deleted_at
+  (la columna sigue existiendo).
 - agent_versions (migración 000083_create_agent_versions): historial de
   versiones de un agent con snapshot JSONB. PK BIGSERIAL, FK agent_id.
-  READ-ONLY desde el admin (se listan en el detalle del agent).
-- agent_templates (migración 000068 + 000075): definitions reutilizables
-  de agents (personality + handoff policy + role). READ-ONLY desde el
-  admin (catálogo que se muestra en el detalle del agent).
+  Nunca tuvo organization_id. READ-ONLY desde el admin (se listan en el
+  detalle del agent).
+- agent_templates (migración 000068 + 000075 + 000120 + 000142):
+  definitions reutilizables de agents (personality + handoff policy + role).
+  000142 DROPEÓ organization_id. 000120 agregó `status`. NO tiene
+  deleted_at. READ-ONLY desde el admin (catálogo en el detalle del agent).
 """
 import uuid
 
@@ -24,10 +27,9 @@ from django.db import models
 class Agent(models.Model):
     """Agente LLM. PK uuid. Entidad principal del mantenedor.
 
-    Schema real (agents):
+    Schema real (agents, tras 000120 + 000142):
         id              uuid PK default gen_random_uuid()
-        organization_id uuid NOT NULL FK organizations(id)
-        slug            varchar(100) NOT NULL  (unique per organization_id)
+        slug            varchar(100) NOT NULL
         name            varchar(255) NOT NULL
         description     text NULL
         provider        varchar(50) NOT NULL
@@ -43,16 +45,20 @@ class Agent(models.Model):
         created_at      timestamptz NOT NULL default now()
         updated_at      timestamptz NOT NULL default now()  (trigger set_updated_at)
         deleted_at      timestamptz NULL
-        UNIQUE (organization_id, slug)
+        status          text NOT NULL default 'active'
 
-    NOTA: la tabla NO tiene columna `status`. Por eso este mantenedor NO
-    implementa toggle de estado (no hay estados alternables). Soft-delete
-    SÍ aplica (existe deleted_at): delete marca deleted_at, sin status
-    terminal porque no hay columna status.
+    organization_id fue DROPEADA por la migración 000142 (la tabla
+    organizations ya no existe); el slug ya NO es único per-org. Soft-delete
+    SÍ aplica (existe deleted_at). status existe (000120, free-text default
+    'active').
     """
 
+    STATUS_CHOICES = [
+        ("active", "Activo"),
+        ("inactive", "Inactivo"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField()
     slug = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -73,6 +79,7 @@ class Agent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:
         db_table = "agents"
@@ -88,9 +95,8 @@ class Agent(models.Model):
 
     @property
     def is_active(self) -> bool:
-        # No hay columna status: un agente está "activo" mientras no esté
-        # soft-deleted.
-        return self.deleted_at is None
+        # Activo = status 'active' y sin soft-delete.
+        return self.status == "active" and self.deleted_at is None
 
 
 class AgentVersion(models.Model):
@@ -104,6 +110,10 @@ class AgentVersion(models.Model):
         changed_by  uuid NULL
         created_at  timestamptz NOT NULL default now()
         UNIQUE (agent_id, version)
+
+    Nunca tuvo organization_id. 000120 le agregó status/updated_at, pero el
+    admin no los usa (READ-ONLY): no se declaran fields para columnas no
+    consumidas, y al ser managed=False no rompe nada.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -130,10 +140,9 @@ class AgentVersion(models.Model):
 class AgentTemplate(models.Model):
     """Template reutilizable de agente (personality + handoff). READ-ONLY.
 
-    Schema real (agent_templates, tras migración 000075):
+    Schema real (agent_templates, tras 000075 + 000120 + 000142):
         id               uuid PK default gen_random_uuid()
-        organization_id  uuid NOT NULL FK organizations(id)
-        slug             varchar(80) NOT NULL  (unique per organization_id)
+        slug             varchar(80) NOT NULL
         name             varchar(120) NOT NULL
         system_prompt    text NOT NULL
         personality      text NULL
@@ -152,7 +161,10 @@ class AgentTemplate(models.Model):
         seed_managed     boolean NOT NULL default false
         is_user_modified boolean NOT NULL default false
         seed_version     int NULL
-        UNIQUE (organization_id, slug)
+        status           text NOT NULL default 'active'
+
+    organization_id fue DROPEADA por 000142. status existe (000120). NO tiene
+    deleted_at.
     """
 
     HANDOFF_POLICY_CHOICES = [
@@ -165,8 +177,12 @@ class AgentTemplate(models.Model):
         ("phase-worker", "Phase worker"),
     ]
 
+    STATUS_CHOICES = [
+        ("active", "Activo"),
+        ("inactive", "Inactivo"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField()
     slug = models.CharField(max_length=80)
     name = models.CharField(max_length=120)
     system_prompt = models.TextField()
@@ -188,6 +204,7 @@ class AgentTemplate(models.Model):
     seed_managed = models.BooleanField(default=False)
     is_user_modified = models.BooleanField(default=False)
     seed_version = models.IntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:
         db_table = "agent_templates"

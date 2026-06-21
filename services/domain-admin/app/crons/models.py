@@ -1,10 +1,10 @@
 """Modelos del mantenedor de Crons (schedules user-defined).
 
-Tabla existente en domain-mcp (migración 000016_create_crons):
+Tabla existente en domain-mcp (migración 000016_create_crons + cambios
+posteriores de fase C que dropearon organization_id y agregaron status):
 - crons: schedules definidos por el usuario que disparan un target
-  (flow/agent/skill) según una expresión cron. Aislada por
-  organization_id (multi-tenant). Soft-delete vía deleted_at + flag
-  booleano `enabled` para habilitar/deshabilitar (toggle).
+  (flow/agent/skill) según una expresión cron. Soft-delete vía
+  deleted_at + flag booleano `enabled` para habilitar/deshabilitar (toggle).
 
 NO confundir con system_crons (crons internos del sistema).
 
@@ -19,11 +19,10 @@ from django.db import models
 class Cron(models.Model):
     """Cron schedule de la plataforma. PK uuid.
 
-    Schema real (crons), columna por columna:
+    Schema real (crons), columna por columna (information_schema):
         id              uuid PK default gen_random_uuid()
-        organization_id uuid NOT NULL FK organizations(id)
         created_by      uuid NULL FK users(id) ON DELETE SET NULL
-        slug            varchar(100) NOT NULL  (unique per organization_id)
+        slug            varchar(100) NOT NULL
         name            varchar(255) NOT NULL
         description     text NULL
         cron_expression varchar(100) NOT NULL
@@ -37,10 +36,13 @@ class Cron(models.Model):
         created_at      timestamptz NOT NULL default now()
         updated_at      timestamptz NOT NULL default now()  (trigger set_updated_at)
         deleted_at      timestamptz NULL
-        UNIQUE (organization_id, slug)
+        status          text NOT NULL default 'active'  (migración 000120)
 
-    `enabled` es la dimensión alternable (toggle on/off); NO hay columna
-    `status` con choices, así que el display de estado se deriva del bool.
+    `organization_id` FUE DROPEADA (fase C, migración 000142) cuando se
+    eliminó la tabla organizations; NO existe más en la tabla real.
+
+    `enabled` es la dimensión alternable (toggle on/off); el display de
+    estado se deriva del bool (`is_active`).
     """
 
     # target_type es un CHECK, no un status; lo exponemos como choices del
@@ -52,7 +54,6 @@ class Cron(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField()
     created_by = models.UUIDField(null=True, blank=True)
     slug = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
@@ -70,6 +71,7 @@ class Cron(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    status = models.TextField(default="active")
 
     class Meta:
         db_table = "crons"

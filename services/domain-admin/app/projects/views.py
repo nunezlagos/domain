@@ -20,9 +20,9 @@ Criterios de aceptación:
        X-Requested-With: fetch redirige al listado para que el JS recargue).
   CA4. El detalle funciona standalone y como modal (?partial=1), y lista los
        remotos git (project_repositories) del proyecto.
-  CA5. `projects` NO tiene columna status: el estado activo/archivado es
-       derivado de deleted_at. "Eliminar" archiva (soft-delete) y "toggle"
-       archiva/restaura.
+  CA5. El estado activo/archivado vive en la columna status y en deleted_at
+       (soft-delete), mantenidos en sync. "Eliminar" archiva (soft-delete) y
+       "toggle" archiva/restaura.
   CA6. Toda view exige sesión autenticada; sin ella redirige a /login/.
 ================================================================
 
@@ -152,7 +152,6 @@ def project_create(request):
         if form.is_valid():
             try:
                 project = services.create_project(
-                    organization_id=str(form.cleaned_data["organization_id"]),
                     name=form.cleaned_data["name"],
                     slug=form.cleaned_data["slug"],
                     description=form.cleaned_data["description"],

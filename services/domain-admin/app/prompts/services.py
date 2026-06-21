@@ -5,8 +5,7 @@ modelo vive acá. Esto facilita testing unitario sin tocar HTTP.
 
 La tabla `prompts` la administra domain-mcp (managed=False); Django solo
 lee/escribe vía ORM. Soft-delete (deleted_at) + toggle de habilitación
-(is_active bool). La unicidad real es (organization_id, project_id, slug,
-version).
+(is_active bool). La unicidad real es (project_id, slug, version).
 """
 from __future__ import annotations
 
@@ -65,11 +64,10 @@ def get_prompt(prompt_id: str) -> Prompt:
 
 
 def _slug_taken(
-    organization_id, project_id, slug: str, version: int, exclude_pk=None
+    project_id, slug: str, version: int, exclude_pk=None
 ) -> bool:
-    """La unicidad real es (organization_id, project_id, slug, version)."""
+    """La unicidad real es (project_id, slug, version)."""
     qs = Prompt.objects.filter(
-        organization_id=organization_id,
         project_id=project_id,
         slug=slug,
         version=version,
@@ -82,7 +80,6 @@ def _slug_taken(
 @transaction.atomic
 def create_prompt(
     *,
-    organization_id,
     slug: str,
     body: str,
     version: int = 1,
@@ -95,16 +92,15 @@ def create_prompt(
 ) -> Prompt:
     """Crea un prompt nuevo.
 
-    La combinación (organization_id, project_id, slug, version) debe ser única.
+    La combinación (project_id, slug, version) debe ser única.
     """
-    if _slug_taken(organization_id, project_id, slug, version):
+    if _slug_taken(project_id, slug, version):
         raise PromptError(
             f"Ya existe un prompt con slug '{slug}' v{version} en este "
-            f"contexto (organización/proyecto)."
+            f"proyecto."
         )
 
     prompt = Prompt.objects.create(
-        organization_id=organization_id,
         project_id=project_id,
         created_by=created_by,
         slug=slug,
@@ -132,12 +128,11 @@ def update_prompt(
 ) -> Prompt:
     """Actualiza un prompt.
 
-    organization_id / project_id no se editan (definen el contexto de
-    unicidad). La cuádrupla (org, project, slug, version) sigue siendo única,
-    excluyendo el propio registro.
+    project_id no se edita (define el contexto de unicidad). La tripleta
+    (project, slug, version) sigue siendo única, excluyendo el propio
+    registro.
     """
     if _slug_taken(
-        prompt.organization_id,
         prompt.project_id,
         slug,
         version,
@@ -145,7 +140,7 @@ def update_prompt(
     ):
         raise PromptError(
             f"Ya existe otro prompt con slug '{slug}' v{version} en este "
-            f"contexto (organización/proyecto)."
+            f"proyecto."
         )
 
     prompt.slug = slug

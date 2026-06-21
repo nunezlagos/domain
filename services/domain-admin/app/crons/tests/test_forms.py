@@ -10,13 +10,12 @@ from django.test import TestCase
 
 from crons.forms import CronForm
 
-from .factories import DEFAULT_ORG, DEFAULT_TARGET, make_cron
+from .factories import DEFAULT_TARGET, make_cron
 
 
 class CronFormCreateTests(TestCase):
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Form Cron",
             "slug": "form",
             "description": "",
@@ -54,11 +53,6 @@ class CronFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("target_id", form.errors)
 
-    def test_organization_id_requerido_en_alta(self):
-        form = CronForm(data=self._data(organization_id=""))
-        self.assertFalse(form.is_valid())
-        self.assertIn("organization_id", form.errors)
-
     def test_slug_invalido_falla(self):
         form = CronForm(data=self._data(slug="con espacios"))
         self.assertFalse(form.is_valid())
@@ -89,7 +83,7 @@ class CronFormCreateTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["timezone"], "UTC")
 
-    def test_slug_duplicado_en_misma_org(self):
+    def test_slug_duplicado(self):
         make_cron("Ocupado", slug="ocupado")
         form = CronForm(data=self._data(slug="ocupado"))
         self.assertFalse(form.is_valid())
@@ -99,7 +93,6 @@ class CronFormCreateTests(TestCase):
 class CronFormEditTests(TestCase):
     def _edit_data(self, c, **over):
         base = {
-            "organization_id": str(c.organization_id),
             "name": c.name,
             "slug": c.slug,
             "description": "",

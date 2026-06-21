@@ -19,13 +19,6 @@
 
   <div class="modal-body">
     <div class="form-group">
-      <label class="form-label" for="{{ form.organization_id.id_for_label }}">Organización (UUID) *</label>
-      {{ form.organization_id }}
-      {% if form.organization_id.help_text %}<div class="form-help">{{ form.organization_id.help_text }}</div>{% endif %}
-      {% if form.organization_id.errors %}<div class="form-help text-danger">{{ form.organization_id.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
       <label class="form-label" for="{{ form.project_id.id_for_label }}">Proyecto (UUID)</label>
       {{ form.project_id }}
       {% if form.project_id.help_text %}<div class="form-help">{{ form.project_id.help_text }}</div>{% endif %}

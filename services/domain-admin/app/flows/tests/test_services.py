@@ -12,7 +12,7 @@ from django.test import TestCase
 from flows import services
 from flows.models import Flow
 
-from .factories import DEFAULT_ORG, make_flow, make_flow_version
+from .factories import make_flow, make_flow_version
 
 
 class ListFlowsTests(TestCase):
@@ -82,7 +82,7 @@ class GetFlowTests(TestCase):
 class CreateFlowTests(TestCase):
     def test_crea_flow_ok(self):
         flow = services.create_flow(
-            organization_id=DEFAULT_ORG, name="Nuevo", slug="nuevo",
+            name="Nuevo", slug="nuevo",
             spec={"steps": [{"id": "a"}]}, is_active=True,
         )
         self.assertIsNotNone(flow.pk)
@@ -90,21 +90,10 @@ class CreateFlowTests(TestCase):
         flow.refresh_from_db()
         self.assertEqual(flow.spec, {"steps": [{"id": "a"}]})
 
-    def test_slug_duplicado_en_misma_org_falla(self):
+    def test_slug_duplicado_falla(self):
         make_flow("Existente", slug="dup")
         with self.assertRaises(services.FlowError):
-            services.create_flow(
-                organization_id=DEFAULT_ORG, name="Otro", slug="dup", spec={},
-            )
-
-    def test_mismo_slug_otra_org_ok(self):
-        make_flow("Existente", slug="shared")
-        other_org = uuid.uuid4()
-        flow = services.create_flow(
-            organization_id=other_org, name="Otro", slug="shared", spec={},
-        )
-        self.assertIsNotNone(flow.pk)
-        self.assertEqual(Flow.objects.filter(slug="shared").count(), 2)
+            services.create_flow(name="Otro", slug="dup", spec={})
 
 
 class UpdateFlowTests(TestCase):
@@ -128,7 +117,7 @@ class UpdateFlowTests(TestCase):
         f.refresh_from_db()
         self.assertEqual(f.slug, "moderno")
 
-    def test_slug_choca_con_otro_en_misma_org_falla(self):
+    def test_slug_choca_con_otro_falla(self):
         make_flow("Ocupado", slug="ocupado")
         f = make_flow("Mio", slug="mio")
         with self.assertRaises(services.FlowError):

@@ -5,14 +5,12 @@ verifica un efecto observable en la DB o el valor de retorno real, no un mock.
 """
 from __future__ import annotations
 
-import uuid
-
 from django.test import TestCase
 
 from crons import services
 from crons.models import Cron
 
-from .factories import DEFAULT_ORG, DEFAULT_TARGET, make_cron
+from .factories import DEFAULT_TARGET, make_cron
 
 
 class ListCronsTests(TestCase):
@@ -79,7 +77,7 @@ class ListCronsTests(TestCase):
 class CreateCronTests(TestCase):
     def test_crea_cron_ok(self):
         cron = services.create_cron(
-            organization_id=DEFAULT_ORG, name="Nuevo", slug="nuevo",
+            name="Nuevo", slug="nuevo",
             cron_expression="*/5 * * * *", target_type="flow",
             target_id=DEFAULT_TARGET, inputs={"k": "v"}, enabled=True,
         )
@@ -89,25 +87,14 @@ class CreateCronTests(TestCase):
         self.assertEqual(cron.inputs, {"k": "v"})
         self.assertTrue(cron.enabled)
 
-    def test_slug_duplicado_en_misma_org_falla(self):
+    def test_slug_duplicado_falla(self):
         make_cron("Existente", slug="dup")
         with self.assertRaises(services.CronError):
             services.create_cron(
-                organization_id=DEFAULT_ORG, name="Otro", slug="dup",
+                name="Otro", slug="dup",
                 cron_expression="0 0 * * *", target_type="flow",
                 target_id=DEFAULT_TARGET,
             )
-
-    def test_mismo_slug_otra_org_ok(self):
-        make_cron("Existente", slug="shared")
-        other_org = uuid.uuid4()
-        cron = services.create_cron(
-            organization_id=other_org, name="Otro", slug="shared",
-            cron_expression="0 0 * * *", target_type="agent",
-            target_id=DEFAULT_TARGET,
-        )
-        self.assertIsNotNone(cron.pk)
-        self.assertEqual(Cron.objects.filter(slug="shared").count(), 2)
 
 
 class UpdateCronTests(TestCase):
@@ -135,7 +122,7 @@ class UpdateCronTests(TestCase):
         c.refresh_from_db()
         self.assertEqual(c.slug, "moderno")
 
-    def test_slug_choca_con_otro_en_misma_org_falla(self):
+    def test_slug_choca_con_otro_falla(self):
         make_cron("Ocupado", slug="ocupado")
         c = make_cron("Mio", slug="mio")
         with self.assertRaises(services.CronError):

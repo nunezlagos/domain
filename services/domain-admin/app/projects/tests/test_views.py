@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from projects.models import Project
 
-from .factories import DEFAULT_ORG, make_project
+from .factories import make_project
 
 
 class AuthGuardTests(TestCase):
@@ -99,7 +99,6 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
 
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Creado",
             "slug": "creado",
             "description": "",
@@ -141,7 +140,6 @@ class EditViewTests(AuthenticatedMixin, TestCase):
     def test_post_edita_proyecto(self):
         p = make_project("Edit", slug="edit")
         r = self.client.post(reverse("projects:edit", args=[p.pk]), {
-            "organization_id": str(p.organization_id),
             "name": "Editado",
             "slug": "edit",
             "description": "",

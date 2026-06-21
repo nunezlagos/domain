@@ -1,9 +1,11 @@
 """Modelos del mantenedor de Prompts.
 
 Tabla existente en domain-mcp (migración 000008_create_prompts):
-- prompts: prompts versionados con variables tipadas, aislados por
-  organization_id (multi-tenant) y opcionalmente por project_id.
+- prompts: prompts versionados con variables tipadas, opcionalmente
+  aislados por project_id. La columna organization_id fue eliminada al
+  borrar la tabla organizations (Fase C), así que NO se mapea.
   Soft-delete vía deleted_at. Toggle de habilitación vía is_active (bool).
+  status (free-text, default 'active') estandarizado en 000120.
 
 Django NO migra esta tabla (managed=False). Solo lee/escribe vía ORM;
 las filas (incluido el PK uuid) las genera domain-mcp en producción.
@@ -19,7 +21,6 @@ class Prompt(models.Model):
 
     Schema real (prompts):
         id                uuid PK default gen_random_uuid()
-        organization_id   uuid NOT NULL FK organizations(id)
         project_id        uuid NULL FK projects(id)
         created_by        uuid NULL FK users(id) ON DELETE SET NULL
         slug              varchar(100) NOT NULL
@@ -34,14 +35,15 @@ class Prompt(models.Model):
         created_at        timestamptz NOT NULL default now()
         updated_at        timestamptz NOT NULL default now()  (trigger set_updated_at)
         deleted_at        timestamptz NULL
-        UNIQUE (organization_id, project_id, slug, version)
+        status            text NOT NULL default 'active'
+        UNIQUE (project_id, slug, version)
 
     Nota: body_tsv es una columna GENERATED ALWAYS STORED; no se mapea como
     campo del modelo (Django no la escribe y Postgres la calcula sola).
+    organization_id ya NO existe (se dropeó con la tabla organizations).
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    organization_id = models.UUIDField()
     project_id = models.UUIDField(null=True, blank=True)
     created_by = models.UUIDField(null=True, blank=True)
     slug = models.CharField(max_length=100)
@@ -57,6 +59,7 @@ class Prompt(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="active")
 
     class Meta:
         db_table = "prompts"

@@ -8,15 +8,10 @@ class PromptForm(forms.Form):
     """Form para crear/editar prompts.
 
     Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-    La unicidad real es (organization_id, project_id, slug, version); en
-    edición se excluye el propio registro de la validación de unicidad.
+    La unicidad real es (project_id, slug, version); en edición se excluye
+    el propio registro de la validación de unicidad.
     """
 
-    organization_id = forms.UUIDField(
-        label="Organización (UUID)",
-        widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="UUID de la organización dueña de este prompt.",
-    )
     project_id = forms.UUIDField(
         label="Proyecto (UUID)",
         required=False,
@@ -62,13 +57,10 @@ class PromptForm(forms.Form):
         # clean() consulta self.instance para excluirse en edición.
         self.instance = instance
         if instance is not None:
-            # organization_id / project_id no se editan una vez creado.
-            self.fields["organization_id"].required = False
-            self.fields["organization_id"].widget.attrs["readonly"] = True
+            # project_id no se edita una vez creado.
             self.fields["project_id"].widget.attrs["readonly"] = True
             # Valores iniciales solo al renderizar (unbound).
             if not self.is_bound:
-                self.fields["organization_id"].initial = instance.organization_id
                 self.fields["project_id"].initial = instance.project_id
                 self.fields["slug"].initial = instance.slug
                 self.fields["version"].initial = instance.version
@@ -91,29 +83,25 @@ class PromptForm(forms.Form):
         if not slug or version is None:
             return cleaned
 
-        # En edición la org/proyecto no cambian; usamos las del instance. En
-        # alta usamos el organization_id/project_id enviados en el form.
+        # En edición el proyecto no cambia; usamos el del instance. En alta
+        # usamos el project_id enviado en el form.
         if self.instance is not None:
-            org_id = self.instance.organization_id
             project_id = self.instance.project_id
         else:
-            org_id = cleaned.get("organization_id")
             project_id = cleaned.get("project_id")
 
-        if org_id:
-            qs = Prompt.objects.filter(
-                organization_id=org_id,
-                project_id=project_id,
-                slug=slug,
-                version=version,
+        qs = Prompt.objects.filter(
+            project_id=project_id,
+            slug=slug,
+            version=version,
+        )
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                "Ya existe un prompt con ese slug y versión en este "
+                "proyecto."
             )
-            if self.instance is not None:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise forms.ValidationError(
-                    "Ya existe un prompt con ese slug y versión en este "
-                    "contexto (organización/proyecto)."
-                )
         return cleaned
 
 

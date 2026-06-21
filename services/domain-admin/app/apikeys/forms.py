@@ -76,9 +76,7 @@ class ApiKeyForm(forms.Form):
         name = self.cleaned_data["name"].strip()
         qs = ApiKey.objects.filter(name=name)
         if self.instance is not None:
-            qs = qs.filter(organization_id=self.instance.organization_id).exclude(
-                pk=self.instance.pk
-            )
+            qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
             raise forms.ValidationError("Ya existe una API Key con ese nombre.")
         return name

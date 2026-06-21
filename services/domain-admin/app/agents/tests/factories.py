@@ -4,8 +4,8 @@ Los PKs uuid (agents, agent_templates) en prod los genera domain-mcp, así
 que en tests hay que pasarlos explícitamente. agent_versions tiene PK
 BIGSERIAL (autoincremental): NO se pasa id.
 
-organization_id es un uuid explícito; DEFAULT_ORG compartida para que los
-slugs choquen (la unicidad real es por (organization_id, slug)).
+organization_id fue dropeada (migración 000142): el slug es único
+globalmente, ya no per-organización.
 """
 from __future__ import annotations
 
@@ -13,14 +13,11 @@ import uuid
 
 from agents.models import Agent, AgentTemplate, AgentVersion
 
-DEFAULT_ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
-
 
 def make_agent(
     name: str,
     *,
     slug: str | None = None,
-    organization_id: uuid.UUID | str = DEFAULT_ORG,
     provider: str = "anthropic",
     model: str = "claude-haiku-4-5",
     description: str = "",
@@ -37,7 +34,6 @@ def make_agent(
         slug = name.lower().replace(" ", "-")
     a = Agent.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         name=name,
         slug=slug,
         provider=provider,
@@ -78,7 +74,6 @@ def make_agent_template(
     name: str,
     *,
     slug: str | None = None,
-    organization_id: uuid.UUID | str = DEFAULT_ORG,
     system_prompt: str = "Sos un agente de prueba.",
     role: str = "phase-worker",
     handoff_policy: str = "allow",
@@ -88,7 +83,6 @@ def make_agent_template(
         slug = name.lower().replace(" ", "-")
     return AgentTemplate.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         name=name,
         slug=slug,
         system_prompt=system_prompt,

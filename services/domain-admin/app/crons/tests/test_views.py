@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from crons.models import Cron
 
-from .factories import DEFAULT_ORG, DEFAULT_TARGET, make_cron
+from .factories import DEFAULT_TARGET, make_cron
 
 
 class AuthGuardTests(TestCase):
@@ -99,7 +99,6 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
 
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Creado Cron",
             "slug": "creado",
             "description": "",
@@ -145,7 +144,6 @@ class EditViewTests(AuthenticatedMixin, TestCase):
     def test_post_edita_cron(self):
         c = make_cron("Original", slug="orig", enabled=True)
         r = self.client.post(reverse("crons:edit", args=[c.pk]), {
-            "organization_id": str(c.organization_id),
             "name": "Editado",
             "slug": "orig",
             "description": "",

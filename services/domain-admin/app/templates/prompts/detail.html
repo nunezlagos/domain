@@ -35,7 +35,6 @@
       <tr><th>Versión</th><td>v{{ prompt_obj.version }}</td></tr>
       <tr><th>Descripción</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
       <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
-      <tr><th>Organización</th><td><code>{{ prompt_obj.organization_id }}</code></td></tr>
       <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Versión padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>

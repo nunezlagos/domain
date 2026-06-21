@@ -31,7 +31,6 @@ def make_api_key(
     key_prefix: str = "sk_test1234",
     revoked: bool = False,
     expires_at=None,
-    organization_id=None,
 ) -> ApiKey:
     if user is None:
         user = make_user(f"{uuid.uuid4().hex[:8]}@example.com")
@@ -39,7 +38,6 @@ def make_api_key(
     ak = ApiKey.objects.create(
         id=uuid.uuid4(),
         user=user,
-        organization_id=organization_id,
         name=name,
         key_prefix=key_prefix,
         key_hash=key_hash,

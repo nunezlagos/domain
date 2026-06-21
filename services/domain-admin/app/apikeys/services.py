@@ -82,7 +82,6 @@ def create_api_key(
     user,
     name: str,
     expires_at=None,
-    organization_id=None,
     status: str = "active",
 ) -> tuple[ApiKey, str]:
     """Crea una API key nueva.
@@ -93,13 +92,12 @@ def create_api_key(
     name = (name or "").strip()
     if not name:
         raise ApiKeyError("El nombre de la API Key es obligatorio.")
-    if ApiKey.objects.filter(name=name, organization_id=organization_id).exists():
+    if ApiKey.objects.filter(name=name).exists():
         raise ApiKeyError(f"Ya existe una API Key con nombre '{name}'.")
 
     full, prefix, key_hash = _generate_secret()
     api_key = ApiKey.objects.create(
         user=user,
-        organization_id=organization_id,
         name=name,
         key_prefix=prefix,
         key_hash=key_hash,
@@ -125,10 +123,7 @@ def update_api_key(
     name = (name or "").strip()
     if not name:
         raise ApiKeyError("El nombre de la API Key es obligatorio.")
-    clash = (
-        ApiKey.objects.filter(name=name, organization_id=api_key.organization_id)
-        .exclude(pk=api_key.pk)
-    )
+    clash = ApiKey.objects.filter(name=name).exclude(pk=api_key.pk)
     if clash.exists():
         raise ApiKeyError(f"Ya existe otra API Key con nombre '{name}'.")
 

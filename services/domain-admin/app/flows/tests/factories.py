@@ -1,7 +1,7 @@
 """Helpers para crear filas reales en la DB de test.
 
 Los PKs son UUID (en prod los genera domain-mcp), así que en tests hay
-que pasarlos explícitamente. organization_id también es un uuid explícito.
+que pasarlos explícitamente.
 """
 from __future__ import annotations
 
@@ -9,16 +9,11 @@ import uuid
 
 from flows.models import Flow, FlowVersion
 
-# Org por defecto compartida entre helpers, para que los slugs choquen
-# (la unicidad real es por (organization_id, slug)).
-DEFAULT_ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
-
 
 def make_flow(
     name: str,
     *,
     slug: str | None = None,
-    organization_id: uuid.UUID | str = DEFAULT_ORG,
     description: str = "",
     spec: dict | None = None,
     is_active: bool = True,
@@ -31,7 +26,6 @@ def make_flow(
         slug = name.lower().replace(" ", "-")
     f = Flow.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         name=name,
         slug=slug,
         description=description,

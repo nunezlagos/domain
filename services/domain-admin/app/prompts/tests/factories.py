@@ -1,7 +1,7 @@
 """Helpers para crear filas reales en la DB de test.
 
 Los PKs son UUID (en prod los genera domain-mcp), así que en tests hay
-que pasarlos explícitamente. organization_id también es un uuid explícito.
+que pasarlos explícitamente.
 """
 from __future__ import annotations
 
@@ -9,15 +9,10 @@ import uuid
 
 from prompts.models import Prompt
 
-# Org por defecto compartida entre helpers, para que las cuádruplas
-# (organization_id, project_id, slug, version) choquen como en prod.
-DEFAULT_ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
-
 
 def make_prompt(
     slug: str,
     *,
-    organization_id: uuid.UUID | str = DEFAULT_ORG,
     project_id: uuid.UUID | str | None = None,
     version: int = 1,
     body: str = "Contenido del prompt.",
@@ -30,7 +25,6 @@ def make_prompt(
 ) -> Prompt:
     p = Prompt.objects.create(
         id=uuid.uuid4(),
-        organization_id=organization_id,
         project_id=project_id,
         created_by=created_by,
         slug=slug,

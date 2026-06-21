@@ -65,7 +65,6 @@ def get_cron(cron_id: str) -> Cron:
 @transaction.atomic
 def create_cron(
     *,
-    organization_id: str,
     name: str,
     slug: str,
     cron_expression: str,
@@ -77,14 +76,13 @@ def create_cron(
     enabled: bool = True,
     created_by: str | None = None,
 ) -> Cron:
-    """Crea un cron nuevo. slug debe ser único dentro de la organización."""
-    if Cron.objects.filter(organization_id=organization_id, slug=slug).exists():
+    """Crea un cron nuevo. slug debe ser único."""
+    if Cron.objects.filter(slug=slug).exists():
         raise CronError(
-            f"Ya existe un cron con slug '{slug}' en esta organización."
+            f"Ya existe un cron con slug '{slug}'."
         )
 
     cron = Cron.objects.create(
-        organization_id=organization_id,
         created_by=created_by,
         name=name,
         slug=slug,
@@ -113,12 +111,12 @@ def update_cron(
     inputs: dict | None = None,
     enabled: bool = True,
 ) -> Cron:
-    """Actualiza un cron. El slug sigue siendo único per-organización."""
+    """Actualiza un cron. El slug sigue siendo único."""
     if slug != cron.slug and Cron.objects.filter(
-        organization_id=cron.organization_id, slug=slug
+        slug=slug
     ).exclude(pk=cron.pk).exists():
         raise CronError(
-            f"Ya existe otro cron con slug '{slug}' en esta organización."
+            f"Ya existe otro cron con slug '{slug}'."
         )
 
     cron.name = name

@@ -13,7 +13,6 @@ from agents import services
 from agents.models import Agent
 
 from .factories import (
-    DEFAULT_ORG,
     make_agent,
     make_agent_template,
     make_agent_version,
@@ -95,7 +94,7 @@ class GetAgentTests(TestCase):
 class CreateAgentTests(TestCase):
     def test_crea_agente_ok(self):
         agent = services.create_agent(
-            organization_id=DEFAULT_ORG, name="Nuevo", slug="nuevo",
+            name="Nuevo", slug="nuevo",
             provider="anthropic", model="claude-haiku-4-5",
             skills_slugs=["search", "summarize"],
         )
@@ -104,23 +103,13 @@ class CreateAgentTests(TestCase):
         agent.refresh_from_db()
         self.assertEqual(agent.skills_slugs, ["search", "summarize"])
 
-    def test_slug_duplicado_en_misma_org_falla(self):
+    def test_slug_duplicado_falla(self):
         make_agent("Existente", slug="dup")
         with self.assertRaises(services.AgentError):
             services.create_agent(
-                organization_id=DEFAULT_ORG, name="Otro", slug="dup",
+                name="Otro", slug="dup",
                 provider="anthropic", model="claude-haiku-4-5",
             )
-
-    def test_mismo_slug_otra_org_ok(self):
-        make_agent("Existente", slug="shared")
-        other_org = uuid.uuid4()
-        agent = services.create_agent(
-            organization_id=other_org, name="Otro", slug="shared",
-            provider="anthropic", model="claude-haiku-4-5",
-        )
-        self.assertIsNotNone(agent.pk)
-        self.assertEqual(Agent.objects.filter(slug="shared").count(), 2)
 
 
 class UpdateAgentTests(TestCase):
@@ -144,7 +133,7 @@ class UpdateAgentTests(TestCase):
         a.refresh_from_db()
         self.assertEqual(a.slug, "moderno")
 
-    def test_slug_choca_con_otro_en_misma_org_falla(self):
+    def test_slug_choca_con_otro_falla(self):
         make_agent("Ocupado", slug="ocupado")
         a = make_agent("Mio", slug="mio")
         with self.assertRaises(services.AgentError):

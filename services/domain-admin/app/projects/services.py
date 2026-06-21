@@ -6,11 +6,14 @@ modelo vive acá. Esto facilita testing unitario sin tocar HTTP.
 Las tablas (projects / project_templates / project_repositories) las
 administra domain-mcp (managed=False); Django solo lee/escribe vía ORM.
 
-`projects` NO tiene columna status: el estado activo/archivado es DERIVADO
-de deleted_at. Por eso:
-- delete_project  -> soft-delete (setea deleted_at).
-- toggle_project_status -> archiva (setea deleted_at) o restaura (deleted_at
-  = NULL). Es el "toggle" de estado de esta entidad.
+El estado activo/archivado se refleja en la columna `status` y en `deleted_at`
+(soft-delete). Ambos se mantienen consistentes:
+- delete_project  -> soft-delete (setea deleted_at + status=archived).
+- toggle_project_status -> archiva (deleted_at=now + status=archived) o
+  restaura (deleted_at=NULL + status=active). Es el "toggle" de estado.
+
+NOTA: la columna organization_id fue dropeada (tabla organizations eliminada);
+ninguna query la referencia. El slug es único globalmente.
 """
 from __future__ import annotations
 
@@ -75,20 +78,14 @@ def get_project_repositories(project: Project) -> list[ProjectRepository]:
     )
 
 
-def list_available_templates(organization_id: str | None = None) -> list[ProjectTemplate]:
-    """Templates aplicables: públicos + los de la organización del proyecto."""
-    from django.db.models import Q
-
-    qs = ProjectTemplate.objects.all()
-    if organization_id is not None:
-        qs = qs.filter(Q(is_public=True) | Q(organization_id=organization_id))
-    return list(qs.order_by("slug"))
+def list_available_templates() -> list[ProjectTemplate]:
+    """Templates disponibles para el selector del form (ordenados por slug)."""
+    return list(ProjectTemplate.objects.all().order_by("slug"))
 
 
 @transaction.atomic
 def create_project(
     *,
-    organization_id: str,
     name: str,
     slug: str,
     description: str = "",
@@ -97,17 +94,14 @@ def create_project(
     current_branch: str = "",
     client_id: str | None = None,
 ) -> Project:
-    """Crea un proyecto nuevo. slug único dentro de la organización."""
-    if Project.objects.filter(organization_id=organization_id, slug=slug).exists():
-        raise ProjectError(
-            f"Ya existe un proyecto con slug '{slug}' en esta organización."
-        )
+    """Crea un proyecto nuevo. slug único global."""
+    if Project.objects.filter(slug=slug).exists():
+        raise ProjectError(f"Ya existe un proyecto con slug '{slug}'.")
 
     if template_id and not ProjectTemplate.objects.filter(pk=template_id).exists():
         raise ProjectError(f"El template '{template_id}' no existe.")
 
     project = Project.objects.create(
-        organization_id=organization_id,
         name=name,
         slug=slug,
         description=description or "",
@@ -131,13 +125,11 @@ def update_project(
     current_branch: str = "",
     client_id: str | None = None,
 ) -> Project:
-    """Actualiza un proyecto. slug sigue siendo único per-organización."""
+    """Actualiza un proyecto. slug sigue siendo único global."""
     if slug != project.slug and Project.objects.filter(
-        organization_id=project.organization_id, slug=slug
+        slug=slug
     ).exclude(pk=project.pk).exists():
-        raise ProjectError(
-            f"Ya existe otro proyecto con slug '{slug}' en esta organización."
-        )
+        raise ProjectError(f"Ya existe otro proyecto con slug '{slug}'.")
 
     if template_id and not ProjectTemplate.objects.filter(pk=template_id).exists():
         raise ProjectError(f"El template '{template_id}' no existe.")
@@ -155,30 +147,29 @@ def update_project(
 
 @transaction.atomic
 def delete_project(project: Project) -> None:
-    """Soft delete: marca deleted_at. NO borra físicamente.
-
-    `projects` no tiene columna status; el estado archivado es derivado de
-    deleted_at, así que basta con setearlo.
-    """
+    """Soft delete: marca deleted_at + status=archived. NO borra físicamente."""
     from django.utils import timezone
 
     project.deleted_at = timezone.now()
+    project.status = Project.STATUS_ARCHIVED
     project.save()
 
 
 @transaction.atomic
 def toggle_project_status(project: Project) -> str:
-    """Alterna activo <-> archivado vía deleted_at. Retorna el status derivado.
+    """Alterna activo <-> archivado. Mantiene deleted_at y status en sync.
 
-    - Proyecto activo (deleted_at IS NULL) -> archivado (deleted_at = now()).
-    - Proyecto archivado -> restaurado (deleted_at = NULL).
+    - Proyecto activo (deleted_at IS NULL) -> archivado.
+    - Proyecto archivado -> restaurado.
     """
     from django.utils import timezone
 
     if project.deleted_at is None:
         project.deleted_at = timezone.now()
+        project.status = Project.STATUS_ARCHIVED
     else:
         project.deleted_at = None
+        project.status = Project.STATUS_ACTIVE
     project.save()
     return project.status
 

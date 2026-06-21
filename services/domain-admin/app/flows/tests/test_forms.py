@@ -1,8 +1,7 @@
 """Tests de FlowForm (validaciones del mantenedor de Flows).
 
 Verifican reglas reales: campos requeridos, JSON del spec, normalización
-de slug, unicidad de slug per-organización y exclusión del propio registro
-en edición.
+de slug, unicidad de slug y exclusión del propio registro en edición.
 """
 from __future__ import annotations
 
@@ -10,13 +9,12 @@ from django.test import TestCase
 
 from flows.forms import FlowForm
 
-from .factories import DEFAULT_ORG, make_flow
+from .factories import make_flow
 
 
 class FlowFormCreateTests(TestCase):
     def _data(self, **over):
         base = {
-            "organization_id": str(DEFAULT_ORG),
             "name": "Form Flow",
             "slug": "form",
             "description": "",
@@ -58,11 +56,6 @@ class FlowFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)
 
-    def test_organization_id_requerido_en_alta(self):
-        form = FlowForm(data=self._data(organization_id=""))
-        self.assertFalse(form.is_valid())
-        self.assertIn("organization_id", form.errors)
-
     def test_spec_invalido_falla(self):
         form = FlowForm(data=self._data(spec="no-es-json"))
         self.assertFalse(form.is_valid())
@@ -73,7 +66,7 @@ class FlowFormCreateTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)
 
-    def test_slug_duplicado_en_misma_org(self):
+    def test_slug_duplicado(self):
         make_flow("Ocupado", slug="ocupado")
         form = FlowForm(data=self._data(slug="ocupado"))
         self.assertFalse(form.is_valid())
@@ -83,7 +76,6 @@ class FlowFormCreateTests(TestCase):
 class FlowFormEditTests(TestCase):
     def _edit_data(self, f, **over):
         base = {
-            "organization_id": str(f.organization_id),
             "name": f.name,
             "slug": f.slug,
             "description": "",

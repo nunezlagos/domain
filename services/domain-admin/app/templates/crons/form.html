@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if mode == "create" %}Nuevo cron{% else %}Editar {{ cron_obj.display_name }}{% endif %}
+{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Nuevo cron" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% if mode == 'edit' %}{% url 'crons:detail' cron_obj.pk %}{% else %}{% url 'crons:list' %}{% endif %}"
+       class="text-secondary" style="font-size: var(--fs-sm);">← Volver</a>
+    <h1 class="mt-1">
+      {% if mode == "create" %}Nuevo cron{% else %}Editar cron{% endif %}
+    </h1>
+    <p class="subtitle">
+      {% if mode == "create" %}
+        Crear un nuevo cron/schedule de la organización
+      {% else %}
+        Modificá los datos de <strong>{{ cron_obj.display_name }}</strong>
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="card" style="max-width: 720px;">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        <span class="alert-icon">✕</span>
+        <div class="alert-content">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.organization_id.id_for_label }}">Organización (UUID) *</label>
+      {{ form.organization_id }}
+      {% if form.organization_id.help_text %}<div class="form-help">{{ form.organization_id.help_text }}</div>{% endif %}
+      {% if form.organization_id.errors %}<div class="form-help text-danger">{{ form.organization_id.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+        {{ form.slug }}
+        {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+        {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresión cron *</label>
+        {{ form.cron_expression }}
+        {% if form.cron_expression.help_text %}<div class="form-help">{{ form.cron_expression.help_text }}</div>{% endif %}
+        {% if form.cron_expression.errors %}<div class="form-help text-danger">{{ form.cron_expression.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.target_type.id_for_label }}">Tipo de target *</label>
+        {{ form.target_type }}
+        {% if form.target_type.errors %}<div class="form-help text-danger">{{ form.target_type.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.target_id.id_for_label }}">Target (UUID) *</label>
+        {{ form.target_id }}
+        {% if form.target_id.help_text %}<div class="form-help">{{ form.target_id.help_text }}</div>{% endif %}
+        {% if form.target_id.errors %}<div class="form-help text-danger">{{ form.target_id.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.timezone.id_for_label }}">Timezone</label>
+        {{ form.timezone }}
+        {% if form.timezone.help_text %}<div class="form-help">{{ form.timezone.help_text }}</div>{% endif %}
+        {% if form.timezone.errors %}<div class="form-help text-danger">{{ form.timezone.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group" style="flex: 1; display: flex; align-items: center; gap: var(--space-sm);">
+        {{ form.enabled }}
+        <label class="form-label" for="{{ form.enabled.id_for_label }}" style="margin: 0;">Habilitado</label>
+        {% if form.enabled.errors %}<div class="form-help text-danger">{{ form.enabled.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+      {{ form.description }}
+      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.inputs.id_for_label }}">Inputs (JSON)</label>
+      {{ form.inputs }}
+      {% if form.inputs.help_text %}<div class="form-help">{{ form.inputs.help_text }}</div>{% endif %}
+      {% if form.inputs.errors %}<div class="form-help text-danger">{{ form.inputs.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <hr>
+
+    <div class="d-flex gap-2" style="justify-content: flex-end;">
+      <a href="{% if mode == 'edit' %}{% url 'crons:detail' cron_obj.pk %}{% else %}{% url 'crons:list' %}{% endif %}"
+         class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "create" %}Crear cron{% else %}Guardar cambios{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

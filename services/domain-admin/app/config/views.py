@@ -79,16 +79,16 @@ def components_demo(request):
 # sdd_/tdd_: spec (explore->tasks), exec (apply), tdd (verify/judge),
 # close (archive/onboard).
 _SDD_PHASES = [
-    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el código existente."),
-    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptación."),
-    ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs."),
-    ("sdd-design", "Design", "spec", "Diseña la solución y la arquitectura."),
-    ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables."),
-    ("sdd-apply", "Apply", "exec", "Implementa el código de las tareas."),
-    ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato."),
-    ("sdd-judge", "Judge", "tdd", "Revisión adversarial de la implementación."),
-    ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos."),
-    ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio."),
+    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el código existente.", "search"),
+    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptación.", "doc"),
+    ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs.", "bulb"),
+    ("sdd-design", "Design", "spec", "Diseña la solución y la arquitectura.", "blueprint"),
+    ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables.", "checklist"),
+    ("sdd-apply", "Apply", "exec", "Implementa el código de las tareas.", "code"),
+    ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato.", "check"),
+    ("sdd-judge", "Judge", "tdd", "Revisión adversarial de la implementación.", "scale"),
+    ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos.", "archive"),
+    ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio.", "book"),
 ]
 
 
@@ -115,14 +115,8 @@ def sdd_flow(request):
     }
 
     phases = []
-    for index, (slug, name, group, desc) in enumerate(_SDD_PHASES):
+    for index, (slug, name, group, desc, icon) in enumerate(_SDD_PHASES):
         tpl = by_slug.get(slug)
-        # Serpentina 5x2: fila 1 (idx 0-4) L->R; fila 2 (idx 5-9) R->L para que
-        # el flujo continúe sin saltar. col 1-5; en fila 2 col = 10 - index.
-        if index < 5:
-            row, col = 1, index + 1
-        else:
-            row, col = 2, 10 - index
         phases.append(
             {
                 "index": index,
@@ -131,10 +125,9 @@ def sdd_flow(request):
                 "name": name,
                 "group": group,
                 "desc": desc,
+                "icon": icon,
                 "id": str(tpl.id) if tpl else None,
                 "seeded": tpl is not None,
-                "row": row,
-                "col": col,
             }
         )
 

@@ -7,6 +7,8 @@
 
 Django NO migra estas tablas (managed=False). Solo lee/escribe via ORM.
 """
+import uuid
+
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
@@ -14,7 +16,7 @@ from django.db import models
 class Role(models.Model):
     """Rol de la plataforma. Tabla seeded, no se crea/edita desde admin."""
 
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     slug = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
@@ -43,7 +45,7 @@ class User(models.Model):
         ("revoked", "Revocado"),
     ]
 
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=200, blank=True, default="")
     role = models.CharField(max_length=50, default="viewer")  # rol "principal"
@@ -87,7 +89,7 @@ class UserRole(models.Model):
         granted_by  uuid (nullable)
     """
 
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column="user_id", related_name="roles")
     role = models.ForeignKey(Role, on_delete=models.CASCADE, db_column="role_id", related_name="users")
     granted_at = models.DateTimeField(auto_now_add=True)

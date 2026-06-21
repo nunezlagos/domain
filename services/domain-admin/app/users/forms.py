@@ -48,24 +48,25 @@ class UserForm(forms.Form):
 
     def __init__(self, *args, instance: User | None = None, **kwargs):
         super().__init__(*args, **kwargs)
+        # clean_email() consulta self.instance para excluirse en edición.
+        self.instance = instance
         # Choices de roles desde la DB (roles fijos/seeded).
         self.fields["role"].choices = [
             (r.slug, f"{r.name} ({r.slug})")
             for r in Role.objects.filter(status="active").order_by("slug")
         ]
-        # Defaults.
+        # Password requerido en alta, opcional en edición (vacío = no cambiar).
+        # Se setea SIEMPRE (también en form bound/submit), no solo al renderizar,
+        # si no un POST de alta sin password pasaría la validación.
+        is_create = instance is None
+        self.fields["password"].required = is_create
+        self.fields["password_confirm"].required = is_create
+        # Valores iniciales solo al renderizar el form de edición (unbound).
         if instance is not None and not self.is_bound:
             self.fields["email"].initial = instance.email
             self.fields["name"].initial = instance.name
             self.fields["role"].initial = instance.role
             self.fields["status"].initial = instance.status
-            # Password siempre vacío en edición.
-            self.fields["password"].required = False
-            self.fields["password_confirm"].required = False
-        elif not self.is_bound:
-            # Create: password requerido.
-            self.fields["password"].required = True
-            self.fields["password_confirm"].required = True
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()

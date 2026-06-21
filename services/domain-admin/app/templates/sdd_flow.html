@@ -13,13 +13,6 @@
 
 {% block content %}
 <div class="sdd-flow-page">
-  <header class="sdd-flow-header">
-    <h1>Flujo SDD</h1>
-    <p class="sdd-flow-intro">
-      Pipeline SDD del prompt al issue implementado. Click en una fase para editar su prompt.
-    </p>
-  </header>
-
   {% comment %}
     DIAGRAMA DE SECUENCIA UML (SVG vertical). viewBox 0 0 1240 1180.
     width:100% height:auto -> escala. En mobile el contenedor .sdd-diagram
@@ -31,7 +24,7 @@
     Usuario=120, Router=360, Orchestrator=600, Agente=860, Datos=1120.
   {% endcomment %}
   <div class="sdd-diagram">
-    <svg class="sdd-svg" viewBox="0 0 1240 920" role="img"
+    <svg class="sdd-svg" viewBox="0 -56 1240 980" role="img"
          preserveAspectRatio="xMidYMid meet"
          aria-label="Diagrama de secuencia del pipeline SDD"
          xmlns="http://www.w3.org/2000/svg">
@@ -65,6 +58,9 @@
           </feMerge>
         </filter>
       </defs>
+
+      {% comment %} Nombre del diagrama, dentro del propio SVG {% endcomment %}
+      <text class="sdd-diagram-title" x="620" y="-22" text-anchor="middle">Flujo SDD</text>
 
       {% comment %} LIFELINES (líneas verticales punteadas hacia abajo) {% endcomment %}
       <g class="sdd-lifelines">

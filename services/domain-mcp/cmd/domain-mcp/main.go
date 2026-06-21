@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/audit"
@@ -233,6 +234,15 @@ func main() {
 		LLM:         factory,
 		Knowledge:   knowledgeSvc,
 		Observation: observations,
+		// Lee el prompt 'analysis' editable (tabla prompts, global). Fallback
+		// al const DefaultAnalysisSystemPrompt si no existe.
+		PromptLoader: func(ctx context.Context) (string, error) {
+			p, err := prompts.GetActive(ctx, uuid.Nil, nil, "analysis")
+			if err != nil {
+				return "", err
+			}
+			return p.Body, nil
+		},
 	}
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
@@ -245,6 +255,15 @@ func main() {
 		classifier = &promptrouter.LLMClassifier{
 			Provider: anthrop, Model: "claude-haiku-4-5-20251001",
 			Fallback: promptrouter.HeuristicClassifier{},
+			// Lee el prompt 'triage' editable (tabla prompts, global). Fallback
+			// al const DefaultTriageSystemPrompt si no existe.
+			PromptLoader: func(ctx context.Context) (string, error) {
+				p, err := prompts.GetActive(ctx, uuid.Nil, nil, "triage")
+				if err != nil {
+					return "", err
+				}
+				return p.Body, nil
+			},
 		}
 	}
 	promptRouterSvc := &promptrouter.Router{

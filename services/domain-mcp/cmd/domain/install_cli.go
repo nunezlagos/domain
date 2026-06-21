@@ -1141,6 +1141,9 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.SkillsCatalogSeeder{})
 	registry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	registry.Register(&seeds.FlowsCatalogSeeder{})
+	registry.Register(&seeds.TriagePromptSeeder{})
+	registry.Register(&seeds.AnalysisPromptSeeder{})
+	registry.Register(&seeds.WizardFormulatorPromptSeeder{})
 
 	reports, err := registry.RunAll(ctx, pool, seeds.Env(envStr))
 	if err != nil {

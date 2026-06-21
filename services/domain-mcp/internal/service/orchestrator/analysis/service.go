@@ -32,6 +32,24 @@ import (
 // ErrNoProjectForOrg indica que la organización no tiene projects seedeados.
 var ErrNoProjectForOrg = errors.New("analysis: no projects found for organization — seed one first")
 
+// DefaultAnalysisSystemPrompt es el system prompt del mini-pipeline de
+// análisis read-only por defecto. Se seedea en la tabla prompts con
+// slug='analysis' para que sea editable desde el dashboard. El servicio lo
+// usa como fallback si la DB no tiene el prompt o el loader no está cableado.
+const DefaultAnalysisSystemPrompt = `Sos un analista técnico de proyectos de software.
+Dado un prompt de un usuario, producís un análisis markdown estructurado
+con la información solicitada.
+
+Reglas:
+- Respondé ÚNICAMENTE con markdown, sin JSON, sin código extra.
+- Si el prompt pide listar algo, producí una lista con formato markdown.
+- Si el prompt pide investigar algo, producí un informe estructurado.
+- Si no podés responder porque necesitás acceso al codebase, decilo
+  claramente en el análisis.
+- El análisis debe ser auto-contenido: cualquiera que lo lea debe
+  entender el contexto sin referencias externas.
+- Incluí un resumen ejecutivo al inicio y conclusiones al final.`
+
 // Service ejecuta el mini-pipeline de análisis read-only.
 type Service struct {
 	Pool    *pgxpool.Pool
@@ -39,6 +57,12 @@ type Service struct {
 	LLM     *llm.Factory
 	Knowledge *knowsvc.Service
 	Observation *obssvc.Service
+	// PromptLoader opcional: si está seteado y devuelve un body no vacío,
+	// ESE body se usa como SystemPrompt en lugar de la const hardcodeada.
+	// Esto permite editar el prompt de análisis desde el dashboard (tabla
+	// prompts, slug='analysis') sin recompilar. Si es nil, devuelve "" o
+	// devuelve error, el servicio cae al const DefaultAnalysisSystemPrompt.
+	PromptLoader func(ctx context.Context) (string, error)
 }
 
 // Input es lo que recibe RunAnalysis.
@@ -153,19 +177,12 @@ func (s *Service) explore(ctx context.Context, in Input) (string, error) {
 		return "", fmt.Errorf("get provider: %w", err)
 	}
 
-	systemPrompt := `Sos un analista técnico de proyectos de software.
-Dado un prompt de un usuario, producís un análisis markdown estructurado
-con la información solicitada.
-
-Reglas:
-- Respondé ÚNICAMENTE con markdown, sin JSON, sin código extra.
-- Si el prompt pide listar algo, producí una lista con formato markdown.
-- Si el prompt pide investigar algo, producí un informe estructurado.
-- Si no podés responder porque necesitás acceso al codebase, decilo
-  claramente en el análisis.
-- El análisis debe ser auto-contenido: cualquiera que lo lea debe
-  entender el contexto sin referencias externas.
-- Incluí un resumen ejecutivo al inicio y conclusiones al final.`
+	systemPrompt := DefaultAnalysisSystemPrompt
+	if s.PromptLoader != nil {
+		if loaded, lerr := s.PromptLoader(ctx); lerr == nil && strings.TrimSpace(loaded) != "" {
+			systemPrompt = loaded
+		}
+	}
 
 	resp, err := provider.Complete(ctx, llm.CompletionOptions{
 		MaxTokens:    2048,

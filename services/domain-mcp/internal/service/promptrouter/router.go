@@ -153,6 +153,19 @@ var (
 // puede crear el flow_run. En ese caso Route devuelve error tipado
 // ErrOrgIDRequiredForOrchestrator.
 func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID, orgID *uuid.UUID) (*Response, error) {
+	return r.RouteWithIntent(ctx, rawText, createdBy, orgID, nil)
+}
+
+// RouteWithIntent es Route con clasificación híbrida: si intentOverride
+// es un Intent válido del enum, se usa DIRECTO y se SALTEA la clasificación
+// (el cliente —Claude Code vía MCP— ya clasificó usando el prompt 'triage').
+// Si intentOverride es nil o inválido, clasifica como Route normal (LLM si
+// hay Provider, else keyword heurístico).
+//
+// Este es el modelo SIN API keys de LLM en la plataforma: el LLM es el
+// agente cliente, que trae su propio intent. El keyword fallback se
+// mantiene para clientes que no clasifican.
+func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy *uuid.UUID, orgID *uuid.UUID, intentOverride *Intent) (*Response, error) {
 	if strings.TrimSpace(rawText) == "" {
 		return nil, ErrEmptyPrompt
 	}
@@ -160,7 +173,11 @@ func (r *Router) Route(ctx context.Context, rawText string, createdBy *uuid.UUID
 	intent := IntentChat
 	conf := 1.0
 	reasoning := "default chat"
-	if r.Classifier != nil {
+	if intentOverride != nil && validIntent(string(*intentOverride)) {
+		intent = *intentOverride
+		conf = 1.0
+		reasoning = "intent override del cliente (clasificación via prompt 'triage')"
+	} else if r.Classifier != nil {
 		var err error
 		intent, conf, reasoning, err = r.Classifier.Classify(ctx, rawText)
 		if err != nil {

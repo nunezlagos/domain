@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	prouter "nunezlagos/domain/internal/service/promptrouter"
 )
 
 // toolPromptRoute — domain_prompt
@@ -19,13 +21,16 @@ import (
 // arranca el wizard SDD (feature/fix/hotfix/refactor/doc/rfc).
 func toolPromptRoute() mcp.Tool {
 	return mcp.NewTool("domain_prompt",
-		mcp.WithDescription("Entry point principal del flow Domain. Recibe un prompt crudo del usuario, lo clasifica (chat/idea/feature/fix/hotfix/refactor/doc/rfc) y devuelve: para chat/idea una respuesta directa; para el resto, arranca el wizard interactivo y devuelve la primera pregunta. El cliente sigue con domain_hu_create_answer."),
+		mcp.WithDescription("Entry point principal del flow Domain. Recibe un prompt crudo del usuario, lo clasifica (chat/idea/feature/fix/hotfix/refactor/doc/rfc/analysis) y devuelve: para chat/idea una respuesta directa; para el resto, arranca el wizard/orquestador y devuelve la primera pregunta. El cliente sigue con domain_hu_create_answer. CLASIFICACIÓN HÍBRIDA: como agente IA podés clasificar vos mismo el intent usando el prompt 'triage' (traélo con domain_prompt_get(slug='triage')) y pasar el resultado en el parámetro 'intent' — eso SALTEA la clasificación del servidor. Si no pasás 'intent', el servidor clasifica (LLM si hay provider, else keywords)."),
 		mcp.WithString("raw_text",
 			mcp.Description("Prompt crudo del usuario tal cual fue tipeado en el agente IA"),
 			mcp.Required(),
 		),
 		mcp.WithString("created_by_user_id",
 			mcp.Description("UUID del usuario que tipeó el prompt (opcional, para audit)"),
+		),
+		mcp.WithString("intent",
+			mcp.Description("Intent ya clasificado por el cliente (opcional): chat|idea|feature|fix|hotfix|refactor|doc|rfc|analysis. Si es válido, el servidor lo usa y NO reclasifica. Usá el prompt 'triage' (domain_prompt_get) para decidirlo."),
 		),
 	)
 }
@@ -55,7 +60,9 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
-	resp, err := d.PromptRouter.Route(ctx, rawText, createdBy, orgID)
+	intentOverride := prouter.ParseIntent(req.GetString("intent", ""))
+
+	resp, err := d.PromptRouter.RouteWithIntent(ctx, rawText, createdBy, orgID, intentOverride)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("route: %v", err)), nil
 	}

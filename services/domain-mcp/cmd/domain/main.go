@@ -489,6 +489,12 @@ func runServer() {
 	seedRegistry.Register(&seeds.SkillsCatalogSeeder{})
 	seedRegistry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	seedRegistry.Register(&seeds.FlowsCatalogSeeder{})
+	// Prompt de triage (clasificación de intent) editable desde el dashboard.
+	seedRegistry.Register(&seeds.TriagePromptSeeder{})
+	// Prompt de análisis (mini-pipeline read-only) editable desde el dashboard.
+	seedRegistry.Register(&seeds.AnalysisPromptSeeder{})
+	// Prompt del wizard formulator editable desde el dashboard.
+	seedRegistry.Register(&seeds.WizardFormulatorPromptSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
@@ -595,6 +601,16 @@ func runServer() {
 			Provider: anthropicProv,
 			Model:    "claude-haiku-4-5-20251001",
 			Fallback: promptrouter.HeuristicClassifier{},
+			// Lee el prompt 'triage' editable de la tabla prompts (global,
+			// project_id NULL). Si no existe o el body es vacío, el classifier
+			// cae al const DefaultTriageSystemPrompt.
+			PromptLoader: func(ctx context.Context) (string, error) {
+				p, err := promptService.GetActive(ctx, uuid.Nil, nil, "triage")
+				if err != nil {
+					return "", err
+				}
+				return p.Body, nil
+			},
 		}
 		logger.Info("prompt classifier: LLM anthropic con fallback heurístico")
 	} else {
@@ -616,6 +632,15 @@ func runServer() {
 		wizardPlanner.QuestionFormulator = &wp.LLMQuestionFormulator{
 			Provider: anthropicProv,
 			Model:    "claude-haiku-4-5-20251001",
+			// Lee el prompt 'wizard-formulator' editable (tabla prompts,
+			// global). Fallback al const DefaultFormulatorSystemPrompt.
+			PromptLoader: func(ctx context.Context) (string, error) {
+				p, err := promptService.GetActive(ctx, uuid.Nil, nil, "wizard-formulator")
+				if err != nil {
+					return "", err
+				}
+				return p.Body, nil
+			},
 		}
 	}
 
@@ -647,6 +672,15 @@ func runServer() {
 	analysisSvc := &analysissvc.Service{
 		Pool: pools.App, Audit: recorder, LLM: llmFactory,
 		Knowledge: knowledgeService, Observation: obsService,
+		// Lee el prompt 'analysis' editable (tabla prompts, global). Fallback
+		// al const DefaultAnalysisSystemPrompt si no existe.
+		PromptLoader: func(ctx context.Context) (string, error) {
+			p, err := promptService.GetActive(ctx, uuid.Nil, nil, "analysis")
+			if err != nil {
+				return "", err
+			}
+			return p.Body, nil
+		},
 	}
 
 	promptRouterSvc := &promptrouter.Router{

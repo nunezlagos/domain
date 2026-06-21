@@ -7,11 +7,15 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/service/promptrouter"
 )
 
 // promptRouterRequest body de POST /api/v1/prompt
 type promptRouterRequest struct {
 	RawText string `json:"raw_text"`
+	// Intent opcional: si el cliente ya clasificó (vía prompt 'triage'),
+	// se usa directo y se saltea la clasificación del servidor.
+	Intent string `json:"intent,omitempty"`
 }
 
 // routePrompt — endpoint HTTP alternativo al MCP tool domain_prompt (issue-12.7).
@@ -64,7 +68,8 @@ func (a *API) routePrompt(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp, err := a.PromptRouter.Route(r.Context(), req.RawText, createdBy, orgID)
+	intentOverride := promptrouter.ParseIntent(req.Intent)
+	resp, err := a.PromptRouter.RouteWithIntent(r.Context(), req.RawText, createdBy, orgID, intentOverride)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "route_failed", err.Error())
 		return

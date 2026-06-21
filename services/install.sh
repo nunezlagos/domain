@@ -151,6 +151,14 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
     log "Limpiando $STALE leftovers untracked (layouts viejos, incl. repos anidados)..."
     (cd "$INSTALL_DIR" && git clean -ffd >/dev/null 2>&1) || true
   fi
+  # Algunos leftovers flat tienen artefactos GITIGNOREADOS adentro (ej:
+  # domain-mcp/.../.ai/, .mcp.json) que git clean no remueve sin -x — y -x
+  # borraría .env/certs/backups. Los borramos explícitamente por nombre:
+  # estos paths en la raíz SIEMPRE son duplicados del layout viejo (los reales
+  # viven bajo services/), nunca contenido legítimo del repo root.
+  for stale in domain-admin domain-mcp caddy minio postgres systemd Makefile install-vps.sh .env.example; do
+    [[ -e "$INSTALL_DIR/$stale" ]] && rm -rf "${INSTALL_DIR:?}/$stale"
+  done
   ok "Working tree limpio (sin duplicados flat)"
 fi
 

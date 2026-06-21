@@ -41,7 +41,8 @@ class PromptForm(InstanceAwareMixin, forms.Form):
     )
     body = forms.CharField(
         label="Cuerpo del prompt",
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 8}),
+        widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 14, "spellcheck": "false"}),
+        help_text="Cuerpo del prompt (editor monospace).",
     )
     description = forms.CharField(
         label="Descripción",

@@ -46,10 +46,9 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
                          # en clean_spec (la columna es NOT NULL pero {} la satisface).
         initial=dict,
         widget=forms.Textarea(attrs={
-            "class": "form-control",
-            "rows": 6,
+            "class": "form-control form-control--code",
+            "rows": 14,
             "spellcheck": "false",
-            "style": "font-family: var(--font-mono, monospace);",
         }),
         help_text="Definición declarativa del DAG en JSON (objeto). Vacío = {}.",
     )

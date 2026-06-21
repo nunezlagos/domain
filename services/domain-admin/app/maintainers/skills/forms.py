@@ -47,8 +47,8 @@ class SkillForm(InstanceAwareMixin, forms.Form):
     content = forms.CharField(
         label="Contenido",
         required=False,
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 4}),
-        help_text="Cuerpo de la skill (prompt, código, etc.).",
+        widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 14, "spellcheck": "false"}),
+        help_text="Cuerpo de la skill (prompt, código, etc.) — editor monospace.",
     )
     timeout_seconds = forms.IntegerField(
         label="Timeout (segundos)",

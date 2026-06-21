@@ -69,9 +69,9 @@ class CronForm(InstanceAwareMixin, forms.Form):
     inputs = forms.CharField(
         label="Inputs (JSON)",
         required=False,
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 3,
-                                     "placeholder": "{}"}),
-        help_text="Objeto JSON con los inputs del target.",
+        widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 10,
+                                     "spellcheck": "false", "placeholder": "{}"}),
+        help_text="Objeto JSON con los inputs del target (editor monospace).",
     )
     enabled = forms.BooleanField(
         label="Habilitado",

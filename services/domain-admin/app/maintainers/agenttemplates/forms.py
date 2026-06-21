@@ -34,8 +34,8 @@ class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
     )
     system_prompt = forms.CharField(
         label="System prompt",
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 4}),
-        help_text="Instrucciones de sistema de la plantilla.",
+        widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 14, "spellcheck": "false"}),
+        help_text="Instrucciones de sistema de la plantilla (editor monospace).",
     )
     personality = forms.CharField(
         label="Personalidad",

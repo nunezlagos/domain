@@ -55,7 +55,8 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
     system_prompt = forms.CharField(
         label="System prompt",
         required=False,
-        widget=forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 14, "spellcheck": "false"}),
+        help_text="Instrucciones de sistema del agente (editor monospace).",
     )
     skills_slugs = forms.CharField(
         label="Skills (slugs)",

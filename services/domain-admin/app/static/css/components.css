@@ -204,7 +204,34 @@
 }
 .form-control:disabled { opacity: 0.5; cursor: not-allowed; }
 
-textarea.form-control { min-height: 100px; resize: vertical; }
+textarea.form-control {
+  min-height: 180px;
+  width: 100%;
+  resize: vertical;
+  line-height: 1.5;
+  padding: var(--space-md);
+  overflow-y: auto;
+}
+
+/* Campo de código / prompt / JSON: editor monospace más alto, con un
+   fondo/borde sutil tipo editor (usa tokens del design system). Se aplica
+   sobre .form-control desde los widgets Textarea de los campos grandes. */
+.form-control--code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  min-height: 340px;
+  white-space: pre;
+  overflow: auto;
+  background: var(--color-bg-app);
+  border-color: var(--color-border-light);
+}
+.form-control--code:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
 
 .form-select {
   appearance: none;

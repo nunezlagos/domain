@@ -15,21 +15,40 @@
    - Color por GRUPO (spec/exec/tdd/close) tomado de variables.css.
    Reusa SIEMPRE los tokens del design system. */
 
+/* FIT AL VIEWPORT
+   .content tiene padding var(--space-lg) (24px) arriba+abajo. base.html apila
+   navbar (--navbar-height) + main.content + footer (--footer-height). La página
+   ocupa el alto disponible restante y se reparte como flex column: header auto,
+   diagrama flex:1. Usamos dvh para que en mobile descuente la barra del browser.
+   Reserva = navbar + footer + padding vertical del content (2 * space-lg). */
 .sdd-flow-page {
+  --sdd-reserve: calc(
+    var(--navbar-height) + var(--footer-height) + (2 * var(--space-lg))
+  );
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--sdd-reserve));
+  min-height: 420px;
   max-width: 1200px;
   margin: 0 auto;
   overflow-x: hidden;
 }
 
 .sdd-flow-header {
-  margin-bottom: var(--space-lg);
+  flex: 0 0 auto;
+  margin-bottom: var(--space-md);
+}
+
+.sdd-flow-header h1 {
+  margin: 0;
 }
 
 .sdd-flow-intro {
   color: var(--color-text-secondary);
   margin: var(--space-xs) 0 0;
-  max-width: 64ch;
-  line-height: 1.5;
+  max-width: 80ch;
+  line-height: 1.4;
+  font-size: var(--fs-sm);
 }
 
 /* Grupos (concern): cada clase define el acento del grupo ------------------- */
@@ -38,27 +57,31 @@
 .sdd-g-tdd   { --g-color: var(--color-success); --g-soft: var(--color-success-soft); }
 .sdd-g-close { --g-color: var(--color-accent);  --g-soft: var(--color-accent-soft); }
 
-/* Contenedor del diagrama --------------------------------------------------- */
+/* Contenedor del diagrama ---------------------------------------------------
+   flex:1 => toma todo el alto restante de .sdd-flow-page. El SVG (con
+   preserveAspectRatio="xMidYMid meet") escala para entrar ENTERO en este box,
+   ancho y alto, con letterbox si sobra. min-height:0 evita que el flex item
+   crezca por su contenido. */
 .sdd-diagram {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
   background:
     radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0)
       0 0 / 24px 24px,
     var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  padding: var(--space-lg);
-  /* Scroll horizontal SOLO del diagrama si no entra (mobile). Nunca el body. */
-  overflow-x: auto;
-  overflow-y: hidden;
+  padding: var(--space-md);
+  overflow: hidden;
 }
 
-/* SVG: escala proporcional. Vertical => height:auto. ------------------------ */
+/* SVG: ocupa el box completo y escala por preserveAspectRatio (meet). -------- */
 .sdd-svg {
   display: block;
   width: 100%;
-  height: auto;
-  max-width: 100%;
+  height: 100%;
   overflow: visible;
 }
 
@@ -68,6 +91,8 @@
   stroke-width: 1.5;
   stroke-dasharray: 4 5;
   opacity: 0.7;
+  /* Glow tenue continuo en las lifelines (luz de fondo). */
+  filter: drop-shadow(0 0 2px rgba(96, 165, 250, 0.25));
 }
 
 /* ============================ ACTIVATION BARS ============================ */
@@ -92,12 +117,23 @@
   text-anchor: middle;
 }
 
-/* ============================ MENSAJES (flechas) ============================ */
+/* ============================ MENSAJES (flechas) ============================
+   Cada <line>/<path> de mensaje se ILUMINA al pasar el mouse (glow + brillo).
+   cursor:pointer y transición suave. El glow base es muy sutil. */
 .sdd-msg {
   stroke: var(--color-border-light);
   stroke-width: 2;
+  cursor: pointer;
+  transition: stroke var(--transition-fast), filter var(--transition-fast),
+    stroke-width var(--transition-fast), opacity var(--transition-fast);
 }
 .sdd-arrow-head { fill: var(--color-border-light); }
+
+.sdd-msg:hover {
+  stroke: var(--color-text-link);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 5px rgba(96, 165, 250, 0.85));
+}
 
 /* Retornos: punteados, más tenues, cabeza abierta */
 .sdd-msg-ret {
@@ -105,6 +141,12 @@
   stroke-width: 1.5;
   stroke-dasharray: 5 4;
   opacity: 0.8;
+}
+.sdd-msg-ret:hover {
+  stroke: var(--color-text-secondary);
+  stroke-width: 2;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.7));
 }
 .sdd-arrow-head-ret {
   fill: none;
@@ -119,6 +161,14 @@
   stroke-width: 2;
   stroke-dasharray: 6 4;
   opacity: 0.9;
+  /* Glow ámbar base + se refuerza en hover. */
+  filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4));
+}
+.sdd-msg-loop:hover {
+  stroke: var(--color-warning);
+  stroke-width: 2.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.9));
 }
 .sdd-arrow-head-loop { fill: var(--color-warning); }
 
@@ -224,6 +274,7 @@
   position: relative;
   transition: background-color var(--transition-fast),
     box-shadow var(--transition-fast),
+    filter var(--transition-fast),
     transform var(--transition-fast);
 }
 
@@ -238,6 +289,7 @@
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
   border-left: 8px solid var(--g-color, var(--color-border-light));
+  transition: filter var(--transition-fast);
 }
 
 /* Etiqueta "N. Fase": chip sutil con acento de grupo */
@@ -253,18 +305,28 @@
   white-space: nowrap;
 }
 
-/* Hover (solo fases clickeables) ------------------------------------------- */
+/* Hover (solo fases clickeables): la línea del mensaje (gradiente del fondo) y
+   su cabeza de flecha se ILUMINAN con el color del grupo (glow), el chip se
+   rellena y hay un leve lift. ------------------------------------------------ */
 .sdd-phase:not(.is-disabled):hover {
   transform: translateY(-1px);
+  /* Glow del color de grupo sobre toda la barra-mensaje. */
+  filter: drop-shadow(0 0 6px var(--g-color, var(--color-accent)));
 }
 .sdd-phase:not(.is-disabled):hover .sdd-ph-label {
   background: var(--g-color);
   color: var(--color-text-inverse);
-  box-shadow: 0 2px 8px var(--color-shadow-md);
+  box-shadow: 0 0 10px var(--g-color, var(--color-shadow-md));
+}
+.sdd-phase:not(.is-disabled):active {
+  transform: translateY(0);
 }
 
 .sdd-phase:focus-visible {
   outline: none;
+}
+.sdd-phase:focus-visible {
+  filter: drop-shadow(0 0 6px var(--g-color, var(--color-accent)));
 }
 .sdd-phase:focus-visible .sdd-ph-label {
   outline: 3px solid var(--g-color, var(--color-accent));
@@ -281,19 +343,33 @@
 
 /* ============================================================
    RESPONSIVE
-   El SVG escala por viewBox vertical. En desktop entra completo.
-   El BODY nunca scrollea horizontal; sólo el .sdd-diagram lo hace.
-   En mobile, donde las 5 columnas se achicarían demasiado, fijamos
-   un ancho mínimo legible y dejamos que el contenedor scrollee en X.
+   En desktop el diagrama entra COMPLETO (preserveAspectRatio meet escala a la
+   caja flex). En mobile, si el ajuste lo deja muy chico, dejamos un ancho
+   mínimo legible y que SOLO el .sdd-diagram scrollee en X (pinch / swipe).
+   El BODY nunca scrollea horizontal.
    ============================================================ */
 @media (max-width: 760px) {
+  .sdd-flow-page {
+    /* En mobile damos más alto al diagrama: el header colapsa su intro. */
+    height: auto;
+    min-height: calc(100dvh - var(--sdd-reserve));
+  }
+  .sdd-flow-intro {
+    display: none;
+  }
   .sdd-diagram {
     padding: var(--space-sm);
+    /* Fallback: scroll horizontal SOLO del diagrama (nunca el body). */
+    overflow-x: auto;
+    overflow-y: hidden;
   }
-  /* Ancho mínimo: por debajo de esto el SVG dejaría de encoger y el
-     contenedor (.sdd-diagram con overflow-x:auto) ofrece scroll lateral. */
+  /* Ancho mínimo legible: por debajo de esto el SVG deja de encoger y el
+     contenedor (overflow-x:auto) ofrece swipe lateral. height:auto deja que
+     el aspect-ratio del viewBox fije la altura proporcional. */
   .sdd-svg {
-    width: 820px;
+    width: 760px;
+    height: auto;
     max-width: none;
+    flex: 0 0 auto;
   }
 }

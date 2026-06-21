@@ -1,17 +1,19 @@
-"""HU-47.2: Django settings con frontend design system.
+"""Settings comunes a todos los entornos.
 
 HISTORIAL:
 - HU-45.1: placeholder estatico
 - HU-47.1: login simple single-user
 - HU-47.2: design system (sidebar, navbar, footer, components)
+- HU-48.x: ORM (Django models managed=False contra Postgres de domain-mcp)
 
-PRÓXIMOS:
-- HU-45.2: ORM (Django models) + User multi-user
+Este modulo NO debe importarse directo como DJANGO_SETTINGS_MODULE.
+Usa el paquete `config.settings` (selecciona prod/test via DJANGO_ENV).
 """
 import os
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# base.py vive en app/config/settings/ -> parent.parent.parent == app/
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = "hu-47.2-rotate-me-before-prod-3f8a9b2c1d4e5f6a"
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
@@ -21,6 +23,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",      # HU-47.2: para flash messages (alerts)
     "django.contrib.staticfiles",
+    "core",                         # paquete transversal (base models/services/views)
     "users",                        # HU-48: mantenedor de usuarios
     "projects",                     # mantenedor de proyectos
     "apikeys",                      # mantenedor de API keys

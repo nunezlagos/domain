@@ -1,0 +1,63 @@
+/* ============================================================
+   maintainers.css — estilos compartidos de los mantenedores
+   (listados server-side, tablas, modales CRUD).
+
+   Complementa variables.css / base.css / layout.css /
+   components.css SIN redefinir nada de ellos: solo agrega
+   clases nuevas con prefijo .mnt- y helpers de la tabla base.
+   ============================================================ */
+
+/* Nota muted al lado del subtítulo ("se actualiza al detectar...") */
+.mnt-subtitle-note {
+  font-size: var(--fs-xs);
+  margin-left: var(--space-sm);
+  color: var(--color-text-muted);
+}
+
+/* Card de búsqueda (search bar de los listados) */
+.mnt-search-card {
+  padding: var(--space-md);
+}
+
+/* Celda de tabla vacía (estado "no hay registros") */
+.mnt-empty-cell {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--color-text-muted);
+}
+
+/* Columna de acciones: ancha lo mínimo, sin wrap */
+.mnt-col-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Grupo de botones de acción alineado a la derecha en la fila */
+.mnt-row-actions {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+}
+
+/* Botón de eliminar (icono) en color peligro */
+.mnt-action-danger {
+  color: var(--color-danger);
+}
+
+/* Anchos de modal por tipo (alineados al inline que había en base.html) */
+.modal-dynamic { max-width: 720px; }
+.modal-confirm { max-width: 420px; }
+
+/* Tabla de detalle (key/value) dentro del modal de detalle */
+.mnt-detail-table {
+  font-size: var(--fs-sm);
+}
+.mnt-detail-table th {
+  width: 140px;
+}
+
+/* Subtítulo de sección dentro de un detalle */
+.mnt-detail-section {
+  font-size: var(--fs-base);
+  margin-top: var(--space-md);
+}

@@ -1,0 +1,13 @@
+{% comment %}
+============================================================
+MODAL GENÉRICO DINÁMICO (HU-48.2)
+Container reusable: cualquier vista inyecta HTML acá via fetch().
+Se abre con openDynamicModal(html), se cierra con closeDynamicModal()
+(definidos en static/js/modals.js).
+============================================================
+{% endcomment %}
+<div class="modal-backdrop" id="modal-dynamic">
+  <div class="modal" role="dialog" style="max-width: 720px;" id="modal-dynamic-content">
+    <!-- contenido inyectado -->
+  </div>
+</div>

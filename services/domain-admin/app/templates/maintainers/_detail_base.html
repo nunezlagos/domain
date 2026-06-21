@@ -1,0 +1,37 @@
+{% comment %}
+============================================================
+Envoltorio BASE de detalle para el modal dinámico.
+Provee header + body + footer del modal y deja que cada app
+defina el contenido y las acciones específicas.
+
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta
+modals.js via fetch al endpoint ?partial=1). NO extiende
+base.html: es un fragmento. Cada app lo EXTIENDE:
+
+  {% extends "maintainers/_detail_base.html" %}
+  {% block detail_title %}{{ user_obj.display_name }}{% endblock %}
+  {% block detail_body %}...info...{% endblock %}
+  {% block detail_actions %}
+    <button class="btn btn-primary" data-action="edit" data-id="{{ obj.pk }}">Editar</button>
+    ...
+  {% endblock %}
+
+Bloques:
+  detail_title    título del modal (REQUERIDO)
+  detail_body     contenido del cuerpo (REQUERIDO)
+  detail_actions  botones del footer (default: solo Cerrar)
+============================================================
+{% endcomment %}
+<div class="modal-header">
+  <h3 class="modal-title">{% block detail_title %}Detalle{% endblock %}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  {% block detail_body %}{% endblock %}
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+  {% block detail_actions %}{% endblock %}
+</div>

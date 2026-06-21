@@ -24,3 +24,11 @@ urlpatterns = [
     path("crons/", include("crons.urls")),
     path("prompts/", include("prompts.urls")),
 ]
+
+# Handlers de error a nivel módulo. Django los resuelve por nombre de variable
+# (handler400/403/404/500) apuntando a vistas que renderizan
+# templates/errors/{code}.html. El handler500 solo se usa con DEBUG=False.
+handler400 = "config.views.bad_request"
+handler403 = "config.views.permission_denied"
+handler404 = "config.views.page_not_found"
+handler500 = "config.views.server_error"

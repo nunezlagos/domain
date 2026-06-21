@@ -1,0 +1,23 @@
+"""Helpers base para factories de los apps.
+
+Los PK son UUID (los genera domain-mcp en prod), así que en tests conviene
+pasarlos explícitos. Estos helpers centralizan eso para que las factories de
+cada app no repitan la generación de uuid.
+"""
+from __future__ import annotations
+
+import uuid
+
+
+def new_id() -> uuid.UUID:
+    """UUID nuevo para usar como PK en factories de test."""
+    return uuid.uuid4()
+
+
+def make(model, **kwargs):
+    """Crea una fila del `model` poniendo un PK uuid si no se pasó `id`.
+
+    Ej.: make(Project, name="X", slug="x")
+    """
+    kwargs.setdefault("id", new_id())
+    return model.objects.create(**kwargs)

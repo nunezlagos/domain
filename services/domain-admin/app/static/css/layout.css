@@ -194,3 +194,30 @@
   padding: var(--space-md);
   background: linear-gradient(135deg, var(--color-bg-app) 0%, #1a2332 100%);
 }
+
+/* === Error pages === */
+.error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 50vh;
+  padding: var(--space-2xl) var(--space-md);
+}
+.error-code {
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  color: var(--color-text-link);
+}
+.error-title {
+  font-size: var(--fs-2xl);
+  margin-top: var(--space-md);
+}
+.error-message {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-base);
+  margin-top: var(--space-sm);
+  max-width: 480px;
+}

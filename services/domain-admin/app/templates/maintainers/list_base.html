@@ -1,0 +1,100 @@
+{% comment %}
+============================================================
+Página BASE de listado de mantenedor. Extiende base.html y
+arma la estructura común: header con botón crear, search input
+[data-search-input], contenedor [data-maintainer-table] con
+los data-attrs que consume maintainer.js, y la carga del JS.
+
+Cada app la EXTIENDE y define solo lo propio vía bloques:
+
+  {% extends "maintainers/list_base.html" %}
+  {% block page_title %}Usuarios{% endblock %}           {# <title> del browser #}
+  {% block header_title %}Usuarios{% endblock %}         {# <h1> de la página #}
+  {% block page_subtitle %}Gestión de miembros...{% endblock %}
+  {% block create_label %}+ Nuevo usuario{% endblock %}
+  {% block search_placeholder %}Email o nombre...{% endblock %}
+  {% block table_area_id %}users-table-area{% endblock %}
+  {% block base_url %}/usuarios/{% endblock %}
+  {% block signal_url %}{% url 'users:signal' %}{% endblock %}
+  {% block table %}{% include "users/_table_partial.html" %}{% endblock %}
+
+Bloques disponibles:
+  page_title       <title> del browser
+  header_title     <h1> de la página
+  page_subtitle    bajada bajo el h1
+  header_actions   bloque entero de acciones (default: botón crear)
+  create_label     texto del botón crear
+  search           bloque entero de búsqueda (default: input debounced)
+  search_placeholder
+  table_area_id    id del contenedor [data-maintainer-table]
+  base_url         data-base-url (ej "/usuarios/")
+  signal_url       data-signal-url
+  table            include del _table_partial de la app (REQUERIDO)
+
+Título del navbar: variable de contexto `page_title` (seteala en la view),
+o sobreescribí el bloque `navbar` completo.
+
+Variables esperadas en el contexto (de la view):
+  search         término de búsqueda activo (str)
+  signal_count   parte 1 de la señal (count)
+  signal_version parte 2 de la señal (max updated_at / versión)
+  page_title     (opc) título mostrado en el navbar
+============================================================
+{% endcomment %}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% block page_title %}Mantenedor{% endblock %} - Domain Admin{% endblock %}
+
+{% comment %}
+  Título del navbar: por defecto usa la variable de contexto `page_title`
+  (seteala en la view). Si una app prefiere un literal, sobreescribe el
+  bloque `navbar` completo, igual que hacen hoy las list.html por-app.
+{% endcomment %}
+{% block navbar %}
+  {% include "components/_navbar.html" with title=page_title|default:"Domain Admin" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <h1>{% block header_title %}Mantenedor{% endblock %}</h1>
+    <p class="subtitle">
+      {% block page_subtitle %}Gestión de registros{% endblock %}
+      <span class="text-muted" style="font-size: var(--fs-xs); margin-left: var(--space-sm);">
+        (se actualiza al detectar cambios en BD)
+      </span>
+    </p>
+  </div>
+  {% block header_actions %}
+  <button class="btn btn-primary" data-action="create">
+    {% block create_label %}+ Nuevo{% endblock %}
+  </button>
+  {% endblock %}
+</div>
+
+{% block search %}
+<form method="get" class="card mb-4" style="padding: var(--space-md);" role="search">
+  <div>
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="{% block search_placeholder %}Buscar...{% endblock %}"
+           autocomplete="off"
+           data-search-input>
+  </div>
+</form>
+{% endblock %}
+
+<div id="{% block table_area_id %}maintainer-table-area{% endblock %}"
+     data-maintainer-table
+     data-base-url="{% block base_url %}/{% endblock %}"
+     data-signal-url="{% block signal_url %}{% endblock %}"
+     data-signal="{{ signal_count }}|{{ signal_version }}">
+  {% block table %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  <script src="{% static 'js/maintainer.js' %}"></script>
+{% endblock %}

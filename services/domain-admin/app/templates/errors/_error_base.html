@@ -1,0 +1,29 @@
+{% comment %}
+============================================================
+Layout BASE de páginas de error. Extiende base.html y centra
+un bloque con el código, título, mensaje y un link al panel.
+Coherente con el design system (variables/components).
+
+Cada página de error lo EXTIENDE y define:
+  {% block error_code %}404{% endblock %}
+  {% block error_title %}Página no encontrada{% endblock %}
+  {% block error_message %}...{% endblock %}
+
+Nota: 500.html NO usa este base (no hay garantía de contexto
+en un error de servidor); trae su propio HTML mínimo.
+============================================================
+{% endcomment %}
+{% extends "base.html" %}
+
+{% block title %}{% block error_title_meta %}Error{% endblock %} - Domain Admin{% endblock %}
+
+{% block content %}
+<div class="error-page">
+  <div class="error-code">{% block error_code %}Error{% endblock %}</div>
+  <h1 class="error-title">{% block error_title %}Algo salió mal{% endblock %}</h1>
+  <p class="error-message">
+    {% block error_message %}Ocurrió un error inesperado.{% endblock %}
+  </p>
+  <a href="{% url 'dashboard' %}" class="btn btn-primary mt-4">Volver al panel</a>
+</div>
+{% endblock %}

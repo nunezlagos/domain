@@ -25,6 +25,11 @@ logs/
 # Volumenes mounts si alguien usa bind por path
 data/
 
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # OS
 .DS_Store
 Thumbs.db

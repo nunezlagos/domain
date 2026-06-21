@@ -55,57 +55,6 @@
   </table>
 </div>
 
-<!-- Roles asignados -->
-<div class="card mb-4">
-  <div class="flex-between mb-3">
-    <h3 style="margin: 0;">Roles asignados</h3>
-    <span class="text-muted" style="font-size: var(--fs-sm);">{{ user_roles|length }} activo(s)</span>
-  </div>
-
-  {% if user_roles %}
-    <div class="table-wrapper">
-      <table class="table">
-        <thead>
-          <tr><th>Rol</th><th>Descripción</th><th>Asignado</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for ur in user_roles %}
-            <tr>
-              <td><span class="badge badge-primary">{{ ur.role.slug }}</span></td>
-              <td class="text-secondary">{{ ur.role.name }}</td>
-              <td class="text-secondary">{{ ur.granted_at|date:"d/m/Y H:i" }}</td>
-              <td>
-                <form method="post" action="{% url 'users:role_revoke' user_obj.pk ur.role.pk %}" style="display: inline;">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-sm">Quitar</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    <p class="text-muted">Este usuario no tiene roles asignados.</p>
-  {% endif %}
-
-  <!-- Asignar nuevo rol -->
-  {% if assign_form.fields.role.queryset.exists %}
-    <form method="post" action="{% url 'users:role_assign' user_obj.pk %}" class="mt-3">
-      {% csrf_token %}
-      <div class="d-flex gap-2" style="align-items: end;">
-        <div style="flex: 1;">
-          <label class="form-label" for="role">Asignar nuevo rol</label>
-          {{ assign_form.role }}
-        </div>
-        <button type="submit" class="btn btn-primary">Asignar rol</button>
-      </div>
-    </form>
-  {% else %}
-    <p class="text-muted mt-3">Este usuario ya tiene todos los roles disponibles asignados.</p>
-  {% endif %}
-</div>
-
 <!-- Modal de confirmación de eliminación -->
 <div class="modal-backdrop" id="modal-delete-{{ user_obj.pk }}">
   <div class="modal" style="max-width: 420px;">

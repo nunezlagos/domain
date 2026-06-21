@@ -8,9 +8,9 @@ from __future__ import annotations
 from core.tests.base import MaintainerTestCase
 
 from maintainers.users import services
-from maintainers.users.models import User, UserRole
+from maintainers.users.models import User
 
-from .factories import make_role, make_user, make_user_role
+from .factories import make_role, make_user
 
 
 class ListUsersTests(MaintainerTestCase):
@@ -153,29 +153,6 @@ class ToggleStatusTests(MaintainerTestCase):
         services.toggle_user_status(u)
         u.refresh_from_db()
         self.assertEqual(u.status, "suspended")
-
-
-class RoleAssignmentTests(MaintainerTestCase):
-    def setUp(self):
-        self.role = make_role("editor")
-        self.user = make_user("roles@example.com")
-
-    def test_assign_crea_userrole(self):
-        services.assign_role(self.user, self.role.pk)
-        self.assertTrue(UserRole.objects.filter(user=self.user, role=self.role).exists())
-
-    def test_assign_es_idempotente(self):
-        services.assign_role(self.user, self.role.pk)
-        services.assign_role(self.user, self.role.pk)
-        self.assertEqual(UserRole.objects.filter(user=self.user, role=self.role).count(), 1)
-
-    def test_revoke_elimina(self):
-        make_user_role(self.user, self.role)
-        self.assertTrue(services.revoke_role(self.user, self.role.pk))
-        self.assertFalse(UserRole.objects.filter(user=self.user, role=self.role).exists())
-
-    def test_revoke_inexistente_devuelve_false(self):
-        self.assertFalse(services.revoke_role(self.user, self.role.pk))
 
 
 class ListSignalTests(MaintainerTestCase):

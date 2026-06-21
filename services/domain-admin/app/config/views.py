@@ -45,9 +45,16 @@ def login_view(request):
             request.session["email"] = admin_email
             messages.success(request, f"Bienvenido, {admin_email}")
             return HttpResponseRedirect("/dashboard/")
-        messages.error(request, "Email o password incorrecto.")
+        messages.error(request, "Email o contraseña incorrectos.")
 
     return render(request, "login.html")
+
+
+def home_view(request):
+    """Raíz: redirige al panel o al login."""
+    if _is_authed(request):
+        return HttpResponseRedirect("/dashboard/")
+    return HttpResponseRedirect("/login/")
 
 
 @csrf_protect

@@ -1,12 +1,15 @@
-"""HU-47.2: URL routing del admin dashboard."""
-from django.urls import path
+"""HU-48.1: URL routing del admin dashboard."""
+from django.urls import include, path
 
 from config import views
 
 urlpatterns = [
-    path("", views.login_view, name="home"),
+    path("", views.home_view, name="home"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("dashboard/", views.dashboard, name="dashboard"),
-    path("components/", views.components_demo, name="components"),
+    path("componentes/", views.components_demo, name="components"),
+
+    # Mantenedor de usuarios (HU-48)
+    path("usuarios/", include("users.urls")),
 ]

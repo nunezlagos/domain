@@ -1,39 +1,39 @@
 {% extends "base.html" %}
 
-{% block title %}Components - Domain Admin{% endblock %}
+{% block title %}Componentes - Domain Admin{% endblock %}
 
 {% block navbar %}
-  {% include "components/_navbar.html" with title="Components" %}
+  {% include "components/_navbar.html" with title="Componentes" %}
 {% endblock %}
 
 {% block content %}
 <div class="content-header">
   <div>
-    <h1>Design System</h1>
-    <p class="subtitle">Catálogo de componentes disponibles en el admin</p>
+    <h1>Sistema de diseño</h1>
+    <p class="subtitle">Catálogo de componentes disponibles en el panel</p>
   </div>
 </div>
 
-<!-- Buttons -->
+<!-- Botones -->
 <section class="card mb-4">
-  <h3>Buttons</h3>
+  <h3>Botones</h3>
   <p class="text-secondary mt-2 mb-3">Variantes y tamaños.</p>
 
   <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap;">
-    <button class="btn btn-primary">Primary</button>
-    <button class="btn btn-secondary">Secondary</button>
-    <button class="btn btn-success">Success</button>
-    <button class="btn btn-warning">Warning</button>
-    <button class="btn btn-danger">Danger</button>
+    <button class="btn btn-primary">Primario</button>
+    <button class="btn btn-secondary">Secundario</button>
+    <button class="btn btn-success">Éxito</button>
+    <button class="btn btn-warning">Advertencia</button>
+    <button class="btn btn-danger">Peligro</button>
     <button class="btn btn-info">Info</button>
-    <button class="btn btn-ghost">Ghost</button>
+    <button class="btn btn-ghost">Fantasma</button>
   </div>
 
   <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap; align-items: center;">
-    <button class="btn btn-primary btn-sm">Small</button>
-    <button class="btn btn-primary">Default</button>
-    <button class="btn btn-primary btn-lg">Large</button>
-    <button class="btn btn-primary" disabled>Disabled</button>
+    <button class="btn btn-primary btn-sm">Pequeño</button>
+    <button class="btn btn-primary">Normal</button>
+    <button class="btn btn-primary btn-lg">Grande</button>
+    <button class="btn btn-primary" disabled>Deshabilitado</button>
   </div>
 
   <div class="d-flex gap-2">
@@ -42,9 +42,9 @@
   </div>
 </section>
 
-<!-- Alerts -->
+<!-- Alertas -->
 <section class="card mb-4">
-  <h3>Alerts</h3>
+  <h3>Alertas</h3>
   <p class="text-secondary mt-2 mb-3">Mensajes contextuales con tipos semánticos.</p>
 
   <div class="alert alert-success" data-auto-dismiss>
@@ -60,7 +60,7 @@
     <span class="alert-icon">⚠</span>
     <div class="alert-content">
       <div class="alert-title">Atención</div>
-      <div class="alert-message">El budget del mes está al 80%. Considerá revisar el uso.</div>
+      <div class="alert-message">El presupuesto del mes está al 80%. Considerá revisar el uso.</div>
     </div>
     <button class="alert-close" aria-label="Cerrar">&times;</button>
   </div>
@@ -84,38 +84,38 @@
   </div>
 </section>
 
-<!-- Badges -->
+<!-- Insignias -->
 <section class="card mb-4">
-  <h3>Badges</h3>
-  <p class="text-secondary mt-2 mb-3">Etiquetas compactas para status.</p>
+  <h3>Insignias</h3>
+  <p class="text-secondary mt-2 mb-3">Etiquetas compactas para estado.</p>
   <div class="d-flex gap-2" style="flex-wrap: wrap;">
-    <span class="badge">default</span>
-    <span class="badge badge-primary">primary</span>
-    <span class="badge badge-success">success</span>
-    <span class="badge badge-warning">warning</span>
-    <span class="badge badge-danger">danger</span>
+    <span class="badge">predeterminado</span>
+    <span class="badge badge-primary">primario</span>
+    <span class="badge badge-success">éxito</span>
+    <span class="badge badge-warning">advertencia</span>
+    <span class="badge badge-danger">peligro</span>
   </div>
 </section>
 
-<!-- Forms -->
+<!-- Formularios -->
 <section class="card mb-4">
-  <h3>Forms</h3>
+  <h3>Formularios</h3>
   <p class="text-secondary mt-2 mb-3">Inputs, selects, textareas, checks.</p>
 
   <div style="max-width: 480px;">
     <div class="form-group">
       <label class="form-label" for="demo-input">Email</label>
-      <input type="email" id="demo-input" class="form-control" placeholder="user@example.com" value="admin@admin.com">
+      <input type="email" id="demo-input" class="form-control" placeholder="usuario@ejemplo.com" value="admin@admin.com">
       <div class="form-help">Nunca compartas tu email principal.</div>
     </div>
 
     <div class="form-group">
       <label class="form-label" for="demo-select">Rol</label>
       <select id="demo-select" class="form-control form-select">
-        <option>Owner</option>
-        <option>Admin</option>
-        <option>Developer</option>
-        <option selected>Viewer</option>
+        <option>Propietario</option>
+        <option>Administrador</option>
+        <option>Desarrollador</option>
+        <option selected>Visualizador</option>
       </select>
     </div>
 
@@ -144,10 +144,10 @@
   </div>
 </section>
 
-<!-- Table -->
+<!-- Tabla -->
 <section class="card mb-4">
-  <h3>Tables</h3>
-  <p class="text-secondary mt-2 mb-3">Tabla con datos de muestra (members management preview).</p>
+  <h3>Tablas</h3>
+  <p class="text-secondary mt-2 mb-3">Ejemplo de tabla con datos de muestra.</p>
 
   <div class="table-wrapper">
     <table class="table">
@@ -157,41 +157,33 @@
           <th>Rol</th>
           <th>Estado</th>
           <th>Uso (mes)</th>
-          <th>Último login</th>
+          <th>Último acceso</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><code>owner@acme.com</code></td>
-          <td><span class="badge badge-primary">Owner</span></td>
-          <td><span class="badge badge-success">active</span></td>
-          <td>4,231 prompts</td>
+          <td><code>propietario@acme.com</code></td>
+          <td><span class="badge badge-primary">Propietario</span></td>
+          <td><span class="badge badge-success">activo</span></td>
+          <td>4.231 prompts</td>
           <td>hace 2h</td>
           <td><button class="btn btn-ghost btn-sm">Editar</button></td>
         </tr>
         <tr>
           <td><code>dev1@acme.com</code></td>
-          <td><span class="badge">Developer</span></td>
-          <td><span class="badge badge-success">active</span></td>
-          <td>1,890 prompts</td>
+          <td><span class="badge">Desarrollador</span></td>
+          <td><span class="badge badge-success">activo</span></td>
+          <td>1.890 prompts</td>
           <td>hace 1d</td>
           <td><button class="btn btn-ghost btn-sm">Editar</button></td>
         </tr>
         <tr>
-          <td><code>viewer@external.com</code></td>
-          <td><span class="badge">Viewer</span></td>
-          <td><span class="badge badge-warning">pending</span></td>
+          <td><code>viewer@externo.com</code></td>
+          <td><span class="badge">Visualizador</span></td>
+          <td><span class="badge badge-warning">pendiente</span></td>
           <td>0 prompts</td>
           <td>nunca</td>
-          <td><button class="btn btn-ghost btn-sm">Editar</button></td>
-        </tr>
-        <tr>
-          <td><code>old@acme.com</code></td>
-          <td><span class="badge">Developer</span></td>
-          <td><span class="badge badge-danger">revoked</span></td>
-          <td>—</td>
-          <td>hace 3m</td>
           <td><button class="btn btn-ghost btn-sm">Editar</button></td>
         </tr>
       </tbody>
@@ -199,21 +191,21 @@
   </div>
 </section>
 
-<!-- Cards -->
+<!-- Tarjetas de estadísticas -->
 <section class="mb-4">
-  <h3 class="mb-3">Cards</h3>
+  <h3 class="mb-3">Tarjetas de estadísticas</h3>
   <div class="stats-grid">
     <div class="stat-card">
       <div class="number">42</div>
-      <div class="label">Active users</div>
+      <div class="label">Usuarios activos</div>
     </div>
     <div class="stat-card">
-      <div class="number">$1,284</div>
-      <div class="label">Cost (month)</div>
+      <div class="number">$1.284</div>
+      <div class="label">Costo (mes)</div>
     </div>
     <div class="stat-card">
-      <div class="number">99.9%</div>
-      <div class="label">Uptime</div>
+      <div class="number">99,9%</div>
+      <div class="label">Disponibilidad</div>
     </div>
   </div>
 </section>
@@ -230,18 +222,18 @@
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label">Email</label>
-        <input type="email" class="form-control" placeholder="user@acme.com">
+        <input type="email" class="form-control" placeholder="usuario@acme.com">
       </div>
       <div class="form-group">
         <label class="form-label">Rol</label>
         <select class="form-control form-select">
-          <option>Viewer</option>
-          <option>Developer</option>
-          <option>Admin</option>
-          <option>Owner</option>
+          <option>Visualizador</option>
+          <option>Desarrollador</option>
+          <option>Administrador</option>
+          <option>Propietario</option>
         </select>
       </div>
-      <p class="form-help">El usuario recibirá un email de invitación con un link OTP.</p>
+      <p class="form-help">El usuario recibirá un email de invitación con un enlace OTP.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
@@ -250,7 +242,7 @@
   </div>
 </div>
 
-<!-- Modal: confirm -->
+<!-- Modal: confirmar -->
 <div class="modal-backdrop" id="modal-confirm">
   <div class="modal" role="dialog" style="max-width: 400px;">
     <div class="modal-header">

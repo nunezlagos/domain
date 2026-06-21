@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",      # HU-47.2: para flash messages (alerts)
     "django.contrib.staticfiles",
+    "users",                        # HU-48: mantenedor de usuarios
 ]
 
 MIDDLEWARE = [

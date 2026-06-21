@@ -1,47 +1,78 @@
 /* HU-47.2: master file de paleta y tokens de diseño.
-   Cambiar valores acá propaga a TODO el dashboard. */
+   Cambiar valores acá propaga a TODO el dashboard.
+
+   TEMA: claro (Skote) con SIDEBAR oscuro.
+   - Tokens generales (--color-*) = paleta CLARA: superficies blancas, texto
+     oscuro. Todo el CSS que los referencia se reskinea solo.
+   - Tokens --sidebar-* = paleta OSCURA, usados SOLO por el sidebar (layout.css).
+   El navbar/topbar usa los tokens generales => queda CLARO. */
 
 :root {
-  /* Background (dark slate) */
-  --color-bg-app:        #0f172a;
-  --color-bg-surface:    #1e293b;
-  --color-bg-elevated:   #334155;
-  --color-bg-hover:      #334155;
-  --color-bg-input:      #0f172a;
+  /* Background (light) */
+  --color-bg-app:        #f8f8fb;   /* fondo body/app */
+  --color-bg-surface:    #ffffff;   /* cards, modales, inputs, navbar, footer */
+  --color-bg-elevated:   #f8f9fa;   /* superficie elevada/sutil/tertiary */
+  --color-bg-hover:      #f8f9fa;   /* hover de filas / items */
+  --color-bg-input:      #ffffff;   /* fondo de inputs */
 
   /* Text */
-  --color-text-primary:    #e2e8f0;
-  --color-text-secondary:  #94a3b8;
-  --color-text-muted:      #64748b;
-  --color-text-inverse:    #0f172a;
-  --color-text-link:       #60a5fa;
+  --color-text-primary:    #495057;  /* texto primario */
+  --color-text-secondary:  #74788d;  /* secundario / muted-fuerte */
+  --color-text-muted:      #74788d;  /* muted */
+  --color-text-inverse:    #ffffff;  /* texto sobre fondos de acento */
+  --color-text-link:       #556ee6;  /* enlaces / acento de texto */
+  --color-text-heading:    #343a40;  /* énfasis / headings */
 
   /* Brand / Accent */
-  --color-accent:        #2563eb;
-  --color-accent-hover:  #1d4ed8;
-  --color-accent-active: #1e40af;
-  --color-accent-soft:   rgba(37, 99, 235, 0.15);
+  --color-accent:        #556ee6;
+  --color-accent-hover:  #485ec4;
+  --color-accent-active: #3b4fae;
+  --color-accent-soft:   rgba(85, 110, 230, 0.18);
 
   /* Semantic */
-  --color-success:       #10b981;
-  --color-success-bg:    #064e3b;
-  --color-success-soft:  rgba(16, 185, 129, 0.15);
-  --color-warning:       #f59e0b;
-  --color-warning-bg:    #78350f;
-  --color-warning-soft:  rgba(245, 158, 11, 0.15);
-  --color-danger:        #ef4444;
-  --color-danger-bg:     #7f1d1d;
-  --color-danger-soft:   rgba(239, 68, 68, 0.15);
-  --color-info:          #3b82f6;
-  --color-info-bg:       #1e3a8a;
-  --color-info-soft:     rgba(59, 130, 246, 0.15);
+  --color-success:       #34c38f;
+  --color-success-bg:    rgba(52, 195, 143, 0.18);
+  --color-success-soft:  rgba(52, 195, 143, 0.18);
+  --color-warning:       #f1b44c;
+  --color-warning-bg:    rgba(241, 180, 76, 0.18);
+  --color-warning-soft:  rgba(241, 180, 76, 0.18);
+  --color-danger:        #f46a6a;
+  --color-danger-bg:     rgba(244, 106, 106, 0.18);
+  --color-danger-soft:   rgba(244, 106, 106, 0.18);
+  --color-info:          #50a5f1;
+  --color-info-bg:       rgba(80, 165, 241, 0.18);
+  --color-info-soft:     rgba(80, 165, 241, 0.18);
+  --color-secondary:     #74788d;
 
-  /* Borders & shadow */
-  --color-border:        #334155;
-  --color-border-light:  #475569;
-  --color-shadow-sm:     rgba(0, 0, 0, 0.2);
-  --color-shadow-md:     rgba(0, 0, 0, 0.3);
-  --color-shadow-lg:     rgba(0, 0, 0, 0.5);
+  /* Borders & shadow (light) */
+  --color-border:        #eff2f7;   /* borde claro estándar */
+  --color-border-light:  #ced4da;   /* borde fuerte / translucent */
+  --color-bg-alt:        #eff2f7;   /* fondo alterno */
+  --color-shadow-sm:     rgba(18, 38, 63, 0.03);
+  --color-shadow-md:     rgba(18, 38, 63, 0.06);
+  --color-shadow-lg:     rgba(18, 38, 63, 0.1);
+
+  /* ============================================================
+     SIDEBAR (oscuro) — tokens propios, usados solo por layout.css.
+     Texto claro sobre fondo oscuro. El item activo lleva acento
+     primary en la barra lateral.
+     ============================================================ */
+  --sidebar-bg:           #2a3042;
+  --sidebar-item:         #a6b0cf;  /* item normal */
+  --sidebar-sub:          #79829c;  /* sub-item / footer */
+  --sidebar-icon:         #6a7187;  /* icono */
+  --sidebar-item-hover:   #ffffff;  /* item hover */
+  --sidebar-item-active:  #ffffff;  /* item activo */
+  --sidebar-section:      #79829c;  /* label de sección */
+  --sidebar-logo:         #ffffff;  /* logo / título */
+  --sidebar-accent:       #556ee6;  /* barra/acento del activo */
+  --sidebar-hover-bg:     rgba(255, 255, 255, 0.05);
+  --sidebar-active-bg:    rgba(255, 255, 255, 0.07);
+  --sidebar-border:       rgba(255, 255, 255, 0.08);
+
+  /* Footer (claro) */
+  --color-footer-bg:     #f2f2f5;
+  --color-footer-text:   #74788d;
 
   /* Spacing */
   --space-xs:  0.25rem;
@@ -59,7 +90,7 @@
   --radius-full: 9999px;
 
   /* Typography */
-  --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-base: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   --fs-xs:   0.75rem;
   --fs-sm:   0.875rem;

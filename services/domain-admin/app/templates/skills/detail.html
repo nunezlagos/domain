@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ skill_obj.display_name }} - Skills{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de skill" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'skills:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a skills</a>
+    <h1 class="mt-1">{{ skill_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ skill_obj.slug }}</code>
+      · Tipo: <span class="badge">{{ skill_obj.get_skill_type_display }}</span>
+      {% if skill_obj.proposed %}· <span class="badge badge-warning">Propuesta</span>{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'skills:edit' skill_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ skill_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info de la skill -->
+<div class="card mb-4">
+  <h3>Información</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th style="width: 200px;">Nombre</th><td>{{ skill_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ skill_obj.slug }}</code></td></tr>
+      <tr><th>Tipo</th><td><span class="badge">{{ skill_obj.get_skill_type_display }}</span></td></tr>
+      <tr><th>Descripción</th><td>{{ skill_obj.description|default:"—" }}</td></tr>
+      <tr><th>Timeout</th><td>{{ skill_obj.timeout_seconds }} s</td></tr>
+      <tr><th>Idempotente</th><td>{{ skill_obj.idempotent|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Efectos secundarios</th><td>{{ skill_obj.has_side_effects|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Tags</th>
+        <td>{% for tag in skill_obj.tags %}<span class="badge badge-primary">{{ tag }}</span>{% empty %}—{% endfor %}</td>
+      </tr>
+      <tr><th>Versión fijada</th><td>{{ skill_obj.pinned_version|default:"—" }}</td></tr>
+      <tr><th>Proyecto</th><td>{% if skill_obj.project_id %}<code>{{ skill_obj.project_id }}</code>{% else %}<span class="text-muted">Global</span>{% endif %}</td></tr>
+      <tr><th>Creado</th><td>{{ skill_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ skill_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Versiones (read-only) -->
+<div class="card mb-4">
+  <h3>Versiones</h3>
+  {% if skill_versions %}
+    <table class="table mt-2">
+      <thead>
+        <tr>
+          <th>Versión</th>
+          <th>Changelog</th>
+          <th>Autor</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in skill_versions %}
+          <tr>
+            <td><span class="badge">v{{ v.version }}</span></td>
+            <td>{{ v.changelog|default:"—" }}</td>
+            <td>{% if v.created_by %}<code>{{ v.created_by }}</code>{% else %}—{% endif %}</td>
+            <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+      {{ skill_versions|length }} versión(es). Snapshots inmutables (solo lectura).
+    </p>
+  {% else %}
+    <p class="text-muted">Esta skill no tiene versiones registradas.</p>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal-backdrop" id="modal-delete-{{ skill_obj.pk }}">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar skill?</h3>
+      <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar la skill <strong>{{ skill_obj.display_name }}</strong>.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: la skill queda marcada como eliminada pero el registro se conserva para auditoría.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'skills:delete' skill_obj.pk %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

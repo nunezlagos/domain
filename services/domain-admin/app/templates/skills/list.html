@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Skills - Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Skills" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <h1>Skills</h1>
+    <p class="subtitle">
+      Definiciones de skills de la plataforma
+      <span class="text-muted" style="font-size: var(--fs-xs); margin-left: var(--space-sm);">
+        (se actualiza al detectar cambios en BD)
+      </span>
+    </p>
+  </div>
+  <button class="btn btn-primary"
+          data-action="create">
+    + Nueva skill
+  </button>
+</div>
+
+<!-- Search bar: solo input (sin botón), búsqueda as-you-type (debounced) -->
+<form method="get" class="card mb-4" style="padding: var(--space-md);" role="search">
+  <div>
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Nombre, slug o descripción..."
+           autocomplete="off"
+           data-search-input>
+  </div>
+</form>
+
+<!-- Tabla (server-side renderizada; se refresca solo al detectar cambios en BD).
+     data-base-url declara el prefijo de montaje del recurso (convención
+     entity-agnostic): el handler global de base.html deriva las URLs de
+     acción (nuevo/editar/eliminar/detalle) desde acá, sin conocer ningún
+     recurso concreto. -->
+<div id="entity-table-area"
+     data-base-url="/skills/"
+     data-signal-url="{% url 'skills:signal' %}"
+     data-signal="{{ signal_count }}|{{ signal_version }}">
+  {% include "skills/_table_partial.html" %}
+</div>
+
+<script>
+// =============================================================
+// server-side + refresh ON-CHANGE + search as-you-type
+//
+// NO refresca la tabla a ciegas cada 5s. Hace un chequeo barato de
+// "señal" (count + max(updated_at)) contra el endpoint skills:signal.
+// Solo cuando la señal cambia (alta/edición/baja en BD, incluso de otro
+// admin u otro servicio) se re-renderiza la tabla. El filtro y la
+// paginación siguen 100% server-side.
+// =============================================================
+(function() {
+  const tableArea = document.getElementById('entity-table-area');
+  if (!tableArea) return;
+
+  const searchInput = document.querySelector('[data-search-input]');
+  const signalURL = tableArea.dataset.signalUrl;
+  const CHECK_MS = 5000;        // cada cuánto se chequea la señal (query barata)
+  let lastSignal = tableArea.dataset.signal || '';  // señal embebida en el render
+  let checkTimer = null;
+  let searchTimer = null;
+  let isFetching = false;
+  let paused = false;           // se pausa mientras hay un modal abierto
+
+  // Construir URL para fetch de la tabla (incluye q + page + fragment)
+  function buildFetchURL() {
+    const params = new URLSearchParams();
+    params.set('fragment', 'table');
+    if (searchInput && searchInput.value.trim()) {
+      params.set('q', searchInput.value.trim());
+    }
+    const page = new URLSearchParams(window.location.search).get('page');
+    if (page) params.set('page', page);
+    return window.location.pathname + '?' + params.toString();
+  }
+
+  // Fetch y reemplazar el contenido de la tabla (server-side render)
+  async function refreshTable() {
+    if (isFetching) return; // evitar requests concurrentes
+    isFetching = true;
+    try {
+      const r = await fetch(buildFetchURL(), {credentials: 'same-origin'});
+      if (r.ok) {
+        tableArea.innerHTML = await r.text();
+        bindPagination();
+      }
+    } catch (err) {
+      console.warn('Refresh tabla falló:', err);
+    } finally {
+      isFetching = false;
+    }
+  }
+
+  // Chequeo de señal: refresca SOLO si la BD cambió desde el último check.
+  async function checkSignal() {
+    if (paused || isFetching || !signalURL) return;
+    try {
+      const r = await fetch(signalURL, {credentials: 'same-origin'});
+      if (!r.ok) return;
+      const s = await r.json();
+      const current = s.count + '|' + s.version;
+      if (current !== lastSignal) {
+        lastSignal = current;
+        await refreshTable();   // hubo un cambio en BD → re-render
+      }
+    } catch (err) {
+      console.warn('Check de señal falló:', err);
+    }
+  }
+
+  function startWatch() {
+    if (checkTimer) return;
+    checkTimer = setInterval(checkSignal, CHECK_MS);
+  }
+  function stopWatch() {
+    if (checkTimer) { clearInterval(checkTimer); checkTimer = null; }
+  }
+
+  // Pausar el watch mientras hay un modal abierto (no refrescar mientras editás)
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-modal-open]') ||
+        e.target.closest('[data-action]')) {
+      paused = true;
+    }
+    if (e.target.closest('[data-modal-close]') ||
+        (e.target.classList && e.target.classList.contains('modal-backdrop'))) {
+      // Reanudar después de cerrar; re-sincroniza la señal en el próximo tick.
+      setTimeout(function() { paused = false; }, 500);
+    }
+  });
+
+  // Search as-you-type (debounce 300ms, sin botón) → server-side
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function() {
+        const url = new URL(window.location);
+        const q = searchInput.value.trim();
+        if (q) url.searchParams.set('q', q);
+        else url.searchParams.delete('q');
+        url.searchParams.delete('page');
+        window.history.replaceState({}, '', url);
+        refreshTable();   // el filtrado es server-side; refresca on-demand
+      }, 300);
+    });
+  }
+
+  // Pagination via AJAX (interceptar clicks en data-page-link) → server-side
+  function bindPagination() {
+    tableArea.querySelectorAll('[data-page-link]').forEach(function(a) {
+      a.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        const page = a.getAttribute('data-page-link');
+        const url = new URL(window.location);
+        if (page === '1') url.searchParams.delete('page');
+        else url.searchParams.set('page', page);
+        window.history.replaceState({}, '', url);
+        refreshTable();
+      });
+    });
+  }
+  bindPagination();
+
+  // Arrancar el watch de señal al cargar.
+  startWatch();
+})();
+</script>
+{% endblock %}

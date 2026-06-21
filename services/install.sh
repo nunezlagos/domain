@@ -137,15 +137,19 @@ fi
 
 # Limpieza de leftovers: archivos untracked de layouts viejos. Un install
 # pre-restructura dejaba copias FLAT de services/* en la raíz de $INSTALL_DIR
-# (Makefile, domain-admin/, scripts/backup.sh, systemd/, ...). Esas copias
-# hacían que `make -C /opt/services` y los units systemd apuntaran a CÓDIGO
-# VIEJO. git clean (sin -x) respeta .gitignore, así que .env, certs/ y
+# (Makefile, domain-admin/, domain-mcp/, scripts/backup.sh, systemd/, ...).
+# Esas copias hacían que `make -C /opt/services` y los units systemd apuntaran
+# a CÓDIGO VIEJO.
+#
+# Usamos -ffd (doble -f): -fd solo no borra directorios con un .git anidado
+# (ej: domain-mcp/ que tenía un repo embebido) y los dejaba como residual.
+# -ff sí los remueve. SIN -x → respeta .gitignore, así que .env, certs/ y
 # backups/ (ignorados) se PRESERVAN; solo borra los duplicados obsoletos.
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  STALE=$(cd "$INSTALL_DIR" && git clean -nd 2>/dev/null | wc -l)
+  STALE=$(cd "$INSTALL_DIR" && git clean -nffd 2>/dev/null | wc -l)
   if [[ "$STALE" -gt 0 ]]; then
-    log "Limpiando $STALE leftovers untracked (layouts viejos)..."
-    (cd "$INSTALL_DIR" && git clean -fd >/dev/null 2>&1) || true
+    log "Limpiando $STALE leftovers untracked (layouts viejos, incl. repos anidados)..."
+    (cd "$INSTALL_DIR" && git clean -ffd >/dev/null 2>&1) || true
   fi
   ok "Working tree limpio (sin duplicados flat)"
 fi

@@ -1,0 +1,84 @@
+<div class="modal-header">
+  <h3 class="modal-title">{{ flow_obj.display_name }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary mb-3">
+    <code>{{ flow_obj.slug }}</code>
+    · Estado:
+    {% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>
+    {% else %}<span class="badge badge-warning">{{ flow_obj.status_label }}</span>
+    {% endif %}
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 180px;">Nombre</th><td>{{ flow_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
+      <tr><th>Descripción</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
+      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Versión de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Organización</th><td><code>{{ flow_obj.organization_id }}</code></td></tr>
+      <tr><th>Creado</th><td>{{ flow_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ flow_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Versiones</h4>
+  {% if flow_versions %}
+    <table class="table" style="font-size: var(--fs-sm);">
+      <thead>
+        <tr>
+          <th style="width: 1%;">Versión</th>
+          <th>Hash</th>
+          <th>Nota</th>
+          <th>Creada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in flow_versions %}
+          <tr>
+            <td><span class="badge badge-primary">v{{ v.version }}</span></td>
+            <td><code>{{ v.short_hash }}</code></td>
+            <td>{{ v.note|default:"—" }}</td>
+            <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+      {{ flow_versions|length }} versión(es). Las versiones son snapshots
+      inmutables (read-only); se generan al publicar cambios del flow.
+    </p>
+  {% else %}
+    <p class="text-muted">Este flow todavía no tiene versiones publicadas.</p>
+  {% endif %}
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ flow_obj.pk }}">
+    Editar
+  </button>
+  {% if flow_obj.is_active %}
+    <button type="button" class="btn btn-warning"
+            data-action="toggle" data-id="{{ flow_obj.pk }}">
+      Desactivar
+    </button>
+  {% else %}
+    <button type="button" class="btn btn-success"
+            data-action="toggle" data-id="{{ flow_obj.pk }}">
+      Activar
+    </button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ flow_obj.pk }}"
+          data-name="{{ flow_obj.display_name }}">
+    Eliminar
+  </button>
+</div>

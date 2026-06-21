@@ -41,21 +41,12 @@
     </span>
   </div>
 
-  {# ======================================================================
-     DIAGRAMA DE FLUJO (SVG)
-     ----------------------------------------------------------------------
-     - viewBox fijo -> escala proporcional (width:100%, height:auto en CSS).
-     - Layout vertical top->bottom (mejor para mobile: se ve completo).
-     - <marker> para cabezas de flecha; <filter> sutil para sombra.
-     - Procesos = rect redondeado; decisiones = rombo (polygon);
-       terminadores inicio/fin = rect pill (rx alto).
-     - CADA FASE CLICKEABLE usa <foreignObject> con un <button> HTML real
-       que conserva data-action/data-id/data-base-url. Como es un nodo HTML
-       del DOM, modals.js (closest('[data-action]')) lo intercepta igual que
-       en una tabla. Inicio/Fin no son clickeables (solo shapes SVG).
-     - Cada fase se ubica en su shape por clave estable (pmap.<slug-corto>,
-       ej. pmap.verify) -> coordenadas fijas del flowchart, no por orden.
-     ====================================================================== #}
+  {% comment %}
+    Diagrama de flujo (SVG): viewBox fijo -> escala proporcional. Layout vertical.
+    Cada fase clickeable = foreignObject con button HTML (conserva data-action/
+    data-id/data-base-url; modals.js lo intercepta). Inicio/Fin no son
+    clickeables. Cada fase se ubica por clave estable pmap.<slug>.
+  {% endcomment %}
   <div class="sdd-diagram">
     <svg class="sdd-svg" viewBox="0 0 760 1700" role="img"
          aria-label="Diagrama de flujo del pipeline SDD"
@@ -84,8 +75,7 @@
       </defs>
 
       {# ============================ FLECHAS ============================ #}
-      {# Se dibujan PRIMERO para quedar por debajo de los nodos.
-         La columna principal está centrada en x=380. #}
+      {# Flechas primero (quedan debajo de los nodos); columna principal en x=380. #}
       <g class="sdd-edges" fill="none">
         {# Inicio -> Explore #}
         <path class="sdd-edge" marker-end="url(#sdd-arrow)"
@@ -153,9 +143,7 @@
       </g>
 
       {# ====================== PROCESOS Y DECISIONES ==================== #}
-      {# Cada nodo clickeable: <foreignObject> con un <button> HTML real.
-         El shape visual (rect/diamond) lo dibuja el <button> vía CSS
-         (background/clip-path), de modo que el click cae sobre el botón. #}
+      {# Cada nodo clickeable = foreignObject con button HTML; el shape (rect/rombo) lo da el CSS. #}
 
       {# --- explore (process) --- #}
       {% with p=pmap.explore %}

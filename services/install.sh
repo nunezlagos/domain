@@ -153,11 +153,19 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
   fi
   # Algunos leftovers flat tienen artefactos GITIGNOREADOS adentro (ej:
   # domain-mcp/.../.ai/, .mcp.json) que git clean no remueve sin -x — y -x
-  # borraría .env/certs/backups. Los borramos explícitamente por nombre:
-  # estos paths en la raíz SIEMPRE son duplicados del layout viejo (los reales
-  # viven bajo services/), nunca contenido legítimo del repo root.
-  for stale in domain-admin domain-mcp caddy minio postgres systemd Makefile install-vps.sh .env.example; do
-    [[ -e "$INSTALL_DIR/$stale" ]] && rm -rf "${INSTALL_DIR:?}/$stale"
+  # borraría .env/certs/backups. Los limpiamos de forma FUTURE-PROOF (sin
+  # hardcodear nombres): una entrada en la raíz es duplicado del layout viejo
+  # si su nombre también existe bajo services/ Y no está tracked en la raíz.
+  # Así, cualquier servicio nuevo que sumes bajo services/ queda cubierto
+  # automáticamente, sin tocar contenido tracked (README.md, scripts/...) ni
+  # los ignorados legítimos (.env, certs/, backups/).
+  for svc in "$INSTALL_DIR/services"/*; do
+    name=$(basename "$svc")
+    [[ "$name" == "certs" ]] && continue          # symlink, lo recrea STEP 5
+    [[ -e "$INSTALL_DIR/$name" ]] || continue       # no hay dup en la raíz
+    # Si algún archivo de ese path está tracked en la raíz → contenido legítimo.
+    git -C "$INSTALL_DIR" ls-files --error-unmatch "$name" >/dev/null 2>&1 && continue
+    rm -rf "${INSTALL_DIR:?}/$name"
   done
   ok "Working tree limpio (sin duplicados flat)"
 fi

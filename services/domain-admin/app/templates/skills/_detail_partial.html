@@ -1,9 +1,14 @@
-<div class="modal-header">
-  <h3 class="modal-title">{{ skill_obj.display_name }}</h3>
-  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
-</div>
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de skill para el modal dinámico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define título, cuerpo (info + versiones
+read-only) y acciones propias. skills NO tiene toggle: acciones = editar /
+eliminar.
+{% endcomment %}
 
-<div class="modal-body">
+{% block detail_title %}{{ skill_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
   <p class="text-secondary mb-3">
     <code>{{ skill_obj.slug }}</code>
     · Tipo: <span class="badge">{{ skill_obj.get_skill_type_display }}</span>
@@ -61,10 +66,9 @@
   {% else %}
     <p class="text-muted">Esta skill no tiene versiones registradas.</p>
   {% endif %}
-</div>
+{% endblock %}
 
-<div class="modal-footer">
-  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+{% block detail_actions %}
   <button type="button" class="btn btn-primary"
           data-action="edit" data-id="{{ skill_obj.pk }}">
     Editar
@@ -74,4 +78,4 @@
           data-name="{{ skill_obj.display_name }}">
     Eliminar
   </button>
-</div>
+{% endblock %}

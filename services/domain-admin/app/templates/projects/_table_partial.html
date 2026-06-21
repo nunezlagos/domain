@@ -1,87 +1,90 @@
-<div class="table-wrapper">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Nombre</th>
-        <th>Slug</th>
-        <th>Repositorio</th>
-        <th>Rama</th>
-        <th>Estado</th>
-        <th>Creado</th>
-        <th style="width: 1%; white-space: nowrap;">Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in projects %}
-        <tr id="project-row-{{ p.pk }}">
-          <td>{{ p.name }}</td>
-          <td><code>{{ p.slug }}</code></td>
-          <td>
-            {% if p.repository_url %}
-              <code>{{ p.repository_url }}</code>
-            {% else %}<span class="text-muted">—</span>{% endif %}
-          </td>
-          <td>{{ p.current_branch|default:"—" }}</td>
-          <td>
-            {% if p.is_active %}<span class="badge badge-success">{{ p.get_status_display }}</span>
-            {% else %}<span class="badge badge-danger">{{ p.get_status_display }}</span>
-            {% endif %}
-          </td>
-          <td>{{ p.created_at|date:"d/m/Y" }}</td>
-          <td>
-            <div class="d-flex gap-1" style="justify-content: flex-end;">
-              <button class="btn btn-icon btn-ghost" title="Ver detalle"
-                      data-action="view" data-id="{{ p.pk }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </button>
-              <button class="btn btn-icon btn-ghost" title="Editar"
-                      data-action="edit" data-id="{{ p.pk }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 20h9"/>
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                </svg>
-              </button>
-              {% if p.is_active %}
-                <button class="btn btn-icon btn-ghost" title="Archivar"
-                        data-action="toggle" data-id="{{ p.pk }}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="21 8 21 21 3 21 3 8"/>
-                    <rect x="1" y="3" width="22" height="5"/>
-                    <line x1="10" y1="12" x2="14" y2="12"/>
-                  </svg>
-                </button>
-              {% else %}
-                <button class="btn btn-icon btn-ghost" title="Restaurar"
-                        data-action="toggle" data-id="{{ p.pk }}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="1 4 1 10 7 10"/>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                  </svg>
-                </button>
-              {% endif %}
-              <button class="btn btn-icon btn-ghost" title="Eliminar"
-                      style="color: var(--color-danger);"
-                      data-action="delete" data-id="{{ p.pk }}" data-name="{{ p.display_name }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
-            </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
-            No hay proyectos{% if search %} que coincidan con "{{ search }}"{% endif %}.
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+{% extends "maintainers/_table_base.html" %}
+{% comment %}
+Tabla de proyectos. Extiende maintainers/_table_base.html (wrapper + thead/tbody
++ paginación compartida). Define columnas y filas propias. Como la lista viene
+bajo `projects` (no `object_list`), se sobreescribe el bloque `rows` completo.
+{% endcomment %}
 
-{% include "projects/_pagination_partial.html" %}
+{% block columns %}
+  <th>Nombre</th>
+  <th>Slug</th>
+  <th>Repositorio</th>
+  <th>Rama</th>
+  <th>Estado</th>
+  <th>Creado</th>
+  <th style="width: 1%; white-space: nowrap;">Acciones</th>
+{% endblock %}
+
+{% block colspan %}7{% endblock %}
+{% block empty %}No hay proyectos{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
+
+{% block rows %}
+  {% for p in projects %}
+    <tr id="project-row-{{ p.pk }}">
+      <td>{{ p.name }}</td>
+      <td><code>{{ p.slug }}</code></td>
+      <td>
+        {% if p.repository_url %}
+          <code>{{ p.repository_url }}</code>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </td>
+      <td>{{ p.current_branch|default:"—" }}</td>
+      <td>
+        {% if p.is_active %}<span class="badge badge-success">{{ p.get_status_display }}</span>
+        {% else %}<span class="badge badge-danger">{{ p.get_status_display }}</span>
+        {% endif %}
+      </td>
+      <td>{{ p.created_at|date:"d/m/Y" }}</td>
+      <td>
+        <div class="d-flex gap-1" style="justify-content: flex-end;">
+          <button class="btn btn-icon btn-ghost" title="Ver detalle"
+                  data-action="view" data-id="{{ p.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button class="btn btn-icon btn-ghost" title="Editar"
+                  data-action="edit" data-id="{{ p.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+          {% if p.is_active %}
+            <button class="btn btn-icon btn-ghost" title="Archivar"
+                    data-action="toggle" data-id="{{ p.pk }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="21 8 21 21 3 21 3 8"/>
+                <rect x="1" y="3" width="22" height="5"/>
+                <line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+            </button>
+          {% else %}
+            <button class="btn btn-icon btn-ghost" title="Restaurar"
+                    data-action="toggle" data-id="{{ p.pk }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </button>
+          {% endif %}
+          <button class="btn btn-icon btn-ghost" title="Eliminar"
+                  style="color: var(--color-danger);"
+                  data-action="delete" data-id="{{ p.pk }}" data-name="{{ p.display_name }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr>
+      <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+        No hay proyectos{% if search %} que coincidan con "{{ search }}"{% endif %}.
+      </td>
+    </tr>
+  {% endfor %}
+{% endblock %}

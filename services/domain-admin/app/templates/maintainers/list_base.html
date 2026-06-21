@@ -1,3 +1,4 @@
+{% extends "base.html" %}
 {% comment %}
 ============================================================
 Página BASE de listado de mantenedor. Extiende base.html y
@@ -41,7 +42,6 @@ Variables esperadas en el contexto (de la view):
   page_title     (opc) título mostrado en el navbar
 ============================================================
 {% endcomment %}
-{% extends "base.html" %}
 {% load static %}
 
 {% block title %}{% block page_title %}Mantenedor{% endblock %} - Domain Admin{% endblock %}

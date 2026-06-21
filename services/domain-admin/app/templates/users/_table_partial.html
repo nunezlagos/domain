@@ -1,9 +1,9 @@
+{% extends "maintainers/_table_base.html" %}
 {% comment %}
 Tabla de usuarios. Extiende maintainers/_table_base.html (wrapper + thead/tbody
 + paginación compartida). Define columnas y filas propias. Como la lista viene
 bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
 {% endcomment %}
-{% extends "maintainers/_table_base.html" %}
 
 {% block columns %}
   <th>Email</th>

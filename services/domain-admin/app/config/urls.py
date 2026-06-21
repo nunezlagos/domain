@@ -14,15 +14,15 @@ urlpatterns = [
     path("usuarios/", include("maintainers.users.urls")),
 
     # Mantenedores de proyectos y API keys
-    path("proyectos/", include("projects.urls")),
-    path("api-keys/", include("apikeys.urls")),
+    path("proyectos/", include("maintainers.projects.urls")),
+    path("api-keys/", include("maintainers.apikeys.urls")),
 
     # Mantenedores de agentes, skills, flows, crons y prompts
-    path("agentes/", include("agents.urls")),
-    path("skills/", include("skills.urls")),
-    path("flows/", include("flows.urls")),
-    path("crons/", include("crons.urls")),
-    path("prompts/", include("prompts.urls")),
+    path("agentes/", include("maintainers.agents.urls")),
+    path("skills/", include("maintainers.skills.urls")),
+    path("flows/", include("maintainers.flows.urls")),
+    path("crons/", include("maintainers.crons.urls")),
+    path("prompts/", include("maintainers.prompts.urls")),
 ]
 
 # Handlers de error a nivel módulo. Django los resuelve por nombre de variable

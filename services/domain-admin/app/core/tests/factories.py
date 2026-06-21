@@ -14,8 +14,13 @@ def new_id() -> uuid.UUID:
     return uuid.uuid4()
 
 
-def make(model, **kwargs):
+def make(model, /, **kwargs):
     """Crea una fila del `model` poniendo un PK uuid si no se pasó `id`.
+
+    `model` es positional-only (con `/`) a propósito: hay tablas con una
+    columna llamada `model` (ej. agents.model = nombre del LLM), así que
+    `make(Agent, model="anthropic")` debe meter `model` en kwargs, no chocar
+    con el parámetro de la clase.
 
     Ej.: make(Project, name="X", slug="x")
     """

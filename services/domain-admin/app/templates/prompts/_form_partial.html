@@ -1,76 +1,59 @@
-<form method="post" action="{{ action }}" data-modal-form novalidate>
-  {% csrf_token %}
+{% extends "maintainers/_form_base.html" %}
+{% comment %}
+Form de prompt para el modal dinámico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el título,
+los campos y el label del submit.
+{% endcomment %}
 
-  {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      <span class="alert-icon">✕</span>
-      <div class="alert-content">
-        {% for error in form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+{% block form_title %}{% if mode == "create" %}Nuevo prompt{% else %}Editar prompt{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear prompt{% else %}Guardar cambios{% endif %}{% endblock %}
 
-  <div class="modal-header">
-    <h3 class="modal-title">{% if mode == "create" %}Nuevo prompt{% else %}Editar prompt{% endif %}</h3>
-    <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.project_id.id_for_label }}">Proyecto (UUID)</label>
+    {{ form.project_id }}
+    {% if form.project_id.help_text %}<div class="form-help">{{ form.project_id.help_text }}</div>{% endif %}
+    {% if form.project_id.errors %}<div class="form-help text-danger">{{ form.project_id.errors|join:", " }}</div>{% endif %}
   </div>
 
-  <div class="modal-body">
-    <div class="form-group">
-      <label class="form-label" for="{{ form.project_id.id_for_label }}">Proyecto (UUID)</label>
-      {{ form.project_id }}
-      {% if form.project_id.help_text %}<div class="form-help">{{ form.project_id.help_text }}</div>{% endif %}
-      {% if form.project_id.errors %}<div class="form-help text-danger">{{ form.project_id.errors|join:", " }}</div>{% endif %}
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 2;">
+      <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+      {{ form.slug }}
+      {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+      {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 2;">
-        <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-        {{ form.slug }}
-        {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-        {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.version.id_for_label }}">Versión *</label>
-        {{ form.version }}
-        {% if form.version.errors %}<div class="form-help text-danger">{{ form.version.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label" for="{{ form.body.id_for_label }}">Cuerpo del prompt *</label>
-      {{ form.body }}
-      {% if form.body.errors %}<div class="form-help text-danger">{{ form.body.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
-      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
-      {{ form.description }}
-      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
-      <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
-      {{ form.tags }}
-      {% if form.tags.help_text %}<div class="form-help">{{ form.tags.help_text }}</div>{% endif %}
-      {% if form.tags.errors %}<div class="form-help text-danger">{{ form.tags.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
-      <label class="form-check-label">
-        {{ form.is_active }} Activo
-      </label>
-      {% if form.is_active.errors %}<div class="form-help text-danger">{{ form.is_active.errors|join:", " }}</div>{% endif %}
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.version.id_for_label }}">Versión *</label>
+      {{ form.version }}
+      {% if form.version.errors %}<div class="form-help text-danger">{{ form.version.errors|join:", " }}</div>{% endif %}
     </div>
   </div>
 
-  <div class="modal-footer">
-    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
-    <button type="submit" class="btn btn-primary">
-      {% if mode == "create" %}Crear prompt{% else %}Guardar cambios{% endif %}
-    </button>
+  <div class="form-group">
+    <label class="form-label" for="{{ form.body.id_for_label }}">Cuerpo del prompt *</label>
+    {{ form.body }}
+    {% if form.body.errors %}<div class="form-help text-danger">{{ form.body.errors|join:", " }}</div>{% endif %}
   </div>
-</form>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    {{ form.description }}
+    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
+    {{ form.tags }}
+    {% if form.tags.help_text %}<div class="form-help">{{ form.tags.help_text }}</div>{% endif %}
+    {% if form.tags.errors %}<div class="form-help text-danger">{{ form.tags.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-check-label">
+      {{ form.is_active }} Activo
+    </label>
+    {% if form.is_active.errors %}<div class="form-help text-danger">{{ form.is_active.errors|join:", " }}</div>{% endif %}
+  </div>
+{% endblock %}

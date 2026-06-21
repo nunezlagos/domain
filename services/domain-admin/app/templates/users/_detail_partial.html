@@ -1,8 +1,8 @@
+{% extends "maintainers/_detail_base.html" %}
 {% comment %}
 Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.html
 (header + body + footer del modal). Define título, cuerpo y acciones propias.
 {% endcomment %}
-{% extends "maintainers/_detail_base.html" %}
 
 {% block detail_title %}{{ user_obj.display_name }}{% endblock %}
 

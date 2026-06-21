@@ -25,13 +25,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "core",                         # paquete transversal (base models/services/views)
     "maintainers.users",            # HU-48: mantenedor de usuarios (app_label "users")
-    "projects",                     # mantenedor de proyectos
-    "apikeys",                      # mantenedor de API keys
-    "agents",                       # mantenedor de agentes
-    "skills",                       # mantenedor de skills
-    "flows",                        # mantenedor de flows
-    "crons",                        # mantenedor de crons (schedules)
-    "prompts",                      # mantenedor de prompts
+    "maintainers.projects",         # mantenedor de proyectos
+    "maintainers.apikeys",          # mantenedor de API keys
+    "maintainers.agents",           # mantenedor de agentes
+    "maintainers.skills",           # mantenedor de skills
+    "maintainers.flows",            # mantenedor de flows
+    "maintainers.crons",            # mantenedor de crons (schedules)
+    "maintainers.prompts",          # mantenedor de prompts
 ]
 
 MIDDLEWARE = [

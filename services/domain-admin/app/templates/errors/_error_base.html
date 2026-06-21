@@ -1,3 +1,4 @@
+{% extends "base.html" %}
 {% comment %}
 ============================================================
 Layout BASE de páginas de error. Extiende base.html y centra
@@ -13,7 +14,6 @@ Nota: 500.html NO usa este base (no hay garantía de contexto
 en un error de servidor); trae su propio HTML mínimo.
 ============================================================
 {% endcomment %}
-{% extends "base.html" %}
 
 {% block title %}{% block error_title_meta %}Error{% endblock %} - Domain Admin{% endblock %}
 

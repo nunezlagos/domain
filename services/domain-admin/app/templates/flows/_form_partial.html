@@ -1,74 +1,57 @@
-<form method="post" action="{{ action }}" data-modal-form novalidate>
-  {% csrf_token %}
+{% extends "maintainers/_form_base.html" %}
+{% comment %}
+Form de flow para el modal dinámico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el título,
+los campos y el label del submit.
+{% endcomment %}
 
-  {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      <span class="alert-icon">✕</span>
-      <div class="alert-content">
-        {% for error in form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+{% block form_title %}{% if mode == "create" %}Nuevo flow{% else %}Editar flow{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear flow{% else %}Guardar cambios{% endif %}{% endblock %}
 
-  <div class="modal-header">
-    <h3 class="modal-title">{% if mode == "create" %}Nuevo flow{% else %}Editar flow{% endif %}</h3>
-    <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+    {{ form.name }}
+    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
   </div>
 
-  <div class="modal-body">
-    <div class="form-group">
-      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
-      {{ form.name }}
-      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
-    </div>
+  <div class="form-group">
+    <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+    {{ form.slug }}
+    {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+    {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+  </div>
 
-    <div class="form-group">
-      <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-      {{ form.slug }}
-      {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-      {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
-    </div>
+  <div class="form-group">
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    {{ form.description }}
+    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+  </div>
 
-    <div class="form-group">
-      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
-      {{ form.description }}
-      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
-    </div>
+  <div class="form-group">
+    <label class="form-label" for="{{ form.spec.id_for_label }}">Spec (JSON) *</label>
+    {{ form.spec }}
+    {% if form.spec.help_text %}<div class="form-help">{{ form.spec.help_text }}</div>{% endif %}
+    {% if form.spec.errors %}<div class="form-help text-danger">{{ form.spec.errors|join:", " }}</div>{% endif %}
+  </div>
 
-    <div class="form-group">
-      <label class="form-label" for="{{ form.spec.id_for_label }}">Spec (JSON) *</label>
-      {{ form.spec }}
-      {% if form.spec.help_text %}<div class="form-help">{{ form.spec.help_text }}</div>{% endif %}
-      {% if form.spec.errors %}<div class="form-help text-danger">{{ form.spec.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.seed_version.id_for_label }}">Versión de seed</label>
-        {{ form.seed_version }}
-        {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
-        {{ form.is_active }} Activo
-      </label>
-      <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
-        {{ form.deterministic_replay }} Replay determinista
-      </label>
-      <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
-        {{ form.seed_managed }} Seed gestionado
-      </label>
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.seed_version.id_for_label }}">Versión de seed</label>
+      {{ form.seed_version }}
+      {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
     </div>
   </div>
 
-  <div class="modal-footer">
-    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
-    <button type="submit" class="btn btn-primary">
-      {% if mode == "create" %}Crear flow{% else %}Guardar cambios{% endif %}
-    </button>
+  <div class="form-group">
+    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+      {{ form.is_active }} Activo
+    </label>
+    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+      {{ form.deterministic_replay }} Replay determinista
+    </label>
+    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+      {{ form.seed_managed }} Seed gestionado
+    </label>
   </div>
-</form>
+{% endblock %}

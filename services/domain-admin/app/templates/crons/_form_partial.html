@@ -1,93 +1,76 @@
-<form method="post" action="{{ action }}" data-modal-form novalidate>
-  {% csrf_token %}
+{% extends "maintainers/_form_base.html" %}
+{% comment %}
+Form de cron para el modal dinámico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el título,
+los campos y el label del submit.
+{% endcomment %}
 
-  {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      <span class="alert-icon">✕</span>
-      <div class="alert-content">
-        {% for error in form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+{% block form_title %}{% if mode == "create" %}Nuevo cron{% else %}Editar cron{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear cron{% else %}Guardar cambios{% endif %}{% endblock %}
 
-  <div class="modal-header">
-    <h3 class="modal-title">{% if mode == "create" %}Nuevo cron{% else %}Editar cron{% endif %}</h3>
-    <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+    {{ form.name }}
+    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
   </div>
 
-  <div class="modal-body">
-    <div class="form-group">
-      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
-      {{ form.name }}
-      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+      {{ form.slug }}
+      {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+      {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-        {{ form.slug }}
-        {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-        {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresión cron *</label>
-        {{ form.cron_expression }}
-        {% if form.cron_expression.help_text %}<div class="form-help">{{ form.cron_expression.help_text }}</div>{% endif %}
-        {% if form.cron_expression.errors %}<div class="form-help text-danger">{{ form.cron_expression.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.target_type.id_for_label }}">Tipo de target *</label>
-        {{ form.target_type }}
-        {% if form.target_type.errors %}<div class="form-help text-danger">{{ form.target_type.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.target_id.id_for_label }}">Target (UUID) *</label>
-        {{ form.target_id }}
-        {% if form.target_id.help_text %}<div class="form-help">{{ form.target_id.help_text }}</div>{% endif %}
-        {% if form.target_id.errors %}<div class="form-help text-danger">{{ form.target_id.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.timezone.id_for_label }}">Timezone</label>
-        {{ form.timezone }}
-        {% if form.timezone.help_text %}<div class="form-help">{{ form.timezone.help_text }}</div>{% endif %}
-        {% if form.timezone.errors %}<div class="form-help text-danger">{{ form.timezone.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1; display: flex; align-items: center; gap: var(--space-sm);">
-        {{ form.enabled }}
-        <label class="form-label" for="{{ form.enabled.id_for_label }}" style="margin: 0;">Habilitado</label>
-        {% if form.enabled.errors %}<div class="form-help text-danger">{{ form.enabled.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
-      {{ form.description }}
-      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="form-group">
-      <label class="form-label" for="{{ form.inputs.id_for_label }}">Inputs (JSON)</label>
-      {{ form.inputs }}
-      {% if form.inputs.help_text %}<div class="form-help">{{ form.inputs.help_text }}</div>{% endif %}
-      {% if form.inputs.errors %}<div class="form-help text-danger">{{ form.inputs.errors|join:", " }}</div>{% endif %}
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresión cron *</label>
+      {{ form.cron_expression }}
+      {% if form.cron_expression.help_text %}<div class="form-help">{{ form.cron_expression.help_text }}</div>{% endif %}
+      {% if form.cron_expression.errors %}<div class="form-help text-danger">{{ form.cron_expression.errors|join:", " }}</div>{% endif %}
     </div>
   </div>
 
-  <div class="modal-footer">
-    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
-    <button type="submit" class="btn btn-primary">
-      {% if mode == "create" %}Crear cron{% else %}Guardar cambios{% endif %}
-    </button>
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.target_type.id_for_label }}">Tipo de target *</label>
+      {{ form.target_type }}
+      {% if form.target_type.errors %}<div class="form-help text-danger">{{ form.target_type.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.target_id.id_for_label }}">Target (UUID) *</label>
+      {{ form.target_id }}
+      {% if form.target_id.help_text %}<div class="form-help">{{ form.target_id.help_text }}</div>{% endif %}
+      {% if form.target_id.errors %}<div class="form-help text-danger">{{ form.target_id.errors|join:", " }}</div>{% endif %}
+    </div>
   </div>
-</form>
+
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.timezone.id_for_label }}">Timezone</label>
+      {{ form.timezone }}
+      {% if form.timezone.help_text %}<div class="form-help">{{ form.timezone.help_text }}</div>{% endif %}
+      {% if form.timezone.errors %}<div class="form-help text-danger">{{ form.timezone.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group" style="flex: 1; display: flex; align-items: center; gap: var(--space-sm);">
+      {{ form.enabled }}
+      <label class="form-label" for="{{ form.enabled.id_for_label }}" style="margin: 0;">Habilitado</label>
+      {% if form.enabled.errors %}<div class="form-help text-danger">{{ form.enabled.errors|join:", " }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    {{ form.description }}
+    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.inputs.id_for_label }}">Inputs (JSON)</label>
+    {{ form.inputs }}
+    {% if form.inputs.help_text %}<div class="form-help">{{ form.inputs.help_text }}</div>{% endif %}
+    {% if form.inputs.errors %}<div class="form-help text-danger">{{ form.inputs.errors|join:", " }}</div>{% endif %}
+  </div>
+{% endblock %}

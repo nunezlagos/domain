@@ -1,9 +1,9 @@
+{% extends "maintainers/_form_base.html" %}
 {% comment %}
 Form de usuario para el modal dinámico. Extiende maintainers/_form_base.html
 (form + csrf + non_field_errors + header + footer). Define solo el título,
 los campos y el label del submit.
 {% endcomment %}
-{% extends "maintainers/_form_base.html" %}
 
 {% block form_title %}{% if mode == "create" %}Nuevo usuario{% else %}Editar usuario{% endif %}{% endblock %}
 {% block submit_label %}{% if mode == "create" %}Crear usuario{% else %}Guardar cambios{% endif %}{% endblock %}

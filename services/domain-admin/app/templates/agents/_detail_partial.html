@@ -1,9 +1,14 @@
-<div class="modal-header">
-  <h3 class="modal-title">{{ agent_obj.display_name }}</h3>
-  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
-</div>
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de agente para el modal dinámico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Incluye dos tablas READ-ONLY: historial de versiones (agent_versions) y catálogo
+de templates de agente (agent_templates).
+{% endcomment %}
 
-<div class="modal-body">
+{% block detail_title %}{{ agent_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
   <p class="text-secondary mb-3">
     <code>{{ agent_obj.slug }}</code>
     · Proveedor: <span class="badge">{{ agent_obj.provider }}</span>
@@ -89,10 +94,9 @@
   {% else %}
     <p class="text-muted">No hay templates de agente disponibles.</p>
   {% endif %}
-</div>
+{% endblock %}
 
-<div class="modal-footer">
-  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+{% block detail_actions %}
   <button type="button" class="btn btn-primary"
           data-action="edit" data-id="{{ agent_obj.pk }}">
     Editar
@@ -102,4 +106,4 @@
           data-name="{{ agent_obj.display_name }}">
     Eliminar
   </button>
-</div>
+{% endblock %}

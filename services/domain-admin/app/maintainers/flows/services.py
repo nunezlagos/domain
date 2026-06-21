@@ -1,0 +1,161 @@
+"""Capa de negocio del mantenedor de Flows (migrada a core).
+
+list + signal se delegan a core.service.MaintainerService (sin reimplementar la
+búsqueda/paginación ni el aggregate de la señal). El resto —spec JSONB, unicidad
+de slug, toggle sobre el boolean is_active, soft-delete y las versiones
+read-only— sigue acá.
+
+Particularidades de `flows` respecto del patrón base:
+- list excluye los soft-deleted (deleted_at != NULL) vía un queryset base.
+- El estado habilitado/deshabilitado es el boolean `is_active` (NO el campo
+  status); el toggle alterna ese boolean.
+- flow_versions es un sub-recurso READ-ONLY (sin CRUD); se expone solo un getter
+  para mostrarlo en el detalle del flow (análogo a get_user_roles en users).
+
+Las views (core.views.MaintainerViews) descubren las funciones por convención
+de nombre: get_flow / create_flow / update_flow / delete_flow /
+toggle_flow_status / get_list_signal. `entity_label="Flow"` -> attr "flow", que
+ya coincide con esos nombres.
+"""
+from __future__ import annotations
+
+from django.db import transaction
+
+from core.service import MaintainerService
+
+from .models import Flow, FlowVersion
+
+
+# Error de dominio (la view lo traduce a messages.error).
+class FlowError(Exception):
+    """Error de operación sobre flows."""
+
+
+# Service base reusado: list (search name/slug/description + paginación) + signal.
+class FlowService(MaintainerService):
+    model = Flow
+    search_fields = ("name", "slug", "description")
+    ordering = ("-created_at",)
+
+
+_service = FlowService()
+
+
+def list_flows(search: str = "", page: int = 1, per_page: int = 20) -> dict:
+    """Lista flows NO eliminados con búsqueda + paginación.
+
+    Delega en MaintainerService.list (pasándole el queryset base que excluye los
+    soft-deleted) y renombra la clave `items` -> `flows` para no romper el
+    contrato del template/tests existentes.
+    """
+    qs = Flow.objects.filter(deleted_at__isnull=True)
+    data = _service.list(qs=qs, search=search, page=page, per_page=per_page)
+    data["flows"] = data.pop("items")
+    return data
+
+
+def get_list_signal() -> dict:
+    """Señal barata de cambios {count, version} para refresh on-change."""
+    return _service.list_signal()
+
+
+def get_flow(flow_id: str) -> Flow:
+    try:
+        return Flow.objects.get(pk=flow_id)
+    except Flow.DoesNotExist as exc:
+        raise FlowError(f"Flow {flow_id} no existe.") from exc
+
+
+def get_flow_versions(flow: Flow) -> list[FlowVersion]:
+    """Sub-recurso READ-ONLY: versiones del flow ordenadas (más nueva primero)."""
+    return list(FlowVersion.objects.filter(flow=flow).order_by("-version"))
+
+
+@transaction.atomic
+def create_flow(
+    *,
+    name: str,
+    slug: str,
+    description: str = "",
+    spec: dict | None = None,
+    is_active: bool = True,
+    deterministic_replay: bool = False,
+    seed_managed: bool = False,
+    seed_version: int | None = None,
+) -> Flow:
+    """Crea un flow nuevo. slug debe ser único."""
+    if Flow.objects.filter(slug=slug).exists():
+        raise FlowError(f"Ya existe un flow con slug '{slug}'.")
+
+    return Flow.objects.create(
+        name=name,
+        slug=slug,
+        description=description or "",
+        spec=spec if spec is not None else {},
+        is_active=is_active,
+        deterministic_replay=deterministic_replay,
+        seed_managed=seed_managed,
+        seed_version=seed_version,
+    )
+
+
+@transaction.atomic
+def update_flow(
+    flow: Flow,
+    *,
+    name: str,
+    slug: str,
+    description: str = "",
+    spec: dict | None = None,
+    is_active: bool = True,
+    deterministic_replay: bool = False,
+    seed_managed: bool = False,
+    seed_version: int | None = None,
+) -> Flow:
+    """Actualiza un flow. El slug sigue siendo único."""
+    if slug != flow.slug and Flow.objects.filter(slug=slug).exclude(pk=flow.pk).exists():
+        raise FlowError(f"Ya existe otro flow con slug '{slug}'.")
+
+    flow.name = name
+    flow.slug = slug
+    flow.description = description or ""
+    if spec is not None:
+        flow.spec = spec
+    flow.is_active = is_active
+    flow.deterministic_replay = deterministic_replay
+    flow.seed_managed = seed_managed
+    flow.seed_version = seed_version
+    flow.save()
+    return flow
+
+
+@transaction.atomic
+def delete_flow(flow: Flow) -> None:
+    """Soft delete: marca deleted_at + is_active=false. NO borra físicamente."""
+    from django.utils import timezone
+
+    flow.deleted_at = timezone.now()
+    flow.is_active = False
+    flow.save()
+
+
+@transaction.atomic
+def toggle_flow_status(flow: Flow) -> bool:
+    """Alterna is_active (habilitado <-> deshabilitado). Retorna el nuevo valor."""
+    flow.is_active = not flow.is_active
+    flow.save()
+    return flow.is_active
+
+
+def get_stats() -> dict:
+    """Stats agregadas para el header del listado."""
+    base = Flow.objects.filter(deleted_at__isnull=True)
+    return {
+        "total": base.count(),
+        "active": base.filter(is_active=True).count(),
+        "inactive": base.filter(is_active=False).count(),
+    }
+
+
+# Excepción de dominio que core.views.MaintainerViews traduce a messages.error.
+ServiceError = FlowError

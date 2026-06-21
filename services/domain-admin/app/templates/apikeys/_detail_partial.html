@@ -1,9 +1,12 @@
-<div class="modal-header">
-  <h3 class="modal-title">{{ apikey_obj.display_name }}</h3>
-  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
-</div>
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de API Key para el modal dinámico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define título, cuerpo y acciones propias.
+{% endcomment %}
 
-<div class="modal-body">
+{% block detail_title %}{{ apikey_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
   <p class="text-secondary mb-3">
     <code>{{ apikey_obj.key_prefix }}…</code>
     · Dueño: <span class="badge">{{ apikey_obj.user.display_name }}</span>
@@ -38,10 +41,9 @@
   <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
     El secreto en claro nunca se almacena: solo el prefijo (visible) y el hash.
   </p>
-</div>
+{% endblock %}
 
-<div class="modal-footer">
-  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+{% block detail_actions %}
   <button type="button" class="btn btn-primary"
           data-action="edit" data-id="{{ apikey_obj.pk }}">
     Editar
@@ -62,4 +64,4 @@
           data-name="{{ apikey_obj.display_name }}">
     Eliminar
   </button>
-</div>
+{% endblock %}

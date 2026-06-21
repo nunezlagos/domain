@@ -1,15 +1,18 @@
-<div class="modal-header">
-  <h3 class="modal-title">{{ user_obj.display_name }}</h3>
-  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
-</div>
+{% comment %}
+Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define título, cuerpo y acciones propias.
+{% endcomment %}
+{% extends "maintainers/_detail_base.html" %}
 
-<div class="modal-body">
+{% block detail_title %}{{ user_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
   <p class="text-secondary mb-3">
     <code>{{ user_obj.email }}</code>
     · Rol principal: <span class="badge">{{ user_obj.role }}</span>
     · Estado:
-    {% if user_obj.status == 'active' %}<span class="badge badge-success">Activo</span>
-    {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">Pendiente</span>
+    {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
+    {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
     {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
     {% endif %}
   </p>
@@ -49,10 +52,9 @@
   {% else %}
     <p class="text-muted">Este usuario no tiene roles asignados.</p>
   {% endif %}
-</div>
+{% endblock %}
 
-<div class="modal-footer">
-  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+{% block detail_actions %}
   <button type="button" class="btn btn-primary"
           data-action="edit" data-id="{{ user_obj.pk }}">
     Editar
@@ -73,4 +75,4 @@
           data-name="{{ user_obj.display_name }}">
     Eliminar
   </button>
-</div>
+{% endblock %}

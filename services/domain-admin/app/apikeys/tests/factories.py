@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 
-from users.models import User
+from maintainers.users.models import User
 
 from apikeys.models import ApiKey
 

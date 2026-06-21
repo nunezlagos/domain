@@ -1,84 +1,87 @@
-<div class="table-wrapper">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Email</th>
-        <th>Nombre</th>
-        <th>Rol</th>
-        <th>Estado</th>
-        <th>Creado</th>
-        <th>Último acceso</th>
-        <th style="width: 1%; white-space: nowrap;">Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in users %}
-        <tr id="user-row-{{ u.pk }}">
-          <td><code>{{ u.email }}</code></td>
-          <td>{{ u.name|default:"—" }}</td>
-          <td><span class="badge">{{ u.role }}</span></td>
-          <td>
-            {% if u.status == 'active' %}<span class="badge badge-success">{{ u.get_status_display }}</span>
-            {% elif u.status == 'pending' %}<span class="badge badge-warning">{{ u.get_status_display }}</span>
-            {% else %}<span class="badge badge-danger">{{ u.get_status_display }}</span>
-            {% endif %}
-          </td>
-          <td>{{ u.created_at|date:"d/m/Y" }}</td>
-          <td>{{ u.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
-          <td>
-            <div class="d-flex gap-1" style="justify-content: flex-end;">
-              <button class="btn btn-icon btn-ghost" title="Ver detalle"
-                      data-action="view" data-id="{{ u.pk }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </button>
-              <button class="btn btn-icon btn-ghost" title="Editar"
-                      data-action="edit" data-id="{{ u.pk }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 20h9"/>
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                </svg>
-              </button>
-              {% if u.is_active %}
-                <button class="btn btn-icon btn-ghost" title="Desactivar"
-                        data-action="toggle" data-id="{{ u.pk }}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                    <line x1="12" y1="2" x2="12" y2="12"/>
-                  </svg>
-                </button>
-              {% else %}
-                <button class="btn btn-icon btn-ghost" title="Activar"
-                        data-action="toggle" data-id="{{ u.pk }}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                    <line x1="12" y1="2" x2="12" y2="12"/>
-                    <line x1="12" y1="9" x2="12" y2="12"/>
-                  </svg>
-                </button>
-              {% endif %}
-              <button class="btn btn-icon btn-ghost" title="Eliminar"
-                      style="color: var(--color-danger);"
-                      data-action="delete" data-id="{{ u.pk }}" data-name="{{ u.display_name }}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
-            </div>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
-            No hay usuarios{% if search %} que coincidan con "{{ search }}"{% endif %}.
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+{% comment %}
+Tabla de usuarios. Extiende maintainers/_table_base.html (wrapper + thead/tbody
++ paginación compartida). Define columnas y filas propias. Como la lista viene
+bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
+{% endcomment %}
+{% extends "maintainers/_table_base.html" %}
 
-{% include "users/_pagination_partial.html" %}
+{% block columns %}
+  <th>Email</th>
+  <th>Nombre</th>
+  <th>Rol</th>
+  <th>Estado</th>
+  <th>Creado</th>
+  <th>Último acceso</th>
+  <th style="width: 1%; white-space: nowrap;">Acciones</th>
+{% endblock %}
+
+{% block colspan %}7{% endblock %}
+{% block empty %}No hay usuarios{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
+
+{% block rows %}
+  {% for u in users %}
+    <tr id="user-row-{{ u.pk }}">
+      <td><code>{{ u.email }}</code></td>
+      <td>{{ u.name|default:"—" }}</td>
+      <td><span class="badge">{{ u.role }}</span></td>
+      <td>
+        {% if u.status == 'active' %}<span class="badge badge-success">{{ u.get_status_display }}</span>
+        {% elif u.status == 'pending' %}<span class="badge badge-warning">{{ u.get_status_display }}</span>
+        {% else %}<span class="badge badge-danger">{{ u.get_status_display }}</span>
+        {% endif %}
+      </td>
+      <td>{{ u.created_at|date:"d/m/Y" }}</td>
+      <td>{{ u.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+      <td>
+        <div class="d-flex gap-1" style="justify-content: flex-end;">
+          <button class="btn btn-icon btn-ghost" title="Ver detalle"
+                  data-action="view" data-id="{{ u.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button class="btn btn-icon btn-ghost" title="Editar"
+                  data-action="edit" data-id="{{ u.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+          {% if u.is_active %}
+            <button class="btn btn-icon btn-ghost" title="Desactivar"
+                    data-action="toggle" data-id="{{ u.pk }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                <line x1="12" y1="2" x2="12" y2="12"/>
+              </svg>
+            </button>
+          {% else %}
+            <button class="btn btn-icon btn-ghost" title="Activar"
+                    data-action="toggle" data-id="{{ u.pk }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                <line x1="12" y1="2" x2="12" y2="12"/>
+                <line x1="12" y1="9" x2="12" y2="12"/>
+              </svg>
+            </button>
+          {% endif %}
+          <button class="btn btn-icon btn-ghost" title="Eliminar"
+                  style="color: var(--color-danger);"
+                  data-action="delete" data-id="{{ u.pk }}" data-name="{{ u.display_name }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr>
+      <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+        No hay usuarios{% if search %} que coincidan con "{{ search }}"{% endif %}.
+      </td>
+    </tr>
+  {% endfor %}
+{% endblock %}

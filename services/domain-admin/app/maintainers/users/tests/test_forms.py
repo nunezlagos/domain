@@ -1,18 +1,19 @@
 """Tests de UserForm (validaciones del mantenedor).
 
-Verifican reglas reales: password requerido en alta, confirmación,
-longitud mínima, email único y normalización a minúsculas.
+Verifican reglas reales: password requerido en alta, confirmación, longitud
+mínima, email único y normalización a minúsculas (esta última delegada al
+core.forms.EmailNormalizationMixin).
 """
 from __future__ import annotations
 
-from django.test import TestCase
+from core.tests.base import MaintainerTestCase
 
-from users.forms import UserForm
+from maintainers.users.forms import UserForm
 
 from .factories import make_role, make_user
 
 
-class UserFormCreateTests(TestCase):
+class UserFormCreateTests(MaintainerTestCase):
     def setUp(self):
         make_role("viewer")
 
@@ -57,7 +58,7 @@ class UserFormCreateTests(TestCase):
         self.assertIn("email", form.errors)
 
 
-class UserFormEditTests(TestCase):
+class UserFormEditTests(MaintainerTestCase):
     def setUp(self):
         make_role("viewer")
 

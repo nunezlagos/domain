@@ -1,20 +1,31 @@
-"""HU-48.1: Modelos del mantenedor de usuarios.
+"""Modelos del mantenedor de usuarios (migrado a core).
 
-3 tablas existentes en domain-mcp:
-- users: usuarios de la plataforma (managed=False)
-- roles: roles fijos/seeded (managed=False, solo lectura)
-- user_roles: pivote many-to-many (managed=False)
+3 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
+- users:      usuarios de la plataforma  -> hereda de core.SoftDeleteModel
+- roles:      roles fijos/seeded          -> model propio (NO se toca el área roles)
+- user_roles: pivote many-to-many         -> model propio (PK compuesta, excluido del guard)
 
-Django NO migra estas tablas (managed=False). Solo lee/escribe via ORM.
+User reusa los campos comunes (id/created_at/updated_at/deleted_at/status) de
+core.models.SoftDeleteModel y declara SOLO sus columnas propias. Las columnas
+declaradas deben matchear EXACTO la tabla real `users` (guard:
+core/tests/test_schema_drift.py).
 """
+from __future__ import annotations
+
 import uuid
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
+from core.models import SoftDeleteModel
+
 
 class Role(models.Model):
-    """Rol de la plataforma. Tabla seeded, no se crea/edita desde admin."""
+    """Rol de la plataforma. Tabla seeded, no se crea/edita desde admin.
+
+    NO migrado a core a propósito: el área de roles/permisos quedó reservada
+    (la maneja Django / pedido del usuario). Se mueve tal cual estaba.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     slug = models.CharField(max_length=50, unique=True)
@@ -35,8 +46,12 @@ class Role(models.Model):
         return f"{self.name} ({self.slug})"
 
 
-class User(models.Model):
-    """Usuario de la plataforma. PK uuid."""
+class User(SoftDeleteModel):
+    """Usuario de la plataforma.
+
+    id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
+    `status` se redeclara solo para sumarle choices (misma columna).
+    """
 
     STATUS_CHOICES = [
         ("active", "Activo"),
@@ -45,13 +60,9 @@ class User(models.Model):
         ("revoked", "Revocado"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=200, blank=True, default="")
     role = models.CharField(max_length=50, default="viewer")  # rol "principal"
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
     rut = models.CharField(max_length=20, blank=True, default="")
     last_organization_id = models.UUIDField(null=True, blank=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
@@ -59,6 +70,7 @@ class User(models.Model):
     erased_at = models.DateTimeField(null=True, blank=True)
     password_hash = models.BinaryField(null=True, blank=True)
     password_set_at = models.DateTimeField(null=True, blank=True)
+    # Redeclara status (heredado de SoftDeleteModel) solo para agregar choices.
     status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:
@@ -80,6 +92,9 @@ class User(models.Model):
 
 class UserRole(models.Model):
     """Pivote: asigna roles a users (many-to-many con metadata).
+
+    NO migrado a core: PK compuesta (user_id, role_id) sin columna `id` usable
+    en Django 5.1; excluido del guard de schema drift. Se mueve tal cual.
 
     Schema:
         id          uuid PK

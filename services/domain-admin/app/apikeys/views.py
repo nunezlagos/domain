@@ -32,7 +32,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from users.models import User
+from maintainers.users.models import User
 
 from . import services
 from .forms import ApiKeyForm, ApiKeySearchForm

@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",      # HU-47.2: para flash messages (alerts)
     "django.contrib.staticfiles",
     "core",                         # paquete transversal (base models/services/views)
-    "users",                        # HU-48: mantenedor de usuarios
+    "maintainers.users",            # HU-48: mantenedor de usuarios (app_label "users")
     "projects",                     # mantenedor de proyectos
     "apikeys",                      # mantenedor de API keys
     "agents",                       # mantenedor de agentes

@@ -1,79 +1,62 @@
-<form method="post" action="{{ action }}" data-modal-form novalidate>
-  {% csrf_token %}
+{% comment %}
+Form de usuario para el modal dinámico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el título,
+los campos y el label del submit.
+{% endcomment %}
+{% extends "maintainers/_form_base.html" %}
 
-  {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      <span class="alert-icon">✕</span>
-      <div class="alert-content">
-        {% for error in form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
-      </div>
+{% block form_title %}{% if mode == "create" %}Nuevo usuario{% else %}Editar usuario{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear usuario{% else %}Guardar cambios{% endif %}{% endblock %}
+
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.email.id_for_label }}">Email *</label>
+    {{ form.email }}
+    {% if form.email.errors %}<div class="form-help text-danger">{{ form.email.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre completo</label>
+    {{ form.name }}
+    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.role.id_for_label }}">Rol principal *</label>
+      {{ form.role }}
+      {% if form.role.help_text %}<div class="form-help">{{ form.role.help_text }}</div>{% endif %}
+      {% if form.role.errors %}<div class="form-help text-danger">{{ form.role.errors|join:", " }}</div>{% endif %}
     </div>
+
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.status.id_for_label }}">Estado</label>
+      {{ form.status }}
+    </div>
+  </div>
+
+  {% if mode == "create" %}
+    <hr>
+    <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
+      La contraseña se guarda hasheada (PBKDF2).
+    </p>
   {% endif %}
 
-  <div class="modal-header">
-    <h3 class="modal-title">{% if mode == "create" %}Nuevo usuario{% else %}Editar usuario{% endif %}</h3>
-    <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
-  </div>
-
-  <div class="modal-body">
-    <div class="form-group">
-      <label class="form-label" for="{{ form.email.id_for_label }}">Email *</label>
-      {{ form.email }}
-      {% if form.email.errors %}<div class="form-help text-danger">{{ form.email.errors|join:", " }}</div>{% endif %}
+  <div class="d-flex gap-3">
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.password.id_for_label }}">
+        {% if mode == "create" %}Contraseña *{% else %}Nueva contraseña (opcional){% endif %}
+      </label>
+      {{ form.password }}
+      {% if form.password.help_text %}<div class="form-help">{{ form.password.help_text }}</div>{% endif %}
+      {% if form.password.errors %}<div class="form-help text-danger">{{ form.password.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group">
-      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre completo</label>
-      {{ form.name }}
-      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
-    </div>
-
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.role.id_for_label }}">Rol principal *</label>
-        {{ form.role }}
-        {% if form.role.help_text %}<div class="form-help">{{ form.role.help_text }}</div>{% endif %}
-        {% if form.role.errors %}<div class="form-help text-danger">{{ form.role.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.status.id_for_label }}">Estado</label>
-        {{ form.status }}
-      </div>
-    </div>
-
-    {% if mode == "create" %}
-      <hr>
-      <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
-        La contraseña se guarda hasheada (PBKDF2).
-      </p>
-    {% endif %}
-
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.password.id_for_label }}">
-          {% if mode == "create" %}Contraseña *{% else %}Nueva contraseña (opcional){% endif %}
-        </label>
-        {{ form.password }}
-        {% if form.password.help_text %}<div class="form-help">{{ form.password.help_text }}</div>{% endif %}
-        {% if form.password.errors %}<div class="form-help text-danger">{{ form.password.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.password_confirm.id_for_label }}">
-          {% if mode == "create" %}Confirmar contraseña *{% else %}Confirmar nueva{% endif %}
-        </label>
-        {{ form.password_confirm }}
-      </div>
+    <div class="form-group" style="flex: 1;">
+      <label class="form-label" for="{{ form.password_confirm.id_for_label }}">
+        {% if mode == "create" %}Confirmar contraseña *{% else %}Confirmar nueva{% endif %}
+      </label>
+      {{ form.password_confirm }}
     </div>
   </div>
-
-  <div class="modal-footer">
-    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
-    <button type="submit" class="btn btn-primary">
-      {% if mode == "create" %}Crear usuario{% else %}Guardar cambios{% endif %}
-    </button>
-  </div>
-</form>
+{% endblock %}

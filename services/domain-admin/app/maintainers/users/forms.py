@@ -1,15 +1,24 @@
-"""HU-48.1: Forms del mantenedor de usuarios."""
+"""Forms del mantenedor de usuarios (migrados a core).
+
+UserForm reusa core.forms.EmailNormalizationMixin para la normalización
+strip+lower + unicidad del email (excluyendo la propia instancia en edición).
+La lógica propia —choices de roles desde BD, password requerido en alta y
+hasheo PBKDF2— queda acá.
+"""
 from django import forms
 from django.contrib.auth.hashers import make_password
+
+from core.forms import EmailNormalizationMixin
 
 from .models import Role, User, UserRole
 
 
-class UserForm(forms.Form):
-    """Form para crear/editar usuarios.
+class UserForm(EmailNormalizationMixin, forms.Form):
+    """Form para crear/editar usuarios. Password opcional en edición."""
 
-    Password es opcional en edición (vacío = no cambiar).
-    """
+    # core.forms.EmailNormalizationMixin usa estos atributos para la unicidad.
+    email_model = User
+    email_field = "email"
 
     email = forms.EmailField(
         label="Email",
@@ -47,17 +56,16 @@ class UserForm(forms.Form):
     )
 
     def __init__(self, *args, instance: User | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        # clean_email() consulta self.instance para excluirse en edición.
-        self.instance = instance
+        # InstanceAwareMixin (via EmailNormalizationMixin) captura instance.
+        super().__init__(*args, instance=instance, **kwargs)
         # Choices de roles desde la DB (roles fijos/seeded).
         self.fields["role"].choices = [
             (r.slug, f"{r.name} ({r.slug})")
             for r in Role.objects.filter(status="active").order_by("slug")
         ]
         # Password requerido en alta, opcional en edición (vacío = no cambiar).
-        # Se setea SIEMPRE (también en form bound/submit), no solo al renderizar,
-        # si no un POST de alta sin password pasaría la validación.
+        # Se setea SIEMPRE (también en form bound), si no un POST de alta sin
+        # password pasaría la validación.
         is_create = instance is None
         self.fields["password"].required = is_create
         self.fields["password_confirm"].required = is_create
@@ -67,15 +75,6 @@ class UserForm(forms.Form):
             self.fields["name"].initial = instance.name
             self.fields["role"].initial = instance.role
             self.fields["status"].initial = instance.status
-
-    def clean_email(self):
-        email = self.cleaned_data["email"].strip().lower()
-        qs = User.objects.filter(email=email)
-        if self.instance is not None:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise forms.ValidationError("Ya existe un usuario con ese email.")
-        return email
 
     def clean(self):
         cleaned = super().clean()
@@ -110,7 +109,6 @@ class UserRoleAssignForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         if user is not None:
-            # Excluir roles ya asignados.
             assigned = UserRole.objects.filter(user=user).values_list("role_id", flat=True)
             self.fields["role"].queryset = (
                 Role.objects.filter(status="active").exclude(id__in=assigned).order_by("slug")

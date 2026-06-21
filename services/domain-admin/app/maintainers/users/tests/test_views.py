@@ -1,7 +1,9 @@
-"""Tests de las views (HTTP) del mantenedor de usuarios (HU-48).
+"""Tests de las views (HTTP) del mantenedor de usuarios.
 
-Usan el test client real contra URLs reales. Verifican status codes,
-efectos en DB y forma de la respuesta (HTML vs JSON vs partial).
+Usan el test client real contra URLs reales (namespace 'users', intacto tras la
+migración a maintainers.users). Verifican status codes, efectos en DB y forma
+de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
+core.tests.base.MaintainerTestCase.
 """
 from __future__ import annotations
 
@@ -10,7 +12,9 @@ import json
 from django.test import TestCase
 from django.urls import reverse
 
-from users.models import User
+from core.tests.base import MaintainerTestCase
+
+from maintainers.users.models import User
 
 from .factories import make_role, make_user
 
@@ -29,14 +33,7 @@ class AuthGuardTests(TestCase):
         self.assertIn("/login/", r["Location"])
 
 
-class AuthenticatedMixin:
-    def authenticate(self):
-        session = self.client.session
-        session["authenticated"] = True
-        session.save()
-
-
-class ListViewTests(AuthenticatedMixin, TestCase):
+class ListViewTests(MaintainerTestCase):
     def setUp(self):
         self.authenticate()
         make_user("vista@example.com", name="Vista User")
@@ -50,7 +47,6 @@ class ListViewTests(AuthenticatedMixin, TestCase):
         r = self.client.get(reverse("users:list"), {"fragment": "table"})
         self.assertEqual(r.status_code, 200)
         body = r.content.decode()
-        # Es un partial: tiene la tabla pero NO el layout completo.
         self.assertIn("<table", body)
         self.assertNotIn("<html", body)
 
@@ -61,7 +57,7 @@ class ListViewTests(AuthenticatedMixin, TestCase):
         self.assertNotContains(r, "otro@example.com")
 
 
-class SignalEndpointTests(AuthenticatedMixin, TestCase):
+class SignalEndpointTests(MaintainerTestCase):
     def setUp(self):
         self.authenticate()
 
@@ -76,7 +72,7 @@ class SignalEndpointTests(AuthenticatedMixin, TestCase):
         self.assertEqual(data["count"], 1)
 
 
-class CreateViewTests(AuthenticatedMixin, TestCase):
+class CreateViewTests(MaintainerTestCase):
     def setUp(self):
         self.authenticate()
         make_role("viewer")
@@ -107,7 +103,7 @@ class CreateViewTests(AuthenticatedMixin, TestCase):
         self.assertFalse(User.objects.filter(email="corta@example.com").exists())
 
 
-class ToggleViewTests(AuthenticatedMixin, TestCase):
+class ToggleViewTests(MaintainerTestCase):
     def setUp(self):
         self.authenticate()
 
@@ -120,7 +116,7 @@ class ToggleViewTests(AuthenticatedMixin, TestCase):
         self.assertEqual(u.status, "suspended")
 
 
-class DeleteViewTests(AuthenticatedMixin, TestCase):
+class DeleteViewTests(MaintainerTestCase):
     def setUp(self):
         self.authenticate()
 
@@ -131,3 +127,16 @@ class DeleteViewTests(AuthenticatedMixin, TestCase):
         u.refresh_from_db()
         self.assertEqual(u.status, "revoked")
         self.assertIsNotNone(u.deleted_at)
+
+
+class DetailViewTests(MaintainerTestCase):
+    def setUp(self):
+        self.authenticate()
+
+    def test_detail_partial_muestra_usuario(self):
+        u = make_user("detalle@example.com", name="Detalle")
+        r = self.client.get(reverse("users:detail", args=[u.pk]), {"partial": "1"})
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode()
+        self.assertIn("detalle@example.com", body)
+        self.assertNotIn("<html", body)

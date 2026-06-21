@@ -11,7 +11,7 @@ urlpatterns = [
     path("componentes/", views.components_demo, name="components"),
 
     # Mantenedor de usuarios (HU-48)
-    path("usuarios/", include("users.urls")),
+    path("usuarios/", include("maintainers.users.urls")),
 
     # Mantenedores de proyectos y API keys
     path("proyectos/", include("projects.urls")),

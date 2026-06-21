@@ -1,47 +1,52 @@
-"""HU-48.1: services (capa de negocio, separada de views).
+"""Capa de negocio del mantenedor de usuarios (migrada a core).
 
-Patrón: las views solo hacen HTTP request/response; toda la lógica
-de modelo vive acá. Esto facilita testing unitario sin tocar HTTP.
+list + signal se delegan a core.service.MaintainerService (sin reimplementar la
+búsqueda/paginación ni el aggregate de la señal). El resto —roles, password,
+create/update/delete/toggle con sus validaciones de dominio— sigue acá.
+
+Las views (core.views.MaintainerViews) descubren las funciones por convención
+de nombre: get_user / create_user / update_user / delete_user /
+toggle_user_status / get_list_signal. `entity_label="Usuario"` -> attr "usuario",
+por eso además exponemos alias get_usuario/... para el descubrimiento del core.
 """
 from __future__ import annotations
 
-from typing import Iterable
-
 from django.db import transaction
+
+from core.service import MaintainerService
 
 from .models import Role, User, UserRole
 
 
-# Errores de dominio (la view los traduce a messages.error).
+# Error de dominio (la view lo traduce a messages.error).
 class UserError(Exception):
     """Error de operación sobre usuarios."""
 
 
+# Service base reusado: list (search email/name + paginación) + signal.
+class UserService(MaintainerService):
+    model = User
+    search_fields = ("email", "name")
+    ordering = ("-created_at",)
+
+
+_service = UserService()
+
+
 def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista usuarios con búsqueda opcional + paginación.
+    """Lista usuarios con búsqueda + paginación.
 
-    Retorna dict con: users, total, page, per_page, total_pages, has_next, has_prev.
+    Delega en MaintainerService.list y renombra la clave `items` -> `users`
+    para no romper el contrato del template/tests existentes.
     """
-    qs = User.objects.all()
-    if search:
-        qs = qs.filter(email__icontains=search) | qs.filter(name__icontains=search)
-    qs = qs.distinct().order_by("-created_at")
+    data = _service.list(search=search, page=page, per_page=per_page)
+    data["users"] = data.pop("items")
+    return data
 
-    total = qs.count()
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    start = (page - 1) * per_page
-    end = start + per_page
-    users = list(qs[start:end])
 
-    return {
-        "users": users,
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "total_pages": total_pages,
-        "has_next": end < total,
-        "has_prev": page > 1,
-    }
+def get_list_signal() -> dict:
+    """Señal barata de cambios {count, version} para refresh on-change."""
+    return _service.list_signal()
 
 
 def get_user(user_id: str) -> User:
@@ -72,22 +77,20 @@ def create_user(
     status: str,
     hashed_password: bytes | None,
 ) -> User:
-    """Crea un user nuevo. hashed_password debe venir de UserForm.hashed_password()."""
+    """Crea un user nuevo. hashed_password viene de UserForm.hashed_password()."""
     if User.objects.filter(email__iexact=email).exists():
         raise UserError(f"Ya existe un usuario con email {email}.")
 
-    # Validar que el rol existe.
     if not Role.objects.filter(slug=role_slug, status="active").exists():
         raise UserError(f"Rol '{role_slug}' no existe o no está activo.")
 
-    user = User.objects.create(
+    return User.objects.create(
         email=email,
         name=name or "",
         role=role_slug,
         status=status,
         password_hash=hashed_password,
     )
-    return user
 
 
 @transaction.atomic
@@ -101,7 +104,6 @@ def update_user(
     hashed_password: bytes | None,
 ) -> User:
     """Actualiza user. hashed_password=None deja el actual."""
-    # Si cambia el email, validar que no choque con otro user.
     if email != user.email and User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
         raise UserError(f"Ya existe otro usuario con email {email}.")
 
@@ -120,11 +122,26 @@ def update_user(
 
 @transaction.atomic
 def delete_user(user: User) -> None:
-    """Soft delete: marca deleted_at. NO borra físicamente."""
+    """Soft delete: marca deleted_at + status=revoked. NO borra físicamente."""
     from django.utils import timezone
     user.deleted_at = timezone.now()
     user.status = "revoked"
     user.save()
+
+
+@transaction.atomic
+def toggle_user_status(user: User) -> str:
+    """Alterna active <-> suspended (pending/revoked -> active). Devuelve el nuevo status."""
+    if user.status == "active":
+        user.status = "suspended"
+    elif user.status == "suspended":
+        user.status = "active"
+    elif user.status in ("pending", "revoked"):
+        user.status = "active"
+    else:
+        user.status = "suspended"
+    user.save()
+    return user.status
 
 
 @transaction.atomic
@@ -143,53 +160,26 @@ def assign_role(user: User, role_id: str, granted_by: str | None = None) -> User
 @transaction.atomic
 def revoke_role(user: User, role_id: str) -> bool:
     """Revoca un rol del user. Retorna True si se eliminó."""
-    qs = UserRole.objects.filter(user=user, role_id=role_id)
-    deleted_count, _ = qs.delete()
+    deleted_count, _ = UserRole.objects.filter(user=user, role_id=role_id).delete()
     return deleted_count > 0
-
-
-def get_list_signal() -> dict:
-    """HU-48.2: señal barata de cambios para refresh on-change.
-
-    NO es polling ciego de la tabla. Devuelve count + max(updated_at):
-    cualquier alta, edición, baja (soft) o toggle muta uno de los dos
-    (updated_at es auto_now; created_at de altas nuevas sube el max).
-    El front compara contra su última señal y solo re-renderiza la
-    tabla cuando algo cambió en la BD — incluyendo inserts de otros
-    servicios (domain-mcp) que escriben directo en `users`.
-
-    Query barata: SELECT count(*), max(updated_at) FROM users.
-    """
-    from django.db.models import Count, Max
-
-    agg = User.objects.aggregate(total=Count("id"), latest=Max("updated_at"))
-    latest = agg["latest"]
-    return {
-        "count": agg["total"] or 0,
-        "version": latest.isoformat() if latest else "",
-    }
 
 
 def get_stats() -> dict:
     """Stats agregadas para el header del listado."""
-    total = User.objects.count()
-    active = User.objects.filter(status="active", deleted_at__isnull=True, is_erased=False).count()
-    pending = User.objects.filter(status="pending").count()
-    return {"total": total, "active": active, "pending": pending}
+    return {
+        "total": User.objects.count(),
+        "active": User.objects.filter(status="active", deleted_at__isnull=True, is_erased=False).count(),
+        "pending": User.objects.filter(status="pending").count(),
+    }
 
 
-@transaction.atomic
-def toggle_user_status(user: User) -> str:
-    """Alterna active ↔ suspended. Retorna el nuevo status."""
-    from django.utils import timezone
-
-    if user.status == "active":
-        user.status = "suspended"
-    elif user.status == "suspended":
-        user.status = "active"
-    elif user.status in ("pending", "revoked"):
-        user.status = "active"
-    else:
-        user.status = "suspended"
-    user.save()
-    return user.status
+# --- Alias para el descubrimiento por convención de core.views.MaintainerViews.
+# entity_label="Usuario" -> _entity_attr() == "usuario", core busca
+# get_usuario / create_usuario / update_usuario / delete_usuario /
+# toggle_usuario_status. Apuntamos esos nombres a las funciones reales.
+get_usuario = get_user
+create_usuario = create_user
+update_usuario = update_user
+delete_usuario = delete_user
+toggle_usuario_status = toggle_user_status
+ServiceError = UserError

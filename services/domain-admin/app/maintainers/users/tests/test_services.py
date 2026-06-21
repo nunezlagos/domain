@@ -1,20 +1,19 @@
-"""Tests de la capa de servicio del mantenedor de usuarios (HU-48).
+"""Tests de la capa de servicio del mantenedor de usuarios.
 
-Corren contra Postgres real (managed=True en settings_test). Se evita
-falsos positivos: cada assert verifica un efecto observable en la DB o el
-valor de retorno real, no un mock.
+Corren contra Postgres real (managed=True via core.tests.runner). Cada assert
+verifica un efecto observable en la DB o el valor de retorno real, no un mock.
 """
 from __future__ import annotations
 
-from django.test import TestCase
+from core.tests.base import MaintainerTestCase
 
-from users import services
-from users.models import User, UserRole
+from maintainers.users import services
+from maintainers.users.models import User, UserRole
 
 from .factories import make_role, make_user, make_user_role
 
 
-class ListUsersTests(TestCase):
+class ListUsersTests(MaintainerTestCase):
     def setUp(self):
         make_user("ana@example.com", name="Ana Torres")
         make_user("beto@example.com", name="Beto Díaz")
@@ -57,7 +56,7 @@ class ListUsersTests(TestCase):
         self.assertTrue(data_p2["has_prev"])
 
 
-class CreateUserTests(TestCase):
+class CreateUserTests(MaintainerTestCase):
     def setUp(self):
         make_role("viewer")
 
@@ -85,7 +84,7 @@ class CreateUserTests(TestCase):
             )
 
 
-class UpdateUserTests(TestCase):
+class UpdateUserTests(MaintainerTestCase):
     def setUp(self):
         make_role("viewer")
         make_role("admin")
@@ -122,18 +121,17 @@ class UpdateUserTests(TestCase):
             )
 
 
-class DeleteUserTests(TestCase):
+class DeleteUserTests(MaintainerTestCase):
     def test_soft_delete_no_borra_fila(self):
         u = make_user("borrar@example.com")
         services.delete_user(u)
         u.refresh_from_db()
         self.assertIsNotNone(u.deleted_at)
         self.assertEqual(u.status, "revoked")
-        # La fila sigue existiendo (soft delete).
         self.assertTrue(User.objects.filter(pk=u.pk).exists())
 
 
-class ToggleStatusTests(TestCase):
+class ToggleStatusTests(MaintainerTestCase):
     def test_active_a_suspended(self):
         u = make_user("t1@example.com", status="active")
         self.assertEqual(services.toggle_user_status(u), "suspended")
@@ -157,7 +155,7 @@ class ToggleStatusTests(TestCase):
         self.assertEqual(u.status, "suspended")
 
 
-class RoleAssignmentTests(TestCase):
+class RoleAssignmentTests(MaintainerTestCase):
     def setUp(self):
         self.role = make_role("editor")
         self.user = make_user("roles@example.com")
@@ -180,7 +178,7 @@ class RoleAssignmentTests(TestCase):
         self.assertFalse(services.revoke_role(self.user, self.role.pk))
 
 
-class ListSignalTests(TestCase):
+class ListSignalTests(MaintainerTestCase):
     def test_signal_cuenta_usuarios(self):
         make_user("s1@example.com")
         make_user("s2@example.com")

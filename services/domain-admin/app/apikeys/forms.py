@@ -7,7 +7,7 @@ Se usa forms.Form (no ModelForm) porque el modelo es managed=False.
 """
 from django import forms
 
-from users.models import User
+from maintainers.users.models import User
 
 from .models import ApiKey
 

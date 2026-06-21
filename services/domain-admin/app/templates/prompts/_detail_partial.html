@@ -1,0 +1,64 @@
+<div class="modal-header">
+  <h3 class="modal-title">{{ prompt_obj.display_name }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary mb-3">
+    <code>{{ prompt_obj.slug }}</code> · v{{ prompt_obj.version }}
+    · Estado:
+    {% if prompt_obj.is_enabled %}<span class="badge badge-success">Activo</span>
+    {% else %}<span class="badge badge-warning">Inactivo</span>
+    {% endif %}
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 160px;">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
+      <tr><th>Versión</th><td>v{{ prompt_obj.version }}</td></tr>
+      <tr><th>Descripción</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
+      <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
+      <tr><th>Organización</th><td><code>{{ prompt_obj.organization_id }}</code></td></tr>
+      <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Versión padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Creado</th><td>{{ prompt_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ prompt_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Cuerpo</h4>
+  <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm);">{{ prompt_obj.body }}</pre>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Variables</h4>
+  {% if prompt_obj.variables %}
+    <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm);">{{ prompt_obj.variables }}</pre>
+  {% else %}
+    <p class="text-secondary" style="font-size: var(--fs-sm);">Sin variables definidas.</p>
+  {% endif %}
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ prompt_obj.pk }}">
+    Editar
+  </button>
+  {% if prompt_obj.is_enabled %}
+    <button type="button" class="btn btn-warning"
+            data-action="toggle" data-id="{{ prompt_obj.pk }}">
+      Desactivar
+    </button>
+  {% else %}
+    <button type="button" class="btn btn-success"
+            data-action="toggle" data-id="{{ prompt_obj.pk }}">
+      Activar
+    </button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ prompt_obj.pk }}"
+          data-name="{{ prompt_obj.display_name }}">
+    Eliminar
+  </button>
+</div>

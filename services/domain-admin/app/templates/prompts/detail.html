@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ prompt_obj.display_name }} - Prompts{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de prompt" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'prompts:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a prompts</a>
+    <h1 class="mt-1">{{ prompt_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ prompt_obj.slug }}</code> · v{{ prompt_obj.version }}
+      · Estado:
+      {% if prompt_obj.is_enabled %}<span class="badge badge-success">Activo</span>
+      {% else %}<span class="badge badge-warning">Inactivo</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'prompts:edit' prompt_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ prompt_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del prompt -->
+<div class="card mb-4">
+  <h3>Información</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th style="width: 200px;">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
+      <tr><th>Versión</th><td>v{{ prompt_obj.version }}</td></tr>
+      <tr><th>Descripción</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
+      <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
+      <tr><th>Organización</th><td><code>{{ prompt_obj.organization_id }}</code></td></tr>
+      <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Versión padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if prompt_obj.is_enabled %}<span class="badge badge-success">Activo</span>
+          {% else %}<span class="badge badge-warning">Inactivo</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Creado</th><td>{{ prompt_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ prompt_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Cuerpo del prompt -->
+<div class="card mb-4">
+  <h3>Cuerpo</h3>
+  <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm);">{{ prompt_obj.body }}</pre>
+</div>
+
+<!-- Variables -->
+<div class="card mb-4">
+  <h3>Variables</h3>
+  {% if prompt_obj.variables %}
+    <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm);">{{ prompt_obj.variables }}</pre>
+  {% else %}
+    <p class="text-secondary">Sin variables definidas.</p>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal-backdrop" id="modal-delete-{{ prompt_obj.pk }}">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar prompt?</h3>
+      <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar <strong>{{ prompt_obj.display_name }}</strong>.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el prompt queda desactivado pero el registro se conserva para auditoría.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'prompts:delete' prompt_obj.pk %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

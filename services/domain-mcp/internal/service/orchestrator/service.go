@@ -200,7 +200,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		)
 		return result, nil
 	}
-	if mode == ModeExpress || mode == ModeFull || mode == ModeDetect {
+	if mode == ModeExpress || mode == ModeLite || mode == ModeFull || mode == ModeDetect {
 		// Si hay Repo configurado, resolver el flow_id ANTES de armar
 		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
 		// hecho trabajo de prompts si la org no está inicializada.
@@ -227,6 +227,12 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		switch mode {
 		case ModeExpress:
 			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
+		case ModeLite:
+			// Lite NO pasa por selectPhases/ValidateDAG: ejecuta el subset
+			// curado LitePhases tal cual (explore→apply→verify por default),
+			// igual que Express. StartingPhase/SkipPhases no aplican — el set
+			// ya es chico y fijo; tunearlo se hace editando modes.LitePhases.
+			plan, err = modes.BuildLitePlan(ctx, s.Phases, phaseInput, now)
 		case ModeFull, ModeDetect:
 			// Detect usa el mismo planner que Full — la diferencia es
 			// que NO persistimos abajo (dry-run).

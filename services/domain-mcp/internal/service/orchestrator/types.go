@@ -24,6 +24,12 @@ import (
 //
 //   - ModeExpress: fast path para cambios ≤10 líneas single-file. Sólo
 //     sdd-apply + sdd-verify. Confirm condicional D1.
+//   - ModeLite: camino reducido para cambios triviales (fix de 1 línea,
+//     doc, refactor chico). Corre un SUBSET de fases (default
+//     sdd-explore → sdd-apply → sdd-verify) salteando las pesadas
+//     (propose/design/tasks/judge/archive/onboard). Más amplio que
+//     Express (incluye explore para ubicar el cambio) pero mucho más
+//     barato que Full. Opt-in: nunca es el default.
 //   - ModeFull: pipeline completo de 10 fases.
 //   - ModeSolo: ejecución inline server-side via LLM provider directo
 //     (sin cliente IDE colaborador).
@@ -35,6 +41,7 @@ type Mode string
 
 const (
 	ModeExpress Mode = "express"
+	ModeLite    Mode = "lite"
 	ModeFull    Mode = "full"
 	ModeSolo    Mode = "solo"
 	ModeDetect  Mode = "detect"
@@ -44,7 +51,7 @@ const (
 // IsValid reporta si el string corresponde a un modo soportado.
 func (m Mode) IsValid() bool {
 	switch m {
-	case ModeExpress, ModeFull, ModeSolo, ModeDetect, ModeAsync:
+	case ModeExpress, ModeLite, ModeFull, ModeSolo, ModeDetect, ModeAsync:
 		return true
 	}
 	return false

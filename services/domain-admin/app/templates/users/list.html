@@ -36,6 +36,7 @@
 
 <!-- Tabla (server-side renderizada; se refresca solo al detectar cambios en BD) -->
 <div id="users-table-area"
+     data-base-url="/usuarios/"
      data-signal-url="{% url 'users:signal' %}"
      data-signal="{{ signal_count }}|{{ signal_version }}">
   {% include "users/_table_partial.html" %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client_obj.display_name }} - Clientes{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de cliente" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'clients:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a clientes</a>
+    <h1 class="mt-1">{{ client_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ client_obj.slug }}</code>
+      · Estado:
+      {% if client_obj.status == 'active' %}<span class="badge badge-success">{{ client_obj.get_status_display }}</span>
+      {% elif client_obj.status == 'inactive' %}<span class="badge badge-warning">{{ client_obj.get_status_display }}</span>
+      {% else %}<span class="badge badge-danger">{{ client_obj.get_status_display }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'clients:edit' client_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ client_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del cliente -->
+<div class="card mb-4">
+  <h3>Información</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th style="width: 200px;">Nombre</th><td>{{ client_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ client_obj.slug }}</code></td></tr>
+      <tr><th>Tax ID / RUT</th><td>{{ client_obj.tax_id|default:"—" }}</td></tr>
+      <tr><th>Email de contacto</th><td>{{ client_obj.contact_email|default:"—" }}</td></tr>
+      <tr><th>Teléfono</th><td>{{ client_obj.contact_phone|default:"—" }}</td></tr>
+      <tr><th>Dirección</th><td>{{ client_obj.address|default:"—" }}</td></tr>
+      <tr><th>Organización</th><td><code>{{ client_obj.organization_id }}</code></td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if client_obj.status == 'active' %}<span class="badge badge-success">{{ client_obj.get_status_display }}</span>
+          {% elif client_obj.status == 'inactive' %}<span class="badge badge-warning">{{ client_obj.get_status_display }}</span>
+          {% else %}<span class="badge badge-danger">{{ client_obj.get_status_display }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Creado</th><td>{{ client_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ client_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal-backdrop" id="modal-delete-{{ client_obj.pk }}">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar cliente?</h3>
+      <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar a <strong>{{ client_obj.display_name }}</strong>.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el cliente queda archivado pero el registro se conserva para auditoría.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'clients:delete' client_obj.pk %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

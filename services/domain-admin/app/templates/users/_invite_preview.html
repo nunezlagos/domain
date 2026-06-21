@@ -15,11 +15,6 @@ trabajo futuro (ver maintainers/users/views.py:invite_preview).
 </div>
 
 <div class="modal-body">
-  <div class="alert alert-warning" style="margin-bottom: var(--space-md);">
-    El envío por email queda pendiente (sin SMTP configurado). Esto es un
-    <strong>preview</strong>: el correo no se envió ni se registró la invitación.
-  </div>
-
   <div class="d-flex gap-1" style="margin-bottom: var(--space-md); align-items: stretch;">
     <input type="text" class="form-control" readonly
            id="invite-link" value="{{ enrollment_url }}"

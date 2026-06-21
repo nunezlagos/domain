@@ -216,16 +216,20 @@ make up
 make wait-healthy
 ok "5 servicios healthy"
 
-# === STEP 7: Systemd timers ===
-log "7/8  Configurando systemd timers..."
+# === STEP 7: Systemd units + timers ===
+log "7/8  Configurando systemd units + timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.service /etc/systemd/system/ 2>/dev/null || true
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
   sudo_run systemctl daemon-reload
+  # Persistencia al boot: el stack ya está arriba (STEP 6 via make up); enable
+  # sin --now solo lo registra para arrancar en el próximo boot desde la ruta
+  # correcta ($INSTALL_DIR/services). Evita el doble make up redundante.
+  sudo_run systemctl enable domain-services.service 2>/dev/null || true
   sudo_run systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
-  ok "Timers systemd activos"
+  ok "Units + timers systemd activos"
 else
-  warn "no se encontró $INSTALL_DIR/services/systemd/, saltando timers"
+  warn "no se encontró $INSTALL_DIR/services/systemd/, saltando systemd"
 fi
 
 # === STEP 8: Print credenciales ===

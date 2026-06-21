@@ -4,9 +4,9 @@ After=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/services
+WorkingDirectory=/opt/services/services
 EnvironmentFile=/opt/services/.env
-ExecStart=/opt/services/scripts/healthcheck-alert.sh
+ExecStart=/opt/services/services/scripts/healthcheck-alert.sh
 TimeoutStartSec=60
 
 [Install]

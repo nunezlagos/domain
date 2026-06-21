@@ -8,11 +8,11 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/services
+WorkingDirectory=/opt/services/services
 EnvironmentFile=/opt/services/.env
-ExecStart=/usr/bin/make -C /opt/services up
-ExecStop=/usr/bin/make -C /opt/services down
-ExecReload=/usr/bin/make -C /opt/services restart SVC=all
+ExecStart=/usr/bin/make -C /opt/services/services up
+ExecStop=/usr/bin/make -C /opt/services/services down
+ExecReload=/usr/bin/make -C /opt/services/services restart SVC=all
 TimeoutStartSec=300
 TimeoutStopSec=120
 

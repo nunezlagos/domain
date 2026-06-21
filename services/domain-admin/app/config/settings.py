@@ -50,12 +50,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# HU-47.1: SQLite file-based (django.contrib.sessions.ready() requiere DB).
-# HU-47.2: signed_cookies sessions (no usa DB en runtime).
+# HU-48.1: las tablas reales (users, roles, user_roles, etc.) viven en
+# Postgres (donde corre domain-mcp). Django NO las migra (managed=False)
+# pero querya contra la DB configurada acá.
+#
+# Credenciales tomadas del env (.env) — mismas que usa domain-mcp.
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", "domain"),
+        "USER": os.environ.get("DB_APP_USER", "app_user"),
+        "PASSWORD": os.environ.get("APP_USER_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "postgres"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
+        "OPTIONS": {
+            "sslmode": "disable",
+        },
     }
 }
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"

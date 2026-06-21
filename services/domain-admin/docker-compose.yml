@@ -20,6 +20,12 @@ services:
       # Override via /opt/services/.env en producción.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@admin.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      # HU-48.1: conexión a Postgres compartido (mismas vars que domain-mcp).
+      POSTGRES_DB: ${POSTGRES_DB:-domain}
+      DB_APP_USER: ${POSTGRES_DB_USER:-app_user}
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
     networks:
       - domain_internal
     expose:

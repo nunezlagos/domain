@@ -1,0 +1,65 @@
+<div class="modal-header">
+  <h3 class="modal-title">{{ apikey_obj.display_name }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary mb-3">
+    <code>{{ apikey_obj.key_prefix }}…</code>
+    · Dueño: <span class="badge">{{ apikey_obj.user.display_name }}</span>
+    · Estado:
+    {% if apikey_obj.status == 'active' %}<span class="badge badge-success">{{ apikey_obj.get_status_display }}</span>
+    {% elif apikey_obj.status == 'expired' %}<span class="badge badge-warning">{{ apikey_obj.get_status_display }}</span>
+    {% else %}<span class="badge badge-danger">{{ apikey_obj.get_status_display }}</span>
+    {% endif %}
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 140px;">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
+      <tr><th>Prefijo</th><td><code>{{ apikey_obj.key_prefix }}…</code></td></tr>
+      <tr><th>Dueño</th><td>{{ apikey_obj.user.display_name }} (<code>{{ apikey_obj.user.email }}</code>)</td></tr>
+      <tr><th>Creada</th><td>{{ apikey_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Expira</th><td>{{ apikey_obj.expires_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Último uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Revocada</th>
+        <td>
+          {% if apikey_obj.revoked_at %}
+            {{ apikey_obj.revoked_at|date:"d/m/Y H:i" }}
+          {% else %}
+            <span class="text-muted">No</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
+    El secreto en claro nunca se almacena: solo el prefijo (visible) y el hash.
+  </p>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ apikey_obj.pk }}">
+    Editar
+  </button>
+  {% if apikey_obj.is_active %}
+    <button type="button" class="btn btn-warning"
+            data-action="toggle" data-id="{{ apikey_obj.pk }}">
+      Revocar
+    </button>
+  {% else %}
+    <button type="button" class="btn btn-success"
+            data-action="toggle" data-id="{{ apikey_obj.pk }}">
+      Reactivar
+    </button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ apikey_obj.pk }}"
+          data-name="{{ apikey_obj.display_name }}">
+    Eliminar
+  </button>
+</div>

@@ -1,0 +1,76 @@
+<div class="modal-header">
+  <h3 class="modal-title">{{ user_obj.display_name }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary mb-3">
+    <code>{{ user_obj.email }}</code>
+    · Rol principal: <span class="badge">{{ user_obj.role }}</span>
+    · Estado:
+    {% if user_obj.status == 'active' %}<span class="badge badge-success">Activo</span>
+    {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">Pendiente</span>
+    {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
+    {% endif %}
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 140px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
+      <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
+      <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
+      <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
+      <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Último acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Contraseña</th>
+        <td>
+          {% if user_obj.password_set_at %}
+            {{ user_obj.password_set_at|date:"d/m/Y H:i" }}
+          {% else %}
+            <span class="text-muted">No establecida</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Roles asignados</h4>
+  {% if user_roles %}
+    <div class="d-flex gap-2" style="flex-wrap: wrap;">
+      {% for ur in user_roles %}
+        <span class="badge badge-primary">{{ ur.role.slug }}</span>
+      {% endfor %}
+    </div>
+    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+      {{ user_roles|length }} activo(s).
+      Para asignar/quitar roles usá el panel de edición.
+    </p>
+  {% else %}
+    <p class="text-muted">Este usuario no tiene roles asignados.</p>
+  {% endif %}
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ user_obj.pk }}">
+    Editar
+  </button>
+  {% if user_obj.is_active %}
+    <button type="button" class="btn btn-warning"
+            data-action="toggle" data-id="{{ user_obj.pk }}">
+      Desactivar
+    </button>
+  {% else %}
+    <button type="button" class="btn btn-success"
+            data-action="toggle" data-id="{{ user_obj.pk }}">
+      Activar
+    </button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ user_obj.pk }}"
+          data-name="{{ user_obj.display_name }}">
+    Eliminar
+  </button>
+</div>

@@ -10,102 +10,137 @@
 <div class="content-header">
   <div>
     <h1>Usuarios</h1>
-    <p class="subtitle">Gestión de miembros de la plataforma</p>
+    <p class="subtitle">
+      Gestión de miembros de la plataforma
+      <span class="text-muted" style="font-size: var(--fs-xs); margin-left: var(--space-sm);">
+        (auto-refresh cada 5s)
+      </span>
+    </p>
   </div>
-  <a href="{% url 'users:create' %}" class="btn btn-primary">+ Nuevo usuario</a>
+  <button class="btn btn-primary"
+          data-action="create">
+    + Nuevo usuario
+  </button>
 </div>
 
-<!-- Stats -->
-<div class="stats-grid mb-4">
-  <div class="stat-card">
-    <div class="number">{{ stats.total }}</div>
-    <div class="label">Total</div>
-  </div>
-  <div class="stat-card">
-    <div class="number text-success">{{ stats.active }}</div>
-    <div class="label">Activos</div>
-  </div>
-  <div class="stat-card">
-    <div class="number text-warning">{{ stats.pending }}</div>
-    <div class="label">Pendientes</div>
-  </div>
-</div>
-
-<!-- Search bar -->
-<form method="get" class="card mb-4" style="padding: var(--space-md);">
-  <div class="d-flex gap-2" style="align-items: end;">
-    <div style="flex: 1;">
-      <label class="form-label" for="q">Buscar</label>
-      <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
-             placeholder="Email o nombre...">
-    </div>
-    <button type="submit" class="btn btn-primary">Buscar</button>
-    {% if search %}
-      <a href="{% url 'users:list' %}" class="btn btn-ghost">Limpiar</a>
-    {% endif %}
+<!-- Search bar: solo input (sin botón), búsqueda as-you-type (debounced) -->
+<form method="get" class="card mb-4" style="padding: var(--space-md);" role="search">
+  <div>
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Email o nombre..."
+           autocomplete="off"
+           data-search-input>
   </div>
 </form>
 
-<!-- Tabla de usuarios -->
-<div class="table-wrapper">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Email</th>
-        <th>Nombre</th>
-        <th>Rol</th>
-        <th>Estado</th>
-        <th>Creado</th>
-        <th>Último acceso</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in users %}
-        <tr>
-          <td><code>{{ u.email }}</code></td>
-          <td>{{ u.name|default:"—" }}</td>
-          <td><span class="badge">{{ u.role }}</span></td>
-          <td>
-            {% if u.status == 'active' %}<span class="badge badge-success">{{ u.get_status_display }}</span>
-            {% elif u.status == 'pending' %}<span class="badge badge-warning">{{ u.get_status_display }}</span>
-            {% else %}<span class="badge badge-danger">{{ u.get_status_display }}</span>
-            {% endif %}
-          </td>
-          <td>{{ u.created_at|date:"d/m/Y" }}</td>
-          <td>{{ u.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
-          <td>
-            <a href="{% url 'users:detail' u.pk %}" class="btn btn-ghost btn-sm">Ver</a>
-            <a href="{% url 'users:edit' u.pk %}" class="btn btn-ghost btn-sm">Editar</a>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
-            No hay usuarios{% if search %} que coincidan con "{{ search }}"{% endif %}.
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- Tabla (server-side renderizada + auto-refresh vía polling) -->
+<div id="users-table-area">
+  {% include "users/_table_partial.html" %}
 </div>
 
-<!-- Pagination -->
-{% if total > per_page %}
-<div class="d-flex gap-2 mt-3" style="justify-content: center; align-items: center;">
-  {% if has_prev %}
-    <a href="?page={{ page|add:-1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm">
-      ← Anterior
-    </a>
-  {% endif %}
-  <span class="text-secondary">
-    Página {{ page }} de {{ total_pages }}
-  </span>
-  {% if has_next %}
-    <a href="?page={{ page|add:1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm">
-      Siguiente →
-    </a>
-  {% endif %}
-</div>
-{% endif %}
+<script>
+// =============================================================
+// HU-48.2: server-side + auto-refresh + search as-you-type
+// =============================================================
+(function() {
+  const tableArea = document.getElementById('users-table-area');
+  if (!tableArea) return;
+
+  const searchInput = document.querySelector('[data-search-input]');
+  const REFRESH_MS = 5000;
+  let pollTimer = null;
+  let searchTimer = null;
+  let isFetching = false;
+
+  // Construir URL para fetch (incluye q + page + fragment)
+  function buildFetchURL() {
+    const params = new URLSearchParams();
+    params.set('fragment', 'table');
+    if (searchInput && searchInput.value.trim()) {
+      params.set('q', searchInput.value.trim());
+    }
+    const page = new URLSearchParams(window.location.search).get('page');
+    if (page) params.set('page', page);
+    return window.location.pathname + '?' + params.toString();
+  }
+
+  // Fetch y reemplazar el contenido de la tabla
+  async function refreshTable() {
+    if (isFetching) return; // evitar requests concurrentes
+    isFetching = true;
+    try {
+      const r = await fetch(buildFetchURL(), {credentials: 'same-origin'});
+      if (r.ok) {
+        const html = await r.text();
+        tableArea.innerHTML = html;
+        // Re-bind pagination clicks
+        bindPagination();
+      }
+    } catch (err) {
+      console.warn('Auto-refresh failed:', err);
+    } finally {
+      isFetching = false;
+    }
+  }
+
+  // Polling cada 5s
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(refreshTable, REFRESH_MS);
+  }
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  // Pausar polling cuando se abre un modal (UX: no refrescar mientras editás)
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-modal-open]') ||
+        e.target.closest('[data-action]')) {
+      stopPolling();
+    }
+    if (e.target.closest('[data-modal-close]')) {
+      // Reanudar después de cerrar
+      setTimeout(startPolling, 500);
+    }
+  });
+
+  // Search as-you-type (debounce 300ms, sin botón)
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function() {
+        // Actualizar URL (sin recargar)
+        const url = new URL(window.location);
+        const q = searchInput.value.trim();
+        if (q) url.searchParams.set('q', q);
+        else url.searchParams.delete('q');
+        url.searchParams.delete('page');
+        window.history.replaceState({}, '', url);
+        // Refrescar tabla
+        refreshTable();
+      }, 300);
+    });
+  }
+
+  // Pagination via AJAX (interceptar clicks en data-page-link)
+  function bindPagination() {
+    tableArea.querySelectorAll('[data-page-link]').forEach(function(a) {
+      a.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        const page = a.getAttribute('data-page-link');
+        const url = new URL(window.location);
+        if (page === '1') url.searchParams.delete('page');
+        else url.searchParams.set('page', page);
+        window.history.replaceState({}, '', url);
+        refreshTable();
+      });
+    });
+  }
+  bindPagination();
+
+  // Iniciar polling al cargar
+  startPolling();
+})();
+</script>
 {% endblock %}

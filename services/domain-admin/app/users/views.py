@@ -43,7 +43,20 @@ def user_list(request):
     per_page = 20
 
     data = services.list_users(search=search, page=page_num, per_page=per_page)
-    stats = services.get_stats()
+
+    # HU-48.2: ?fragment=table → solo tabla + paginación (sin base/layout).
+    # Para auto-refresh vía polling.
+    if request.GET.get("fragment") == "table":
+        return render(request, "users/_table_partial.html", {
+            "users": data["users"],
+            "total": data["total"],
+            "page": data["page"],
+            "per_page": data["per_page"],
+            "total_pages": data["total_pages"],
+            "has_next": data["has_next"],
+            "has_prev": data["has_prev"],
+            "search": search,
+        })
 
     return render(request, "users/list.html", {
         "users": data["users"],
@@ -55,7 +68,6 @@ def user_list(request):
         "has_prev": data["has_prev"],
         "search": search,
         "search_form": search_form,
-        "stats": stats,
     })
 
 
@@ -209,6 +221,27 @@ def role_revoke(request, user_id: str, role_id: str):
         messages.error(request, str(exc))
 
     return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
+
+
+# === Toggle active/suspended (HU-48.2) ===
+
+@require_http_methods(["POST"])
+def user_toggle(request, user_id: str):
+    """Toggle de status active<->suspended via AJAX."""
+    if (redir := _require_auth(request)):
+        return redir
+
+    try:
+        user = services.get_user(user_id)
+        new_status = services.toggle_user_status(user)
+        labels = {"active": "activado", "suspended": "suspendido", "pending": "marcado pendiente", "revoked": "revocado"}
+        label = labels.get(new_status, new_status)
+        messages.success(request, f"Usuario {user.email} {label}.")
+    except services.UserError as exc:
+        messages.error(request, str(exc))
+
+    # AJAX: redirige al list; el JS hace reload para mostrar el cambio
+    return HttpResponseRedirect(reverse("users:list"))
 
 
 # === URLs (MVC routing) ===

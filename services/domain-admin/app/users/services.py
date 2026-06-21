@@ -154,3 +154,20 @@ def get_stats() -> dict:
     active = User.objects.filter(status="active", deleted_at__isnull=True, is_erased=False).count()
     pending = User.objects.filter(status="pending").count()
     return {"total": total, "active": active, "pending": pending}
+
+
+@transaction.atomic
+def toggle_user_status(user: User) -> str:
+    """Alterna active ↔ suspended. Retorna el nuevo status."""
+    from django.utils import timezone
+
+    if user.status == "active":
+        user.status = "suspended"
+    elif user.status == "suspended":
+        user.status = "active"
+    elif user.status in ("pending", "revoked"):
+        user.status = "active"
+    else:
+        user.status = "suspended"
+    user.save()
+    return user.status

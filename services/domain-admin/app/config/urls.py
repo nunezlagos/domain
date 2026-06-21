@@ -23,6 +23,9 @@ urlpatterns = [
     path("flows/", include("maintainers.flows.urls")),
     path("crons/", include("maintainers.crons.urls")),
     path("prompts/", include("maintainers.prompts.urls")),
+
+    # Mantenedor de plantillas de agentes (agent_templates)
+    path("plantillas-agentes/", include("maintainers.agenttemplates.urls")),
 ]
 
 # Handlers de error a nivel módulo. Django los resuelve por nombre de variable

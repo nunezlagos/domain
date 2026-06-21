@@ -1,0 +1,64 @@
+{% extends "maintainers/_table_base.html" %}
+{% comment %}
+Tabla de plantillas de agentes. Extiende maintainers/_table_base.html (wrapper +
+thead/tbody + paginación compartida). Define columnas y filas propias. Como la
+lista viene bajo `agenttemplates` (no `object_list`), se sobreescribe el bloque
+`rows` completo. Sin toggle (status no se alterna; baja = HARD delete), así que
+las acciones son solo ver / editar / eliminar.
+{% endcomment %}
+
+{% block columns %}
+  <th>Nombre</th>
+  <th>Slug</th>
+  <th>Modelo</th>
+  <th>Rol</th>
+  <th>Estado</th>
+  <th style="width: 1%; white-space: nowrap;">Acciones</th>
+{% endblock %}
+
+{% block colspan %}6{% endblock %}
+{% block empty %}No hay plantillas{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
+
+{% block rows %}
+  {% for t in agenttemplates %}
+    <tr id="agenttemplate-row-{{ t.pk }}">
+      <td>{{ t.name }}</td>
+      <td><code>{{ t.slug }}</code></td>
+      <td><code>{{ t.model }}</code></td>
+      <td><span class="badge">{{ t.get_role_display }}</span></td>
+      <td><span class="badge">{{ t.get_status_display }}</span></td>
+      <td>
+        <div class="d-flex gap-1" style="justify-content: flex-end;">
+          <button class="btn btn-icon btn-ghost" title="Ver detalle"
+                  data-action="view" data-id="{{ t.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button class="btn btn-icon btn-ghost" title="Editar"
+                  data-action="edit" data-id="{{ t.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+          <button class="btn btn-icon btn-ghost" title="Eliminar"
+                  style="color: var(--color-danger);"
+                  data-action="delete" data-id="{{ t.pk }}" data-name="{{ t.display_name }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr>
+      <td colspan="6" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+        No hay plantillas{% if search %} que coincidan con "{{ search }}"{% endif %}.
+      </td>
+    </tr>
+  {% endfor %}
+{% endblock %}

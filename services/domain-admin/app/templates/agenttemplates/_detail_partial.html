@@ -1,0 +1,54 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de plantilla de agente para el modal dinámico. Extiende
+maintainers/_detail_base.html (header + body + footer del modal). Define título,
+cuerpo (info) y acciones propias. Sin toggle: acciones = editar / eliminar.
+{% endcomment %}
+
+{% block detail_title %}{{ template_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+  <p class="text-secondary mb-3">
+    <code>{{ template_obj.slug }}</code>
+    · Rol: <span class="badge">{{ template_obj.get_role_display }}</span>
+    · Estado: <span class="badge">{{ template_obj.get_status_display }}</span>
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 160px;">Nombre</th><td>{{ template_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ template_obj.slug }}</code></td></tr>
+      <tr><th>Modelo</th><td><code>{{ template_obj.model }}</code></td></tr>
+      <tr><th>Rol</th><td><span class="badge">{{ template_obj.get_role_display }}</span></td></tr>
+      <tr><th>Política de handoff</th><td>{{ template_obj.get_handoff_policy_display }}</td></tr>
+      <tr><th>Temperatura</th><td>{{ template_obj.temperature }}</td></tr>
+      <tr><th>Max tokens</th><td>{{ template_obj.max_tokens }}</td></tr>
+      <tr><th>Personalidad</th><td>{{ template_obj.personality|default:"—" }}</td></tr>
+      <tr><th>System prompt</th><td><pre style="white-space: pre-wrap; margin: 0;">{{ template_obj.system_prompt|default:"—" }}</pre></td></tr>
+      <tr><th>Capacidades</th>
+        <td>
+          {% for cap in template_obj.capabilities %}<span class="badge badge-primary">{{ cap }}</span>{% empty %}—{% endfor %}
+        </td>
+      </tr>
+      <tr><th>Estado</th><td><span class="badge">{{ template_obj.get_status_display }}</span></td></tr>
+      <tr><th>Gestionada por seed</th><td>{{ template_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Modificada por usuario</th><td>{{ template_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Versión de seed</th><td>{{ template_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Creada</th><td>{{ template_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizada</th><td>{{ template_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+{% endblock %}
+
+{% block detail_actions %}
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ template_obj.pk }}">
+    Editar
+  </button>
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ template_obj.pk }}"
+          data-name="{{ template_obj.display_name }}">
+    Eliminar
+  </button>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if mode == "create" %}Nuevo proyecto{% else %}Editar {{ project_obj.display_name }}{% endif %}
+{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Nuevo proyecto" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% if mode == 'edit' %}{% url 'projects:detail' project_obj.pk %}{% else %}{% url 'projects:list' %}{% endif %}"
+       class="text-secondary" style="font-size: var(--fs-sm);">← Volver</a>
+    <h1 class="mt-1">
+      {% if mode == "create" %}Nuevo proyecto{% else %}Editar proyecto{% endif %}
+    </h1>
+    <p class="subtitle">
+      {% if mode == "create" %}
+        Crear un nuevo proyecto de la organización
+      {% else %}
+        Modificá los datos de <code>{{ project_obj.slug }}</code>
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="card" style="max-width: 720px;">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        <span class="alert-icon">✕</span>
+        <div class="alert-content">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {{ form.organization_id }}
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+      {{ form.slug }}
+      {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+      {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+      {{ form.description }}
+      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.repository_url.id_for_label }}">Repositorio (URL principal)</label>
+      {{ form.repository_url }}
+      {% if form.repository_url.errors %}<div class="form-help text-danger">{{ form.repository_url.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.template.id_for_label }}">Template</label>
+        {{ form.template }}
+        {% if form.template.help_text %}<div class="form-help">{{ form.template.help_text }}</div>{% endif %}
+        {% if form.template.errors %}<div class="form-help text-danger">{{ form.template.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group" style="flex: 1;">
+        <label class="form-label" for="{{ form.current_branch.id_for_label }}">Rama actual</label>
+        {{ form.current_branch }}
+        {% if form.current_branch.errors %}<div class="form-help text-danger">{{ form.current_branch.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="d-flex gap-2" style="justify-content: flex-end;">
+      <a href="{% if mode == 'edit' %}{% url 'projects:detail' project_obj.pk %}{% else %}{% url 'projects:list' %}{% endif %}"
+         class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "create" %}Crear proyecto{% else %}Guardar cambios{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -13,7 +13,7 @@
     <p class="subtitle">
       Gestión de miembros de la plataforma
       <span class="text-muted" style="font-size: var(--fs-xs); margin-left: var(--space-sm);">
-        (auto-refresh cada 5s)
+        (se actualiza al detectar cambios en BD)
       </span>
     </p>
   </div>
@@ -34,26 +34,37 @@
   </div>
 </form>
 
-<!-- Tabla (server-side renderizada + auto-refresh vía polling) -->
-<div id="users-table-area">
+<!-- Tabla (server-side renderizada; se refresca solo al detectar cambios en BD) -->
+<div id="users-table-area"
+     data-signal-url="{% url 'users:signal' %}"
+     data-signal="{{ signal_count }}|{{ signal_version }}">
   {% include "users/_table_partial.html" %}
 </div>
 
 <script>
 // =============================================================
-// HU-48.2: server-side + auto-refresh + search as-you-type
+// HU-48.2: server-side + refresh ON-CHANGE + search as-you-type
+//
+// NO refresca la tabla a ciegas cada 5s. Hace un chequeo barato de
+// "señal" (count + max(updated_at)) contra el endpoint users:signal.
+// Solo cuando la señal cambia (alta/edición/baja/toggle en BD, incluso
+// de otro admin u otro servicio) se re-renderiza la tabla. El filtro y
+// la paginación siguen 100% server-side.
 // =============================================================
 (function() {
   const tableArea = document.getElementById('users-table-area');
   if (!tableArea) return;
 
   const searchInput = document.querySelector('[data-search-input]');
-  const REFRESH_MS = 5000;
-  let pollTimer = null;
+  const signalURL = tableArea.dataset.signalUrl;
+  const CHECK_MS = 5000;        // cada cuánto se chequea la señal (query barata)
+  let lastSignal = tableArea.dataset.signal || '';  // señal embebida en el render
+  let checkTimer = null;
   let searchTimer = null;
   let isFetching = false;
+  let paused = false;           // se pausa mientras hay un modal abierto
 
-  // Construir URL para fetch (incluye q + page + fragment)
+  // Construir URL para fetch de la tabla (incluye q + page + fragment)
   function buildFetchURL() {
     const params = new URLSearchParams();
     params.set('fragment', 'table');
@@ -65,65 +76,78 @@
     return window.location.pathname + '?' + params.toString();
   }
 
-  // Fetch y reemplazar el contenido de la tabla
+  // Fetch y reemplazar el contenido de la tabla (server-side render)
   async function refreshTable() {
     if (isFetching) return; // evitar requests concurrentes
     isFetching = true;
     try {
       const r = await fetch(buildFetchURL(), {credentials: 'same-origin'});
       if (r.ok) {
-        const html = await r.text();
-        tableArea.innerHTML = html;
-        // Re-bind pagination clicks
+        tableArea.innerHTML = await r.text();
         bindPagination();
       }
     } catch (err) {
-      console.warn('Auto-refresh failed:', err);
+      console.warn('Refresh tabla falló:', err);
     } finally {
       isFetching = false;
     }
   }
 
-  // Polling cada 5s
-  function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(refreshTable, REFRESH_MS);
-  }
-  function stopPolling() {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  // Chequeo de señal: refresca SOLO si la BD cambió desde el último check.
+  async function checkSignal() {
+    if (paused || isFetching || !signalURL) return;
+    try {
+      const r = await fetch(signalURL, {credentials: 'same-origin'});
+      if (!r.ok) return;
+      const s = await r.json();
+      const current = s.count + '|' + s.version;
+      if (current !== lastSignal) {
+        lastSignal = current;
+        await refreshTable();   // hubo un cambio en BD → re-render
+      }
+    } catch (err) {
+      console.warn('Check de señal falló:', err);
+    }
   }
 
-  // Pausar polling cuando se abre un modal (UX: no refrescar mientras editás)
+  function startWatch() {
+    if (checkTimer) return;
+    checkTimer = setInterval(checkSignal, CHECK_MS);
+  }
+  function stopWatch() {
+    if (checkTimer) { clearInterval(checkTimer); checkTimer = null; }
+  }
+
+  // Pausar el watch mientras hay un modal abierto (no refrescar mientras editás)
   document.addEventListener('click', function(e) {
     if (e.target.closest('[data-modal-open]') ||
         e.target.closest('[data-action]')) {
-      stopPolling();
+      paused = true;
     }
-    if (e.target.closest('[data-modal-close]')) {
-      // Reanudar después de cerrar
-      setTimeout(startPolling, 500);
+    if (e.target.closest('[data-modal-close]') ||
+        (e.target.classList && e.target.classList.contains('modal-backdrop'))) {
+      // Reanudar después de cerrar; re-sincroniza la señal en el próximo tick.
+      setTimeout(function() { paused = false; }, 500);
     }
   });
 
-  // Search as-you-type (debounce 300ms, sin botón)
+  // Search as-you-type (debounce 300ms, sin botón) → server-side
   if (searchInput) {
     searchInput.addEventListener('input', function() {
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(function() {
-        // Actualizar URL (sin recargar)
         const url = new URL(window.location);
         const q = searchInput.value.trim();
         if (q) url.searchParams.set('q', q);
         else url.searchParams.delete('q');
         url.searchParams.delete('page');
         window.history.replaceState({}, '', url);
-        // Refrescar tabla
-        refreshTable();
+        refreshTable();   // el filtrado es server-side; refresca on-demand
       }, 300);
     });
   }
 
-  // Pagination via AJAX (interceptar clicks en data-page-link)
+  // Pagination via AJAX (interceptar clicks en data-page-link) → server-side
   function bindPagination() {
     tableArea.querySelectorAll('[data-page-link]').forEach(function(a) {
       a.addEventListener('click', function(ev) {
@@ -139,8 +163,8 @@
   }
   bindPagination();
 
-  // Iniciar polling al cargar
-  startPolling();
+  // Arrancar el watch de señal al cargar.
+  startWatch();
 })();
 </script>
 {% endblock %}

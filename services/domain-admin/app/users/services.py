@@ -148,6 +148,28 @@ def revoke_role(user: User, role_id: str) -> bool:
     return deleted_count > 0
 
 
+def get_list_signal() -> dict:
+    """HU-48.2: señal barata de cambios para refresh on-change.
+
+    NO es polling ciego de la tabla. Devuelve count + max(updated_at):
+    cualquier alta, edición, baja (soft) o toggle muta uno de los dos
+    (updated_at es auto_now; created_at de altas nuevas sube el max).
+    El front compara contra su última señal y solo re-renderiza la
+    tabla cuando algo cambió en la BD — incluyendo inserts de otros
+    servicios (domain-mcp) que escriben directo en `users`.
+
+    Query barata: SELECT count(*), max(updated_at) FROM users.
+    """
+    from django.db.models import Count, Max
+
+    agg = User.objects.aggregate(total=Count("id"), latest=Max("updated_at"))
+    latest = agg["latest"]
+    return {
+        "count": agg["total"] or 0,
+        "version": latest.isoformat() if latest else "",
+    }
+
+
 def get_stats() -> dict:
     """Stats agregadas para el header del listado."""
     total = User.objects.count()

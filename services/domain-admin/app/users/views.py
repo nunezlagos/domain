@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.views.decorators.http import require_http_methods
@@ -58,6 +58,9 @@ def user_list(request):
             "search": search,
         })
 
+    # Señal inicial: se embebe en el HTML para que el front parta con la
+    # versión exacta del render (evita perder un cambio entre render y 1er poll).
+    sig = services.get_list_signal()
     return render(request, "users/list.html", {
         "users": data["users"],
         "total": data["total"],
@@ -68,7 +71,20 @@ def user_list(request):
         "has_prev": data["has_prev"],
         "search": search,
         "search_form": search_form,
+        "signal_count": sig["count"],
+        "signal_version": sig["version"],
     })
+
+
+def user_list_signal(request):
+    """HU-48.2: señal de cambios (JSON) para refresh on-change.
+
+    Reemplaza el polling ciego de la tabla: el front pega acá (query barata),
+    compara con su última señal y solo refresca la tabla si cambió.
+    """
+    if (redir := _require_auth(request)):
+        return redir
+    return JsonResponse(services.get_list_signal())
 
 
 # === Detalle ===
@@ -81,17 +97,23 @@ def user_detail(request, user_id: str):
         user = services.get_user(user_id)
     except services.UserError as exc:
         messages.error(request, str(exc))
+        if request.headers.get("X-Requested-With") == "fetch":
+            return HttpResponseRedirect(reverse("users:list"))
         return HttpResponseRedirect(reverse("users:list"))
 
     user_roles = services.get_user_roles(user)
     available_roles = services.list_available_roles()
 
-    return render(request, "users/detail.html", {
+    ctx = {
         "user_obj": user,
         "user_roles": user_roles,
         "available_roles": available_roles,
         "assign_form": UserRoleAssignForm(user=user),
-    })
+    }
+    # ?partial=1 → solo el bloque detail (para modal)
+    if request.GET.get("partial") == "1":
+        return render(request, "users/_detail_partial.html", ctx)
+    return render(request, "users/detail.html", ctx)
 
 
 # === Crear ===

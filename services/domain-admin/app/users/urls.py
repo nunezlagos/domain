@@ -11,6 +11,7 @@ app_name = "users"
 
 urlpatterns = [
     path("", views.user_list, name="list"),
+    path("signal/", views.user_list_signal, name="signal"),
     path("nuevo/", views.user_create, name="create"),
     path("<uuid:user_id>/", views.user_detail, name="detail"),
     path("<uuid:user_id>/editar/", views.user_edit, name="edit"),

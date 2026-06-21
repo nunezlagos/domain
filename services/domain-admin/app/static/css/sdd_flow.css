@@ -1,13 +1,14 @@
 /* sdd_flow.css — DIAGRAMA DE FLUJO del pipeline SDD (vista general).
    ---------------------------------------------------------------------------
    Approach visual:
-   - El diagrama es UN SVG con viewBox fijo (760x1700). width:100% + height:auto
-     => escala proporcional en cualquier pantalla, como un flowchart de internet.
-   - Layout vertical top->bottom: terminador INICIO -> procesos (explore..apply)
+   - El diagrama es UN SVG con viewBox fijo HORIZONTAL (1840x360). width:100% +
+     height:auto => escala proporcional. En desktop entra completo; en mobile el
+     contenedor permite scroll horizontal SOLO del diagrama (nunca del body).
+   - Layout horizontal left->right: terminador INICIO -> procesos (explore..apply)
      -> decisiones (verify, judge) -> procesos (archive, onboard) -> FIN.
    - Las flechas son <path> SVG con <marker> (cabeza). Branches etiquetados
-     Sí/No. Loops de retorno verify->apply y judge->apply. Camino "lite"
-     punteado a la izquierda (explore -> apply).
+     Sí/No. Loops de retorno verify->apply y judge->apply curvan POR DEBAJO de
+     la fila. Camino "lite" punteado curva POR ARRIBA (explore -> apply).
    - Cada FASE clickeable es un <button> HTML real dentro de <foreignObject>,
      así conserva data-action/data-id/data-base-url y modals.js lo intercepta
      (closest('[data-action]')) igual que en las tablas. El shape (caja
@@ -16,7 +17,7 @@
    Reusa SIEMPRE los tokens del design system. */
 
 .sdd-flow-page {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -83,9 +84,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-lg);
+  /* Scroll horizontal SOLO del diagrama si no entra (mobile). Nunca el body. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-/* SVG: escala proporcional. No scroll horizontal nunca. -------------------- */
+/* SVG: escala proporcional horizontal. En desktop entra completo; en mobile
+   conserva un ancho mínimo legible y el contenedor scrollea. ---------------- */
 .sdd-svg {
   display: block;
   width: 100%;
@@ -122,7 +127,7 @@
 /* ====================== ETIQUETAS DE RAMA (Sí / No / lite) ================ */
 .sdd-branch-labels text {
   font-family: var(--font-base);
-  font-size: 15px;
+  font-size: 19px;
   font-weight: var(--fw-bold);
   text-anchor: middle;
 }
@@ -130,7 +135,7 @@
 .sdd-branch-no   { fill: var(--color-warning); }
 .sdd-branch-lite {
   fill: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 17px;
   font-style: italic;
   font-weight: var(--fw-medium);
   letter-spacing: 0.05em;
@@ -145,7 +150,7 @@
 .sdd-term-text {
   fill: var(--color-text-primary);
   font-family: var(--font-base);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: var(--fw-semibold);
   text-anchor: middle;
 }
@@ -164,14 +169,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   text-align: center;
   font-family: var(--font-base);
   color: var(--color-text-primary);
   background: var(--color-bg-elevated);
   border: 2px solid var(--g-color, var(--color-border-light));
   cursor: pointer;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
   transition: transform var(--transition-fast),
     box-shadow var(--transition-fast),
     filter var(--transition-fast),
@@ -180,9 +185,9 @@
 
 /* Acento de grupo: una franja izquierda sutil + sombra tinte */
 .sdd-shape-process {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   border-left-width: 5px;
-  box-shadow: 0 6px 16px var(--color-shadow-md);
+  box-shadow: 0 4px 10px var(--color-shadow-md);
 }
 
 /* Decisión = ROMBO. El botón se recorta en diamante con clip-path; el texto
@@ -196,7 +201,8 @@
     linear-gradient(var(--color-bg-elevated), var(--color-bg-elevated))
       padding-box,
     var(--g-color, var(--color-border-light)) border-box;
-  padding: 0 var(--space-2xl);
+  padding: 0 var(--space-lg);
+  gap: 0;
   position: relative;
   /* El "borde" del rombo se simula con un segundo plano (outline interior). */
   outline: 2px solid var(--g-color, var(--color-border-light));
@@ -223,27 +229,22 @@
   outline-offset: 2px;
 }
 
-/* Contenido del nodo -------------------------------------------------------- */
+/* Contenido del nodo (compacto: nombre + badge de paso chico) ---------------- */
 .sdd-n-step {
   display: inline-block;
-  min-width: 20px;
-  padding: 1px var(--space-xs);
+  min-width: 16px;
+  padding: 0 6px;
   border-radius: var(--radius-full);
   background: var(--g-soft, var(--color-bg-hover));
   color: var(--g-color, var(--color-text-secondary));
   font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .sdd-n-name {
-  font-size: var(--fs-base);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   line-height: 1.15;
-}
-.sdd-n-desc {
-  font-size: var(--fs-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.3;
 }
 
 /* Nodo no seedeado: deshabilitado ------------------------------------------ */
@@ -256,22 +257,29 @@
 
 /* ============================================================
    RESPONSIVE
-   El SVG escala solo por viewBox; en mobile el flowchart vertical
-   se ve completo y más chico (OK). Permitimos scroll vertical
-   natural, NUNCA horizontal.
+   El SVG escala por viewBox horizontal. En desktop entra completo.
+   El BODY nunca scrollea horizontal; sólo el .sdd-diagram lo hace.
+   En mobile, donde el flujo horizontal se achicaría demasiado,
+   fijamos un ancho mínimo legible y dejamos que el contenedor
+   scrollee en X.
    ============================================================ */
-.sdd-flow-page,
-.sdd-diagram {
+.sdd-flow-page {
   overflow-x: hidden;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 760px) {
   .sdd-diagram {
     padding: var(--space-sm);
   }
-  /* En pantallas muy chicas el texto del SVG ya escaló; reducimos el
-     padding lateral del rombo para que el texto no se apriete. */
+  /* Ancho mínimo: por debajo de esto el SVG dejaría de encoger y el
+     contenedor (.sdd-diagram con overflow-x:auto) ofrece scroll lateral. */
+  .sdd-svg {
+    width: 760px;
+    max-width: none;
+  }
+  /* En pantallas chicas reducimos el padding lateral del rombo para que el
+     texto no se apriete. */
   .sdd-shape-decision {
-    padding: 0 var(--space-xl);
+    padding: 0 var(--space-md);
   }
 }

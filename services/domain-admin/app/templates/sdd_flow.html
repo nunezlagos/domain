@@ -17,12 +17,12 @@
     <h1>Flujo SDD</h1>
     <p class="sdd-flow-intro">
       Diagrama de flujo del pipeline SDD: 10 fases que van del prompt del usuario
-      al issue implementado, con decisiones (verify / judge) y loops de retorno.
-      Hacé click en una fase para editar su prompt (plantilla de agente).
+      al issue implementado, con decisiones verify / judge y loops de retorno.
+      Hacé click en una fase para editar su prompt.
     </p>
   </header>
 
-  {# Leyenda de grupos: chips de color por concern #}
+  {% comment %} Leyenda de grupos: chips de color por concern {% endcomment %}
   <div class="sdd-legend" role="list" aria-label="Grupos del pipeline">
     <span class="sdd-legend-item sdd-g-spec" role="listitem">
       <span class="sdd-legend-dot"></span> Spec
@@ -42,242 +42,227 @@
   </div>
 
   {% comment %}
-    Diagrama de flujo (SVG): viewBox fijo -> escala proporcional. Layout vertical.
-    Cada fase clickeable = foreignObject con button HTML (conserva data-action/
-    data-id/data-base-url; modals.js lo intercepta). Inicio/Fin no son
-    clickeables. Cada fase se ubica por clave estable pmap.<slug>.
+    Diagrama de flujo SVG horizontal: viewBox fijo -> escala proporcional.
+    Fila principal izquierda -> derecha. Cada fase clickeable = foreignObject
+    con button HTML (conserva data-action/data-id/data-base-url; modals.js lo
+    intercepta). Inicio/Fin no son clickeables. Loops de retorno por debajo,
+    camino lite punteado por arriba. Posiciones por clave estable pmap.<slug>.
   {% endcomment %}
   <div class="sdd-diagram">
-    <svg class="sdd-svg" viewBox="0 0 760 1700" role="img"
+    <svg class="sdd-svg" viewBox="0 0 1840 360" role="img"
          aria-label="Diagrama de flujo del pipeline SDD"
          xmlns="http://www.w3.org/2000/svg">
       <defs>
-        {# Cabeza de flecha estándar #}
+        {% comment %} Cabeza de flecha estándar {% endcomment %}
         <marker id="sdd-arrow" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head"/>
         </marker>
-        {# Cabeza de flecha para loops (color de retorno) #}
+        {% comment %} Cabeza de flecha para loops {% endcomment %}
         <marker id="sdd-arrow-loop" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head-loop"/>
         </marker>
-        {# Cabeza de flecha para el camino lite (punteado) #}
+        {% comment %} Cabeza de flecha para el camino lite {% endcomment %}
         <marker id="sdd-arrow-lite" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head-lite"/>
         </marker>
-        {# Sombra sutil para los nodos #}
+        {% comment %} Sombra sutil para los nodos {% endcomment %}
         <filter id="sdd-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="4" stdDeviation="6"
-                        flood-color="#000000" flood-opacity="0.35"/>
+          <feDropShadow dx="0" dy="3" stdDeviation="4"
+                        flood-color="#000000" flood-opacity="0.3"/>
         </filter>
       </defs>
 
-      {# ============================ FLECHAS ============================ #}
-      {# Flechas primero (quedan debajo de los nodos); columna principal en x=380. #}
+      {% comment %}
+        FLECHAS primero (debajo de los nodos). Fila principal en y=160.
+        Pitch horizontal de 150px. Cada nodo proceso mide 124x64 (centro y=160).
+        Rombos miden 116x116 (centro y=160). Inicio en x=10, Fin en x=1700.
+      {% endcomment %}
       <g class="sdd-edges" fill="none">
-        {# Inicio -> Explore #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 96 L380 130"/>
-        {# Explore -> Spec #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 220 L380 254"/>
-        {# Spec -> Propose #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 344 L380 378"/>
-        {# Propose -> Design #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 468 L380 502"/>
-        {# Design -> Tasks #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 592 L380 626"/>
-        {# Tasks -> Apply #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 716 L380 750"/>
-        {# Apply -> Verify (diamond) #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 840 L380 874"/>
-        {# Verify (Sí) -> Judge (diamond) #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 1006 L380 1062"/>
-        {# Judge (Sí) -> Archive #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 1194 L380 1250"/>
-        {# Archive -> Onboard #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 1340 L380 1374"/>
-        {# Onboard -> Fin #}
-        <path class="sdd-edge" marker-end="url(#sdd-arrow)"
-              d="M380 1464 L380 1498"/>
+        {% comment %} Inicio -> Explore {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M120 160 H134"/>
+        {% comment %} Explore -> Spec {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M258 160 H284"/>
+        {% comment %} Spec -> Propose {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M408 160 H434"/>
+        {% comment %} Propose -> Design {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M558 160 H584"/>
+        {% comment %} Design -> Tasks {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M708 160 H734"/>
+        {% comment %} Tasks -> Apply {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M858 160 H884"/>
+        {% comment %} Apply -> Verify {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1008 160 H1041"/>
+        {% comment %} Verify Sí -> Judge {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1157 160 H1191"/>
+        {% comment %} Judge Sí -> Archive {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1307 160 H1334"/>
+        {% comment %} Archive -> Onboard {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1458 160 H1484"/>
+        {% comment %} Onboard -> Fin {% endcomment %}
+        <path class="sdd-edge" marker-end="url(#sdd-arrow)" d="M1608 160 H1694"/>
 
-        {# LOOP verify "No" -> vuelve a Apply (lado derecho) #}
+        {% comment %} LOOP verify "No" -> vuelve a Apply (curva por debajo) {% endcomment %}
         <path class="sdd-edge sdd-edge-loop" marker-end="url(#sdd-arrow-loop)"
-              d="M480 940 H660 V795 H520"/>
-        {# LOOP judge "No" -> vuelve a Apply (lado derecho, más afuera) #}
+              d="M1100 218 C1100 290 950 300 950 232"/>
+        {% comment %} LOOP judge "No" -> vuelve a Apply (curva más baja) {% endcomment %}
         <path class="sdd-edge sdd-edge-loop" marker-end="url(#sdd-arrow-loop)"
-              d="M480 1128 H700 V780 H520"/>
+              d="M1250 218 C1250 335 946 335 946 234"/>
 
-        {# CAMINO LITE (punteado): Explore -> Apply directo (lado izquierdo) #}
+        {% comment %} CAMINO LITE punteado: Explore -> Apply directo (curva por arriba) {% endcomment %}
         <path class="sdd-edge sdd-edge-lite" marker-end="url(#sdd-arrow-lite)"
-              d="M280 175 H90 V795 H240"/>
+              d="M196 128 C196 50 946 50 946 86"/>
       </g>
 
-      {# ====================== ETIQUETAS DE RAMA ====================== #}
+      {% comment %} ETIQUETAS DE RAMA {% endcomment %}
       <g class="sdd-branch-labels">
-        {# Verify: Sí (baja) / No (loop derecho) #}
-        <text class="sdd-branch-yes" x="392" y="1036">Sí</text>
-        <text class="sdd-branch-no"  x="492" y="934">No</text>
-        {# Judge: Sí (baja) / No (loop derecho) #}
-        <text class="sdd-branch-yes" x="392" y="1226">Sí</text>
-        <text class="sdd-branch-no"  x="492" y="1122">No</text>
-        {# Lite #}
-        <text class="sdd-branch-lite" x="98" y="490">lite</text>
+        {% comment %} Verify: Sí (sigue) / No (loop) {% endcomment %}
+        <text class="sdd-branch-yes" x="1174" y="150">Sí</text>
+        <text class="sdd-branch-no"  x="1112" y="262">No</text>
+        {% comment %} Judge: Sí (sigue) / No (loop) {% endcomment %}
+        <text class="sdd-branch-yes" x="1324" y="150">Sí</text>
+        <text class="sdd-branch-no"  x="1262" y="308">No</text>
+        {% comment %} Lite {% endcomment %}
+        <text class="sdd-branch-lite" x="560" y="42">lite</text>
       </g>
 
-      {# ====================== TERMINADOR: INICIO ====================== #}
+      {% comment %} TERMINADOR: INICIO {% endcomment %}
       <g class="sdd-terminator">
-        <rect x="285" y="40" width="190" height="56" rx="28" ry="28"
+        <rect x="10" y="134" width="110" height="52" rx="26" ry="26"
               filter="url(#sdd-shadow)"/>
-        <text x="380" y="73" class="sdd-term-text">Prompt del usuario</text>
+        <text x="65" y="165" class="sdd-term-text">Prompt</text>
       </g>
 
-      {# ====================== PROCESOS Y DECISIONES ==================== #}
-      {# Cada nodo clickeable = foreignObject con button HTML; el shape (rect/rombo) lo da el CSS. #}
+      {% comment %}
+        PROCESOS Y DECISIONES. Cada nodo clickeable = foreignObject con button
+        HTML; el shape (rect/rombo) lo da el CSS. Pitch 150px desde x=134.
+      {% endcomment %}
 
-      {# --- explore (process) --- #}
+      {% comment %} --- explore (process) --- {% endcomment %}
       {% with p=pmap.explore %}
-      <foreignObject x="280" y="130" width="200" height="90" class="sdd-fo">
+      <foreignObject x="134" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">1</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- spec (process) --- #}
+      {% comment %} --- spec (process) --- {% endcomment %}
       {% with p=pmap.spec %}
-      <foreignObject x="280" y="254" width="200" height="90" class="sdd-fo">
+      <foreignObject x="284" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">2</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- propose (process) --- #}
+      {% comment %} --- propose (process) --- {% endcomment %}
       {% with p=pmap.propose %}
-      <foreignObject x="280" y="378" width="200" height="90" class="sdd-fo">
+      <foreignObject x="434" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">3</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- design (process) --- #}
+      {% comment %} --- design (process) --- {% endcomment %}
       {% with p=pmap.design %}
-      <foreignObject x="280" y="502" width="200" height="90" class="sdd-fo">
+      <foreignObject x="584" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">4</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">Define tests + sabotaje</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- tasks (process) --- #}
+      {% comment %} --- tasks (process) --- {% endcomment %}
       {% with p=pmap.tasks %}
-      <foreignObject x="280" y="626" width="200" height="90" class="sdd-fo">
+      <foreignObject x="734" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">5</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- apply (process) --- #}
+      {% comment %} --- apply (process) --- {% endcomment %}
       {% with p=pmap.apply %}
-      <foreignObject x="270" y="750" width="220" height="90" class="sdd-fo">
+      <foreignObject x="884" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · RED GREEN REFACTOR"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">6</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">RED → GREEN → REFACTOR</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- verify (DECISIÓN / rombo) --- #}
+      {% comment %} --- verify (DECISIÓN / rombo) --- {% endcomment %}
       {% with p=pmap.verify %}
-      <foreignObject x="280" y="874" width="200" height="132" class="sdd-fo">
+      <foreignObject x="1042" y="102" width="116" height="116" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-decision sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · ¿Tests Gherkin pasan?"{% else %}disabled title="Fase no seedeada"{% endif %}>
           <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">¿Tests (Gherkin) pasan?</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- judge (DECISIÓN / rombo) --- #}
+      {% comment %} --- judge (DECISIÓN / rombo) --- {% endcomment %}
       {% with p=pmap.judge %}
-      <foreignObject x="280" y="1062" width="200" height="132" class="sdd-fo">
+      <foreignObject x="1192" y="102" width="116" height="116" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-decision sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · ¿Sabotaje detectado?"{% else %}disabled title="Fase no seedeada"{% endif %}>
           <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">¿Sabotaje detectado?</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- archive (process) --- #}
+      {% comment %} --- archive (process) --- {% endcomment %}
       {% with p=pmap.archive %}
-      <foreignObject x="280" y="1250" width="200" height="90" class="sdd-fo">
+      <foreignObject x="1334" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+          <span class="sdd-n-name">{{ p.name }}</span>
           <span class="sdd-n-step">9</span>
-          <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# --- onboard (process) --- #}
+      {% comment %} --- onboard (process) --- {% endcomment %}
       {% with p=pmap.onboard %}
-      <foreignObject x="280" y="1374" width="200" height="90" class="sdd-fo">
+      <foreignObject x="1484" y="128" width="124" height="64" class="sdd-fo">
         <button xmlns="http://www.w3.org/1999/xhtml" type="button"
                 class="sdd-node sdd-shape-process sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="Editar prompt: {{ p.name }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-          <span class="sdd-n-step">10</span>
+                {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} · {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
           <span class="sdd-n-name">{{ p.name }}</span>
-          <span class="sdd-n-desc">{{ p.desc }}</span>
+          <span class="sdd-n-step">10</span>
         </button>
       </foreignObject>
       {% endwith %}
 
-      {# ====================== TERMINADOR: FIN ====================== #}
+      {% comment %} TERMINADOR: FIN {% endcomment %}
       <g class="sdd-terminator">
-        <rect x="285" y="1498" width="190" height="56" rx="28" ry="28"
+        <rect x="1700" y="134" width="130" height="52" rx="26" ry="26"
               filter="url(#sdd-shadow)"/>
-        <text x="380" y="1531" class="sdd-term-text">Issue implementado</text>
+        <text x="1765" y="165" class="sdd-term-text">Issue listo</text>
       </g>
     </svg>
   </div>

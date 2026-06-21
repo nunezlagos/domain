@@ -113,17 +113,27 @@ def user_create(request):
                     hashed_password=form.hashed_password(),
                 )
                 messages.success(request, f"Usuario {user.email} creado correctamente.")
+                # AJAX: devolver redirect header para que el JS haga reload
+                if request.headers.get("X-Requested-With") == "fetch":
+                    return HttpResponseRedirect(reverse("users:list"))
                 return HttpResponseRedirect(reverse("users:detail", args=[user.pk]))
             except services.UserError as exc:
                 messages.error(request, str(exc))
+                # AJAX: re-renderizar form con errores en modal
+                if request.headers.get("X-Requested-With") == "fetch":
+                    return render(request, "users/_form_partial.html", {
+                        "form": form, "mode": "create", "user_obj": None,
+                        "action": reverse("users:create"),
+                    })
     else:
         form = UserForm()
 
-    return render(request, "users/form.html", {
-        "form": form,
-        "mode": "create",
-        "user_obj": None,
-    })
+    # ?partial=1 → solo el form para inyectar en modal
+    ctx = {"form": form, "mode": "create", "user_obj": None,
+           "action": reverse("users:create")}
+    if request.GET.get("partial") == "1":
+        return render(request, "users/_form_partial.html", ctx)
+    return render(request, "users/form.html", ctx)
 
 
 # === Editar ===
@@ -137,6 +147,8 @@ def user_edit(request, user_id: str):
         user = services.get_user(user_id)
     except services.UserError as exc:
         messages.error(request, str(exc))
+        if request.headers.get("X-Requested-With") == "fetch":
+            return HttpResponseRedirect(reverse("users:list"))
         return HttpResponseRedirect(reverse("users:list"))
 
     if request.method == "POST":
@@ -152,17 +164,25 @@ def user_edit(request, user_id: str):
                     hashed_password=form.hashed_password(),
                 )
                 messages.success(request, f"Usuario {user.email} actualizado.")
+                if request.headers.get("X-Requested-With") == "fetch":
+                    return HttpResponseRedirect(reverse("users:list"))
                 return HttpResponseRedirect(reverse("users:detail", args=[user.pk]))
             except services.UserError as exc:
                 messages.error(request, str(exc))
+                if request.headers.get("X-Requested-With") == "fetch":
+                    return render(request, "users/_form_partial.html", {
+                        "form": form, "mode": "edit", "user_obj": user,
+                        "action": reverse("users:edit", args=[user.pk]),
+                    })
     else:
         form = UserForm(instance=user)
 
-    return render(request, "users/form.html", {
-        "form": form,
-        "mode": "edit",
-        "user_obj": user,
-    })
+    # ?partial=1 → solo el form para inyectar en modal
+    ctx = {"form": form, "mode": "edit", "user_obj": user,
+           "action": reverse("users:edit", args=[user.pk])}
+    if request.GET.get("partial") == "1":
+        return render(request, "users/_form_partial.html", ctx)
+    return render(request, "users/form.html", ctx)
 
 
 # === Eliminar ===

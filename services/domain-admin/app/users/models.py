@@ -7,6 +7,7 @@
 
 Django NO migra estas tablas (managed=False). Solo lee/escribe via ORM.
 """
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 
@@ -17,7 +18,8 @@ class Role(models.Model):
     slug = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
-    permissions = models.JSONField(default=list, blank=True)
+    # En la DB es text[] (no jsonb), por eso ArrayField en lugar de JSONField.
+    permissions = ArrayField(models.CharField(max_length=100), default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=20, default="active")

@@ -18,6 +18,27 @@ services:
       - domain_internal
     restart: "no"
 
+  # Init container: corre `domain seed all` después de las migraciones y
+  # antes que el server. Aplica los catálogos globales (platform_policies,
+  # project_templates, mcp_providers, skills, agent_templates, flows) de
+  # forma idempotente vía seed_versions, así que correrlo en cada `up` es
+  # seguro. Usa el MISMO DSN superuser que domain-migrate.
+  domain-seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: domain-mcp:local
+    container_name: domain-seed
+    command: ["seed", "all"]
+    environment:
+      DOMAIN_DATABASE_URL: postgres://${POSTGRES_USER:-domain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
+    depends_on:
+      domain-migrate:
+        condition: service_completed_successfully
+    networks:
+      - domain_internal
+    restart: "no"
+
   domain-mcp:
     build:
       context: .
@@ -27,6 +48,8 @@ services:
     restart: unless-stopped
     depends_on:
       domain-migrate:
+        condition: service_completed_successfully
+      domain-seed:
         condition: service_completed_successfully
     environment:
       DOMAIN_HTTP_PORT: 8000

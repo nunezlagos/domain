@@ -6,11 +6,25 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// FlowsCatalogSeeder implementa el interface Seeder para el catálogo
+// global de flows. Order > agent_templates.
+type FlowsCatalogSeeder struct{}
+
+func (s *FlowsCatalogSeeder) Name() string    { return "flows" }
+func (s *FlowsCatalogSeeder) Version() int    { return flowsSeedVersion }
+func (s *FlowsCatalogSeeder) Order() int      { return 52 }
+func (s *FlowsCatalogSeeder) IsDevOnly() bool { return false }
+
+func (s *FlowsCatalogSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Report, error) {
+	return seedFlows(ctx, tx)
+}
+
 // FlowCatalogEntry — issue-08.10 seed-003: declaración built-in de un
-// flow seedeable per-org. Hoy el único entry es `sdd-pipeline-v1`, pero
+// flow global seedeable. Hoy el único entry es `sdd-pipeline-v1`, pero
 // el shape es reutilizable para futuros built-in flows (project bootstrap,
 // nightly maintenance, etc.).
 type FlowCatalogEntry struct {
@@ -79,7 +93,7 @@ var SDDPipelinePhaseSlugs = []string{
 	"sdd-onboard",
 }
 
-// FlowsCatalog devuelve el set de flows seedeables per-org. El catalog
+// FlowsCatalog devuelve el set de flows globales seedeables. El catalog
 // es estable; bumps de seed_version sólo cuando el spec cambia.
 func FlowsCatalog() []FlowCatalogEntry {
 	return []FlowCatalogEntry{
@@ -137,7 +151,9 @@ func retryPolicyForPhase(phase string) string {
 // FlowSpecJSON refleja la API; este int controla el seeder dedup).
 const flowsSeedVersion = 1
 
-// SeedFlowsForOrg materializa el catalog en una org específica.
+// SeedFlowsForOrg aplica el catalog global de flows usando un pool.
+// El parámetro orgID quedó vestigial; se conserva como helper pool-based
+// para tests.
 // Idempotente (UPSERT) y respeta is_user_modified=true; cleanup
 // defensivo borra rows seed_managed con slugs ya no presentes en el
 // catalog, salvo que tengan flow_runs activos (status pending/running)
@@ -145,7 +161,14 @@ const flowsSeedVersion = 1
 //
 // Sigue el patrón de SeedAgentTemplatesForOrg (chunk 28fddeb): xmax=0
 // distingue INSERT real vs DO UPDATE para reportar Created/Updated.
-func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (Report, error) {
+func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, _ uuid.UUID) (Report, error) {
+	return seedFlows(ctx, pool)
+}
+
+// seedFlows aplica el UPSERT + cleanup del catálogo de flows usando
+// cualquier execer (pool o tx). Compartido entre SeedFlowsForOrg (pool) y
+// FlowsCatalogSeeder.Run (tx).
+func seedFlows(ctx context.Context, db execer) (Report, error) {
 	var rep Report
 	catalog := FlowsCatalog()
 	for _, e := range catalog {
@@ -154,7 +177,7 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 			return rep, fmt.Errorf("marshal spec for %s: %w", e.Slug, err)
 		}
 		var inserted bool
-		err = pool.QueryRow(ctx, `
+		err = db.QueryRow(ctx, `
 			INSERT INTO flows
 			  (slug, name, description, spec, is_active,
 			   deterministic_replay, seed_managed, seed_version)
@@ -180,7 +203,7 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 			// (se aplicaron cambios del catálogo). Para eso releemos la
 			// row: si is_user_modified=true → preserved, else updated.
 			var userModified bool
-			if scanErr := pool.QueryRow(ctx,
+			if scanErr := db.QueryRow(ctx,
 				`SELECT is_user_modified FROM flows WHERE slug=$1`,
 				e.Slug,
 			).Scan(&userModified); scanErr == nil && userModified {
@@ -197,7 +220,7 @@ func SeedFlowsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (
 	for i, e := range catalog {
 		currentSlugs[i] = e.Slug
 	}
-	cleanupTag, err := pool.Exec(ctx, `
+	cleanupTag, err := db.Exec(ctx, `
 		DELETE FROM flows f
 		WHERE f.seed_managed = true
 		  AND f.is_user_modified = false

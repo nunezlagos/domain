@@ -1136,6 +1136,11 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.PlatformPoliciesSeeder{})
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
 	registry.Register(&seeds.MCPProvidersSeeder{})
+	// Catálogos globales (skills/agent_templates/flows) — idempotentes vía
+	// seed_versions. Mismos seeders que registra main.go al bootear.
+	registry.Register(&seeds.SkillsCatalogSeeder{})
+	registry.Register(&seeds.AgentTemplatesCatalogSeeder{})
+	registry.Register(&seeds.FlowsCatalogSeeder{})
 
 	reports, err := registry.RunAll(ctx, pool, seeds.Env(envStr))
 	if err != nil {

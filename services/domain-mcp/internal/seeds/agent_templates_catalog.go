@@ -6,8 +6,22 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// AgentTemplatesCatalogSeeder implementa el interface Seeder para el
+// catálogo global de agent_templates. Order > skills.
+type AgentTemplatesCatalogSeeder struct{}
+
+func (s *AgentTemplatesCatalogSeeder) Name() string    { return "agent_templates" }
+func (s *AgentTemplatesCatalogSeeder) Version() int    { return agentTemplatesSeedVersion }
+func (s *AgentTemplatesCatalogSeeder) Order() int      { return 51 }
+func (s *AgentTemplatesCatalogSeeder) IsDevOnly() bool { return false }
+
+func (s *AgentTemplatesCatalogSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Report, error) {
+	return seedAgentTemplates(ctx, tx)
+}
 
 // AgentTemplateCatalogEntry es la definition reutilizable de un agent
 // template built-in. issue-08.5 + issue-08.10 (re-cataloging a sdd-*).
@@ -670,15 +684,24 @@ JSON estricto:
 }
 
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
-// Bump version → 4 para que SeedAgentTemplatesForOrg re-aplique en
-// todas las orgs (overwrite, salvo is_user_modified=true).
+// Bump version → 4 para que el seeder re-aplique el catálogo global
+// (overwrite, salvo is_user_modified=true).
 const agentTemplatesSeedVersion = 4
 
-// SeedAgentTemplatesForOrg materializa el catalog SDD en una org específica.
+// SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
+// El parámetro orgID quedó vestigial (los agent_templates de catálogo son
+// globales); se conserva como helper pool-based para tests.
 // Idempotente: respeta is_user_modified=true (no pisa customizaciones).
 // Cleanup defensivo: borra rows con seed_managed=true que no estén en el
 // catálogo actual Y no tengan agent_runs en estado running.
-func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (Report, error) {
+func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, _ uuid.UUID) (Report, error) {
+	return seedAgentTemplates(ctx, pool)
+}
+
+// seedAgentTemplates aplica el UPSERT + cleanup del catálogo usando
+// cualquier execer (pool o tx). Compartido entre SeedAgentTemplatesForOrg
+// (pool) y AgentTemplatesCatalogSeeder.Run (tx).
+func seedAgentTemplates(ctx context.Context, db execer) (Report, error) {
 	var rep Report
 	catalog := AgentTemplateCatalog()
 
@@ -699,7 +722,7 @@ func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uui
 
 		// xmax=0 distingue INSERT real (Created) vs DO UPDATE (Updated).
 		var inserted bool
-		err := pool.QueryRow(ctx, `
+		err := db.QueryRow(ctx, `
 			INSERT INTO agent_templates
 			  (slug, name, system_prompt, personality, capabilities,
 			   model, temperature, max_tokens, handoff_policy, metadata, role,
@@ -740,7 +763,7 @@ func SeedAgentTemplatesForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uui
 		currentSlugs[i] = e.Slug
 	}
 
-	cleanupTag, err := pool.Exec(ctx, `
+	cleanupTag, err := db.Exec(ctx, `
 		DELETE FROM agent_templates t
 		WHERE t.seed_managed = true
 		  AND t.is_user_modified = false

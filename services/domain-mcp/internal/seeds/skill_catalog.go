@@ -5,13 +5,42 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SkillCatalog define skills built-in que toda org nueva recibe.
-// Pattern: skill_catalog NO es global (skills tienen org_id NOT NULL),
-// se materializa per-org via SeedSkillsForOrg invocado al crear org
-// (issue-21.1 org-management) o vía CLI `domain seed --org <id>`.
+// execer es la interfaz mínima compartida por *pgxpool.Pool y pgx.Tx.
+// Permite que el cuerpo de los seeders de catálogo (UPSERT) corra tanto
+// con un pool (wrappers SeedXForOrg, helpers de tests) como con una tx
+// dentro del Registry (Seeder.Run, usado por `domain seed all`).
+// Incluye QueryRow además de Exec porque los seeders de agent_templates y
+// flows usan RETURNING (xmax=0) para distinguir Created de Updated.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// skillsSeedVersion es la versión actual del catálogo de skills. Se usa
+// tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
+// pool-based SeedSkillsForOrg.
+const skillsSeedVersion = 3
+
+// SkillsCatalogSeeder implementa el interface Seeder para el catálogo
+// global de skills. Order > platform_policies/project_templates/mcp_providers.
+type SkillsCatalogSeeder struct{}
+
+func (s *SkillsCatalogSeeder) Name() string    { return "skills" }
+func (s *SkillsCatalogSeeder) Version() int    { return skillsSeedVersion }
+func (s *SkillsCatalogSeeder) Order() int      { return 50 }
+func (s *SkillsCatalogSeeder) IsDevOnly() bool { return false }
+
+func (s *SkillsCatalogSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Report, error) {
+	return seedSkills(ctx, tx, skillsSeedVersion)
+}
+
+// SkillCatalog define las skills built-in globales del catálogo.
+// Se materializan via SkillsCatalogSeeder dentro de `domain seed all`.
 //
 // Cada skill se marca seed_managed=true; updates futuros del catalog
 // solo afectan filas con is_user_modified=false (no sobrescribe customs).
@@ -664,9 +693,18 @@ Output:
 	}
 }
 
-// SeedSkillsForOrg materializa el catálogo en una org específica.
-// Idempotente: ON CONFLICT (org, slug) UPDATE solo si is_user_modified=false.
-func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, version int) (Report, error) {
+// SeedSkillsForOrg aplica el catálogo global de skills usando un pool.
+// El parámetro orgID quedó vestigial (las skills de catálogo son globales:
+// project_id IS NULL); se conserva como helper pool-based para tests.
+// Idempotente: ON CONFLICT (slug) UPDATE solo si is_user_modified=false.
+func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, _ uuid.UUID, version int) (Report, error) {
+	return seedSkills(ctx, pool, version)
+}
+
+// seedSkills aplica el UPSERT idempotente del catálogo de skills usando
+// cualquier execer (pool o tx). Compartido entre SeedSkillsForOrg (pool) y
+// SkillsCatalogSeeder.Run (tx) para no duplicar el SQL.
+func seedSkills(ctx context.Context, db execer, version int) (Report, error) {
 	var rep Report
 	for _, e := range SkillCatalog() {
 		input, _ := json.Marshal(e.InputSchema)
@@ -680,7 +718,7 @@ func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 			contentPtr = &e.Content
 		}
 
-		tag, err := pool.Exec(ctx, `
+		tag, err := db.Exec(ctx, `
 			INSERT INTO skills (slug, name, description, skill_type,
 			                    content, input_schema, output_schema, timeout_seconds,
 			                    idempotent, has_side_effects, tags,

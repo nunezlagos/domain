@@ -168,8 +168,6 @@ func main() {
 		runWorkflow(os.Args[2:])
 	case "install":
 		os.Exit(runInstall(os.Args[2:]))
-	case "seed-org":
-		runSeedOrg(os.Args[2:])
 	case "seed-demo":
 		runSeedDemo(os.Args[2:])
 	case "embed-backfill":
@@ -485,9 +483,12 @@ func runServer() {
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
-	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
-	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
-	// seeds.SeedAgentTemplatesForOrg (issue-21.1 org-management hook).
+	// Catálogos globales (skills/agent_templates/flows): organizations fue
+	// eliminada, son globales. Corren como Seeders del Registry (idempotente
+	// vía seed_versions) después de los anteriores (Order 50/51/52).
+	seedRegistry.Register(&seeds.SkillsCatalogSeeder{})
+	seedRegistry.Register(&seeds.AgentTemplatesCatalogSeeder{})
+	seedRegistry.Register(&seeds.FlowsCatalogSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
@@ -2230,53 +2231,3 @@ func (a *analysisRunnerAdapter) RunAnalysis(ctx context.Context, in promptrouter
 	}, nil
 }
 
-// runSeedOrg: aplica los catálogos per-org (skills, agent_templates,
-// flows) a una org ya existente. Útil para retro-seedear orgs creadas
-// antes del PostCreateHook (REQ-57). Uso: domain seed-org <uuid>
-func runSeedOrg(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Uso: domain seed-org <organization-uuid>")
-		os.Exit(2)
-	}
-	orgID, err := uuid.Parse(args[0])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "UUID inválido:", err)
-		os.Exit(2)
-	}
-	ctx := context.Background()
-	dsn := os.Getenv("DOMAIN_DATABASE_URL")
-	if dsn == "" {
-		dsn = os.Getenv("DATABASE_URL")
-	}
-	if dsn == "" {
-		fmt.Fprintln(os.Stderr, "DOMAIN_DATABASE_URL no seteado")
-		os.Exit(1)
-	}
-	pool, err := pgxpoolNew(ctx, dsn)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "open pool:", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
-
-	fmt.Printf("Seedeando catálogos per-org en %s...\n", orgID)
-	rs, err := seeds.SeedSkillsForOrg(ctx, pool, orgID, 3)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "skills:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ skills: created=%d updated=%d skipped=%d\n", rs.Created, rs.Updated, rs.Skipped)
-	ra, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "agent_templates:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ agent_templates: created=%d updated=%d skipped=%d\n", ra.Created, ra.Updated, ra.Skipped)
-	rf, err := seeds.SeedFlowsForOrg(ctx, pool, orgID)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "flows:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ flows: created=%d updated=%d skipped=%d\n", rf.Created, rf.Updated, rf.Skipped)
-	fmt.Println("Listo.")
-}

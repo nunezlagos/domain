@@ -57,7 +57,7 @@ class User(models.Model):
     erased_at = models.DateTimeField(null=True, blank=True)
     password_hash = models.BinaryField(null=True, blank=True)
     password_set_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, default="active")
+    status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:
         db_table = "users"

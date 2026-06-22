@@ -53,11 +53,12 @@ class ProjectViews(MaintainerViews):
     #     del POST. La URL principal y el template ya no se mandan (la primera
     #     se deriva del repo default; el template se quitó).
     def _form_payload(self, form) -> dict:
+        # current_branch ya no se edita en el modal (cada repo tiene su rama);
+        # se omite para preservar el valor existente (es referencial / de sistema).
         return {
             "name": form.cleaned_data["name"],
             "slug": form.cleaned_data["slug"],
             "description": form.cleaned_data["description"],
-            "current_branch": form.cleaned_data["current_branch"],
             "repositories": self._parse_repo_post(form.data),
         }
 

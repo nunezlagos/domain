@@ -47,12 +47,6 @@ class ProjectForm(InstanceAwareMixin, forms.Form):
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}),
     )
-    current_branch = forms.CharField(
-        label="Rama actual",
-        max_length=120,
-        required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "main"}),
-    )
 
     def __init__(self, *args, instance: Project | None = None, **kwargs):
         # InstanceAwareMixin captura instance y lo expone como self.instance.
@@ -62,7 +56,6 @@ class ProjectForm(InstanceAwareMixin, forms.Form):
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
             self.fields["description"].initial = instance.description
-            self.fields["current_branch"].initial = instance.current_branch
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()

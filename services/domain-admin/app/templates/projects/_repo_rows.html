@@ -1,13 +1,25 @@
 {% comment %}
 Sección "Repositorios git" del form de proyecto. Filas dinámicas (url + rama +
 folder) que viajan como arrays paralelos repo_url[]/repo_branch[]/repo_folder[].
-El primero es el principal (default). El + agrega filas, el − las quita
-(projects-repos.js, delegado para funcionar en el modal dinámico).
+El primero es el principal (default). El botón git+ agrega filas, el tacho las
+quita (projects-repos.js, delegado para funcionar en el modal dinámico).
 
 Contexto: repo_rows = lista de {url, branch_default, root_path}.
 {% endcomment %}
 <div class="form-group">
-  <label class="form-label">Repositorios git</label>
+  <div class="d-flex" style="align-items: center; justify-content: space-between; gap: var(--space-sm);">
+    <label class="form-label" style="margin: 0;">Repositorios git</label>
+    <button type="button" class="btn btn-icon btn-ghost" data-repo-add title="Agregar repositorio">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="6" y1="3" x2="6" y2="15"/>
+        <circle cx="18" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <path d="M18 9a9 9 0 0 1-9 9"/>
+        <line x1="14.5" y1="14.5" x2="20.5" y2="14.5"/>
+        <line x1="17.5" y1="11.5" x2="17.5" y2="17.5"/>
+      </svg>
+    </button>
+  </div>
   <div class="form-help">
     URL del repo, rama por defecto y carpeta donde vive en el checkout
     (ej. <code>/</code> o <code>/domain/services/</code>, opcional). El primero
@@ -25,7 +37,8 @@ Contexto: repo_rows = lista de {url, branch_default, root_path}.
                placeholder="/ (opcional)" value="{{ r.root_path }}">
         <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
       </div>
@@ -39,20 +52,13 @@ Contexto: repo_rows = lista de {url, branch_default, root_path}.
                placeholder="/ (opcional)">
         <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
       </div>
     {% endfor %}
   </div>
-
-  <button type="button" class="btn btn-ghost btn-sm" data-repo-add style="margin-top: var(--space-sm);">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="12" y1="5" x2="12" y2="19"/>
-      <line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-    Agregar repositorio
-  </button>
 
   {% comment %} Plantilla inerte para clonar filas nuevas (no se envía). {% endcomment %}
   <template data-repo-template>
@@ -65,7 +71,8 @@ Contexto: repo_rows = lista de {url, branch_default, root_path}.
              placeholder="/ (opcional)">
       <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="5" y1="12" x2="19" y2="12"/>
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </svg>
       </button>
     </div>

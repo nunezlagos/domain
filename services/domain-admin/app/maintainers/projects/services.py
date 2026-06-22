@@ -197,7 +197,7 @@ def update_project(
     description: str = "",
     repository_url: str = "",
     template_id: str | None = None,
-    current_branch: str = "",
+    current_branch: str | None = None,
     client_id: str | None = None,
     repositories: list[dict] | None = None,
 ) -> Project:
@@ -205,6 +205,8 @@ def update_project(
 
     `repositories` (si se pasa) reemplaza el set de remotos git; la URL
     principal se re-deriva del primero. Si es None, no se tocan repos.
+    `current_branch` es None cuando no se edita (el modal ya no lo expone): en
+    ese caso se PRESERVA el valor existente (es referencial / de sistema).
     """
     if slug != project.slug and Project.objects.filter(
         slug=slug
@@ -218,7 +220,8 @@ def update_project(
     project.slug = slug
     project.description = description or ""
     project.template_id = template_id or None
-    project.current_branch = current_branch or ""
+    if current_branch is not None:
+        project.current_branch = current_branch
     project.client_id = client_id or None
     if repositories is None:
         # Sin gestión de repos: respetar la URL principal recibida (legacy).

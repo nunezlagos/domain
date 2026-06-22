@@ -15,20 +15,25 @@ Contexto esperado (lo provee la view de cada app):
   search      termino de busqueda activo (str, opcional)
 ============================================================
 {% endcomment %}
-{% if total > per_page %}
-<div class="d-flex gap-2 mt-3" style="justify-content: center; align-items: center;">
-  {% if has_prev %}
-    <a href="?page={{ page|add:-1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:-1 }}">
-      ← Anterior
-    </a>
-  {% endif %}
-  <span class="text-secondary">
-    Pagina {{ page }} de {{ total_pages }}
+{% comment %} Pie SIEMPRE visible: total de registros (izq) + navegacion de pagina
+   (der). Antes solo aparecia con total > per_page, por eso no salia con 1 pagina. {% endcomment %}
+<div class="d-flex gap-2 mt-3" style="justify-content: space-between; align-items: center;">
+  <span class="text-secondary" style="font-size: var(--fs-sm);">
+    {{ total }} registro{{ total|pluralize }}
   </span>
-  {% if has_next %}
-    <a href="?page={{ page|add:1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:1 }}">
-      Siguiente →
-    </a>
-  {% endif %}
+  <div class="d-flex gap-2" style="align-items: center;">
+    {% if has_prev %}
+      <a href="?page={{ page|add:-1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:-1 }}">
+        ← Anterior
+      </a>
+    {% endif %}
+    <span class="text-secondary" style="font-size: var(--fs-sm);">
+      Pagina {{ page }} de {{ total_pages }}
+    </span>
+    {% if has_next %}
+      <a href="?page={{ page|add:1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:1 }}">
+        Siguiente →
+      </a>
+    {% endif %}
+  </div>
 </div>
-{% endif %}

@@ -18,9 +18,14 @@
   // ----------------------------------------------------------
   // Modal genérico (open/close + content dinámico)
   // ----------------------------------------------------------
-  function openDynamicModal(html) {
+  function openDynamicModal(html, srcUrl) {
     document.getElementById('modal-dynamic-content').innerHTML = html;
-    document.getElementById('modal-dynamic').classList.add('open');
+    var m = document.getElementById('modal-dynamic');
+    // Guardamos la URL fuente del modal para poder REFRESCAR su contenido tras
+    // una accion interna (ej. borrar una API key dentro del detalle de usuario)
+    // sin navegar al redirect del recurso borrado.
+    if (srcUrl !== undefined) m.dataset.src = srcUrl || '';
+    m.classList.add('open');
   }
   function closeDynamicModal() {
     document.getElementById('modal-dynamic').classList.remove('open');
@@ -124,16 +129,22 @@
           var r = await fetch(fetchUrl, { credentials: 'same-origin' });
           if (r.ok) {
             var html = await r.text();
-            openDynamicModal(html);
+            openDynamicModal(html, fetchUrl);
           } else {
             alert('Error al cargar (' + r.status + ')');
           }
         } else if (action === 'delete') {
           // Setear action del form de delete + nombre
-          document.getElementById('confirm-delete-form').action =
-            btn.dataset.url || base + rowId + '/eliminar/';
+          var delForm = document.getElementById('confirm-delete-form');
+          delForm.action = btn.dataset.url || base + rowId + '/eliminar/';
           document.getElementById('confirm-delete-name').textContent =
             btn.dataset.name || 'este elemento';
+          // Si el delete se dispara DESDE un modal dinamico abierto (ej. detalle
+          // de usuario), guardamos su URL fuente para refrescarlo tras borrar en
+          // vez de navegar al redirect del recurso (que sacaba del modal).
+          var dynM = document.getElementById('modal-dynamic');
+          delForm.dataset.refreshSrc =
+            (dynM && dynM.classList.contains('open') && dynM.dataset.src) ? dynM.dataset.src : '';
           document.getElementById('modal-confirm-delete').classList.add('open');
         } else if (action === 'toggle') {
           var toggleUrl = btn.dataset.url || base + rowId + '/toggle/';
@@ -188,6 +199,46 @@
       }
     } catch (err) {
       alert('Error al enviar: ' + err.message);
+    }
+  });
+
+  // ----------------------------------------------------------
+  // Submit del form de confirmacion de delete: por fetch (no nativo) para NO
+  // seguir el redirect del recurso. Si el delete salio de un modal dinamico
+  // abierto (data-refresh-src), refrescamos su contenido y nos quedamos en el
+  // modal; si no, recargamos la pagina (delete desde la lista).
+  // ----------------------------------------------------------
+  document.addEventListener('submit', async function (e) {
+    var form = e.target;
+    if (form.id !== 'confirm-delete-form') return;
+    e.preventDefault();
+    try {
+      var r = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' },
+      });
+      document.getElementById('modal-confirm-delete').classList.remove('open');
+      if (!(r.ok || r.redirected)) {
+        alert('Error al eliminar (' + r.status + ')');
+        return;
+      }
+      var refresh = form.dataset.refreshSrc;
+      if (refresh) {
+        var rr = await fetch(refresh, {
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'fetch' },
+        });
+        if (rr.ok) {
+          openDynamicModal(await rr.text(), refresh);
+          return;
+        }
+      }
+      closeDynamicModal();
+      window.location.reload();
+    } catch (err) {
+      alert('Error al eliminar: ' + err.message);
     }
   });
 

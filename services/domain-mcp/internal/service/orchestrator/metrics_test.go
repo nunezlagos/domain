@@ -45,6 +45,10 @@ func (f *fakeRepo) MarkStepFailed(_ context.Context, _ uuid.UUID, _ string) erro
 	f.markedFailed = true
 	return nil
 }
+
+func (f *fakeRepo) SetFlowRunError(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
 func (f *fakeRepo) UpdateFlowRunStatus(_ context.Context, _ uuid.UUID, _ string) error { return nil }
 func (f *fakeRepo) UpdateStepInputs(_ context.Context, _ uuid.UUID, _ map[string]any) error {
 	return nil

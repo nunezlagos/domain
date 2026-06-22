@@ -227,6 +227,10 @@ func (m *multiConcernRepo) MarkStepCompleted(_ context.Context, stepID uuid.UUID
 func (m *multiConcernRepo) MarkStepFailed(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+func (m *multiConcernRepo) SetFlowRunError(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
 func (m *multiConcernRepo) UpdateFlowRunStatus(_ context.Context, _ uuid.UUID, status string) error {
 	m.updatedStatusTo = status
 	return nil

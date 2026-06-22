@@ -548,7 +548,21 @@ func (s *Service) propagateFlowStatusAfterFailure(ctx context.Context, flowRunID
 		return err
 	}
 	newStatus, _, _ := aggregateFlowStatus(steps)
-	return s.Repo.UpdateFlowRunStatus(ctx, flowRunID, newStatus)
+	if err := s.Repo.UpdateFlowRunStatus(ctx, flowRunID, newStatus); err != nil {
+		return err
+	}
+	// Si el flow quedo failed, registramos el motivo (error del primer step
+	// fallido) en flow_runs.error para no dejar el fallo ciego (antes quedaba
+	// NULL). Best-effort: no abortamos si falla el UPDATE del error.
+	if newStatus == "failed" {
+		for _, st := range steps {
+			if st.Status == "failed" && st.Error != "" {
+				_ = s.Repo.SetFlowRunError(ctx, flowRunID, st.StepKey+": "+st.Error)
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // aggregateFlowStatus deriva el status del flow_run a partir de los

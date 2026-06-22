@@ -41,6 +41,9 @@ type Repository interface {
 	ListFlowRunSteps(ctx context.Context, flowRunID uuid.UUID) ([]FlowRunStepRow, error)
 	MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error
 	MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error
+	// SetFlowRunError persiste el motivo del fallo en flow_runs.error (antes
+	// quedaba NULL, dejando el fallo ciego para debugging).
+	SetFlowRunError(ctx context.Context, flowRunID uuid.UUID, errorMsg string) error
 	UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error
 	// UpdateStepInputs reemplaza el JSONB step.inputs (usado para lazy
 	// build de user_prompt en modo Full cuando una fase completa y
@@ -481,6 +484,16 @@ func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.U
 		flowRunID, status)
 	if err != nil {
 		return fmt.Errorf("update flow_run status: %w", err)
+	}
+	return nil
+}
+
+// SetFlowRunError persiste el motivo del fallo en flow_runs.error.
+func (r *pgRepository) SetFlowRunError(ctx context.Context, flowRunID uuid.UUID, errorMsg string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE flow_runs SET error = $2 WHERE id = $1`, flowRunID, errorMsg)
+	if err != nil {
+		return fmt.Errorf("set flow_run error: %w", err)
 	}
 	return nil
 }

@@ -89,6 +89,10 @@
         Llamadas = línea sólida + sdd-arrow. Retornos = punteada + sdd-arrow-ret.
       {% endcomment %}
       <g class="sdd-msgs" fill="none">
+        {% comment %} 0. ORIGEN del project_id: session_bootstrap resuelve/auto-crea
+           el proyecto desde el git y devuelve project_id (+ auto-enlaza skills). {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="120" y1="112" x2="1120" y2="112"/>
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="1120" y1="134" x2="120" y2="134"/>
         {% comment %} 1. Usuario -> Router: prompt {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="120" y1="166" x2="360" y2="166"/>
         {% comment %} TRIAGE: self-message del Router (clasifica intent + persiste intake) {% endcomment %}
@@ -158,18 +162,20 @@
 
       {% comment %} ETIQUETAS de mensajes (texto sobre la flecha) {% endcomment %}
       <g class="sdd-msg-labels">
-        <text class="sdd-lbl"     x="240" y="158">prompt</text>
+        <text class="sdd-lbl"     x="300" y="106">session_bootstrap: git -&gt; resuelve / auto-crea proyecto</text>
+        <text class="sdd-lbl-ret" x="540" y="128">project_id (+ auto-enlaza skills de plataforma)</text>
+        <text class="sdd-lbl"     x="240" y="158">prompt (con project_id)</text>
         <text class="sdd-lbl"     x="410" y="190">triage (clasifica intent + intake)</text>
         <text class="sdd-lbl"     x="476" y="212">intent + project_id</text>
-        <text class="sdd-lbl"     x="300" y="502">gate (manual/híbrido): aprobación humana</text>
+        <text class="sdd-lbl"     x="300" y="502">gate (manual/hibrido): aprobacion humana</text>
         <text class="sdd-lbl"     x="640" y="252">flow_run + reglas/skills del proyecto</text>
         <text class="sdd-lbl-ret" x="864" y="274">ok</text>
 
         <text class="sdd-lbl-ret" x="730" y="334">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="386">resultado</text>
         {% comment %} hardspec (spec) {% endcomment %}
-        <text class="sdd-lbl"     x="250" y="362">hardspec (opcional): revisar + enriquecer</text>
-        <text class="sdd-lbl-ret" x="300" y="396">confirma (auditado) + re-redacta</text>
+        <text class="sdd-lbl"     x="250" y="362">hardspec (obligatorio): revisar el spec</text>
+        <text class="sdd-lbl-ret" x="300" y="396">OK o rehacer parte (auditado)</text>
         <text class="sdd-lbl-ret" x="730" y="438">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="490">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="550">resultado</text>
@@ -185,7 +191,7 @@
 
         {% comment %} asistencia humana en archive + loop re-editar spec {% endcomment %}
         <text class="sdd-lbl"      x="300" y="742">asistencia: ¿omitir tareas?</text>
-        <text class="sdd-lbl-ret"  x="320" y="780">decisión humana</text>
+        <text class="sdd-lbl-ret"  x="320" y="780">decision humana</text>
         <text class="sdd-lbl-loop" x="360" y="540">re-editar spec (el SDD puede mutar)</text>
       </g>
 

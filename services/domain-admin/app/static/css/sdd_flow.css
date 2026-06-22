@@ -14,8 +14,6 @@
   flex-direction: column;
   height: calc(100dvh - var(--sdd-reserve));
   min-height: 460px;
-  max-width: 1100px;
-  margin: 0 auto;
   overflow: hidden;
 }
 /* Card contenedor (estilo mantenedores: bordes redondeados + sombra abajo/

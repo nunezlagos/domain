@@ -18,13 +18,36 @@
   margin: 0 auto;
   overflow: hidden;
 }
-.sdd-hd { flex: 0 0 auto; margin-bottom: var(--space-sm); }
-.sdd-hd-title { margin: 0 0 6px; }
+/* Header: titulo a la izquierda, leyenda de modos a la derecha (misma linea) */
+.sdd-hd {
+  flex: 0 0 auto;
+  margin-bottom: var(--space-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.sdd-hd-title { margin: 0; }
 
-/* Leyenda de modos */
-.sdd-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.sdd-modes-label { font-size: var(--fs-sm); font-weight: 600; color: var(--color-text-secondary); }
-.sdd-chip { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+/* Leyenda de modos: grupo prolijo de pills con punto de color */
+.sdd-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.sdd-modes-label { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-right: 2px; }
+.sdd-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid; white-space: nowrap;
+}
+.sdd-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .c-full { color: var(--color-accent);  border-color: var(--color-accent);  background: var(--color-accent-soft); }
 .c-lite { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
 .c-exp  { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }

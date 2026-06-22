@@ -11,9 +11,10 @@ _entity_attr() == "api_key", por eso esos nombres calzan directo.
 """
 from __future__ import annotations
 
-import hashlib
+import base64
 import secrets
 
+import bcrypt
 from django.db import transaction
 
 from core.service import MaintainerService
@@ -59,16 +60,28 @@ def get_api_key(api_key_id: str) -> ApiKey:
         raise ApiKeyError(f"API Key {api_key_id} no existe.") from exc
 
 
+# Constantes espejadas del backend Go (internal/auth/apikey/apikey.go).
+# DEBEN coincidir o el MCP rechaza la key: formato domk_<env>_<secret>,
+# prefix = primeros 16 chars, hash = bcrypt(cost=12).
+_API_KEY_ENV = "live"
+_PREFIX_LEN = 16
+_SECRET_BYTES = 32
+_BCRYPT_COST = 12
+
+
 def _generate_secret() -> tuple[str, str, bytes]:
     """Genera un secreto nuevo. Retorna (secreto_claro, prefix, hash).
 
-    El secreto en claro SOLO se devuelve una vez (al crear) para mostrarlo al
-    usuario; nunca se persiste. Se guarda prefix (visible) + hash (sha256).
+    Formato IDENTICO al backend Go: `domk_<env>_<base64url(32 bytes, sin
+    padding)>`. El hash es bcrypt (lo que valida Resolve en el MCP). El plaintext
+    se devuelve para mostrarlo y persistirlo (key_plaintext) — el owner pidio
+    poder verlo de nuevo.
     """
-    raw = secrets.token_urlsafe(32)
-    full = f"sk_{raw}"
-    prefix = full[:20]
-    key_hash = hashlib.sha256(full.encode("utf-8")).digest()
+    secret = secrets.token_bytes(_SECRET_BYTES)
+    encoded = base64.urlsafe_b64encode(secret).rstrip(b"=").decode("ascii")
+    full = f"domk_{_API_KEY_ENV}_{encoded}"
+    prefix = full[:_PREFIX_LEN]
+    key_hash = bcrypt.hashpw(full.encode("utf-8"), bcrypt.gensalt(rounds=_BCRYPT_COST))
     return full, prefix, key_hash
 
 
@@ -97,6 +110,7 @@ def create_api_key(
         name=name,
         key_prefix=prefix,
         key_hash=key_hash,
+        key_plaintext=full,
         expires_at=expires_at,
         status=status,
     )

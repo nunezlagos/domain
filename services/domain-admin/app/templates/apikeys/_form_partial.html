@@ -45,8 +45,8 @@ campos y el label del submit.
   {% if mode == "create" %}
     <hr>
     <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
-      El secreto se genera al crear y se muestra UNA sola vez. Guardalo:
-      no se vuelve a mostrar (solo se persiste el hash + prefijo).
+      El secreto se genera al crear (formato <code>domk_…</code>, valido para el
+      MCP). Podras copiarlo ahora y tambien verlo de nuevo en el detalle de la key.
     </p>
   {% endif %}
 {% endblock %}

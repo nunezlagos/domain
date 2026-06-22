@@ -17,6 +17,24 @@ Detalle de API Key para el modal dinamico. Extiende maintainers/_detail_base.htm
     {% endif %}
   </p>
 
+  {% if apikey_obj.key_plaintext %}
+    <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">API Key</h4>
+    <div class="d-flex gap-2" style="align-items: stretch;">
+      <input type="text" id="apikey-secret-{{ apikey_obj.pk }}" class="form-control"
+             value="{{ apikey_obj.key_plaintext }}" readonly
+             style="font-family: var(--font-mono, monospace); font-size: var(--fs-sm);"
+             onclick="this.select()">
+      <button type="button" class="btn btn-secondary"
+              data-copy="#apikey-secret-{{ apikey_obj.pk }}">
+        Copiar
+      </button>
+    </div>
+    <p class="text-muted mt-1" style="font-size: var(--fs-sm);">
+      Usala como <code>Authorization: Bearer &lt;key&gt;</code>. Tratala como
+      una credencial: quien la tenga puede operar como este usuario.
+    </p>
+  {% endif %}
+
   <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
@@ -38,9 +56,12 @@ Detalle de API Key para el modal dinamico. Extiende maintainers/_detail_base.htm
     </tbody>
   </table>
 
-  <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
-    El secreto en claro nunca se almacena: solo el prefijo (visible) y el hash.
-  </p>
+  {% if not apikey_obj.key_plaintext %}
+    <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
+      Esta key se creo antes de guardar el secreto en claro: solo se ve el
+      prefijo. Si la perdiste, regenerala (editar &gt; revocar y crear una nueva).
+    </p>
+  {% endif %}
 {% endblock %}
 
 {% block detail_actions %}

@@ -75,6 +75,14 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
               </td>
               <td class="text-muted">{{ k.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
               <td style="width: 1%; white-space: nowrap;">
+                {% if k.key_plaintext %}
+                  <input type="text" id="user-apikey-{{ k.pk }}"
+                         value="{{ k.key_plaintext }}" readonly
+                         style="position: absolute; left: -9999px;" tabindex="-1" aria-hidden="true">
+                  <button type="button" class="btn btn-sm btn-ghost"
+                          data-copy="#user-apikey-{{ k.pk }}"
+                          title="Copiar la API key completa">Copiar</button>
+                {% endif %}
                 <button type="button" class="btn btn-sm btn-ghost"
                         data-action="edit" data-id="{{ k.pk }}">Editar</button>
               </td>

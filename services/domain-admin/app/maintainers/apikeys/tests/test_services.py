@@ -6,7 +6,7 @@ MaintainerTestCase por consistencia con el resto de los mantenedores.
 """
 from __future__ import annotations
 
-import hashlib
+import bcrypt
 
 from django.utils import timezone
 
@@ -50,11 +50,14 @@ class CreateApiKeyTests(MaintainerTestCase):
         owner = make_user("c@example.com")
         api_key, secret = services.create_api_key(user=owner, name="Nueva")
         self.assertTrue(ApiKey.objects.filter(pk=api_key.pk).exists())
-        self.assertTrue(secret.startswith("sk_"))
-        # El hash persistido corresponde al secreto devuelto.
-        self.assertEqual(api_key.key_hash, hashlib.sha256(secret.encode()).digest())
-        # El prefijo persistido es el visible del secreto.
-        self.assertEqual(api_key.key_prefix, secret[:20])
+        # Formato compatible con el backend Go: domk_<env>_<secret>.
+        self.assertTrue(secret.startswith("domk_live_"))
+        # El hash persistido es bcrypt y valida contra el secreto devuelto.
+        self.assertTrue(bcrypt.checkpw(secret.encode(), bytes(api_key.key_hash)))
+        # El prefijo persistido es el visible del secreto (primeros 16 chars).
+        self.assertEqual(api_key.key_prefix, secret[:16])
+        # El plaintext queda guardado para re-mostrarlo.
+        self.assertEqual(api_key.key_plaintext, secret)
 
     def test_nombre_vacio_falla(self):
         owner = make_user("c2@example.com")

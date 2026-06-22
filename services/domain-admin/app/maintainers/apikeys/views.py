@@ -55,11 +55,12 @@ class ApiKeyViews(MaintainerViews):
             **self._form_payload(form),
         )
         # Se cuela en el flash de create() via mensaje extra; el generico ya
-        # agrega "API Key creado correctamente.", aqui sumamos el secreto.
+        # agrega "API Key creado correctamente.", aqui sumamos el secreto. Ahora
+        # tambien queda visible en el detalle (key_plaintext), asi que no es la
+        # unica chance de copiarlo.
         messages.warning(
             self._request,
-            f"Secreto de '{api_key.name}' (copialo ahora, no se vuelve a "
-            f"mostrar): {secret}",
+            f"Secreto de '{api_key.name}' (tambien visible en el detalle): {secret}",
         )
         return api_key
 

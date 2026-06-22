@@ -47,7 +47,9 @@
       document.querySelectorAll('[data-filter]').forEach(function (el) {
         var name = el.getAttribute('name') || el.dataset.filter;
         if (!name) return;
-        if (el.multiple) {
+        if (el.type === 'checkbox') {
+          if (el.checked) params.append(name, el.value);
+        } else if (el.multiple) {
           Array.prototype.forEach.call(el.selectedOptions, function (o) {
             if (o.value) params.append(name, o.value);
           });
@@ -74,8 +76,11 @@
     // mismos filtros activos (q + role[] + status[]).
     document.querySelectorAll('[data-filter]').forEach(function (el) {
       el.addEventListener('change', function () {
-        var url = new URL(window.location.href);
-        url.searchParams.delete('page');
+        // Resetear a pagina 1 al cambiar un filtro (si no, buildFetchURL leeria
+        // la pagina vieja de la URL y podria pedir una pagina vacia).
+        var u = new URL(window.location.href);
+        u.searchParams.delete('page');
+        window.history.replaceState({}, '', u);
         refreshTable();
       });
     });

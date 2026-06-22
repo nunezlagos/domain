@@ -486,3 +486,27 @@ textarea.form-control {
 .gap-3 { gap: var(--space-md); }
 
 .w-full { width: 100%; }
+
+/* Chip de filtro multi-select (checkbox compacto en pill). Se resalta al marcar.
+   Reemplaza al <select multiple> nativo (grande/incomodo). */
+.sdd-chip-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
+}
+.sdd-chip-filter:hover { border-color: var(--color-text-link); }
+.sdd-chip-filter input { margin: 0; cursor: pointer; }
+.sdd-chip-filter:has(input:checked) {
+  background: var(--color-info-soft);
+  border-color: var(--color-info);
+  color: var(--color-info);
+  font-weight: 600;
+}

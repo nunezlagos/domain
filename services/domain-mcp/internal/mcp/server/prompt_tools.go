@@ -33,7 +33,7 @@ func toolPromptRoute() mcp.Tool {
 			mcp.Description("Intent ya clasificado por el cliente (opcional): chat|idea|feature|fix|hotfix|refactor|doc|rfc|analysis. Si es valido, el servidor lo usa y NO reclasifica. Usa el prompt 'triage' (domain_prompt_get) para decidirlo."),
 		),
 		mcp.WithString("project_id",
-			mcp.Description("UUID del proyecto (de domain_session_bootstrap). Scopea el intake/triage al proyecto. Si se omite, el triage queda sin proyecto."),
+			mcp.Description("UUID del proyecto (de domain_session_bootstrap). OBLIGATORIO para intents SDD (feature/fix/hotfix/refactor/doc/rfc/analysis): el intake y el orquestador lo exigen y devuelven project_id required si falta. Opcional solo para chat/idea (no arrancan flujo). Resolve el project_id con domain_session_bootstrap al inicio de la sesion."),
 		),
 	)
 }

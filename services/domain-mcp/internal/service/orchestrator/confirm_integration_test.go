@@ -23,6 +23,7 @@ func TestExpressD1_SmallChange_AutoApproves(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -31,6 +32,7 @@ func TestExpressD1_SmallChange_AutoApproves(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "fix typo",
 		Mode:           orchestrator.ModeExpress,
@@ -60,6 +62,7 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -68,6 +71,7 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "refactor grande",
 		Mode:           orchestrator.ModeExpress,
@@ -118,6 +122,7 @@ func TestExpressD1_MultiFile_RequiresConfirm(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -126,6 +131,7 @@ func TestExpressD1_MultiFile_RequiresConfirm(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeExpress,
@@ -153,6 +159,7 @@ func TestExpressD1_RejectConfirm_MarksFlowFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -161,6 +168,7 @@ func TestExpressD1_RejectConfirm_MarksFlowFailed(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID:  orgID,
+		ProjectID:      projectID,
 		UserID:          userID,
 		RawText:         "x",
 		Mode:            orchestrator.ModeExpress,

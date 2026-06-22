@@ -36,13 +36,13 @@ func (m *mockAttSvc) PromoteEntity(_ context.Context, fromKind, toKind string, _
 }
 
 func TestAttachToDraft_InitsUploadAndPersistsRef(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	mock := &mockAttSvc{}
 	svc.Attachments = mock
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeBugFix, "El director no puede descargar la ficha", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeBugFix, "El director no puede descargar la ficha", nil, &projectID)
 	require.NoError(t, err)
 
 	res, err := svc.AttachToDraft(ctx, d.ID, "screenshot.png", "image/png", 102400)
@@ -59,12 +59,12 @@ func TestAttachToDraft_InitsUploadAndPersistsRef(t *testing.T) {
 }
 
 func TestAttachToDraft_MultipleAttachmentsAccumulate(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	svc.Attachments = &mockAttSvc{}
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeBugFix, "Bug con multiple screenshots", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeBugFix, "Bug con multiple screenshots", nil, &projectID)
 	require.NoError(t, err)
 
 	_, err = svc.AttachToDraft(ctx, d.ID, "before.png", "image/png", 50_000)
@@ -81,12 +81,12 @@ func TestAttachToDraft_MultipleAttachmentsAccumulate(t *testing.T) {
 }
 
 func TestAttachToDraft_RejectsAbandonedDraft(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	svc.Attachments = &mockAttSvc{}
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 	require.NoError(t, svc.Abandon(ctx, d.ID, "changed mind"))
 
@@ -95,12 +95,12 @@ func TestAttachToDraft_RejectsAbandonedDraft(t *testing.T) {
 }
 
 func TestAttachToDraft_NotConfigured(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	svc.Attachments = nil
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
 	_, err = svc.AttachToDraft(ctx, d.ID, "x.png", "image/png", 1024)
@@ -108,13 +108,13 @@ func TestAttachToDraft_NotConfigured(t *testing.T) {
 }
 
 func TestPromoteAttachmentsToHU_AfterCommit(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	mock := &mockAttSvc{}
 	svc.Attachments = mock
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "feature con screenshot", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "feature con screenshot", nil, &projectID)
 	require.NoError(t, err)
 
 	// Answer todos los 8 steps + attach
@@ -141,12 +141,12 @@ func TestPromoteAttachmentsToHU_AfterCommit(t *testing.T) {
 
 // Sabotaje: PromoteAttachmentsToHU sobre draft no committed debe rechazar.
 func TestSabotage_PromoteBeforeCommit(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	svc.Attachments = &mockAttSvc{}
 	ctx := context.Background()
 
-	d, _, _ := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, _ := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	_, err := svc.PromoteAttachmentsToHU(ctx, d.ID, uuid.New())
 	require.ErrorIs(t, err, hb.ErrInvalidStatus)
 }

@@ -25,6 +25,11 @@ var (
 	ErrNotFound      = errors.New("intake not found")
 	ErrInvalidStatus = errors.New("invalid status for operation")
 	ErrInvalidSource = errors.New("invalid source")
+
+	// ErrProjectIDRequired Fase 2: el intake se scopea a un proyecto
+	// (issue_intake_payloads.project_id es NOT NULL tras 000167). Submit
+	// rechaza nil/uuid.Nil ANTES del insert para dar un error estable.
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 const (
@@ -110,6 +115,11 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	}
 	if strings.TrimSpace(in.RawText) == "" {
 		return nil, fmt.Errorf("raw_text required")
+	}
+	// Fase 2: project_id obligatorio. Se valida antes del insert para no
+	// depender del not-null constraint (000167) y dar un error estable.
+	if in.ProjectID == nil || *in.ProjectID == uuid.Nil {
+		return nil, ErrProjectIDRequired
 	}
 	if in.RawPayload == nil {
 		in.RawPayload = map[string]any{}

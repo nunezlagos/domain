@@ -29,6 +29,12 @@ var (
 	ErrInvalidAnswer     = errors.New("answer invalid for current step")
 	ErrExpired           = errors.New("draft expired")
 	ErrUnsupportedMode   = errors.New("mode not yet supported")
+
+	// ErrProjectIDRequired Fase 2: el wizard scopea el draft (y el issue/REQ que
+	// materializa al Commit) a un proyecto. Sin project_id no hay scoping, asi
+	// que Start lo rechaza ANTES de insertar el draft (issue_drafts.project_id
+	// es NOT NULL tras 000167).
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 // Mode permitidos. Implementados: feature. Resto reservado.
@@ -183,6 +189,11 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 	}
 	if strings.TrimSpace(initialIdea) == "" {
 		return nil, nil, fmt.Errorf("initial_idea required")
+	}
+	// Fase 2: project_id obligatorio. Se valida antes del insert para no
+	// depender del not-null constraint (000167) y dar un error estable.
+	if projectID == nil || *projectID == uuid.Nil {
+		return nil, nil, ErrProjectIDRequired
 	}
 
 	expires := time.Now().Add(s.ttl())

@@ -27,7 +27,8 @@ func toolHUCreateStart() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithString("project_id",
-			mcp.Description("UUID del proyecto (de domain_session_bootstrap). Scopea el draft al proyecto (issue_drafts.project_id). Si se omite, queda sin proyecto."),
+			mcp.Description("UUID del proyecto (de domain_session_bootstrap). OBLIGATORIO: scopea el draft al proyecto (issue_drafts.project_id es NOT NULL)."),
+			mcp.Required(),
 		),
 	)
 }
@@ -101,14 +102,16 @@ func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError("mode e initial_idea son requeridos"), nil
 	}
 	userID, _ := uuid.Parse(d.Principal.UserID)
-	var projectID *uuid.UUID
-	if s := req.GetString("project_id", ""); s != "" {
-		p, perr := uuid.Parse(s)
-		if perr != nil {
-			return mcp.NewToolResultError("invalid project_id"), nil
-		}
-		projectID = &p
+	// Fase 2: project_id obligatorio (issue_drafts.project_id es NOT NULL).
+	pidStr := req.GetString("project_id", "")
+	if pidStr == "" {
+		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
 	}
+	p, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return mcp.NewToolResultError("invalid project_id"), nil
+	}
+	projectID := &p
 	draft, q, err := d.Hubuilder.Start(ctx, mode, idea, &userID, projectID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("start: %v", err)), nil

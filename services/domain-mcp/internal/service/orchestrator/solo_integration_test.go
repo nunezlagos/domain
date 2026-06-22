@@ -112,6 +112,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -128,6 +129,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature CI/CD",
 		Mode:           orchestrator.ModeSolo,
@@ -167,6 +169,7 @@ func TestService_Run_Solo_RequiresLLMFactory(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -176,6 +179,7 @@ func TestService_Run_Solo_RequiresLLMFactory(t *testing.T) {
 	// LLM intentionally not set
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeSolo,
@@ -191,6 +195,7 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -208,6 +213,7 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
+		ProjectID:      projectID,
 		RawText: "x", Mode: orchestrator.ModeSolo,
 	})
 	require.Error(t, err, "Solo debe abortar con JSON inválido")

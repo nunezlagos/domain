@@ -30,6 +30,7 @@ func TestService_Run_LiteMode_BuildsSubsetPlan(t *testing.T) {
 
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "fix typo trivial en docs",
 		Mode:           ModeLite,
@@ -52,6 +53,7 @@ func TestService_Run_LiteMode_SkipsHeavyPhases(t *testing.T) {
 	s := New(nil, nil, buildRegistryLite(t), "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "refactor chico",
 		Mode:           ModeLite,
@@ -76,6 +78,7 @@ func TestService_Run_LiteMode_DoesNotNeedFullRegistry(t *testing.T) {
 	s := New(nil, nil, buildRegistryLite(t), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		Mode:           ModeLite,
@@ -97,6 +100,7 @@ func TestService_Run_DefaultMode_StaysFull(t *testing.T) {
 	s := New(nil, nil, buildRegistryLite(t), "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		// Mode vacío → debe inferir Full, NO Lite.

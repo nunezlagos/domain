@@ -27,6 +27,7 @@ func TestExpress_FullHappyPath(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -36,6 +37,7 @@ func TestExpress_FullHappyPath(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "fix typo en CHANGELOG.md",
 		Mode:           orchestrator.ModeExpress,
@@ -101,6 +103,7 @@ func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -109,6 +112,7 @@ func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeExpress,
@@ -141,6 +145,7 @@ func TestExpress_PhaseResult_OnAlreadyCompletedStep_Rejected(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -149,6 +154,7 @@ func TestExpress_PhaseResult_OnAlreadyCompletedStep_Rejected(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeExpress,

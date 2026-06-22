@@ -35,6 +35,7 @@ func TestService_Run_ExpressMode_BuildsApplyAndVerifyPlan(t *testing.T) {
 
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "implementar typo fix en HelloWorld.go",
 		Mode:           ModeExpress,
@@ -56,6 +57,7 @@ func TestService_Run_ExpressMode_DeclaresD5RequiredOnApply(t *testing.T) {
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "anything",
 		Mode:           ModeExpress,
@@ -72,6 +74,7 @@ func TestService_Run_ExpressMode_VerifySuggestedSavesAreOptional(t *testing.T) {
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "anything",
 		Mode:           ModeExpress,
@@ -88,6 +91,7 @@ func TestService_Run_ExpressMode_RegistryWithoutHandlers_Fails(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev") // registry vacío
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		Mode:           ModeExpress,
@@ -102,6 +106,7 @@ func TestService_Run_FullMode_WithoutAllHandlers_Fails(t *testing.T) {
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		Mode:           ModeFull,

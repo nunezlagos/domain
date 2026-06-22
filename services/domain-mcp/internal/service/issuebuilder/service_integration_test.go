@@ -18,7 +18,10 @@ import (
 	hb "nunezlagos/domain/internal/service/issuebuilder"
 )
 
-func setupHB(t *testing.T) (*hb.Service, func()) {
+// setupHB levanta la DB, el service y un proyecto fixture. Fase 2: Start exige
+// projectID (issue_drafts.project_id es NOT NULL), asi que el fixture devuelve
+// el id del proyecto al cual scopear los drafts del test.
+func setupHB(t *testing.T) (*hb.Service, uuid.UUID, func()) {
 	t.Helper()
 	ctx := context.Background()
 	pgC, err := postgres.Run(ctx,
@@ -39,21 +42,31 @@ func setupHB(t *testing.T) (*hb.Service, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
+	// Org + proyecto fixture para scopear los drafts.
+	var orgID, projectID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
+	).Scan(&orgID))
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (organization_id, name, slug)
+		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`, orgID,
+	).Scan(&projectID))
+
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	svc := &hb.Service{Pool: pools.App, Audit: rec}
 
-	return svc, func() {
+	return svc, projectID, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
 }
 
 func TestStart_FeatureMode_FirstQuestion(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, q, err := svc.Start(ctx, hb.ModeFeature, "Quiero exportar runs a CSV", nil, nil)
+	d, q, err := svc.Start(ctx, hb.ModeFeature, "Quiero exportar runs a CSV", nil, &projectID)
 	require.NoError(t, err)
 	require.Equal(t, hb.StatusInProgress, d.Status)
 	require.Equal(t, 8, d.TotalSteps)
@@ -64,33 +77,33 @@ func TestStart_FeatureMode_FirstQuestion(t *testing.T) {
 }
 
 func TestStart_InvalidMode(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), "bogus", "idea", nil, nil)
+	_, _, err := svc.Start(context.Background(), "bogus", "idea", nil, &projectID)
 	require.ErrorIs(t, err, hb.ErrInvalidMode)
 }
 
 func TestStart_UnsupportedMode(t *testing.T) {
 	t.Skip("pre-existente: todos los modes (feature/bug-fix/refactor/doc/rfc) tienen flow implementado, ErrUnsupportedMode no se dispara. Se mantiene como guard para cuando se agregue un mode nuevo con flow placeholder.")
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), hb.ModeBugFix, "idea", nil, nil)
+	_, _, err := svc.Start(context.Background(), hb.ModeBugFix, "idea", nil, &projectID)
 	require.ErrorIs(t, err, hb.ErrUnsupportedMode)
 }
 
 func TestStart_EmptyIdea(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), hb.ModeFeature, "  ", nil, nil)
+	_, _, err := svc.Start(context.Background(), hb.ModeFeature, "  ", nil, &projectID)
 	require.Error(t, err)
 }
 
 func TestAnswer_AdvancesStep(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
 	d2, q, err := svc.Answer(ctx, d.ID, "feature")
@@ -100,11 +113,11 @@ func TestAnswer_AdvancesStep(t *testing.T) {
 }
 
 func TestAnswer_InvalidValue(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
 	_, _, err = svc.Answer(ctx, d.ID, "bogus_change_type")
@@ -112,18 +125,18 @@ func TestAnswer_InvalidValue(t *testing.T) {
 }
 
 func TestAnswer_NotFound(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, _, cleanup := setupHB(t)
 	defer cleanup()
 	_, _, err := svc.Answer(context.Background(), uuid.New(), "feature")
 	require.ErrorIs(t, err, hb.ErrNotFound)
 }
 
 func TestFullFlow_FeatureMode(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "Exportar runs CSV", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "Exportar runs CSV", nil, &projectID)
 	require.NoError(t, err)
 
 	answers := []any{
@@ -162,11 +175,11 @@ func TestFullFlow_FeatureMode(t *testing.T) {
 }
 
 func TestAbandon_FromInProgress(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
 	err = svc.Abandon(ctx, d.ID, "changed mind")
@@ -178,12 +191,12 @@ func TestAbandon_FromInProgress(t *testing.T) {
 }
 
 func TestList_ByStatus(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea1", nil, nil)
-	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea2", nil, nil)
+	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea1", nil, &projectID)
+	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea2", nil, &projectID)
 
 	drafts, err := svc.List(ctx, hb.StatusInProgress)
 	require.NoError(t, err)
@@ -194,11 +207,11 @@ func TestList_ByStatus(t *testing.T) {
 // fallar (no infinite loop). Forzamos current_step a un valor inválido y
 // verificamos detección.
 func TestSabotage_OvershootStep(t *testing.T) {
-	svc, cleanup := setupHB(t)
+	svc, projectID, cleanup := setupHB(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
 	// Forzamos current_step más allá del último válido

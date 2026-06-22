@@ -35,7 +35,8 @@ func toolIntakeSubmit() mcp.Tool {
 			mcp.Description("Payload opcional adicional (JSONB)"),
 		),
 		mcp.WithString("project_id",
-			mcp.Description("UUID del proyecto (de domain_session_bootstrap). Scopea el intake al proyecto (issue_intake_payloads.project_id). Si se omite, queda sin proyecto."),
+			mcp.Description("UUID del proyecto (de domain_session_bootstrap). OBLIGATORIO: scopea el intake al proyecto (issue_intake_payloads.project_id es NOT NULL)."),
+			mcp.Required(),
 		),
 	)
 }
@@ -102,14 +103,16 @@ func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) 
 		rawPayload = v
 	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	var projectID *uuid.UUID
-	if s := req.GetString("project_id", ""); s != "" {
-		pp, perr := uuid.Parse(s)
-		if perr != nil {
-			return mcp.NewToolResultError("invalid project_id"), nil
-		}
-		projectID = &pp
+	// Fase 2: project_id obligatorio (issue_intake_payloads.project_id es NOT NULL).
+	pidStr := req.GetString("project_id", "")
+	if pidStr == "" {
+		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
 	}
+	pp, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return mcp.NewToolResultError("invalid project_id"), nil
+	}
+	projectID := &pp
 	p, err := d.Intake.Submit(ctx, intakesvc.SubmitInput{
 		Source:         source,
 		SourceRef:      sourceRef,

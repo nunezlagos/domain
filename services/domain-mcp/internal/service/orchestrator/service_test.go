@@ -15,6 +15,7 @@ func TestService_Run_RejectsEmptyRawText(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "   ",
 	})
@@ -26,6 +27,7 @@ func TestService_Run_RejectsInvalidMode(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "refactor X",
 		Mode:           Mode("bogus"),
@@ -38,6 +40,7 @@ func TestService_Run_AsyncWithExpressMaxLines_Rejected_D6(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID:  uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:          uuid.New(),
 		RawText:         "any",
 		Mode:            ModeAsync,
@@ -51,6 +54,7 @@ func TestService_Run_UnknownStartingPhase(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		StartingPhase:  PhaseSlug("sdd-no-such-phase"),
@@ -76,6 +80,7 @@ func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	s := New(nil, nil, reg, "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "implement issue-08.10 dispatch",
 	})

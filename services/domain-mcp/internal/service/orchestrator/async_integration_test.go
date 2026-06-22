@@ -27,6 +27,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -36,6 +37,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implement async mode",
 		Mode:           orchestrator.ModeAsync,
@@ -79,6 +81,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -93,6 +96,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implement async mode e2e",
 		Mode:           orchestrator.ModeAsync,
@@ -153,6 +157,7 @@ func TestService_ProcessAsyncFlowRun_WithoutLLMFactory_ReturnsError(t *testing.T
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -163,6 +168,7 @@ func TestService_ProcessAsyncFlowRun_WithoutLLMFactory_ReturnsError(t *testing.T
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeAsync,
@@ -182,6 +188,7 @@ func TestService_ProcessAsyncFlowRun_NonAsyncFlow_ReturnsError(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -193,6 +200,7 @@ func TestService_ProcessAsyncFlowRun_NonAsyncFlow_ReturnsError(t *testing.T) {
 	// Persistir flow_run en modo express (no async) via Run()
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "fix typo",
 		Mode:           orchestrator.ModeExpress,
@@ -213,6 +221,7 @@ func TestService_ProcessAsyncFlowRun_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -230,6 +239,7 @@ func TestService_ProcessAsyncFlowRun_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
+		ProjectID:      projectID,
 		RawText: "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
@@ -265,6 +275,7 @@ func TestService_ProcessAsyncFlowRun_WithoutSignalStore_WorksDegraded(t *testing
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -279,6 +290,7 @@ func TestService_ProcessAsyncFlowRun_WithoutSignalStore_WorksDegraded(t *testing
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
+		ProjectID:      projectID,
 		RawText: "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
@@ -303,6 +315,7 @@ func TestService_ProcessAsyncFlowRun_ResumesFromSavedPriors(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -316,6 +329,7 @@ func TestService_ProcessAsyncFlowRun_ResumesFromSavedPriors(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
+		ProjectID:      projectID,
 		RawText: "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
@@ -374,6 +388,7 @@ func TestService_Async_WithStartingPhase_StartsFromPhase(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -383,6 +398,7 @@ func TestService_Async_WithStartingPhase_StartsFromPhase(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeAsync,
@@ -402,6 +418,7 @@ func TestService_Async_WithSkipPhases_OmittedPhases(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -411,6 +428,7 @@ func TestService_Async_WithSkipPhases_OmittedPhases(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeAsync,
@@ -428,6 +446,7 @@ func TestService_Async_RequiresRepo(t *testing.T) {
 	s := orchestrator.New(nil, nil, buildFullRegistry(), "dev")
 	_, err := s.Run(context.Background(), orchestrator.OrchestrateInput{
 		OrganizationID: uuid.New(),
+		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
 		Mode:           orchestrator.ModeAsync,

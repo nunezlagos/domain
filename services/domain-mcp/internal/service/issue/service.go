@@ -41,6 +41,11 @@ var (
 	ErrScenarioInvalid = errors.New("scenario validation failed")
 	ErrInvalidStatus   = errors.New("invalid status")
 	ErrInvalidPriority = errors.New("invalid priority")
+
+	// ErrProjectIDRequired Fase 2: el issue hereda project_id del REQ padre. Si
+	// el REQ resuelto tiene project_id NULL, no hay scoping valido y se rechaza
+	// ANTES del insert (en vez de dejar pasar un not-null violation de PG).
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 var reIssueSlug = regexp.MustCompile(`^issue-\d+\.\d+(-[a-z0-9-]+)?$`)
@@ -122,6 +127,12 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 			return nil, ErrReqNotFound
 		}
 		return nil, fmt.Errorf("find req: %w", err)
+	}
+	// Fase 2: el REQ padre debe estar scopeado a un proyecto. Si su project_id
+	// es NULL el issue heredaria NULL y violaria el NOT NULL (000167); cortamos
+	// antes con un error estable.
+	if projectID == nil || *projectID == uuid.Nil {
+		return nil, ErrProjectIDRequired
 	}
 
 	var desc *string

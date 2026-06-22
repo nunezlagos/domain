@@ -1,0 +1,12 @@
+-- down: NO-OP a proposito.
+--
+-- Esta migracion hace dos cosas irreversibles:
+--   1) BACKFILL: copia project_id del padre a las filas hijas. No guardamos cuales
+--      filas estaban NULL antes, asi que no podemos distinguir un project_id
+--      backfilleado de uno escrito por la app -> no se puede "des-backfillear".
+--   2) BORRADO de filas huerfanas (project_id NULL). Las filas borradas no se
+--      conservan en ningun lado, asi que no hay forma de restaurarlas.
+--
+-- Revertir el SET NOT NULL en si vive en 000167.down (DROP NOT NULL). Esta
+-- migracion de datos no tiene reverso: el down es intencionalmente vacio.
+SELECT 1;

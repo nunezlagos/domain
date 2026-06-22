@@ -460,6 +460,11 @@ func (s *Service) validate(in OrchestrateInput) error {
 	if strings.TrimSpace(in.RawText) == "" {
 		return ErrEmptyRawText
 	}
+	// Fase 2: project_id obligatorio. Se rechaza antes de construir el plan o
+	// persistir el flow_run para no depender del not-null constraint (000167).
+	if in.ProjectID == uuid.Nil {
+		return ErrProjectIDRequired
+	}
 	if in.Mode != "" && !in.Mode.IsValid() {
 		return ErrInvalidMode
 	}

@@ -27,6 +27,12 @@ var (
 	// ErrEmptyRawText el caller no proveyó prompt. El orquestador no inventa.
 	ErrEmptyRawText = errors.New("orchestrator requires non-empty raw_text")
 
+	// ErrProjectIDRequired Fase 2: la corrida del orquestador escribe la cadena
+	// SDD/TDD (flow_runs.project_id + sdd_requirements/issues) scopeada a un
+	// proyecto. ProjectID == uuid.Nil se rechaza en validate() ANTES de persistir
+	// el flow_run, en vez de dejar pasar un not-null violation de PG (000167).
+	ErrProjectIDRequired = errors.New("orchestrator requires a project_id")
+
 	// ErrUnknownPhase StartingPhase o SkipPhases referencia una fase no
 	// registrada en phases.Registry.
 	ErrUnknownPhase = errors.New("unknown phase slug")

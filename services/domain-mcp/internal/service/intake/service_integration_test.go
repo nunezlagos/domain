@@ -18,7 +18,10 @@ import (
 	"nunezlagos/domain/internal/service/intake"
 )
 
-func setupIntake(t *testing.T) (*intake.Service, func()) {
+// setupIntake levanta la DB, el service y un proyecto fixture. Fase 2: Submit
+// exige ProjectID (issue_intake_payloads.project_id es NOT NULL), asi que el
+// fixture devuelve el id del proyecto al cual scopear los intakes del test.
+func setupIntake(t *testing.T) (*intake.Service, uuid.UUID, func()) {
 	t.Helper()
 	ctx := context.Background()
 	pgC, err := postgres.Run(ctx,
@@ -38,20 +41,31 @@ func setupIntake(t *testing.T) (*intake.Service, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
+	// Org + proyecto fixture para scopear los intakes.
+	var orgID, projectID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
+	).Scan(&orgID))
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (organization_id, name, slug)
+		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`, orgID,
+	).Scan(&projectID))
+
 	svc := &intake.Service{Pool: pools.App, Audit: &audit.PGRecorder{Pool: pools.Auth}}
-	return svc, func() {
+	return svc, projectID, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
 }
 
 func TestSubmit_AgentSource_OK(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 
 	p, err := svc.Submit(context.Background(), intake.SubmitInput{
-		Source:  intake.SourceAgent,
-		RawText: "El export a CSV no aparece para directores",
+		Source:    intake.SourceAgent,
+		ProjectID: &projectID,
+		RawText:   "El export a CSV no aparece para directores",
 	})
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusReceived, p.Status)
@@ -59,7 +73,7 @@ func TestSubmit_AgentSource_OK(t *testing.T) {
 }
 
 func TestSubmit_InvalidSource(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, _, cleanup := setupIntake(t)
 	defer cleanup()
 
 	_, err := svc.Submit(context.Background(), intake.SubmitInput{
@@ -70,7 +84,7 @@ func TestSubmit_InvalidSource(t *testing.T) {
 }
 
 func TestSubmit_EmptyText(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, _, cleanup := setupIntake(t)
 	defer cleanup()
 
 	_, err := svc.Submit(context.Background(), intake.SubmitInput{
@@ -80,13 +94,14 @@ func TestSubmit_EmptyText(t *testing.T) {
 }
 
 func TestFullFlow_AgentToCommitted(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 
 	p, err := svc.Submit(ctx, intake.SubmitInput{
-		Source:  intake.SourceAgent,
-		RawText: "Necesito exportar runs como CSV",
+		Source:    intake.SourceAgent,
+		ProjectID: &projectID,
+		RawText:   "Necesito exportar runs como CSV",
 	})
 	require.NoError(t, err)
 
@@ -116,19 +131,19 @@ func TestFullFlow_AgentToCommitted(t *testing.T) {
 }
 
 func TestApprove_WrongStatus(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
-	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, RawText: "x"})
+	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
 	_, err := svc.Approve(ctx, p.ID, uuid.New())
 	require.ErrorIs(t, err, intake.ErrInvalidStatus)
 }
 
 func TestReject_FromPending(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
-	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, RawText: "x"})
+	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
 	_, _ = svc.UpdateClassification(ctx, p.ID, "fix", "low", 0.7, "")
 	_, _ = svc.MarkPendingReview(ctx, p.ID, "t", "d", "REQ-04-opsx-sdd",
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
@@ -139,12 +154,12 @@ func TestReject_FromPending(t *testing.T) {
 }
 
 func TestListPending_ExcludesCommitted(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	p1, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, RawText: "open"})
-	p2, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, RawText: "closed"})
+	p1, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "open"})
+	p2, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "closed"})
 	_, _ = svc.UpdateClassification(ctx, p2.ID, "fix", "low", 0.9, "")
 	_, _ = svc.MarkPendingReview(ctx, p2.ID, "t", "d", "REQ-04-opsx-sdd",
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
@@ -165,10 +180,10 @@ func TestListPending_ExcludesCommitted(t *testing.T) {
 
 // Sabotaje: status='committed' impide approve directo.
 func TestSabotage_ApproveOnCommittedRejected(t *testing.T) {
-	svc, cleanup := setupIntake(t)
+	svc, projectID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
-	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, RawText: "x"})
+	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
 
 	// Forzamos status=committed para verificar rechazo
 	_, err := svc.Pool.Exec(ctx,

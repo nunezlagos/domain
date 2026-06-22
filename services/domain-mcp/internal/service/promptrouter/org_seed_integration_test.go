@@ -41,6 +41,23 @@ func seedOrgUser(ctx context.Context, pool *pgxpool.Pool, name, slug, ownerEmail
 	return &org, &member, nil
 }
 
+// seedProject inserta un proyecto para la org dada y devuelve su id. Fase 2:
+// el camino orquestador/intake exige project_id (columnas NOT NULL), asi que
+// los tests del router que arrancan flujos feature/fix necesitan un proyecto al
+// cual scopear la corrida.
+func seedProject(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) uuid.UUID {
+	t.Helper()
+	var projectID uuid.UUID
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO projects (organization_id, name, slug)
+		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`,
+		orgID,
+	).Scan(&projectID); err != nil {
+		t.Fatalf("seedProject: %v", err)
+	}
+	return projectID
+}
+
 // mustSeedOrgUser es la variante que falla el test ante error.
 func mustSeedOrgUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, name, slug, ownerEmail, ownerName string) (*seedOrgResult, *seedMemberResult) {
 	t.Helper()

@@ -38,6 +38,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -46,6 +47,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature compleja con SDD completo",
 		Mode:           orchestrator.ModeFull,
@@ -100,6 +102,7 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -108,6 +111,7 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar logging estructurado",
 		Mode:           orchestrator.ModeFull,
@@ -156,6 +160,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -164,6 +169,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "doc only",
 		Mode:           orchestrator.ModeFull,
@@ -187,6 +193,7 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -195,6 +202,7 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "resume desde apply",
 		Mode:           orchestrator.ModeFull,
@@ -217,6 +225,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -225,6 +234,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature foo",
 		Mode:           orchestrator.ModeFull,

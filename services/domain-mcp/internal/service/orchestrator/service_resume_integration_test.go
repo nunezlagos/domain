@@ -33,6 +33,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -42,6 +43,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	session1 := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature de export PDF",
 		Mode:           orchestrator.ModeFull,
@@ -134,6 +136,7 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -143,6 +146,7 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 	session1 := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "refactor mediano",
 		Mode:           orchestrator.ModeExpress,

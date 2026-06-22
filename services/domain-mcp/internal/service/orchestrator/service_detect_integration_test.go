@@ -22,6 +22,7 @@ func TestService_Run_Detect_BuildsPlanWithoutPersistence(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -30,6 +31,7 @@ func TestService_Run_Detect_BuildsPlanWithoutPersistence(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "preview de feature X",
 		Mode:           orchestrator.ModeDetect,
@@ -62,10 +64,12 @@ func TestService_Run_Detect_RequiresSeededFlow(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	// flow NO seedeado a propósito; agent_templates tampoco
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	_, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeDetect,

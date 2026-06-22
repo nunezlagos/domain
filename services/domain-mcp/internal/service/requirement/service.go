@@ -39,6 +39,12 @@ var (
 	ErrParentNotFound  = errors.New("parent requirement not found")
 	ErrInvalidStatus   = errors.New("invalid status")
 	ErrInvalidPriority = errors.New("invalid priority")
+
+	// ErrProjectIDRequired Fase 2: project_id es OBLIGATORIO (sdd_requirements
+	// es la raiz de la cadena SDD; sin proyecto no hay scoping). Se rechaza nil
+	// o uuid.Nil ANTES del insert para devolver un error estable en vez del
+	// not-null violation crudo de PG.
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 var reReqSlug = regexp.MustCompile(`^REQ-\d+(-[a-z0-9-]+)?$`)
@@ -100,6 +106,11 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 	}
 	if !validPriorities[priority] {
 		return nil, ErrInvalidPriority
+	}
+	// Fase 2: project_id obligatorio. Se valida antes de tocar la DB para no
+	// depender del not-null constraint (000167) y dar un error estable.
+	if projectID == nil || *projectID == uuid.Nil {
+		return nil, ErrProjectIDRequired
 	}
 
 	var parentID *uuid.UUID

@@ -99,8 +99,6 @@ class CreateViewTests(MaintainerTestCase):
             "name": "Creado",
             "slug": "creado",
             "description": "",
-            "repository_url": "",
-            "template": "",
             "current_branch": "",
         }
         base.update(over)
@@ -110,6 +108,22 @@ class CreateViewTests(MaintainerTestCase):
         r = self.client.post(reverse("projects:create"), self._data())
         self.assertEqual(r.status_code, 302)
         self.assertTrue(Project.objects.filter(slug="creado").exists())
+
+    def test_post_crea_proyecto_con_repos(self):
+        from maintainers.projects import services
+        r = self.client.post(reverse("projects:create"), self._data(
+            slug="con-repos",
+            repo_url=["https://github.com/org/domain", "https://gitlab.com/org/mirror"],
+            repo_branch=["main", ""],
+            repo_folder=["/", "/sub/"],
+        ))
+        self.assertEqual(r.status_code, 302)
+        project = Project.objects.get(slug="con-repos")
+        repos = services.get_project_repositories(project)
+        self.assertEqual(len(repos), 2)
+        self.assertTrue(repos[0].is_default)
+        self.assertEqual(repos[0].root_path, "/")
+        self.assertEqual(project.repository_url, "https://github.com/org/domain")
 
     def test_post_ajax_redirige_a_list(self):
         r = self.client.post(reverse("projects:create"), self._data(slug="ajax"),
@@ -140,8 +154,6 @@ class EditViewTests(MaintainerTestCase):
             "name": "Editado",
             "slug": "edit",
             "description": "",
-            "repository_url": "",
-            "template": "",
             "current_branch": "main",
         })
         self.assertEqual(r.status_code, 302)

@@ -20,7 +20,10 @@ ninguna query la referencia. El slug es único globalmente.
 """
 from __future__ import annotations
 
+import re
+
 from django.db import transaction
+from django.utils import timezone
 
 from core.service import MaintainerService
 
@@ -81,6 +84,72 @@ def list_available_templates() -> list[ProjectTemplate]:
     return list(ProjectTemplate.objects.all().order_by("slug"))
 
 
+# --- Repos git por proyecto -------------------------------------------------
+
+def _derive_repo_name(url: str, index: int) -> str:
+    """Alias del remoto derivado de la URL (último segmento sin .git).
+
+    Como ya no hay constraint UNIQUE(project_id, name) en la tabla, no es
+    necesario garantizar unicidad; solo buscamos un alias legible. Fallback a
+    'origin' para el primero y 'repo-N' para el resto.
+    """
+    base = url.rstrip("/").rsplit("/", 1)[-1]
+    if base.endswith(".git"):
+        base = base[:-4]
+    base = re.sub(r"[^A-Za-z0-9._-]", "", base).strip("-")
+    if base:
+        return base[:50]
+    return "origin" if index == 0 else f"repo-{index + 1}"
+
+
+def _sync_repositories(project: Project, rows: list[dict]) -> None:
+    """Reconcilia los remotos git del proyecto contra las filas del form.
+
+    rows: lista de dicts {url, branch_default, root_path} (ya filtradas: url no
+    vacía). Reconciliación POR POSICIÓN contra los repos activos existentes
+    (orden estable por created_at): se actualizan en sitio los que calzan, se
+    crean los extras y se soft-deletean los sobrantes. El primero queda como
+    is_default. Además backfillea projects.repository_url con la URL del default
+    (compat con el campo legacy de 1 repo principal).
+    """
+    existing = list(
+        ProjectRepository.objects.filter(
+            project=project, deleted_at__isnull=True
+        ).order_by("created_at", "id")
+    )
+
+    for i, row in enumerate(rows):
+        name = _derive_repo_name(row["url"], i)
+        is_default = i == 0
+        if i < len(existing):
+            repo = existing[i]
+            repo.name = name
+            repo.url = row["url"]
+            repo.branch_default = row.get("branch_default", "")
+            repo.root_path = row.get("root_path", "")
+            repo.is_default = is_default
+            repo.save()
+        else:
+            ProjectRepository.objects.create(
+                project=project,
+                name=name,
+                url=row["url"],
+                branch_default=row.get("branch_default", ""),
+                root_path=row.get("root_path", ""),
+                is_default=is_default,
+            )
+
+    # Sobrantes: soft-delete (deleted_at) y quitarles el flag default.
+    for repo in existing[len(rows):]:
+        repo.deleted_at = timezone.now()
+        repo.is_default = False
+        repo.save()
+
+    # Backfill de la URL principal legacy desde el repo default (primero).
+    project.repository_url = rows[0]["url"] if rows else ""
+    project.save(update_fields=["repository_url", "updated_at"])
+
+
 @transaction.atomic
 def create_project(
     *,
@@ -91,8 +160,14 @@ def create_project(
     template_id: str | None = None,
     current_branch: str = "",
     client_id: str | None = None,
+    repositories: list[dict] | None = None,
 ) -> Project:
-    """Crea un proyecto nuevo. slug único global."""
+    """Crea un proyecto nuevo. slug único global.
+
+    `repositories` (si se pasa) es el set completo de remotos git como filas
+    {url, branch_default, root_path}; se sincroniza y la URL principal se deriva
+    del primero. Si es None, no se tocan repos (compat con callers legacy).
+    """
     if Project.objects.filter(slug=slug).exists():
         raise ProjectError(f"Ya existe un proyecto con slug '{slug}'.")
 
@@ -108,6 +183,8 @@ def create_project(
         current_branch=current_branch or "",
         client_id=client_id or None,
     )
+    if repositories is not None:
+        _sync_repositories(project, repositories)
     return project
 
 
@@ -122,8 +199,13 @@ def update_project(
     template_id: str | None = None,
     current_branch: str = "",
     client_id: str | None = None,
+    repositories: list[dict] | None = None,
 ) -> Project:
-    """Actualiza un proyecto. slug sigue siendo único global."""
+    """Actualiza un proyecto. slug sigue siendo único global.
+
+    `repositories` (si se pasa) reemplaza el set de remotos git; la URL
+    principal se re-deriva del primero. Si es None, no se tocan repos.
+    """
     if slug != project.slug and Project.objects.filter(
         slug=slug
     ).exclude(pk=project.pk).exists():
@@ -135,11 +217,17 @@ def update_project(
     project.name = name
     project.slug = slug
     project.description = description or ""
-    project.repository_url = repository_url or ""
     project.template_id = template_id or None
     project.current_branch = current_branch or ""
     project.client_id = client_id or None
+    if repositories is None:
+        # Sin gestión de repos: respetar la URL principal recibida (legacy).
+        project.repository_url = repository_url or ""
     project.save()
+
+    if repositories is not None:
+        # _sync_repositories backfillea project.repository_url desde el default.
+        _sync_repositories(project, repositories)
     return project
 
 

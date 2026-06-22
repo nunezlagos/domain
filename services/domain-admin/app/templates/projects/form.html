@@ -61,25 +61,12 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label" for="{{ form.repository_url.id_for_label }}">Repositorio (URL principal)</label>
-      {{ form.repository_url }}
-      {% if form.repository_url.errors %}<div class="form-help text-danger">{{ form.repository_url.errors|join:", " }}</div>{% endif %}
+      <label class="form-label" for="{{ form.current_branch.id_for_label }}">Rama actual</label>
+      {{ form.current_branch }}
+      {% if form.current_branch.errors %}<div class="form-help text-danger">{{ form.current_branch.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.template.id_for_label }}">Template</label>
-        {{ form.template }}
-        {% if form.template.help_text %}<div class="form-help">{{ form.template.help_text }}</div>{% endif %}
-        {% if form.template.errors %}<div class="form-help text-danger">{{ form.template.errors|join:", " }}</div>{% endif %}
-      </div>
-
-      <div class="form-group" style="flex: 1;">
-        <label class="form-label" for="{{ form.current_branch.id_for_label }}">Rama actual</label>
-        {{ form.current_branch }}
-        {% if form.current_branch.errors %}<div class="form-help text-danger">{{ form.current_branch.errors|join:", " }}</div>{% endif %}
-      </div>
-    </div>
+    {% include "projects/_repo_rows.html" %}
 
     <hr>
 

@@ -55,7 +55,7 @@
     <div class="table-wrapper">
       <table class="table">
         <thead>
-          <tr><th>Alias</th><th>URL</th><th>Rama default</th><th>Tipo</th><th>Workflow</th><th>Default</th></tr>
+          <tr><th>Alias</th><th>URL</th><th>Rama default</th><th>Folder</th><th>Tipo</th><th>Workflow</th><th>Default</th></tr>
         </thead>
         <tbody>
           {% for r in repositories %}
@@ -63,6 +63,7 @@
               <td><code>{{ r.name }}</code></td>
               <td><code>{{ r.url }}</code></td>
               <td class="text-secondary">{{ r.branch_default|default:"—" }}</td>
+              <td class="text-secondary">{% if r.root_path %}<code>{{ r.root_path }}</code>{% else %}—{% endif %}</td>
               <td class="text-secondary">{{ r.get_kind_display|default:"—" }}</td>
               <td class="text-secondary">{{ r.get_workflow_display|default:"—" }}</td>
               <td>{% if r.is_default %}<span class="badge badge-primary">default</span>{% else %}—{% endif %}</td>

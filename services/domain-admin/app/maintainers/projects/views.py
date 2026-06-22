@@ -30,17 +30,58 @@ from .models import Project
 class ProjectViews(MaintainerViews):
     """MaintainerViews especializado para projects (context keys + payload + msgs)."""
 
-    # --- payload del service: el form trae `template`; el service espera
-    #     `template_id`. Además omitimos campos que el service no recibe.
+    # --- repos: filas dinámicas (url + rama + folder) que viajan como arrays
+    #     paralelos repo_url[]/repo_branch[]/repo_folder[] en el POST.
+    @staticmethod
+    def _parse_repo_post(data) -> list[dict]:
+        urls = data.getlist("repo_url")
+        branches = data.getlist("repo_branch")
+        folders = data.getlist("repo_folder")
+        rows: list[dict] = []
+        for i, url in enumerate(urls):
+            url = (url or "").strip()
+            if not url:
+                continue
+            rows.append({
+                "url": url,
+                "branch_default": (branches[i] if i < len(branches) else "").strip(),
+                "root_path": (folders[i] if i < len(folders) else "").strip(),
+            })
+        return rows
+
+    # --- payload del service: campos base + el set completo de repos parseado
+    #     del POST. La URL principal y el template ya no se mandan (la primera
+    #     se deriva del repo default; el template se quitó).
     def _form_payload(self, form) -> dict:
         return {
             "name": form.cleaned_data["name"],
             "slug": form.cleaned_data["slug"],
             "description": form.cleaned_data["description"],
-            "repository_url": form.cleaned_data["repository_url"],
-            "template_id": form.cleaned_data["template"],
             "current_branch": form.cleaned_data["current_branch"],
+            "repositories": self._parse_repo_post(form.data),
         }
+
+    # --- filas de repos para el template del form (pre-fill).
+    def _repo_rows(self, form, instance) -> list[dict]:
+        # Re-render por error de validación (form bound): preservar lo tipeado.
+        if form.is_bound:
+            return self._parse_repo_post(form.data)
+        # GET edit: repos existentes; si no hay pero hay URL principal legacy,
+        # sembrar una fila para no perder el dato.
+        if instance is not None:
+            repos = services.get_project_repositories(instance)
+            if repos:
+                return [
+                    {"url": r.url, "branch_default": r.branch_default, "root_path": r.root_path}
+                    for r in repos
+                ]
+            if instance.repository_url:
+                return [{
+                    "url": instance.repository_url,
+                    "branch_default": instance.current_branch,
+                    "root_path": "",
+                }]
+        return []
 
     # --- contextos: los templates de projects usan `project_obj` (no `object`).
     def list_context(self, data: dict, search: str) -> dict:
@@ -56,6 +97,7 @@ class ProjectViews(MaintainerViews):
             "project_obj": instance,
             "object": instance,
             "action": action,
+            "repo_rows": self._repo_rows(form, instance),
         }
 
     def detail_context(self, instance) -> dict:

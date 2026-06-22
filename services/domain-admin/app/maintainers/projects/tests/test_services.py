@@ -158,6 +158,72 @@ class RepositoriesTests(MaintainerTestCase):
         self.assertEqual(repos[0].name, "origin")
 
 
+class SyncRepositoriesTests(MaintainerTestCase):
+    def test_create_con_repos_setea_default_y_url_principal(self):
+        project = services.create_project(
+            name="P", slug="p",
+            repositories=[
+                {"url": "https://github.com/org/domain", "branch_default": "main", "root_path": "/"},
+                {"url": "https://gitlab.com/org/mirror", "branch_default": "", "root_path": "/sub/"},
+            ],
+        )
+        repos = services.get_project_repositories(project)
+        self.assertEqual(len(repos), 2)
+        # default = primero; name derivado de la URL.
+        self.assertTrue(repos[0].is_default)
+        self.assertEqual(repos[0].name, "domain")
+        self.assertEqual(repos[0].root_path, "/")
+        # URL principal legacy = repo default.
+        project.refresh_from_db()
+        self.assertEqual(project.repository_url, "https://github.com/org/domain")
+
+    def test_repositories_none_no_toca_repos(self):
+        project = services.create_project(
+            name="P", slug="p", repository_url="https://x/y",
+        )
+        self.assertEqual(len(services.get_project_repositories(project)), 0)
+        project.refresh_from_db()
+        self.assertEqual(project.repository_url, "https://x/y")
+
+    def test_update_reemplaza_set_y_softdeletea_sobrantes(self):
+        project = services.create_project(
+            name="P", slug="p",
+            repositories=[
+                {"url": "https://github.com/org/a", "branch_default": "", "root_path": ""},
+                {"url": "https://github.com/org/b", "branch_default": "", "root_path": ""},
+            ],
+        )
+        services.update_project(
+            project, name="P", slug="p",
+            repositories=[{"url": "https://github.com/org/c", "branch_default": "dev", "root_path": "/c/"}],
+        )
+        repos = services.get_project_repositories(project)
+        self.assertEqual(len(repos), 1)
+        self.assertEqual(repos[0].url, "https://github.com/org/c")
+        self.assertEqual(repos[0].root_path, "/c/")
+        self.assertTrue(repos[0].is_default)
+        project.refresh_from_db()
+        self.assertEqual(project.repository_url, "https://github.com/org/c")
+
+    def test_update_con_lista_vacia_limpia_todo(self):
+        project = services.create_project(
+            name="P", slug="p",
+            repositories=[{"url": "https://github.com/org/a", "branch_default": "", "root_path": ""}],
+        )
+        services.update_project(project, name="P", slug="p", repositories=[])
+        self.assertEqual(len(services.get_project_repositories(project)), 0)
+        project.refresh_from_db()
+        self.assertEqual(project.repository_url, "")
+
+    def test_update_repositories_none_preserva_repos(self):
+        project = services.create_project(
+            name="P", slug="p",
+            repositories=[{"url": "https://github.com/org/a", "branch_default": "", "root_path": ""}],
+        )
+        services.update_project(project, name="P2", slug="p")  # sin repositories
+        self.assertEqual(len(services.get_project_repositories(project)), 1)
+
+
 class TemplatesTests(MaintainerTestCase):
     def test_lista_todos_ordenados_por_slug(self):
         make_template("zeta")

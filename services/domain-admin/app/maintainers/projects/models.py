@@ -138,6 +138,9 @@ class ProjectRepository(SoftDeleteModel):
     is_default = models.BooleanField(default=False)
     workflow = models.CharField(max_length=40, blank=True, default="", choices=WORKFLOW_CHOICES)
     notes = models.TextField(blank=True, default="")
+    # root_path: carpeta del checkout donde vive este repo (ej. "/" o
+    # "/domain/services/"). Opcional. Migración 000159 en domain-mcp.
+    root_path = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
         db_table = "project_repositories"

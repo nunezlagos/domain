@@ -1,8 +1,10 @@
 """Tests de ProjectForm (validaciones del mantenedor).
 
-Verifican reglas reales: slug requerido y normalizado, formato de slug,
-unicidad global de slug y selección de template. La captura de `instance` para
-excluirse en edición se delega a core.forms.InstanceAwareMixin.
+Verifican reglas reales: slug requerido y normalizado, formato de slug y
+unicidad global de slug. La captura de `instance` para excluirse en edición se
+delega a core.forms.InstanceAwareMixin. El campo `template` se quitó del form
+(su lógica nunca se consumía) y los repos git ya no son fields (van como filas
+dinámicas que parsea la view), por eso no aparecen acá.
 """
 from __future__ import annotations
 
@@ -10,7 +12,7 @@ from core.tests.base import MaintainerTestCase
 
 from maintainers.projects.forms import ProjectForm
 
-from .factories import make_project, make_template
+from .factories import make_project
 
 
 class ProjectFormCreateTests(MaintainerTestCase):
@@ -19,8 +21,6 @@ class ProjectFormCreateTests(MaintainerTestCase):
             "name": "Form",
             "slug": "form",
             "description": "",
-            "repository_url": "",
-            "template": "",
             "current_branch": "",
         }
         base.update(over)
@@ -51,17 +51,6 @@ class ProjectFormCreateTests(MaintainerTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)
 
-    def test_template_vacio_es_none(self):
-        form = ProjectForm(data=self._data(template=""))
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertIsNone(form.cleaned_data["template"])
-
-    def test_template_valido_se_acepta(self):
-        tpl = make_template("django")
-        form = ProjectForm(data=self._data(template=str(tpl.pk)))
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data["template"], str(tpl.pk))
-
 
 class ProjectFormEditTests(MaintainerTestCase):
     def test_edit_mantiene_su_propio_slug(self):
@@ -71,8 +60,6 @@ class ProjectFormEditTests(MaintainerTestCase):
                 "name": "Mismo v2",
                 "slug": "mismo",
                 "description": "",
-                "repository_url": "",
-                "template": "",
                 "current_branch": "",
             },
             instance=p,
@@ -87,8 +74,6 @@ class ProjectFormEditTests(MaintainerTestCase):
                 "name": "Mio",
                 "slug": "otro",
                 "description": "",
-                "repository_url": "",
-                "template": "",
                 "current_branch": "",
             },
             instance=p,

@@ -34,7 +34,7 @@ Detalle de proyecto para el modal dinámico. Extiende maintainers/_detail_base.h
   {% if repositories %}
     <table class="table" style="font-size: var(--fs-sm);">
       <thead>
-        <tr><th>Alias</th><th>URL</th><th>Rama</th><th>Tipo</th><th>Default</th></tr>
+        <tr><th>Alias</th><th>URL</th><th>Rama</th><th>Folder</th><th>Default</th></tr>
       </thead>
       <tbody>
         {% for r in repositories %}
@@ -42,7 +42,7 @@ Detalle de proyecto para el modal dinámico. Extiende maintainers/_detail_base.h
             <td><code>{{ r.name }}</code></td>
             <td><code>{{ r.url }}</code></td>
             <td>{{ r.branch_default|default:"—" }}</td>
-            <td>{{ r.get_kind_display|default:"—" }}</td>
+            <td>{% if r.root_path %}<code>{{ r.root_path }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
             <td>{% if r.is_default %}<span class="badge badge-primary">default</span>{% else %}—{% endif %}</td>
           </tr>
         {% endfor %}

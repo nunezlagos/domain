@@ -1,0 +1,73 @@
+{% comment %}
+Sección "Repositorios git" del form de proyecto. Filas dinámicas (url + rama +
+folder) que viajan como arrays paralelos repo_url[]/repo_branch[]/repo_folder[].
+El primero es el principal (default). El + agrega filas, el − las quita
+(projects-repos.js, delegado para funcionar en el modal dinámico).
+
+Contexto: repo_rows = lista de {url, branch_default, root_path}.
+{% endcomment %}
+<div class="form-group">
+  <label class="form-label">Repositorios git</label>
+  <div class="form-help">
+    URL del repo, rama por defecto y carpeta donde vive en el checkout
+    (ej. <code>/</code> o <code>/domain/services/</code>, opcional). El primero
+    es el repositorio principal.
+  </div>
+
+  <div data-repo-list style="margin-top: var(--space-sm);">
+    {% for r in repo_rows %}
+      <div class="repo-row">
+        <input type="text" name="repo_url" class="form-control" autocomplete="off"
+               placeholder="https://github.com/org/repo" value="{{ r.url }}">
+        <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+               placeholder="rama (main)" value="{{ r.branch_default }}">
+        <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+               placeholder="/ (opcional)" value="{{ r.root_path }}">
+        <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    {% empty %}
+      <div class="repo-row">
+        <input type="text" name="repo_url" class="form-control" autocomplete="off"
+               placeholder="https://github.com/org/repo">
+        <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+               placeholder="rama (main)">
+        <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+               placeholder="/ (opcional)">
+        <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+
+  <button type="button" class="btn btn-ghost btn-sm" data-repo-add style="margin-top: var(--space-sm);">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Agregar repositorio
+  </button>
+
+  {% comment %} Plantilla inerte para clonar filas nuevas (no se envía). {% endcomment %}
+  <template data-repo-template>
+    <div class="repo-row">
+      <input type="text" name="repo_url" class="form-control" autocomplete="off"
+             placeholder="https://github.com/org/repo">
+      <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+             placeholder="rama (main)">
+      <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+             placeholder="/ (opcional)">
+      <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </template>
+</div>

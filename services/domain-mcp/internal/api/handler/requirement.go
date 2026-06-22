@@ -17,6 +17,7 @@ type createReqBody struct {
 	Status      string `json:"status,omitempty"`
 	Priority    string `json:"priority,omitempty"`
 	ParentSlug  string `json:"parent_slug,omitempty"`
+	ProjectID   string `json:"project_id,omitempty"`
 }
 
 type updateReqBody struct {
@@ -41,7 +42,16 @@ func (a *API) createRequirement(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	req, err := a.ReqService.Create(r.Context(), b.Slug, b.Title, b.Description, b.Status, b.Priority, b.ParentSlug)
+	var projectID *uuid.UUID
+	if b.ProjectID != "" {
+		pid, perr := uuid.Parse(b.ProjectID)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "invalid_project_id", perr.Error())
+			return
+		}
+		projectID = &pid
+	}
+	req, err := a.ReqService.Create(r.Context(), b.Slug, b.Title, b.Description, b.Status, b.Priority, b.ParentSlug, projectID)
 	if err != nil {
 		switch {
 		case errors.Is(err, reqsvc.ErrSlugInvalid), errors.Is(err, reqsvc.ErrInvalidStatus), errors.Is(err, reqsvc.ErrInvalidPriority):

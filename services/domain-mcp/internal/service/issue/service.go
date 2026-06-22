@@ -56,6 +56,7 @@ type Issue struct {
 	Status      string     `json:"status"`
 	Priority    string     `json:"priority"`
 	ReqID       uuid.UUID  `json:"req_id"`
+	ProjectID   *uuid.UUID `json:"project_id,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	Scenarios   []Scenario `json:"scenarios,omitempty"`
@@ -114,7 +115,8 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 	}
 
 	var reqID uuid.UUID
-	err := s.Pool.QueryRow(ctx, `SELECT id FROM sdd_requirements WHERE slug = $1`, reqSlug).Scan(&reqID)
+	var projectID *uuid.UUID // heredado del requirement padre (scoping por proyecto)
+	err := s.Pool.QueryRow(ctx, `SELECT id, project_id FROM sdd_requirements WHERE slug = $1`, reqSlug).Scan(&reqID, &projectID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrReqNotFound
@@ -135,11 +137,11 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 	var hu Issue
 	err = tx.QueryRow(ctx,
-		`INSERT INTO issues (slug, title, description, status, priority, req_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, slug, title, description, status, priority, req_id, created_at, updated_at`,
-		slug, title, desc, status, priority, reqID,
-	).Scan(&hu.ID, &hu.Slug, &hu.Title, &hu.Description, &hu.Status, &hu.Priority, &hu.ReqID, &hu.CreatedAt, &hu.UpdatedAt)
+		`INSERT INTO issues (slug, title, description, status, priority, req_id, project_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, slug, title, description, status, priority, req_id, project_id, created_at, updated_at`,
+		slug, title, desc, status, priority, reqID, projectID,
+	).Scan(&hu.ID, &hu.Slug, &hu.Title, &hu.Description, &hu.Status, &hu.Priority, &hu.ReqID, &hu.ProjectID, &hu.CreatedAt, &hu.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrSlugTaken
@@ -147,7 +149,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 		return nil, fmt.Errorf("insert user_story: %w", err)
 	}
 
-	hu.Scenarios, err = insertScenariosTx(ctx, tx, hu.ID, scenarios)
+	hu.Scenarios, err = insertScenariosTx(ctx, tx, hu.ID, projectID, scenarios)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +452,7 @@ func scanScenarios(rows pgx.Rows) ([]Scenario, error) {
 	return out, rows.Err()
 }
 
-func insertScenariosTx(ctx context.Context, tx pgx.Tx, issueID uuid.UUID, scenarios []Scenario) ([]Scenario, error) {
+func insertScenariosTx(ctx context.Context, tx pgx.Tx, issueID uuid.UUID, projectID *uuid.UUID, scenarios []Scenario) ([]Scenario, error) {
 	if len(scenarios) == 0 {
 		return nil, nil
 	}
@@ -459,10 +461,10 @@ func insertScenariosTx(ctx context.Context, tx pgx.Tx, issueID uuid.UUID, scenar
 		sc.HuID = issueID
 		sc.Position = i
 		err := tx.QueryRow(ctx,
-			`INSERT INTO issue_gherkin_scenarios (issue_id, feature, scenario, given, when_text, then_rows, position)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO issue_gherkin_scenarios (issue_id, project_id, feature, scenario, given, when_text, then_rows, position)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			 RETURNING id, issue_id, feature, scenario, given, when_text, then_rows, position, created_at`,
-			issueID, sc.Feature, sc.Scenario, sc.Given, sc.When, sc.Then, i,
+			issueID, projectID, sc.Feature, sc.Scenario, sc.Given, sc.When, sc.Then, i,
 		).Scan(&out[i].ID, &out[i].HuID, &out[i].Feature, &out[i].Scenario, &out[i].Given, &out[i].When, &out[i].Then, &out[i].Position, &out[i].CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("insert scenario %d: %w", i, err)

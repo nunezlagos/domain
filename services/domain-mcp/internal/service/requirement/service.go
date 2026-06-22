@@ -55,6 +55,7 @@ type Requirement struct {
 	Status      string     `json:"status"`
 	Priority    string     `json:"priority"`
 	ParentID    *uuid.UUID `json:"parent_id,omitempty"`
+	ProjectID   *uuid.UUID `json:"project_id,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
@@ -81,7 +82,7 @@ type Service struct {
 }
 
 // Create inserta un requirement. Si parentSlug no es vacío, busca el padre.
-func (s *Service) Create(ctx context.Context, slug, title, description, status, priority string, parentSlug string) (*Requirement, error) {
+func (s *Service) Create(ctx context.Context, slug, title, description, status, priority string, parentSlug string, projectID *uuid.UUID) (*Requirement, error) {
 	if !reReqSlug.MatchString(slug) {
 		return nil, ErrSlugInvalid
 	}
@@ -117,11 +118,11 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 	var r Requirement
 	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title, description, status, priority, parent_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, slug, title, description, status, priority, parent_id, created_at, updated_at`,
-		slug, title, desc, status, priority, parentID,
-	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
+		`INSERT INTO sdd_requirements (slug, title, description, status, priority, parent_id, project_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, slug, title, description, status, priority, parent_id, project_id, created_at, updated_at`,
+		slug, title, desc, status, priority, parentID, projectID,
+	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.ProjectID, &r.CreatedAt, &r.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrSlugTaken

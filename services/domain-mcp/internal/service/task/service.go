@@ -110,6 +110,10 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 	}
 	defer tx.Rollback(ctx)
 
+	// project_id heredado del issue padre (scoping por proyecto).
+	var projectID *uuid.UUID
+	_ = tx.QueryRow(ctx, `SELECT project_id FROM issues WHERE id = $1`, issueID).Scan(&projectID)
+
 	// Compute next position per section
 	posMap := map[string]int{}
 	for _, in := range inputs {
@@ -132,10 +136,10 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 
 		var t Task
 		err := tx.QueryRow(ctx,
-			`INSERT INTO issue_tasks (issue_id, section, description, position, status)
-			 VALUES ($1, $2, $3, $4, 'pending')
+			`INSERT INTO issue_tasks (issue_id, project_id, section, description, position, status)
+			 VALUES ($1, $2, $3, $4, $5, 'pending')
 			 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
-			issueID, in.Section, in.Description, pos,
+			issueID, projectID, in.Section, in.Description, pos,
 		).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("insert task: %w", err)

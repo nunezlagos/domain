@@ -7,59 +7,65 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
 {% block detail_title %}{{ user_obj.display_name }}{% endblock %}
 
 {% block detail_body %}
-  <p class="text-secondary mb-3">
-    <code>{{ user_obj.email }}</code>
-    · Rol principal: <span class="badge">{{ user_obj.role }}</span>
-    · Estado:
-    {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
-    {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
-    {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
-    {% endif %}
-  </p>
-
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
-    <tbody>
-      <tr><th style="width: 140px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
-      <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
-      <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
-      <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
-      <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
-      <tr><th>Contraseña</th>
-        <td>
-          {% if user_obj.password_set_at %}
-            {{ user_obj.password_set_at|date:"d/m/Y H:i" }}
-          {% else %}
-            <span class="text-muted">No establecida</span>
-          {% endif %}
-        </td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Roles asignados</h4>
-  {% if user_roles %}
-    <div class="d-flex gap-2" style="flex-wrap: wrap;">
-      {% for ur in user_roles %}
-        <span class="badge badge-primary">{{ ur.role.slug }}</span>
-      {% endfor %}
+  {% comment %} Resumen arriba (email + rol principal + estado), luego tabs verticales. {% endcomment %}
+  <div class="vuser-head">
+    <div class="vuser-avatar">{{ user_obj.display_name|slice:":1"|upper }}</div>
+    <div>
+      <div class="vuser-email"><code>{{ user_obj.email }}</code></div>
+      <div class="d-flex gap-2 mt-1" style="align-items: center; flex-wrap: wrap;">
+        <span class="badge">{{ user_obj.role }}</span>
+        {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
+        {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
+        {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
+        {% endif %}
+      </div>
     </div>
-    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
-      {{ user_roles|length }} activo(s).
-      Para asignar/quitar roles usa el panel de edicion.
-    </p>
-  {% else %}
-    <p class="text-muted">Este usuario no tiene roles asignados.</p>
-  {% endif %}
+  </div>
 
-  {% comment %}
-  Seccion API Keys del usuario. Las acciones (editar/crear) apuntan al
-  mantenedor existente de API Keys via data-base-url="/api-keys/", reusando su
-  CRUD. api_keys viene del detail_context de users.views (filter user_id=pk).
-  {% endcomment %}
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">API Keys</h4>
-  <div data-base-url="/api-keys/">
+  <div class="vtabs">
+    <input type="radio" name="utab" id="ut-info" checked>
+    <input type="radio" name="utab" id="ut-roles">
+    <input type="radio" name="utab" id="ut-keys">
+    <nav class="vtabs-nav">
+      <label for="ut-info">Informacion</label>
+      <label for="ut-roles">Roles {% if user_roles %}<span class="vtab-count">{{ user_roles|length }}</span>{% endif %}</label>
+      <label for="ut-keys">API Keys {% if api_keys %}<span class="vtab-count">{{ api_keys|length }}</span>{% endif %}</label>
+    </nav>
+    <div class="vtabs-body">
+
+      {% comment %} ===== Pane: Informacion ===== {% endcomment %}
+      <div class="vpane vpane-info">
+        <table class="table" style="font-size: var(--fs-sm);">
+          <tbody>
+            <tr><th style="width: 140px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
+            <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
+            <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
+            <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
+            <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+            <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+            <tr><th>Contraseña</th>
+              <td>{% if user_obj.password_set_at %}{{ user_obj.password_set_at|date:"d/m/Y H:i" }}{% else %}<span class="text-muted">No establecida</span>{% endif %}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {% comment %} ===== Pane: Roles ===== {% endcomment %}
+      <div class="vpane vpane-roles">
+        {% if user_roles %}
+          <div class="d-flex gap-2" style="flex-wrap: wrap;">
+            {% for ur in user_roles %}<span class="badge badge-primary">{{ ur.role.slug }}</span>{% endfor %}
+          </div>
+          <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+            {{ user_roles|length }} activo(s). Para asignar/quitar roles usa el panel de edicion.
+          </p>
+        {% else %}
+          <p class="text-muted">Este usuario no tiene roles asignados.</p>
+        {% endif %}
+      </div>
+
+      {% comment %} ===== Pane: API Keys ===== {% endcomment %}
+      <div class="vpane vpane-keys" data-base-url="/api-keys/">
     {% if api_keys %}
       <table class="table" style="font-size: var(--fs-sm);">
         <tbody>
@@ -122,7 +128,9 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
         + Crear API Key
       </button>
     {% endif %}
-  </div>
+      </div>{# /vpane-keys #}
+    </div>{# /vtabs-body #}
+  </div>{# /vtabs #}
 {% endblock %}
 
 {% block detail_actions %}

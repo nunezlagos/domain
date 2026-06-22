@@ -88,22 +88,4 @@
     </div>
   </div>
 </div>
-
-<script>
-  // Escala el diagrama para que entre en el alto disponible (igual que el SVG).
-  (function () {
-    function fitSeq() {
-      var box = document.querySelector('.sdd-diagram');
-      var seq = document.querySelector('.seq');
-      if (!box || !seq) return;
-      seq.style.transform = 'none';
-      var s = Math.min(box.clientWidth / seq.offsetWidth, box.clientHeight / seq.offsetHeight, 1);
-      seq.style.transform = 'scale(' + s + ')';
-    }
-    window.addEventListener('resize', fitSeq);
-    window.addEventListener('load', fitSeq);
-    document.addEventListener('DOMContentLoaded', fitSeq);
-    fitSeq();
-  })();
-</script>
 {% endblock %}

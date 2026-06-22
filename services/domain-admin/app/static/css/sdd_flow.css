@@ -29,19 +29,17 @@
 .c-lite { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
 .c-exp  { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
 
-/* Area del diagrama: ocupa el resto; el .seq se escala para entrar (fitSeq).
-   overflow hidden para clipear el espacio de layout que deja el transform. */
+/* Area del diagrama: ocupa el resto del alto. El diagrama llena TODO el ancho;
+   si queda mas alto que la caja, scrollea adentro (la pagina no scrollea). */
 .sdd-diagram {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  overflow: hidden;
+  overflow: auto;
 }
 
-/* Unidad escalable. Ancho de diseno fijo para una secuencia legible. */
-.seq { width: 880px; flex: 0 0 auto; transform-origin: top center; }
+/* El diagrama llena el ancho disponible (lifelines en %). min-width para que en
+   pantallas chicas siga legible y scrollee en X en vez de apretarse. */
+.seq { width: 100%; min-width: 700px; }
 
 /* Cabecera de participantes: 5 columnas iguales con caja + sombra */
 .actors { display: grid; grid-template-columns: repeat(5, 1fr); margin-bottom: 6px; }
@@ -67,7 +65,7 @@
 .ll1 { left: 10%; } .ll2 { left: 30%; } .ll3 { left: 50%; } .ll4 { left: 70%; } .ll5 { left: 90%; }
 
 /* Cada mensaje ocupa su propio alto -> nunca se solapan verticalmente */
-.msg { position: relative; height: 42px; }
+.msg { position: relative; height: 36px; }
 .msg .lbl {
   position: absolute; top: 0;
   font-size: 11.5px; color: var(--color-text-secondary);
@@ -76,7 +74,7 @@
 .msg .lbl.ret { color: var(--color-text-muted); font-style: italic; }
 
 /* Linea de la flecha + cabeza por pseudo-elemento */
-.msg .line { position: absolute; top: 26px; height: 0; border-top: 2px solid var(--color-text-secondary); }
+.msg .line { position: absolute; top: 23px; height: 0; border-top: 2px solid var(--color-text-secondary); }
 .msg .line.ret { border-top: 1.6px dashed var(--color-text-muted); }
 .msg .line.to-right::after, .msg .line.to-left::after {
   content: ""; position: absolute; top: -5px; border: 5px solid transparent;
@@ -88,14 +86,14 @@
 
 /* Self-message (triage / itera): bucle corto sobre la lifeline */
 .msg .self {
-  position: absolute; top: 14px; width: 46px; height: 20px;
+  position: absolute; top: 11px; width: 46px; height: 18px;
   border: 1.6px solid var(--color-text-secondary); border-left: 0; border-radius: 0 8px 8px 0;
 }
 .msg .self.acc { border-color: var(--color-info); }
 
 /* Fase: boton clickeable Orchestrator -> Agente, coloreado por grupo */
 .ph {
-  position: absolute; top: 16px; left: 50%; width: 20%; height: 24px;
+  position: absolute; top: 13px; left: 50%; width: 20%; height: 22px;
   border: 0; cursor: pointer; display: flex; align-items: center; gap: 6px;
   padding: 0 8px; border-radius: 5px; font: inherit; color: #fff;
   font-size: 11.5px; font-weight: 600; background: var(--g, var(--color-text-link));

@@ -144,7 +144,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 			return nil, err
 		}
 		if err := s.persistPlan(ctx, in, mode,
@@ -182,7 +182,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 			return nil, err
 		}
 		if err := s.persistPlan(ctx, in, mode,
@@ -250,7 +250,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		// recompilar binario. Detect TAMBIÉN hidrata: el preview es útil
 		// sólo si refleja los prompts reales que correrá Full.
 		if s.Repo != nil {
-			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 				return nil, err
 			}
 		}
@@ -329,10 +329,13 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 // el seed (no hay default sano para un prompt en blanco).
 //
 // También extrae SkillThreshold desde agent_templates.metadata (D3).
-func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, plan *modes.PhasePlan) error {
+func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uuid.UUID, plan *modes.PhasePlan) error {
 	if plan == nil {
 		return nil
 	}
+	// Reglas del proyecto (+ plataforma) leídas una vez y anexadas a cada fase:
+	// la lectura de reglas es parte del flujo SDD (scoping por proyecto).
+	rulesBlock := s.buildRulesBlock(ctx, projectID)
 	type cached struct {
 		systemPrompt string
 		threshold    float64
@@ -352,12 +355,87 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, pla
 		if err != nil {
 			return err
 		}
-		c := cached{systemPrompt: t.SystemPrompt, threshold: t.SkillThreshold()}
+		sysPrompt := t.SystemPrompt + rulesBlock
+		c := cached{systemPrompt: sysPrompt, threshold: t.SkillThreshold()}
 		cache[slug] = c
 		plan.Steps[i].SystemPrompt = c.systemPrompt
 		plan.Steps[i].SkillThreshold = c.threshold
 	}
 	return nil
+}
+
+// buildRulesBlock arma un bloque markdown con las reglas vigentes: las de
+// plataforma (platform_policies) + las del proyecto (project_policies),
+// respetando override_platform (si una policy de proyecto de un `kind`
+// marca override, se omiten las de plataforma de ese mismo kind). Best-effort:
+// si falla la lectura, devuelve "" (las reglas son aditivas, no bloqueantes).
+func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) string {
+	if s.Pool == nil {
+		return ""
+	}
+	type pol struct {
+		name, body, kind string
+		override         bool
+	}
+	var platform, project []pol
+
+	if rows, err := s.Pool.Query(ctx,
+		`SELECT name, COALESCE(body_md,''), COALESCE(kind,'')
+		   FROM platform_policies WHERE is_active = TRUE
+		   ORDER BY kind, slug`); err == nil {
+		for rows.Next() {
+			var p pol
+			if rows.Scan(&p.name, &p.body, &p.kind) == nil && p.body != "" {
+				platform = append(platform, p)
+			}
+		}
+		rows.Close()
+	}
+
+	if projectID != uuid.Nil {
+		if rows, err := s.Pool.Query(ctx,
+			`SELECT name, COALESCE(body_md,''), COALESCE(kind,''), override_platform
+			   FROM project_policies
+			   WHERE project_id = $1 AND is_active = TRUE
+			     AND deleted_at IS NULL AND proposed = FALSE
+			   ORDER BY kind, slug`, projectID); err == nil {
+			for rows.Next() {
+				var p pol
+				if rows.Scan(&p.name, &p.body, &p.kind, &p.override) == nil && p.body != "" {
+					project = append(project, p)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	overridden := make(map[string]bool)
+	for _, p := range project {
+		if p.override && p.kind != "" {
+			overridden[p.kind] = true
+		}
+	}
+
+	var b strings.Builder
+	write := func(p pol) {
+		b.WriteString("\n### ")
+		b.WriteString(p.name)
+		b.WriteString("\n")
+		b.WriteString(p.body)
+		b.WriteString("\n")
+	}
+	for _, p := range platform {
+		if !overridden[p.kind] {
+			write(p)
+		}
+	}
+	for _, p := range project {
+		write(p)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\n\n## Reglas vigentes (plataforma + proyecto)\n" + b.String()
 }
 
 // now devuelve la hora vía Clock o cae a UTC system si Clock fue nil

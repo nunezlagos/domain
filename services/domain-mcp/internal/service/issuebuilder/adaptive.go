@@ -40,8 +40,9 @@ func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, c
 		return nil, nil, fmt.Errorf("intent=%s no requiere wizard", intent)
 	}
 
-	// Crear draft estándar + persistir envelope.
-	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy)
+	// Crear draft estándar + persistir envelope. projectID nil: StartAdaptive
+	// aun no recibe project_id (follow-up si se quiere scopear este path).
+	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy, nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -53,7 +53,7 @@ func TestStart_FeatureMode_FirstQuestion(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, q, err := svc.Start(ctx, hb.ModeFeature, "Quiero exportar runs a CSV", nil)
+	d, q, err := svc.Start(ctx, hb.ModeFeature, "Quiero exportar runs a CSV", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, hb.StatusInProgress, d.Status)
 	require.Equal(t, 8, d.TotalSteps)
@@ -66,7 +66,7 @@ func TestStart_FeatureMode_FirstQuestion(t *testing.T) {
 func TestStart_InvalidMode(t *testing.T) {
 	svc, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), "bogus", "idea", nil)
+	_, _, err := svc.Start(context.Background(), "bogus", "idea", nil, nil)
 	require.ErrorIs(t, err, hb.ErrInvalidMode)
 }
 
@@ -74,14 +74,14 @@ func TestStart_UnsupportedMode(t *testing.T) {
 	t.Skip("pre-existente: todos los modes (feature/bug-fix/refactor/doc/rfc) tienen flow implementado, ErrUnsupportedMode no se dispara. Se mantiene como guard para cuando se agregue un mode nuevo con flow placeholder.")
 	svc, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), hb.ModeBugFix, "idea", nil)
+	_, _, err := svc.Start(context.Background(), hb.ModeBugFix, "idea", nil, nil)
 	require.ErrorIs(t, err, hb.ErrUnsupportedMode)
 }
 
 func TestStart_EmptyIdea(t *testing.T) {
 	svc, cleanup := setupHB(t)
 	defer cleanup()
-	_, _, err := svc.Start(context.Background(), hb.ModeFeature, "  ", nil)
+	_, _, err := svc.Start(context.Background(), hb.ModeFeature, "  ", nil, nil)
 	require.Error(t, err)
 }
 
@@ -90,7 +90,7 @@ func TestAnswer_AdvancesStep(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
 	require.NoError(t, err)
 
 	d2, q, err := svc.Answer(ctx, d.ID, "feature")
@@ -104,7 +104,7 @@ func TestAnswer_InvalidValue(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
 	require.NoError(t, err)
 
 	_, _, err = svc.Answer(ctx, d.ID, "bogus_change_type")
@@ -123,7 +123,7 @@ func TestFullFlow_FeatureMode(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "Exportar runs CSV", nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "Exportar runs CSV", nil, nil)
 	require.NoError(t, err)
 
 	answers := []any{
@@ -166,7 +166,7 @@ func TestAbandon_FromInProgress(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
 	require.NoError(t, err)
 
 	err = svc.Abandon(ctx, d.ID, "changed mind")
@@ -182,8 +182,8 @@ func TestList_ByStatus(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea1", nil)
-	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea2", nil)
+	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea1", nil, nil)
+	_, _, _ = svc.Start(ctx, hb.ModeFeature, "idea2", nil, nil)
 
 	drafts, err := svc.List(ctx, hb.StatusInProgress)
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestSabotage_OvershootStep(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil)
+	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, nil)
 	require.NoError(t, err)
 
 	// Forzamos current_step más allá del último válido

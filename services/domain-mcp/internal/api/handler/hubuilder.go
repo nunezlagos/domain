@@ -13,6 +13,7 @@ func (a *API) startHubDraft(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Mode        string `json:"mode"`
 		InitialIdea string `json:"initial_idea"`
+		ProjectID   string `json:"project_id,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, 400, "invalid_json", err.Error())
@@ -25,7 +26,17 @@ func (a *API) startHubDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := uuid.Parse(p.UserID)
 
-	draft, question, err := a.Hubuilder.Start(r.Context(), body.Mode, body.InitialIdea, &userID)
+	var projectID *uuid.UUID
+	if body.ProjectID != "" {
+		pp, perr := uuid.Parse(body.ProjectID)
+		if perr != nil {
+			writeError(w, 400, "invalid_project_id", perr.Error())
+			return
+		}
+		projectID = &pp
+	}
+
+	draft, question, err := a.Hubuilder.Start(r.Context(), body.Mode, body.InitialIdea, &userID, projectID)
 	if err != nil {
 		code, status := "internal_error", 500
 		switch {

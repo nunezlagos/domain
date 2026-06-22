@@ -288,7 +288,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 
 	// Path legacy (wizard): preservado para deploys sin Orchestrator configurado.
 	mode := wizardModeForIntent(intent)
-	draft, q, err := r.IssueBuilderService.Start(ctx, mode, rawText, createdBy)
+	draft, q, err := r.IssueBuilderService.Start(ctx, mode, rawText, createdBy, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("wizard start: %w", err)
 	}

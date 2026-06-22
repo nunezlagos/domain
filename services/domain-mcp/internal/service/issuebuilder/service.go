@@ -128,7 +128,7 @@ func (s *Service) ttl() time.Duration {
 }
 
 // Start inicia un nuevo wizard. Crea draft y devuelve primera pregunta.
-func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy *uuid.UUID) (*Draft, *Question, error) {
+func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy *uuid.UUID, projectID *uuid.UUID) (*Draft, *Question, error) {
 	flow, ok := flowsByMode[mode]
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %s", ErrInvalidMode, mode)
@@ -144,13 +144,15 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 
 	var d Draft
 	// ISSUE-21.6: RETURNING sin organization_id.
+	// project_id (nullable, mig 000161): scopea el draft al proyecto. *uuid.UUID
+	// nil -> NULL. Antes quedaba siempre NULL porque Start no lo recibia.
 	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO issue_drafts (created_by, mode, initial_idea, total_steps, expires_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO issue_drafts (created_by, project_id, mode, initial_idea, total_steps, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_by, mode, initial_idea, answers,
 		          current_step, total_steps, status, pending_clarifications,
 		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
-		createdBy, mode, initialIdea, len(flow), expires,
+		createdBy, projectID, mode, initialIdea, len(flow), expires,
 	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
 		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
 		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)

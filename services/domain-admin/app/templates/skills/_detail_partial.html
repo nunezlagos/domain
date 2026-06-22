@@ -15,10 +15,10 @@ eliminar.
     {% if skill_obj.proposed %}· <span class="badge badge-warning">Propuesta</span>{% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
     <tbody>
-      <tr><th style="width: 160px;">Nombre</th><td>{{ skill_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ skill_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ skill_obj.slug }}</code></td></tr>
       <tr><th>Tipo</th><td><span class="badge">{{ skill_obj.get_skill_type_display }}</span></td></tr>
       <tr><th>Descripcion</th><td>{{ skill_obj.description|default:"—" }}</td></tr>
@@ -37,9 +37,9 @@ eliminar.
     </tbody>
   </table>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Versiones</h4>
+  <h4 class="mnt-detail-section">Versiones</h4>
   {% if skill_versions %}
-    <table class="table" style="font-size: var(--fs-sm);">
+    <table class="table mnt-table-sm">
       <thead>
         <tr>
           <th>Version</th>
@@ -59,7 +59,7 @@ eliminar.
         {% endfor %}
       </tbody>
     </table>
-    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+    <p class="text-secondary mt-2 mnt-text-sm">
       {{ skill_versions|length }} version(es). Las versiones son snapshots
       inmutables (solo lectura).
     </p>

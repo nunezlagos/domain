@@ -9,7 +9,7 @@
 {% block content %}
 <div class="content-header">
   <div>
-    <a href="{% url 'apikeys:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a API Keys</a>
+    <a href="{% url 'apikeys:list' %}" class="text-secondary mnt-text-sm">← Volver a API Keys</a>
     <h1 class="mt-1">{{ apikey_obj.display_name }}</h1>
     <p class="subtitle">
       <code>{{ apikey_obj.key_prefix }}…</code>
@@ -28,7 +28,7 @@
   <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
-      <tr><th style="width: 200px;">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
       <tr><th>Prefijo</th><td><code>{{ apikey_obj.key_prefix }}…</code></td></tr>
       <tr><th>Dueño</th><td>{{ apikey_obj.user.display_name }} (<code>{{ apikey_obj.user.email }}</code>)</td></tr>
       <tr><th>Estado</th>
@@ -53,25 +53,25 @@
       </tr>
     </tbody>
   </table>
-  <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
+  <p class="text-muted mt-2 mnt-text-sm">
     El secreto en claro nunca se almacena: solo el prefijo (visible) y el hash.
   </p>
 </div>
 
 <!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ apikey_obj.pk }}">
-  <div class="modal" style="max-width: 420px;">
+  <div class="modal modal-confirm">
     <div class="modal-header">
       <h3 class="modal-title">¿Eliminar API Key?</h3>
       <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
     </div>
     <div class="modal-body">
       <p>Vas a eliminar <strong>{{ apikey_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: la key se revoca (deja de autenticar) pero el registro se conserva para auditoria.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: la key se revoca (deja de autenticar) pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
-      <form method="post" action="{% url 'apikeys:delete' apikey_obj.pk %}" style="display: inline;">
+      <form method="post" action="{% url 'apikeys:delete' apikey_obj.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>

@@ -9,7 +9,7 @@
 {% block content %}
 <div class="content-header">
   <div>
-    <a href="{% url 'skills:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a skills</a>
+    <a href="{% url 'skills:list' %}" class="text-secondary mnt-text-sm">← Volver a skills</a>
     <h1 class="mt-1">{{ skill_obj.display_name }}</h1>
     <p class="subtitle">
       <code>{{ skill_obj.slug }}</code>
@@ -29,7 +29,7 @@
   <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
-      <tr><th style="width: 200px;">Nombre</th><td>{{ skill_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ skill_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ skill_obj.slug }}</code></td></tr>
       <tr><th>Tipo</th><td><span class="badge">{{ skill_obj.get_skill_type_display }}</span></td></tr>
       <tr><th>Descripcion</th><td>{{ skill_obj.description|default:"—" }}</td></tr>
@@ -71,7 +71,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+    <p class="text-secondary mt-2 mnt-text-sm">
       {{ skill_versions|length }} version(es). Snapshots inmutables (solo lectura).
     </p>
   {% else %}
@@ -81,18 +81,18 @@
 
 <!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ skill_obj.pk }}">
-  <div class="modal" style="max-width: 420px;">
+  <div class="modal modal-confirm">
     <div class="modal-header">
       <h3 class="modal-title">¿Eliminar skill?</h3>
       <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
     </div>
     <div class="modal-body">
       <p>Vas a eliminar la skill <strong>{{ skill_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: la skill queda marcada como eliminada pero el registro se conserva para auditoria.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: la skill queda marcada como eliminada pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
-      <form method="post" action="{% url 'skills:delete' skill_obj.pk %}" style="display: inline;">
+      <form method="post" action="{% url 'skills:delete' skill_obj.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>

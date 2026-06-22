@@ -16,10 +16,10 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
     <tbody>
-      <tr><th style="width: 180px;">Nombre</th><td>{{ flow_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ flow_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
       <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
       <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
@@ -31,12 +31,12 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
     </tbody>
   </table>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Versiones</h4>
+  <h4 class="mnt-detail-section">Versiones</h4>
   {% if flow_versions %}
-    <table class="table" style="font-size: var(--fs-sm);">
+    <table class="table mnt-table-sm">
       <thead>
         <tr>
-          <th style="width: 1%;">Version</th>
+          <th class="mnt-col-narrow">Version</th>
           <th>Hash</th>
           <th>Nota</th>
           <th>Creada</th>
@@ -53,7 +53,7 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
         {% endfor %}
       </tbody>
     </table>
-    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+    <p class="text-secondary mt-2 mnt-text-sm">
       {{ flow_versions|length }} version(es). Las versiones son snapshots
       inmutables (read-only); se generan al publicar cambios del flow.
     </p>

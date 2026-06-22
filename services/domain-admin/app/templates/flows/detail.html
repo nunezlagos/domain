@@ -9,7 +9,7 @@
 {% block content %}
 <div class="content-header">
   <div>
-    <a href="{% url 'flows:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a flows</a>
+    <a href="{% url 'flows:list' %}" class="text-secondary mnt-text-sm">← Volver a flows</a>
     <h1 class="mt-1">{{ flow_obj.display_name }}</h1>
     <p class="subtitle">
       <code>{{ flow_obj.slug }}</code>
@@ -31,7 +31,7 @@
   <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
-      <tr><th style="width: 220px;">Nombre</th><td>{{ flow_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ flow_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
       <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
       <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
@@ -58,7 +58,7 @@
     <table class="table mt-2">
       <thead>
         <tr>
-          <th style="width: 1%;">Version</th>
+          <th class="mnt-col-narrow">Version</th>
           <th>Hash</th>
           <th>Nota</th>
           <th>Creada</th>
@@ -75,7 +75,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+    <p class="text-secondary mt-2 mnt-text-sm">
       {{ flow_versions|length }} version(es). Snapshots inmutables (read-only).
     </p>
   {% else %}
@@ -85,18 +85,18 @@
 
 <!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ flow_obj.pk }}">
-  <div class="modal" style="max-width: 420px;">
+  <div class="modal modal-confirm">
     <div class="modal-header">
       <h3 class="modal-title">¿Eliminar flow?</h3>
       <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
     </div>
     <div class="modal-body">
       <p>Vas a eliminar el flow <strong>{{ flow_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el flow queda deshabilitado pero el registro se conserva para auditoria.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el flow queda deshabilitado pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
-      <form method="post" action="{% url 'flows:delete' flow_obj.pk %}" style="display: inline;">
+      <form method="post" action="{% url 'flows:delete' flow_obj.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>

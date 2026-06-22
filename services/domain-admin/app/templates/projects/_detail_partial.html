@@ -15,10 +15,10 @@ Detalle de proyecto para el modal dinamico. Extiende maintainers/_detail_base.ht
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
     <tbody>
-      <tr><th style="width: 160px;">Nombre</th><td>{{ project_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ project_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ project_obj.slug }}</code></td></tr>
       <tr><th>Descripcion</th><td>{{ project_obj.description|default:"—" }}</td></tr>
       <tr><th>Repositorio</th>
@@ -30,9 +30,9 @@ Detalle de proyecto para el modal dinamico. Extiende maintainers/_detail_base.ht
     </tbody>
   </table>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Remotos git</h4>
+  <h4 class="mnt-detail-section">Remotos git</h4>
   {% if repositories %}
-    <table class="table" style="font-size: var(--fs-sm);">
+    <table class="table mnt-table-sm">
       <thead>
         <tr><th>Alias</th><th>URL</th><th>Rama</th><th>Folder</th><th>Default</th></tr>
       </thead>

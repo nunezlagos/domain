@@ -56,33 +56,42 @@ Variables esperadas en el contexto (de la view):
 {% endblock %}
 
 {% block content %}
-<div class="content-header content-header--actions-only">
-  {% comment %} El nombre de la seccion ya lo muestra el navbar; no duplicamos h1/subtitulo. {% endcomment %}
-  {% block header_actions %}
-  <button class="btn btn-outline-primary" data-action="create">
-    {% block create_label %}+ Nuevo{% endblock %}
-  </button>
-  {% endblock %}
-</div>
-
-{% block search %}
-<form method="get" class="card mb-4" style="padding: var(--space-md);" role="search">
-  <div>
-    <label class="form-label" for="q">Buscar</label>
-    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
-           placeholder="{% block search_placeholder %}Buscar...{% endblock %}"
-           autocomplete="off"
-           data-search-input>
+{% comment %} Layout estandar en CARD para TODOS los mantenedores: header (titulo
+   izq + acciones der), container de filtros (search + bloque filters opcional) y
+   tabla. Estilos en maintainers.css (.mnt-*). Cada app define los bloques. {% endcomment %}
+<div class="card mnt-panel">
+  <div class="mnt-head">
+    <div>
+      <h2 class="mnt-head-title">{% block header_title %}Mantenedor{% endblock %}</h2>
+      <p class="mnt-head-sub">{% block page_subtitle %}{% endblock %}</p>
+    </div>
+    <div class="mnt-actions">
+      {% block header_actions %}
+        <button class="btn btn-primary" data-action="create">
+          {% block create_label %}+ Nuevo{% endblock %}
+        </button>
+      {% endblock %}
+    </div>
   </div>
-</form>
-{% endblock %}
 
-<div id="{% block table_area_id %}maintainer-table-area{% endblock %}"
-     data-maintainer-table
-     data-base-url="{% block base_url %}/{% endblock %}"
-     data-signal-url="{% block signal_url %}{% endblock %}"
-     data-signal="{{ signal_count }}|{{ signal_version }}">
-  {% block table %}{% endblock %}
+  <div class="mnt-filters">
+    {% block filters %}
+      <div class="mnt-filters-search">
+        <label class="form-label" for="q">Buscar</label>
+        <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+               placeholder="{% block search_placeholder %}Buscar...{% endblock %}"
+               autocomplete="off" data-search-input>
+      </div>
+    {% endblock %}
+  </div>
+
+  <div id="{% block table_area_id %}maintainer-table-area{% endblock %}"
+       data-maintainer-table
+       data-base-url="{% block base_url %}/{% endblock %}"
+       data-signal-url="{% block signal_url %}{% endblock %}"
+       data-signal="{{ signal_count }}|{{ signal_version }}">
+    {% block table %}{% endblock %}
+  </div>
 </div>
 {% endblock %}
 

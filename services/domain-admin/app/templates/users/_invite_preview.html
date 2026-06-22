@@ -15,24 +15,23 @@ trabajo futuro (ver maintainers/users/views.py:invite_preview).
 </div>
 
 <div class="modal-body">
-  <div class="d-flex gap-1" style="margin-bottom: var(--space-md); align-items: stretch;">
-    <input type="text" class="form-control" readonly
-           id="invite-link" value="{{ enrollment_url }}"
-           style="font-size: var(--fs-sm);">
-    <button type="button" class="btn btn-outline-primary btn-sm"
-            data-copy="#invite-link" style="white-space: nowrap;">
+  <div class="d-flex gap-1 mb-3 align-stretch">
+    <input type="text" class="form-control mnt-text-sm" readonly
+           id="invite-link" value="{{ enrollment_url }}">
+    <button type="button" class="btn btn-outline-primary btn-sm nowrap"
+            data-copy="#invite-link">
       Copiar link
     </button>
   </div>
-  <p class="text-secondary" style="font-size: var(--fs-sm); margin-bottom: var(--space-md);">
+  <p class="text-secondary mnt-note">
     El link de enrollment expira en {{ expires_days }} dias
     ({{ expires_at|date:"d/m/Y H:i" }}).
   </p>
 
-  <h4 style="font-size: var(--fs-sm); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: var(--space-sm);">
+  <h4 class="mnt-section-label">
     Preview del email
   </h4>
-  <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden;">
+  <div class="mnt-embed-box">
     {% include "emails/invitation.html" %}
   </div>
 </div>

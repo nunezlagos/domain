@@ -9,7 +9,7 @@
 {% block content %}
 <div class="content-header">
   <div>
-    <a href="{% url 'agents:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a agentes</a>
+    <a href="{% url 'agents:list' %}" class="text-secondary mnt-text-sm">← Volver a agentes</a>
     <h1 class="mt-1">{{ agent_obj.display_name }}</h1>
     <p class="subtitle">
       <code>{{ agent_obj.slug }}</code>
@@ -29,7 +29,7 @@
   <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
-      <tr><th style="width: 200px;">Nombre</th><td>{{ agent_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ agent_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ agent_obj.slug }}</code></td></tr>
       <tr><th>Proveedor</th><td>{{ agent_obj.provider }}</td></tr>
       <tr><th>Modelo</th><td><code>{{ agent_obj.model }}</code></td></tr>
@@ -56,7 +56,7 @@
 {% if agent_obj.system_prompt %}
 <div class="card mb-4">
   <h3>System prompt</h3>
-  <pre style="white-space: pre-wrap; font-size: var(--fs-sm); background: var(--color-bg-elevated, #f8f9fa); padding: var(--space-sm); border-radius: 4px;">{{ agent_obj.system_prompt }}</pre>
+  <pre class="mnt-pre">{{ agent_obj.system_prompt }}</pre>
 </div>
 {% endif %}
 
@@ -66,7 +66,7 @@
   {% if agent_versions %}
     <table class="table mt-2">
       <thead>
-        <tr><th style="width: 1%;">Version</th><th>Modificado por</th><th>Fecha</th></tr>
+        <tr><th class="mnt-col-narrow">Version</th><th>Modificado por</th><th>Fecha</th></tr>
       </thead>
       <tbody>
         {% for v in agent_versions %}
@@ -110,18 +110,18 @@
 
 <!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ agent_obj.pk }}">
-  <div class="modal" style="max-width: 420px;">
+  <div class="modal modal-confirm">
     <div class="modal-header">
       <h3 class="modal-title">¿Eliminar agente?</h3>
       <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
     </div>
     <div class="modal-body">
       <p>Vas a eliminar a <strong>{{ agent_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el agente queda marcado como eliminado pero el registro se conserva para auditoria.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el agente queda marcado como eliminado pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
-      <form method="post" action="{% url 'agents:delete' agent_obj.pk %}" style="display: inline;">
+      <form method="post" action="{% url 'agents:delete' agent_obj.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>

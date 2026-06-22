@@ -13,7 +13,7 @@ bajo `api_keys` (no `object_list`), se sobreescribe el bloque `rows` completo.
   <th>Creada</th>
   <th>Expira</th>
   <th>Ultimo uso</th>
-  <th style="width: 1%; white-space: nowrap;">Acciones</th>
+  <th class="mnt-col-actions">Acciones</th>
 {% endblock %}
 
 {% block colspan %}8{% endblock %}
@@ -35,7 +35,7 @@ bajo `api_keys` (no `object_list`), se sobreescribe el bloque `rows` completo.
       <td>{{ k.expires_at|date:"d/m/Y"|default:"Nunca" }}</td>
       <td>{{ k.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
       <td>
-        <div class="d-flex gap-1" style="justify-content: flex-end;">
+        <div class="d-flex gap-1 mnt-row-actions">
           <button class="btn btn-icon btn-ghost" title="Ver detalle"
                   data-action="view" data-id="{{ k.pk }}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -68,8 +68,7 @@ bajo `api_keys` (no `object_list`), se sobreescribe el bloque `rows` completo.
               </svg>
             </button>
           {% endif %}
-          <button class="btn btn-icon btn-ghost" title="Eliminar"
-                  style="color: var(--color-danger);"
+          <button class="btn btn-icon btn-ghost mnt-action-danger" title="Eliminar"
                   data-action="delete" data-id="{{ k.pk }}" data-name="{{ k.display_name }}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
@@ -81,7 +80,7 @@ bajo `api_keys` (no `object_list`), se sobreescribe el bloque `rows` completo.
     </tr>
   {% empty %}
     <tr>
-      <td colspan="8" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+      <td colspan="8" class="mnt-empty-cell">
         No hay API Keys{% if search %} que coincidan con "{{ search }}"{% endif %}.
       </td>
     </tr>

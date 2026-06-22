@@ -7,8 +7,8 @@ quita (projects-repos.js, delegado para funcionar en el modal dinamico).
 Contexto: repo_rows = lista de {url, branch_default, root_path}.
 {% endcomment %}
 <div class="form-group">
-  <div class="d-flex" style="align-items: center; justify-content: space-between; gap: var(--space-sm);">
-    <label class="form-label" style="margin: 0;">Repositorios git</label>
+  <div class="d-flex align-center justify-between gap-2">
+    <label class="form-label m-0">Repositorios git</label>
     <button type="button" class="btn btn-icon btn-ghost" data-repo-add title="Agregar repositorio">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="6" y1="3" x2="6" y2="15"/>
@@ -26,7 +26,7 @@ Contexto: repo_rows = lista de {url, branch_default, root_path}.
     es el repositorio principal.
   </div>
 
-  <div data-repo-list style="margin-top: var(--space-sm);">
+  <div data-repo-list class="mt-sm">
     {% for r in repo_rows %}
       <div class="repo-row">
         <input type="text" name="repo_url" class="form-control" autocomplete="off"

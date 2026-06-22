@@ -81,6 +81,14 @@
 .btn-danger { background: var(--color-danger); color: white; }
 .btn-danger:hover { background: #e25858; }
 
+/* Outline danger (ej. boton "Cerrar" del detalle de usuario) */
+.btn-outline-danger {
+  background: transparent;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+.btn-outline-danger:hover { background: var(--color-danger); color: #fff; }
+
 .btn-info { background: var(--color-info); color: white; }
 .btn-info:hover { background: #3f93df; }
 
@@ -531,6 +539,7 @@ textarea.form-control {
 }
 .ms-option:hover { background: var(--color-bg-surface); }
 .ms-option input { margin: 0; cursor: pointer; }
+.ms-empty { font-size: var(--fs-sm); padding: 4px; color: var(--color-text-muted); }
 
 /* Detalle de usuario: tabs HORIZONTALES arriba (CSS-only via radios), minimalista. */
 .htabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }

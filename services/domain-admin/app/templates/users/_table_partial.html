@@ -12,7 +12,7 @@ bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
   <th>Estado</th>
   <th>Creado</th>
   <th>Ultimo acceso</th>
-  <th style="width: 1%; white-space: nowrap;">Acciones</th>
+  <th class="mnt-col-actions">Acciones</th>
 {% endblock %}
 
 {% block colspan %}7{% endblock %}
@@ -33,7 +33,7 @@ bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
       <td>{{ u.created_at|date:"d/m/Y" }}</td>
       <td>{{ u.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
       <td>
-        <div class="d-flex gap-1" style="justify-content: flex-end;">
+        <div class="d-flex gap-1 mnt-row-actions">
           <button class="btn btn-icon btn-ghost" title="Invitar por email"
                   data-action="modal" data-url="/usuarios/{{ u.pk }}/invitar/">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -73,8 +73,7 @@ bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
               </svg>
             </button>
           {% endif %}
-          <button class="btn btn-icon btn-ghost" title="Eliminar"
-                  style="color: var(--color-danger);"
+          <button class="btn btn-icon btn-ghost mnt-action-danger" title="Eliminar"
                   data-action="delete" data-id="{{ u.pk }}" data-name="{{ u.display_name }}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
@@ -86,7 +85,7 @@ bajo `users` (no `object_list`), se sobreescribe el bloque `rows` completo.
     </tr>
   {% empty %}
     <tr>
-      <td colspan="7" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+      <td colspan="7" class="mnt-empty-cell">
         No hay usuarios{% if search %} que coincidan con "{{ search }}"{% endif %}.
       </td>
     </tr>

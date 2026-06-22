@@ -9,7 +9,7 @@
 {% block content %}
 <div class="content-header">
   <div>
-    <a href="{% url 'projects:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a proyectos</a>
+    <a href="{% url 'projects:list' %}" class="text-secondary mnt-text-sm">← Volver a proyectos</a>
     <h1 class="mt-1">{{ project_obj.display_name }}</h1>
     <p class="subtitle">
       <code>{{ project_obj.slug }}</code>
@@ -31,7 +31,7 @@
   <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
-      <tr><th style="width: 200px;">Nombre</th><td>{{ project_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ project_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ project_obj.slug }}</code></td></tr>
       <tr><th>Descripcion</th><td>{{ project_obj.description|default:"—" }}</td></tr>
       <tr><th>Repositorio</th>
@@ -47,8 +47,8 @@
 <!-- Remotos git -->
 <div class="card mb-4">
   <div class="flex-between mb-3">
-    <h3 style="margin: 0;">Remotos git</h3>
-    <span class="text-muted" style="font-size: var(--fs-sm);">{{ repositories|length }} activo(s)</span>
+    <h3 class="m-0">Remotos git</h3>
+    <span class="text-muted mnt-text-sm">{{ repositories|length }} activo(s)</span>
   </div>
 
   {% if repositories %}
@@ -79,18 +79,18 @@
 
 <!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ project_obj.pk }}">
-  <div class="modal" style="max-width: 420px;">
+  <div class="modal modal-confirm">
     <div class="modal-header">
       <h3 class="modal-title">¿Eliminar proyecto?</h3>
       <button class="btn btn-icon btn-ghost" data-modal-close>&times;</button>
     </div>
     <div class="modal-body">
       <p>Vas a eliminar <strong>{{ project_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el proyecto se archiva (deleted_at) pero el registro se conserva para auditoria.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el proyecto se archiva (deleted_at) pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
-      <form method="post" action="{% url 'projects:delete' project_obj.pk %}" style="display: inline;">
+      <form method="post" action="{% url 'projects:delete' project_obj.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>

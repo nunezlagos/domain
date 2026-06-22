@@ -92,6 +92,14 @@
       }
       return;
     }
+    // Seleccionar todo el texto al hacer click en un input readonly
+    // ([data-select-on-click]). Reemplaza el onclick="this.select()" inline
+    // para que NO haya JS en el HTML; funciona en partials inyectados al modal.
+    var selectable = e.target.closest('[data-select-on-click]');
+    if (selectable && typeof selectable.select === 'function') {
+      selectable.select();
+      // no return: dejar que otros handlers (copy, etc.) sigan si aplica
+    }
     // Action handlers (AJAX → modal dinámico)
     var btn = e.target.closest('[data-action]');
     if (btn) {

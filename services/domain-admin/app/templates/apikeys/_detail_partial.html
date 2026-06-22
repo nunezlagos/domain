@@ -18,27 +18,26 @@ Detalle de API Key para el modal dinamico. Extiende maintainers/_detail_base.htm
   </p>
 
   {% if apikey_obj.key_plaintext %}
-    <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">API Key</h4>
-    <div class="d-flex gap-2" style="align-items: stretch;">
-      <input type="text" id="apikey-secret-{{ apikey_obj.pk }}" class="form-control"
+    <h4 class="mnt-detail-section">API Key</h4>
+    <div class="d-flex gap-2 align-stretch">
+      <input type="text" id="apikey-secret-{{ apikey_obj.pk }}" class="form-control mono-sm"
              value="{{ apikey_obj.key_plaintext }}" readonly
-             style="font-family: var(--font-mono, monospace); font-size: var(--fs-sm);"
-             onclick="this.select()">
+             data-select-on-click>
       <button type="button" class="btn btn-secondary"
               data-copy="#apikey-secret-{{ apikey_obj.pk }}">
         Copiar
       </button>
     </div>
-    <p class="text-muted mt-1" style="font-size: var(--fs-sm);">
+    <p class="text-muted mt-1 mnt-text-sm">
       Usala como <code>Authorization: Bearer &lt;key&gt;</code>. Tratala como
       una credencial: quien la tenga puede operar como este usuario.
     </p>
   {% endif %}
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
     <tbody>
-      <tr><th style="width: 140px;">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
       <tr><th>Prefijo</th><td><code>{{ apikey_obj.key_prefix }}…</code></td></tr>
       <tr><th>Dueño</th><td>{{ apikey_obj.user.display_name }} (<code>{{ apikey_obj.user.email }}</code>)</td></tr>
       <tr><th>Creada</th><td>{{ apikey_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
@@ -57,7 +56,7 @@ Detalle de API Key para el modal dinamico. Extiende maintainers/_detail_base.htm
   </table>
 
   {% if not apikey_obj.key_plaintext %}
-    <p class="text-muted mt-2" style="font-size: var(--fs-sm);">
+    <p class="text-muted mt-2 mnt-text-sm">
       Esta key se creo antes de guardar el secreto en claro: solo se ve el
       prefijo. Si la perdiste, regenerala (editar &gt; revocar y crear una nueva).
     </p>

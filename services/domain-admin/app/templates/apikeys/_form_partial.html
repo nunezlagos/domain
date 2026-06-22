@@ -28,14 +28,14 @@ campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.expires_at.id_for_label }}">Expira el</label>
       {{ form.expires_at }}
       {% if form.expires_at.help_text %}<div class="form-help">{{ form.expires_at.help_text }}</div>{% endif %}
       {% if form.expires_at.errors %}<div class="form-help text-danger">{{ form.expires_at.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.status.id_for_label }}">Estado</label>
       {{ form.status }}
       {% if form.status.errors %}<div class="form-help text-danger">{{ form.status.errors|join:", " }}</div>{% endif %}
@@ -44,7 +44,7 @@ campos y el label del submit.
 
   {% if mode == "create" %}
     <hr>
-    <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
+    <p class="text-secondary mb-3 mnt-text-sm">
       El secreto se genera al crear (formato <code>domk_…</code>, valido para el
       MCP). Podras copiarlo ahora y tambien verlo de nuevo en el detalle de la key.
     </p>

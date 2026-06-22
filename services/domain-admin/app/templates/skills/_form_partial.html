@@ -16,14 +16,14 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
       {{ form.slug }}
       {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
       {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.skill_type.id_for_label }}">Tipo</label>
       {{ form.skill_type }}
       {% if form.skill_type.errors %}<div class="form-help text-danger">{{ form.skill_type.errors|join:", " }}</div>{% endif %}
@@ -44,14 +44,14 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.timeout_seconds.id_for_label }}">Timeout (segundos)</label>
       {{ form.timeout_seconds }}
       {% if form.timeout_seconds.help_text %}<div class="form-help">{{ form.timeout_seconds.help_text }}</div>{% endif %}
       {% if form.timeout_seconds.errors %}<div class="form-help text-danger">{{ form.timeout_seconds.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
       {{ form.tags }}
       {% if form.tags.help_text %}<div class="form-help">{{ form.tags.help_text }}</div>{% endif %}
@@ -60,12 +60,12 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label">{{ form.idempotent }} Idempotente</label>
       {% if form.idempotent.errors %}<div class="form-help text-danger">{{ form.idempotent.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label">{{ form.has_side_effects }} Tiene efectos secundarios</label>
       {% if form.has_side_effects.errors %}<div class="form-help text-danger">{{ form.has_side_effects.errors|join:", " }}</div>{% endif %}
     </div>

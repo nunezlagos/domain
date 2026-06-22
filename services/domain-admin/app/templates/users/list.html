@@ -1,110 +1,87 @@
 {% extends "maintainers/list_base.html" %}
 {% load static %}
 {% comment %}
-Listado de usuarios. Extiende maintainers/list_base.html (que carga maintainer.js
-via extra_js) pero SOBREESCRIBE el bloque `content` para el layout nuevo en card:
-un solo contenedor .card (fondo paleta + border-radius + sombra abajo/derecha) que
-adentro lleva header (nombre a la izq + botones a la der), filtro, y tabla. Es un
-PREVIEW solo en Users; si gusta, se sube a list_base para todos los mantenedores.
+Listado de usuarios. Extiende maintainers/list_base.html y solo define los
+bloques propios (header, acciones, filtros, tabla). El layout en card + el
+container de filtros (color/borde/radius/sombra) viven en maintainers.css
+(.mnt-*); aca NO hay estilos inline. Es el mismo diseño que heredan todos los
+mantenedores.
 {% endcomment %}
 
 {% block page_title %}Usuarios{% endblock %}
+{% block header_title %}Usuarios{% endblock %}
+{% block page_subtitle %}Gestion de miembros de la plataforma{% endblock %}
 
-{% block content %}
-<div class="card" style="display: flex; flex-direction: column; gap: var(--space-md);">
+{% block header_actions %}
+  <button class="btn btn-outline-primary" data-action="modal" data-url="/usuarios/api-keys/">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+    </svg>
+    API Keys
+  </button>
+  <button class="btn btn-primary" data-action="create">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Usuario
+  </button>
+{% endblock %}
 
-  {% comment %} Header: nombre del mantenedor a la izquierda, acciones a la derecha {% endcomment %}
-  <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
-              padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
-    <div>
-      <h2 style="margin: 0;">Usuarios</h2>
-      <p style="margin: 2px 0 0; color: var(--color-text-secondary); font-size: var(--fs-sm);">
-        Gestion de miembros de la plataforma
-      </p>
-    </div>
-    <div style="display: flex; gap: var(--space-sm); align-items: center;">
-      <button class="btn btn-outline-primary" data-action="modal" data-url="/usuarios/api-keys/">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
-        API Keys
+{% block filters %}
+  <div>
+    <label class="form-label">Rol</label>
+    <div class="ms" data-multiselect data-ms-placeholder="Todos los roles">
+      <button type="button" class="form-control ms-trigger" data-ms-trigger>
+        <span data-ms-label class="ms-muted">Todos los roles</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <button class="btn btn-primary" data-action="create">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Usuario
-      </button>
-    </div>
-  </div>
-
-  {% comment %} Container de filtros: color distinto al fondo del card, radius leve
-     + sombrita. Multi-select rol/estado, buscar, y export a Excel (CSV). {% endcomment %}
-  <div style="background: var(--color-bg-elevated); border: 1px solid var(--color-border);
-              border-radius: 10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
-              padding: var(--space-md); display: flex; gap: var(--space-md);
-              align-items: flex-end; flex-wrap: wrap;">
-    <div>
-      <label class="form-label">Rol</label>
-      <div class="ms" data-multiselect data-ms-placeholder="Todos los roles">
-        <button type="button" class="form-control ms-trigger" data-ms-trigger>
-          <span data-ms-label class="ms-muted">Todos los roles</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="ms-panel" data-ms-panel hidden>
-          <input type="text" class="form-control ms-search" placeholder="Buscar rol..." data-ms-search>
-          <div class="ms-options">
-            {% for r in role_options %}
-              <label class="ms-option" data-ms-option="{{ r }}">
-                <input type="checkbox" data-filter name="role" value="{{ r }}" {% if r in selected_roles %}checked{% endif %}>
-                <span>{{ r }}</span>
-              </label>
-            {% empty %}
-              <span class="text-muted" style="font-size: var(--fs-sm); padding: 4px;">Sin roles</span>
-            {% endfor %}
-          </div>
+      <div class="ms-panel" data-ms-panel hidden>
+        <input type="text" class="form-control ms-search" placeholder="Buscar rol..." data-ms-search>
+        <div class="ms-options">
+          {% for r in role_options %}
+            <label class="ms-option" data-ms-option="{{ r }}">
+              <input type="checkbox" data-filter name="role" value="{{ r }}" {% if r in selected_roles %}checked{% endif %}>
+              <span>{{ r }}</span>
+            </label>
+          {% empty %}
+            <span class="ms-empty">Sin roles</span>
+          {% endfor %}
         </div>
       </div>
     </div>
-    <div>
-      <label class="form-label" for="f-status">Estado</label>
-      <select data-filter name="status" id="f-status" class="form-control form-select" style="min-width: 150px;">
-        <option value="">Todos</option>
-        {% for val, lbl in status_options %}
-          <option value="{{ val }}" {% if val in selected_statuses %}selected{% endif %}>{{ lbl }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div style="flex: 1 1 220px;">
-      <label class="form-label" for="q">Buscar</label>
-      <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
-             placeholder="Email o nombre..." autocomplete="off" data-search-input>
-    </div>
-    <div>
-      <button type="button" class="btn" data-export="/usuarios/export/"
-              style="color: var(--color-success); border: 1px solid var(--color-success); background: var(--color-success-soft);"
-              title="Exportar consolidado a Excel (CSV)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
-        </svg>
-        Excel
-      </button>
-    </div>
   </div>
-
-  {% comment %} Tabla (mismos data-attrs que consume maintainer.js) {% endcomment %}
-  <div id="users-table-area"
-       data-maintainer-table
-       data-base-url="/usuarios/"
-       data-signal-url="{% url 'users:signal' %}"
-       data-signal="{{ signal_count }}|{{ signal_version }}">
-    {% include "users/_table_partial.html" %}
+  <div>
+    <label class="form-label" for="f-status">Estado</label>
+    <select data-filter name="status" id="f-status" class="form-control form-select mnt-filter-select">
+      <option value="">Todos</option>
+      {% for val, lbl in status_options %}
+        <option value="{{ val }}" {% if val in selected_statuses %}selected{% endif %}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
   </div>
-</div>
+  <div class="mnt-filters-search">
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Email o nombre..." autocomplete="off" data-search-input>
+  </div>
+  <div>
+    <button type="button" class="btn btn-excel" data-export="/usuarios/export/"
+            title="Exportar consolidado a Excel (CSV)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+      </svg>
+      Excel
+    </button>
+  </div>
 {% endblock %}
+
+{% block table_area_id %}users-table-area{% endblock %}
+{% block base_url %}/usuarios/{% endblock %}
+{% block signal_url %}{% url 'users:signal' %}{% endblock %}
+{% block table %}{% include "users/_table_partial.html" %}{% endblock %}
 
 {% block extra_js %}
   {{ block.super }}

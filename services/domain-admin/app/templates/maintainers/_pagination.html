@@ -17,17 +17,17 @@ Contexto esperado (lo provee la view de cada app):
 {% endcomment %}
 {% comment %} Pie SIEMPRE visible: total de registros (izq) + navegacion de pagina
    (der). Antes solo aparecia con total > per_page, por eso no salia con 1 pagina. {% endcomment %}
-<div class="d-flex gap-2 mt-3" style="justify-content: space-between; align-items: center;">
-  <span class="text-secondary" style="font-size: var(--fs-sm);">
+<div class="d-flex gap-2 mt-3 justify-between align-center">
+  <span class="text-secondary mnt-text-sm">
     {{ total }} registro{{ total|pluralize }}
   </span>
-  <div class="d-flex gap-2" style="align-items: center;">
+  <div class="d-flex gap-2 align-center">
     {% if has_prev %}
       <a href="?page={{ page|add:-1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:-1 }}">
         ← Anterior
       </a>
     {% endif %}
-    <span class="text-secondary" style="font-size: var(--fs-sm);">
+    <span class="text-secondary mnt-text-sm">
       Pagina {{ page }} de {{ total_pages }}
     </span>
     {% if has_next %}

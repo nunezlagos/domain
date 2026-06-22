@@ -15,10 +15,10 @@ Detalle de prompt para el modal dinamico. Extiende maintainers/_detail_base.html
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
-  <table class="table" style="font-size: var(--fs-sm);">
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
     <tbody>
-      <tr><th style="width: 160px;">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
+      <tr><th class="mnt-th-label">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
       <tr><th>Version</th><td>v{{ prompt_obj.version }}</td></tr>
       <tr><th>Descripcion</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
       <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
@@ -30,14 +30,14 @@ Detalle de prompt para el modal dinamico. Extiende maintainers/_detail_base.html
     </tbody>
   </table>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Cuerpo</h4>
-  <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm);">{{ prompt_obj.body }}</pre>
+  <h4 class="mnt-detail-section">Cuerpo</h4>
+  <pre class="mnt-pre-alt">{{ prompt_obj.body }}</pre>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Variables</h4>
+  <h4 class="mnt-detail-section">Variables</h4>
   {% if prompt_obj.variables %}
-    <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm);">{{ prompt_obj.variables }}</pre>
+    <pre class="mnt-pre-alt">{{ prompt_obj.variables }}</pre>
   {% else %}
-    <p class="text-secondary" style="font-size: var(--fs-sm);">Sin variables definidas.</p>
+    <p class="text-secondary mnt-text-sm">Sin variables definidas.</p>
   {% endif %}
 {% endblock %}
 

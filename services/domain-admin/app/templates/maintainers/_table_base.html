@@ -40,7 +40,7 @@ Bloques:
           </tr>
         {% empty %}
           <tr>
-            <td colspan="{% block colspan %}1{% endblock %}" style="text-align: center; padding: var(--space-xl); color: var(--color-text-muted);">
+            <td colspan="{% block colspan %}1{% endblock %}" class="mnt-empty-cell">
               {% block empty %}No hay registros{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
             </td>
           </tr>

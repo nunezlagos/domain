@@ -12,7 +12,7 @@
 <div class="content-header">
   <div>
     <a href="{% if mode == 'edit' %}{% url 'apikeys:detail' apikey_obj.pk %}{% else %}{% url 'apikeys:list' %}{% endif %}"
-       class="text-secondary" style="font-size: var(--fs-sm);">← Volver</a>
+       class="text-secondary mnt-text-sm">← Volver</a>
     <h1 class="mt-1">
       {% if mode == "create" %}Nueva API Key{% else %}Editar API Key{% endif %}
     </h1>
@@ -26,7 +26,7 @@
   </div>
 </div>
 
-<div class="card" style="max-width: 720px;">
+<div class="card mnt-form-card">
   <form method="post" novalidate>
     {% csrf_token %}
 
@@ -60,14 +60,14 @@
     </div>
 
     <div class="d-flex gap-3">
-      <div class="form-group" style="flex: 1;">
+      <div class="form-group form-group--grow">
         <label class="form-label" for="{{ form.expires_at.id_for_label }}">Expira el</label>
         {{ form.expires_at }}
         {% if form.expires_at.help_text %}<div class="form-help">{{ form.expires_at.help_text }}</div>{% endif %}
         {% if form.expires_at.errors %}<div class="form-help text-danger">{{ form.expires_at.errors|join:", " }}</div>{% endif %}
       </div>
 
-      <div class="form-group" style="flex: 1;">
+      <div class="form-group form-group--grow">
         <label class="form-label" for="{{ form.status.id_for_label }}">Estado</label>
         {{ form.status }}
         {% if form.status.errors %}<div class="form-help text-danger">{{ form.status.errors|join:", " }}</div>{% endif %}
@@ -76,7 +76,7 @@
 
     {% if mode == "create" %}
       <hr>
-      <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
+      <p class="text-secondary mb-3 mnt-text-sm">
         El secreto se genera al crear y se muestra UNA sola vez. Guardalo:
         no se vuelve a mostrar (solo se persiste el hash + prefijo).
       </p>
@@ -84,7 +84,7 @@
 
     <hr>
 
-    <div class="d-flex gap-2" style="justify-content: flex-end;">
+    <div class="d-flex gap-2 mnt-form-actions">
       <a href="{% if mode == 'edit' %}{% url 'apikeys:detail' apikey_obj.pk %}{% else %}{% url 'apikeys:list' %}{% endif %}"
          class="btn btn-ghost">Cancelar</a>
       <button type="submit" class="btn btn-primary">

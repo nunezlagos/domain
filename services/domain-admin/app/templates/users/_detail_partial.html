@@ -21,9 +21,9 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
 
       {% comment %} ===== Pane: Informacion ===== {% endcomment %}
       <div class="vpane vpane-info">
-        <table class="table" style="font-size: var(--fs-sm);">
+        <table class="table mnt-table-sm">
           <tbody>
-            <tr><th style="width: 140px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
+            <tr><th class="mnt-th-label">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
             <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
             <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
             <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
@@ -46,10 +46,10 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
       {% comment %} ===== Pane: Roles ===== {% endcomment %}
       <div class="vpane vpane-roles">
         {% if user_roles %}
-          <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          <div class="d-flex gap-2 flex-wrap">
             {% for ur in user_roles %}<span class="badge badge-primary">{{ ur.role.slug }}</span>{% endfor %}
           </div>
-          <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
+          <p class="text-secondary mt-2 mnt-text-sm">
             {{ user_roles|length }} activo(s). Para asignar/quitar roles usa el panel de edicion.
           </p>
         {% else %}
@@ -60,8 +60,8 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
       {% comment %} ===== Pane: API Keys ===== Solo VISTA + copiar; la gestion
         (crear/editar/eliminar/filtrar) vive en el modal "Gestionar API Keys". {% endcomment %}
       <div class="vpane vpane-keys">
-        <div class="d-flex" style="justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
-          <span class="text-secondary" style="font-size: var(--fs-sm);">
+        <div class="d-flex justify-between align-center mb-2">
+          <span class="text-secondary mnt-text-sm">
             {{ api_keys|length }} API key{{ api_keys|length|pluralize:",s" }} de este usuario
           </span>
           <button type="button" class="btn btn-sm btn-outline-primary" data-action="modal" data-url="/usuarios/api-keys/">
@@ -69,7 +69,7 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
           </button>
         </div>
         {% if api_keys %}
-          <table class="table" style="font-size: var(--fs-sm);">
+          <table class="table mnt-table-sm">
             <tbody>
               {% for k in api_keys %}
                 <tr>
@@ -80,10 +80,10 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
                     {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
                     {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>{% endif %}
                   </td>
-                  <td style="width: 1%; white-space: nowrap; text-align: right;">
+                  <td class="mnt-col-narrow text-right">
                     {% if k.key_plaintext %}
                       <input type="text" id="user-apikey-{{ k.pk }}" value="{{ k.key_plaintext }}" readonly
-                             style="position: absolute; left: -9999px;" tabindex="-1" aria-hidden="true">
+                             class="offscreen" tabindex="-1" aria-hidden="true">
                       <button type="button" class="btn btn-icon btn-ghost"
                               data-copy="#user-apikey-{{ k.pk }}" title="Copiar la API key">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -106,8 +106,7 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
 {% endblock %}
 
 {% block detail_actions %}
-  <button type="button" class="btn" data-modal-close
-          style="color: var(--color-danger); border: 1px solid var(--color-danger); background: transparent;">
+  <button type="button" class="btn btn-outline-danger" data-modal-close>
     Cerrar
   </button>
 {% endblock %}

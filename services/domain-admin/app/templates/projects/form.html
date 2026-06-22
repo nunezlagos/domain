@@ -12,7 +12,7 @@
 <div class="content-header">
   <div>
     <a href="{% if mode == 'edit' %}{% url 'projects:detail' project_obj.pk %}{% else %}{% url 'projects:list' %}{% endif %}"
-       class="text-secondary" style="font-size: var(--fs-sm);">← Volver</a>
+       class="text-secondary mnt-text-sm">← Volver</a>
     <h1 class="mt-1">
       {% if mode == "create" %}Nuevo proyecto{% else %}Editar proyecto{% endif %}
     </h1>
@@ -26,7 +26,7 @@
   </div>
 </div>
 
-<div class="card" style="max-width: 720px;">
+<div class="card mnt-form-card">
   <form method="post" novalidate>
     {% csrf_token %}
 
@@ -64,7 +64,7 @@
 
     <hr>
 
-    <div class="d-flex gap-2" style="justify-content: flex-end;">
+    <div class="d-flex gap-2 mnt-form-actions">
       <a href="{% if mode == 'edit' %}{% url 'projects:detail' project_obj.pk %}{% else %}{% url 'projects:list' %}{% endif %}"
          class="btn btn-ghost">Cancelar</a>
       <button type="submit" class="btn btn-primary">

@@ -16,14 +16,14 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
       {{ form.slug }}
       {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
       {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresion cron *</label>
       {{ form.cron_expression }}
       {% if form.cron_expression.help_text %}<div class="form-help">{{ form.cron_expression.help_text }}</div>{% endif %}
@@ -32,13 +32,13 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.target_type.id_for_label }}">Tipo de target *</label>
       {{ form.target_type }}
       {% if form.target_type.errors %}<div class="form-help text-danger">{{ form.target_type.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.target_id.id_for_label }}">Target (UUID) *</label>
       {{ form.target_id }}
       {% if form.target_id.help_text %}<div class="form-help">{{ form.target_id.help_text }}</div>{% endif %}
@@ -47,16 +47,16 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.timezone.id_for_label }}">Timezone</label>
       {{ form.timezone }}
       {% if form.timezone.help_text %}<div class="form-help">{{ form.timezone.help_text }}</div>{% endif %}
       {% if form.timezone.errors %}<div class="form-help text-danger">{{ form.timezone.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1; display: flex; align-items: center; gap: var(--space-sm);">
+    <div class="form-group form-group--check">
       {{ form.enabled }}
-      <label class="form-label" for="{{ form.enabled.id_for_label }}" style="margin: 0;">Habilitado</label>
+      <label class="form-label m-0" for="{{ form.enabled.id_for_label }}">Habilitado</label>
       {% if form.enabled.errors %}<div class="form-help text-danger">{{ form.enabled.errors|join:", " }}</div>{% endif %}
     </div>
   </div>

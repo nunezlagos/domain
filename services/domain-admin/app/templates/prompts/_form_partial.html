@@ -17,14 +17,14 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 2;">
+    <div class="form-group form-group--grow2">
       <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
       {{ form.slug }}
       {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
       {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
     </div>
 
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.version.id_for_label }}">Version *</label>
       {{ form.version }}
       {% if form.version.errors %}<div class="form-help text-danger">{{ form.version.errors|join:", " }}</div>{% endif %}

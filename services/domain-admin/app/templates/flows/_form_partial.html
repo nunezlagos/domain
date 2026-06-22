@@ -36,7 +36,7 @@ los campos y el label del submit.
   </div>
 
   <div class="d-flex gap-3">
-    <div class="form-group" style="flex: 1;">
+    <div class="form-group form-group--grow">
       <label class="form-label" for="{{ form.seed_version.id_for_label }}">Version de seed</label>
       {{ form.seed_version }}
       {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
@@ -44,13 +44,13 @@ los campos y el label del submit.
   </div>
 
   <div class="form-group">
-    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+    <label class="form-check form-check-inline">
       {{ form.is_active }} Activo
     </label>
-    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+    <label class="form-check form-check-inline">
       {{ form.deterministic_replay }} Replay determinista
     </label>
-    <label class="form-check" style="display: flex; align-items: center; gap: var(--space-sm);">
+    <label class="form-check form-check-inline">
       {{ form.seed_managed }} Seed gestionado
     </label>
   </div>

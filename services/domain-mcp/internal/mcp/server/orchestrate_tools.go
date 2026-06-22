@@ -46,6 +46,9 @@ func toolOrchestrate() mcp.Tool {
 		mcp.WithNumber("express_max_lines",
 			mcp.Description("Override del threshold de Express (default 10). Sólo aplica si mode=express."),
 		),
+		mcp.WithString("project_id",
+			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). Scopea el flow_run y la cadena SDD/TDD al proyecto. Si se omite, la corrida queda sin proyecto."),
+		),
 	)
 }
 
@@ -114,6 +117,15 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	startingPhase := req.GetString("starting_phase", "")
 	expressMax := req.GetInt("express_max_lines", 0)
 
+	projectID := uuid.Nil
+	if s := req.GetString("project_id", ""); s != "" {
+		p, perr := uuid.Parse(s)
+		if perr != nil {
+			return mcp.NewToolResultError("invalid project_id"), nil
+		}
+		projectID = p
+	}
+
 	args := req.GetArguments()
 	var skipPhases []orchsvc.PhaseSlug
 	if raw, ok := args["skip_phases"].([]any); ok {
@@ -127,6 +139,7 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	in := orchsvc.OrchestrateInput{
 		OrganizationID:  orgID,
 		UserID:          userID,
+		ProjectID:       projectID,
 		RawText:         rawText,
 		Mode:            orchsvc.Mode(modeStr),
 		StartingPhase:   orchsvc.PhaseSlug(startingPhase),

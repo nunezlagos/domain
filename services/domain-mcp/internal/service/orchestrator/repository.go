@@ -132,6 +132,7 @@ type FlowRunStepRow struct {
 type FlowRunInsert struct {
 	ID              uuid.UUID
 	OrganizationID  uuid.UUID
+	ProjectID       uuid.UUID
 	FlowID          uuid.UUID
 	TriggeredBy     uuid.UUID
 	Status          string
@@ -234,12 +235,13 @@ func (r *pgRepository) CreateFlowRun(ctx context.Context, in FlowRunInsert) erro
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
 	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
+	// project_id nullable (scoping por proyecto, mig 000161).
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO flow_runs
-		  (id, flow_id, triggered_by, trigger_type, status,
+		  (id, flow_id, project_id, triggered_by, trigger_type, status,
 		   inputs, cursor, started_at)
-		VALUES ($1,$2,$3,'manual',$4,$5,$6,$7)`,
-		in.ID, in.FlowID, nullUUID(in.TriggeredBy),
+		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8)`,
+		in.ID, in.FlowID, nullUUID(in.ProjectID), nullUUID(in.TriggeredBy),
 		in.Status, inputsJSON, metadataJSON, in.StartedAt)
 	if err != nil {
 		return fmt.Errorf("insert flow_run: %w", err)
@@ -510,6 +512,7 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 	if err := s.Repo.CreateFlowRun(ctx, FlowRunInsert{
 		ID:             flowRunID,
 		OrganizationID: in.OrganizationID,
+		ProjectID:      in.ProjectID,
 		FlowID:         flowID,
 		TriggeredBy:    in.UserID,
 		Status:         "pending",

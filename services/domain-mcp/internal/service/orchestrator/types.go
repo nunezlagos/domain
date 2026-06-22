@@ -82,6 +82,11 @@ type OrchestrateInput struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
 
+	// ProjectID scopea la corrida a un proyecto (flow_runs.project_id + cadena
+	// SDD/TDD). Lo resuelve el bootstrap (siempre disponible al iniciar la
+	// conversación). uuid.Nil = sin scope (compat durante la ventana de deploy).
+	ProjectID uuid.UUID
+
 	// RawText es el prompt libre del usuario (después de PromptRouter
 	// classification). El orquestador NO re-clasifica.
 	RawText string

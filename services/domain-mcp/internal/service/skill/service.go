@@ -487,6 +487,34 @@ ORDER BY score DESC LIMIT $2
 	return out, rows.Err()
 }
 
+// LinkedSkillIDs devuelve el set de skill IDs habilitadas para un proyecto
+// (vía project_skills). Scoping por proyecto (regla "usable solo si enlazada"):
+// el caller filtra los resultados de SearchHybrid contra este set. Si projectID
+// es Nil devuelve nil (sin scope → el caller no filtra).
+func (s *Service) LinkedSkillIDs(ctx context.Context, projectID uuid.UUID) (map[uuid.UUID]bool, error) {
+	if projectID == uuid.Nil {
+		return nil, nil
+	}
+	rows, err := s.Pool.Query(ctx,
+		`SELECT skill_id FROM project_skills
+		   WHERE project_id = $1 AND is_enabled = TRUE`,
+		projectID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("linked skills: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[uuid.UUID]bool)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 // SoftDelete marca deleted_at si no hay dependencias activas.
 // Detección de dependencias por depends_on de OTROS skills (no flows aún —
 // REQ-09 flow_steps no implementado todavía; verificación pending).

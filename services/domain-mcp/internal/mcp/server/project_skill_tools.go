@@ -114,16 +114,21 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	q := `SELECT id, slug, name, COALESCE(description,''), skill_type,
-		    CASE WHEN project_id IS NULL THEN 'global' ELSE 'project' END AS scope
-		   FROM skills
-		   WHERE deleted_at IS NULL
-		     AND proposed = false
-		     AND (project_id = $1`
-	if includeGlobals {
-		q += ` OR project_id IS NULL`
+	// Scoping por proyecto: una skill es usable SOLO si está enlazada vía
+	// project_skills (regla "no usable si no enlazada"). El scope 'global' vs
+	// 'project' refleja si la definición de la skill es de plataforma
+	// (skills.project_id IS NULL) o propia del proyecto.
+	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
+		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
+		   FROM skills s
+		   JOIN project_skills ps
+		     ON ps.skill_id = s.id AND ps.project_id = $1 AND ps.is_enabled = TRUE
+		   WHERE s.deleted_at IS NULL
+		     AND s.proposed = false`
+	if !includeGlobals {
+		q += ` AND s.project_id IS NOT NULL`
 	}
-	q += `) ORDER BY (project_id IS NULL) ASC, slug ASC`
+	q += ` ORDER BY (s.project_id IS NULL) ASC, s.slug ASC`
 
 	rows, err := d.q(ctx).Query(ctx, q, proj.ID)
 	if err != nil {

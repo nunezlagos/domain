@@ -265,7 +265,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 			threshold := readFloat(nextStep.Inputs["skill_threshold"], 0)
 			if threshold > 0 {
 				agentSlug, _ := nextStep.Inputs["agent_template_slug"].(string)
-				recs, err := s.fetchRecommendedSkills(ctx, flowRun.OrganizationID, agentSlug, threshold)
+				recs, err := s.fetchRecommendedSkills(ctx, flowRun.OrganizationID, flowRun.ProjectID, agentSlug, threshold)
 				if err != nil {
 					// D3 es informativo — no bloqueamos el flow si falla
 					span.RecordError(err)

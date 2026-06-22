@@ -104,6 +104,7 @@ func (t *AgentTemplate) SkillThreshold() float64 {
 type FlowRunRow struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 	FlowID         uuid.UUID
 	Status         string
 	Cursor         map[string]any
@@ -255,18 +256,22 @@ func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRo
 		cursorRaw  []byte
 		startedAt  *time.Time
 		finishedAt *time.Time
+		projectID  *uuid.UUID
 	)
-	// ISSUE-21.6: organization_id omitido del SELECT.
+	// ISSUE-21.6: organization_id omitido del SELECT. project_id nullable.
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, flow_id, status, cursor, started_at, finished_at
+		SELECT id, flow_id, project_id, status, cursor, started_at, finished_at
 		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&row.ID, &row.FlowID, &row.Status,
+	).Scan(&row.ID, &row.FlowID, &projectID, &row.Status,
 		&cursorRaw, &startedAt, &finishedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrFlowRunNotFound
 		}
 		return nil, fmt.Errorf("get flow_run: %w", err)
+	}
+	if projectID != nil {
+		row.ProjectID = *projectID
 	}
 	row.StartedAt = startedAt
 	row.FinishedAt = finishedAt

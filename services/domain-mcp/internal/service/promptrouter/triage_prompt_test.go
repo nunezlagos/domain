@@ -106,7 +106,7 @@ func TestRouteWithIntent_Override_SkipsClassification(t *testing.T) {
 
 	// Override a 'chat' → Route responde directo sin tocar services ni clasificar.
 	override := promptrouter.IntentChat
-	resp, err := r.RouteWithIntent(context.Background(), "el botón no funciona", nil, nil, &override)
+	resp, err := r.RouteWithIntent(context.Background(), "el botón no funciona", nil, nil, nil, &override)
 	require.NoError(t, err)
 	require.False(t, spy.called, "el classifier NO debe invocarse cuando hay override")
 	require.Equal(t, promptrouter.IntentChat, resp.Intent)
@@ -117,7 +117,7 @@ func TestRouteWithIntent_NilOverride_Classifies(t *testing.T) {
 	spy := &spyClassifier{intent: promptrouter.IntentChat}
 	r := &promptrouter.Router{Classifier: spy}
 
-	resp, err := r.RouteWithIntent(context.Background(), "cualquier cosa", nil, nil, nil)
+	resp, err := r.RouteWithIntent(context.Background(), "cualquier cosa", nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.True(t, spy.called, "sin override el classifier debe invocarse")
 	require.Equal(t, promptrouter.IntentChat, resp.Intent)
@@ -129,7 +129,7 @@ func TestRouteWithIntent_InvalidOverride_FallsBackToClassifier(t *testing.T) {
 
 	// Un *Intent con valor inválido NO es del enum → se ignora, clasifica.
 	bad := promptrouter.Intent("garbage")
-	resp, err := r.RouteWithIntent(context.Background(), "x", nil, nil, &bad)
+	resp, err := r.RouteWithIntent(context.Background(), "x", nil, nil, nil, &bad)
 	require.NoError(t, err)
 	require.True(t, spy.called)
 	require.Equal(t, promptrouter.IntentChat, resp.Intent)

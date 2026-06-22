@@ -16,6 +16,8 @@ type promptRouterRequest struct {
 	// Intent opcional: si el cliente ya clasificó (vía prompt 'triage'),
 	// se usa directo y se saltea la clasificación del servidor.
 	Intent string `json:"intent,omitempty"`
+	// ProjectID opcional: scopea el intake/triage al proyecto.
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 // routePrompt — endpoint HTTP alternativo al MCP tool domain_prompt (issue-12.7).
@@ -69,7 +71,16 @@ func (a *API) routePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	intentOverride := promptrouter.ParseIntent(req.Intent)
-	resp, err := a.PromptRouter.RouteWithIntent(r.Context(), req.RawText, createdBy, orgID, intentOverride)
+	var projectID *uuid.UUID
+	if req.ProjectID != "" {
+		if p, perr := uuid.Parse(req.ProjectID); perr == nil {
+			projectID = &p
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_project_id", perr.Error())
+			return
+		}
+	}
+	resp, err := a.PromptRouter.RouteWithIntent(r.Context(), req.RawText, createdBy, orgID, projectID, intentOverride)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "route_failed", err.Error())
 		return

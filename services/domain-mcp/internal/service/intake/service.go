@@ -85,6 +85,7 @@ type SubmitInput struct {
 	Source         string
 	SourceRef      string
 	OrganizationID *uuid.UUID
+	ProjectID      *uuid.UUID
 	SubmittedBy    string
 	RawText        string
 	RawPayload     map[string]any
@@ -129,8 +130,8 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	// (single-org, nullable post-000145).
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO issue_intake_payloads (source, source_ref, submitted_by,
-		                             raw_text, raw_payload)
-		VALUES ($1, $2, $3, $4, $5)
+		                             raw_text, raw_payload, project_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, source, source_ref, submitted_by, raw_text, raw_payload,
 		          status, classified_type, classified_severity, classified_confidence,
 		          classification_reasoning, needs_clarification, proposed_title,
@@ -138,7 +139,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 		          dedup_candidates, merge_action, reviewer_id, reviewed_at,
 		          rejection_reason, committed_req_id, committed_issue_id, failure_reason,
 		          created_at, updated_at`,
-		in.Source, srcRef, subBy, in.RawText, payloadJSON,
+		in.Source, srcRef, subBy, in.RawText, payloadJSON, in.ProjectID,
 	).Scan(scanPayloadCols(&p)...)
 	if err != nil {
 		return nil, fmt.Errorf("insert intake: %w", err)

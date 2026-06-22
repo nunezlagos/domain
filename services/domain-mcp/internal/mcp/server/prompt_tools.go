@@ -32,6 +32,9 @@ func toolPromptRoute() mcp.Tool {
 		mcp.WithString("intent",
 			mcp.Description("Intent ya clasificado por el cliente (opcional): chat|idea|feature|fix|hotfix|refactor|doc|rfc|analysis. Si es válido, el servidor lo usa y NO reclasifica. Usá el prompt 'triage' (domain_prompt_get) para decidirlo."),
 		),
+		mcp.WithString("project_id",
+			mcp.Description("UUID del proyecto (de domain_session_bootstrap). Scopea el intake/triage al proyecto. Si se omite, el triage queda sin proyecto."),
+		),
 	)
 }
 
@@ -62,7 +65,16 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 
 	intentOverride := prouter.ParseIntent(req.GetString("intent", ""))
 
-	resp, err := d.PromptRouter.RouteWithIntent(ctx, rawText, createdBy, orgID, intentOverride)
+	var projectID *uuid.UUID
+	if s := req.GetString("project_id", ""); s != "" {
+		if p, perr := uuid.Parse(s); perr == nil {
+			projectID = &p
+		} else {
+			return mcp.NewToolResultError("invalid project_id"), nil
+		}
+	}
+
+	resp, err := d.PromptRouter.RouteWithIntent(ctx, rawText, createdBy, orgID, projectID, intentOverride)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("route: %v", err)), nil
 	}

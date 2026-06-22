@@ -86,6 +86,13 @@
       </svg>
       Plantillas de Agentes
     </a>
+    <a href="{% url 'projectpolicies:list' %}" class="sidebar-link {% if 'reglas-proyecto' in request.path %}active{% endif %}">
+      <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+      Reglas por proyecto
+    </a>
 
     <div class="sidebar-section mt-3">Flujos</div>
     <a href="{% url 'sdd_flow' %}" class="sidebar-link {% if 'flujo-sdd' in request.path %}active{% endif %}">

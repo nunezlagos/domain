@@ -29,6 +29,9 @@ urlpatterns = [
 
     # Mantenedor de plantillas de agentes (agent_templates)
     path("plantillas-agentes/", include("maintainers.agenttemplates.urls")),
+
+    # Mantenedor de reglas por proyecto (project_policies)
+    path("reglas-proyecto/", include("maintainers.projectpolicies.urls")),
 ]
 
 # Handlers de error a nivel módulo. Django los resuelve por nombre de variable

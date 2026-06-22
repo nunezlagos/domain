@@ -32,6 +32,7 @@ MAINTAINER_APPS = (
     "flows",
     "crons",
     "prompts",
+    "projectpolicies",
 )
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "real_schema.json"

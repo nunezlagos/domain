@@ -121,6 +121,16 @@
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="712" x2="608" y2="712"/>
         {% comment %} ret archive: Agente -> Datos {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="772" x2="1120" y2="772"/>
+
+        {% comment %} ASISTENCIA HUMANA en archive (lado izq libre, Orchestrator<->Usuario):
+           al archivar el humano puede pedir omitir tareas; eso re-edita el spec. {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="748" x2="120" y2="748"/>
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="120" y1="764" x2="592" y2="764"/>
+
+        {% comment %} LOOP re-editar spec: archive -> spec (el spec/SDD puede mutar) {% endcomment %}
+        <path class="sdd-msg sdd-msg-loop" marker-end="url(#sdd-arrow-loop)"
+              d="M592 758 H520 V372 H600"/>
+
         {% comment %} ret onboard {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="824" x2="608" y2="824"/>
 
@@ -136,7 +146,7 @@
       <g class="sdd-msg-labels">
         <text class="sdd-lbl"     x="240" y="158">prompt</text>
         <text class="sdd-lbl"     x="476" y="206">intent + project_id</text>
-        <text class="sdd-lbl"     x="640" y="252">crea flow_run (project_id) + steps</text>
+        <text class="sdd-lbl"     x="640" y="252">flow_run + reglas/skills del proyecto</text>
         <text class="sdd-lbl-ret" x="864" y="274">ok</text>
 
         <text class="sdd-lbl-ret" x="730" y="334">resultado</text>
@@ -152,24 +162,11 @@
 
         <text class="sdd-lbl-loop" x="724" y="592">reintento</text>
         <text class="sdd-lbl"      x="356" y="844">issue implementado</text>
-      </g>
 
-      {% comment %} NOTA al margen: modo lite {% endcomment %}
-      <g class="sdd-note">
-        <path class="sdd-note-box" d="M16 300 H196 L208 312 V372 H16 Z"/>
-        <text class="sdd-note-t" x="28" y="326">modo lite</text>
-        <text class="sdd-note-t sdd-note-sub" x="28" y="346">explore -&gt; apply</text>
-        <text class="sdd-note-t sdd-note-sub" x="28" y="364">-&gt; verify</text>
-      </g>
-
-      {% comment %} NOTA: scoping por proyecto (project_id + reglas/skills + modo exec) {% endcomment %}
-      <g class="sdd-note">
-        <path class="sdd-note-box" d="M928 100 H1212 L1224 112 V214 H928 Z"/>
-        <text class="sdd-note-t" x="940" y="126">scoping por proyecto</text>
-        <text class="sdd-note-t sdd-note-sub" x="940" y="146">bootstrap resuelve project_id</text>
-        <text class="sdd-note-t sdd-note-sub" x="940" y="164">Orchestrator lee reglas</text>
-        <text class="sdd-note-t sdd-note-sub" x="940" y="182">(plataforma+proyecto) y skills</text>
-        <text class="sdd-note-t sdd-note-sub" x="940" y="200">enlazadas; modo auto/manual/híbrido</text>
+        {% comment %} asistencia humana en archive + loop re-editar spec {% endcomment %}
+        <text class="sdd-lbl"      x="300" y="742">asistencia: ¿omitir tareas?</text>
+        <text class="sdd-lbl-ret"  x="320" y="780">decisión humana</text>
+        <text class="sdd-lbl-loop" x="360" y="540">re-editar spec (el SDD puede mutar)</text>
       </g>
 
       {% comment %} ============== PARTICIPANTES (cajas arriba) ============== {% endcomment %}

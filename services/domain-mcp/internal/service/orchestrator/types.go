@@ -93,6 +93,11 @@ type OrchestrateInput struct {
 	// confirm existente (domain_orchestrate_confirm).
 	ExecMode string
 
+	// Hardspec (opcional): si true, al completar sdd-spec el orquestador pausa
+	// para una reiteración humana (revisar + enriquecer + re-redactar el spec) y
+	// la confirmación queda registrada en audit_log. Ortogonal a ExecMode.
+	Hardspec bool
+
 	// RawText es el prompt libre del usuario (después de PromptRouter
 	// classification). El orquestador NO re-clasifica.
 	RawText string

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 
+	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 	"nunezlagos/domain/internal/tracing"
 )
@@ -268,7 +269,29 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 					return nil, fmt.Errorf("mark next blocked (gate): %w", err)
 				}
 				out.RequiresConfirm = true
-				out.ConfirmMessage = "Fase '" + nextStep.StepKey + "' requiere tu aprobación (modo " + flowRun.ExecMode + "). Revisá el resultado y llamá domain_orchestrate_confirm(confirmed=true) para continuar, o false para abortar."
+				out.ConfirmMessage = "La fase '" + nextStep.StepKey + "' requiere aprobacion (modo " + flowRun.ExecMode + "). Revise el resultado y llame domain_orchestrate_confirm(confirmed=true) para continuar, o false para abortar."
+				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
+			}
+
+			// HARDSPEC: al completar sdd-spec con hardspec activo, pausa para una
+			// reiteración humana (revisar + enriquecer + re-redactar) y AUDITA el
+			// requerimiento de confirmación. Ortogonal a exec_mode.
+			if !out.RequiresConfirm && flowRun.Hardspec && step.StepKey == "sdd-spec" {
+				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
+					"hardspec: reiteración humana del spec requerida"); err != nil {
+					return nil, fmt.Errorf("mark next blocked (hardspec): %w", err)
+				}
+				out.RequiresConfirm = true
+				out.ConfirmMessage = "hardspec: revise y enriquezca el spec; si hace falta re-redactelo (re-ejecute sdd-spec). Confirme con domain_orchestrate_confirm(confirmed=true) para continuar. La confirmacion queda auditada."
+				if s.Audit != nil {
+					audit.RecordOrLog(ctx, s.Audit, audit.Event{
+						ActorType:  audit.ActorSystem,
+						Action:     "hardspec.review_required",
+						EntityType: "flow_run",
+						EntityID:   &flowRun.ID,
+						NewValues:  map[string]any{"phase": "sdd-spec"},
+					})
+				}
 				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
 			}
 

@@ -50,7 +50,10 @@ func toolOrchestrate() mcp.Tool {
 			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). Scopea el flow_run y la cadena SDD/TDD al proyecto. Si se omite, la corrida queda sin proyecto."),
 		),
 		mcp.WithString("exec_mode",
-			mcp.Description("Modo de ejecución: auto (corre sin pausar), manual (pausa y pide aprobación tras CADA fase vía domain_orchestrate_confirm), hybrid (pausa solo en fases clave: spec/design/apply/judge). Default: auto. Preguntale al usuario al inicio qué modo quiere."),
+			mcp.Description("Modo de ejecucion: auto (corre sin pausar), manual (pausa y pide aprobacion tras CADA fase via domain_orchestrate_confirm), hybrid (pausa solo en fases clave: spec/design/apply/judge). Default: auto. Consulte al usuario al inicio que modo quiere."),
+		),
+		mcp.WithBoolean("hardspec",
+			mcp.Description("Reiteracion humana del spec (OBLIGATORIA por defecto): al terminar sdd-spec el flujo pausa para que el desarrollador de el OK o solicite rehacer una parte especifica del spec. La confirmacion queda auditada. Use hardspec=false solo para desactivarla (default true)."),
 		),
 	)
 }
@@ -139,11 +142,18 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
+	// hardspec OBLIGATORIO por defecto: solo se desactiva si se pasa false explícito.
+	hardspec := true
+	if v, ok := args["hardspec"].(bool); ok {
+		hardspec = v
+	}
+
 	in := orchsvc.OrchestrateInput{
 		OrganizationID:  orgID,
 		UserID:          userID,
 		ProjectID:       projectID,
 		ExecMode:        req.GetString("exec_mode", ""),
+		Hardspec:        hardspec,
 		RawText:         rawText,
 		Mode:            orchsvc.Mode(modeStr),
 		StartingPhase:   orchsvc.PhaseSlug(startingPhase),

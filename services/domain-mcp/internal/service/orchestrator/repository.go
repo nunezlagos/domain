@@ -108,6 +108,7 @@ type FlowRunRow struct {
 	FlowID         uuid.UUID
 	Status         string
 	ExecMode       string
+	Hardspec       bool
 	Cursor         map[string]any
 	StartedAt      *time.Time
 	FinishedAt     *time.Time
@@ -139,6 +140,7 @@ type FlowRunInsert struct {
 	TriggeredBy     uuid.UUID
 	Status          string
 	ExecMode        string
+	Hardspec        bool
 	Inputs          map[string]any
 	Metadata        map[string]any
 	StartedAt       time.Time
@@ -242,14 +244,14 @@ func (r *pgRepository) CreateFlowRun(ctx context.Context, in FlowRunInsert) erro
 		execMode = "auto"
 	}
 	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
-	// project_id nullable (mig 000161) + exec_mode (mig 000162).
+	// project_id nullable (mig 000161) + exec_mode (000162) + hardspec (000163).
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO flow_runs
 		  (id, flow_id, project_id, triggered_by, trigger_type, status,
-		   exec_mode, inputs, cursor, started_at)
-		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8,$9)`,
+		   exec_mode, hardspec, inputs, cursor, started_at)
+		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8,$9,$10)`,
 		in.ID, in.FlowID, nullUUID(in.ProjectID), nullUUID(in.TriggeredBy),
-		in.Status, execMode, inputsJSON, metadataJSON, in.StartedAt)
+		in.Status, execMode, in.Hardspec, inputsJSON, metadataJSON, in.StartedAt)
 	if err != nil {
 		return fmt.Errorf("insert flow_run: %w", err)
 	}
@@ -267,10 +269,10 @@ func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRo
 	// ISSUE-21.6: organization_id omitido del SELECT. project_id nullable.
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, flow_id, project_id, status, COALESCE(exec_mode,'auto'),
-		       cursor, started_at, finished_at
+		       COALESCE(hardspec,false), cursor, started_at, finished_at
 		FROM flow_runs WHERE id = $1`, id,
 	).Scan(&row.ID, &row.FlowID, &projectID, &row.Status, &row.ExecMode,
-		&cursorRaw, &startedAt, &finishedAt)
+		&row.Hardspec, &cursorRaw, &startedAt, &finishedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrFlowRunNotFound
@@ -529,6 +531,7 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 		TriggeredBy:    in.UserID,
 		Status:         "pending",
 		ExecMode:       in.ExecMode,
+		Hardspec:       in.Hardspec,
 		Inputs:         map[string]any{"raw_text": in.RawText},
 		Metadata: map[string]any{
 			"orchestrator_run_id": orchestratorRunID.String(),

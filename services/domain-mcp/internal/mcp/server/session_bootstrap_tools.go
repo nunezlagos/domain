@@ -181,7 +181,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 					"cwd":             cwd,
 				},
 				"existing_rules_files": rulesFiles,
-				"next_step":            "No pude auto-crear el proyecto. Preguntale al usuario slug/remote/workflow y llamá domain_session_register.",
+				"next_step":            "No se pudo auto-crear el proyecto. Consulte al usuario slug/remote/workflow y llame domain_session_register.",
 			}
 			return toolResultJSON(resp)
 		}
@@ -196,10 +196,10 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 			},
 			"linked_skills":        linked,
 			"existing_rules_files": rulesFiles,
-			"next_step":            fmt.Sprintf("Proyecto auto-creado (slug=%s) con %d skills de plataforma enlazadas. Pasá project_id=%s en domain_prompt/domain_orchestrate. Si detectaste archivos AI-rules, importalos con domain_project_policy_import_from_text.", newSlug, linked, newID.String()),
+			"next_step":            fmt.Sprintf("Proyecto auto-creado (slug=%s) con %d skills de plataforma enlazadas. Use project_id=%s en domain_prompt/domain_orchestrate. Si hay archivos AI-rules detectados, importelos con domain_project_policy_import_from_text.", newSlug, linked, newID.String()),
 		}
 		if len(rulesFiles) > 0 {
-			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno."
+			resp["suggested_imports_note"] = "Se detectaron " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Lealos con la tool Read y llame domain_project_policy_import_from_text por cada uno."
 		}
 		return toolResultJSON(resp)
 	}

@@ -36,14 +36,14 @@ func (r *pgRepository) q(ctx context.Context) querier {
 
 const selectCols = `id, project_id, name, url,
 		COALESCE(branch_default,''), COALESCE(kind,''), is_default,
-		COALESCE(workflow,''), COALESCE(notes,''),
+		COALESCE(workflow,''), COALESCE(notes,''), COALESCE(root_path,''),
 		created_at, updated_at, deleted_at`
 
 func scanRepo(row pgx.Row) (*Repo, error) {
 	var r Repo
 	if err := row.Scan(
 		&r.ID, &r.ProjectID, &r.Name, &r.URL,
-		&r.BranchDefault, &r.Kind, &r.IsDefault, &r.Workflow, &r.Notes,
+		&r.BranchDefault, &r.Kind, &r.IsDefault, &r.Workflow, &r.Notes, &r.RootPath,
 		&r.CreatedAt, &r.UpdatedAt, &r.DeletedAt,
 	); err != nil {
 		return nil, err
@@ -60,11 +60,11 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Repo, erro
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_repositories
 		   (project_id, name, url, branch_default,
-		    kind, is_default, workflow, notes)
-		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,NULLIF($7,''),NULLIF($8,''))
+		    kind, is_default, workflow, notes, root_path)
+		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,NULLIF($7,''),NULLIF($8,''),NULLIF($9,''))
 		 RETURNING `+selectCols,
 		in.ProjectID, in.Name, in.URL, in.BranchDefault,
-		in.Kind, in.IsDefault, in.Workflow, in.Notes,
+		in.Kind, in.IsDefault, in.Workflow, in.Notes, in.RootPath,
 	)
 	repo, err := scanRepo(row)
 	if isUniqueViolation(err) {
@@ -157,6 +157,9 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 	}
 	if in.Notes != nil {
 		add("notes", nullIfEmpty(*in.Notes))
+	}
+	if in.RootPath != nil {
+		add("root_path", nullIfEmpty(*in.RootPath))
 	}
 	if len(sets) == 0 {
 		return r.Get(ctx, orgID, id)

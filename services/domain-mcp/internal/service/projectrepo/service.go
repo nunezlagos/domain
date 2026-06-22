@@ -39,6 +39,7 @@ type AddInput struct {
 	IsDefault      bool
 	Workflow       string
 	Notes          string
+	RootPath       string
 }
 
 func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
@@ -67,6 +68,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
 		IsDefault:      in.IsDefault,
 		Workflow:       strings.ToLower(strings.TrimSpace(in.Workflow)),
 		Notes:          strings.TrimSpace(in.Notes),
+		RootPath:       strings.TrimSpace(in.RootPath),
 	})
 	if err != nil {
 		return nil, err

@@ -510,3 +510,24 @@ textarea.form-control {
   color: var(--color-info);
   font-weight: 600;
 }
+
+/* Multi-select tipo select2 (vanilla, ver multiselect.js) */
+.ms { position: relative; min-width: 180px; }
+.ms-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; cursor: pointer; text-align: left;
+}
+.ms-trigger .ms-muted { color: var(--color-text-muted); }
+.ms-panel {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 220px;
+  background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+  border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); padding: 8px;
+}
+.ms-search { margin-bottom: 6px; }
+.ms-options { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.ms-option {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.ms-option:hover { background: var(--color-bg-surface); }
+.ms-option input { margin: 0; cursor: pointer; }

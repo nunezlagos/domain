@@ -1,4 +1,5 @@
 {% extends "maintainers/list_base.html" %}
+{% load static %}
 {% comment %}
 Listado de usuarios. Extiende maintainers/list_base.html (que carga maintainer.js
 via extra_js) pero SOBREESCRIBE el bloque `content` para el layout nuevo en card:
@@ -46,27 +47,34 @@ PREVIEW solo en Users; si gusta, se sube a list_base para todos los mantenedores
               align-items: flex-end; flex-wrap: wrap;">
     <div>
       <label class="form-label">Rol</label>
-      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-        {% for r in role_options %}
-          <label class="sdd-chip-filter">
-            <input type="checkbox" data-filter name="role" value="{{ r }}" {% if r in selected_roles %}checked{% endif %}>
-            <span>{{ r }}</span>
-          </label>
-        {% empty %}
-          <span class="text-muted" style="font-size: var(--fs-sm);">Sin roles</span>
-        {% endfor %}
+      <div class="ms" data-multiselect data-ms-placeholder="Todos los roles">
+        <button type="button" class="form-control ms-trigger" data-ms-trigger>
+          <span data-ms-label class="ms-muted">Todos los roles</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="ms-panel" data-ms-panel hidden>
+          <input type="text" class="form-control ms-search" placeholder="Buscar rol..." data-ms-search>
+          <div class="ms-options">
+            {% for r in role_options %}
+              <label class="ms-option" data-ms-option="{{ r }}">
+                <input type="checkbox" data-filter name="role" value="{{ r }}" {% if r in selected_roles %}checked{% endif %}>
+                <span>{{ r }}</span>
+              </label>
+            {% empty %}
+              <span class="text-muted" style="font-size: var(--fs-sm); padding: 4px;">Sin roles</span>
+            {% endfor %}
+          </div>
+        </div>
       </div>
     </div>
     <div>
-      <label class="form-label">Estado</label>
-      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <label class="form-label" for="f-status">Estado</label>
+      <select data-filter name="status" id="f-status" class="form-control form-select" style="min-width: 150px;">
+        <option value="">Todos</option>
         {% for val, lbl in status_options %}
-          <label class="sdd-chip-filter">
-            <input type="checkbox" data-filter name="status" value="{{ val }}" {% if val in selected_statuses %}checked{% endif %}>
-            <span>{{ lbl }}</span>
-          </label>
+          <option value="{{ val }}" {% if val in selected_statuses %}selected{% endif %}>{{ lbl }}</option>
         {% endfor %}
-      </div>
+      </select>
     </div>
     <div style="flex: 1 1 220px;">
       <label class="form-label" for="q">Buscar</label>
@@ -96,4 +104,9 @@ PREVIEW solo en Users; si gusta, se sube a list_base para todos los mantenedores
     {% include "users/_table_partial.html" %}
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  <script src="{% static 'js/multiselect.js' %}"></script>
 {% endblock %}

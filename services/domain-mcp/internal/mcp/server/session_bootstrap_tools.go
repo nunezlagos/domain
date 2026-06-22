@@ -165,20 +165,41 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 
 	projID, projSlug, matched := d.matchProjectFromCwdOrRemote(ctx, orgID, cwd, gitRemote)
 	if !matched {
-		suggestionSlug := strings.ToLower(filepath.Base(strings.TrimRight(cwd, "/")))
+		// El project_id se resuelve SIEMPRE: si no hay match, se auto-crea desde
+		// el git de la sesión y se enlazan las skills de plataforma. Si el alta
+		// falla, caemos al cuestionario manual (comportamiento previo).
+		newID, newSlug, cerr := d.autoCreateProject(ctx, orgID, cwd, gitRemote, gitBranch, gitHead)
+		if cerr != nil {
+			suggestionSlug := sanitizeSlug(filepath.Base(strings.TrimRight(cwd, "/")))
+			resp := map[string]any{
+				"known":              false,
+				"auto_create_failed": cerr.Error(),
+				"suggestion": map[string]any{
+					"slug":            suggestionSlug,
+					"remote_detected": gitRemote,
+					"branch_detected": gitBranch,
+					"cwd":             cwd,
+				},
+				"existing_rules_files": rulesFiles,
+				"next_step":            "No pude auto-crear el proyecto. Preguntale al usuario slug/remote/workflow y llamá domain_session_register.",
+			}
+			return toolResultJSON(resp)
+		}
+		linked, _ := d.linkPlatformSkills(ctx, newID)
 		resp := map[string]any{
-			"known": false,
-			"suggestion": map[string]any{
-				"slug":            suggestionSlug,
-				"remote_detected": gitRemote,
-				"branch_detected": gitBranch,
-				"cwd":             cwd,
+			"known":        true,
+			"auto_created": true,
+			"project": map[string]any{
+				"id":   newID.String(),
+				"slug": newSlug,
+				"name": newSlug,
 			},
+			"linked_skills":        linked,
 			"existing_rules_files": rulesFiles,
-			"next_step":            "Preguntale al usuario: (1) confirmá slug='" + suggestionSlug + "' o pasame otro; (2) confirmá remote=" + gitRemote + " (origin) o pasame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llamá domain_session_register.",
+			"next_step":            fmt.Sprintf("Proyecto auto-creado (slug=%s) con %d skills de plataforma enlazadas. Pasá project_id=%s en domain_prompt/domain_orchestrate. Si detectaste archivos AI-rules, importalos con domain_project_policy_import_from_text.", newSlug, linked, newID.String()),
 		}
 		if len(rulesFiles) > 0 {
-			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Después de registrar el proyecto, leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno para que domain herede lo que el repo ya documenta sin pisar nada."
+			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno."
 		}
 		return toolResultJSON(resp)
 	}
@@ -322,6 +343,103 @@ func safeDeref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// sanitizeSlug deriva un slug válido (kebab-case, empieza con letra) desde un
+// texto libre (ej. basename del cwd). Matchea el patrón de projects.slug.
+func sanitizeSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevDash = false
+		case !prevDash && b.Len() > 0:
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		out = "proyecto"
+	}
+	// El slug debe empezar con letra (regex de projects.slug).
+	if out[0] >= '0' && out[0] <= '9' {
+		out = "p-" + out
+	}
+	if len(out) > 100 {
+		out = strings.Trim(out[:100], "-")
+	}
+	return out
+}
+
+// autoCreateProject crea un proyecto desde el contexto git de la sesión cuando
+// el bootstrap no encontró match (decisión: el project_id se resuelve SIEMPRE;
+// si no existe, se crea). Idempotente por slug. Corre dentro de la tx del
+// handler (d.q usa la tx). Registra el remoto y deja una observación.
+func (d *Deps) autoCreateProject(ctx context.Context, orgID uuid.UUID, cwd, gitRemote, gitBranch, gitHead string) (uuid.UUID, string, error) {
+	slug := sanitizeSlug(filepath.Base(strings.TrimRight(cwd, "/")))
+
+	// Idempotencia: si el slug ya existe (no matcheado por remote/basename),
+	// reusarlo en vez de fallar por UNIQUE.
+	if d.Projects != nil {
+		if existing, _ := d.Projects.GetBySlug(ctx, orgID, slug); existing != nil {
+			return existing.ID, existing.Slug, nil
+		}
+	}
+
+	var projID uuid.UUID
+	if err := d.q(ctx).QueryRow(ctx,
+		`INSERT INTO projects
+		   (slug, name, description, repository_url,
+		    last_known_head, last_seen_branch, last_seen_cwd, last_seen_at)
+		 VALUES ($1,$2,'',NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NOW())
+		 RETURNING id`,
+		slug, slug, gitRemote, gitHead, gitBranch, cwd,
+	).Scan(&projID); err != nil {
+		return uuid.Nil, "", fmt.Errorf("insert project: %w", err)
+	}
+
+	// Registrar el remoto detectado (best-effort, no aborta el alta).
+	if gitRemote != "" && d.ProjectRepos != nil {
+		_, _ = d.ProjectRepos.Add(ctx, projectreposvc.AddInput{
+			ProjectID:     projID,
+			Name:          "origin",
+			URL:           gitRemote,
+			BranchDefault: gitBranch,
+		})
+	}
+
+	// Observación de auditoría (best-effort).
+	_, _ = d.q(ctx).Exec(ctx,
+		`INSERT INTO knowledge_observations (project_id, observation_type, content, tags)
+		 VALUES ($1, 'discovery', $2, ARRAY['bootstrap','auto_created'])`,
+		projID,
+		fmt.Sprintf("# Proyecto auto-creado vía session_bootstrap\n\nslug: %s\ncwd: %s\nremote: %s\nbranch: %s",
+			slug, cwd, gitRemote, gitBranch),
+	)
+
+	return projID, slug, nil
+}
+
+// linkPlatformSkills enlaza todas las skills de plataforma (globales, sin
+// project_id) al proyecto, vía project_skills. Es el "auto-enlace al crear"
+// (decisión del usuario): un proyecto nuevo arranca con el catálogo de
+// plataforma habilitado; después se desenlaza lo que no se use. Idempotente.
+func (d *Deps) linkPlatformSkills(ctx context.Context, projID uuid.UUID) (int64, error) {
+	tag, err := d.q(ctx).Exec(ctx,
+		`INSERT INTO project_skills (project_id, skill_id)
+		   SELECT $1, id FROM skills
+		   WHERE project_id IS NULL AND deleted_at IS NULL AND proposed = FALSE
+		 ON CONFLICT (project_id, skill_id) DO NOTHING`,
+		projID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("link platform skills: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

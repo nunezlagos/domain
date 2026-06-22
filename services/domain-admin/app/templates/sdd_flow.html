@@ -91,8 +91,10 @@
       <g class="sdd-msgs" fill="none">
         {% comment %} 1. Usuario -> Router: prompt {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="120" y1="166" x2="360" y2="166"/>
+        {% comment %} TRIAGE: self-message del Router (clasifica intent + persiste intake) {% endcomment %}
+        <path class="sdd-msg" marker-end="url(#sdd-arrow)" d="M360 182 H404 V196 H364"/>
         {% comment %} 2. Router -> Orchestrator: intent {% endcomment %}
-        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="360" y1="214" x2="592" y2="214"/>
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="360" y1="220" x2="592" y2="220"/>
         {% comment %} 3. Orchestrator -> Datos: crea flow_run + steps {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="608" y1="260" x2="1120" y2="260"/>
         {% comment %} retorno Datos -> Orchestrator {% endcomment %}
@@ -113,6 +115,10 @@
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="496" x2="608" y2="496"/>
         {% comment %} ret tasks {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="556" x2="608" y2="556"/>
+
+        {% comment %} GATE por fase (modo manual/híbrido): Orchestrator pide aprobación
+           humana entre fases clave (spec/design/apply/judge) antes de seguir. {% endcomment %}
+        <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="508" x2="120" y2="508"/>
         {% comment %} apply: Agente -> Datos persiste {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="608" x2="1120" y2="608"/>
         {% comment %} ret verify {% endcomment %}
@@ -145,7 +151,9 @@
       {% comment %} ETIQUETAS de mensajes (texto sobre la flecha) {% endcomment %}
       <g class="sdd-msg-labels">
         <text class="sdd-lbl"     x="240" y="158">prompt</text>
-        <text class="sdd-lbl"     x="476" y="206">intent + project_id</text>
+        <text class="sdd-lbl"     x="410" y="190">triage (clasifica intent + intake)</text>
+        <text class="sdd-lbl"     x="476" y="212">intent + project_id</text>
+        <text class="sdd-lbl"     x="300" y="502">gate (manual/híbrido): aprobación humana</text>
         <text class="sdd-lbl"     x="640" y="252">flow_run + reglas/skills del proyecto</text>
         <text class="sdd-lbl-ret" x="864" y="274">ok</text>
 

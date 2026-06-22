@@ -26,6 +26,9 @@ services:
       APP_USER_PASSWORD: ${APP_USER_PASSWORD}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
+      # Passphrase de cifrado at-rest de API keys (pgcrypto). DEBE ser identica a
+      # la de domain-mcp; el admin descifra key_ciphertext para mostrar la key.
+      DOMAIN_FIELD_ENC_KEY: ${DOMAIN_FIELD_ENC_KEY}
     networks:
       - domain_internal
     expose:

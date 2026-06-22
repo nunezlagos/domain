@@ -15,26 +15,38 @@ API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
 </div>
 
 <div class="modal-body" data-base-url="/api-keys/">
-  <div class="d-flex" style="justify-content: space-between; align-items: center; gap: var(--space-md); margin-bottom: var(--space-md); flex-wrap: wrap;">
-    <div class="d-flex gap-2" style="flex-wrap: wrap; align-items: center;">
-      <select data-modal-filter name="user" class="form-control form-select" style="min-width: 180px;">
-        <option value="">Todos los usuarios</option>
+  {% comment %} Filtros en container propio (mismo estilo que el mantenedor de
+     Users: color distinto al fondo + borde + radius + sombra). {% endcomment %}
+  <div style="background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+              border-radius: 10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+              padding: var(--space-md); margin-bottom: var(--space-md);
+              display: flex; gap: var(--space-md); align-items: flex-end; flex-wrap: wrap;">
+    <div>
+      <label class="form-label" for="ak-f-user">Usuario</label>
+      <select data-modal-filter name="user" id="ak-f-user" class="form-control form-select" style="min-width: 190px;">
+        <option value="">Todos</option>
         {% for u in user_options %}
           <option value="{{ u.id }}" {% if u.id|stringformat:'s' == selected_user %}selected{% endif %}>{{ u.email }}</option>
         {% endfor %}
       </select>
-      <select data-modal-filter name="status" class="form-control form-select" style="min-width: 150px;">
-        <option value="">Todos los estados</option>
+    </div>
+    <div>
+      <label class="form-label" for="ak-f-status">Estado</label>
+      <select data-modal-filter name="status" id="ak-f-status" class="form-control form-select" style="min-width: 150px;">
+        <option value="">Todos</option>
         {% for val, lbl in status_options %}
           <option value="{{ val }}" {% if val == selected_status %}selected{% endif %}>{{ lbl }}</option>
         {% endfor %}
       </select>
-      <span class="text-secondary" style="font-size: var(--fs-sm);">{{ total }} resultado{{ total|pluralize:",s" }}</span>
     </div>
+    <div style="flex: 1 1 auto;"></div>
     <button type="button" class="btn btn-sm btn-outline-primary" data-action="create">
       + API Key
     </button>
   </div>
+  <p class="text-secondary" style="font-size: var(--fs-sm); margin: 0 0 var(--space-sm);">
+    {{ total }} resultado{{ total|pluralize:",s" }}
+  </p>
 
   <table class="table" style="font-size: var(--fs-sm);">
     <thead>

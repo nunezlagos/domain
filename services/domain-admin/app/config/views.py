@@ -114,6 +114,18 @@ def sdd_flow(request):
         for t in AgentTemplate.objects.filter(slug__in=slugs).only("id", "slug", "name")
     }
 
+    # Membresia de modos + gates por fase (para badges del diagrama HTML).
+    #   lite    = explore + apply + verify
+    #   express = apply + verify
+    #   gate    = pausa humana manual/hibrido (spec/design/apply/judge)
+    #   hardspec= reiteracion humana obligatoria del spec
+    #   loop    = nucleo de reintento "hasta que los tests pasen"
+    _LITE = {"sdd-explore", "sdd-apply", "sdd-verify"}
+    _EXPRESS = {"sdd-apply", "sdd-verify"}
+    _GATE = {"sdd-spec", "sdd-design", "sdd-apply", "sdd-judge"}
+    _HARDSPEC = {"sdd-spec"}
+    _LOOP = {"sdd-apply", "sdd-verify", "sdd-judge"}
+
     phases = []
     for index, (slug, name, group, desc, icon) in enumerate(_SDD_PHASES):
         tpl = by_slug.get(slug)
@@ -128,6 +140,11 @@ def sdd_flow(request):
                 "icon": icon,
                 "id": str(tpl.id) if tpl else None,
                 "seeded": tpl is not None,
+                "lite": slug in _LITE,
+                "express": slug in _EXPRESS,
+                "gate": slug in _GATE,
+                "hardspec": slug in _HARDSPEC,
+                "loop": slug in _LOOP,
             }
         )
 

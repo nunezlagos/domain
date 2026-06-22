@@ -1,381 +1,228 @@
-/* sdd_flow.css — DIAGRAMA DE SECUENCIA UML del pipeline SDD (vista general).
+/* sdd_flow.css — Pipeline SDD en HTML/CSS (vista general).
    ---------------------------------------------------------------------------
-   Approach visual:
-   - El diagrama es UN SVG con viewBox fijo VERTICAL (1240x1180). width:100% +
-     height:auto => escala proporcional. En desktop entra completo; en mobile el
-     contenedor permite scroll horizontal SOLO del diagrama (nunca el body).
-   - 5 PARTICIPANTES (cajas arriba) con LIFELINE punteada vertical: Usuario,
-     Router, Orchestrator, Agente, Datos. El tiempo avanza de arriba a abajo.
-   - MENSAJES = flechas horizontales: sólidas para llamadas, punteadas para
-     retornos. apply->verify->judge dentro de un FRAGMENTO UML "loop".
-   - Cada FASE clickeable (Orchestrator -> Agente) es un <button> HTML real
-     dentro de <foreignObject>: conserva data-action/data-id/data-base-url y
-     modals.js lo intercepta (closest('[data-action]')) igual que en las tablas.
-     El propio botón dibuja la flecha (barra fina con cabeza por CSS).
-   - Color por GRUPO (spec/exec/tdd/close) tomado de variables.css.
+   Reemplaza el viejo diagrama de secuencia SVG (coordenadas a mano que se
+   solapaban) por un layout en flujo: el motor de layout acomoda todo, sin
+   solapamiento. Cada fase es un <button> real clickeable (data-action/data-id/
+   data-base-url) que modals.js intercepta. Color por grupo (spec/exec/tdd/
+   close), badges de modo (lite/express) y de gate (hardspec/gate humano), y un
+   recuadro visual para el loop apply->verify->judge.
    Reusa SIEMPRE los tokens del design system. */
 
-/* FIT AL VIEWPORT
-   .content tiene padding var(--space-lg) (24px) arriba+abajo. base.html apila
-   navbar (--navbar-height) + main.content + footer (--footer-height). La página
-   ocupa el alto disponible restante y se reparte como flex column: header auto,
-   diagrama flex:1. Usamos dvh para que en mobile descuente la barra del browser.
-   Reserva = navbar + footer + padding vertical del content (2 * space-lg). */
 .sdd-flow-page {
-  --sdd-reserve: calc(
-    var(--navbar-height) + var(--footer-height) + (2 * var(--space-lg))
-  );
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - var(--sdd-reserve));
-  min-height: 420px;
-  max-width: 1200px;
+  max-width: 880px;
   margin: 0 auto;
-  overflow-x: hidden;
+  padding-bottom: var(--space-xl, 32px);
 }
 
-.sdd-flow-header {
-  flex: 0 0 auto;
-  margin-bottom: var(--space-md);
-}
-
-.sdd-flow-header h1 {
-  margin: 0;
-}
-
-.sdd-flow-intro {
+/* Header --------------------------------------------------------------------*/
+.sdd-hd { margin-bottom: var(--space-lg); }
+.sdd-hd-title { margin: 0; }
+.sdd-hd-sub {
   color: var(--color-text-secondary);
   margin: var(--space-xs) 0 0;
-  max-width: 80ch;
-  line-height: 1.4;
+  max-width: 72ch;
+  line-height: 1.5;
   font-size: var(--fs-sm);
 }
+.sdd-hd-sub code, .sdd-pre code, .sdd-note code {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 0 5px;
+  font-size: 0.88em;
+}
 
-/* Grupos (concern): cada clase define el acento del grupo ------------------- */
+/* Grupos (concern): cada clase define el acento del grupo -------------------*/
 .sdd-g-spec  { --g-color: var(--color-info);    --g-soft: var(--color-info-soft); }
 .sdd-g-exec  { --g-color: var(--color-warning); --g-soft: var(--color-warning-soft); }
 .sdd-g-tdd   { --g-color: var(--color-success); --g-soft: var(--color-success-soft); }
 .sdd-g-close { --g-color: var(--color-accent);  --g-soft: var(--color-accent-soft); }
 
-/* Contenedor del diagrama ---------------------------------------------------
-   flex:1 => toma todo el alto restante de .sdd-flow-page. El SVG (con
-   preserveAspectRatio="xMidYMid meet") escala para entrar ENTERO en este box,
-   ancho y alto, con letterbox si sobra. min-height:0 evita que el flex item
-   crezca por su contenido. */
-.sdd-diagram {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  background:
-    radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0)
-      0 0 / 24px 24px,
-    var(--color-bg-surface);
+/* Arranque (pre-pipeline) ---------------------------------------------------*/
+.sdd-pre {
+  background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: 10px;
   padding: var(--space-md);
-  overflow: hidden;
+  margin-bottom: var(--space-lg);
 }
-
-/* SVG: ocupa el box completo y escala por preserveAspectRatio (meet). -------- */
-.sdd-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-/* Nombre del diagrama (dentro del SVG) */
-.sdd-diagram-title {
-  fill: var(--color-text-primary);
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-/* ============================ LIFELINES ============================ */
-.sdd-lifeline {
-  stroke: var(--color-border-light);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 5;
-  opacity: 0.9;
-}
-
-/* ============================ ACTIVATION BARS ============================ */
-.sdd-activation {
-  fill: var(--color-bg-elevated);
-  stroke: var(--color-border-light);
-  stroke-width: 1;
-  opacity: 0.9;
-}
-
-/* ============================ PARTICIPANTES ============================ */
-.sdd-actor-box {
-  fill: var(--color-bg-elevated);
-  stroke: var(--color-border-light);
-  stroke-width: 1.5;
-}
-.sdd-actor-t {
-  fill: var(--color-text-primary);
-  font-family: var(--font-base);
-  font-size: 17px;
-  font-weight: var(--fw-semibold);
-  text-anchor: middle;
-}
-
-/* ============================ MENSAJES (flechas) ============================
-   Cada <line>/<path> de mensaje se ILUMINA al pasar el mouse (glow + brillo).
-   cursor:pointer y transición suave. El glow base es muy sutil. */
-.sdd-msg {
-  stroke: var(--color-border-light);
-  stroke-width: 2;
-  cursor: pointer;
-  transition: stroke var(--transition-fast), filter var(--transition-fast),
-    stroke-width var(--transition-fast), opacity var(--transition-fast);
-}
-.sdd-arrow-head { fill: var(--color-border-light); }
-
-.sdd-msg:hover {
-  stroke: var(--color-text-link);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 4px rgba(85, 110, 230, 0.45));
-}
-
-/* Retornos: punteados, más tenues, cabeza abierta */
-.sdd-msg-ret {
-  stroke: var(--color-text-muted);
-  stroke-width: 1.5;
-  stroke-dasharray: 5 4;
-  opacity: 0.8;
-}
-.sdd-msg-ret:hover {
-  stroke: var(--color-text-secondary);
-  stroke-width: 2;
-  opacity: 1;
-  filter: drop-shadow(0 0 3px rgba(116, 120, 141, 0.4));
-}
-.sdd-arrow-head-ret {
-  fill: none;
-  stroke: var(--color-text-muted);
-  stroke-width: 1.5;
-}
-
-/* Loop de reintento (judge -> apply) */
-.sdd-msg-loop {
-  fill: none;
-  stroke: var(--color-warning);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
-  opacity: 0.9;
-  /* Glow ámbar base + se refuerza en hover. */
-  filter: drop-shadow(0 0 2px rgba(241, 180, 76, 0.35));
-}
-.sdd-msg-loop:hover {
-  stroke: var(--color-warning);
-  stroke-width: 2.5;
-  opacity: 1;
-  filter: drop-shadow(0 0 5px rgba(241, 180, 76, 0.6));
-}
-.sdd-arrow-head-loop { fill: var(--color-warning); }
-
-/* ============================ ETIQUETAS de mensaje ============================ */
-.sdd-msg-labels text {
-  font-family: var(--font-base);
-  text-anchor: middle;
-}
-.sdd-lbl {
-  fill: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: var(--fw-medium);
-}
-.sdd-lbl-ret {
-  fill: var(--color-text-muted);
-  font-size: 12px;
-  font-style: italic;
-}
-.sdd-lbl-loop {
-  fill: var(--color-warning);
-  font-size: 13px;
-  font-weight: var(--fw-semibold);
-  text-anchor: middle;
-}
-
-/* ============================ FRAGMENTO COMBINADO (loop) ============================ */
-.sdd-frag-box {
-  fill: rgba(241, 180, 76, 0.06);
-  stroke: var(--color-warning);
-  stroke-width: 1.5;
-  stroke-dasharray: 2 0;
-  opacity: 0.9;
-  rx: 4;
-}
-.sdd-frag-tab {
-  fill: var(--color-bg-elevated);
-  stroke: var(--color-warning);
-  stroke-width: 1.5;
-}
-.sdd-frag-kind {
-  fill: var(--color-warning);
-  font-family: var(--font-base);
-  font-size: 13px;
-  font-weight: var(--fw-bold);
-  text-anchor: start;
-}
-.sdd-frag-cond {
-  fill: var(--color-text-secondary);
-  font-family: var(--font-base);
-  font-size: 13px;
-  font-weight: var(--fw-medium);
-  text-anchor: start;
-}
-
-/* ============================ NOTA (modo lite) ============================ */
-.sdd-note-box {
-  fill: var(--color-bg-elevated);
-  stroke: var(--color-text-muted);
-  stroke-width: 1;
-  opacity: 0.92;
-}
-.sdd-note-t {
-  fill: var(--color-text-secondary);
-  font-family: var(--font-base);
-  font-size: 13px;
-  font-weight: var(--fw-semibold);
-  text-anchor: start;
-}
-.sdd-note-sub {
-  fill: var(--color-text-muted);
-  font-weight: var(--fw-normal);
-  font-size: 12px;
-}
-
-/* ============================ MENSAJES DE FASE (foreignObject) ============================ */
-/* El <foreignObject> es el lienzo; el <button> ocupa el 100% y ES la flecha de
-   llamada Orchestrator -> Agente: una barra fina con un acento de grupo a la
-   izquierda (origen) y una cabeza de flecha a la derecha (destino, el Agente).
-   pointer-events sobre el botón => el click llega a modals.js. */
-.sdd-fo { overflow: visible; }
-
-.sdd-phase {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  margin: 0;
+.sdd-pre-step {
   display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+.sdd-pre-step p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.sdd-pre-num {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--color-text-link);
+  color: #fff;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.sdd-pre-arrow {
+  color: var(--color-text-muted);
+  margin: 4px 0 4px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Leyenda de modos ----------------------------------------------------------*/
+.sdd-modes {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  text-align: left;
-  font-family: var(--font-base);
-  color: var(--color-text-primary);
-  /* La "línea" del mensaje: borde inferior = trazo de la flecha */
-  background: linear-gradient(
-    to bottom,
-    transparent calc(100% - 2px),
-    var(--g-color, var(--color-border-light)) calc(100% - 2px)
-  );
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  padding: 0 18px 0 10px;
-  position: relative;
-  transition: background-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    filter var(--transition-fast),
-    transform var(--transition-fast);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
 }
-
-/* Cabeza de flecha del mensaje (apunta al Agente, a la derecha) */
-.sdd-phase::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: -3px;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 8px solid var(--g-color, var(--color-border-light));
-  transition: filter var(--transition-fast);
-}
-
-/* Etiqueta "N. Fase": chip sutil con acento de grupo */
-.sdd-ph-label {
-  display: inline-block;
-  padding: 1px 10px;
-  border-radius: var(--radius-full);
-  background: var(--g-soft, var(--color-bg-hover));
-  color: var(--g-color, var(--color-text-secondary));
+.sdd-modes-label {
   font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-  line-height: 1.6;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-right: var(--space-xs);
+}
+.sdd-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
   white-space: nowrap;
 }
+.sdd-chip-full    { color: var(--color-accent);  border-color: var(--color-accent);  background: var(--color-accent-soft); }
+.sdd-chip-lite    { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
+.sdd-chip-express { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
 
-/* Hover (solo fases clickeables): la línea del mensaje (gradiente del fondo) y
-   su cabeza de flecha se ILUMINAN con el color del grupo (glow), el chip se
-   rellena y hay un leve lift. ------------------------------------------------ */
-.sdd-phase:not(.is-disabled):hover {
+/* Pipeline ------------------------------------------------------------------*/
+.sdd-pipe {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Nodos (fases) conectados por una linea vertical sutil entre ellos */
+.sdd-node-li { position: relative; }
+.sdd-node-li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: 100%;
+  height: 10px;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.sdd-node {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  text-align: left;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--g-color, var(--color-border));
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast), background var(--transition-fast);
+}
+.sdd-node:hover:not(.is-disabled) {
+  border-color: var(--g-color);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
   transform: translateY(-1px);
-  /* Glow del color de grupo sobre toda la barra-mensaje. */
-  filter: drop-shadow(0 0 6px var(--g-color, var(--color-accent)));
 }
-.sdd-phase:not(.is-disabled):hover .sdd-ph-label {
-  background: var(--g-color);
-  color: var(--color-text-inverse);
-  box-shadow: 0 0 10px var(--g-color, var(--color-shadow-md));
-}
-.sdd-phase:not(.is-disabled):active {
-  transform: translateY(0);
-}
-
-.sdd-phase:focus-visible {
-  outline: none;
-}
-.sdd-phase:focus-visible {
-  filter: drop-shadow(0 0 6px var(--g-color, var(--color-accent)));
-}
-.sdd-phase:focus-visible .sdd-ph-label {
-  outline: 3px solid var(--g-color, var(--color-accent));
-  outline-offset: 2px;
-}
-
-/* Fase no seedeada: deshabilitada ------------------------------------------ */
-.sdd-phase.is-disabled,
-.sdd-phase:disabled {
+.sdd-node.is-disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  opacity: 0.45;
-  filter: grayscale(0.4);
 }
 
-/* ============================================================
-   RESPONSIVE
-   En desktop el diagrama entra COMPLETO (preserveAspectRatio meet escala a la
-   caja flex). En mobile, si el ajuste lo deja muy chico, dejamos un ancho
-   mínimo legible y que SOLO el .sdd-diagram scrollee en X (pinch / swipe).
-   El BODY nunca scrollea horizontal.
-   ============================================================ */
-@media (max-width: 760px) {
-  .sdd-flow-page {
-    /* En mobile damos más alto al diagrama: el header colapsa su intro. */
-    height: auto;
-    min-height: calc(100dvh - var(--sdd-reserve));
-  }
-  .sdd-flow-intro {
-    display: none;
-  }
-  .sdd-diagram {
-    padding: var(--space-sm);
-    /* Fallback: scroll horizontal SOLO del diagrama (nunca el body). */
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  /* Ancho mínimo legible: por debajo de esto el SVG deja de encoger y el
-     contenedor (overflow-x:auto) ofrece swipe lateral. height:auto deja que
-     el aspect-ratio del viewBox fije la altura proporcional. */
-  .sdd-svg {
-    width: 760px;
-    height: auto;
-    max-width: none;
-    flex: 0 0 auto;
-  }
+.sdd-node-step {
+  flex: 0 0 auto;
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--g-soft, var(--color-bg-elevated));
+  color: var(--g-color, var(--color-text-secondary));
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.sdd-node-main { flex: 1 1 auto; min-width: 0; }
+.sdd-node-name { display: block; font-weight: 600; }
+.sdd-node-desc {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--color-text-secondary);
+  margin-top: 1px;
+}
+.sdd-node-tags {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  max-width: 240px;
+}
+.sdd-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.sdd-tag-hard    { color: var(--color-danger, #f85149);  border-color: var(--color-danger, #f85149);  background: rgba(248,81,73,0.12); }
+.sdd-tag-gate    { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
+.sdd-tag-lite    { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
+.sdd-tag-express { color: var(--color-warning); border-color: var(--color-warning); background: transparent; }
+
+/* Recuadro del loop (apply -> verify -> judge) ------------------------------*/
+.sdd-loop-open {
+  list-style: none;
+  margin-top: 4px;
+}
+.sdd-loop-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  border: 1px dashed var(--color-warning);
+  border-radius: 8px;
+  padding: 3px 10px;
+}
+/* Banda visual: los nodos del loop comparten un riel izquierdo punteado */
+.sdd-node-li.in-loop { padding-left: 14px; border-left: 2px dashed var(--color-warning); margin-left: 2px; }
+.sdd-loop-close { list-style: none; height: 2px; }
+
+/* Notas (humano-in-the-loop + agente) ---------------------------------------*/
+.sdd-notes {
+  margin-top: var(--space-xl, 28px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm) var(--space-md);
+}
+.sdd-note {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.sdd-note p { margin: 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--color-text-secondary); }
+.sdd-note strong { color: var(--color-text-primary); }
+.sdd-note-ic { flex: 0 0 auto; font-size: 16px; line-height: 1.3; }
+
+@media (max-width: 640px) {
+  .sdd-node { flex-wrap: wrap; }
+  .sdd-node-tags { max-width: 100%; justify-content: flex-start; padding-left: 42px; }
+  .sdd-notes { grid-template-columns: 1fr; }
 }

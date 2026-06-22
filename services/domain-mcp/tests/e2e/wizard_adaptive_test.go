@@ -71,7 +71,7 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 	// Prompt típico de bug — el analyzer infiere bastante.
 	prompt := "URGENTE: producción caída, el endpoint /api/v1/observations falla con 500 al hacer POST"
 
-	d, q, err := svc.StartAdaptive(ctx, prompt, nil)
+	d, q, err := svc.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, d)
 	require.Equal(t, issuebuilder.ModeBugFix, d.Mode)
@@ -137,7 +137,7 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 	require.NoError(t, err)
 
 	prompt := "Bug: al crear una observación nueva el endpoint falla con error 500"
-	d, _, err := svc.StartAdaptive(ctx, prompt, nil)
+	d, _, err := svc.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 
 	env, err := svc.LoadEnvelope(ctx, d.ID)
@@ -163,7 +163,7 @@ func TestE2E_WizardAdaptive_ChatIntentSkipsWizard(t *testing.T) {
 	defer cleanup()
 
 	_, _, err := svc.StartAdaptive(context.Background(),
-		"¿Cómo se configuran las migrations?", nil)
+		"¿Cómo se configuran las migrations?", nil, nil)
 	require.Error(t, err, "intent=chat NO debe arrancar wizard")
 	require.Contains(t, err.Error(), "no requiere wizard")
 }

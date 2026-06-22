@@ -152,7 +152,7 @@ func TestIssueType_Feature_StartsAdaptiveWizard(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Quiero implementar export de runs a CSV con streaming"
-	d, q, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
+	d, q, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, d)
 	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
@@ -225,7 +225,7 @@ func TestIssueType_Refactor_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Necesito refactor del módulo de auth para extract los handlers en archivos separados"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeRefactor, d.Mode)
 }
@@ -239,7 +239,7 @@ func TestIssueType_Doc_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Hay que actualizar la documentación del README con los nuevos endpoints"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeDoc, d.Mode)
 }
@@ -253,7 +253,7 @@ func TestIssueType_RFC_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "RFC: diseño arquitectura del nuevo sistema de cache multi-tier, tradeoffs entre redis vs pgvector"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeRFC, d.Mode)
 }
@@ -280,7 +280,7 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 	require.NoError(t, err)
 
 	prompt := "Necesito un endpoint batch para crear múltiples observaciones simultáneamente"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
 

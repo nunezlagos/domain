@@ -862,6 +862,12 @@ func runServer() {
 		issuebuilderSvc.Attachments = &issuebuilder.AttachmentServiceAdapter{Inner: attachmentService}
 	}
 
+	// Materializacion del wizard: inyectar requirement + issue services al
+	// issuebuilder ya creado para que Commit escriba en sdd_requirements +
+	// issues (antes solo marcaba committed).
+	issuebuilderSvc.ReqSvc = &issuebuilder.RequirementServiceAdapter{Inner: requirementService}
+	issuebuilderSvc.IssueSvc = &issuebuilder.IssueServiceAdapter{Inner: huService}
+
 	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
 
 	api := &handler.API{

@@ -48,6 +48,7 @@ import (
 	"nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/intake"
+	issuesvc "nunezlagos/domain/internal/service/issue"
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
@@ -60,6 +61,7 @@ import (
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	"nunezlagos/domain/internal/service/promptrouter"
+	requirementsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
@@ -246,6 +248,14 @@ func main() {
 	}
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
+	// Materializacion del wizard: requirement + issue services para que Commit
+	// escriba en sdd_requirements + issues (antes solo marcaba committed).
+	issuebuilderSvc.ReqSvc = &issuebuilder.RequirementServiceAdapter{
+		Inner: &requirementsvc.Service{Pool: pools.App, Audit: recorder},
+	}
+	issuebuilderSvc.IssueSvc = &issuebuilder.IssueServiceAdapter{
+		Inner: &issuesvc.Service{Pool: pools.App, Audit: recorder},
+	}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
 	extsyncSvc := &extsync.Service{Pool: pools.App}
 

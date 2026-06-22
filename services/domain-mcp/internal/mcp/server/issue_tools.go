@@ -194,12 +194,18 @@ func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("commit: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{
+	out := map[string]any{
 		"draft_id":     draft.ID.String(),
 		"status":       draft.Status,
 		"committed_at": draft.CommittedAt,
 		"target_path":  draft.TargetPath,
-	})
+	}
+	// Si el Commit materializo el draft en un issue real, devolver su slug + id.
+	if draft.IssueID != nil {
+		out["issue_id"] = draft.IssueID.String()
+		out["issue_slug"] = draft.IssueSlug
+	}
+	return toolResultJSON(out)
 }
 
 func (d *Deps) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

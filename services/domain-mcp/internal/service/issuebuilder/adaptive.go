@@ -24,7 +24,7 @@ type AdaptiveService struct {
 
 // StartAdaptive corre el análisis pipeline sobre el prompt + crea draft
 // + devuelve la primera pregunta (o nil si todo se infirió).
-func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, createdBy *uuid.UUID) (*Draft, *wp.Question, error) {
+func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, createdBy *uuid.UUID, projectID *uuid.UUID) (*Draft, *wp.Question, error) {
 	env, err := a.Analyzer.Analyze(ctx, rawPrompt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("analyze: %w", err)
@@ -40,9 +40,8 @@ func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, c
 		return nil, nil, fmt.Errorf("intent=%s no requiere wizard", intent)
 	}
 
-	// Crear draft estándar + persistir envelope. projectID nil: StartAdaptive
-	// aun no recibe project_id (follow-up si se quiere scopear este path).
-	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy, nil)
+	// Crear draft estándar + persistir envelope, scopeado al proyecto.
+	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy, projectID)
 	if err != nil {
 		return nil, nil, err
 	}

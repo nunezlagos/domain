@@ -81,9 +81,20 @@ func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolR
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register failed: %v", err)), nil
 	}
+	// Auto-enlace: registrar una skill de proyecto la deja USABLE de una. Sin
+	// esto la skill quedaba creada pero no enlazada (project_skills), y el flujo
+	// (fetchRecommendedSkills filtra por LinkedSkillIDs) nunca la usaba. Idempotente.
+	if _, lerr := d.q(ctx).Exec(ctx,
+		`INSERT INTO project_skills (project_id, skill_id)
+		 VALUES ($1, $2) ON CONFLICT (project_id, skill_id) DO NOTHING`,
+		proj.ID, id,
+	); lerr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("register: skill creada pero no se pudo enlazar: %v", lerr)), nil
+	}
 	return toolResultJSON(map[string]any{
 		"id": id.String(), "scope": "project", "project_slug": projSlug,
 		"slug": slug, "name": name, "skill_type": skillType,
+		"linked": true,
 	})
 }
 

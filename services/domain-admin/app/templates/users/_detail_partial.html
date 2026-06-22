@@ -4,18 +4,10 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
 (header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
-{% block detail_title %}{{ user_obj.display_name }}{% endblock %}
+{% block detail_title %}Datos de usuario{% endblock %}
 
 {% block detail_body %}
-  {% comment %} Minimalista: header simple (email + estado), 3 tabs horizontales. {% endcomment %}
-  <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">
-    <code>{{ user_obj.email }}</code>
-    {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
-    {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
-    {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
-    {% endif %}
-  </p>
-
+  {% comment %} Minimalista: 3 tabs horizontales; los datos (incl. estado) van en Informacion. {% endcomment %}
   <div class="htabs">
     <input type="radio" name="utab" id="ut-info" checked>
     <input type="radio" name="utab" id="ut-roles">
@@ -35,6 +27,13 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
             <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
             <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
             <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
+            <tr><th>Estado</th>
+              <td>
+                {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
+                {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
+                {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>{% endif %}
+              </td>
+            </tr>
             <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
             <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
             <tr><th>Contraseña</th>
@@ -128,24 +127,8 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
 {% endblock %}
 
 {% block detail_actions %}
-  <button type="button" class="btn btn-primary"
-          data-action="edit" data-id="{{ user_obj.pk }}">
-    Editar
-  </button>
-  {% if user_obj.is_active %}
-    <button type="button" class="btn btn-warning"
-            data-action="toggle" data-id="{{ user_obj.pk }}">
-      Desactivar
-    </button>
-  {% else %}
-    <button type="button" class="btn btn-success"
-            data-action="toggle" data-id="{{ user_obj.pk }}">
-      Activar
-    </button>
-  {% endif %}
-  <button type="button" class="btn btn-danger"
-          data-action="delete" data-id="{{ user_obj.pk }}"
-          data-name="{{ user_obj.display_name }}">
-    Eliminar
+  <button type="button" class="btn" data-modal-close
+          style="color: var(--color-danger); border: 1px solid var(--color-danger); background: transparent;">
+    Cerrar
   </button>
 {% endblock %}

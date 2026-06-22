@@ -13,97 +13,97 @@
 
 {% block content %}
 {% comment %}
-  Diagrama del pipeline SDD en HTML/CSS (no SVG): el layout en flujo evita el
-  solapamiento de textos/lineas que tenia el diagrama de coordenadas. Cada fase
-  es un <button> clickeable (data-action/data-id/data-base-url) que abre el
-  editor del agent_template via modals.js. Color por grupo (sdd-g-*), badges de
-  modo (lite/express) y de gate (hardspec/gate humano), y recuadro del loop.
+  Diagrama de SECUENCIA del pipeline SDD en HTML/CSS (reemplaza el viejo SVG de
+  coordenadas a mano que solapaba textos). Mismo formato secuencia: 5 lifelines
+  (Usuario/Router/Orchestrator/Agente/Datos), tiempo hacia abajo, flechas entre
+  lifelines (solidas=llamada, punteadas=retorno). Cada mensaje en su propia fila:
+  el layout evita el solapamiento. Las 10 fases son <button> clickeables
+  (data-action/data-id) que abren el editor del agent_template via modals.js.
+  El diagrama escala para entrar en el viewport (igual que el SVG) via fitSeq().
 {% endcomment %}
 <div class="sdd-flow-page">
-
   <header class="sdd-hd">
     <h1 class="sdd-hd-title">Flujo SDD</h1>
-    <p class="sdd-hd-sub">
-      Pipeline de 10 fases. El <strong>project_id</strong> se resuelve al inicio
-      y scopea todo lo demas: reglas, skills, requirements e issues.
-    </p>
+    <div class="sdd-modes">
+      <span class="sdd-modes-label">Modos:</span>
+      <span class="sdd-chip c-full">full &middot; 10 fases</span>
+      <span class="sdd-chip c-lite">lite &middot; explore+apply+verify</span>
+      <span class="sdd-chip c-exp">express &middot; apply+verify</span>
+    </div>
   </header>
 
-  {% comment %} Arranque (antes del pipeline): de donde sale el project_id {% endcomment %}
-  <section class="sdd-pre">
-    <div class="sdd-pre-step">
-      <span class="sdd-pre-num">0</span>
-      <p><strong>session_bootstrap</strong> &mdash; lee el git, resuelve o
-        auto-crea el proyecto y devuelve <code>project_id</code>. Auto-enlaza las
-        skills de plataforma al proyecto.</p>
-    </div>
-    <div class="sdd-pre-arrow" aria-hidden="true">&darr;</div>
-    <div class="sdd-pre-step">
-      <span class="sdd-pre-num">1</span>
-      <p><strong>prompt &rarr; triage</strong> &mdash; el Router clasifica el
-        intent y persiste el intake; el Orchestrator crea el <code>flow_run</code>
-        inyectando las reglas y skills del proyecto.</p>
-    </div>
-  </section>
+  <div class="sdd-diagram">
+    <div class="seq">
+      <div class="actors">
+        <div class="actor">Usuario</div><div class="actor">Router</div>
+        <div class="actor">Orchestrator</div><div class="actor">Agente (LLM)</div><div class="actor">Datos</div>
+      </div>
+      <div class="body">
+        <div class="lifelines"><i class="ll1"></i><i class="ll2"></i><i class="ll3"></i><i class="ll4"></i><i class="ll5"></i></div>
 
-  {% comment %} Leyenda de modos de ejecucion {% endcomment %}
-  <div class="sdd-modes">
-    <span class="sdd-modes-label">Modos de ejecucion</span>
-    <span class="sdd-chip sdd-chip-full">full &middot; las 10 fases</span>
-    <span class="sdd-chip sdd-chip-lite">lite &middot; explore + apply + verify</span>
-    <span class="sdd-chip sdd-chip-express">express &middot; apply + verify</span>
+        <div class="msg"><span class="lbl" style="left:50%">session_bootstrap: git &rarr; resuelve / auto-crea proyecto</span><span class="line to-right" style="left:10%;width:80%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:50%">project_id (+ auto-enlaza skills de plataforma)</span><span class="line ret to-left" style="left:10%;width:80%"></span></div>
+        <div class="msg"><span class="lbl" style="left:20%">prompt (con project_id)</span><span class="line to-right" style="left:10%;width:20%"></span></div>
+        <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake)</span><span class="self" style="left:30%"></span></div>
+        <div class="msg"><span class="lbl" style="left:40%">intent + project_id</span><span class="line to-right" style="left:30%;width:20%"></span></div>
+        <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto</span><span class="line to-right" style="left:50%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:70%">ok</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
+
+        {% with p=pmap.explore %}<div class="msg">{% include "_sdd_phase.html" with p=p step=1 tag="lite" %}</div>{% endwith %}
+        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% with p=pmap.spec %}<div class="msg">{% include "_sdd_phase.html" with p=p step=2 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl" style="left:30%">&#9995; hardspec (obligatorio): revisar el spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:30%">OK o rehacer parte (auditado)</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% with p=pmap.propose %}<div class="msg">{% include "_sdd_phase.html" with p=p step=3 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% with p=pmap.design %}<div class="msg">{% include "_sdd_phase.html" with p=p step=4 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl" style="left:30%">&#9939; gate (manual/hibrido): aprobacion humana</span><span class="line to-left" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:30%">confirm: aprueba / rechaza</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% with p=pmap.tasks %}<div class="msg">{% include "_sdd_phase.html" with p=p step=5 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+
+        <div class="loop"><span class="tag">&#8635; loop &middot; hasta que los tests pasen</span>
+          <div class="exp-band" style="top:6px;bottom:46px"></div>
+          <span class="exp-lbl">nucleo express / lite</span>
+          {% with p=pmap.apply %}<div class="msg">{% include "_sdd_phase.html" with p=p step=6 tag="lite/exp" %}</div>{% endwith %}
+          <div class="msg"><span class="lbl" style="left:80%">itera: crea req/issue/tasks</span><span class="self acc" style="left:70%"></span></div>
+          <div class="msg"><span class="lbl" style="left:80%">crea/persiste (req&middot;issue&middot;tasks)</span><span class="line to-right" style="left:70%;width:20%"></span></div>
+          <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+          {% with p=pmap.verify %}<div class="msg">{% include "_sdd_phase.html" with p=p step=7 tag="lite/exp" %}</div>{% endwith %}
+          <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+          {% with p=pmap.judge %}<div class="msg">{% include "_sdd_phase.html" with p=p step=8 %}</div>{% endwith %}
+          <div class="msg"><span class="lbl ret" style="left:60%">resultado &middot; reintento si falla</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        </div>
+
+        {% with p=pmap.archive %}<div class="msg">{% include "_sdd_phase.html" with p=p step=9 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl" style="left:30%">asistencia: &iquest;omitir tareas? &rarr; re-editar spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl ret" style="left:30%">decision humana</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl" style="left:80%">persiste</span><span class="line to-right" style="left:70%;width:20%"></span></div>
+        {% with p=pmap.onboard %}<div class="msg">{% include "_sdd_phase.html" with p=p step=10 %}</div>{% endwith %}
+        <div class="msg"><span class="lbl ret" style="left:60%">onboarding (doc opcional)</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        <div class="msg"><span class="lbl" style="left:30%">issue implementado</span><span class="line to-left" style="left:10%;width:40%"></span></div>
+      </div>
+    </div>
   </div>
-
-  {% comment %} Pipeline de fases (cada una clickeable) {% endcomment %}
-  <ol class="sdd-pipe">
-    {% for p in phases %}
-    {% if p.loop and p.slug == "sdd-apply" %}<li class="sdd-loop-open" aria-hidden="true"><span class="sdd-loop-tag">&#8635; loop &middot; reintenta hasta que los tests pasen</span></li>{% endif %}
-    <li class="sdd-node-li{% if p.loop %} in-loop{% endif %}">
-      <button type="button"
-              class="sdd-node sdd-g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
-              {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} &middot; {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
-        <span class="sdd-node-step">{{ p.step }}</span>
-        <span class="sdd-node-main">
-          <span class="sdd-node-name">{{ p.name }}</span>
-          <span class="sdd-node-desc">{{ p.desc }}</span>
-        </span>
-        <span class="sdd-node-tags">
-          {% if p.hardspec %}<span class="sdd-tag sdd-tag-hard">hardspec</span>{% endif %}
-          {% if p.gate %}<span class="sdd-tag sdd-tag-gate">gate humano</span>{% endif %}
-          {% if p.lite %}<span class="sdd-tag sdd-tag-lite">lite</span>{% endif %}
-          {% if p.express %}<span class="sdd-tag sdd-tag-express">express</span>{% endif %}
-        </span>
-      </button>
-    </li>
-    {% if p.loop and p.slug == "sdd-judge" %}<li class="sdd-loop-close" aria-hidden="true"></li>{% endif %}
-    {% endfor %}
-  </ol>
-
-  {% comment %} Notas de las interacciones humano-in-the-loop y el agente {% endcomment %}
-  <section class="sdd-notes">
-    <div class="sdd-note">
-      <span class="sdd-note-ic sdd-ic-hard">&#9995;</span>
-      <p><strong>hardspec</strong> (obligatorio): al terminar <em>spec</em> el
-        flujo pausa para que el desarrollador de el OK o pida rehacer una parte;
-        la confirmacion queda auditada.</p>
-    </div>
-    <div class="sdd-note">
-      <span class="sdd-note-ic sdd-ic-gate">&#9939;</span>
-      <p><strong>gate</strong> (manual/hibrido): aprobacion humana entre fases
-        clave (spec/design/apply/judge) via <code>domain_orchestrate_confirm</code>
-        (aprueba = continua / rechaza = aborta).</p>
-    </div>
-    <div class="sdd-note">
-      <span class="sdd-note-ic sdd-ic-loop">&#8635;</span>
-      <p><strong>loop</strong>: apply &rarr; verify &rarr; judge reintenta hasta
-        que los tests Gherkin pasen y el judge no detecte sabotaje.</p>
-    </div>
-    <div class="sdd-note">
-      <span class="sdd-note-ic sdd-ic-agent">&#129302;</span>
-      <p>El <strong>Agente (LLM)</strong> ejecuta cada fase; en <em>apply</em>
-        crea y persiste requirement &middot; issue &middot; tasks, todos
-        scopeados al <code>project_id</code>.</p>
-    </div>
-  </section>
 </div>
+
+<script>
+  // Escala el diagrama para que entre en el alto disponible (igual que el SVG).
+  (function () {
+    function fitSeq() {
+      var box = document.querySelector('.sdd-diagram');
+      var seq = document.querySelector('.seq');
+      if (!box || !seq) return;
+      seq.style.transform = 'none';
+      var s = Math.min(box.clientWidth / seq.offsetWidth, box.clientHeight / seq.offsetHeight, 1);
+      seq.style.transform = 'scale(' + s + ')';
+    }
+    window.addEventListener('resize', fitSeq);
+    window.addEventListener('load', fitSeq);
+    document.addEventListener('DOMContentLoaded', fitSeq);
+    fitSeq();
+  })();
+</script>
 {% endblock %}

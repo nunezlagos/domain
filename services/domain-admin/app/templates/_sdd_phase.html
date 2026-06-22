@@ -1,0 +1,12 @@
+{% comment %}
+  Boton de fase del diagrama de secuencia SDD. Params:
+    p    = dict de la fase (de pmap): group, name, desc, id, seeded
+    step = numero de paso (1..10)
+    tag  = etiqueta de modo opcional (texto plano, ej. "lite", "lite/exp")
+  Clickeable si esta seedeado: abre el editor del agent_template via modals.js.
+{% endcomment %}
+<button type="button"
+        class="ph g-{{ p.group }}{% if not p.seeded %} is-disabled{% endif %}"
+        {% if p.seeded %}data-action="edit" data-id="{{ p.id }}" data-base-url="/plantillas-agentes/" title="{{ p.name }} - {{ p.desc }}"{% else %}disabled title="Fase no seedeada"{% endif %}>
+  <span class="n">{{ step }}</span>{{ p.name }}{% if tag %}<span class="tag">{{ tag }}</span>{% endif %}
+</button>

@@ -104,7 +104,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	agentS := &agentsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
 	lifeS := &lifecycle.Service{Pool: pools.App, Audit: rec}
-	keys := &apikey.PGStore{Pool: pools.Auth}
+	keys := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: "test-field-enc-key"}
 
 	// LLM factory con stub registrado como "ollama" (provider en whitelist del agent service)
 	factory := llm.NewFactory()

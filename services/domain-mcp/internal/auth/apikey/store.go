@@ -19,6 +19,11 @@ import (
 
 var ErrNotFound = errors.New("api key not found")
 
+// ErrNoEncKey se devuelve al emitir/rotar una key cuando la passphrase de
+// cifrado (FieldEncKey, de DOMAIN_FIELD_ENC_KEY) no esta seteada. NO se cae al
+// plaintext como fallback: preferimos fallar antes que persistir la key en claro.
+var ErrNoEncKey = errors.New("api key field encryption not configured (set DOMAIN_FIELD_ENC_KEY)")
+
 // ISSUE-21.6: UUID canónico para single-org. Se usa para poblar
 // APIKeyInfo.OrgID y variables orgID locales ahora que la columna
 // u.organization_id no se selecciona (Fase C).
@@ -27,6 +32,11 @@ var canonicalOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 // PGStore Postgres-backed.
 type PGStore struct {
 	Pool *pgxpool.Pool
+	// FieldEncKey passphrase simetrica para pgcrypto (pgp_sym_encrypt). Se inyecta
+	// desde config (DOMAIN_FIELD_ENC_KEY). Issue/Rotate cifran la key en claro en
+	// key_ciphertext con esta passphrase; si esta vacia, fallan con ErrNoEncKey.
+	// Resolve no la necesita (valida por bcrypt). Mig 000168.
+	FieldEncKey string
 }
 
 // Issue genera nueva key para el user, persiste hash + prefix, retorna plaintext.
@@ -35,18 +45,23 @@ type PGStore struct {
 // el org de una key se deriva de su user (users.organization_id) en Resolve/List.
 func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env string) (plaintext string, keyID uuid.UUID, err error) {
 	_ = orgID
+	if s.FieldEncKey == "" {
+		return "", uuid.Nil, ErrNoEncKey
+	}
 	plaintext, prefix, hash, err := Generate(env)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
-	// key_plaintext se persiste para poder re-mostrar la key en el dashboard
-	// (decision de producto, mig 000164). El bcrypt sigue siendo lo que valida
-	// Resolve; el plaintext es solo para display/copia.
+	// Cifrado at-rest (mig 000168): la key en claro se persiste cifrada en
+	// key_ciphertext via pgp_sym_encrypt(plaintext, passphrase). key_plaintext
+	// queda NULL (ya no se escribe claro). El dashboard la descifra con
+	// pgp_sym_decrypt para mostrarla. El bcrypt (key_hash) sigue siendo lo que
+	// valida Resolve; el ciphertext es solo para display/copia.
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_plaintext)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
+		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
 		 RETURNING id`,
-		userID, hash, prefix, name, plaintext,
+		userID, hash, prefix, name, plaintext, s.FieldEncKey,
 	).Scan(&keyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert api_key: %w", err)
@@ -104,6 +119,9 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 // Rotate genera nueva key, persiste, y revoca la anterior en una transacción.
 // Retorna plaintext de la nueva key.
 func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID uuid.UUID, name, env string) (newPlaintext string, newKeyID uuid.UUID, err error) {
+	if s.FieldEncKey == "" {
+		return "", uuid.Nil, ErrNoEncKey
+	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("begin tx: %w", err)
@@ -116,11 +134,13 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 
+	// Cifrado at-rest (mig 000168): igual que Issue, la nueva key se persiste
+	// cifrada en key_ciphertext; key_plaintext queda NULL.
 	err = tx.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_plaintext)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
+		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
 		 RETURNING id`,
-		userID, hash, prefix, name, newPlaintext,
+		userID, hash, prefix, name, newPlaintext, s.FieldEncKey,
 	).Scan(&newKeyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert new key: %w", err)

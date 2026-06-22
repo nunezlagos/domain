@@ -11,8 +11,12 @@ tabla es `revoked_at` (NO `deleted_at`, que la tabla real NO tiene). Declarar
 `deleted_at` romperia el guard de schema drift (core/tests/test_schema_drift.py).
 
 Columnas reales (core/tests/real_schema.json -> auth_api_keys):
-    id, user_id, key_hash, key_prefix, key_plaintext, name, last_used_at,
-    expires_at, revoked_at, created_at, updated_at, status
+    id, user_id, key_hash, key_prefix, key_plaintext, key_ciphertext, name,
+    last_used_at, expires_at, revoked_at, created_at, updated_at, status
+
+Desde la mig 000168 la key NUEVA se guarda cifrada at-rest en key_ciphertext
+(BYTEA, pgcrypto/pgp_sym). key_plaintext solo queda como fallback para keys
+viejas (creadas antes de la mig). El detalle descifra con pgp_sym_decrypt.
 
 NOTA: organization_id fue dropeada; NO existe en la tabla real, NO se declara.
 """
@@ -50,10 +54,16 @@ class ApiKey(BaseModel):
     )
     key_hash = models.BinaryField()
     key_prefix = models.CharField(max_length=20)
-    # key_plaintext: la key en claro, guardada para poder mostrarla de nuevo en
-    # el detalle (decision de producto, mig 000164). Nullable: keys viejas
-    # creadas antes de esta columna no la tienen.
+    # key_plaintext: la key en claro. DEPRECADA para escritura desde la mig
+    # 000168: las keys NUEVAS van cifradas en key_ciphertext, esta queda NULL.
+    # Solo se lee como fallback para keys viejas que la tienen poblada.
     key_plaintext = models.TextField(null=True, blank=True)
+    # key_ciphertext: la key cifrada at-rest con pgcrypto/pgp_sym (mig 000168).
+    # BYTEA -> BinaryField. NO se lee/escribe como bytes crudos desde el ORM: se
+    # cifra/descifra con pgp_sym_encrypt/decrypt en SQL (services.create_api_key
+    # y get_api_key_plaintext), porque la passphrase vive fuera de la DB
+    # (DOMAIN_FIELD_ENC_KEY). Nullable: keys viejas no la tienen.
+    key_ciphertext = models.BinaryField(null=True, blank=True)
     name = models.CharField(max_length=255)
     last_used_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)

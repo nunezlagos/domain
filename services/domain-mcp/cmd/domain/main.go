@@ -793,7 +793,7 @@ func runServer() {
 		scheduler.Run(leaderCtx)
 	})
 	defer schedCancel()
-	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
+	apiKeyStore := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
 	otpUserLookup := &otpUserLookupAdapter{pool: pools.Auth}
 	otpService := &otp.Service{
 		Pool:  pools.Auth,

@@ -28,11 +28,25 @@ from django.views.decorators.http import require_http_methods
 from core.auth import require_auth
 from core.views import MaintainerViews
 from maintainers.apikeys.models import ApiKey
-from maintainers.apikeys.services import list_api_keys
+from maintainers.apikeys.services import get_api_key_plaintext, list_api_keys
 
 from . import services
 from .forms import UserForm, UserRoleAssignForm
 from .models import User
+
+
+def _decrypt_api_keys(user_id) -> list:
+    """Lista las API keys del usuario con la key en claro lista para mostrar.
+
+    Cada instancia trae key_plaintext sobreescrito con el valor descifrado de
+    key_ciphertext (pgp_sym_decrypt) o el fallback viejo (mig 000168). Se asigna
+    al atributo (managed=False, NO persiste) para que el template del detalle de
+    usuario siga usando k.key_plaintext sin cambios.
+    """
+    keys = list(ApiKey.objects.filter(user_id=user_id).order_by("-created_at"))
+    for k in keys:
+        k.key_plaintext = get_api_key_plaintext(k.pk)
+    return keys
 
 
 class UserViews(MaintainerViews):
@@ -72,9 +86,7 @@ class UserViews(MaintainerViews):
             "available_roles": services.list_available_roles(),
             "assign_form": UserRoleAssignForm(user=instance),
             # API keys del usuario, para la seccion "API Keys" del modal de detalle.
-            "api_keys": list(
-                ApiKey.objects.filter(user_id=instance.pk).order_by("-created_at")
-            ),
+            "api_keys": _decrypt_api_keys(instance.pk),
         }
 
 

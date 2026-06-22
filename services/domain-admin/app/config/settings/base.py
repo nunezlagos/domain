@@ -82,6 +82,13 @@ DATABASES = {
 }
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
+# Cifrado at-rest de campos sensibles (pgcrypto/pgp_sym). Passphrase compartida
+# con domain-mcp: DEBE ser identica y estar en el .env de AMBOS servicios bajo el
+# mismo nombre DOMAIN_FIELD_ENC_KEY. La usa el mantenedor de API keys para cifrar
+# (create_api_key) y descifrar (get_api_key_plaintext) la key en claro via SQL.
+# Vacia = no se pueden crear/mostrar keys cifradas (el service falla con error).
+FIELD_ENC_KEY = os.environ.get("DOMAIN_FIELD_ENC_KEY", "")
+
 # HU-47.2: static files con WhiteNoise (servido por gunicorn directo).
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]

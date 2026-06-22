@@ -130,7 +130,7 @@ func main() {
 	}
 	defer pools.Close()
 
-	keys := &apikey.PGStore{Pool: pools.Auth}
+	keys := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
 	principal, err := keys.Resolve(ctx, apiKey)
 	if err != nil {
 		// issue-01.9: enforcement. Key invalida o revocada.

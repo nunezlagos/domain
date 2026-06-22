@@ -63,6 +63,13 @@ type Config struct {
 	OTelSampleRatio     float64
 	OTelServiceName     string
 
+	// Cifrado de campos at-rest (pgcrypto / pgp_sym). Passphrase simetrica que
+	// usan Issue/Rotate de auth_api_keys para cifrar la key en claro
+	// (key_ciphertext) y el dashboard para descifrarla. DEBE estar tambien en el
+	// env de domain-admin (Django) bajo el mismo nombre. Vacio = no se puede
+	// emitir keys cifradas (Issue/Rotate fallan con error claro).
+	FieldEncKey string
+
 	// Seeders (issue-01.7)
 	SeedOnBoot bool
 
@@ -125,6 +132,8 @@ func Load() (*Config, error) {
 		OTelExporterProto:   getEnv("DOMAIN_OTEL_EXPORTER_OTLP_PROTOCOL", "grpc"),
 		OTelSampleRatio:     getEnvFloat("DOMAIN_OTEL_SAMPLE_RATIO", 1.0),
 		OTelServiceName:     getEnv("DOMAIN_OTEL_SERVICE_NAME", "domain-mcp"),
+
+		FieldEncKey: getEnv("DOMAIN_FIELD_ENC_KEY", ""),
 
 		SeedOnBoot: getEnvBool("DOMAIN_SEED_ON_BOOT", true),
 

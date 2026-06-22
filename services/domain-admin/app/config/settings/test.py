@@ -25,6 +25,10 @@ TEST_RUNNER = "core.tests.runner.ManagedModelTestRunner"
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
+# Passphrase de cifrado at-rest para los tests (en prod viene del env
+# DOMAIN_FIELD_ENC_KEY). Sin esto, create_api_key/get_api_key_plaintext fallan.
+FIELD_ENC_KEY = "test-field-enc-key"
+
 # En prod la sesion es signed_cookies; el helper client.session de los tests no
 # persiste bien con ese backend. Usamos sesion en DB solo en test para poder
 # setear el flag `authenticated` de forma fiable.

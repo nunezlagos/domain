@@ -68,7 +68,7 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 
 	// apikey store usa AuthPool: Resolve hace lookup global de auth_api_keys por
 	// prefix (no conoce org_id aun) y necesita atravesar RLS.
-	keys := &apikey.PGStore{Pool: authPool}
+	keys := &apikey.PGStore{Pool: authPool, FieldEncKey: "test-field-enc-key"}
 
 	searchS := &searchsvc.Service{Pool: pool}
 	api := &handler.API{

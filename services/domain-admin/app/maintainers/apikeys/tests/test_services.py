@@ -56,8 +56,20 @@ class CreateApiKeyTests(MaintainerTestCase):
         self.assertTrue(bcrypt.checkpw(secret.encode(), bytes(api_key.key_hash)))
         # El prefijo persistido es el visible del secreto (primeros 16 chars).
         self.assertEqual(api_key.key_prefix, secret[:16])
-        # El plaintext queda guardado para re-mostrarlo.
-        self.assertEqual(api_key.key_plaintext, secret)
+        # Cifrado at-rest (mig 000168): key_plaintext NO se escribe en claro;
+        # el secreto se recupera descifrando key_ciphertext (pgp_sym_decrypt).
+        api_key.refresh_from_db()
+        self.assertIsNone(api_key.key_plaintext)
+        self.assertEqual(services.get_api_key_plaintext(api_key.pk), secret)
+
+    def test_get_plaintext_fallback_a_key_vieja(self):
+        # Keys viejas (pre-mig): sin ciphertext pero con key_plaintext en claro.
+        owner = make_user("legacy@example.com")
+        ak = ApiKey.objects.create(
+            user=owner, name="Legacy", key_prefix="domk_live_legacy",
+            key_hash=b"x", key_plaintext="domk_live_clarovieja", status="active",
+        )
+        self.assertEqual(services.get_api_key_plaintext(ak.pk), "domk_live_clarovieja")
 
     def test_nombre_vacio_falla(self):
         owner = make_user("c2@example.com")

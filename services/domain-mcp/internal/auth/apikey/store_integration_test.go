@@ -49,7 +49,9 @@ func setupKeyStore(t *testing.T) (*PGStore, uuid.UUID, uuid.UUID, func()) {
 		`INSERT INTO users (organization_id, email, name, role)
 		 VALUES ($1, 'owner@acme.com', 'Owner', 'owner') RETURNING id`, orgID).Scan(&userID))
 
-	return &PGStore{Pool: pool}, orgID, userID, func() {
+	// FieldEncKey de test: Issue/Rotate cifran key_ciphertext con pgcrypto
+	// (mig 000168 crea la extension en la DB de test).
+	return &PGStore{Pool: pool, FieldEncKey: "test-field-enc-key"}, orgID, userID, func() {
 		pool.Close()
 		_ = pgC.Terminate(ctx)
 	}

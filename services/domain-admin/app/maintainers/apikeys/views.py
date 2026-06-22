@@ -93,6 +93,11 @@ class ApiKeyViews(MaintainerViews):
         }
 
     def detail_context(self, instance) -> dict:
+        # La key en claro para mostrarla/copiarla sale descifrada de
+        # key_ciphertext (pgp_sym_decrypt) con fallback al key_plaintext viejo. Se
+        # sobreescribe el atributo en la instancia (managed=False, NO persiste)
+        # para que el template siga usando apikey_obj.key_plaintext sin cambios.
+        instance.key_plaintext = services.get_api_key_plaintext(instance.pk)
         return {"apikey_obj": instance, "object": instance}
 
 

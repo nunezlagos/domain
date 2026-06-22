@@ -15,11 +15,26 @@ import base64
 import secrets
 
 import bcrypt
-from django.db import transaction
+from django.conf import settings
+from django.db import connection, transaction
 
 from core.service import MaintainerService
 
 from .models import ApiKey
+
+
+def _field_enc_key() -> str:
+    """Passphrase de cifrado at-rest (DOMAIN_FIELD_ENC_KEY via settings).
+
+    Compartida con domain-mcp; DEBE ser identica en ambos .env. Si esta vacia no
+    se puede cifrar/descifrar: fallamos antes que escribir/leer en claro.
+    """
+    key = getattr(settings, "FIELD_ENC_KEY", "") or ""
+    if not key:
+        raise ApiKeyError(
+            "Cifrado de API keys no configurado: falta DOMAIN_FIELD_ENC_KEY en el env."
+        )
+    return key
 
 
 # Error de dominio (la view lo traduce a messages.error).
@@ -104,17 +119,70 @@ def create_api_key(
     if ApiKey.objects.filter(name=name).exists():
         raise ApiKeyError(f"Ya existe una API Key con nombre '{name}'.")
 
+    # La passphrase se valida ANTES de generar/crear nada: si no esta, abortamos
+    # sin tocar la DB (no queremos una key a medio crear).
+    enc_key = _field_enc_key()
+
     full, prefix, key_hash = _generate_secret()
+    # key_plaintext queda NULL (mig 000168): ya no se escribe la key en claro.
     api_key = ApiKey.objects.create(
         user=user,
         name=name,
         key_prefix=prefix,
         key_hash=key_hash,
-        key_plaintext=full,
         expires_at=expires_at,
         status=status,
     )
+    # Cifrado at-rest: key_ciphertext = pgp_sym_encrypt(full, passphrase). Raw SQL
+    # porque la columna es BYTEA y el cifrado lo hace Postgres (pgcrypto), no el
+    # ORM. Va dentro del mismo @transaction.atomic que el create de arriba.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE auth_api_keys SET key_ciphertext = pgp_sym_encrypt(%s, %s) "
+            "WHERE id = %s",
+            [full, enc_key, str(api_key.pk)],
+        )
     return api_key, full
+
+
+def get_api_key_plaintext(api_key_id: str) -> str | None:
+    """Devuelve la key en claro descifrada, o None si no hay nada que mostrar.
+
+    Prioridad:
+      1) key_ciphertext (keys nuevas, mig 000168): pgp_sym_decrypt(..., passphrase).
+      2) key_plaintext (fallback keys viejas creadas antes de la mig).
+      3) None (solo se vio el prefijo; nunca se guardo el secreto).
+
+    El descifrado lo hace Postgres (pgcrypto) con la passphrase del env; la key
+    nunca se persiste descifrada.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT key_ciphertext IS NOT NULL, key_plaintext FROM auth_api_keys "
+            "WHERE id = %s",
+            [str(api_key_id)],
+        )
+        row = cursor.fetchone()
+    if row is None:
+        return None
+    has_ciphertext, plaintext = row
+    if has_ciphertext:
+        # Descifrado AISLADO en su propio savepoint: si la passphrase no coincide
+        # (ej. tras rotar DOMAIN_FIELD_ENC_KEY) o falta, pgp_sym_decrypt lanza error
+        # de DB. Lo capturamos y devolvemos None: el detalle del usuario descifra
+        # varias keys en loop, y un error NO debe tumbar (500) toda la pagina.
+        try:
+            with transaction.atomic(), connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pgp_sym_decrypt(key_ciphertext, %s)::text "
+                    "FROM auth_api_keys WHERE id = %s",
+                    [_field_enc_key(), str(api_key_id)],
+                )
+                return cursor.fetchone()[0]
+        except Exception:
+            return None
+    # Fallback: key vieja en claro (puede ser None tambien).
+    return plaintext
 
 
 @transaction.atomic

@@ -532,37 +532,26 @@ textarea.form-control {
 .ms-option:hover { background: var(--color-bg-surface); }
 .ms-option input { margin: 0; cursor: pointer; }
 
-/* Detalle de usuario: cabecera + tabs verticales (CSS-only via radios) */
-.vuser-head { display: flex; gap: var(--space-md); align-items: center; margin-bottom: var(--space-md); }
-.vuser-avatar {
-  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
-  background: var(--color-info-soft); color: var(--color-info);
-  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;
+/* Detalle de usuario: tabs HORIZONTALES arriba (CSS-only via radios), minimalista. */
+.htabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.htabs-nav {
+  display: flex; gap: 2px; border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-md);
 }
-.vtabs { display: grid; grid-template-columns: 170px 1fr; gap: var(--space-md); align-items: start; }
-.vtabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
-.vtabs-nav {
-  grid-column: 1; display: flex; flex-direction: column; gap: 4px;
-  border-right: 1px solid var(--color-border); padding-right: var(--space-sm);
-}
-.vtabs-nav label {
-  padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+.htabs-nav label {
+  padding: 8px 14px; cursor: pointer; font-size: 13px;
   color: var(--color-text-secondary);
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 6px;
 }
-.vtabs-nav label:hover { background: var(--color-bg-elevated); }
+.htabs-nav label:hover { color: var(--color-text-primary); }
 .vtab-count { background: var(--color-bg-elevated); border-radius: 999px; padding: 0 7px; font-size: 11px; }
-.vtabs-body { grid-column: 2; min-width: 0; }
 .vpane { display: none; }
-#ut-info:checked ~ .vtabs-nav label[for="ut-info"],
-#ut-roles:checked ~ .vtabs-nav label[for="ut-roles"],
-#ut-keys:checked ~ .vtabs-nav label[for="ut-keys"] {
-  background: var(--color-info-soft); color: var(--color-info); font-weight: 600;
+#ut-info:checked ~ .htabs-nav label[for="ut-info"],
+#ut-roles:checked ~ .htabs-nav label[for="ut-roles"],
+#ut-keys:checked ~ .htabs-nav label[for="ut-keys"] {
+  color: var(--color-info); border-bottom-color: var(--color-info); font-weight: 600;
 }
-#ut-info:checked ~ .vtabs-body .vpane-info,
-#ut-roles:checked ~ .vtabs-body .vpane-roles,
-#ut-keys:checked ~ .vtabs-body .vpane-keys { display: block; }
-@media (max-width: 560px) {
-  .vtabs { grid-template-columns: 1fr; }
-  .vtabs-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; padding-right: 0; }
-}
+#ut-info:checked ~ .htabs-body .vpane-info,
+#ut-roles:checked ~ .htabs-body .vpane-roles,
+#ut-keys:checked ~ .htabs-body .vpane-keys { display: block; }

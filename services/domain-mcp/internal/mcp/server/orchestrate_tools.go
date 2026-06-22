@@ -49,6 +49,9 @@ func toolOrchestrate() mcp.Tool {
 		mcp.WithString("project_id",
 			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). Scopea el flow_run y la cadena SDD/TDD al proyecto. Si se omite, la corrida queda sin proyecto."),
 		),
+		mcp.WithString("exec_mode",
+			mcp.Description("Modo de ejecución: auto (corre sin pausar), manual (pausa y pide aprobación tras CADA fase vía domain_orchestrate_confirm), hybrid (pausa solo en fases clave: spec/design/apply/judge). Default: auto. Preguntale al usuario al inicio qué modo quiere."),
+		),
 	)
 }
 
@@ -140,6 +143,7 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		OrganizationID:  orgID,
 		UserID:          userID,
 		ProjectID:       projectID,
+		ExecMode:        req.GetString("exec_mode", ""),
 		RawText:         rawText,
 		Mode:            orchsvc.Mode(modeStr),
 		StartingPhase:   orchsvc.PhaseSlug(startingPhase),

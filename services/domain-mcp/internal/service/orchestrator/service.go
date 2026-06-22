@@ -463,6 +463,11 @@ func (s *Service) validate(in OrchestrateInput) error {
 	if in.Mode != "" && !in.Mode.IsValid() {
 		return ErrInvalidMode
 	}
+	switch in.ExecMode {
+	case "", "auto", "manual", "hybrid":
+	default:
+		return ErrInvalidExecMode
+	}
 	if in.Mode == ModeAsync && in.ExpressMaxLines > 0 {
 		// ExpressMaxLines>0 sólo tiene sentido para Express. Si el caller
 		// pidió async con ExpressMaxLines, es la combinación D6.

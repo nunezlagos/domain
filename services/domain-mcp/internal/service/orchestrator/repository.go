@@ -107,6 +107,7 @@ type FlowRunRow struct {
 	ProjectID      uuid.UUID
 	FlowID         uuid.UUID
 	Status         string
+	ExecMode       string
 	Cursor         map[string]any
 	StartedAt      *time.Time
 	FinishedAt     *time.Time
@@ -137,6 +138,7 @@ type FlowRunInsert struct {
 	FlowID          uuid.UUID
 	TriggeredBy     uuid.UUID
 	Status          string
+	ExecMode        string
 	Inputs          map[string]any
 	Metadata        map[string]any
 	StartedAt       time.Time
@@ -235,15 +237,19 @@ func (r *pgRepository) CreateFlowRun(ctx context.Context, in FlowRunInsert) erro
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
+	execMode := in.ExecMode
+	if execMode == "" {
+		execMode = "auto"
+	}
 	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
-	// project_id nullable (scoping por proyecto, mig 000161).
+	// project_id nullable (mig 000161) + exec_mode (mig 000162).
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO flow_runs
 		  (id, flow_id, project_id, triggered_by, trigger_type, status,
-		   inputs, cursor, started_at)
-		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8)`,
+		   exec_mode, inputs, cursor, started_at)
+		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8,$9)`,
 		in.ID, in.FlowID, nullUUID(in.ProjectID), nullUUID(in.TriggeredBy),
-		in.Status, inputsJSON, metadataJSON, in.StartedAt)
+		in.Status, execMode, inputsJSON, metadataJSON, in.StartedAt)
 	if err != nil {
 		return fmt.Errorf("insert flow_run: %w", err)
 	}
@@ -260,9 +266,10 @@ func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRo
 	)
 	// ISSUE-21.6: organization_id omitido del SELECT. project_id nullable.
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, flow_id, project_id, status, cursor, started_at, finished_at
+		SELECT id, flow_id, project_id, status, COALESCE(exec_mode,'auto'),
+		       cursor, started_at, finished_at
 		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&row.ID, &row.FlowID, &projectID, &row.Status,
+	).Scan(&row.ID, &row.FlowID, &projectID, &row.Status, &row.ExecMode,
 		&cursorRaw, &startedAt, &finishedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -521,6 +528,7 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 		FlowID:         flowID,
 		TriggeredBy:    in.UserID,
 		Status:         "pending",
+		ExecMode:       in.ExecMode,
 		Inputs:         map[string]any{"raw_text": in.RawText},
 		Metadata: map[string]any{
 			"orchestrator_run_id": orchestratorRunID.String(),

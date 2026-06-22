@@ -260,6 +260,18 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
 			}
 
+			// Gate por fase según exec_mode (manual = cada fase; hybrid = fases
+			// clave). Reusa el mismo bloqueo + domain_orchestrate_confirm que D1.
+			if !out.RequiresConfirm && requiresPhaseGate(flowRun.ExecMode, nextStep.StepKey) {
+				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
+					"phase gate ("+flowRun.ExecMode+"): aprobación requerida para "+nextStep.StepKey); err != nil {
+					return nil, fmt.Errorf("mark next blocked (gate): %w", err)
+				}
+				out.RequiresConfirm = true
+				out.ConfirmMessage = "Fase '" + nextStep.StepKey + "' requiere tu aprobación (modo " + flowRun.ExecMode + "). Revisá el resultado y llamá domain_orchestrate_confirm(confirmed=true) para continuar, o false para abortar."
+				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
+			}
+
 			// D3 auto-skill: recomendar skills para el próximo step
 			// si tiene skill_threshold configurado.
 			threshold := readFloat(nextStep.Inputs["skill_threshold"], 0)
@@ -284,6 +296,25 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 //
 // El cliente IDE puede pasar lines_changed (count) en el output si lo
 // tiene; si no, sólo evaluamos files_changed > 1 (multi-file).
+// hybridGatePhases son las fases donde una decisión humana cambia el rumbo;
+// en modo "hybrid" el flujo pausa solo en estas.
+var hybridGatePhases = map[string]bool{
+	"sdd-spec": true, "sdd-design": true, "sdd-apply": true, "sdd-judge": true,
+}
+
+// requiresPhaseGate decide si la próxima fase debe pausar para aprobación
+// humana según el modo de ejecución de la corrida.
+func requiresPhaseGate(execMode, nextPhaseSlug string) bool {
+	switch execMode {
+	case "manual":
+		return true
+	case "hybrid":
+		return hybridGatePhases[nextPhaseSlug]
+	default: // "auto" o vacío
+		return false
+	}
+}
+
 func shouldRequireConfirm(step *FlowRunStepRow, output map[string]any) bool {
 	if step.StepKey != "sdd-apply" {
 		return false

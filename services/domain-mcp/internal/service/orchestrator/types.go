@@ -87,6 +87,12 @@ type OrchestrateInput struct {
 	// conversación). uuid.Nil = sin scope (compat durante la ventana de deploy).
 	ProjectID uuid.UUID
 
+	// ExecMode controla el pausado entre fases: "auto" (corre todo), "manual"
+	// (pausa y pide aprobación tras CADA fase), "hybrid" (pausa solo en fases
+	// clave: spec/design/apply/judge). Vacío => "auto". El gate reusa el
+	// confirm existente (domain_orchestrate_confirm).
+	ExecMode string
+
 	// RawText es el prompt libre del usuario (después de PromptRouter
 	// classification). El orquestador NO re-clasifica.
 	RawText string

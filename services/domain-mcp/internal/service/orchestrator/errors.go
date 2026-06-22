@@ -21,6 +21,9 @@ var (
 	// ErrInvalidMode el Mode no está en {express, full, solo, detect, async}.
 	ErrInvalidMode = errors.New("invalid orchestrator mode")
 
+	// ErrInvalidExecMode el ExecMode no está en {auto, manual, hybrid}.
+	ErrInvalidExecMode = errors.New("invalid exec_mode (auto|manual|hybrid)")
+
 	// ErrEmptyRawText el caller no proveyó prompt. El orquestador no inventa.
 	ErrEmptyRawText = errors.New("orchestrator requires non-empty raw_text")
 

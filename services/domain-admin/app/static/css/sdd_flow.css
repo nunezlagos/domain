@@ -18,6 +18,17 @@
   margin: 0 auto;
   overflow: hidden;
 }
+/* Card contenedor (estilo mantenedores: bordes redondeados + sombra abajo/
+   derecha, de la clase .card). Llena el alto y deja scrollear el diagrama
+   adentro. */
+.sdd-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Header: titulo a la izquierda, leyenda de modos a la derecha (misma linea) */
 .sdd-hd {
   flex: 0 0 auto;

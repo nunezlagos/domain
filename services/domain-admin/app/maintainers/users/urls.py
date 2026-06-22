@@ -22,4 +22,5 @@ urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="user_id") + [
     # Consolidacion: API Keys (modal de gestion) + invitacion (preview) viven aqui.
     path("api-keys/", views.apikeys_modal, name="apikeys_modal"),
     path("<uuid:user_id>/invitar/", views.invite_preview, name="invite_preview"),
+    path("export/", views.export_users, name="export"),
 ]

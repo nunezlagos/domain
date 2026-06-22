@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
@@ -63,10 +63,31 @@ class UserViews(MaintainerViews):
             "hashed_password": form.hashed_password(),
         }
 
+    # --- list con filtros multi-select (rol/estado). Guardamos el request para
+    #     que do_list/list_context lean los getlist; el resto lo arma core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
+    def do_list(self, search: str, page: int) -> dict:
+        req = getattr(self, "_list_request", None)
+        roles = req.GET.getlist("role") if req else []
+        statuses = req.GET.getlist("status") if req else []
+        return services.list_users(
+            search=search, page=page, per_page=self.per_page,
+            roles=roles, statuses=statuses,
+        )
+
     # --- contextos: los templates de users usan `user_obj` (no `object`).
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Usuarios"
+        req = getattr(self, "_list_request", None)
+        # Opciones + seleccion actual para el container de filtros.
+        ctx["role_options"] = services.list_role_options()
+        ctx["status_options"] = User.STATUS_CHOICES
+        ctx["selected_roles"] = req.GET.getlist("role") if req else []
+        ctx["selected_statuses"] = req.GET.getlist("status") if req else []
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -168,6 +189,21 @@ def apikeys_modal(request):
         "users/_apikeys_modal.html",
         {"api_keys": data["api_keys"], "total": data["total"]},
     )
+
+
+def export_users(request):
+    """Export CSV (consolidado, abre en Excel) de los usuarios filtrados.
+    Respeta los filtros activos: q (busqueda), role[], status[] (multi-select)."""
+    if (redir := require_auth(request)):
+        return redir
+    csv_data = services.export_users_csv(
+        search=(request.GET.get("q") or "").strip(),
+        roles=request.GET.getlist("role"),
+        statuses=request.GET.getlist("status"),
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="usuarios.csv"'
+    return resp
 
 
 @require_http_methods(["GET"])

@@ -33,15 +33,57 @@ class UserService(MaintainerService):
 _service = UserService()
 
 
-def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista usuarios con busqueda + paginacion.
+def _filtered_user_qs(roles=None, statuses=None):
+    """Queryset de User filtrado por rol y/o estado (multi-select). Listas vacias
+    = sin filtro. Se pasa como qs base a MaintainerService.list (que suma search)."""
+    qs = User.objects.all()
+    if roles:
+        qs = qs.filter(role__in=roles)
+    if statuses:
+        qs = qs.filter(status__in=statuses)
+    return qs
 
-    Delega en MaintainerService.list y renombra la clave `items` -> `users`
-    para no romper el contrato del template/tests existentes.
+
+def list_users(search: str = "", page: int = 1, per_page: int = 20,
+               roles=None, statuses=None) -> dict:
+    """Lista usuarios con busqueda + filtros (rol/estado) + paginacion.
+
+    Delega en MaintainerService.list (pasando el qs ya filtrado) y renombra la
+    clave `items` -> `users` para no romper el contrato del template/tests.
     """
-    data = _service.list(search=search, page=page, per_page=per_page)
+    data = _service.list(qs=_filtered_user_qs(roles, statuses),
+                         search=search, page=page, per_page=per_page)
     data["users"] = data.pop("items")
     return data
+
+
+def export_users_csv(search: str = "", roles=None, statuses=None) -> str:
+    """CSV consolidado (compatible con Excel) de los usuarios que matchean los
+    filtros activos (rol/estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_user_qs(roles, statuses)
+    if search:
+        qs = qs.filter(Q(email__icontains=search) | Q(name__icontains=search))
+    qs = qs.distinct().order_by("email")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Email", "Nombre", "Rol", "Estado", "RUT", "Ultimo acceso", "Creado"])
+    for u in qs:
+        w.writerow([
+            u.email, u.name, u.role, u.get_status_display(), u.rut,
+            u.last_login_at.strftime("%Y-%m-%d %H:%M") if u.last_login_at else "",
+            u.created_at.strftime("%Y-%m-%d %H:%M") if u.created_at else "",
+        ])
+    return buf.getvalue()
+
+
+def list_role_options() -> list[str]:
+    """Roles distintos en uso (para el multi-select del filtro)."""
+    return sorted(r for r in User.objects.values_list("role", flat=True).distinct() if r)
 
 
 def get_list_signal() -> dict:

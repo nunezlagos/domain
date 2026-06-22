@@ -38,12 +38,48 @@ PREVIEW solo en Users; si gusta, se sube a list_base para todos los mantenedores
     </div>
   </div>
 
-  {% comment %} Filtro {% endcomment %}
-  <form method="get" role="search">
-    <label class="form-label" for="q">Buscar</label>
-    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
-           placeholder="Email o nombre..." autocomplete="off" data-search-input>
-  </form>
+  {% comment %} Container de filtros: color distinto al fondo del card, radius leve
+     + sombrita. Multi-select rol/estado, buscar, y export a Excel (CSV). {% endcomment %}
+  <div style="background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+              border-radius: 10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+              padding: var(--space-md); display: flex; gap: var(--space-md);
+              align-items: flex-end; flex-wrap: wrap;">
+    <div>
+      <label class="form-label" for="f-role">Rol</label>
+      <select multiple data-filter name="role" id="f-role" class="form-control form-select"
+              size="3" style="min-width: 150px;">
+        {% for r in role_options %}
+          <option value="{{ r }}" {% if r in selected_roles %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label" for="f-status">Estado</label>
+      <select multiple data-filter name="status" id="f-status" class="form-control form-select"
+              size="3" style="min-width: 150px;">
+        {% for val, lbl in status_options %}
+          <option value="{{ val }}" {% if val in selected_statuses %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex: 1 1 220px;">
+      <label class="form-label" for="q">Buscar</label>
+      <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+             placeholder="Email o nombre..." autocomplete="off" data-search-input>
+    </div>
+    <div>
+      <button type="button" class="btn" data-export="/usuarios/export/"
+              style="color: var(--color-success); border: 1px solid var(--color-success); background: var(--color-success-soft);"
+              title="Exportar consolidado a Excel (CSV)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+        </svg>
+        Excel
+      </button>
+    </div>
+  </div>
 
   {% comment %} Tabla (mismos data-attrs que consume maintainer.js) {% endcomment %}
   <div id="users-table-area"

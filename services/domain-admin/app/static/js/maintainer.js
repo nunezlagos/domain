@@ -41,16 +41,53 @@
     var paused = false; // se pausa mientras hay un modal abierto
 
     // Construir URL para fetch de la tabla (incluye q + page + fragment)
+    function collectFilters(params) {
+      // Filtros adicionales [data-filter] (ej. multi-select rol/estado). El name
+      // del control es el param; multi-select agrega un valor por opcion elegida.
+      document.querySelectorAll('[data-filter]').forEach(function (el) {
+        var name = el.getAttribute('name') || el.dataset.filter;
+        if (!name) return;
+        if (el.multiple) {
+          Array.prototype.forEach.call(el.selectedOptions, function (o) {
+            if (o.value) params.append(name, o.value);
+          });
+        } else if (el.value) {
+          params.set(name, el.value);
+        }
+      });
+    }
+
     function buildFetchURL() {
       var params = new URLSearchParams();
       params.set('fragment', 'table');
       if (searchInput && searchInput.value.trim()) {
         params.set('q', searchInput.value.trim());
       }
+      collectFilters(params);
       var page = new URLSearchParams(window.location.search).get('page');
       if (page) params.set('page', page);
       return window.location.pathname + '?' + params.toString();
     }
+
+    // Filtros [data-filter]: al cambiar, refrescan la tabla (server-side) y
+    // resetean a pagina 1. El boton [data-export] descarga el CSV con los
+    // mismos filtros activos (q + role[] + status[]).
+    document.querySelectorAll('[data-filter]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        refreshTable();
+      });
+    });
+    document.querySelectorAll('[data-export]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var params = new URLSearchParams();
+        if (searchInput && searchInput.value.trim()) params.set('q', searchInput.value.trim());
+        collectFilters(params);
+        window.location = btn.dataset.export + '?' + params.toString();
+      });
+    });
 
     // Fetch y reemplazar el contenido de la tabla (server-side render)
     async function refreshTable() {

@@ -1,0 +1,71 @@
+{% comment %}
+Modal "Skills del proyecto" (gestión project_skills). Se renderiza dentro de
+#modal-dynamic-content. Enlazar/desenlazar via data-skill-toggle (project-skills.js):
+POSTea a /proyectos/<id>/skills/toggle/ y re-inyecta este mismo partial.
+Contexto: project_obj, linked_skills (con .link_enabled), available_skills.
+{% endcomment %}
+<div class="modal-header">
+  <h3 class="modal-title">Skills de {{ project_obj.display_name }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost" data-modal-close aria-label="Cerrar">&times;</button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary" style="font-size: var(--fs-sm); margin-bottom: var(--space-md);">
+    Solo las skills <strong>enlazadas</strong> se usan en este proyecto. Las de
+    plataforma se auto-enlazan al crear el proyecto; acá las gestionás.
+  </p>
+
+  <h4 style="font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-bottom: var(--space-sm);">
+    Enlazadas ({{ linked_skills|length }})
+  </h4>
+  {% if linked_skills %}
+    <table class="table" style="font-size: var(--fs-sm); margin-bottom: var(--space-md);">
+      <tbody>
+        {% for s in linked_skills %}
+          <tr>
+            <td style="width: 1%; white-space: nowrap;"><code>{{ s.slug }}</code></td>
+            <td>{{ s.name }}</td>
+            <td style="width: 1%; white-space: nowrap;">
+              <button type="button" class="btn btn-sm btn-ghost"
+                      data-skill-toggle data-url="/proyectos/{{ project_obj.pk }}/skills/toggle/"
+                      data-skill-id="{{ s.id }}" data-op="unlink" style="color: var(--color-danger);">
+                Desenlazar
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-muted" style="font-size: var(--fs-sm); margin-bottom: var(--space-md);">Sin skills enlazadas.</p>
+  {% endif %}
+
+  <h4 style="font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-bottom: var(--space-sm);">
+    Disponibles ({{ available_skills|length }})
+  </h4>
+  {% if available_skills %}
+    <table class="table" style="font-size: var(--fs-sm);">
+      <tbody>
+        {% for s in available_skills %}
+          <tr>
+            <td style="width: 1%; white-space: nowrap;"><code>{{ s.slug }}</code></td>
+            <td>{{ s.name }}</td>
+            <td style="width: 1%; white-space: nowrap;">
+              <button type="button" class="btn btn-sm btn-outline-primary"
+                      data-skill-toggle data-url="/proyectos/{{ project_obj.pk }}/skills/toggle/"
+                      data-skill-id="{{ s.id }}" data-op="link">
+                Enlazar
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-muted" style="font-size: var(--fs-sm);">No hay skills de plataforma para enlazar.</p>
+  {% endif %}
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+</div>

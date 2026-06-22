@@ -58,6 +58,10 @@ Detalle de proyecto para el modal dinámico. Extiende maintainers/_detail_base.h
           data-action="edit" data-id="{{ project_obj.pk }}">
     Editar
   </button>
+  <button type="button" class="btn btn-secondary"
+          data-action="modal" data-url="/proyectos/{{ project_obj.pk }}/skills/">
+    Gestionar skills
+  </button>
   {% if project_obj.is_active %}
     <button type="button" class="btn btn-warning"
             data-action="toggle" data-id="{{ project_obj.pk }}">

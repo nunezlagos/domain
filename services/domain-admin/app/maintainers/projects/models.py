@@ -21,6 +21,8 @@ dropeada de estas tablas. Por eso NINGÚN modelo declara organization_id.
 """
 from __future__ import annotations
 
+import uuid
+
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
@@ -153,3 +155,28 @@ class ProjectRepository(SoftDeleteModel):
     @property
     def is_active(self) -> bool:
         return self.deleted_at is None
+
+
+class ProjectSkill(models.Model):
+    """Enlace N:N proyecto<->skill (tabla puente project_skills, mig 000160).
+
+    Tabla plana (managed=False): id/project_id/skill_id/is_enabled/created_by/
+    created_at. NO hereda de BaseModel (no tiene updated_at). El backend usa
+    este enlace para decidir qué skills son usables en el proyecto.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, db_column="project_id", related_name="skill_links"
+    )
+    skill_id = models.UUIDField()
+    is_enabled = models.BooleanField(default=True)
+    created_by = models.UUIDField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "project_skills"
+        managed = False
+
+    def __str__(self) -> str:
+        return f"{self.project_id} ↔ {self.skill_id}"

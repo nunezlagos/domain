@@ -84,6 +84,54 @@ def list_available_templates() -> list[ProjectTemplate]:
     return list(ProjectTemplate.objects.all().order_by("slug"))
 
 
+# --- Skills enlazadas al proyecto (project_skills) --------------------------
+
+def list_linked_skills(project: Project) -> list:
+    """Skills enlazadas al proyecto (con flag link_enabled), ordenadas por slug."""
+    from maintainers.projects.models import ProjectSkill
+    from maintainers.skills.models import Skill
+
+    links = list(ProjectSkill.objects.filter(project=project))
+    enabled = {link.skill_id: link.is_enabled for link in links}
+    skills = list(Skill.objects.filter(id__in=list(enabled.keys())).order_by("slug"))
+    for s in skills:
+        s.link_enabled = enabled.get(s.id, True)
+    return skills
+
+
+def list_available_skills(project: Project) -> list:
+    """Skills de plataforma (globales) NO enlazadas todavía al proyecto."""
+    from maintainers.projects.models import ProjectSkill
+    from maintainers.skills.models import Skill
+
+    linked_ids = list(
+        ProjectSkill.objects.filter(project=project).values_list("skill_id", flat=True)
+    )
+    return list(
+        Skill.objects.filter(project_id__isnull=True, deleted_at__isnull=True)
+        .exclude(id__in=linked_ids)
+        .order_by("slug")
+    )
+
+
+@transaction.atomic
+def link_skill(project: Project, skill_id: str) -> None:
+    """Enlaza una skill al proyecto (idempotente)."""
+    from maintainers.projects.models import ProjectSkill
+
+    ProjectSkill.objects.get_or_create(
+        project=project, skill_id=skill_id, defaults={"is_enabled": True}
+    )
+
+
+@transaction.atomic
+def unlink_skill(project: Project, skill_id: str) -> None:
+    """Desenlaza una skill del proyecto."""
+    from maintainers.projects.models import ProjectSkill
+
+    ProjectSkill.objects.filter(project=project, skill_id=skill_id).delete()
+
+
 # --- Repos git por proyecto -------------------------------------------------
 
 def _derive_repo_name(url: str, index: int) -> str:

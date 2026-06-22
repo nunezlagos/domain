@@ -19,7 +19,10 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from django.views.decorators.http import require_http_methods
 
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
@@ -123,6 +126,46 @@ class ProjectViews(MaintainerViews):
         except self.error_class as exc:
             messages.error(request, str(exc))
         return HttpResponseRedirect(self.url("list"))
+
+
+def _skills_ctx(project) -> dict:
+    return {
+        "project_obj": project,
+        "linked_skills": services.list_linked_skills(project),
+        "available_skills": services.list_available_skills(project),
+    }
+
+
+@require_http_methods(["GET"])
+def manage_skills(request, project_id):
+    """Modal de gestión de skills enlazadas al proyecto (enlazar/desenlazar)."""
+    if (redir := require_auth(request)):
+        return redir
+    try:
+        project = services.get_project(project_id)
+    except services.ProjectError as exc:
+        messages.error(request, str(exc))
+        return HttpResponseRedirect(views.url("list"))
+    return render(request, "projects/_skills_modal.html", _skills_ctx(project))
+
+
+@require_http_methods(["POST"])
+def toggle_skill(request, project_id):
+    """Enlaza (op=link) o desenlaza (op=unlink) una skill; re-renderiza el modal."""
+    if (redir := require_auth(request)):
+        return redir
+    try:
+        project = services.get_project(project_id)
+    except services.ProjectError as exc:
+        messages.error(request, str(exc))
+        return HttpResponseRedirect(views.url("list"))
+    skill_id = request.POST.get("skill_id", "")
+    op = request.POST.get("op", "")
+    if skill_id and op == "link":
+        services.link_skill(project, skill_id)
+    elif skill_id and op == "unlink":
+        services.unlink_skill(project, skill_id)
+    return render(request, "projects/_skills_modal.html", _skills_ctx(project))
 
 
 # Instancia que cablea todo. list_key="projects" -> el template recibe la lista

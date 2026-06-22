@@ -49,10 +49,19 @@
    los textareas / editores de prompt respiren. El body scrollea dentro
    (overflow-y heredado de .modal) con max-height acotado. El de confirm-delete
    queda chico. En mobile, responsive.css fuerza casi-fullscreen (no se toca). */
+/* Tamaño FIJO y consistente: el frame no se agranda/achica con el contenido.
+   El body scrollea adentro; header y footer quedan fijos. */
 .modal-dynamic {
-  max-width: min(920px, 94vw);
-  max-height: 90vh;
+  width: min(920px, 94vw);
+  height: 82vh;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+.modal-dynamic > .modal-header,
+.modal-dynamic > .modal-footer { flex: 0 0 auto; }
+.modal-dynamic > .modal-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .modal-confirm { max-width: 420px; }
 
 /* Tabla de detalle (key/value) dentro del modal de detalle */

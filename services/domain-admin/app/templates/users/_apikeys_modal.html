@@ -41,10 +41,7 @@ API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
         <tr>
           <td><code>{{ k.key_prefix }}…</code></td>
           <td>{{ k.name }}</td>
-          <td>
-            {{ k.user.display_name }}
-            <br><code class="text-muted" style="font-size: var(--fs-xs);">{{ k.user.email }}</code>
-          </td>
+          <td title="{{ k.user.email }}">{{ k.user.display_name }}</td>
           <td>
             {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
             {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>

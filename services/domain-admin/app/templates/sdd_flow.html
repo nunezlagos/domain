@@ -119,7 +119,10 @@
         {% comment %} GATE por fase (modo manual/híbrido): Orchestrator pide aprobación
            humana entre fases clave (spec/design/apply/judge) antes de seguir. {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="508" x2="120" y2="508"/>
-        {% comment %} apply: Agente -> Datos persiste {% endcomment %}
+        {% comment %} ITERACIÓN del Agente (LLM): razona y llama tools para crear los
+           artefactos (requirement/issue/tasks). Self-message en su lifeline. {% endcomment %}
+        <path class="sdd-msg" marker-end="url(#sdd-arrow)" d="M868 430 H912 V446 H870"/>
+        {% comment %} apply: Agente -> Datos crea/persiste (req/issue/tasks vía tools) {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="608" x2="1120" y2="608"/>
         {% comment %} ret verify {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="660" x2="608" y2="660"/>
@@ -162,7 +165,8 @@
         <text class="sdd-lbl-ret" x="730" y="438">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="490">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="550">resultado</text>
-        <text class="sdd-lbl-ret" x="930" y="602">persiste</text>
+        <text class="sdd-lbl"     x="918" y="438">itera: crea req/issue/tasks</text>
+        <text class="sdd-lbl-ret" x="930" y="602">crea/persiste</text>
         <text class="sdd-lbl-ret" x="730" y="654">resultado</text>
         <text class="sdd-lbl-ret" x="730" y="706">resultado</text>
         <text class="sdd-lbl-ret" x="930" y="766">persiste</text>
@@ -189,7 +193,7 @@
         <text class="sdd-actor-t"   x="600"  y="69">Orchestrator</text>
 
         <rect class="sdd-actor-box" x="788"  y="44" width="144" height="40" rx="6" filter="url(#sdd-shadow)"/>
-        <text class="sdd-actor-t"   x="860"  y="69">Agente</text>
+        <text class="sdd-actor-t"   x="860"  y="69">Agente (LLM)</text>
 
         <rect class="sdd-actor-box" x="1048" y="44" width="144" height="40" rx="6" filter="url(#sdd-shadow)"/>
         <text class="sdd-actor-t"   x="1120" y="69">Datos</text>

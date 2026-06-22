@@ -57,70 +57,49 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
         {% endif %}
       </div>
 
-      {% comment %} ===== Pane: API Keys ===== {% endcomment %}
-      <div class="vpane vpane-keys" data-base-url="/api-keys/">
-    {% if api_keys %}
-      <table class="table" style="font-size: var(--fs-sm);">
-        <tbody>
-          {% for k in api_keys %}
-            <tr>
-              <td><code>{{ k.key_prefix }}…</code></td>
-              <td>{{ k.name }}</td>
-              <td>
-                {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
-                {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
-                {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>
-                {% endif %}
-              </td>
-              <td class="text-muted">{{ k.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td>
-              <td style="width: 1%; white-space: nowrap;">
-                <div class="d-flex gap-1" style="justify-content: flex-end;">
-                  {% if k.key_plaintext %}
-                    <input type="text" id="user-apikey-{{ k.pk }}"
-                           value="{{ k.key_plaintext }}" readonly
-                           style="position: absolute; left: -9999px;" tabindex="-1" aria-hidden="true">
-                    <button type="button" class="btn btn-icon btn-ghost"
-                            data-copy="#user-apikey-{{ k.pk }}" title="Copiar la API key">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                      </svg>
-                    </button>
-                  {% endif %}
-                  <button type="button" class="btn btn-icon btn-ghost" title="Ver detalle"
-                          data-action="view" data-id="{{ k.pk }}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                      <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                  </button>
-                  <button type="button" class="btn btn-icon btn-ghost" title="Editar"
-                          data-action="edit" data-id="{{ k.pk }}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 20h9"/>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                    </svg>
-                  </button>
-                  <button type="button" class="btn btn-icon btn-ghost" title="Eliminar"
-                          style="color: var(--color-danger);"
-                          data-action="delete" data-id="{{ k.pk }}" data-name="{{ k.display_name }}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="text-muted" style="margin-bottom: var(--space-sm);">Sin API keys.</p>
-      <button type="button" class="btn btn-sm btn-outline-primary" data-action="create">
-        + Crear API Key
-      </button>
-    {% endif %}
+      {% comment %} ===== Pane: API Keys ===== Solo VISTA + copiar; la gestion
+        (crear/editar/eliminar/filtrar) vive en el modal "Gestionar API Keys". {% endcomment %}
+      <div class="vpane vpane-keys">
+        <div class="d-flex" style="justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
+          <span class="text-secondary" style="font-size: var(--fs-sm);">
+            {{ api_keys|length }} API key{{ api_keys|length|pluralize:",s" }} de este usuario
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-action="modal" data-url="/usuarios/api-keys/">
+            Gestionar API Keys
+          </button>
+        </div>
+        {% if api_keys %}
+          <table class="table" style="font-size: var(--fs-sm);">
+            <tbody>
+              {% for k in api_keys %}
+                <tr>
+                  <td><code>{{ k.key_prefix }}…</code></td>
+                  <td>{{ k.name }}</td>
+                  <td>
+                    {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
+                    {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
+                    {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>{% endif %}
+                  </td>
+                  <td style="width: 1%; white-space: nowrap; text-align: right;">
+                    {% if k.key_plaintext %}
+                      <input type="text" id="user-apikey-{{ k.pk }}" value="{{ k.key_plaintext }}" readonly
+                             style="position: absolute; left: -9999px;" tabindex="-1" aria-hidden="true">
+                      <button type="button" class="btn btn-icon btn-ghost"
+                              data-copy="#user-apikey-{{ k.pk }}" title="Copiar la API key">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                      </button>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted">Este usuario no tiene API keys.</p>
+        {% endif %}
       </div>{# /vpane-keys #}
     </div>{# /htabs-body #}
   </div>{# /htabs #}

@@ -52,13 +52,19 @@ class ApiKeyService(MaintainerService):
 _service = ApiKeyService()
 
 
-def list_api_keys(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista API keys con busqueda + paginacion.
+def list_api_keys(search: str = "", page: int = 1, per_page: int = 20,
+                  user_id=None, status=None) -> dict:
+    """Lista API keys con busqueda + filtros (usuario/estado) + paginacion.
 
-    Delega en MaintainerService.list y renombra la clave `items` -> `api_keys`
-    para no romper el contrato del template/tests existentes.
+    Delega en MaintainerService.list (qs pre-filtrado) y renombra `items` ->
+    `api_keys` para no romper el contrato del template/tests existentes.
     """
-    data = _service.list(search=search, page=page, per_page=per_page)
+    qs = ApiKey.objects.select_related("user").all()
+    if user_id:
+        qs = qs.filter(user_id=user_id)
+    if status:
+        qs = qs.filter(status=status)
+    data = _service.list(qs=qs, search=search, page=page, per_page=per_page)
     data["api_keys"] = data.pop("items")
     return data
 
@@ -215,12 +221,10 @@ def update_api_key(
 
 @transaction.atomic
 def delete_api_key(api_key: ApiKey) -> None:
-    """Soft delete: revoca (marca revoked_at + status). NO borra fisicamente."""
-    from django.utils import timezone
-
-    api_key.revoked_at = timezone.now()
-    api_key.status = "revoked"
-    api_key.save()
+    """Hard delete: ELIMINA la fila (no es revocar). Revocar sin borrar queda en
+    el toggle (active<->revoked). El usuario pidio que 'eliminar' elimine de verdad
+    (desaparece de la lista), no que quede como revocada."""
+    api_key.delete()
 
 
 @transaction.atomic

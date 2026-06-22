@@ -183,11 +183,21 @@ def apikeys_modal(request):
     if (redir := require_auth(request)):
         return redir
 
-    data = list_api_keys(search="", page=1, per_page=100)
+    user_id = request.GET.get("user") or ""
+    status = request.GET.get("status") or ""
+    data = list_api_keys(search="", page=1, per_page=100,
+                         user_id=user_id or None, status=status or None)
     return render(
         request,
         "users/_apikeys_modal.html",
-        {"api_keys": data["api_keys"], "total": data["total"]},
+        {
+            "api_keys": data["api_keys"],
+            "total": data["total"],
+            "user_options": User.objects.filter(status="active").order_by("email"),
+            "status_options": ApiKey.STATUS_CHOICES,
+            "selected_user": user_id,
+            "selected_status": status,
+        },
     )
 
 

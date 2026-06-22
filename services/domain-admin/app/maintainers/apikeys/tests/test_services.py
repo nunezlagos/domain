@@ -102,14 +102,13 @@ class UpdateApiKeyTests(MaintainerTestCase):
 
 
 class DeleteApiKeyTests(MaintainerTestCase):
-    def test_soft_delete_marca_revoked(self):
+    def test_hard_delete_elimina_la_fila(self):
         ak = make_api_key("Borrable", status="active")
+        pk = ak.pk
         services.delete_api_key(ak)
-        ak.refresh_from_db()
-        self.assertEqual(ak.status, "revoked")
-        self.assertIsNotNone(ak.revoked_at)
-        # No se borro fisicamente.
-        self.assertTrue(ApiKey.objects.filter(pk=ak.pk).exists())
+        # Hard delete: la fila se elimina (no queda como revocada). Revocar sin
+        # borrar es el toggle.
+        self.assertFalse(ApiKey.objects.filter(pk=pk).exists())
 
 
 class ToggleApiKeyTests(MaintainerTestCase):

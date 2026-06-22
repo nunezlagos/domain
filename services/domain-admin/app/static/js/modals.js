@@ -113,7 +113,9 @@
             headers: { 'X-Requested-With': 'fetch' },
           });
           if (mr.ok) {
-            openDynamicModal(await mr.text());
+            // Pasar modalUrl como src para que un delete dentro de ESTE modal lo
+            // refresque a si mismo (antes quedaba el src viejo del "ver usuario").
+            openDynamicModal(await mr.text(), modalUrl);
           } else {
             alert('Error al cargar (' + mr.status + ')');
           }
@@ -165,10 +167,28 @@
     }
   });
 
-  // Click en backdrop cierra el modal
-  document.addEventListener('click', function (e) {
-    if (e.target.classList && e.target.classList.contains('modal-backdrop')) {
-      e.target.classList.remove('open');
+  // NOTA: el click en el backdrop NO cierra el modal (a pedido). Solo se cierra
+  // con el boton X, Cancelar o Cerrar (data-modal-close), para evitar cierres
+  // accidentales al hacer click afuera.
+
+  // Filtros DENTRO de un modal ([data-modal-filter]): al cambiar, re-fetch del
+  // contenido del modal (su src) con los params de todos los filtros + re-inject.
+  document.addEventListener('change', async function (e) {
+    if (!e.target.closest('[data-modal-filter]')) return;
+    var modal = document.getElementById('modal-dynamic');
+    if (!modal || !modal.dataset.src) return;
+    var base = modal.dataset.src.split('?')[0];
+    var params = new URLSearchParams();
+    modal.querySelectorAll('[data-modal-filter]').forEach(function (el) {
+      var name = el.getAttribute('name') || el.dataset.modalFilter;
+      if (name && el.value) params.set(name, el.value);
+    });
+    var url = base + '?' + params.toString();
+    try {
+      var r = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (r.ok) openDynamicModal(await r.text(), url);
+    } catch (err) {
+      console.warn('Filtro de modal fallo:', err);
     }
   });
 
@@ -212,6 +232,10 @@
     var form = e.target;
     if (form.id !== 'confirm-delete-form') return;
     e.preventDefault();
+    // Recordar la tab activa del modal (si tiene tabs) para restaurarla tras el
+    // refresh — asi un delete dentro de la tab API Keys no salta a Informacion.
+    var activeTab = document.querySelector('#modal-dynamic input[name="utab"]:checked');
+    var activeTabId = activeTab ? activeTab.id : null;
     try {
       var r = await fetch(form.action, {
         method: 'POST',
@@ -232,6 +256,11 @@
         });
         if (rr.ok) {
           openDynamicModal(await rr.text(), refresh);
+          // Restaurar la tab activa (el HTML re-inyectado vuelve a la 1ra).
+          if (activeTabId) {
+            var t = document.getElementById(activeTabId);
+            if (t) t.checked = true;
+          }
           return;
         }
       }

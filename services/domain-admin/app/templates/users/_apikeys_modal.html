@@ -15,10 +15,22 @@ API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
 </div>
 
 <div class="modal-body" data-base-url="/api-keys/">
-  <div class="d-flex" style="justify-content: space-between; align-items: center; margin-bottom: var(--space-md);">
-    <span class="text-secondary" style="font-size: var(--fs-sm);">
-      {{ total }} API key{{ total|pluralize:",s" }} en total.
-    </span>
+  <div class="d-flex" style="justify-content: space-between; align-items: center; gap: var(--space-md); margin-bottom: var(--space-md); flex-wrap: wrap;">
+    <div class="d-flex gap-2" style="flex-wrap: wrap; align-items: center;">
+      <select data-modal-filter name="user" class="form-control form-select" style="min-width: 180px;">
+        <option value="">Todos los usuarios</option>
+        {% for u in user_options %}
+          <option value="{{ u.id }}" {% if u.id|stringformat:'s' == selected_user %}selected{% endif %}>{{ u.email }}</option>
+        {% endfor %}
+      </select>
+      <select data-modal-filter name="status" class="form-control form-select" style="min-width: 150px;">
+        <option value="">Todos los estados</option>
+        {% for val, lbl in status_options %}
+          <option value="{{ val }}" {% if val == selected_status %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+      <span class="text-secondary" style="font-size: var(--fs-sm);">{{ total }} resultado{{ total|pluralize:",s" }}</span>
+    </div>
     <button type="button" class="btn btn-sm btn-outline-primary" data-action="create">
       + API Key
     </button>

@@ -43,7 +43,13 @@ def _decrypt_api_keys(user_id) -> list:
     al atributo (managed=False, NO persiste) para que el template del detalle de
     usuario siga usando k.key_plaintext sin cambios.
     """
-    keys = list(ApiKey.objects.filter(user_id=user_id).order_by("-created_at"))
+    # No mostrar las revocadas en el detalle del usuario (la gestion completa,
+    # incl. revocadas, vive en el modal "Gestionar API Keys").
+    keys = list(
+        ApiKey.objects.filter(user_id=user_id, revoked_at__isnull=True)
+        .exclude(status="revoked")
+        .order_by("-created_at")
+    )
     for k in keys:
         k.key_plaintext = get_api_key_plaintext(k.pk)
     return keys

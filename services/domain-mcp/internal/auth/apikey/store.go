@@ -39,11 +39,14 @@ func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env 
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
+	// key_plaintext se persiste para poder re-mostrar la key en el dashboard
+	// (decision de producto, mig 000164). El bcrypt sigue siendo lo que valida
+	// Resolve; el plaintext es solo para display/copia.
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_plaintext)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
-		userID, hash, prefix, name,
+		userID, hash, prefix, name, plaintext,
 	).Scan(&keyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert api_key: %w", err)
@@ -114,10 +117,10 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 	}
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_plaintext)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
-		userID, hash, prefix, name,
+		userID, hash, prefix, name, newPlaintext,
 	).Scan(&newKeyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert new key: %w", err)

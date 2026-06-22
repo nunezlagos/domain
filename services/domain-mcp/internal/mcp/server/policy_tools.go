@@ -27,6 +27,10 @@ func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		// platform-level (sin scope project)
 		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", rls(deps.handlePolicyGet))},
 		{Tool: toolPolicyList(), Handler: wrap.Wrap("domain_policy_list", deps.handlePolicyList)},
+		// Fase 3 — alta/edicion de platform_policies globales desde MCP
+		// (antes solo seeder / Django admin).
+		{Tool: toolPlatformPolicyCreate(), Handler: wrap.Wrap("domain_platform_policy_create", rls(deps.handlePlatformPolicyCreate))},
+		{Tool: toolPlatformPolicyEdit(), Handler: wrap.Wrap("domain_platform_policy_edit", rls(deps.handlePlatformPolicyEdit))},
 		// project-level
 		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(deps.handleProjectPolicySet))},
 		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(deps.handleProjectPolicyList))},
@@ -342,6 +346,189 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 		"source_path": sourcePath,
 		"version":     created.Version,
 		"id":          created.ID.String(),
+	})
+}
+
+// --- Fase 3: alta/edicion de platform_policies globales ---
+
+// platformPolicyKinds son los kinds aceptados por el CHECK constraint de
+// platform_policies (mig 000045). OJO: project_policies acepta mas kinds
+// (agent_protocol, git_workflow, tech_stack, test_strategy) pero la tabla
+// global NO — validar aca evita un error SQL opaco.
+var platformPolicyKinds = map[string]bool{
+	"convention": true, "security_rule": true, "architecture": true,
+	"sdd_workflow": true, "observability": true, "migration_rule": true,
+	"linter_config": true,
+}
+
+func toolPlatformPolicyCreate() mcp.Tool {
+	return mcp.NewTool("domain_platform_policy_create",
+		mcp.WithDescription("Crea una platform_policy GLOBAL (sin scope de proyecto). Las platform_policies aplican a TODOS los proyectos por defecto (se leen siempre en el system prompt), a diferencia de project_policies que son overrides opt-in. Es el equivalente desde MCP del seeder. Usar para reglas de plataforma transversales."),
+		mcp.WithString("slug", mcp.Description("Slug unico (kebab-case)"), mcp.Required()),
+		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("convention|security_rule|architecture|sdd_workflow|observability|migration_rule|linter_config"), mcp.Required()),
+		mcp.WithString("body_md", mcp.Description("Cuerpo Markdown de la regla"), mcp.Required()),
+		mcp.WithString("source_file", mcp.Description("Path de origen opcional (informativo)")),
+	)
+}
+
+func (d *Deps) handlePlatformPolicyCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Pool == nil {
+		return mcp.NewToolResultError("pool not configured"), nil
+	}
+	args := req.GetArguments()
+	slug, _ := args["slug"].(string)
+	name, _ := args["name"].(string)
+	kind, _ := args["kind"].(string)
+	body, _ := args["body_md"].(string)
+	if slug == "" || name == "" || kind == "" || body == "" {
+		return mcp.NewToolResultError("slug, name, kind y body_md requeridos"), nil
+	}
+	if !platformPolicyKinds[kind] {
+		return mcp.NewToolResultError(fmt.Sprintf("kind '%s' invalido para platform_policies", kind)), nil
+	}
+	sourceFile, _ := args["source_file"].(string)
+
+	// Marcamos is_user_modified=TRUE para que el seeder no pise esta policy
+	// (mismo contrato que el seeder con ediciones manuales).
+	var id uuid.UUID
+	var version int
+	err := d.q(ctx).QueryRow(ctx,
+		`INSERT INTO platform_policies
+		   (slug, name, kind, body_md, source_file, is_active, is_user_modified)
+		 VALUES ($1,$2,$3,$4,NULLIF($5,''),TRUE,TRUE)
+		 RETURNING id, version`,
+		slug, name, kind, body, sourceFile,
+	).Scan(&id, &version)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("create failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"id": id.String(), "scope": "platform",
+		"slug": slug, "name": name, "kind": kind, "version": version,
+		"note": "platform_policy global creada. Aplica a todos los proyectos por defecto.",
+	})
+}
+
+func toolPlatformPolicyEdit() mcp.Tool {
+	return mcp.NewTool("domain_platform_policy_edit",
+		mcp.WithDescription("Edita una platform_policy global. Identifica por 'id' (UUID) o 'slug' (la activa). Actualiza SOLO los campos provistos (name/kind/body_md). Si cambia body_md, archiva la version anterior en platform_policy_versions y bumpea version. Marca is_user_modified=TRUE."),
+		mcp.WithString("id", mcp.Description("UUID de la policy. Preferido. Si se omite, se usa slug.")),
+		mcp.WithString("slug", mcp.Description("Slug de la policy activa. Ignorado si se pasa id.")),
+		mcp.WithString("name", mcp.Description("Nuevo nombre. Omitir para no cambiar.")),
+		mcp.WithString("kind", mcp.Description("Nuevo kind. Omitir para no cambiar. Valores: convention|security_rule|architecture|sdd_workflow|observability|migration_rule|linter_config")),
+		mcp.WithString("body_md", mcp.Description("Nuevo cuerpo Markdown. Omitir para no cambiar. Si cambia, se archiva la version previa.")),
+	)
+}
+
+func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if d.Pool == nil {
+		return mcp.NewToolResultError("pool not configured"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	slug, _ := args["slug"].(string)
+	if idStr == "" && slug == "" {
+		return mcp.NewToolResultError("id o slug requerido"), nil
+	}
+
+	// Campos opcionales. Solo se actualiza lo provisto (string no vacio).
+	var (
+		newName *string
+		newKind *string
+		newBody *string
+	)
+	if v, ok := args["name"].(string); ok && v != "" {
+		newName = &v
+	}
+	if v, ok := args["kind"].(string); ok && v != "" {
+		if !platformPolicyKinds[v] {
+			return mcp.NewToolResultError(fmt.Sprintf("kind '%s' invalido para platform_policies", v)), nil
+		}
+		newKind = &v
+	}
+	if v, ok := args["body_md"].(string); ok && v != "" {
+		newBody = &v
+	}
+	if newName == nil && newKind == nil && newBody == nil {
+		return mcp.NewToolResultError("nada para actualizar: pasa al menos un campo"), nil
+	}
+
+	// Lookup de la fila actual (id directo o slug activo).
+	var (
+		curID      uuid.UUID
+		curSlug    string
+		curVersion int
+		curBody    string
+		curStruct  []byte
+	)
+	lookupSQL := `SELECT id, slug, version, body_md, body_structured
+	                FROM platform_policies
+	               WHERE %s AND is_active = TRUE`
+	var lookupArg any
+	if idStr != "" {
+		parsed, perr := uuid.Parse(idStr)
+		if perr != nil {
+			return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
+		}
+		lookupArg = parsed
+		lookupSQL = fmt.Sprintf(lookupSQL, "id = $1")
+	} else {
+		lookupArg = slug
+		lookupSQL = fmt.Sprintf(lookupSQL, "slug = $1")
+	}
+	if err := d.q(ctx).QueryRow(ctx, lookupSQL, lookupArg).
+		Scan(&curID, &curSlug, &curVersion, &curBody, &curStruct); err != nil {
+		return mcp.NewToolResultError("platform_policy no encontrada"), nil
+	}
+
+	// Si cambia el body, archivar la version actual antes de pisarla y bumpear.
+	bumpVersion := newBody != nil && *newBody != curBody
+	if bumpVersion {
+		var changedBy *uuid.UUID
+		if uid, uerr := uuid.Parse(d.Principal.UserID); uerr == nil {
+			changedBy = &uid
+		}
+		if _, err := d.q(ctx).Exec(ctx,
+			`INSERT INTO platform_policy_versions
+			   (policy_id, version, body_md, body_structured, changed_by)
+			 VALUES ($1,$2,$3,$4,$5)`,
+			curID, curVersion, curBody, curStruct, changedBy,
+		); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("archive version failed: %v", err)), nil
+		}
+	}
+
+	var (
+		outName, outKind string
+		outVersion       int
+	)
+	versionExpr := "version"
+	if bumpVersion {
+		versionExpr = "version + 1"
+	}
+	updSQL := `UPDATE platform_policies
+	              SET name             = COALESCE($2, name),
+	                  kind             = COALESCE($3, kind),
+	                  body_md          = COALESCE($4, body_md),
+	                  version          = ` + versionExpr + `,
+	                  is_user_modified = TRUE
+	            WHERE id = $1 AND is_active = TRUE
+	          RETURNING name, kind, version`
+	if err := d.q(ctx).QueryRow(ctx, updSQL, curID, newName, newKind, newBody).
+		Scan(&outName, &outKind, &outVersion); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("edit failed: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"id": curID.String(), "scope": "platform",
+		"slug": curSlug, "name": outName, "kind": outKind,
+		"version": outVersion, "version_bumped": bumpVersion, "updated": true,
 	})
 }
 

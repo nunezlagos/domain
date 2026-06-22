@@ -43,7 +43,7 @@ class UserViews(MaintainerViews):
     def _form_payload(self, form) -> dict:
         return {
             "email": form.cleaned_data["email"],
-            "name": form.cleaned_data["name"],
+            "name": form.composed_name(),
             "role_slug": form.cleaned_data["role"],
             "status": form.cleaned_data["status"],
             "hashed_password": form.hashed_password(),

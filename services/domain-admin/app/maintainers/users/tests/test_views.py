@@ -80,19 +80,22 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_crea_usuario(self):
         r = self.client.post(reverse("users:create"), {
             "email": "creado@example.com",
-            "name": "Creado",
+            "first_name": "Creado",
+            "paternal_surname": "Pérez",
+            "maternal_surname": "Soto",
             "role": "viewer",
             "status": "active",
             "password": "supersecret",
             "password_confirm": "supersecret",
         })
         self.assertEqual(r.status_code, 302)
-        self.assertTrue(User.objects.filter(email="creado@example.com").exists())
+        u = User.objects.get(email="creado@example.com")
+        self.assertEqual(u.name, "Creado Pérez Soto")
 
     def test_post_password_corta_no_crea(self):
         r = self.client.post(reverse("users:create"), {
             "email": "corta@example.com",
-            "name": "Corta",
+            "first_name": "Corta",
             "role": "viewer",
             "status": "active",
             "password": "abc",

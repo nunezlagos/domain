@@ -11,6 +11,17 @@ con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% block create_label %}+ Nuevo proyecto{% endblock %}
 {% block search_placeholder %}Nombre, slug, descripción o repo...{% endblock %}
 
+{% comment %} Acción primaria resaltada (btn-primary), igual criterio que usuarios. {% endcomment %}
+{% block header_actions %}
+  <button class="btn btn-primary" data-action="create">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Nuevo proyecto
+  </button>
+{% endblock %}
+
 {% block table_area_id %}projects-table-area{% endblock %}
 {% block base_url %}/proyectos/{% endblock %}
 {% block signal_url %}{% url 'projects:signal' %}{% endblock %}

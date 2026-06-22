@@ -25,9 +25,21 @@ class UserForm(EmailNormalizationMixin, forms.Form):
         max_length=255,
         widget=forms.EmailInput(attrs={"class": "form-control", "autocomplete": "off"}),
     )
-    name = forms.CharField(
-        label="Nombre completo",
-        max_length=200,
+    first_name = forms.CharField(
+        label="Nombres",
+        max_length=120,
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    paternal_surname = forms.CharField(
+        label="Apellido paterno",
+        max_length=60,
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    maternal_surname = forms.CharField(
+        label="Apellido materno",
+        max_length=60,
         required=False,
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
@@ -72,9 +84,37 @@ class UserForm(EmailNormalizationMixin, forms.Form):
         # Valores iniciales solo al renderizar el form de edición (unbound).
         if instance is not None and not self.is_bound:
             self.fields["email"].initial = instance.email
-            self.fields["name"].initial = instance.name
+            first, paternal, maternal = self._split_name(instance.name)
+            self.fields["first_name"].initial = first
+            self.fields["paternal_surname"].initial = paternal
+            self.fields["maternal_surname"].initial = maternal
             self.fields["role"].initial = instance.role
             self.fields["status"].initial = instance.status
+
+    @staticmethod
+    def _split_name(full: str) -> tuple[str, str, str]:
+        """Parte `name` en (nombres, apellido paterno, apellido materno).
+
+        Heurística (lossy, el usuario reedita): 1 token -> todo a nombres;
+        2 -> nombres + paterno; 3+ -> primero=nombres, último=materno, el
+        medio=paterno.
+        """
+        parts = (full or "").split()
+        if not parts:
+            return "", "", ""
+        if len(parts) == 1:
+            return parts[0], "", ""
+        if len(parts) == 2:
+            return parts[0], parts[1], ""
+        return parts[0], " ".join(parts[1:-1]), parts[-1]
+
+    def composed_name(self) -> str:
+        """Recompone `name` desde los 3 campos (para mandar al service)."""
+        parts = [
+            self.cleaned_data.get(k, "").strip()
+            for k in ("first_name", "paternal_surname", "maternal_surname")
+        ]
+        return " ".join(p for p in parts if p)
 
     def clean(self):
         cleaned = super().clean()

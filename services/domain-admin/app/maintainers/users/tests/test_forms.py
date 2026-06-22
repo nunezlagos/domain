@@ -20,7 +20,9 @@ class UserFormCreateTests(MaintainerTestCase):
     def _data(self, **over):
         base = {
             "email": "form@example.com",
-            "name": "Form",
+            "first_name": "Form",
+            "paternal_surname": "",
+            "maternal_surname": "",
             "role": "viewer",
             "status": "active",
             "password": "supersecret",
@@ -82,7 +84,9 @@ class UserFormEditTests(MaintainerTestCase):
         form = UserForm(
             data={
                 "email": "mismo@example.com",
-                "name": "X",
+                "first_name": "X",
+                "paternal_surname": "",
+                "maternal_surname": "",
                 "role": "viewer",
                 "status": "active",
                 "password": "",
@@ -91,3 +95,40 @@ class UserFormEditTests(MaintainerTestCase):
             instance=u,
         )
         self.assertTrue(form.is_valid(), form.errors)
+
+
+class UserFormNameCompositionTests(MaintainerTestCase):
+    def setUp(self):
+        make_role("viewer")
+
+    def _data(self, **over):
+        base = {
+            "email": "comp@example.com",
+            "first_name": "Juan Pablo",
+            "paternal_surname": "Núñez",
+            "maternal_surname": "Lagos",
+            "role": "viewer",
+            "status": "active",
+            "password": "supersecret",
+            "password_confirm": "supersecret",
+        }
+        base.update(over)
+        return base
+
+    def test_composed_name_une_los_tres(self):
+        form = UserForm(data=self._data())
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.composed_name(), "Juan Pablo Núñez Lagos")
+
+    def test_composed_name_omite_vacios(self):
+        form = UserForm(data=self._data(paternal_surname="", maternal_surname=""))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.composed_name(), "Juan Pablo")
+
+    def test_split_name_parsea_en_edicion(self):
+        u = make_user("split@example.com")
+        u.name = "Ana María Pérez Soto"
+        form = UserForm(instance=u)
+        self.assertEqual(form.fields["first_name"].initial, "Ana")
+        self.assertEqual(form.fields["paternal_surname"].initial, "María Pérez")
+        self.assertEqual(form.fields["maternal_surname"].initial, "Soto")

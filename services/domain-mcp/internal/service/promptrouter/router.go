@@ -250,6 +250,11 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 			userID = *createdBy
 		}
 		mode := orchestratorModeForIntent(intent)
+		// OrchestrateInput.ProjectID es uuid.UUID (valor); projectID es *uuid.UUID.
+		var projID uuid.UUID
+		if projectID != nil {
+			projID = *projectID
+		}
 		orchRes, err := r.Orchestrator.Run(ctx, orchsvc.OrchestrateInput{
 			OrganizationID: *orgID,
 			UserID:         userID,
@@ -258,7 +263,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 			// project_id: scopea el flow_run al proyecto. Sin esto el flow_run
 			// quedaba con project_id NULL aunque el intake sí lo recibía
 			// (gap detectado en el test E2E del flujo via domain_prompt).
-			ProjectID: projectID,
+			ProjectID: projID,
 			// Hardspec obligatorio por diseño: el camino domain_prompt es el que
 			// usa el agente; si no lo seteamos quedaba en false (zero value) y la
 			// reiteración humana en sdd-spec no se exigía. domain_orchestrate ya

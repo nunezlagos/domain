@@ -6,7 +6,7 @@
 // Convenciones (rules/api.md):
 //   - JSON requests/responses, error shape {"error":{"code","message",...}}
 //   - 201 con Location, 204 en DELETE, 422 validation, 401 unauthorized
-//   - X-Request-Id correlación, X-Rate-Limit-* cuando aplica
+//   - X-Request-Id correlacion, X-Rate-Limit-* cuando aplica
 package handler
 
 import (
@@ -102,7 +102,7 @@ type API struct {
 	// WaitGroup + per-job timeout. Si nil, el handler cae al fallback
 	// legacy (go func() directo).
 	WebhookDispatcher *WebhookDispatcher
-	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega acá.
+	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega aqui.
 	// Si nil, usa el switch legacy (compat).
 	Dispatcher                *dispatch.Dispatcher
 	CostService               *cost.Service
@@ -171,23 +171,23 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
 	// REQ-72 auth web (login user+password con roles). /auth/login se mantiene
-	// por compat con CLI installer; el resto del flujo web se removió en Ola 8.
+	// por compat con CLI installer; el resto del flujo web se removio en Ola 8.
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
 	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
-	// Tambien sin Bearer: la primera request al sistema no tiene user todavía.
+	// Tambien sin Bearer: la primera request al sistema no tiene user todavia.
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 
-	// REQ-43.3 (Ola 1): endpoints solo-Angular removidos. Consumidos únicamente
+	// REQ-43.3 (Ola 1): endpoints solo-Angular removidos. Consumidos unicamente
 	// por el admin Angular archivado en openspec/archive/2026-06-19-domain-admin-angular/.
 	// Removidos: /audit-logs, /api-keys, /activity-logs, enrollment-token admin.
 	// Mantenidos: /auth/enroll (CLI installer consume).
 
-	// Organización (single-org): la entidad organization se removió. Los
+	// Organizacion (single-org): la entidad organization se removio. Los
 	// endpoints de org settings (GET/PATCH /organizations/{id}) y member
 	// management (/organizations/{id}/members) ya no existen. Se conserva
 	// solo /auth/enroll (onboarding global, consumido por CLI).
-	// issue-37.1: self-enrollment con token compartido (público)
+	// issue-37.1: self-enrollment con token compartido (publico)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 
 	// REQ-43.4 (Ola 2): endpoints SDD/TDD removidos. Consumidos solo por el admin
@@ -217,9 +217,9 @@ func (a *API) Router() http.Handler {
 //   - /api/v1/clients/* (POST/GET/{id_or_slug}/PUT/DELETE/restore/status)
 
 	// REQ-43.3 (Ola 1): endpoints Tickets, Users, Events SSE y Jira webhook removidos.
-// Consumidos únicamente por el admin Angular archivado. Mantener handler en código
+// Consumidos unicamente por el admin Angular archivado. Mantener handler en codigo
 // (caller methods quedan en struct API) evita romper referencias en tests; el borrado
-// físico de handlers + sus tests se difiere a la HU-43.13 (cleanup post-sunset).
+// fisico de handlers + sus tests se difiere a la HU-43.13 (cleanup post-sunset).
 //
 // Removidos en esta ola:
 //   - /api/v1/projects/{slug}/tickets, /api/v1/tickets/*
@@ -257,7 +257,7 @@ func (a *API) Router() http.Handler {
 	// REQ-43.7/43.8 (Ola 4/6): Inbound webhooks management + Crons + Flows + Flow-Runs removidos.
 // Consumidos solo por admin Angular (vistas admin-webhooks, admin-crons, admin-flows) Y mockeados
 // en SDK tests. El MCP consume WebhookService/CronService/FlowService/FlowRunner directamente.
-// El endpoint público HMAC /api/v1/webhooks/{slug}/receive se mantiene (integraciones externas).
+// El endpoint publico HMAC /api/v1/webhooks/{slug}/receive se mantiene (integraciones externas).
 //
 // Removidos:
 //   - /api/v1/inbound-webhooks/* (POST/GET/{id}/PATCH/DELETE/deliveries/replay)
@@ -266,7 +266,7 @@ func (a *API) Router() http.Handler {
 //   - /api/v1/runs/{id}/signals (POST)
 //   - /api/v1/flow-runs/{id} (GET/POST pause/resume/cancel/stream)
 
-	// Webhooks inbound (público, HMAC auth — slug + secret en config)
+	// Webhooks inbound (publico, HMAC auth — slug + secret en config)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
 
 	// REQ-43.7 (Ola 4): Skills + Prompts endpoints removidos.
@@ -331,7 +331,7 @@ func AuthAllowlist() []string {
 
 // --- JSON helpers ---
 
-// ensureJSONSlice: si data es un slice nil, devuelve un []T{} vacío para que
+// ensureJSONSlice: si data es un slice nil, devuelve un []T{} vacio para que
 // JSON serialice como [] en vez de null. Si data es otro tipo (struct, map, string),
 // lo devuelve tal cual.
 func ensureJSONSlice(data any) any {
@@ -350,7 +350,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 	// HU-28.5: status ya escrito → best effort. Si encode rompe (cliente
 	// desconectado, stream cerrado), loggeamos pero no podemos cambiar el
-	// status code. No enmascaramos el error tragándolo en `_`.
+	// status code. No enmascaramos el error tragandolo en `_`.
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Error("failed to encode response", "error", err, "status", status)
 	}
@@ -366,7 +366,7 @@ func writeData(w http.ResponseWriter, status int, data any) {
 	writeJSON(w, status, map[string]any{"data": ensureJSONSlice(data)})
 }
 
-// writeDataWithMeta envía {data, ...extra} para responses con pagination/warnings/etc.
+// writeDataWithMeta envia {data, ...extra} para responses con pagination/warnings/etc.
 // Las keys de extra NO deben colisionar con "data".
 func writeDataWithMeta(w http.ResponseWriter, status int, data any, extra map[string]any) {
 	body := map[string]any{"data": ensureJSONSlice(data)}
@@ -387,16 +387,16 @@ func decodeJSON(r *http.Request, v any) error {
 
 // --- Principal / cross-org helpers (HU-28.3) ---
 //
-// Estos helpers reemplazan el patrón:
+// Estos helpers reemplazan el patron:
 //
 //   p, _ := principal(r)
 //   if p == nil { writeError(...) ; return }
 //   orgID, _ := uuid.Parse(p.OrganizationID)
 //   if resource.OrganizationID != orgID { writeError(404) ; return }
 //
-// El middleware middleware.PrincipalCtx (post-auth) ya parseó los UUIDs
-// y los inyectó en el ctx vía ctxkeys. Los handlers solo llaman a estos
-// accesores. Si el caller NO está autenticado (allowlist path), orgID(ctx)
+// El middleware middleware.PrincipalCtx (post-auth) ya parseo los UUIDs
+// y los inyecto en el ctx via ctxkeys. Los handlers solo llaman a estos
+// accesores. Si el caller NO esta autenticado (allowlist path), orgID(ctx)
 // devuelve uuid.Nil — los handlers de paths autenticados pueden asumir
 // no-nil porque apikey.Middleware bloquea antes.
 
@@ -408,7 +408,7 @@ var ErrCrossOrg = errors.New("handler: cross-org access denied")
 
 // orgID devuelve el OrganizationID del principal autenticado, parseado
 // como uuid.UUID por el middleware PrincipalCtx. Retorna uuid.Nil si
-// el request no pasó por auth (no debería ocurrir en paths /api/v1/*).
+// el request no paso por auth (no deberia ocurrir en paths /api/v1/*).
 func (a *API) orgID(ctx context.Context) uuid.UUID {
 	return ctxkeys.OrgID(ctx)
 }
@@ -422,7 +422,7 @@ func (a *API) userID(ctx context.Context) uuid.UUID {
 // Retorna ErrCrossOrg si no coincide. El handler debe traducirlo a 404
 // (no 403) para no filtrar existencia de recursos cross-org.
 //
-// Uso típico:
+// Uso tipico:
 //
 //	flow, err := a.FlowService.GetByID(ctx, id)
 //	if err != nil { ... }

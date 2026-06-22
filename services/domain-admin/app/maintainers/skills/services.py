@@ -1,16 +1,16 @@
 """Capa de negocio del mantenedor de Skills (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El resto —scope de slug por
+busqueda/paginacion ni el aggregate de la señal). El resto —scope de slug por
 (project_id, slug), parseo de tags, create/update/delete con sus validaciones de
-dominio, y la lista READ-ONLY de versiones— sigue acá.
+dominio, y la lista READ-ONLY de versiones— sigue aqui.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
-de nombre: entity_label="Skill" -> attr "skill", así que core busca get_skill /
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
+de nombre: entity_label="Skill" -> attr "skill", asi que core busca get_skill /
 create_skill / update_skill / delete_skill / get_list_signal, que ya coinciden
 con los nombres reales (no hacen falta alias como en users).
 
-skills SÍ tiene `deleted_at` -> soft-delete. La unicidad de slug es por scope:
+skills SI tiene `deleted_at` -> soft-delete. La unicidad de slug es por scope:
 (project_id, slug), donde project_id NULL = skill global. skill_versions es
 read-only (sin CRUD).
 """
@@ -25,7 +25,7 @@ from .models import Skill, SkillVersion
 
 # Error de dominio (la view lo traduce a messages.error).
 class SkillError(Exception):
-    """Error de operación sobre skills."""
+    """Error de operacion sobre skills."""
 
 
 # Service base reusado. El listado parte de un queryset propio (excluye
@@ -46,7 +46,7 @@ def _slug_taken(slug: str, project_id, exclude_pk=None) -> bool:
     """True si ya existe una skill viva con ese slug en el mismo scope.
 
     El scope es el project_id (NULL = global). Excluye soft-deleted y,
-    opcionalmente, el propio registro (edición).
+    opcionalmente, el propio registro (edicion).
     """
     qs = Skill.objects.filter(deleted_at__isnull=True, slug=slug)
     if project_id in (None, ""):
@@ -59,7 +59,7 @@ def _slug_taken(slug: str, project_id, exclude_pk=None) -> bool:
 
 
 def list_skills(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista skills (excluye soft-deleted) con búsqueda + paginación.
+    """Lista skills (excluye soft-deleted) con busqueda + paginacion.
 
     Delega en MaintainerService.list pasando el queryset base filtrado y
     renombra la clave `items` -> `skills` para no romper el template/tests.
@@ -84,7 +84,7 @@ def get_skill(skill_id: str) -> Skill:
 
 
 def get_skill_versions(skill: Skill) -> list[SkillVersion]:
-    """Versiones (snapshots) de una skill, más nueva primero. Read-only."""
+    """Versiones (snapshots) de una skill, mas nueva primero. Read-only."""
     return list(SkillVersion.objects.filter(skill=skill).order_by("-version"))
 
 
@@ -102,7 +102,7 @@ def create_skill(
     tags: list[str] | None = None,
     project_id=None,
 ) -> Skill:
-    """Crea una skill nueva. slug debe ser único dentro de su scope."""
+    """Crea una skill nueva. slug debe ser unico dentro de su scope."""
     if _slug_taken(slug, project_id):
         raise SkillError(f"Ya existe una skill con slug '{slug}' en este scope.")
 
@@ -134,10 +134,10 @@ def update_skill(
     has_side_effects: bool = False,
     tags: list[str] | None = None,
 ) -> Skill:
-    """Actualiza una skill. El slug sigue siendo único dentro de su scope.
+    """Actualiza una skill. El slug sigue siendo unico dentro de su scope.
 
     El scope (project_id) no se cambia desde el admin; se valida contra el
-    project_id actual del registro, excluyéndose a sí mismo.
+    project_id actual del registro, excluyendose a si mismo.
     """
     if slug != skill.slug and _slug_taken(slug, skill.project_id, exclude_pk=skill.pk):
         raise SkillError(f"Ya existe otra skill con slug '{slug}' en este scope.")
@@ -157,7 +157,7 @@ def update_skill(
 
 @transaction.atomic
 def delete_skill(skill: Skill) -> None:
-    """Soft delete: marca deleted_at. NO borra físicamente."""
+    """Soft delete: marca deleted_at. NO borra fisicamente."""
     from django.utils import timezone
 
     skill.deleted_at = timezone.now()
@@ -174,5 +174,5 @@ def get_stats() -> dict:
     }
 
 
-# Excepción de dominio que el core descubre como `ServiceError`.
+# Excepcion de dominio que el core descubre como `ServiceError`.
 ServiceError = SkillError

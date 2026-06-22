@@ -1,8 +1,8 @@
 {% comment %}
-Sección "Repositorios git" del form de proyecto. Filas dinámicas (url + rama +
+Seccion "Repositorios git" del form de proyecto. Filas dinamicas (url + rama +
 folder) que viajan como arrays paralelos repo_url[]/repo_branch[]/repo_folder[].
-El primero es el principal (default). El botón git+ agrega filas, el tacho las
-quita (projects-repos.js, delegado para funcionar en el modal dinámico).
+El primero es el principal (default). El boton git+ agrega filas, el tacho las
+quita (projects-repos.js, delegado para funcionar en el modal dinamico).
 
 Contexto: repo_rows = lista de {url, branch_default, root_path}.
 {% endcomment %}
@@ -60,7 +60,7 @@ Contexto: repo_rows = lista de {url, branch_default, root_path}.
     {% endfor %}
   </div>
 
-  {% comment %} Plantilla inerte para clonar filas nuevas (no se envía). {% endcomment %}
+  {% comment %} Plantilla inerte para clonar filas nuevas (no se envia). {% endcomment %}
   <template data-repo-template>
     <div class="repo-row">
       <input type="text" name="repo_url" class="form-control" autocomplete="off"

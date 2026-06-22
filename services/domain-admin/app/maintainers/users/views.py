@@ -1,17 +1,17 @@
 """Views del mantenedor de usuarios (migradas a core).
 
-Las 7 vistas estándar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Acá solo:
+Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
+arma core.views.MaintainerViews. Aqui solo:
 
   1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks específicos de users:
+  2. Se sobreescriben los hooks especificos de users:
        - _form_payload: mapea role -> role_slug y agrega hashed_password().
        - form_context / detail_context: exponen `user_obj` (+ roles en detail)
          que los templates de users ya consumen.
   3. Se agregan las 2 vistas propias del dominio roles (asignar / revocar),
-     que NO son parte del CRUD estándar.
+     que NO son parte del CRUD estandar.
 
-El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
+El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ class UserViews(MaintainerViews):
             "user_roles": services.get_user_roles(instance),
             "available_roles": services.list_available_roles(),
             "assign_form": UserRoleAssignForm(user=instance),
-            # API keys del usuario, para la sección "API Keys" del modal de detalle.
+            # API keys del usuario, para la seccion "API Keys" del modal de detalle.
             "api_keys": list(
                 ApiKey.objects.filter(user_id=instance.pk).order_by("-created_at")
             ),
@@ -95,7 +95,7 @@ views = UserViews(
 )
 
 
-# === Vistas propias del dominio roles (fuera del CRUD estándar) ===
+# === Vistas propias del dominio roles (fuera del CRUD estandar) ===
 
 @require_http_methods(["POST"])
 def role_assign(request, user_id: str):
@@ -110,7 +110,7 @@ def role_assign(request, user_id: str):
             services.assign_role(user, role.pk)
             messages.success(request, f"Rol '{role.slug}' asignado a {user.email}.")
         else:
-            messages.error(request, "Formulario inválido.")
+            messages.error(request, "Formulario invalido.")
     except services.UserError as exc:
         messages.error(request, str(exc))
     except Exception as exc:  # noqa: BLE001 — feedback al usuario, no swallow silencioso
@@ -136,16 +136,16 @@ def role_revoke(request, user_id: str, role_id: str):
     return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
 
 
-# === Consolidación API Keys + Invitaciones dentro del mantenedor de Usuarios ===
+# === Consolidacion API Keys + Invitaciones dentro del mantenedor de Usuarios ===
 
 @require_http_methods(["GET"])
 def apikeys_modal(request):
     """Listado COMPACTO de API Keys para el modal "Gestionar API Keys".
 
-    Reusa apikeys.services.list_api_keys (search/paginación del MaintainerService)
+    Reusa apikeys.services.list_api_keys (search/paginacion del MaintainerService)
     y renderiza un partial chico. Las acciones por fila (editar/revocar/crear)
-    apuntan al mantenedor existente (/api-keys/) vía data-base-url, así que el
-    submit lo maneja modals.js contra las rutas estándar de apikeys.
+    apuntan al mantenedor existente (/api-keys/) via data-base-url, asi que el
+    submit lo maneja modals.js contra las rutas estandar de apikeys.
     """
     if (redir := require_auth(request)):
         return redir
@@ -160,15 +160,15 @@ def apikeys_modal(request):
 
 @require_http_methods(["GET"])
 def invite_preview(request, user_id: str):
-    """Preview del email de invitación (PREVIEW-ONLY, sin SMTP ni persistencia).
+    """Preview del email de invitacion (PREVIEW-ONLY, sin SMTP ni persistencia).
 
     Renderiza el email HTML real (templates/emails/invitation.html) con un token
-    de enrollment generado al vuelo y expiración a 7 días, dentro de un modal con
-    nota de "envío pendiente" y botón "Copiar link".
+    de enrollment generado al vuelo y expiracion a 7 dias, dentro de un modal con
+    nota de "envio pendiente" y boton "Copiar link".
 
     IMPORTANTE: NO se persiste en auth_invitations (se evita el FK
-    invited_by_user_id). El registro de la invitación y el envío real por SMTP
-    quedan como trabajo futuro: acá solo se muestra cómo se vería el correo.
+    invited_by_user_id). El registro de la invitacion y el envio real por SMTP
+    quedan como trabajo futuro: aqui solo se muestra como se veria el correo.
     """
     if (redir := require_auth(request)):
         return redir

@@ -17,8 +17,8 @@ class ListSkillsTests(MaintainerTestCase):
     def setUp(self):
         make_skill("Resumir Ticket", slug="resumir-ticket",
                    description="Resume un ticket de soporte")
-        make_skill("Clasificar Intención", slug="clasificar-intencion",
-                   description="Detecta la intención del usuario")
+        make_skill("Clasificar Intencion", slug="clasificar-intencion",
+                   description="Detecta la intencion del usuario")
         make_skill("Generar Respuesta", slug="generar-respuesta")
 
     def test_sin_search_devuelve_todos(self):
@@ -37,7 +37,7 @@ class ListSkillsTests(MaintainerTestCase):
     def test_search_por_slug(self):
         data = services.list_skills(search="clasificar-intencion", page=1, per_page=20)
         self.assertEqual(data["total"], 1)
-        self.assertEqual(data["skills"][0].name, "Clasificar Intención")
+        self.assertEqual(data["skills"][0].name, "Clasificar Intencion")
 
     def test_search_por_descripcion(self):
         data = services.list_skills(search="soporte", page=1, per_page=20)

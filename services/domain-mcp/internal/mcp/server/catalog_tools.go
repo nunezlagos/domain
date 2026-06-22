@@ -1,4 +1,4 @@
-// issue-12.3 — tools MCP faltantes del catálogo: skill_execute,
+// issue-12.3 — tools MCP faltantes del catalogo: skill_execute,
 // agent_create, flow_create y cron_list.
 package mcpserver
 
@@ -28,7 +28,7 @@ func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool 
 		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", deps.handleAgentCreate)},
 		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", deps.handleFlowCreate)},
 		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", deps.handleCronList)},
-		// REQ-28.2: gestión de projects desde MCP, con asociación a client.
+		// REQ-28.2: gestion de projects desde MCP, con asociacion a client.
 		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(deps.handleProjectCreate))},
 		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(deps.handleProjectUpdate))},
 	}
@@ -38,13 +38,13 @@ func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool 
 }
 
 // toolProjectCreate (REQ-28.2): crea un project, opcionalmente asociado a un
-// client (mandante) vía client_slug. Si client_slug se omite, el project queda
+// client (mandante) via client_slug. Si client_slug se omite, el project queda
 // como "interno" (client_id NULL).
 func toolProjectCreate() mcp.Tool {
 	return mcp.NewTool("domain_project_create",
 		mcp.WithDescription("Crea un project. Si client_slug se especifica, lo asocia al mandante correspondiente (consultoras gestionando proyectos por cliente)."),
 		mcp.WithString("slug",
-			mcp.Description("Slug único per-org (kebab-case)"),
+			mcp.Description("Slug unico per-org (kebab-case)"),
 			mcp.Required(),
 		),
 		mcp.WithString("name",
@@ -52,7 +52,7 @@ func toolProjectCreate() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithString("description",
-			mcp.Description("Descripción opcional"),
+			mcp.Description("Descripcion opcional"),
 		),
 		mcp.WithString("repository_url",
 			mcp.Description("URL del repositorio asociado (opcional)"),
@@ -112,7 +112,7 @@ func (d *Deps) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest)
 // client_slug == "" → unset (proyecto pasa a interno); slug → reasigna.
 func toolProjectUpdate() mcp.Tool {
 	return mcp.NewTool("domain_project_update",
-		mcp.WithDescription("Actualiza name/description/repository_url y opcionalmente reasigna el client (mandante). Pasar client_slug='' (string vacío) para desasignar."),
+		mcp.WithDescription("Actualiza name/description/repository_url y opcionalmente reasigna el client (mandante). Pasar client_slug='' (string vacio) para desasignar."),
 		mcp.WithString("slug",
 			mcp.Description("Slug actual del project a actualizar"),
 			mcp.Required(),
@@ -121,13 +121,13 @@ func toolProjectUpdate() mcp.Tool {
 			mcp.Description("Nuevo nombre (opcional)"),
 		),
 		mcp.WithString("description",
-			mcp.Description("Nueva descripción (opcional)"),
+			mcp.Description("Nueva descripcion (opcional)"),
 		),
 		mcp.WithString("repository_url",
 			mcp.Description("Nuevo repository_url (opcional)"),
 		),
 		mcp.WithString("client_slug",
-			mcp.Description("Opcional: slug del nuevo client. String vacío '' = desasignar."),
+			mcp.Description("Opcional: slug del nuevo client. String vacio '' = desasignar."),
 		),
 	)
 }
@@ -190,13 +190,13 @@ func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest)
 
 func toolSkillExecute() mcp.Tool {
 	return mcp.NewTool("domain_skill_execute",
-		mcp.WithDescription("Ejecuta un skill por slug con parámetros validados contra su input_schema. Persiste el log de ejecución."),
+		mcp.WithDescription("Ejecuta un skill por slug con parametros validados contra su input_schema. Persiste el log de ejecucion."),
 		mcp.WithString("skill_slug",
 			mcp.Description("Slug del skill a ejecutar"),
 			mcp.Required(),
 		),
 		mcp.WithObject("parameters",
-			mcp.Description("Parámetros del skill (validados contra input_schema)"),
+			mcp.Description("Parametros del skill (validados contra input_schema)"),
 		),
 		mcp.WithString("mode",
 			mcp.Description("sync (default) | async (retorna execution_id para polling)"),
@@ -204,10 +204,10 @@ func toolSkillExecute() mcp.Tool {
 	)
 }
 
-// runSkillDispatch (issue-35.1 phase 5): la ejecución de skills desde
+// runSkillDispatch (issue-35.1 phase 5): la ejecucion de skills desde
 // MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
 // (SkillExecution.Execute directo) fue eliminado: 1 sola
-// implementación para cron, webhook y MCP.
+// implementacion para cron, webhook y MCP.
 func (d *Deps) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
@@ -257,7 +257,7 @@ func toolAgentCreate() mcp.Tool {
 	return mcp.NewTool("domain_agent_create",
 		mcp.WithDescription("Crea un agent con provider/model/system_prompt y skills asignados."),
 		mcp.WithString("slug",
-			mcp.Description("Slug único del agent (kebab-case)"),
+			mcp.Description("Slug unico del agent (kebab-case)"),
 			mcp.Required(),
 		),
 		mcp.WithString("name",
@@ -327,7 +327,7 @@ func toolFlowCreate() mcp.Tool {
 	return mcp.NewTool("domain_flow_create",
 		mcp.WithDescription("Crea un flow con su spec DAG (steps validados: tipos, ciclos, error policies)."),
 		mcp.WithString("slug",
-			mcp.Description("Slug único del flow"),
+			mcp.Description("Slug unico del flow"),
 			mcp.Required(),
 		),
 		mcp.WithString("name",
@@ -361,7 +361,7 @@ func (d *Deps) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*
 	specJSON, _ := json.Marshal(specRaw)
 	var spec flowsvc.Spec
 	if err := json.Unmarshal(specJSON, &spec); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("spec inválido: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("spec invalido: %v", err)), nil
 	}
 
 	fl, err := d.Flows.Create(ctx, flowsvc.CreateInput{
@@ -377,7 +377,7 @@ func (d *Deps) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*
 
 func toolCronList() mcp.Tool {
 	return mcp.NewTool("domain_cron_list",
-		mcp.WithDescription("Lista los crons programados de la org con su próxima ejecución."),
+		mcp.WithDescription("Lista los crons programados de la org con su proxima ejecucion."),
 	)
 }
 

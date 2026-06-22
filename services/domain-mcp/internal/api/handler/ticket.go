@@ -540,7 +540,7 @@ func (a *API) bulkLinkTicketsExternal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.ProjectSlug == "" || req.Provider == "" || len(req.Mappings) == 0 {
-		writeError(w, http.StatusBadRequest, "missing_fields", "project_slug, provider, mappings (no vacío)")
+		writeError(w, http.StatusBadRequest, "missing_fields", "project_slug, provider, mappings (no vacio)")
 		return
 	}
 	proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, req.ProjectSlug)

@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de usuarios.
 
 Usan el test client real contra URLs reales (namespace 'users', intacto tras la
-migración a maintainers.users). Verifican status codes, efectos en DB y forma
+migracion a maintainers.users). Verifican status codes, efectos en DB y forma
 de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
@@ -20,7 +20,7 @@ from .factories import make_role, make_user
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("users:list"))
@@ -81,7 +81,7 @@ class CreateViewTests(MaintainerTestCase):
         r = self.client.post(reverse("users:create"), {
             "email": "creado@example.com",
             "first_name": "Creado",
-            "paternal_surname": "Pérez",
+            "paternal_surname": "Perez",
             "maternal_surname": "Soto",
             "role": "viewer",
             "status": "active",
@@ -90,7 +90,7 @@ class CreateViewTests(MaintainerTestCase):
         })
         self.assertEqual(r.status_code, 302)
         u = User.objects.get(email="creado@example.com")
-        self.assertEqual(u.name, "Creado Pérez Soto")
+        self.assertEqual(u.name, "Creado Perez Soto")
 
     def test_post_password_corta_no_crea(self):
         r = self.client.post(reverse("users:create"), {
@@ -101,7 +101,7 @@ class CreateViewTests(MaintainerTestCase):
             "password": "abc",
             "password_confirm": "abc",
         })
-        # Form inválido → re-render (200), sin crear.
+        # Form invalido → re-render (200), sin crear.
         self.assertEqual(r.status_code, 200)
         self.assertFalse(User.objects.filter(email="corta@example.com").exists())
 

@@ -51,7 +51,7 @@ func (a *API) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	var b createAPIKeyBody
 	if err := decodeJSON(r, &b); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_body", "JSON inválido")
+		writeError(w, http.StatusBadRequest, "invalid_body", "JSON invalido")
 		return
 	}
 	if b.Name == "" {
@@ -72,7 +72,7 @@ func (a *API) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, map[string]any{
 		"api_key":    plaintext,
 		"api_key_id": keyID,
-		"note":       "guardá la API key — solo se muestra UNA vez",
+		"note":       "guarda la API key — solo se muestra UNA vez",
 	})
 }
 

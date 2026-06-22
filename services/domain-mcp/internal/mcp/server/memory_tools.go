@@ -33,9 +33,9 @@ func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 
 func toolMemDelete() mcp.Tool {
 	return mcp.NewTool("domain_mem_delete",
-		mcp.WithDescription("Elimina (soft-delete) una observación de memoria por id."),
+		mcp.WithDescription("Elimina (soft-delete) una observacion de memoria por id."),
 		mcp.WithString("observation_id",
-			mcp.Description("UUID de la observación a eliminar"),
+			mcp.Description("UUID de la observacion a eliminar"),
 			mcp.Required(),
 		),
 	)
@@ -50,7 +50,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	idRaw, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idRaw)
 	if err != nil {
-		return mcp.NewToolResultError("observation_id inválido"), nil
+		return mcp.NewToolResultError("observation_id invalido"), nil
 	}
 	// Guard anti-enumeration: misma respuesta para no-existe.
 	if _, err := d.Observations.Get(ctx, id); err != nil {
@@ -65,7 +65,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 
 func toolMemSavePrompt() mcp.Tool {
 	return mcp.NewTool("domain_mem_save_prompt",
-		mcp.WithDescription("Guarda un prompt reutilizable versionado (por slug). Cada save del mismo slug crea una versión nueva."),
+		mcp.WithDescription("Guarda un prompt reutilizable versionado (por slug). Cada save del mismo slug crea una version nueva."),
 		mcp.WithString("slug",
 			mcp.Description("Slug estable del prompt (kebab-case)"),
 			mcp.Required(),
@@ -78,10 +78,10 @@ func toolMemSavePrompt() mcp.Tool {
 			mcp.Description("Project al que scoping el prompt (opcional: global de la org si se omite)"),
 		),
 		mcp.WithString("description",
-			mcp.Description("Descripción corta"),
+			mcp.Description("Descripcion corta"),
 		),
 		mcp.WithBoolean("set_active",
-			mcp.Description("Marcar esta versión como activa (default true)"),
+			mcp.Description("Marcar esta version como activa (default true)"),
 		),
 	)
 }
@@ -130,7 +130,7 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 
 func toolMemCapturePassive() mcp.Tool {
 	return mcp.NewTool("domain_mem_capture_passive",
-		mcp.WithDescription("Captura pasiva de contexto (baja prioridad): guarda una observación tipo 'passive' con dedup automático por hash de contenido."),
+		mcp.WithDescription("Captura pasiva de contexto (baja prioridad): guarda una observacion tipo 'passive' con dedup automatico por hash de contenido."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project"),
 			mcp.Required(),
@@ -179,7 +179,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		Metadata:        map[string]any{"source": source, "passive": true},
 	})
 	if err != nil {
-		// Dedup hash: contenido idéntico ya capturado no es error para el caller.
+		// Dedup hash: contenido identico ya capturado no es error para el caller.
 		if strings.Contains(err.Error(), "duplicate") {
 			return toolResultJSON(map[string]any{"captured": false, "reason": "duplicate"})
 		}
@@ -190,7 +190,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 
 func toolMemSuggestTopicKey() mcp.Tool {
 	return mcp.NewTool("domain_mem_suggest_topic_key",
-		mcp.WithDescription("Sugiere un topic_key kebab-case estable a partir de un contenido (heurística de keywords, sin LLM)."),
+		mcp.WithDescription("Sugiere un topic_key kebab-case estable a partir de un contenido (heuristica de keywords, sin LLM)."),
 		mcp.WithString("content",
 			mcp.Description("Contenido del cual derivar el topic key"),
 			mcp.Required(),
@@ -199,8 +199,8 @@ func toolMemSuggestTopicKey() mcp.Tool {
 }
 
 var (
-	reWord = regexp.MustCompile(`[a-záéíóúñü0-9]+`)
-	// stopwords ES+EN mínimas para keywords.
+	reWord = regexp.MustCompile(`[a-zaeiouñu0-9]+`)
+	// stopwords ES+EN minimas para keywords.
 	topicStopwords = map[string]bool{
 		"el": true, "la": true, "los": true, "las": true, "de": true, "del": true,
 		"en": true, "un": true, "una": true, "que": true, "con": true, "por": true,
@@ -211,7 +211,7 @@ var (
 	}
 )
 
-// SuggestTopicKey deriva un slug kebab-case con las keywords más frecuentes.
+// SuggestTopicKey deriva un slug kebab-case con las keywords mas frecuentes.
 func SuggestTopicKey(content string) string {
 	words := reWord.FindAllString(strings.ToLower(content), -1)
 	freq := map[string]int{}
@@ -228,7 +228,7 @@ func SuggestTopicKey(content string) string {
 	if len(order) == 0 {
 		return "general"
 	}
-	// Orden estable: frecuencia desc, luego orden de aparición.
+	// Orden estable: frecuencia desc, luego orden de aparicion.
 	pos := map[string]int{}
 	for i, w := range order {
 		pos[w] = i
@@ -257,7 +257,7 @@ func (d *Deps) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolReque
 
 func toolMemStats() mcp.Tool {
 	return mcp.NewTool("domain_mem_stats",
-		mcp.WithDescription("Estadísticas de memoria de la org: observations totales, por tipo, sessions y prompts."),
+		mcp.WithDescription("Estadisticas de memoria de la org: observations totales, por tipo, sessions y prompts."),
 		mcp.WithString("project_slug",
 			mcp.Description("Limitar stats a un project (opcional)"),
 		),
@@ -286,7 +286,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	byType := map[string]int64{}
-	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyectó withOrgTxHandler.
+	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyecto withOrgTxHandler.
 	rows, err := d.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM knowledge_observations
 		WHERE deleted_at IS NULL`+projFilter+`

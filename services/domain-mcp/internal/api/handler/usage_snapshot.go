@@ -11,8 +11,8 @@ import (
 )
 
 // usageCurrentSnapshot GET /api/v1/usage/current — issue-33.4.
-// Devuelve snapshot del día UTC actual scoped a la org del principal.
-// Read-only, sin params. POST/PUT/DELETE devuelven 405 vía router (Go 1.22+
+// Devuelve snapshot del dia UTC actual scoped a la org del principal.
+// Read-only, sin params. POST/PUT/DELETE devuelven 405 via router (Go 1.22+
 // method routing).
 func (a *API) usageCurrentSnapshot(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
@@ -42,8 +42,8 @@ func (a *API) usageCurrentSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 // usageHistory GET /api/v1/usage/history?days=N — issue-33.4.
-// Default days=7, max days=365. Día más reciente primero. Gap-fill con ceros
-// en días sin actividad.
+// Default days=7, max days=365. Dia mas reciente primero. Gap-fill con ceros
+// en dias sin actividad.
 func (a *API) usageHistory(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

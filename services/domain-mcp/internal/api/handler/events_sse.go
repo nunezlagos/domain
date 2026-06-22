@@ -27,8 +27,8 @@ import (
 // Heartbeat: cada 25s manda comentario ": ping\n\n" para mantener
 // proxies abiertos (Caddy/nginx desconectan tras ~60s idle).
 //
-// Reconexión: el cliente debe asumir lossy (no buffer histórico).
-// Para sincronizarse después de reconectar: GET el recurso afectado.
+// Reconexion: el cliente debe asumir lossy (no buffer historico).
+// Para sincronizarse despues de reconectar: GET el recurso afectado.
 func (a *API) sseEvents(w http.ResponseWriter, r *http.Request) {
 	if a.EventBus == nil {
 		http.Error(w, "events bus no configurado", http.StatusServiceUnavailable)
@@ -41,7 +41,7 @@ func (a *API) sseEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	orgID, err := uuid.Parse(princ.OrganizationID)
 	if err != nil {
-		http.Error(w, "principal org inválido", http.StatusBadRequest)
+		http.Error(w, "principal org invalido", http.StatusBadRequest)
 		return
 	}
 	flusher, ok := w.(http.Flusher)
@@ -59,7 +59,7 @@ func (a *API) sseEvents(w http.ResponseWriter, r *http.Request) {
 	sub := a.EventBus.Subscribe(orgID, 64)
 	defer a.EventBus.Unsubscribe(sub)
 
-	// Hello event para que el cliente sepa que la conexión está viva.
+	// Hello event para que el cliente sepa que la conexion esta viva.
 	fmt.Fprintf(w, "event: hello\ndata: {\"sub_id\":\"%s\"}\n\n", sub.ID)
 	flusher.Flush()
 

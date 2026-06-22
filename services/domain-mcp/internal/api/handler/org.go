@@ -23,14 +23,14 @@ func parseUUID(s string) (uuid.UUID, error) {
 }
 
 // roleOwner / roleAdmin: single-org global roles. La entidad organization se
-// removió (single-org); los roles viven en users.role y se validan acá contra
-// el catálogo rbac.
+// removio (single-org); los roles viven en users.role y se validan aqui contra
+// el catalogo rbac.
 var (
 	roleOwner = string(rbac.RoleOwner)
 	roleAdmin = string(rbac.RoleAdmin)
 )
 
-// memberEmailRegex validación de formato (sin DNS).
+// memberEmailRegex validacion de formato (sin DNS).
 var memberEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 // allowedMemberRoles cierra el conjunto de roles aceptados al crear members.

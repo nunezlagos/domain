@@ -88,7 +88,7 @@ class CreateProjectTests(MaintainerTestCase):
         project = services.create_project(
             name="Con tpl", slug="con-tpl", template_id=str(tpl.pk),
         )
-        # template_id es UUIDField; recién coacciona a UUID tras round-trip a BD.
+        # template_id es UUIDField; recien coacciona a UUID tras round-trip a BD.
         project.refresh_from_db()
         self.assertEqual(project.template_id, tpl.pk)
 

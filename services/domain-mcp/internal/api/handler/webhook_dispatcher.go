@@ -10,15 +10,15 @@ import (
 // WebhookDispatcher gestiona el lifecycle de las goroutines que ejecutan
 // dispatch de webhooks inbound. Garantiza:
 //   - Backpressure: bounded queue (channel bufferizado). Enqueue retorna
-//     false si está llena → handler responde 503.
+//     false si esta llena → handler responde 503.
 //   - Timeout por job: cada job corre con su propio context con deadline.
 //   - WaitGroup: el shutdown espera a los jobs en vuelo (hasta un budget).
-//   - Context cancelable: shutdown cancela jobs que están en vuelo.
+//   - Context cancelable: shutdown cancela jobs que estan en vuelo.
 //
-// ISSUE-28.7 (webhook-goroutine-lifecycle): antes el handler hacía
+// ISSUE-28.7 (webhook-goroutine-lifecycle): antes el handler hacia
 // `go a.runWebhookTarget(context.Background(), ...)` directamente. Problemas:
 //   - Unbounded goroutines (10k webhooks/s → 10k goroutines).
-//   - Sin cancelación: context.Background no hereda el shutdown.
+//   - Sin cancelacion: context.Background no hereda el shutdown.
 //   - Sin WaitGroup: graceful shutdown no espera los webhooks.
 type WebhookDispatcher struct {
 	ch       chan webhookJob
@@ -27,8 +27,8 @@ type WebhookDispatcher struct {
 	dispatch func(context.Context, webhookJob)
 	logger   *slog.Logger
 
-	// closed es el flag que indica que el dispatcher no acepta más jobs.
-	// Se setea en Shutdown. atómico para race-free check en Enqueue.
+	// closed es el flag que indica que el dispatcher no acepta mas jobs.
+	// Se setea en Shutdown. atomico para race-free check en Enqueue.
 	closedMu sync.RWMutex
 	closed   bool
 }
@@ -45,13 +45,13 @@ type webhookJob struct {
 	startedAt time.Time
 }
 
-// WebhookDispatcherConfig parámetros del dispatcher.
+// WebhookDispatcherConfig parametros del dispatcher.
 type WebhookDispatcherConfig struct {
 	// QueueSize: bounded channel. Default 256.
 	QueueSize int
 	// JobTimeout: cada job corre con deadline. Default 30s (recomendado HU).
 	JobTimeout time.Duration
-	// Dispatch: función que ejecuta el job real (runWebhookTarget del
+	// Dispatch: funcion que ejecuta el job real (runWebhookTarget del
 	// handler, o un stub en tests).
 	Dispatch func(context.Context, webhookJob)
 	// Logger para reportar shutdown errors. Default: slog.Default().
@@ -72,7 +72,7 @@ func NewWebhookDispatcher(cfg WebhookDispatcherConfig) *WebhookDispatcher {
 	if cfg.Dispatch == nil {
 		cfg.Dispatch = func(ctx context.Context, _ webhookJob) {
 			// Default no-op para que el dispatcher pueda existir
-			// sin dispatch real (caso de test sin lógica de negocio).
+			// sin dispatch real (caso de test sin logica de negocio).
 		}
 	}
 
@@ -83,8 +83,8 @@ func NewWebhookDispatcher(cfg WebhookDispatcherConfig) *WebhookDispatcher {
 		logger:   cfg.Logger,
 	}
 
-	// N workers = 1 (single goroutine que procesa en serie). Para más
-	// throughput, se podrían spawnear N; por ahora single-worker es
+	// N workers = 1 (single goroutine que procesa en serie). Para mas
+	// throughput, se podrian spawnear N; por ahora single-worker es
 	// suficiente (webhook dispatch no es CPU-bound, espera I/O HTTP).
 	d.wg.Add(1)
 	go d.worker()
@@ -93,9 +93,9 @@ func NewWebhookDispatcher(cfg WebhookDispatcherConfig) *WebhookDispatcher {
 }
 
 // Enqueue intenta agregar un job a la cola. Retorna false si la cola
-// está llena o el dispatcher ya cerró → handler responde 503.
+// esta llena o el dispatcher ya cerro → handler responde 503.
 //
-// ctx se usa para cancelación del request; el job en sí corre con su
+// ctx se usa para cancelacion del request; el job en si corre con su
 // propio timeout (cfg.JobTimeout).
 func (d *WebhookDispatcher) Enqueue(ctx context.Context, job webhookJob) bool {
 	d.closedMu.RLock()
@@ -164,7 +164,7 @@ func (d *WebhookDispatcher) Shutdown(ctx context.Context) error {
 	}
 }
 
-// QueueLen retorna la cantidad de jobs pendientes (para métricas).
+// QueueLen retorna la cantidad de jobs pendientes (para metricas).
 func (d *WebhookDispatcher) QueueLen() int {
 	return len(d.ch)
 }

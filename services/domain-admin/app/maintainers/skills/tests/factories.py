@@ -1,7 +1,7 @@
 """Factories del mantenedor de Skills.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). Solo agrega los helpers específicos de las 2
+prod los genera domain-mcp). Solo agrega los helpers especificos de las 2
 tablas del dominio (skills, skill_versions).
 
 La unicidad de slug es por (project_id, slug); DEFAULT_PROJECT permite forzar

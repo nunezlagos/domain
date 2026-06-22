@@ -71,7 +71,7 @@ class ListAgentTemplatesTests(MaintainerTestCase):
 class CreateAgentTemplateTests(MaintainerTestCase):
     def test_crea_template_ok(self):
         t = services.create_agenttemplate(
-            slug="nueva", name="Nueva", system_prompt="Sos útil.",
+            slug="nueva", name="Nueva", system_prompt="Sos util.",
             capabilities=["research"],
         )
         self.assertIsNotNone(t.pk)

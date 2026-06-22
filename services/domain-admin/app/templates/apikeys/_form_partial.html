@@ -1,7 +1,7 @@
 {% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de API Key para el modal dinámico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el título, los
+Form de API Key para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo, los
 campos y el label del submit.
 {% endcomment %}
 
@@ -20,7 +20,7 @@ campos y el label del submit.
     <label class="form-label" for="{{ form.user.id_for_label }}">Usuario dueño *</label>
     {{ form.user }}
     {% if mode == "edit" %}
-      <div class="form-help">El dueño no se puede cambiar después de creada.</div>
+      <div class="form-help">El dueño no se puede cambiar despues de creada.</div>
     {% elif form.user.help_text %}
       <div class="form-help">{{ form.user.help_text }}</div>
     {% endif %}

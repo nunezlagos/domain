@@ -1,7 +1,7 @@
 """Modelo del mantenedor de Reglas por proyecto (project_policies).
 
-Tabla existente en domain-mcp (migración 000106_create_project_policies),
-managed=False: Django solo lee/escribe vía ORM; el PK uuid lo genera domain-mcp.
+Tabla existente en domain-mcp (migracion 000106_create_project_policies),
+managed=False: Django solo lee/escribe via ORM; el PK uuid lo genera domain-mcp.
 
 ProjectPolicy hereda de core.models.SoftDeleteModel porque la tabla tiene
 deleted_at + status. Solo se declaran las columnas PROPIAS. Deben matchear
@@ -21,21 +21,21 @@ class ProjectPolicy(SoftDeleteModel):
     """Regla (policy) scopeada a un proyecto.
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
-    is_active controla la habilitación; override_platform define si reemplaza
-    (true) o amplía (false) la regla de plataforma del mismo kind.
+    is_active controla la habilitacion; override_platform define si reemplaza
+    (true) o amplia (false) la regla de plataforma del mismo kind.
     """
 
     KIND_CHOICES = [
-        ("convention", "Convención"),
+        ("convention", "Convencion"),
         ("security_rule", "Regla de seguridad"),
         ("architecture", "Arquitectura"),
         ("sdd_workflow", "Workflow SDD"),
         ("observability", "Observabilidad"),
-        ("migration_rule", "Regla de migración"),
+        ("migration_rule", "Regla de migracion"),
         ("linter_config", "Config de linter"),
         ("agent_protocol", "Protocolo de agente"),
         ("git_workflow", "Workflow git"),
-        ("tech_stack", "Stack técnico"),
+        ("tech_stack", "Stack tecnico"),
         ("test_strategy", "Estrategia de tests"),
     ]
     SOURCE_CHOICES = [

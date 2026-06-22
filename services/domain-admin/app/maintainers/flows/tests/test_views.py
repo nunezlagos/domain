@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de Flows (migrado a core).
 
 Usan el test client real contra URLs reales (namespace 'flows', intacto tras la
-migración a maintainers.flows). Verifican status codes, efectos en DB y forma
+migracion a maintainers.flows). Verifican status codes, efectos en DB y forma
 de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
@@ -21,7 +21,7 @@ from .factories import make_flow, make_flow_version
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("flows:list"))
@@ -128,7 +128,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_flow("Existente", slug="dup")
         r = self.client.post(reverse("flows:create"), self._data(slug="dup"))
-        # Form inválido (clean_slug) → re-render 200, sin crear nuevo.
+        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Flow.objects.filter(slug="dup").count(), 1)
 

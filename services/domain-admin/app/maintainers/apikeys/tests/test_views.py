@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de API Keys.
 
 Usan el test client real contra URLs reales (namespace 'apikeys', intacto tras
-la migración a maintainers.apikeys). El helper authenticate() viene de
+la migracion a maintainers.apikeys). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from maintainers.users.tests.factories import make_user
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("apikeys:list"))

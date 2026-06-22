@@ -17,7 +17,7 @@ import (
 // toolHUCreateStart — domain_hu_create_start
 func toolHUCreateStart() mcp.Tool {
 	return mcp.NewTool("domain_hu_create_start",
-		mcp.WithDescription("Inicia un nuevo wizard de creación de HU. Crea un borrador y devuelve la primera pregunta."),
+		mcp.WithDescription("Inicia un nuevo wizard de creacion de HU. Crea un borrador y devuelve la primera pregunta."),
 		mcp.WithString("mode",
 			mcp.Description("Modo del wizard: feature"),
 			mcp.Required(),
@@ -125,7 +125,7 @@ func (d *Deps) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest
 	}
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("draft_id inválido"), nil
+		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
 	// Intentar parsear answer como JSON primero; si falla, usar string literal
 	var rawAnswer any = answer
@@ -160,7 +160,7 @@ func (d *Deps) handleHUCreatePreview(ctx context.Context, req mcp.CallToolReques
 	idStr, _ := args["draft_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("draft_id inválido"), nil
+		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
 	preview, err := d.Hubuilder.BuildPreview(ctx, id)
 	if err != nil {
@@ -177,7 +177,7 @@ func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest
 	idStr, _ := args["draft_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("draft_id inválido"), nil
+		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
 	draft, err := d.Hubuilder.Commit(ctx, id)
 	if err != nil {
@@ -199,7 +199,7 @@ func (d *Deps) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolReques
 	idStr, _ := args["draft_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("draft_id inválido"), nil
+		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
 	reason, _ := args["reason"].(string)
 	if err := d.Hubuilder.Abandon(ctx, id, reason); err != nil {
@@ -239,7 +239,7 @@ func (d *Deps) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) 
 // registerHUTools registra los tools del wizard de issues (HU → issue
 // rename del REQ-56). Se registran tanto los NUEVOS nombres
 // domain_issue_* como los LEGACY domain_hu_* para no romper clientes
-// que aún tipean los nombres viejos. Los handlers son los mismos.
+// que aun tipean los nombres viejos. Los handlers son los mismos.
 func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	return []mcpgo.ServerTool{
 		// Nuevos nombres (issue_create_*)
@@ -264,7 +264,7 @@ func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 
 func toolIssueCreateStart() mcp.Tool {
 	return mcp.NewTool("domain_issue_create_start",
-		mcp.WithDescription("Inicia un wizard de creación de issue (workflow SDD con Gherkin scenarios). Crea un borrador y devuelve la primera pregunta. NOTA: para tickets operativos (bug/task/feature básicos sin Gherkin) usar domain_ticket_create."),
+		mcp.WithDescription("Inicia un wizard de creacion de issue (workflow SDD con Gherkin scenarios). Crea un borrador y devuelve la primera pregunta. NOTA: para tickets operativos (bug/task/feature basicos sin Gherkin) usar domain_ticket_create."),
 		mcp.WithString("mode", mcp.Description("Modo del wizard: feature"), mcp.Required()),
 		mcp.WithString("initial_idea", mcp.Description("Idea inicial del issue"), mcp.Required()),
 	)

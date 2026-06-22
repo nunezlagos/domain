@@ -1,8 +1,8 @@
 """Tests de AgentForm (validaciones del mantenedor de Agentes).
 
-Verifican reglas reales: campos requeridos, normalización de skills_slugs
+Verifican reglas reales: campos requeridos, normalizacion de skills_slugs
 (CSV → lista), unicidad de slug (delegada al core.forms.SlugNormalizationMixin)
-y exclusión del propio registro en edición.
+y exclusion del propio registro en edicion.
 """
 from __future__ import annotations
 

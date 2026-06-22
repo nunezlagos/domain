@@ -62,12 +62,12 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	// observations, auth_invitations) NO tienen RLS habilitada — sus services
 	// validan org_id en la query. Tablas con RLS (auth_api_keys, audit_log,
 	// auth_otp_codes, activity_log, auth_secrets) las accede AuthPool o un flujo
-	// con txctx.WithOrgTx explícito.
+	// con txctx.WithOrgTx explicito.
 	projS := &projsvc.Service{Pool: pool, Audit: rec}
 	obsS := &observation.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{}}
 
 	// apikey store usa AuthPool: Resolve hace lookup global de auth_api_keys por
-	// prefix (no conoce org_id aún) y necesita atravesar RLS.
+	// prefix (no conoce org_id aun) y necesita atravesar RLS.
 	keys := &apikey.PGStore{Pool: authPool}
 
 	searchS := &searchsvc.Service{Pool: pool}
@@ -79,8 +79,8 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	}
 
 	// Insertar org + user directamente (el org.Service fue removido). El schema
-	// aún exige users.organization_id NOT NULL con FK a organizations, así que
-	// creamos ambas filas vía SQL sobre el AuthPool (BYPASSRLS) y emitimos la key.
+	// aun exige users.organization_id NOT NULL con FK a organizations, asi que
+	// creamos ambas filas via SQL sobre el AuthPool (BYPASSRLS) y emitimos la key.
 	var orgID, userID uuid.UUID
 	require.NoError(t, authPool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
@@ -93,7 +93,7 @@ func setupAPI(t *testing.T) (*httptest.Server, string, func()) {
 	require.NoError(t, err)
 
 	// Middleware stack: auth + tx RLS → router. Pool es OBLIGATORIO desde
-	// migration 000085 (observations/sessions con RLS FORCE): sin él no
+	// migration 000085 (observations/sessions con RLS FORCE): sin el no
 	// se abre la tx con SET LOCAL y los writes devuelven 500.
 	mw := &apikey.Middleware{Resolver: keys, Allowlist: handler.AuthAllowlist(), Pool: pools.App}
 	handler := mw.Wrap(api.Router())

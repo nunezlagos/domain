@@ -1,5 +1,5 @@
 // REQ-52 REST endpoints adicionales para el dashboard. Espejo HTTP de
-// los tools MCP de REQ-41 a REQ-50 que no tenían REST todavía:
+// los tools MCP de REQ-41 a REQ-50 que no tenian REST todavia:
 //   - usage_summary (REQ-47) → GET /api/v1/usage/turn-summary
 //   - proposals (REQ-49)    → GET /list, POST /review
 //   - verifications (REQ-50) → GET /list, POST /start/update/complete
@@ -7,7 +7,7 @@
 //   - project_policies (REQ-43) → GET /list
 //   - captured_prompts (REQ-41) → GET /list
 //
-// Mantenemos shapes idénticos a los tools MCP donde es razonable, para
+// Mantenemos shapes identicos a los tools MCP donde es razonable, para
 // que el frontend pueda reutilizar tipos.
 package handler
 
@@ -24,7 +24,7 @@ import (
 
 // ----- Usage summary (REQ-47) -----
 // GET /api/v1/usage/turn-summary?project_slug=
-// REQ-42.3: el parámetro session_id se removió (tabla/columna session dropeada).
+// REQ-42.3: el parametro session_id se removio (tabla/columna session dropeada).
 func (a *API) usageTurnSummary(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {
@@ -223,7 +223,7 @@ func (a *API) listProposals(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	// Para read-only acá usamos el pool admin que bypassa RLS — pero
+	// Para read-only aqui usamos el pool admin que bypassa RLS — pero
 	// filtramos manualmente por current_org_id ya que el query lo hace.
 	if a.Pool == nil {
 		writeError(w, http.StatusServiceUnavailable, "pool_unavailable", "")

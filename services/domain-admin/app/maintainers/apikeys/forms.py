@@ -1,14 +1,14 @@
 """Forms del mantenedor de API Keys (migrados a core).
 
 ApiKeyForm reusa core.forms.InstanceAwareMixin para capturar `instance=` y
-poder excluirse a sí mismo en la validación de unicidad del nombre (en
-edición). La lógica propia —choices de usuarios dueños, dueño inmutable en
-edición— queda acá.
+poder excluirse a si mismo en la validacion de unicidad del nombre (en
+edicion). La logica propia —choices de usuarios dueños, dueño inmutable en
+edicion— queda aqui.
 
 Se usa forms.Form (no ModelForm) porque el modelo es managed=False.
-- En create: se elige el user dueño + nombre + expiración opcional.
+- En create: se elige el user dueño + nombre + expiracion opcional.
 - En edit: NO se reasigna el user ni se regenera el secreto; solo se editan
-  nombre, expiración y status.
+  nombre, expiracion y status.
 """
 from django import forms
 
@@ -26,7 +26,7 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={
             "class": "form-control",
-            "placeholder": "Ej: Integración CI/CD",
+            "placeholder": "Ej: Integracion CI/CD",
             "autocomplete": "off",
         }),
         help_text="Etiqueta legible para identificar la key.",
@@ -45,7 +45,7 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
             "type": "datetime-local",
         }, format="%Y-%m-%dT%H:%M"),
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"],
-        help_text="Dejala vacía para que no expire.",
+        help_text="Dejala vacia para que no expire.",
     )
     status = forms.ChoiceField(
         label="Estado",
@@ -64,7 +64,7 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
             for u in User.objects.filter(status="active").order_by("email")
         ]
 
-        # En edición el dueño NO se puede cambiar (regla de negocio): se
+        # En edicion el dueño NO se puede cambiar (regla de negocio): se
         # bloquea el select y se rellena con el dueño actual.
         if instance is not None:
             self.fields["user"].required = False
@@ -86,20 +86,20 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
         return name
 
     def clean_user(self):
-        # En edición el campo viene disabled (sin valor en POST): conservamos
+        # En edicion el campo viene disabled (sin valor en POST): conservamos
         # el dueño original.
         if self.instance is not None:
             return str(self.instance.user.pk)
         user_id = self.cleaned_data.get("user")
         if not user_id:
-            raise forms.ValidationError("Debés seleccionar un usuario dueño.")
+            raise forms.ValidationError("Debes seleccionar un usuario dueño.")
         if not User.objects.filter(pk=user_id).exists():
             raise forms.ValidationError("El usuario seleccionado no existe.")
         return user_id
 
 
 class ApiKeySearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",

@@ -1,5 +1,5 @@
 // REQ-43 — tools MCP de policies:
-//   - domain_policy_get extiende para resolver jerárquico:
+//   - domain_policy_get extiende para resolver jerarquico:
 //     project_policies → platform_policies (fallback). Si se pasa
 //     project_slug, devuelve la del proyecto (si existe) o la global.
 //   - domain_policy_list lista platform policies (sin scope).
@@ -37,7 +37,7 @@ func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 
 func toolPolicyGet() mcp.Tool {
 	return mcp.NewTool("domain_policy_get",
-		mcp.WithDescription("Obtiene una policy resolviendo jerárquicamente: si pasás project_slug y existe una project_policy con ese slug, la devuelve (con flag scope='project'). Si no, fallback a platform_policies (scope='platform'). Llamar ANTES de tocar código del dominio."),
+		mcp.WithDescription("Obtiene una policy resolviendo jerarquicamente: si pasas project_slug y existe una project_policy con ese slug, la devuelve (con flag scope='project'). Si no, fallback a platform_policies (scope='platform'). Llamar ANTES de tocar codigo del dominio."),
 		mcp.WithString("slug",
 			mcp.Description("Slug de la policy (ej: 'go', 'db', 'testing', 'git_workflow', 'tech_stack')"),
 			mcp.Required(),
@@ -67,7 +67,7 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 				pol, perr := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 				if perr == nil && pol != nil {
 					// Si override_platform=true, devolver solo project.
-					// Si false, intentar también la platform y concatenar.
+					// Si false, intentar tambien la platform y concatenar.
 					payload := map[string]any{
 						"scope":             "project",
 						"project_slug":      projSlug,
@@ -108,9 +108,9 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 
 func toolPolicyList() mcp.Tool {
 	return mcp.NewTool("domain_policy_list",
-		mcp.WithDescription("Lista las platform policies activas (slug + nombre + kind + versión). Útil para descubrir qué rules existen antes de pedirlas con domain_policy_get."),
+		mcp.WithDescription("Lista las platform policies activas (slug + nombre + kind + version). Util para descubrir que rules existen antes de pedirlas con domain_policy_get."),
 		mcp.WithString("kind",
-			mcp.Description("Filtrar por kind (ej: 'convention','security_rule','architecture','sdd_workflow'); vacío = todas"),
+			mcp.Description("Filtrar por kind (ej: 'convention','security_rule','architecture','sdd_workflow'); vacio = todas"),
 		),
 	)
 }
@@ -138,7 +138,7 @@ func (d *Deps) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*
 
 func toolProjectPolicySet() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_set",
-		mcp.WithDescription("Crea o actualiza una policy específica de un proyecto (override o extensión de la platform_policy del mismo slug). source='llm_generated' si fue auto-generada por el LLM aprendiendo del proyecto."),
+		mcp.WithDescription("Crea o actualiza una policy especifica de un proyecto (override o extension de la platform_policy del mismo slug). source='llm_generated' si fue auto-generada por el LLM aprendiendo del proyecto."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece"), mcp.Required()),
 		mcp.WithString("slug", mcp.Description("Slug de la policy (mismo namespace que platform — si coincide, este aplica para el proyecto)"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
@@ -214,7 +214,7 @@ func toolProjectPolicyList() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_list",
 		mcp.WithDescription("Lista las project_policies activas de un proyecto (opcional filtrar por kind)."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto a consultar"), mcp.Required()),
-		mcp.WithString("kind", mcp.Description("Filtrar por kind. Vacío = todas")),
+		mcp.WithString("kind", mcp.Description("Filtrar por kind. Vacio = todas")),
 	)
 }
 
@@ -245,17 +245,17 @@ func (d *Deps) handleProjectPolicyList(ctx context.Context, req mcp.CallToolRequ
 
 func toolProjectPolicyDelete() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_delete",
-		mcp.WithDescription("Soft-delete una project_policy. La policy queda inactiva — el resolver caerá al platform fallback."),
+		mcp.WithDescription("Soft-delete una project_policy. La policy queda inactiva — el resolver caera al platform fallback."),
 		mcp.WithString("id", mcp.Description("UUID de la project_policy"), mcp.Required()),
 	)
 }
 
 func toolProjectPolicyImport() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_import_from_text",
-		mcp.WithDescription("Importa un AGENTS.md / CLAUDE.md / .cursorrules / openspec / etc. del repo como project_policy del proyecto, con source='seed_imported'. El LLM lee el archivo con su tool Read y pasa el body acá. Útil para que domain herede lo que el repo ya documenta SIN PISAR nada del archivo original — solo persiste una copia importada como policy versionada."),
+		mcp.WithDescription("Importa un AGENTS.md / CLAUDE.md / .cursorrules / openspec / etc. del repo como project_policy del proyecto, con source='seed_imported'. El LLM lee el archivo con su tool Read y pasa el body aqui. Util para que domain herede lo que el repo ya documenta SIN PISAR nada del archivo original — solo persiste una copia importada como policy versionada."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece"), mcp.Required()),
 		mcp.WithString("source_path", mcp.Description("Path relativo en el repo del archivo origen (ej. AGENTS.md, .claude/CLAUDE.md). Se usa para construir slug y name."), mcp.Required()),
-		mcp.WithString("body_md", mcp.Description("Contenido completo del archivo (lo que devolvió tu tool Read)"), mcp.Required()),
+		mcp.WithString("body_md", mcp.Description("Contenido completo del archivo (lo que devolvio tu tool Read)"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("Tipo (default 'convention'). Valores: convention|architecture|sdd_workflow|git_workflow|tech_stack|test_strategy|agent_protocol")),
 	)
 }
@@ -302,7 +302,7 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 
 	// Upsert: si ya hay una imported con mismo slug, update (bumpea version
 	// con snapshot a project_policy_versions). Idempotente — re-importar
-	// el mismo archivo crea una versión nueva en lugar de duplicar.
+	// el mismo archivo crea una version nueva en lugar de duplicar.
 	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 	if existing != nil {
 		userID, _ := uuid.Parse(d.Principal.UserID)
@@ -357,7 +357,7 @@ func (d *Deps) handleProjectPolicyDelete(ctx context.Context, req mcp.CallToolRe
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	if err := d.ProjectPolicies.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil

@@ -1,4 +1,4 @@
-// Handler REST para clients (mandantes). Útil para consultoras que
+// Handler REST para clients (mandantes). Util para consultoras que
 // gestionan proyectos por cliente.
 //
 // Endpoints:

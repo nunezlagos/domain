@@ -1,7 +1,7 @@
 """Tests de la capa service del mantenedor de API Keys (DB real).
 
 Corren contra Postgres real (managed=True via el runner de test). El helper de
-autenticación no hace falta acá (services no toca HTTP), pero se usa
+autenticacion no hace falta aqui (services no toca HTTP), pero se usa
 MaintainerTestCase por consistencia con el resto de los mantenedores.
 """
 from __future__ import annotations
@@ -93,7 +93,7 @@ class DeleteApiKeyTests(MaintainerTestCase):
         ak.refresh_from_db()
         self.assertEqual(ak.status, "revoked")
         self.assertIsNotNone(ak.revoked_at)
-        # No se borró físicamente.
+        # No se borro fisicamente.
         self.assertTrue(ApiKey.objects.filter(pk=ak.pk).exists())
 
 

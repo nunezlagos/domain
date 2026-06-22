@@ -25,7 +25,7 @@
 
 <!-- Info de la API Key -->
 <div class="card mb-4">
-  <h3>Información</h3>
+  <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
       <tr><th style="width: 200px;">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
@@ -41,7 +41,7 @@
       </tr>
       <tr><th>Creada</th><td>{{ apikey_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Expira</th><td>{{ apikey_obj.expires_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
-      <tr><th>Último uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Ultimo uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
       <tr><th>Revocada</th>
         <td>
           {% if apikey_obj.revoked_at %}
@@ -58,7 +58,7 @@
   </p>
 </div>
 
-<!-- Modal de confirmación de eliminación -->
+<!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ apikey_obj.pk }}">
   <div class="modal" style="max-width: 420px;">
     <div class="modal-header">
@@ -67,13 +67,13 @@
     </div>
     <div class="modal-body">
       <p>Vas a eliminar <strong>{{ apikey_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: la key se revoca (deja de autenticar) pero el registro se conserva para auditoría.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: la key se revoca (deja de autenticar) pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form method="post" action="{% url 'apikeys:delete' apikey_obj.pk %}" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

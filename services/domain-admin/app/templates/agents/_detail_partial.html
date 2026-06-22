@@ -1,8 +1,8 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de agente para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
-Incluye dos tablas READ-ONLY: historial de versiones (agent_versions) y catálogo
+Detalle de agente para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
+Incluye dos tablas READ-ONLY: historial de versiones (agent_versions) y catalogo
 de templates de agente (agent_templates).
 {% endcomment %}
 
@@ -15,16 +15,16 @@ de templates de agente (agent_templates).
     · Modelo: <code>{{ agent_obj.model }}</code>
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 180px;">Nombre</th><td>{{ agent_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ agent_obj.slug }}</code></td></tr>
       <tr><th>Proveedor</th><td>{{ agent_obj.provider }}</td></tr>
       <tr><th>Modelo</th><td><code>{{ agent_obj.model }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ agent_obj.description|default:"—" }}</td></tr>
-      <tr><th>Máx. iteraciones</th><td>{{ agent_obj.max_iterations }}</td></tr>
-      <tr><th>Presupuesto de tokens</th><td>{{ agent_obj.token_budget|default:"Sin límite" }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ agent_obj.description|default:"—" }}</td></tr>
+      <tr><th>Max. iteraciones</th><td>{{ agent_obj.max_iterations }}</td></tr>
+      <tr><th>Presupuesto de tokens</th><td>{{ agent_obj.token_budget|default:"Sin limite" }}</td></tr>
       <tr><th>Temperatura</th><td>{{ agent_obj.temperature|default:"—" }}</td></tr>
       <tr><th>Skills</th>
         <td>
@@ -33,8 +33,8 @@ de templates de agente (agent_templates).
           {% else %}—{% endif %}
         </td>
       </tr>
-      <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
       <tr><th>Estado</th><td>{{ agent_obj.get_status_display }}</td></tr>
       <tr><th>Creado</th><td>{{ agent_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ agent_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
@@ -51,7 +51,7 @@ de templates de agente (agent_templates).
   {% if agent_versions %}
     <table class="table" style="font-size: var(--fs-sm);">
       <thead>
-        <tr><th style="width: 1%;">Versión</th><th>Modificado por</th><th>Fecha</th></tr>
+        <tr><th style="width: 1%;">Version</th><th>Modificado por</th><th>Fecha</th></tr>
       </thead>
       <tbody>
         {% for v in agent_versions %}
@@ -64,7 +64,7 @@ de templates de agente (agent_templates).
       </tbody>
     </table>
     <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
-      {{ agent_versions|length }} versión(es). Solo lectura: el historial lo genera domain-mcp en cada cambio.
+      {{ agent_versions|length }} version(es). Solo lectura: el historial lo genera domain-mcp en cada cambio.
     </p>
   {% else %}
     <p class="text-muted">Este agente no tiene versiones registradas.</p>

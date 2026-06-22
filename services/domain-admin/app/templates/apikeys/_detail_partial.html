@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de API Key para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de API Key para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
 {% block detail_title %}{{ apikey_obj.display_name }}{% endblock %}
@@ -17,7 +17,7 @@ Detalle de API Key para el modal dinámico. Extiende maintainers/_detail_base.ht
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 140px;">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
@@ -25,7 +25,7 @@ Detalle de API Key para el modal dinámico. Extiende maintainers/_detail_base.ht
       <tr><th>Dueño</th><td>{{ apikey_obj.user.display_name }} (<code>{{ apikey_obj.user.email }}</code>)</td></tr>
       <tr><th>Creada</th><td>{{ apikey_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Expira</th><td>{{ apikey_obj.expires_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
-      <tr><th>Último uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Ultimo uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
       <tr><th>Revocada</th>
         <td>
           {% if apikey_obj.revoked_at %}

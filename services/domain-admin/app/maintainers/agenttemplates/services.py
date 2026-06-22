@@ -1,17 +1,17 @@
 """Capa de negocio del mantenedor de Plantillas de Agentes.
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El resto —validación de
+busqueda/paginacion ni el aggregate de la señal). El resto —validacion de
 unicidad de slug (global, la tabla no tiene scope por proyecto), parseo de
-capabilities, create/update/delete— vive acá.
+capabilities, create/update/delete— vive aqui.
 
 agent_templates NO tiene deleted_at → NO hay soft-delete: el listado parte de
 AgentTemplate.objects.all() (sin filtro de borrados) y delete es HARD delete
 (borra la fila). Tampoco hay toggle de status en la UI.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
 de nombre: entity_label="Plantilla de Agente" → attr "plantilla_de_agente",
-así que se exponen alias get_plantilla_de_agente / create_… / update_… /
+asi que se exponen alias get_plantilla_de_agente / create_… / update_… /
 delete_… que reusan las funciones de dominio (get_agenttemplate, etc.).
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .models import AgentTemplate
 
 # Error de dominio (la view lo traduce a messages.error).
 class AgentTemplateError(Exception):
-    """Error de operación sobre plantillas de agentes."""
+    """Error de operacion sobre plantillas de agentes."""
 
 
 class AgentTemplateService(MaintainerService):
@@ -46,7 +46,7 @@ def _slug_taken(slug: str, exclude_pk=None) -> bool:
 
 
 def list_agenttemplates(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista plantillas con búsqueda + paginación.
+    """Lista plantillas con busqueda + paginacion.
 
     Delega en MaintainerService.list y renombra la clave `items` ->
     `agenttemplates` para el template/tests.
@@ -82,7 +82,7 @@ def create_agenttemplate(
     handoff_policy: str = "allow",
     role: str = "phase-worker",
 ) -> AgentTemplate:
-    """Crea una plantilla. slug debe ser único (global)."""
+    """Crea una plantilla. slug debe ser unico (global)."""
     if _slug_taken(slug):
         raise AgentTemplateError(f"Ya existe una plantilla con slug '{slug}'.")
 
@@ -115,7 +115,7 @@ def update_agenttemplate(
     handoff_policy: str = "allow",
     role: str = "phase-worker",
 ) -> AgentTemplate:
-    """Actualiza una plantilla. El slug sigue siendo único (global)."""
+    """Actualiza una plantilla. El slug sigue siendo unico (global)."""
     if slug != template.slug and _slug_taken(slug, exclude_pk=template.pk):
         raise AgentTemplateError(f"Ya existe otra plantilla con slug '{slug}'.")
 
@@ -135,12 +135,12 @@ def update_agenttemplate(
 
 @transaction.atomic
 def delete_agenttemplate(template: AgentTemplate) -> None:
-    """HARD delete: agent_templates NO tiene deleted_at, así que se borra la
-    fila físicamente (no hay soft-delete)."""
+    """HARD delete: agent_templates NO tiene deleted_at, asi que se borra la
+    fila fisicamente (no hay soft-delete)."""
     template.delete()
 
 
-# --- Alias por convención de core.views (entity_label -> attr) ---------------
+# --- Alias por convencion de core.views (entity_label -> attr) ---------------
 # entity_label="Plantilla de Agente" -> _entity_attr() = "plantilla_de_agente".
 # core busca get_<attr>/create_<attr>/update_<attr>/delete_<attr>.
 get_plantilla_de_agente = get_agenttemplate
@@ -149,5 +149,5 @@ update_plantilla_de_agente = update_agenttemplate
 delete_plantilla_de_agente = delete_agenttemplate
 
 
-# Excepción de dominio que el core descubre como `ServiceError`.
+# Excepcion de dominio que el core descubre como `ServiceError`.
 ServiceError = AgentTemplateError

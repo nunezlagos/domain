@@ -1,9 +1,9 @@
 """Forms del mantenedor de usuarios (migrados a core).
 
-UserForm reusa core.forms.EmailNormalizationMixin para la normalización
-strip+lower + unicidad del email (excluyendo la propia instancia en edición).
-La lógica propia —choices de roles desde BD, password requerido en alta y
-hasheo PBKDF2— queda acá.
+UserForm reusa core.forms.EmailNormalizationMixin para la normalizacion
+strip+lower + unicidad del email (excluyendo la propia instancia en edicion).
+La logica propia —choices de roles desde BD, password requerido en alta y
+hasheo PBKDF2— queda aqui.
 """
 from django import forms
 from django.contrib.auth.hashers import make_password
@@ -14,7 +14,7 @@ from .models import Role, User, UserRole
 
 
 class UserForm(EmailNormalizationMixin, forms.Form):
-    """Form para crear/editar usuarios. Password opcional en edición."""
+    """Form para crear/editar usuarios. Password opcional en edicion."""
 
     # core.forms.EmailNormalizationMixin usa estos atributos para la unicidad.
     email_model = User
@@ -59,7 +59,7 @@ class UserForm(EmailNormalizationMixin, forms.Form):
         label="Contraseña",
         required=False,
         widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "new-password"}),
-        help_text="Déjala vacía para mantener la actual (en edición). Mínimo 8 caracteres.",
+        help_text="Dejala vacia para mantener la actual (en edicion). Minimo 8 caracteres.",
     )
     password_confirm = forms.CharField(
         label="Confirmar contraseña",
@@ -75,13 +75,13 @@ class UserForm(EmailNormalizationMixin, forms.Form):
             (r.slug, f"{r.name} ({r.slug})")
             for r in Role.objects.filter(status="active").order_by("slug")
         ]
-        # Password requerido en alta, opcional en edición (vacío = no cambiar).
-        # Se setea SIEMPRE (también en form bound), si no un POST de alta sin
-        # password pasaría la validación.
+        # Password requerido en alta, opcional en edicion (vacio = no cambiar).
+        # Se setea SIEMPRE (tambien en form bound), si no un POST de alta sin
+        # password pasaria la validacion.
         is_create = instance is None
         self.fields["password"].required = is_create
         self.fields["password_confirm"].required = is_create
-        # Valores iniciales solo al renderizar el form de edición (unbound).
+        # Valores iniciales solo al renderizar el form de edicion (unbound).
         if instance is not None and not self.is_bound:
             self.fields["email"].initial = instance.email
             first, paternal, maternal = self._split_name(instance.name)
@@ -95,8 +95,8 @@ class UserForm(EmailNormalizationMixin, forms.Form):
     def _split_name(full: str) -> tuple[str, str, str]:
         """Parte `name` en (nombres, apellido paterno, apellido materno).
 
-        Heurística (lossy, el usuario reedita): 1 token -> todo a nombres;
-        2 -> nombres + paterno; 3+ -> primero=nombres, último=materno, el
+        Heuristica (lossy, el usuario reedita): 1 token -> todo a nombres;
+        2 -> nombres + paterno; 3+ -> primero=nombres, ultimo=materno, el
         medio=paterno.
         """
         parts = (full or "").split()
@@ -129,7 +129,7 @@ class UserForm(EmailNormalizationMixin, forms.Form):
         return cleaned
 
     def hashed_password(self) -> bytes | None:
-        """Devuelve el password hasheado o None si no se cambió."""
+        """Devuelve el password hasheado o None si no se cambio."""
         pw = self.cleaned_data.get("password")
         if not pw:
             return None
@@ -156,7 +156,7 @@ class UserRoleAssignForm(forms.Form):
 
 
 class UserSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",

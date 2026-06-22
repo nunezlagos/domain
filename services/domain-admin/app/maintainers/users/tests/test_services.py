@@ -16,7 +16,7 @@ from .factories import make_role, make_user, make_user_role
 class ListUsersTests(MaintainerTestCase):
     def setUp(self):
         make_user("ana@example.com", name="Ana Torres")
-        make_user("beto@example.com", name="Beto Díaz")
+        make_user("beto@example.com", name="Beto Diaz")
         make_user("carla@example.com", name="Carla Ruiz")
 
     def test_sin_search_devuelve_todos(self):

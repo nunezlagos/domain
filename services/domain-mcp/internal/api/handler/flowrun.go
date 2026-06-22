@@ -103,7 +103,7 @@ func (a *API) cancelFlowRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "invalid_transition", err.Error())
 		return
 	}
-	// Propagación best-effort al worker local si este pod ejecuta el run.
+	// Propagacion best-effort al worker local si este pod ejecuta el run.
 	if a.FlowRunner != nil {
 		_ = a.FlowRunner.CancelRun(run.ID)
 	}
@@ -143,7 +143,7 @@ func (a *API) streamFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Suscripción a NOTIFY de progreso con conn dedicada (cerrada al salir
+	// Suscripcion a NOTIFY de progreso con conn dedicada (cerrada al salir
 	// para no devolver al pool una conn con LISTEN colgado).
 	conn, err := a.FlowService.Pool.Acquire(ctx)
 	if err != nil {

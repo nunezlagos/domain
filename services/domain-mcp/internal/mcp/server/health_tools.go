@@ -1,9 +1,9 @@
-// REQ-53 — domain_health: autodiagnóstico ligero del estado de domain
+// REQ-53 — domain_health: autodiagnostico ligero del estado de domain
 // desde la perspectiva del cliente. Permite al user (o al LLM) detectar
 // problemas de conectividad/config sin tener que probar mil tools.
 //
 // Devuelve: estado de auth, version de schema_migrations, count de
-// proyectos, último project_session_bootstrap del usuario, tools
+// proyectos, ultimo project_session_bootstrap del usuario, tools
 // disponibles y servicios opcionales no configurados.
 package mcpserver
 
@@ -31,7 +31,7 @@ func registerHealthTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 
 func toolHealth() mcp.Tool {
 	return mcp.NewTool("domain_health",
-		mcp.WithDescription("Autodiagnóstico de domain. Devuelve estado de auth, schema version, counts de objetos del usuario y servicios opcionales no configurados. Llamar cuando algo no funcione 'sin razón obvia' o como sanity check post-install."),
+		mcp.WithDescription("Autodiagnostico de domain. Devuelve estado de auth, schema version, counts de objetos del usuario y servicios opcionales no configurados. Llamar cuando algo no funcione 'sin razon obvia' o como sanity check post-install."),
 	)
 }
 
@@ -78,7 +78,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	userID, _ := uuid.Parse(d.Principal.UserID)
 
 	// Counts de objetos del usuario en su org (queries simples,
-	// app_admin pool si está disponible para BYPASSRLS).
+	// app_admin pool si esta disponible para BYPASSRLS).
 	counts := map[string]any{}
 	queries := []struct {
 		key string
@@ -111,7 +111,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	resp["counts"] = counts
 
-	// Último project_session_bootstrap del usuario (proyecto más recientemente tocado)
+	// Ultimo project_session_bootstrap del usuario (proyecto mas recientemente tocado)
 	var lastSlug, lastSeenStr string
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT slug, to_char(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
@@ -125,7 +125,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		}
 	}
 
-	// Servicios opcionales: detectar cuáles NO están configurados
+	// Servicios opcionales: detectar cuales NO estan configurados
 	missing := []string{}
 	if d.PromptRouter == nil {
 		missing = append(missing, "prompt_router")

@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de plantilla de agente para el modal dinámico. Extiende
-maintainers/_detail_base.html (header + body + footer del modal). Define título,
+Detalle de plantilla de agente para el modal dinamico. Extiende
+maintainers/_detail_base.html (header + body + footer del modal). Define titulo,
 cuerpo (info) y acciones propias. Sin toggle: acciones = editar / eliminar.
 {% endcomment %}
 
@@ -14,14 +14,14 @@ cuerpo (info) y acciones propias. Sin toggle: acciones = editar / eliminar.
     · Estado: <span class="badge">{{ template_obj.get_status_display }}</span>
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 160px;">Nombre</th><td>{{ template_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ template_obj.slug }}</code></td></tr>
       <tr><th>Modelo</th><td><code>{{ template_obj.model }}</code></td></tr>
       <tr><th>Rol</th><td><span class="badge">{{ template_obj.get_role_display }}</span></td></tr>
-      <tr><th>Política de handoff</th><td>{{ template_obj.get_handoff_policy_display }}</td></tr>
+      <tr><th>Politica de handoff</th><td>{{ template_obj.get_handoff_policy_display }}</td></tr>
       <tr><th>Temperatura</th><td>{{ template_obj.temperature }}</td></tr>
       <tr><th>Max tokens</th><td>{{ template_obj.max_tokens }}</td></tr>
       <tr><th>Personalidad</th><td>{{ template_obj.personality|default:"—" }}</td></tr>
@@ -32,9 +32,9 @@ cuerpo (info) y acciones propias. Sin toggle: acciones = editar / eliminar.
         </td>
       </tr>
       <tr><th>Estado</th><td><span class="badge">{{ template_obj.get_status_display }}</span></td></tr>
-      <tr><th>Gestionada por seed</th><td>{{ template_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Modificada por usuario</th><td>{{ template_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Versión de seed</th><td>{{ template_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Gestionada por seed</th><td>{{ template_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Modificada por usuario</th><td>{{ template_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
+      <tr><th>Version de seed</th><td>{{ template_obj.seed_version|default:"—" }}</td></tr>
       <tr><th>Creada</th><td>{{ template_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizada</th><td>{{ template_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
     </tbody>

@@ -2,7 +2,7 @@
 
 // MCP integration test del orquestador SDD (issue-08.10 mcp-001..004).
 // Usa mcptest.NewServer in-process para invocar tools como un cliente
-// real (Claude Code, Cline) lo haría sobre stdio, sin levantar binario.
+// real (Claude Code, Cline) lo haria sobre stdio, sin levantar binario.
 
 package mcpserver_test
 

@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
 {% block detail_title %}{{ user_obj.display_name }}{% endblock %}
@@ -17,7 +17,7 @@ Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.ht
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 140px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
@@ -25,7 +25,7 @@ Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.ht
       <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
       <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
       <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Último acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
       <tr><th>Contraseña</th>
         <td>
           {% if user_obj.password_set_at %}
@@ -47,15 +47,15 @@ Detalle de usuario para el modal dinámico. Extiende maintainers/_detail_base.ht
     </div>
     <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
       {{ user_roles|length }} activo(s).
-      Para asignar/quitar roles usá el panel de edición.
+      Para asignar/quitar roles usa el panel de edicion.
     </p>
   {% else %}
     <p class="text-muted">Este usuario no tiene roles asignados.</p>
   {% endif %}
 
   {% comment %}
-  Sección API Keys del usuario. Las acciones (editar/crear) apuntan al
-  mantenedor existente de API Keys vía data-base-url="/api-keys/", reusando su
+  Seccion API Keys del usuario. Las acciones (editar/crear) apuntan al
+  mantenedor existente de API Keys via data-base-url="/api-keys/", reusando su
   CRUD. api_keys viene del detail_context de users.views (filter user_id=pk).
   {% endcomment %}
   <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">API Keys</h4>

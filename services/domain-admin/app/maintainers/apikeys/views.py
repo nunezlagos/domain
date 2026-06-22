@@ -1,18 +1,18 @@
 """Views del mantenedor de API Keys (migradas a core).
 
-Las 7 vistas estándar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Acá solo se especializa lo propio de keys:
+Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
+arma core.views.MaintainerViews. Aqui solo se especializa lo propio de keys:
 
   - _form_payload: separa name/expires_at/status del `user` (que el service de
     create necesita como instancia User, no como id).
   - do_create: resuelve el User dueño, llama create_api_key (que devuelve
     (obj, secreto)) y mete el secreto en el messages.success — se muestra UNA
-    sola vez. El core llamaría create_api_key(**payload), pero acá la firma y el
-    valor de retorno difieren, así que se sobreescribe el hook.
+    sola vez. El core llamaria create_api_key(**payload), pero aqui la firma y el
+    valor de retorno difieren, asi que se sobreescribe el hook.
   - form_context / detail_context: exponen `apikey_obj` (lo que los templates
-    de apikeys ya consumen) además de `object`.
+    de apikeys ya consumen) ademas de `object`.
 
-El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
+El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/X-Requested-With inline).
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ class ApiKeyViews(MaintainerViews):
     """MaintainerViews especializado para API keys (payload + secreto + ctx)."""
 
     # --- payload: el service de update espera name/expires_at/status; el de
-    #     create además necesita el `user` resuelto a instancia (lo hace
+    #     create ademas necesita el `user` resuelto a instancia (lo hace
     #     do_create). update_api_key NO recibe user (dueño inmutable).
     def _form_payload(self, form) -> dict:
         return {
@@ -43,7 +43,7 @@ class ApiKeyViews(MaintainerViews):
         """Crea la key resolviendo el User dueño y exponiendo el secreto.
 
         create_api_key devuelve (obj, secreto_claro): el secreto se muestra una
-        sola vez en el mensaje de éxito. Cualquier User.DoesNotExist se traduce
+        sola vez en el mensaje de exito. Cualquier User.DoesNotExist se traduce
         a ApiKeyError para que la view lo maneje como error de dominio.
         """
         try:
@@ -54,11 +54,11 @@ class ApiKeyViews(MaintainerViews):
             user=owner,
             **self._form_payload(form),
         )
-        # Se cuela en el flash de create() vía mensaje extra; el genérico ya
-        # agrega "API Key creado correctamente.", acá sumamos el secreto.
+        # Se cuela en el flash de create() via mensaje extra; el generico ya
+        # agrega "API Key creado correctamente.", aqui sumamos el secreto.
         messages.warning(
             self._request,
-            f"Secreto de '{api_key.name}' (cópialo ahora, no se vuelve a "
+            f"Secreto de '{api_key.name}' (copialo ahora, no se vuelve a "
             f"mostrar): {secret}",
         )
         return api_key

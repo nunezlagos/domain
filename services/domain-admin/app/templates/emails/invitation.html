@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 {% comment %}
-Email HTML de invitación a Domain Admin.
+Email HTML de invitacion a Domain Admin.
 
 Layout table-based + estilos inline (compatible con clientes de correo). Se usa
 en DOS contextos:
   1. Preview en el modal de Usuarios (templates/users/_invite_preview.html lo
      incluye con {% include %}).
-  2. Envío real por SMTP a futuro (hoy NO hay SMTP: el envío queda pendiente).
+  2. Envio real por SMTP a futuro (hoy NO hay SMTP: el envio queda pendiente).
 
 Contexto esperado:
   user_name, user_email, user_role, enrollment_url, expires_at, expires_days.
@@ -17,7 +17,7 @@ Paleta: primary #556ee6, texto #495057, fondo #f8f8fb.
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invitación a Domain Admin</title>
+  <title>Invitacion a Domain Admin</title>
 </head>
 <body style="margin:0; padding:0; background-color:#f8f8fb;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -27,7 +27,7 @@ Paleta: primary #556ee6, texto #495057, fondo #f8f8fb.
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
                style="width:600px; max-width:600px; background-color:#ffffff; border-radius:8px; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
-          <!-- Línea de acento (delgada, ancho completo) -->
+          <!-- Linea de acento (delgada, ancho completo) -->
           <tr>
             <td style="height:4px; line-height:4px; font-size:0; background-color:#556ee6;">&nbsp;</td>
           </tr>
@@ -54,8 +54,8 @@ Paleta: primary #556ee6, texto #495057, fondo #f8f8fb.
                 <strong style="color:#556ee6;">{{ user_role }}</strong>.
               </p>
               <p style="margin:0 0 24px 0;">
-                Para activar tu cuenta y definir tu contraseña, aceptá la
-                invitación con el botón de abajo.
+                Para activar tu cuenta y definir tu contraseña, acepta la
+                invitacion con el boton de abajo.
               </p>
 
               <!-- CTA (centrado) -->
@@ -64,23 +64,23 @@ Paleta: primary #556ee6, texto #495057, fondo #f8f8fb.
                   <td align="center" bgcolor="#556ee6" style="border-radius:6px;">
                     <a href="{{ enrollment_url }}" target="_blank"
                        style="display:inline-block; padding:12px 28px; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; border-radius:6px;">
-                      Aceptar invitación
+                      Aceptar invitacion
                     </a>
                   </td>
                 </tr>
               </table>
 
               <p style="margin:0 0 4px 0; font-size:11px; color:#adb5bd; text-align:center;">
-                O copiá y pegá este link en tu navegador:
+                O copia y pega este link en tu navegador:
               </p>
               <p style="margin:0 0 20px 0; font-size:11px; word-break:break-all; text-align:center;">
                 <a href="{{ enrollment_url }}" style="color:#74788d; text-decoration:none;">{{ enrollment_url }}</a>
               </p>
 
               <p style="margin:0; font-size:13px; color:#74788d;">
-                Esta invitación expira en {{ expires_days }} días
+                Esta invitacion expira en {{ expires_days }} dias
                 ({{ expires_at|date:"d/m/Y H:i" }}). Si no esperabas este correo,
-                podés ignorarlo.
+                puede ignorarlo.
               </p>
             </td>
           </tr>
@@ -90,7 +90,7 @@ Paleta: primary #556ee6, texto #495057, fondo #f8f8fb.
             <td style="padding:20px 32px; background-color:#f8f8fb; border-top:1px solid #eff2f7;">
               <p style="margin:0; font-size:12px; color:#adb5bd; line-height:1.5;">
                 Enviado a {{ user_email }} · Domain Admin<br>
-                Este es un mensaje automático, no respondas a este correo.
+                Este es un mensaje automatico, no respondas a este correo.
               </p>
             </td>
           </tr>

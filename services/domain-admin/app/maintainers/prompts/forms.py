@@ -1,10 +1,10 @@
 """Forms del mantenedor de Prompts (migrados a core).
 
 PromptForm reusa core.forms.InstanceAwareMixin para capturar `instance=` y
-exponer `self.instance` (lo usa clean() para excluirse en edición). La unicidad
-NO es por slug sino por la tripleta (project_id, slug, version), así que NO se
-usa SlugNormalizationMixin (su check de unicidad es por columna única); la
-normalización slug -> strip+lower se mantiene local para preservar la semántica
+exponer `self.instance` (lo usa clean() para excluirse en edicion). La unicidad
+NO es por slug sino por la tripleta (project_id, slug, version), asi que NO se
+usa SlugNormalizationMixin (su check de unicidad es por columna unica); la
+normalizacion slug -> strip+lower se mantiene local para preservar la semantica
 exacta (SlugField ya valida el formato; no se aplica slugify()).
 """
 from django import forms
@@ -18,7 +18,7 @@ class PromptForm(InstanceAwareMixin, forms.Form):
     """Form para crear/editar prompts.
 
     Usa forms.Form (no ModelForm) porque el modelo es managed=False. La unicidad
-    real es (project_id, slug, version); en edición se excluye el propio registro.
+    real es (project_id, slug, version); en edicion se excluye el propio registro.
     """
 
     project_id = forms.UUIDField(
@@ -31,10 +31,10 @@ class PromptForm(InstanceAwareMixin, forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador del prompt dentro del contexto (minúsculas, guiones).",
+        help_text="Identificador del prompt dentro del contexto (minusculas, guiones).",
     )
     version = forms.IntegerField(
-        label="Versión",
+        label="Version",
         min_value=1,
         initial=1,
         widget=forms.NumberInput(attrs={"class": "form-control"}),
@@ -45,7 +45,7 @@ class PromptForm(InstanceAwareMixin, forms.Form):
         help_text="Cuerpo del prompt (editor monospace).",
     )
     description = forms.CharField(
-        label="Descripción",
+        label="Descripcion",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
@@ -92,7 +92,7 @@ class PromptForm(InstanceAwareMixin, forms.Form):
         if not slug or version is None:
             return cleaned
 
-        # En edición el proyecto no cambia; usamos el del instance. En alta
+        # En edicion el proyecto no cambia; usamos el del instance. En alta
         # usamos el project_id enviado en el form.
         if self.instance is not None:
             project_id = self.instance.project_id
@@ -103,19 +103,19 @@ class PromptForm(InstanceAwareMixin, forms.Form):
         qs = self._exclude_self(qs)
         if qs.exists():
             raise forms.ValidationError(
-                "Ya existe un prompt con ese slug y versión en este proyecto."
+                "Ya existe un prompt con ese slug y version en este proyecto."
             )
         return cleaned
 
 
 class PromptSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",
         required=False,
         widget=forms.TextInput(attrs={
             "class": "form-control",
-            "placeholder": "Slug, descripción o contenido...",
+            "placeholder": "Slug, descripcion o contenido...",
         }),
     )

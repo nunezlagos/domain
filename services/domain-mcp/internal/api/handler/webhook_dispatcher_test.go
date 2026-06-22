@@ -46,9 +46,9 @@ func TestWebhookDispatcher_Backpressure(t *testing.T) {
 	// Llenar la cola + 1 worker ocupado.
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "1"}))
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "2"}))
-	// worker toma 1 → quedan 1 slot libre. Enqueue #3 OK (no lleno aún).
+	// worker toma 1 → quedan 1 slot libre. Enqueue #3 OK (no lleno aun).
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "3"}))
-	// Pero el worker está bloqueado, no consume más. Enqueue #4 debe
+	// Pero el worker esta bloqueado, no consume mas. Enqueue #4 debe
 	// fallar (default branch → false).
 	require.False(t, d.Enqueue(context.Background(), webhookJob{hookID: "4"}),
 		"cola llena → backpressure")

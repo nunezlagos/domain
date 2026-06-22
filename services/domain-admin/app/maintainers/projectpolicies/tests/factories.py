@@ -8,7 +8,7 @@ from core.tests.factories import make
 from maintainers.projectpolicies.models import ProjectPolicy
 
 
-def make_policy(name: str = "Convención de commits", *, project_id=None,
+def make_policy(name: str = "Convencion de commits", *, project_id=None,
                 slug: str | None = None, kind: str = "convention",
                 body_md: str = "Commits en español.", is_active: bool = True,
                 override_platform: bool = False, deleted: bool = False) -> ProjectPolicy:

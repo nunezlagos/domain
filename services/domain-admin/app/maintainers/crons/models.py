@@ -2,7 +2,7 @@
 
 Tabla existente en domain-mcp (managed=False, Django solo lee/escribe):
 - crons: schedules definidos por el usuario que disparan un target
-  (flow/agent/skill) según una expresión cron.
+  (flow/agent/skill) segun una expresion cron.
 
 Cron hereda de core.models.SoftDeleteModel y reusa los campos comunes
 (id / created_at / updated_at / deleted_at / status); declara SOLO sus
@@ -44,9 +44,9 @@ class Cron(SoftDeleteModel):
         deleted_at      timestamptz NULL                         (SoftDeleteModel)
         status          text NOT NULL default 'active'           (SoftDeleteModel)
 
-    `organization_id` FUE DROPEADA (fase C, migración 000142); NO existe más.
+    `organization_id` FUE DROPEADA (fase C, migracion 000142); NO existe mas.
 
-    `enabled` es la dimensión alternable (toggle on/off); el display de
+    `enabled` es la dimension alternable (toggle on/off); el display de
     estado se deriva del bool (`is_active`).
     """
 

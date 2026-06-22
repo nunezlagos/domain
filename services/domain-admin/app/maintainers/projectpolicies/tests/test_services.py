@@ -77,6 +77,6 @@ class ListTests(MaintainerTestCase):
 
     def test_search_por_nombre(self):
         make_policy("Seguridad API", slug="sec")
-        make_policy("Convención", slug="conv")
+        make_policy("Convencion", slug="conv")
         data = services.list_policies(search="Seguridad", page=1, per_page=20)
         self.assertEqual(data["total"], 1)

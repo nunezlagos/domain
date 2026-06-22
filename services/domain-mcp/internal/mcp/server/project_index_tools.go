@@ -8,7 +8,7 @@
 //        (AGENTS.md, README.md, .claude/CLAUDE.md, package.json, etc).
 //
 //   2. LLM lee cada archivo del manifest con su tool nativa Read y los
-//      submitéa con domain_project_index_submit(run_id, files[]).
+//      submitea con domain_project_index_submit(run_id, files[]).
 //      Server clasifica cada archivo:
 //        - AGENTS.md / CLAUDE.md / .claude/CLAUDE.md → project_policy
 //          (kind=agent_protocol, slug=imported-<name>, source=seed_imported)
@@ -21,11 +21,11 @@
 //          listando los targets como "comandos comunes del proyecto"
 //        - .github/workflows/*.yml → knowledge_doc (category=ci)
 //
-//   3. domain_project_index_status(project_slug) → último run + counts.
+//   3. domain_project_index_status(project_slug) → ultimo run + counts.
 //
 // Aspecto Cursor-like: una sola call al LLM "indexar este proyecto" deja
 // persistido todo el contexto del repo en project_policies + knowledge.
-// Después domain_policy_get, mem_search etc lo recuperan sin volver al fs.
+// Despues domain_policy_get, mem_search etc lo recuperan sin volver al fs.
 package mcpserver
 
 import (
@@ -55,7 +55,7 @@ func registerProjectIndexTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Server
 
 func toolProjectIndexStart() mcp.Tool {
 	return mcp.NewTool("domain_project_index_start",
-		mcp.WithDescription("Inicia un indexing run del proyecto. Server devuelve un manifest de paths/patterns relevantes que vos (LLM) tenés que leer del repo con tu tool Read nativa. Después submitea con domain_project_index_submit. Resultado: docs/conventions/stack del repo quedan persistidos como project_policies + knowledge_docs para que futuras sesiones los tengan en BD sin volver al filesystem (RAG del proyecto)."),
+		mcp.WithDescription("Inicia un indexing run del proyecto. Server devuelve un manifest de paths/patterns relevantes que usted (LLM) tiene que leer del repo con tu tool Read nativa. Despues submitea con domain_project_index_submit. Resultado: docs/conventions/stack del repo quedan persistidos como project_policies + knowledge_docs para que futuras sesiones los tengan en BD sin volver al filesystem (RAG del proyecto)."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto a indexar"), mcp.Required()),
 		mcp.WithString("git_head", mcp.Description("SHA1 del HEAD actual. Opcional pero recomendado para audit.")),
 		mcp.WithBoolean("force", mcp.Description("Re-indexar aunque haya run reciente. Default false.")),
@@ -64,16 +64,16 @@ func toolProjectIndexStart() mcp.Tool {
 
 func toolProjectIndexSubmit() mcp.Tool {
 	return mcp.NewTool("domain_project_index_submit",
-		mcp.WithDescription("Submitea N archivos del repo al server para clasificación + persistencia. Cada archivo: {path, content}. El server clasifica el archivo según su path/contenido (AGENTS.md→policy, README→knowledge, package.json→tech_stack, Makefile→comandos comunes, etc) y persiste en la tabla apropiada con source='seed_imported'. NO modifica el archivo original. Idempotente: re-submitear el mismo path actualiza la versión."),
+		mcp.WithDescription("Submitea N archivos del repo al server para clasificacion + persistencia. Cada archivo: {path, content}. El server clasifica el archivo segun su path/contenido (AGENTS.md→policy, README→knowledge, package.json→tech_stack, Makefile→comandos comunes, etc) y persiste en la tabla apropiada con source='seed_imported'. NO modifica el archivo original. Idempotente: re-submitear el mismo path actualiza la version."),
 		mcp.WithString("run_id", mcp.Description("UUID del run devuelto por start"), mcp.Required()),
 		mcp.WithArray("files", mcp.Description("Array de {path: 'relativo al repo', content: 'texto del archivo'}"), mcp.Required()),
-		mcp.WithBoolean("complete", mcp.Description("Si true, marca el run como completed. Si false, queda running para más submits. Default: false (último submit debe pasar complete=true).")),
+		mcp.WithBoolean("complete", mcp.Description("Si true, marca el run como completed. Si false, queda running para mas submits. Default: false (ultimo submit debe pasar complete=true).")),
 	)
 }
 
 func toolProjectIndexStatus() mcp.Tool {
 	return mcp.NewTool("domain_project_index_status",
-		mcp.WithDescription("Devuelve el último indexing run del proyecto + summary (counts de qué se persistió). Útil para saber si vale re-indexar (last run hace >7 días o git_head distinto) o si ya está fresco."),
+		mcp.WithDescription("Devuelve el ultimo indexing run del proyecto + summary (counts de que se persistio). Util para saber si vale re-indexar (last run hace >7 dias o git_head distinto) o si ya esta fresco."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto a consultar"), mcp.Required()),
 	)
 }
@@ -114,11 +114,11 @@ func (d *Deps) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequ
 		"project_id":  proj.ID.String(),
 		"project_slug": slug,
 		"manifest":    manifest,
-		"next_step":   "Leé con tu tool Read los archivos que matcheen los patterns del manifest. Después llamá domain_project_index_submit con un batch de {path, content}. En el último batch pasá complete=true para cerrar el run.",
+		"next_step":   "Lee con tu tool Read los archivos que matcheen los patterns del manifest. Despues llama domain_project_index_submit con un batch de {path, content}. En el ultimo batch pasa complete=true para cerrar el run.",
 	})
 }
 
-// buildIndexManifest: paths/patterns ordenados por prioridad (los más
+// buildIndexManifest: paths/patterns ordenados por prioridad (los mas
 // informativos primero). El LLM no necesita leer TODO — leer lo que
 // encuentre.
 func buildIndexManifest() []map[string]any {
@@ -217,7 +217,7 @@ func classifyFile(path, content string) classifiedFile {
 			Category: "policy", Kind: "convention",
 			Slug: "imported-commands-" + strings.ToLower(base),
 			Title: "Comandos: " + base,
-			Body:  "Comandos comunes del proyecto extraídos de `" + base + "`:\n\n```\n" + truncate(content, 4000) + "\n```",
+			Body:  "Comandos comunes del proyecto extraidos de `" + base + "`:\n\n```\n" + truncate(content, 4000) + "\n```",
 		}
 	}
 	// Docs
@@ -249,11 +249,11 @@ func classifyFile(path, content string) classifiedFile {
 	return classifiedFile{Category: "ignored"}
 }
 
-// techStackSummary: extrae info útil de un manifest. Conservador — devuelve
+// techStackSummary: extrae info util de un manifest. Conservador — devuelve
 // el archivo completo truncated si no podemos parsear.
 func techStackSummary(base, content string) string {
 	header := "Stack manifest detectado: `" + base + "`\n\n"
-	return header + "```\n" + truncate(content, 3000) + "\n```\n\nLLM: extraé lenguaje + version + deps relevantes según el formato del archivo."
+	return header + "```\n" + truncate(content, 3000) + "\n```\n\nLLM: extrae lenguaje + version + deps relevantes segun el formato del archivo."
 }
 
 func truncate(s string, n int) string {
@@ -276,11 +276,11 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	runIDStr, _ := args["run_id"].(string)
 	runID, err := uuid.Parse(runIDStr)
 	if err != nil {
-		return mcp.NewToolResultError("run_id inválido"), nil
+		return mcp.NewToolResultError("run_id invalido"), nil
 	}
 	rawFiles, _ := args["files"].([]any)
 	if len(rawFiles) == 0 {
-		return mcp.NewToolResultError("files requerido (no vacío)"), nil
+		return mcp.NewToolResultError("files requerido (no vacio)"), nil
 	}
 	complete, _ := args["complete"].(bool)
 
@@ -301,7 +301,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	// Si un statement falla (ej: unique violation, subquery multi-row),
 	// la tx queda "aborted" (SQLSTATE 25P02) y mata todos los statements
 	// subsiguientes. Con SAVEPOINT/RELEASE/ROLLBACK TO, un fallo se
-	// revierte al punto pre-iteración y la tx sigue sana para los
+	// revierte al punto pre-iteracion y la tx sigue sana para los
 	// siguientes archivos.
 	for i, raw := range rawFiles {
 		m, ok := raw.(map[string]any)
@@ -316,7 +316,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 
 		spName := fmt.Sprintf("sp_idx_%d", i)
 		if _, err := d.q(ctx).Exec(ctx, "SAVEPOINT "+spName); err != nil {
-			// Si ni el SAVEPOINT funciona, la tx está rota de verdad.
+			// Si ni el SAVEPOINT funciona, la tx esta rota de verdad.
 			// Marcamos el archivo como ignored y continuamos con los
 			// siguientes (cada uno va a tener el mismo problema, pero
 			// al menos el handler no crashea).
@@ -344,7 +344,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 					fileErr = fmt.Errorf("create+rollback: %w / %v", serr, rerr)
 				} else {
 					// UPDATE usando CTE para evitar subquery multi-row que
-					// podía romper la tx con error de subquery.
+					// podia romper la tx con error de subquery.
 					ctag, uerr := d.q(ctx).Exec(ctx,
 						`WITH existing AS (
 						   SELECT id FROM project_policies
@@ -359,13 +359,13 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 						projectID, cls.Slug, cls.Body, cls.Title,
 					)
 					if uerr != nil {
-						// Update falló — el savepoint sigue rolled back,
+						// Update fallo — el savepoint sigue rolled back,
 						// marcamos ignored.
 						fileErr = fmt.Errorf("update policy: %w (create was: %v)", uerr, serr)
 					} else if ctag.RowsAffected() == 0 {
-						// No había policy previa — el Create falló por otra
-						// razón (ej: validation). Lo registramos como ignored.
-						fileErr = fmt.Errorf("policy create failed y no había previa: %v", serr)
+						// No habia policy previa — el Create fallo por otra
+						// razon (ej: validation). Lo registramos como ignored.
+						fileErr = fmt.Errorf("policy create failed y no habia previa: %v", serr)
 					} else {
 						policiesCreated++
 					}
@@ -423,7 +423,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		}
 
 		// Si hubo error en este archivo, lo registramos como ignored
-		// pero la tx ya está en el savepoint (rolled back), lista
+		// pero la tx ya esta en el savepoint (rolled back), lista
 		// para el siguiente archivo.
 		if fileErr != nil {
 			ignored++
@@ -432,9 +432,9 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				errMsg = errMsg[:60]
 			}
 			ignoredPaths = append(ignoredPaths, path+" ("+errMsg+")")
-			// Asegurar que la tx está limpia para el próximo archivo.
+			// Asegurar que la tx esta limpia para el proximo archivo.
 			// Si el savepoint sigue activo (caso CREATE OK que no fue),
-			// ROLLBACK. Si ya está rolled back, esto es no-op.
+			// ROLLBACK. Si ya esta rolled back, esto es no-op.
 			_, _ = d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
 		} else {
 			// Todo OK en este archivo — liberar el savepoint.
@@ -509,7 +509,7 @@ func (d *Deps) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolReq
 	if err != nil {
 		return toolResultJSON(map[string]any{
 			"has_run":     false,
-			"recommendation": "No hay indexing previo. Llamá domain_project_index_start para crear el primer index.",
+			"recommendation": "No hay indexing previo. Llama domain_project_index_start para crear el primer index.",
 		})
 	}
 	var summary any

@@ -123,7 +123,7 @@ func TestBehavior_AuthBootstrap_SuccessResponseShape(t *testing.T) {
 		"email":           "admin@saargo.com",
 		"org_name":        "Saargo",
 		"method":          "bootstrap",
-		"note":            "guardá la API key — solo se muestra UNA vez. No expira automáticamente; rotala manualmente con /domain-login.",
+		"note":            "guarda la API key — solo se muestra UNA vez. No expira automaticamente; rotala manualmente con /domain-login.",
 	}
 	data, err := json.Marshal(body)
 	require.NoError(t, err)

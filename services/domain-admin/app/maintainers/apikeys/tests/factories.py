@@ -2,7 +2,7 @@
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
 prod los genera domain-mcp) y el make_user del mantenedor de usuarios (las keys
-cuelgan de un user real). Solo agrega el helper específico de auth_api_keys.
+cuelgan de un user real). Solo agrega el helper especifico de auth_api_keys.
 """
 from __future__ import annotations
 

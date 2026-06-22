@@ -1,8 +1,8 @@
 """Helpers base para factories de los apps.
 
-Los PK son UUID (los genera domain-mcp en prod), así que en tests conviene
-pasarlos explícitos. Estos helpers centralizan eso para que las factories de
-cada app no repitan la generación de uuid.
+Los PK son UUID (los genera domain-mcp en prod), asi que en tests conviene
+pasarlos explicitos. Estos helpers centralizan eso para que las factories de
+cada app no repitan la generacion de uuid.
 """
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ def new_id() -> uuid.UUID:
 
 
 def make(model, /, **kwargs):
-    """Crea una fila del `model` poniendo un PK uuid si no se pasó `id`.
+    """Crea una fila del `model` poniendo un PK uuid si no se paso `id`.
 
-    `model` es positional-only (con `/`) a propósito: hay tablas con una
-    columna llamada `model` (ej. agents.model = nombre del LLM), así que
+    `model` es positional-only (con `/`) a proposito: hay tablas con una
+    columna llamada `model` (ej. agents.model = nombre del LLM), asi que
     `make(Agent, model="anthropic")` debe meter `model` en kwargs, no chocar
-    con el parámetro de la clase.
+    con el parametro de la clase.
 
     Ej.: make(Project, name="X", slug="x")
     """

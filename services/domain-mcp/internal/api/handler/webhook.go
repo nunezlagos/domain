@@ -16,12 +16,12 @@ import (
 	"nunezlagos/domain/internal/service/webhook"
 )
 
-// POST /webhooks/{slug} — endpoint público para webhooks inbound.
+// POST /webhooks/{slug} — endpoint publico para webhooks inbound.
 // NO requiere Bearer auth; auth es por HMAC con secret del webhook config.
 //
 // Headers reconocidos:
 //   X-Hub-Signature-256: sha256=<hex>  (GitHub)
-//   X-Gitlab-Token: <secret>           (GitLab — comparación constante)
+//   X-Gitlab-Token: <secret>           (GitLab — comparacion constante)
 //   X-Domain-Signature: sha256=<hex>   (generic)
 func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
@@ -47,7 +47,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar HMAC según source_type
+	// Verificar HMAC segun source_type
 	if !verifyWebhookSignature(hook.SourceType, secret, body, r) {
 		_ = a.WebhookService.RecordDelivery(r.Context(), hook.ID, body,
 			collectHeaders(r), r.RemoteAddr, "signature_invalid", nil, "HMAC mismatch")
@@ -55,13 +55,13 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construir inputs según mapping
+	// Construir inputs segun mapping
 	inputs := buildInputs(body, hook.InputsMapping)
 
-	// ISSUE-28.7: dispatch vía WebhookDispatcher (bounded queue + WaitGroup +
-	// per-job timeout). Si la cola está llena o el dispatcher cerró → 503.
+	// ISSUE-28.7: dispatch via WebhookDispatcher (bounded queue + WaitGroup +
+	// per-job timeout). Si la cola esta llena o el dispatcher cerro → 503.
 	if a.WebhookDispatcher == nil {
-		// Fallback al comportamiento legacy si el dispatcher no está
+		// Fallback al comportamiento legacy si el dispatcher no esta
 		// configurado (backward compat para tests que no inicializan
 		// el struct completo).
 		go a.runWebhookTarget(r.Context(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
@@ -96,7 +96,7 @@ func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Requ
 		token := r.Header.Get("X-Gitlab-Token")
 		return token != "" && token == string(secret)
 	case "bitbucket":
-		// Bitbucket no firma por default; verificación por IP allowlist (no impl)
+		// Bitbucket no firma por default; verificacion por IP allowlist (no impl)
 		return true
 	case "generic":
 		return webhook.VerifyHMAC(secret, body, r.Header.Get("X-Domain-Signature"))
@@ -107,7 +107,7 @@ func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Requ
 func buildInputs(payload []byte, mapping map[string]any) map[string]any {
 	inputs := map[string]any{"raw": json.RawMessage(payload)}
 	// Mapping JSONPath-like simple: {"foo": "$.field.path"}
-	// Implementación MVP: copia field-a-field si values son strings con prefix $.
+	// Implementacion MVP: copia field-a-field si values son strings con prefix $.
 	var parsed map[string]any
 	_ = json.Unmarshal(payload, &parsed)
 	for k, v := range mapping {
@@ -164,7 +164,7 @@ func collectHeaders(r *http.Request) map[string]string {
 
 // runWebhookTarget ejecuta el target del webhook delegando al dispatcher
 // unificado (issue-35.1 phase 5). El switch local fue eliminado: ahora
-// existe 1 sola implementación (dispatch.Dispatcher) compartida por
+// existe 1 sola implementacion (dispatch.Dispatcher) compartida por
 // cron, webhook y MCP.
 func (a *API) runWebhookTarget(ctx context.Context, hook *webhook.Webhook,
 	body []byte, inputs map[string]any, headers map[string]string, sourceIP string) {
@@ -208,5 +208,5 @@ func (a *API) runWebhookTarget(ctx context.Context, hook *webhook.Webhook,
 		headers, sourceIP, status, triggeredID, errStr)
 }
 
-// Wrap bytes para evitar consumir body más de una vez (si necesario en futuro)
+// Wrap bytes para evitar consumir body mas de una vez (si necesario en futuro)
 var _ = bytes.NewReader

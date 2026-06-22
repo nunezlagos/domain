@@ -1,8 +1,8 @@
 """Tests de AgentTemplateForm (validaciones del mantenedor de Plantillas).
 
-Verifican reglas reales: campos requeridos, normalización de slug, parseo de
+Verifican reglas reales: campos requeridos, normalizacion de slug, parseo de
 capabilities, rangos (temperature/max_tokens), choices y unicidad de slug
-(global) con exclusión del propio registro en edición.
+(global) con exclusion del propio registro en edicion.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class AgentTemplateFormCreateTests(MaintainerTestCase):
         base = {
             "name": "Form Plantilla",
             "slug": "form",
-            "system_prompt": "Sos útil.",
+            "system_prompt": "Sos util.",
             "personality": "amable",
             "capabilities": "research, code",
             "model": "claude-haiku-4-5",

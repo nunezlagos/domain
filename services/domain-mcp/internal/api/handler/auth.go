@@ -33,7 +33,7 @@ type verifyOTPBody struct {
 func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 	var b requestOTPBody
 	if err := decodeJSON(r, &b); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_body", "JSON inválido")
+		writeError(w, http.StatusBadRequest, "invalid_body", "JSON invalido")
 		return
 	}
 	if b.Identifier == "" {
@@ -41,7 +41,7 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.OTPRateLimiter != nil && !a.OTPRateLimiter.Allow("otp:request:"+b.Identifier+":"+clientIP(r)) {
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiadas solicitudes, intentá más tarde")
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiadas solicitudes, intenta mas tarde")
 		return
 	}
 	if a.OTPService != nil {
@@ -49,7 +49,7 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 		// Swallow ErrUserNotFound: anti-enumeration
 	}
 	writeData(w, http.StatusOK, map[string]any{
-		"message": "si el identifier corresponde a una cuenta, recibirás un código",
+		"message": "si el identifier corresponde a una cuenta, recibiras un codigo",
 	})
 }
 
@@ -58,7 +58,7 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	var b verifyOTPBody
 	if err := decodeJSON(r, &b); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_body", "JSON inválido")
+		writeError(w, http.StatusBadRequest, "invalid_body", "JSON invalido")
 		return
 	}
 	if b.Identifier == "" || b.Code == "" {
@@ -66,7 +66,7 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.OTPRateLimiter != nil && !a.OTPRateLimiter.Allow("otp:verify:"+b.Identifier+":"+clientIP(r)) {
-		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiados intentos, intentá más tarde")
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiados intentos, intenta mas tarde")
 		return
 	}
 	if a.OTPService == nil || a.APIKeys == nil {
@@ -78,13 +78,13 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, otp.ErrInvalidCode):
-			writeError(w, http.StatusUnauthorized, "invalid_code", "código inválido")
+			writeError(w, http.StatusUnauthorized, "invalid_code", "codigo invalido")
 		case errors.Is(err, otp.ErrOTPExpired):
-			writeError(w, http.StatusUnauthorized, "code_expired", "código expirado")
+			writeError(w, http.StatusUnauthorized, "code_expired", "codigo expirado")
 		case errors.Is(err, otp.ErrTooManyAttempts):
 			writeError(w, http.StatusTooManyRequests, "too_many_attempts", "demasiados intentos")
 		default:
-			writeError(w, http.StatusUnauthorized, "invalid_code", "código inválido")
+			writeError(w, http.StatusUnauthorized, "invalid_code", "codigo invalido")
 		}
 		return
 	}
@@ -107,6 +107,6 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		"email":           result.Email,
 		"api_key":         plaintext,
 		"api_key_id":      keyID,
-		"note":            "guardá la API key — solo se muestra UNA vez",
+		"note":            "guarda la API key — solo se muestra UNA vez",
 	})
 }

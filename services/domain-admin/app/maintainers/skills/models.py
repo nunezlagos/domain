@@ -1,7 +1,7 @@
 """Modelos del mantenedor de Skills (migrado a core).
 
 2 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
-- skills:         definición de una skill   -> hereda de core.SoftDeleteModel
+- skills:         definicion de una skill   -> hereda de core.SoftDeleteModel
 - skill_versions: snapshots inmutables       -> hereda de core.BaseModel (read-only)
 
 Skill reusa los campos comunes (id/created_at/updated_at/deleted_at/status) de
@@ -10,17 +10,17 @@ core.models.BaseModel. Cada uno declara SOLO sus columnas propias. Las columnas
 declaradas deben matchear EXACTO la tabla real (guard:
 core/tests/test_schema_drift.py + real_schema.json).
 
-Evolución del schema relevante (verificada en migrations):
+Evolucion del schema relevante (verificada en migrations):
 - 000056: skills.pinned_version INT nullable.
 - 000107: skills.project_id UUID nullable (NULL = skill global de la org;
-  not-NULL = skill de un proyecto). El UNIQUE pasó a ser por (project_id, slug)
-  vía 2 índices parciales (global vs por proyecto).
+  not-NULL = skill de un proyecto). El UNIQUE paso a ser por (project_id, slug)
+  via 2 indices parciales (global vs por proyecto).
 - 000110: skills.proposed BOOL default false.
 - 000142: DROP COLUMN organization_id en TODAS las tablas (incluida skills).
 - 000144: skill_type deprecado a 'prompt' para api/code/mcp_tool, pero el CHECK
   sigue aceptando los 4 valores.
 
-skills SÍ tiene `status` y `deleted_at` (soft-delete). La baja es soft-delete
+skills SI tiene `status` y `deleted_at` (soft-delete). La baja es soft-delete
 (deleted_at); el toggle de estado NO se expone en el mantenedor (la baja real es
 deleted_at, no un status alternable).
 
@@ -40,7 +40,7 @@ class Skill(SoftDeleteModel):
     """Skill de la plataforma.
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
-    Las columnas declaradas acá matchean EXACTO la tabla real `skills`.
+    Las columnas declaradas aqui matchean EXACTO la tabla real `skills`.
     """
 
     # skill_type no es un "status" alternable; lo usamos como choices para
@@ -48,7 +48,7 @@ class Skill(SoftDeleteModel):
     # coinciden con el CHECK real de la tabla.
     SKILL_TYPE_CHOICES = [
         ("prompt", "Prompt"),
-        ("code", "Código"),
+        ("code", "Codigo"),
         ("api", "API"),
         ("mcp_tool", "Herramienta MCP"),
     ]
@@ -89,12 +89,12 @@ class Skill(SoftDeleteModel):
 
     @property
     def is_active(self) -> bool:
-        """Una skill está vigente si no está soft-deleted ni propuesta."""
+        """Una skill esta vigente si no esta soft-deleted ni propuesta."""
         return self.deleted_at is None and not self.proposed
 
 
 class SkillVersion(BaseModel):
-    """Snapshot inmutable de una skill por versión. Read-only desde el admin.
+    """Snapshot inmutable de una skill por version. Read-only desde el admin.
 
     id / created_at / updated_at vienen de BaseModel. `status` existe en la
     tabla real (skill_versions) pero NO `deleted_at`, por eso hereda de

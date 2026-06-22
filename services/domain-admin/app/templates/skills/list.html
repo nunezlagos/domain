@@ -1,7 +1,7 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de skills. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
@@ -9,7 +9,7 @@ con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% block header_title %}Skills{% endblock %}
 {% block page_subtitle %}Definiciones de skills de la plataforma{% endblock %}
 {% block create_label %}+ Nueva skill{% endblock %}
-{% block search_placeholder %}Nombre, slug o descripción...{% endblock %}
+{% block search_placeholder %}Nombre, slug o descripcion...{% endblock %}
 
 {% block table_area_id %}skills-table-area{% endblock %}
 {% block base_url %}/skills/{% endblock %}

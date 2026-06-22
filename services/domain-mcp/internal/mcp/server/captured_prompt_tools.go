@@ -1,10 +1,10 @@
 // Tools MCP de captured_prompts (REQ-41): persistir el raw_text del usuario
-// para análisis posterior. Prefijo `domain_prompt_capture` + listing.
+// para analisis posterior. Prefijo `domain_prompt_capture` + listing.
 //
 // El LLM cliente debe llamar domain_prompt_capture UNA vez por turn
 // (apenas reciba el mensaje del user), pasando content + opcionalmente
 // project_slug. char_count se computa server-side como proxy de tokens
-// hasta tener integración real. (REQ-42.3: session_id removido.)
+// hasta tener integracion real. (REQ-42.3: session_id removido.)
 package mcpserver
 
 import (
@@ -33,13 +33,13 @@ func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serv
 
 func toolPromptCapture() mcp.Tool {
 	return mcp.NewTool("domain_prompt_capture",
-		mcp.WithDescription("Persiste el raw_text que el usuario escribió en este turn. Llamar UNA vez al inicio de cada turn, antes de actuar. char_count se computa server-side (proxy de tokens)."),
+		mcp.WithDescription("Persiste el raw_text que el usuario escribio en este turn. Llamar UNA vez al inicio de cada turn, antes de actuar. char_count se computa server-side (proxy de tokens)."),
 		mcp.WithString("content",
-			mcp.Description("Texto plano del mensaje del usuario, tal cual lo escribió."),
+			mcp.Description("Texto plano del mensaje del usuario, tal cual lo escribio."),
 			mcp.Required(),
 		),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del proyecto en cuyo contexto se mandó el mensaje (opcional)."),
+			mcp.Description("Slug del proyecto en cuyo contexto se mando el mensaje (opcional)."),
 		),
 		mcp.WithString("client_kind",
 			mcp.Description("Cliente IDE que captura: claude-code | opencode | cursor | cline | continue | claude-desktop."),
@@ -52,15 +52,15 @@ func toolPromptCapture() mcp.Tool {
 
 func toolPromptCapturedList() mcp.Tool {
 	return mcp.NewTool("domain_prompt_captured_list",
-		mcp.WithDescription("Lista prompts del usuario capturados, filtrables por project/user. Para revisión y análisis."),
+		mcp.WithDescription("Lista prompts del usuario capturados, filtrables por project/user. Para revision y analisis."),
 		mcp.WithString("project_slug",
 			mcp.Description("Filtrar por slug de proyecto"),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máx resultados (default 50, max 200)"),
+			mcp.Description("Max resultados (default 50, max 200)"),
 		),
 		mcp.WithNumber("offset",
-			mcp.Description("Offset paginación (default 0)"),
+			mcp.Description("Offset paginacion (default 0)"),
 		),
 	)
 }
@@ -118,13 +118,13 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 
 func toolTurnComplete() mcp.Tool {
 	return mcp.NewTool("domain_turn_complete",
-		mcp.WithDescription("Cierra el turn actual reportando cuántos chars escribió el LLM en su respuesta. El server estima tokens out con ratio 4:1 y los persiste. Llamar al final de CADA turn pasando el prompt_id que devolvió domain_prompt_capture. Permite trackear consumo aproximado por turn/session/project sin que el cliente IDE reporte tokens reales."),
+		mcp.WithDescription("Cierra el turn actual reportando cuantos chars escribio el LLM en su respuesta. El server estima tokens out con ratio 4:1 y los persiste. Llamar al final de CADA turn pasando el prompt_id que devolvio domain_prompt_capture. Permite trackear consumo aproximado por turn/session/project sin que el cliente IDE reporte tokens reales."),
 		mcp.WithString("prompt_id",
-			mcp.Description("UUID del row de captured_prompts (lo devolvió domain_prompt_capture al inicio del turn)"),
+			mcp.Description("UUID del row de captured_prompts (lo devolvio domain_prompt_capture al inicio del turn)"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("response_chars",
-			mcp.Description("Total de chars que escribió el LLM en su respuesta + tool calls de este turn"),
+			mcp.Description("Total de chars que escribio el LLM en su respuesta + tool calls de este turn"),
 			mcp.Required(),
 		),
 		mcp.WithString("model",
@@ -135,7 +135,7 @@ func toolTurnComplete() mcp.Tool {
 
 func toolUsageSummary() mcp.Tool {
 	return mcp.NewTool("domain_usage_summary",
-		mcp.WithDescription("Agrega tokens estimados (proxy chars/4) de todos los turns de un project. Útil para mostrarle al usuario cuánto está consumiendo y detectar overengineering ('gastar más tokens no significa ser más productivo')."),
+		mcp.WithDescription("Agrega tokens estimados (proxy chars/4) de todos los turns de un project. Util para mostrarle al usuario cuanto esta consumiendo y detectar overengineering ('gastar mas tokens no significa ser mas productivo')."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del proyecto a resumir"),
 		),
@@ -153,7 +153,7 @@ func (d *Deps) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["prompt_id"].(string)
 	pid, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("prompt_id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("prompt_id invalido (UUID requerido)"), nil
 	}
 	rc := 0
 	if v, ok := args["response_chars"].(float64); ok {

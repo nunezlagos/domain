@@ -1,9 +1,9 @@
 """URL routing del mantenedor de Plantillas de Agentes.
 
-Mounted at /plantillas-agentes/ en config/urls.py. Las 7 rutas estándar (list,
+Mounted at /plantillas-agentes/ en config/urls.py. Las 7 rutas estandar (list,
 signal, create, detail, edit, delete, toggle) las arma
 core.urls.maintainer_urlpatterns a partir de la instancia `views`. Este
-mantenedor NO expone botón de toggle en la UI (status no se alterna; la baja es
+mantenedor NO expone boton de toggle en la UI (status no se alterna; la baja es
 HARD delete), pero la ruta queda cableada por el helper igual que en el resto;
 simplemente no se usa.
 

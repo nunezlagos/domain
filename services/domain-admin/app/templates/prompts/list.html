@@ -1,15 +1,15 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de prompts. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Prompts{% endblock %}
 {% block header_title %}Prompts{% endblock %}
-{% block page_subtitle %}Prompts versionados que la organización usa en agentes y flujos{% endblock %}
+{% block page_subtitle %}Prompts versionados que la organizacion usa en agentes y flujos{% endblock %}
 {% block create_label %}+ Nuevo prompt{% endblock %}
-{% block search_placeholder %}Slug, descripción o contenido...{% endblock %}
+{% block search_placeholder %}Slug, descripcion o contenido...{% endblock %}
 
 {% block table_area_id %}prompts-table-area{% endblock %}
 {% block base_url %}/prompts/{% endblock %}

@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de proyecto para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de proyecto para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
 {% block detail_title %}{{ project_obj.display_name }}{% endblock %}
@@ -15,12 +15,12 @@ Detalle de proyecto para el modal dinámico. Extiende maintainers/_detail_base.h
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 160px;">Nombre</th><td>{{ project_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ project_obj.slug }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ project_obj.description|default:"—" }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ project_obj.description|default:"—" }}</td></tr>
       <tr><th>Repositorio</th>
         <td>{% if project_obj.repository_url %}<code>{{ project_obj.repository_url }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
       </tr>

@@ -20,7 +20,7 @@ import (
 //   POST /api/v1/auth/logout        (Bearer sess_*) → {ok:true}
 //
 // El middleware acepta Bearer api key (domk_*) o session token (sess_*).
-// El handler /me y /logout sólo aceptan session tokens.
+// El handler /me y /logout solo aceptan session tokens.
 
 type loginReq struct {
 	Email    string `json:"email"`
@@ -47,7 +47,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var in loginReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "json inválido"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "json invalido"})
 		return
 	}
 	in.Email = strings.TrimSpace(strings.ToLower(in.Email))
@@ -60,8 +60,8 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		IP: realIP(r), UserAgent: r.Header.Get("User-Agent"),
 	})
 	if err != nil {
-		// Defensa anti-enumeración: mismo mensaje para todas las fallas.
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "credenciales inválidas"})
+		// Defensa anti-enumeracion: mismo mensaje para todas las fallas.
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "credenciales invalidas"})
 		return
 	}
 	resp := loginResp{
@@ -71,7 +71,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// ISSUE-21.6 single-org: si el user tiene 1 solo rol, generar el
 	// session_token directamente (skip select-role). El dashboard single-org
-	// no tiene role switcher, así que el flow de 2 pasos es overhead.
+	// no tiene role switcher, asi que el flow de 2 pasos es overhead.
 	if len(res.Roles) == 1 {
 		sel, selErr := a.AuthSessionService.SelectRole(
 			r.Context(),
@@ -110,7 +110,7 @@ func (a *API) authSelectRole(w http.ResponseWriter, r *http.Request) {
 	}
 	var in selectRoleReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "json inválido"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "json invalido"})
 		return
 	}
 	if in.TempToken == "" || in.RoleSlug == "" {
@@ -122,9 +122,9 @@ func (a *API) authSelectRole(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, session.ErrRoleNotGranted):
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "no tenés ese rol"})
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "no tiene ese rol"})
 		default:
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "temp_token inválido o expirado"})
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "temp_token invalido o expirado"})
 		}
 		return
 	}
@@ -168,8 +168,8 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// REQ-78 POST /api/v1/auth/refresh: extiende la sesión activa por otro
-// SessionTTL (8h). Útil para que el dashboard no obligue a re-login si
+// REQ-78 POST /api/v1/auth/refresh: extiende la sesion activa por otro
+// SessionTTL (8h). Util para que el dashboard no obligue a re-login si
 // el usuario sigue activo. Devuelve el nuevo expires_at + datos del
 // usuario y rol activo.
 func (a *API) authRefresh(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +190,7 @@ func (a *API) authRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	active, expires, err := a.AuthSessionService.Refresh(r.Context(), tok)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token inválido o expirado"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token invalido o expirado"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

@@ -3,15 +3,15 @@
 PROBLEMA QUE RESUELVE: los models son managed=False en prod, pero el runner de
 test los flipea a managed=True y crea el schema desde los PROPIOS models. Eso
 significa que si un model declara una columna que NO existe en la BD real, los
-tests igual PASAN (Django crea esa columna en la DB efímera). managed=True
-NUNCA caza drift por sí solo.
+tests igual PASAN (Django crea esa columna en la DB efimera). managed=True
+NUNCA caza drift por si solo.
 
 Este test cierra ese hueco: carga `real_schema.json` (snapshot de las columnas
 reales de la BD viva) y, para CADA model de los apps de mantenedor, verifica
 que toda columna declarada por el model exista en la tabla real. Si un model
 declara una columna inexistente, falla con un mensaje claro.
 
-Mantenimiento: cuando la BD real gana/pierde columnas, actualizá
+Mantenimiento: cuando la BD real gana/pierde columnas, actualiza
 real_schema.json (es la fuente de verdad de este guard).
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ MAINTAINER_APPS = (
 _SCHEMA_PATH = Path(__file__).resolve().parent / "real_schema.json"
 
 # Tablas excluidas del guard. user_roles ya NO se excluye: el model UserRole se
-# reconcilió (sin columna `id`, user como primary_key db_column user_id), así que
+# reconcilio (sin columna `id`, user como primary_key db_column user_id), asi que
 # sus columnas calzan con la tabla real y el guard lo valida.
 _SKIP_TABLES: set[str] = set()
 
@@ -72,7 +72,7 @@ class SchemaDriftTests(SimpleTestCase):
 
         for app_label, model in self._iter_models():
             db_table = model._meta.db_table
-            # Saltar models cuya tabla no esté en el snapshot o esté excluida.
+            # Saltar models cuya tabla no este en el snapshot o este excluida.
             if db_table not in self.real_schema or db_table in _SKIP_TABLES:
                 continue
 
@@ -96,8 +96,8 @@ class SchemaDriftTests(SimpleTestCase):
             "BD viva):\n\n" + "\n\n".join(problems),
         )
         # Sanity: el test debe haber chequeado al menos un model, si no el
-        # iterador/labels están mal y el guard sería un falso verde.
+        # iterador/labels estan mal y el guard seria un falso verde.
         self.assertGreater(
             checked, 0,
-            "El guard no chequeó ningún model: revisá MAINTAINER_APPS / labels.",
+            "El guard no chequeo ningun model: revisa MAINTAINER_APPS / labels.",
         )

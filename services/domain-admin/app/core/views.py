@@ -1,6 +1,6 @@
-"""Vistas genéricas de un mantenedor.
+"""Vistas genericas de un mantenedor.
 
-`MaintainerViews` arma las 7 vistas estándar de un mantenedor reusando el
+`MaintainerViews` arma las 7 vistas estandar de un mantenedor reusando el
 comportamiento EXACTO del app `users` (que es el contrato de referencia):
 
     list    GET   ""                  -> layout completo, o ?fragment=table -> solo tabla
@@ -22,7 +22,7 @@ Un app declara una instancia::
         app_name="projects",
         model=Project,
         form_class=ProjectForm,
-        service=services,            # módulo o objeto con las funciones de negocio
+        service=services,            # modulo o objeto con las funciones de negocio
         templates="projects",        # carpeta de templates: projects/list.html, etc.
         search_fields=("name", "slug"),
         entity_label="Proyecto",
@@ -31,8 +31,8 @@ Un app declara una instancia::
 
 y luego en urls.py usa core.urls.maintainer_urlpatterns(views).
 
-CONTRATO con el `service` (mismo shape que users.services). El módulo/objeto
-de servicio debe exponer (los nombres son configurables vía *_fn):
+CONTRATO con el `service` (mismo shape que users.services). El modulo/objeto
+de servicio debe exponer (los nombres son configurables via *_fn):
 
     list_<plural>(search, page, per_page) -> dict con la lista bajo `list_key`
         (por defecto "items"; users usa "users"). Si no existe, se cae a
@@ -44,7 +44,7 @@ de servicio debe exponer (los nombres son configurables vía *_fn):
     delete_<entity>(instance) -> None        (soft delete)
     toggle_<entity>_status(instance) -> str  (nuevo status)
 
-Para mantenedores cuyo service no calza 1:1, sobreescribí los hooks
+Para mantenedores cuyo service no calza 1:1, sobreescribi los hooks
 (`do_create`, `do_update`, etc.) en una subclase.
 """
 from __future__ import annotations
@@ -60,9 +60,9 @@ from .service import MaintainerService
 
 
 class MaintainerViews:
-    """Fábrica de vistas estándar para un mantenedor.
+    """Fabrica de vistas estandar para un mantenedor.
 
-    Las vistas se exponen como métodos bound: list, signal, detail, create,
+    Las vistas se exponen como metodos bound: list, signal, detail, create,
     edit, delete, toggle. core.urls.maintainer_urlpatterns las cablea.
     """
 
@@ -93,7 +93,7 @@ class MaintainerViews:
         self.per_page = per_page
         self.search_param = search_param
 
-        # Fallback service genérico (si el módulo del app no define list/signal).
+        # Fallback service generico (si el modulo del app no define list/signal).
         self._base = MaintainerService()
         self._base.model = model
         self._base.search_fields = self.search_fields
@@ -107,12 +107,12 @@ class MaintainerViews:
         return f"{self.templates}/{name}"
 
     # ---- service hooks (sobreescribibles) --------------------------------
-    # Por defecto buscan funciones por convención de nombre en `service`;
-    # si no existen, usan el MaintainerService genérico o lanzan.
+    # Por defecto buscan funciones por convencion de nombre en `service`;
+    # si no existen, usan el MaintainerService generico o lanzan.
 
     @property
     def error_class(self):
-        """Excepción de dominio que el service levanta (default: Exception)."""
+        """Excepcion de dominio que el service levanta (default: Exception)."""
         return getattr(self.service, "ServiceError", None) or getattr(
             self.service, f"{self.entity_label}Error", Exception
         )
@@ -179,7 +179,7 @@ class MaintainerViews:
         return self.entity_label.strip().lower().replace(" ", "_")
 
     def _form_payload(self, form) -> dict:
-        """cleaned_data del form. Sobreescribí si el service espera otra forma
+        """cleaned_data del form. Sobreescribi si el service espera otra forma
         (p.ej. users mapea role->role_slug y agrega hashed_password())."""
         return dict(form.cleaned_data)
 
@@ -205,8 +205,8 @@ class MaintainerViews:
         return {"object": instance}
 
     def build_form(self, *args, instance=None, **kwargs):
-        """Instancia el form. Sobreescribí si tu form no acepta `instance`
-        kwarg (ModelForm usa `instance=`; el UserForm del ref también)."""
+        """Instancia el form. Sobreescribi si tu form no acepta `instance`
+        kwarg (ModelForm usa `instance=`; el UserForm del ref tambien)."""
         return self.form_class(*args, instance=instance, **kwargs)
 
     # ---- vistas ----------------------------------------------------------
@@ -220,7 +220,7 @@ class MaintainerViews:
         data = self.do_list(search=search, page=page)
         ctx = self.list_context(data, search)
 
-        # ?fragment=table -> solo tabla + paginación (para auto-refresh).
+        # ?fragment=table -> solo tabla + paginacion (para auto-refresh).
         if request.GET.get("fragment") == "table":
             return render(request, self.tpl("_table_partial.html"), ctx)
 

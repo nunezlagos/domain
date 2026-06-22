@@ -1,13 +1,13 @@
 """Capa de negocio del mantenedor de usuarios (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El resto —roles, password,
-create/update/delete/toggle con sus validaciones de dominio— sigue acá.
+busqueda/paginacion ni el aggregate de la señal). El resto —roles, password,
+create/update/delete/toggle con sus validaciones de dominio— sigue aqui.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
 de nombre: get_user / create_user / update_user / delete_user /
 toggle_user_status / get_list_signal. `entity_label="Usuario"` -> attr "usuario",
-por eso además exponemos alias get_usuario/... para el descubrimiento del core.
+por eso ademas exponemos alias get_usuario/... para el descubrimiento del core.
 """
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ from .models import Role, User, UserRole
 
 # Error de dominio (la view lo traduce a messages.error).
 class UserError(Exception):
-    """Error de operación sobre usuarios."""
+    """Error de operacion sobre usuarios."""
 
 
-# Service base reusado: list (search email/name + paginación) + signal.
+# Service base reusado: list (search email/name + paginacion) + signal.
 class UserService(MaintainerService):
     model = User
     search_fields = ("email", "name")
@@ -34,7 +34,7 @@ _service = UserService()
 
 
 def list_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista usuarios con búsqueda + paginación.
+    """Lista usuarios con busqueda + paginacion.
 
     Delega en MaintainerService.list y renombra la clave `items` -> `users`
     para no romper el contrato del template/tests existentes.
@@ -82,7 +82,7 @@ def create_user(
         raise UserError(f"Ya existe un usuario con email {email}.")
 
     if not Role.objects.filter(slug=role_slug, status="active").exists():
-        raise UserError(f"Rol '{role_slug}' no existe o no está activo.")
+        raise UserError(f"Rol '{role_slug}' no existe o no esta activo.")
 
     return User.objects.create(
         email=email,
@@ -108,7 +108,7 @@ def update_user(
         raise UserError(f"Ya existe otro usuario con email {email}.")
 
     if not Role.objects.filter(slug=role_slug, status="active").exists():
-        raise UserError(f"Rol '{role_slug}' no existe o no está activo.")
+        raise UserError(f"Rol '{role_slug}' no existe o no esta activo.")
 
     user.email = email
     user.name = name or ""
@@ -122,7 +122,7 @@ def update_user(
 
 @transaction.atomic
 def delete_user(user: User) -> None:
-    """Soft delete: marca deleted_at + status=revoked. NO borra físicamente."""
+    """Soft delete: marca deleted_at + status=revoked. NO borra fisicamente."""
     from django.utils import timezone
     user.deleted_at = timezone.now()
     user.status = "revoked"
@@ -159,7 +159,7 @@ def assign_role(user: User, role_id: str, granted_by: str | None = None) -> User
 
 @transaction.atomic
 def revoke_role(user: User, role_id: str) -> bool:
-    """Revoca un rol del user. Retorna True si se eliminó."""
+    """Revoca un rol del user. Retorna True si se elimino."""
     deleted_count, _ = UserRole.objects.filter(user=user, role_id=role_id).delete()
     return deleted_count > 0
 
@@ -173,7 +173,7 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convención de core.views.MaintainerViews.
+# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
 # entity_label="Usuario" -> _entity_attr() == "usuario", core busca
 # get_usuario / create_usuario / update_usuario / delete_usuario /
 # toggle_usuario_status. Apuntamos esos nombres a las funciones reales.

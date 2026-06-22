@@ -64,7 +64,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # HU-48.1: las tablas reales (users, roles, user_roles, etc.) viven en
 # Postgres (donde corre domain-mcp). Django NO las migra (managed=False)
-# pero querya contra la DB configurada acá.
+# pero querya contra la DB configurada aqui.
 #
 # Credenciales tomadas del env (.env) — mismas que usa domain-mcp.
 DATABASES = {
@@ -87,7 +87,7 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"  # collectstatic destination
 
-# WHITENOISE settings: servir archivos estáticos sin nginx.
+# WHITENOISE settings: servir archivos estaticos sin nginx.
 MIDDLEWARE.insert(0, "whitenoise.middleware.WhiteNoiseMiddleware")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
@@ -107,8 +107,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # W342: UserRole usa un FK con primary_key=True (db_column user_id) como
 # workaround a la PK COMPUESTA de user_roles, que Django 5.1 no soporta nativo.
-# Django sugiere OneToOneField, pero sería semánticamente incorrecto (un user
-# tiene muchos roles). El warning es esperado y no aplica acá.
+# Django sugiere OneToOneField, pero seria semanticamente incorrecto (un user
+# tiene muchos roles). El warning es esperado y no aplica aqui.
 SILENCED_SYSTEM_CHECKS = ["fields.W342"]
 
 USE_TZ = True

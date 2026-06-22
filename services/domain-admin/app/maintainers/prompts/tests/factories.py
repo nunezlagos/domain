@@ -1,7 +1,7 @@
 """Factories del mantenedor de Prompts.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). Solo agrega el helper específico de la tabla prompts.
+prod los genera domain-mcp). Solo agrega el helper especifico de la tabla prompts.
 """
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 
 list + signal se delegan a core.service.MaintainerService. Lo propio —unicidad
 (project_id, slug) entre activas, toggle is_active que reactiva soft-deleted—
-queda acá. entity_label="Regla" -> core busca get_regla/create_regla/
+queda aqui. entity_label="Regla" -> core busca get_regla/create_regla/
 update_regla/delete_regla/toggle_regla_status: se exponen como alias.
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .models import ProjectPolicy
 
 
 class ProjectPolicyError(Exception):
-    """Error de operación sobre reglas de proyecto."""
+    """Error de operacion sobre reglas de proyecto."""
 
 
 class ProjectPolicyService(MaintainerService):
@@ -135,7 +135,7 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convención (entity_label="Regla").
+# --- Alias para el descubrimiento por convencion (entity_label="Regla").
 get_regla = get_policy
 create_regla = create_policy
 update_regla = update_policy

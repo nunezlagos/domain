@@ -218,8 +218,8 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	writeDataWithMeta(w, http.StatusOK, list, map[string]any{"pagination": pageMeta})
 }
 
-// GET /api/v1/search — búsqueda global cross-entity (issue-03.7).
-// Parámetros: q, limit, entity_type (csv: observation,prompt,session),
+// GET /api/v1/search — busqueda global cross-entity (issue-03.7).
+// Parametros: q, limit, entity_type (csv: observation,prompt,session),
 // project_slug (csv), tags (csv), date_from, date_to (ISO 8601).
 func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -245,7 +245,7 @@ func (a *API) searchObservations(w http.ResponseWriter, r *http.Request) {
 		for _, slug := range strings.Split(slugs, ",") {
 			proj, err := a.ProjectService.GetBySlug(r.Context(), orgID, strings.TrimSpace(slug))
 			if err != nil {
-				continue // slug inválido: ignorar
+				continue // slug invalido: ignorar
 			}
 			filter.ProjectIDs = append(filter.ProjectIDs, proj.ID)
 		}

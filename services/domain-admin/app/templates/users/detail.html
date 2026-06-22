@@ -25,7 +25,7 @@
 
 <!-- Info del usuario -->
 <div class="card mb-4">
-  <h3>Información</h3>
+  <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
       <tr><th style="width: 200px;">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
@@ -41,7 +41,7 @@
         </td>
       </tr>
       <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Último acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
       <tr><th>Contraseña</th>
         <td>
           {% if user_obj.password_set_at %}
@@ -66,7 +66,7 @@
     <div class="table-wrapper">
       <table class="table">
         <thead>
-          <tr><th>Rol</th><th>Descripción</th><th>Asignado</th><th></th></tr>
+          <tr><th>Rol</th><th>Descripcion</th><th>Asignado</th><th></th></tr>
         </thead>
         <tbody>
           {% for ur in user_roles %}
@@ -106,7 +106,7 @@
   {% endif %}
 </div>
 
-<!-- Modal de confirmación de eliminación -->
+<!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ user_obj.pk }}">
   <div class="modal" style="max-width: 420px;">
     <div class="modal-header">
@@ -115,13 +115,13 @@
     </div>
     <div class="modal-body">
       <p>Vas a eliminar a <strong>{{ user_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el usuario no podrá autenticarse pero el registro se conserva para auditoría.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el usuario no podra autenticarse pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form method="post" action="{% url 'users:delete' user_obj.pk %}" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

@@ -1,5 +1,5 @@
 // Tools MCP de project_repositories (REQ-42): permitir al LLM registrar y
-// consultar los remotos conocidos por proyecto. Cuando hay ambigüedad
+// consultar los remotos conocidos por proyecto. Cuando hay ambiguedad
 // (>1 remoto, ninguno marcado default), el LLM debe consultar antes de
 // pushear.
 package mcpserver
@@ -29,13 +29,13 @@ func registerProjectRepoTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 
 func toolProjectRepoAdd() mcp.Tool {
 	return mcp.NewTool("domain_project_repo_add",
-		mcp.WithDescription("Registra un remoto (origin/upstream/mirror/etc.) para un proyecto. El primer remoto agregado queda is_default automáticamente. workflow: merge|pr|mr|trunk_based|rebase. kind: github|gitlab|bitbucket|gitea|other."),
+		mcp.WithDescription("Registra un remoto (origin/upstream/mirror/etc.) para un proyecto. El primer remoto agregado queda is_default automaticamente. workflow: merge|pr|mr|trunk_based|rebase. kind: github|gitlab|bitbucket|gitea|other."),
 		mcp.WithString("project_slug", mcp.Description("Slug del proyecto al que pertenece este remoto."), mcp.Required()),
-		mcp.WithString("name", mcp.Description("Alias del remoto (origin, upstream, mirror, ...). Único por proyecto."), mcp.Required()),
+		mcp.WithString("name", mcp.Description("Alias del remoto (origin, upstream, mirror, ...). Unico por proyecto."), mcp.Required()),
 		mcp.WithString("url", mcp.Description("URL del remoto (https:// o git@...)."), mcp.Required()),
 		mcp.WithString("branch_default", mcp.Description("Rama principal en este remoto (main, master, services, ...). Opcional pero recomendado.")),
 		mcp.WithString("kind", mcp.Description("Provider: github|gitlab|bitbucket|gitea|other.")),
-		mcp.WithString("workflow", mcp.Description("Cómo se llevan cambios a este remoto: merge|pr|mr|trunk_based|rebase. Vacío = sin opinión.")),
+		mcp.WithString("workflow", mcp.Description("Como se llevan cambios a este remoto: merge|pr|mr|trunk_based|rebase. Vacio = sin opinion.")),
 		mcp.WithBoolean("is_default", mcp.Description("Forzarlo como default del proyecto (solo 1 default por proyecto).")),
 		mcp.WithString("notes", mcp.Description("Notas libres (ej. 'sin push directo, requiere review obligatoria').")),
 	)
@@ -43,21 +43,21 @@ func toolProjectRepoAdd() mcp.Tool {
 
 func toolProjectRepoList() mcp.Tool {
 	return mcp.NewTool("domain_project_repo_list",
-		mcp.WithDescription("Lista los remotos registrados de un proyecto, ordenados por is_default DESC, nombre ASC. Llamar antes de pushear si hay ambigüedad o si el LLM no sabe el remoto."),
+		mcp.WithDescription("Lista los remotos registrados de un proyecto, ordenados por is_default DESC, nombre ASC. Llamar antes de pushear si hay ambiguedad o si el LLM no sabe el remoto."),
 		mcp.WithString("project_slug", mcp.Description("Slug del proyecto."), mcp.Required()),
 	)
 }
 
 func toolProjectRepoSetDefault() mcp.Tool {
 	return mcp.NewTool("domain_project_repo_set_default",
-		mcp.WithDescription("Marca un remoto como default del proyecto. Limpia el default previo automáticamente."),
+		mcp.WithDescription("Marca un remoto como default del proyecto. Limpia el default previo automaticamente."),
 		mcp.WithString("repo_id", mcp.Description("UUID del project_repository."), mcp.Required()),
 	)
 }
 
 func toolProjectRepoDelete() mcp.Tool {
 	return mcp.NewTool("domain_project_repo_delete",
-		mcp.WithDescription("Soft-delete de un remoto del proyecto. Si era default, el proyecto queda sin default — el LLM tendrá que preguntar."),
+		mcp.WithDescription("Soft-delete de un remoto del proyecto. Si era default, el proyecto queda sin default — el LLM tendra que preguntar."),
 		mcp.WithString("repo_id", mcp.Description("UUID del project_repository."), mcp.Required()),
 	)
 }
@@ -168,7 +168,7 @@ func (d *Deps) handleProjectRepoSetDefault(ctx context.Context, req mcp.CallTool
 	idStr, _ := args["repo_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("repo_id inválido"), nil
+		return mcp.NewToolResultError("repo_id invalido"), nil
 	}
 	repo, err := d.ProjectRepos.SetDefault(ctx, orgID, id)
 	if err != nil {
@@ -186,7 +186,7 @@ func (d *Deps) handleProjectRepoDelete(ctx context.Context, req mcp.CallToolRequ
 	idStr, _ := args["repo_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("repo_id inválido"), nil
+		return mcp.NewToolResultError("repo_id invalido"), nil
 	}
 	if err := d.ProjectRepos.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil

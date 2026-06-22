@@ -1,7 +1,7 @@
 {% comment %}
 ============================================================
 Tabla base de mantenedor. Estructura compartida (wrapper +
-thead/tbody + paginación). Cada app la EXTIENDE y define
+thead/tbody + paginacion). Cada app la EXTIENDE y define
 solo sus columnas y filas:
 
   {% extends "maintainers/_table_base.html" %}
@@ -21,7 +21,7 @@ Bloques:
   columns   — celdas <th> del encabezado
   rows      — cuerpo completo del <tbody> (default: itera object_list)
   row       — celdas <td> de UNA fila (usado por el loop default)
-  colspan   — nº de columnas para la fila vacía (default: 1)
+  colspan   — nº de columnas para la fila vacia (default: 1)
   empty     — texto cuando no hay registros
 ============================================================
 {% endcomment %}

@@ -18,9 +18,9 @@
     </h1>
     <p class="subtitle">
       {% if mode == "create" %}
-        Crear un nuevo proyecto de la organización
+        Crear un nuevo proyecto de la organizacion
       {% else %}
-        Modificá los datos de <code>{{ project_obj.slug }}</code>
+        Modifica los datos de <code>{{ project_obj.slug }}</code>
       {% endif %}
     </p>
   </div>
@@ -55,7 +55,7 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+      <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
       {{ form.description }}
       {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
     </div>

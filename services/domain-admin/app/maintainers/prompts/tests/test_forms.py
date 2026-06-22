@@ -1,8 +1,8 @@
 """Tests de PromptForm (validaciones del mantenedor de Prompts).
 
-Verifican reglas reales: campos requeridos, normalización de slug, parseo de
-tags, unicidad de la tripleta (project, slug, version) y exclusión del propio
-registro en edición (esta última delegada al core.forms.InstanceAwareMixin).
+Verifican reglas reales: campos requeridos, normalizacion de slug, parseo de
+tags, unicidad de la tripleta (project, slug, version) y exclusion del propio
+registro en edicion (esta ultima delegada al core.forms.InstanceAwareMixin).
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class PromptFormCreateTests(MaintainerTestCase):
 
     def test_slug_se_normaliza_minuscula(self):
         form = PromptForm(data=self._data(slug="MiSlug"))
-        # SlugField acepta "MiSlug"; clean_slug lo baja a minúsculas.
+        # SlugField acepta "MiSlug"; clean_slug lo baja a minusculas.
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["slug"], "mislug")
 

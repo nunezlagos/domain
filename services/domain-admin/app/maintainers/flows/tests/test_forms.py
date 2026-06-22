@@ -1,8 +1,8 @@
 """Tests de FlowForm (validaciones del mantenedor de Flows, migrado a core).
 
-Verifican reglas reales: campos requeridos, JSON del spec, normalización de
+Verifican reglas reales: campos requeridos, JSON del spec, normalizacion de
 slug (delegada a core.forms.SlugNormalizationMixin), unicidad de slug y
-exclusión del propio registro en edición.
+exclusion del propio registro en edicion.
 """
 from __future__ import annotations
 

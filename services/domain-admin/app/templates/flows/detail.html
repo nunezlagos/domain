@@ -28,16 +28,16 @@
 
 <!-- Info del flow -->
 <div class="card mb-4">
-  <h3>Información</h3>
+  <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
       <tr><th style="width: 220px;">Nombre</th><td>{{ flow_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
-      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Versión de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
-      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
+      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
+      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Version de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
       <tr><th>Estado</th>
         <td>
           {% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>
@@ -58,7 +58,7 @@
     <table class="table mt-2">
       <thead>
         <tr>
-          <th style="width: 1%;">Versión</th>
+          <th style="width: 1%;">Version</th>
           <th>Hash</th>
           <th>Nota</th>
           <th>Creada</th>
@@ -76,14 +76,14 @@
       </tbody>
     </table>
     <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
-      {{ flow_versions|length }} versión(es). Snapshots inmutables (read-only).
+      {{ flow_versions|length }} version(es). Snapshots inmutables (read-only).
     </p>
   {% else %}
-    <p class="text-muted mt-2">Este flow todavía no tiene versiones publicadas.</p>
+    <p class="text-muted mt-2">Este flow todavia no tiene versiones publicadas.</p>
   {% endif %}
 </div>
 
-<!-- Modal de confirmación de eliminación -->
+<!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ flow_obj.pk }}">
   <div class="modal" style="max-width: 420px;">
     <div class="modal-header">
@@ -92,13 +92,13 @@
     </div>
     <div class="modal-body">
       <p>Vas a eliminar el flow <strong>{{ flow_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el flow queda deshabilitado pero el registro se conserva para auditoría.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el flow queda deshabilitado pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form method="post" action="{% url 'flows:delete' flow_obj.pk %}" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

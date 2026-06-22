@@ -1,4 +1,4 @@
-"""Tests de la gestión de skills por proyecto (project_skills)."""
+"""Tests de la gestion de skills por proyecto (project_skills)."""
 from __future__ import annotations
 
 from django.urls import reverse
@@ -63,7 +63,7 @@ class ProjectSkillsViewTests(MaintainerTestCase):
 
     def test_toggle_requiere_auth(self):
         from django.test import Client
-        anon = Client()  # sin authenticate() -> sin flag de sesión
+        anon = Client()  # sin authenticate() -> sin flag de sesion
         r = anon.post(reverse("projects:toggle_skill", args=[self.project.pk]),
                       {"skill_id": str(self.g1.id), "op": "link"})
         self.assertEqual(r.status_code, 302)

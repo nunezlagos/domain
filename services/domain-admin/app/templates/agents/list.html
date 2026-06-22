@@ -1,13 +1,13 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de agentes. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Agentes{% endblock %}
 {% block header_title %}Agentes{% endblock %}
-{% block page_subtitle %}Agentes LLM definidos por la organización (provider, modelo, skills, límites){% endblock %}
+{% block page_subtitle %}Agentes LLM definidos por la organizacion (provider, modelo, skills, limites){% endblock %}
 {% block create_label %}+ Nuevo agente{% endblock %}
 {% block search_placeholder %}Nombre, slug, proveedor o modelo...{% endblock %}
 

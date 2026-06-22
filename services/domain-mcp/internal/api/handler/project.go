@@ -127,7 +127,7 @@ type updateProjectBody struct {
 	Settings      map[string]any `json:"settings,omitempty"`
 	// ClientSlug (REQ-28.2) — PATCH semantics:
 	//   ausente / null     → no toca
-	//   string vacío ""    → unset (project queda interno)
+	//   string vacio ""    → unset (project queda interno)
 	//   string con slug    → reasigna a ese client
 	ClientSlug *string `json:"client_slug,omitempty"`
 }

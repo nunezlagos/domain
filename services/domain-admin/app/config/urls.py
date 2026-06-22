@@ -34,7 +34,7 @@ urlpatterns = [
     path("reglas-proyecto/", include("maintainers.projectpolicies.urls")),
 ]
 
-# Handlers de error a nivel módulo. Django los resuelve por nombre de variable
+# Handlers de error a nivel modulo. Django los resuelve por nombre de variable
 # (handler400/403/404/500) apuntando a vistas que renderizan
 # templates/errors/{code}.html. El handler500 solo se usa con DEBUG=False.
 handler400 = "config.views.bad_request"

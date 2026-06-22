@@ -1,7 +1,7 @@
 """Capa de negocio del mantenedor de Proyectos (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). Lo propio del dominio queda acá:
+busqueda/paginacion ni el aggregate de la señal). Lo propio del dominio queda aqui:
 
 - list_projects filtra SOLO proyectos activos (deleted_at IS NULL) — por eso pasa
   un queryset pre-filtrado a MaintainerService.list en vez de usar el default.
@@ -11,12 +11,12 @@ búsqueda/paginación ni el aggregate de la señal). Lo propio del dominio queda
     * toggle_project_status -> archiva (deleted_at=now + status=archived) o
       restaura (deleted_at=NULL + status=active).
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención de
-nombre. entity_label="Proyecto" -> attr "proyecto", por eso además exponemos
+Las views (core.views.MaintainerViews) descubren las funciones por convencion de
+nombre. entity_label="Proyecto" -> attr "proyecto", por eso ademas exponemos
 alias get_proyecto/... para el descubrimiento del core.
 
 NOTA: la columna organization_id fue dropeada (tabla organizations eliminada);
-ninguna query la referencia. El slug es único globalmente.
+ninguna query la referencia. El slug es unico globalmente.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .models import Project, ProjectRepository, ProjectTemplate
 
 # Error de dominio (la view lo traduce a messages.error).
 class ProjectError(Exception):
-    """Error de operación sobre proyectos."""
+    """Error de operacion sobre proyectos."""
 
 
 # Service base reusado: search (name/slug/description/repository_url) + signal.
@@ -46,10 +46,10 @@ _service = ProjectService()
 
 
 def list_projects(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista proyectos ACTIVOS (no archivados) con búsqueda + paginación.
+    """Lista proyectos ACTIVOS (no archivados) con busqueda + paginacion.
 
     Excluye los soft-deleted/archivados (deleted_at != NULL). Delega la
-    búsqueda/paginación en MaintainerService.list pasando el queryset ya
+    busqueda/paginacion en MaintainerService.list pasando el queryset ya
     filtrado, y renombra la clave `items` -> `projects` para no romper el
     contrato del template/tests existentes.
     """
@@ -100,7 +100,7 @@ def list_linked_skills(project: Project) -> list:
 
 
 def list_available_skills(project: Project) -> list:
-    """Skills de plataforma (globales) NO enlazadas todavía al proyecto."""
+    """Skills de plataforma (globales) NO enlazadas todavia al proyecto."""
     from maintainers.projects.models import ProjectSkill
     from maintainers.skills.models import Skill
 
@@ -135,7 +135,7 @@ def unlink_skill(project: Project, skill_id: str) -> None:
 # --- Repos git por proyecto -------------------------------------------------
 
 def _derive_repo_name(url: str, index: int) -> str:
-    """Alias del remoto derivado de la URL (último segmento sin .git).
+    """Alias del remoto derivado de la URL (ultimo segmento sin .git).
 
     Como ya no hay constraint UNIQUE(project_id, name) en la tabla, no es
     necesario garantizar unicidad; solo buscamos un alias legible. Fallback a
@@ -154,10 +154,10 @@ def _sync_repositories(project: Project, rows: list[dict]) -> None:
     """Reconcilia los remotos git del proyecto contra las filas del form.
 
     rows: lista de dicts {url, branch_default, root_path} (ya filtradas: url no
-    vacía). Reconciliación POR POSICIÓN contra los repos activos existentes
+    vacia). Reconciliacion POR POSICION contra los repos activos existentes
     (orden estable por created_at): se actualizan en sitio los que calzan, se
     crean los extras y se soft-deletean los sobrantes. El primero queda como
-    is_default. Además backfillea projects.repository_url con la URL del default
+    is_default. Ademas backfillea projects.repository_url con la URL del default
     (compat con el campo legacy de 1 repo principal).
     """
     existing = list(
@@ -210,7 +210,7 @@ def create_project(
     client_id: str | None = None,
     repositories: list[dict] | None = None,
 ) -> Project:
-    """Crea un proyecto nuevo. slug único global.
+    """Crea un proyecto nuevo. slug unico global.
 
     `repositories` (si se pasa) es el set completo de remotos git como filas
     {url, branch_default, root_path}; se sincroniza y la URL principal se deriva
@@ -249,7 +249,7 @@ def update_project(
     client_id: str | None = None,
     repositories: list[dict] | None = None,
 ) -> Project:
-    """Actualiza un proyecto. slug sigue siendo único global.
+    """Actualiza un proyecto. slug sigue siendo unico global.
 
     `repositories` (si se pasa) reemplaza el set de remotos git; la URL
     principal se re-deriva del primero. Si es None, no se tocan repos.
@@ -272,7 +272,7 @@ def update_project(
         project.current_branch = current_branch
     project.client_id = client_id or None
     if repositories is None:
-        # Sin gestión de repos: respetar la URL principal recibida (legacy).
+        # Sin gestion de repos: respetar la URL principal recibida (legacy).
         project.repository_url = repository_url or ""
     project.save()
 
@@ -284,7 +284,7 @@ def update_project(
 
 @transaction.atomic
 def delete_project(project: Project) -> None:
-    """Soft delete: marca deleted_at + status=archived. NO borra físicamente."""
+    """Soft delete: marca deleted_at + status=archived. NO borra fisicamente."""
     from django.utils import timezone
 
     project.deleted_at = timezone.now()
@@ -322,7 +322,7 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convención de core.views.MaintainerViews.
+# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
 # entity_label="Proyecto" -> _entity_attr() == "proyecto", core busca
 # get_proyecto / create_proyecto / update_proyecto / delete_proyecto /
 # toggle_proyecto_status. Apuntamos esos nombres a las funciones reales.

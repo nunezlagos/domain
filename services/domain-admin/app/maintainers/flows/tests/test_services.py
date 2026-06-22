@@ -18,7 +18,7 @@ from .factories import make_flow, make_flow_version
 class ListFlowsTests(MaintainerTestCase):
     def setUp(self):
         make_flow("Onboarding", slug="onboarding", description="alta de usuarios")
-        make_flow("Billing", slug="billing", description="facturación mensual")
+        make_flow("Billing", slug="billing", description="facturacion mensual")
         make_flow("Cleanup", slug="cleanup")
 
     def test_sin_search_devuelve_todos(self):
@@ -40,7 +40,7 @@ class ListFlowsTests(MaintainerTestCase):
         self.assertEqual(data["flows"][0].name, "Billing")
 
     def test_search_por_descripcion(self):
-        data = services.list_flows(search="facturación", page=1, per_page=20)
+        data = services.list_flows(search="facturacion", page=1, per_page=20)
         self.assertEqual(data["total"], 1)
         self.assertEqual(data["flows"][0].slug, "billing")
 

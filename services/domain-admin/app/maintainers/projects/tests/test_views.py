@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de Proyectos.
 
 Usan el test client real contra URLs reales (namespace 'projects', intacto tras
-la migración a maintainers.projects). Verifican status codes, efectos en DB y
+la migracion a maintainers.projects). Verifican status codes, efectos en DB y
 forma de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene
 de core.tests.base.MaintainerTestCase.
 """
@@ -20,7 +20,7 @@ from .factories import make_project
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("projects:list"))

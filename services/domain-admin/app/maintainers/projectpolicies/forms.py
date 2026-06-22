@@ -1,7 +1,7 @@
 """Forms del mantenedor de Reglas por proyecto.
 
 forms.Form (modelo managed=False). El proyecto se elige de un dropdown
-(proyectos activos) en vez de pegar un UUID. La unicidad práctica es
+(proyectos activos) en vez de pegar un UUID. La unicidad practica es
 (project_id, slug) entre las reglas activas no borradas.
 """
 from django import forms
@@ -30,7 +30,7 @@ class ProjectPolicyForm(InstanceAwareMixin, forms.Form):
         label="Slug",
         max_length=80,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador de la regla dentro del proyecto (minúsculas, guiones).",
+        help_text="Identificador de la regla dentro del proyecto (minusculas, guiones).",
     )
     kind = forms.ChoiceField(
         label="Tipo",
@@ -46,7 +46,7 @@ class ProjectPolicyForm(InstanceAwareMixin, forms.Form):
         label="Reemplaza la regla de plataforma",
         required=False,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
-        help_text="Si está activo, reemplaza la regla de plataforma del mismo tipo; si no, la amplía.",
+        help_text="Si esta activo, reemplaza la regla de plataforma del mismo tipo; si no, la amplia.",
     )
     is_active = forms.BooleanField(
         label="Activa",
@@ -81,7 +81,7 @@ class ProjectPolicyForm(InstanceAwareMixin, forms.Form):
         slug = cleaned.get("slug")
         if not slug:
             return cleaned
-        # Proyecto: en edición se preserva el del instance (disabled no envía valor).
+        # Proyecto: en edicion se preserva el del instance (disabled no envia valor).
         if self.instance is not None:
             project_id = self.instance.project_id
         else:

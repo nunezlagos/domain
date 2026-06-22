@@ -19,7 +19,7 @@ func TestToolClientCreate_TieneCamposRequeridos(t *testing.T) {
 		t.Fatalf("name=%s want domain_client_create", tool.Name)
 	}
 	if !strings.Contains(tool.Description, "cliente") && !strings.Contains(tool.Description, "mandante") {
-		t.Errorf("description debería mencionar cliente o mandante, got: %s", tool.Description)
+		t.Errorf("description deberia mencionar cliente o mandante, got: %s", tool.Description)
 	}
 }
 
@@ -38,7 +38,7 @@ func TestToolClientNames(t *testing.T) {
 			t.Errorf("tool name=%s want=%s", tool.Name, want)
 		}
 		if tool.Description == "" {
-			t.Errorf("tool %s: description vacío", want)
+			t.Errorf("tool %s: description vacio", want)
 		}
 	}
 }

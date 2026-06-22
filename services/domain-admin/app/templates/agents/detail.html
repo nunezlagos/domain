@@ -26,16 +26,16 @@
 
 <!-- Info del agente -->
 <div class="card mb-4">
-  <h3>Información</h3>
+  <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
       <tr><th style="width: 200px;">Nombre</th><td>{{ agent_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ agent_obj.slug }}</code></td></tr>
       <tr><th>Proveedor</th><td>{{ agent_obj.provider }}</td></tr>
       <tr><th>Modelo</th><td><code>{{ agent_obj.model }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ agent_obj.description|default:"—" }}</td></tr>
-      <tr><th>Máx. iteraciones</th><td>{{ agent_obj.max_iterations }}</td></tr>
-      <tr><th>Presupuesto de tokens</th><td>{{ agent_obj.token_budget|default:"Sin límite" }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ agent_obj.description|default:"—" }}</td></tr>
+      <tr><th>Max. iteraciones</th><td>{{ agent_obj.max_iterations }}</td></tr>
+      <tr><th>Presupuesto de tokens</th><td>{{ agent_obj.token_budget|default:"Sin limite" }}</td></tr>
       <tr><th>Temperatura</th><td>{{ agent_obj.temperature|default:"—" }}</td></tr>
       <tr><th>Skills</th>
         <td>
@@ -44,8 +44,8 @@
           {% else %}—{% endif %}
         </td>
       </tr>
-      <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
       <tr><th>Estado</th><td>{{ agent_obj.get_status_display }}</td></tr>
       <tr><th>Creado</th><td>{{ agent_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ agent_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
@@ -66,7 +66,7 @@
   {% if agent_versions %}
     <table class="table mt-2">
       <thead>
-        <tr><th style="width: 1%;">Versión</th><th>Modificado por</th><th>Fecha</th></tr>
+        <tr><th style="width: 1%;">Version</th><th>Modificado por</th><th>Fecha</th></tr>
       </thead>
       <tbody>
         {% for v in agent_versions %}
@@ -108,7 +108,7 @@
   {% endif %}
 </div>
 
-<!-- Modal de confirmación de eliminación -->
+<!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ agent_obj.pk }}">
   <div class="modal" style="max-width: 420px;">
     <div class="modal-header">
@@ -117,13 +117,13 @@
     </div>
     <div class="modal-body">
       <p>Vas a eliminar a <strong>{{ agent_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el agente queda marcado como eliminado pero el registro se conserva para auditoría.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el agente queda marcado como eliminado pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form method="post" action="{% url 'agents:delete' agent_obj.pk %}" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

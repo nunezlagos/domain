@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de prompt para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de prompt para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
 {% block detail_title %}{{ prompt_obj.display_name }}{% endblock %}
@@ -15,15 +15,15 @@ Detalle de prompt para el modal dinámico. Extiende maintainers/_detail_base.htm
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 160px;">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
-      <tr><th>Versión</th><td>v{{ prompt_obj.version }}</td></tr>
-      <tr><th>Descripción</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
+      <tr><th>Version</th><td>v{{ prompt_obj.version }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
       <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
       <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
-      <tr><th>Versión padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Version padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Creado</th><td>{{ prompt_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ prompt_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>

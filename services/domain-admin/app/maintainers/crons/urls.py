@@ -1,6 +1,6 @@
 """URL routing del mantenedor de Crons (schedules), migrado a core.
 
-Mounted at /crons/ en config/urls.py. Las 7 rutas estándar (list, signal,
+Mounted at /crons/ en config/urls.py. Las 7 rutas estandar (list, signal,
 create, detail, edit, delete, toggle) las arma core.urls.maintainer_urlpatterns
 a partir de la instancia `views`.
 

@@ -10,7 +10,7 @@ import (
 // Devuelve snapshot del cluster (conexiones, tablas, locks) + alertas evaluadas.
 //
 // Requiere rol platform_admin (issue-02.2). Por simplicidad ahora solo verifica
-// que el principal exista — endurecer cuando RBAC esté completo.
+// que el principal exista — endurecer cuando RBAC este completo.
 func (a *API) getDBStats(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
 	if p == nil {

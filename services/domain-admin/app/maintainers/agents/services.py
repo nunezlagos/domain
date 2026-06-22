@@ -1,13 +1,13 @@
 """Capa de negocio del mantenedor de Agentes (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). La diferencia con users: el
-listado EXCLUYE los soft-deleted (deleted_at != NULL), así que se le pasa al
-service un queryset base ya filtrado. El resto —slug único, normalización de
+busqueda/paginacion ni el aggregate de la señal). La diferencia con users: el
+listado EXCLUYE los soft-deleted (deleted_at != NULL), asi que se le pasa al
+service un queryset base ya filtrado. El resto —slug unico, normalizacion de
 skills, create/update/delete con validaciones, y los getters READ-ONLY de
-versiones/templates— queda acá.
+versiones/templates— queda aqui.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
 de nombre. entity_label="Agente" -> attr "agente", por eso exponemos alias
 get_agente/... apuntando a las funciones reales.
 """
@@ -22,10 +22,10 @@ from .models import Agent, AgentTemplate, AgentVersion
 
 # Error de dominio (la view lo traduce a messages.error).
 class AgentError(Exception):
-    """Error de operación sobre agentes."""
+    """Error de operacion sobre agentes."""
 
 
-# Service base reusado: list (search name/slug/provider/model + paginación) +
+# Service base reusado: list (search name/slug/provider/model + paginacion) +
 # signal. El list parte de un qs que excluye soft-deleted.
 class AgentsService(MaintainerService):
     model = Agent
@@ -41,9 +41,9 @@ _service = AgentsService()
 
 
 def list_agents(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista agentes (excluye soft-deleted) con búsqueda + paginación.
+    """Lista agentes (excluye soft-deleted) con busqueda + paginacion.
 
-    Delega en MaintainerService.list pasándole el qs ya filtrado, y renombra la
+    Delega en MaintainerService.list pasandole el qs ya filtrado, y renombra la
     clave `items` -> `agents` para no romper el contrato del template/tests.
     """
     data = _service.list(
@@ -79,7 +79,7 @@ def create_agent(
     token_budget: int | None = None,
     temperature=None,
 ) -> Agent:
-    """Crea un agente nuevo. El slug debe ser único (ya no hay organización)."""
+    """Crea un agente nuevo. El slug debe ser unico (ya no hay organizacion)."""
     if Agent.objects.filter(slug=slug).exists():
         raise AgentError(f"Ya existe un agente con slug '{slug}'.")
 
@@ -112,7 +112,7 @@ def update_agent(
     token_budget: int | None = None,
     temperature=None,
 ) -> Agent:
-    """Actualiza un agente. El slug sigue siendo único (sin organización)."""
+    """Actualiza un agente. El slug sigue siendo unico (sin organizacion)."""
     if slug != agent.slug and Agent.objects.filter(
         slug=slug
     ).exclude(pk=agent.pk).exists():
@@ -134,7 +134,7 @@ def update_agent(
 
 @transaction.atomic
 def delete_agent(agent: Agent) -> None:
-    """Soft delete: marca deleted_at. NO borra físicamente."""
+    """Soft delete: marca deleted_at. NO borra fisicamente."""
     from django.utils import timezone
 
     agent.deleted_at = timezone.now()
@@ -142,12 +142,12 @@ def delete_agent(agent: Agent) -> None:
 
 
 def get_agent_versions(agent: Agent) -> list[AgentVersion]:
-    """Historial de versiones del agent (READ-ONLY). Más reciente primero."""
+    """Historial de versiones del agent (READ-ONLY). Mas reciente primero."""
     return list(AgentVersion.objects.filter(agent=agent).order_by("-version"))
 
 
 def get_agent_templates() -> list[AgentTemplate]:
-    """Catálogo de templates de agente (READ-ONLY) para el detalle del agent."""
+    """Catalogo de templates de agente (READ-ONLY) para el detalle del agent."""
     return list(AgentTemplate.objects.all().order_by("name"))
 
 
@@ -161,7 +161,7 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convención de core.views.MaintainerViews.
+# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
 # entity_label="Agente" -> _entity_attr() == "agente"; core busca
 # get_agente / create_agente / update_agente / delete_agente. Apuntamos esos
 # nombres a las funciones reales. (NO hay toggle: agents no alterna estado.)

@@ -243,7 +243,7 @@ type updateFlowBody struct {
 
 // PATCH /api/v1/flows/{id} — issue-09.7 (fv-002)
 // Crea una nueva flow_version en draft con el spec propuesto. NO muta la
-// definition current del flow: el draft se activa recién al publish.
+// definition current del flow: el draft se activa recien al publish.
 func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -300,7 +300,7 @@ func (a *API) updateFlow(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/v1/flows/{id} — issue-09.1: full update del flow current con
-// optimistic locking opcional vía header If-Unmodified-Since (RFC 7232).
+// optimistic locking opcional via header If-Unmodified-Since (RFC 7232).
 // Mismatch → 412 Precondition Failed.
 func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
@@ -337,7 +337,7 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, "validation_failed", "invalid If-Unmodified-Since")
 			return
 		}
-		// Comparación a resolución de segundo (HTTP date no tiene sub-segundo):
+		// Comparacion a resolucion de segundo (HTTP date no tiene sub-segundo):
 		// usamos el updated_at real si coincide truncado.
 		if prev.UpdatedAt.UTC().Truncate(time.Second).Equal(ts.UTC().Truncate(time.Second)) {
 			expected := prev.UpdatedAt
@@ -457,7 +457,7 @@ func (a *API) listFlowParents(w http.ResponseWriter, r *http.Request) {
 
 const maxImportBytes = 1 << 20 // 1MB (issue-09.1)
 
-// POST /api/v1/flows/import — issue-09.1. Acepta JSON o YAML según
+// POST /api/v1/flows/import — issue-09.1. Acepta JSON o YAML segun
 // Content-Type; slug duplicado → 409.
 func (a *API) importFlow(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

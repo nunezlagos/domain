@@ -1,4 +1,4 @@
-// Handlers de ejecución de skills (issue-05.5): sync, async y polling.
+// Handlers de ejecucion de skills (issue-05.5): sync, async y polling.
 package handler
 
 import (

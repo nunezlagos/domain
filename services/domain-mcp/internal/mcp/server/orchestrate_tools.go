@@ -8,7 +8,7 @@
 //
 //   domain_orchestrate_phase_result(flow_run_step_id, output, memory_refs_saved)
 //     Reporta el resultado de una fase. Valida D5 + handler.Validate.
-//     Devuelve status + next step prompt si hay más fases pending.
+//     Devuelve status + next step prompt si hay mas fases pending.
 //
 //   domain_flow_status(flow_run_id)
 //     Lee el estado completo de un flow_run gobernado por el orquestador.
@@ -31,20 +31,20 @@ func toolOrchestrate() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate",
 		mcp.WithDescription("Inicia un flow del orquestador SDD a partir del prompt del usuario. Devuelve flow_run_id + plan con los steps (system_prompt + user_prompt + suggested_saves) que el cliente IDE debe ejecutar en orden. Reportar cada step terminada con domain_orchestrate_phase_result."),
 		mcp.WithString("raw_text",
-			mcp.Description("Prompt original del usuario (sin clasificación previa de PromptRouter)."),
+			mcp.Description("Prompt original del usuario (sin clasificacion previa de PromptRouter)."),
 			mcp.Required(),
 		),
 		mcp.WithString("mode",
-			mcp.Description("Modo del orquestador: express | lite | full | solo | detect | async. Default: full. Express usa sólo sdd-apply + sdd-verify para cambios ≤10 líneas single-file. Lite corre un subset (sdd-explore + sdd-apply + sdd-verify) para cambios triviales (fix de 1 línea, doc, refactor chico) salteando las fases pesadas."),
+			mcp.Description("Modo del orquestador: express | lite | full | solo | detect | async. Default: full. Express usa solo sdd-apply + sdd-verify para cambios ≤10 lineas single-file. Lite corre un subset (sdd-explore + sdd-apply + sdd-verify) para cambios triviales (fix de 1 linea, doc, refactor chico) salteando las fases pesadas."),
 		),
 		mcp.WithString("starting_phase",
-			mcp.Description("Phase slug para reanudar desde una fase específica (p.ej. sdd-design). Si vacío, arranca en sdd-explore."),
+			mcp.Description("Phase slug para reanudar desde una fase especifica (p.ej. sdd-design). Si vacio, arranca en sdd-explore."),
 		),
 		mcp.WithArray("skip_phases",
 			mcp.Description("Lista de phase slugs a omitir. El orquestador valida que el DAG resultante sea ejecutable."),
 		),
 		mcp.WithNumber("express_max_lines",
-			mcp.Description("Override del threshold de Express (default 10). Sólo aplica si mode=express."),
+			mcp.Description("Override del threshold de Express (default 10). Solo aplica si mode=express."),
 		),
 		mcp.WithString("project_id",
 			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). Scopea el flow_run y la cadena SDD/TDD al proyecto. Si se omite, la corrida queda sin proyecto."),
@@ -60,9 +60,9 @@ func toolOrchestrate() mcp.Tool {
 
 func toolOrchestratePhaseResult() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate_phase_result",
-		mcp.WithDescription("Reporta el resultado de una fase del orquestador. Valida el contract D5 (suggested_saves required) + el shape específico del handler. Devuelve status del step + siguiente step pendiente (si hay) con su prompt."),
+		mcp.WithDescription("Reporta el resultado de una fase del orquestador. Valida el contract D5 (suggested_saves required) + el shape especifico del handler. Devuelve status del step + siguiente step pendiente (si hay) con su prompt."),
 		mcp.WithString("flow_run_step_id",
-			mcp.Description("UUID del step que terminó (lo recibiste en el plan inicial de domain_orchestrate)."),
+			mcp.Description("UUID del step que termino (lo recibiste en el plan inicial de domain_orchestrate)."),
 			mcp.Required(),
 		),
 		mcp.WithObject("output",
@@ -70,17 +70,17 @@ func toolOrchestratePhaseResult() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithArray("memory_refs_saved",
-			mcp.Description("Memory refs persistidas vía mem_save durante la fase. Cada item: {type, id}. Requerido para satisfacer suggested_saves con Required=true (D5)."),
+			mcp.Description("Memory refs persistidas via mem_save durante la fase. Cada item: {type, id}. Requerido para satisfacer suggested_saves con Required=true (D5)."),
 		),
 		mcp.WithNumber("duration_ms",
-			mcp.Description("Duración en milisegundos de la ejecución de la fase en el cliente (opcional, para métricas)."),
+			mcp.Description("Duracion en milisegundos de la ejecucion de la fase en el cliente (opcional, para metricas)."),
 		),
 	)
 }
 
 func toolOrchestrateConfirm() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate_confirm",
-		mcp.WithDescription("Confirma o rechaza un paso bloqueado por el confirm condicional D1 (RFC 0006). Se invoca cuando domain_orchestrate_phase_result devolvió RequiresConfirm=true. Si confirmed=true, el step queda pending y el cliente puede continuar con su prompt original; si false, el flow_run pasa a failed con razón 'user_rejected_confirm'."),
+		mcp.WithDescription("Confirma o rechaza un paso bloqueado por el confirm condicional D1 (RFC 0006). Se invoca cuando domain_orchestrate_phase_result devolvio RequiresConfirm=true. Si confirmed=true, el step queda pending y el cliente puede continuar con su prompt original; si false, el flow_run pasa a failed con razon 'user_rejected_confirm'."),
 		mcp.WithString("flow_run_id",
 			mcp.Description("UUID del flow_run que tiene un step bloqueado."),
 			mcp.Required(),
@@ -94,7 +94,7 @@ func toolOrchestrateConfirm() mcp.Tool {
 
 func toolFlowStatus() mcp.Tool {
 	return mcp.NewTool("domain_flow_status",
-		mcp.WithDescription("Lee el estado de un flow_run del orquestador SDD: status del run + lista de steps con su status, outputs y previews de prompts. Útil para resumir, retomar tras reconexión, debugging."),
+		mcp.WithDescription("Lee el estado de un flow_run del orquestador SDD: status del run + lista de steps con su status, outputs y previews de prompts. Util para resumir, retomar tras reconexion, debugging."),
 		mcp.WithString("flow_run_id",
 			mcp.Description("UUID del flow_run a consultar (devuelto por domain_orchestrate)."),
 			mcp.Required(),
@@ -142,7 +142,7 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
-	// hardspec OBLIGATORIO por defecto: solo se desactiva si se pasa false explícito.
+	// hardspec OBLIGATORIO por defecto: solo se desactiva si se pasa false explicito.
 	hardspec := true
 	if v, ok := args["hardspec"].(bool); ok {
 		hardspec = v
@@ -214,7 +214,7 @@ func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToo
 		DurationMS:      durationMS,
 	})
 	if err != nil {
-		// Errores tipados se devuelven con código accionable para que el
+		// Errores tipados se devuelven con codigo accionable para que el
 		// cliente decida si re-emitir, fallar o pedir input humano.
 		return mcp.NewToolResultError("phase_result: " + err.Error()), nil
 	}

@@ -1,8 +1,8 @@
 {% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de plantilla de agente para el modal dinámico. Extiende
+Form de plantilla de agente para el modal dinamico. Extiende
 maintainers/_form_base.html (form + csrf + non_field_errors + header + footer).
-Define solo el título, los campos y el label del submit.
+Define solo el titulo, los campos y el label del submit.
 {% endcomment %}
 
 {% block form_title %}{% if mode == "create" %}Nueva plantilla{% else %}Editar plantilla{% endif %}{% endblock %}
@@ -58,7 +58,7 @@ Define solo el título, los campos y el label del submit.
     </div>
 
     <div class="form-group" style="flex: 1;">
-      <label class="form-label" for="{{ form.handoff_policy.id_for_label }}">Política de handoff</label>
+      <label class="form-label" for="{{ form.handoff_policy.id_for_label }}">Politica de handoff</label>
       {{ form.handoff_policy }}
       {% if form.handoff_policy.errors %}<div class="form-help text-danger">{{ form.handoff_policy.errors|join:", " }}</div>{% endif %}
     </div>

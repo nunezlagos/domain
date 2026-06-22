@@ -1,10 +1,10 @@
 """Tests de ProjectForm (validaciones del mantenedor).
 
 Verifican reglas reales: slug requerido y normalizado, formato de slug y
-unicidad global de slug. La captura de `instance` para excluirse en edición se
-delega a core.forms.InstanceAwareMixin. El campo `template` se quitó del form
-(su lógica nunca se consumía) y los repos git ya no son fields (van como filas
-dinámicas que parsea la view), por eso no aparecen acá.
+unicidad global de slug. La captura de `instance` para excluirse en edicion se
+delega a core.forms.InstanceAwareMixin. El campo `template` se quito del form
+(su logica nunca se consumia) y los repos git ya no son fields (van como filas
+dinamicas que parsea la view), por eso no aparecen aqui.
 """
 from __future__ import annotations
 

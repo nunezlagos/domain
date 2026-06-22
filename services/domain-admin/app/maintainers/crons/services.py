@@ -1,14 +1,14 @@
 """Capa de negocio del mantenedor de Crons (schedules), migrada a core.
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El listado excluye los
-soft-deleted vía un queryset base. El resto —unicidad de slug, parseo de
-inputs, create/update/delete/toggle del flag `enabled`— sigue acá.
+busqueda/paginacion ni el aggregate de la señal). El listado excluye los
+soft-deleted via un queryset base. El resto —unicidad de slug, parseo de
+inputs, create/update/delete/toggle del flag `enabled`— sigue aqui.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
 de nombre: entity_label="Cron" -> attr "cron" -> get_cron / create_cron /
 update_cron / delete_cron / get_list_signal. El toggle alterna el flag booleano
-`enabled` (no `status`), así que se sobreescribe el hook do_toggle en la view.
+`enabled` (no `status`), asi que se sobreescribe el hook do_toggle en la view.
 """
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ from .models import Cron
 
 # Error de dominio (la view lo traduce a messages.error).
 class CronError(Exception):
-    """Error de operación sobre crons."""
+    """Error de operacion sobre crons."""
 
 
-# Service base reusado: list (search name/slug/expr/target_type + paginación) +
+# Service base reusado: list (search name/slug/expr/target_type + paginacion) +
 # signal. El queryset base excluye soft-deleted.
 class CronsService(MaintainerService):
     model = Cron
@@ -39,7 +39,7 @@ _service = CronsService()
 
 
 def list_crons(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista crons (excluye soft-deleted) con búsqueda + paginación.
+    """Lista crons (excluye soft-deleted) con busqueda + paginacion.
 
     Delega en MaintainerService.list y renombra `items` -> `crons` para no
     romper el contrato del template/tests existentes.
@@ -75,7 +75,7 @@ def create_cron(
     enabled: bool = True,
     created_by: str | None = None,
 ) -> Cron:
-    """Crea un cron nuevo. slug debe ser único."""
+    """Crea un cron nuevo. slug debe ser unico."""
     if Cron.objects.filter(slug=slug).exists():
         raise CronError(f"Ya existe un cron con slug '{slug}'.")
 
@@ -107,7 +107,7 @@ def update_cron(
     inputs: dict | None = None,
     enabled: bool = True,
 ) -> Cron:
-    """Actualiza un cron. El slug sigue siendo único."""
+    """Actualiza un cron. El slug sigue siendo unico."""
     if slug != cron.slug and Cron.objects.filter(slug=slug).exclude(pk=cron.pk).exists():
         raise CronError(f"Ya existe otro cron con slug '{slug}'.")
 
@@ -126,7 +126,7 @@ def update_cron(
 
 @transaction.atomic
 def delete_cron(cron: Cron) -> None:
-    """Soft delete: marca deleted_at + deshabilita. NO borra físicamente.
+    """Soft delete: marca deleted_at + deshabilita. NO borra fisicamente.
 
     No hay status terminal en el flujo del cron; el registro queda
     deshabilitado (enabled=False) y fuera del listado (deleted_at != NULL).
@@ -156,5 +156,5 @@ def get_stats() -> dict:
     }
 
 
-# Alias para el descubrimiento por convención de core.views.MaintainerViews.
+# Alias para el descubrimiento por convencion de core.views.MaintainerViews.
 ServiceError = CronError

@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de flow para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de flow para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
 {% endcomment %}
 
@@ -16,16 +16,16 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 180px;">Nombre</th><td>{{ flow_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
-      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Sí,No" }}</td></tr>
-      <tr><th>Versión de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
-      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Sí,No" }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
+      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
+      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Version de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
       <tr><th>Creado</th><td>{{ flow_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ flow_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
     </tbody>
@@ -36,7 +36,7 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
     <table class="table" style="font-size: var(--fs-sm);">
       <thead>
         <tr>
-          <th style="width: 1%;">Versión</th>
+          <th style="width: 1%;">Version</th>
           <th>Hash</th>
           <th>Nota</th>
           <th>Creada</th>
@@ -54,11 +54,11 @@ Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
       </tbody>
     </table>
     <p class="text-secondary mt-2" style="font-size: var(--fs-sm);">
-      {{ flow_versions|length }} versión(es). Las versiones son snapshots
+      {{ flow_versions|length }} version(es). Las versiones son snapshots
       inmutables (read-only); se generan al publicar cambios del flow.
     </p>
   {% else %}
-    <p class="text-muted">Este flow todavía no tiene versiones publicadas.</p>
+    <p class="text-muted">Este flow todavia no tiene versiones publicadas.</p>
   {% endif %}
 {% endblock %}
 

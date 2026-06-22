@@ -32,7 +32,7 @@ func TestAuthorizeOrg_MismaOrg_OK(t *testing.T) {
 	orgID := uuid.New()
 	ctx := ctxkeys.WithOrgID(context.Background(), orgID)
 	if err := a.authorizeOrg(ctx, orgID); err != nil {
-		t.Errorf("authorizeOrg con misma org devolvió error: %v", err)
+		t.Errorf("authorizeOrg con misma org devolvio error: %v", err)
 	}
 }
 
@@ -43,17 +43,17 @@ func TestAuthorizeOrg_CrossOrg_DevuelveErrCrossOrg(t *testing.T) {
 	ctx := ctxkeys.WithOrgID(context.Background(), caller)
 	err := a.authorizeOrg(ctx, resource)
 	if !errors.Is(err, ErrCrossOrg) {
-		t.Errorf("authorizeOrg cross-org devolvió %v, want ErrCrossOrg", err)
+		t.Errorf("authorizeOrg cross-org devolvio %v, want ErrCrossOrg", err)
 	}
 }
 
 func TestAuthorizeOrg_SinCtx_Bloquea(t *testing.T) {
-	// Si el middleware nunca seteó OrgID en ctx, a.orgID() devuelve uuid.Nil.
+	// Si el middleware nunca seteo OrgID en ctx, a.orgID() devuelve uuid.Nil.
 	// authorizeOrg debe rechazar cualquier resource (defense-in-depth).
 	a := &API{}
 	resource := uuid.New()
 	err := a.authorizeOrg(context.Background(), resource)
 	if !errors.Is(err, ErrCrossOrg) {
-		t.Errorf("authorizeOrg sin ctx devolvió %v, want ErrCrossOrg", err)
+		t.Errorf("authorizeOrg sin ctx devolvio %v, want ErrCrossOrg", err)
 	}
 }

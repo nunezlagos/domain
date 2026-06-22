@@ -1,14 +1,14 @@
 """Modelos del mantenedor de Proyectos (migrado a core).
 
-3 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe vía
+3 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe via
 ORM; las filas y el PK uuid los genera domain-mcp en prod):
 
-- projects:             proyecto. Soft-delete vía deleted_at + status
+- projects:             proyecto. Soft-delete via deleted_at + status
                         -> hereda de core.SoftDeleteModel.
 - project_templates:    templates preconfigurados. SIN deleted_at (solo status),
-                        catálogo seeded de solo-lectura -> hereda de core.BaseModel
+                        catalogo seeded de solo-lectura -> hereda de core.BaseModel
                         y declara `status` propio.
-- project_repositories: N remotos git por proyecto. Soft-delete vía deleted_at +
+- project_repositories: N remotos git por proyecto. Soft-delete via deleted_at +
                         status + flag is_default -> hereda de core.SoftDeleteModel.
 
 Cada model reusa los campos comunes (id/created_at/updated_at, y deleted_at/status
@@ -17,7 +17,7 @@ columnas declaradas matchean EXACTO el schema real (guard:
 core/tests/test_schema_drift.py + core/tests/real_schema.json).
 
 NOTA: la tabla `organizations` fue eliminada y la columna `organization_id` fue
-dropeada de estas tablas. Por eso NINGÚN modelo declara organization_id.
+dropeada de estas tablas. Por eso NINGUN modelo declara organization_id.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from core.models import BaseModel, SoftDeleteModel
 
 
 class ProjectTemplate(BaseModel):
-    """Template de proyecto. Catálogo seeded, solo-lectura desde el admin.
+    """Template de proyecto. Catalogo seeded, solo-lectura desde el admin.
 
     id / created_at / updated_at vienen de BaseModel. NO tiene deleted_at, por
     eso NO hereda de SoftDeleteModel; declara `status` propio (la columna existe
@@ -61,7 +61,7 @@ class ProjectTemplate(BaseModel):
 
 
 class Project(SoftDeleteModel):
-    """Proyecto. Soft-delete vía deleted_at + columna status.
+    """Proyecto. Soft-delete via deleted_at + columna status.
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
     `status` se redeclara solo para sumarle choices (misma columna).
@@ -111,7 +111,7 @@ class Project(SoftDeleteModel):
 
 
 class ProjectRepository(SoftDeleteModel):
-    """Remoto git de un proyecto. Soft-delete vía deleted_at + flag is_default.
+    """Remoto git de un proyecto. Soft-delete via deleted_at + flag is_default.
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
     """
@@ -141,7 +141,7 @@ class ProjectRepository(SoftDeleteModel):
     workflow = models.CharField(max_length=40, blank=True, default="", choices=WORKFLOW_CHOICES)
     notes = models.TextField(blank=True, default="")
     # root_path: carpeta del checkout donde vive este repo (ej. "/" o
-    # "/domain/services/"). Opcional. Migración 000159 en domain-mcp.
+    # "/domain/services/"). Opcional. Migracion 000159 en domain-mcp.
     root_path = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
@@ -162,7 +162,7 @@ class ProjectSkill(models.Model):
 
     Tabla plana (managed=False): id/project_id/skill_id/is_enabled/created_by/
     created_at. NO hereda de BaseModel (no tiene updated_at). El backend usa
-    este enlace para decidir qué skills son usables en el proyecto.
+    este enlace para decidir que skills son usables en el proyecto.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

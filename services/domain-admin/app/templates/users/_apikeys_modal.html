@@ -1,13 +1,13 @@
 {% comment %}
 Modal "Gestionar API Keys" (consolidado dentro del mantenedor de Usuarios).
 
-Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js vía fetch a
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js via fetch a
 /usuarios/api-keys/ con data-action="modal"). NO extiende base.html: es un
 fragmento de modal (header + body + footer), igual contrato que _detail_base.
 
 Las acciones por fila NO apuntan a /usuarios/: el wrapper [data-base-url="/api-keys/"]
 hace que modals.js resuelva edit/create/delete contra el mantenedor existente de
-API Keys. Así reusamos su CRUD (form/modales) sin duplicar nada.
+API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
 {% endcomment %}
 <div class="modal-header">
   <h3 class="modal-title">API Keys</h3>
@@ -31,7 +31,7 @@ API Keys. Así reusamos su CRUD (form/modales) sin duplicar nada.
         <th>Nombre</th>
         <th>Usuario</th>
         <th>Estado</th>
-        <th>Último uso</th>
+        <th>Ultimo uso</th>
         <th>Expira</th>
         <th style="width: 1%; white-space: nowrap;">Acciones</th>
       </tr>

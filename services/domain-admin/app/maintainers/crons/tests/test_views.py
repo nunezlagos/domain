@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de Crons.
 
 Usan el test client real contra URLs reales (namespace 'crons', intacto tras la
-migración a maintainers.crons). Verifican status codes, efectos en DB y forma de
+migracion a maintainers.crons). Verifican status codes, efectos en DB y forma de
 la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
@@ -21,7 +21,7 @@ from .factories import DEFAULT_TARGET, make_cron
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("crons:list"))
@@ -117,7 +117,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_cron("Existente", slug="dup")
         r = self.client.post(reverse("crons:create"), self._data(slug="dup"))
-        # Form inválido (clean_slug) → re-render 200, sin crear nuevo.
+        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Cron.objects.filter(slug="dup").count(), 1)
 

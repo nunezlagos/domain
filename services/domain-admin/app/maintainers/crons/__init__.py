@@ -1,9 +1,9 @@
-"""Mantenedor de Crons (schedules) — migrado al patrón consolidado `core`.
+"""Mantenedor de Crons (schedules) — migrado al patron consolidado `core`.
 
 Reusa core.models (SoftDeleteModel), core.service.MaintainerService (list +
-signal), core.views.MaintainerViews (las 7 vistas estándar),
+signal), core.views.MaintainerViews (las 7 vistas estandar),
 core.urls.maintainer_urlpatterns y core.forms (mixins). Solo conserva lo propio
-del dominio: el flag booleano `enabled` (dimensión del toggle, distinta del
+del dominio: el flag booleano `enabled` (dimension del toggle, distinta del
 `status`), el parseo de `inputs` (jsonb) y la unicidad de `slug`.
 
 Django 5.1 autodescubre el AppConfig (apps.CronsConfig) al apuntar

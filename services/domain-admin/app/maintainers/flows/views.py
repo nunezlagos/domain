@@ -1,39 +1,39 @@
 """Views del mantenedor de Flows (migradas a core).
 
 ================================ SDD ================================
-HU: Como administrador de la organización quiero un mantenedor de Flows
+HU: Como administrador de la organizacion quiero un mantenedor de Flows
     para crear, listar, editar, activar/desactivar y dar de baja (soft)
     los flows (DAGs declarativos), y ver el historial de versiones
     (snapshots inmutables) de cada flow.
 
-Criterios de aceptación:
-  1. El listado muestra los flows NO eliminados, paginado, con búsqueda
-     server-side por nombre/slug/descripción.
+Criterios de aceptacion:
+  1. El listado muestra los flows NO eliminados, paginado, con busqueda
+     server-side por nombre/slug/descripcion.
   2. El listado se auto-refresca solo cuando la BD cambia (señal
      count + max(updated_at)), no con polling ciego.
   3. Crear/editar se hacen en un modal AJAX (?partial=1 + header
-     X-Requested-With: fetch). Form inválido re-renderiza el modal con
+     X-Requested-With: fetch). Form invalido re-renderiza el modal con
      errores; submit OK recarga el listado.
   4. El detalle se abre en modal (?partial=1) e incluye la lista
      READ-ONLY de versiones (flow_versions) del flow; sin CRUD sobre ellas.
   5. Toggle alterna is_active (habilitado <-> deshabilitado, POST).
      Eliminar es soft-delete (POST): marca deleted_at + is_active=false.
-  6. Toda acción exige sesión autenticada; si no, redirige a /login/.
+  6. Toda accion exige sesion autenticada; si no, redirige a /login/.
 ====================================================================
 
-Las 7 vistas estándar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Acá solo:
+Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
+arma core.views.MaintainerViews. Aqui solo:
 
   1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los context builders específicos de flows:
+  2. Se sobreescriben los context builders especificos de flows:
        - form_context / detail_context: exponen `flow_obj` (+ flow_versions en
          detail) que los templates de flows ya consumen.
 
 El payload del service (create_flow/update_flow) calza 1:1 con el cleaned_data
-del FlowForm, así que NO se sobreescribe _form_payload (el default
+del FlowForm, asi que NO se sobreescribe _form_payload (el default
 dict(form.cleaned_data) ya sirve).
 
-El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
+El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations

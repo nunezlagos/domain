@@ -128,7 +128,7 @@ func (a *API) getEnrollmentTokenMetadata(w http.ResponseWriter, r *http.Request)
 }
 
 // deleteEnrollmentToken DELETE /api/v1/organizations/{id}/enrollment-token.
-// Revoca el token activo sin crear uno nuevo. 204 si éxito, 404 si no había activo.
+// Revoca el token activo sin crear uno nuevo. 204 si exito, 404 si no habia activo.
 func (a *API) deleteEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := a.authEnrollmentAdmin(w, r)
 	if !ok {

@@ -2,7 +2,7 @@
 
 3 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
 - users:      usuarios de la plataforma  -> hereda de core.SoftDeleteModel
-- roles:      roles fijos/seeded          -> model propio (NO se toca el área roles)
+- roles:      roles fijos/seeded          -> model propio (NO se toca el area roles)
 - user_roles: pivote many-to-many         -> model propio (PK compuesta, excluido del guard)
 
 User reusa los campos comunes (id/created_at/updated_at/deleted_at/status) de
@@ -23,7 +23,7 @@ from core.models import SoftDeleteModel
 class Role(models.Model):
     """Rol de la plataforma. Tabla seeded, no se crea/edita desde admin.
 
-    NO migrado a core a propósito: el área de roles/permisos quedó reservada
+    NO migrado a core a proposito: el area de roles/permisos quedo reservada
     (la maneja Django / pedido del usuario). Se mueve tal cual estaba.
     """
 
@@ -94,7 +94,7 @@ class UserRole(models.Model):
     """Pivote: asigna roles a users (many-to-many con metadata).
 
     La tabla real user_roles tiene PK COMPUESTA (user_id, role_id) y NO tiene
-    columna `id`. Django 5.1 no soporta CompositePrimaryKey, así que usamos
+    columna `id`. Django 5.1 no soporta CompositePrimaryKey, asi que usamos
     `user` como primary_key (db_column user_id). Alcanza para lo que hace el app:
     leer (filter por user/role), asignar (create) y revocar (delete por filter).
     El INSERT no manda `id` (no existe) y la unicidad real (user_id, role_id) la

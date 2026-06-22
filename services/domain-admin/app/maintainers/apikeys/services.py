@@ -1,11 +1,11 @@
 """Capa de negocio del mantenedor de API Keys (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El resto —generación del
-secreto, create/update/delete/toggle con sus validaciones de dominio— sigue acá.
+busqueda/paginacion ni el aggregate de la señal). El resto —generacion del
+secreto, create/update/delete/toggle con sus validaciones de dominio— sigue aqui.
 
-Las views (core.views.MaintainerViews, vía ApiKeyViews) descubren las funciones
-por convención: get_api_key / create_api_key / update_api_key / delete_api_key /
+Las views (core.views.MaintainerViews, via ApiKeyViews) descubren las funciones
+por convencion: get_api_key / create_api_key / update_api_key / delete_api_key /
 toggle_api_key_status / get_list_signal. `entity_label="API Key"` ->
 _entity_attr() == "api_key", por eso esos nombres calzan directo.
 """
@@ -23,10 +23,10 @@ from .models import ApiKey
 
 # Error de dominio (la view lo traduce a messages.error).
 class ApiKeyError(Exception):
-    """Error de operación sobre API keys."""
+    """Error de operacion sobre API keys."""
 
 
-# Service base reusado: list (search name/prefix + paginación) + signal.
+# Service base reusado: list (search name/prefix + paginacion) + signal.
 class ApiKeyService(MaintainerService):
     model = ApiKey
     search_fields = ("name", "key_prefix")
@@ -37,7 +37,7 @@ _service = ApiKeyService()
 
 
 def list_api_keys(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista API keys con búsqueda + paginación.
+    """Lista API keys con busqueda + paginacion.
 
     Delega en MaintainerService.list y renombra la clave `items` -> `api_keys`
     para no romper el contrato del template/tests existentes.
@@ -113,8 +113,8 @@ def update_api_key(
 ) -> ApiKey:
     """Actualiza metadata de la API key.
 
-    NO regenera el secreto (eso es rotación, fuera de alcance acá). Solo
-    nombre, expiración y status editables.
+    NO regenera el secreto (eso es rotacion, fuera de alcance aqui). Solo
+    nombre, expiracion y status editables.
     """
     name = (name or "").strip()
     if not name:
@@ -133,7 +133,7 @@ def update_api_key(
 
 @transaction.atomic
 def delete_api_key(api_key: ApiKey) -> None:
-    """Soft delete: revoca (marca revoked_at + status). NO borra físicamente."""
+    """Soft delete: revoca (marca revoked_at + status). NO borra fisicamente."""
     from django.utils import timezone
 
     api_key.revoked_at = timezone.now()
@@ -145,7 +145,7 @@ def delete_api_key(api_key: ApiKey) -> None:
 def toggle_api_key_status(api_key: ApiKey) -> str:
     """Alterna active <-> revoked. Retorna el nuevo status.
 
-    Revocar setea revoked_at; reactivar lo limpia. NO se usa el toggle genérico
+    Revocar setea revoked_at; reactivar lo limpia. NO se usa el toggle generico
     de core (active<->suspended) porque el dominio de keys es active<->revoked
     con manejo de revoked_at.
     """
@@ -169,5 +169,5 @@ def get_stats() -> dict:
     return {"total": total, "active": active, "revoked": revoked}
 
 
-# Excepción de dominio que core.views.MaintainerViews captura (error_class).
+# Excepcion de dominio que core.views.MaintainerViews captura (error_class).
 ServiceError = ApiKeyError

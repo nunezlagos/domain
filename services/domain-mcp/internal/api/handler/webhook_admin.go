@@ -1,5 +1,5 @@
 // Handlers admin de webhooks inbound — issue-10.2 (CRUD + deliveries + replay).
-// El secret se revela UNA sola vez en el response del create; después solo
+// El secret se revela UNA sola vez en el response del create; despues solo
 // existe cifrado at-rest.
 package handler
 

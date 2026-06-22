@@ -18,9 +18,9 @@
     </h1>
     <p class="subtitle">
       {% if mode == "create" %}
-        Crear una credencial de acceso programático
+        Crear una credencial de acceso programatico
       {% else %}
-        Modificá los datos de <strong>{{ apikey_obj.name }}</strong>
+        Modifica los datos de <strong>{{ apikey_obj.name }}</strong>
       {% endif %}
     </p>
   </div>
@@ -52,7 +52,7 @@
       <label class="form-label" for="{{ form.user.id_for_label }}">Usuario dueño *</label>
       {{ form.user }}
       {% if mode == "edit" %}
-        <div class="form-help">El dueño no se puede cambiar después de creada.</div>
+        <div class="form-help">El dueño no se puede cambiar despues de creada.</div>
       {% elif form.user.help_text %}
         <div class="form-help">{{ form.user.help_text }}</div>
       {% endif %}

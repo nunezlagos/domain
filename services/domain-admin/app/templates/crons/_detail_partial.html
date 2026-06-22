@@ -1,7 +1,7 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de cron para el modal dinámico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define título, cuerpo y acciones propias.
+Detalle de cron para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
 {% endcomment %}
 
 {% block detail_title %}{{ cron_obj.display_name }}{% endblock %}
@@ -15,19 +15,19 @@ Detalle de cron para el modal dinámico. Extiende maintainers/_detail_base.html
     {% endif %}
   </p>
 
-  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Información</h4>
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
   <table class="table" style="font-size: var(--fs-sm);">
     <tbody>
       <tr><th style="width: 160px;">Nombre</th><td>{{ cron_obj.name }}</td></tr>
       <tr><th>Slug</th><td><code>{{ cron_obj.slug }}</code></td></tr>
-      <tr><th>Descripción</th><td>{{ cron_obj.description|default:"—" }}</td></tr>
-      <tr><th>Expresión cron</th><td><code>{{ cron_obj.cron_expression }}</code></td></tr>
+      <tr><th>Descripcion</th><td>{{ cron_obj.description|default:"—" }}</td></tr>
+      <tr><th>Expresion cron</th><td><code>{{ cron_obj.cron_expression }}</code></td></tr>
       <tr><th>Timezone</th><td>{{ cron_obj.timezone }}</td></tr>
       <tr><th>Tipo de target</th><td>{{ cron_obj.get_target_type_display }}</td></tr>
       <tr><th>Target</th><td><code>{{ cron_obj.target_id }}</code></td></tr>
       <tr><th>Inputs</th><td><code>{{ cron_obj.inputs }}</code></td></tr>
-      <tr><th>Última ejecución</th><td>{{ cron_obj.last_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
-      <tr><th>Próxima ejecución</th><td>{{ cron_obj.next_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+      <tr><th>Ultima ejecucion</th><td>{{ cron_obj.last_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+      <tr><th>Proxima ejecucion</th><td>{{ cron_obj.next_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
       <tr><th>Creado</th><td>{{ cron_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ cron_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
     </tbody>

@@ -1,18 +1,18 @@
 """Views del mantenedor de Proyectos (migradas a core).
 
-Las 7 vistas estándar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Acá solo:
+Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
+arma core.views.MaintainerViews. Aqui solo:
 
   1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks específicos de projects:
+  2. Se sobreescriben los hooks especificos de projects:
        - _form_payload: mapea el campo `template` del form -> `template_id` que
          espera el service (y omite los campos que el service no recibe).
        - list_context: agrega stats + page_title que el listado consume.
        - form_context / detail_context: exponen `project_obj` (+ repositories en
          detail) que los templates de projects ya consumen.
-       - toggle: mensaje propio (archivado/restaurado) en vez del genérico.
+       - toggle: mensaje propio (archivado/restaurado) en vez del generico.
 
-El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
+El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from .models import Project
 class ProjectViews(MaintainerViews):
     """MaintainerViews especializado para projects (context keys + payload + msgs)."""
 
-    # --- repos: filas dinámicas (url + rama + folder) que viajan como arrays
+    # --- repos: filas dinamicas (url + rama + folder) que viajan como arrays
     #     paralelos repo_url[]/repo_branch[]/repo_folder[] en el POST.
     @staticmethod
     def _parse_repo_post(data) -> list[dict]:
@@ -54,7 +54,7 @@ class ProjectViews(MaintainerViews):
 
     # --- payload del service: campos base + el set completo de repos parseado
     #     del POST. La URL principal y el template ya no se mandan (la primera
-    #     se deriva del repo default; el template se quitó).
+    #     se deriva del repo default; el template se quito).
     def _form_payload(self, form) -> dict:
         # current_branch ya no se edita en el modal (cada repo tiene su rama);
         # se omite para preservar el valor existente (es referencial / de sistema).
@@ -67,7 +67,7 @@ class ProjectViews(MaintainerViews):
 
     # --- filas de repos para el template del form (pre-fill).
     def _repo_rows(self, form, instance) -> list[dict]:
-        # Re-render por error de validación (form bound): preservar lo tipeado.
+        # Re-render por error de validacion (form bound): preservar lo tipeado.
         if form.is_bound:
             return self._parse_repo_post(form.data)
         # GET edit: repos existentes; si no hay pero hay URL principal legacy,
@@ -138,7 +138,7 @@ def _skills_ctx(project) -> dict:
 
 @require_http_methods(["GET"])
 def manage_skills(request, project_id):
-    """Modal de gestión de skills enlazadas al proyecto (enlazar/desenlazar)."""
+    """Modal de gestion de skills enlazadas al proyecto (enlazar/desenlazar)."""
     if (redir := require_auth(request)):
         return redir
     try:

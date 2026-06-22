@@ -19,7 +19,7 @@ type runAgentBody struct {
 	Variables map[string]any `json:"variables,omitempty"`
 }
 
-// POST /api/v1/agents/{id}/run — ejecución síncrona del agent.
+// POST /api/v1/agents/{id}/run — ejecucion sincrona del agent.
 func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

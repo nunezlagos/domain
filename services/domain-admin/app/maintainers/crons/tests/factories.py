@@ -1,7 +1,7 @@
 """Factories del mantenedor de Crons.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). target_id también es uuid explícito.
+prod los genera domain-mcp). target_id tambien es uuid explicito.
 """
 from __future__ import annotations
 

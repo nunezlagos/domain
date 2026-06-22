@@ -20,7 +20,7 @@ import (
 //   ?offset=N  default 0
 //
 // El listado respeta RLS via la tx del middleware — solo retorna users
-// de la misma organización que el principal.
+// de la misma organizacion que el principal.
 
 type userListItem struct {
 	ID    uuid.UUID `json:"id"`

@@ -207,7 +207,7 @@ func TestFlowRunAPI_PauseResumeCancel(t *testing.T) {
 	resp, body = doJSON(t, "POST", srv.URL+"/api/v1/flow-runs/"+runID+"/cancel", key, nil)
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "body=%s", body)
 
-	// Estado final cancelled + transiciones inválidas post-terminal
+	// Estado final cancelled + transiciones invalidas post-terminal
 	resp, body = doJSON(t, "GET", srv.URL+"/api/v1/flow-runs/"+runID, key, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, string(body), `"cancelled"`)

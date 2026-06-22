@@ -1,8 +1,8 @@
 """Tests de SkillForm (validaciones del mantenedor de Skills).
 
-Verifican reglas reales: campos requeridos, normalización de slug, parseo de
-tags, rango de timeout, unicidad de slug per-scope y exclusión del propio
-registro en edición.
+Verifican reglas reales: campos requeridos, normalizacion de slug, parseo de
+tags, rango de timeout, unicidad de slug per-scope y exclusion del propio
+registro en edicion.
 """
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ class SkillFormCreateTests(MaintainerTestCase):
 
     def test_slug_se_normaliza_a_minusculas(self):
         form = SkillForm(data=self._data(slug="MiSkill"))
-        # clean_slug hace .strip().lower(): el slug es válido y queda en minúsculas.
+        # clean_slug hace .strip().lower(): el slug es valido y queda en minusculas.
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["slug"], "miskill")
 

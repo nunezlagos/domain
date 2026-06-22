@@ -1,10 +1,10 @@
 // REQ-44 tools MCP para skills scoped a proyecto. Conviven con los tools
 // globales (skill_list/skill_search/skill_get): estos nuevos agregan
-// scope = project + fallback automático a globales (project_id IS NULL).
+// scope = project + fallback automatico a globales (project_id IS NULL).
 //
-// La migration 000107 ya agregó skills.project_id NULL-able + indexes.
+// La migration 000107 ya agrego skills.project_id NULL-able + indexes.
 // No tocamos el service skill existente — usamos queries SQL directas
-// con RLS-aware q(ctx) (toma tx del context si está).
+// con RLS-aware q(ctx) (toma tx del context si esta).
 package mcpserver
 
 import (
@@ -28,13 +28,13 @@ func registerProjectSkillTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Server
 
 func toolProjectSkillRegister() mcp.Tool {
 	return mcp.NewTool("domain_project_skill_register",
-		mcp.WithDescription("Registra una skill específica de un proyecto (project_id NOT NULL). Mismo slug puede convivir con una skill global. Útil cuando el LLM aprende un patrón propio del proyecto y quiere persistirlo."),
+		mcp.WithDescription("Registra una skill especifica de un proyecto (project_id NOT NULL). Mismo slug puede convivir con una skill global. Util cuando el LLM aprende un patron propio del proyecto y quiere persistirlo."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece"), mcp.Required()),
 		mcp.WithString("slug", mcp.Description("Slug de la skill (kebab-case)"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
-		mcp.WithString("description", mcp.Description("Descripción 1-2 líneas. Sirve al matching de skill_search.")),
+		mcp.WithString("description", mcp.Description("Descripcion 1-2 lineas. Sirve al matching de skill_search.")),
 		mcp.WithString("skill_type", mcp.Description("prompt|code|api|mcp_tool. Default: prompt")),
-		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template prompt, código, etc).")),
+		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template prompt, codigo, etc).")),
 	)
 }
 
@@ -114,9 +114,9 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Scoping por proyecto: una skill es usable SOLO si está enlazada vía
+	// Scoping por proyecto: una skill es usable SOLO si esta enlazada via
 	// project_skills (regla "no usable si no enlazada"). El scope 'global' vs
-	// 'project' refleja si la definición de la skill es de plataforma
+	// 'project' refleja si la definicion de la skill es de plataforma
 	// (skills.project_id IS NULL) o propia del proyecto.
 	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
 		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
@@ -161,6 +161,6 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 
 // nota: domain_skill_get y domain_skill_execute existentes resuelven por
 // slug global. Si el LLM quiere ejecutar una project-skill, debe pasar
-// el id explícito (futuro: extender execute para aceptar project_slug
+// el id explicito (futuro: extender execute para aceptar project_slug
 // y resolver slug → id en el scope correcto).
-var _ context.Context // silenciar import si vacío
+var _ context.Context // silenciar import si vacio

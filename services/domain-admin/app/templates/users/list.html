@@ -1,23 +1,23 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de usuarios. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Usuarios{% endblock %}
 {% block header_title %}Usuarios{% endblock %}
-{% block page_subtitle %}Gestión de miembros de la plataforma{% endblock %}
+{% block page_subtitle %}Gestion de miembros de la plataforma{% endblock %}
 {% block create_label %}+ Usuario{% endblock %}
 {% block search_placeholder %}Email o nombre...{% endblock %}
 
 {% comment %}
-header_actions: dos botones del mismo tamaño, cada uno con su ícono identificador.
-Jerarquía: "Usuario" es la acción PRIMARIA (btn-primary, sólido y resaltado);
+header_actions: dos botones del mismo tamaño, cada uno con su icono identificador.
+Jerarquia: "Usuario" es la accion PRIMARIA (btn-primary, solido y resaltado);
 "API Keys" es secundaria (btn-outline-primary, invertido). Orden: API Keys → Usuario.
 "Gestionar API Keys" abre el modal con el listado compacto (data-action="modal"
-hace fetch de /usuarios/api-keys/ e inyecta el partial en el modal dinámico);
-"+ Usuario" abre el form de creación (data-action="create" usa el data-base-url
+hace fetch de /usuarios/api-keys/ e inyecta el partial en el modal dinamico);
+"+ Usuario" abre el form de creacion (data-action="create" usa el data-base-url
 del contenedor de tabla).
 {% endcomment %}
 {% block header_actions %}

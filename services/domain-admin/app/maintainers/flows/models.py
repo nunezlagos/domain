@@ -2,7 +2,7 @@
 
 2 tablas existentes en domain-mcp (managed=False, Django solo lee/escribe):
 - flows:         DAGs declarativos con spec JSONB  -> hereda de core.SoftDeleteModel
-- flow_versions: snapshots inmutables por versión  -> hereda de core.BaseModel (READ-ONLY)
+- flow_versions: snapshots inmutables por version  -> hereda de core.BaseModel (READ-ONLY)
 
 Flow reusa los campos comunes (id/created_at/updated_at/deleted_at/status) de
 core.models.SoftDeleteModel y declara SOLO sus columnas propias. FlowVersion
@@ -11,7 +11,7 @@ Las columnas declaradas deben matchear EXACTO las tablas reales (guard:
 core/tests/test_schema_drift.py + core/tests/real_schema.json).
 
 El estado habilitado/deshabilitado del flow es el boolean `is_active`; el
-toggle alterna ese boolean. La baja es soft (deleted_at) y además deshabilita
+toggle alterna ese boolean. La baja es soft (deleted_at) y ademas deshabilita
 (is_active=false). NO existe `organization_id` en la tabla real.
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ class Flow(SoftDeleteModel):
     """Flow (DAG declarativo).
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
-    Soft-delete vía deleted_at; habilitado/deshabilitado vía is_active (boolean).
+    Soft-delete via deleted_at; habilitado/deshabilitado via is_active (boolean).
 
     Schema real (flows):
         id                   uuid PK
@@ -80,10 +80,10 @@ class Flow(SoftDeleteModel):
 
 
 class FlowVersion(BaseModel):
-    """Snapshot inmutable de la definición de un flow. READ-ONLY en el admin.
+    """Snapshot inmutable de la definicion de un flow. READ-ONLY en el admin.
 
     id / created_at / updated_at vienen de BaseModel. Sin CRUD por modal: se
-    muestran como lista read-only en el detalle del flow padre (análogo a
+    muestran como lista read-only en el detalle del flow padre (analogo a
     user_roles en users/).
 
     Schema real (flow_versions):

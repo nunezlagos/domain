@@ -60,7 +60,7 @@ def make_agent_version(
     snapshot: dict | None = None,
     changed_by: uuid.UUID | str | None = None,
 ) -> AgentVersion:
-    # PK BIGSERIAL -> no se pasa id (make() pondría un uuid).
+    # PK BIGSERIAL -> no se pasa id (make() pondria un uuid).
     return AgentVersion.objects.create(
         agent=agent,
         version=version,

@@ -1,9 +1,9 @@
 """Forms del mantenedor de Flows (migrados a core).
 
-FlowForm reusa core.forms.SlugNormalizationMixin para la normalización
+FlowForm reusa core.forms.SlugNormalizationMixin para la normalizacion
 strip+lower+slugify + unicidad del slug (excluyendo la propia instancia en
-edición). La lógica propia —spec JSONB editado como texto JSON y los flags
-booleanos— queda acá.
+edicion). La logica propia —spec JSONB editado como texto JSON y los flags
+booleanos— queda aqui.
 """
 from django import forms
 
@@ -32,16 +32,16 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único (minúsculas, guiones).",
+        help_text="Identificador unico (minusculas, guiones).",
     )
     description = forms.CharField(
-        label="Descripción",
+        label="Descripcion",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
     spec = forms.JSONField(
         label="Spec (JSON)",
-        required=False,  # {} es válido; Django trata {} como "empty", así que
+        required=False,  # {} es valido; Django trata {} como "empty", asi que
                          # no lo marcamos required y normalizamos None/empty a {}
                          # en clean_spec (la columna es NOT NULL pero {} la satisface).
         initial=dict,
@@ -50,7 +50,7 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
             "rows": 14,
             "spellcheck": "false",
         }),
-        help_text="Definición declarativa del DAG en JSON (objeto). Vacío = {}.",
+        help_text="Definicion declarativa del DAG en JSON (objeto). Vacio = {}.",
     )
     is_active = forms.BooleanField(
         label="Activo",
@@ -69,7 +69,7 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     seed_version = forms.IntegerField(
-        label="Versión de seed",
+        label="Version de seed",
         required=False,
         min_value=0,
         widget=forms.NumberInput(attrs={"class": "form-control"}),
@@ -77,9 +77,9 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
 
     def __init__(self, *args, instance: Flow | None = None, **kwargs):
         # InstanceAwareMixin (via SlugNormalizationMixin) captura instance para
-        # que clean_slug se excluya a sí mismo en edición.
+        # que clean_slug se excluya a si mismo en edicion.
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edición (unbound).
+        # Valores iniciales solo al renderizar el form de edicion (unbound).
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
@@ -91,8 +91,8 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
             self.fields["seed_version"].initial = instance.seed_version
 
     def clean_spec(self):
-        # forms.JSONField ya parseó/validó el JSON (un string mal formado falla
-        # antes de llegar acá). Solo normalizamos vacío -> {} (la columna jsonb
+        # forms.JSONField ya parseo/valido el JSON (un string mal formado falla
+        # antes de llegar aqui). Solo normalizamos vacio -> {} (la columna jsonb
         # es NOT NULL) y exigimos que sea un objeto JSON.
         spec = self.cleaned_data.get("spec")
         if spec in (None, "", [], (), {}):
@@ -103,13 +103,13 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
 
 
 class FlowSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",
         required=False,
         widget=forms.TextInput(attrs={
             "class": "form-control",
-            "placeholder": "Nombre, slug o descripción...",
+            "placeholder": "Nombre, slug o descripcion...",
         }),
     )

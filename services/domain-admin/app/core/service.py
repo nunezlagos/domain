@@ -1,15 +1,15 @@
-"""Service base genérico para mantenedores.
+"""Service base generico para mantenedores.
 
 `MaintainerService` extrae las dos operaciones de lectura comunes a TODOS los
-mantenedores, que hoy están copiadas (con otro nombre de clave) en cada app:
+mantenedores, que hoy estan copiadas (con otro nombre de clave) en cada app:
 
-- `list(...)`  -> listado con búsqueda + paginación (equivalente a
+- `list(...)`  -> listado con busqueda + paginacion (equivalente a
   users.services.list_users, pero la clave de la lista es `items` en vez de
-  `users` para que sea genérico).
+  `users` para que sea generico).
 - `list_signal(model)` -> señal barata de cambios {count, version} para el
   refresh on-change (equivalente a users.services.get_list_signal).
 
-Es genérico por model: no asume nada del dominio salvo que el model tenga
+Es generico por model: no asume nada del dominio salvo que el model tenga
 `updated_at` (lo cumplen todos por heredar de core.models.BaseModel).
 
 Cada app puede:
@@ -27,7 +27,7 @@ from django.db.models import Count, Max, Q
 class MaintainerService:
     """Base reusable para list + signal de un mantenedor.
 
-    Subclase mínima::
+    Subclase minima::
 
         class ProjectService(MaintainerService):
             model = Project
@@ -37,7 +37,7 @@ class MaintainerService:
         sig = ProjectService().list_signal()
 
     O bien usarlo sin subclasear pasando el model en cada llamada (los
-    métodos aceptan overrides explícitos).
+    metodos aceptan overrides explicitos).
     """
 
     #: model por defecto (puede sobreescribirse por subclase o por argumento).
@@ -61,15 +61,15 @@ class MaintainerService:
         page: int = 1,
         per_page: int = 20,
     ) -> dict:
-        """Listado con búsqueda + paginación.
+        """Listado con busqueda + paginacion.
 
         Retorna dict con: items, total, page, per_page, total_pages,
         has_next, has_prev. (Mismo shape que users.services.list_users salvo
         que la lista se llama `items`.)
 
         - `qs`: queryset base; si None usa `model.objects.all()`.
-        - `search`: término; filtra icontains en `search_fields` (OR), distinct.
-        - `search_fields`: override de los campos de búsqueda.
+        - `search`: termino; filtra icontains en `search_fields` (OR), distinct.
+        - `search_fields`: override de los campos de busqueda.
         """
         if qs is None:
             qs = self._resolve_model().objects.all()
@@ -104,8 +104,8 @@ class MaintainerService:
 
         Devuelve {count, version}: count = nº de filas, version =
         max(updated_at).isoformat() ("" si no hay filas). Cualquier alta,
-        edición, baja (soft) o toggle muta uno de los dos. El front compara
-        contra su última señal y solo re-renderiza la tabla cuando algo cambió
+        edicion, baja (soft) o toggle muta uno de los dos. El front compara
+        contra su ultima señal y solo re-renderiza la tabla cuando algo cambio
         en la BD (incluyendo inserts de otros servicios).
 
         Query barata: SELECT count(*), max(updated_at) FROM <tabla>.

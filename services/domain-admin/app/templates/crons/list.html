@@ -1,15 +1,15 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de crons. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Crons{% endblock %}
 {% block header_title %}Crons (schedules){% endblock %}
-{% block page_subtitle %}Schedules que disparan un target (flow/agent/skill) según una expresión cron{% endblock %}
+{% block page_subtitle %}Schedules que disparan un target (flow/agent/skill) segun una expresion cron{% endblock %}
 {% block create_label %}+ Nuevo cron{% endblock %}
-{% block search_placeholder %}Nombre, slug, expresión o target...{% endblock %}
+{% block search_placeholder %}Nombre, slug, expresion o target...{% endblock %}
 
 {% block table_area_id %}crons-table-area{% endblock %}
 {% block base_url %}/crons/{% endblock %}

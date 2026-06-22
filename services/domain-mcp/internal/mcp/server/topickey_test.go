@@ -11,7 +11,7 @@ func TestSuggestTopicKey(t *testing.T) {
 		content string
 		want    string
 	}{
-		{"Migración de postgres: la migración requiere postgres y pgvector", "migración-postgres-requiere"},
+		{"Migracion de postgres: la migracion requiere postgres y pgvector", "migracion-postgres-requiere"},
 		{"", "general"},
 		{"el la de y o", "general"},
 		{"deploy", "deploy"},
@@ -24,7 +24,7 @@ func TestSuggestTopicKey(t *testing.T) {
 func TestSuggestTopicKey_StableAndKebab(t *testing.T) {
 	content := "Circuit breaker para webhooks: el circuit breaker abre tras N fallos de webhooks"
 	a := SuggestTopicKey(content)
-	require.Equal(t, a, SuggestTopicKey(content), "determinístico")
+	require.Equal(t, a, SuggestTopicKey(content), "deterministico")
 	require.NotContains(t, a, " ")
 	require.Contains(t, a, "-")
 }

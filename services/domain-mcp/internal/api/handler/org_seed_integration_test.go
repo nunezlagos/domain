@@ -17,10 +17,10 @@ type seedOrgResult struct{ ID uuid.UUID }
 type seedMemberResult struct{ UserID uuid.UUID }
 
 // seedOrgUser inserta org + owner user directamente (el org.Service fue
-// removido). Replica el núcleo del antiguo org.Service.Create: las dos filas
+// removido). Replica el nucleo del antiguo org.Service.Create: las dos filas
 // que el resto del setup necesita (organizations + users con role owner). No
-// ejecuta los post-create hooks (seeds de skills/agents/flows) porque ningún
-// test acá depende de ese seeding.
+// ejecuta los post-create hooks (seeds de skills/agents/flows) porque ningun
+// test aqui depende de ese seeding.
 func seedOrgUser(ctx context.Context, pool *pgxpool.Pool, name, slug, ownerEmail, ownerName string) (*seedOrgResult, *seedMemberResult, error) {
 	var org seedOrgResult
 	if err := pool.QueryRow(ctx,

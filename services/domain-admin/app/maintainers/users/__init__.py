@@ -1,8 +1,8 @@
-"""Mantenedor de usuarios — primer app migrado al patrón consolidado `core`.
+"""Mantenedor de usuarios — primer app migrado al patron consolidado `core`.
 
-Es el PATRÓN DE REFERENCIA: reusa core.models (SoftDeleteModel),
+Es el PATRON DE REFERENCIA: reusa core.models (SoftDeleteModel),
 core.service.MaintainerService (list + signal), core.views.MaintainerViews
-(las 7 vistas estándar), core.urls.maintainer_urlpatterns y core.forms
+(las 7 vistas estandar), core.urls.maintainer_urlpatterns y core.forms
 (EmailNormalizationMixin). Solo conserva lo propio del dominio: roles,
 password hasheado y las rutas extra de asignar/revocar rol.
 

@@ -13,19 +13,19 @@ import (
 // promptRouterRequest body de POST /api/v1/prompt
 type promptRouterRequest struct {
 	RawText string `json:"raw_text"`
-	// Intent opcional: si el cliente ya clasificó (vía prompt 'triage'),
-	// se usa directo y se saltea la clasificación del servidor.
+	// Intent opcional: si el cliente ya clasifico (via prompt 'triage'),
+	// se usa directo y se saltea la clasificacion del servidor.
 	Intent string `json:"intent,omitempty"`
 	// ProjectID opcional: scopea el intake/triage al proyecto.
 	ProjectID string `json:"project_id,omitempty"`
 }
 
 // routePrompt — endpoint HTTP alternativo al MCP tool domain_prompt (issue-12.7).
-// Útil para clientes no-MCP (web UI, scripts, curl, tests E2E).
+// Util para clientes no-MCP (web UI, scripts, curl, tests E2E).
 //
 // POST /api/v1/prompt
 //
-//	{"raw_text": "el botón no funciona ya pasé screenshot"}
+//	{"raw_text": "el boton no funciona ya pase screenshot"}
 //
 // Response 200:
 //

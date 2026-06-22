@@ -20,7 +20,7 @@ from .factories import make_agent_template
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("agenttemplates:list"))
@@ -99,7 +99,7 @@ class CreateViewTests(MaintainerTestCase):
         base = {
             "name": "Creada",
             "slug": "creada",
-            "system_prompt": "Sos útil.",
+            "system_prompt": "Sos util.",
             "personality": "amable",
             "capabilities": "research, code",
             "model": "claude-haiku-4-5",
@@ -124,7 +124,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_agent_template("Existente", slug="dup")
         r = self.client.post(reverse("agenttemplates:create"), self._data(slug="dup"))
-        # Form inválido (clean_slug) → re-render 200, sin crear nuevo.
+        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
         self.assertEqual(r.status_code, 200)
         self.assertEqual(AgentTemplate.objects.filter(slug="dup").count(), 1)
 

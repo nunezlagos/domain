@@ -1,9 +1,9 @@
 """Modelos base ABSTRACTOS para los mantenedores.
 
 Las tablas reales viven en domain-mcp; en este admin los models son
-`managed = False` (Django no las migra, solo lee/escribe vía ORM). Estos
+`managed = False` (Django no las migra, solo lee/escribe via ORM). Estos
 abstractos existen para que los models de los apps hereden los campos comunes
-(id uuid, created_at, updated_at, y para SoftDeleteModel además deleted_at +
+(id uuid, created_at, updated_at, y para SoftDeleteModel ademas deleted_at +
 status) y NO los repitan a mano en cada app.
 
 IMPORTANTE — contrato para las subclases:
@@ -31,7 +31,7 @@ from django.db import models
 
 
 class BaseModel(models.Model):
-    """Base abstracta: PK uuid + timestamps automáticos.
+    """Base abstracta: PK uuid + timestamps automaticos.
 
     `created_at` es auto_now_add (se setea al insertar) y `updated_at` es
     auto_now (se actualiza en cada save). El bump de updated_at es lo que
@@ -51,7 +51,7 @@ class SoftDeleteModel(BaseModel):
 
     El soft delete NO borra la fila: marca `deleted_at` y suele setear
     `status = "revoked"` (eso lo hace el service del app, no el modelo).
-    `status` se declara genérico (CharField); una subclase puede redeclararlo
+    `status` se declara generico (CharField); una subclase puede redeclararlo
     con `choices` propias sin romper el esquema (misma columna)::
 
         status = models.CharField(max_length=20, default="active",

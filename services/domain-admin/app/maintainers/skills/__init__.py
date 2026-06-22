@@ -1,8 +1,8 @@
-"""Mantenedor de Skills — migrado al patrón consolidado `core`.
+"""Mantenedor de Skills — migrado al patron consolidado `core`.
 
 Reusa core.models (SoftDeleteModel para skills), core.service.MaintainerService
-(list + signal), core.views.MaintainerViews (las 7 vistas estándar, de las
-cuales skills NO usa toggle: la baja es soft-delete vía deleted_at),
+(list + signal), core.views.MaintainerViews (las 7 vistas estandar, de las
+cuales skills NO usa toggle: la baja es soft-delete via deleted_at),
 core.urls.maintainer_urlpatterns y core.forms (SlugNormalizationMixin). Solo
 conserva lo propio del dominio: scope de slug por (project_id, slug), parseo de
 tags y la lista READ-ONLY de versiones (skill_versions).

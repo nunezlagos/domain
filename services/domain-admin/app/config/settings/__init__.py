@@ -1,13 +1,13 @@
-"""Paquete de settings con selección por entorno.
+"""Paquete de settings con seleccion por entorno.
 
-`config.settings` sigue siendo importable y válido (el Dockerfile usa
+`config.settings` sigue siendo importable y valido (el Dockerfile usa
 DJANGO_SETTINGS_MODULE=config.settings). Por defecto carga base + prod.
 
-Selección via DJANGO_ENV:
+Seleccion via DJANGO_ENV:
     DJANGO_ENV=prod (default) -> base + prod
     DJANGO_ENV=test           -> base + test
 
-Para tests también podés apuntar directo al módulo:
+Para tests tambien puede apuntar directo al modulo:
     DJANGO_SETTINGS_MODULE=config.settings.test
 """
 import os

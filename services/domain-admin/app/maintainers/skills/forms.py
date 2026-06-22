@@ -1,10 +1,10 @@
 """Forms del mantenedor de Skills (migrados a core).
 
 SkillForm reusa core.forms.InstanceAwareMixin para capturar la instancia en
-edición (y poder excluirse en la validación de unicidad). NO usa
+edicion (y poder excluirse en la validacion de unicidad). NO usa
 SlugNormalizationMixin porque la unicidad de slug es por scope
 (project_id, slug), no global: ese check vive en clean_slug. El resto —parseo
-de tags, choices de skill_type— queda acá.
+de tags, choices de skill_type— queda aqui.
 """
 from django import forms
 
@@ -17,8 +17,8 @@ class SkillForm(InstanceAwareMixin, forms.Form):
     """Form para crear/editar skills.
 
     Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-    El slug es único dentro de su scope (project_id); en edición se excluye el
-    propio registro de la validación de unicidad. El scope (project_id) no se
+    El slug es unico dentro de su scope (project_id); en edicion se excluye el
+    propio registro de la validacion de unicidad. El scope (project_id) no se
     edita desde el admin.
     """
 
@@ -26,7 +26,7 @@ class SkillForm(InstanceAwareMixin, forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único dentro del scope (minúsculas, guiones).",
+        help_text="Identificador unico dentro del scope (minusculas, guiones).",
     )
     name = forms.CharField(
         label="Nombre",
@@ -40,7 +40,7 @@ class SkillForm(InstanceAwareMixin, forms.Form):
         widget=forms.Select(attrs={"class": "form-control form-select"}),
     )
     description = forms.CharField(
-        label="Descripción",
+        label="Descripcion",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
@@ -48,7 +48,7 @@ class SkillForm(InstanceAwareMixin, forms.Form):
         label="Contenido",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control form-control--code", "rows": 14, "spellcheck": "false"}),
-        help_text="Cuerpo de la skill (prompt, código, etc.) — editor monospace.",
+        help_text="Cuerpo de la skill (prompt, codigo, etc.) — editor monospace.",
     )
     timeout_seconds = forms.IntegerField(
         label="Timeout (segundos)",
@@ -91,8 +91,8 @@ class SkillForm(InstanceAwareMixin, forms.Form):
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
-        # La unicidad real es (project_id, slug). En edición el scope no cambia,
-        # así que validamos contra el project_id del instance; en alta el scope
+        # La unicidad real es (project_id, slug). En edicion el scope no cambia,
+        # asi que validamos contra el project_id del instance; en alta el scope
         # es global (project_id NULL) desde el admin.
         project_id = self.instance.project_id if self.instance is not None else None
         qs = Skill.objects.filter(deleted_at__isnull=True, slug=slug)
@@ -112,13 +112,13 @@ class SkillForm(InstanceAwareMixin, forms.Form):
 
 
 class SkillSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",
         required=False,
         widget=forms.TextInput(attrs={
             "class": "form-control",
-            "placeholder": "Nombre, slug o descripción...",
+            "placeholder": "Nombre, slug o descripcion...",
         }),
     )

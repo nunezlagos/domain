@@ -3,13 +3,13 @@
 Extraen normalizaciones que se repiten en los forms de los apps:
 
 - `InstanceAwareMixin`: guarda `self.instance` desde el kwarg `instance=` para
-  que los `clean_*` puedan excluirse a sí mismos en validaciones de unicidad
-  (mismo patrón que UserForm en el app de referencia).
+  que los `clean_*` puedan excluirse a si mismos en validaciones de unicidad
+  (mismo patron que UserForm en el app de referencia).
 - `EmailNormalizationMixin`: `clean_email` -> strip + lower + unicidad
-  (excluye la propia instancia en edición).
+  (excluye la propia instancia en edicion).
 - `SlugNormalizationMixin`: `clean_slug` -> strip + lower + slugify + unicidad.
 
-Configurá por atributos de clase qué model/campo usar para la unicidad::
+Configura por atributos de clase que model/campo usar para la unicidad::
 
     class ProjectForm(SlugNormalizationMixin, forms.Form):
         slug_model = Project          # model para chequear unicidad
@@ -25,14 +25,14 @@ from django.utils.text import slugify
 
 
 class InstanceAwareMixin:
-    """Captura `instance=` y lo expone como `self.instance` (None si no se pasó).
+    """Captura `instance=` y lo expone como `self.instance` (None si no se paso).
 
-    Permite que los `clean_*` hagan `.exclude(pk=self.instance.pk)` en edición.
+    Permite que los `clean_*` hagan `.exclude(pk=self.instance.pk)` en edicion.
     """
 
     def __init__(self, *args, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # No pisar self.instance si ya lo seteó un ModelForm.
+        # No pisar self.instance si ya lo seteo un ModelForm.
         if not hasattr(self, "instance") or instance is not None:
             self.instance = instance
 
@@ -74,7 +74,7 @@ class SlugNormalizationMixin(InstanceAwareMixin):
         raw = (self.cleaned_data["slug"] or "").strip().lower()
         slug = slugify(raw)
         if not slug:
-            raise forms.ValidationError("El slug no puede quedar vacío.")
+            raise forms.ValidationError("El slug no puede quedar vacio.")
         if self.slug_model is not None:
             qs = self.slug_model.objects.filter(**{self.slug_field: slug})
             if self._exclude_self(qs).exists():

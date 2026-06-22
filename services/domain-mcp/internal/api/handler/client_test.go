@@ -1,5 +1,5 @@
-// Tests del handler de clients (mandantes). Cubren validación de body,
-// gating por principal/orgID en ctx, y resolución id_or_slug. Los paths
+// Tests del handler de clients (mandantes). Cubren validacion de body,
+// gating por principal/orgID en ctx, y resolucion id_or_slug. Los paths
 // que requieren DB (Create/Update reales) viven en client_integration_test.go.
 package handler
 

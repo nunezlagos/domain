@@ -1,15 +1,15 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de flows. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Flows{% endblock %}
 {% block header_title %}Flows{% endblock %}
-{% block page_subtitle %}DAGs declarativos que ejecuta la organización{% endblock %}
+{% block page_subtitle %}DAGs declarativos que ejecuta la organizacion{% endblock %}
 {% block create_label %}+ Nuevo flow{% endblock %}
-{% block search_placeholder %}Nombre, slug o descripción...{% endblock %}
+{% block search_placeholder %}Nombre, slug o descripcion...{% endblock %}
 
 {% block table_area_id %}flows-table-area{% endblock %}
 {% block base_url %}/flows/{% endblock %}

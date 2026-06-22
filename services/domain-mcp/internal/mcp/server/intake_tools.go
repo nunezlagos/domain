@@ -49,16 +49,16 @@ func toolIntakeGet() mcp.Tool {
 
 func toolIntakeListPending() mcp.Tool {
 	return mcp.NewTool("domain_intake_list_pending",
-		mcp.WithDescription("Lista intakes pendientes de revisión (no terminales)."),
+		mcp.WithDescription("Lista intakes pendientes de revision (no terminales)."),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50, max 200)"),
+			mcp.Description("Maximo resultados (default 50, max 200)"),
 		),
 	)
 }
 
 func toolIntakeApprove() mcp.Tool {
 	return mcp.NewTool("domain_intake_approve",
-		mcp.WithDescription("Aprueba un intake en pending_review. Precondición para commit."),
+		mcp.WithDescription("Aprueba un intake en pending_review. Precondicion para commit."),
 		mcp.WithString("id",
 			mcp.Description("UUID del intake"),
 			mcp.Required(),
@@ -68,7 +68,7 @@ func toolIntakeApprove() mcp.Tool {
 
 func toolIntakeReject() mcp.Tool {
 	return mcp.NewTool("domain_intake_reject",
-		mcp.WithDescription("Rechaza un intake con razón."),
+		mcp.WithDescription("Rechaza un intake con razon."),
 		mcp.WithString("id",
 			mcp.Description("UUID del intake"),
 			mcp.Required(),
@@ -126,7 +126,7 @@ func (d *Deps) handleIntakeGet(ctx context.Context, req mcp.CallToolRequest) (*m
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	p, err := d.Intake.Get(ctx, id)
 	if err != nil {
@@ -159,7 +159,7 @@ func (d *Deps) handleIntakeApprove(ctx context.Context, req mcp.CallToolRequest)
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	reviewerID, _ := uuid.Parse(d.Principal.UserID)
 	p, err := d.Intake.Approve(ctx, id, reviewerID)
@@ -184,7 +184,7 @@ func (d *Deps) handleIntakeReject(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	reviewerID, _ := uuid.Parse(d.Principal.UserID)
 	p, err := d.Intake.Reject(ctx, id, reviewerID, reason)

@@ -29,7 +29,7 @@
          aria-label="Diagrama de secuencia del pipeline SDD"
          xmlns="http://www.w3.org/2000/svg">
       <defs>
-        {% comment %} Cabeza de flecha para llamadas (sólidas) {% endcomment %}
+        {% comment %} Cabeza de flecha para llamadas (solidas) {% endcomment %}
         <marker id="sdd-arrow" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="8" markerHeight="8" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" class="sdd-arrow-head"/>
@@ -49,7 +49,7 @@
           <feDropShadow dx="0" dy="3" stdDeviation="4"
                         flood-color="#000000" flood-opacity="0.35"/>
         </filter>
-        {% comment %} Glow suave para líneas/flechas (luces del diagrama) {% endcomment %}
+        {% comment %} Glow suave para lineas/flechas (luces del diagrama) {% endcomment %}
         <filter id="sdd-glow" x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur stdDeviation="2.4" result="b"/>
           <feMerge>
@@ -62,7 +62,7 @@
       {% comment %} Nombre del diagrama, dentro del propio SVG {% endcomment %}
       <text class="sdd-diagram-title" x="620" y="-22" text-anchor="middle">Flujo SDD</text>
 
-      {% comment %} LIFELINES (líneas verticales punteadas hacia abajo) {% endcomment %}
+      {% comment %} LIFELINES (lineas verticales punteadas hacia abajo) {% endcomment %}
       <g class="sdd-lifelines">
         <line class="sdd-lifeline" x1="120"  y1="84" x2="120"  y2="864"/>
         <line class="sdd-lifeline" x1="360"  y1="84" x2="360"  y2="864"/>
@@ -86,7 +86,7 @@
 
       {% comment %}
         MENSAJES (flechas horizontales, eje del tiempo de arriba a abajo).
-        Llamadas = línea sólida + sdd-arrow. Retornos = punteada + sdd-arrow-ret.
+        Llamadas = linea solida + sdd-arrow. Retornos = punteada + sdd-arrow-ret.
       {% endcomment %}
       <g class="sdd-msgs" fill="none">
         {% comment %} 0. ORIGEN del project_id: session_bootstrap resuelve/auto-crea
@@ -105,17 +105,17 @@
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="1120" y1="280" x2="608" y2="280"/>
 
         {% comment %}
-          Las flechas de las 10 fases (Orchestrator -> Agente) NO se dibujan acá:
+          Las flechas de las 10 fases (Orchestrator -> Agente) NO se dibujan aqui:
           cada una es el borde inferior del <button> en foreignObject (abajo). El
-          retorno punteado de cada fase sí va acá, debajo de su botón.
+          retorno punteado de cada fase si va aqui, debajo de su boton.
         {% endcomment %}
         {% comment %} ret explore: Agente -> Orchestrator {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="340" x2="608" y2="340"/>
         {% comment %} ret spec {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="392" x2="608" y2="392"/>
 
-        {% comment %} HARDSPEC: reiteración humana OPCIONAL en spec (revisar+enriquecer
-           -> re-redactar). Requiere confirmación AUDITADA. Lado izq libre. {% endcomment %}
+        {% comment %} HARDSPEC: reiteracion humana OPCIONAL en spec (revisar+enriquecer
+           -> re-redactar). Requiere confirmacion AUDITADA. Lado izq libre. {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="368" x2="120" y2="368"/>
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="120" y1="382" x2="592" y2="382"/>
         {% comment %} ret propose {% endcomment %}
@@ -125,13 +125,15 @@
         {% comment %} ret tasks {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="556" x2="608" y2="556"/>
 
-        {% comment %} GATE por fase (modo manual/híbrido): Orchestrator pide aprobación
-           humana entre fases clave (spec/design/apply/judge) antes de seguir. {% endcomment %}
+        {% comment %} GATE por fase (modo manual/hibrido): Orchestrator pide aprobacion
+           humana entre fases clave (spec/design/apply/judge); el humano responde
+           via domain_orchestrate_confirm (aprueba=continua / rechaza=aborta). {% endcomment %}
         <line class="sdd-msg" marker-end="url(#sdd-arrow)" x1="592" y1="508" x2="120" y2="508"/>
-        {% comment %} ITERACIÓN del Agente (LLM): razona y llama tools para crear los
+        <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="120" y1="522" x2="592" y2="522"/>
+        {% comment %} ITERACION del Agente (LLM): razona y llama tools para crear los
            artefactos (requirement/issue/tasks). Self-message en su lifeline. {% endcomment %}
         <path class="sdd-msg" marker-end="url(#sdd-arrow)" d="M868 430 H912 V446 H870"/>
-        {% comment %} apply: Agente -> Datos crea/persiste (req/issue/tasks vía tools) {% endcomment %}
+        {% comment %} apply: Agente -> Datos crea/persiste (req/issue/tasks via tools) {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="868" y1="608" x2="1120" y2="608"/>
         {% comment %} ret verify {% endcomment %}
         <line class="sdd-msg sdd-msg-ret" marker-end="url(#sdd-arrow-ret)" x1="852" y1="660" x2="608" y2="660"/>
@@ -168,6 +170,7 @@
         <text class="sdd-lbl"     x="410" y="190">triage (clasifica intent + intake)</text>
         <text class="sdd-lbl"     x="476" y="212">intent + project_id</text>
         <text class="sdd-lbl"     x="300" y="502">gate (manual/hibrido): aprobacion humana</text>
+        <text class="sdd-lbl-ret" x="330" y="536">confirm: aprueba (continua) / rechaza</text>
         <text class="sdd-lbl"     x="640" y="252">flow_run + reglas/skills del proyecto</text>
         <text class="sdd-lbl-ret" x="864" y="274">ok</text>
 

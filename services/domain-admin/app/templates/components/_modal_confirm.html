@@ -1,8 +1,8 @@
 {% comment %}
 ============================================================
-MODAL DE CONFIRMACIÓN REUSABLE (cualquier delete)
+MODAL DE CONFIRMACION REUSABLE (cualquier delete)
 El action del form y el nombre se setean via JS (modals.js)
-antes de abrir, a partir del botón [data-action="delete"].
+antes de abrir, a partir del boton [data-action="delete"].
 ============================================================
 {% endcomment %}
 <div class="modal-backdrop" id="modal-confirm-delete">
@@ -13,13 +13,13 @@ antes de abrir, a partir del botón [data-action="delete"].
     </div>
     <div class="modal-body">
       <p>Vas a eliminar <strong id="confirm-delete-name">este elemento</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el registro se conserva para auditoría pero no se puede usar más.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el registro se conserva para auditoria pero no se puede usar mas.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form id="confirm-delete-form" method="post" action="" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

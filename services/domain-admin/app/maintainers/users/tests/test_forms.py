@@ -1,7 +1,7 @@
 """Tests de UserForm (validaciones del mantenedor).
 
-Verifican reglas reales: password requerido en alta, confirmación, longitud
-mínima, email único y normalización a minúsculas (esta última delegada al
+Verifican reglas reales: password requerido en alta, confirmacion, longitud
+minima, email unico y normalizacion a minusculas (esta ultima delegada al
 core.forms.EmailNormalizationMixin).
 """
 from __future__ import annotations
@@ -105,7 +105,7 @@ class UserFormNameCompositionTests(MaintainerTestCase):
         base = {
             "email": "comp@example.com",
             "first_name": "Juan Pablo",
-            "paternal_surname": "Núñez",
+            "paternal_surname": "Nuñez",
             "maternal_surname": "Lagos",
             "role": "viewer",
             "status": "active",
@@ -118,7 +118,7 @@ class UserFormNameCompositionTests(MaintainerTestCase):
     def test_composed_name_une_los_tres(self):
         form = UserForm(data=self._data())
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.composed_name(), "Juan Pablo Núñez Lagos")
+        self.assertEqual(form.composed_name(), "Juan Pablo Nuñez Lagos")
 
     def test_composed_name_omite_vacios(self):
         form = UserForm(data=self._data(paternal_surname="", maternal_surname=""))
@@ -127,8 +127,8 @@ class UserFormNameCompositionTests(MaintainerTestCase):
 
     def test_split_name_parsea_en_edicion(self):
         u = make_user("split@example.com")
-        u.name = "Ana María Pérez Soto"
+        u.name = "Ana Maria Perez Soto"
         form = UserForm(instance=u)
         self.assertEqual(form.fields["first_name"].initial, "Ana")
-        self.assertEqual(form.fields["paternal_surname"].initial, "María Pérez")
+        self.assertEqual(form.fields["paternal_surname"].initial, "Maria Perez")
         self.assertEqual(form.fields["maternal_surname"].initial, "Soto")

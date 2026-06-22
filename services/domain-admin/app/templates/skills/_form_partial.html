@@ -1,7 +1,7 @@
 {% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de skill para el modal dinámico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el título,
+Form de skill para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo,
 los campos y el label del submit.
 {% endcomment %}
 
@@ -31,7 +31,7 @@ los campos y el label del submit.
   </div>
 
   <div class="form-group">
-    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
     {{ form.description }}
     {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
   </div>

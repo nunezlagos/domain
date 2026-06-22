@@ -8,7 +8,7 @@ import (
 )
 
 // GET /api/v1/auth/first-run
-// Indica si la DB está vacía (sin users). Helper para que el CLI
+// Indica si la DB esta vacia (sin users). Helper para que el CLI
 // decida si usar bootstrap u OTP antes de pedir email.
 func (a *API) authFirstRun(w http.ResponseWriter, r *http.Request) {
 	if a.Bootstrap == nil {
@@ -28,7 +28,7 @@ func (a *API) authFirstRun(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/auth/bootstrap
 // Auto-crea el primer user de la primera org. SOLO funciona si
-// la DB no tiene users. Después, retorna 400 email_not_in_any_org
+// la DB no tiene users. Despues, retorna 400 email_not_in_any_org
 // y el caller debe usar /auth/request-otp.
 func (a *API) authBootstrap(w http.ResponseWriter, r *http.Request) {
 	if a.Bootstrap == nil {
@@ -37,7 +37,7 @@ func (a *API) authBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	var b bootstrapRequest
 	if err := decodeJSON(r, &b); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_body", "JSON inválido")
+		writeError(w, http.StatusBadRequest, "invalid_body", "JSON invalido")
 		return
 	}
 	if b.Email == "" {
@@ -71,8 +71,8 @@ func (a *API) authBootstrap(w http.ResponseWriter, r *http.Request) {
 		"method":           "bootstrap",
 		"enrollment_token": res.EnrollmentToken,
 		"enrollment_role":  res.EnrollmentRole,
-		"enrollment_note":  "compartí este enrollment_token con tu equipo; cualquiera con el token puede self-enrolarse via POST /api/v1/auth/enroll. Rotalo si se filtra.",
-		"note":             "guardá la API key — solo se muestra UNA vez. No expira automáticamente; rotala manualmente con /domain-login.",
+		"enrollment_note":  "comparti este enrollment_token con tu equipo; cualquiera con el token puede self-enrolarse via POST /api/v1/auth/enroll. Rotalo si se filtra.",
+		"note":             "guarda la API key — solo se muestra UNA vez. No expira automaticamente; rotala manualmente con /domain-login.",
 	})
 }
 

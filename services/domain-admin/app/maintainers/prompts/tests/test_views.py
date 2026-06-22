@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de Prompts.
 
 Usan el test client real contra URLs reales (namespace 'prompts', intacto tras la
-migración a maintainers.prompts). Verifican status codes, efectos en DB y forma
+migracion a maintainers.prompts). Verifican status codes, efectos en DB y forma
 de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
@@ -21,7 +21,7 @@ from .factories import make_prompt
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("prompts:list"))
@@ -119,7 +119,7 @@ class CreateViewTests(MaintainerTestCase):
         make_prompt("dup", version=1)
         r = self.client.post(reverse("prompts:create"),
                             self._data(slug="dup", version="1"))
-        # Form inválido (clean) → re-render 200, sin crear nuevo.
+        # Form invalido (clean) → re-render 200, sin crear nuevo.
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Prompt.objects.filter(slug="dup").count(), 1)
 

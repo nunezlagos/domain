@@ -68,7 +68,7 @@ func toolSyncRegisterPush() mcp.Tool {
 
 func toolSyncMarkDrift() mcp.Tool {
 	return mcp.NewTool("domain_sync_mark_drift",
-		mcp.WithDescription("Marca un sync state como conflicto por edición externa detectada."),
+		mcp.WithDescription("Marca un sync state como conflicto por edicion externa detectada."),
 		mcp.WithString("state_id",
 			mcp.Description("UUID del sync state"),
 			mcp.Required(),
@@ -93,7 +93,7 @@ func toolSyncListConflicts() mcp.Tool {
 	return mcp.NewTool("domain_sync_list_conflicts",
 		mcp.WithDescription("Lista sync states con drift sin resolver."),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50, max 200)"),
+			mcp.Description("Maximo resultados (default 50, max 200)"),
 		),
 	)
 }
@@ -153,11 +153,11 @@ func (d *Deps) handleSyncRegisterPush(ctx context.Context, req mcp.CallToolReque
 	}
 	provID, err := uuid.Parse(provIDStr)
 	if err != nil {
-		return mcp.NewToolResultError("provider_id inválido"), nil
+		return mcp.NewToolResultError("provider_id invalido"), nil
 	}
 	entityID, err := uuid.Parse(entityIDStr)
 	if err != nil {
-		return mcp.NewToolResultError("entity_id inválido"), nil
+		return mcp.NewToolResultError("entity_id invalido"), nil
 	}
 	extURL, _ := args["external_url"].(string)
 	extType, _ := args["external_type"].(string)
@@ -185,7 +185,7 @@ func (d *Deps) handleSyncMarkDrift(ctx context.Context, req mcp.CallToolRequest)
 	idStr, _ := args["state_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("state_id inválido"), nil
+		return mcp.NewToolResultError("state_id invalido"), nil
 	}
 	var driftFields map[string]any
 	if v, ok := args["drift_fields"].(map[string]any); ok {
@@ -210,7 +210,7 @@ func (d *Deps) handleSyncMarkResolved(ctx context.Context, req mcp.CallToolReque
 	idStr, _ := args["state_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("state_id inválido"), nil
+		return mcp.NewToolResultError("state_id invalido"), nil
 	}
 	st, err := d.ExtSync.MarkResolved(ctx, id)
 	if err != nil {
@@ -257,7 +257,7 @@ func (d *Deps) handleSyncGetState(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	st, err := d.ExtSync.Get(ctx, id)
 	if err != nil {

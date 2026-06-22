@@ -1,7 +1,7 @@
 // REQ-49 — proposals de policies/skills auto-generadas por el LLM.
 //
 // Workflow:
-//   1. LLM detecta un patrón recurrente del proyecto (workflow git,
+//   1. LLM detecta un patron recurrente del proyecto (workflow git,
 //      convention de migrations, tech stack constraint, etc).
 //   2. Llama domain_propose_policy o domain_propose_skill con
 //      source='llm_generated' + proposed=true. Queda invisible para los
@@ -9,9 +9,9 @@
 //   3. domain_proposal_list muestra las propuestas pendientes.
 //   4. domain_proposal_review(kind, id, action: accept|reject) decide.
 //
-// Por qué no aprobación automática: el LLM puede malinterpretar un
+// Por que no aprobacion automatica: el LLM puede malinterpretar un
 // pattern. Mantener al humano en el loop evita reglas equivocadas que
-// después confunden al propio LLM.
+// despues confunden al propio LLM.
 package mcpserver
 
 import (
@@ -40,34 +40,34 @@ func registerProposalsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerToo
 
 func toolProposePolicy() mcp.Tool {
 	return mcp.NewTool("domain_propose_policy",
-		mcp.WithDescription("LLM propone una nueva project_policy basada en lo que aprendió del proyecto. Queda en estado proposed=true — invisible para policy_get hasta que el usuario apruebe con domain_proposal_review. NO usar para reglas obvias (ej. 'usar git') — usar para patterns específicos del repo (workflow, migrations, convention)."),
+		mcp.WithDescription("LLM propone una nueva project_policy basada en lo que aprendio del proyecto. Queda en estado proposed=true — invisible para policy_get hasta que el usuario apruebe con domain_proposal_review. NO usar para reglas obvias (ej. 'usar git') — usar para patterns especificos del repo (workflow, migrations, convention)."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica"), mcp.Required()),
 		mcp.WithString("slug", mcp.Description("Slug de la policy propuesta"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("convention|security_rule|architecture|sdd_workflow|observability|migration_rule|linter_config|agent_protocol|git_workflow|tech_stack|test_strategy"), mcp.Required()),
-		mcp.WithString("body_md", mcp.Description("Cuerpo Markdown — qué es la regla y por qué"), mcp.Required()),
-		mcp.WithString("rationale", mcp.Description("Por qué proponés esta regla: qué pattern observaste, en cuántos archivos/turns lo viste. Esto le da contexto al humano que aprueba.")),
+		mcp.WithString("body_md", mcp.Description("Cuerpo Markdown — que es la regla y por que"), mcp.Required()),
+		mcp.WithString("rationale", mcp.Description("Por que propones esta regla: que pattern observaste, en cuantos archivos/turns lo viste. Esto le da contexto al humano que aprueba.")),
 	)
 }
 
 func toolProposeSkill() mcp.Tool {
 	return mcp.NewTool("domain_propose_skill",
-		mcp.WithDescription("LLM propone una nueva skill basada en una tarea recurrente del proyecto. Queda proposed=true — invisible hasta aprobación. Útil cuando hacés N veces el mismo comando con variantes (ej. 'php artisan migrate manual + reload cache + clear views' = una skill 'reset-db')."),
+		mcp.WithDescription("LLM propone una nueva skill basada en una tarea recurrente del proyecto. Queda proposed=true — invisible hasta aprobacion. Util cuando haces N veces el mismo comando con variantes (ej. 'php artisan migrate manual + reload cache + clear views' = una skill 'reset-db')."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica (null = global de la org)")),
 		mcp.WithString("slug", mcp.Description("Slug de la skill"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
-		mcp.WithString("description", mcp.Description("Para qué sirve, qué inputs/outputs espera"), mcp.Required()),
+		mcp.WithString("description", mcp.Description("Para que sirve, que inputs/outputs espera"), mcp.Required()),
 		mcp.WithString("skill_type", mcp.Description("prompt|code|api|mcp_tool"), mcp.Required()),
-		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template, código, etc)"), mcp.Required()),
-		mcp.WithString("rationale", mcp.Description("Por qué la proponés: qué hiciste manualmente N veces.")),
+		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template, codigo, etc)"), mcp.Required()),
+		mcp.WithString("rationale", mcp.Description("Por que la propones: que hiciste manualmente N veces.")),
 	)
 }
 
 func toolProposalList() mcp.Tool {
 	return mcp.NewTool("domain_proposal_list",
-		mcp.WithDescription("Lista proposals pendientes (proposed=true, sin review todavía). El usuario revisa y decide con domain_proposal_review."),
+		mcp.WithDescription("Lista proposals pendientes (proposed=true, sin review todavia). El usuario revisa y decide con domain_proposal_review."),
 		mcp.WithString("kind", mcp.Description("Filtrar: policy | skill | all (default)")),
-		mcp.WithString("project_slug", mcp.Description("Filtrar proposals de un proyecto específico (solo afecta policies)")),
+		mcp.WithString("project_slug", mcp.Description("Filtrar proposals de un proyecto especifico (solo afecta policies)")),
 	)
 }
 
@@ -77,7 +77,7 @@ func toolProposalReview() mcp.Tool {
 		mcp.WithString("kind", mcp.Description("policy | skill"), mcp.Required()),
 		mcp.WithString("id", mcp.Description("UUID del row a revisar"), mcp.Required()),
 		mcp.WithString("action", mcp.Description("accept | reject"), mcp.Required()),
-		mcp.WithString("reason", mcp.Description("Razón del review (opcional, queda como audit). Útil cuando rechazás para que el LLM aprenda.")),
+		mcp.WithString("reason", mcp.Description("Razon del review (opcional, queda como audit). Util cuando rechazas para que el LLM aprenda.")),
 	)
 }
 
@@ -288,7 +288,7 @@ func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest
 	action := strings.ToLower(strings.TrimSpace(asString(args["action"])))
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	if action != "accept" && action != "reject" {
 		return mcp.NewToolResultError("action debe ser 'accept' o 'reject'"), nil

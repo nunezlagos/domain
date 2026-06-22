@@ -23,14 +23,14 @@ def _is_authed(request) -> bool:
 
 
 def _require_auth(request) -> HttpResponseRedirect | None:
-    """Retorna redirect a /login/ si no está autenticado, None si OK."""
+    """Retorna redirect a /login/ si no esta autenticado, None si OK."""
     if not _is_authed(request):
         return HttpResponseRedirect("/login/")
     return None
 
 
 def login_view(request):
-    # Si ya está autenticado, mandarlo al dashboard.
+    # Si ya esta autenticado, mandarlo al dashboard.
     if _is_authed(request):
         return HttpResponseRedirect("/dashboard/")
 
@@ -51,7 +51,7 @@ def login_view(request):
 
 
 def home_view(request):
-    """Raíz: redirige al panel o al login."""
+    """Raiz: redirige al panel o al login."""
     if _is_authed(request):
         return HttpResponseRedirect("/dashboard/")
     return HttpResponseRedirect("/login/")
@@ -74,19 +74,19 @@ def components_demo(request):
 
 
 # --- Flujo SDD (vista general, no-CRUD) --------------------------------------
-# Orden canónico de las 10 fases del pipeline SDD + el grupo (concern) de cada
-# una para colorear el diagrama. El grupo ata visualmente la fase a la taxonomía
+# Orden canonico de las 10 fases del pipeline SDD + el grupo (concern) de cada
+# una para colorear el diagrama. El grupo ata visualmente la fase a la taxonomia
 # sdd_/tdd_: spec (explore->tasks), exec (apply), tdd (verify/judge),
 # close (archive/onboard).
 _SDD_PHASES = [
-    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el código existente.", "search"),
-    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptación.", "doc"),
+    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el codigo existente.", "search"),
+    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptacion.", "doc"),
     ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs.", "bulb"),
-    ("sdd-design", "Design", "spec", "Diseña la solución y la arquitectura.", "blueprint"),
+    ("sdd-design", "Design", "spec", "Diseña la solucion y la arquitectura.", "blueprint"),
     ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables.", "checklist"),
-    ("sdd-apply", "Apply", "exec", "Implementa el código de las tareas.", "code"),
+    ("sdd-apply", "Apply", "exec", "Implementa el codigo de las tareas.", "code"),
     ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato.", "check"),
-    ("sdd-judge", "Judge", "tdd", "Revisión adversarial de la implementación.", "scale"),
+    ("sdd-judge", "Judge", "tdd", "Revision adversarial de la implementacion.", "scale"),
     ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos.", "archive"),
     ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio.", "book"),
 ]
@@ -97,8 +97,8 @@ def sdd_flow(request):
     """Vista general del pipeline SDD como diagrama de loop.
 
     Resuelve los agent_templates por slug sdd-* (una sola query) y arma la lista
-    ordenada de las 10 fases. Cada fase lleva el id del template si está seedeado
-    (el nodo abre el modal de edición del prompt reusando agenttemplates); si no,
+    ordenada de las 10 fases. Cada fase lleva el id del template si esta seedeado
+    (el nodo abre el modal de edicion del prompt reusando agenttemplates); si no,
     el nodo se muestra deshabilitado.
     """
     redir = _require_auth(request)
@@ -141,7 +141,7 @@ def sdd_flow(request):
 
 def logout_view(request):
     request.session.flush()
-    messages.info(request, "Sesión cerrada.")
+    messages.info(request, "Sesion cerrada.")
     return HttpResponseRedirect("/login/")
 
 

@@ -1,9 +1,9 @@
 """Factories del mantenedor de Proyectos.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). Solo agrega los helpers específicos de las 3 tablas
+prod los genera domain-mcp). Solo agrega los helpers especificos de las 3 tablas
 del dominio (projects, project_templates, project_repositories). La columna
-organization_id fue dropeada del schema real, por eso ningún factory la setea.
+organization_id fue dropeada del schema real, por eso ningun factory la setea.
 """
 from __future__ import annotations
 

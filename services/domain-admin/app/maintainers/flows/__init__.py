@@ -1,7 +1,7 @@
-"""Mantenedor de Flows — migrado al patrón consolidado `core`.
+"""Mantenedor de Flows — migrado al patron consolidado `core`.
 
 Reusa core.models (SoftDeleteModel para Flow), core.service.MaintainerService
-(list + signal), core.views.MaintainerViews (las 7 vistas estándar),
+(list + signal), core.views.MaintainerViews (las 7 vistas estandar),
 core.urls.maintainer_urlpatterns y core.forms (SlugNormalizationMixin). Solo
 conserva lo propio del dominio: el spec JSONB, el toggle sobre el boolean
 is_active (en vez de status) y las versiones (flow_versions) read-only que se

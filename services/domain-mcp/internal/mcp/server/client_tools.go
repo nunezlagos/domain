@@ -1,4 +1,4 @@
-// Tools MCP de clients (mandantes). Útil para consultoras que gestionan
+// Tools MCP de clients (mandantes). Util para consultoras que gestionan
 // proyectos por cliente. Tools registradas con prefijo `domain_client_*`.
 //
 // Tools:
@@ -49,13 +49,13 @@ func registerClientTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 
 func toolClientCreate() mcp.Tool {
 	return mcp.NewTool("domain_client_create",
-		mcp.WithDescription("Crea un cliente/mandante en la org actual del principal. Útil para consultoras que gestionan proyectos por cliente."),
+		mcp.WithDescription("Crea un cliente/mandante en la org actual del principal. Util para consultoras que gestionan proyectos por cliente."),
 		mcp.WithString("name",
-			mcp.Description("Nombre del cliente (razón social o nombre comercial)"),
+			mcp.Description("Nombre del cliente (razon social o nombre comercial)"),
 			mcp.Required(),
 		),
 		mcp.WithString("slug",
-			mcp.Description("Slug único del cliente dentro de la org (kebab-case)"),
+			mcp.Description("Slug unico del cliente dentro de la org (kebab-case)"),
 			mcp.Required(),
 		),
 		mcp.WithString("tax_id",
@@ -65,10 +65,10 @@ func toolClientCreate() mcp.Tool {
 			mcp.Description("Email de contacto principal (opcional)"),
 		),
 		mcp.WithString("contact_phone",
-			mcp.Description("Teléfono de contacto principal (opcional)"),
+			mcp.Description("Telefono de contacto principal (opcional)"),
 		),
 		mcp.WithString("address",
-			mcp.Description("Dirección postal (opcional)"),
+			mcp.Description("Direccion postal (opcional)"),
 		),
 		mcp.WithObject("metadata",
 			mcp.Description("Metadata estructurada arbitraria (JSONB)"),
@@ -78,15 +78,15 @@ func toolClientCreate() mcp.Tool {
 
 func toolClientList() mcp.Tool {
 	return mcp.NewTool("domain_client_list",
-		mcp.WithDescription("Lista los clientes/mandantes de la org actual. Filtros opcionales por status y paginación con limit/offset."),
+		mcp.WithDescription("Lista los clientes/mandantes de la org actual. Filtros opcionales por status y paginacion con limit/offset."),
 		mcp.WithString("status",
-			mcp.Description("Filtrar por status (ej: active, archived). Vacío = todos."),
+			mcp.Description("Filtrar por status (ej: active, archived). Vacio = todos."),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50, max 200)"),
+			mcp.Description("Maximo resultados (default 50, max 200)"),
 		),
 		mcp.WithNumber("offset",
-			mcp.Description("Offset para paginación (default 0)"),
+			mcp.Description("Offset para paginacion (default 0)"),
 		),
 	)
 }
@@ -255,11 +255,11 @@ func (d *Deps) handleClientUpdate(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	fields, _ := args["fields"].(map[string]any)
 	if len(fields) == 0 {
-		return mcp.NewToolResultError("fields es requerido y no puede estar vacío"), nil
+		return mcp.NewToolResultError("fields es requerido y no puede estar vacio"), nil
 	}
 	orgID, err := uuid.Parse(d.Principal.OrganizationID)
 	if err != nil {
@@ -306,7 +306,7 @@ func (d *Deps) handleClientDelete(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	orgID, err := uuid.Parse(d.Principal.OrganizationID)
 	if err != nil {
@@ -333,14 +333,14 @@ func (d *Deps) handleClientRestore(ctx context.Context, req mcp.CallToolRequest)
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	orgID, err := uuid.Parse(d.Principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	// Restore directo: Service.Get excluye soft-deleted, así que un Get
-	// previo siempre devolvería "not found". El repo.Restore retorna
+	// Restore directo: Service.Get excluye soft-deleted, asi que un Get
+	// previo siempre devolveria "not found". El repo.Restore retorna
 	// ErrClientNotFound si el id no existe (RowsAffected=0). Tras restaurar,
 	// recargamos para devolver el client actualizado.
 	if err := d.Clients.Restore(ctx, orgID, id); err != nil {
@@ -364,7 +364,7 @@ func (d *Deps) handleClientSetStatus(ctx context.Context, req mcp.CallToolReques
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	status, _ := args["status"].(string)
 	if status == "" {

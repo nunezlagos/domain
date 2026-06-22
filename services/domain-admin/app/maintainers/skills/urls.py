@@ -1,9 +1,9 @@
 """URL routing del mantenedor de Skills (migrado a core).
 
-Mounted at /skills/ en config/urls.py. Las 7 rutas estándar (list, signal,
+Mounted at /skills/ en config/urls.py. Las 7 rutas estandar (list, signal,
 create, detail, edit, delete, toggle) las arma core.urls.maintainer_urlpatterns
-a partir de la instancia `views`. skills no expone un botón de toggle en la UI
-(la baja es soft-delete vía deleted_at), pero la ruta queda cableada por el
+a partir de la instancia `views`. skills no expone un boton de toggle en la UI
+(la baja es soft-delete via deleted_at), pero la ruta queda cableada por el
 helper igual que en el resto de los mantenedores; simplemente no se usa.
 
 app_name="skills" -> {% url 'skills:list' %} sigue funcionando igual que antes.

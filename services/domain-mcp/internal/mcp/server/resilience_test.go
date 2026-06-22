@@ -159,7 +159,7 @@ func TestCircuitBreaker_HalfOpenRecovery(t *testing.T) {
 	require.True(t, result.IsError)
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "circuit open")
 
-	// Avanzar reloj pasado el cooldown → half-open: la call pasa y el éxito resetea
+	// Avanzar reloj pasado el cooldown → half-open: la call pasa y el exito resetea
 	current = base.Add(2 * time.Minute)
 	failing = false
 	result, err := wrapped(context.Background(), mcp.CallToolRequest{})
@@ -196,7 +196,7 @@ func TestCircuitBreaker_HalfOpenFailureReopens(t *testing.T) {
 	require.EqualValues(t, 3, calls.Load(), "re-abierto: handler no se invoca")
 }
 
-// Sabotaje: un éxito intercalado resetea el contador — el breaker NUNCA debe
+// Sabotaje: un exito intercalado resetea el contador — el breaker NUNCA debe
 // abrir si los fallos no son consecutivos.
 func TestSabotage_CircuitBreaker_NonConsecutiveFailuresDontOpen(t *testing.T) {
 	r := NewResilientWrapper(ToolBudget{CBThreshold: 3, CBCooldown: time.Hour})
@@ -211,7 +211,7 @@ func TestSabotage_CircuitBreaker_NonConsecutiveFailuresDontOpen(t *testing.T) {
 	}
 	wrapped := r.Wrap("cb_mixed", h)
 
-	// fallo, fallo, ÉXITO, fallo, fallo, ÉXITO — nunca 3 consecutivos
+	// fallo, fallo, EXITO, fallo, fallo, EXITO — nunca 3 consecutivos
 	for i := 0; i < 2; i++ {
 		fail = true
 		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
@@ -219,5 +219,5 @@ func TestSabotage_CircuitBreaker_NonConsecutiveFailuresDontOpen(t *testing.T) {
 		fail = false
 		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
 	}
-	require.EqualValues(t, 6, calls.Load(), "breaker jamás debió abrir")
+	require.EqualValues(t, 6, calls.Load(), "breaker jamas debio abrir")
 }

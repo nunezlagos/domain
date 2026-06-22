@@ -7,7 +7,7 @@ Tabla existente en domain-mcp (managed=False, Django solo lee/escribe):
 ApiKey reusa id/created_at/updated_at de core.models.BaseModel y declara SOLO
 sus columnas propias. NO hereda de SoftDeleteModel: el soft-delete de esta
 tabla es `revoked_at` (NO `deleted_at`, que la tabla real NO tiene). Declarar
-`deleted_at` rompería el guard de schema drift (core/tests/test_schema_drift.py).
+`deleted_at` romperia el guard de schema drift (core/tests/test_schema_drift.py).
 
 Columnas reales (core/tests/real_schema.json -> auth_api_keys):
     id, user_id, key_hash, key_prefix, name, last_used_at, expires_at,
@@ -30,7 +30,7 @@ class ApiKey(BaseModel):
     solo se ve `key_prefix` (los primeros chars) y el `key_hash` (sha256).
 
     id / created_at / updated_at vienen de BaseModel. `status` y `revoked_at`
-    se declaran acá (el soft-delete de esta tabla es revoked_at, no deleted_at).
+    se declaran aqui (el soft-delete de esta tabla es revoked_at, no deleted_at).
     """
 
     STATUS_CHOICES = [

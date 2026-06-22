@@ -7,10 +7,10 @@
 //
 // Principal:
 //
-//	El proceso domain-mcp resuelve UN principal al boot vía API key
-//	(env var DOMAIN_API_KEY) y todas las tool calls de la sesión operan en
+//	El proceso domain-mcp resuelve UN principal al boot via API key
+//	(env var DOMAIN_API_KEY) y todas las tool calls de la sesion operan en
 //	nombre de ese principal. Esto coincide con el modelo MCP stdio: un
-//	proceso por sesión de cliente.
+//	proceso por sesion de cliente.
 package mcpserver
 
 import (
@@ -83,8 +83,8 @@ type Deps struct {
 	WorkflowImport  *workflowimport.Service // issue-12.7 override de .md
 	Pool            *pgxpool.Pool           // para queries de agent_run_logs
 	Principal       *apikey.Principal       // resuelto al boot
-	// Dispatcher (issue-35.1 phase 5): único path para ejecutar
-	// flow/agent/skill desde MCP. REQUERIDO en producción; los handlers
+	// Dispatcher (issue-35.1 phase 5): unico path para ejecutar
+	// flow/agent/skill desde MCP. REQUERIDO en produccion; los handlers
 	// retornan error si Dispatcher == nil.
 	Dispatcher *dispatch.Dispatcher
 	ServerName string
@@ -92,14 +92,14 @@ type Deps struct {
 	// SharedCache REQ-67: cache LRU compartido entre todos los requests
 	// (NO se clona por request). Si nil, cache desactivado.
 	SharedCache CacheStore
-	// REQ-70 métricas. Si nil, los hooks no se setean.
+	// REQ-70 metricas. Si nil, los hooks no se setean.
 	MetricsOnToolCall  func(tool, status string, dur float64)
 	MetricsOnCacheHit  func()
 	MetricsOnCacheMiss func()
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).
-// Sobreescribe per-tool en producción según necesidad.
+// Sobreescribe per-tool en produccion segun necesidad.
 var defaultBudget = ToolBudget{
 	CallsPerMinute: 120,
 	MaxRetries:     1,
@@ -109,19 +109,19 @@ var defaultBudget = ToolBudget{
 }
 
 // Tools construye la lista de mcpgo.ServerTool del proyecto (todos prefijo
-// domain_*). Útil para tests in-process que reciben []ServerTool en
-// mcptest.NewServer. Producción usa New() que internamente reusa Tools().
+// domain_*). Util para tests in-process que reciben []ServerTool en
+// mcptest.NewServer. Produccion usa New() que internamente reusa Tools().
 // Cada handler queda wrapped con ResilientWrapper (rate limit + retry).
 func Tools(deps Deps) []mcpgo.ServerTool {
 	wrap := NewResilientWrapper(defaultBudget)
-	// REQ-70 métricas — aplica con o sin cache.
+	// REQ-70 metricas — aplica con o sin cache.
 	if deps.MetricsOnToolCall != nil || deps.MetricsOnCacheHit != nil || deps.MetricsOnCacheMiss != nil {
 		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
 	}
 
-	// REQ-67 query cache. Si Deps.SharedCache está configurado (lo
+	// REQ-67 query cache. Si Deps.SharedCache esta configurado (lo
 	// hace el wireup principal en cmd/domain), activamos lookup +
-	// invalidación. Si no, el wrap se comporta como antes.
+	// invalidacion. Si no, el wrap se comporta como antes.
 	if deps.SharedCache != nil {
 		wrap.SetCache(deps.SharedCache)
 		// Accessor del orgID del Principal vigente. Como deps se clona
@@ -134,7 +134,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			return deps.Principal.OrganizationID
 		})
 		// READs cacheables — TTL conservador para tolerar lag percibido
-		// tras una escritura (la invalidación es síncrona, no eventual).
+		// tras una escritura (la invalidacion es sincrona, no eventual).
 		readTTLs := map[string]time.Duration{
 			"domain_ticket_list":           5 * time.Second,
 			"domain_ticket_get":            5 * time.Second,
@@ -169,7 +169,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			wrap.SetInvalidating(w)
 		}
 	}
-	// Tools que escriben (mutation): tope más bajo (60/min)
+	// Tools que escriben (mutation): tope mas bajo (60/min)
 	for _, mutTool := range []string{
 		"domain_mem_save", "domain_knowledge_save",
 		"domain_agent_run",
@@ -239,9 +239,9 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 }
 
 // ServerInstructions es el protocolo que el agente recibe en el
-// initialize del MCP. Única fuente: internal/agentprotocol (el mismo
-// contenido se seedea en BD como policy 'agent-protocol' — la versión
-// viva que el agente debe preferir vía domain_policy_get).
+// initialize del MCP. Unica fuente: internal/agentprotocol (el mismo
+// contenido se seedea en BD como policy 'agent-protocol' — la version
+// viva que el agente debe preferir via domain_policy_get).
 const ServerInstructions = agentprotocol.Full
 
 // New monta el servidor MCP con los tools del prefijo `domain_*`.
@@ -260,13 +260,13 @@ func New(deps Deps) *mcpgo.MCPServer {
 
 func toolMemSave() mcp.Tool {
 	return mcp.NewTool("domain_mem_save",
-		mcp.WithDescription("Guarda una observación de memoria en el project indicado. Genera embedding automáticamente para búsqueda híbrida."),
+		mcp.WithDescription("Guarda una observacion de memoria en el project indicado. Genera embedding automaticamente para busqueda hibrida."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project donde guardar"),
 			mcp.Required(),
 		),
 		mcp.WithString("content",
-			mcp.Description("Contenido de la observación (texto libre)"),
+			mcp.Description("Contenido de la observacion (texto libre)"),
 			mcp.Required(),
 		),
 		mcp.WithString("observation_type",
@@ -284,26 +284,26 @@ func toolMemSave() mcp.Tool {
 
 func toolMemSearch() mcp.Tool {
 	return mcp.NewTool("domain_mem_search",
-		mcp.WithDescription("Busca observations relevantes a una query usando búsqueda híbrida BM25 + cosine + RRF fusion."),
+		mcp.WithDescription("Busca observations relevantes a una query usando busqueda hibrida BM25 + cosine + RRF fusion."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 100)"),
+			mcp.Description("Maximo resultados (default 20, max 100)"),
 		),
 	)
 }
 
 func toolMemContext() mcp.Tool {
 	return mcp.NewTool("domain_mem_context",
-		mcp.WithDescription("Recupera las últimas N observations de un project, ordenadas por fecha desc. Útil para contexto de sesión."),
+		mcp.WithDescription("Recupera las ultimas N observations de un project, ordenadas por fecha desc. Util para contexto de sesion."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 200)"),
+			mcp.Description("Maximo resultados (default 20, max 200)"),
 		),
 	)
 }
@@ -312,13 +312,13 @@ func toolMemContext() mcp.Tool {
 
 func toolPromptGet() mcp.Tool {
 	return mcp.NewTool("domain_prompt_get",
-		mcp.WithDescription("Obtiene la versión ACTIVA de un prompt template por slug. Útil para inyectar prompts en runs."),
+		mcp.WithDescription("Obtiene la version ACTIVA de un prompt template por slug. Util para inyectar prompts en runs."),
 		mcp.WithString("slug",
 			mcp.Description("Slug del prompt template"),
 			mcp.Required(),
 		),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del project (opcional; si vacío usa prompts globales de la org)"),
+			mcp.Description("Slug del project (opcional; si vacio usa prompts globales de la org)"),
 		),
 	)
 }
@@ -331,7 +331,7 @@ func toolPromptSearch() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -340,14 +340,14 @@ func toolContext() mcp.Tool {
 	return mcp.NewTool("domain_context_snapshot",
 		mcp.WithDescription("Devuelve snapshot del contexto: observations + prompts recientes para un project."),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del project (opcional; vacío = scope org-wide)"),
+			mcp.Description("Slug del project (opcional; vacio = scope org-wide)"),
 		),
 	)
 }
 
 func toolTimeline() mcp.Tool {
 	return mcp.NewTool("domain_timeline",
-		mcp.WithDescription("Vecindario cronológico de una observation: N entradas antes y después incluyendo observations + prompts del mismo project."),
+		mcp.WithDescription("Vecindario cronologico de una observation: N entradas antes y despues incluyendo observations + prompts del mismo project."),
 		mcp.WithString("observation_id",
 			mcp.Description("UUID de la observation ancla"),
 			mcp.Required(),
@@ -363,16 +363,16 @@ func toolTimeline() mcp.Tool {
 
 func toolGlobalSearch() mcp.Tool {
 	return mcp.NewTool("domain_search_global",
-		mcp.WithDescription("Búsqueda global cross-entity (observations + prompts) scoped por org del principal. Filtros opcionales."),
+		mcp.WithDescription("Busqueda global cross-entity (observations + prompts) scoped por org del principal. Filtros opcionales."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 200)"),
+			mcp.Description("Maximo resultados (default 20, max 200)"),
 		),
 		mcp.WithArray("entity_types",
-			mcp.Description("Filtrar a tipos específicos: observation, prompt"),
+			mcp.Description("Filtrar a tipos especificos: observation, prompt"),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
 		mcp.WithArray("tags",
@@ -395,7 +395,7 @@ func toolAgentRunLogs() mcp.Tool {
 func toolFlowList() mcp.Tool {
 	return mcp.NewTool("domain_flow_list",
 		mcp.WithDescription("Lista los flows definidos en la org."),
-		mcp.WithNumber("limit", mcp.Description("Máximo 200 (default 50)")),
+		mcp.WithNumber("limit", mcp.Description("Maximo 200 (default 50)")),
 	)
 }
 
@@ -449,7 +449,7 @@ func toolAgentList() mcp.Tool {
 	return mcp.NewTool("domain_agent_list",
 		mcp.WithDescription("Lista los agents disponibles en la org."),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50)"),
+			mcp.Description("Maximo resultados (default 50)"),
 		),
 	)
 }
@@ -473,23 +473,23 @@ func toolSkillList() mcp.Tool {
 			mcp.Description("Filtrar por tipo: prompt | code | api | mcp_tool"),
 		),
 		mcp.WithString("tag",
-			mcp.Description("Filtrar por tag específico"),
+			mcp.Description("Filtrar por tag especifico"),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50)"),
+			mcp.Description("Maximo resultados (default 50)"),
 		),
 	)
 }
 
 func toolSkillSearch() mcp.Tool {
 	return mcp.NewTool("domain_skill_search",
-		mcp.WithDescription("Busca skills por similitud semántica + BM25 sobre name+description."),
+		mcp.WithDescription("Busca skills por similitud semantica + BM25 sobre name+description."),
 		mcp.WithString("query",
 			mcp.Description("Texto descriptivo del capability buscado"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -508,13 +508,13 @@ func toolSkillGet() mcp.Tool {
 
 func toolKnowledgeSave() mcp.Tool {
 	return mcp.NewTool("domain_knowledge_save",
-		mcp.WithDescription("Guarda un documento de conocimiento. Se chunkea automáticamente y genera embeddings por chunk para RAG."),
+		mcp.WithDescription("Guarda un documento de conocimiento. Se chunkea automaticamente y genera embeddings por chunk para RAG."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project donde guardar"),
 			mcp.Required(),
 		),
 		mcp.WithString("title",
-			mcp.Description("Título del documento"),
+			mcp.Description("Titulo del documento"),
 			mcp.Required(),
 		),
 		mcp.WithString("body",
@@ -536,13 +536,13 @@ func toolKnowledgeSave() mcp.Tool {
 
 func toolKnowledgeSearch() mcp.Tool {
 	return mcp.NewTool("domain_knowledge_search",
-		mcp.WithDescription("Búsqueda híbrida (vector + BM25 + RRF) sobre chunks de knowledge documents."),
+		mcp.WithDescription("Busqueda hibrida (vector + BM25 + RRF) sobre chunks de knowledge documents."),
 		mcp.WithString("query",
-			mcp.Description("Texto de búsqueda"),
+			mcp.Description("Texto de busqueda"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -559,7 +559,7 @@ func toolKnowledgeGet() mcp.Tool {
 
 func toolMemGetObservation() mcp.Tool {
 	return mcp.NewTool("domain_mem_get_observation",
-		mcp.WithDescription("Recupera una observation específica por ID (UUID)."),
+		mcp.WithDescription("Recupera una observation especifica por ID (UUID)."),
 		mcp.WithString("id",
 			mcp.Description("UUID de la observation"),
 			mcp.Required(),
@@ -795,7 +795,7 @@ func (d *Deps) handleTimeline(ctx context.Context, req mcp.CallToolRequest) (*mc
 	idStr, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("observation_id inválido"), nil
+		return mcp.NewToolResultError("observation_id invalido"), nil
 	}
 	before := 3
 	after := 3
@@ -852,9 +852,9 @@ func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-// runAgentDispatch (issue-35.1 phase 5): la ejecución de agents desde
+// runAgentDispatch (issue-35.1 phase 5): la ejecucion de agents desde
 // MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
-// (AgentRunner.Run directo) fue eliminado: 1 sola implementación
+// (AgentRunner.Run directo) fue eliminado: 1 sola implementacion
 // compartida por cron, webhook y MCP.
 func (d *Deps) runAgentDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Agents == nil {
@@ -907,7 +907,7 @@ func (d *Deps) handleAgentRunLogs(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["run_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("run_id inválido"), nil
+		return mcp.NewToolResultError("run_id invalido"), nil
 	}
 	// Existence guard
 	var exists bool
@@ -977,7 +977,7 @@ func (d *Deps) handleFlowList(ctx context.Context, req mcp.CallToolRequest) (*mc
 	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
 }
 
-// runFlowDispatch (issue-35.1 phase 5): la ejecución de flows desde
+// runFlowDispatch (issue-35.1 phase 5): la ejecucion de flows desde
 // MCP se delega EXCLUSIVAMENTE al dispatcher unificado.
 func (d *Deps) runFlowDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
@@ -990,7 +990,7 @@ func (d *Deps) runFlowDispatch(ctx context.Context, req mcp.CallToolRequest) (*m
 	idStr, _ := args["flow_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("flow_id inválido"), nil
+		return mcp.NewToolResultError("flow_id invalido"), nil
 	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	userID, _ := uuid.Parse(d.Principal.UserID)
@@ -1100,7 +1100,7 @@ func (d *Deps) handleAgentGet(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if idStr, _ := args["id"].(string); idStr != "" {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return mcp.NewToolResultError("id inválido"), nil
+			return mcp.NewToolResultError("id invalido"), nil
 		}
 		ag, err := d.Agents.GetByID(ctx, id)
 		if err != nil {
@@ -1172,7 +1172,7 @@ func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if idStr, _ := args["id"].(string); idStr != "" {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return mcp.NewToolResultError("id inválido"), nil
+			return mcp.NewToolResultError("id invalido"), nil
 		}
 		sk, err := d.Skills.GetByID(ctx, id)
 		if err != nil {
@@ -1264,7 +1264,7 @@ func (d *Deps) handleKnowledgeGet(ctx context.Context, req mcp.CallToolRequest) 
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID)"), nil
+		return mcp.NewToolResultError("id invalido (UUID)"), nil
 	}
 	doc, chunks, err := d.Knowledge.Get(ctx, id)
 	if err != nil {

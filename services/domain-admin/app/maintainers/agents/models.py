@@ -1,23 +1,23 @@
 """Modelos del mantenedor de Agentes (migrado a core).
 
 Tablas existentes en domain-mcp (managed=False; Django NO las migra, solo
-lee/escribe vía ORM). Las filas (incluido el PK uuid) las genera domain-mcp.
+lee/escribe via ORM). Las filas (incluido el PK uuid) las genera domain-mcp.
 
 - agents:         entidad principal. Tiene deleted_at + status -> hereda de
                   core.SoftDeleteModel (reusa id/created_at/updated_at/
                   deleted_at/status; redeclara status solo para choices).
 - agent_versions: historial (snapshot JSONB). PK BIGSERIAL (no uuid), por eso
                   NO hereda de core.BaseModel (que impone PK uuid). READ-ONLY.
-                  Excluida del guard via _SKIP_TABLES no aplica: la tabla SÍ
-                  está en real_schema; declaramos solo columnas existentes.
-- agent_templates: catálogo reutilizable. Tiene id uuid + created_at +
+                  Excluida del guard via _SKIP_TABLES no aplica: la tabla SI
+                  esta en real_schema; declaramos solo columnas existentes.
+- agent_templates: catalogo reutilizable. Tiene id uuid + created_at +
                   updated_at pero NO deleted_at -> hereda de core.BaseModel
                   (reusa id/created_at/updated_at; agrega status propio).
                   READ-ONLY.
 
 Cada columna declarada debe existir EXACTO en la tabla real (guard:
 core/tests/test_schema_drift.py + real_schema.json). organization_id fue
-DROPEADA por la migración 000142; el slug es único globalmente.
+DROPEADA por la migracion 000142; el slug es unico globalmente.
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ class Agent(SoftDeleteModel):
 
 
 class AgentVersion(models.Model):
-    """Versión histórica de un Agent (snapshot JSONB). READ-ONLY en el admin.
+    """Version historica de un Agent (snapshot JSONB). READ-ONLY en el admin.
 
     PK BIGSERIAL (no uuid) -> no puede heredar de core.BaseModel (PK uuid). Se
     declaran solo las columnas que el admin consume; status/updated_at existen
@@ -113,14 +113,14 @@ class AgentTemplate(BaseModel):
     """Template reutilizable de agente (personality + handoff). READ-ONLY.
 
     id / created_at / updated_at vienen de core.BaseModel. NO tiene deleted_at
-    (por eso BaseModel y no SoftDeleteModel); `status` SÍ existe en la tabla y
-    se declara acá (BaseModel no lo aporta).
+    (por eso BaseModel y no SoftDeleteModel); `status` SI existe en la tabla y
+    se declara aqui (BaseModel no lo aporta).
     """
 
     HANDOFF_POLICY_CHOICES = [
         ("allow", "Permitir"),
         ("forbid", "Prohibir"),
-        ("require_supervisor_approval", "Requiere aprobación de supervisor"),
+        ("require_supervisor_approval", "Requiere aprobacion de supervisor"),
     ]
     ROLE_CHOICES = [
         ("orchestrator", "Orquestador"),

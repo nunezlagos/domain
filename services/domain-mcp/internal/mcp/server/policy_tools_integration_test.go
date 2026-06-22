@@ -19,7 +19,7 @@ func TestMCP_PolicyGetAndList(t *testing.T) {
 
 	_, err := f.policies.Create(ctx, policysvc.CreateInput{
 		Slug: "go", Name: "Go Conventions", Kind: policysvc.KindConvention,
-		BodyMD: "# Go\n\n- Usá pgx v5 para Postgres\n- Errores con %w siempre",
+		BodyMD: "# Go\n\n- Usa pgx v5 para Postgres\n- Errores con %w siempre",
 	})
 	require.NoError(t, err)
 	_, err = f.policies.Create(ctx, policysvc.CreateInput{

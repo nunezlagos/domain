@@ -1,6 +1,6 @@
 """URL routing del mantenedor de API Keys (migrado a core).
 
-Mounted at /api-keys/ en config/urls.py. Las 7 rutas estándar (list, signal,
+Mounted at /api-keys/ en config/urls.py. Las 7 rutas estandar (list, signal,
 create, detail, edit, delete, toggle) las arma core.urls.maintainer_urlpatterns
 a partir de la instancia `views`. No hay rutas propias adicionales.
 

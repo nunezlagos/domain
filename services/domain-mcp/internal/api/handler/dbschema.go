@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SchemaInfo: descripción del schema completo de la DB.
-// HU-41.4: alimenta la página /admin/database (DB explorer) del admin.
+// SchemaInfo: descripcion del schema completo de la DB.
+// HU-41.4: alimenta la pagina /admin/database (DB explorer) del admin.
 type SchemaInfo struct {
 	Tables     []TableInfo `json:"tables"`
 	TotalCount int         `json:"total_count"`
@@ -27,10 +27,10 @@ type TableInfo struct {
 	Indexes      []IndexInfo  `json:"indexes"`
 	ForeignKeys  []FKInfo     `json:"foreign_keys"`
 	Category     string       `json:"category"`
-	// REQ-42.10: agrupamiento por FUNCIONALIDAD leído de table_catalog (HU 42.1).
-	GroupKey   string `json:"group_key"`   // grupo funcional, p.ej. "auth", "sdd" ("" si no está en el catálogo)
+	// REQ-42.10: agrupamiento por FUNCIONALIDAD leido de table_catalog (HU 42.1).
+	GroupKey   string `json:"group_key"`   // grupo funcional, p.ej. "auth", "sdd" ("" si no esta en el catalogo)
 	GroupLabel string `json:"group_label"` // etiqueta legible del grupo
-	SortOrder  int    `json:"sort_order"`  // orden de presentación (catálogo)
+	SortOrder  int    `json:"sort_order"`  // orden de presentacion (catalogo)
 }
 
 type ColumnInfo struct {
@@ -56,7 +56,7 @@ type FKInfo struct {
 }
 
 // GET /api/v1/admin/db-schema — HU-41.4
-// Retorna el schema completo: tablas, columnas, FKs, índices, row counts.
+// Retorna el schema completo: tablas, columnas, FKs, indices, row counts.
 // Usa el pool AUTH (app_admin) para bypassear RLS y ver todas las tablas.
 func (a *API) getDBSchema(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
@@ -81,8 +81,8 @@ func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) 
 
 	// 1. Tablas operativas (excluyendo schema_migrations y pg_*).
 	//    REQ-42.10: LEFT JOIN table_catalog para traer grupo/label/orden
-	//    funcional (HU 42.1). Las tablas sin entrada en el catálogo quedan
-	//    con group_key vacío (el front las agrupa por prefijo como fallback).
+	//    funcional (HU 42.1). Las tablas sin entrada en el catalogo quedan
+	//    con group_key vacio (el front las agrupa por prefijo como fallback).
 	rows, err := pool.Query(ctx, `
 		SELECT t.table_name,
 		       COALESCE(c.grupo, ''),
@@ -112,7 +112,7 @@ func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) 
 	}
 	info.TotalCount = len(info.Tables)
 
-	// 2. Para cada tabla: columnas, FKs, índices, row count
+	// 2. Para cada tabla: columnas, FKs, indices, row count
 	for i := range info.Tables {
 		tbl := &info.Tables[i]
 		if err := loadTableInfo(ctx, pool, tbl); err != nil {
@@ -200,7 +200,7 @@ func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) erro
 		}
 	}
 
-	// Índices
+	// Indices
 	idxRows, err := pool.Query(ctx, `
 		SELECT
 			i.indexname,

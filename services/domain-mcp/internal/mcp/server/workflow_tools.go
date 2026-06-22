@@ -26,9 +26,9 @@ import (
 
 func toolWorkflowImport() mcp.Tool {
 	return mcp.NewTool("domain_workflow_import",
-		mcp.WithDescription("Escanea el proyecto buscando archivos .md de instrucciones IA (CLAUDE.md, .claude/**, .opencode/**, .cursor/**, .windsurfrules, AGENTS.md, etc.) y los archiva en BD reemplazándolos por stubs que apuntan al MCP de Domain. Idempotente: skip si content_hash no cambió."),
+		mcp.WithDescription("Escanea el proyecto buscando archivos .md de instrucciones IA (CLAUDE.md, .claude/**, .opencode/**, .cursor/**, .windsurfrules, AGENTS.md, etc.) y los archiva en BD reemplazandolos por stubs que apuntan al MCP de Domain. Idempotente: skip si content_hash no cambio."),
 		mcp.WithString("root",
-			mcp.Description("Directorio raíz del proyecto (default '.')"),
+			mcp.Description("Directorio raiz del proyecto (default '.')"),
 		),
 		mcp.WithBoolean("write_stub",
 			mcp.Description("Si true (default), reemplaza el .md original con un stub. Si false, solo backup en BD."),
@@ -53,7 +53,7 @@ func toolWorkflowRestore() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithString("root",
-			mcp.Description("Directorio raíz del proyecto (default '.')"),
+			mcp.Description("Directorio raiz del proyecto (default '.')"),
 		),
 	)
 }

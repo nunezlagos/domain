@@ -9,7 +9,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// REQ-67: serialización del resultado para guardar en cache LRU.
+// REQ-67: serializacion del resultado para guardar en cache LRU.
 //
 // El cache guarda bytes (lo que `LRU` espera). El handler MCP devuelve
 // *mcp.CallToolResult — JSON marshalable. encode → JSON → bytes;

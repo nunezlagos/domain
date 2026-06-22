@@ -1,17 +1,17 @@
 """Views del mantenedor de Prompts (migradas a core).
 
-Las 7 vistas estándar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Acá solo:
+Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
+arma core.views.MaintainerViews. Aqui solo:
 
   1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks específicos de prompts:
+  2. Se sobreescriben los hooks especificos de prompts:
        - do_create / do_update: el service espera kwargs concretos (slug, body,
          version, description, is_active, tags; project_id/created_by solo en
-         alta). En edición project_id NO se manda (no se edita).
+         alta). En edicion project_id NO se manda (no se edita).
        - form_context / detail_context: exponen `prompt_obj` (no `object`), que
          los templates de prompts ya consumen.
 
-El guard de auth (require_auth) y la detección AJAX (is_ajax) vienen de
+El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
 core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ from .models import Prompt
 class PromptViews(MaintainerViews):
     """MaintainerViews especializado para prompts (payload + context keys)."""
 
-    # --- payload del service: project_id/created_by solo en alta; en edición
+    # --- payload del service: project_id/created_by solo en alta; en edicion
     #     el service no acepta project_id (no se edita una vez creado).
     def do_create(self, form):
         cd = form.cleaned_data

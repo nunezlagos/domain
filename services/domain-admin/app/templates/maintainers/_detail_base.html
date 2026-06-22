@@ -1,8 +1,8 @@
 {% comment %}
 ============================================================
-Envoltorio BASE de detalle para el modal dinámico.
+Envoltorio BASE de detalle para el modal dinamico.
 Provee header + body + footer del modal y deja que cada app
-defina el contenido y las acciones específicas.
+defina el contenido y las acciones especificas.
 
 Se renderiza DENTRO de #modal-dynamic-content (lo inyecta
 modals.js via fetch al endpoint ?partial=1). NO extiende
@@ -17,7 +17,7 @@ base.html: es un fragmento. Cada app lo EXTIENDE:
   {% endblock %}
 
 Bloques:
-  detail_title    título del modal (REQUERIDO)
+  detail_title    titulo del modal (REQUERIDO)
   detail_body     contenido del cuerpo (REQUERIDO)
   detail_actions  botones del footer (default: solo Cerrar)
 ============================================================

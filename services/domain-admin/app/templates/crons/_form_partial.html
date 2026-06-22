@@ -1,7 +1,7 @@
 {% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de cron para el modal dinámico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el título,
+Form de cron para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo,
 los campos y el label del submit.
 {% endcomment %}
 
@@ -24,7 +24,7 @@ los campos y el label del submit.
     </div>
 
     <div class="form-group" style="flex: 1;">
-      <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresión cron *</label>
+      <label class="form-label" for="{{ form.cron_expression.id_for_label }}">Expresion cron *</label>
       {{ form.cron_expression }}
       {% if form.cron_expression.help_text %}<div class="form-help">{{ form.cron_expression.help_text }}</div>{% endif %}
       {% if form.cron_expression.errors %}<div class="form-help text-danger">{{ form.cron_expression.errors|join:", " }}</div>{% endif %}
@@ -62,7 +62,7 @@ los campos y el label del submit.
   </div>
 
   <div class="form-group">
-    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
     {{ form.description }}
     {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
   </div>

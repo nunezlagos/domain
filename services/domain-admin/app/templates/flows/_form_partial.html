@@ -1,7 +1,7 @@
 {% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de flow para el modal dinámico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el título,
+Form de flow para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo,
 los campos y el label del submit.
 {% endcomment %}
 
@@ -23,7 +23,7 @@ los campos y el label del submit.
   </div>
 
   <div class="form-group">
-    <label class="form-label" for="{{ form.description.id_for_label }}">Descripción</label>
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
     {{ form.description }}
     {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
   </div>
@@ -37,7 +37,7 @@ los campos y el label del submit.
 
   <div class="d-flex gap-3">
     <div class="form-group" style="flex: 1;">
-      <label class="form-label" for="{{ form.seed_version.id_for_label }}">Versión de seed</label>
+      <label class="form-label" for="{{ form.seed_version.id_for_label }}">Version de seed</label>
       {{ form.seed_version }}
       {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
     </div>

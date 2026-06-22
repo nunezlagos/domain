@@ -7,7 +7,7 @@
 //   - super_admin → ve cualquier org (con ?org_id=)
 //
 // Las queries respetan RLS porque se ejecutan dentro de la tx del
-// middleware de auth (issue-25.14) si está disponible; sino en el Pool.
+// middleware de auth (issue-25.14) si esta disponible; sino en el Pool.
 
 package handler
 
@@ -27,7 +27,7 @@ import (
 	"nunezlagos/domain/internal/store/txctx"
 )
 
-// TopUserEntry: un user con sus métricas del mes.
+// TopUserEntry: un user con sus metricas del mes.
 type TopUserEntry struct {
 	UserID    uuid.UUID `json:"user_id"`
 	Name      string    `json:"name"`
@@ -71,7 +71,7 @@ type OrgOverviewResponse struct {
 	SystemHealth      *SystemHealth         `json:"system_health,omitempty"`
 }
 
-// queryRunner es la abstracción mínima de pgx.Tx + pgxpool.Pool para
+// queryRunner es la abstraccion minima de pgx.Tx + pgxpool.Pool para
 // que las queries corran con RLS cuando hay tx, o sin RLS en el Pool.
 type queryRunner interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -90,7 +90,7 @@ func runnerFromCtx(ctx context.Context, pool interface {
 	return pool
 }
 
-// connRunner: wrapper pgx.Tx que libera la conexión del pool al finalizar.
+// connRunner: wrapper pgx.Tx que libera la conexion del pool al finalizar.
 // Necesario porque txctx.TxFromContext comparte la misma tx entre goroutines
 // (no goroutine-safe) — abrimos tx propia por goroutine.
 type connRunner struct {
@@ -151,19 +151,19 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Detectar si hay tx en ctx (middleware API key la inyectó post-auth).
+	// Detectar si hay tx en ctx (middleware API key la inyecto post-auth).
 	// pgx.Tx NO es goroutine-safe: si usamos esa misma tx en errgroup → conn busy.
-	// Solución: cada goroutine abre su PROPIA tx con WithOrgUserTx, scopeada a la org.
+	// Solucion: cada goroutine abre su PROPIA tx con WithOrgUserTx, scopeada a la org.
 	// Si NO hay tx en ctx, Pool directo (RLS como defense-in-depth).
 	hasTx := txctx.TxFromContext(ctx) != nil
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(4) // 3 queries + 1 DB health, paralelas
 
-	// Helper local: cada goroutine toma su propia conexión del pool
+	// Helper local: cada goroutine toma su propia conexion del pool
 	// y opcionalmente abre tx con SET LOCAL app.current_org_id.
 	openRunner := func() (queryRunner, error) {
 		if hasTx {
-			// Tomar una conexión del pool y abrir tx con SET LOCAL.
+			// Tomar una conexion del pool y abrir tx con SET LOCAL.
 			conn, err := a.Pool.Acquire(gctx)
 			if err != nil {
 				return nil, fmt.Errorf("acquire conn: %w", err)
@@ -202,8 +202,8 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
-		// REQ-42.2: cost_logs se dropeó; tokens/cost del mes quedan en 0
-		// (no había writer de producción para esa tabla).
+		// REQ-42.2: cost_logs se dropeo; tokens/cost del mes quedan en 0
+		// (no habia writer de produccion para esa tabla).
 		row := runner.QueryRow(gctx, `
 			SELECT
 			  (SELECT count(*) FROM users WHERE deleted_at IS NULL),
@@ -226,7 +226,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
-		// REQ-42.2: cost_logs se dropeó; el ranking por cost/tokens ya no
+		// REQ-42.2: cost_logs se dropeo; el ranking por cost/tokens ya no
 		// aplica. Top users se ordena por prompts capturados del mes;
 		// tokens_in/out y cost_usd quedan en 0.
 		rows, err := runner.Query(gctx, `
@@ -258,7 +258,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		return rows.Err()
 	})
 
-	// Recent activity (últimos 10 del audit_log).
+	// Recent activity (ultimos 10 del audit_log).
 	g.Go(func() error {
 		runner, err := openRunner()
 		if err != nil {

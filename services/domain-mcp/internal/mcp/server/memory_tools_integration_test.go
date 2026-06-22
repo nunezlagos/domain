@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// callToolRaw permite asertar también resultados de error del tool.
+// callToolRaw permite asertar tambien resultados de error del tool.
 func callToolRaw(t *testing.T, srv *mcptest.Server, name string, args map[string]any) (string, bool) {
 	t.Helper()
 	req := mcp.CallToolRequest{}
@@ -70,14 +70,14 @@ func TestMCP_MemSavePrompt_Versions(t *testing.T) {
 		Active  bool `json:"active"`
 	}
 	out1 := callTool(t, f.srv, "domain_mem_save_prompt", map[string]any{
-		"slug": "review-pr", "body": "Revisá el PR {{pr_url}} con foco en seguridad",
+		"slug": "review-pr", "body": "Revisa el PR {{pr_url}} con foco en seguridad",
 	})
 	var p1 promptRes
 	require.NoError(t, json.Unmarshal([]byte(out1), &p1))
 	require.Equal(t, 1, p1.Version)
 
 	out2 := callTool(t, f.srv, "domain_mem_save_prompt", map[string]any{
-		"slug": "review-pr", "body": "Revisá el PR {{pr_url}} con foco en seguridad y performance",
+		"slug": "review-pr", "body": "Revisa el PR {{pr_url}} con foco en seguridad y performance",
 	})
 	var p2 promptRes
 	require.NoError(t, json.Unmarshal([]byte(out2), &p2))
@@ -121,7 +121,7 @@ func TestMCP_MemSuggestTopicKey(t *testing.T) {
 	defer f.cleanup()
 
 	out := callTool(t, f.srv, "domain_mem_suggest_topic_key", map[string]any{
-		"content": "Migración de postgres con pgvector: la migración de postgres requiere extension pgvector",
+		"content": "Migracion de postgres con pgvector: la migracion de postgres requiere extension pgvector",
 	})
 	var res struct {
 		TopicKey string `json:"topic_key"`

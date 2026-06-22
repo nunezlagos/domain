@@ -1,17 +1,17 @@
 """Modelo del mantenedor de Prompts (migrado a core).
 
-Tabla existente en domain-mcp (migración 000008_create_prompts), managed=False:
-Django solo lee/escribe vía ORM; las filas (incluido el PK uuid) las genera
-domain-mcp en producción.
+Tabla existente en domain-mcp (migracion 000008_create_prompts), managed=False:
+Django solo lee/escribe via ORM; las filas (incluido el PK uuid) las genera
+domain-mcp en produccion.
 
 Prompt hereda de core.models.SoftDeleteModel porque la tabla tiene deleted_at +
 status: id / created_at / updated_at / deleted_at / status vienen del abstracto
-y NO se repiten acá. Solo se declaran las columnas PROPIAS. Las columnas
+y NO se repiten aqui. Solo se declaran las columnas PROPIAS. Las columnas
 declaradas deben matchear EXACTO la tabla real `prompts` (guard:
 core/tests/test_schema_drift.py).
 
 NOTA: body_tsv es una columna GENERATED ALWAYS STORED; no se mapea (Django no la
-escribe y Postgres la calcula sola). organization_id ya NO existe (se dropeó con
+escribe y Postgres la calcula sola). organization_id ya NO existe (se dropeo con
 la tabla organizations en Fase C).
 """
 from __future__ import annotations
@@ -26,8 +26,8 @@ class Prompt(SoftDeleteModel):
     """Prompt versionado.
 
     id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
-    La unicidad real es (project_id, slug, version). Soft-delete vía deleted_at;
-    toggle de habilitación vía is_active (bool).
+    La unicidad real es (project_id, slug, version). Soft-delete via deleted_at;
+    toggle de habilitacion via is_active (bool).
     """
 
     project_id = models.UUIDField(null=True, blank=True)

@@ -1,9 +1,9 @@
 """Forms del mantenedor de Agentes (migrados a core).
 
-AgentForm reusa core.forms.SlugNormalizationMixin para la normalización
+AgentForm reusa core.forms.SlugNormalizationMixin para la normalizacion
 strip+lower+slugify + unicidad del slug (excluyendo la propia instancia en
-edición). Lo propio del dominio —campos del agente y skills_slugs como CSV—
-queda acá. Usa forms.Form (no ModelForm) porque el modelo es managed=False.
+edicion). Lo propio del dominio —campos del agente y skills_slugs como CSV—
+queda aqui. Usa forms.Form (no ModelForm) porque el modelo es managed=False.
 """
 from django import forms
 
@@ -15,7 +15,7 @@ from .models import Agent
 class AgentForm(SlugNormalizationMixin, forms.Form):
     """Form para crear/editar agentes.
 
-    El slug es único globalmente (ya no hay organización: organization_id fue
+    El slug es unico globalmente (ya no hay organizacion: organization_id fue
     dropeada). `skills_slugs` (text[] en la BD) se edita como CSV y se
     normaliza a lista en clean_skills_slugs().
     """
@@ -33,7 +33,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único (minúsculas, guiones).",
+        help_text="Identificador unico (minusculas, guiones).",
     )
     provider = forms.CharField(
         label="Proveedor",
@@ -48,7 +48,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
         help_text="Ej: claude-haiku-4-5.",
     )
     description = forms.CharField(
-        label="Descripción",
+        label="Descripcion",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
@@ -65,7 +65,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
         help_text="Slugs de skills separados por coma.",
     )
     max_iterations = forms.IntegerField(
-        label="Máx. iteraciones",
+        label="Max. iteraciones",
         min_value=1,
         initial=20,
         widget=forms.NumberInput(attrs={"class": "form-control"}),
@@ -75,7 +75,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
         required=False,
         min_value=0,
         widget=forms.NumberInput(attrs={"class": "form-control"}),
-        help_text="Opcional. Vacío = sin límite.",
+        help_text="Opcional. Vacio = sin limite.",
     )
     temperature = forms.DecimalField(
         label="Temperatura",
@@ -90,9 +90,9 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
 
     def __init__(self, *args, instance: Agent | None = None, **kwargs):
         # InstanceAwareMixin (via SlugNormalizationMixin) captura instance para
-        # que clean_slug se excluya a sí mismo en edición.
+        # que clean_slug se excluya a si mismo en edicion.
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edición (unbound).
+        # Valores iniciales solo al renderizar el form de edicion (unbound).
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
@@ -113,7 +113,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
 
 
 class AgentSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",

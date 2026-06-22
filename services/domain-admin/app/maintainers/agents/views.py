@@ -1,17 +1,17 @@
 """Views del mantenedor de Agentes (migradas a core).
 
-Las vistas estándar (list, signal, detail, create, edit, delete) las arma
-core.views.MaintainerViews. Acá solo:
+Las vistas estandar (list, signal, detail, create, edit, delete) las arma
+core.views.MaintainerViews. Aqui solo:
 
   1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks específicos de agents:
+  2. Se sobreescriben los hooks especificos de agents:
        - do_list: usa services.list_agents (EXCLUYE soft-deleted), a
-         diferencia del list genérico que listaría todo.
+         diferencia del list generico que listaria todo.
        - form_context / detail_context: exponen `agent_obj` (+ versiones y
          templates READ-ONLY en el detalle) que los templates ya consumen.
 
 NO se cablea toggle: agents no alterna estado (su delete es soft-delete puro).
-El guard de auth y la detección AJAX vienen de core.auth (antes _require_auth/
+El guard de auth y la deteccion AJAX vienen de core.auth (antes _require_auth/
 _is_ajax duplicados).
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ from .models import Agent
 class AgentViews(MaintainerViews):
     """MaintainerViews especializado para agents (list filtrado + contextos)."""
 
-    # --- listado: usa el service que EXCLUYE soft-deleted (el list genérico
+    # --- listado: usa el service que EXCLUYE soft-deleted (el list generico
     #     del core no filtra deleted_at). list_key="agents" ya viene seteado.
     def do_list(self, search: str, page: int) -> dict:
         return services.list_agents(search=search, page=page, per_page=self.per_page)

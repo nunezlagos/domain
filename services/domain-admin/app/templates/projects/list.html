@@ -1,17 +1,17 @@
 {% extends "maintainers/list_base.html" %}
 {% comment %}
 Listado de proyectos. Extiende maintainers/list_base.html: este define la
-estructura común (header + search debounced + contenedor [data-maintainer-table]
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
 con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% endcomment %}
 
 {% block page_title %}Proyectos{% endblock %}
 {% block header_title %}Proyectos{% endblock %}
-{% block page_subtitle %}Gestión de los proyectos de la organización{% endblock %}
+{% block page_subtitle %}Gestion de los proyectos de la organizacion{% endblock %}
 {% block create_label %}+ Nuevo proyecto{% endblock %}
-{% block search_placeholder %}Nombre, slug, descripción o repo...{% endblock %}
+{% block search_placeholder %}Nombre, slug, descripcion o repo...{% endblock %}
 
-{% comment %} Acción primaria resaltada (btn-primary), igual criterio que usuarios. {% endcomment %}
+{% comment %} Accion primaria resaltada (btn-primary), igual criterio que usuarios. {% endcomment %}
 {% block header_actions %}
   <button class="btn btn-primary" data-action="create">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

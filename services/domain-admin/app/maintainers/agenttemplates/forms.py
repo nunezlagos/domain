@@ -1,9 +1,9 @@
 """Forms del mantenedor de Plantillas de Agentes.
 
 AgentTemplateForm usa core.forms.SlugNormalizationMixin: la unicidad de slug es
-GLOBAL (la tabla agent_templates no tiene scope por proyecto), así que el mixin
+GLOBAL (la tabla agent_templates no tiene scope por proyecto), asi que el mixin
 encaja 1:1 (normaliza strip+lower+slugify y valida unicidad excluyendo el propio
-registro en edición). El resto —choices, parseo de capabilities— vive acá.
+registro en edicion). El resto —choices, parseo de capabilities— vive aqui.
 
 Usa forms.Form (no ModelForm) porque el modelo es managed=False (proxy).
 """
@@ -25,7 +25,7 @@ class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
         label="Slug",
         max_length=80,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único global (minúsculas, guiones).",
+        help_text="Identificador unico global (minusculas, guiones).",
     )
     name = forms.CharField(
         label="Nombre",
@@ -72,7 +72,7 @@ class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
         widget=forms.NumberInput(attrs={"class": "form-control"}),
     )
     handoff_policy = forms.ChoiceField(
-        label="Política de handoff",
+        label="Politica de handoff",
         choices=AgentTemplate.HANDOFF_POLICY_CHOICES,
         initial="allow",
         widget=forms.Select(attrs={"class": "form-control form-select"}),
@@ -106,7 +106,7 @@ class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
 
 
 class AgentTemplateSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",

@@ -1,8 +1,8 @@
 """Tests de CronForm (validaciones del mantenedor de Crons).
 
-Verifican reglas reales: campos requeridos, normalización de slug, parseo de
-inputs JSON, unicidad de slug y exclusión del propio registro en edición (esta
-última delegada a core.forms.InstanceAwareMixin).
+Verifican reglas reales: campos requeridos, normalizacion de slug, parseo de
+inputs JSON, unicidad de slug y exclusion del propio registro en edicion (esta
+ultima delegada a core.forms.InstanceAwareMixin).
 """
 from __future__ import annotations
 

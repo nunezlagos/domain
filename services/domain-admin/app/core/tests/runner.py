@@ -1,13 +1,13 @@
 """Test runner que flipea modelos managed=False -> True solo durante tests.
 
-CANÓNICO: este es el runner oficial del proyecto. (El de users.tests.runner
-queda por compatibilidad, pero apuntá TEST_RUNNER acá:
+CANONICO: este es el runner oficial del proyecto. (El de users.tests.runner
+queda por compatibilidad, pero apunta TEST_RUNNER aqui:
 "core.tests.runner.ManagedModelTestRunner".)
 
 En prod las tablas reales las administra domain-mcp, por eso los modelos son
 managed=False y Django no las migra. En test necesitamos que el runner cree el
-schema en la DB efímera, así que las marcamos managed=True justo antes de crear
-la DB de test (cuando el app registry ya está cargado) y las restauramos al
+schema en la DB efimera, asi que las marcamos managed=True justo antes de crear
+la DB de test (cuando el app registry ya esta cargado) y las restauramos al
 terminar.
 """
 from django.test.runner import DiscoverRunner

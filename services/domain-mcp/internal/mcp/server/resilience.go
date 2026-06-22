@@ -20,7 +20,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 )
 
-// ToolBudget configura límite por tool (defaults razonables si zero).
+// ToolBudget configura limite por tool (defaults razonables si zero).
 type ToolBudget struct {
 	CallsPerMinute int           // 0 = unlimited
 	MaxRetries     int           // default 0 (sin retry)
@@ -32,7 +32,7 @@ type ToolBudget struct {
 // rateState tracking interno per-tool.
 type rateState struct {
 	mu     sync.Mutex
-	window []time.Time // timestamps de las últimas N calls
+	window []time.Time // timestamps de las ultimas N calls
 }
 
 func (s *rateState) allow(maxPerMin int) bool {
@@ -56,7 +56,7 @@ func (s *rateState) allow(maxPerMin int) bool {
 }
 
 // cbState circuit breaker per-tool: tras CBThreshold fallos consecutivos
-// se abre por CBCooldown. Pasado el cooldown entra en half-open implícito:
+// se abre por CBCooldown. Pasado el cooldown entra en half-open implicito:
 // la siguiente call pasa; si falla re-abre de inmediato, si funciona resetea.
 type cbState struct {
 	mu          sync.Mutex
@@ -87,7 +87,7 @@ func (s *cbState) record(failure bool, threshold int, cooldown time.Duration, no
 
 // ResilientWrapper agrega budget + retry + circuit breaker a un mcpgo.ToolHandlerFunc.
 //
-// REQ-67 también encapsula un query cache opcional (cacheLRU). Tools
+// REQ-67 tambien encapsula un query cache opcional (cacheLRU). Tools
 // READ marcados via SetCacheable(name, ttl) cachean su resultado por
 // (org_id, tool, args_hash). Tools WRITE marcados via SetInvalidating
 // (name) limpian el cache del org tras handler exitoso.
@@ -105,7 +105,7 @@ type ResilientWrapper struct {
 	invalidates map[string]bool          // tool -> true si invalida en escritura
 	orgIDFn     func() string            // accessor del orgID del principal vigente
 
-	// REQ-70 métricas. Hooks no-op si nil — el wrap sigue funcionando.
+	// REQ-70 metricas. Hooks no-op si nil — el wrap sigue funcionando.
 	metricsOnCall  func(tool, status string, durationSeconds float64)
 	metricsOnCacheHit  func()
 	metricsOnCacheMiss func()
@@ -113,7 +113,7 @@ type ResilientWrapper struct {
 
 // CacheStore abstrae el LRU (interface para poder mockear en tests).
 // Exportado para que el wireup principal (cmd/domain) pueda inyectar
-// una implementación (cache.LRU del package internal/cache).
+// una implementacion (cache.LRU del package internal/cache).
 type CacheStore interface {
 	Get(key string) ([]byte, bool)
 	Set(key string, value []byte, ttl time.Duration)
@@ -140,7 +140,7 @@ func (r *ResilientWrapper) SetCache(store CacheStore) {
 	r.cacheLRU = store
 }
 
-// SetCacheable marca un tool como READ-cacheable con TTL específico.
+// SetCacheable marca un tool como READ-cacheable con TTL especifico.
 func (r *ResilientWrapper) SetCacheable(toolName string, ttl time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -155,7 +155,7 @@ func (r *ResilientWrapper) SetInvalidating(toolName string) {
 	r.invalidates[toolName] = true
 }
 
-// SetMetricsHooks (REQ-70) inyecta callbacks para emitir métricas.
+// SetMetricsHooks (REQ-70) inyecta callbacks para emitir metricas.
 // El wrapper no conoce de Prometheus; quien crea el wrapper (server.Tools)
 // pasa los hooks que tocan los Counter/Histogram del Registry.
 func (r *ResilientWrapper) SetMetricsHooks(
@@ -172,7 +172,7 @@ func (r *ResilientWrapper) SetMetricsHooks(
 
 // SetOrgIDAccessor inyecta un closure que devuelve el orgID del
 // principal vigente. Necesario porque el wrap no tiene acceso directo
-// a Deps; quien crea el wrapper (server.Tools) sí.
+// a Deps; quien crea el wrapper (server.Tools) si.
 func (r *ResilientWrapper) SetOrgIDAccessor(fn func() string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -208,7 +208,7 @@ func (r *ResilientWrapper) invalidateOrg(orgID string) {
 	store.FlushPrefix(orgID + ":")
 }
 
-// SetBudget configura budget específico para un tool.
+// SetBudget configura budget especifico para un tool.
 func (r *ResilientWrapper) SetBudget(toolName string, b ToolBudget) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -246,7 +246,7 @@ func (r *ResilientWrapper) breaker(toolName string) *cbState {
 	return s
 }
 
-// Wrap envuelve un handler con rate limiting + retry + cache + métricas.
+// Wrap envuelve un handler con rate limiting + retry + cache + metricas.
 func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := r.now()
@@ -272,7 +272,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-		// REQ-67 cache lookup (solo si el tool está marcado cacheable).
+		// REQ-67 cache lookup (solo si el tool esta marcado cacheable).
 		r.mu.Lock()
 		orgIDFn := r.orgIDFn
 		r.mu.Unlock()
@@ -316,7 +316,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			cb.record(failure, b.CBThreshold, cooldown, r.now())
 		}
 
-		// REQ-67 cache write / invalidation tras éxito del handler.
+		// REQ-67 cache write / invalidation tras exito del handler.
 		success := err == nil && (result == nil || !result.IsError)
 		if success {
 			if cacheable && orgID != "" && cacheKey != "" {
@@ -328,7 +328,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 				r.invalidateOrg(orgID)
 			}
 		}
-		// REQ-70 emit métrica del call (excepto cache_hits que ya
+		// REQ-70 emit metrica del call (excepto cache_hits que ya
 		// se emitieron arriba con return).
 		r.mu.Lock()
 		oc := r.metricsOnCall

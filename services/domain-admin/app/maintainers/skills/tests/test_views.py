@@ -1,7 +1,7 @@
 """Tests de las views (HTTP) del mantenedor de Skills.
 
 Usan el test client real contra URLs reales (namespace 'skills', intacto tras la
-migración a maintainers.skills). Verifican status codes, efectos en DB y forma
+migracion a maintainers.skills). Verifican status codes, efectos en DB y forma
 de la respuesta (HTML vs JSON vs partial). El helper authenticate() viene de
 core.tests.base.MaintainerTestCase.
 """
@@ -21,7 +21,7 @@ from .factories import make_skill, make_skill_version
 
 
 class AuthGuardTests(TestCase):
-    """Sin sesión autenticada → redirect a /login/ (no toca DB)."""
+    """Sin sesion autenticada → redirect a /login/ (no toca DB)."""
 
     def test_list_redirige_sin_auth(self):
         r = self.client.get(reverse("skills:list"))
@@ -87,9 +87,9 @@ class DetailViewTests(MaintainerTestCase):
 
     def test_detail_muestra_versiones(self):
         s = make_skill("Con Versiones", slug="con-versiones")
-        make_skill_version(s, version=1, changelog="primera versión")
+        make_skill_version(s, version=1, changelog="primera version")
         r = self.client.get(reverse("skills:detail", args=[s.pk]), {"partial": "1"})
-        self.assertContains(r, "primera versión")
+        self.assertContains(r, "primera version")
         self.assertContains(r, "v1")
 
     def test_detail_inexistente_redirige(self):
@@ -127,7 +127,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_skill("Existente", slug="dup")
         r = self.client.post(reverse("skills:create"), self._data(slug="dup"))
-        # Form inválido (clean_slug) → re-render 200, sin crear nuevo.
+        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Skill.objects.filter(slug="dup").count(), 1)
 

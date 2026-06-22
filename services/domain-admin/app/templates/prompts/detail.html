@@ -28,15 +28,15 @@
 
 <!-- Info del prompt -->
 <div class="card mb-4">
-  <h3>Información</h3>
+  <h3>Informacion</h3>
   <table class="table mt-2">
     <tbody>
       <tr><th style="width: 200px;">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
-      <tr><th>Versión</th><td>v{{ prompt_obj.version }}</td></tr>
-      <tr><th>Descripción</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
+      <tr><th>Version</th><td>v{{ prompt_obj.version }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
       <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
       <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
-      <tr><th>Versión padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Version padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>
       <tr><th>Estado</th>
         <td>
@@ -67,7 +67,7 @@
   {% endif %}
 </div>
 
-<!-- Modal de confirmación de eliminación -->
+<!-- Modal de confirmacion de eliminacion -->
 <div class="modal-backdrop" id="modal-delete-{{ prompt_obj.pk }}">
   <div class="modal" style="max-width: 420px;">
     <div class="modal-header">
@@ -76,13 +76,13 @@
     </div>
     <div class="modal-body">
       <p>Vas a eliminar <strong>{{ prompt_obj.display_name }}</strong>.</p>
-      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el prompt queda desactivado pero el registro se conserva para auditoría.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esto es un soft delete: el prompt queda desactivado pero el registro se conserva para auditoria.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-modal-close>Cancelar</button>
       <form method="post" action="{% url 'prompts:delete' prompt_obj.pk %}" style="display: inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
       </form>
     </div>
   </div>

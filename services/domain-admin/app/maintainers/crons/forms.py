@@ -1,9 +1,9 @@
 """Forms del mantenedor de Crons (schedules), migrados a core.
 
 CronForm reusa core.forms.InstanceAwareMixin para capturar `instance=` y
-poder excluirse a sí mismo en la validación de unicidad del slug (mismo patrón
-que el resto de los mantenedores). La lógica propia —parseo de `inputs` (jsonb),
-normalización de timezone y el checkbox `enabled`— queda acá.
+poder excluirse a si mismo en la validacion de unicidad del slug (mismo patron
+que el resto de los mantenedores). La logica propia —parseo de `inputs` (jsonb),
+normalizacion de timezone y el checkbox `enabled`— queda aqui.
 
 Usa forms.Form (no ModelForm) porque el modelo es managed=False.
 """
@@ -19,7 +19,7 @@ from .models import Cron
 class CronForm(InstanceAwareMixin, forms.Form):
     """Form para crear/editar crons.
 
-    El slug es único; en edición se excluye el propio registro (vía
+    El slug es unico; en edicion se excluye el propio registro (via
     InstanceAwareMixin._exclude_self). `inputs` (jsonb) se ingresa como texto
     JSON y se parsea en clean_inputs. `enabled` es un checkbox booleano.
     """
@@ -33,19 +33,19 @@ class CronForm(InstanceAwareMixin, forms.Form):
         label="Slug",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
-        help_text="Identificador único (minúsculas, guiones).",
+        help_text="Identificador unico (minusculas, guiones).",
     )
     description = forms.CharField(
-        label="Descripción",
+        label="Descripcion",
         required=False,
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
     cron_expression = forms.CharField(
-        label="Expresión cron",
+        label="Expresion cron",
         max_length=100,
         widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off",
                                       "placeholder": "0 9 * * *"}),
-        help_text="Expresión cron estándar (min hora día mes día-semana).",
+        help_text="Expresion cron estandar (min hora dia mes dia-semana).",
     )
     timezone = forms.CharField(
         label="Timezone",
@@ -83,7 +83,7 @@ class CronForm(InstanceAwareMixin, forms.Form):
     def __init__(self, *args, instance: Cron | None = None, **kwargs):
         # InstanceAwareMixin captura instance y lo expone como self.instance.
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edición (unbound).
+        # Valores iniciales solo al renderizar el form de edicion (unbound).
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
@@ -97,7 +97,7 @@ class CronForm(InstanceAwareMixin, forms.Form):
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
-        # Unicidad por slug; en edición se excluye el propio registro.
+        # Unicidad por slug; en edicion se excluye el propio registro.
         qs = Cron.objects.filter(slug=slug)
         if self._exclude_self(qs).exists():
             raise forms.ValidationError("Ya existe un cron con ese slug.")
@@ -110,7 +110,7 @@ class CronForm(InstanceAwareMixin, forms.Form):
         try:
             parsed = json.loads(raw)
         except (ValueError, TypeError) as exc:
-            raise forms.ValidationError("Inputs debe ser JSON válido.") from exc
+            raise forms.ValidationError("Inputs debe ser JSON valido.") from exc
         if not isinstance(parsed, dict):
             raise forms.ValidationError("Inputs debe ser un objeto JSON.")
         return parsed
@@ -120,13 +120,13 @@ class CronForm(InstanceAwareMixin, forms.Form):
 
 
 class CronSearchForm(forms.Form):
-    """Búsqueda simple en el listado."""
+    """Busqueda simple en el listado."""
 
     q = forms.CharField(
         label="Buscar",
         required=False,
         widget=forms.TextInput(attrs={
             "class": "form-control",
-            "placeholder": "Nombre, slug, expresión o target...",
+            "placeholder": "Nombre, slug, expresion o target...",
         }),
     )

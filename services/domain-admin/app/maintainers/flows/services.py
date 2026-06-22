@@ -1,18 +1,18 @@
 """Capa de negocio del mantenedor de Flows (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). El resto —spec JSONB, unicidad
+busqueda/paginacion ni el aggregate de la señal). El resto —spec JSONB, unicidad
 de slug, toggle sobre el boolean is_active, soft-delete y las versiones
-read-only— sigue acá.
+read-only— sigue aqui.
 
-Particularidades de `flows` respecto del patrón base:
-- list excluye los soft-deleted (deleted_at != NULL) vía un queryset base.
+Particularidades de `flows` respecto del patron base:
+- list excluye los soft-deleted (deleted_at != NULL) via un queryset base.
 - El estado habilitado/deshabilitado es el boolean `is_active` (NO el campo
   status); el toggle alterna ese boolean.
 - flow_versions es un sub-recurso READ-ONLY (sin CRUD); se expone solo un getter
-  para mostrarlo en el detalle del flow (análogo a get_user_roles en users).
+  para mostrarlo en el detalle del flow (analogo a get_user_roles en users).
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención
+Las views (core.views.MaintainerViews) descubren las funciones por convencion
 de nombre: get_flow / create_flow / update_flow / delete_flow /
 toggle_flow_status / get_list_signal. `entity_label="Flow"` -> attr "flow", que
 ya coincide con esos nombres.
@@ -28,10 +28,10 @@ from .models import Flow, FlowVersion
 
 # Error de dominio (la view lo traduce a messages.error).
 class FlowError(Exception):
-    """Error de operación sobre flows."""
+    """Error de operacion sobre flows."""
 
 
-# Service base reusado: list (search name/slug/description + paginación) + signal.
+# Service base reusado: list (search name/slug/description + paginacion) + signal.
 class FlowService(MaintainerService):
     model = Flow
     search_fields = ("name", "slug", "description")
@@ -42,9 +42,9 @@ _service = FlowService()
 
 
 def list_flows(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista flows NO eliminados con búsqueda + paginación.
+    """Lista flows NO eliminados con busqueda + paginacion.
 
-    Delega en MaintainerService.list (pasándole el queryset base que excluye los
+    Delega en MaintainerService.list (pasandole el queryset base que excluye los
     soft-deleted) y renombra la clave `items` -> `flows` para no romper el
     contrato del template/tests existentes.
     """
@@ -67,7 +67,7 @@ def get_flow(flow_id: str) -> Flow:
 
 
 def get_flow_versions(flow: Flow) -> list[FlowVersion]:
-    """Sub-recurso READ-ONLY: versiones del flow ordenadas (más nueva primero)."""
+    """Sub-recurso READ-ONLY: versiones del flow ordenadas (mas nueva primero)."""
     return list(FlowVersion.objects.filter(flow=flow).order_by("-version"))
 
 
@@ -83,7 +83,7 @@ def create_flow(
     seed_managed: bool = False,
     seed_version: int | None = None,
 ) -> Flow:
-    """Crea un flow nuevo. slug debe ser único."""
+    """Crea un flow nuevo. slug debe ser unico."""
     if Flow.objects.filter(slug=slug).exists():
         raise FlowError(f"Ya existe un flow con slug '{slug}'.")
 
@@ -112,7 +112,7 @@ def update_flow(
     seed_managed: bool = False,
     seed_version: int | None = None,
 ) -> Flow:
-    """Actualiza un flow. El slug sigue siendo único."""
+    """Actualiza un flow. El slug sigue siendo unico."""
     if slug != flow.slug and Flow.objects.filter(slug=slug).exclude(pk=flow.pk).exists():
         raise FlowError(f"Ya existe otro flow con slug '{slug}'.")
 
@@ -131,7 +131,7 @@ def update_flow(
 
 @transaction.atomic
 def delete_flow(flow: Flow) -> None:
-    """Soft delete: marca deleted_at + is_active=false. NO borra físicamente."""
+    """Soft delete: marca deleted_at + is_active=false. NO borra fisicamente."""
     from django.utils import timezone
 
     flow.deleted_at = timezone.now()
@@ -157,5 +157,5 @@ def get_stats() -> dict:
     }
 
 
-# Excepción de dominio que core.views.MaintainerViews traduce a messages.error.
+# Excepcion de dominio que core.views.MaintainerViews traduce a messages.error.
 ServiceError = FlowError

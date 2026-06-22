@@ -1,12 +1,12 @@
 {% comment %}
 Modal "Invitar por email" (PREVIEW-ONLY).
 
-Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js vía fetch a
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js via fetch a
 /usuarios/<id>/invitar/ con data-action="modal"). Muestra el PREVIEW del email
-HTML de invitación (templates/emails/invitation.html) + nota de envío pendiente
-+ botón "Copiar link" (delegado por modals.js vía data-copy).
+HTML de invitacion (templates/emails/invitation.html) + nota de envio pendiente
++ boton "Copiar link" (delegado por modals.js via data-copy).
 
-NO persiste en auth_invitations ni envía nada: el registro y el envío SMTP son
+NO persiste en auth_invitations ni envia nada: el registro y el envio SMTP son
 trabajo futuro (ver maintainers/users/views.py:invite_preview).
 {% endcomment %}
 <div class="modal-header">
@@ -25,7 +25,7 @@ trabajo futuro (ver maintainers/users/views.py:invite_preview).
     </button>
   </div>
   <p class="text-secondary" style="font-size: var(--fs-sm); margin-bottom: var(--space-md);">
-    El link de enrollment expira en {{ expires_days }} días
+    El link de enrollment expira en {{ expires_days }} dias
     ({{ expires_at|date:"d/m/Y H:i" }}).
   </p>
 

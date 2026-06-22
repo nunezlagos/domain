@@ -1,7 +1,7 @@
 """Views del mantenedor de Reglas por proyecto.
 
-Las 7 vistas estándar las arma core.views.MaintainerViews. Acá solo el payload
-del service (mapea el `project` ChoiceField -> project_id en alta; en edición el
+Las 7 vistas estandar las arma core.views.MaintainerViews. Aqui solo el payload
+del service (mapea el `project` ChoiceField -> project_id en alta; en edicion el
 proyecto no cambia) y los context keys (`policy_obj`).
 """
 from __future__ import annotations

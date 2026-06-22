@@ -1,7 +1,7 @@
 """Factories del mantenedor de Flows.
 
 Reusa core.tests.factories.make (pone un PK uuid si no se pasa `id`, ya que en
-prod los genera domain-mcp). Solo agrega los helpers específicos de las 2
+prod los genera domain-mcp). Solo agrega los helpers especificos de las 2
 tablas del dominio (flows, flow_versions).
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ def make_flow_version(
     created_by: uuid.UUID | None = None,
 ) -> FlowVersion:
     if hash is None:
-        # Hash único determinista por (flow, version) para no chocar con
+        # Hash unico determinista por (flow, version) para no chocar con
         # la unicidad (flow_id, hash).
         hash = f"{flow.pk.hex}{version:04d}".ljust(64, "0")[:64]
     return make(

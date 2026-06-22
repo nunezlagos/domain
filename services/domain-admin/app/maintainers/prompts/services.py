@@ -1,18 +1,18 @@
 """Capa de negocio del mantenedor de Prompts (migrada a core).
 
 list + signal se delegan a core.service.MaintainerService (sin reimplementar la
-búsqueda/paginación ni el aggregate de la señal). Lo propio del dominio —unicidad
+busqueda/paginacion ni el aggregate de la señal). Lo propio del dominio —unicidad
 de la tripleta (project_id, slug, version), tags, toggle de is_active que reactiva
-soft-deleted— sigue acá.
+soft-deleted— sigue aqui.
 
 El listado excluye los soft-deleted (deleted_at != NULL): por eso PromptService
 sobreescribe `list` para inyectar ese filtro en el queryset base antes de
 delegar en el MaintainerService.
 
-Las views (core.views.MaintainerViews) descubren las funciones por convención de
+Las views (core.views.MaintainerViews) descubren las funciones por convencion de
 nombre: get_prompt / create_prompt / update_prompt / delete_prompt /
 toggle_prompt_status / get_list_signal. entity_label="Prompt" -> attr "prompt",
-así que esos nombres ya calzan (no hacen falta alias).
+asi que esos nombres ya calzan (no hacen falta alias).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from .models import Prompt
 
 # Error de dominio (la view lo traduce a messages.error).
 class PromptError(Exception):
-    """Error de operación sobre prompts."""
+    """Error de operacion sobre prompts."""
 
 
 class PromptService(MaintainerService):
@@ -46,7 +46,7 @@ _service = PromptService()
 
 
 def list_prompts(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista prompts (no soft-deleted) con búsqueda + paginación.
+    """Lista prompts (no soft-deleted) con busqueda + paginacion.
 
     Delega en MaintainerService.list y renombra la clave `items` -> `prompts`
     para no romper el contrato del template/tests existentes.
@@ -89,7 +89,7 @@ def create_prompt(
     variables=None,
     tags=None,
 ) -> Prompt:
-    """Crea un prompt nuevo. (project_id, slug, version) debe ser única."""
+    """Crea un prompt nuevo. (project_id, slug, version) debe ser unica."""
     if _slug_taken(project_id, slug, version):
         raise PromptError(
             f"Ya existe un prompt con slug '{slug}' v{version} en este proyecto."
@@ -123,7 +123,7 @@ def update_prompt(
     """Actualiza un prompt.
 
     project_id no se edita (define el contexto de unicidad). La tripleta
-    (project, slug, version) sigue siendo única, excluyendo el propio registro.
+    (project, slug, version) sigue siendo unica, excluyendo el propio registro.
     """
     if _slug_taken(prompt.project_id, slug, version, exclude_pk=prompt.pk):
         raise PromptError(
@@ -145,7 +145,7 @@ def update_prompt(
 
 @transaction.atomic
 def delete_prompt(prompt: Prompt) -> None:
-    """Soft delete: marca deleted_at + is_active=False. NO borra físicamente."""
+    """Soft delete: marca deleted_at + is_active=False. NO borra fisicamente."""
     prompt.deleted_at = timezone.now()
     prompt.is_active = False
     prompt.save()

@@ -1,7 +1,7 @@
 // REQ-50 — verify checkpoints post-cambios.
 //
 // Flujo:
-//  1. Tras un cambio de código no trivial, el LLM llama domain_verify_start
+//  1. Tras un cambio de codigo no trivial, el LLM llama domain_verify_start
 //     con kind + lista de items (build/test/lint/etc). El server crea
 //     un checkpoint con status=running.
 //  2. El LLM ejecuta cada item con sus tools nativas (Bash, Read) y
@@ -9,11 +9,11 @@
 //  3. Al terminar, domain_verify_complete cierra el checkpoint con
 //     status final (passed/failed/partial).
 //  4. domain_verify_pending lista checkpoints abiertos del proyecto
-//     — útil al re-abrir sesión, ver qué quedó sin verificar.
+//     — util al re-abrir sesion, ver que quedo sin verificar.
 //
 // El server NO ejecuta nada. Solo persiste resultados estructurados
-// para audit y para que un próximo LLM pueda ver "el último cambio
-// dejó tests fallando, no avanzar sin arreglar primero".
+// para audit y para que un proximo LLM pueda ver "el ultimo cambio
+// dejo tests fallando, no avanzar sin arreglar primero".
 package mcpserver
 
 import (
@@ -41,10 +41,10 @@ func registerVerificationsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serve
 
 func toolVerifyStart() mcp.Tool {
 	return mcp.NewTool("domain_verify_start",
-		mcp.WithDescription("Abre un checkpoint de verificación post-cambio. Llamar DESPUÉS de un edit no trivial (no para typos), antes de declarar 'listo'. items[] = lista de checks individuales que vas a correr (build, test, lint, smoke, typecheck, migration). Status del item arranca en 'pending' y vos lo updateás con domain_verify_update_item."),
-		mcp.WithString("project_slug", mcp.Description("Proyecto en el que estás trabajando"), mcp.Required()),
+		mcp.WithDescription("Abre un checkpoint de verificacion post-cambio. Llamar DESPUES de un edit no trivial (no para typos), antes de declarar 'listo'. items[] = lista de checks individuales que vas a correr (build, test, lint, smoke, typecheck, migration). Status del item arranca en 'pending' y usted lo updateas con domain_verify_update_item."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto en el que estas trabajando"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("build | test | lint | smoke | typecheck | migration | custom"), mcp.Required()),
-		mcp.WithString("context", mcp.Description("Qué cambio gatilló esta verificación (1 línea, ej: 'agregué endpoint POST /api/v1/clients').")),
+		mcp.WithString("context", mcp.Description("Que cambio gatillo esta verificacion (1 linea, ej: 'agregue endpoint POST /api/v1/clients').")),
 		mcp.WithArray("items", mcp.Description("Array de items {label, command?}. label es obligatorio, command es informativo. Ej: [{label: 'go test ./internal/...', command: 'go test ./...'}, {label: 'go vet', command: 'go vet ./...'}]"), mcp.Required()),
 	)
 }
@@ -55,21 +55,21 @@ func toolVerifyUpdateItem() mcp.Tool {
 		mcp.WithString("verification_id", mcp.Description("UUID del checkpoint"), mcp.Required()),
 		mcp.WithString("label", mcp.Description("Label exacto del item (el que pasaste en verify_start)"), mcp.Required()),
 		mcp.WithString("status", mcp.Description("pass | fail | skipped"), mcp.Required()),
-		mcp.WithString("output", mcp.Description("Output relevante (último ~500 chars, no todo el log)")),
-		mcp.WithNumber("duration_ms", mcp.Description("Tiempo de ejecución en ms (opcional)")),
+		mcp.WithString("output", mcp.Description("Output relevante (ultimo ~500 chars, no todo el log)")),
+		mcp.WithNumber("duration_ms", mcp.Description("Tiempo de ejecucion en ms (opcional)")),
 	)
 }
 
 func toolVerifyComplete() mcp.Tool {
 	return mcp.NewTool("domain_verify_complete",
-		mcp.WithDescription("Cierra el verify checkpoint. Server calcula status final automáticamente: si todos los items son 'pass' → passed; si algún item 'fail' → failed; si mezcla pass + skipped → partial."),
+		mcp.WithDescription("Cierra el verify checkpoint. Server calcula status final automaticamente: si todos los items son 'pass' → passed; si algun item 'fail' → failed; si mezcla pass + skipped → partial."),
 		mcp.WithString("verification_id", mcp.Description("UUID del checkpoint"), mcp.Required()),
 	)
 }
 
 func toolVerifyPending() mcp.Tool {
 	return mcp.NewTool("domain_verify_pending",
-		mcp.WithDescription("Lista checkpoints pendientes o fallados de un proyecto. Llamar al inicio de sesión para ver si quedaron tests fallando del último cambio — no avanzar con feature nuevo sin atender esto."),
+		mcp.WithDescription("Lista checkpoints pendientes o fallados de un proyecto. Llamar al inicio de sesion para ver si quedaron tests fallando del ultimo cambio — no avanzar con feature nuevo sin atender esto."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto a consultar"), mcp.Required()),
 		mcp.WithNumber("limit", mcp.Description("Default 10")),
 	)
@@ -92,7 +92,7 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	}
 	rawItems, _ := args["items"].([]any)
 	if len(rawItems) == 0 {
-		return mcp.NewToolResultError("items debe ser un array no vacío"), nil
+		return mcp.NewToolResultError("items debe ser un array no vacio"), nil
 	}
 
 	// Normalizar items: cada uno debe tener label, status arranca pending.
@@ -157,7 +157,7 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 	idStr, _ := args["verification_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("verification_id inválido"), nil
+		return mcp.NewToolResultError("verification_id invalido"), nil
 	}
 	label, _ := args["label"].(string)
 	status := strings.ToLower(strings.TrimSpace(asString(args["status"])))
@@ -227,7 +227,7 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	idStr, _ := args["verification_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("verification_id inválido"), nil
+		return mcp.NewToolResultError("verification_id invalido"), nil
 	}
 
 	var itemsRaw []byte
@@ -259,7 +259,7 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	case fail > 0:
 		finalStatus = "failed"
 	case pending > 0:
-		finalStatus = "partial" // hay items sin reportar — el LLM cerró sin completar
+		finalStatus = "partial" // hay items sin reportar — el LLM cerro sin completar
 	case pass > 0 && skipped == 0:
 		finalStatus = "passed"
 	case skipped > 0:

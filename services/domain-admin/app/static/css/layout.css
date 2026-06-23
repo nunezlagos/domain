@@ -44,7 +44,7 @@
      el texto con font-size:0 y se inyecta la "D" via ::before. */
   body.sidebar-collapsed .sidebar-logo { font-size: 0; }
   body.sidebar-collapsed .sidebar-logo::before {
-    content: "D";
+    content: "td";
     font-size: var(--fs-lg);
     font-weight: var(--fw-bold);
     color: var(--sidebar-accent);

@@ -41,10 +41,6 @@ API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
       + API Key
     </button>
   </div>
-  <p class="text-secondary mnt-result-count">
-    {{ total }} resultado{{ total|pluralize:",s" }}
-  </p>
-
   <table class="table mnt-table-sm">
     <thead>
       <tr>
@@ -97,6 +93,8 @@ API Keys. Asi reusamos su CRUD (form/modales) sin duplicar nada.
       {% endfor %}
     </tbody>
   </table>
+
+  {% include "maintainers/_modal_pagination.html" %}
 </div>
 
 <div class="modal-footer">

@@ -200,6 +200,30 @@
     }
   });
 
+  // Paginacion DENTRO de un modal ([data-modal-page]): re-fetch del contenido
+  // del modal con ?page=N + los filtros activos ([data-modal-filter]), re-inject.
+  document.addEventListener('click', async function (e) {
+    var pager = e.target.closest('[data-modal-page]');
+    if (!pager) return;
+    e.preventDefault();
+    var modal = document.getElementById('modal-dynamic');
+    if (!modal || !modal.dataset.src) return;
+    var base = modal.dataset.src.split('?')[0];
+    var params = new URLSearchParams();
+    modal.querySelectorAll('[data-modal-filter]').forEach(function (el) {
+      var name = el.getAttribute('name') || el.dataset.modalFilter;
+      if (name && el.value) params.set(name, el.value);
+    });
+    params.set('page', pager.getAttribute('data-modal-page'));
+    var url = base + '?' + params.toString();
+    try {
+      var r = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (r.ok) openDynamicModal(await r.text(), url);
+    } catch (err) {
+      console.warn('Paginacion de modal fallo:', err);
+    }
+  });
+
   // ----------------------------------------------------------
   // Form submit dentro del modal dinámico (intercepta [data-modal-form])
   // ----------------------------------------------------------

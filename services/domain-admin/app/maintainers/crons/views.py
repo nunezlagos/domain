@@ -112,7 +112,7 @@ views = CronViews(
     entity_label="Cron",
     id_kwarg="cron_id",
     list_key="crons",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

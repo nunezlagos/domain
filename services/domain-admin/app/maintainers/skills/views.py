@@ -90,7 +90,7 @@ views = SkillViews(
     entity_label="Skill",
     id_kwarg="skill_id",
     list_key="skills",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

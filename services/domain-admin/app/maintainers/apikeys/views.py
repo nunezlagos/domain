@@ -137,7 +137,7 @@ views = ApiKeyViews(
     entity_label="API Key",
     id_kwarg="apikey_id",
     list_key="api_keys",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

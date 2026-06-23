@@ -66,6 +66,6 @@ views = ProjectPolicyViews(
     entity_label="Regla",
     id_kwarg="policy_id",
     list_key="policies",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )

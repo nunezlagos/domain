@@ -104,7 +104,7 @@ views = PromptViews(
     entity_label="Prompt",
     id_kwarg="prompt_id",
     list_key="prompts",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

@@ -70,6 +70,6 @@ views = AgentTemplateViews(
     entity_label="Plantilla de Agente",
     id_kwarg="template_id",
     list_key="agenttemplates",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )

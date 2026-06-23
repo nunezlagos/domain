@@ -108,7 +108,7 @@ views = FlowViews(
     entity_label="Flow",
     id_kwarg="flow_id",
     list_key="flows",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

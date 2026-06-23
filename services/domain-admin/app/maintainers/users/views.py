@@ -129,7 +129,7 @@ views = UserViews(
     entity_label="Usuario",
     id_kwarg="user_id",
     list_key="users",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 
@@ -191,7 +191,10 @@ def apikeys_modal(request):
 
     user_id = request.GET.get("user") or ""
     status = request.GET.get("status") or ""
-    data = list_api_keys(search="", page=1, per_page=100,
+    page = int(request.GET.get("page", 1) or 1)
+    # Paginado a 10 (como las tablas de los mantenedores) para que el modal no
+    # supere el viewport. La navegacion la maneja modals.js [data-modal-page].
+    data = list_api_keys(search="", page=page, per_page=10,
                          user_id=user_id or None, status=status or None)
     return render(
         request,
@@ -199,6 +202,11 @@ def apikeys_modal(request):
         {
             "api_keys": data["api_keys"],
             "total": data["total"],
+            "page": data["page"],
+            "per_page": data["per_page"],
+            "total_pages": data["total_pages"],
+            "has_next": data["has_next"],
+            "has_prev": data["has_prev"],
             "user_options": User.objects.filter(status="active").order_by("email"),
             "status_options": ApiKey.STATUS_CHOICES,
             "selected_user": user_id,

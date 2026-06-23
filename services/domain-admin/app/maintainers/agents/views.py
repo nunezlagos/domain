@@ -88,7 +88,7 @@ views = AgentViews(
     entity_label="Agente",
     id_kwarg="agent_id",
     list_key="agents",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

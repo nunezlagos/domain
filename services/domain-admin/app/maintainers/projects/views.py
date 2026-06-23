@@ -198,7 +198,7 @@ views = ProjectViews(
     entity_label="Proyecto",
     id_kwarg="project_id",
     list_key="projects",
-    per_page=20,
+    per_page=10,
     search_param="q",
 )
 

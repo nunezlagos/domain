@@ -1,32 +1,85 @@
-{% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de proyecto para el modal dinamico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el titulo, los
-campos y el label del submit.
+Form de proyecto (modal) con tabs VERTICALES (.vtabs), igual chrome que el ver.
+NO extiende _form_base porque ese envuelve los campos en .form-grid (chocaria con
+los vtabs); replicamos su contrato: data-modal-form + csrf + non_field_errors +
+header + footer (lo intercepta modals.js).
+
+Tabs: Datos y Repositorios son editables (campos del form). En EDICION se suman
+Skills y Reglas (mismos panes que el ver). Las skills se gestionan por AJAX
+(project-skills.js) independiente del submit del form.
+
+Contexto: form, mode ("create"|"edit"), action, project_obj, repo_rows, y en
+edicion skills_* / *_policies (de form_context).
 {% endcomment %}
+<form method="post" action="{{ action }}" data-modal-form novalidate>
+  {% csrf_token %}
 
-{% block form_title %}{% if mode == "create" %}Nuevo proyecto{% else %}Editar proyecto{% endif %}{% endblock %}
-{% block submit_label %}{% if mode == "create" %}Crear proyecto{% else %}Guardar cambios{% endif %}{% endblock %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      <span class="alert-icon">✕</span>
+      <div class="alert-content">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
 
-{% block fields %}
-  <div class="form-group">
-    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
-    {{ form.name }}
-    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+  <div class="modal-header">
+    <h3 class="modal-title">{% if mode == "create" %}Nuevo proyecto{% else %}Editar proyecto{% endif %}</h3>
+    <button type="button" class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
 
-  <div class="form-group">
-    <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-    {{ form.slug }}
-    {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-    {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+  <div class="modal-body">
+    <div class="vtabs">
+      <input type="radio" name="ptab" id="pt-datos" checked>
+      <input type="radio" name="ptab" id="pt-repos">
+      {% if mode == "edit" %}
+        <input type="radio" name="ptab" id="pt-skills">
+        <input type="radio" name="ptab" id="pt-reglas">
+      {% endif %}
+      <nav class="vtabs-nav">
+        <label for="pt-datos">Datos</label>
+        <label for="pt-repos">Repositorios</label>
+        {% if mode == "edit" %}
+          <label for="pt-skills">Skills <span class="vtab-count">{{ skills_applied_count }}</span></label>
+          <label for="pt-reglas">Reglas</label>
+        {% endif %}
+      </nav>
+      <div class="vtabs-body">
+        <div class="vpane vpane-datos">
+          <div class="form-group">
+            <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+            {{ form.name }}
+            {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+            {{ form.slug }}
+            {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+            {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
+            {{ form.description }}
+            {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="vpane vpane-repos">
+          {% include "projects/_repo_rows.html" %}
+        </div>
+
+        {% if mode == "edit" %}
+          <div class="vpane vpane-skills">
+            <div id="project-skills-pane">{% include "projects/_skills_pane.html" %}</div>
+          </div>
+          <div class="vpane vpane-reglas">{% include "projects/_rules_pane.html" %}</div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-  <div class="form-group">
-    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
-    {{ form.description }}
-    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+  <div class="modal-footer">
+    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn btn-primary">{% if mode == "create" %}Crear proyecto{% else %}Guardar cambios{% endif %}</button>
   </div>
-
-  {% include "projects/_repo_rows.html" %}
-{% endblock %}
+</form>

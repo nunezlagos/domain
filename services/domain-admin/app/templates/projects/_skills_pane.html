@@ -1,0 +1,73 @@
+{% comment %}
+Contenido del pane "Skills" del proyecto (modelo hibrido: auto + excluibles).
+Se re-renderiza SOLO (toggle_skill) dentro de #project-skills-pane, por eso es
+contenido "interno" sin wrapper de id. Lo usan el ver y el editar.
+
+Contexto: project_obj, skills_globals (con .excluded), skills_internals (con
+.excluded), skills_applied_count, skills_excluded_count.
+{% endcomment %}
+<p class="text-secondary mnt-text-sm">
+  {{ skills_applied_count }} skill{{ skills_applied_count|pluralize }} aplican a este proyecto{% if skills_excluded_count %} · {{ skills_excluded_count }} excluida{{ skills_excluded_count|pluralize }}{% endif %}.
+</p>
+
+<h4 class="mnt-section-label">Globales (aplican automaticamente)</h4>
+{% if skills_globals %}
+  <table class="table mnt-table-sm">
+    <tbody>
+      {% for s in skills_globals %}
+        <tr class="{% if s.excluded %}skill-excluded{% endif %}">
+          <td class="mnt-col-narrow"><code>{{ s.slug }}</code></td>
+          <td class="skill-name">{{ s.name }}</td>
+          <td class="mnt-col-narrow">
+            {% if s.excluded %}<span class="badge badge-danger">Excluida</span>
+            {% else %}<span class="badge badge-success">Aplica</span>{% endif %}
+          </td>
+          <td class="mnt-col-narrow">
+            {% if s.excluded %}
+              <button type="button" class="btn btn-sm btn-ghost" data-skill-toggle
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-skill-id="{{ s.id }}" data-op="include">Incluir</button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-skill-toggle
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-skill-id="{{ s.id }}" data-op="exclude">Excluir</button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted mnt-text-sm">No hay skills globales en la plataforma.</p>
+{% endif %}
+
+<h4 class="mnt-section-label">Internas del proyecto</h4>
+{% if skills_internals %}
+  <table class="table mnt-table-sm">
+    <tbody>
+      {% for s in skills_internals %}
+        <tr class="{% if s.excluded %}skill-excluded{% endif %}">
+          <td class="mnt-col-narrow"><code>{{ s.slug }}</code></td>
+          <td class="skill-name">{{ s.name }}</td>
+          <td class="mnt-col-narrow">
+            {% if s.excluded %}<span class="badge badge-danger">Excluida</span>
+            {% else %}<span class="badge badge-success">Aplica</span>{% endif %}
+          </td>
+          <td class="mnt-col-narrow">
+            {% if s.excluded %}
+              <button type="button" class="btn btn-sm btn-ghost" data-skill-toggle
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-skill-id="{{ s.id }}" data-op="include">Incluir</button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-skill-toggle
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-skill-id="{{ s.id }}" data-op="exclude">Excluir</button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted mnt-text-sm">Este proyecto no tiene skills internas propias.</p>
+{% endif %}

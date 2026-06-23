@@ -1,4 +1,9 @@
-"""Tests de la gestion de skills por proyecto (project_skills)."""
+"""Tests del modelo hibrido de skills por proyecto (auto + excluibles).
+
+Las skills globales (project_id NULL) aplican AUTOMATICAMENTE; project_skills se
+usa SOLO para EXCLUIR (is_enabled=FALSE). Las internas (project_id = proyecto)
+son propias del proyecto. El toggle excluye (op=exclude) / re-incluye (op=include).
+"""
 from __future__ import annotations
 
 from django.urls import reverse
@@ -19,25 +24,30 @@ class ProjectSkillsServiceTests(MaintainerTestCase):
         self.g2 = make_skill("Global 2", slug="g2")
         make_skill("Borrada", slug="gx", deleted=True)        # no debe aparecer
 
-    def test_disponibles_lista_globales_no_enlazadas(self):
-        avail = services.list_available_skills(self.project)
-        slugs = {s.slug for s in avail}
+    def test_globales_aplican_automaticamente(self):
+        data = services.list_project_skills(self.project)
+        slugs = {s.slug for s in data["globals"]}
         self.assertIn("g1", slugs)
         self.assertIn("g2", slugs)
         self.assertNotIn("gx", slugs)  # soft-deleted excluida
+        # sin exclusiones: todas las globales aplican
+        self.assertFalse(any(s.excluded for s in data["globals"]))
+        self.assertEqual(data["excluded_count"], 0)
 
-    def test_link_y_unlink(self):
-        services.link_skill(self.project, str(self.g1.id))
-        linked = services.list_linked_skills(self.project)
-        self.assertEqual([s.slug for s in linked], ["g1"])
-        # ya enlazada -> no aparece en disponibles
-        self.assertNotIn("g1", {s.slug for s in services.list_available_skills(self.project)})
-        # idempotente
-        services.link_skill(self.project, str(self.g1.id))
-        self.assertEqual(ProjectSkill.objects.filter(project=self.project).count(), 1)
-        # unlink
-        services.unlink_skill(self.project, str(self.g1.id))
-        self.assertEqual(services.list_linked_skills(self.project), [])
+    def test_excluir_y_reincluir(self):
+        # excluir g1 -> fila is_enabled=FALSE
+        services.set_skill_excluded(self.project, str(self.g1.id), excluded=True)
+        row = ProjectSkill.objects.get(project=self.project, skill_id=self.g1.id)
+        self.assertFalse(row.is_enabled)
+        data = services.list_project_skills(self.project)
+        g1 = next(s for s in data["globals"] if s.slug == "g1")
+        self.assertTrue(g1.excluded)
+        self.assertEqual(data["excluded_count"], 1)
+        # re-incluir -> borra la fila de exclusion
+        services.set_skill_excluded(self.project, str(self.g1.id), excluded=False)
+        self.assertFalse(
+            ProjectSkill.objects.filter(project=self.project, skill_id=self.g1.id).exists()
+        )
 
 
 class ProjectSkillsViewTests(MaintainerTestCase):
@@ -46,24 +56,28 @@ class ProjectSkillsViewTests(MaintainerTestCase):
         self.project = make_project("Demo", slug="demo")
         self.g1 = make_skill("Global 1", slug="g1")
 
-    def test_modal_get(self):
-        r = self.client.get(reverse("projects:manage_skills", args=[self.project.pk]))
+    def test_detalle_muestra_skills(self):
+        # El "ver" del proyecto ahora incluye el tab de skills (pane).
+        r = self.client.get(reverse("projects:detail", args=[self.project.pk]) + "?partial=1")
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "Skills de")
         self.assertContains(r, "g1")
+        self.assertContains(r, "Globales")
 
-    def test_toggle_link_then_unlink(self):
+    def test_toggle_exclude_then_include(self):
         url = reverse("projects:toggle_skill", args=[self.project.pk])
-        r = self.client.post(url, {"skill_id": str(self.g1.id), "op": "link"})
+        r = self.client.post(url, {"skill_id": str(self.g1.id), "op": "exclude"})
         self.assertEqual(r.status_code, 200)
-        self.assertTrue(ProjectSkill.objects.filter(project=self.project, skill_id=self.g1.id).exists())
-        r = self.client.post(url, {"skill_id": str(self.g1.id), "op": "unlink"})
+        row = ProjectSkill.objects.get(project=self.project, skill_id=self.g1.id)
+        self.assertFalse(row.is_enabled)
+        r = self.client.post(url, {"skill_id": str(self.g1.id), "op": "include"})
         self.assertEqual(r.status_code, 200)
-        self.assertFalse(ProjectSkill.objects.filter(project=self.project, skill_id=self.g1.id).exists())
+        self.assertFalse(
+            ProjectSkill.objects.filter(project=self.project, skill_id=self.g1.id).exists()
+        )
 
     def test_toggle_requiere_auth(self):
         from django.test import Client
         anon = Client()  # sin authenticate() -> sin flag de sesion
         r = anon.post(reverse("projects:toggle_skill", args=[self.project.pk]),
-                      {"skill_id": str(self.g1.id), "op": "link"})
+                      {"skill_id": str(self.g1.id), "op": "exclude"})
         self.assertEqual(r.status_code, 302)

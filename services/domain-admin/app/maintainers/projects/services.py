@@ -123,52 +123,89 @@ def list_available_templates() -> list[ProjectTemplate]:
     return list(ProjectTemplate.objects.all().order_by("slug"))
 
 
-# --- Skills enlazadas al proyecto (project_skills) --------------------------
+# --- Skills aplicables al proyecto (modelo hibrido: auto + excluibles) -------
+# Las skills GLOBALES (project_id NULL) aplican AUTOMATICAMENTE a todos los
+# proyectos; las INTERNAS (project_id = proyecto) son propias del proyecto.
+# project_skills se usa SOLO para EXCLUIR (fila con is_enabled=FALSE). Esto
+# espeja el resolver del MCP (skill.ApplicableSkillIDs).
 
-def list_linked_skills(project: Project) -> list:
-    """Skills enlazadas al proyecto (con flag link_enabled), ordenadas por slug."""
+def _excluded_skill_ids(project: Project) -> set:
+    """IDs de skills EXCLUIDAS para el proyecto (project_skills.is_enabled=FALSE)."""
     from maintainers.projects.models import ProjectSkill
-    from maintainers.skills.models import Skill
 
-    links = list(ProjectSkill.objects.filter(project=project))
-    enabled = {link.skill_id: link.is_enabled for link in links}
-    skills = list(Skill.objects.filter(id__in=list(enabled.keys())).order_by("slug"))
-    for s in skills:
-        s.link_enabled = enabled.get(s.id, True)
-    return skills
-
-
-def list_available_skills(project: Project) -> list:
-    """Skills de plataforma (globales) NO enlazadas todavia al proyecto."""
-    from maintainers.projects.models import ProjectSkill
-    from maintainers.skills.models import Skill
-
-    linked_ids = list(
-        ProjectSkill.objects.filter(project=project).values_list("skill_id", flat=True)
+    return set(
+        ProjectSkill.objects.filter(project=project, is_enabled=False)
+        .values_list("skill_id", flat=True)
     )
-    return list(
+
+
+def list_project_skills(project: Project) -> dict:
+    """Skills que conciernen al proyecto, separadas en globales e internas.
+
+    Cada skill trae el flag `.excluded` (True si esta excluida para el proyecto).
+    Las globales aplican salvo que esten excluidas; las internas son del proyecto.
+    """
+    from maintainers.skills.models import Skill
+
+    excluded = _excluded_skill_ids(project)
+    globals_ = list(
         Skill.objects.filter(project_id__isnull=True, deleted_at__isnull=True)
-        .exclude(id__in=linked_ids)
         .order_by("slug")
     )
+    internals = list(
+        Skill.objects.filter(project_id=project.id, deleted_at__isnull=True)
+        .order_by("slug")
+    )
+    for s in globals_ + internals:
+        s.excluded = s.id in excluded
+    return {
+        "globals": globals_,
+        "internals": internals,
+        "applied_count": sum(1 for s in globals_ + internals if not s.excluded),
+        "excluded_count": len(excluded),
+    }
 
 
 @transaction.atomic
-def link_skill(project: Project, skill_id: str) -> None:
-    """Enlaza una skill al proyecto (idempotente)."""
+def set_skill_excluded(project: Project, skill_id: str, excluded: bool) -> None:
+    """Excluye (excluded=True → fila is_enabled=FALSE) o re-incluye (excluded=False
+    → borra la exclusion) una skill para el proyecto. Modelo hibrido: sin fila o
+    is_enabled=TRUE = aplica; is_enabled=FALSE = excluida."""
     from maintainers.projects.models import ProjectSkill
 
-    ProjectSkill.objects.get_or_create(
-        project=project, skill_id=skill_id, defaults={"is_enabled": True}
+    if excluded:
+        ProjectSkill.objects.update_or_create(
+            project=project, skill_id=skill_id, defaults={"is_enabled": False}
+        )
+    else:
+        ProjectSkill.objects.filter(project=project, skill_id=skill_id).delete()
+
+
+# --- Reglas (policies) que aplican al proyecto ------------------------------
+
+def list_project_policies(project: Project) -> list:
+    """Reglas propias del proyecto (project_policies activas)."""
+    from maintainers.projectpolicies.models import ProjectPolicy
+
+    return list(
+        ProjectPolicy.objects.filter(
+            project_id=project.id, deleted_at__isnull=True, is_active=True
+        ).order_by("kind", "slug")
     )
 
 
-@transaction.atomic
-def unlink_skill(project: Project, skill_id: str) -> None:
-    """Desenlaza una skill del proyecto."""
-    from maintainers.projects.models import ProjectSkill
+def list_platform_policies() -> list[dict]:
+    """Reglas de plataforma (globales) activas. Aplican AUTOMATICAMENTE a todos los
+    proyectos (resolver buildRulesBlock del MCP). No hay modelo Django: lectura
+    directa de platform_policies (tabla managed por domain-mcp)."""
+    from django.db import connection
 
-    ProjectSkill.objects.filter(project=project, skill_id=skill_id).delete()
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT name, COALESCE(kind,''), COALESCE(body_md,'') "
+            "FROM platform_policies WHERE is_active = TRUE ORDER BY kind, slug"
+        )
+        return [{"name": r[0], "kind": r[1], "body_md": r[2]} for r in cur.fetchall()]
 
 
 # --- Repos git por proyecto -------------------------------------------------

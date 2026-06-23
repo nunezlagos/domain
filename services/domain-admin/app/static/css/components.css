@@ -568,3 +568,52 @@ textarea.form-control {
 #ut-info:checked ~ .htabs-body .vpane-info,
 #ut-roles:checked ~ .htabs-body .vpane-roles,
 #ut-keys:checked ~ .htabs-body .vpane-keys { display: block; }
+
+/* Detalle/edicion de proyecto: tabs VERTICALES (nav izquierda, panel derecha),
+   CSS-only via radios. Minimalista, mismo criterio que .htabs pero en columna. */
+.vtabs { display: flex; gap: var(--space-lg); align-items: flex-start; }
+.vtabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.vtabs-nav {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 160px; flex: 0 0 auto;
+  border-right: 1px solid var(--color-border); padding-right: var(--space-sm);
+}
+.vtabs-nav label {
+  padding: 8px 12px; cursor: pointer; font-size: 13px;
+  color: var(--color-text-secondary); border-radius: 6px;
+  border-left: 2px solid transparent;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+}
+.vtabs-nav label:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
+.vtabs-body { flex: 1 1 auto; min-width: 0; }
+.vtabs .vpane { display: none; }
+#pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
+#pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
+#pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
+#pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
+  color: var(--color-info); border-left-color: var(--color-info);
+  background: var(--color-bg-elevated); font-weight: 600;
+}
+#pt-datos:checked ~ .vtabs-body .vpane-datos,
+#pt-repos:checked ~ .vtabs-body .vpane-repos,
+#pt-skills:checked ~ .vtabs-body .vpane-skills,
+#pt-reglas:checked ~ .vtabs-body .vpane-reglas { display: block; }
+/* Skill excluida: se ve atenuada con el texto tachado en el nombre. */
+.skill-excluded { opacity: 0.6; }
+.skill-excluded .skill-name { text-decoration: line-through; }
+/* En pantallas chicas los vtabs se apilan: nav arriba en fila scrolleable. */
+@media (max-width: 767.98px) {
+  .vtabs { flex-direction: column; }
+  .vtabs-nav {
+    flex-direction: row; overflow-x: auto; min-width: 0; width: 100%;
+    border-right: none; border-bottom: 1px solid var(--color-border);
+    padding-right: 0; padding-bottom: var(--space-sm);
+  }
+  .vtabs-nav label { border-left: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  #pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
+  #pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
+  #pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
+  #pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
+    border-left-color: transparent; border-bottom-color: var(--color-info);
+  }
+}

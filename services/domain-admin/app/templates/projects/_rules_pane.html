@@ -1,0 +1,46 @@
+{% comment %}
+Pane "Reglas" del proyecto (read-only). Las de plataforma aplican
+AUTOMATICAMENTE a todos los proyectos (resolver del MCP); las del proyecto las
+amplian o reemplazan (override_platform). Gestion fina: mantenedor de reglas.
+
+Contexto: project_obj, platform_policies (dicts name/kind/body_md),
+project_policies (ProjectPolicy con .override_platform).
+{% endcomment %}
+<h4 class="mnt-section-label">De plataforma (aplican automaticamente)</h4>
+{% if platform_policies %}
+  <table class="table mnt-table-sm">
+    <tbody>
+      {% for p in platform_policies %}
+        <tr>
+          <td class="mnt-col-narrow"><span class="badge">{{ p.kind|default:"—" }}</span></td>
+          <td>{{ p.name }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted mnt-text-sm">No hay reglas de plataforma activas.</p>
+{% endif %}
+
+<h4 class="mnt-section-label">Del proyecto</h4>
+{% if project_policies %}
+  <table class="table mnt-table-sm">
+    <tbody>
+      {% for p in project_policies %}
+        <tr>
+          <td class="mnt-col-narrow"><span class="badge">{{ p.kind|default:"—" }}</span></td>
+          <td>{{ p.name }}</td>
+          <td class="mnt-col-narrow">
+            {% if p.override_platform %}<span class="badge badge-warning">Reemplaza</span>
+            {% else %}<span class="badge">Amplia</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted mnt-text-sm">Este proyecto no tiene reglas propias.</p>
+{% endif %}
+<p class="mnt-text-sm">
+  <a href="{% url 'projectpolicies:list' %}" class="text-secondary">Gestionar reglas por proyecto →</a>
+</p>

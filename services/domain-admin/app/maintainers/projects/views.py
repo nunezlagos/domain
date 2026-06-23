@@ -113,7 +113,7 @@ class ProjectViews(MaintainerViews):
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
-        return {
+        ctx = {
             "form": form,
             "mode": mode,
             "project_obj": instance,
@@ -121,13 +121,21 @@ class ProjectViews(MaintainerViews):
             "action": action,
             "repo_rows": self._repo_rows(form, instance),
         }
+        # En edicion exponemos skills + reglas para las tabs (mismo set que el ver).
+        if mode == "edit" and instance is not None:
+            ctx.update(_skills_ctx(instance))
+            ctx.update(_rules_ctx(instance))
+        return ctx
 
     def detail_context(self, instance) -> dict:
-        return {
+        ctx = {
             "project_obj": instance,
             "object": instance,
             "repositories": services.get_project_repositories(instance),
         }
+        ctx.update(_skills_ctx(instance))
+        ctx.update(_rules_ctx(instance))
+        return ctx
 
     # --- toggle con feedback de dominio (archivado/restaurado).
     def toggle(self, request, **kwargs):
@@ -147,29 +155,30 @@ class ProjectViews(MaintainerViews):
 
 
 def _skills_ctx(project) -> dict:
+    """Contexto del pane de skills (globales + internas, con flag .excluded)."""
+    data = services.list_project_skills(project)
     return {
         "project_obj": project,
-        "linked_skills": services.list_linked_skills(project),
-        "available_skills": services.list_available_skills(project),
+        "skills_globals": data["globals"],
+        "skills_internals": data["internals"],
+        "skills_applied_count": data["applied_count"],
+        "skills_excluded_count": data["excluded_count"],
     }
 
 
-@require_http_methods(["GET"])
-def manage_skills(request, project_id):
-    """Modal de gestion de skills enlazadas al proyecto (enlazar/desenlazar)."""
-    if (redir := require_auth(request)):
-        return redir
-    try:
-        project = services.get_project(project_id)
-    except services.ProjectError as exc:
-        messages.error(request, str(exc))
-        return HttpResponseRedirect(views.url("list"))
-    return render(request, "projects/_skills_modal.html", _skills_ctx(project))
+def _rules_ctx(project) -> dict:
+    """Contexto del pane de reglas (plataforma auto + del proyecto)."""
+    return {
+        "project_obj": project,
+        "platform_policies": services.list_platform_policies(),
+        "project_policies": services.list_project_policies(project),
+    }
 
 
 @require_http_methods(["POST"])
 def toggle_skill(request, project_id):
-    """Enlaza (op=link) o desenlaza (op=unlink) una skill; re-renderiza el modal."""
+    """Excluye (op=exclude) o re-incluye (op=include) una skill para el proyecto;
+    re-renderiza SOLO el pane de skills (#project-skills-pane)."""
     if (redir := require_auth(request)):
         return redir
     try:
@@ -179,11 +188,9 @@ def toggle_skill(request, project_id):
         return HttpResponseRedirect(views.url("list"))
     skill_id = request.POST.get("skill_id", "")
     op = request.POST.get("op", "")
-    if skill_id and op == "link":
-        services.link_skill(project, skill_id)
-    elif skill_id and op == "unlink":
-        services.unlink_skill(project, skill_id)
-    return render(request, "projects/_skills_modal.html", _skills_ctx(project))
+    if skill_id and op in ("exclude", "include"):
+        services.set_skill_excluded(project, skill_id, excluded=(op == "exclude"))
+    return render(request, "projects/_skills_pane.html", _skills_ctx(project))
 
 
 # Instancia que cablea todo. list_key="projects" -> el template recibe la lista

@@ -16,8 +16,8 @@ from . import views
 app_name = "projects"
 
 urlpatterns = [
-    # Gestion de skills enlazadas al proyecto (modal).
-    path("<uuid:project_id>/skills/", views.manage_skills, name="manage_skills"),
+    # Excluir/re-incluir una skill del proyecto (modelo hibrido). Re-renderiza
+    # el pane de skills dentro del detalle/edicion (vertical tabs).
     path("<uuid:project_id>/skills/toggle/", views.toggle_skill, name="toggle_skill"),
     # Export consolidado a CSV/Excel (respeta filtros activos).
     path("export/", views.export_projects, name="export"),

@@ -1,10 +1,12 @@
 // ============================================================
-// project-skills.js — enlazar/desenlazar skills de un proyecto
-// dentro del modal "Skills del proyecto", sin recargar la página.
+// project-skills.js — excluir/re-incluir skills de un proyecto
+// dentro del tab "Skills" del ver/editar, sin recargar la página.
 //
 // Cada botón [data-skill-toggle] POSTea {skill_id, op} a su data-url
-// (/proyectos/<id>/skills/toggle/) y el server devuelve el partial del
-// modal re-renderizado, que reemplaza #modal-dynamic-content.
+// (/proyectos/<id>/skills/toggle/, op=exclude|include) y el server devuelve
+// SOLO el pane de skills re-renderizado, que reemplaza el contenido de
+// #project-skills-pane (NO todo el modal: así no se pierde el form de edición
+// ni el tab activo, que viven fuera del pane).
 //
 // Depende de csrf.js (getCSRFToken). Delegado en document para funcionar
 // con el HTML inyectado en el modal dinámico.
@@ -34,7 +36,9 @@
       });
       if (r.ok) {
         var html = await r.text();
-        var c = document.getElementById('modal-dynamic-content');
+        // Reemplaza SOLO el pane de skills (no todo el modal): preserva el form
+        // de edición y el tab activo, que están fuera de #project-skills-pane.
+        var c = document.getElementById('project-skills-pane');
         if (c) c.innerHTML = html;
       } else {
         btn.disabled = false;

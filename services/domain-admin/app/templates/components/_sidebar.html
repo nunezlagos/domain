@@ -1,7 +1,14 @@
 {% load static %}
 <aside class="sidebar" id="app-sidebar">
   <div class="sidebar-header">
-    <span class="sidebar-logo">Domain <span class="accent">Admin</span></span>
+    {% comment %} El logo y el boton chevron colapsan/expanden el sidebar a
+       solo-iconos en desktop (data-sidebar-collapse, lo maneja sidebar.js). {% endcomment %}
+    <span class="sidebar-logo" data-sidebar-collapse role="button" tabindex="0" title="Colapsar / expandir menu">Domain <span class="accent">Admin</span></span>
+    <button type="button" class="btn btn-icon btn-ghost sidebar-collapse-btn" data-sidebar-collapse aria-label="Colapsar o expandir menu" title="Colapsar / expandir menu">
+      <svg class="sidebar-collapse-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </button>
   </div>
 
   <nav class="sidebar-nav">

@@ -16,7 +16,9 @@ Muestra email del usuario desde session.
     </svg>
   </button>
 
-  <div class="navbar-title">{{ title|default:"Domain Admin" }}</div>
+  {% comment %} Reloj en vivo (fecha + hora de Santiago de Chile). Lo actualiza
+     clock.js cada segundo; el texto inicial es un placeholder. {% endcomment %}
+  <div class="navbar-clock" data-clock aria-live="off" title="Hora de Santiago de Chile">—</div>
 
   <div class="navbar-actions">
     <span class="navbar-user">

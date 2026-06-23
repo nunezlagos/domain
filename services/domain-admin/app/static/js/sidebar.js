@@ -56,7 +56,39 @@
     else openSidebar();
   }
 
+  // --- Colapso a solo-iconos (desktop). Persistido en localStorage. ---
+  var COLLAPSE_KEY = 'sidebar-collapsed';
+
+  function setCollapsed(on) {
+    body.classList.toggle('sidebar-collapsed', on);
+    try { localStorage.setItem(COLLAPSE_KEY, on ? '1' : '0'); } catch (e) { /* storage off */ }
+  }
+
+  function toggleCollapsed() { setCollapsed(!body.classList.contains('sidebar-collapsed')); }
+
+  // Restaurar estado guardado (solo aplica visualmente en desktop, ver CSS).
+  try {
+    if (localStorage.getItem(COLLAPSE_KEY) === '1') body.classList.add('sidebar-collapsed');
+  } catch (e) { /* storage off */ }
+
+  // En modo colapsado los links quedan solo-icono: poner title con su texto
+  // para que el tooltip identifique cada item al pasar el mouse.
+  document.querySelectorAll('.sidebar-link').forEach(function (a) {
+    if (!a.getAttribute('title')) {
+      var label = (a.textContent || '').trim();
+      if (label) a.setAttribute('title', label);
+    }
+  });
+
   document.addEventListener('click', function (e) {
+    // Colapsar/expandir (logo o boton chevron). Solo desktop: en mobile el
+    // sidebar es un drawer, no tiene sentido el modo solo-iconos.
+    var collapse = e.target.closest('[data-sidebar-collapse]');
+    if (collapse) {
+      e.preventDefault();
+      if (!isMobile()) toggleCollapsed();
+      return;
+    }
     // Hamburguesa
     var toggle = e.target.closest('[data-sidebar-toggle]');
     if (toggle) {

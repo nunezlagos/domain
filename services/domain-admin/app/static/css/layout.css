@@ -33,6 +33,27 @@
   color: var(--sidebar-logo);
 }
 .sidebar-logo .accent { color: var(--sidebar-accent); }
+.sidebar-logo[role="button"] { cursor: pointer; }
+
+/* Boton chevron para colapsar/expandir el sidebar (solo desktop) */
+.sidebar-collapse-btn { margin-left: auto; color: var(--sidebar-section); flex: 0 0 auto; }
+.sidebar-collapse-btn:hover { color: var(--sidebar-item-hover); background: var(--sidebar-hover-bg); }
+.sidebar-collapse-icon { transition: transform var(--transition-fast); }
+
+/* === Sidebar colapsado (solo iconos). Solo desktop: en mobile el sidebar es un
+   drawer off-canvas (responsive.css) y no debe verse afectado. === */
+@media (min-width: 768px) {
+  body.sidebar-collapsed { --sidebar-width: 68px; }
+  body.sidebar-collapsed .sidebar-header { justify-content: center; padding-left: 0; padding-right: 0; }
+  body.sidebar-collapsed .sidebar-logo { display: none; }
+  body.sidebar-collapsed .sidebar-collapse-btn { margin-left: 0; }
+  body.sidebar-collapsed .sidebar-collapse-icon { transform: rotate(180deg); }
+  /* Las etiquetas de seccion pierden el texto pero mantienen el espacio. */
+  body.sidebar-collapsed .sidebar-section { font-size: 0; padding: var(--space-sm) 0; }
+  /* Los links muestran solo el icono, centrado (el texto suelto colapsa con font-size:0). */
+  body.sidebar-collapsed .sidebar-link { justify-content: center; gap: 0; font-size: 0; padding: var(--space-sm) 0; }
+  body.sidebar-collapsed .sidebar-footer { font-size: 0; padding: var(--space-sm) 0; }
+}
 
 .sidebar-nav {
   flex: 1;
@@ -117,6 +138,17 @@
   font-size: var(--fs-lg);
   font-weight: var(--fw-semibold);
 }
+
+/* Reloj del navbar (reemplaza al titulo): fecha + hora de Santiago de Chile.
+   tabular-nums evita que los digitos "salten" al actualizar cada segundo. */
+.navbar-clock {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.navbar-clock .navbar-clock-time { color: var(--color-text-primary); font-weight: var(--fw-semibold); }
 
 .navbar-actions {
   display: flex;

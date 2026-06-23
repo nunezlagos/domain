@@ -18,12 +18,15 @@ core.auth (antes estaban duplicados como _require_auth/X-Requested-With inline).
 from __future__ import annotations
 
 from django.contrib import messages
+from django.http import HttpResponse
 
+from core.auth import require_auth
 from core.views import MaintainerViews
 from maintainers.users.models import User
 
 from . import services
 from .forms import ApiKeyForm
+from .models import ApiKey
 
 
 class ApiKeyViews(MaintainerViews):
@@ -77,10 +80,31 @@ class ApiKeyViews(MaintainerViews):
         self._request = request
         return super().edit(request, **kwargs)
 
+    # --- list con filtros (usuario/estado). Guardamos el request para que
+    #     do_list/list_context lean los GET; el resto lo arma core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
+    def do_list(self, search: str, page: int) -> dict:
+        req = getattr(self, "_list_request", None)
+        user = req.GET.get("user") if req else ""
+        status = req.GET.get("status") if req else ""
+        return services.list_api_keys(
+            search=search, page=page, per_page=self.per_page,
+            user_id=user or None, status=status or None,
+        )
+
     # --- contextos: los templates de apikeys usan `apikey_obj` (no `object`).
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "API Keys"
+        req = getattr(self, "_list_request", None)
+        # Opciones + seleccion actual para el container de filtros.
+        ctx["user_options"] = User.objects.filter(status="active").order_by("email")
+        ctx["status_options"] = ApiKey.STATUS_CHOICES
+        ctx["selected_user"] = req.GET.get("user") if req else ""
+        ctx["selected_status"] = req.GET.get("status") if req else ""
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -116,3 +140,18 @@ views = ApiKeyViews(
     per_page=20,
     search_param="q",
 )
+
+
+def export_api_keys(request):
+    """Export CSV (consolidado, abre en Excel) de las API keys filtradas.
+    Respeta los filtros activos: q (busqueda), user (usuario), status (estado)."""
+    if (redir := require_auth(request)):
+        return redir
+    csv_data = services.export_api_keys_csv(
+        search=(request.GET.get("q") or "").strip(),
+        user_id=(request.GET.get("user") or "") or None,
+        status=(request.GET.get("status") or "") or None,
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="api-keys.csv"'
+    return resp

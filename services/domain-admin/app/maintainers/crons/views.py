@@ -17,6 +17,9 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
 
+from django.http import HttpResponse
+
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
@@ -43,11 +46,25 @@ class CronViews(MaintainerViews):
             "enabled": form.cleaned_data["enabled"],
         }
 
+    # --- list con filtros (tipo/habilitado). Guardamos el request para que
+    #     do_list/list_context lean los GET; el resto lo arma el core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
     # --- list: el listado de crons excluye los soft-deleted (el do_list
     #     generico del core no filtra deleted_at). Se delega al service de
     #     dominio, que ya devuelve la lista bajo la key `crons`.
     def do_list(self, search: str, page: int) -> dict:
-        return services.list_crons(search=search, page=page, per_page=self.per_page)
+        req = getattr(self, "_list_request", None)
+        target_types = req.GET.getlist("target_type") if req else []
+        # enabled: "" = sin filtro, "1" = True, "0" = False.
+        val = req.GET.get("enabled") if req else None
+        enabled = None if not val else (val == "1")
+        return services.list_crons(
+            search=search, page=page, per_page=self.per_page,
+            target_types=target_types, enabled=enabled,
+        )
 
     # --- toggle: el cron se habilita/deshabilita por el flag `enabled`, no por
     #     `status`. Se delega al service de dominio.
@@ -63,6 +80,11 @@ class CronViews(MaintainerViews):
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Crons"
+        req = getattr(self, "_list_request", None)
+        # Opciones + seleccion actual para el container de filtros.
+        ctx["target_type_options"] = Cron.TARGET_TYPE_CHOICES
+        ctx["selected_target_type"] = req.GET.getlist("target_type") if req else []
+        ctx["selected_enabled"] = (req.GET.get("enabled") or "") if req else ""
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -93,3 +115,21 @@ views = CronViews(
     per_page=20,
     search_param="q",
 )
+
+
+def export_crons(request):
+    """Export CSV (consolidado, abre en Excel) de los crons filtrados.
+    Respeta los filtros activos: q (busqueda), target_type[] (multi) y
+    enabled ("" sin filtro / "1" True / "0" False)."""
+    if (redir := require_auth(request)):
+        return redir
+    val = request.GET.get("enabled")
+    enabled = None if not val else (val == "1")
+    csv_data = services.export_crons_csv(
+        search=(request.GET.get("q") or "").strip(),
+        target_types=request.GET.getlist("target_type"),
+        enabled=enabled,
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="crons.csv"'
+    return resp

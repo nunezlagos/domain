@@ -19,4 +19,6 @@ urlpatterns = [
     # Gestion de skills enlazadas al proyecto (modal).
     path("<uuid:project_id>/skills/", views.manage_skills, name="manage_skills"),
     path("<uuid:project_id>/skills/toggle/", views.toggle_skill, name="toggle_skill"),
+    # Export consolidado a CSV/Excel (respeta filtros activos).
+    path("export/", views.export_projects, name="export"),
 ] + maintainer_urlpatterns(views.views, id_kwarg="project_id")

@@ -41,17 +41,56 @@ class FlowService(MaintainerService):
 _service = FlowService()
 
 
-def list_flows(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista flows NO eliminados con busqueda + paginacion.
-
-    Delega en MaintainerService.list (pasandole el queryset base que excluye los
-    soft-deleted) y renombra la clave `items` -> `flows` para no romper el
-    contrato del template/tests existentes.
-    """
+def _filtered_flow_qs(is_active=None):
+    """Queryset de Flow NO eliminado, filtrado por el boolean is_active. `None`
+    = sin filtro de estado. Se pasa como qs base a MaintainerService.list (que
+    suma search). Preserva la exclusion de soft-deleted (deleted_at != NULL)."""
     qs = Flow.objects.filter(deleted_at__isnull=True)
-    data = _service.list(qs=qs, search=search, page=page, per_page=per_page)
+    if is_active is not None:
+        qs = qs.filter(is_active=is_active)
+    return qs
+
+
+def list_flows(search: str = "", page: int = 1, per_page: int = 20,
+               is_active=None) -> dict:
+    """Lista flows NO eliminados con busqueda + filtro is_active + paginacion.
+
+    Delega en MaintainerService.list (pasandole el queryset ya filtrado, que
+    excluye los soft-deleted) y renombra la clave `items` -> `flows` para no
+    romper el contrato del template/tests existentes.
+    """
+    data = _service.list(qs=_filtered_flow_qs(is_active),
+                         search=search, page=page, per_page=per_page)
     data["flows"] = data.pop("items")
     return data
+
+
+def export_flows_csv(search: str = "", is_active=None) -> str:
+    """CSV consolidado (compatible con Excel) de los flows que matchean los
+    filtros activos (estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_flow_qs(is_active)
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search)
+            | Q(slug__icontains=search)
+            | Q(description__icontains=search)
+        )
+    qs = qs.order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Nombre", "Slug", "Descripcion", "Activo", "Creado"])
+    for f in qs:
+        w.writerow([
+            f.name, f.slug, f.description,
+            "Si" if f.is_active else "No",
+            f.created_at.strftime("%Y-%m-%d %H:%M") if f.created_at else "",
+        ])
+    return buf.getvalue()
 
 
 def get_list_signal() -> dict:

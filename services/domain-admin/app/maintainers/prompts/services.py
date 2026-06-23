@@ -45,15 +45,62 @@ class PromptService(MaintainerService):
 _service = PromptService()
 
 
-def list_prompts(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista prompts (no soft-deleted) con busqueda + paginacion.
+def _filtered_prompt_qs(is_active=None):
+    """Queryset base de Prompt para el listado/export: replica la exclusion de
+    soft-deleted que hace PromptService.list (deleted_at IS NULL) y suma el
+    filtro opcional is_active. None = sin filtro de estado.
 
-    Delega en MaintainerService.list y renombra la clave `items` -> `prompts`
-    para no romper el contrato del template/tests existentes.
+    Se construye el qs base aqui (en vez de delegar el default de
+    PromptService.list) porque al pasar un `qs` explicito a list, el setdefault
+    de PromptService.list no aplica; asi garantizamos que los soft-deleted
+    sigan excluidos."""
+    qs = Prompt.objects.filter(deleted_at__isnull=True)
+    if is_active is not None:
+        qs = qs.filter(is_active=is_active)
+    return qs
+
+
+def list_prompts(search: str = "", page: int = 1, per_page: int = 20,
+                 is_active=None) -> dict:
+    """Lista prompts (no soft-deleted) con busqueda + filtro is_active + paginacion.
+
+    Delega en MaintainerService.list (pasando el qs ya filtrado) y renombra la
+    clave `items` -> `prompts` para no romper el contrato del template/tests.
     """
-    data = _service.list(search=search, page=page, per_page=per_page)
+    data = _service.list(qs=_filtered_prompt_qs(is_active),
+                         search=search, page=page, per_page=per_page)
     data["prompts"] = data.pop("items")
     return data
+
+
+def export_prompts_csv(search: str = "", is_active=None) -> str:
+    """CSV consolidado (compatible con Excel) de los prompts que matchean los
+    filtros activos (estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_prompt_qs(is_active)
+    if search:
+        qs = qs.filter(
+            Q(slug__icontains=search)
+            | Q(description__icontains=search)
+            | Q(body__icontains=search)
+        )
+    qs = qs.distinct().order_by("slug")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Slug", "Descripcion", "Version", "Activo (Si/No)", "Creado"])
+    for p in qs:
+        w.writerow([
+            p.slug,
+            p.description,
+            p.version,
+            "Si" if p.is_active else "No",
+            p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "",
+        ])
+    return buf.getvalue()
 
 
 def get_list_signal() -> dict:

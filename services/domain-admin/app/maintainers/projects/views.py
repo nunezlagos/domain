@@ -18,7 +18,7 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 from __future__ import annotations
 
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
@@ -87,11 +87,29 @@ class ProjectViews(MaintainerViews):
                 }]
         return []
 
+    # --- list con filtro por estado. Guardamos el request para que
+    #     do_list/list_context lean el GET; el resto lo arma core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
+    def do_list(self, search: str, page: int) -> dict:
+        req = getattr(self, "_list_request", None)
+        status = req.GET.get("status") if req else ""
+        return services.list_projects(
+            search=search, page=page, per_page=self.per_page,
+            statuses=[status] if status else None,
+        )
+
     # --- contextos: los templates de projects usan `project_obj` (no `object`).
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Proyectos"
         ctx["stats"] = services.get_stats()
+        req = getattr(self, "_list_request", None)
+        # Opciones + seleccion actual para el container de filtros.
+        ctx["status_options"] = Project.STATUS_CHOICES
+        ctx["selected_status"] = req.GET.get("status") if req else ""
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -183,3 +201,18 @@ views = ProjectViews(
     per_page=20,
     search_param="q",
 )
+
+
+def export_projects(request):
+    """Export CSV (consolidado, abre en Excel) de los proyectos filtrados.
+    Respeta los filtros activos: q (busqueda) y status (estado)."""
+    if (redir := require_auth(request)):
+        return redir
+    status = (request.GET.get("status") or "").strip()
+    csv_data = services.export_projects_csv(
+        search=(request.GET.get("q") or "").strip(),
+        statuses=[status] if status else None,
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="proyectos.csv"'
+    return resp

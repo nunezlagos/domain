@@ -1,8 +1,10 @@
 {% extends "maintainers/list_base.html" %}
+{% load static %}
 {% comment %}
 Listado de skills. Extiende maintainers/list_base.html: este define la
 estructura comun (header + search debounced + contenedor [data-maintainer-table]
-con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
+con data-base-url/-signal-url/-signal) y carga maintainer.js. El container de
+filtros (.mnt-*) vive en maintainers.css; aca NO hay estilos ni JS inline.
 {% endcomment %}
 
 {% block page_title %}Skills{% endblock %}
@@ -10,6 +12,34 @@ con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
 {% block page_subtitle %}Definiciones de skills de la plataforma{% endblock %}
 {% block create_label %}+ Nueva skill{% endblock %}
 {% block search_placeholder %}Nombre, slug o descripcion...{% endblock %}
+
+{% block filters %}
+  <div>
+    <label class="form-label" for="f-skill-type">Tipo</label>
+    <select data-filter name="skill_type" id="f-skill-type" class="form-control form-select mnt-filter-select">
+      <option value="">Todos</option>
+      {% for val, lbl in skill_type_options %}
+        <option value="{{ val }}" {% if val == selected_skill_type %}selected{% endif %}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mnt-filters-search">
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Nombre, slug o descripcion..." autocomplete="off" data-search-input>
+  </div>
+  <div>
+    <button type="button" class="btn btn-excel" data-export="/skills/export/"
+            title="Exportar consolidado a Excel (CSV)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+      </svg>
+      Excel
+    </button>
+  </div>
+{% endblock %}
 
 {% block table_area_id %}skills-table-area{% endblock %}
 {% block base_url %}/skills/{% endblock %}

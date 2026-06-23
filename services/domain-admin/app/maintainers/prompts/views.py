@@ -16,6 +16,9 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
 
+from django.http import HttpResponse
+
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
@@ -52,10 +55,28 @@ class PromptViews(MaintainerViews):
             tags=cd["tags"],
         )
 
+    # --- list con filtro de estado (is_active). Guardamos el request para que
+    #     do_list/list_context lean el GET; el resto lo arma core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
+    def do_list(self, search: str, page: int) -> dict:
+        req = getattr(self, "_list_request", None)
+        val = req.GET.get("active") if req else ""
+        is_active = None if not val else (val == "1")
+        return services.list_prompts(
+            search=search, page=page, per_page=self.per_page,
+            is_active=is_active,
+        )
+
     # --- contextos: los templates de prompts usan `prompt_obj` (no `object`).
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Prompts"
+        req = getattr(self, "_list_request", None)
+        # Seleccion actual del filtro de estado para el container de filtros.
+        ctx["selected_active"] = req.GET.get("active") if req else ""
         return ctx
 
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -86,3 +107,19 @@ views = PromptViews(
     per_page=20,
     search_param="q",
 )
+
+
+def export_prompts(request):
+    """Export CSV (consolidado, abre en Excel) de los prompts filtrados.
+    Respeta los filtros activos: q (busqueda) y active (is_active)."""
+    if (redir := require_auth(request)):
+        return redir
+    val = request.GET.get("active") or ""
+    is_active = None if not val else (val == "1")
+    csv_data = services.export_prompts_csv(
+        search=(request.GET.get("q") or "").strip(),
+        is_active=is_active,
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="prompts.csv"'
+    return resp

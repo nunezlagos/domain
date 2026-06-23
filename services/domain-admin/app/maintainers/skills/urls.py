@@ -9,10 +9,14 @@ helper igual que en el resto de los mantenedores; simplemente no se usa.
 app_name="skills" -> {% url 'skills:list' %} sigue funcionando igual que antes.
 id_kwarg="skill_id" debe coincidir con el id_kwarg del MaintainerViews.
 """
+from django.urls import path
+
 from core.urls import maintainer_urlpatterns
 
 from . import views
 
 app_name = "skills"
 
-urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="skill_id")
+urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="skill_id") + [
+    path("export/", views.export_skills, name="export"),
+]

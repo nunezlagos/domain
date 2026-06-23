@@ -69,6 +69,37 @@ def list_api_keys(search: str = "", page: int = 1, per_page: int = 20,
     return data
 
 
+def export_api_keys_csv(search: str = "", user_id=None, status=None) -> str:
+    """CSV consolidado (compatible con Excel) de las API keys que matchean los
+    filtros activos (usuario/estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = ApiKey.objects.select_related("user").all()
+    if user_id:
+        qs = qs.filter(user_id=user_id)
+    if status:
+        qs = qs.filter(status=status)
+    if search:
+        qs = qs.filter(Q(name__icontains=search) | Q(key_prefix__icontains=search))
+    qs = qs.order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Prefijo", "Nombre", "Usuario", "Estado", "Ultimo uso", "Expira", "Creado"])
+    for k in qs:
+        w.writerow([
+            k.key_prefix, k.name,
+            k.user.email if k.user_id else "",
+            k.get_status_display(),
+            k.last_used_at.strftime("%Y-%m-%d %H:%M") if k.last_used_at else "",
+            k.expires_at.strftime("%Y-%m-%d %H:%M") if k.expires_at else "",
+            k.created_at.strftime("%Y-%m-%d %H:%M") if k.created_at else "",
+        ])
+    return buf.getvalue()
+
+
 def get_list_signal() -> dict:
     """Señal barata de cambios {count, version} para refresh on-change."""
     return _service.list_signal()

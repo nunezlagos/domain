@@ -38,15 +38,62 @@ class CronsService(MaintainerService):
 _service = CronsService()
 
 
-def list_crons(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista crons (excluye soft-deleted) con busqueda + paginacion.
+def _filtered_cron_qs(target_types=None, enabled=None):
+    """Queryset de Cron (sin soft-deleted) filtrado por tipo y/o habilitado.
 
-    Delega en MaintainerService.list y renombra `items` -> `crons` para no
-    romper el contrato del template/tests existentes.
+    Listas/valores vacios = sin filtro. target_types: lista de valores de
+    target_type (multi). enabled: True/False explicito (None = sin filtro). Se
+    pasa como qs base a MaintainerService.list (que suma search)."""
+    qs = _service.base_qs()
+    if target_types:
+        qs = qs.filter(target_type__in=target_types)
+    if enabled is not None:
+        qs = qs.filter(enabled=enabled)
+    return qs
+
+
+def list_crons(search: str = "", page: int = 1, per_page: int = 20,
+               target_types=None, enabled=None) -> dict:
+    """Lista crons (excluye soft-deleted) con busqueda + filtros + paginacion.
+
+    Filtros: target_types (tipo, multi) y enabled (True/False/None). Delega en
+    MaintainerService.list (pasando el qs ya filtrado) y renombra `items` ->
+    `crons` para no romper el contrato del template/tests existentes.
     """
-    data = _service.list(qs=_service.base_qs(), search=search, page=page, per_page=per_page)
+    data = _service.list(qs=_filtered_cron_qs(target_types, enabled),
+                         search=search, page=page, per_page=per_page)
     data["crons"] = data.pop("items")
     return data
+
+
+def export_crons_csv(search: str = "", target_types=None, enabled=None) -> str:
+    """CSV consolidado (compatible con Excel) de los crons que matchean los
+    filtros activos (tipo/habilitado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_cron_qs(target_types, enabled)
+    if search:
+        # Mismos campos que CronsService.search_fields (name/slug/expr/tipo).
+        qs = qs.filter(
+            Q(name__icontains=search)
+            | Q(slug__icontains=search)
+            | Q(cron_expression__icontains=search)
+            | Q(target_type__icontains=search)
+        )
+    qs = qs.distinct().order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Nombre", "Slug", "Expresion", "Tipo", "Target", "Habilitado", "Creado"])
+    for c in qs:
+        w.writerow([
+            c.name, c.slug, c.cron_expression, c.get_target_type_display(),
+            c.target_id, "Si" if c.enabled else "No",
+            c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else "",
+        ])
+    return buf.getvalue()
 
 
 def get_list_signal() -> dict:

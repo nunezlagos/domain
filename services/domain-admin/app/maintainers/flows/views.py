@@ -38,6 +38,9 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
 
+from django.http import HttpResponse
+
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
@@ -48,11 +51,32 @@ from .models import Flow
 class FlowViews(MaintainerViews):
     """MaintainerViews especializado para flows (list filtrado + context keys)."""
 
+    # --- list con filtro is_active. Guardamos el request para que
+    #     do_list/list_context lean el GET `active`; el resto lo arma core.
+    def list(self, request):
+        self._list_request = request
+        return super().list(request)
+
     # --- list: el default de core.views lista TODO; flows debe EXCLUIR los
     #     soft-deleted (deleted_at != NULL). Se delega en services.list_flows,
-    #     que aplica ese filtro y ya devuelve la lista bajo `flows`.
+    #     que aplica ese filtro y ya devuelve la lista bajo `flows`. El GET
+    #     `active` ("1"/"0") se traduce a bool; "" = sin filtro de estado.
     def do_list(self, search: str, page: int) -> dict:
-        return services.list_flows(search=search, page=page, per_page=self.per_page)
+        req = getattr(self, "_list_request", None)
+        val = req.GET.get("active") if req else None
+        is_active = None if not val else (val == "1")
+        return services.list_flows(
+            search=search, page=page, per_page=self.per_page,
+            is_active=is_active,
+        )
+
+    # --- contexto del listado: agrega la seleccion actual del filtro is_active
+    #     para que el container de filtros marque la opcion correcta.
+    def list_context(self, data: dict, search: str) -> dict:
+        ctx = super().list_context(data, search)
+        req = getattr(self, "_list_request", None)
+        ctx["selected_active"] = req.GET.get("active", "") if req else ""
+        return ctx
 
     # --- contextos: los templates de flows usan `flow_obj` (no `object`).
     def form_context(self, form, mode: str, instance, action: str) -> dict:
@@ -87,3 +111,19 @@ views = FlowViews(
     per_page=20,
     search_param="q",
 )
+
+
+def export_flows(request):
+    """Export CSV (consolidado, abre en Excel) de los flows filtrados.
+    Respeta los filtros activos: q (busqueda) y active ("1"/"0", "" = todos)."""
+    if (redir := require_auth(request)):
+        return redir
+    val = request.GET.get("active") or ""
+    is_active = None if not val else (val == "1")
+    csv_data = services.export_flows_csv(
+        search=(request.GET.get("q") or "").strip(),
+        is_active=is_active,
+    )
+    resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="flows.csv"'
+    return resp

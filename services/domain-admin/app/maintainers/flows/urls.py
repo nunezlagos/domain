@@ -11,10 +11,14 @@ Los segmentos en español (nuevo/editar/eliminar/toggle) que arma core.urls son
 OBLIGATORIOS: maintainer.js deriva las URLs de accion desde data-base-url +
 estos segmentos. core.urls los mantiene identicos a los del app original.
 """
+from django.urls import path
+
 from core.urls import maintainer_urlpatterns
 
 from . import views
 
 app_name = "flows"
 
-urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="flow_id")
+urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="flow_id") + [
+    path("export/", views.export_flows, name="export"),
+]

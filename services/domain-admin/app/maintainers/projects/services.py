@@ -45,18 +45,57 @@ class ProjectService(MaintainerService):
 _service = ProjectService()
 
 
-def list_projects(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista proyectos ACTIVOS (no archivados) con busqueda + paginacion.
+def _filtered_project_qs(statuses=None):
+    """Queryset de Project filtrado por estado (status). Lista vacia = sin
+    filtro. Se pasa como qs base a MaintainerService.list (que suma search)."""
+    qs = Project.objects.all()
+    if statuses:
+        qs = qs.filter(status__in=statuses)
+    return qs
 
-    Excluye los soft-deleted/archivados (deleted_at != NULL). Delega la
+
+def list_projects(search: str = "", page: int = 1, per_page: int = 20,
+                  statuses=None) -> dict:
+    """Lista proyectos ACTIVOS (no archivados) con busqueda + filtro + paginacion.
+
+    Excluye los soft-deleted/archivados (deleted_at != NULL). Aplica ademas el
+    filtro por estado (status) sobre el queryset base. Delega la
     busqueda/paginacion en MaintainerService.list pasando el queryset ya
     filtrado, y renombra la clave `items` -> `projects` para no romper el
     contrato del template/tests existentes.
     """
-    qs = Project.objects.filter(deleted_at__isnull=True)
+    qs = _filtered_project_qs(statuses).filter(deleted_at__isnull=True)
     data = _service.list(qs=qs, search=search, page=page, per_page=per_page)
     data["projects"] = data.pop("items")
     return data
+
+
+def export_projects_csv(search: str = "", statuses=None) -> str:
+    """CSV consolidado (compatible con Excel) de los proyectos que matchean los
+    filtros activos (estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_project_qs(statuses)
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search)
+            | Q(slug__icontains=search)
+            | Q(description__icontains=search)
+            | Q(repository_url__icontains=search)
+        )
+    qs = qs.distinct().order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Nombre", "Slug", "Descripcion", "Estado", "Creado"])
+    for p in qs:
+        w.writerow([
+            p.name, p.slug, p.description, p.get_status_display(),
+            p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "",
+        ])
+    return buf.getvalue()
 
 
 def get_list_signal() -> dict:

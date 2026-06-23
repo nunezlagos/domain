@@ -58,17 +58,58 @@ def _slug_taken(slug: str, project_id, exclude_pk=None) -> bool:
     return qs.exists()
 
 
-def list_skills(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista skills (excluye soft-deleted) con busqueda + paginacion.
+def _filtered_skill_qs(skill_types=None):
+    """Queryset de Skill filtrado por tipo (multi-select). Lista vacia = sin
+    filtro. Parte del queryset base (excluye soft-deleted) y se pasa a
+    MaintainerService.list (que suma la busqueda)."""
+    qs = _service.base_qs()
+    if skill_types:
+        qs = qs.filter(skill_type__in=skill_types)
+    return qs
 
-    Delega en MaintainerService.list pasando el queryset base filtrado y
-    renombra la clave `items` -> `skills` para no romper el template/tests.
+
+def list_skills(search: str = "", page: int = 1, per_page: int = 20,
+                skill_types=None) -> dict:
+    """Lista skills (excluye soft-deleted) con busqueda + filtro de tipo +
+    paginacion.
+
+    Delega en MaintainerService.list pasando el queryset ya filtrado y renombra
+    la clave `items` -> `skills` para no romper el template/tests.
     """
     data = _service.list(
-        qs=_service.base_qs(), search=search, page=page, per_page=per_page
+        qs=_filtered_skill_qs(skill_types), search=search, page=page,
+        per_page=per_page,
     )
     data["skills"] = data.pop("items")
     return data
+
+
+def export_skills_csv(search: str = "", skill_types=None) -> str:
+    """CSV consolidado (compatible con Excel) de las skills que matchean los
+    filtros activos (tipo/busqueda). Excluye soft-deleted. Sin paginar."""
+    import csv
+    import io
+
+    from django.db.models import Q
+
+    qs = _filtered_skill_qs(skill_types)
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search)
+            | Q(slug__icontains=search)
+            | Q(description__icontains=search)
+        )
+    qs = qs.distinct().order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Nombre", "Slug", "Tipo", "Descripcion", "Creado"])
+    for s in qs:
+        w.writerow([
+            s.name, s.slug, s.get_skill_type_display(), s.description,
+            s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "",
+        ])
+    return buf.getvalue()
 
 
 def get_list_signal() -> dict:

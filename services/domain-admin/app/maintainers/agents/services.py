@@ -40,17 +40,64 @@ class AgentsService(MaintainerService):
 _service = AgentsService()
 
 
-def list_agents(search: str = "", page: int = 1, per_page: int = 20) -> dict:
-    """Lista agentes (excluye soft-deleted) con busqueda + paginacion.
+def _filtered_agent_qs(providers=None, statuses=None):
+    """Queryset base del listado (excluye soft-deleted) filtrado por proveedor
+    y/o estado (multi-select). Listas vacias = sin filtro. Se pasa como qs base a
+    MaintainerService.list (que suma la busqueda)."""
+    qs = _service.base_qs()
+    if providers:
+        qs = qs.filter(provider__in=providers)
+    if statuses:
+        qs = qs.filter(status__in=statuses)
+    return qs
 
-    Delega en MaintainerService.list pasandole el qs ya filtrado, y renombra la
-    clave `items` -> `agents` para no romper el contrato del template/tests.
+
+def list_agents(search: str = "", page: int = 1, per_page: int = 20,
+                providers=None, statuses=None) -> dict:
+    """Lista agentes (excluye soft-deleted) con busqueda + filtros + paginacion.
+
+    Delega en MaintainerService.list pasandole el qs ya filtrado (proveedor/
+    estado), y renombra la clave `items` -> `agents` para no romper el contrato
+    del template/tests.
     """
     data = _service.list(
-        qs=_service.base_qs(), search=search, page=page, per_page=per_page
+        qs=_filtered_agent_qs(providers, statuses),
+        search=search, page=page, per_page=per_page,
     )
     data["agents"] = data.pop("items")
     return data
+
+
+def export_agents_csv(search: str = "", providers=None, statuses=None) -> str:
+    """CSV consolidado (compatible con Excel) de los agentes que matchean los
+    filtros activos (proveedor/estado/busqueda). Sin paginar."""
+    import csv
+    import io
+    from django.db.models import Q
+
+    qs = _filtered_agent_qs(providers, statuses)
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search) | Q(slug__icontains=search)
+            | Q(provider__icontains=search) | Q(model__icontains=search)
+        )
+    qs = qs.distinct().order_by("name")
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Nombre", "Slug", "Proveedor", "Modelo", "Estado", "Skills", "Creado"])
+    for a in qs:
+        w.writerow([
+            a.name, a.slug, a.provider, a.model, a.get_status_display(),
+            ", ".join(a.skills_slugs or []),
+            a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
+        ])
+    return buf.getvalue()
+
+
+def list_provider_options() -> list[str]:
+    """Proveedores distintos en uso (para el multi-select del filtro)."""
+    return sorted(p for p in Agent.objects.values_list("provider", flat=True).distinct() if p)
 
 
 def get_list_signal() -> dict:

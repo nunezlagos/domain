@@ -19,4 +19,6 @@ from . import views
 
 app_name = "agents"
 
-urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="agent_id")
+urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="agent_id") + [
+    path("export/", views.export_agents, name="export"),
+]

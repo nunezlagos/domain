@@ -37,19 +37,20 @@ func (s *Service) fetchRecommendedSkills(ctx context.Context, orgID, projectID u
 	if err != nil {
 		return nil, fmt.Errorf("search skills: %w", err)
 	}
-	// Scoping por proyecto: solo se recomiendan skills ENLAZADAS al proyecto
-	// (project_skills). Si projectID es Nil, no se filtra (compat sin scope).
-	linked, err := s.Skills.LinkedSkillIDs(ctx, projectID)
+	// Scoping por proyecto (modelo hibrido): aplican las globales (auto) + las del
+	// proyecto, menos las EXCLUIDAS (project_skills.is_enabled = FALSE). Si projectID
+	// es Nil, no se filtra (compat sin scope).
+	applicable, err := s.Skills.ApplicableSkillIDs(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("linked skills: %w", err)
+		return nil, fmt.Errorf("applicable skills: %w", err)
 	}
 	recs := &SkillsRecommended{Threshold: threshold}
 	for _, r := range results {
 		if r.Score < threshold {
 			continue
 		}
-		if linked != nil && !linked[r.ID] {
-			continue // skill no enlazada a este proyecto → no usable
+		if applicable != nil && !applicable[r.ID] {
+			continue // skill no aplica a este proyecto (otro proyecto o excluida)
 		}
 		recs.Skills = append(recs.Skills, SkillRecommendation{
 			Slug:  r.Slug,

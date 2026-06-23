@@ -129,17 +129,20 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Scoping por proyecto: una skill es usable SOLO si esta enlazada via
-	// project_skills (regla "no usable si no enlazada"). El scope 'global' vs
-	// 'project' refleja si la definicion de la skill es de plataforma
-	// (skills.project_id IS NULL) o propia del proyecto.
+	// Modelo hibrido (auto + excluibles): aplican las globales (project_id IS NULL,
+	// automaticas) + las del proyecto (project_id = $1), MENOS las excluidas
+	// (project_skills con is_enabled = FALSE). El scope 'global' vs 'project'
+	// refleja si la definicion de la skill es de plataforma o propia del proyecto.
 	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
 		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
 		   FROM skills s
-		   JOIN project_skills ps
-		     ON ps.skill_id = s.id AND ps.project_id = $1 AND ps.is_enabled = TRUE
 		   WHERE s.deleted_at IS NULL
-		     AND s.proposed = false`
+		     AND s.proposed = false
+		     AND (s.project_id IS NULL OR s.project_id = $1)
+		     AND NOT EXISTS (
+		       SELECT 1 FROM project_skills ps
+		        WHERE ps.skill_id = s.id AND ps.project_id = $1 AND ps.is_enabled = FALSE
+		     )`
 	if !includeGlobals {
 		q += ` AND s.project_id IS NOT NULL`
 	}
@@ -347,14 +350,14 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 	})
 }
 
-// domain_project_skill_unlink borra la fila project_skills que enlaza una
-// skill a un proyecto. NO borra la skill — solo la desenlaza, dejandola
-// no-usable en ese proyecto (regla "no usable si no enlazada"). Idempotente:
-// no es error si el enlace no existe. Identifica la skill por skill_id (UUID)
-// o por skill_slug (resuelve global o del proyecto).
+// domain_project_skill_unlink EXCLUYE una skill de un proyecto (modelo hibrido:
+// auto + excluibles). Las skills aplican automaticamente; "unlink" registra una
+// EXCLUSION (project_skills con is_enabled = FALSE) para que esa skill deje de
+// aplicar a ese proyecto. NO borra la skill. Idempotente. Identifica la skill por
+// skill_id (UUID) o por skill_slug (resuelve global o del proyecto).
 func toolProjectSkillUnlink() mcp.Tool {
 	return mcp.NewTool("domain_project_skill_unlink",
-		mcp.WithDescription("Desenlaza una skill de un proyecto (borra la fila project_skills). NO borra la skill — solo deja de estar disponible en ese proyecto. Idempotente: no falla si el enlace no existe. Identifica la skill por 'skill_id' (UUID) o 'skill_slug' (busca primero la del proyecto, luego la global)."),
+		mcp.WithDescription("Excluye una skill de un proyecto: registra una exclusion (project_skills.is_enabled=FALSE) para que esa skill deje de aplicar. Las skills globales aplican automaticamente; esto sirve para desactivar una puntual. NO borra la skill. Idempotente. Identifica la skill por 'skill_id' (UUID) o 'skill_slug' (busca primero la del proyecto, luego la global)."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto del que se desenlaza"), mcp.Required()),
 		mcp.WithString("skill_id", mcp.Description("UUID de la skill. Preferido. Si se omite, se usa skill_slug.")),
 		mcp.WithString("skill_slug", mcp.Description("Slug de la skill. Ignorado si se pasa skill_id.")),
@@ -412,17 +415,22 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		}
 	}
 
-	tag, err := d.q(ctx).Exec(ctx,
-		`DELETE FROM project_skills WHERE project_id = $1 AND skill_id = $2`,
+	// Modelo hibrido: "unlink" = EXCLUIR (upsert is_enabled=FALSE), no borrar la
+	// fila. Borrarla haria que la skill global vuelva a aplicar (auto). La exclusion
+	// es la que hace que deje de aplicar.
+	if _, eerr := d.q(ctx).Exec(ctx,
+		`INSERT INTO project_skills (project_id, skill_id, is_enabled)
+		   VALUES ($1, $2, FALSE)
+		 ON CONFLICT (project_id, skill_id) DO UPDATE SET is_enabled = FALSE`,
 		proj.ID, target,
-	)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("unlink failed: %v", err)), nil
+	); eerr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("exclude failed: %v", eerr)), nil
 	}
 	return toolResultJSON(map[string]any{
 		"project_slug": projSlug,
 		"skill_id":     target.String(),
-		"unlinked":     tag.RowsAffected() > 0,
+		"excluded":     true,
+		"unlinked":     true,
 	})
 }
 

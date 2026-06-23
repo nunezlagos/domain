@@ -185,7 +185,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 			}
 			return toolResultJSON(resp)
 		}
-		linked, _ := d.linkPlatformSkills(ctx, newID)
+		applicable, _ := d.countPlatformSkills(ctx, newID)
 		resp := map[string]any{
 			"known":        true,
 			"auto_created": true,
@@ -194,9 +194,9 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 				"slug": newSlug,
 				"name": newSlug,
 			},
-			"linked_skills":        linked,
+			"applicable_skills":    applicable,
 			"existing_rules_files": rulesFiles,
-			"next_step":            fmt.Sprintf("Proyecto auto-creado (slug=%s) con %d skills de plataforma enlazadas. Use project_id=%s en domain_prompt/domain_orchestrate. Si hay archivos AI-rules detectados, importelos con domain_project_policy_import_from_text.", newSlug, linked, newID.String()),
+			"next_step":            fmt.Sprintf("Proyecto auto-creado (slug=%s). Las %d skills de plataforma aplican automaticamente (modelo hibrido: globales auto, excluibles por proyecto). Use project_id=%s en domain_prompt/domain_orchestrate. Si hay archivos AI-rules detectados, importelos con domain_project_policy_import_from_text.", newSlug, applicable, newID.String()),
 		}
 		if len(rulesFiles) > 0 {
 			resp["suggested_imports_note"] = "Se detectaron " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Lealos con la tool Read y llame domain_project_policy_import_from_text por cada uno."
@@ -424,22 +424,20 @@ func (d *Deps) autoCreateProject(ctx context.Context, orgID uuid.UUID, cwd, gitR
 	return projID, slug, nil
 }
 
-// linkPlatformSkills enlaza todas las skills de plataforma (globales, sin
-// project_id) al proyecto, via project_skills. Es el "auto-enlace al crear"
-// (decision del usuario): un proyecto nuevo arranca con el catalogo de
-// plataforma habilitado; despues se desenlaza lo que no se use. Idempotente.
-func (d *Deps) linkPlatformSkills(ctx context.Context, projID uuid.UUID) (int64, error) {
-	tag, err := d.q(ctx).Exec(ctx,
-		`INSERT INTO project_skills (project_id, skill_id)
-		   SELECT $1, id FROM skills
-		   WHERE project_id IS NULL AND deleted_at IS NULL AND proposed = FALSE
-		 ON CONFLICT (project_id, skill_id) DO NOTHING`,
-		projID,
-	)
+// countPlatformSkills cuenta las skills de plataforma (globales) que aplicaran
+// al proyecto. Modelo hibrido (auto + excluibles): las globales aplican
+// AUTOMATICAMENTE sin enlace; project_skills se usa solo para EXCLUIR. Por eso
+// el bootstrap ya NO inserta filas — solo informa cuantas aplican.
+func (d *Deps) countPlatformSkills(ctx context.Context, projID uuid.UUID) (int64, error) {
+	var n int64
+	err := d.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM skills
+		   WHERE project_id IS NULL AND deleted_at IS NULL AND proposed = FALSE`,
+	).Scan(&n)
 	if err != nil {
-		return 0, fmt.Errorf("link platform skills: %w", err)
+		return 0, fmt.Errorf("count platform skills: %w", err)
 	}
-	return tag.RowsAffected(), nil
+	return n, nil
 }
 
 func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

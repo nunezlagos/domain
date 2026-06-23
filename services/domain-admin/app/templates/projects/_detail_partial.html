@@ -60,11 +60,11 @@ Reglas (plataforma auto + del proyecto). Misma estructura que el editar.
     </div>
 
     <div class="vpane vpane-skills">
-      <div id="project-skills-pane" data-pane data-pane-url="{% url 'projects:skills_pane' project_obj.pk %}">{% include "projects/_skills_pane.html" %}</div>
+      <div id="project-skills-pane" data-pane data-pane-readonly="1" data-pane-url="{% url 'projects:skills_pane' project_obj.pk %}">{% include "projects/_skills_pane.html" %}</div>
     </div>
 
     <div class="vpane vpane-reglas">
-      <div id="project-rules-pane" data-pane data-pane-url="{% url 'projects:rules_pane' project_obj.pk %}">{% include "projects/_rules_pane.html" %}</div>
+      <div id="project-rules-pane" data-pane data-pane-readonly="1" data-pane-url="{% url 'projects:rules_pane' project_obj.pk %}">{% include "projects/_rules_pane.html" %}</div>
     </div>
   </div>
 </div>

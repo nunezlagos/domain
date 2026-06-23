@@ -28,6 +28,8 @@
 
   async function fetchPane(pane, scope, page) {
     var params = new URLSearchParams({ scope: scope, page: String(page) });
+    // El "ver" es read-only: re-fetchea sin columna/botones de gestion.
+    if (pane.dataset.paneReadonly === '1') params.set('readonly', '1');
     try {
       var r = await fetch(pane.dataset.paneUrl + '?' + params.toString(), {
         credentials: 'same-origin',

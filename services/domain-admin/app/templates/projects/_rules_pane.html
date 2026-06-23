@@ -17,12 +17,14 @@ is_active/override_platform/editable), rules_scope, counts, paginacion.
     <option value="platform" {% if rules_scope == 'platform' %}selected{% endif %}>Plataforma ({{ rules_platform_count }})</option>
     <option value="project" {% if rules_scope == 'project' %}selected{% endif %}>Del proyecto ({{ rules_project_count }})</option>
   </select>
-  <a href="{% url 'projectpolicies:list' %}" class="text-secondary mnt-text-sm">+ Gestionar reglas →</a>
+  {% if not readonly %}
+    <a href="{% url 'projectpolicies:list' %}" class="text-secondary mnt-text-sm">+ Gestionar reglas →</a>
+  {% endif %}
 </div>
 
 <table class="table mnt-table-sm">
   <thead>
-    <tr><th>Tipo</th><th>Nombre</th><th>Origen</th><th>Estado</th><th class="mnt-col-actions">Accion</th></tr>
+    <tr><th>Tipo</th><th>Nombre</th><th>Origen</th><th>Estado</th>{% if not readonly %}<th class="mnt-col-actions">Accion</th>{% endif %}</tr>
   </thead>
   <tbody>
     {% for r in rules %}
@@ -35,24 +37,26 @@ is_active/override_platform/editable), rules_scope, counts, paginacion.
           {% elif r.is_active %}<span class="badge badge-success">Activa</span>
           {% else %}<span class="badge badge-danger">Inactiva</span>{% endif %}
         </td>
-        <td class="mnt-col-narrow">
-          {% if r.editable %}
-            {% if r.is_active %}
-              <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-pane-action
-                      data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
-                      data-params="policy_id={{ r.id }}">Desactivar</button>
+        {% if not readonly %}
+          <td class="mnt-col-narrow">
+            {% if r.editable %}
+              {% if r.is_active %}
+                <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-pane-action
+                        data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
+                        data-params="policy_id={{ r.id }}">Desactivar</button>
+              {% else %}
+                <button type="button" class="btn btn-sm btn-ghost" data-pane-action
+                        data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
+                        data-params="policy_id={{ r.id }}">Activar</button>
+              {% endif %}
             {% else %}
-              <button type="button" class="btn btn-sm btn-ghost" data-pane-action
-                      data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
-                      data-params="policy_id={{ r.id }}">Activar</button>
+              <span class="text-muted mnt-text-sm">—</span>
             {% endif %}
-          {% else %}
-            <span class="text-muted mnt-text-sm">—</span>
-          {% endif %}
-        </td>
+          </td>
+        {% endif %}
       </tr>
     {% empty %}
-      <tr><td colspan="5" class="mnt-empty-cell">No hay reglas para este filtro.</td></tr>
+      <tr><td colspan="{% if readonly %}4{% else %}5{% endif %}" class="mnt-empty-cell">No hay reglas para este filtro.</td></tr>
     {% endfor %}
   </tbody>
 </table>

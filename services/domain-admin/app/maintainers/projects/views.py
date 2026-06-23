@@ -123,8 +123,9 @@ class ProjectViews(MaintainerViews):
         }
         # En edicion exponemos skills + reglas para las tabs (mismo set que el ver).
         if mode == "edit" and instance is not None:
-            ctx.update(_skills_ctx(instance))
-            ctx.update(_rules_ctx(instance))
+            # En edicion las skills/reglas son gestionables (readonly=False).
+            ctx.update(_skills_ctx(instance, readonly=False))
+            ctx.update(_rules_ctx(instance, readonly=False))
         return ctx
 
     def detail_context(self, instance) -> dict:
@@ -133,8 +134,9 @@ class ProjectViews(MaintainerViews):
             "object": instance,
             "repositories": services.get_project_repositories(instance),
         }
-        ctx.update(_skills_ctx(instance))
-        ctx.update(_rules_ctx(instance))
+        # El "ver" es un visualizador: skills/reglas SOLO lectura (sin gestionar).
+        ctx.update(_skills_ctx(instance, readonly=True))
+        ctx.update(_rules_ctx(instance, readonly=True))
         return ctx
 
     # --- toggle con feedback de dominio (archivado/restaurado).
@@ -154,8 +156,9 @@ class ProjectViews(MaintainerViews):
         return HttpResponseRedirect(self.url("list"))
 
 
-def _skills_ctx(project, scope="all", page=1) -> dict:
-    """Contexto del pane de skills (tabla combinada + filtro scope + paginacion)."""
+def _skills_ctx(project, scope="all", page=1, readonly=False) -> dict:
+    """Contexto del pane de skills (tabla combinada + filtro scope + paginacion).
+    readonly=True (el "ver"): sin columna/botones de accion."""
     data = services.list_project_skills(project, scope=scope, page=page)
     return {
         "project_obj": project,
@@ -165,14 +168,16 @@ def _skills_ctx(project, scope="all", page=1) -> dict:
         "skills_excluded_count": data["excluded_count"],
         "skills_global_count": data["global_count"],
         "skills_internal_count": data["internal_count"],
+        "readonly": readonly,
         # paginacion del pane
         "total": data["total"], "page": data["page"], "per_page": data["per_page"],
         "total_pages": data["total_pages"], "has_prev": data["has_prev"], "has_next": data["has_next"],
     }
 
 
-def _rules_ctx(project, scope="all", page=1) -> dict:
-    """Contexto del pane de reglas (tabla combinada + filtro scope + paginacion)."""
+def _rules_ctx(project, scope="all", page=1, readonly=False) -> dict:
+    """Contexto del pane de reglas (tabla combinada + filtro scope + paginacion).
+    readonly=True (el "ver"): sin botones de toggle ni link de gestion."""
     data = services.list_project_rules(project, scope=scope, page=page)
     return {
         "project_obj": project,
@@ -180,6 +185,7 @@ def _rules_ctx(project, scope="all", page=1) -> dict:
         "rules_scope": data["scope"],
         "rules_platform_count": data["platform_count"],
         "rules_project_count": data["project_count"],
+        "readonly": readonly,
         "total": data["total"], "page": data["page"], "per_page": data["per_page"],
         "total_pages": data["total_pages"], "has_prev": data["has_prev"], "has_next": data["has_next"],
     }
@@ -203,7 +209,8 @@ def skills_pane(request, project_id):
         return redir
     scope = request.GET.get("scope") or "all"
     page = request.GET.get("page") or 1
-    return render(request, "projects/_skills_pane.html", _skills_ctx(project, scope, page))
+    readonly = request.GET.get("readonly") == "1"
+    return render(request, "projects/_skills_pane.html", _skills_ctx(project, scope, page, readonly))
 
 
 @require_http_methods(["POST"])
@@ -234,7 +241,8 @@ def rules_pane(request, project_id):
         return redir
     scope = request.GET.get("scope") or "all"
     page = request.GET.get("page") or 1
-    return render(request, "projects/_rules_pane.html", _rules_ctx(project, scope, page))
+    readonly = request.GET.get("readonly") == "1"
+    return render(request, "projects/_rules_pane.html", _rules_ctx(project, scope, page, readonly))
 
 
 @require_http_methods(["POST"])

@@ -11,8 +11,11 @@ boton de export a Excel (CSV); todos los estilos viven en maintainers.css.
 {% block page_title %}Flows{% endblock %}
 {% block header_title %}Flows{% endblock %}
 {% block page_subtitle %}DAGs declarativos que ejecuta la organizacion{% endblock %}
-{% block create_label %}+ Nuevo flow{% endblock %}
 {% block search_placeholder %}Nombre, slug o descripcion...{% endblock %}
+
+{% comment %} Crear deshabilitado: el catalogo de flows lo gestiona la plataforma
+   (sdd-pipeline-v1). El mantenedor es solo visualizar + editar. {% endcomment %}
+{% block header_actions %}{% endblock %}
 
 {% block filters %}
   <div>

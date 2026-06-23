@@ -70,12 +70,10 @@ Reglas (plataforma auto + del proyecto). Misma estructura que el editar.
 </div>
 {% endblock %}
 
+{% comment %} Footer: solo Cerrar (rojo) + Editar (primary), a pedido. Archivar/
+   Eliminar quedan en las acciones de la fila del listado. {% endcomment %}
+{% block detail_close %}{% endblock %}
 {% block detail_actions %}
+  <button type="button" class="btn btn-outline-danger" data-modal-close>Cerrar</button>
   <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ project_obj.pk }}">Editar</button>
-  {% if project_obj.is_active %}
-    <button type="button" class="btn btn-warning" data-action="toggle" data-id="{{ project_obj.pk }}">Archivar</button>
-  {% else %}
-    <button type="button" class="btn btn-success" data-action="toggle" data-id="{{ project_obj.pk }}">Restaurar</button>
-  {% endif %}
-  <button type="button" class="btn btn-danger" data-action="delete" data-id="{{ project_obj.pk }}" data-name="{{ project_obj.display_name }}">Eliminar</button>
 {% endblock %}

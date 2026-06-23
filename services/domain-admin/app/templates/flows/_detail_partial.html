@@ -1,86 +1,78 @@
 {% extends "maintainers/_detail_base.html" %}
 {% comment %}
-Detalle de flow para el modal dinamico. Extiende maintainers/_detail_base.html
-(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
-Incluye la lista READ-ONLY de versiones (flow_versions) del flow.
+Detalle de flow (modal). Minimalista con tabs VERTICALES (.vtabs): Datos, JSON
+(spec read-only) y Versiones (snapshots inmutables). Modal grande para leer el
+JSON comodo. Footer: Cerrar (rojo) + Editar (primary). Misma estructura que el editar.
 {% endcomment %}
 
 {% block detail_title %}{{ flow_obj.display_name }}{% endblock %}
 
 {% block detail_body %}
-  <p class="text-secondary mb-3">
-    <code>{{ flow_obj.slug }}</code>
-    · Estado:
-    {% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>
-    {% else %}<span class="badge badge-warning">{{ flow_obj.status_label }}</span>
-    {% endif %}
-  </p>
-
-  <h4 class="mnt-detail-section">Informacion</h4>
-  <table class="table mnt-table-sm">
-    <tbody>
-      <tr><th class="mnt-th-label">Nombre</th><td>{{ flow_obj.name }}</td></tr>
-      <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
-      <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
-      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
-      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Si,No" }}</td></tr>
-      <tr><th>Version de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
-      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
-      <tr><th>Creado</th><td>{{ flow_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Actualizado</th><td>{{ flow_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
-    </tbody>
-  </table>
-
-  <h4 class="mnt-detail-section">Versiones</h4>
-  {% if flow_versions %}
-    <table class="table mnt-table-sm">
-      <thead>
-        <tr>
-          <th class="mnt-col-narrow">Version</th>
-          <th>Hash</th>
-          <th>Nota</th>
-          <th>Creada</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for v in flow_versions %}
-          <tr>
-            <td><span class="badge badge-primary">v{{ v.version }}</span></td>
-            <td><code>{{ v.short_hash }}</code></td>
-            <td>{{ v.note|default:"—" }}</td>
-            <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+<div class="vtabs" data-modal-lg>
+  <input type="radio" name="ptab" id="pt-datos" checked>
+  <input type="radio" name="ptab" id="pt-json">
+  <input type="radio" name="ptab" id="pt-versiones">
+  <nav class="vtabs-nav">
+    <label for="pt-datos">Datos</label>
+    <label for="pt-json">JSON</label>
+    <label for="pt-versiones">Versiones <span class="vtab-count">{{ flow_versions|length }}</span></label>
+  </nav>
+  <div class="vtabs-body">
+    <div class="vpane vpane-datos">
+      <table class="table mnt-table-sm">
+        <tbody>
+          <tr><th class="mnt-th-label">Nombre</th><td>{{ flow_obj.name }}</td></tr>
+          <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
+          <tr><th>Estado</th>
+            <td>{% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>{% else %}<span class="badge badge-warning">{{ flow_obj.status_label }}</span>{% endif %}</td>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="text-secondary mt-2 mnt-text-sm">
-      {{ flow_versions|length }} version(es). Las versiones son snapshots
-      inmutables (read-only); se generan al publicar cambios del flow.
-    </p>
-  {% else %}
-    <p class="text-muted">Este flow todavia no tiene versiones publicadas.</p>
-  {% endif %}
+          <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
+          <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
+          <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+          <tr><th>Version de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
+          <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
+          <tr><th>Creado</th><td>{{ flow_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+          <tr><th>Actualizado</th><td>{{ flow_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="vpane vpane-json">
+      {% if spec_pretty %}<pre class="json-view">{{ spec_pretty }}</pre>
+      {% else %}<p class="text-muted">Este flow no tiene spec.</p>{% endif %}
+    </div>
+
+    <div class="vpane vpane-versiones">
+      {% if flow_versions %}
+        <table class="table mnt-table-sm">
+          <thead>
+            <tr><th class="mnt-col-narrow">Version</th><th>Hash</th><th>Nota</th><th>Creada</th></tr>
+          </thead>
+          <tbody>
+            {% for v in flow_versions %}
+              <tr>
+                <td><span class="badge badge-primary">v{{ v.version }}</span></td>
+                <td><code>{{ v.short_hash }}</code></td>
+                <td>{{ v.note|default:"—" }}</td>
+                <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="text-secondary mt-2 mnt-text-sm">
+          {{ flow_versions|length }} version(es). Snapshots inmutables (read-only).
+        </p>
+      {% else %}
+        <p class="text-muted">Este flow todavia no tiene versiones publicadas.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}
 
+{% comment %} Footer: solo Cerrar (rojo) + Editar (primary), a pedido. {% endcomment %}
+{% block detail_close %}{% endblock %}
 {% block detail_actions %}
-  <button type="button" class="btn btn-primary"
-          data-action="edit" data-id="{{ flow_obj.pk }}">
-    Editar
-  </button>
-  {% if flow_obj.is_active %}
-    <button type="button" class="btn btn-warning"
-            data-action="toggle" data-id="{{ flow_obj.pk }}">
-      Desactivar
-    </button>
-  {% else %}
-    <button type="button" class="btn btn-success"
-            data-action="toggle" data-id="{{ flow_obj.pk }}">
-      Activar
-    </button>
-  {% endif %}
-  <button type="button" class="btn btn-danger"
-          data-action="delete" data-id="{{ flow_obj.pk }}"
-          data-name="{{ flow_obj.display_name }}">
-    Eliminar
-  </button>
+  <button type="button" class="btn btn-outline-danger" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ flow_obj.pk }}">Editar</button>
 {% endblock %}

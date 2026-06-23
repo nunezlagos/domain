@@ -38,7 +38,10 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 """
 from __future__ import annotations
 
-from django.http import HttpResponse
+import json
+
+from django.contrib import messages
+from django.http import HttpResponse, HttpResponseRedirect
 
 from core.auth import require_auth
 from core.views import MaintainerViews
@@ -46,6 +49,20 @@ from core.views import MaintainerViews
 from . import services
 from .forms import FlowForm
 from .models import Flow
+
+
+def _pretty_spec(flow) -> str:
+    """Devuelve el spec del flow como JSON formateado (indent 2) para mostrar/
+    editar. Acepta dict/list (JSONField) o string JSON; si no parsea, lo crudo."""
+    spec = getattr(flow, "spec", None)
+    if spec in (None, ""):
+        return ""
+    if isinstance(spec, (dict, list)):
+        return json.dumps(spec, indent=2, ensure_ascii=False)
+    try:
+        return json.dumps(json.loads(spec), indent=2, ensure_ascii=False)
+    except (ValueError, TypeError):
+        return str(spec)
 
 
 class FlowViews(MaintainerViews):
@@ -56,6 +73,18 @@ class FlowViews(MaintainerViews):
     def list(self, request):
         self._list_request = request
         return super().list(request)
+
+    # --- CREAR deshabilitado: el catalogo de flows lo gestiona el seeder de la
+    #     plataforma (sdd-pipeline-v1). El mantenedor es solo visualizar + editar.
+    #     Bloqueamos tanto el GET (form) como el POST: redirige al listado.
+    def create(self, request):
+        if (redir := require_auth(request)):
+            return redir
+        messages.info(
+            request,
+            "Los flows no se crean desde el dashboard: el catalogo lo gestiona la plataforma.",
+        )
+        return HttpResponseRedirect(self.url("list"))
 
     # --- list: el default de core.views lista TODO; flows debe EXCLUIR los
     #     soft-deleted (deleted_at != NULL). Se delega en services.list_flows,
@@ -80,19 +109,24 @@ class FlowViews(MaintainerViews):
 
     # --- contextos: los templates de flows usan `flow_obj` (no `object`).
     def form_context(self, form, mode: str, instance, action: str) -> dict:
-        return {
+        ctx = {
             "form": form,
             "mode": mode,
             "flow_obj": instance,
             "object": instance,
             "action": action,
         }
+        # En edicion mostramos tambien las versiones (read-only) en su tab.
+        if mode == "edit" and instance is not None:
+            ctx["flow_versions"] = services.get_flow_versions(instance)
+        return ctx
 
     def detail_context(self, instance) -> dict:
         return {
             "flow_obj": instance,
             "object": instance,
             "flow_versions": services.get_flow_versions(instance),
+            "spec_pretty": _pretty_spec(instance),
         }
 
 

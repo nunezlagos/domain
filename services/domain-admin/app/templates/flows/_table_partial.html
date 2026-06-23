@@ -45,31 +45,8 @@ bajo `flows` (no `object_list`), se sobreescribe el bloque `rows` completo.
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
             </svg>
           </button>
-          {% if f.is_active %}
-            <button class="btn btn-icon btn-ghost" title="Desactivar"
-                    data-action="toggle" data-id="{{ f.pk }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                <line x1="12" y1="2" x2="12" y2="12"/>
-              </svg>
-            </button>
-          {% else %}
-            <button class="btn btn-icon btn-ghost" title="Activar"
-                    data-action="toggle" data-id="{{ f.pk }}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                <line x1="12" y1="2" x2="12" y2="12"/>
-                <line x1="12" y1="9" x2="12" y2="12"/>
-              </svg>
-            </button>
-          {% endif %}
-          <button class="btn btn-icon btn-ghost mnt-action-danger" title="Eliminar"
-                  data-action="delete" data-id="{{ f.pk }}" data-name="{{ f.display_name }}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
+          {% comment %} Flows: solo visualizar + editar (sin toggle ni eliminar;
+             el catalogo lo gestiona la plataforma). {% endcomment %}
         </div>
       </td>
     </tr>

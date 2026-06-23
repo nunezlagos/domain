@@ -1,57 +1,107 @@
-{% extends "maintainers/_form_base.html" %}
 {% comment %}
-Form de flow para el modal dinamico. Extiende maintainers/_form_base.html
-(form + csrf + non_field_errors + header + footer). Define solo el titulo,
-los campos y el label del submit.
+Editar flow (modal) con tabs VERTICALES (.vtabs), igual chrome que el ver. NO
+extiende _form_base (ese envuelve los campos en .form-grid, chocaria con los
+vtabs); replicamos su contrato: data-modal-form + csrf + non_field_errors +
+header + footer (lo intercepta modals.js).
+
+Tabs: Datos (campos), JSON (editor del spec, grande y monoespaciado) y Versiones
+(read-only). Modal grande ([data-modal-lg]) para editar el JSON comodo.
+
+Crear esta deshabilitado (la view redirige), asi que este form es siempre edicion.
+Contexto: form, mode, action, flow_obj, flow_versions.
 {% endcomment %}
+<form method="post" action="{{ action }}" data-modal-form novalidate>
+  {% csrf_token %}
 
-{% block form_title %}{% if mode == "create" %}Nuevo flow{% else %}Editar flow{% endif %}{% endblock %}
-{% block submit_label %}{% if mode == "create" %}Crear flow{% else %}Guardar cambios{% endif %}{% endblock %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      <span class="alert-icon">✕</span>
+      <div class="alert-content">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
 
-{% block fields %}
-  <div class="form-group">
-    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
-    {{ form.name }}
-    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+  <div class="modal-header">
+    <h3 class="modal-title">Editar flow</h3>
+    <button type="button" class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
 
-  <div class="form-group">
-    <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-    {{ form.slug }}
-    {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-    {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
-  </div>
+  <div class="modal-body">
+    <div class="vtabs" data-modal-lg>
+      <input type="radio" name="ptab" id="pt-datos" checked>
+      <input type="radio" name="ptab" id="pt-json">
+      <input type="radio" name="ptab" id="pt-versiones">
+      <nav class="vtabs-nav">
+        <label for="pt-datos">Datos</label>
+        <label for="pt-json">JSON</label>
+        <label for="pt-versiones">Versiones <span class="vtab-count">{{ flow_versions|length }}</span></label>
+      </nav>
+      <div class="vtabs-body">
+        <div class="vpane vpane-datos">
+          <div class="form-group">
+            <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+            {{ form.name }}
+            {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+            {{ form.slug }}
+            {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+            {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
+            {{ form.description }}
+            {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="{{ form.seed_version.id_for_label }}">Version de seed</label>
+            {{ form.seed_version }}
+            {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-check form-check-inline">{{ form.is_active }} Activo</label>
+            <label class="form-check form-check-inline">{{ form.deterministic_replay }} Replay determinista</label>
+            <label class="form-check form-check-inline">{{ form.seed_managed }} Seed gestionado</label>
+          </div>
+        </div>
 
-  <div class="form-group">
-    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
-    {{ form.description }}
-    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
-  </div>
+        <div class="vpane vpane-json">
+          <label class="form-label" for="{{ form.spec.id_for_label }}">Spec (JSON) *</label>
+          <div class="json-editor">{{ form.spec }}</div>
+          {% if form.spec.help_text %}<div class="form-help">{{ form.spec.help_text }}</div>{% endif %}
+          {% if form.spec.errors %}<div class="form-help text-danger">{{ form.spec.errors|join:", " }}</div>{% endif %}
+        </div>
 
-  <div class="form-group">
-    <label class="form-label" for="{{ form.spec.id_for_label }}">Spec (JSON) *</label>
-    {{ form.spec }}
-    {% if form.spec.help_text %}<div class="form-help">{{ form.spec.help_text }}</div>{% endif %}
-    {% if form.spec.errors %}<div class="form-help text-danger">{{ form.spec.errors|join:", " }}</div>{% endif %}
-  </div>
-
-  <div class="d-flex gap-3">
-    <div class="form-group form-group--grow">
-      <label class="form-label" for="{{ form.seed_version.id_for_label }}">Version de seed</label>
-      {{ form.seed_version }}
-      {% if form.seed_version.errors %}<div class="form-help text-danger">{{ form.seed_version.errors|join:", " }}</div>{% endif %}
+        <div class="vpane vpane-versiones">
+          {% if flow_versions %}
+            <table class="table mnt-table-sm">
+              <thead>
+                <tr><th class="mnt-col-narrow">Version</th><th>Hash</th><th>Nota</th><th>Creada</th></tr>
+              </thead>
+              <tbody>
+                {% for v in flow_versions %}
+                  <tr>
+                    <td><span class="badge badge-primary">v{{ v.version }}</span></td>
+                    <td><code>{{ v.short_hash }}</code></td>
+                    <td>{{ v.note|default:"—" }}</td>
+                    <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <p class="text-secondary mt-2 mnt-text-sm">Snapshots inmutables (read-only).</p>
+          {% else %}
+            <p class="text-muted">Este flow todavia no tiene versiones publicadas.</p>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="form-group">
-    <label class="form-check form-check-inline">
-      {{ form.is_active }} Activo
-    </label>
-    <label class="form-check form-check-inline">
-      {{ form.deterministic_replay }} Replay determinista
-    </label>
-    <label class="form-check form-check-inline">
-      {{ form.seed_managed }} Seed gestionado
-    </label>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn btn-primary">Guardar cambios</button>
   </div>
-{% endblock %}
+</form>

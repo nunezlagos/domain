@@ -592,13 +592,17 @@ textarea.form-control {
 #pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
 #pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
 #pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
-#pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
+#pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"],
+#pt-json:checked ~ .vtabs-nav label[for="pt-json"],
+#pt-versiones:checked ~ .vtabs-nav label[for="pt-versiones"] {
   color: var(--color-accent); border-left-color: var(--color-accent); font-weight: 600;
 }
 #pt-datos:checked ~ .vtabs-body .vpane-datos,
 #pt-repos:checked ~ .vtabs-body .vpane-repos,
 #pt-skills:checked ~ .vtabs-body .vpane-skills,
-#pt-reglas:checked ~ .vtabs-body .vpane-reglas { display: block; }
+#pt-reglas:checked ~ .vtabs-body .vpane-reglas,
+#pt-json:checked ~ .vtabs-body .vpane-json,
+#pt-versiones:checked ~ .vtabs-body .vpane-versiones { display: block; }
 /* Skill excluida: se ve atenuada con el texto tachado en el nombre. */
 .skill-excluded { opacity: 0.6; }
 .skill-excluded .skill-name { text-decoration: line-through; }
@@ -614,7 +618,22 @@ textarea.form-control {
   #pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
   #pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
   #pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
-  #pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
+  #pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"],
+  #pt-json:checked ~ .vtabs-nav label[for="pt-json"],
+  #pt-versiones:checked ~ .vtabs-nav label[for="pt-versiones"] {
     border-left-color: transparent; border-bottom-color: var(--color-accent);
   }
+}
+
+/* Editor de JSON (spec de flow): textarea alto y monoespaciado para editar comodo. */
+.json-editor textarea, textarea.json-editor {
+  min-height: 360px; width: 100%;
+  font-family: var(--font-mono, monospace); font-size: var(--fs-sm);
+  white-space: pre; tab-size: 2;
+}
+.json-view {
+  max-height: 420px; overflow: auto;
+  white-space: pre; font-family: var(--font-mono, monospace); font-size: var(--fs-sm);
+  background: var(--color-bg-elevated); padding: var(--space-md);
+  border-radius: var(--radius-sm); margin: 0;
 }

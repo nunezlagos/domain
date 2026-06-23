@@ -139,30 +139,48 @@ def _excluded_skill_ids(project: Project) -> set:
     )
 
 
-def list_project_skills(project: Project) -> dict:
-    """Skills que conciernen al proyecto, separadas en globales e internas.
+def list_project_skills(project: Project, scope: str = "all", page: int = 1,
+                        per_page: int = 10) -> dict:
+    """Skills que conciernen al proyecto en UNA tabla combinada, con filtro de
+    scope (all|global|internal) y paginacion.
 
-    Cada skill trae el flag `.excluded` (True si esta excluida para el proyecto).
-    Las globales aplican salvo que esten excluidas; las internas son del proyecto.
+    Cada skill trae `.scope` ('global'|'internal') y `.excluded` (True si esta
+    excluida para el proyecto). Las globales aplican salvo exclusion; las internas
+    son del proyecto. applied/excluded counts son sobre el TOTAL (no la pagina).
     """
+    from django.core.paginator import Paginator
     from maintainers.skills.models import Skill
 
     excluded = _excluded_skill_ids(project)
     globals_ = list(
-        Skill.objects.filter(project_id__isnull=True, deleted_at__isnull=True)
-        .order_by("slug")
+        Skill.objects.filter(project_id__isnull=True, deleted_at__isnull=True).order_by("slug")
     )
     internals = list(
-        Skill.objects.filter(project_id=project.id, deleted_at__isnull=True)
-        .order_by("slug")
+        Skill.objects.filter(project_id=project.id, deleted_at__isnull=True).order_by("slug")
     )
-    for s in globals_ + internals:
-        s.excluded = s.id in excluded
+    for s in globals_:
+        s.scope, s.excluded = "global", s.id in excluded
+    for s in internals:
+        s.scope, s.excluded = "internal", s.id in excluded
+    combined = globals_ + internals
+
+    filtered = globals_ if scope == "global" else internals if scope == "internal" else combined
+    paginator = Paginator(filtered, per_page)
+    page = max(1, min(int(page or 1), paginator.num_pages or 1))
+    pg = paginator.page(page)
     return {
-        "globals": globals_,
-        "internals": internals,
-        "applied_count": sum(1 for s in globals_ + internals if not s.excluded),
-        "excluded_count": len(excluded),
+        "items": list(pg.object_list),
+        "total": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": paginator.num_pages,
+        "has_prev": pg.has_previous(),
+        "has_next": pg.has_next(),
+        "scope": scope,
+        "applied_count": sum(1 for s in combined if not s.excluded),
+        "excluded_count": sum(1 for s in combined if s.excluded),
+        "global_count": len(globals_),
+        "internal_count": len(internals),
     }
 
 
@@ -183,17 +201,6 @@ def set_skill_excluded(project: Project, skill_id: str, excluded: bool) -> None:
 
 # --- Reglas (policies) que aplican al proyecto ------------------------------
 
-def list_project_policies(project: Project) -> list:
-    """Reglas propias del proyecto (project_policies activas)."""
-    from maintainers.projectpolicies.models import ProjectPolicy
-
-    return list(
-        ProjectPolicy.objects.filter(
-            project_id=project.id, deleted_at__isnull=True, is_active=True
-        ).order_by("kind", "slug")
-    )
-
-
 def list_platform_policies() -> list[dict]:
     """Reglas de plataforma (globales) activas. Aplican AUTOMATICAMENTE a todos los
     proyectos (resolver buildRulesBlock del MCP). No hay modelo Django: lectura
@@ -206,6 +213,62 @@ def list_platform_policies() -> list[dict]:
             "FROM platform_policies WHERE is_active = TRUE ORDER BY kind, slug"
         )
         return [{"name": r[0], "kind": r[1], "body_md": r[2]} for r in cur.fetchall()]
+
+
+def list_project_rules(project: Project, scope: str = "all", page: int = 1,
+                       per_page: int = 10) -> dict:
+    """Reglas que aplican al proyecto en UNA tabla combinada, con filtro de scope
+    (all|platform|project) y paginacion. Las de plataforma son read-only (aplican
+    auto); las del proyecto son editables (toggle activo/inactivo + edicion en el
+    mantenedor de reglas). Cada item es un dict con scope/kind/name/id/is_active/
+    override_platform/editable."""
+    from django.core.paginator import Paginator
+    from maintainers.projectpolicies.models import ProjectPolicy
+
+    platform = [
+        {"scope": "platform", "kind": d["kind"], "name": d["name"], "id": None,
+         "is_active": True, "override_platform": False, "editable": False}
+        for d in list_platform_policies()
+    ]
+    project_rules = [
+        {"scope": "project", "kind": p.kind, "name": p.name, "id": str(p.id),
+         "is_active": p.is_active, "override_platform": p.override_platform, "editable": True}
+        for p in ProjectPolicy.objects.filter(
+            project_id=project.id, deleted_at__isnull=True
+        ).order_by("kind", "slug")
+    ]
+    combined = platform + project_rules
+
+    filtered = platform if scope == "platform" else project_rules if scope == "project" else combined
+    paginator = Paginator(filtered, per_page)
+    page = max(1, min(int(page or 1), paginator.num_pages or 1))
+    pg = paginator.page(page)
+    return {
+        "items": list(pg.object_list),
+        "total": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": paginator.num_pages,
+        "has_prev": pg.has_previous(),
+        "has_next": pg.has_next(),
+        "scope": scope,
+        "platform_count": len(platform),
+        "project_count": len(project_rules),
+    }
+
+
+@transaction.atomic
+def toggle_project_policy(project: Project, policy_id: str) -> None:
+    """Activa/desactiva una regla PROPIA del proyecto (reusa el toggle del
+    mantenedor de reglas). Solo project_policies; las de plataforma no se tocan."""
+    from maintainers.projectpolicies import services as pp_services
+    from maintainers.projectpolicies.models import ProjectPolicy
+
+    policy = ProjectPolicy.objects.filter(
+        project_id=project.id, pk=policy_id, deleted_at__isnull=True
+    ).first()
+    if policy:
+        pp_services.toggle_policy_status(policy)
 
 
 # --- Repos git por proyecto -------------------------------------------------

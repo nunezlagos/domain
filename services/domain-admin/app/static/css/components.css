@@ -580,19 +580,20 @@ textarea.form-control {
 }
 .vtabs-nav label {
   padding: 8px 12px; cursor: pointer; font-size: 13px;
-  color: var(--color-text-secondary); border-radius: 6px;
+  color: var(--color-text-secondary);
   border-left: 2px solid transparent;
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
 }
-.vtabs-nav label:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
+.vtabs-nav label:hover { color: var(--color-text-primary); }
 .vtabs-body { flex: 1 1 auto; min-width: 0; }
 .vtabs .vpane { display: none; }
+/* Tab activo: SOLO una linea a la izquierda en el color principal de la
+   plataforma (--color-accent). Sin fondo ni bordes redondeados. */
 #pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
 #pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
 #pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
 #pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
-  color: var(--color-info); border-left-color: var(--color-info);
-  background: var(--color-bg-elevated); font-weight: 600;
+  color: var(--color-accent); border-left-color: var(--color-accent); font-weight: 600;
 }
 #pt-datos:checked ~ .vtabs-body .vpane-datos,
 #pt-repos:checked ~ .vtabs-body .vpane-repos,
@@ -614,6 +615,6 @@ textarea.form-control {
   #pt-repos:checked ~ .vtabs-nav label[for="pt-repos"],
   #pt-skills:checked ~ .vtabs-nav label[for="pt-skills"],
   #pt-reglas:checked ~ .vtabs-nav label[for="pt-reglas"] {
-    border-left-color: transparent; border-bottom-color: var(--color-info);
+    border-left-color: transparent; border-bottom-color: var(--color-accent);
   }
 }

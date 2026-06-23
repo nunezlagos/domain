@@ -154,43 +154,104 @@ class ProjectViews(MaintainerViews):
         return HttpResponseRedirect(self.url("list"))
 
 
-def _skills_ctx(project) -> dict:
-    """Contexto del pane de skills (globales + internas, con flag .excluded)."""
-    data = services.list_project_skills(project)
+def _skills_ctx(project, scope="all", page=1) -> dict:
+    """Contexto del pane de skills (tabla combinada + filtro scope + paginacion)."""
+    data = services.list_project_skills(project, scope=scope, page=page)
     return {
         "project_obj": project,
-        "skills_globals": data["globals"],
-        "skills_internals": data["internals"],
+        "skills": data["items"],
+        "skills_scope": data["scope"],
         "skills_applied_count": data["applied_count"],
         "skills_excluded_count": data["excluded_count"],
+        "skills_global_count": data["global_count"],
+        "skills_internal_count": data["internal_count"],
+        # paginacion del pane
+        "total": data["total"], "page": data["page"], "per_page": data["per_page"],
+        "total_pages": data["total_pages"], "has_prev": data["has_prev"], "has_next": data["has_next"],
     }
 
 
-def _rules_ctx(project) -> dict:
-    """Contexto del pane de reglas (plataforma auto + del proyecto)."""
+def _rules_ctx(project, scope="all", page=1) -> dict:
+    """Contexto del pane de reglas (tabla combinada + filtro scope + paginacion)."""
+    data = services.list_project_rules(project, scope=scope, page=page)
     return {
         "project_obj": project,
-        "platform_policies": services.list_platform_policies(),
-        "project_policies": services.list_project_policies(project),
+        "rules": data["items"],
+        "rules_scope": data["scope"],
+        "rules_platform_count": data["platform_count"],
+        "rules_project_count": data["project_count"],
+        "total": data["total"], "page": data["page"], "per_page": data["per_page"],
+        "total_pages": data["total_pages"], "has_prev": data["has_prev"], "has_next": data["has_next"],
     }
+
+
+def _resolve_project_or_redirect(project_id):
+    """Devuelve (project, None) o (None, redirect) si no existe."""
+    try:
+        return services.get_project(project_id), None
+    except services.ProjectError as exc:
+        return None, HttpResponseRedirect(views.url("list"))
+
+
+@require_http_methods(["GET"])
+def skills_pane(request, project_id):
+    """Pane de skills (filtro scope + paginacion) para el tab del ver/editar."""
+    if (redir := require_auth(request)):
+        return redir
+    project, redir = _resolve_project_or_redirect(project_id)
+    if redir:
+        return redir
+    scope = request.GET.get("scope") or "all"
+    page = request.GET.get("page") or 1
+    return render(request, "projects/_skills_pane.html", _skills_ctx(project, scope, page))
 
 
 @require_http_methods(["POST"])
 def toggle_skill(request, project_id):
-    """Excluye (op=exclude) o re-incluye (op=include) una skill para el proyecto;
-    re-renderiza SOLO el pane de skills (#project-skills-pane)."""
+    """Excluye (op=exclude) o re-incluye (op=include) una skill; re-renderiza el
+    pane preservando scope+page (los manda el JS del pane)."""
     if (redir := require_auth(request)):
         return redir
-    try:
-        project = services.get_project(project_id)
-    except services.ProjectError as exc:
-        messages.error(request, str(exc))
-        return HttpResponseRedirect(views.url("list"))
+    project, redir = _resolve_project_or_redirect(project_id)
+    if redir:
+        return redir
     skill_id = request.POST.get("skill_id", "")
     op = request.POST.get("op", "")
     if skill_id and op in ("exclude", "include"):
         services.set_skill_excluded(project, skill_id, excluded=(op == "exclude"))
-    return render(request, "projects/_skills_pane.html", _skills_ctx(project))
+    scope = request.POST.get("scope") or "all"
+    page = request.POST.get("page") or 1
+    return render(request, "projects/_skills_pane.html", _skills_ctx(project, scope, page))
+
+
+@require_http_methods(["GET"])
+def rules_pane(request, project_id):
+    """Pane de reglas (filtro scope + paginacion) para el tab del ver/editar."""
+    if (redir := require_auth(request)):
+        return redir
+    project, redir = _resolve_project_or_redirect(project_id)
+    if redir:
+        return redir
+    scope = request.GET.get("scope") or "all"
+    page = request.GET.get("page") or 1
+    return render(request, "projects/_rules_pane.html", _rules_ctx(project, scope, page))
+
+
+@require_http_methods(["POST"])
+def toggle_rule(request, project_id):
+    """Activa/desactiva una regla PROPIA del proyecto; re-renderiza el pane de
+    reglas preservando scope+page."""
+    if (redir := require_auth(request)):
+        return redir
+    project, redir = _resolve_project_or_redirect(project_id)
+    if redir:
+        return redir
+    policy_id = request.POST.get("policy_id", "")
+    if policy_id:
+        services.toggle_project_policy(project, policy_id)
+    scope = request.POST.get("scope") or "all"
+    page = request.POST.get("page") or 1
+    return render(request, "projects/_rules_pane.html", _rules_ctx(project, scope, page))
 
 
 # Instancia que cablea todo. list_key="projects" -> el template recibe la lista

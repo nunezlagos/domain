@@ -56,6 +56,14 @@
   max-height: 90vh;
 }
 .modal-confirm { max-width: 420px; }
+/* Variante GRANDE del modal dinamico (ver/editar de proyecto: mas espacio para
+   las tabs verticales + tablas). La activa modals.js cuando el contenido trae
+   [data-modal-lg]. */
+.modal-dynamic.modal-dynamic--lg { max-width: min(1140px, 96vw); }
+
+/* Filtro chico arriba de una tabla de pane (skills/reglas dentro del modal). */
+.pane-filter { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.pane-filter .form-select { min-width: 150px; }
 
 /* Tabla de detalle (key/value) dentro del modal de detalle */
 .mnt-detail-table {

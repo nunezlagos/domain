@@ -1,30 +1,74 @@
 // ============================================================
-// project-skills.js — excluir/re-incluir skills de un proyecto
-// dentro del tab "Skills" del ver/editar, sin recargar la página.
+// project-skills.js — panes AJAX genéricos dentro del ver/editar de
+// proyecto (tabs Skills y Reglas), sin recargar la página.
 //
-// Cada botón [data-skill-toggle] POSTea {skill_id, op} a su data-url
-// (/proyectos/<id>/skills/toggle/, op=exclude|include) y el server devuelve
-// SOLO el pane de skills re-renderizado, que reemplaza el contenido de
-// #project-skills-pane (NO todo el modal: así no se pierde el form de edición
-// ni el tab activo, que viven fuera del pane).
+// Un "pane" es un contenedor [data-pane] con data-pane-url (endpoint GET que
+// re-renderiza el contenido interno del pane). El contenido trae:
+//   - [data-pane-state data-scope="..." data-page="N"]  (estado actual)
+//   - [data-pane-filter]   select de filtro (name=scope) → re-fetch, page=1
+//   - [data-pane-page="N"]  botones de paginación        → re-fetch page=N
+//   - [data-pane-action] data-url="POST" data-params="a=1&b=2" → POST (con
+//       scope+page actuales) y reemplaza el pane con la respuesta.
 //
-// Depende de csrf.js (getCSRFToken). Delegado en document para funcionar
-// con el HTML inyectado en el modal dinámico.
+// Reemplaza SOLO el innerHTML del [data-pane] (no todo el modal): preserva el
+// form de edición y el tab activo, que viven fuera del pane.
+//
+// Depende de csrf.js (getCSRFToken). Delegado en document para funcionar con el
+// HTML inyectado en el modal dinámico.
 // ============================================================
 (function () {
-  document.addEventListener('click', async function (e) {
-    var btn = e.target.closest('[data-skill-toggle]');
-    if (!btn) return;
-    e.preventDefault();
-    var url = btn.dataset.url;
-    if (!url) return;
-    btn.disabled = true;
-    var body = new URLSearchParams({
-      skill_id: btn.dataset.skillId || '',
-      op: btn.dataset.op || '',
-    });
+  function paneState(pane) {
+    var st = pane.querySelector('[data-pane-state]');
+    var f = pane.querySelector('[data-pane-filter]');
+    return {
+      scope: (f && f.value) || (st && st.getAttribute('data-scope')) || 'all',
+      page: (st && st.getAttribute('data-page')) || '1',
+    };
+  }
+
+  async function fetchPane(pane, scope, page) {
+    var params = new URLSearchParams({ scope: scope, page: String(page) });
     try {
-      var r = await fetch(url, {
+      var r = await fetch(pane.dataset.paneUrl + '?' + params.toString(), {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' },
+      });
+      if (r.ok) pane.innerHTML = await r.text();
+      else alert('Error (' + r.status + ')');
+    } catch (err) {
+      alert('Error de red: ' + err.message);
+    }
+  }
+
+  // Filtro de scope: vuelve a página 1.
+  document.addEventListener('change', function (e) {
+    var f = e.target.closest('[data-pane-filter]');
+    if (!f) return;
+    var pane = f.closest('[data-pane]');
+    if (pane) fetchPane(pane, f.value || 'all', 1);
+  });
+
+  // Click: paginación o acción (toggle).
+  document.addEventListener('click', async function (e) {
+    var pager = e.target.closest('[data-pane-page]');
+    if (pager) {
+      e.preventDefault();
+      var pane = pager.closest('[data-pane]');
+      if (pane) fetchPane(pane, paneState(pane).scope, pager.getAttribute('data-pane-page'));
+      return;
+    }
+    var act = e.target.closest('[data-pane-action]');
+    if (!act) return;
+    e.preventDefault();
+    var pane2 = act.closest('[data-pane]');
+    if (!pane2 || !act.dataset.url) return;
+    act.disabled = true;
+    var st = paneState(pane2);
+    var body = new URLSearchParams(act.dataset.params || '');
+    body.set('scope', st.scope);
+    body.set('page', st.page);
+    try {
+      var r = await fetch(act.dataset.url, {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCSRFToken(),
@@ -34,18 +78,10 @@
         credentials: 'same-origin',
         body: body.toString(),
       });
-      if (r.ok) {
-        var html = await r.text();
-        // Reemplaza SOLO el pane de skills (no todo el modal): preserva el form
-        // de edición y el tab activo, que están fuera de #project-skills-pane.
-        var c = document.getElementById('project-skills-pane');
-        if (c) c.innerHTML = html;
-      } else {
-        btn.disabled = false;
-        alert('Error (' + r.status + ')');
-      }
+      if (r.ok) pane2.innerHTML = await r.text();
+      else { act.disabled = false; alert('Error (' + r.status + ')'); }
     } catch (err) {
-      btn.disabled = false;
+      act.disabled = false;
       alert('Error de red: ' + err.message);
     }
   });

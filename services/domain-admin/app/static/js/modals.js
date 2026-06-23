@@ -19,7 +19,11 @@
   // Modal genérico (open/close + content dinámico)
   // ----------------------------------------------------------
   function openDynamicModal(html, srcUrl) {
-    document.getElementById('modal-dynamic-content').innerHTML = html;
+    var content = document.getElementById('modal-dynamic-content');
+    content.innerHTML = html;
+    // Modal GRANDE: si el contenido inyectado trae [data-modal-lg], el modal usa
+    // la variante ancha (.modal-dynamic--lg). Se resetea si no lo trae.
+    content.classList.toggle('modal-dynamic--lg', !!content.querySelector('[data-modal-lg]'));
     var m = document.getElementById('modal-dynamic');
     // Guardamos la URL fuente del modal para poder REFRESCAR su contenido tras
     // una accion interna (ej. borrar una API key dentro del detalle de usuario)

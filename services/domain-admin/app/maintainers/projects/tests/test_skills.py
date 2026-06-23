@@ -25,14 +25,20 @@ class ProjectSkillsServiceTests(MaintainerTestCase):
         make_skill("Borrada", slug="gx", deleted=True)        # no debe aparecer
 
     def test_globales_aplican_automaticamente(self):
-        data = services.list_project_skills(self.project)
-        slugs = {s.slug for s in data["globals"]}
+        data = services.list_project_skills(self.project)  # scope=all, page 1
+        slugs = {s.slug for s in data["items"]}
         self.assertIn("g1", slugs)
         self.assertIn("g2", slugs)
         self.assertNotIn("gx", slugs)  # soft-deleted excluida
-        # sin exclusiones: todas las globales aplican
-        self.assertFalse(any(s.excluded for s in data["globals"]))
+        self.assertFalse(any(s.excluded for s in data["items"]))
         self.assertEqual(data["excluded_count"], 0)
+        self.assertEqual(data["global_count"], 2)
+
+    def test_filtro_scope(self):
+        only_internal = services.list_project_skills(self.project, scope="internal")
+        self.assertEqual(only_internal["items"], [])  # no hay internas
+        only_global = services.list_project_skills(self.project, scope="global")
+        self.assertEqual({s.slug for s in only_global["items"]}, {"g1", "g2"})
 
     def test_excluir_y_reincluir(self):
         # excluir g1 -> fila is_enabled=FALSE
@@ -40,7 +46,7 @@ class ProjectSkillsServiceTests(MaintainerTestCase):
         row = ProjectSkill.objects.get(project=self.project, skill_id=self.g1.id)
         self.assertFalse(row.is_enabled)
         data = services.list_project_skills(self.project)
-        g1 = next(s for s in data["globals"] if s.slug == "g1")
+        g1 = next(s for s in data["items"] if s.slug == "g1")
         self.assertTrue(g1.excluded)
         self.assertEqual(data["excluded_count"], 1)
         # re-incluir -> borra la fila de exclusion

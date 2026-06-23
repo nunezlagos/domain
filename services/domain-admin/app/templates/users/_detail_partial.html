@@ -105,6 +105,9 @@ Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.htm
   </div>{# /htabs #}
 {% endblock %}
 
+{% comment %} Anulamos el "Cerrar" por defecto del footer: este detalle usa solo
+   el "Cerrar" rojo (outline) de abajo, para no mostrar dos botones de cierre. {% endcomment %}
+{% block detail_close %}{% endblock %}
 {% block detail_actions %}
   <button type="button" class="btn btn-outline-danger" data-modal-close>
     Cerrar

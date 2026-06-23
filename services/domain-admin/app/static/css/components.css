@@ -431,6 +431,10 @@ textarea.form-control {
   border-bottom: 1px solid var(--color-border);
 }
 .modal-title { font-size: var(--fs-lg); font-weight: var(--fw-semibold); }
+/* Boton X de cierre del modal: icono SVG centrado, sin borde, color sutil. */
+.modal-close { color: var(--color-text-muted); border-color: transparent; }
+.modal-close:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
+.modal-close svg { display: block; }
 .modal-body { padding: var(--space-lg); }
 .modal-footer {
   display: flex;

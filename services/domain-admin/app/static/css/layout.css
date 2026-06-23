@@ -35,19 +35,20 @@
 .sidebar-logo .accent { color: var(--sidebar-accent); }
 .sidebar-logo[role="button"] { cursor: pointer; }
 
-/* Boton chevron para colapsar/expandir el sidebar (solo desktop) */
-.sidebar-collapse-btn { margin-left: auto; color: var(--sidebar-section); flex: 0 0 auto; }
-.sidebar-collapse-btn:hover { color: var(--sidebar-item-hover); background: var(--sidebar-hover-bg); }
-.sidebar-collapse-icon { transition: transform var(--transition-fast); }
-
 /* === Sidebar colapsado (solo iconos). Solo desktop: en mobile el sidebar es un
    drawer off-canvas (responsive.css) y no debe verse afectado. === */
 @media (min-width: 768px) {
   body.sidebar-collapsed { --sidebar-width: 68px; }
   body.sidebar-collapsed .sidebar-header { justify-content: center; padding-left: 0; padding-right: 0; }
-  body.sidebar-collapsed .sidebar-logo { display: none; }
-  body.sidebar-collapsed .sidebar-collapse-btn { margin-left: 0; }
-  body.sidebar-collapsed .sidebar-collapse-icon { transform: rotate(180deg); }
+  /* El logo se reduce a la marca "D" (sigue clickeable para expandir): se oculta
+     el texto con font-size:0 y se inyecta la "D" via ::before. */
+  body.sidebar-collapsed .sidebar-logo { font-size: 0; }
+  body.sidebar-collapsed .sidebar-logo::before {
+    content: "D";
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--sidebar-accent);
+  }
   /* Las etiquetas de seccion pierden el texto pero mantienen el espacio. */
   body.sidebar-collapsed .sidebar-section { font-size: 0; padding: var(--space-sm) 0; }
   /* Los links muestran solo el icono, centrado (el texto suelto colapsa con font-size:0). */

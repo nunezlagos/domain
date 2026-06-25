@@ -1,71 +1,16 @@
-"""Vistas genericas de un mantenedor.
-
-`MaintainerViews` arma las 7 vistas estandar de un mantenedor reusando el
-comportamiento EXACTO del app `users` (que es el contrato de referencia):
-
-    list    GET   ""                  -> layout completo, o ?fragment=table -> solo tabla
-    signal  GET   "signal/"           -> JSON {count, version}
-    create  GET/POST "nuevo/"         -> form; ?partial=1 -> _form_partial; AJAX (fetch) -> redirect/partial
-    detail  GET   "<pk>/"             -> detail; ?partial=1 -> _detail_partial
-    edit    GET/POST "<pk>/editar/"   -> igual a create pero con instance
-    delete  POST  "<pk>/eliminar/"    -> soft delete -> redirect list
-    toggle  POST  "<pk>/toggle/"      -> alterna status -> redirect list
-
-Un app declara una instancia::
-
-    from core.views import MaintainerViews
-    from . import services
-    from .forms import ProjectForm
-    from .models import Project
-
-    views = MaintainerViews(
-        app_name="projects",
-        model=Project,
-        form_class=ProjectForm,
-        service=services,            # modulo o objeto con las funciones de negocio
-        templates="projects",        # carpeta de templates: projects/list.html, etc.
-        search_fields=("name", "slug"),
-        entity_label="Proyecto",
-        id_kwarg="pk",
-    )
-
-y luego en urls.py usa core.urls.maintainer_urlpatterns(views).
-
-CONTRATO con el `service` (mismo shape que users.services). El modulo/objeto
-de servicio debe exponer (los nombres son configurables via *_fn):
-
-    list_<plural>(search, page, per_page) -> dict con la lista bajo `list_key`
-        (por defecto "items"; users usa "users"). Si no existe, se cae a
-        core.service.MaintainerService.
-    get_list_signal() -> {count, version}   (o se cae al MaintainerService)
-    get_<entity>(id) -> instance | raise ServiceError
-    create_<entity>(**form_payload) -> instance
-    update_<entity>(instance, **form_payload) -> instance
-    delete_<entity>(instance) -> None        (soft delete)
-    toggle_<entity>_status(instance) -> str  (nuevo status)
-
-Para mantenedores cuyo service no calza 1:1, sobreescribi los hooks
-(`do_create`, `do_update`, etc.) en una subclase.
-"""
 from __future__ import annotations
 
 from django.contrib import messages
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.views.decorators.http import require_http_methods
 
-from .auth import is_ajax, require_auth
+from .auth import require_auth
+from .mixins import AjaxMixin, AuthMixin, ContextMixin
 from .service import MaintainerService
 
 
-class MaintainerViews:
-    """Fabrica de vistas estandar para un mantenedor.
-
-    Las vistas se exponen como metodos bound: list, signal, detail, create,
-    edit, delete, toggle. core.urls.maintainer_urlpatterns las cablea.
-    """
-
+class MaintainerViews(AuthMixin, AjaxMixin, ContextMixin):
     def __init__(
         self,
         *,
@@ -93,12 +38,9 @@ class MaintainerViews:
         self.per_page = per_page
         self.search_param = search_param
 
-
         self._base = MaintainerService()
         self._base.model = model
         self._base.search_fields = self.search_fields
-
-
 
     def url(self, name: str, *args) -> str:
         return reverse(f"{self.app_name}:{name}", args=args)
@@ -106,13 +48,8 @@ class MaintainerViews:
     def tpl(self, name: str) -> str:
         return f"{self.templates}/{name}"
 
-
-
-
-
     @property
     def error_class(self):
-        """Excepcion de dominio que el service levanta (default: Exception)."""
         return getattr(self.service, "ServiceError", None) or getattr(
             self.service, f"{self.entity_label}Error", Exception
         )
@@ -122,8 +59,6 @@ class MaintainerViews:
             search=search, search_fields=self.search_fields,
             page=page, per_page=self.per_page,
         )
-
-
         if self.list_key != "items":
             data[self.list_key] = data.pop("items")
         return data
@@ -179,40 +114,10 @@ class MaintainerViews:
         return self.entity_label.strip().lower().replace(" ", "_")
 
     def _form_payload(self, form) -> dict:
-        """cleaned_data del form. Sobreescribi si el service espera otra forma
-        (p.ej. users mapea role->role_slug y agrega hashed_password())."""
         return dict(form.cleaned_data)
 
-
-
-    def list_context(self, data: dict, search: str) -> dict:
-        ctx = {
-            self.list_key: data[self.list_key],
-            "total": data["total"],
-            "page": data["page"],
-            "per_page": data["per_page"],
-            "total_pages": data["total_pages"],
-            "has_next": data["has_next"],
-            "has_prev": data["has_prev"],
-            "search": search,
-        }
-        return ctx
-
-    def form_context(self, form, mode: str, instance, action: str) -> dict:
-        return {"form": form, "mode": mode, "object": instance, "action": action}
-
-    def detail_context(self, instance) -> dict:
-        return {"object": instance}
-
-    def build_form(self, *args, instance=None, **kwargs):
-        """Instancia el form. Sobreescribi si tu form no acepta `instance`
-        kwarg (ModelForm usa `instance=`; el UserForm del ref tambien)."""
-        return self.form_class(*args, instance=instance, **kwargs)
-
-
-
     def list(self, request):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
 
         search = (request.GET.get(self.search_param) or "").strip()
@@ -220,11 +125,8 @@ class MaintainerViews:
         data = self.do_list(search=search, page=page)
         ctx = self.list_context(data, search)
 
-
         if request.GET.get("fragment") == "table":
             return render(request, self.tpl("_table_partial.html"), ctx)
-
-
 
         sig = self.do_signal()
         ctx["signal_count"] = sig["count"]
@@ -232,12 +134,12 @@ class MaintainerViews:
         return render(request, self.tpl("list.html"), ctx)
 
     def signal(self, request):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
         return JsonResponse(self.do_signal())
 
     def detail(self, request, **kwargs):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
         obj_id = kwargs[self.id_kwarg]
         try:
@@ -251,7 +153,7 @@ class MaintainerViews:
         return render(request, self.tpl("detail.html"), ctx)
 
     def create(self, request):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
 
         if request.method == "POST":
@@ -262,12 +164,12 @@ class MaintainerViews:
                     messages.success(
                         request, f"{self.entity_label} creado correctamente."
                     )
-                    if is_ajax(request):
-                        return HttpResponseRedirect(self.url("list"))
+                    if self._is_ajax(request):
+                        return self._render_ajax_redirect(self.url("list"))
                     return HttpResponseRedirect(self.url("detail", instance.pk))
                 except self.error_class as exc:
                     messages.error(request, str(exc))
-                    if is_ajax(request):
+                    if self._is_ajax(request):
                         return render(
                             request, self.tpl("_form_partial.html"),
                             self.form_context(form, "create", None, self.url("create")),
@@ -281,7 +183,7 @@ class MaintainerViews:
         return render(request, self.tpl("form.html"), ctx)
 
     def edit(self, request, **kwargs):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
         obj_id = kwargs[self.id_kwarg]
         try:
@@ -296,12 +198,12 @@ class MaintainerViews:
                 try:
                     instance = self.do_update(instance, form)
                     messages.success(request, f"{self.entity_label} actualizado.")
-                    if is_ajax(request):
-                        return HttpResponseRedirect(self.url("list"))
+                    if self._is_ajax(request):
+                        return self._render_ajax_redirect(self.url("list"))
                     return HttpResponseRedirect(self.url("detail", instance.pk))
                 except self.error_class as exc:
                     messages.error(request, str(exc))
-                    if is_ajax(request):
+                    if self._is_ajax(request):
                         return render(
                             request, self.tpl("_form_partial.html"),
                             self.form_context(form, "edit", instance, self.url("edit", instance.pk)),
@@ -315,7 +217,7 @@ class MaintainerViews:
         return render(request, self.tpl("form.html"), ctx)
 
     def delete(self, request, **kwargs):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
         obj_id = kwargs[self.id_kwarg]
         try:
@@ -329,7 +231,7 @@ class MaintainerViews:
         return HttpResponseRedirect(self.url("list"))
 
     def toggle(self, request, **kwargs):
-        if (redir := require_auth(request)):
+        if (redir := self._auth_check(request)):
             return redir
         obj_id = kwargs[self.id_kwarg]
         try:

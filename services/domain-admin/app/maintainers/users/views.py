@@ -1,19 +1,3 @@
-"""Views del mantenedor de usuarios (migradas a core).
-
-Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Aqui solo:
-
-  1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks especificos de users:
-       - _form_payload: mapea role -> role_slug y agrega hashed_password().
-       - form_context / detail_context: exponen `user_obj` (+ roles en detail)
-         que los templates de users ya consumen.
-  3. Se agregan las 2 vistas propias del dominio roles (asignar / revocar),
-     que NO son parte del CRUD estandar.
-
-El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
-core.auth (antes estaban duplicados como _require_auth/_is_ajax).
-"""
 from __future__ import annotations
 
 import uuid
@@ -27,39 +11,27 @@ from django.views.decorators.http import require_http_methods
 
 from core.auth import require_auth
 from core.views import MaintainerViews
-from maintainers.apikeys.models import ApiKey
-from maintainers.apikeys.services import get_api_key_plaintext, list_api_keys
+from maintainers.apikeys.interfaces import ApiKeyServiceInterface
+from maintainers.apikeys import services as apikeys_services
 
 from . import services
 from .forms import UserForm, UserRoleAssignForm
 from .models import User
 
 
-def _decrypt_api_keys(user_id) -> list:
-    """Lista las API keys del usuario con la key en claro lista para mostrar.
-
-    Cada instancia trae key_plaintext sobreescrito con el valor descifrado de
-    key_ciphertext (pgp_sym_decrypt) o el fallback viejo (mig 000168). Se asigna
-    al atributo (managed=False, NO persiste) para que el template del detalle de
-    usuario siga usando k.key_plaintext sin cambios.
-    """
-
-
+def _decrypt_api_keys(user_id, api_key_service: ApiKeyServiceInterface) -> list:
+    from maintainers.apikeys.models import ApiKey
     keys = list(
         ApiKey.objects.filter(user_id=user_id, revoked_at__isnull=True)
         .exclude(status="revoked")
         .order_by("-created_at")
     )
     for k in keys:
-        k.key_plaintext = get_api_key_plaintext(k.pk)
+        k.key_plaintext = api_key_service.get_api_key_plaintext(k.pk)
     return keys
 
 
 class UserViews(MaintainerViews):
-    """MaintainerViews especializado para users (context keys + payload + msgs)."""
-
-
-
     def _form_payload(self, form) -> dict:
         return {
             "email": form.cleaned_data["email"],
@@ -68,8 +40,6 @@ class UserViews(MaintainerViews):
             "status": form.cleaned_data["status"],
             "hashed_password": form.hashed_password(),
         }
-
-
 
     def list(self, request):
         self._list_request = request
@@ -83,7 +53,6 @@ class UserViews(MaintainerViews):
             search=search, page=page, per_page=self.per_page,
             roles=roles, statuses=statuses,
         )
-
 
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
@@ -112,11 +81,8 @@ class UserViews(MaintainerViews):
             "user_roles": services.get_user_roles(instance),
             "available_roles": services.list_available_roles(),
             "assign_form": UserRoleAssignForm(user=instance),
-
-            "api_keys": _decrypt_api_keys(instance.pk),
+            "api_keys": _decrypt_api_keys(instance.pk, apikeys_services),
         }
-
-
 
 
 views = UserViews(
@@ -132,8 +98,6 @@ views = UserViews(
     per_page=10,
     search_param="q",
 )
-
-
 
 
 @require_http_methods(["POST"])
@@ -152,7 +116,7 @@ def role_assign(request, user_id: str):
             messages.error(request, "Formulario invalido.")
     except services.UserError as exc:
         messages.error(request, str(exc))
-    except Exception as exc:  # noqa: BLE001 — feedback al usuario, no swallow silencioso
+    except Exception as exc:
         messages.error(request, f"Error: {exc}")
 
     return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
@@ -175,17 +139,8 @@ def role_revoke(request, user_id: str, role_id: str):
     return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
 
 
-
-
 @require_http_methods(["GET"])
 def apikeys_modal(request):
-    """Listado COMPACTO de API Keys para el modal "Gestionar API Keys".
-
-    Reusa apikeys.services.list_api_keys (search/paginacion del MaintainerService)
-    y renderiza un partial chico. Las acciones por fila (editar/revocar/crear)
-    apuntan al mantenedor existente (/api-keys/) via data-base-url, asi que el
-    submit lo maneja modals.js contra las rutas estandar de apikeys.
-    """
     if (redir := require_auth(request)):
         return redir
 
@@ -193,9 +148,10 @@ def apikeys_modal(request):
     status = request.GET.get("status") or ""
     page = int(request.GET.get("page", 1) or 1)
 
-
-    data = list_api_keys(search="", page=page, per_page=10,
-                         user_id=user_id or None, status=status or None)
+    data = apikeys_services.list_api_keys(
+        search="", page=page, per_page=10,
+        user_id=user_id or None, status=status or None
+    )
     return render(
         request,
         "users/_apikeys_modal.html",
@@ -208,7 +164,7 @@ def apikeys_modal(request):
             "has_next": data["has_next"],
             "has_prev": data["has_prev"],
             "user_options": User.objects.filter(status="active").order_by("email"),
-            "status_options": ApiKey.STATUS_CHOICES,
+            "status_options": apikeys_services.ApiKeyService.model.STATUS_CHOICES,
             "selected_user": user_id,
             "selected_status": status,
         },
@@ -216,8 +172,6 @@ def apikeys_modal(request):
 
 
 def export_users(request):
-    """Export CSV (consolidado, abre en Excel) de los usuarios filtrados.
-    Respeta los filtros activos: q (busqueda), role[], status[] (multi-select)."""
     if (redir := require_auth(request)):
         return redir
     csv_data = services.export_users_csv(
@@ -232,16 +186,6 @@ def export_users(request):
 
 @require_http_methods(["GET"])
 def invite_preview(request, user_id: str):
-    """Preview del email de invitacion (PREVIEW-ONLY, sin SMTP ni persistencia).
-
-    Renderiza el email HTML real (templates/emails/invitation.html) con un token
-    de enrollment generado al vuelo y expiracion a 7 dias, dentro de un modal con
-    nota de "envio pendiente" y boton "Copiar link".
-
-    IMPORTANTE: NO se persiste en auth_invitations (se evita el FK
-    invited_by_user_id). El registro de la invitacion y el envio real por SMTP
-    quedan como trabajo futuro: aqui solo se muestra como se veria el correo.
-    """
     if (redir := require_auth(request)):
         return redir
 

@@ -1,0 +1,23 @@
+from typing import Protocol
+
+from maintainers.projects.models import Project, ProjectRepository
+
+
+class ProjectRepositoryServiceInterface(Protocol):
+    def get_project_repositories(self, project: Project) -> list[ProjectRepository]: ...
+    def sync_repositories(self, project: Project, rows: list[dict]) -> None: ...
+
+
+class ProjectSkillServiceInterface(Protocol):
+    def list_project_skills(
+        self, project: Project, scope: str, page: int, per_page: int
+    ) -> dict: ...
+    def set_skill_excluded(self, project: Project, skill_id: str, excluded: bool) -> None: ...
+
+
+class ProjectPolicyServiceInterface(Protocol):
+    def list_project_rules(
+        self, project: Project, scope: str, page: int, per_page: int
+    ) -> dict: ...
+    def toggle_project_policy(self, project: Project, policy_id: str) -> None: ...
+    def list_platform_policies(self) -> list[dict]: ...

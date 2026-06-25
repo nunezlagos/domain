@@ -13,16 +13,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	"nunezlagos/domain/internal/auth/apikey"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
+type projectService interface {
+	List(ctx context.Context, orgID uuid.UUID) ([]projsvc.Project, error)
+	ListFiltered(ctx context.Context, orgID uuid.UUID, clientSlug string) ([]projsvc.Project, error)
+}
+
+type projectHandlers struct {
+	projects  projectService
+	principal *apikey.Principal
+}
+
 func registerProjectTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-
-
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &projectHandlers{projects: deps.Projects, principal: deps.Principal}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolProjectList(), Handler: wrap.Wrap("domain_project_list", rls(deps.handleProjectList))},
+		{Tool: toolProjectList(), Handler: wrap.Wrap("domain_project_list", rls(h.handleProjectList))},
 	}
 }
 
@@ -35,11 +47,11 @@ func toolProjectList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Projects == nil {
+func (h *projectHandlers) handleProjectList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.projects == nil {
 		return mcp.NewToolResultError("project service not configured"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
@@ -54,7 +66,7 @@ func (d *Deps) handleProjectList(ctx context.Context, req mcp.CallToolRequest) (
 		ClientName  string
 	}
 	if clientSlug != "" {
-		list, err := d.Projects.ListFiltered(ctx, orgID, clientSlug)
+		list, err := h.projects.ListFiltered(ctx, orgID, clientSlug)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("list projects failed: %v", err)), nil
 		}
@@ -64,7 +76,7 @@ func (d *Deps) handleProjectList(ctx context.Context, req mcp.CallToolRequest) (
 			}{p.Slug, p.Name, p.Description, p.ClientSlug, p.ClientName})
 		}
 	} else {
-		list, err := d.Projects.List(ctx, orgID)
+		list, err := h.projects.List(ctx, orgID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("list projects failed: %v", err)), nil
 		}

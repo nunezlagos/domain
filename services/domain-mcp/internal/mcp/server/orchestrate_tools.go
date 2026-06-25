@@ -1,18 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 package mcpserver
 
 import (
@@ -23,9 +10,22 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
+
+type orchestratorService interface {
+	Run(ctx context.Context, in orchsvc.OrchestrateInput) (*orchsvc.OrchestrateResult, error)
+	RecordPhaseResult(ctx context.Context, in orchsvc.PhaseResultInput) (*orchsvc.PhaseResultResult, error)
+	ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, confirmed bool) (*orchsvc.PhaseResultResult, error)
+	GetFlowStatus(ctx context.Context, flowRunID uuid.UUID) (*orchsvc.FlowStatusResponse, error)
+}
+
+type orchestrateHandlers struct {
+	orchestrator orchestratorService
+	principal    *apikey.Principal
+}
 
 func toolOrchestrate() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate",
@@ -103,18 +103,18 @@ func toolFlowStatus() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	rawText, err := req.RequireString("raw_text")
 	if err != nil {
@@ -123,8 +123,6 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	modeStr := req.GetString("mode", "")
 	startingPhase := req.GetString("starting_phase", "")
 	expressMax := req.GetInt("express_max_lines", 0)
-
-
 
 	pidStr := req.GetString("project_id", "")
 	if pidStr == "" {
@@ -145,7 +143,6 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
-
 	hardspec := true
 	if v, ok := args["hardspec"].(bool); ok {
 		hardspec = v
@@ -163,7 +160,7 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		SkipPhases:      skipPhases,
 		ExpressMaxLines: expressMax,
 	}
-	res, err := d.Orchestrator.Run(ctx, in)
+	res, err := h.orchestrator.Run(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError("orchestrate: " + err.Error()), nil
 	}
@@ -171,11 +168,11 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	stepIDStr, err := req.RequireString("flow_run_step_id")
@@ -210,26 +207,24 @@ func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToo
 		}
 	}
 
-	res, err := d.Orchestrator.RecordPhaseResult(ctx, orchsvc.PhaseResultInput{
+	res, err := h.orchestrator.RecordPhaseResult(ctx, orchsvc.PhaseResultInput{
 		FlowRunStepID:   stepID,
 		Output:          output,
 		MemoryRefsSaved: refs,
 		DurationMS:      durationMS,
 	})
 	if err != nil {
-
-
 		return mcp.NewToolResultError("phase_result: " + err.Error()), nil
 	}
 	body, _ := json.MarshalIndent(res, "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	idStr, err := req.RequireString("flow_run_id")
@@ -242,7 +237,7 @@ func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolReq
 	}
 	args := req.GetArguments()
 	confirmed, _ := args["confirmed"].(bool)
-	res, err := d.Orchestrator.ConfirmContinue(ctx, flowRunID, confirmed)
+	res, err := h.orchestrator.ConfirmContinue(ctx, flowRunID, confirmed)
 	if err != nil {
 		return mcp.NewToolResultError("confirm: " + err.Error()), nil
 	}
@@ -250,11 +245,11 @@ func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolReq
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	idStr, err := req.RequireString("flow_run_id")
@@ -265,7 +260,7 @@ func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return mcp.NewToolResultError("invalid flow_run_id"), nil
 	}
-	status, err := d.Orchestrator.GetFlowStatus(ctx, flowRunID)
+	status, err := h.orchestrator.GetFlowStatus(ctx, flowRunID)
 	if err != nil {
 		return mcp.NewToolResultError("flow_status: " + err.Error()), nil
 	}
@@ -276,7 +271,7 @@ func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-
+	h := &orchestrateHandlers{orchestrator: deps.Orchestrator, principal: deps.Principal}
 	wrap.SetBudget("domain_orchestrate",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_phase_result",
@@ -284,9 +279,9 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 	wrap.SetBudget("domain_orchestrate_confirm",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	return []mcpgo.ServerTool{
-		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", deps.handleOrchestrate)},
-		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", deps.handleOrchestratePhaseResult)},
-		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", deps.handleOrchestrateConfirm)},
-		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", deps.handleFlowStatus)},
+		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", h.handleOrchestrate)},
+		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
+		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm)},
+		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", h.handleFlowStatus)},
 	}
 }

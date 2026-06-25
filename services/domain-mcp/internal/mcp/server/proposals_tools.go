@@ -20,21 +20,59 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
+	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 )
 
+type proposalsPoliciesStore interface {
+	Create(ctx context.Context, in projectpolicysvc.CreateInput) (*projectpolicysvc.Policy, error)
+}
+
+type projectLookup interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type proposalsHandlers struct {
+	projectPolicies proposalsPoliciesStore
+	projects        projectLookup
+	pool            *pgxpool.Pool
+	principal       *apikey.Principal
+}
+
+func (h *proposalsHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerProposalsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &proposalsHandlers{
+		projectPolicies: deps.ProjectPolicies,
+		projects:        deps.Projects,
+		pool:            deps.Pool,
+		principal:       deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolProposePolicy(), Handler: wrap.Wrap("domain_propose_policy", rls(deps.handleProposePolicy))},
-		{Tool: toolProposeSkill(), Handler: wrap.Wrap("domain_propose_skill", rls(deps.handleProposeSkill))},
-		{Tool: toolProposalList(), Handler: wrap.Wrap("domain_proposal_list", rls(deps.handleProposalList))},
-		{Tool: toolProposalReview(), Handler: wrap.Wrap("domain_proposal_review", rls(deps.handleProposalReview))},
+		{Tool: toolProposePolicy(), Handler: wrap.Wrap("domain_propose_policy", rls(h.handleProposePolicy))},
+		{Tool: toolProposeSkill(), Handler: wrap.Wrap("domain_propose_skill", rls(h.handleProposeSkill))},
+		{Tool: toolProposalList(), Handler: wrap.Wrap("domain_proposal_list", rls(h.handleProposalList))},
+		{Tool: toolProposalReview(), Handler: wrap.Wrap("domain_proposal_review", rls(h.handleProposalReview))},
 	}
 }
 
@@ -81,14 +119,14 @@ func toolProposalReview() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *proposalsHandlers) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.ProjectPolicies == nil || d.Projects == nil {
+	if h.projectPolicies == nil || h.projects == nil {
 		return mcp.NewToolResultError("project_policy service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	slug, _ := args["slug"].(string)
@@ -103,14 +141,12 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 		body = body + "\n\n---\n_Rationale (propuesto por LLM)_: " + rationale
 	}
 
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-
-
-	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+	created, err := h.projectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 		OrganizationID: orgID,
 		ProjectID:      proj.ID,
 		Slug:           slug,
@@ -123,7 +159,7 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError(fmt.Sprintf("create proposal failed: %v", err)), nil
 	}
 
-	if _, err := d.q(ctx).Exec(ctx,
+	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE project_policies SET proposed = true
 		   WHERE id = $1`,
 		created.ID,
@@ -140,14 +176,14 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 	})
 }
 
-func (d *Deps) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *proposalsHandlers) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["slug"].(string)
 	name, _ := args["name"].(string)
@@ -163,15 +199,15 @@ func (d *Deps) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) 
 	}
 
 	var projectID *uuid.UUID
-	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil {
-		if proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
+	if projSlug, _ := args["project_slug"].(string); projSlug != "" && h.projects != nil {
+		if proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
 			pid := proj.ID
 			projectID = &pid
 		}
 	}
 
 	var id uuid.UUID
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
 		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema, proposed)
@@ -191,14 +227,14 @@ func (d *Deps) handleProposeSkill(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *proposalsHandlers) handleProposalList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	kind := strings.ToLower(strings.TrimSpace(asString(args["kind"])))
 	if kind == "" {
@@ -207,8 +243,8 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 	projSlug, _ := args["project_slug"].(string)
 
 	var projectFilter *uuid.UUID
-	if projSlug != "" && d.Projects != nil {
-		if proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
+	if projSlug != "" && h.projects != nil {
+		if proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
 			pid := proj.ID
 			projectFilter = &pid
 		}
@@ -216,8 +252,6 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 
 	policies := []map[string]any{}
 	skills := []map[string]any{}
-
-
 
 	const tsFmt = "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
 
@@ -231,7 +265,7 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 			queryArgs = append(queryArgs, *projectFilter)
 		}
 		q += " ORDER BY created_at DESC LIMIT 50"
-		if rows, err := d.q(ctx).Query(ctx, q, queryArgs...); err == nil {
+		if rows, err := h.q(ctx).Query(ctx, q, queryArgs...); err == nil {
 			for rows.Next() {
 				var id, slug, name, k, ts string
 				if err := rows.Scan(&id, &slug, &name, &k, &ts); err == nil {
@@ -245,7 +279,7 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 	}
 
 	if kind == "skill" || kind == "all" {
-		if rows, err := d.q(ctx).Query(ctx,
+		if rows, err := h.q(ctx).Query(ctx,
 			`SELECT id::text, slug, name, skill_type, project_id, `+tsFmt+`
 			   FROM skills
 			   WHERE proposed = true AND deleted_at IS NULL
@@ -275,11 +309,11 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *proposalsHandlers) handleProposalReview(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -306,15 +340,13 @@ func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest
 
 	var sql string
 	if action == "accept" {
-
 		sql = "UPDATE " + table + ` SET proposed = false
 		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	} else {
-
 		sql = "UPDATE " + table + ` SET deleted_at = NOW()
 		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	}
-	tag, err := d.q(ctx).Exec(ctx, sql, id)
+	tag, err := h.q(ctx).Exec(ctx, sql, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("review failed: %v", err)), nil
 	}

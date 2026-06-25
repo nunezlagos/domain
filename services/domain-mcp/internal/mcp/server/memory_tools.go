@@ -10,24 +10,69 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	obssvc "nunezlagos/domain/internal/service/observation"
+	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
-func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+type memoryObservationService interface {
+	Get(ctx context.Context, id uuid.UUID) (*obssvc.Observation, error)
+	SoftDelete(ctx context.Context, id, actorID uuid.UUID) error
+	Save(ctx context.Context, in obssvc.SaveInput) (*obssvc.Observation, error)
+}
 
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+type memoryProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type memoryPromptService interface {
+	Create(ctx context.Context, in promptsvc.CreateInput) (*promptsvc.Prompt, error)
+}
+
+type memoryHandlers struct {
+	observations memoryObservationService
+	projects     memoryProjectGetter
+	prompts      memoryPromptService
+	principal    *apikey.Principal
+	pool         *pgxpool.Pool
+}
+
+func (h *memoryHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
+func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &memoryHandlers{
+		observations: deps.Observations,
+		projects:     deps.Projects,
+		prompts:      deps.Prompts,
+		principal:    deps.Principal,
+		pool:         deps.Pool,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(deps.handleMemDelete))},
-		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", deps.handleMemSavePrompt)},
-		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(deps.handleMemCapturePassive))},
-		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", deps.handleMemSuggestTopicKey)},
-		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(deps.handleMemStats))},
+		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(h.handleMemDelete))},
+		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", h.handleMemSavePrompt)},
+		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(h.handleMemCapturePassive))},
+		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", h.handleMemSuggestTopicKey)},
+		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(h.handleMemStats))},
 	}
 }
 
@@ -41,8 +86,8 @@ func toolMemDelete() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 
@@ -53,11 +98,11 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("observation_id invalido"), nil
 	}
 
-	if _, err := d.Observations.Get(ctx, id); err != nil {
+	if _, err := h.observations.Get(ctx, id); err != nil {
 		return mcp.NewToolResultError("observation not found"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	if err := d.Observations.SoftDelete(ctx, id, userID); err != nil {
+	userID, _ := uuid.Parse(h.principal.UserID)
+	if err := h.observations.SoftDelete(ctx, id, userID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"deleted": true, "observation_id": id})
@@ -86,8 +131,8 @@ func toolMemSavePrompt() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 	args := req.GetArguments()
@@ -96,15 +141,15 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 	if slug == "" || body == "" {
 		return mcp.NewToolResultError("slug y body son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	var projectID *uuid.UUID
 	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		proj, err := h.projects.GetBySlug(ctx, orgID, ps)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
 		}
@@ -116,7 +161,7 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 		setActive = v
 	}
 
-	p, err := d.Prompts.Create(ctx, promptsvc.CreateInput{
+	p, err := h.prompts.Create(ctx, promptsvc.CreateInput{
 		OrganizationID: orgID, ProjectID: projectID, CreatedBy: &userID,
 		Slug: slug, Body: body, Description: desc, SetActive: setActive,
 	})
@@ -145,8 +190,8 @@ func toolMemCapturePassive() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 
@@ -156,12 +201,12 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 	if projectSlug == "" || content == "" {
 		return mcp.NewToolResultError("project_slug y content son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
+	userID, _ := uuid.Parse(h.principal.UserID)
+	proj, err := h.projects.GetBySlug(ctx, orgID, projectSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projectSlug)), nil
 	}
@@ -170,7 +215,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		source = "passive"
 	}
 
-	obs, err := d.Observations.Save(ctx, obssvc.SaveInput{
+	obs, err := h.observations.Save(ctx, obssvc.SaveInput{
 		OrganizationID:  orgID,
 		ProjectID:       proj.ID,
 		CreatedBy:       &userID,
@@ -246,7 +291,7 @@ func SuggestTopicKey(content string) string {
 	return strings.Join(order[:n], "-")
 }
 
-func (d *Deps) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (h *memoryHandlers) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args := req.GetArguments()
 	content, _ := args["content"].(string)
 	if content == "" {
@@ -264,11 +309,11 @@ func toolMemStats() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
@@ -277,7 +322,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	projFilter := ""
 	qArgs := []any{}
 	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		proj, err := h.projects.GetBySlug(ctx, orgID, ps)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
 		}
@@ -287,7 +332,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 
 	byType := map[string]int64{}
 
-	rows, err := d.q(ctx).Query(ctx, `
+	rows, err := h.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM knowledge_observations
 		WHERE deleted_at IS NULL`+projFilter+`
 		GROUP BY observation_type`, qArgs...)
@@ -312,7 +357,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 
 
 	var prompts int64
-	_ = d.q(ctx).QueryRow(ctx,
+	_ = h.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)
 
 	return toolResultJSON(map[string]any{

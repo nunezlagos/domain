@@ -9,7 +9,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	"nunezlagos/domain/internal/auth/apikey"
+	syncsvc "nunezlagos/domain/internal/service/extsync"
 )
+
+type extSyncService interface {
+	RegisterProvider(ctx context.Context, orgID uuid.UUID, provider, displayName, baseURL, projectKey string, config map[string]any) (*syncsvc.Provider, error)
+	RegisterPush(ctx context.Context, providerID uuid.UUID, entityKind string, entityID uuid.UUID, externalKey, externalURL, externalType string, fieldMapping map[string]any) (*syncsvc.SyncState, error)
+	MarkDrift(ctx context.Context, stateID uuid.UUID, driftFields map[string]any) (*syncsvc.SyncState, error)
+	MarkResolved(ctx context.Context, stateID uuid.UUID) (*syncsvc.SyncState, error)
+	ListConflicts(ctx context.Context, limit int) ([]syncsvc.SyncState, error)
+	Get(ctx context.Context, id uuid.UUID) (*syncsvc.SyncState, error)
+}
+
+type syncHandlers struct {
+	extSync   extSyncService
+	principal *apikey.Principal
+}
 
 // toolSyncRegisterProvider — domain_sync_register_provider
 func toolSyncRegisterProvider() mcp.Tool {
@@ -108,10 +125,8 @@ func toolSyncGetState() mcp.Tool {
 	)
 }
 
-
-
-func (d *Deps) handleSyncRegisterProvider(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncRegisterProvider(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -126,8 +141,8 @@ func (d *Deps) handleSyncRegisterProvider(ctx context.Context, req mcp.CallToolR
 	if v, ok := args["config"].(map[string]any); ok {
 		config = v
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	p, err := d.ExtSync.RegisterProvider(ctx, orgID, provider, displayName, baseURL, projectKey, config)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	p, err := h.extSync.RegisterProvider(ctx, orgID, provider, displayName, baseURL, projectKey, config)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register provider: %v", err)), nil
 	}
@@ -139,8 +154,8 @@ func (d *Deps) handleSyncRegisterProvider(ctx context.Context, req mcp.CallToolR
 	})
 }
 
-func (d *Deps) handleSyncRegisterPush(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncRegisterPush(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -165,20 +180,20 @@ func (d *Deps) handleSyncRegisterPush(ctx context.Context, req mcp.CallToolReque
 	if v, ok := args["field_mapping"].(map[string]any); ok {
 		fieldMapping = v
 	}
-	st, err := d.ExtSync.RegisterPush(ctx, provID, entityKind, entityID, extKey, extURL, extType, fieldMapping)
+	st, err := h.extSync.RegisterPush(ctx, provID, entityKind, entityID, extKey, extURL, extType, fieldMapping)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register push: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"id":          st.ID.String(),
-		"status":      st.SyncStatus,
+		"id":           st.ID.String(),
+		"status":       st.SyncStatus,
 		"external_key": st.ExternalKey,
-		"direction":   st.SyncDirection,
+		"direction":    st.SyncDirection,
 	})
 }
 
-func (d *Deps) handleSyncMarkDrift(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncMarkDrift(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -191,19 +206,19 @@ func (d *Deps) handleSyncMarkDrift(ctx context.Context, req mcp.CallToolRequest)
 	if v, ok := args["drift_fields"].(map[string]any); ok {
 		driftFields = v
 	}
-	st, err := d.ExtSync.MarkDrift(ctx, id, driftFields)
+	st, err := h.extSync.MarkDrift(ctx, id, driftFields)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("mark drift: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"id":              st.ID.String(),
-		"status":          st.SyncStatus,
+		"id":                st.ID.String(),
+		"status":            st.SyncStatus,
 		"drift_detected_at": st.DriftDetectedAt,
 	})
 }
 
-func (d *Deps) handleSyncMarkResolved(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncMarkResolved(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -212,7 +227,7 @@ func (d *Deps) handleSyncMarkResolved(ctx context.Context, req mcp.CallToolReque
 	if err != nil {
 		return mcp.NewToolResultError("state_id invalido"), nil
 	}
-	st, err := d.ExtSync.MarkResolved(ctx, id)
+	st, err := h.extSync.MarkResolved(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("mark resolved: %v", err)), nil
 	}
@@ -222,8 +237,8 @@ func (d *Deps) handleSyncMarkResolved(ctx context.Context, req mcp.CallToolReque
 	})
 }
 
-func (d *Deps) handleSyncListConflicts(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncListConflicts(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -231,26 +246,26 @@ func (d *Deps) handleSyncListConflicts(ctx context.Context, req mcp.CallToolRequ
 	if v, ok := args["limit"].(float64); ok {
 		limit = int(v)
 	}
-	results, err := d.ExtSync.ListConflicts(ctx, limit)
+	results, err := h.extSync.ListConflicts(ctx, limit)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list conflicts: %v", err)), nil
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, st := range results {
 		out = append(out, map[string]any{
-			"id":               st.ID.String(),
-			"provider_id":      st.ProviderID.String(),
-			"entity_kind":      st.EntityKind,
-			"entity_id":        st.EntityID.String(),
-			"external_key":     st.ExternalKey,
+			"id":                st.ID.String(),
+			"provider_id":       st.ProviderID.String(),
+			"entity_kind":       st.EntityKind,
+			"entity_id":         st.EntityID.String(),
+			"external_key":      st.ExternalKey,
 			"drift_detected_at": st.DriftDetectedAt,
 		})
 	}
 	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
 }
 
-func (d *Deps) handleSyncGetState(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.ExtSync == nil {
+func (h *syncHandlers) handleSyncGetState(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.extSync == nil {
 		return mcp.NewToolResultError("extsync service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -259,7 +274,7 @@ func (d *Deps) handleSyncGetState(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError("id invalido"), nil
 	}
-	st, err := d.ExtSync.Get(ctx, id)
+	st, err := h.extSync.Get(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 	}
@@ -268,12 +283,13 @@ func (d *Deps) handleSyncGetState(ctx context.Context, req mcp.CallToolRequest) 
 
 // registerSyncTools agrega tools de external sync al listado.
 func registerSyncTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &syncHandlers{extSync: deps.ExtSync, principal: deps.Principal}
 	return []mcpgo.ServerTool{
-		{Tool: toolSyncRegisterProvider(), Handler: wrap.Wrap("domain_sync_register_provider", deps.handleSyncRegisterProvider)},
-		{Tool: toolSyncRegisterPush(), Handler: wrap.Wrap("domain_sync_register_push", deps.handleSyncRegisterPush)},
-		{Tool: toolSyncMarkDrift(), Handler: wrap.Wrap("domain_sync_mark_drift", deps.handleSyncMarkDrift)},
-		{Tool: toolSyncMarkResolved(), Handler: wrap.Wrap("domain_sync_mark_resolved", deps.handleSyncMarkResolved)},
-		{Tool: toolSyncListConflicts(), Handler: wrap.Wrap("domain_sync_list_conflicts", deps.handleSyncListConflicts)},
-		{Tool: toolSyncGetState(), Handler: wrap.Wrap("domain_sync_get_state", deps.handleSyncGetState)},
+		{Tool: toolSyncRegisterProvider(), Handler: wrap.Wrap("domain_sync_register_provider", h.handleSyncRegisterProvider)},
+		{Tool: toolSyncRegisterPush(), Handler: wrap.Wrap("domain_sync_register_push", h.handleSyncRegisterPush)},
+		{Tool: toolSyncMarkDrift(), Handler: wrap.Wrap("domain_sync_mark_drift", h.handleSyncMarkDrift)},
+		{Tool: toolSyncMarkResolved(), Handler: wrap.Wrap("domain_sync_mark_resolved", h.handleSyncMarkResolved)},
+		{Tool: toolSyncListConflicts(), Handler: wrap.Wrap("domain_sync_list_conflicts", h.handleSyncListConflicts)},
+		{Tool: toolSyncGetState(), Handler: wrap.Wrap("domain_sync_get_state", h.handleSyncGetState)},
 	}
 }

@@ -12,18 +12,42 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
+type projectRepoService interface {
+	Add(ctx context.Context, in projectreposvc.AddInput) (*projectreposvc.Repo, error)
+	List(ctx context.Context, orgID, projectID uuid.UUID) ([]*projectreposvc.Repo, error)
+	SetDefault(ctx context.Context, orgID, id uuid.UUID) (*projectreposvc.Repo, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
+}
+
+type projectRepoProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type projectRepoHandlers struct {
+	repos     projectRepoService
+	projects  projectRepoProjectGetter
+	principal *apikey.Principal
+}
+
 func registerProjectRepoTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &projectRepoHandlers{
+		repos:     deps.ProjectRepos,
+		projects:  deps.Projects,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolProjectRepoAdd(), Handler: wrap.Wrap("domain_project_repo_add", rls(deps.handleProjectRepoAdd))},
-		{Tool: toolProjectRepoList(), Handler: wrap.Wrap("domain_project_repo_list", rls(deps.handleProjectRepoList))},
-		{Tool: toolProjectRepoSetDefault(), Handler: wrap.Wrap("domain_project_repo_set_default", rls(deps.handleProjectRepoSetDefault))},
-		{Tool: toolProjectRepoDelete(), Handler: wrap.Wrap("domain_project_repo_delete", rls(deps.handleProjectRepoDelete))},
+		{Tool: toolProjectRepoAdd(), Handler: wrap.Wrap("domain_project_repo_add", rls(h.handleProjectRepoAdd))},
+		{Tool: toolProjectRepoList(), Handler: wrap.Wrap("domain_project_repo_list", rls(h.handleProjectRepoList))},
+		{Tool: toolProjectRepoSetDefault(), Handler: wrap.Wrap("domain_project_repo_set_default", rls(h.handleProjectRepoSetDefault))},
+		{Tool: toolProjectRepoDelete(), Handler: wrap.Wrap("domain_project_repo_delete", rls(h.handleProjectRepoDelete))},
 	}
 }
 
@@ -62,32 +86,32 @@ func toolProjectRepoDelete() mcp.Tool {
 	)
 }
 
-func (d *Deps) requireProjectRepoDeps() error {
-	if d.Principal == nil {
+func (h *projectRepoHandlers) requireDeps() error {
+	if h.principal == nil {
 		return fmt.Errorf("no authenticated principal")
 	}
-	if d.ProjectRepos == nil {
+	if h.repos == nil {
 		return fmt.Errorf("project_repositories service not configured")
 	}
-	if d.Projects == nil {
+	if h.projects == nil {
 		return fmt.Errorf("projects service not configured")
 	}
 	return nil
 }
 
-func (d *Deps) resolveProjectIDFromSlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {
-	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+func (h *projectRepoHandlers) resolveProjectIDFromSlug(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {
+	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("project '%s' not found: %w", slug, err)
 	}
 	return proj.ID, nil
 }
 
-func (d *Deps) handleProjectRepoAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireProjectRepoDeps(); err != nil {
+func (h *projectRepoHandlers) handleProjectRepoAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["project_slug"].(string)
 	name, _ := args["name"].(string)
@@ -95,7 +119,7 @@ func (d *Deps) handleProjectRepoAdd(ctx context.Context, req mcp.CallToolRequest
 	if slug == "" || name == "" || url == "" {
 		return mcp.NewToolResultError("project_slug, name y url requeridos"), nil
 	}
-	projID, err := d.resolveProjectIDFromSlug(ctx, orgID, slug)
+	projID, err := h.resolveProjectIDFromSlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -119,28 +143,28 @@ func (d *Deps) handleProjectRepoAdd(ctx context.Context, req mcp.CallToolRequest
 	if v, ok := args["notes"].(string); ok {
 		in.Notes = v
 	}
-	repo, err := d.ProjectRepos.Add(ctx, in)
+	repo, err := h.repos.Add(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("add failed: %v", err)), nil
 	}
 	return toolResultJSON(repo)
 }
 
-func (d *Deps) handleProjectRepoList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireProjectRepoDeps(); err != nil {
+func (h *projectRepoHandlers) handleProjectRepoList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["project_slug"].(string)
 	if slug == "" {
 		return mcp.NewToolResultError("project_slug requerido"), nil
 	}
-	projID, err := d.resolveProjectIDFromSlug(ctx, orgID, slug)
+	projID, err := h.resolveProjectIDFromSlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	list, err := d.ProjectRepos.List(ctx, orgID, projID)
+	list, err := h.repos.List(ctx, orgID, projID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
@@ -159,36 +183,36 @@ func (d *Deps) handleProjectRepoList(ctx context.Context, req mcp.CallToolReques
 	})
 }
 
-func (d *Deps) handleProjectRepoSetDefault(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireProjectRepoDeps(); err != nil {
+func (h *projectRepoHandlers) handleProjectRepoSetDefault(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["repo_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("repo_id invalido"), nil
 	}
-	repo, err := d.ProjectRepos.SetDefault(ctx, orgID, id)
+	repo, err := h.repos.SetDefault(ctx, orgID, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("set_default failed: %v", err)), nil
 	}
 	return toolResultJSON(repo)
 }
 
-func (d *Deps) handleProjectRepoDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireProjectRepoDeps(); err != nil {
+func (h *projectRepoHandlers) handleProjectRepoDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["repo_id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("repo_id invalido"), nil
 	}
-	if err := d.ProjectRepos.Delete(ctx, orgID, id); err != nil {
+	if err := h.repos.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})

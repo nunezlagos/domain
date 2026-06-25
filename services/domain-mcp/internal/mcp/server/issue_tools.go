@@ -11,8 +11,23 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 )
+
+type huService interface {
+	Start(ctx context.Context, mode, initialIdea string, createdBy *uuid.UUID, projectID *uuid.UUID) (*husvc.Draft, *husvc.Question, error)
+	Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) (*husvc.Draft, *husvc.Question, error)
+	BuildPreview(ctx context.Context, draftID uuid.UUID) (*husvc.Preview, error)
+	Commit(ctx context.Context, draftID uuid.UUID) (*husvc.Draft, error)
+	Abandon(ctx context.Context, draftID uuid.UUID, reason string) error
+	List(ctx context.Context, status string) ([]husvc.Draft, error)
+}
+
+type issueHandlers struct {
+	hu        huService
+	principal *apikey.Principal
+}
 
 // toolHUCreateStart — domain_hu_create_start
 func toolHUCreateStart() mcp.Tool {
@@ -89,10 +104,8 @@ func toolHUDraftsList() mcp.Tool {
 	)
 }
 
-
-
-func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -101,7 +114,7 @@ func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest)
 	if mode == "" || idea == "" {
 		return mcp.NewToolResultError("mode e initial_idea son requeridos"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	pidStr := req.GetString("project_id", "")
 	if pidStr == "" {
@@ -112,7 +125,7 @@ func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError("invalid project_id"), nil
 	}
 	projectID := &p
-	draft, q, err := d.Hubuilder.Start(ctx, mode, idea, &userID, projectID)
+	draft, q, err := h.hu.Start(ctx, mode, idea, &userID, projectID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("start: %v", err)), nil
 	}
@@ -127,8 +140,8 @@ func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest)
 	return toolResultJSON(out)
 }
 
-func (d *Deps) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -147,7 +160,7 @@ func (d *Deps) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest
 	if json.Unmarshal([]byte(answer), &parsed) == nil {
 		rawAnswer = parsed
 	}
-	draft, q, err := d.Hubuilder.Answer(ctx, id, rawAnswer)
+	draft, q, err := h.hu.Answer(ctx, id, rawAnswer)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("answer: %v", err)), nil
 	}
@@ -166,8 +179,8 @@ func (d *Deps) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest
 	return toolResultJSON(out)
 }
 
-func (d *Deps) handleHUCreatePreview(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUCreatePreview(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -176,15 +189,15 @@ func (d *Deps) handleHUCreatePreview(ctx context.Context, req mcp.CallToolReques
 	if err != nil {
 		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
-	preview, err := d.Hubuilder.BuildPreview(ctx, id)
+	preview, err := h.hu.BuildPreview(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("preview: %v", err)), nil
 	}
 	return toolResultJSON(preview)
 }
 
-func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -193,7 +206,7 @@ func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
-	draft, err := d.Hubuilder.Commit(ctx, id)
+	draft, err := h.hu.Commit(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("commit: %v", err)), nil
 	}
@@ -211,8 +224,8 @@ func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest
 	return toolResultJSON(out)
 }
 
-func (d *Deps) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -222,7 +235,7 @@ func (d *Deps) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
 	reason, _ := args["reason"].(string)
-	if err := d.Hubuilder.Abandon(ctx, id, reason); err != nil {
+	if err := h.hu.Abandon(ctx, id, reason); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("abandon: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
@@ -231,13 +244,13 @@ func (d *Deps) handleHUCreateAbandon(ctx context.Context, req mcp.CallToolReques
 	})
 }
 
-func (d *Deps) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Hubuilder == nil {
+func (h *issueHandlers) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.hu == nil {
 		return mcp.NewToolResultError("issuebuilder service no configurado"), nil
 	}
 	args := req.GetArguments()
 	status, _ := args["status"].(string)
-	drafts, err := d.Hubuilder.List(ctx, status)
+	drafts, err := h.hu.List(ctx, status)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
 	}
@@ -261,26 +274,24 @@ func (d *Deps) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) 
 // domain_issue_* como los LEGACY domain_hu_* para no romper clientes
 // que aun tipean los nombres viejos. Los handlers son los mismos.
 func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &issueHandlers{hu: deps.Hubuilder, principal: deps.Principal}
 	return []mcpgo.ServerTool{
 
-		{Tool: toolIssueCreateStart(), Handler: wrap.Wrap("domain_issue_create_start", deps.handleHUCreateStart)},
-		{Tool: toolIssueCreateAnswer(), Handler: wrap.Wrap("domain_issue_create_answer", deps.handleHUCreateAnswer)},
-		{Tool: toolIssueCreatePreview(), Handler: wrap.Wrap("domain_issue_create_preview", deps.handleHUCreatePreview)},
-		{Tool: toolIssueCreateCommit(), Handler: wrap.Wrap("domain_issue_create_commit", deps.handleHUCreateCommit)},
-		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", deps.handleHUCreateAbandon)},
-		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", deps.handleHUDraftsList)},
+		{Tool: toolIssueCreateStart(), Handler: wrap.Wrap("domain_issue_create_start", h.handleHUCreateStart)},
+		{Tool: toolIssueCreateAnswer(), Handler: wrap.Wrap("domain_issue_create_answer", h.handleHUCreateAnswer)},
+		{Tool: toolIssueCreatePreview(), Handler: wrap.Wrap("domain_issue_create_preview", h.handleHUCreatePreview)},
+		{Tool: toolIssueCreateCommit(), Handler: wrap.Wrap("domain_issue_create_commit", h.handleHUCreateCommit)},
+		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", h.handleHUCreateAbandon)},
+		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", h.handleHUDraftsList)},
 
-		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", deps.handleHUCreateStart)},
-		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", deps.handleHUCreateAnswer)},
-		{Tool: toolHUCreatePreview(), Handler: wrap.Wrap("domain_hu_create_preview", deps.handleHUCreatePreview)},
-		{Tool: toolHUCreateCommit(), Handler: wrap.Wrap("domain_hu_create_commit", deps.handleHUCreateCommit)},
-		{Tool: toolHUCreateAbandon(), Handler: wrap.Wrap("domain_hu_create_abandon", deps.handleHUCreateAbandon)},
-		{Tool: toolHUDraftsList(), Handler: wrap.Wrap("domain_hu_drafts_list", deps.handleHUDraftsList)},
+		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", h.handleHUCreateStart)},
+		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", h.handleHUCreateAnswer)},
+		{Tool: toolHUCreatePreview(), Handler: wrap.Wrap("domain_hu_create_preview", h.handleHUCreatePreview)},
+		{Tool: toolHUCreateCommit(), Handler: wrap.Wrap("domain_hu_create_commit", h.handleHUCreateCommit)},
+		{Tool: toolHUCreateAbandon(), Handler: wrap.Wrap("domain_hu_create_abandon", h.handleHUCreateAbandon)},
+		{Tool: toolHUDraftsList(), Handler: wrap.Wrap("domain_hu_drafts_list", h.handleHUDraftsList)},
 	}
 }
-
-
-
 
 func toolIssueCreateStart() mcp.Tool {
 	return mcp.NewTool("domain_issue_create_start",

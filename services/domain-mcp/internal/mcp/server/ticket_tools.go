@@ -13,29 +13,73 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
+	clientsvc "nunezlagos/domain/internal/service/client"
+	projsvc "nunezlagos/domain/internal/service/project"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 )
 
+type ticketService interface {
+	Create(ctx context.Context, in ticketsvc.CreateInput) (*ticketsvc.Ticket, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (*ticketsvc.Ticket, error)
+	GetByKey(ctx context.Context, orgID, projectID uuid.UUID, key string) (*ticketsvc.Ticket, error)
+	List(ctx context.Context, orgID uuid.UUID, filter ticketsvc.ListFilter) ([]*ticketsvc.Ticket, int64, error)
+	UpdateAs(ctx context.Context, orgID, id, actor uuid.UUID, in ticketsvc.UpdateInput) (*ticketsvc.Ticket, error)
+	ChangeStatus(ctx context.Context, orgID, id uuid.UUID, toStatus string, actorID uuid.UUID, note string) (*ticketsvc.Ticket, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
+	AddComment(ctx context.Context, ticketID, authorID uuid.UUID, body string) (*ticketsvc.Comment, error)
+	ListComments(ctx context.Context, ticketID uuid.UUID) ([]*ticketsvc.Comment, error)
+	StatusHistory(ctx context.Context, ticketID uuid.UUID) ([]*ticketsvc.StatusChange, error)
+	LinkExternal(ctx context.Context, orgID, id uuid.UUID, link ticketsvc.ExternalLink) (*ticketsvc.Ticket, error)
+	UnlinkExternal(ctx context.Context, orgID, id uuid.UUID) error
+	LinkIssue(ctx context.Context, orgID, ticketID uuid.UUID, issueID *uuid.UUID) (*ticketsvc.Ticket, error)
+	BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []ticketsvc.BulkLinkMapping) (*ticketsvc.BulkLinkResult, error)
+	Claim(ctx context.Context, orgID, ticketID, userID uuid.UUID, ttlMinutes int) (*ticketsvc.Ticket, error)
+	Release(ctx context.Context, orgID, ticketID, userID uuid.UUID) (*ticketsvc.Ticket, error)
+	Reassign(ctx context.Context, orgID, ticketID uuid.UUID, newAssignee *uuid.UUID) (*ticketsvc.Ticket, error)
+}
+
+type ticketProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type optionalClientService interface {
+	Get(ctx context.Context, orgID uuid.UUID, idOrSlug string) (*clientsvc.Client, error)
+}
+
+type ticketHandlers struct {
+	tickets   ticketService
+	projects  ticketProjectGetter
+	clients   optionalClientService
+	principal *apikey.Principal
+}
+
 func registerTicketTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &ticketHandlers{
+		tickets:   deps.Tickets,
+		projects:  deps.Projects,
+		clients:   deps.Clients,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolTicketCreate(), Handler: wrap.Wrap("domain_ticket_create", rls(deps.handleTicketCreate))},
-		{Tool: toolTicketGet(), Handler: wrap.Wrap("domain_ticket_get", rls(deps.handleTicketGet))},
-		{Tool: toolTicketList(), Handler: wrap.Wrap("domain_ticket_list", rls(deps.handleTicketList))},
-		{Tool: toolTicketUpdate(), Handler: wrap.Wrap("domain_ticket_update", rls(deps.handleTicketUpdate))},
-		{Tool: toolTicketChangeStatus(), Handler: wrap.Wrap("domain_ticket_change_status", rls(deps.handleTicketChangeStatus))},
-		{Tool: toolTicketDelete(), Handler: wrap.Wrap("domain_ticket_delete", rls(deps.handleTicketDelete))},
-		{Tool: toolTicketCommentAdd(), Handler: wrap.Wrap("domain_ticket_comment_add", rls(deps.handleTicketCommentAdd))},
-		{Tool: toolTicketCommentList(), Handler: wrap.Wrap("domain_ticket_comment_list", rls(deps.handleTicketCommentList))},
-		{Tool: toolTicketStatusHistory(), Handler: wrap.Wrap("domain_ticket_status_history", rls(deps.handleTicketStatusHistory))},
-		{Tool: toolTicketLinkExternal(), Handler: wrap.Wrap("domain_ticket_link_external", rls(deps.handleTicketLinkExternal))},
-		{Tool: toolTicketLinkIssue(), Handler: wrap.Wrap("domain_ticket_link_issue", rls(deps.handleTicketLinkIssue))},
-		{Tool: toolTicketLinkExternalBulk(), Handler: wrap.Wrap("domain_ticket_link_external_bulk", rls(deps.handleTicketLinkExternalBulk))},
-		{Tool: toolTicketClaim(), Handler: wrap.Wrap("domain_ticket_claim", rls(deps.handleTicketClaim))},
-		{Tool: toolTicketRelease(), Handler: wrap.Wrap("domain_ticket_release", rls(deps.handleTicketRelease))},
-		{Tool: toolTicketReassign(), Handler: wrap.Wrap("domain_ticket_reassign", rls(deps.handleTicketReassign))},
+		{Tool: toolTicketCreate(), Handler: wrap.Wrap("domain_ticket_create", rls(h.handleTicketCreate))},
+		{Tool: toolTicketGet(), Handler: wrap.Wrap("domain_ticket_get", rls(h.handleTicketGet))},
+		{Tool: toolTicketList(), Handler: wrap.Wrap("domain_ticket_list", rls(h.handleTicketList))},
+		{Tool: toolTicketUpdate(), Handler: wrap.Wrap("domain_ticket_update", rls(h.handleTicketUpdate))},
+		{Tool: toolTicketChangeStatus(), Handler: wrap.Wrap("domain_ticket_change_status", rls(h.handleTicketChangeStatus))},
+		{Tool: toolTicketDelete(), Handler: wrap.Wrap("domain_ticket_delete", rls(h.handleTicketDelete))},
+		{Tool: toolTicketCommentAdd(), Handler: wrap.Wrap("domain_ticket_comment_add", rls(h.handleTicketCommentAdd))},
+		{Tool: toolTicketCommentList(), Handler: wrap.Wrap("domain_ticket_comment_list", rls(h.handleTicketCommentList))},
+		{Tool: toolTicketStatusHistory(), Handler: wrap.Wrap("domain_ticket_status_history", rls(h.handleTicketStatusHistory))},
+		{Tool: toolTicketLinkExternal(), Handler: wrap.Wrap("domain_ticket_link_external", rls(h.handleTicketLinkExternal))},
+		{Tool: toolTicketLinkIssue(), Handler: wrap.Wrap("domain_ticket_link_issue", rls(h.handleTicketLinkIssue))},
+		{Tool: toolTicketLinkExternalBulk(), Handler: wrap.Wrap("domain_ticket_link_external_bulk", rls(h.handleTicketLinkExternalBulk))},
+		{Tool: toolTicketClaim(), Handler: wrap.Wrap("domain_ticket_claim", rls(h.handleTicketClaim))},
+		{Tool: toolTicketRelease(), Handler: wrap.Wrap("domain_ticket_release", rls(h.handleTicketRelease))},
+		{Tool: toolTicketReassign(), Handler: wrap.Wrap("domain_ticket_reassign", rls(h.handleTicketReassign))},
 	}
 }
 
@@ -63,12 +107,12 @@ func toolTicketReassign() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleTicketClaim(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketClaim(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -79,37 +123,37 @@ func (d *Deps) handleTicketClaim(ctx context.Context, req mcp.CallToolRequest) (
 	if v, ok := args["ttl_minutes"].(float64); ok {
 		ttl = int(v)
 	}
-	t, err := d.Tickets.Claim(ctx, orgID, id, userID, ttl)
+	t, err := h.tickets.Claim(ctx, orgID, id, userID, ttl)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("claim failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketRelease(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketRelease(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("id invalido"), nil
 	}
-	t, err := d.Tickets.Release(ctx, orgID, id, userID)
+	t, err := h.tickets.Release(ctx, orgID, id, userID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("release failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketReassign(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketReassign(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -122,7 +166,7 @@ func (d *Deps) handleTicketReassign(ctx context.Context, req mcp.CallToolRequest
 			assignee = &aid
 		}
 	}
-	t, err := d.Tickets.Reassign(ctx, orgID, id, assignee)
+	t, err := h.tickets.Reassign(ctx, orgID, id, assignee)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("reassign failed: %v", err)), nil
 	}
@@ -242,14 +286,14 @@ func toolTicketLinkExternal() mcp.Tool {
 
 
 
-func (d *Deps) requireTicketDeps() error {
-	if d.Principal == nil {
+func (h *ticketHandlers) requireDeps() error {
+	if h.principal == nil {
 		return fmt.Errorf("no authenticated principal")
 	}
-	if d.Tickets == nil {
+	if h.tickets == nil {
 		return fmt.Errorf("tickets service not configured")
 	}
-	if d.Projects == nil {
+	if h.projects == nil {
 		return fmt.Errorf("projects service not configured")
 	}
 	return nil
@@ -266,8 +310,8 @@ func parseDateYMD(s string) *time.Time {
 	return &t
 }
 
-func (d *Deps) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	args := req.GetArguments()
@@ -276,9 +320,9 @@ func (d *Deps) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) 
 	if projSlug == "" || title == "" {
 		return mcp.NewToolResultError("project_slug y title requeridos"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
@@ -300,8 +344,8 @@ func (d *Deps) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) 
 	if v, ok := args["priority"].(string); ok {
 		in.Priority = v
 	}
-	if v, ok := args["client_slug"].(string); ok && v != "" && d.Clients != nil {
-		if cl, _ := d.Clients.Get(ctx, orgID, v); cl != nil {
+	if v, ok := args["client_slug"].(string); ok && v != "" && h.clients != nil {
+		if cl, _ := h.clients.Get(ctx, orgID, v); cl != nil {
 			cid := cl.ID
 			in.ClientID = &cid
 		}
@@ -339,25 +383,25 @@ func (d *Deps) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) 
 		in.ExternalURL = v
 	}
 
-	t, err := d.Tickets.Create(ctx, in)
+	t, err := h.tickets.Create(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create ticket failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	if idStr, _ := args["id"].(string); idStr != "" {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
 			return mcp.NewToolResultError("id invalido"), nil
 		}
-		t, err := d.Tickets.Get(ctx, orgID, id)
+		t, err := h.tickets.Get(ctx, orgID, id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("ticket not found: %v", err)), nil
 		}
@@ -368,26 +412,26 @@ func (d *Deps) handleTicketGet(ctx context.Context, req mcp.CallToolRequest) (*m
 	if projSlug == "" || key == "" {
 		return mcp.NewToolResultError("pasa id o (project_slug + key)"), nil
 	}
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
-	t, err := d.Tickets.GetByKey(ctx, orgID, proj.ID, key)
+	t, err := h.tickets.GetByKey(ctx, orgID, proj.ID, key)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("ticket %s not found", key)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	filter := ticketsvc.ListFilter{}
 	if v, ok := args["project_slug"].(string); ok && v != "" {
-		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil {
+		if proj, perr := h.projects.GetBySlug(ctx, orgID, v); perr == nil {
 			pid := proj.ID
 			filter.ProjectID = &pid
 		}
@@ -428,19 +472,19 @@ func (d *Deps) handleTicketList(ctx context.Context, req mcp.CallToolRequest) (*
 	if v, ok := args["offset"].(float64); ok {
 		filter.Offset = int(v)
 	}
-	list, total, err := d.Tickets.List(ctx, orgID, filter)
+	list, total, err := h.tickets.List(ctx, orgID, filter)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"tickets": list, "total": total})
 }
 
-func (d *Deps) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -488,19 +532,19 @@ func (d *Deps) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) 
 	if v, ok := args["due_date"].(string); ok && v != "" {
 		in.DueDate = parseDateYMD(v)
 	}
-	t, err := d.Tickets.UpdateAs(ctx, orgID, id, userID, in)
+	t, err := h.tickets.UpdateAs(ctx, orgID, id, userID, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketChangeStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketChangeStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -512,35 +556,35 @@ func (d *Deps) handleTicketChangeStatus(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError("to_status requerido"), nil
 	}
 	note, _ := args["note"].(string)
-	t, err := d.Tickets.ChangeStatus(ctx, orgID, id, toStatus, userID, note)
+	t, err := h.tickets.ChangeStatus(ctx, orgID, id, toStatus, userID, note)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("change_status failed: %v", err)), nil
 	}
 	return toolResultJSON(t)
 }
 
-func (d *Deps) handleTicketDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("id invalido"), nil
 	}
-	if err := d.Tickets.Delete(ctx, orgID, id); err != nil {
+	if err := h.tickets.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})
 }
 
-func (d *Deps) handleTicketCommentAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketCommentAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	idStr, _ := args["ticket_id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -548,15 +592,15 @@ func (d *Deps) handleTicketCommentAdd(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError("ticket_id invalido"), nil
 	}
 	body, _ := args["body_md"].(string)
-	c, err := d.Tickets.AddComment(ctx, id, userID, body)
+	c, err := h.tickets.AddComment(ctx, id, userID, body)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("comment failed: %v", err)), nil
 	}
 	return toolResultJSON(c)
 }
 
-func (d *Deps) handleTicketCommentList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketCommentList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	args := req.GetArguments()
@@ -565,15 +609,15 @@ func (d *Deps) handleTicketCommentList(ctx context.Context, req mcp.CallToolRequ
 	if err != nil {
 		return mcp.NewToolResultError("ticket_id invalido"), nil
 	}
-	out, err := d.Tickets.ListComments(ctx, id)
+	out, err := h.tickets.ListComments(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list comments failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"comments": out, "total": len(out)})
 }
 
-func (d *Deps) handleTicketStatusHistory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketStatusHistory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	args := req.GetArguments()
@@ -582,18 +626,18 @@ func (d *Deps) handleTicketStatusHistory(ctx context.Context, req mcp.CallToolRe
 	if err != nil {
 		return mcp.NewToolResultError("ticket_id invalido"), nil
 	}
-	hist, err := d.Tickets.StatusHistory(ctx, id)
+	hist, err := h.tickets.StatusHistory(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("history failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"history": hist, "total": len(hist)})
 }
 
-func (d *Deps) handleTicketLinkExternal(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketLinkExternal(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
@@ -602,14 +646,14 @@ func (d *Deps) handleTicketLinkExternal(ctx context.Context, req mcp.CallToolReq
 	}
 	provider, _ := args["provider"].(string)
 	if provider == "" {
-		if err := d.Tickets.UnlinkExternal(ctx, orgID, id); err != nil {
+		if err := h.tickets.UnlinkExternal(ctx, orgID, id); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("unlink failed: %v", err)), nil
 		}
 		return toolResultJSON(map[string]any{"id": id.String(), "unlinked": true})
 	}
 	extID, _ := args["external_id"].(string)
 	extURL, _ := args["external_url"].(string)
-	t, err := d.Tickets.LinkExternal(ctx, orgID, id, ticketsvc.ExternalLink{
+	t, err := h.tickets.LinkExternal(ctx, orgID, id, ticketsvc.ExternalLink{
 		Provider: provider, ID: extID, URL: extURL,
 	})
 	if err != nil {
@@ -626,11 +670,11 @@ func toolTicketLinkIssue() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleTicketLinkIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketLinkIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	tStr, _ := args["ticket_id"].(string)
 	tID, err := uuid.Parse(tStr)
@@ -645,7 +689,7 @@ func (d *Deps) handleTicketLinkIssue(ctx context.Context, req mcp.CallToolReques
 		}
 		issuePtr = &iID
 	}
-	t, err := d.Tickets.LinkIssue(ctx, orgID, tID, issuePtr)
+	t, err := h.tickets.LinkIssue(ctx, orgID, tID, issuePtr)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("link_issue failed: %v", err)), nil
 	}
@@ -662,11 +706,11 @@ func toolTicketLinkExternalBulk() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleTicketLinkExternalBulk(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if err := d.requireTicketDeps(); err != nil {
+func (h *ticketHandlers) handleTicketLinkExternalBulk(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["project_slug"].(string)
 	provider, _ := args["provider"].(string)
@@ -674,7 +718,7 @@ func (d *Deps) handleTicketLinkExternalBulk(ctx context.Context, req mcp.CallToo
 	if slug == "" || provider == "" || len(rawMappings) == 0 {
 		return mcp.NewToolResultError("project_slug, provider y mappings (no vacio) requeridos"), nil
 	}
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, slug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, slug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
 	}
@@ -701,7 +745,7 @@ func (d *Deps) handleTicketLinkExternalBulk(ctx context.Context, req mcp.CallToo
 		}
 		mappings = append(mappings, mp)
 	}
-	res, err := d.Tickets.BulkLinkExternal(ctx, orgID, proj.ID, provider, mappings)
+	res, err := h.tickets.BulkLinkExternal(ctx, orgID, proj.ID, provider, mappings)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("bulk link failed: %v", err)), nil
 	}

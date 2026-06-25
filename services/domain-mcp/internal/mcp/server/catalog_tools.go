@@ -11,28 +11,68 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/dispatch"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	cronsvc "nunezlagos/domain/internal/service/cron"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	projsvc "nunezlagos/domain/internal/service/project"
+	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
+type catalogProjectsService interface {
+	Create(ctx context.Context, in projsvc.CreateInput) (*projsvc.Project, error)
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+	Update(ctx context.Context, id uuid.UUID, in projsvc.UpdateInput) (*projsvc.Project, error)
+}
+
+type catalogAgentsService interface {
+	Create(ctx context.Context, in agentsvc.CreateInput) (*agentsvc.Agent, error)
+}
+
+type catalogFlowsService interface {
+	Create(ctx context.Context, in flowsvc.CreateInput) (*flowsvc.Flow, error)
+}
+
+type catalogCronsService interface {
+	List(ctx context.Context, orgID uuid.UUID) ([]cronsvc.Cron, error)
+}
+
+type catalogSkillsService interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*skillsvc.Skill, error)
+}
+
+type catalogHandlers struct {
+	projects   catalogProjectsService
+	agents     catalogAgentsService
+	flows      catalogFlowsService
+	crons      catalogCronsService
+	skills     catalogSkillsService
+	dispatcher *dispatch.Dispatcher
+	principal  *apikey.Principal
+}
+
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-
-
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &catalogHandlers{
+		projects:   deps.Projects,
+		agents:     deps.Agents,
+		flows:      deps.Flows,
+		crons:      deps.Crons,
+		skills:     deps.Skills,
+		dispatcher: deps.Dispatcher,
+		principal:  deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	tools := []mcpgo.ServerTool{
-		{Tool: toolSkillExecute(), Handler: wrap.Wrap("domain_skill_execute", deps.runSkillDispatch)},
-		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", deps.handleAgentCreate)},
-		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", deps.handleFlowCreate)},
-		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", deps.handleCronList)},
-
-		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(deps.handleProjectCreate))},
-		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(deps.handleProjectUpdate))},
+		{Tool: toolSkillExecute(), Handler: wrap.Wrap("domain_skill_execute", h.runSkillDispatch)},
+		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", h.handleAgentCreate)},
+		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", h.handleFlowCreate)},
+		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", h.handleCronList)},
+		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(h.handleProjectCreate))},
+		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(h.handleProjectUpdate))},
 	}
-
 	tools = append(tools, registerClientTools(wrap, deps)...)
 	return tools
 }
@@ -63,11 +103,11 @@ func toolProjectCreate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Projects == nil {
+	if h.projects == nil {
 		return mcp.NewToolResultError("project service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -76,17 +116,17 @@ func (d *Deps) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest)
 	if slug == "" || name == "" {
 		return mcp.NewToolResultError("slug y name son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	desc, _ := args["description"].(string)
 	repoURL, _ := args["repository_url"].(string)
 	clientSlug, _ := args["client_slug"].(string)
 
-	p, err := d.Projects.Create(ctx, projsvc.CreateInput{
+	p, err := h.projects.Create(ctx, projsvc.CreateInput{
 		OrganizationID: orgID,
 		Name:           name,
 		Slug:           slug,
@@ -132,11 +172,11 @@ func toolProjectUpdate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Projects == nil {
+	if h.projects == nil {
 		return mcp.NewToolResultError("project service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -144,13 +184,13 @@ func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if slug == "" {
 		return mcp.NewToolResultError("slug es requerido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
-	prev, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	prev, err := h.projects.GetBySlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
 	}
@@ -166,15 +206,13 @@ func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest)
 		upd.RepositoryURL = &v
 	}
 
-
-
 	if raw, ok := args["client_slug"]; ok {
 		if s, ok := raw.(string); ok {
 			upd.ClientSlug = &s
 		}
 	}
 
-	p, err := d.Projects.Update(ctx, prev.ID, upd)
+	p, err := h.projects.Update(ctx, prev.ID, upd)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update project failed: %v", err)), nil
 	}
@@ -208,14 +246,14 @@ func toolSkillExecute() mcp.Tool {
 // MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
 // (SkillExecution.Execute directo) fue eliminado: 1 sola
 // implementacion para cron, webhook y MCP.
-func (d *Deps) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Dispatcher == nil {
+	if h.dispatcher == nil {
 		return mcp.NewToolResultError("dispatcher no configurado"), nil
 	}
-	if d.Skills == nil {
+	if h.skills == nil {
 		return mcp.NewToolResultError("skill service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -223,11 +261,11 @@ func (d *Deps) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*
 	if slug == "" {
 		return mcp.NewToolResultError("skill_slug es requerido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	sk, err := d.Skills.GetBySlug(ctx, orgID, slug)
+	sk, err := h.skills.GetBySlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("skill '%s' not found", slug)), nil
 	}
@@ -235,7 +273,7 @@ func (d *Deps) runSkillDispatch(ctx context.Context, req mcp.CallToolRequest) (*
 	mode, _ := args["mode"].(string)
 
 	inputsRaw, _ := json.Marshal(params)
-	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
+	res, dispatchErr := h.dispatcher.Dispatch(ctx, dispatch.Request{
 		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
 		TargetID: sk.ID, Inputs: inputsRaw,
 	})
@@ -282,8 +320,8 @@ func toolAgentCreate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleAgentCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) handleAgentCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 	args := req.GetArguments()
@@ -294,11 +332,11 @@ func (d *Deps) handleAgentCreate(ctx context.Context, req mcp.CallToolRequest) (
 	if slug == "" || name == "" || provider == "" || model == "" {
 		return mcp.NewToolResultError("slug, name, provider y model son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	var skills []string
 	if v, ok := args["skills"].([]any); ok {
@@ -310,7 +348,7 @@ func (d *Deps) handleAgentCreate(ctx context.Context, req mcp.CallToolRequest) (
 	}
 	sysPrompt, _ := args["system_prompt"].(string)
 
-	ag, err := d.Agents.Create(ctx, agentsvc.CreateInput{
+	ag, err := h.agents.Create(ctx, agentsvc.CreateInput{
 		OrganizationID: orgID, Slug: slug, Name: name,
 		Provider: provider, Model: model, SystemPrompt: sysPrompt,
 		SkillsSlugs: skills, ActorID: userID,
@@ -341,8 +379,8 @@ func toolFlowCreate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 	args := req.GetArguments()
@@ -352,11 +390,11 @@ func (d *Deps) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*
 	if slug == "" || name == "" || !ok {
 		return mcp.NewToolResultError("slug, name y spec son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	specJSON, _ := json.Marshal(specRaw)
 	var spec flowsvc.Spec
@@ -364,7 +402,7 @@ func (d *Deps) handleFlowCreate(ctx context.Context, req mcp.CallToolRequest) (*
 		return mcp.NewToolResultError(fmt.Sprintf("spec invalido: %v", err)), nil
 	}
 
-	fl, err := d.Flows.Create(ctx, flowsvc.CreateInput{
+	fl, err := h.flows.Create(ctx, flowsvc.CreateInput{
 		OrganizationID: orgID, Slug: slug, Name: name, Spec: spec, ActorID: userID,
 	})
 	if err != nil {
@@ -381,18 +419,18 @@ func toolCronList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleCronList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *catalogHandlers) handleCronList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Crons == nil {
+	if h.crons == nil {
 		return mcp.NewToolResultError("cron service not configured"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	crons, err := d.Crons.List(ctx, orgID)
+	crons, err := h.crons.List(ctx, orgID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list crons failed: %v", err)), nil
 	}

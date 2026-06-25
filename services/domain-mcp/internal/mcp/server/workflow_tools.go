@@ -1,28 +1,27 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 package mcpserver
 
 import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/service/workflowimport"
 )
+
+type workflowImportService interface {
+	Import(ctx context.Context, in workflowimport.ImportInput) (*workflowimport.ImportReport, error)
+	List(ctx context.Context, projectID *uuid.UUID) ([]workflowimport.ImportedFile, error)
+	Restore(ctx context.Context, projectID *uuid.UUID, relPath, projectRoot string) error
+}
+
+type workflowHandlers struct {
+	workflow workflowImportService
+}
 
 func toolWorkflowImport() mcp.Tool {
 	return mcp.NewTool("domain_workflow_import",
@@ -58,8 +57,8 @@ func toolWorkflowRestore() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleWorkflowImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.WorkflowImport == nil {
+func (h *workflowHandlers) handleWorkflowImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.workflow == nil {
 		return mcp.NewToolResultError("workflow import service not configured"), nil
 	}
 	root := req.GetString("root", ".")
@@ -80,7 +79,7 @@ func (d *Deps) handleWorkflowImport(ctx context.Context, req mcp.CallToolRequest
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 	}
 
-	rep, err := d.WorkflowImport.Import(ctx, workflowimport.ImportInput{
+	rep, err := h.workflow.Import(ctx, workflowimport.ImportInput{
 		ProjectRoot:  root,
 		StubTemplate: workflowimport.DefaultStub,
 		WriteStub:    writeStub,
@@ -92,36 +91,35 @@ func (d *Deps) handleWorkflowImport(ctx context.Context, req mcp.CallToolRequest
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleWorkflowList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.WorkflowImport == nil {
+func (h *workflowHandlers) handleWorkflowList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.workflow == nil {
 		return mcp.NewToolResultError("workflow import service not configured"), nil
 	}
-	files, err := d.WorkflowImport.List(ctx, nil)
+	files, err := h.workflow.List(ctx, nil)
 	if err != nil {
 		return mcp.NewToolResultError("list: " + err.Error()), nil
 	}
 
-
 	lite := make([]map[string]any, 0, len(files))
 	for _, f := range files {
 		lite = append(lite, map[string]any{
-			"id":          f.ID,
-			"source_tool": f.SourceTool,
-			"rel_path":    f.RelPath,
-			"status":      f.Status,
-			"size_bytes":  f.SizeBytes,
+			"id":           f.ID,
+			"source_tool":  f.SourceTool,
+			"rel_path":     f.RelPath,
+			"status":       f.Status,
+			"size_bytes":   f.SizeBytes,
 			"content_hash": f.ContentHash,
-			"replaced_at": f.ReplacedAt,
-			"restored_at": f.RestoredAt,
-			"created_at":  f.CreatedAt,
+			"replaced_at":  f.ReplacedAt,
+			"restored_at":  f.RestoredAt,
+			"created_at":   f.CreatedAt,
 		})
 	}
 	body, _ := json.MarshalIndent(lite, "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleWorkflowRestore(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.WorkflowImport == nil {
+func (h *workflowHandlers) handleWorkflowRestore(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.workflow == nil {
 		return mcp.NewToolResultError("workflow import service not configured"), nil
 	}
 	relPath, err := req.RequireString("rel_path")
@@ -129,7 +127,7 @@ func (d *Deps) handleWorkflowRestore(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	root := req.GetString("root", ".")
-	if err := d.WorkflowImport.Restore(ctx, nil, relPath, root); err != nil {
+	if err := h.workflow.Restore(ctx, nil, relPath, root); err != nil {
 		return mcp.NewToolResultError("restore: " + err.Error()), nil
 	}
 	body, _ := json.MarshalIndent(map[string]any{
@@ -139,9 +137,10 @@ func (d *Deps) handleWorkflowRestore(ctx context.Context, req mcp.CallToolReques
 }
 
 func registerWorkflowTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &workflowHandlers{workflow: deps.WorkflowImport}
 	return []mcpgo.ServerTool{
-		{Tool: toolWorkflowImport(), Handler: wrap.Wrap("domain_workflow_import", deps.handleWorkflowImport)},
-		{Tool: toolWorkflowList(), Handler: wrap.Wrap("domain_workflow_list", deps.handleWorkflowList)},
-		{Tool: toolWorkflowRestore(), Handler: wrap.Wrap("domain_workflow_restore", deps.handleWorkflowRestore)},
+		{Tool: toolWorkflowImport(), Handler: wrap.Wrap("domain_workflow_import", h.handleWorkflowImport)},
+		{Tool: toolWorkflowList(), Handler: wrap.Wrap("domain_workflow_list", h.handleWorkflowList)},
+		{Tool: toolWorkflowRestore(), Handler: wrap.Wrap("domain_workflow_restore", h.handleWorkflowRestore)},
 	}
 }

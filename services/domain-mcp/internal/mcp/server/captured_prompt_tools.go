@@ -15,19 +15,42 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
-func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+type capturedPromptService interface {
+	Capture(ctx context.Context, in capturedpromptsvc.CaptureInput) (*capturedpromptsvc.Prompt, error)
+	List(ctx context.Context, orgID uuid.UUID, filter capturedpromptsvc.ListFilter) ([]*capturedpromptsvc.Prompt, int64, error)
+	CompleteTurn(ctx context.Context, in capturedpromptsvc.CompleteTurnInput) (*capturedpromptsvc.Prompt, error)
+	SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*capturedpromptsvc.SessionUsage, error)
+}
 
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+type capturedPromptProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type capturedPromptHandlers struct {
+	prompts   capturedPromptService
+	projects  capturedPromptProjectGetter
+	principal *apikey.Principal
+}
+
+func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &capturedPromptHandlers{
+		prompts:   deps.CapturedPrompts,
+		projects:  deps.Projects,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolPromptCapture(), Handler: wrap.Wrap("domain_prompt_capture", rls(deps.handlePromptCapture))},
-		{Tool: toolPromptCapturedList(), Handler: wrap.Wrap("domain_prompt_captured_list", rls(deps.handlePromptCapturedList))},
-		{Tool: toolTurnComplete(), Handler: wrap.Wrap("domain_turn_complete", rls(deps.handleTurnComplete))},
-		{Tool: toolUsageSummary(), Handler: wrap.Wrap("domain_usage_summary", rls(deps.handleUsageSummary))},
+		{Tool: toolPromptCapture(), Handler: wrap.Wrap("domain_prompt_capture", rls(h.handlePromptCapture))},
+		{Tool: toolPromptCapturedList(), Handler: wrap.Wrap("domain_prompt_captured_list", rls(h.handlePromptCapturedList))},
+		{Tool: toolTurnComplete(), Handler: wrap.Wrap("domain_turn_complete", rls(h.handleTurnComplete))},
+		{Tool: toolUsageSummary(), Handler: wrap.Wrap("domain_usage_summary", rls(h.handleUsageSummary))},
 	}
 }
 
@@ -65,11 +88,11 @@ func toolPromptCapturedList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *capturedPromptHandlers) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.CapturedPrompts == nil {
+	if h.prompts == nil {
 		return mcp.NewToolResultError("captured_prompts service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -77,11 +100,11 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 	if content == "" {
 		return mcp.NewToolResultError("content requerido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, err := uuid.Parse(d.Principal.UserID)
+	userID, err := uuid.Parse(h.principal.UserID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal user_id"), nil
 	}
@@ -92,8 +115,8 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 		Content:        content,
 	}
 
-	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
-		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
+	if v, ok := args["project_slug"].(string); ok && v != "" && h.projects != nil {
+		if proj, perr := h.projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID
 			in.ProjectID = &pid
 		}
@@ -105,7 +128,7 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 		in.Model = v
 	}
 
-	p, err := d.CapturedPrompts.Capture(ctx, in)
+	p, err := h.prompts.Capture(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 	}
@@ -142,11 +165,11 @@ func toolUsageSummary() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *capturedPromptHandlers) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.CapturedPrompts == nil {
+	if h.prompts == nil {
 		return mcp.NewToolResultError("captured_prompts service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -160,9 +183,9 @@ func (d *Deps) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) 
 		rc = int(v)
 	}
 	model, _ := args["model"].(string)
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 
-	p, err := d.CapturedPrompts.CompleteTurn(ctx, capturedpromptsvc.CompleteTurnInput{
+	p, err := h.prompts.CompleteTurn(ctx, capturedpromptsvc.CompleteTurnInput{
 		OrganizationID: orgID,
 		PromptID:       pid,
 		ResponseChars:  rc,
@@ -180,14 +203,14 @@ func (d *Deps) handleTurnComplete(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-func (d *Deps) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *capturedPromptHandlers) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.CapturedPrompts == nil {
+	if h.prompts == nil {
 		return mcp.NewToolResultError("captured_prompts service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 
@@ -195,36 +218,36 @@ func (d *Deps) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) 
 	if projSlug == "" {
 		return mcp.NewToolResultError("debe pasarse project_slug"), nil
 	}
-	if d.Projects == nil {
+	if h.projects == nil {
 		return mcp.NewToolResultError("projects service not configured"), nil
 	}
-	proj, err := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, err := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
-	u, err := d.CapturedPrompts.SummarizeByProject(ctx, orgID, proj.ID)
+	u, err := h.prompts.SummarizeByProject(ctx, orgID, proj.ID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("summary failed: %v", err)), nil
 	}
 	return toolResultJSON(u)
 }
 
-func (d *Deps) handlePromptCapturedList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *capturedPromptHandlers) handlePromptCapturedList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.CapturedPrompts == nil {
+	if h.prompts == nil {
 		return mcp.NewToolResultError("captured_prompts service not configured"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
 	args := req.GetArguments()
 	filter := capturedpromptsvc.ListFilter{}
 
-	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
-		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
+	if v, ok := args["project_slug"].(string); ok && v != "" && h.projects != nil {
+		if proj, perr := h.projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID
 			filter.ProjectID = &pid
 		}
@@ -236,7 +259,7 @@ func (d *Deps) handlePromptCapturedList(ctx context.Context, req mcp.CallToolReq
 		filter.Offset = int(v)
 	}
 
-	list, total, err := d.CapturedPrompts.List(ctx, orgID, filter)
+	list, total, err := h.prompts.List(ctx, orgID, filter)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}

@@ -36,20 +36,62 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
+	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 )
 
+type knowledgeChecker interface{}
+
+type indexPoliciesStore interface {
+	Create(ctx context.Context, in projectpolicysvc.CreateInput) (*projectpolicysvc.Policy, error)
+}
+
+type indexProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type projectIndexHandlers struct {
+	knowledge       knowledgeChecker
+	projectPolicies indexPoliciesStore
+	projects        indexProjectGetter
+	pool            *pgxpool.Pool
+	principal       *apikey.Principal
+}
+
+func (h *projectIndexHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerProjectIndexTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &projectIndexHandlers{
+		knowledge:       deps.Knowledge,
+		projectPolicies: deps.ProjectPolicies,
+		projects:        deps.Projects,
+		pool:            deps.Pool,
+		principal:       deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolProjectIndexStart(), Handler: wrap.Wrap("domain_project_index_start", rls(deps.handleProjectIndexStart))},
-		{Tool: toolProjectIndexSubmit(), Handler: wrap.Wrap("domain_project_index_submit", rls(deps.handleProjectIndexSubmit))},
-		{Tool: toolProjectIndexStatus(), Handler: wrap.Wrap("domain_project_index_status", rls(deps.handleProjectIndexStatus))},
+		{Tool: toolProjectIndexStart(), Handler: wrap.Wrap("domain_project_index_start", rls(h.handleProjectIndexStart))},
+		{Tool: toolProjectIndexSubmit(), Handler: wrap.Wrap("domain_project_index_submit", rls(h.handleProjectIndexSubmit))},
+		{Tool: toolProjectIndexStatus(), Handler: wrap.Wrap("domain_project_index_status", rls(h.handleProjectIndexStatus))},
 	}
 }
 
@@ -78,27 +120,25 @@ func toolProjectIndexStatus() mcp.Tool {
 	)
 }
 
-
-
-func (d *Deps) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Projects == nil {
+func (h *projectIndexHandlers) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.projects == nil {
 		return mcp.NewToolResultError("principal o projects service no configurado"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	slug, _ := args["project_slug"].(string)
 	if slug == "" {
 		return mcp.NewToolResultError("project_slug requerido"), nil
 	}
-	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
 	}
 	gitHead, _ := args["git_head"].(string)
 
 	var runID uuid.UUID
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_index_runs
 		   (project_id, started_by, git_head)
 		 VALUES ($1,$2,NULLIF($3,''))
@@ -110,11 +150,11 @@ func (d *Deps) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequ
 
 	manifest := buildIndexManifest()
 	return toolResultJSON(map[string]any{
-		"run_id":      runID.String(),
-		"project_id":  proj.ID.String(),
+		"run_id":       runID.String(),
+		"project_id":   proj.ID.String(),
 		"project_slug": slug,
-		"manifest":    manifest,
-		"next_step":   "Lee con tu tool Read los archivos que matcheen los patterns del manifest. Despues llama domain_project_index_submit con un batch de {path, content}. En el ultimo batch pasa complete=true para cerrar el run.",
+		"manifest":     manifest,
+		"next_step":    "Lee con tu tool Read los archivos que matcheen los patterns del manifest. Despues llama domain_project_index_submit con un batch de {path, content}. En el ultimo batch pasa complete=true para cerrar el run.",
 	})
 }
 
@@ -168,12 +208,11 @@ func classifyFile(path, content string) classifiedFile {
 	dir := filepath.Dir(path)
 	low := strings.ToLower(base)
 
-
 	if low == "agents.md" || low == "claude.md" || low == "agent.md" ||
 		(strings.HasPrefix(path, ".claude/") && low == "claude.md") {
 		return classifiedFile{
 			Category: "policy", Kind: "agent_protocol",
-			Slug: "imported-" + strings.TrimSuffix(strings.ToLower(strings.ReplaceAll(path, "/", "-")), ".md"),
+			Slug:  "imported-" + strings.TrimSuffix(strings.ToLower(strings.ReplaceAll(path, "/", "-")), ".md"),
 			Title: "Imported: " + path, Body: content,
 		}
 	}
@@ -181,7 +220,7 @@ func classifyFile(path, content string) classifiedFile {
 	if strings.HasPrefix(path, ".claude/rules/") && strings.HasSuffix(low, ".md") {
 		return classifiedFile{
 			Category: "policy", Kind: "convention",
-			Slug: "imported-rules-" + strings.TrimSuffix(low, ".md"),
+			Slug:  "imported-rules-" + strings.TrimSuffix(low, ".md"),
 			Title: "Rule: " + base, Body: content,
 		}
 	}
@@ -190,7 +229,7 @@ func classifyFile(path, content string) classifiedFile {
 		path == ".github/copilot-instructions.md" {
 		return classifiedFile{
 			Category: "policy", Kind: "convention",
-			Slug: "imported-" + strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(path, "."), "/", "-")),
+			Slug:  "imported-" + strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(path, "."), "/", "-")),
 			Title: "Imported: " + path, Body: content,
 		}
 	}
@@ -215,7 +254,7 @@ func classifyFile(path, content string) classifiedFile {
 	if base == "Makefile" || base == "makefile" || base == "Taskfile.yml" || base == "justfile" {
 		return classifiedFile{
 			Category: "policy", Kind: "convention",
-			Slug: "imported-commands-" + strings.ToLower(base),
+			Slug:  "imported-commands-" + strings.ToLower(base),
 			Title: "Comandos: " + base,
 			Body:  "Comandos comunes del proyecto extraidos de `" + base + "`:\n\n```\n" + truncate(content, 4000) + "\n```",
 		}
@@ -226,7 +265,7 @@ func classifyFile(path, content string) classifiedFile {
 		title := strings.TrimSuffix(base, ".md")
 		return classifiedFile{
 			Category: "knowledge", Kind: "docs",
-			Slug: "imported-docs-" + strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(path, ".md"), "/", "-")),
+			Slug:  "imported-docs-" + strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(path, ".md"), "/", "-")),
 			Title: title, Body: content,
 		}
 	}
@@ -234,7 +273,7 @@ func classifyFile(path, content string) classifiedFile {
 	if strings.HasPrefix(path, ".github/workflows/") && (strings.HasSuffix(low, ".yml") || strings.HasSuffix(low, ".yaml")) {
 		return classifiedFile{
 			Category: "knowledge", Kind: "ci",
-			Slug: "imported-ci-" + strings.TrimSuffix(strings.TrimSuffix(low, ".yml"), ".yaml"),
+			Slug:  "imported-ci-" + strings.TrimSuffix(strings.TrimSuffix(low, ".yml"), ".yaml"),
 			Title: "CI workflow: " + base, Body: content,
 		}
 	}
@@ -242,7 +281,7 @@ func classifyFile(path, content string) classifiedFile {
 	if strings.HasPrefix(path, "openspec/changes/") && strings.HasSuffix(low, ".md") {
 		return classifiedFile{
 			Category: "knowledge", Kind: "spec",
-			Slug: "imported-spec-" + strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(path, ".md"), "/", "-")),
+			Slug:  "imported-spec-" + strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(path, ".md"), "/", "-")),
 			Title: "Spec: " + path, Body: content,
 		}
 	}
@@ -263,15 +302,15 @@ func truncate(s string, n int) string {
 	return s[:n] + "\n...[truncated]"
 }
 
-func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectIndexHandlers) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no principal"), nil
 	}
-	if d.ProjectPolicies == nil || d.Knowledge == nil {
+	if h.projectPolicies == nil || h.knowledge == nil {
 		return mcp.NewToolResultError("project_policies o knowledge service no configurado"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	runIDStr, _ := args["run_id"].(string)
 	runID, err := uuid.Parse(runIDStr)
@@ -284,9 +323,8 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	}
 	complete, _ := args["complete"].(bool)
 
-
 	var projectID uuid.UUID
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`SELECT project_id FROM project_index_runs
 		   WHERE id = $1`,
 		runID,
@@ -296,12 +334,6 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 
 	policiesCreated, knowledgeCreated, ignored := 0, 0, 0
 	ignoredPaths := []string{}
-
-
-
-
-
-
 
 	for i, raw := range rawFiles {
 		m, ok := raw.(map[string]any)
@@ -315,11 +347,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		}
 
 		spName := fmt.Sprintf("sp_idx_%d", i)
-		if _, err := d.q(ctx).Exec(ctx, "SAVEPOINT "+spName); err != nil {
-
-
-
-
+		if _, err := h.q(ctx).Exec(ctx, "SAVEPOINT "+spName); err != nil {
 			ignored++
 			ignoredPaths = append(ignoredPaths, path+" (savepoint failed: "+err.Error()+")")
 			continue
@@ -329,9 +357,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		var fileErr error
 		switch cls.Category {
 		case "policy":
-
-
-			_, serr := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+			_, serr := h.projectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 				OrganizationID: orgID, ProjectID: projectID,
 				Slug: cls.Slug, Name: cls.Title, Kind: cls.Kind,
 				BodyMD: cls.Body, Source: "seed_imported",
@@ -339,13 +365,10 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			if serr == nil {
 				policiesCreated++
 			} else {
-
-				if _, rerr := d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName); rerr != nil {
+				if _, rerr := h.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName); rerr != nil {
 					fileErr = fmt.Errorf("create+rollback: %w / %v", serr, rerr)
 				} else {
-
-
-					ctag, uerr := d.q(ctx).Exec(ctx,
+					ctag, uerr := h.q(ctx).Exec(ctx,
 						`WITH existing AS (
 						   SELECT id FROM project_policies
 						   WHERE project_id = $1
@@ -359,12 +382,8 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 						projectID, cls.Slug, cls.Body, cls.Title,
 					)
 					if uerr != nil {
-
-
 						fileErr = fmt.Errorf("update policy: %w (create was: %v)", uerr, serr)
 					} else if ctag.RowsAffected() == 0 {
-
-
 						fileErr = fmt.Errorf("policy create failed y no habia previa: %v", serr)
 					} else {
 						policiesCreated++
@@ -372,7 +391,6 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				}
 			}
 		case "knowledge":
-
 			metaJSON, _ := json.Marshal(map[string]any{
 				"slug":        cls.Slug,
 				"source_path": path,
@@ -380,7 +398,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			})
 			tags := []string{"seed_imported", cls.Kind}
 			var existingID uuid.UUID
-			qerr := d.q(ctx).QueryRow(ctx,
+			qerr := h.q(ctx).QueryRow(ctx,
 				`SELECT id FROM knowledge_docs
 				   WHERE project_id = $1
 				     AND metadata->>'slug' = $2 AND deleted_at IS NULL
@@ -391,7 +409,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				fileErr = fmt.Errorf("lookup knowledge: %w", qerr)
 			} else {
 				if existingID != uuid.Nil {
-					_, uerr := d.q(ctx).Exec(ctx,
+					_, uerr := h.q(ctx).Exec(ctx,
 						`UPDATE knowledge_docs
 						   SET title=$2, body=$3, metadata=$4, tags=$5, updated_at=NOW()
 						   WHERE id=$1`,
@@ -403,7 +421,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 						knowledgeCreated++
 					}
 				} else {
-					_, ierr := d.q(ctx).Exec(ctx,
+					_, ierr := h.q(ctx).Exec(ctx,
 						`INSERT INTO knowledge_docs
 						   (project_id, created_by, title, body,
 						    source, tags, metadata)
@@ -422,9 +440,6 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			ignoredPaths = append(ignoredPaths, path)
 		}
 
-
-
-
 		if fileErr != nil {
 			ignored++
 			errMsg := fileErr.Error()
@@ -432,16 +447,11 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				errMsg = errMsg[:60]
 			}
 			ignoredPaths = append(ignoredPaths, path+" ("+errMsg+")")
-
-
-
-			_, _ = d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
+			_, _ = h.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
 		} else {
-
-			_, _ = d.q(ctx).Exec(ctx, "RELEASE SAVEPOINT "+spName)
+			_, _ = h.q(ctx).Exec(ctx, "RELEASE SAVEPOINT "+spName)
 		}
 	}
-
 
 	summary := map[string]any{
 		"policies_created":     policiesCreated,
@@ -456,7 +466,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		status = "completed"
 		completedClause = ", completed_at = NOW()"
 	}
-	if _, err := d.q(ctx).Exec(ctx,
+	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE project_index_runs
 		   SET files_submitted = files_submitted + $2,
 		       summary = $3::jsonb,
@@ -468,27 +478,27 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	}
 
 	return toolResultJSON(map[string]any{
-		"run_id":              runID.String(),
-		"status":              status,
-		"files_submitted":     len(rawFiles),
-		"policies_created":    policiesCreated,
-		"knowledge_created":   knowledgeCreated,
-		"ignored":             ignored,
-		"ignored_paths":       firstN(ignoredPaths, 10),
+		"run_id":            runID.String(),
+		"status":            status,
+		"files_submitted":   len(rawFiles),
+		"policies_created":  policiesCreated,
+		"knowledge_created": knowledgeCreated,
+		"ignored":           ignored,
+		"ignored_paths":     firstN(ignoredPaths, 10),
 	})
 }
 
-func (d *Deps) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Projects == nil {
+func (h *projectIndexHandlers) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.projects == nil {
 		return mcp.NewToolResultError("no configurado"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["project_slug"].(string)
 	if slug == "" {
 		return mcp.NewToolResultError("project_slug requerido"), nil
 	}
-	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
 	}
@@ -496,7 +506,7 @@ func (d *Deps) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolReq
 	var summaryRaw []byte
 	var filesSubmitted int
 	var startedAt, completedAt string
-	err = d.q(ctx).QueryRow(ctx,
+	err = h.q(ctx).QueryRow(ctx,
 		`SELECT id::text, status, COALESCE(git_head,''), summary,
 		        files_submitted,
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
@@ -508,7 +518,7 @@ func (d *Deps) handleProjectIndexStatus(ctx context.Context, req mcp.CallToolReq
 	).Scan(&id, &status, &gitHead, &summaryRaw, &filesSubmitted, &startedAt, &completedAt)
 	if err != nil {
 		return toolResultJSON(map[string]any{
-			"has_run":     false,
+			"has_run":        false,
 			"recommendation": "No hay indexing previo. Llama domain_project_index_start para crear el primer index.",
 		})
 	}

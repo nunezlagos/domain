@@ -11,8 +11,18 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	prouter "nunezlagos/domain/internal/service/promptrouter"
 )
+
+type promptRouterService interface {
+	RouteWithIntent(ctx context.Context, rawText string, createdBy *uuid.UUID, orgID *uuid.UUID, projectID *uuid.UUID, intentOverride *prouter.Intent) (*prouter.Response, error)
+}
+
+type promptHandlers struct {
+	router    promptRouterService
+	principal *apikey.Principal
+}
 
 // toolPromptRoute — domain_prompt
 //
@@ -38,8 +48,8 @@ func toolPromptRoute() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.PromptRouter == nil {
+func (h *promptHandlers) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.router == nil {
 		return mcp.NewToolResultError("prompt router not configured"), nil
 	}
 	rawText, err := req.RequireString("raw_text")
@@ -48,11 +58,11 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 	}
 	var createdBy *uuid.UUID
 	var orgID *uuid.UUID
-	if d.Principal != nil {
-		if u, err := uuid.Parse(d.Principal.UserID); err == nil {
+	if h.principal != nil {
+		if u, err := uuid.Parse(h.principal.UserID); err == nil {
 			createdBy = &u
 		}
-		if o, err := uuid.Parse(d.Principal.OrganizationID); err == nil {
+		if o, err := uuid.Parse(h.principal.OrganizationID); err == nil {
 			orgID = &o
 		}
 	}
@@ -74,7 +84,7 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
-	resp, err := d.PromptRouter.RouteWithIntent(ctx, rawText, createdBy, orgID, projectID, intentOverride)
+	resp, err := h.router.RouteWithIntent(ctx, rawText, createdBy, orgID, projectID, intentOverride)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("route: %v", err)), nil
 	}
@@ -87,7 +97,8 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 
 // registerPromptTools agrega tools del prompt router al listado.
 func registerPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &promptHandlers{router: deps.PromptRouter, principal: deps.Principal}
 	return []mcpgo.ServerTool{
-		{Tool: toolPromptRoute(), Handler: wrap.Wrap("domain_prompt", deps.handlePromptRoute)},
+		{Tool: toolPromptRoute(), Handler: wrap.Wrap("domain_prompt", h.handlePromptRoute)},
 	}
 }

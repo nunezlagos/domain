@@ -12,21 +12,54 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
+type skillProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type projectSkillHandlers struct {
+	projects  skillProjectGetter
+	pool      *pgxpool.Pool
+	principal *apikey.Principal
+}
+
+func (h *projectSkillHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerProjectSkillTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &projectSkillHandlers{
+		projects:  deps.Projects,
+		pool:      deps.Pool,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolProjectSkillRegister(), Handler: wrap.Wrap("domain_project_skill_register", rls(deps.handleProjectSkillRegister))},
-		{Tool: toolProjectSkillList(), Handler: wrap.Wrap("domain_project_skill_list", rls(deps.handleProjectSkillList))},
+		{Tool: toolProjectSkillRegister(), Handler: wrap.Wrap("domain_project_skill_register", rls(h.handleProjectSkillRegister))},
+		{Tool: toolProjectSkillList(), Handler: wrap.Wrap("domain_project_skill_list", rls(h.handleProjectSkillList))},
 
-		{Tool: toolSkillCreate(), Handler: wrap.Wrap("domain_skill_create", rls(deps.handleSkillCreate))},
-		{Tool: toolSkillEdit(), Handler: wrap.Wrap("domain_skill_edit", rls(deps.handleSkillEdit))},
-		{Tool: toolProjectSkillUnlink(), Handler: wrap.Wrap("domain_project_skill_unlink", rls(deps.handleProjectSkillUnlink))},
+		{Tool: toolSkillCreate(), Handler: wrap.Wrap("domain_skill_create", rls(h.handleSkillCreate))},
+		{Tool: toolSkillEdit(), Handler: wrap.Wrap("domain_skill_edit", rls(h.handleSkillEdit))},
+		{Tool: toolProjectSkillUnlink(), Handler: wrap.Wrap("domain_project_skill_unlink", rls(h.handleProjectSkillUnlink))},
 	}
 }
 
@@ -42,11 +75,11 @@ func toolProjectSkillRegister() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectSkillHandlers) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -63,14 +96,14 @@ func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolR
 	desc, _ := args["description"].(string)
 	content, _ := args["content"].(string)
 
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
 	var id uuid.UUID
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
 		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema)
@@ -82,9 +115,7 @@ func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("register failed: %v", err)), nil
 	}
 
-
-
-	if _, lerr := d.q(ctx).Exec(ctx,
+	if _, lerr := h.q(ctx).Exec(ctx,
 		`INSERT INTO project_skills (project_id, skill_id)
 		 VALUES ($1, $2) ON CONFLICT (project_id, skill_id) DO NOTHING`,
 		proj.ID, id,
@@ -106,11 +137,11 @@ func toolProjectSkillList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectSkillHandlers) handleProjectSkillList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -123,15 +154,11 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		includeGlobals = v
 	}
 
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
-
-
-
-
 
 	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
 		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
@@ -148,7 +175,7 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 	}
 	q += ` ORDER BY (s.project_id IS NULL) ASC, s.slug ASC`
 
-	rows, err := d.q(ctx).Query(ctx, q, proj.ID)
+	rows, err := h.q(ctx).Query(ctx, q, proj.ID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
@@ -177,8 +204,6 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 	})
 }
 
-
-
 // domain_skill_create crea una skill GLOBAL (project_id IS NULL). Es el
 // equivalente desde MCP del seeder: la skill queda disponible para enlazar
 // a cualquier proyecto via domain_project_skill_register/link. No la enlaza
@@ -195,11 +220,11 @@ func toolSkillCreate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleSkillCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectSkillHandlers) handleSkillCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -218,10 +243,8 @@ func (d *Deps) handleSkillCreate(ctx context.Context, req mcp.CallToolRequest) (
 	desc, _ := args["description"].(string)
 	content, _ := args["content"].(string)
 
-
-
 	var id uuid.UUID
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
 		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema)
@@ -255,11 +278,11 @@ func toolSkillEdit() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectSkillHandlers) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -269,14 +292,13 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("id o slug requerido"), nil
 	}
 
-
 	var target uuid.UUID
 	if idStr != "" {
 		parsed, perr := uuid.Parse(idStr)
 		if perr != nil {
 			return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 		}
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT id FROM skills WHERE id = $1 AND deleted_at IS NULL`,
 			parsed,
 		).Scan(&target)
@@ -284,7 +306,7 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 			return mcp.NewToolResultError(fmt.Sprintf("skill id '%s' no encontrada", idStr)), nil
 		}
 	} else {
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT id FROM skills
 			   WHERE slug = $1 AND project_id IS NULL AND deleted_at IS NULL`,
 			slug,
@@ -293,10 +315,6 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 			return mcp.NewToolResultError(fmt.Sprintf("skill global '%s' no encontrada", slug)), nil
 		}
 	}
-
-
-
-
 
 	var (
 		name      *string
@@ -327,7 +345,7 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 		outSlug, outName, outType string
 		outDesc                   string
 	)
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`UPDATE skills
 		   SET name        = COALESCE($2, name),
 		       description  = COALESCE($3, description),
@@ -364,11 +382,11 @@ func toolProjectSkillUnlink() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *projectSkillHandlers) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -382,13 +400,11 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError("skill_id o skill_slug requerido"), nil
 	}
 
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
-
-
 
 	var target uuid.UUID
 	if skillID != "" {
@@ -398,7 +414,7 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		}
 		target = parsed
 	} else {
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT id FROM skills
 			   WHERE slug = $1 AND deleted_at IS NULL
 			     AND (project_id = $2 OR project_id IS NULL)
@@ -407,7 +423,6 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 			skillSlug, proj.ID,
 		).Scan(&target)
 		if err != nil {
-
 			return toolResultJSON(map[string]any{
 				"project_slug": projSlug, "skill_slug": skillSlug,
 				"unlinked": false, "reason": "skill no encontrada",
@@ -415,10 +430,7 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		}
 	}
 
-
-
-
-	if _, eerr := d.q(ctx).Exec(ctx,
+	if _, eerr := h.q(ctx).Exec(ctx,
 		`INSERT INTO project_skills (project_id, skill_id, is_enabled)
 		   VALUES ($1, $2, FALSE)
 		 ON CONFLICT (project_id, skill_id) DO UPDATE SET is_enabled = FALSE`,

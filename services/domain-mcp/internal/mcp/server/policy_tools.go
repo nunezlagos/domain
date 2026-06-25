@@ -12,30 +12,75 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
+	policysvc "nunezlagos/domain/internal/service/policy"
+	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 )
 
-func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+type policiesReader interface {
+	GetBySlug(ctx context.Context, slug string) (*policysvc.Policy, error)
+	List(ctx context.Context, kind string) ([]policysvc.Policy, error)
+}
 
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+type projectPoliciesStore interface {
+	GetBySlug(ctx context.Context, orgID, projectID uuid.UUID, slug string) (*projectpolicysvc.Policy, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, in projectpolicysvc.UpdateInput, userID *uuid.UUID) (*projectpolicysvc.Policy, error)
+	Create(ctx context.Context, in projectpolicysvc.CreateInput) (*projectpolicysvc.Policy, error)
+	List(ctx context.Context, orgID, projectID uuid.UUID, kind string) ([]*projectpolicysvc.Policy, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
+}
+
+type projectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type policyHandlers struct {
+	policies        policiesReader
+	projectPolicies projectPoliciesStore
+	projects        projectGetter
+	pool            *pgxpool.Pool
+	principal       *apikey.Principal
+}
+
+func (h *policyHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
+func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &policyHandlers{
+		policies:        deps.Policies,
+		projectPolicies: deps.ProjectPolicies,
+		projects:        deps.Projects,
+		pool:            deps.Pool,
+		principal:       deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-
-		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", rls(deps.handlePolicyGet))},
-		{Tool: toolPolicyList(), Handler: wrap.Wrap("domain_policy_list", deps.handlePolicyList)},
-
-
-		{Tool: toolPlatformPolicyCreate(), Handler: wrap.Wrap("domain_platform_policy_create", rls(deps.handlePlatformPolicyCreate))},
-		{Tool: toolPlatformPolicyEdit(), Handler: wrap.Wrap("domain_platform_policy_edit", rls(deps.handlePlatformPolicyEdit))},
-
-		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(deps.handleProjectPolicySet))},
-		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(deps.handleProjectPolicyList))},
-		{Tool: toolProjectPolicyDelete(), Handler: wrap.Wrap("domain_project_policy_delete", rls(deps.handleProjectPolicyDelete))},
-		{Tool: toolProjectPolicyImport(), Handler: wrap.Wrap("domain_project_policy_import_from_text", rls(deps.handleProjectPolicyImport))},
+		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", rls(h.handlePolicyGet))},
+		{Tool: toolPolicyList(), Handler: wrap.Wrap("domain_policy_list", h.handlePolicyList)},
+		{Tool: toolPlatformPolicyCreate(), Handler: wrap.Wrap("domain_platform_policy_create", rls(h.handlePlatformPolicyCreate))},
+		{Tool: toolPlatformPolicyEdit(), Handler: wrap.Wrap("domain_platform_policy_edit", rls(h.handlePlatformPolicyEdit))},
+		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(h.handleProjectPolicySet))},
+		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(h.handleProjectPolicyList))},
+		{Tool: toolProjectPolicyDelete(), Handler: wrap.Wrap("domain_project_policy_delete", rls(h.handleProjectPolicyDelete))},
+		{Tool: toolProjectPolicyImport(), Handler: wrap.Wrap("domain_project_policy_import_from_text", rls(h.handleProjectPolicyImport))},
 	}
 }
 
@@ -52,8 +97,8 @@ func toolPolicyGet() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Policies == nil {
+func (h *policyHandlers) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.policies == nil {
 		return mcp.NewToolResultError("policy service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -62,16 +107,13 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("slug es requerido"), nil
 	}
 
-
-	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil && d.ProjectPolicies != nil && d.Principal != nil {
-		orgID, perr := uuid.Parse(d.Principal.OrganizationID)
+	if projSlug, _ := args["project_slug"].(string); projSlug != "" && h.projects != nil && h.projectPolicies != nil && h.principal != nil {
+		orgID, perr := uuid.Parse(h.principal.OrganizationID)
 		if perr == nil {
-			proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+			proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 			if perr == nil && proj != nil {
-				pol, perr := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+				pol, perr := h.projectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 				if perr == nil && pol != nil {
-
-
 					payload := map[string]any{
 						"scope":             "project",
 						"project_slug":      projSlug,
@@ -83,7 +125,7 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 						"override_platform": pol.OverridePlatform,
 					}
 					if !pol.OverridePlatform {
-						if base, berr := d.Policies.GetBySlug(ctx, slug); berr == nil && base != nil {
+						if base, berr := h.policies.GetBySlug(ctx, slug); berr == nil && base != nil {
 							payload["platform_body_md"] = base.BodyMD
 							payload["platform_version"] = base.Version
 							payload["scope"] = "merged"
@@ -95,8 +137,7 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 		}
 	}
 
-
-	p, err := d.Policies.GetBySlug(ctx, slug)
+	p, err := h.policies.GetBySlug(ctx, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("policy '%s' not found", slug)), nil
 	}
@@ -119,13 +160,13 @@ func toolPolicyList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Policies == nil {
+func (h *policyHandlers) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.policies == nil {
 		return mcp.NewToolResultError("policy service not configured"), nil
 	}
 	args := req.GetArguments()
 	kind, _ := args["kind"].(string)
-	policies, err := d.Policies.List(ctx, kind)
+	policies, err := h.policies.List(ctx, kind)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list policies failed: %v", err)), nil
 	}
@@ -137,8 +178,6 @@ func (d *Deps) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*
 	}
 	return toolResultJSON(map[string]any{"policies": out, "total": len(out)})
 }
-
-
 
 func toolProjectPolicySet() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_set",
@@ -153,14 +192,14 @@ func toolProjectPolicySet() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectPolicySet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handleProjectPolicySet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.ProjectPolicies == nil || d.Projects == nil {
+	if h.projectPolicies == nil || h.projects == nil {
 		return mcp.NewToolResultError("project_policy service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	slug, _ := args["slug"].(string)
@@ -176,13 +215,12 @@ func (d *Deps) handleProjectPolicySet(ctx context.Context, req mcp.CallToolReque
 		source = "manual"
 	}
 
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-
-	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+	existing, _ := h.projectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 	if existing != nil {
 		upd := projectpolicysvc.UpdateInput{
 			Name:             &name,
@@ -190,15 +228,15 @@ func (d *Deps) handleProjectPolicySet(ctx context.Context, req mcp.CallToolReque
 			BodyMD:           &body,
 			OverridePlatform: &override,
 		}
-		userID, _ := uuid.Parse(d.Principal.UserID)
-		updated, err := d.ProjectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
+		userID, _ := uuid.Parse(h.principal.UserID)
+		updated, err := h.projectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 		}
 		return toolResultJSON(updated)
 	}
 
-	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+	created, err := h.projectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 		OrganizationID:   orgID,
 		ProjectID:        proj.ID,
 		Slug:             slug,
@@ -222,25 +260,25 @@ func toolProjectPolicyList() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleProjectPolicyList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handleProjectPolicyList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.ProjectPolicies == nil || d.Projects == nil {
+	if h.projectPolicies == nil || h.projects == nil {
 		return mcp.NewToolResultError("project_policy service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	kind, _ := args["kind"].(string)
 	if projSlug == "" {
 		return mcp.NewToolResultError("project_slug requerido"), nil
 	}
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
-	list, err := d.ProjectPolicies.List(ctx, orgID, proj.ID, kind)
+	list, err := h.projectPolicies.List(ctx, orgID, proj.ID, kind)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
@@ -265,10 +303,6 @@ func toolProjectPolicyImport() mcp.Tool {
 }
 
 func slugFromSourcePath(p string) string {
-
-
-
-
 	cleaned := strings.ReplaceAll(p, "/", "-")
 	cleaned = strings.TrimPrefix(cleaned, ".")
 	cleaned = strings.ReplaceAll(cleaned, ".md", "")
@@ -276,14 +310,14 @@ func slugFromSourcePath(p string) string {
 	return "imported-" + cleaned
 }
 
-func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.ProjectPolicies == nil || d.Projects == nil {
+	if h.projectPolicies == nil || h.projects == nil {
 		return mcp.NewToolResultError("project_policy service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	sourcePath, _ := args["source_path"].(string)
@@ -296,7 +330,7 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 		kind = "convention"
 	}
 
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
@@ -304,18 +338,15 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 	slug := slugFromSourcePath(sourcePath)
 	name := "Imported: " + sourcePath
 
-
-
-
-	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
+	existing, _ := h.projectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 	if existing != nil {
-		userID, _ := uuid.Parse(d.Principal.UserID)
+		userID, _ := uuid.Parse(h.principal.UserID)
 		upd := projectpolicysvc.UpdateInput{
 			Name:   &name,
 			Kind:   &kind,
 			BodyMD: &body,
 		}
-		updated, err := d.ProjectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
+		updated, err := h.projectPolicies.Update(ctx, orgID, existing.ID, upd, &userID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("import update failed: %v", err)), nil
 		}
@@ -328,7 +359,7 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 		})
 	}
 
-	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
+	created, err := h.projectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 		OrganizationID: orgID,
 		ProjectID:      proj.ID,
 		Slug:           slug,
@@ -348,8 +379,6 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 		"id":          created.ID.String(),
 	})
 }
-
-
 
 // platformPolicyKinds son los kinds aceptados por el CHECK constraint de
 // platform_policies (mig 000045). OJO: project_policies acepta mas kinds
@@ -372,11 +401,11 @@ func toolPlatformPolicyCreate() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePlatformPolicyCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handlePlatformPolicyCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -392,11 +421,9 @@ func (d *Deps) handlePlatformPolicyCreate(ctx context.Context, req mcp.CallToolR
 	}
 	sourceFile, _ := args["source_file"].(string)
 
-
-
 	var id uuid.UUID
 	var version int
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO platform_policies
 		   (slug, name, kind, body_md, source_file, is_active, is_user_modified)
 		 VALUES ($1,$2,$3,$4,NULLIF($5,''),TRUE,TRUE)
@@ -424,11 +451,11 @@ func toolPlatformPolicyEdit() mcp.Tool {
 	)
 }
 
-func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -437,7 +464,6 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 	if idStr == "" && slug == "" {
 		return mcp.NewToolResultError("id o slug requerido"), nil
 	}
-
 
 	var (
 		newName *string
@@ -459,7 +485,6 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 	if newName == nil && newKind == nil && newBody == nil {
 		return mcp.NewToolResultError("nada para actualizar: pasa al menos un campo"), nil
 	}
-
 
 	var (
 		curID      uuid.UUID
@@ -483,19 +508,18 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 		lookupArg = slug
 		lookupSQL = fmt.Sprintf(lookupSQL, "slug = $1")
 	}
-	if err := d.q(ctx).QueryRow(ctx, lookupSQL, lookupArg).
+	if err := h.q(ctx).QueryRow(ctx, lookupSQL, lookupArg).
 		Scan(&curID, &curSlug, &curVersion, &curBody, &curStruct); err != nil {
 		return mcp.NewToolResultError("platform_policy no encontrada"), nil
 	}
 
-
 	bumpVersion := newBody != nil && *newBody != curBody
 	if bumpVersion {
 		var changedBy *uuid.UUID
-		if uid, uerr := uuid.Parse(d.Principal.UserID); uerr == nil {
+		if uid, uerr := uuid.Parse(h.principal.UserID); uerr == nil {
 			changedBy = &uid
 		}
-		if _, err := d.q(ctx).Exec(ctx,
+		if _, err := h.q(ctx).Exec(ctx,
 			`INSERT INTO platform_policy_versions
 			   (policy_id, version, body_md, body_structured, changed_by)
 			 VALUES ($1,$2,$3,$4,$5)`,
@@ -521,7 +545,7 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 	                  is_user_modified = TRUE
 	            WHERE id = $1 AND is_active = TRUE
 	          RETURNING name, kind, version`
-	if err := d.q(ctx).QueryRow(ctx, updSQL, curID, newName, newKind, newBody).
+	if err := h.q(ctx).QueryRow(ctx, updSQL, curID, newName, newKind, newBody).
 		Scan(&outName, &outKind, &outVersion); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("edit failed: %v", err)), nil
 	}
@@ -532,21 +556,21 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 	})
 }
 
-func (d *Deps) handleProjectPolicyDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *policyHandlers) handleProjectPolicyDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.ProjectPolicies == nil {
+	if h.projectPolicies == nil {
 		return mcp.NewToolResultError("project_policy service not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("id invalido"), nil
 	}
-	if err := d.ProjectPolicies.Delete(ctx, orgID, id); err != nil {
+	if err := h.projectPolicies.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})

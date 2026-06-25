@@ -1,10 +1,3 @@
-"""Forms del mantenedor de Agentes (migrados a core).
-
-AgentForm reusa core.forms.SlugNormalizationMixin para la normalizacion
-strip+lower+slugify + unicidad del slug (excluyendo la propia instancia en
-edicion). Lo propio del dominio —campos del agente y skills_slugs como CSV—
-queda aqui. Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-"""
 from django import forms
 
 from core.forms import SlugNormalizationMixin
@@ -13,14 +6,6 @@ from .models import Agent
 
 
 class AgentForm(SlugNormalizationMixin, forms.Form):
-    """Form para crear/editar agentes.
-
-    El slug es unico globalmente (ya no hay organizacion: organization_id fue
-    dropeada). `skills_slugs` (text[] en la BD) se edita como CSV y se
-    normaliza a lista en clean_skills_slugs().
-    """
-
-
     slug_model = Agent
     slug_field = "slug"
 
@@ -89,8 +74,6 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Agent | None = None, **kwargs):
-
-
         super().__init__(*args, instance=instance, **kwargs)
 
         if instance is not None and not self.is_bound:
@@ -113,8 +96,6 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
 
 
 class AgentSearchForm(forms.Form):
-    """Busqueda simple en el listado."""
-
     q = forms.CharField(
         label="Buscar",
         required=False,

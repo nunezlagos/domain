@@ -1,19 +1,3 @@
-"""Views del mantenedor de Agentes (migradas a core).
-
-Las vistas estandar (list, signal, detail, create, edit, delete) las arma
-core.views.MaintainerViews. Aqui solo:
-
-  1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks especificos de agents:
-       - do_list: usa services.list_agents (EXCLUYE soft-deleted), a
-         diferencia del list generico que listaria todo.
-       - form_context / detail_context: exponen `agent_obj` (+ versiones y
-         templates READ-ONLY en el detalle) que los templates ya consumen.
-
-NO se cablea toggle: agents no alterna estado (su delete es soft-delete puro).
-El guard de auth y la deteccion AJAX vienen de core.auth (antes _require_auth/
-_is_ajax duplicados).
-"""
 from __future__ import annotations
 
 from django.http import HttpResponse
@@ -25,18 +9,10 @@ from . import services
 from .forms import AgentForm
 from .models import Agent
 
-
 class AgentViews(MaintainerViews):
-    """MaintainerViews especializado para agents (list filtrado + contextos)."""
-
-
-
     def list(self, request):
         self._list_request = request
         return super().list(request)
-
-
-
 
     def do_list(self, search: str, page: int) -> dict:
         req = getattr(self, "_list_request", None)
@@ -94,8 +70,6 @@ views = AgentViews(
 
 
 def export_agents(request):
-    """Export CSV (consolidado, abre en Excel) de los agentes filtrados.
-    Respeta los filtros activos: q (busqueda), provider[] (multi-select), status."""
     if (redir := require_auth(request)):
         return redir
     status = request.GET.get("status") or ""

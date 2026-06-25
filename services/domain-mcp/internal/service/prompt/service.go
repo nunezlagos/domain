@@ -1,12 +1,3 @@
-// Package prompt — issue-03.3 prompt templates versionados.
-//
-// Cada prompt tiene slug + version (UNIQUE por org+project+slug+version).
-// Active = is_active=true AND deleted_at IS NULL. Solo UNA versión activa por
-// slug+project a la vez (enforcement en service, no constraint DB).
-//
-// Variables JSONB define los placeholders esperados:
-//
-//	[{"name":"username","type":"string","required":true,"default":""}, ...]
 package prompt
 
 import (
@@ -23,13 +14,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/prompt/promptdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
-	ErrSlugInvalid    = errors.New("slug must be lowercase ascii, digits, dashes (2-100 chars)")
-	ErrBodyRequired   = errors.New("body required")
-	ErrNotFound       = errors.New("prompt not found")
-	ErrVersionExists  = errors.New("version already exists for this slug")
+	ErrSlugInvalid     = errors.New("slug must be lowercase ascii, digits, dashes (2-100 chars)")
+	ErrBodyRequired    = errors.New("body required")
+	ErrNotFound        = errors.New("prompt not found")
+	ErrVersionExists   = errors.New("version already exists for this slug")
 	ErrNoActiveVersion = errors.New("no active version found for slug")
 )
 
@@ -82,9 +75,55 @@ type Service struct {
 	Audit audit.Recorder
 }
 
-// Create crea siempre una nueva versión. La numeración auto-incrementa por
-// (organization_id, COALESCE(project_id, '00000...'), slug). Si SetActive=true,
-// dentro de la misma tx desactiva las anteriores y marca esta como activa.
+func (s *Service) q(ctx context.Context) *promptdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return promptdb.New(tx)
+	}
+	return promptdb.New(s.Pool)
+}
+
+func toPrompt(id uuid.UUID, _ uuid.UUID, projectID *uuid.UUID, createdBy *uuid.UUID, slug string, version int32, body string, variables []byte, description string, isActive bool, parentVersionID *uuid.UUID, tags []string, createdAt time.Time, updatedAt time.Time) Prompt {
+	var vars []Variable
+	if variables != nil {
+		_ = json.Unmarshal(variables, &vars)
+	}
+	return Prompt{
+		ID:              id,
+		ProjectID:       projectID,
+		CreatedBy:       createdBy,
+		Slug:            slug,
+		Version:         int(version),
+		Body:            body,
+		Variables:       vars,
+		Description:     description,
+		IsActive:        isActive,
+		ParentVersionID: parentVersionID,
+		Tags:            tags,
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
+	}
+}
+
+func toPromptFromGetByID(r promptdb.GetByIDRow) Prompt {
+	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+}
+
+func toPromptFromGetActive(r promptdb.GetActiveRow) Prompt {
+	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+}
+
+func toPromptFromGetByIDForUpdate(r promptdb.GetByIDForUpdateRow) Prompt {
+	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+}
+
+func toPromptFromInsert(r promptdb.InsertPromptRow) Prompt {
+	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+}
+
+func toPromptFromList(r promptdb.ListVersionsRow) Prompt {
+	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+}
+
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	in.Slug = strings.TrimSpace(in.Slug)
 	if !reSlug.MatchString(in.Slug) {
@@ -107,46 +146,42 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	q := promptdb.New(tx)
 
-	var nextVersion int
-	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(MAX(version), 0) + 1
-		 FROM prompts
-		 WHERE slug = $1
-		   AND project_id IS NOT DISTINCT FROM $2
-		   AND deleted_at IS NULL`,
-		in.Slug, in.ProjectID,
-	).Scan(&nextVersion)
+	nextVersion, err := q.NextVersion(ctx, promptdb.NextVersionParams{
+		Slug:      in.Slug,
+		ProjectID: in.ProjectID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("calc version: %w", err)
 	}
 
-
 	if in.SetActive {
-		_, err = tx.Exec(ctx,
-			`UPDATE prompts SET is_active = false
-			 WHERE slug = $1
-			   AND project_id IS NOT DISTINCT FROM $2
-			   AND is_active = true AND deleted_at IS NULL`,
-			in.Slug, in.ProjectID)
+		err = q.DeactivatePriorVersions(ctx, promptdb.DeactivatePriorVersionsParams{
+			Slug:      in.Slug,
+			ProjectID: in.ProjectID,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("deactivate prior versions: %w", err)
 		}
 	}
 
-	var p Prompt
-	err = tx.QueryRow(ctx,
-		`INSERT INTO prompts (project_id, created_by, slug, version,
-		                      body, variables, description, is_active, tags)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, project_id, created_by, slug, version,
-		           body, variables, COALESCE(description,''), is_active,
-		           parent_version_id, tags, created_at, updated_at`,
-		in.ProjectID, in.CreatedBy, in.Slug, nextVersion,
-		in.Body, varsJSON, nullStr(in.Description), in.SetActive, in.Tags,
-	).Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
-		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
-		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
+	var desc *string
+	if in.Description != "" {
+		desc = &in.Description
+	}
+
+	pRow, err := q.InsertPrompt(ctx, promptdb.InsertPromptParams{
+		ProjectID:   in.ProjectID,
+		CreatedBy:   in.CreatedBy,
+		Slug:        in.Slug,
+		Version:     nextVersion,
+		Body:        in.Body,
+		Variables:   varsJSON,
+		Description: desc,
+		IsActive:    in.SetActive,
+		Tags:        in.Tags,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert prompt: %w", err)
 	}
@@ -154,6 +189,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
+
+	p := toPromptFromInsert(pRow)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -169,7 +206,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	return &p, nil
 }
 
-// SetActive marca una versión como activa y desactiva las anteriores del mismo slug+project.
 func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt, error) {
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -177,15 +213,9 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var p Prompt
-	err = tx.QueryRow(ctx,
-		`SELECT id, project_id, created_by, slug, version,
-		        body, variables, COALESCE(description,''), is_active,
-		        parent_version_id, tags, created_at, updated_at
-		 FROM prompts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id,
-	).Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
-		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
-		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
+	q := promptdb.New(tx)
+
+	pRow, err := q.GetByIDForUpdate(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -193,85 +223,81 @@ func (s *Service) SetActive(ctx context.Context, id, actorID uuid.UUID) (*Prompt
 		return nil, fmt.Errorf("query: %w", err)
 	}
 
-	_, err = tx.Exec(ctx,
-		`UPDATE prompts SET is_active = false
-		 WHERE slug = $1
-		   AND project_id IS NOT DISTINCT FROM $2
-		   AND id <> $3 AND is_active = true AND deleted_at IS NULL`,
-		p.Slug, p.ProjectID, p.ID)
+	err = q.DeactivateOthers(ctx, promptdb.DeactivateOthersParams{
+		Slug:      pRow.Slug,
+		ProjectID: pRow.ProjectID,
+		ID:        id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("deactivate siblings: %w", err)
 	}
-	_, err = tx.Exec(ctx, `UPDATE prompts SET is_active = true WHERE id = $1`, p.ID)
+
+	err = q.ActivatePrompt(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("activate: %w", err)
 	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
+
+	p := toPromptFromGetByIDForUpdate(pRow)
 	p.IsActive = true
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorID:        &actorID,
-			ActorType:      audit.ActorUser,
-			Action:         "prompt.set_active",
-			EntityType:     "prompt",
-			EntityID:       &id,
+			ActorID:    &actorID,
+			ActorType:  audit.ActorUser,
+			Action:     "prompt.set_active",
+			EntityType: "prompt",
+			EntityID:   &id,
 		})
 	}
 	return &p, nil
 }
 
-// GetActive devuelve la versión activa del slug en el project (o sin project).
 func (s *Service) GetActive(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, slug string) (*Prompt, error) {
-	p, err := s.queryOne(ctx,
-		`WHERE slug = $1
-		   AND project_id IS NOT DISTINCT FROM $2
-		   AND is_active = true AND deleted_at IS NULL
-		 ORDER BY version DESC LIMIT 1`,
-		slug, projectID)
-	if errors.Is(err, ErrNotFound) {
+	pRow, err := s.q(ctx).GetActive(ctx, promptdb.GetActiveParams{
+		Slug:      slug,
+		ProjectID: projectID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoActiveVersion
 	}
-	return p, err
+	if err != nil {
+		return nil, err
+	}
+	p := toPromptFromGetActive(pRow)
+	return &p, nil
 }
 
-// GetByID retorna prompt por UUID (cualquier versión, no-deleted).
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Prompt, error) {
-	return s.queryOne(ctx, `WHERE id = $1 AND deleted_at IS NULL`, id)
+	pRow, err := s.q(ctx).GetByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	p := toPromptFromGetByID(pRow)
+	return &p, nil
 }
 
-// ListVersions devuelve todas las versiones de un slug (newest first).
 func (s *Service) ListVersions(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, slug string) ([]Prompt, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, project_id, created_by, slug, version,
-		        body, variables, COALESCE(description,''), is_active,
-		        parent_version_id, tags, created_at, updated_at
-		 FROM prompts
-		 WHERE slug = $1
-		   AND project_id IS NOT DISTINCT FROM $2
-		   AND deleted_at IS NULL
-		 ORDER BY version DESC`,
-		slug, projectID)
+	rows, err := s.q(ctx).ListVersions(ctx, promptdb.ListVersionsParams{
+		Slug:      slug,
+		ProjectID: projectID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list versions: %w", err)
 	}
-	defer rows.Close()
-	var out []Prompt
-	for rows.Next() {
-		var p Prompt
-		if err := rows.Scan(&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
-			&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
-			&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
+	out := make([]Prompt, len(rows))
+	for i, r := range rows {
+		out[i] = toPromptFromList(r)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-// Search hace BM25 sobre body_tsv con headline para fragmento destacado.
 func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]SearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, nil
@@ -279,44 +305,30 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := s.Pool.Query(ctx, `
-SELECT p.id, p.project_id, p.created_by, p.slug, p.version,
-       p.body, p.variables, COALESCE(p.description,''), p.is_active,
-       p.parent_version_id, p.tags, p.created_at, p.updated_at,
-       ts_rank(p.body_tsv, q)::float8 AS score,
-       ts_headline('spanish', p.body, q, 'StartSel=<mark>,StopSel=</mark>,MaxWords=20,MinWords=5') AS headline
-FROM prompts p, plainto_tsquery('spanish', $1) AS q
-WHERE p.deleted_at IS NULL AND p.body_tsv @@ q
-ORDER BY score DESC
-LIMIT $2
-`, query, limit)
+	rows, err := s.q(ctx).SearchPrompts(ctx, promptdb.SearchPromptsParams{
+		Query:       query,
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	defer rows.Close()
-	var out []SearchResult
-	for rows.Next() {
-		var r SearchResult
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.CreatedBy, &r.Slug, &r.Version,
-			&r.Body, &varsRaw{&r.Variables}, &r.Description, &r.IsActive,
-			&r.ParentVersionID, &r.Tags, &r.CreatedAt, &r.UpdatedAt,
-			&r.Score, &r.Headline); err != nil {
-			return nil, err
+	out := make([]SearchResult, len(rows))
+	for i, r := range rows {
+		out[i] = SearchResult{
+			Prompt:   toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt),
+			Score:    r.Score,
+			Headline: r.Headline,
 		}
-		out = append(out, r)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-// SoftDelete marca deleted_at. Deja inactivo automáticamente.
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE prompts SET deleted_at = NOW(), is_active = false
-		 WHERE id = $1 AND deleted_at IS NULL`, id)
+	n, err := s.q(ctx).SoftDeletePrompt(ctx, id)
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
@@ -329,55 +341,4 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Prompt, error) {
-	var p Prompt
-	q := `SELECT id, project_id, created_by, slug, version,
-	        body, variables, COALESCE(description,''), is_active,
-	        parent_version_id, tags, created_at, updated_at FROM prompts ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&p.ID, &p.ProjectID, &p.CreatedBy, &p.Slug, &p.Version,
-		&p.Body, &varsRaw{&p.Variables}, &p.Description, &p.IsActive,
-		&p.ParentVersionID, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
-	}
-	return &p, nil
-}
-
-// varsRaw scan helper: JSONB → []Variable.
-type varsRaw struct {
-	target *[]Variable
-}
-
-func (v *varsRaw) Scan(src any) error {
-	if src == nil {
-		*v.target = []Variable{}
-		return nil
-	}
-	var raw []byte
-	switch s := src.(type) {
-	case []byte:
-		raw = s
-	case string:
-		raw = []byte(s)
-	default:
-		return fmt.Errorf("varsRaw: unsupported type %T", src)
-	}
-	if len(raw) == 0 {
-		*v.target = []Variable{}
-		return nil
-	}
-	return json.Unmarshal(raw, v.target)
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

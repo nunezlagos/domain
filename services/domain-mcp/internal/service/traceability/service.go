@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/traceability/traceabilitydb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // Forward trace: REQ → HU → Proposal/Design → Tasks → Code
@@ -123,11 +124,16 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
-func (s *Service) q() *traceabilitydb.Queries { return traceabilitydb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *traceabilitydb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return traceabilitydb.New(tx)
+	}
+	return traceabilitydb.New(s.Pool)
+}
 
 // GetRequirementTrace returns full forward trace for a REQ.
 func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*RequirementTrace, error) {
-	r, err := s.q().GetRequirementBySlug(ctx, reqSlug)
+	r, err := s.q(ctx).GetRequirementBySlug(ctx, reqSlug)
 	if err != nil {
 		return nil, fmt.Errorf("req not found: %w", err)
 	}
@@ -142,7 +148,7 @@ func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*Req
 }
 
 func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTraceNode, error) {
-	q := s.q()
+	q := s.q(ctx)
 	issues, err := q.ListIssuesByReq(ctx, reqID)
 	if err != nil {
 		return nil, fmt.Errorf("query HUs: %w", err)
@@ -181,7 +187,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 // GetCodeTrace returns backward trace from a file path.
 func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace, error) {
-	q := s.q()
+	q := s.q(ctx)
 	ct := CodeTrace{File: filePath}
 
 	huRow, err := q.GetCodeTraceHU(ctx, filePath)
@@ -199,7 +205,7 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 
 // GetCoverageDashboard returns aggregate coverage metrics.
 func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard, error) {
-	row, err := s.q().GetCoverageDashboard(ctx)
+	row, err := s.q(ctx).GetCoverageDashboard(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("coverage dashboard: %w", err)
 	}
@@ -220,7 +226,7 @@ func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard,
 
 // GetProgressReport returns task progress grouped by REQ.
 func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, error) {
-	rows, err := s.q().GetProgressReport(ctx)
+	rows, err := s.q(ctx).GetProgressReport(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("progress report: %w", err)
 	}
@@ -241,7 +247,7 @@ func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, erro
 
 // GetHUsWithoutProposals returns HUs with no proposal.
 func (s *Service) GetHUsWithoutProposals(ctx context.Context) ([]HUGap, error) {
-	rows, err := s.q().GetHUsWithoutProposals(ctx)
+	rows, err := s.q(ctx).GetHUsWithoutProposals(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("gap query: %w", err)
 	}
@@ -254,7 +260,7 @@ func (s *Service) GetHUsWithoutProposals(ctx context.Context) ([]HUGap, error) {
 
 // GetHUsWithoutDesigns returns HUs with no design.
 func (s *Service) GetHUsWithoutDesigns(ctx context.Context) ([]HUGap, error) {
-	rows, err := s.q().GetHUsWithoutDesigns(ctx)
+	rows, err := s.q(ctx).GetHUsWithoutDesigns(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("gap query: %w", err)
 	}
@@ -267,7 +273,7 @@ func (s *Service) GetHUsWithoutDesigns(ctx context.Context) ([]HUGap, error) {
 
 // GetHUsWithIncompleteTasks returns HUs where not all tasks completed.
 func (s *Service) GetHUsWithIncompleteTasks(ctx context.Context) ([]HUGap, error) {
-	rows, err := s.q().GetHUsWithIncompleteTasks(ctx)
+	rows, err := s.q(ctx).GetHUsWithIncompleteTasks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("incomplete tasks: %w", err)
 	}
@@ -280,7 +286,7 @@ func (s *Service) GetHUsWithIncompleteTasks(ctx context.Context) ([]HUGap, error
 
 // GetConsolidatedReport returns matrix of REQ stats.
 func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow, error) {
-	rows, err := s.q().GetConsolidatedReport(ctx)
+	rows, err := s.q(ctx).GetConsolidatedReport(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("consolidated report: %w", err)
 	}
@@ -303,7 +309,7 @@ func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow,
 
 // AddCodeReference creates a code reference link.
 func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, filePath, repo, branch string) (*CodeRefSummary, error) {
-	row, err := s.q().AddCodeReference(ctx, traceabilitydb.AddCodeReferenceParams{
+	row, err := s.q(ctx).AddCodeReference(ctx, traceabilitydb.AddCodeReferenceParams{
 		IssueID:  issueID,
 		FilePath: filePath,
 		Repo:     repo,
@@ -317,7 +323,7 @@ func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, fileP
 
 // RemoveCodeReference removes a code reference by ID.
 func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) error {
-	if err := s.q().RemoveCodeReference(ctx, refID); err != nil {
+	if err := s.q(ctx).RemoveCodeReference(ctx, refID); err != nil {
 		return fmt.Errorf("remove code reference: %w", err)
 	}
 	return nil

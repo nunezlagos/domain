@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/wizardplan"
+	"nunezlagos/domain/internal/service/wizardplan/wizardplandb"
 )
 
 // IssueDedupSource compara el prompt vs issues existentes via FTS sobre
@@ -28,55 +29,40 @@ func (s *IssueDedupSource) Run(ctx context.Context, env *wizardplan.ContextEnvel
 		limit = 5
 	}
 
-	q := strings.TrimSpace(env.RawPrompt)
-	if q == "" {
+	query := strings.TrimSpace(env.RawPrompt)
+	if query == "" {
 		return nil
 	}
-	if len(q) > 300 {
-		q = q[:300]
+	if len(query) > 300 {
+		query = query[:300]
 	}
 
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, slug, title, status,
-		       ts_rank(to_tsvector('spanish', coalesce(title, '') || ' ' || coalesce(description, '')),
-		               plainto_tsquery('spanish', $1)) AS score
-		FROM issues
-		WHERE to_tsvector('spanish', coalesce(title, '') || ' ' || coalesce(description, ''))
-		      @@ plainto_tsquery('spanish', $1)
-		ORDER BY score DESC
-		LIMIT $2`,
-		q, limit,
-	)
+	q := wizardplandb.New(s.Pool)
+
+	issueRows, err := q.ListIssuesByFTS(ctx, wizardplandb.ListIssuesByFTSParams{
+		Query:       query,
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
 	candidates := []wizardplan.HUDedupCandidate{}
-	for rows.Next() {
-		var c wizardplan.HUDedupCandidate
-		if err := rows.Scan(&c.HUID, &c.Slug, &c.Title, &c.Status, &c.Similarity); err != nil {
-			continue
-		}
-		c.Reason = "FTS match vs title+description"
-		candidates = append(candidates, c)
-	}
-	if err := rows.Err(); err != nil {
-		return err
+	for _, row := range issueRows {
+		candidates = append(candidates, wizardplan.HUDedupCandidate{
+			HUID:       row.ID,
+			Slug:       row.Slug,
+			Title:      row.Title,
+			Status:     row.Status,
+			Similarity: float64(row.Score),
+			Reason:     "FTS match vs title+description",
+		})
 	}
 
 	env.HUMatches = &wizardplan.HUDedupFinding{Candidates: candidates}
 
-
 	if len(candidates) > 0 && candidates[0].Similarity > 0.3 {
-
-		var reqSlug string
-		err := s.Pool.QueryRow(ctx, `
-			SELECT r.slug
-			FROM issues us
-			JOIN sdd_requirements r ON r.id = us.req_id
-			WHERE us.id = $1`, candidates[0].HUID,
-		).Scan(&reqSlug)
+		reqSlug, err := q.GetRequirementSlugByIssueID(ctx, candidates[0].HUID)
 		if err == nil && reqSlug != "" {
 			env.Touch(wizardplan.SlotREQParent, reqSlug, "hu_dedup",
 				candidates[0].Similarity*0.9,

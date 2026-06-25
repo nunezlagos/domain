@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/projectpolicy/projectpolicydb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -28,35 +31,55 @@ type querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func (r *pgRepository) q(ctx context.Context) querier {
+func (r *pgRepository) q(ctx context.Context) *projectpolicydb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return projectpolicydb.New(tx)
+	}
+	return projectpolicydb.New(r.pool)
+}
+
+func (r *pgRepository) raw(ctx context.Context) querier {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return tx
 	}
 	return r.pool
 }
 
-// ISSUE-21.6: selectCols sin organization_id (Fase C).
-const selectCols = `id, project_id, slug, name, kind,
-		body_md, body_structured, version, is_active, override_platform,
-		source, created_at, updated_at, deleted_at`
+func toPolicy(id uuid.UUID, projectID uuid.UUID, slug, name, kind, bodyMD string, bodyStructured []byte, version int32, isActive, overridePlatform bool, source string, createdAt, updatedAt time.Time, deletedAt pgtype.Timestamptz) Policy {
+	var bs any
+	if bodyStructured != nil {
+		_ = json.Unmarshal(bodyStructured, &bs)
+	}
+	var da *time.Time
+	if deletedAt.Valid {
+		da = &deletedAt.Time
+	}
+	return Policy{
+		ID: id, ProjectID: projectID, Slug: slug, Name: name, Kind: kind,
+		BodyMD: bodyMD, BodyStructured: bs,
+		Version: int(version), IsActive: isActive, OverridePlatform: overridePlatform,
+		Source: source, CreatedAt: createdAt, UpdatedAt: updatedAt, DeletedAt: da,
+	}
+}
 
-func scanPolicy(row pgx.Row) (*Policy, error) {
-	var p Policy
-	var structured []byte
-	if err := row.Scan(
-		&p.ID, &p.ProjectID, &p.Slug, &p.Name, &p.Kind,
-		&p.BodyMD, &structured, &p.Version, &p.IsActive, &p.OverridePlatform,
-		&p.Source, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
-	); err != nil {
-		return nil, err
-	}
-	if len(structured) > 0 {
-		var v any
-		if err := json.Unmarshal(structured, &v); err == nil {
-			p.BodyStructured = v
-		}
-	}
-	return &p, nil
+func toPolicyFromInsert(r projectpolicydb.InsertPolicyRow) Policy {
+	return toPolicy(r.ID, r.ProjectID, r.Slug, r.Name, r.Kind, r.BodyMd, r.BodyStructured, r.Version, r.IsActive, r.OverridePlatform, r.Source, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+}
+
+func toPolicyFromList(r projectpolicydb.ListPoliciesRow) Policy {
+	return toPolicy(r.ID, r.ProjectID, r.Slug, r.Name, r.Kind, r.BodyMd, r.BodyStructured, r.Version, r.IsActive, r.OverridePlatform, r.Source, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+}
+
+func toPolicyFromGetBySlug(r projectpolicydb.GetPolicyBySlugRow) Policy {
+	return toPolicy(r.ID, r.ProjectID, r.Slug, r.Name, r.Kind, r.BodyMd, r.BodyStructured, r.Version, r.IsActive, r.OverridePlatform, r.Source, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+}
+
+func toPolicyFromGet(r projectpolicydb.GetPolicyRow) Policy {
+	return toPolicy(r.ID, r.ProjectID, r.Slug, r.Name, r.Kind, r.BodyMd, r.BodyStructured, r.Version, r.IsActive, r.OverridePlatform, r.Source, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+}
+
+func toPolicyFromUpdate(r projectpolicydb.UpdatePolicyRow) Policy {
+	return toPolicy(r.ID, r.ProjectID, r.Slug, r.Name, r.Kind, r.BodyMd, r.BodyStructured, r.Version, r.IsActive, r.OverridePlatform, r.Source, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
 }
 
 func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, error) {
@@ -71,85 +94,72 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, err
 		source = "manual"
 	}
 
-	row := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO project_policies
-		   (project_id, slug, name, kind,
-		    body_md, body_structured, override_platform, source)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		 RETURNING `+selectCols,
-		in.ProjectID, in.Slug, in.Name, in.Kind,
-		in.BodyMD, structuredBytes, in.OverridePlatform, source,
-	)
-	p, err := scanPolicy(row)
+	row, err := r.q(ctx).InsertPolicy(ctx, projectpolicydb.InsertPolicyParams{
+		ProjectID:        in.ProjectID,
+		Slug:             in.Slug,
+		Name:             in.Name,
+		Kind:             in.Kind,
+		BodyMd:           in.BodyMD,
+		BodyStructured:   structuredBytes,
+		OverridePlatform: in.OverridePlatform,
+		Source:           source,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert project_policy: %w", err)
 	}
-	return p, nil
+	p := toPolicyFromInsert(row)
+	return &p, nil
 }
 
-func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID, kind string) ([]*Policy, error) {
-
-	_ = orgID
-	q := `SELECT ` + selectCols + `
-		   FROM project_policies
-		   WHERE project_id = $1
-		     AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`
-	args := []any{projectID}
+func (r *pgRepository) List(ctx context.Context, _ uuid.UUID, projectID uuid.UUID, kind string) ([]*Policy, error) {
+	var kindPtr *string
 	if kind != "" {
-		q += " AND kind = $2"
-		args = append(args, kind)
+		kindPtr = &kind
 	}
-	q += " ORDER BY kind ASC, slug ASC"
-	rows, err := r.q(ctx).Query(ctx, q, args...)
+
+	rows, err := r.q(ctx).ListPolicies(ctx, projectpolicydb.ListPoliciesParams{
+		ProjectID: projectID,
+		Kind:      kindPtr,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list project_policies: %w", err)
 	}
-	defer rows.Close()
-	out := make([]*Policy, 0)
-	for rows.Next() {
-		p, err := scanPolicy(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, p)
+	out := make([]*Policy, 0, len(rows))
+	for _, row := range rows {
+		p := toPolicyFromList(row)
+		out = append(out, &p)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func (r *pgRepository) GetBySlug(ctx context.Context, orgID, projectID uuid.UUID, slug string) (*Policy, error) {
-	_ = orgID
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT `+selectCols+`
-		 FROM project_policies
-		 WHERE project_id = $1 AND slug = $2
-		   AND is_active = TRUE AND deleted_at IS NULL AND proposed = false`,
-		projectID, slug,
-	)
-	p, err := scanPolicy(row)
+func (r *pgRepository) GetBySlug(ctx context.Context, _ uuid.UUID, projectID uuid.UUID, slug string) (*Policy, error) {
+	row, err := r.q(ctx).GetPolicyBySlug(ctx, projectpolicydb.GetPolicyBySlugParams{
+		ProjectID: projectID,
+		Slug:      slug,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return nil, fmt.Errorf("get project_policy by slug: %w", err)
+	}
+	p := toPolicyFromGetBySlug(row)
+	return &p, nil
 }
 
-func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Policy, error) {
-	_ = orgID
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT `+selectCols+`
-		 FROM project_policies
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	)
-	p, err := scanPolicy(row)
+func (r *pgRepository) Get(ctx context.Context, _ uuid.UUID, id uuid.UUID) (*Policy, error) {
+	row, err := r.q(ctx).GetPolicy(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return nil, fmt.Errorf("get project_policy: %w", err)
+	}
+	p := toPolicyFromGet(row)
+	return &p, nil
 }
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput, changedBy *uuid.UUID) (*Policy, error) {
-
-	_ = orgID
 	curr, err := r.Get(ctx, orgID, id)
 	if err != nil {
 		return nil, err
@@ -179,7 +189,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 
 	newVersion := curr.Version + 1
 
-	if _, err := r.q(ctx).Exec(ctx,
+	if _, err := r.raw(ctx).Exec(ctx,
 		`INSERT INTO project_policy_versions
 		   (policy_id, version, body_md, body_structured, changed_by)
 		 VALUES ($1,$2,$3,$4,$5)`,
@@ -188,29 +198,28 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 		return nil, fmt.Errorf("snapshot version: %w", err)
 	}
 
-	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE project_policies
-		 SET name=$2, kind=$3, body_md=$4, body_structured=$5,
-		     override_platform=$6, version=$7
-		 WHERE id=$1 AND deleted_at IS NULL
-		 RETURNING `+selectCols,
-		id, curr.Name, curr.Kind, curr.BodyMD, structuredBytes,
-		curr.OverridePlatform, newVersion,
-	)
-	return scanPolicy(row)
+	row, err := r.q(ctx).UpdatePolicy(ctx, projectpolicydb.UpdatePolicyParams{
+		ID:               id,
+		Name:             curr.Name,
+		Kind:             curr.Kind,
+		BodyMd:           curr.BodyMD,
+		BodyStructured:   structuredBytes,
+		OverridePlatform: curr.OverridePlatform,
+		Version:          int32(newVersion),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("update project_policy: %w", err)
+	}
+	p := toPolicyFromUpdate(row)
+	return &p, nil
 }
 
-func (r *pgRepository) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
-	_ = orgID
-	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE project_policies SET deleted_at = NOW(), is_active = FALSE
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	)
+func (r *pgRepository) SoftDelete(ctx context.Context, _ uuid.UUID, id uuid.UUID) error {
+	n, err := r.q(ctx).SoftDeletePolicy(ctx, id)
 	if err != nil {
 		return fmt.Errorf("soft-delete project_policy: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil

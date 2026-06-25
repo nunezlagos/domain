@@ -21,6 +21,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/requirement/requirementdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // Status y Priority valores permitidos.
@@ -85,7 +86,12 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-func (s *Service) q() *requirementdb.Queries { return requirementdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *requirementdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return requirementdb.New(tx)
+	}
+	return requirementdb.New(s.Pool)
+}
 
 // Create inserta un requirement. Si parentSlug no es vacío, busca el padre.
 func (s *Service) Create(ctx context.Context, slug, title, description, status, priority string, parentSlug string, projectID *uuid.UUID) (*Requirement, error) {
@@ -126,7 +132,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 		desc = &description
 	}
 
-	row, err := s.q().InsertRequirement(ctx, requirementdb.InsertRequirementParams{
+	row, err := s.q(ctx).InsertRequirement(ctx, requirementdb.InsertRequirementParams{
 		Slug:        slug,
 		Title:       title,
 		Description: desc,
@@ -157,7 +163,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 // GetBySlug retorna un requirement por slug.
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*Requirement, error) {
-	row, err := s.q().GetRequirementBySlug(ctx, slug)
+	row, err := s.q(ctx).GetRequirementBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -170,7 +176,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*Requirement, err
 
 // GetByID retorna un requirement por ID.
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Requirement, error) {
-	row, err := s.q().GetRequirementByID(ctx, id)
+	row, err := s.q(ctx).GetRequirementByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -187,7 +193,7 @@ func (s *Service) List(ctx context.Context, filter RequirementFilter) ([]Require
 		filter.Limit = 50
 	}
 
-	rows, err := s.q().ListRequirements(ctx, requirementdb.ListRequirementsParams{
+	rows, err := s.q(ctx).ListRequirements(ctx, requirementdb.ListRequirementsParams{
 		Limit:    int32(filter.Limit),
 		Offset:   int32(filter.Offset),
 		Status:   optStr(filter.Status),
@@ -239,7 +245,7 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 		newPriority = *priority
 	}
 
-	row, err := s.q().UpdateRequirement(ctx, requirementdb.UpdateRequirementParams{
+	row, err := s.q(ctx).UpdateRequirement(ctx, requirementdb.UpdateRequirementParams{
 		Slug:        slug,
 		Title:       newTitle,
 		Description: newDesc,
@@ -279,9 +285,9 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 	}
 
 	if recursive {
-		err = s.q().ArchiveRequirementRecursive(ctx, r.ID)
+		err = s.q(ctx).ArchiveRequirementRecursive(ctx, r.ID)
 	} else {
-		err = s.q().ArchiveRequirement(ctx, r.ID)
+		err = s.q(ctx).ArchiveRequirement(ctx, r.ID)
 	}
 	if err != nil {
 		return fmt.Errorf("archive requirement: %w", err)
@@ -302,7 +308,7 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 
 // GetTree retorna el árbol jerárquico desde un slug raíz. Máximo 10 niveles.
 func (s *Service) GetTree(ctx context.Context, slug string) (*RequirementTree, error) {
-	rows, err := s.q().GetRequirementTree(ctx, slug)
+	rows, err := s.q(ctx).GetRequirementTree(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("get tree: %w", err)
 	}

@@ -15,6 +15,7 @@ import (
 
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/service/outboundwebhook/outboundwebhookdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -62,6 +63,13 @@ type CreateInput struct {
 type Service struct {
 	Pool   *pgxpool.Pool
 	Cipher *crypto.Cipher
+}
+
+func (s *Service) q(ctx context.Context) *outboundwebhookdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return outboundwebhookdb.New(tx)
+	}
+	return outboundwebhookdb.New(s.Pool)
 }
 
 func ValidateURL(raw string, requireTLS bool) error {
@@ -160,7 +168,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 		secretCipher = ct
 	}
 
-	q := outboundwebhookdb.New(s.Pool)
+	q := s.q(ctx)
 	row, err := q.InsertSubscription(ctx, outboundwebhookdb.InsertSubscriptionParams{
 		OrganizationID: orgID,
 		Name:           in.Name,
@@ -185,7 +193,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 }
 
 func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType string) ([]Subscription, error) {
-	rows, err := outboundwebhookdb.New(s.Pool).ListByEvent(ctx, eventType)
+	rows, err := s.q(ctx).ListByEvent(ctx, eventType)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +205,7 @@ func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType st
 }
 
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Subscription, error) {
-	row, err := outboundwebhookdb.New(s.Pool).GetByID(ctx, id)
+	row, err := s.q(ctx).GetByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -209,7 +217,7 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Subscription, 
 }
 
 func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription, error) {
-	rows, err := outboundwebhookdb.New(s.Pool).ListAll(ctx)
+	rows, err := s.q(ctx).ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +229,7 @@ func (s *Service) ListAll(ctx context.Context, orgID uuid.UUID) ([]Subscription,
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	n, err := outboundwebhookdb.New(s.Pool).DeleteSubscription(ctx, id)
+	n, err := s.q(ctx).DeleteSubscription(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -232,7 +240,7 @@ func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 }
 
 func (s *Service) getByID(ctx context.Context, id uuid.UUID) (*Subscription, error) {
-	row, err := outboundwebhookdb.New(s.Pool).GetByID(ctx, id)
+	row, err := s.q(ctx).GetByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -248,7 +256,7 @@ func (s *Service) GetByIDInternal(ctx context.Context, id uuid.UUID) (*Subscript
 }
 
 func (s *Service) DecryptSecret(ctx context.Context, id uuid.UUID) ([]byte, error) {
-	ct, err := outboundwebhookdb.New(s.Pool).GetSecretCipher(ctx, id)
+	ct, err := s.q(ctx).GetSecretCipher(ctx, id)
 	if err != nil {
 		return nil, err
 	}

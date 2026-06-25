@@ -1,108 +1,117 @@
-// Package observation — pg_repository.go: implementación PG del Repository.
-//
-// Wrappea el pool y honra tx-context (si el middleware HTTP inyectó una tx,
-// las queries corren contra esa tx para que RLS aplique).
 package observation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/observation/observationdb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
-// pgRepository implementa Repository contra Postgres con pgxpool.
 type pgRepository struct {
 	pool *pgxpool.Pool
 }
 
-// NewPgRepository construye el repository PG. pool puede ser nil para casos
-// donde el Service es usado solo con tx-context inyectada — en ese caso TODAS
-// las requests deben venir con tx (o las queries fallarán al hacer nil deref
-// sobre pool).
 func NewPgRepository(pool *pgxpool.Pool) Repository {
 	return &pgRepository{pool: pool}
 }
 
-// querier es el subset de pgx que necesitamos. Tanto *pgxpool.Pool como pgx.Tx
-// satisfacen estas firmas.
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func (r *pgRepository) q(ctx context.Context) querier {
+func (r *pgRepository) q(ctx context.Context) *observationdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return observationdb.New(tx)
+	}
+	return observationdb.New(r.pool)
+}
+
+func (r *pgRepository) raw(ctx context.Context) querier {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return tx
 	}
 	return r.pool
 }
 
-func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observation, error) {
-	var o Observation
-	err := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO knowledge_observations
-		   (project_id, created_by, session_id, content,
-		    embedding, observation_type, tags, metadata, content_hash)
-		 VALUES ($1, $2, $3, $4, $5::vector, $6, $7, $8, $9)
-		 RETURNING id, project_id, created_by, session_id,
-		           content, observation_type, tags, metadata, created_at, updated_at`,
-		in.ProjectID, in.CreatedBy, in.SessionID, in.Content,
-		in.EmbeddingLit, in.ObservationType, in.Tags, in.MetadataJSON, in.ContentHash,
-	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
-		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
-	if err != nil {
+func toObservation(id uuid.UUID, projectID uuid.UUID, createdBy *uuid.UUID, sessionID *uuid.UUID, content, observationType string, tags []string, metadata []byte, createdAt, updatedAt time.Time) Observation {
+	var m map[string]any
+	if metadata != nil {
+		_ = json.Unmarshal(metadata, &m)
+	}
+	return Observation{
+		ID: id, ProjectID: projectID, CreatedBy: createdBy, SessionID: sessionID,
+		Content: content, ObservationType: observationType, Tags: tags,
+		Metadata: m, CreatedAt: createdAt, UpdatedAt: updatedAt,
+	}
+}
 
+func toObservationFromInsert(r observationdb.InsertObservationRow) Observation {
+	return toObservation(r.ID, r.ProjectID, r.CreatedBy, r.SessionID, r.Content, r.ObservationType, r.Tags, r.Metadata, r.CreatedAt, r.UpdatedAt)
+}
+
+func toObservationFromGet(r observationdb.GetObservationRow) Observation {
+	return toObservation(r.ID, r.ProjectID, r.CreatedBy, r.SessionID, r.Content, r.ObservationType, r.Tags, r.Metadata, r.CreatedAt, r.UpdatedAt)
+}
+
+func toObservationFromList(r observationdb.ListObservationsRow) Observation {
+	return toObservation(r.ID, r.ProjectID, r.CreatedBy, r.SessionID, r.Content, r.ObservationType, r.Tags, r.Metadata, r.CreatedAt, r.UpdatedAt)
+}
+
+func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observation, error) {
+	row, err := r.q(ctx).InsertObservation(ctx, observationdb.InsertObservationParams{
+		ProjectID:       in.ProjectID,
+		CreatedBy:       in.CreatedBy,
+		SessionID:       in.SessionID,
+		Content:         in.Content,
+		Embedding:       in.EmbeddingLit,
+		ObservationType: in.ObservationType,
+		Tags:            in.Tags,
+		Metadata:        in.MetadataJSON,
+		ContentHash:     in.ContentHash,
+	})
+	if err != nil {
 		return nil, err
 	}
+	o := toObservationFromInsert(row)
 	return &o, nil
 }
 
 func (r *pgRepository) Get(ctx context.Context, id uuid.UUID) (*Observation, error) {
-	var o Observation
-	err := r.q(ctx).QueryRow(ctx,
-		`SELECT id, project_id, created_by, session_id,
-		        content, observation_type, tags, metadata, created_at, updated_at
-		 FROM knowledge_observations WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
-		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
+	row, err := r.q(ctx).GetObservation(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get observation: %w", err)
 	}
+	o := toObservationFromGet(row)
 	return &o, nil
 }
 
 func (r *pgRepository) List(ctx context.Context, projectID uuid.UUID, limit int) ([]Observation, error) {
-	rows, err := r.q(ctx).Query(ctx,
-		`SELECT id, project_id, created_by, session_id,
-		        content, observation_type, tags, metadata, created_at, updated_at
-		 FROM knowledge_observations
-		 WHERE project_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, projectID, limit)
+	rows, err := r.q(ctx).ListObservations(ctx, observationdb.ListObservationsParams{
+		ProjectID:   projectID,
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
-	defer rows.Close()
-	var out []Observation
-	for rows.Next() {
-		var o Observation
-		if err := rows.Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
-			&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, o)
+	out := make([]Observation, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toObservationFromList(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]Observation, bool, error) {
@@ -115,7 +124,7 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 	}
 	args := []any{in.ProjectID}
 	q := `SELECT id, project_id, created_by, session_id,
-	            content, observation_type, tags, metadata, created_at, updated_at
+	          content, observation_type, tags, metadata, created_at, updated_at
 	      FROM knowledge_observations
 	      WHERE project_id = $1 AND deleted_at IS NULL`
 	if in.CursorTime != nil && in.CursorID != nil {
@@ -125,21 +134,21 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 	args = append(args, limit+1)
 	q += fmt.Sprintf(" ORDER BY created_at %s, id %s LIMIT $%d", dir, dir, len(args))
 
-	rows, err := r.q(ctx).Query(ctx, q, args...)
+	rawRows, err := r.raw(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("list paginated: %w", err)
 	}
-	defer rows.Close()
+	defer rawRows.Close()
 	var out []Observation
-	for rows.Next() {
+	for rawRows.Next() {
 		var o Observation
-		if err := rows.Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
+		if err := rawRows.Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 			&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, false, err
 		}
 		out = append(out, o)
 	}
-	if err := rows.Err(); err != nil {
+	if err := rawRows.Err(); err != nil {
 		return nil, false, err
 	}
 	hasMore := len(out) > limit
@@ -150,12 +159,11 @@ func (r *pgRepository) ListPaginated(ctx context.Context, in ListPageInput) ([]O
 }
 
 func (r *pgRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE knowledge_observations SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
+	n, err := r.q(ctx).SoftDeleteObservation(ctx, id)
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -165,7 +173,7 @@ func (r *pgRepository) SearchHybrid(ctx context.Context, in SearchInput) ([]Sear
 	var rows pgx.Rows
 	var err error
 	if in.UseVector {
-		rows, err = r.q(ctx).Query(ctx, `
+		rows, err = r.raw(ctx).Query(ctx, `
 WITH bm25 AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(content_tsv, query) DESC) AS r
   FROM knowledge_observations, plainto_tsquery('spanish', $1) AS query
@@ -194,7 +202,7 @@ ORDER BY f.score DESC
 LIMIT $5
 `, in.Query, in.EmbeddingLit, in.Candidates, in.RRFK, in.Limit)
 	} else {
-		rows, err = r.q(ctx).Query(ctx, `
+		rows, err = r.raw(ctx).Query(ctx, `
 SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,
        ts_rank(o.content_tsv, query)::float8 AS score,
@@ -212,16 +220,16 @@ LIMIT $2
 	defer rows.Close()
 	var out []SearchResult
 	for rows.Next() {
-		var r SearchResult
+		var sr SearchResult
 		var bm25Rank, vecRank int64
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.CreatedBy, &r.SessionID,
-			&r.Content, &r.ObservationType, &r.Tags, &r.Metadata, &r.CreatedAt, &r.UpdatedAt,
-			&r.Score, &bm25Rank, &vecRank); err != nil {
+		if err := rows.Scan(&sr.ID, &sr.ProjectID, &sr.CreatedBy, &sr.SessionID,
+			&sr.Content, &sr.ObservationType, &sr.Tags, &sr.Metadata, &sr.CreatedAt, &sr.UpdatedAt,
+			&sr.Score, &bm25Rank, &vecRank); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
-		r.BM25Rank = int(bm25Rank)
-		r.VectorRank = int(vecRank)
-		out = append(out, r)
+		sr.BM25Rank = int(bm25Rank)
+		sr.VectorRank = int(vecRank)
+		out = append(out, sr)
 	}
 	return out, rows.Err()
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/mcpinstaller/mcpinstallerdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type Agent string
@@ -38,10 +39,15 @@ func New(pool *pgxpool.Pool) *Service {
 	return &Service{Pool: pool}
 }
 
-func (s *Service) q() *mcpinstallerdb.Queries { return mcpinstallerdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *mcpinstallerdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return mcpinstallerdb.New(tx)
+	}
+	return mcpinstallerdb.New(s.Pool)
+}
 
 func (s *Service) List(ctx context.Context) ([]Provider, error) {
-	rows, err := s.q().ListProviders(ctx)
+	rows, err := s.q(ctx).ListProviders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query providers: %w", err)
 	}

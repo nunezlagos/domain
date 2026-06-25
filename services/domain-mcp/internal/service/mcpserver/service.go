@@ -19,6 +19,7 @@ import (
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/mcp/client"
 	"nunezlagos/domain/internal/service/mcpserver/mcpserverdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -78,7 +79,12 @@ type Service struct {
 	Logger *slog.Logger
 }
 
-func (s *Service) q() *mcpserverdb.Queries { return mcpserverdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *mcpserverdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return mcpserverdb.New(tx)
+	}
+	return mcpserverdb.New(s.Pool)
+}
 
 // Create registra un nuevo servidor MCP externo. NO conecta — usar SyncTools.
 func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (*Server, error) {
@@ -108,7 +114,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 		envCipher = ct
 	}
 
-	row, err := s.q().InsertServer(ctx, mcpserverdb.InsertServerParams{
+	row, err := s.q(ctx).InsertServer(ctx, mcpserverdb.InsertServerParams{
 		Name:      in.Name,
 		Transport: in.Transport,
 		Command:   nullStr(in.Command),
@@ -137,7 +143,7 @@ func nullStr(s string) *string {
 
 // Get devuelve un server por id+org.
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Server, error) {
-	row, err := s.q().GetServer(ctx, id)
+	row, err := s.q(ctx).GetServer(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -149,7 +155,7 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Server, error)
 }
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, error) {
-	rows, err := s.q().ListServers(ctx)
+	rows, err := s.q(ctx).ListServers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +167,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, err
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	n, err := s.q().DeleteServer(ctx, id)
+	n, err := s.q(ctx).DeleteServer(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -223,7 +229,7 @@ func (s *Service) SyncTools(ctx context.Context, orgID, id uuid.UUID) ([]Tool, e
 
 // decryptEnv devuelve env en formato KEY=VALUE (compatible exec.Cmd.Env).
 func (s *Service) decryptEnv(ctx context.Context, id uuid.UUID) ([]string, error) {
-	ct, err := s.q().GetServerEnvCipher(ctx, id)
+	ct, err := s.q(ctx).GetServerEnvCipher(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +261,7 @@ func (s *Service) upsertTools(ctx context.Context, serverID, orgID uuid.UUID, to
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{}`)
 		}
-		row, err := s.q().UpsertTool(ctx, mcpserverdb.UpsertToolParams{
+		row, err := s.q(ctx).UpsertTool(ctx, mcpserverdb.UpsertToolParams{
 			McpServerID: serverID,
 			ToolName:    t.Name,
 			Description: t.Description,
@@ -270,11 +276,11 @@ func (s *Service) upsertTools(ctx context.Context, serverID, orgID uuid.UUID, to
 }
 
 func (s *Service) markConnected(ctx context.Context, id uuid.UUID) {
-	_ = s.q().MarkServerConnected(ctx, id)
+	_ = s.q(ctx).MarkServerConnected(ctx, id)
 }
 
 func (s *Service) markFailed(ctx context.Context, id uuid.UUID, errMsg string) {
-	_ = s.q().MarkServerFailed(ctx, mcpserverdb.MarkServerFailedParams{
+	_ = s.q(ctx).MarkServerFailed(ctx, mcpserverdb.MarkServerFailedParams{
 		ID:        id,
 		LastError: &errMsg,
 	})
@@ -282,7 +288,7 @@ func (s *Service) markFailed(ctx context.Context, id uuid.UUID, errMsg string) {
 
 // ListTools retorna las tools descubiertas para un server.
 func (s *Service) ListTools(ctx context.Context, orgID, serverID uuid.UUID) ([]Tool, error) {
-	rows, err := s.q().ListToolsByServer(ctx, serverID)
+	rows, err := s.q(ctx).ListToolsByServer(ctx, serverID)
 	if err != nil {
 		return nil, err
 	}

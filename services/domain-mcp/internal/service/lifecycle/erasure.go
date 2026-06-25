@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/lifecycle/lifecycledb"
 )
 
 var (
@@ -44,63 +45,42 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 	}
 	defer tx.Rollback(ctx)
 
+	qtx := lifecycledb.New(tx)
 
-	var isErased bool
-	err = tx.QueryRow(ctx,
-		`SELECT is_erased FROM users WHERE id = $1`, userID).Scan(&isErased)
+	row, err := qtx.GetUserIsErased(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("lookup user: %w", err)
 	}
-	if isErased {
+	if row.IsErased {
 		return nil, ErrAlreadyErased
 	}
 
 	res := &EraseResult{UserID: userID, UpdatedRows: make(map[string]int64)}
 
-
-	tag, err := tx.Exec(ctx, `
-		UPDATE users SET
-			email = 'erased+' || id::text || '@example.invalid',
-			rut = NULL,
-			phone = NULL,
-			name = NULL,
-			is_erased = TRUE,
-			erased_at = NOW()
-		WHERE id = $1
-	`, userID)
+	usersAffected, err := qtx.EraseUserPII(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("update users: %w", err)
 	}
-	res.UpdatedRows["users"] = tag.RowsAffected()
+	res.UpdatedRows["users"] = usersAffected
 
-
-	for _, q := range []struct {
-		table string
-		sql   string
-	}{
-		{"observations", "UPDATE knowledge_observations SET created_by = NULL WHERE created_by = $1"},
-		{"prompts", "UPDATE prompts SET created_by = NULL WHERE created_by = $1"},
-		{"knowledge_docs", "UPDATE knowledge_docs SET created_by = NULL WHERE created_by = $1"},
-		{"agent_runs", "UPDATE agent_runs SET user_id = NULL WHERE user_id = $1"},
-	} {
-		tag, err := tx.Exec(ctx, q.sql, userID)
-		if err != nil {
-
-			res.UpdatedRows[q.table] = 0
-			continue
-		}
-		res.UpdatedRows[q.table] = tag.RowsAffected()
+	if n, err := qtx.AnonymizeObservations(ctx, &userID); err == nil {
+		res.UpdatedRows["observations"] = n
+	}
+	if n, err := qtx.AnonymizePrompts(ctx, &userID); err == nil {
+		res.UpdatedRows["prompts"] = n
+	}
+	if n, err := qtx.AnonymizeKnowledgeDocs(ctx, &userID); err == nil {
+		res.UpdatedRows["knowledge_docs"] = n
+	}
+	if n, err := qtx.AnonymizeAgentRuns(ctx, &userID); err == nil {
+		res.UpdatedRows["agent_runs"] = n
 	}
 
-
-	tag, err = tx.Exec(ctx,
-		`UPDATE auth_api_keys SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
-		userID)
-	if err == nil {
-		res.RevokedAPIKeys = tag.RowsAffected()
+	if n, err := qtx.RevokeUserAPIKeys(ctx, userID); err == nil {
+		res.RevokedAPIKeys = n
 	}
 
 	if err := tx.Commit(ctx); err != nil {

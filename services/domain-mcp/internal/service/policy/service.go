@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/policy/policydb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -83,7 +84,12 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
-func (s *Service) q() *policydb.Queries { return policydb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *policydb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return policydb.New(tx)
+	}
+	return policydb.New(s.Pool)
+}
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Policy, error) {
 	if !reSlug.MatchString(in.Slug) {
@@ -96,7 +102,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Policy, error) {
 		in.BodyStructured = map[string]any{}
 	}
 	bodyJSON, _ := json.Marshal(in.BodyStructured)
-	row, err := s.q().InsertPolicy(ctx, policydb.InsertPolicyParams{
+	row, err := s.q(ctx).InsertPolicy(ctx, policydb.InsertPolicyParams{
 		Slug:           in.Slug,
 		Name:           in.Name,
 		Kind:           in.Kind,
@@ -113,7 +119,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Policy, error) {
 
 // GetBySlug retorna la versión active del policy slug.
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*Policy, error) {
-	row, err := s.q().GetActivePolicyBySlug(ctx, slug)
+	row, err := s.q(ctx).GetActivePolicyBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -126,7 +132,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*Policy, error) {
 
 // List por kind opcional. kind="" → todos.
 func (s *Service) List(ctx context.Context, kind string) ([]Policy, error) {
-	rows, err := s.q().ListActivePolicies(ctx, optStr(kind))
+	rows, err := s.q(ctx).ListActivePolicies(ctx, optStr(kind))
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +195,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	n, err := s.q().DeactivatePolicy(ctx, id)
+	n, err := s.q(ctx).DeactivatePolicy(ctx, id)
 	if err != nil {
 		return err
 	}

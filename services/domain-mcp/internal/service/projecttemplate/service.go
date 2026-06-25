@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/projecttemplate/projecttemplatedb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -61,7 +62,12 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
-func (s *Service) q() *projecttemplatedb.Queries { return projecttemplatedb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *projecttemplatedb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return projecttemplatedb.New(tx)
+	}
+	return projecttemplatedb.New(s.Pool)
+}
 
 func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (*Template, error) {
 	if !reSlug.MatchString(in.Slug) {
@@ -77,7 +83,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 		desc = &in.Description
 	}
 
-	row, err := s.q().InsertTemplate(ctx, projecttemplatedb.InsertTemplateParams{
+	row, err := s.q(ctx).InsertTemplate(ctx, projecttemplatedb.InsertTemplateParams{
 		Slug:          in.Slug,
 		Name:          in.Name,
 		Description:   desc,
@@ -109,7 +115,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 }
 
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Template, error) {
-	row, err := s.q().GetTemplateByID(ctx, id)
+	row, err := s.q(ctx).GetTemplateByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -121,7 +127,7 @@ func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Template, erro
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Template, error) {
-	row, err := s.q().GetTemplateBySlug(ctx, slug)
+	row, err := s.q(ctx).GetTemplateBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -133,7 +139,7 @@ func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (
 }
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Template, error) {
-	rows, err := s.q().ListTemplates(ctx)
+	rows, err := s.q(ctx).ListTemplates(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +151,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Template, e
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	n, err := s.q().DeleteTemplate(ctx, id)
+	n, err := s.q(ctx).DeleteTemplate(ctx, id)
 	if err != nil {
 		return err
 	}

@@ -16,6 +16,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/task/taskdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -99,7 +100,12 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-func (s *Service) q() *taskdb.Queries { return taskdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *taskdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return taskdb.New(tx)
+	}
+	return taskdb.New(s.Pool)
+}
 
 // CreateTasks batch-creates tasks with auto-assigned position per section.
 func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []CreateTaskInput) ([]Task, error) {
@@ -161,7 +167,7 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 
 // ListTasks returns tasks for a HU ordered by section, position.
 func (s *Service) ListTasks(ctx context.Context, issueID uuid.UUID) ([]Task, error) {
-	rows, err := s.q().ListTasksByIssue(ctx, issueID)
+	rows, err := s.q(ctx).ListTasksByIssue(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
@@ -174,7 +180,7 @@ func (s *Service) ListTasks(ctx context.Context, issueID uuid.UUID) ([]Task, err
 
 // GetTask returns a single task with its verification and sabotages.
 func (s *Service) GetTask(ctx context.Context, taskID uuid.UUID) (*Task, error) {
-	row, err := s.q().GetTaskByID(ctx, taskID)
+	row, err := s.q(ctx).GetTaskByID(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -204,7 +210,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 		return nil, ErrInvalidStatus
 	}
 
-	row, err := s.q().GetTaskByID(ctx, taskID)
+	row, err := s.q(ctx).GetTaskByID(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -241,7 +247,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 		}
 	}
 
-	updatedRow, err := s.q().UpdateTaskStatus(ctx, taskdb.UpdateTaskStatusParams{
+	updatedRow, err := s.q(ctx).UpdateTaskStatus(ctx, taskdb.UpdateTaskStatusParams{
 		ID:          taskID,
 		Status:      newStatus,
 		StartedAt:   startedAt,
@@ -268,7 +274,7 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 
 // GetProgress returns aggregate progress for a HU.
 func (s *Service) GetProgress(ctx context.Context, issueID uuid.UUID) (*ProgressReport, error) {
-	row, err := s.q().GetProgress(ctx, issueID)
+	row, err := s.q(ctx).GetProgress(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("get progress: %w", err)
 	}
@@ -286,7 +292,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 		return nil, fmt.Errorf("invalid verification result: %s", result)
 	}
 
-	taskStatus, err := s.q().GetTaskStatus(ctx, taskID)
+	taskStatus, err := s.q(ctx).GetTaskStatus(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -297,7 +303,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 		return nil, ErrNotCompleted
 	}
 
-	row, err := s.q().InsertVerification(ctx, taskdb.InsertVerificationParams{
+	row, err := s.q(ctx).InsertVerification(ctx, taskdb.InsertVerificationParams{
 		TaskID:     taskID,
 		Result:     result,
 		Evidence:   nullStr(evidence),
@@ -313,7 +319,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 
 // CreateSabotage records a sabotage action.
 func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, expectedFailure, actualResult string, restored bool) (*SabotageRecord, error) {
-	exists, err := s.q().TaskExists(ctx, taskID)
+	exists, err := s.q(ctx).TaskExists(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("check task: %w", err)
 	}
@@ -321,7 +327,7 @@ func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, 
 		return nil, ErrNotFound
 	}
 
-	row, err := s.q().InsertSabotage(ctx, taskdb.InsertSabotageParams{
+	row, err := s.q(ctx).InsertSabotage(ctx, taskdb.InsertSabotageParams{
 		TaskID:          taskID,
 		Action:          action,
 		ExpectedFailure: nullStr(expectedFailure),
@@ -337,7 +343,7 @@ func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, 
 
 // ListSabotages returns all sabotage records for a task.
 func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]SabotageRecord, error) {
-	rows, err := s.q().ListSabotagesByTask(ctx, taskID)
+	rows, err := s.q(ctx).ListSabotagesByTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("list sabotages: %w", err)
 	}
@@ -349,7 +355,7 @@ func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]Sabota
 }
 
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
-	exists, err := s.q().IssueExists(ctx, issueID)
+	exists, err := s.q(ctx).IssueExists(ctx, issueID)
 	if err != nil {
 		return fmt.Errorf("check hu: %w", err)
 	}
@@ -360,7 +366,7 @@ func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
 }
 
 func (s *Service) getVerification(ctx context.Context, taskID uuid.UUID) (*VerificationResult, error) {
-	row, err := s.q().GetLatestVerification(ctx, taskID)
+	row, err := s.q(ctx).GetLatestVerification(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

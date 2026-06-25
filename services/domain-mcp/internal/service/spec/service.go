@@ -17,6 +17,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/spec/specdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -82,7 +83,12 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-func (s *Service) q() *specdb.Queries { return specdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *specdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return specdb.New(tx)
+	}
+	return specdb.New(s.Pool)
+}
 
 // CreateProposal inserta nueva versión de proposal para una HU.
 func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intention, scope, approach, risks, testingNotes string) (*Proposal, error) {
@@ -90,10 +96,10 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 		return nil, err
 	}
 
-	maxV, _ := s.q().MaxProposalVersion(ctx, issueID)
+	maxV, _ := s.q(ctx).MaxProposalVersion(ctx, issueID)
 	version := maxV + 1
 
-	row, err := s.q().InsertProposal(ctx, specdb.InsertProposalParams{
+	row, err := s.q(ctx).InsertProposal(ctx, specdb.InsertProposalParams{
 		IssueID:      issueID,
 		Version:      version,
 		Intention:    intention,
@@ -121,7 +127,7 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 
 // GetLatestProposal retorna la última versión de proposal para una HU.
 func (s *Service) GetLatestProposal(ctx context.Context, issueID uuid.UUID) (*Proposal, error) {
-	row, err := s.q().GetLatestProposal(ctx, issueID)
+	row, err := s.q(ctx).GetLatestProposal(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -134,7 +140,7 @@ func (s *Service) GetLatestProposal(ctx context.Context, issueID uuid.UUID) (*Pr
 
 // GetProposalVersion retorna una versión específica.
 func (s *Service) GetProposalVersion(ctx context.Context, issueID uuid.UUID, version int) (*Proposal, error) {
-	row, err := s.q().GetProposalVersion(ctx, specdb.GetProposalVersionParams{
+	row, err := s.q(ctx).GetProposalVersion(ctx, specdb.GetProposalVersionParams{
 		IssueID: issueID,
 		Version: int32(version),
 	})
@@ -150,7 +156,7 @@ func (s *Service) GetProposalVersion(ctx context.Context, issueID uuid.UUID, ver
 
 // ListProposalVersions lista todas las versiones de proposal para una HU.
 func (s *Service) ListProposalVersions(ctx context.Context, issueID uuid.UUID) ([]Proposal, error) {
-	rows, err := s.q().ListProposalVersions(ctx, issueID)
+	rows, err := s.q(ctx).ListProposalVersions(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list proposals: %w", err)
 	}
@@ -163,7 +169,7 @@ func (s *Service) ListProposalVersions(ctx context.Context, issueID uuid.UUID) (
 
 // ChangeProposalStatus cambia status con validación de transición.
 func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID, newStatus, rejectionReason string) (*Proposal, error) {
-	current, err := s.q().GetProposalByID(ctx, proposalID)
+	current, err := s.q(ctx).GetProposalByID(ctx, proposalID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -194,7 +200,7 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 		reason = &rejectionReason
 	}
 
-	row, err := s.q().UpdateProposalStatus(ctx, specdb.UpdateProposalStatusParams{
+	row, err := s.q(ctx).UpdateProposalStatus(ctx, specdb.UpdateProposalStatusParams{
 		ID:              proposalID,
 		Status:          newStatus,
 		RejectionReason: reason,
@@ -223,14 +229,14 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 		return nil, err
 	}
 
-	maxV, _ := s.q().MaxDesignVersion(ctx, issueID)
+	maxV, _ := s.q(ctx).MaxDesignVersion(ctx, issueID)
 	version := maxV + 1
 
 	if proposalID != nil && *proposalID == uuid.Nil {
 		proposalID = nil
 	}
 
-	row, err := s.q().InsertDesign(ctx, specdb.InsertDesignParams{
+	row, err := s.q(ctx).InsertDesign(ctx, specdb.InsertDesignParams{
 		IssueID:         issueID,
 		ProposalID:      proposalID,
 		Version:         version,
@@ -259,7 +265,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 
 // GetLatestDesign retorna el último design para una HU.
 func (s *Service) GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*Design, error) {
-	row, err := s.q().GetLatestDesign(ctx, issueID)
+	row, err := s.q(ctx).GetLatestDesign(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -272,7 +278,7 @@ func (s *Service) GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*Desi
 
 // ListDesignsByHU lista designs de una HU.
 func (s *Service) ListDesignsByHU(ctx context.Context, issueID uuid.UUID) ([]Design, error) {
-	rows, err := s.q().ListDesignsByIssue(ctx, issueID)
+	rows, err := s.q(ctx).ListDesignsByIssue(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list designs: %w", err)
 	}
@@ -289,7 +295,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 		return nil, ErrInvalidStatus
 	}
 
-	row, err := s.q().UpdateDesignStatus(ctx, specdb.UpdateDesignStatusParams{
+	row, err := s.q(ctx).UpdateDesignStatus(ctx, specdb.UpdateDesignStatusParams{
 		ID:     designID,
 		Status: newStatus,
 	})
@@ -315,7 +321,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 }
 
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
-	exists, err := s.q().IssueExists(ctx, issueID)
+	exists, err := s.q(ctx).IssueExists(ctx, issueID)
 	if err != nil {
 		return fmt.Errorf("check hu: %w", err)
 	}

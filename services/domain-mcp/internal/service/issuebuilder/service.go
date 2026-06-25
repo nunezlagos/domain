@@ -15,6 +15,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/issuebuilder/issuebuilderdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -123,6 +124,13 @@ type Service struct {
 	IssueSvc IssueService
 }
 
+func (s *Service) q(ctx context.Context) *issuebuilderdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return issuebuilderdb.New(tx)
+	}
+	return issuebuilderdb.New(s.Pool)
+}
+
 var ErrAttachmentsNotConfigured = errors.New("attachment service not configured")
 
 const defaultDraftTTLHrs = 24
@@ -192,7 +200,7 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 
 	expires := time.Now().Add(s.ttl())
 
-	q := issuebuilderdb.New(s.Pool)
+	q := s.q(ctx)
 	dRow, err := q.InsertDraft(ctx, issuebuilderdb.InsertDraftParams{
 		CreatedBy:   createdBy,
 		ProjectID:   *projectID,
@@ -254,7 +262,7 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 
 	optsJSON, _ := json.Marshal(step.options)
 	answerJSON, _ := json.Marshal(rawAnswer)
-	q := issuebuilderdb.New(s.Pool)
+	q := s.q(ctx)
 	_ = q.InsertStepLog(ctx, issuebuilderdb.InsertStepLogParams{
 		IssueDraftID: draftID,
 		StepKey:      step.Key,
@@ -291,7 +299,7 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Draft, error) {
-	dRow, err := issuebuilderdb.New(s.Pool).GetDraft(ctx, id)
+	dRow, err := s.q(ctx).GetDraft(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -320,7 +328,7 @@ func (s *Service) BuildPreview(ctx context.Context, draftID uuid.UUID) (*Preview
 	}
 
 	previewJSON, _ := json.Marshal(preview)
-	err = issuebuilderdb.New(s.Pool).UpdateDraftPreview(ctx, issuebuilderdb.UpdateDraftPreviewParams{
+	err = s.q(ctx).UpdateDraftPreview(ctx, issuebuilderdb.UpdateDraftPreviewParams{
 		Preview:    previewJSON,
 		TargetPath: &preview.TargetPath,
 		ID:         draftID,
@@ -366,7 +374,7 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 	answers["attachments"] = existing
 	newAnswers, _ := json.Marshal(answers)
 
-	err = issuebuilderdb.New(s.Pool).UpdateDraftAnswers(ctx, issuebuilderdb.UpdateDraftAnswersParams{
+	err = s.q(ctx).UpdateDraftAnswers(ctx, issuebuilderdb.UpdateDraftAnswersParams{
 		Answers: newAnswers,
 		ID:      draftID,
 	})
@@ -407,7 +415,7 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 		}
 	}
 
-	dRow, err := issuebuilderdb.New(s.Pool).CommitDraft(ctx, issuebuilderdb.CommitDraftParams{
+	dRow, err := s.q(ctx).CommitDraft(ctx, issuebuilderdb.CommitDraftParams{
 		Status:  StatusCommitted,
 		ID:      draftID,
 		IssueID: issueID,
@@ -490,7 +498,7 @@ func (s *Service) materialize(ctx context.Context, d *Draft) (*uuid.UUID, string
 }
 
 func (s *Service) resolveOrCreateReq(ctx context.Context, d *Draft, reqSlug string) (uuid.UUID, error) {
-	reqID, err := issuebuilderdb.New(s.Pool).FindRequirementBySlug(ctx, reqSlug)
+	reqID, err := s.q(ctx).FindRequirementBySlug(ctx, reqSlug)
 	if err == nil {
 		return reqID, nil
 	}
@@ -507,7 +515,7 @@ func (s *Service) resolveOrCreateReq(ctx context.Context, d *Draft, reqSlug stri
 }
 
 func (s *Service) draftProjectID(ctx context.Context, draftID uuid.UUID) *uuid.UUID {
-	pid, err := issuebuilderdb.New(s.Pool).GetDraftProjectID(ctx, draftID)
+	pid, err := s.q(ctx).GetDraftProjectID(ctx, draftID)
 	if err != nil {
 		return nil
 	}
@@ -515,7 +523,7 @@ func (s *Service) draftProjectID(ctx context.Context, draftID uuid.UUID) *uuid.U
 }
 
 func (s *Service) nextIssueOrdinal(ctx context.Context, reqID uuid.UUID) (int, error) {
-	count, err := issuebuilderdb.New(s.Pool).CountIssuesByReqID(ctx, reqID)
+	count, err := s.q(ctx).CountIssuesByReqID(ctx, reqID)
 	if err != nil {
 		return 0, fmt.Errorf("contar issues del REQ: %w", err)
 	}
@@ -614,7 +622,7 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 	if d.Status == StatusCommitted {
 		return fmt.Errorf("%w: cannot abandon committed", ErrInvalidStatus)
 	}
-	err = issuebuilderdb.New(s.Pool).AbandonDraft(ctx, issuebuilderdb.AbandonDraftParams{
+	err = s.q(ctx).AbandonDraft(ctx, issuebuilderdb.AbandonDraftParams{
 		Status: StatusAbandoned,
 		ID:     draftID,
 	})
@@ -638,7 +646,7 @@ func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
 	if status != "" {
 		statusFilter = &status
 	}
-	rows, err := issuebuilderdb.New(s.Pool).ListDrafts(ctx, statusFilter)
+	rows, err := s.q(ctx).ListDrafts(ctx, statusFilter)
 	if err != nil {
 		return nil, fmt.Errorf("list drafts: %w", err)
 	}
@@ -650,7 +658,7 @@ func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
 }
 
 func (s *Service) markStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return issuebuilderdb.New(s.Pool).MarkDraftStatus(ctx, issuebuilderdb.MarkDraftStatusParams{
+	return s.q(ctx).MarkDraftStatus(ctx, issuebuilderdb.MarkDraftStatusParams{
 		Status: status,
 		ID:     id,
 	})

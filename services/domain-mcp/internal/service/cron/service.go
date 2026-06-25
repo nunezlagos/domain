@@ -18,6 +18,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/cron/cronsdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -72,6 +73,13 @@ type CreateInput struct {
 type Service struct {
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
+}
+
+func (s *Service) q(ctx context.Context) *cronsdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return cronsdb.New(tx)
+	}
+	return cronsdb.New(s.Pool)
 }
 
 func NextRun(expression, timezone string, from time.Time) (time.Time, error) {
@@ -156,7 +164,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		desc = &in.Description
 	}
 
-	q := cronsdb.New(s.Pool)
+	q := s.q(ctx)
 	cRow, err := q.InsertCron(ctx, cronsdb.InsertCronParams{
 		CreatedBy:      in.CreatedBy,
 		Slug:           in.Slug,
@@ -198,7 +206,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
-	rows, err := cronsdb.New(s.Pool).ListCrons(ctx, 200)
+	rows, err := s.q(ctx).ListCrons(ctx, 200)
 	if err != nil {
 		return nil, fmt.Errorf("list crons: %w", err)
 	}
@@ -210,7 +218,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Cron, error) {
-	cRow, err := cronsdb.New(s.Pool).GetCronByID(ctx, id)
+	cRow, err := s.q(ctx).GetCronByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -266,7 +274,7 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) error {
-	n, err := cronsdb.New(s.Pool).SetCronEnabled(ctx, cronsdb.SetCronEnabledParams{
+	n, err := s.q(ctx).SetCronEnabled(ctx, cronsdb.SetCronEnabledParams{
 		Enabled: enabled,
 		ID:      id,
 	})
@@ -280,7 +288,7 @@ func (s *Service) SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) er
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	n, err := cronsdb.New(s.Pool).SoftDeleteCron(ctx, id)
+	n, err := s.q(ctx).SoftDeleteCron(ctx, id)
 	if err != nil {
 		return err
 	}

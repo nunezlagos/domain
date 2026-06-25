@@ -18,6 +18,7 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/service/issue/issuedb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -91,7 +92,12 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-func (s *Service) q() *issuedb.Queries { return issuedb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *issuedb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return issuedb.New(tx)
+	}
+	return issuedb.New(s.Pool)
+}
 
 // Create inserta una HU con sus escenarios.
 func (s *Service) Create(ctx context.Context, slug, title, description, status, priority, reqSlug string, scenarios []Scenario) (*Issue, error) {
@@ -193,7 +199,7 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 // GetBySlug retorna una HU con sus escenarios.
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*Issue, error) {
-	row, err := s.q().GetIssueBySlug(ctx, slug)
+	row, err := s.q(ctx).GetIssueBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -209,7 +215,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*Issue, error) {
 
 // GetByID retorna una HU por ID.
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Issue, error) {
-	row, err := s.q().GetIssueByID(ctx, id)
+	row, err := s.q(ctx).GetIssueByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -229,7 +235,7 @@ func (s *Service) List(ctx context.Context, filter UserStoryFilter) ([]Issue, er
 		filter.Limit = 50
 	}
 
-	rows, err := s.q().ListIssues(ctx, issuedb.ListIssuesParams{
+	rows, err := s.q(ctx).ListIssues(ctx, issuedb.ListIssuesParams{
 		Limit:    int32(filter.Limit),
 		Offset:   int32(filter.Offset),
 		Status:   optStr(filter.Status),
@@ -291,7 +297,7 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 		newPriority = *priority
 	}
 
-	row, err := s.q().UpdateIssue(ctx, issuedb.UpdateIssueParams{
+	row, err := s.q(ctx).UpdateIssue(ctx, issuedb.UpdateIssueParams{
 		Slug:        slug,
 		Title:       newTitle,
 		Description: newDesc,
@@ -325,7 +331,7 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 
 // Delete elimina una HU.
 func (s *Service) Delete(ctx context.Context, slug string) error {
-	n, err := s.q().DeleteIssue(ctx, slug)
+	n, err := s.q(ctx).DeleteIssue(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("delete user_story: %w", err)
 	}
@@ -340,7 +346,7 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 	if err := validateScenario(sc); err != nil {
 		return nil, err
 	}
-	hu, err := s.q().GetIssueBySlug(ctx, huSlug)
+	hu, err := s.q(ctx).GetIssueBySlug(ctx, huSlug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -348,12 +354,12 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 		return nil, fmt.Errorf("get user_story: %w", err)
 	}
 
-	maxPos, err := s.q().MaxScenarioPosition(ctx, hu.ID)
+	maxPos, err := s.q(ctx).MaxScenarioPosition(ctx, hu.ID)
 	if err != nil {
 		return nil, fmt.Errorf("max position: %w", err)
 	}
 
-	row, err := s.q().InsertScenario(ctx, issuedb.InsertScenarioParams{
+	row, err := s.q(ctx).InsertScenario(ctx, issuedb.InsertScenarioParams{
 		IssueID:   hu.ID,
 		ProjectID: hu.ProjectID,
 		Feature:   sc.Feature,
@@ -372,7 +378,7 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 
 // RemoveScenario elimina un escenario por ID.
 func (s *Service) RemoveScenario(ctx context.Context, scenarioID uuid.UUID) error {
-	n, err := s.q().DeleteScenario(ctx, scenarioID)
+	n, err := s.q(ctx).DeleteScenario(ctx, scenarioID)
 	if err != nil {
 		return fmt.Errorf("delete scenario: %w", err)
 	}
@@ -383,7 +389,7 @@ func (s *Service) RemoveScenario(ctx context.Context, scenarioID uuid.UUID) erro
 }
 
 func (s *Service) listScenarios(ctx context.Context, issueID uuid.UUID) ([]Scenario, error) {
-	rows, err := s.q().ListScenariosByIssue(ctx, issueID)
+	rows, err := s.q(ctx).ListScenariosByIssue(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list scenarios: %w", err)
 	}
@@ -394,7 +400,7 @@ func (s *Service) listScenariosByIDs(ctx context.Context, ids []uuid.UUID) (map[
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	rows, err := s.q().ListScenariosByIssueIDs(ctx, ids)
+	rows, err := s.q(ctx).ListScenariosByIssueIDs(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("list scenarios by ids: %w", err)
 	}

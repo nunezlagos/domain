@@ -414,10 +414,3 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	}
 	return nil
 }
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}

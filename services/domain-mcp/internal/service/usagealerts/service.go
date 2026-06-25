@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/usagealerts/usagealertsdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -124,7 +125,12 @@ type Service struct {
 	Logger      *slog.Logger
 }
 
-func (s *Service) q() *usagealertsdb.Queries { return usagealertsdb.New(s.Pool) }
+func (s *Service) q(ctx context.Context) *usagealertsdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return usagealertsdb.New(tx)
+	}
+	return usagealertsdb.New(s.Pool)
+}
 
 func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (*Alert, error) {
 	if !validMetrics[in.Metric] {
@@ -145,7 +151,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 	if in.CooldownSecs <= 0 {
 		in.CooldownSecs = 3600
 	}
-	row, err := s.q().InsertAlert(ctx, usagealertsdb.InsertAlertParams{
+	row, err := s.q(ctx).InsertAlert(ctx, usagealertsdb.InsertAlertParams{
 		Name:         in.Name,
 		Metric:       in.Metric,
 		Threshold:    in.Threshold,
@@ -174,7 +180,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 }
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, error) {
-	rows, err := s.q().ListAlerts(ctx)
+	rows, err := s.q(ctx).ListAlerts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +192,7 @@ func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, erro
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	n, err := s.q().DeleteAlert(ctx, id)
+	n, err := s.q(ctx).DeleteAlert(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -197,7 +203,7 @@ func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 }
 
 func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active bool) error {
-	n, err := s.q().SetAlertActive(ctx, usagealertsdb.SetAlertActiveParams{ID: id, Active: active})
+	n, err := s.q(ctx).SetAlertActive(ctx, usagealertsdb.SetAlertActiveParams{ID: id, Active: active})
 	if err != nil {
 		return err
 	}
@@ -221,7 +227,7 @@ func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInpu
 		cooldown = &c
 	}
 
-	row, err := s.q().UpdateAlert(ctx, usagealertsdb.UpdateAlertParams{
+	row, err := s.q(ctx).UpdateAlert(ctx, usagealertsdb.UpdateAlertParams{
 		ID:           id,
 		Name:         in.Name,
 		Metric:       in.Metric,
@@ -243,7 +249,7 @@ func (s *Service) ListFires(ctx context.Context, orgID, alertID uuid.UUID, limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.q().ListAlertFires(ctx, usagealertsdb.ListAlertFiresParams{
+	rows, err := s.q(ctx).ListAlertFires(ctx, usagealertsdb.ListAlertFiresParams{
 		AlertID: alertID,
 		Limit:   int32(limit),
 	})
@@ -286,7 +292,7 @@ func CompareThreshold(observed, threshold float64, condition string) bool {
 func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 	costUSD float64, tokensTotal int64) ([]Alert, error) {
 
-	rows, err := s.q().ListActiveAlertsByMetrics(ctx,
+	rows, err := s.q(ctx).ListActiveAlertsByMetrics(ctx,
 		[]string{MetricCostPerRun, MetricTokensPerRun})
 	if err != nil {
 		return nil, err
@@ -324,7 +330,7 @@ func (s *Service) inCooldown(a *Alert) bool {
 
 func (s *Service) recordFire(ctx context.Context, a *Alert, observed float64, extra map[string]any) error {
 	payload, _ := json.Marshal(extra)
-	q := s.q()
+	q := s.q(ctx)
 	if err := q.InsertAlertFire(ctx, usagealertsdb.InsertAlertFireParams{
 		AlertID:       a.ID,
 		Metric:        a.Metric,
@@ -339,7 +345,7 @@ func (s *Service) recordFire(ctx context.Context, a *Alert, observed float64, ex
 
 // Get devuelve un alert por id+org (cross-org guard).
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Alert, error) {
-	row, err := s.q().GetAlert(ctx, id)
+	row, err := s.q(ctx).GetAlert(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}

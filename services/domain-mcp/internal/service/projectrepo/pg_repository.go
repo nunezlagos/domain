@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/projectrepo/projectrepodb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -21,34 +24,11 @@ func NewPgRepository(pool *pgxpool.Pool) Repository {
 	return &pgRepository{pool: pool}
 }
 
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func (r *pgRepository) q(ctx context.Context) querier {
+func (r *pgRepository) q(ctx context.Context) *projectrepodb.Queries {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
+		return projectrepodb.New(tx)
 	}
-	return r.pool
-}
-
-const selectCols = `id, project_id, name, url,
-		COALESCE(branch_default,''), COALESCE(kind,''), is_default,
-		COALESCE(workflow,''), COALESCE(notes,''), COALESCE(root_path,''),
-		created_at, updated_at, deleted_at`
-
-func scanRepo(row pgx.Row) (*Repo, error) {
-	var r Repo
-	if err := row.Scan(
-		&r.ID, &r.ProjectID, &r.Name, &r.URL,
-		&r.BranchDefault, &r.Kind, &r.IsDefault, &r.Workflow, &r.Notes, &r.RootPath,
-		&r.CreatedAt, &r.UpdatedAt, &r.DeletedAt,
-	); err != nil {
-		return nil, err
-	}
-	return &r, nil
+	return projectrepodb.New(r.pool)
 }
 
 func isUniqueViolation(err error) bool {
@@ -56,139 +36,175 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+func deletedAtPtr(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time
+	return &t
+}
+
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Repo, error) {
-	row := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO project_repositories
-		   (project_id, name, url, branch_default,
-		    kind, is_default, workflow, notes, root_path)
-		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,NULLIF($7,''),NULLIF($8,''),NULLIF($9,''))
-		 RETURNING `+selectCols,
-		in.ProjectID, in.Name, in.URL, in.BranchDefault,
-		in.Kind, in.IsDefault, in.Workflow, in.Notes, in.RootPath,
-	)
-	repo, err := scanRepo(row)
+	row, err := r.q(ctx).InsertRepo(ctx, projectrepodb.InsertRepoParams{
+		ProjectID:     in.ProjectID,
+		Name:          in.Name,
+		Url:           in.URL,
+		BranchDefault: in.BranchDefault,
+		Kind:          in.Kind,
+		IsDefault:     in.IsDefault,
+		Workflow:      in.Workflow,
+		Notes:         in.Notes,
+		RootPath:      in.RootPath,
+	})
 	if isUniqueViolation(err) {
 		return nil, ErrDuplicateName
 	}
 	if err != nil {
 		return nil, fmt.Errorf("insert project_repo: %w", err)
 	}
-	return repo, nil
+	return &Repo{
+		ID:            row.ID,
+		ProjectID:     row.ProjectID,
+		Name:          row.Name,
+		URL:           row.Url,
+		BranchDefault: row.BranchDefault,
+		Kind:          row.Kind,
+		IsDefault:     row.IsDefault,
+		Workflow:      row.Workflow,
+		Notes:         row.Notes,
+		RootPath:      row.RootPath,
+		CreatedAt:     row.CreatedAt,
+		UpdatedAt:     row.UpdatedAt,
+		DeletedAt:     deletedAtPtr(row.DeletedAt),
+	}, nil
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID) ([]*Repo, error) {
-	rows, err := r.q(ctx).Query(ctx,
-		`SELECT `+selectCols+`
-		 FROM project_repositories
-		 WHERE project_id = $1 AND deleted_at IS NULL
-		 ORDER BY is_default DESC, name ASC`,
-		projectID,
-	)
+	rows, err := r.q(ctx).ListReposByProject(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list project_repos: %w", err)
 	}
-	defer rows.Close()
-	out := make([]*Repo, 0, 4)
-	for rows.Next() {
-		repo, err := scanRepo(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan project_repo: %w", err)
-		}
-		out = append(out, repo)
+	out := make([]*Repo, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &Repo{
+			ID:            row.ID,
+			ProjectID:     row.ProjectID,
+			Name:          row.Name,
+			URL:           row.Url,
+			BranchDefault: row.BranchDefault,
+			Kind:          row.Kind,
+			IsDefault:     row.IsDefault,
+			Workflow:      row.Workflow,
+			Notes:         row.Notes,
+			RootPath:      row.RootPath,
+			CreatedAt:     row.CreatedAt,
+			UpdatedAt:     row.UpdatedAt,
+			DeletedAt:     deletedAtPtr(row.DeletedAt),
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Repo, error) {
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT `+selectCols+`
-		 FROM project_repositories
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	)
-	repo, err := scanRepo(row)
+	row, err := r.q(ctx).GetRepoByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get project_repo: %w", err)
 	}
-	return repo, nil
+	return &Repo{
+		ID:            row.ID,
+		ProjectID:     row.ProjectID,
+		Name:          row.Name,
+		URL:           row.Url,
+		BranchDefault: row.BranchDefault,
+		Kind:          row.Kind,
+		IsDefault:     row.IsDefault,
+		Workflow:      row.Workflow,
+		Notes:         row.Notes,
+		RootPath:      row.RootPath,
+		CreatedAt:     row.CreatedAt,
+		UpdatedAt:     row.UpdatedAt,
+		DeletedAt:     deletedAtPtr(row.DeletedAt),
+	}, nil
 }
 
 func (r *pgRepository) GetByName(ctx context.Context, orgID, projectID uuid.UUID, name string) (*Repo, error) {
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT `+selectCols+`
-		 FROM project_repositories
-		 WHERE project_id = $1 AND name = $2 AND deleted_at IS NULL`,
-		projectID, name,
-	)
-	repo, err := scanRepo(row)
+	row, err := r.q(ctx).GetRepoByName(ctx, projectrepodb.GetRepoByNameParams{
+		ProjectID: projectID,
+		Name:      name,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get project_repo by name: %w", err)
 	}
-	return repo, nil
+	return &Repo{
+		ID:            row.ID,
+		ProjectID:     row.ProjectID,
+		Name:          row.Name,
+		URL:           row.Url,
+		BranchDefault: row.BranchDefault,
+		Kind:          row.Kind,
+		IsDefault:     row.IsDefault,
+		Workflow:      row.Workflow,
+		Notes:         row.Notes,
+		RootPath:      row.RootPath,
+		CreatedAt:     row.CreatedAt,
+		UpdatedAt:     row.UpdatedAt,
+		DeletedAt:     deletedAtPtr(row.DeletedAt),
+	}, nil
 }
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateParams) (*Repo, error) {
-
-	sets := []string{}
-	args := []any{id}
-	idx := 2
-	add := func(col string, v any) {
-		sets = append(sets, fmt.Sprintf("%s = $%d", col, idx))
-		args = append(args, v)
-		idx++
-	}
-	if in.URL != nil {
-		add("url", *in.URL)
-	}
-	if in.BranchDefault != nil {
-		add("branch_default", nullIfEmpty(*in.BranchDefault))
-	}
-	if in.Kind != nil {
-		add("kind", nullIfEmpty(*in.Kind))
-	}
-	if in.Workflow != nil {
-		add("workflow", nullIfEmpty(*in.Workflow))
-	}
-	if in.Notes != nil {
-		add("notes", nullIfEmpty(*in.Notes))
-	}
-	if in.RootPath != nil {
-		add("root_path", nullIfEmpty(*in.RootPath))
-	}
-	if len(sets) == 0 {
+	if in.URL == nil && in.BranchDefault == nil && in.Kind == nil &&
+		in.Workflow == nil && in.Notes == nil && in.RootPath == nil {
 		return r.Get(ctx, orgID, id)
 	}
-	q := `UPDATE project_repositories SET ` + joinCommas(sets) +
-		` WHERE id = $1 AND deleted_at IS NULL
-		  RETURNING ` + selectCols
-	row := r.q(ctx).QueryRow(ctx, q, args...)
-	repo, err := scanRepo(row)
+	row, err := r.q(ctx).UpdateRepo(ctx, projectrepodb.UpdateRepoParams{
+		ID:            id,
+		Url:           in.URL,
+		BranchDefault: in.BranchDefault,
+		Kind:          in.Kind,
+		Workflow:      in.Workflow,
+		Notes:         in.Notes,
+		RootPath:      in.RootPath,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update project_repo: %w", err)
 	}
-	return repo, nil
+	return &Repo{
+		ID:            row.ID,
+		ProjectID:     row.ProjectID,
+		Name:          row.Name,
+		URL:           row.Url,
+		BranchDefault: row.BranchDefault,
+		Kind:          row.Kind,
+		IsDefault:     row.IsDefault,
+		Workflow:      row.Workflow,
+		Notes:         row.Notes,
+		RootPath:      row.RootPath,
+		CreatedAt:     row.CreatedAt,
+		UpdatedAt:     row.UpdatedAt,
+		DeletedAt:     deletedAtPtr(row.DeletedAt),
+	}, nil
 }
 
 func (r *pgRepository) SetDefault(ctx context.Context, orgID, id uuid.UUID) (*Repo, error) {
-
 	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return r.setDefaultIn(ctx, tx, orgID, id)
+		return r.setDefaultIn(ctx, projectrepodb.New(tx), id)
 	}
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx for SetDefault: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	repo, err := r.setDefaultIn(ctx, tx, orgID, id)
+	repo, err := r.setDefaultIn(ctx, projectrepodb.New(tx), id)
 	if err != nil {
 		return nil, err
 	}
@@ -198,67 +214,53 @@ func (r *pgRepository) SetDefault(ctx context.Context, orgID, id uuid.UUID) (*Re
 	return repo, nil
 }
 
-func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uuid.UUID) (*Repo, error) {
-
-	var projectID uuid.UUID
-	if err := q.QueryRow(ctx,
-		`SELECT project_id FROM project_repositories
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	).Scan(&projectID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+func (r *pgRepository) setDefaultIn(ctx context.Context, q *projectrepodb.Queries, id uuid.UUID) (*Repo, error) {
+	projectID, err := q.GetRepoProjectID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
 		return nil, fmt.Errorf("resolve project_id: %w", err)
 	}
 
-	if _, err := q.Exec(ctx,
-		`UPDATE project_repositories SET is_default = false
-		 WHERE project_id = $1 AND id <> $2 AND is_default = true`,
-		projectID, id,
-	); err != nil {
+	if err := q.ClearProjectDefault(ctx, projectrepodb.ClearProjectDefaultParams{
+		ProjectID: projectID,
+		ID:        id,
+	}); err != nil {
 		return nil, fmt.Errorf("clear previous default: %w", err)
 	}
 
-	row := q.QueryRow(ctx,
-		`UPDATE project_repositories SET is_default = true
-		 WHERE id = $1
-		 RETURNING `+selectCols,
-		id,
-	)
-	return scanRepo(row)
+	row, err := q.SetRepoAsDefault(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("set default: %w", err)
+	}
+	return &Repo{
+		ID:            row.ID,
+		ProjectID:     row.ProjectID,
+		Name:          row.Name,
+		URL:           row.Url,
+		BranchDefault: row.BranchDefault,
+		Kind:          row.Kind,
+		IsDefault:     row.IsDefault,
+		Workflow:      row.Workflow,
+		Notes:         row.Notes,
+		RootPath:      row.RootPath,
+		CreatedAt:     row.CreatedAt,
+		UpdatedAt:     row.UpdatedAt,
+		DeletedAt:     deletedAtPtr(row.DeletedAt),
+	}, nil
 }
 
 func (r *pgRepository) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
-	tag, err := r.q(ctx).Exec(ctx,
-		`UPDATE project_repositories
-		 SET deleted_at = NOW(), is_default = false
-		 WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	)
+	n, err := r.q(ctx).SoftDeleteRepo(ctx, id)
 	if err != nil {
 		return fmt.Errorf("soft-delete project_repo: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil
-}
-
-func nullIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func joinCommas(parts []string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += ", "
-		}
-		out += p
-	}
-	return out
 }

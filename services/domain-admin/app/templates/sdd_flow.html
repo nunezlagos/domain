@@ -53,23 +53,21 @@
         </div>
 
         <div class="msg decision-row">
-          <span class="lbl de-in" style="left:50%">analyzeComplexity + decideMode</span>
-          <span class="line to-right de-arrow-in" style="left:30%;width:20%"></span>
+          <span class="lbl de-in" style="left:40%">analyzeComplexity</span>
+          <span class="line to-right" style="left:30%;width:10%"></span>
           <span class="decision-box">
-            <span class="decision-title">Decision Engine</span>
-            <span class="decision-line">analyzeComplexity(raw_text) → trivial / simple / moderado / complejo</span>
-            <span class="decision-line">decideMode(signal, exec_mode, hasLLM) → solo | express | lite | full</span>
+            <span class="decision-title">&#9670; Decision Engine</span>
+            <span class="decision-line">trivial / simple / moderado / complejo</span>
+            <span class="decision-line">→ solo / express / lite / full</span>
           </span>
-          <span class="de-out-label" style="left:52%">si <strong>trivial+LLM</strong> → solo (server-side)</span>
-          <span class="de-out-label" style="left:75%">si <strong>simple/mod/compl</strong> → plan al IDE</span>
         </div>
 
         <div class="msg">
-          <span class="lbl" style="left:34%">si trivial+LLM → ModeSolo</span>
+          <span class="lbl" style="left:34%">si <strong>trivial+LLM</strong> → ModeSolo (server-side)</span>
           <span class="self" style="left:30%"></span>
         </div>
         <div class="msg">
-          <span class="lbl" style="left:40%">plan + FlowRunContext</span>
+          <span class="lbl" style="left:40%">si <strong>simple/mod/compl</strong> → plan + FlowRunContext al IDE</span>
           <span class="line to-right" style="left:30%;width:20%"></span>
         </div>
 

@@ -1,16 +1,3 @@
-"""Modelos del mantenedor de Crons (schedules user-defined), migrado a core.
-
-Tabla existente en domain-mcp (managed=False, Django solo lee/escribe):
-- crons: schedules definidos por el usuario que disparan un target
-  (flow/agent/skill) segun una expresion cron.
-
-Cron hereda de core.models.SoftDeleteModel y reusa los campos comunes
-(id / created_at / updated_at / deleted_at / status); declara SOLO sus
-columnas propias. Las columnas declaradas deben matchear EXACTO la tabla real
-`crons` (guard: core/tests/test_schema_drift.py + real_schema.json).
-
-NO confundir con system_crons (crons internos del sistema).
-"""
 from __future__ import annotations
 
 from django.db import models
@@ -19,37 +6,6 @@ from core.models import SoftDeleteModel
 
 
 class Cron(SoftDeleteModel):
-    """Cron schedule de la plataforma.
-
-    id / created_at / updated_at / deleted_at / status vienen de SoftDeleteModel.
-    `status` se redeclara solo para matchear el tipo real de la columna (en la
-    BD es `text`, no varchar(20) como el default del abstracto).
-
-    Schema real (crons), columna por columna (information_schema):
-        id              uuid PK default gen_random_uuid()      (SoftDeleteModel)
-        created_by      uuid NULL FK users(id) ON DELETE SET NULL
-        slug            varchar(100) NOT NULL
-        name            varchar(255) NOT NULL
-        description     text NULL
-        cron_expression varchar(100) NOT NULL
-        timezone        varchar(50) NOT NULL default 'UTC'
-        target_type     varchar(20) NOT NULL CHECK IN ('flow','agent','skill')
-        target_id       uuid NOT NULL
-        inputs          jsonb NOT NULL default '{}'
-        enabled         boolean NOT NULL default true
-        last_run_at     timestamptz NULL
-        next_run_at     timestamptz NULL
-        created_at      timestamptz NOT NULL default now()      (SoftDeleteModel)
-        updated_at      timestamptz NOT NULL default now()       (SoftDeleteModel)
-        deleted_at      timestamptz NULL                         (SoftDeleteModel)
-        status          text NOT NULL default 'active'           (SoftDeleteModel)
-
-    `organization_id` FUE DROPEADA (fase C, migracion 000142); NO existe mas.
-
-    `enabled` es la dimension alternable (toggle on/off); el display de
-    estado se deriva del bool (`is_active`).
-    """
-
 
 
     TARGET_TYPE_CHOICES = [

@@ -1,12 +1,3 @@
-"""Forms del mantenedor de Crons (schedules), migrados a core.
-
-CronForm reusa core.forms.InstanceAwareMixin para capturar `instance=` y
-poder excluirse a si mismo en la validacion de unicidad del slug (mismo patron
-que el resto de los mantenedores). La logica propia —parseo de `inputs` (jsonb),
-normalizacion de timezone y el checkbox `enabled`— queda aqui.
-
-Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-"""
 import json
 
 from django import forms
@@ -17,12 +8,6 @@ from .models import Cron
 
 
 class CronForm(InstanceAwareMixin, forms.Form):
-    """Form para crear/editar crons.
-
-    El slug es unico; en edicion se excluye el propio registro (via
-    InstanceAwareMixin._exclude_self). `inputs` (jsonb) se ingresa como texto
-    JSON y se parsea en clean_inputs. `enabled` es un checkbox booleano.
-    """
 
     name = forms.CharField(
         label="Nombre",
@@ -120,8 +105,6 @@ class CronForm(InstanceAwareMixin, forms.Form):
 
 
 class CronSearchForm(forms.Form):
-    """Busqueda simple en el listado."""
-
     q = forms.CharField(
         label="Buscar",
         required=False,

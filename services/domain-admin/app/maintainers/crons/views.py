@@ -1,20 +1,3 @@
-"""Views del mantenedor de Crons (schedules), migradas a core.
-
-Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Aqui solo:
-
-  1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks especificos de crons:
-       - _form_payload: pasa los campos del form tal cual al service.
-       - do_toggle: la dimension alternable es el flag booleano `enabled`,
-         NO `status` (el toggle generico del core alterna status).
-       - do_delete: soft delete propio (deleted_at + enabled=False).
-       - form_context / detail_context: exponen `cron_obj` que los templates
-         de crons ya consumen.
-
-El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
-core.auth (antes estaban duplicados como _require_auth/_is_ajax).
-"""
 from __future__ import annotations
 
 from django.http import HttpResponse
@@ -28,7 +11,6 @@ from .models import Cron
 
 
 class CronViews(MaintainerViews):
-    """MaintainerViews especializado para crons (payload + toggle + contextos)."""
 
 
 
@@ -118,9 +100,6 @@ views = CronViews(
 
 
 def export_crons(request):
-    """Export CSV (consolidado, abre en Excel) de los crons filtrados.
-    Respeta los filtros activos: q (busqueda), target_type[] (multi) y
-    enabled ("" sin filtro / "1" True / "0" False)."""
     if (redir := require_auth(request)):
         return redir
     val = request.GET.get("enabled")

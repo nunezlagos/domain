@@ -1,9 +1,3 @@
-
-
-
-
-
-
 package projectlink
 
 import (
@@ -12,8 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/projectlink/projectlinkdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type Service struct {
@@ -29,30 +27,27 @@ var (
 	ErrInvalidBranch   = errors.New("invalid branch name")
 )
 
+func (s *Service) q(ctx context.Context) *projectlinkdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return projectlinkdb.New(tx)
+	}
+	return projectlinkdb.New(s.Pool)
+}
+
 func (s *Service) LinkByGitRemote(ctx context.Context, remote string) (projectID, orgID, slug string, err error) {
 	candidates := remoteCandidates(remote)
 	if len(candidates) == 0 {
 		return "", "", "", fmt.Errorf("empty remote")
 	}
 
-
-
-
-	err = s.Pool.QueryRow(ctx, `
-		SELECT id::text, slug
-		FROM projects
-		WHERE deleted_at IS NULL
-		  AND repository_url = ANY($1::text[])
-		ORDER BY array_position($1::text[], repository_url)
-		LIMIT 1
-	`, candidates).Scan(&projectID, &slug)
+	result, err := s.q(ctx).LinkByGitRemote(ctx, candidates)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", "", "", nil
 		}
 		return "", "", "", err
 	}
-	return projectID, orgID, slug, nil
+	return result.ID, result.OrganizationID, result.Slug, nil
 }
 
 func remoteCandidates(remote string) []string {
@@ -77,19 +72,25 @@ func (s *Service) UpdateBranch(ctx context.Context, projectID, branch string) er
 	if strings.ContainsAny(branch, " \t\n;") {
 		return ErrInvalidBranch
 	}
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE projects
-		SET current_branch = $2, updated_at = NOW()
-		WHERE id = $1::uuid AND deleted_at IS NULL
-	`, projectID, branch)
-	return err
+
+	pid, err := uuid.Parse(projectID)
+	if err != nil {
+		return fmt.Errorf("invalid projectID: %w", err)
+	}
+
+	return s.q(ctx).UpdateBranch(ctx, projectlinkdb.UpdateBranchParams{
+		ProjectID: pid,
+		Branch:    &branch,
+	})
 }
 
 func (s *Service) GetRules(ctx context.Context, projectID string) ([]string, error) {
-	var rules []string
-	err := s.Pool.QueryRow(ctx, `
-		SELECT rules FROM projects WHERE id = $1::uuid AND deleted_at IS NULL
-	`, projectID).Scan(&rules)
+	pid, err := uuid.Parse(projectID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid projectID: %w", err)
+	}
+
+	rules, err := s.q(ctx).GetRules(ctx, pid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProjectNotFound
@@ -100,15 +101,19 @@ func (s *Service) GetRules(ctx context.Context, projectID string) ([]string, err
 }
 
 func (s *Service) SetRules(ctx context.Context, projectID string, rules []string) error {
+	pid, err := uuid.Parse(projectID)
+	if err != nil {
+		return fmt.Errorf("invalid projectID: %w", err)
+	}
+
 	if rules == nil {
 		rules = []string{}
 	}
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE projects
-		SET rules = $2, updated_at = NOW()
-		WHERE id = $1::uuid AND deleted_at IS NULL
-	`, projectID, rules)
-	return err
+
+	return s.q(ctx).SetRules(ctx, projectlinkdb.SetRulesParams{
+		ProjectID: pid,
+		Rules:     rules,
+	})
 }
 
 func normalizeRemote(remote string) string {

@@ -98,6 +98,32 @@ type Deps struct {
 	MetricsOnCacheMiss func()
 }
 
+// toolRegistrar registra un grupo de tools MCP. Agregar un grupo nuevo
+// requiere solo agregar una entrada en toolGroups — cero cambios en Tools().
+type toolRegistrar func(*ResilientWrapper, Deps) []mcpgo.ServerTool
+
+var toolGroups = []toolRegistrar{
+	registerMemoryTools,
+	registerCatalogTools,
+	registerPolicyTools,
+	registerProjectTools,
+	registerHUTools,
+	registerIntakeTools,
+	registerSyncTools,
+	registerPromptTools,
+	registerOrchestrateTools,
+	registerCapturedPromptTools,
+	registerProjectRepoTools,
+	registerProjectSkillTools,
+	registerSessionBootstrapTools,
+	registerCronCRUDTools,
+	registerProposalsTools,
+	registerVerificationsTools,
+	registerTicketTools,
+	registerHealthTools,
+	registerProjectIndexTools,
+}
+
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).
 // Sobreescribe per-tool en produccion segun necesidad.
 var defaultBudget = ToolBudget{
@@ -216,25 +242,9 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.runFlowDispatch)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
-	tools = append(tools, registerMemoryTools(wrap, deps)...)
-	tools = append(tools, registerCatalogTools(wrap, deps)...)
-	tools = append(tools, registerPolicyTools(wrap, deps)...)
-	tools = append(tools, registerProjectTools(wrap, deps)...)
-	tools = append(tools, registerHUTools(wrap, deps)...)
-	tools = append(tools, registerIntakeTools(wrap, deps)...)
-	tools = append(tools, registerSyncTools(wrap, deps)...)
-	tools = append(tools, registerPromptTools(wrap, deps)...)
-	tools = append(tools, registerOrchestrateTools(wrap, deps)...)
-	tools = append(tools, registerCapturedPromptTools(wrap, deps)...)
-	tools = append(tools, registerProjectRepoTools(wrap, deps)...)
-	tools = append(tools, registerProjectSkillTools(wrap, deps)...)
-	tools = append(tools, registerSessionBootstrapTools(wrap, deps)...)
-	tools = append(tools, registerCronCRUDTools(wrap, deps)...)
-	tools = append(tools, registerProposalsTools(wrap, deps)...)
-	tools = append(tools, registerVerificationsTools(wrap, deps)...)
-	tools = append(tools, registerTicketTools(wrap, deps)...)
-	tools = append(tools, registerHealthTools(wrap, deps)...)
-	tools = append(tools, registerProjectIndexTools(wrap, deps)...)
+	for _, reg := range toolGroups {
+		tools = append(tools, reg(wrap, deps)...)
+	}
 	return tools
 }
 

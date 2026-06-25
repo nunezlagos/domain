@@ -3,7 +3,10 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-reset dev-logs dev-ps dev-psql dev-mc dev-migrate dev-migrate-down \
-        env lint test build clean run mcp version
+        env lint test build clean run mcp version sqlc
+
+# Versión pineada de sqlc (ver docs/db/sqlc-data-layer.md)
+SQLC_VERSION := v1.31.1
 
 # ============================================================
 # Dev environment (HU-01.6)
@@ -58,6 +61,12 @@ dev-migrate-version: build ## Muestra version actual del schema
 lint: ## Corre golangci-lint (HU-19.1)
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint no instalado. https://golangci-lint.run/usage/install/"; exit 1; }
 	golangci-lint run ./...
+
+sqlc: ## Regenera código sqlc de todos los services (ver docs/db/sqlc-data-layer.md)
+	@find internal -name sqlc.yaml -print0 | xargs -0 -I{} dirname {} | while read d; do \
+		echo "sqlc generate: $$d"; \
+		( cd "$$d" && go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate ); \
+	done
 
 test: ## Tests unitarios
 	go test -race -short ./...

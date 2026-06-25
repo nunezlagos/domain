@@ -44,9 +44,19 @@ func (d *Deps) runAgentDispatch(ctx context.Context, req mcp.CallToolRequest) (*
 	vars["input"] = input
 
 	inputsRaw, _ := json.Marshal(vars)
+
+	var meta map[string]any
+	if flowRunIDStr, _ := args["flow_run_id"].(string); flowRunIDStr != "" {
+		if fid, err := uuid.Parse(flowRunIDStr); err == nil {
+			phaseSlug, _ := args["phase_slug"].(string)
+			fc := &dispatch.FlowRunContext{FlowRunID: fid, PhaseSlug: phaseSlug}
+			meta = fc.InjectIntoMetadata(nil)
+		}
+	}
+
 	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
 		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetAgent,
-		TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID,
+		TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID, Metadata: meta,
 	})
 	if dispatchErr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil

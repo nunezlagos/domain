@@ -27,9 +27,10 @@
     <h1 class="sdd-hd-title">Flujo SDD</h1>
     <div class="sdd-modes">
       <span class="sdd-modes-label">Modos:</span>
-      <span class="sdd-chip c-full">full &middot; 10 fases</span>
-      <span class="sdd-chip c-lite">lite &middot; explore+apply+verify</span>
-      <span class="sdd-chip c-exp">express &middot; apply+verify</span>
+      <span class="sdd-chip c-solo">solo &middot; server-side (trivial)</span>
+      <span class="sdd-chip c-exp">express &middot; apply+verify (simple)</span>
+      <span class="sdd-chip c-lite">lite &middot; explore+apply+verify (moderado)</span>
+      <span class="sdd-chip c-full">full &middot; 10 fases (complejo)</span>
     </div>
   </header>
 
@@ -47,6 +48,17 @@
         <div class="msg"><span class="lbl" style="left:20%">prompt (con project_id)</span><span class="line to-right" style="left:10%;width:20%"></span></div>
         <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake)</span><span class="self" style="left:30%"></span></div>
         <div class="msg"><span class="lbl" style="left:40%">intent + project_id</span><span class="line to-right" style="left:30%;width:20%"></span></div>
+
+        <div class="msg decision-row">
+          <span class="decision-box" style="left:30%;width:40%">
+            <span class="decision-title">&#9654; Decision Engine</span>
+            <span class="decision-line">analyzeComplexity(raw_text) &rarr; trivial / simple / moderado / complejo</span>
+            <span class="decision-line">decideMode(signal, exec_mode, hasLLM) &rarr; solo | express | lite | full</span>
+          </span>
+        </div>
+        <div class="msg"><span class="lbl" style="left:34%">si <strong>trivial + LLM</strong> &rarr; ModeSolo (server-side, no delega)</span><span class="self" style="left:30%"></span></div>
+        <div class="msg"><span class="lbl" style="left:40%">si <strong>simple/moderado/complejo</strong> &rarr; plan + FlowRunContext al cliente IDE</span><span class="line to-right" style="left:30%;width:20%"></span></div>
+
         <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto</span><span class="line to-right" style="left:50%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:70%">ok</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
 

@@ -60,6 +60,7 @@
 .c-full { color: var(--color-accent);  border-color: var(--color-accent);  background: var(--color-accent-soft); }
 .c-lite { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
 .c-exp  { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
+.c-solo { color: var(--color-info);    border-color: var(--color-info);    background: var(--color-info-soft, rgba(59,130,246,.1)); }
 
 /* Area del diagrama: ocupa el resto del alto. El diagrama llena TODO el ancho;
    si queda mas alto que la caja, scrollea adentro (la pagina no scrollea). */
@@ -159,3 +160,13 @@
 .exp-lbl { position: absolute; left: 73%; top: 2px; font-size: 10.5px; color: var(--color-success); font-weight: 700; }
 
 code { background: var(--color-bg-elevated); border: 1px solid var(--color-border); border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
+
+/* Decision Engine box */
+.decision-row { position: relative; min-height: 52px; }
+.decision-box {
+  position: absolute; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(59,130,246,.07); border: 1.5px solid var(--color-info, #3b82f6);
+  border-radius: 8px; padding: 6px 12px; font-size: 11px;
+}
+.decision-title { font-weight: 700; color: var(--color-info, #3b82f6); font-size: 11.5px; }
+.decision-line { color: var(--color-text-muted); font-family: monospace; }

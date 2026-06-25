@@ -114,7 +114,8 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 	}
 	mode := in.Mode
 	if mode == "" {
-		mode = ModeFull
+		sig := analyzeComplexity(in.RawText)
+		mode = decideMode(sig, in, s.LLM != nil)
 	}
 	now := s.now()
 	res := &OrchestrateResult{

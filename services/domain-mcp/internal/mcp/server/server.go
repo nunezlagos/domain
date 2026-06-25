@@ -448,6 +448,12 @@ func toolAgentRun() mcp.Tool {
 		mcp.WithObject("variables",
 			mcp.Description("Variables opcionales contextuales"),
 		),
+		mcp.WithString("flow_run_id",
+			mcp.Description("UUID del flow_run si este agent es parte de un pipeline SDD. Inyecta FlowRunContext al dispatcher para que el agent reciba contexto de fase sin heredar el historial completo del orquestador."),
+		),
+		mcp.WithString("phase_slug",
+			mcp.Description("Slug de la fase SDD actual (sdd-apply, sdd-verify, etc.) cuando flow_run_id está presente."),
+		),
 	)
 }
 

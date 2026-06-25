@@ -27,7 +27,8 @@ type Request struct {
 	TargetType  string // "flow" | "agent" | "skill"
 	TargetID    uuid.UUID
 	Inputs      json.RawMessage
-	TriggeredBy *uuid.UUID // user id si aplica
+	TriggeredBy *uuid.UUID     // user id si aplica
+	Metadata    map[string]any // contexto opcional (e.g. FlowRunContext para agents en pipeline)
 }
 
 // Result output normalizado.

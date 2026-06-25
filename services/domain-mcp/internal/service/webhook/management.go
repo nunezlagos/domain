@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/webhook/webhookdb"
 )
 
 // Delivery entrada del log webhook_deliveries.
@@ -26,70 +27,52 @@ type Delivery struct {
 	ReceivedAt     time.Time      `json:"received_at"`
 }
 
-const webhookCols = `id, slug, name, source_type,
-	target_type, target_id, inputs_mapping, enabled, last_delivery_at`
-
 // GetByID lookup sin descifrar secret (para management; el secret nunca sale).
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Webhook, error) {
-	var w Webhook
-	err := s.Pool.QueryRow(ctx,
-		`SELECT `+webhookCols+` FROM webhooks WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType,
-		&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
+	row, err := s.q(ctx).GetWebhookByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get webhook: %w", err)
 	}
+	w := webhookFromRow(row)
 	return &w, nil
 }
 
 // List webhooks de la org (sin secrets).
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Webhook, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT `+webhookCols+` FROM webhooks
-		 WHERE deleted_at IS NULL
-		 ORDER BY created_at DESC`)
+	rows, err := s.q(ctx).ListWebhooks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list webhooks: %w", err)
 	}
-	defer rows.Close()
-	var out []Webhook
-	for rows.Next() {
-		var w Webhook
-		if err := rows.Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType,
-			&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt); err != nil {
-			return nil, err
-		}
-		out = append(out, w)
+	out := make([]Webhook, len(rows))
+	for i, row := range rows {
+		out[i] = webhookFromRow(row)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // SetEnabled toggle.
 func (s *Service) SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE webhooks SET enabled = $1 WHERE id = $2 AND deleted_at IS NULL`,
-		enabled, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
+	_, err := s.q(ctx).SetWebhookEnabled(ctx, webhookdb.SetWebhookEnabledParams{
+		Enabled: enabled,
+		ID:      id,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
-	return nil
+	return err
 }
 
 // SoftDelete con audit.
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE webhooks SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
+	_, err := s.q(ctx).SoftDeleteWebhook(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
 	}
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -105,41 +88,48 @@ func (s *Service) Deliveries(ctx context.Context, webhookID uuid.UUID, limit int
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, webhook_id, payload, headers, COALESCE(source_ip,''),
-		        status, COALESCE(error,''), triggered_run_id, received_at
-		 FROM webhook_deliveries WHERE webhook_id = $1
-		 ORDER BY received_at DESC LIMIT $2`, webhookID, limit)
+	rows, err := s.q(ctx).ListDeliveries(ctx, webhookdb.ListDeliveriesParams{
+		WebhookID: webhookID,
+		Limit:     int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("deliveries: %w", err)
 	}
-	defer rows.Close()
-	var out []Delivery
-	for rows.Next() {
-		var d Delivery
-		if err := rows.Scan(&d.ID, &d.WebhookID, &d.Payload, &d.Headers, &d.SourceIP,
-			&d.Status, &d.Error, &d.TriggeredRunID, &d.ReceivedAt); err != nil {
-			return nil, err
+	out := make([]Delivery, len(rows))
+	for i, row := range rows {
+		out[i] = Delivery{
+			ID:             row.ID,
+			WebhookID:      row.WebhookID,
+			Payload:        unmarshalMap(row.Payload),
+			Headers:        unmarshalMap(row.Headers),
+			SourceIP:       row.SourceIp,
+			Status:         row.Status,
+			Error:          row.Error,
+			TriggeredRunID: row.TriggeredRunID,
+			ReceivedAt:     row.ReceivedAt,
 		}
-		out = append(out, d)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // GetDelivery una delivery puntual (para replay).
 func (s *Service) GetDelivery(ctx context.Context, id uuid.UUID) (*Delivery, error) {
-	var d Delivery
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, webhook_id, payload, headers, COALESCE(source_ip,''),
-		        status, COALESCE(error,''), triggered_run_id, received_at
-		 FROM webhook_deliveries WHERE id = $1`, id,
-	).Scan(&d.ID, &d.WebhookID, &d.Payload, &d.Headers, &d.SourceIP,
-		&d.Status, &d.Error, &d.TriggeredRunID, &d.ReceivedAt)
+	row, err := s.q(ctx).GetDelivery(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get delivery: %w", err)
 	}
-	return &d, nil
+	return &Delivery{
+		ID:             row.ID,
+		WebhookID:      row.WebhookID,
+		Payload:        unmarshalMap(row.Payload),
+		Headers:        unmarshalMap(row.Headers),
+		SourceIP:       row.SourceIp,
+		Status:         row.Status,
+		Error:          row.Error,
+		TriggeredRunID: row.TriggeredRunID,
+		ReceivedAt:     row.ReceivedAt,
+	}, nil
 }

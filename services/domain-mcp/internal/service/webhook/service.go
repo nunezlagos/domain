@@ -27,6 +27,8 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/crypto"
+	"nunezlagos/domain/internal/service/webhook/webhookdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -75,6 +77,53 @@ type Service struct {
 	Crypto *crypto.Cipher // para cifrar secret at-rest
 }
 
+func (s *Service) q(ctx context.Context) *webhookdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return webhookdb.New(tx)
+	}
+	return webhookdb.New(s.Pool)
+}
+
+func webhookFromRow(row webhookdb.Webhook) Webhook {
+	w := Webhook{
+		ID:         row.ID,
+		Slug:       row.Slug,
+		Name:       row.Name,
+		SourceType: row.SourceType,
+		TargetType: row.TargetType,
+		TargetID:   row.TargetID,
+		Enabled:    row.Enabled,
+	}
+	if len(row.InputsMapping) > 0 {
+		_ = json.Unmarshal(row.InputsMapping, &w.InputsMapping)
+	}
+	if w.InputsMapping == nil {
+		w.InputsMapping = map[string]any{}
+	}
+	if row.LastDeliveryAt.Valid {
+		w.LastDeliveryAt = &row.LastDeliveryAt.Time
+	}
+	return w
+}
+
+func unmarshalMap(b []byte) map[string]any {
+	var m map[string]any
+	if len(b) > 0 {
+		_ = json.Unmarshal(b, &m)
+	}
+	if m == nil {
+		m = map[string]any{}
+	}
+	return m
+}
+
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) {
 	if !reSlug.MatchString(in.Slug) {
 		return nil, ErrSlugInvalid
@@ -98,18 +147,16 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) 
 	}
 	mappingJSON, _ := json.Marshal(in.InputsMapping)
 
-	var w Webhook
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO webhooks
-		   (created_by, slug, name, secret_encrypted, source_type,
-		    target_type, target_id, inputs_mapping)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, slug, name, source_type, target_type, target_id,
-		           inputs_mapping, enabled, last_delivery_at`,
-		in.CreatedBy, in.Slug, in.Name, encSecret, in.SourceType,
-		in.TargetType, in.TargetID, mappingJSON,
-	).Scan(&w.ID, &w.Slug, &w.Name, &w.SourceType, &w.TargetType, &w.TargetID,
-		&w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
+	row, err := s.q(ctx).InsertWebhook(ctx, webhookdb.InsertWebhookParams{
+		CreatedBy:       in.CreatedBy,
+		Slug:            in.Slug,
+		Name:            in.Name,
+		SecretEncrypted: encSecret,
+		SourceType:      in.SourceType,
+		TargetType:      in.TargetType,
+		TargetID:        in.TargetID,
+		InputsMapping:   mappingJSON,
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -117,6 +164,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) 
 		}
 		return nil, fmt.Errorf("insert webhook: %w", err)
 	}
+	w := webhookFromRow(row)
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
@@ -133,27 +181,21 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Webhook, error) 
 
 // ResolveBySlug busca webhook + descifra secret para verificar HMAC.
 func (s *Service) ResolveBySlug(ctx context.Context, slug string) (*Webhook, []byte, error) {
-	var w Webhook
-	var encSecret []byte
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, name, secret_encrypted, source_type,
-		        target_type, target_id, inputs_mapping, enabled, last_delivery_at
-		 FROM webhooks WHERE slug = $1 AND deleted_at IS NULL`, slug,
-	).Scan(&w.ID, &w.Slug, &w.Name, &encSecret, &w.SourceType,
-		&w.TargetType, &w.TargetID, &w.InputsMapping, &w.Enabled, &w.LastDeliveryAt)
+	row, err := s.q(ctx).GetWebhookBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("query webhook: %w", err)
 	}
-	if !w.Enabled {
+	if !row.Enabled {
 		return nil, nil, ErrNotFound
 	}
-	secret, err := s.Crypto.Decrypt(encSecret)
+	secret, err := s.Crypto.Decrypt(row.SecretEncrypted)
 	if err != nil {
 		return nil, nil, fmt.Errorf("decrypt secret: %w", err)
 	}
+	w := webhookFromRow(row)
 	return &w, secret, nil
 }
 
@@ -177,23 +219,19 @@ func (s *Service) RecordDelivery(ctx context.Context, webhookID uuid.UUID,
 	payload []byte, headers map[string]string, sourceIP, status string,
 	triggeredRunID *uuid.UUID, errStr string) error {
 	headersJSON, _ := json.Marshal(headers)
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO webhook_deliveries
-		   (webhook_id, payload, headers, source_ip, status, error, triggered_run_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		webhookID, payload, headersJSON, nullStr(sourceIP), status,
-		nullStr(errStr), triggeredRunID)
+
+	err := s.q(ctx).InsertDelivery(ctx, webhookdb.InsertDeliveryParams{
+		WebhookID:      webhookID,
+		Payload:        payload,
+		Headers:        headersJSON,
+		SourceIp:       strPtr(sourceIP),
+		Status:         status,
+		Error:          strPtr(errStr),
+		TriggeredRunID: triggeredRunID,
+	})
 	if err != nil {
 		return fmt.Errorf("record delivery: %w", err)
 	}
-	_, _ = s.Pool.Exec(ctx,
-		`UPDATE webhooks SET last_delivery_at = NOW() WHERE id = $1`, webhookID)
+	_ = s.q(ctx).UpdateLastDelivery(ctx, webhookID)
 	return nil
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

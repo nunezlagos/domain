@@ -78,13 +78,13 @@ Leyenda: **Q** = nº de queries SQL · **LOC** = service sin tests · **RLS** = 
 | mcpserver | 10 | 359 | no | ✅ |
 | requirement | 10 | 402 | no | ✅ |
 
-### Ola 2 — Medianos inline, sin RLS
+### ✅ Ola 2 — Medianos inline, sin RLS — hecha
 | Service | Q | LOC | RLS | Estado |
 |---|--:|--:|:--:|:--:|
-| usagealerts | 13 | 651 | no | ⬜ |
-| spec | 17 | 379 | no | ⬜ |
-| task | 19 | 414 | no | ⬜ |
-| traceability | 28 | 423 | no | ⬜ |
+| usagealerts | 13 | 651 | no | ✅ |
+| spec | 17 | 379 | no | ✅ |
+| task | 19 | 414 | no | ✅ |
+| traceability | 28 | 423 | no | ✅ |
 
 ### Ola 3 — Inline CON RLS, chicos/medianos (usar `q(ctx)`)
 | Service | Q | LOC | Estado |

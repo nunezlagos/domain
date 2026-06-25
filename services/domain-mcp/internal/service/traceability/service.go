@@ -1,4 +1,6 @@
 // Package traceability — issue-04.5 forward/backward traceability + dashboards.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package traceability
 
 import (
@@ -7,8 +9,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/traceability/traceabilitydb"
 )
 
 // Forward trace: REQ → HU → Proposal/Design → Tasks → Code
@@ -119,15 +123,15 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
+func (s *Service) q() *traceabilitydb.Queries { return traceabilitydb.New(s.Pool) }
+
 // GetRequirementTrace returns full forward trace for a REQ.
 func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*RequirementTrace, error) {
-	var req RequirementNode
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, title, status, created_at FROM sdd_requirements WHERE slug = $1`, reqSlug,
-	).Scan(&req.ID, &req.Slug, &req.Title, &req.Status, &req.CreatedAt)
+	r, err := s.q().GetRequirementBySlug(ctx, reqSlug)
 	if err != nil {
 		return nil, fmt.Errorf("req not found: %w", err)
 	}
+	req := RequirementNode{ID: r.ID, Slug: r.Slug, Title: r.Title, Status: r.Status, CreatedAt: r.CreatedAt}
 
 	hus, err := s.getHUTraceNodes(ctx, req.ID)
 	if err != nil {
@@ -138,54 +142,36 @@ func (s *Service) GetRequirementTrace(ctx context.Context, reqSlug string) (*Req
 }
 
 func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTraceNode, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, slug, title, status FROM issues WHERE req_id = $1 ORDER BY slug`, reqID)
+	q := s.q()
+	issues, err := q.ListIssuesByReq(ctx, reqID)
 	if err != nil {
 		return nil, fmt.Errorf("query HUs: %w", err)
 	}
-	defer rows.Close()
 
 	var out []HUTraceNode
-	for rows.Next() {
-		var n HUTraceNode
-		if err := rows.Scan(&n.HU.ID, &n.HU.Slug, &n.HU.Title, &n.HU.Status); err != nil {
-			return nil, fmt.Errorf("scan HU: %w", err)
+	for _, hu := range issues {
+		n := HUTraceNode{HU: UserStorySummary{ID: hu.ID, Slug: hu.Slug, Title: hu.Title, Status: hu.Status}}
+
+		if p, err := q.LatestProposal(ctx, n.HU.ID); err == nil {
+			n.Proposal = &ProposalSummary{Version: int(p.Version), Status: p.Status}
 		}
 
-
-		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
-			n.HU.ID,
-		).Scan(&n.Proposal)
-
-
-		s.Pool.QueryRow(ctx,
-			`SELECT version, status FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
-			n.HU.ID,
-		).Scan(&n.Design)
-
-
-		var tp TaskProgress
-		err := s.Pool.QueryRow(ctx,
-			`SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'completed'),
-			        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1), 0)
-			 FROM issue_tasks WHERE issue_id = $1`, n.HU.ID,
-		).Scan(&tp.Total, &tp.Completed, &tp.Pct)
-		if err == nil && tp.Total > 0 {
-			n.TaskProgress = &tp
+		if d, err := q.LatestDesign(ctx, n.HU.ID); err == nil {
+			n.Design = &DesignSummary{Version: int(d.Version), Status: d.Status}
 		}
 
-
-		codeRows, err := s.Pool.Query(ctx,
-			`SELECT id, file_path, repo, branch FROM issue_code_references WHERE issue_id = $1 ORDER BY file_path`, n.HU.ID)
-		if err == nil {
-			for codeRows.Next() {
-				var cr CodeRefSummary
-				if err := codeRows.Scan(&cr.ID, &cr.FilePath, &cr.Repo, &cr.Branch); err == nil {
-					n.CodeRefs = append(n.CodeRefs, cr)
-				}
+		if tp, err := q.TaskProgressByIssue(ctx, n.HU.ID); err == nil && tp.Total > 0 {
+			n.TaskProgress = &TaskProgress{
+				Total:     int(tp.Total),
+				Completed: int(tp.Completed),
+				Pct:       numericToFloat(tp.Pct),
 			}
-			codeRows.Close()
+		}
+
+		if refs, err := q.ListCodeRefsByIssue(ctx, n.HU.ID); err == nil {
+			for _, r := range refs {
+				n.CodeRefs = append(n.CodeRefs, CodeRefSummary{ID: r.ID, FilePath: r.FilePath, Repo: r.Repo, Branch: r.Branch})
+			}
 		}
 
 		out = append(out, n)
@@ -195,36 +181,17 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 
 // GetCodeTrace returns backward trace from a file path.
 func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace, error) {
-	var ct CodeTrace
-	ct.File = filePath
+	q := s.q()
+	ct := CodeTrace{File: filePath}
 
-
-
-
-	var issueID uuid.UUID
-	var hu UserStorySummary
-	err := s.Pool.QueryRow(ctx,
-		`SELECT cr.issue_id, us.slug, us.title, us.status
-		 FROM issue_code_references cr
-		 JOIN issues us ON us.id = cr.issue_id
-		 WHERE cr.file_path = $1
-		 LIMIT 1`, filePath,
-	).Scan(&issueID, &hu.Slug, &hu.Title, &hu.Status)
+	huRow, err := q.GetCodeTraceHU(ctx, filePath)
 	if err != nil {
 		return &ct, nil // no trace but no error
 	}
-	hu.ID = issueID
-	ct.HU = &hu
+	ct.HU = &UserStorySummary{ID: huRow.IssueID, Slug: huRow.Slug, Title: huRow.Title, Status: huRow.Status}
 
-	var req RequirementNode
-	err = s.Pool.QueryRow(ctx,
-		`SELECT r.id, r.slug, r.title, r.status, r.created_at
-		 FROM sdd_requirements r
-		 JOIN issues us ON us.req_id = r.id
-		 WHERE us.id = $1`, issueID,
-	).Scan(&req.ID, &req.Slug, &req.Title, &req.Status, &req.CreatedAt)
-	if err == nil {
-		ct.REQ = &req
+	if r, err := q.GetRequirementForIssue(ctx, huRow.IssueID); err == nil {
+		ct.REQ = &RequirementNode{ID: r.ID, Slug: r.Slug, Title: r.Title, Status: r.Status, CreatedAt: r.CreatedAt}
 	}
 
 	return &ct, nil
@@ -232,22 +199,16 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 
 // GetCoverageDashboard returns aggregate coverage metrics.
 func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard, error) {
-	var d CoverageDashboard
-	err := s.Pool.QueryRow(ctx, `
-		SELECT
-			COUNT(DISTINCT us.id) AS total_hus,
-			COUNT(DISTINCT us.id) FILTER (WHERE p.issue_id IS NOT NULL) AS hus_with_proposal,
-			COUNT(DISTINCT us.id) FILTER (WHERE d.issue_id IS NOT NULL) AS hus_with_design,
-			COUNT(DISTINCT us.id) FILTER (WHERE t.id IS NOT NULL AND t.status = 'completed') AS hus_with_completed_tasks,
-			COUNT(DISTINCT us.id) FILTER (WHERE cr.issue_id IS NOT NULL) AS hus_with_code_refs
-		FROM issues us
-		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true
-		LEFT JOIN issue_tasks t ON t.issue_id = us.id
-		LEFT JOIN LATERAL (SELECT issue_id FROM issue_code_references WHERE issue_id = us.id LIMIT 1) cr ON true
-	`).Scan(&d.TotalHUs, &d.HUsWithProposal, &d.HUsWithDesign, &d.HUsWithCompletedTasks, &d.HUsWithCodeRefs)
+	row, err := s.q().GetCoverageDashboard(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("coverage dashboard: %w", err)
+	}
+	d := CoverageDashboard{
+		TotalHUs:              int(row.TotalHus),
+		HUsWithProposal:       int(row.HusWithProposal),
+		HUsWithDesign:         int(row.HusWithDesign),
+		HUsWithCompletedTasks: int(row.HusWithCompletedTasks),
+		HUsWithCodeRefs:       int(row.HusWithCodeRefs),
 	}
 	if d.TotalHUs > 0 {
 		d.ProposalPct = float64(d.HUsWithProposal) / float64(d.TotalHUs) * 100
@@ -259,160 +220,116 @@ func (s *Service) GetCoverageDashboard(ctx context.Context) (*CoverageDashboard,
 
 // GetProgressReport returns task progress grouped by REQ.
 func (s *Service) GetProgressReport(ctx context.Context) ([]REQProgressRow, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT r.slug, r.title,
-			COUNT(DISTINCT us.id) AS total_hus,
-			COUNT(DISTINCT us.id) FILTER (WHERE us.status = 'completed') AS completed_hus,
-			COUNT(t.id) AS total_tasks,
-			COUNT(t.id) FILTER (WHERE t.status = 'completed') AS completed_tasks,
-			CASE WHEN COUNT(t.id) > 0
-				THEN ROUND(100.0 * COUNT(t.id) FILTER (WHERE t.status = 'completed') / COUNT(t.id), 1)
-				ELSE 0
-			END AS task_pct
-		FROM sdd_requirements r
-		LEFT JOIN issues us ON us.req_id = r.id
-		LEFT JOIN issue_tasks t ON t.issue_id = us.id
-		WHERE r.status = 'active'
-		GROUP BY r.slug, r.title
-		ORDER BY task_pct ASC
-	`)
+	rows, err := s.q().GetProgressReport(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("progress report: %w", err)
 	}
-	defer rows.Close()
-
-	var out []REQProgressRow
-	for rows.Next() {
-		var row REQProgressRow
-		if err := rows.Scan(&row.ReqSlug, &row.ReqTitle, &row.TotalHUs, &row.CompletedHUs, &row.TotalTasks, &row.CompletedTasks, &row.TaskPct); err != nil {
-			return nil, fmt.Errorf("scan progress: %w", err)
-		}
-		out = append(out, row)
+	out := make([]REQProgressRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, REQProgressRow{
+			ReqSlug:        r.Slug,
+			ReqTitle:       r.Title,
+			TotalHUs:       int(r.TotalHus),
+			CompletedHUs:   int(r.CompletedHus),
+			TotalTasks:     int(r.TotalTasks),
+			CompletedTasks: int(r.CompletedTasks),
+			TaskPct:        numericToFloat(r.TaskPct),
+		})
 	}
 	return out, nil
 }
 
 // GetHUsWithoutProposals returns HUs with no proposal.
 func (s *Service) GetHUsWithoutProposals(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true WHERE p.column1 IS NULL`)
+	rows, err := s.q().GetHUsWithoutProposals(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gap query: %w", err)
+	}
+	out := make([]HUGap, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, HUGap{ID: r.ID, Slug: r.Slug, Title: r.Title, ReqSlug: r.ReqSlug})
+	}
+	return out, nil
 }
 
 // GetHUsWithoutDesigns returns HUs with no design.
 func (s *Service) GetHUsWithoutDesigns(ctx context.Context) ([]HUGap, error) {
-	return s.gapQuery(ctx, `LEFT JOIN LATERAL (SELECT 1 FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true WHERE d.column1 IS NULL`)
+	rows, err := s.q().GetHUsWithoutDesigns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gap query: %w", err)
+	}
+	out := make([]HUGap, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, HUGap{ID: r.ID, Slug: r.Slug, Title: r.Title, ReqSlug: r.ReqSlug})
+	}
+	return out, nil
 }
 
 // GetHUsWithIncompleteTasks returns HUs where not all tasks completed.
 func (s *Service) GetHUsWithIncompleteTasks(ctx context.Context) ([]HUGap, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT us.id, us.slug, us.title, r.slug
-		FROM issues us
-		LEFT JOIN sdd_requirements r ON r.id = us.req_id
-		WHERE us.id IN (
-			SELECT issue_id FROM issue_tasks
-			GROUP BY issue_id
-			HAVING COUNT(*) FILTER (WHERE status = 'completed') < COUNT(*)
-		)
-		ORDER BY us.slug
-	`)
+	rows, err := s.q().GetHUsWithIncompleteTasks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("incomplete tasks: %w", err)
 	}
-	defer rows.Close()
-	return scanGaps(rows)
+	out := make([]HUGap, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, HUGap{ID: r.ID, Slug: r.Slug, Title: r.Title, ReqSlug: r.ReqSlug})
+	}
+	return out, nil
 }
 
 // GetConsolidatedReport returns matrix of REQ stats.
 func (s *Service) GetConsolidatedReport(ctx context.Context) ([]ConsolidatedRow, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT
-			r.slug, r.title,
-			COUNT(DISTINCT us.id) AS total_hus,
-			COUNT(DISTINCT us.id) FILTER (WHERE p.issue_id IS NOT NULL) AS hus_with_proposal,
-			COUNT(DISTINCT us.id) FILTER (WHERE d.issue_id IS NOT NULL) AS hus_with_design,
-			COUNT(DISTINCT us.id) FILTER (WHERE us.status = 'completed') AS completed_hus,
-			COUNT(t.id) AS total_tasks,
-			COUNT(t.id) FILTER (WHERE t.status = 'completed') AS completed_tasks,
-			CASE WHEN COUNT(t.id) > 0
-				THEN ROUND(100.0 * COUNT(t.id) FILTER (WHERE t.status = 'completed') / COUNT(t.id), 1)
-				ELSE 0
-			END AS task_pct
-		FROM sdd_requirements r
-		LEFT JOIN issues us ON us.req_id = r.id
-		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_proposals WHERE issue_id = us.id LIMIT 1) p ON true
-		LEFT JOIN LATERAL (SELECT issue_id FROM sdd_designs WHERE issue_id = us.id LIMIT 1) d ON true
-		LEFT JOIN issue_tasks t ON t.issue_id = us.id
-		WHERE r.status = 'active'
-		GROUP BY r.slug, r.title
-		ORDER BY r.slug
-	`)
+	rows, err := s.q().GetConsolidatedReport(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("consolidated report: %w", err)
 	}
-	defer rows.Close()
-
-	var out []ConsolidatedRow
-	for rows.Next() {
-		var row ConsolidatedRow
-		if err := rows.Scan(&row.ReqSlug, &row.ReqTitle,
-			&row.TotalHUs, &row.HUsWithProposal, &row.HUsWithDesign, &row.CompletedHUs,
-			&row.TotalTasks, &row.CompletedTasks, &row.TaskPct,
-		); err != nil {
-			return nil, fmt.Errorf("scan consolidated: %w", err)
-		}
-		out = append(out, row)
+	out := make([]ConsolidatedRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, ConsolidatedRow{
+			ReqSlug:         r.Slug,
+			ReqTitle:        r.Title,
+			TotalHUs:        int(r.TotalHus),
+			HUsWithProposal: int(r.HusWithProposal),
+			HUsWithDesign:   int(r.HusWithDesign),
+			CompletedHUs:    int(r.CompletedHus),
+			TotalTasks:      int(r.TotalTasks),
+			CompletedTasks:  int(r.CompletedTasks),
+			TaskPct:         numericToFloat(r.TaskPct),
+		})
 	}
 	return out, nil
 }
 
 // AddCodeReference creates a code reference link.
 func (s *Service) AddCodeReference(ctx context.Context, issueID uuid.UUID, filePath, repo, branch string) (*CodeRefSummary, error) {
-	var cr CodeRefSummary
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO issue_code_references (issue_id, file_path, repo, branch)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (issue_id, file_path) DO NOTHING
-		 RETURNING id, file_path, repo, branch`,
-		issueID, filePath, repo, nullStr(branch),
-	).Scan(&cr.ID, &cr.FilePath, &cr.Repo, &cr.Branch)
+	row, err := s.q().AddCodeReference(ctx, traceabilitydb.AddCodeReferenceParams{
+		IssueID:  issueID,
+		FilePath: filePath,
+		Repo:     repo,
+		Branch:   nullStr(branch),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("add code reference: %w", err)
 	}
-	return &cr, nil
+	return &CodeRefSummary{ID: row.ID, FilePath: row.FilePath, Repo: row.Repo, Branch: row.Branch}, nil
 }
 
 // RemoveCodeReference removes a code reference by ID.
 func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM issue_code_references WHERE id = $1`, refID)
-	if err != nil {
+	if err := s.q().RemoveCodeReference(ctx, refID); err != nil {
 		return fmt.Errorf("remove code reference: %w", err)
 	}
 	return nil
 }
 
-
-
-func (s *Service) gapQuery(ctx context.Context, joinClause string) ([]HUGap, error) {
-	q := `SELECT us.id, us.slug, us.title, COALESCE(r.slug, '') FROM issues us
-		  LEFT JOIN sdd_requirements r ON r.id = us.req_id ` + joinClause + ` ORDER BY us.slug`
-	rows, err := s.Pool.Query(ctx, q)
-	if err != nil {
-		return nil, fmt.Errorf("gap query: %w", err)
+// numericToFloat convierte un pgtype.Numeric a float64; 0 si NULL/inválido.
+func numericToFloat(n pgtype.Numeric) float64 {
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return 0
 	}
-	defer rows.Close()
-	return scanGaps(rows)
-}
-
-func scanGaps(rows pgx.Rows) ([]HUGap, error) {
-	var out []HUGap
-	for rows.Next() {
-		var g HUGap
-		if err := rows.Scan(&g.ID, &g.Slug, &g.Title, &g.ReqSlug); err != nil {
-			return nil, fmt.Errorf("scan gap: %w", err)
-		}
-		out = append(out, g)
-	}
-	return out, rows.Err()
+	return f.Float64
 }
 
 func nullStr(v string) *string {

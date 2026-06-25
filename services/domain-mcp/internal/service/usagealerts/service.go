@@ -17,12 +17,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/usagealerts/usagealertsdb"
 )
 
 var (
@@ -33,11 +34,11 @@ var (
 
 // Metric enum de las métricas soportadas.
 const (
-	MetricCostPerRun    = "cost_per_run"
-	MetricCostPerDay    = "cost_per_day"
-	MetricCostPerMonth  = "cost_per_month"
-	MetricTokensPerRun  = "tokens_per_run"
-	MetricTokensPerDay  = "tokens_per_day"
+	MetricCostPerRun   = "cost_per_run"
+	MetricCostPerDay   = "cost_per_day"
+	MetricCostPerMonth = "cost_per_month"
+	MetricTokensPerRun = "tokens_per_run"
+	MetricTokensPerDay = "tokens_per_day"
 )
 
 var validMetrics = map[string]bool{
@@ -68,19 +69,19 @@ type EmailSender interface {
 
 // Alert es la config de una regla.
 type Alert struct {
-	ID             uuid.UUID  `json:"id"`
-	Name           string     `json:"name"`
-	Metric         string     `json:"metric"`
-	Threshold      float64    `json:"threshold"`
-	Condition      string     `json:"condition"`
-	Channel        string     `json:"channel"`
-	Recipients     []string   `json:"recipients"`
-	CooldownSecs   int        `json:"cooldown_secs"`
-	Active         bool       `json:"active"`
-	LastFiredAt    *time.Time `json:"last_fired_at,omitempty"`
-	FireCount      int        `json:"fire_count"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	Metric       string     `json:"metric"`
+	Threshold    float64    `json:"threshold"`
+	Condition    string     `json:"condition"`
+	Channel      string     `json:"channel"`
+	Recipients   []string   `json:"recipients"`
+	CooldownSecs int        `json:"cooldown_secs"`
+	Active       bool       `json:"active"`
+	LastFiredAt  *time.Time `json:"last_fired_at,omitempty"`
+	FireCount    int        `json:"fire_count"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // CreateInput para POST.
@@ -107,13 +108,13 @@ type UpdateInput struct {
 
 // AlertFire representa un disparo registrado de una alerta.
 type AlertFire struct {
-	ID            uuid.UUID `json:"id"`
-	AlertID       uuid.UUID `json:"alert_id"`
-	Metric        string    `json:"metric"`
-	Threshold     float64   `json:"threshold"`
-	ObservedValue float64   `json:"observed_value"`
+	ID            uuid.UUID      `json:"id"`
+	AlertID       uuid.UUID      `json:"alert_id"`
+	Metric        string         `json:"metric"`
+	Threshold     float64        `json:"threshold"`
+	ObservedValue float64        `json:"observed_value"`
 	Payload       map[string]any `json:"payload,omitempty"`
-	FiredAt       time.Time `json:"fired_at"`
+	FiredAt       time.Time      `json:"fired_at"`
 }
 
 // Service operaciones CRUD + evaluate.
@@ -122,6 +123,8 @@ type Service struct {
 	EmailSender EmailSender
 	Logger      *slog.Logger
 }
+
+func (s *Service) q() *usagealertsdb.Queries { return usagealertsdb.New(s.Pool) }
 
 func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (*Alert, error) {
 	if !validMetrics[in.Metric] {
@@ -142,69 +145,63 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 	if in.CooldownSecs <= 0 {
 		in.CooldownSecs = 3600
 	}
-	row := s.Pool.QueryRow(ctx,
-		`INSERT INTO usage_alerts
-			(name, metric, threshold, condition, channel,
-			 recipients, cooldown_secs)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)
-		 RETURNING id, created_at, updated_at`,
-		in.Name, in.Metric, in.Threshold, in.Condition, in.Channel,
-		in.Recipients, in.CooldownSecs)
-	a := &Alert{
-		Name: in.Name, Metric: in.Metric,
-		Threshold: in.Threshold, Condition: in.Condition, Channel: in.Channel,
-		Recipients: in.Recipients, CooldownSecs: in.CooldownSecs, Active: true,
-	}
-	if err := row.Scan(&a.ID, &a.CreatedAt, &a.UpdatedAt); err != nil {
+	row, err := s.q().InsertAlert(ctx, usagealertsdb.InsertAlertParams{
+		Name:         in.Name,
+		Metric:       in.Metric,
+		Threshold:    in.Threshold,
+		Condition:    in.Condition,
+		Channel:      in.Channel,
+		Recipients:   in.Recipients,
+		CooldownSecs: int32(in.CooldownSecs),
+	})
+	if err != nil {
 		return nil, fmt.Errorf("insert: %w", err)
+	}
+	a := &Alert{
+		ID:           row.ID,
+		Name:         in.Name,
+		Metric:       in.Metric,
+		Threshold:    in.Threshold,
+		Condition:    in.Condition,
+		Channel:      in.Channel,
+		Recipients:   in.Recipients,
+		CooldownSecs: in.CooldownSecs,
+		Active:       true,
+		CreatedAt:    row.CreatedAt,
+		UpdatedAt:    row.UpdatedAt,
 	}
 	return a, nil
 }
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Alert, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, name, metric, threshold, condition, channel,
-			recipients, cooldown_secs, active, last_fired_at, fire_count,
-			created_at, updated_at
-		 FROM usage_alerts ORDER BY created_at DESC`)
+	rows, err := s.q().ListAlerts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []Alert
-	for rows.Next() {
-		var a Alert
-		if err := rows.Scan(&a.ID, &a.Name, &a.Metric,
-			&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
-			&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
-			&a.CreatedAt, &a.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
+	for _, r := range rows {
+		out = append(out, toAlertFromList(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM usage_alerts WHERE id=$1`, id)
+	n, err := s.q().DeleteAlert(ctx, id)
 	if err != nil {
 		return err
 	}
-	if ct.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrUnknown
 	}
 	return nil
 }
 
 func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active bool) error {
-	ct, err := s.Pool.Exec(ctx,
-		`UPDATE usage_alerts SET active=$1 WHERE id=$2`,
-		active, id)
+	n, err := s.q().SetAlertActive(ctx, usagealertsdb.SetAlertActiveParams{ID: id, Active: active})
 	if err != nil {
 		return err
 	}
-	if ct.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrUnknown
 	}
 	return nil
@@ -212,64 +209,32 @@ func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active boo
 
 // Update actualiza campos del alert. Solo envía campos no-nil.
 func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput) (*Alert, error) {
-
-	sets := []string{}
-	args := []any{id}
-	idx := 2
-	if in.Name != nil {
-		sets = append(sets, fmt.Sprintf("name=$%d", idx))
-		args = append(args, *in.Name)
-		idx++
-	}
-	if in.Metric != nil {
-		sets = append(sets, fmt.Sprintf("metric=$%d", idx))
-		args = append(args, *in.Metric)
-		idx++
-	}
-	if in.Threshold != nil {
-		sets = append(sets, fmt.Sprintf("threshold=$%d", idx))
-		args = append(args, *in.Threshold)
-		idx++
-	}
-	if in.Condition != nil {
-		sets = append(sets, fmt.Sprintf("condition=$%d", idx))
-		args = append(args, *in.Condition)
-		idx++
-	}
-	if in.Channel != nil {
-		sets = append(sets, fmt.Sprintf("channel=$%d", idx))
-		args = append(args, *in.Channel)
-		idx++
-	}
-	if in.Recipients != nil {
-		sets = append(sets, fmt.Sprintf("recipients=$%d", idx))
-		args = append(args, in.Recipients)
-		idx++
-	}
-	if in.CooldownSecs != nil {
-		sets = append(sets, fmt.Sprintf("cooldown_secs=$%d", idx))
-		args = append(args, *in.CooldownSecs)
-		idx++
-	}
-	if len(sets) == 0 {
+	if in.Name == nil && in.Metric == nil && in.Threshold == nil &&
+		in.Condition == nil && in.Channel == nil && in.Recipients == nil &&
+		in.CooldownSecs == nil {
 		return s.Get(ctx, orgID, id)
 	}
-	sets = append(sets, "updated_at=NOW()")
 
-	q := fmt.Sprintf(
-		`UPDATE usage_alerts SET %s WHERE id=$1
-		 RETURNING id, name, metric, threshold, condition, channel,
-		           recipients, cooldown_secs, active, last_fired_at, fire_count,
-		           created_at, updated_at`,
-		strings.Join(sets, ", "))
-	var a Alert
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&a.ID, &a.Name, &a.Metric, &a.Threshold, &a.Condition,
-		&a.Channel, &a.Recipients, &a.CooldownSecs, &a.Active, &a.LastFiredAt,
-		&a.FireCount, &a.CreatedAt, &a.UpdatedAt)
+	var cooldown *int32
+	if in.CooldownSecs != nil {
+		c := int32(*in.CooldownSecs)
+		cooldown = &c
+	}
+
+	row, err := s.q().UpdateAlert(ctx, usagealertsdb.UpdateAlertParams{
+		ID:           id,
+		Name:         in.Name,
+		Metric:       in.Metric,
+		Threshold:    in.Threshold,
+		Condition:    in.Condition,
+		Channel:      in.Channel,
+		Recipients:   in.Recipients,
+		CooldownSecs: cooldown,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
+	a := toAlertFromUpdate(row)
 	return &a, nil
 }
 
@@ -278,31 +243,29 @@ func (s *Service) ListFires(ctx context.Context, orgID, alertID uuid.UUID, limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT f.id, f.alert_id, f.metric, f.threshold, f.observed_value, f.payload, f.fired_at
-		 FROM usage_alert_fires f
-		 JOIN usage_alerts a ON a.id = f.alert_id
-		 WHERE f.alert_id = $1
-		 ORDER BY f.fired_at DESC LIMIT $2`,
-		alertID, limit)
+	rows, err := s.q().ListAlertFires(ctx, usagealertsdb.ListAlertFiresParams{
+		AlertID: alertID,
+		Limit:   int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []AlertFire
-	for rows.Next() {
-		var f AlertFire
-		var payloadRaw []byte
-		if err := rows.Scan(&f.ID, &f.AlertID, &f.Metric, &f.Threshold,
-			&f.ObservedValue, &payloadRaw, &f.FiredAt); err != nil {
-			return nil, err
+	for _, r := range rows {
+		f := AlertFire{
+			ID:            r.ID,
+			AlertID:       r.AlertID,
+			Metric:        r.Metric,
+			Threshold:     r.Threshold,
+			ObservedValue: r.ObservedValue,
+			FiredAt:       r.FiredAt,
 		}
-		if len(payloadRaw) > 0 {
-			_ = json.Unmarshal(payloadRaw, &f.Payload)
+		if len(r.Payload) > 0 {
+			_ = json.Unmarshal(r.Payload, &f.Payload)
 		}
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // CompareThreshold evalúa la condición. true → debe disparar.
@@ -323,27 +286,14 @@ func CompareThreshold(observed, threshold float64, condition string) bool {
 func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 	costUSD float64, tokensTotal int64) ([]Alert, error) {
 
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, name, metric, threshold, condition, channel,
-			recipients, cooldown_secs, active, last_fired_at, fire_count,
-			created_at, updated_at
-		 FROM usage_alerts
-		 WHERE active = TRUE
-		   AND metric IN ($1, $2)`,
-		MetricCostPerRun, MetricTokensPerRun)
+	rows, err := s.q().ListActiveAlertsByMetrics(ctx,
+		[]string{MetricCostPerRun, MetricTokensPerRun})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var alerts []Alert
-	for rows.Next() {
-		var a Alert
-		if err := rows.Scan(&a.ID, &a.Name, &a.Metric,
-			&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
-			&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
-			&a.CreatedAt, &a.UpdatedAt); err != nil {
-			return nil, err
-		}
+	for _, r := range rows {
+		a := toAlertFromActive(r)
 		var observed float64
 		switch a.Metric {
 		case MetricCostPerRun:
@@ -361,7 +311,7 @@ func (s *Service) EvaluateRunEvent(ctx context.Context, orgID uuid.UUID,
 			}
 		}
 	}
-	return alerts, rows.Err()
+	return alerts, nil
 }
 
 // inCooldown true si LastFiredAt + Cooldown > now.
@@ -374,38 +324,77 @@ func (s *Service) inCooldown(a *Alert) bool {
 
 func (s *Service) recordFire(ctx context.Context, a *Alert, observed float64, extra map[string]any) error {
 	payload, _ := json.Marshal(extra)
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO usage_alert_fires
-			(alert_id, metric, threshold, observed_value, payload)
-		 VALUES ($1,$2,$3,$4,$5)`,
-		a.ID, a.Metric, a.Threshold, observed, payload)
-	if err != nil {
+	q := s.q()
+	if err := q.InsertAlertFire(ctx, usagealertsdb.InsertAlertFireParams{
+		AlertID:       a.ID,
+		Metric:        a.Metric,
+		Threshold:     a.Threshold,
+		ObservedValue: observed,
+		Payload:       payload,
+	}); err != nil {
 		return err
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE usage_alerts SET last_fired_at=NOW(), fire_count=fire_count+1 WHERE id=$1`, a.ID)
-	return err
+	return q.TouchAlertFired(ctx, a.ID)
 }
 
 // Get devuelve un alert por id+org (cross-org guard).
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Alert, error) {
-	row := s.Pool.QueryRow(ctx,
-		`SELECT id, name, metric, threshold, condition, channel,
-			recipients, cooldown_secs, active, last_fired_at, fire_count,
-			created_at, updated_at
-		 FROM usage_alerts WHERE id=$1`, id)
-	var a Alert
-	err := row.Scan(&a.ID, &a.Name, &a.Metric,
-		&a.Threshold, &a.Condition, &a.Channel, &a.Recipients,
-		&a.CooldownSecs, &a.Active, &a.LastFiredAt, &a.FireCount,
-		&a.CreatedAt, &a.UpdatedAt)
+	row, err := s.q().GetAlert(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
 	if err != nil {
 		return nil, err
 	}
+	a := toAlertFromGet(row)
 	return &a, nil
+}
+
+// mapping generado -> dominio. Las distintas row structs comparten la misma
+// forma de Alert; cada adaptador delega en buildAlert.
+func buildAlert(id uuid.UUID, name, metric string, threshold float64,
+	condition, channel string, recipients []string, cooldownSecs int32,
+	active bool, lastFiredAt *time.Time, fireCount int32,
+	createdAt, updatedAt time.Time) Alert {
+	return Alert{
+		ID:           id,
+		Name:         name,
+		Metric:       metric,
+		Threshold:    threshold,
+		Condition:    condition,
+		Channel:      channel,
+		Recipients:   recipients,
+		CooldownSecs: int(cooldownSecs),
+		Active:       active,
+		LastFiredAt:  lastFiredAt,
+		FireCount:    int(fireCount),
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+	}
+}
+
+func toAlertFromList(r usagealertsdb.ListAlertsRow) Alert {
+	return buildAlert(r.ID, r.Name, r.Metric, r.Threshold, r.Condition, r.Channel,
+		r.Recipients, r.CooldownSecs, r.Active, r.LastFiredAt, r.FireCount,
+		r.CreatedAt, r.UpdatedAt)
+}
+
+func toAlertFromGet(r usagealertsdb.GetAlertRow) Alert {
+	return buildAlert(r.ID, r.Name, r.Metric, r.Threshold, r.Condition, r.Channel,
+		r.Recipients, r.CooldownSecs, r.Active, r.LastFiredAt, r.FireCount,
+		r.CreatedAt, r.UpdatedAt)
+}
+
+func toAlertFromUpdate(r usagealertsdb.UpdateAlertRow) Alert {
+	return buildAlert(r.ID, r.Name, r.Metric, r.Threshold, r.Condition, r.Channel,
+		r.Recipients, r.CooldownSecs, r.Active, r.LastFiredAt, r.FireCount,
+		r.CreatedAt, r.UpdatedAt)
+}
+
+func toAlertFromActive(r usagealertsdb.ListActiveAlertsByMetricsRow) Alert {
+	return buildAlert(r.ID, r.Name, r.Metric, r.Threshold, r.Condition, r.Channel,
+		r.Recipients, r.CooldownSecs, r.Active, r.LastFiredAt, r.FireCount,
+		r.CreatedAt, r.UpdatedAt)
 }
 
 func (s *Service) sendEmailAlertAsync(a Alert, observed float64) {

@@ -12,12 +12,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/spec/specdb"
 )
 
 const (
@@ -83,7 +82,7 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-
+func (s *Service) q() *specdb.Queries { return specdb.New(s.Pool) }
 
 // CreateProposal inserta nueva versión de proposal para una HU.
 func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intention, scope, approach, risks, testingNotes string) (*Proposal, error) {
@@ -91,20 +90,22 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 		return nil, err
 	}
 
-	var version int
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM sdd_proposals WHERE issue_id = $1`, issueID).Scan(&version)
-	version++
+	maxV, _ := s.q().MaxProposalVersion(ctx, issueID)
+	version := maxV + 1
 
-	var p Proposal
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO sdd_proposals (issue_id, version, status, intention, scope, approach, risks, testing_notes)
-		 VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7)
-		 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at`,
-		issueID, version, intention, scope, approach, nullStr(risks), nullStr(testingNotes),
-	).Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt)
+	row, err := s.q().InsertProposal(ctx, specdb.InsertProposalParams{
+		IssueID:      issueID,
+		Version:      version,
+		Intention:    intention,
+		Scope:        scope,
+		Approach:     approach,
+		Risks:        nullStr(risks),
+		TestingNotes: nullStr(testingNotes),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert proposal: %w", err)
 	}
+	p := toProposal(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -112,7 +113,7 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 			Action:     "proposal.created",
 			EntityType: "proposal",
 			EntityID:   &p.ID,
-			NewValues:  map[string]any{"issue_id": issueID.String(), "version": version},
+			NewValues:  map[string]any{"issue_id": issueID.String(), "version": int(version)},
 		})
 	}
 	return &p, nil
@@ -120,55 +121,49 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 
 // GetLatestProposal retorna la última versión de proposal para una HU.
 func (s *Service) GetLatestProposal(ctx context.Context, issueID uuid.UUID) (*Proposal, error) {
-	var p Proposal
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
-	).Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt)
+	row, err := s.q().GetLatestProposal(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get latest proposal: %w", err)
 	}
+	p := toProposal(row)
 	return &p, nil
 }
 
 // GetProposalVersion retorna una versión específica.
 func (s *Service) GetProposalVersion(ctx context.Context, issueID uuid.UUID, version int) (*Proposal, error) {
-	var p Proposal
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM sdd_proposals WHERE issue_id = $1 AND version = $2`, issueID, version,
-	).Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt)
+	row, err := s.q().GetProposalVersion(ctx, specdb.GetProposalVersionParams{
+		IssueID: issueID,
+		Version: int32(version),
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get proposal version: %w", err)
 	}
+	p := toProposal(row)
 	return &p, nil
 }
 
 // ListProposalVersions lista todas las versiones de proposal para una HU.
 func (s *Service) ListProposalVersions(ctx context.Context, issueID uuid.UUID) ([]Proposal, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC`, issueID)
+	rows, err := s.q().ListProposalVersions(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list proposals: %w", err)
 	}
-	defer rows.Close()
-	return scanProposals(rows)
+	out := make([]Proposal, len(rows))
+	for i, r := range rows {
+		out[i] = toProposal(r)
+	}
+	return out, nil
 }
 
 // ChangeProposalStatus cambia status con validación de transición.
 func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID, newStatus, rejectionReason string) (*Proposal, error) {
-	var current Proposal
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
-		 FROM sdd_proposals WHERE id = $1`, proposalID,
-	).Scan(&current.ID, &current.HuID, &current.Version, &current.Status, &current.Intention, &current.Scope, &current.Approach, &current.Risks, &current.TestingNotes, &current.RejectionReason, &current.CreatedAt, &current.UpdatedAt)
+	current, err := s.q().GetProposalByID(ctx, proposalID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -199,16 +194,15 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 		reason = &rejectionReason
 	}
 
-	var updated Proposal
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE sdd_proposals SET status = $2, rejection_reason = $3, updated_at = NOW()
-		 WHERE id = $1
-		 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at`,
-		proposalID, newStatus, reason,
-	).Scan(&updated.ID, &updated.HuID, &updated.Version, &updated.Status, &updated.Intention, &updated.Scope, &updated.Approach, &updated.Risks, &updated.TestingNotes, &updated.RejectionReason, &updated.CreatedAt, &updated.UpdatedAt)
+	row, err := s.q().UpdateProposalStatus(ctx, specdb.UpdateProposalStatusParams{
+		ID:              proposalID,
+		Status:          newStatus,
+		RejectionReason: reason,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("update proposal status: %w", err)
 	}
+	updated := toProposal(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -223,32 +217,33 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 	return &updated, nil
 }
 
-
-
 // CreateDesign inserta nuevo design para una HU.
 func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalID *uuid.UUID, archDecisions, alternatives, dataFlow, tddPlan, risksMitigation string) (*Design, error) {
 	if err := s.requireHU(ctx, issueID); err != nil {
 		return nil, err
 	}
 
-	var version int
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM sdd_designs WHERE issue_id = $1`, issueID).Scan(&version)
-	version++
+	maxV, _ := s.q().MaxDesignVersion(ctx, issueID)
+	version := maxV + 1
 
 	if proposalID != nil && *proposalID == uuid.Nil {
 		proposalID = nil
 	}
 
-	var d Design
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO sdd_designs (issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation)
-		 VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8)
-		 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at`,
-		issueID, proposalID, version, archDecisions, nullStr(alternatives), nullStr(dataFlow), nullStr(tddPlan), nullStr(risksMitigation),
-	).Scan(&d.ID, &d.HuID, &d.ProposalID, &d.Version, &d.Status, &d.ArchDecisions, &d.Alternatives, &d.DataFlow, &d.TDDPlan, &d.RisksMitigation, &d.CreatedAt, &d.UpdatedAt)
+	row, err := s.q().InsertDesign(ctx, specdb.InsertDesignParams{
+		IssueID:         issueID,
+		ProposalID:      proposalID,
+		Version:         version,
+		ArchDecisions:   archDecisions,
+		Alternatives:    nullStr(alternatives),
+		DataFlow:        nullStr(dataFlow),
+		TddPlan:         nullStr(tddPlan),
+		RisksMitigation: nullStr(risksMitigation),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert design: %w", err)
 	}
+	d := toDesign(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -256,7 +251,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 			Action:     "design.created",
 			EntityType: "design",
 			EntityID:   &d.ID,
-			NewValues:  map[string]any{"issue_id": issueID.String(), "version": version},
+			NewValues:  map[string]any{"issue_id": issueID.String(), "version": int(version)},
 		})
 	}
 	return &d, nil
@@ -264,30 +259,28 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 
 // GetLatestDesign retorna el último design para una HU.
 func (s *Service) GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*Design, error) {
-	var d Design
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
-		 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`, issueID,
-	).Scan(&d.ID, &d.HuID, &d.ProposalID, &d.Version, &d.Status, &d.ArchDecisions, &d.Alternatives, &d.DataFlow, &d.TDDPlan, &d.RisksMitigation, &d.CreatedAt, &d.UpdatedAt)
+	row, err := s.q().GetLatestDesign(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get latest design: %w", err)
 	}
+	d := toDesign(row)
 	return &d, nil
 }
 
 // ListDesignsByHU lista designs de una HU.
 func (s *Service) ListDesignsByHU(ctx context.Context, issueID uuid.UUID) ([]Design, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
-		 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC`, issueID)
+	rows, err := s.q().ListDesignsByIssue(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list designs: %w", err)
 	}
-	defer rows.Close()
-	return scanDesigns(rows)
+	out := make([]Design, len(rows))
+	for i, r := range rows {
+		out[i] = toDesign(r)
+	}
+	return out, nil
 }
 
 // ChangeDesignStatus cambia status de un design.
@@ -296,19 +289,17 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 		return nil, ErrInvalidStatus
 	}
 
-	var updated Design
-	err := s.Pool.QueryRow(ctx,
-		`UPDATE sdd_designs SET status = $2, updated_at = NOW()
-		 WHERE id = $1
-		 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at`,
-		designID, newStatus,
-	).Scan(&updated.ID, &updated.HuID, &updated.ProposalID, &updated.Version, &updated.Status, &updated.ArchDecisions, &updated.Alternatives, &updated.DataFlow, &updated.TDDPlan, &updated.RisksMitigation, &updated.CreatedAt, &updated.UpdatedAt)
+	row, err := s.q().UpdateDesignStatus(ctx, specdb.UpdateDesignStatusParams{
+		ID:     designID,
+		Status: newStatus,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update design status: %w", err)
 	}
+	updated := toDesign(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -323,11 +314,8 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 	return &updated, nil
 }
 
-
-
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
-	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM issues WHERE id = $1)`, issueID).Scan(&exists)
+	exists, err := s.q().IssueExists(ctx, issueID)
 	if err != nil {
 		return fmt.Errorf("check hu: %w", err)
 	}
@@ -344,36 +332,36 @@ func nullStr(s string) *string {
 	return &s
 }
 
-func scanProposals(rows pgx.Rows) ([]Proposal, error) {
-	defer rows.Close()
-	var out []Proposal
-	for rows.Next() {
-		var p Proposal
-		if err := rows.Scan(&p.ID, &p.HuID, &p.Version, &p.Status, &p.Intention, &p.Scope, &p.Approach, &p.Risks, &p.TestingNotes, &p.RejectionReason, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan proposal: %w", err)
-		}
-		out = append(out, p)
+func toProposal(r specdb.SddProposal) Proposal {
+	return Proposal{
+		ID:              r.ID,
+		HuID:            r.IssueID,
+		Version:         int(r.Version),
+		Status:          r.Status,
+		Intention:       r.Intention,
+		Scope:           r.Scope,
+		Approach:        r.Approach,
+		Risks:           r.Risks,
+		TestingNotes:    r.TestingNotes,
+		RejectionReason: r.RejectionReason,
+		CreatedAt:       r.CreatedAt,
+		UpdatedAt:       r.UpdatedAt,
 	}
-	return out, rows.Err()
 }
 
-func scanDesigns(rows pgx.Rows) ([]Design, error) {
-	defer rows.Close()
-	var out []Design
-	for rows.Next() {
-		var d Design
-		if err := rows.Scan(&d.ID, &d.HuID, &d.ProposalID, &d.Version, &d.Status, &d.ArchDecisions, &d.Alternatives, &d.DataFlow, &d.TDDPlan, &d.RisksMitigation, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan design: %w", err)
-		}
-		out = append(out, d)
+func toDesign(r specdb.SddDesign) Design {
+	return Design{
+		ID:              r.ID,
+		HuID:            r.IssueID,
+		ProposalID:      r.ProposalID,
+		Version:         int(r.Version),
+		Status:          r.Status,
+		ArchDecisions:   r.ArchDecisions,
+		Alternatives:    r.Alternatives,
+		DataFlow:        r.DataFlow,
+		TDDPlan:         r.TddPlan,
+		RisksMitigation: r.RisksMitigation,
+		CreatedAt:       r.CreatedAt,
+		UpdatedAt:       r.UpdatedAt,
 	}
-	return out, rows.Err()
-}
-
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation
 }

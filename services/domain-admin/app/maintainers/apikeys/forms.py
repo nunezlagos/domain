@@ -1,15 +1,3 @@
-"""Forms del mantenedor de API Keys (migrados a core).
-
-ApiKeyForm reusa core.forms.InstanceAwareMixin para capturar `instance=` y
-poder excluirse a si mismo en la validacion de unicidad del nombre (en
-edicion). La logica propia —choices de usuarios dueños, dueño inmutable en
-edicion— queda aqui.
-
-Se usa forms.Form (no ModelForm) porque el modelo es managed=False.
-- En create: se elige el user dueño + nombre + expiracion opcional.
-- En edit: NO se reasigna el user ni se regenera el secreto; solo se editan
-  nombre, expiracion y status.
-"""
 from django import forms
 
 from core.forms import InstanceAwareMixin
@@ -19,8 +7,6 @@ from .models import ApiKey
 
 
 class ApiKeyForm(InstanceAwareMixin, forms.Form):
-    """Form para crear/editar API keys."""
-
     name = forms.CharField(
         label="Nombre",
         max_length=255,
@@ -33,7 +19,7 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
     )
     user = forms.ChoiceField(
         label="Usuario dueño",
-        choices=[],  # se completa en __init__
+        choices=[],
         widget=forms.Select(attrs={"class": "form-control form-select"}),
         help_text="Usuario al que pertenece la API Key.",
     )
@@ -55,16 +41,12 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: ApiKey | None = None, **kwargs):
-
         super().__init__(*args, instance=instance, **kwargs)
-
 
         self.fields["user"].choices = [
             (str(u.pk), u.display_name)
             for u in User.objects.filter(status="active").order_by("email")
         ]
-
-
 
         if instance is not None:
             self.fields["user"].required = False
@@ -86,8 +68,6 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
         return name
 
     def clean_user(self):
-
-
         if self.instance is not None:
             return str(self.instance.user.pk)
         user_id = self.cleaned_data.get("user")
@@ -99,8 +79,6 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
 
 
 class ApiKeySearchForm(forms.Form):
-    """Busqueda simple en el listado."""
-
     q = forms.CharField(
         label="Buscar",
         required=False,

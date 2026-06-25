@@ -1,20 +1,3 @@
-"""Views del mantenedor de Proyectos (migradas a core).
-
-Las 7 vistas estandar (list, signal, detail, create, edit, delete, toggle) las
-arma core.views.MaintainerViews. Aqui solo:
-
-  1. Se configura la instancia `views` (model/form/service/templates/labels).
-  2. Se sobreescriben los hooks especificos de projects:
-       - _form_payload: mapea el campo `template` del form -> `template_id` que
-         espera el service (y omite los campos que el service no recibe).
-       - list_context: agrega stats + page_title que el listado consume.
-       - form_context / detail_context: exponen `project_obj` (+ repositories en
-         detail) que los templates de projects ya consumen.
-       - toggle: mensaje propio (archivado/restaurado) en vez del generico.
-
-El guard de auth (require_auth) y la deteccion AJAX (is_ajax) vienen de
-core.auth (antes estaban duplicados como _require_auth/_is_ajax).
-"""
 from __future__ import annotations
 
 from django.contrib import messages
@@ -29,12 +12,7 @@ from . import services
 from .forms import ProjectForm
 from .models import Project
 
-
 class ProjectViews(MaintainerViews):
-    """MaintainerViews especializado para projects (context keys + payload + msgs)."""
-
-
-
     @staticmethod
     def _parse_repo_post(data) -> list[dict]:
         urls = data.getlist("repo_url")
@@ -157,8 +135,6 @@ class ProjectViews(MaintainerViews):
 
 
 def _skills_ctx(project, scope="all", page=1, readonly=False) -> dict:
-    """Contexto del pane de skills (tabla combinada + filtro scope + paginacion).
-    readonly=True (el "ver"): sin columna/botones de accion."""
     data = services.list_project_skills(project, scope=scope, page=page)
     return {
         "project_obj": project,
@@ -176,8 +152,6 @@ def _skills_ctx(project, scope="all", page=1, readonly=False) -> dict:
 
 
 def _rules_ctx(project, scope="all", page=1, readonly=False) -> dict:
-    """Contexto del pane de reglas (tabla combinada + filtro scope + paginacion).
-    readonly=True (el "ver"): sin botones de toggle ni link de gestion."""
     data = services.list_project_rules(project, scope=scope, page=page)
     return {
         "project_obj": project,
@@ -192,7 +166,6 @@ def _rules_ctx(project, scope="all", page=1, readonly=False) -> dict:
 
 
 def _resolve_project_or_redirect(project_id):
-    """Devuelve (project, None) o (None, redirect) si no existe."""
     try:
         return services.get_project(project_id), None
     except services.ProjectError as exc:
@@ -201,7 +174,6 @@ def _resolve_project_or_redirect(project_id):
 
 @require_http_methods(["GET"])
 def skills_pane(request, project_id):
-    """Pane de skills (filtro scope + paginacion) para el tab del ver/editar."""
     if (redir := require_auth(request)):
         return redir
     project, redir = _resolve_project_or_redirect(project_id)
@@ -215,8 +187,6 @@ def skills_pane(request, project_id):
 
 @require_http_methods(["POST"])
 def toggle_skill(request, project_id):
-    """Excluye (op=exclude) o re-incluye (op=include) una skill; re-renderiza el
-    pane preservando scope+page (los manda el JS del pane)."""
     if (redir := require_auth(request)):
         return redir
     project, redir = _resolve_project_or_redirect(project_id)
@@ -233,7 +203,6 @@ def toggle_skill(request, project_id):
 
 @require_http_methods(["GET"])
 def rules_pane(request, project_id):
-    """Pane de reglas (filtro scope + paginacion) para el tab del ver/editar."""
     if (redir := require_auth(request)):
         return redir
     project, redir = _resolve_project_or_redirect(project_id)
@@ -247,8 +216,6 @@ def rules_pane(request, project_id):
 
 @require_http_methods(["POST"])
 def toggle_rule(request, project_id):
-    """Activa/desactiva una regla PROPIA del proyecto; re-renderiza el pane de
-    reglas preservando scope+page."""
     if (redir := require_auth(request)):
         return redir
     project, redir = _resolve_project_or_redirect(project_id)
@@ -280,8 +247,6 @@ views = ProjectViews(
 
 
 def export_projects(request):
-    """Export CSV (consolidado, abre en Excel) de los proyectos filtrados.
-    Respeta los filtros activos: q (busqueda) y status (estado)."""
     if (redir := require_auth(request)):
         return redir
     status = (request.GET.get("status") or "").strip()

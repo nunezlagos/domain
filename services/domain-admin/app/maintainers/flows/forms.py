@@ -1,10 +1,3 @@
-"""Forms del mantenedor de Flows (migrados a core).
-
-FlowForm reusa core.forms.SlugNormalizationMixin para la normalizacion
-strip+lower+slugify + unicidad del slug (excluyendo la propia instancia en
-edicion). La logica propia —spec JSONB editado como texto JSON y los flags
-booleanos— queda aqui.
-"""
 from django import forms
 
 from core.forms import SlugNormalizationMixin
@@ -13,13 +6,6 @@ from .models import Flow
 
 
 class FlowForm(SlugNormalizationMixin, forms.Form):
-    """Form para crear/editar flows. Usa forms.Form (model es managed=False).
-
-    `spec` es un JSONB obligatorio en la BD: se edita como texto JSON
-    (forms.JSONField parsea y valida que sea JSON bien formado).
-    """
-
-
     slug_model = Flow
     slug_field = "slug"
 
@@ -41,9 +27,7 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
     )
     spec = forms.JSONField(
         label="Spec (JSON)",
-        required=False,  # {} es valido; Django trata {} como "empty", asi que
-
-
+        required=False,
         initial=dict,
         widget=forms.Textarea(attrs={
             "class": "form-control form-control--code",
@@ -76,8 +60,6 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Flow | None = None, **kwargs):
-
-
         super().__init__(*args, instance=instance, **kwargs)
 
         if instance is not None and not self.is_bound:
@@ -91,9 +73,6 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
             self.fields["seed_version"].initial = instance.seed_version
 
     def clean_spec(self):
-
-
-
         spec = self.cleaned_data.get("spec")
         if spec in (None, "", [], (), {}):
             return {}
@@ -103,8 +82,6 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
 
 
 class FlowSearchForm(forms.Form):
-    """Busqueda simple en el listado."""
-
     q = forms.CharField(
         label="Buscar",
         required=False,

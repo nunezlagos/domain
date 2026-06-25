@@ -47,17 +47,31 @@
         <div class="msg"><span class="lbl ret" style="left:50%">project_id (+ auto-enlaza skills de plataforma)</span><span class="line ret to-left" style="left:10%;width:80%"></span></div>
         <div class="msg"><span class="lbl" style="left:20%">prompt (con project_id)</span><span class="line to-right" style="left:10%;width:20%"></span></div>
         <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake)</span><span class="self" style="left:30%"></span></div>
-        <div class="msg"><span class="lbl" style="left:40%">intent + project_id</span><span class="line to-right" style="left:30%;width:20%"></span></div>
+        <div class="msg">
+          <span class="lbl" style="left:40%">intent + project_id</span>
+          <span class="line to-right" style="left:30%;width:20%"></span>
+        </div>
 
         <div class="msg decision-row">
-          <span class="decision-box" style="left:30%;width:42%">
+          <span class="lbl de-in" style="left:50%">analyzeComplexity + decideMode</span>
+          <span class="line to-right de-arrow-in" style="left:30%;width:20%"></span>
+          <span class="decision-box">
             <span class="decision-title">Decision Engine</span>
             <span class="decision-line">analyzeComplexity(raw_text) → trivial / simple / moderado / complejo</span>
             <span class="decision-line">decideMode(signal, exec_mode, hasLLM) → solo | express | lite | full</span>
           </span>
+          <span class="de-out-label" style="left:52%">si <strong>trivial+LLM</strong> → solo (server-side)</span>
+          <span class="de-out-label" style="left:75%">si <strong>simple/mod/compl</strong> → plan al IDE</span>
         </div>
-        <div class="msg"><span class="lbl" style="left:34%">si <strong>trivial + LLM</strong> &rarr; ModeSolo (server-side, no delega)</span><span class="self" style="left:30%"></span></div>
-        <div class="msg"><span class="lbl" style="left:40%">si <strong>simple/moderado/complejo</strong> &rarr; plan + FlowRunContext al cliente IDE</span><span class="line to-right" style="left:30%;width:20%"></span></div>
+
+        <div class="msg">
+          <span class="lbl" style="left:34%">si trivial+LLM → ModeSolo</span>
+          <span class="self" style="left:30%"></span>
+        </div>
+        <div class="msg">
+          <span class="lbl" style="left:40%">plan + FlowRunContext</span>
+          <span class="line to-right" style="left:30%;width:20%"></span>
+        </div>
 
         <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto</span><span class="line to-right" style="left:50%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:70%">ok</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>

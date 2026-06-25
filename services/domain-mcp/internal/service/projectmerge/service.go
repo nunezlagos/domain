@@ -1,13 +1,13 @@
 // Package projectmerge — issue-01.5 fusiona un proyecto source en target.
 //
 // Migra observations, skills, flows, crons, agents desde source.project_id
-// hacia target.project_id en una sola transacción. Tabla project_merges
+// hacia target.project_id en una sola transaccion. Tabla project_merges
 // (000023) registra el merge para audit.
 //
 // Source project queda soft-deleted (deleted_at) post-merge para preservar
 // historial y permitir rollback manual si surge problema.
 //
-// Convención de naming en conflictos (skills/agents/flows/crons que usan
+// Convencion de naming en conflictos (skills/agents/flows/crons que usan
 // slug+project_id UNIQUE): el item del target prevalece; los del source
 // con mismo slug se sufijean con "-merged-<source_slug>".
 package projectmerge
@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/projectmerge/projectmergedb"
 )
 
 var (
@@ -33,7 +34,7 @@ var (
 	ErrAlreadyMerged = errors.New("source project already merged")
 )
 
-// MergeReport documenta qué se movió.
+// MergeReport documenta que se movio.
 type MergeReport struct {
 	MergeID           uuid.UUID `json:"merge_id"`
 	SourceID          uuid.UUID `json:"source_id"`
@@ -51,13 +52,13 @@ type MergeReport struct {
 	CompletedAt       time.Time `json:"completed_at"`
 }
 
-// Service ejecuta merges atómicamente.
+// Service ejecuta merges atomicamente.
 type Service struct {
 	Pool  *pgxpool.Pool
 	Audit *audit.PGRecorder
 }
 
-// Merge fusiona source → target. Atómico via tx; rollback completo en error.
+// Merge fusiona source → target. Atomico via tx; rollback completo en error.
 func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UUID) (*MergeReport, error) {
 	if sourceID == targetID {
 		return nil, ErrSameProject
@@ -76,29 +77,21 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	}
 	defer tx.Rollback(ctx)
 
+	db := projectmergedb.New(tx)
 
-
-
-	var sourceDeleted *time.Time
-	var sourceSlug string
-	err = tx.QueryRow(ctx,
-		`SELECT deleted_at, slug FROM projects WHERE id = $1`, sourceID,
-	).Scan(&sourceDeleted, &sourceSlug)
+	source, err := db.GetSourceProject(ctx, sourceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: source", ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("lookup source: %w", err)
 	}
-	if sourceDeleted != nil {
+	if source.DeletedAt.Valid {
 		return nil, ErrAlreadyMerged
 	}
+	sourceSlug := source.Slug
 
-
-
-	err = tx.QueryRow(ctx,
-		`SELECT 1 FROM projects WHERE id = $1 AND deleted_at IS NULL`, targetID,
-	).Scan(new(int))
+	_, err = db.CheckTargetExists(ctx, targetID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: target", ErrNotFound)
 	}
@@ -106,19 +99,14 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		return nil, fmt.Errorf("lookup target: %w", err)
 	}
 
-
-
-
-	tag, err := tx.Exec(ctx,
-		`UPDATE knowledge_observations SET project_id = $1 WHERE project_id = $2 AND deleted_at IS NULL`,
-		targetID, sourceID,
-	)
+	n, err := db.MoveObservations(ctx, projectmergedb.MoveObservationsParams{
+		TargetID: targetID,
+		SourceID: sourceID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("move observations: %w", err)
 	}
-	report.ObservationsMoved = int(tag.RowsAffected())
-
-
+	report.ObservationsMoved = int(n)
 
 	for _, t := range []struct {
 		table   string
@@ -138,28 +126,24 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		*t.renamed = renamed
 	}
 
-
-	if _, err := tx.Exec(ctx,
-		`UPDATE projects SET deleted_at = now(), updated_at = now() WHERE id = $1`,
-		sourceID,
-	); err != nil {
+	if err := db.SoftDeleteProject(ctx, sourceID); err != nil {
 		return nil, fmt.Errorf("soft-delete source: %w", err)
 	}
 
-
 	report.CompletedAt = time.Now()
 	reportJSON, _ := json.Marshal(report)
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO project_merges (id, source_id, target_id, actor_id, report, merged_at)
-		 VALUES ($1, $2, $3, $4, $5, now())`,
-		report.MergeID, sourceID, targetID, actorID, reportJSON,
-	); err != nil {
-
-		_, _ = tx.Exec(ctx,
-			`INSERT INTO project_merges (id, source_id, target_id, merged_at)
-			 VALUES ($1, $2, $3, now())`,
-			report.MergeID, sourceID, targetID,
-		)
+	if err := db.InsertMergeRecord(ctx, projectmergedb.InsertMergeRecordParams{
+		ID:       report.MergeID,
+		SourceID: sourceID,
+		TargetID: targetID,
+		ActorID:  &actorID,
+		Report:   reportJSON,
+	}); err != nil {
+		_ = db.InsertMergeRecordNoActor(ctx, projectmergedb.InsertMergeRecordNoActorParams{
+			ID:       report.MergeID,
+			SourceID: sourceID,
+			TargetID: targetID,
+		})
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -192,7 +176,6 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 // moveWithRename actualiza project_id en source → target. Para slugs que
 // chocan con target, los sufijea con "-merged-<sourceSlug>" antes de mover.
 func moveWithRename(ctx context.Context, tx pgx.Tx, table string, sourceID, targetID uuid.UUID, sourceSlug string) (int, []string, error) {
-
 	rows, err := tx.Query(ctx,
 		fmt.Sprintf(`
 			SELECT s.id, s.slug
@@ -235,7 +218,6 @@ func moveWithRename(ctx context.Context, tx pgx.Tx, table string, sourceID, targ
 		}
 		renamed = append(renamed, c.Slug+" → "+newSlug)
 	}
-
 
 	tag, err := tx.Exec(ctx,
 		fmt.Sprintf(`UPDATE %s SET project_id = $1 WHERE project_id = $2`, table),

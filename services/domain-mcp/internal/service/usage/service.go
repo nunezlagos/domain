@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/usage/usagedb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -125,6 +126,17 @@ func (s *Service) maxFlowDuration() int {
 	return defaultMaxFlowDuration
 }
 
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+
+// q retorna un *usagedb.Queries que usa la tx del contexto si existe,
+// o el pool directo en caso contrario.
+func (s *Service) q(ctx context.Context) *usagedb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return usagedb.New(tx)
+	}
+	return usagedb.New(s.Pool)
+}
+
 // dayWindow retorna [start, end) del día UTC actual.
 func (s *Service) dayWindow() (start, end time.Time) {
 	now := s.now()
@@ -145,7 +157,10 @@ func (s *Service) runInOrgTx(ctx context.Context, orgID uuid.UUID, fn func(pgx.T
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return fn(tx)
 	}
-	return txctx.WithOrgTx(ctx, s.Pool, orgID, fn)
+	return txctx.WithOrgTx(ctx, s.Pool, orgID, func(tx pgx.Tx) error {
+		ctx = txctx.WithTxContext(ctx, tx)
+		return fn(tx)
+	})
 }
 
 // Current calcula el snapshot del día UTC actual.
@@ -164,41 +179,25 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 	}
 
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-
-
-
 		snap.Organization = singleOrgRef(orgID)
 
-
-
-
-		if err := tx.QueryRow(ctx, `
-			SELECT
-			  (SELECT COUNT(*) FROM knowledge_observations
-			     WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL),
-			  (SELECT COUNT(*) FROM agents
-			     WHERE deleted_at IS NULL),
-			  (SELECT COUNT(*) FROM agent_runs
-			     WHERE created_at >= $1 AND created_at < $2),
-			  (SELECT COUNT(*) FROM flow_runs
-			     WHERE created_at >= $1 AND created_at < $2)
-		`, start, end).Scan(
-			&snap.Counters.Observations,
-			&snap.Counters.Agents,
-			&snap.Counters.AgentRunsToday,
-			&snap.Counters.FlowRunsToday,
-		); err != nil {
+		rows, err := s.q(ctx).GetCounters(ctx, usagedb.GetCountersParams{
+			CreatedAt:   start,
+			CreatedAt_2: end,
+		})
+		if err != nil {
 			return fmt.Errorf("counters query: %w", err)
 		}
+		snap.Counters = Counters{
+			Observations:   rows.Observations,
+			Agents:         rows.Agents,
+			AgentRunsToday: rows.AgentRuns,
+			FlowRunsToday:  rows.FlowRuns,
+		}
 
-
-
-		var maxDur int
-		err := tx.QueryRow(ctx,
-			`SELECT max_flow_duration_seconds FROM flow_config LIMIT 1`,
-		).Scan(&maxDur)
+		maxDur, err := s.q(ctx).GetMaxDuration(ctx)
 		if err == nil {
-			snap.Limits.MaxFlowDurationSeconds = maxDur
+			snap.Limits.MaxFlowDurationSeconds = int(maxDur)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("get flow_config: %w", err)
 		}
@@ -230,72 +229,36 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 	h := &History{}
 	obsByDay := make(map[string]int64)
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-
 		h.Organization = singleOrgRef(orgID)
 
+		q := s.q(ctx)
 
-
-		rows, err := tx.Query(ctx, `
-			WITH series AS (
-			  SELECT generate_series($1::timestamptz, $2::timestamptz - interval '1 day', interval '1 day')::date AS day
-			),
-			ags AS (
-			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
-			  FROM agent_runs
-			  WHERE created_at >= $1 AND created_at < $2
-			  GROUP BY 1
-			),
-			flw AS (
-			  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day, COUNT(*) AS n
-			  FROM flow_runs
-			  WHERE created_at >= $1 AND created_at < $2
-			  GROUP BY 1
-			)
-			SELECT s.day,
-			       COALESCE(a.n, 0)::bigint AS agent_runs,
-			       COALESCE(f.n, 0)::bigint AS flow_runs
-			FROM series s
-			LEFT JOIN ags a ON a.day = s.day
-			LEFT JOIN flw f ON f.day = s.day
-			ORDER BY s.day DESC
-		`, start, end)
+		runs, err := q.GetRunHistory(ctx, usagedb.GetRunHistoryParams{
+			Column1: start,
+			Column2: end,
+		})
 		if err != nil {
-			return fmt.Errorf("history query: %w", err)
+			return fmt.Errorf("run history: %w", err)
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var d DayAggregate
-			var t time.Time
-			if err := rows.Scan(&t, &d.AgentRuns, &d.FlowRuns); err != nil {
-				return fmt.Errorf("scan history row: %w", err)
-			}
-			d.Date = t.UTC().Format("2006-01-02")
-			h.History = append(h.History, d)
-		}
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("history rows: %w", err)
+		for _, r := range runs {
+			h.History = append(h.History, DayAggregate{
+				Date:      r.Day.UTC().Format("2006-01-02"),
+				AgentRuns: r.AgentRuns,
+				FlowRuns:  r.FlowRuns,
+			})
 		}
 
-		rs, qerr := tx.Query(ctx, `
-			SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
-			       COUNT(*)::bigint
-			FROM knowledge_observations
-			WHERE created_at >= $1 AND created_at < $2 AND deleted_at IS NULL
-			GROUP BY 1
-		`, start, end)
-		if qerr != nil {
-			return fmt.Errorf("observations history: %w", qerr)
+		obs, err := q.GetObservationHistory(ctx, usagedb.GetObservationHistoryParams{
+			CreatedAt:   start,
+			CreatedAt_2: end,
+		})
+		if err != nil {
+			return fmt.Errorf("observations history: %w", err)
 		}
-		defer rs.Close()
-		for rs.Next() {
-			var t time.Time
-			var n int64
-			if e := rs.Scan(&t, &n); e != nil {
-				return fmt.Errorf("scan observations history: %w", e)
-			}
-			obsByDay[t.UTC().Format("2006-01-02")] = n
+		for _, o := range obs {
+			obsByDay[o.Day.UTC().Format("2006-01-02")] = o.Count
 		}
-		return rs.Err()
+		return nil
 	}); err != nil {
 		return nil, err
 	}

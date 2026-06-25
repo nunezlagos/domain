@@ -9,24 +9,20 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/activity"
-	"nunezlagos/domain/internal/api/backpressure"
 	"nunezlagos/domain/internal/api/handler"
 	"nunezlagos/domain/internal/api/middleware"
 	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/auth/apikey"
 	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
-	"nunezlagos/domain/internal/auth/rbac"
-	"nunezlagos/domain/internal/auth/session"
+"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/cache"
 	"nunezlagos/domain/internal/config"
-	"nunezlagos/domain/internal/dbmon"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	"nunezlagos/domain/internal/httpserver"
 	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
 	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
 	skillsvc "nunezlagos/domain/internal/service/skill"
-	usagesvc "nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/tracing"
 )
 
@@ -104,70 +100,15 @@ func buildRouter(
 		},
 	}
 
-	_ = &rbac.Checker{} // TODO: wire RequirePermission middleware on per-route basis
-
 	api := &handler.API{
-		ProjectService:        s.ProjectService,
-		ClientService:         s.ClientService,
-		TicketService:         s.TicketService,
-		EventBus:              s.EventBus,
-		AuthSessionService:    s.SessionSvc,
-		CapturedPromptService: s.CapturedPromptService,
-		ProjectRepoService:    s.ProjectRepoService,
-		ProjectPolicyService:  s.ProjectPolicyService,
-		Pool:                  pools.App,
-		ObsService:            s.ObsService,
-		PromptService:         s.PromptService,
-		TimelineService:       s.TimelineService,
-		SearchService:         s.SearchService,
-		KnowledgeService:      s.KnowledgeService,
-		LifecycleService:      s.LifecycleService,
-		SkillService:          s.SkillService,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: s.SkillService,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   s.SkillRunnerInst,
-		},
-		AgentService:              s.AgentService,
-		AgentRunner:               s.AgentRunnerInst,
-		FlowService:               s.FlowService,
-		FlowRunner:                s.FlowRunnerInst,
-		CronService:               s.CronService,
-		WebhookService:            s.InboundWebhookService,
-		Dispatcher:                s.Dispatcher,
-		CostService:               s.CostService,
-		BillingService:            s.BillingService,
-		OutboundWebhookService:    s.OutboundWebhookService,
-		OutboundWebhookDispatcher: s.OutboundDispatcher,
-		OutboundWebhookRequireTLS: s.OutboundRequireTLS,
-		Backpressure:              &backpressure.Limiter{Pool: pools.App},
-		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
-		UsageAlertsService:        s.UsageAlertsService,
-		UsageSnapshot:             &usagesvc.Service{Pool: pools.App},
-		Enrollment:                &enrollsvc.Service{Pool: pools.App, Audit: s.Recorder},
-		MCPServerService:          s.MCPServerService,
-		ProjectTemplateService:    s.ProjectTemplateService,
-		PolicyService:             s.PolicyService,
-		DBStatsService:            s.DBStatsService,
-		Hubuilder:                 s.IssuebuilderSvc,
-		Audit:                     s.Recorder,
-		ActivityRecorder:          s.ActivityStore,
-		ActivityQuerier:           s.ActivityStore,
-		OTPService:                s.OTPService,
-		OTPRateLimiter:            s.OTPRateLimiter,
-		APIKeys:                   s.APIKeyStore,
-		Bootstrap:                 bootstrapsvc.New(pools.App),
-		SecretsStore:              s.SecretsStore,
-		ReqService:                s.RequirementService,
-		HUService:                 s.HUService,
-		SpecService:               s.SpecService,
-		TaskService:               s.TaskService,
-		TraceService:              s.TraceService,
-		AttachmentService:         s.AttachmentService,
-		IssueBuilderAdaptive:      s.IssuebuilderAdaptive,
-		IntakeService:             s.IntakeSvc,
-		PromptRouter:              s.PromptRouterSvc,
-		WorkflowImport:            s.WorkflowImportSvc,
+		OTPService:         s.OTPService,
+		OTPRateLimiter:     s.OTPRateLimiter,
+		APIKeys:            s.APIKeyStore,
+		AuthSessionService: s.SessionSvc,
+		Bootstrap:          bootstrapsvc.New(pools.App),
+		Enrollment:         &enrollsvc.Service{Pool: pools.App, Audit: s.Recorder},
+		WebhookService:     s.InboundWebhookService,
+		Dispatcher:         s.Dispatcher,
 	}
 
 	mux.Handle("/api/", corsMW.Wrap(

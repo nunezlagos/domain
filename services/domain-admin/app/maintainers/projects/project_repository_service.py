@@ -65,3 +65,7 @@ _repository_service = ProjectRepositoryService()
 
 def get_repository_service() -> ProjectRepositoryService:
     return _repository_service
+
+
+def get_project_repositories(project: Project) -> list[ProjectRepository]:
+    return _repository_service.get_project_repositories(project)

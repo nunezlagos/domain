@@ -23,6 +23,7 @@ from .project_service import (
 from .project_repository_service import (
     ProjectRepositoryService,
     get_repository_service,
+    get_project_repositories,
 )
 from .project_skill_service import (
     ProjectSkillService,

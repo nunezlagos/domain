@@ -66,21 +66,21 @@ func TestValidateDAG_SkipMiddle_KeepsDependents_Invalid(t *testing.T) {
 }
 
 func TestValidateDAG_WithStartingPhase_AssumesPriorsDone(t *testing.T) {
-	// StartingPhase = sdd-design: explore, spec, propose se asumen hechos.
-	// Skip [sdd-apply] + keep [sdd-verify] → ERROR (verify necesita apply)
+
+
 	err := ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-apply"},
 		phases.PhaseSlug("sdd-design"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requires")
 
-	// StartingPhase = sdd-design: skip [sdd-archive, sdd-onboard] → OK
+
 	err = ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-archive", "sdd-onboard"},
 		phases.PhaseSlug("sdd-design"))
 	require.NoError(t, err)
 
-	// StartingPhase = sdd-verify: skip [sdd-judge] pero no sdd-archive → ERROR
+
 	err = ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-judge"},
 		phases.PhaseSlug("sdd-verify"))

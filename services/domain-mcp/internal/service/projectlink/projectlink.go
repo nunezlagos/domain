@@ -1,8 +1,8 @@
-// Package projectlink — issue F4 completar Project entity.
-// Link project por git_remote (repository_url), update current_branch,
-// get/set rules[] (slugs de platform_policies que aplican al project).
-//
-// No auto-crea projects. LinkByGitRemote devuelve "" si no encuentra.
+
+
+
+
+
 
 package projectlink
 
@@ -34,10 +34,10 @@ func (s *Service) LinkByGitRemote(ctx context.Context, remote string) (projectID
 	if len(candidates) == 0 {
 		return "", "", "", fmt.Errorf("empty remote")
 	}
-	// ISSUE-21.6: SELECT sin organization_id (single-org, no se necesita
-	// discriminar por org al buscar por repository_url).
-	// orgID queda vacío en el retorno (compat de firma; callers que lo usen
-	// deben migrar a ignorar este valor).
+
+
+
+
 	err = s.Pool.QueryRow(ctx, `
 		SELECT id::text, slug
 		FROM projects

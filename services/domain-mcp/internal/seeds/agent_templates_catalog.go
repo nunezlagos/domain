@@ -720,7 +720,7 @@ func seedAgentTemplates(ctx context.Context, db execer) (Report, error) {
 			role = "phase-worker"
 		}
 
-		// xmax=0 distingue INSERT real (Created) vs DO UPDATE (Updated).
+
 		var inserted bool
 		err := db.QueryRow(ctx, `
 			INSERT INTO agent_templates
@@ -755,9 +755,9 @@ func seedAgentTemplates(ctx context.Context, db execer) (Report, error) {
 		}
 	}
 
-	// Cleanup defensivo: borra seed_managed=true que NO están en el catálogo
-	// actual (slugs viejos como researcher/coder/...) Y no tienen agent_runs
-	// en estado running. Respeta is_user_modified=true.
+
+
+
 	currentSlugs := make([]string, len(catalog))
 	for i, e := range catalog {
 		currentSlugs[i] = e.Slug

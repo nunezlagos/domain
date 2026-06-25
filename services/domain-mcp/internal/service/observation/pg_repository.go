@@ -59,7 +59,7 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Observatio
 	).Scan(&o.ID, &o.ProjectID, &o.CreatedBy, &o.SessionID,
 		&o.Content, &o.ObservationType, &o.Tags, &o.Metadata, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
-		// El service interpreta pgErr para mapear a ErrDuplicate/ErrProjectMismatch.
+
 		return nil, err
 	}
 	return &o, nil

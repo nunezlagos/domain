@@ -15,9 +15,9 @@ func TestNullStr(t *testing.T) {
 }
 
 func TestCreate_RechazaTransportInvalido(t *testing.T) {
-	// Sin pool real, validation in pure function path → falla antes de query.
+
 	s := &Service{}
-	// El error de transport sale antes que cualquier llamada DB.
+
 	_, err := s.Create(nil, [16]byte{}, CreateInput{Transport: "websocket"})
 	if !errors.Is(err, ErrInvalidTransport) {
 		t.Fatalf("got %v, want ErrInvalidTransport", err)

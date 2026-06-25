@@ -1,9 +1,9 @@
--- migration: create_budgets
--- author: nunezlagos
--- issue: issue-15.2
--- description: budgets de gasto LLM por org con threshold de warning
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS budgets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS budgets (
   deleted_at TIMESTAMPTZ
 );
 
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS budgets_org_idx
   ON budgets (organization_id) WHERE deleted_at IS NULL;
 

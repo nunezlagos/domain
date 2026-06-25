@@ -39,7 +39,7 @@ func TestStepRow_LifecycleAndProgress(t *testing.T) {
 		VALUES ($1, $2, 'manual', 'running', '{}') RETURNING id`,
 		f.orgID, fl.ID).Scan(&runID))
 
-	// Suscribirse al canal de progreso ANTES del beat
+
 	conn, err := f.runner.Pool.Acquire(ctx)
 	require.NoError(t, err)
 	defer func() {
@@ -66,7 +66,7 @@ func TestStepRow_LifecycleAndProgress(t *testing.T) {
 	require.InDelta(t, 0.3, progress, 0.001)
 	require.Equal(t, "downloaded 30%", message)
 
-	// Evento NOTIFY recibido con payload correcto (hb-004)
+
 	nctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	n, err := conn.Conn().WaitForNotification(nctx)

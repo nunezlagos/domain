@@ -19,7 +19,7 @@ import (
 )
 
 func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// captured_prompts tiene RLS FORCE (mig 000104): wrap con tx + SET LOCAL.
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -91,7 +91,7 @@ func (d *Deps) handlePromptCapture(ctx context.Context, req mcp.CallToolRequest)
 		UserID:         userID,
 		Content:        content,
 	}
-	// REQ-42.3: session_id removido (columna dropeada de captured_prompts).
+
 	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
 		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID
@@ -191,7 +191,7 @@ func (d *Deps) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) 
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 
-	// REQ-42.3: session_id removido (columna dropeada). Solo se resume por project.
+
 	if projSlug == "" {
 		return mcp.NewToolResultError("debe pasarse project_slug"), nil
 	}
@@ -222,7 +222,7 @@ func (d *Deps) handlePromptCapturedList(ctx context.Context, req mcp.CallToolReq
 	}
 	args := req.GetArguments()
 	filter := capturedpromptsvc.ListFilter{}
-	// REQ-42.3: filtro session_id removido (columna dropeada de captured_prompts).
+
 	if v, ok := args["project_slug"].(string); ok && v != "" && d.Projects != nil {
 		if proj, perr := d.Projects.GetBySlug(ctx, orgID, v); perr == nil && proj != nil {
 			pid := proj.ID

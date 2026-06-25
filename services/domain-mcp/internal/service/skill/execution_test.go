@@ -25,7 +25,7 @@ func TestScrubParams_RedactsSensitiveKeys(t *testing.T) {
 	nested := out["nested"].(map[string]any)
 	require.Equal(t, "[REDACTED]", nested["password"])
 	require.Equal(t, "stgo", nested["city"])
-	// El original no se muta
+
 	require.Equal(t, "sk-123", in["api_key"])
 }
 

@@ -103,9 +103,9 @@ func (b *Bus) Publish(ev Event) {
 		select {
 		case s.Ch <- ev:
 		default:
-			// canal full → drop. El cliente puede recuperarse del
-			// estado real via GET (eventos son notificaciones, no
-			// fuente de verdad).
+
+
+
 		}
 	}
 }

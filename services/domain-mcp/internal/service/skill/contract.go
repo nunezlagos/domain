@@ -54,7 +54,7 @@ func ValidatePayload(schema, payload []byte) ValidationResult {
 
 	var errs []ValidationError
 
-	// required
+
 	if req, ok := sch["required"].([]any); ok {
 		for _, r := range req {
 			name, _ := r.(string)
@@ -66,7 +66,7 @@ func ValidatePayload(schema, payload []byte) ValidationResult {
 		}
 	}
 
-	// type por propiedad
+
 	if props, ok := sch["properties"].(map[string]any); ok {
 		for field, ps := range props {
 			v, ok := data[field]
@@ -85,7 +85,7 @@ func ValidatePayload(schema, payload []byte) ValidationResult {
 					Got:    v,
 				})
 			}
-			// enum
+
 			if enum, ok := pmap["enum"].([]any); ok {
 				if !inEnum(v, enum) {
 					errs = append(errs, ValidationError{

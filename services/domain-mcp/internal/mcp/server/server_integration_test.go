@@ -1,7 +1,7 @@
 //go:build integration
 
-// issue-12.1 MCP server tools integration test.
-// Usa mcptest.NewServer (in-process) para invocar tools sin levantar stdio real.
+
+
 
 package mcpserver_test
 
@@ -157,7 +157,7 @@ func TestMCP_MemSave_AndContext(t *testing.T) {
 func TestMCP_MemSearch_HybridFindsMatch(t *testing.T) {
 	f := setupMCP(t)
 	defer f.cleanup()
-	// Insertar varias observations
+
 	for _, c := range []string{
 		"decidimos usar pgvector con embeddings de openai",
 		"el clima en santiago esta soleado",
@@ -231,7 +231,7 @@ func TestMCP_MemSave_AutoCreatesProject(t *testing.T) {
 	})
 	require.Contains(t, out, "id", "save con project nuevo debe funcionar (auto-create)")
 
-	// El project quedo creado y visible
+
 	listOut := callTool(t, f.srv, "domain_project_list", map[string]any{})
 	require.Contains(t, listOut, "proyecto-nuevo")
 

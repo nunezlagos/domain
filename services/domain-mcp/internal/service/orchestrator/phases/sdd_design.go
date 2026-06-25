@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// sddDesignHandler — fase sdd-design (ADRs + plan TDD). system_prompt en BD.
+
 
 type sddDesignHandler struct{}
 
@@ -37,8 +37,8 @@ func (h *sddDesignHandler) Build(_ context.Context, in Input) (*Output, error) {
 		AgentTemplateSlug: "sdd-design",
 		SystemPrompt:      "",
 		UserPrompt:        b.String(),
-		// RFC 0006 D5: ADRs son REQUIRED. La fase no avanza hasta que el
-		// cliente reporte al menos un memory_ref type='adr' en MemoryRefsSaved.
+
+
 		SuggestedSaves: []SuggestedSave{
 			{Type: "adr", Required: true,
 				Hint: "guardar al menos 1 ADR con type='adr' por decisión arquitectónica"},
@@ -55,8 +55,8 @@ func (h *sddDesignHandler) Validate(_ context.Context, _ *Output, result ClientR
 	if md, _ := result.Output["design_md"].(string); md == "" {
 		return errors.New("sdd-design: campo 'design_md' requerido")
 	}
-	// Sanity: al menos 1 ADR declarado en el output. La validación dura
-	// (mem_save existente) la hace ValidateRequiredSaves en el service.
+
+
 	if adrs, _ := result.Output["adrs"].([]any); len(adrs) == 0 {
 		return errors.New("sdd-design: array 'adrs' requerido (al menos 1 entry)")
 	}

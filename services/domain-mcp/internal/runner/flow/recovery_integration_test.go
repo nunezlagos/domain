@@ -48,7 +48,7 @@ func recoverySetup(t *testing.T) (*flowrunner.Runner, *flow.Service, *skillsvc.S
 	rec := &audit.NopRecorder{}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
-	// NopEmbedder evita llamadas LLM reales en tests de recovery
+
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
 
@@ -75,7 +75,7 @@ func TestRecovery_ReleaseStaleRun(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear un skill simple para el flow
+
 	_, err := skillS.Create(ctx, skillsvc.CreateInput{
 		OrganizationID: orgID, Slug: "t1", Name: "T1",
 		SkillType: skillsvc.TypePrompt, Content: "ok",
@@ -97,7 +97,7 @@ func TestRecovery_ReleaseStaleRun(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Crear un flow_run directamente en estado 'running' con heartbeat viejo
+
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
 		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status, started_at, last_heartbeat_at, worker_id)
@@ -105,13 +105,13 @@ func TestRecovery_ReleaseStaleRun(t *testing.T) {
 		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
-	// Ejecutar recovery
+
 	released, failed, err := runner.ReleaseStaleRuns(ctx, 1*time.Minute, 0)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), released, "should release 1 stale run")
 	require.Equal(t, int64(0), failed, "should not fail any runs")
 
-	// Verificar que el worker_id se limpió
+
 	var workerID *string
 	err = runner.Pool.QueryRow(ctx, `SELECT worker_id FROM flow_runs WHERE id = $1`, runID).Scan(&workerID)
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestRecovery_CrashLoopDetection(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Crear run con recovery_count alto + heartbeat viejo
+
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
 		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status, recovery_count, started_at, last_heartbeat_at, worker_id)
@@ -150,7 +150,7 @@ func TestRecovery_CrashLoopDetection(t *testing.T) {
 		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
-	// Recovery con maxRecoveries=5 → debe marcar como failed
+
 	released, failed, err := runner.ReleaseStaleRuns(ctx, 1*time.Minute, 5)
 	require.NoError(t, err)
 	require.Equal(t, int64(0), released, "should not release crash-loop runs")
@@ -185,7 +185,7 @@ func TestClaimRun_Pending(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Crear run pending
+
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
 		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status)
@@ -270,7 +270,7 @@ func TestRace_TwoWorkersClaim(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Solo 1 run pending
+
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
 		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status)
@@ -278,7 +278,7 @@ func TestRace_TwoWorkersClaim(t *testing.T) {
 		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
-	// Dos workers claimean concurrentemente
+
 	claimer1 := &flowrunner.ClaimRunClaims{Pool: runner.Pool, WorkerID: "race-w1", StaleAfter: 5 * time.Minute}
 	claimer2 := &flowrunner.ClaimRunClaims{Pool: runner.Pool, WorkerID: "race-w2", StaleAfter: 5 * time.Minute}
 
@@ -301,7 +301,7 @@ func TestRace_TwoWorkersClaim(t *testing.T) {
 	<-done
 	<-done
 
-	// Solo uno debe haber obtenido el claim
+
 	claims := 0
 	if claimed1 != nil {
 		claims++

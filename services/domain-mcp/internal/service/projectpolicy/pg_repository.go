@@ -70,7 +70,7 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, err
 	if source == "" {
 		source = "manual"
 	}
-	// ISSUE-21.6: INSERT sin organization_id.
+
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO project_policies
 		   (project_id, slug, name, kind,
@@ -88,7 +88,7 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Policy, err
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID, projectID uuid.UUID, kind string) ([]*Policy, error) {
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+
 	_ = orgID
 	q := `SELECT ` + selectCols + `
 		   FROM project_policies
@@ -148,7 +148,7 @@ func (r *pgRepository) Get(ctx context.Context, orgID, id uuid.UUID) (*Policy, e
 }
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput, changedBy *uuid.UUID) (*Policy, error) {
-	// Estrategia: leer actual, mergear, bumpear version, snapshot a versions, update.
+
 	_ = orgID
 	curr, err := r.Get(ctx, orgID, id)
 	if err != nil {
@@ -178,7 +178,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 	}
 
 	newVersion := curr.Version + 1
-	// Snapshot version anterior
+
 	if _, err := r.q(ctx).Exec(ctx,
 		`INSERT INTO project_policy_versions
 		   (policy_id, version, body_md, body_structured, changed_by)

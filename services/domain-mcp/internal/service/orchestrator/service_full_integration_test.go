@@ -58,17 +58,17 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[9].Slug))
 
-	// Sólo el primer step tiene UserPrompt; el resto vacíos (lazy build).
+
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
 	for i := 1; i < 10; i++ {
 		require.Empty(t, res.Plan.Steps[i].UserPrompt,
 			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
 
-	// SnapshotPrompt = prompt del primer step
+
 	require.Equal(t, res.Plan.Steps[0].UserPrompt, res.SnapshotPrompt)
 
-	// Steps en BD: 10 pendings con system_prompt hidratado desde agent_templates
+
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status, inputs FROM flow_run_steps WHERE flow_run_id=$1 ORDER BY created_at`,
 		res.FlowRunID)
@@ -82,10 +82,10 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 		require.Equal(t, "pending", st)
 		var inp map[string]any
 		require.NoError(t, json.Unmarshal(inputsRaw, &inp))
-		// system_prompt debe estar hidratado desde BD por hydrateSystemPrompts
+
 		sysPrompt, _ := inp["system_prompt"].(string)
 		require.NotEmpty(t, sysPrompt, "step %s debe tener system_prompt hidratado desde agent_templates", k)
-		// raw_text replicado para lazy build
+
 		require.Equal(t, "implementar feature compleja con SDD completo", inp["raw_text"])
 		keys = append(keys, k)
 	}
@@ -118,7 +118,7 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Cliente reporta sdd-explore con intent + scope
+
 	exploreStepID := res.Plan.Steps[0].ID
 	nextRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: exploreStepID,
@@ -135,15 +135,15 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	require.NotNil(t, nextRes.NextStepID)
 	require.Equal(t, "sdd-spec", nextRes.NextStepKey)
 
-	// El NextStepPrompt debe haberse RE-CONSTRUIDO con los outputs del explore:
-	// el handler sdd-spec incluye intent + scope + modules en el prompt.
+
+
 	require.NotEmpty(t, nextRes.NextStepPrompt, "lazy build debe rellenar NextStepPrompt")
 	require.Contains(t, nextRes.NextStepPrompt, "feature", "prompt de spec debe incluir intent del explore")
 	require.Contains(t, nextRes.NextStepPrompt, "multi-file", "debe incluir scope")
 	require.Contains(t, nextRes.NextStepPrompt, "internal/logging", "debe incluir módulos afectados")
 	require.Contains(t, nextRes.NextStepPrompt, "implementar logging estructurado", "raw_text propagado")
 
-	// El user_prompt persistido en el step de sdd-spec debe coincidir
+
 	var inputsRaw []byte
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT inputs FROM flow_run_steps WHERE id=$1`, *nextRes.NextStepID,
@@ -209,7 +209,7 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 		StartingPhase:  orchestrator.PhaseSlug("sdd-apply"),
 	})
 	require.NoError(t, err)
-	// Apply (6) → Verify (7) → Judge (8) → Archive (9) → Onboard (10) = 5 steps
+
 	require.Len(t, res.Plan.Steps, 5)
 	require.Equal(t, "sdd-apply", string(res.Plan.Steps[0].Slug))
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[4].Slug))
@@ -242,7 +242,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Plan.Steps, 10)
 
-	// Output ad-hoc por fase con los campos mínimos que cada Validate exige
+
 	outputs := []map[string]any{
 		{"intent": "feature", "scope": "single-file", "summary": "x"}, // explore
 		{"issue_slug": "issue-99.1-foo", "issue_md": "# spec"},        // spec
@@ -255,7 +255,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		{"archived": true},                                              // archive
 		{"skipped": true},                                               // onboard
 	}
-	// memory_refs requeridos por D5 en design/apply/judge
+
 	memrefs := []map[string][]phases.MemoryRef{
 		{}, // explore
 		{}, // spec
@@ -294,7 +294,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		}
 	}
 
-	// Verificar status final via GetFlowStatus
+
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "completed", st.Status)

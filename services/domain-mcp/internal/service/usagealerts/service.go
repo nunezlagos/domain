@@ -212,7 +212,7 @@ func (s *Service) SetActive(ctx context.Context, orgID, id uuid.UUID, active boo
 
 // Update actualiza campos del alert. Solo envía campos no-nil.
 func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateInput) (*Alert, error) {
-	// Build dynamic SET
+
 	sets := []string{}
 	args := []any{id}
 	idx := 2

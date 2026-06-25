@@ -40,12 +40,12 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 	if s.LLM == nil {
 		return ErrLLMFactoryRequired
 	}
-	// Track outputs acumulados para que cada paso reciba PriorOutputs
-	// igual que en Full mode.
+
+
 	priors := map[phases.PhaseSlug]map[string]any{}
 	for i, step := range plan.Steps {
-		// Si el step ya tenía prompt (step[0] de Full lo trae armado),
-		// usalo; sino reconstruí con priors acumulados.
+
+
 		userPrompt := step.UserPrompt
 		if userPrompt == "" {
 			h, err := s.Phases.Lookup(step.Slug)
@@ -66,13 +66,13 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			userPrompt = rebuilt.UserPrompt
 		}
 
-		// Lookup config completa del agent_template
+
 		tmpl, err := s.Repo.GetAgentTemplate(ctx, in.OrganizationID, step.AgentTemplateSlug)
 		if err != nil {
 			return fmt.Errorf("solo: lookup template %s: %w", step.AgentTemplateSlug, err)
 		}
 
-		// Resolver provider via convención model → provider name
+
 		provider, err := s.LLM.Get(modes.ProviderForModel(tmpl.Model))
 		if err != nil {
 			return fmt.Errorf("solo: provider for %s: %w", tmpl.Model, err)
@@ -91,9 +91,9 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			return fmt.Errorf("solo: complete step %d (%s): %w", i, step.Slug, err)
 		}
 
-		// Parsear el output JSON del modelo. Cada handler declara el
-		// shape en su system_prompt; aplicamos parseo tolerante (extrae
-		// el primer bloque JSON si el modelo agregó prosa alrededor).
+
+
+
 		output, parseErr := parseJSONOutput(resp.Content)
 		if parseErr != nil {
 			_ = s.Repo.MarkStepFailed(ctx, step.ID,
@@ -102,9 +102,9 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			return fmt.Errorf("solo: parse step %d (%s): %w", i, step.Slug, parseErr)
 		}
 
-		// Validate del handler (chequeo shape-specific). Solo mode NO
-		// llama ValidateRequiredSaves: no hay cliente que persista
-		// memory_refs (ADR-4).
+
+
+
 		h, err := s.Phases.Lookup(step.Slug)
 		if err != nil {
 			return fmt.Errorf("solo: lookup %s: %w", step.Slug, err)
@@ -120,14 +120,14 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 		}
 		priors[step.Slug] = output
 
-		// Métricas: phase completed
+
 		if s.Metrics != nil {
 			s.Metrics.OrchestratorPhaseResultsTotal.
 				WithLabelValues(string(step.Slug), "solo", "completed").Inc()
 		}
 	}
 
-	// Todo completed → flow_run.status = completed
+
 	if err := s.Repo.UpdateFlowRunStatus(ctx, flowRunID, "completed"); err != nil {
 		return fmt.Errorf("solo: update flow_run status: %w", err)
 	}
@@ -145,7 +145,7 @@ func parseJSONOutput(raw string) (map[string]any, error) {
 	if s == "" {
 		return nil, errors.New("empty output")
 	}
-	// Strip code fences ```json ... ``` o ``` ... ```
+
 	if strings.HasPrefix(s, "```") {
 		s = strings.TrimPrefix(s, "```json")
 		s = strings.TrimPrefix(s, "```")
@@ -154,7 +154,7 @@ func parseJSONOutput(raw string) (map[string]any, error) {
 		}
 		s = strings.TrimSpace(s)
 	}
-	// Localizar primer { y matching }
+
 	start := strings.Index(s, "{")
 	if start < 0 {
 		return nil, errors.New("no JSON object found in output")

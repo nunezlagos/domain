@@ -107,7 +107,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	}
 	metaJSON, _ := json.Marshal(in.Metadata)
 
-	// Chunk + embed ANTES de la tx para no mantener locks DB durante I/O LLM.
+
 	rawChunks := chunker.Chunk(in.Body, s.ChunkOptions)
 	if len(rawChunks) == 0 {
 		return nil, nil, ErrBodyRequired

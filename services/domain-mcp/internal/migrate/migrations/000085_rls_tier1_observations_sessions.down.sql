@@ -1,5 +1,5 @@
--- Rollback: deshabilita RLS y dropea policies en observations + sessions.
--- Igual que 000028 down: solo DROP y DISABLE, sin tocar grants (idempotente).
+
+
 
 DROP POLICY IF EXISTS observations_org_isolation ON observations;
 ALTER TABLE observations DISABLE ROW LEVEL SECURITY;

@@ -28,7 +28,7 @@ func (r *HumanInputRunner) Run(ctx context.Context, input RunInput) (any, error)
 		return nil, fmt.Errorf("human_input: question required")
 	}
 
-	// Resolve template in question
+
 	question = ResolveTemplate(question, input.Inputs, input.StepOutputs)
 
 	timeoutHours := configInt(input.Config, "timeout_hours")
@@ -38,7 +38,7 @@ func (r *HumanInputRunner) Run(ctx context.Context, input RunInput) (any, error)
 	timeout := time.Duration(timeoutHours) * time.Hour
 
 	if input.TaskCreator == nil {
-		// Without a TaskCreator, return a description of what would happen
+
 		return map[string]any{
 			"task_id":  "simulated",
 			"status":   "awaiting_input",

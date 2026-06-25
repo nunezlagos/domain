@@ -81,14 +81,14 @@ class Project(SoftDeleteModel):
     template_id = models.UUIDField(null=True, blank=True)
     settings = models.JSONField(default=dict, blank=True)
     current_branch = models.CharField(max_length=120, blank=True, default="")
-    # En la DB es text[] (no jsonb), por eso ArrayField.
+
     rules = ArrayField(models.CharField(max_length=100), default=list, blank=True)
     client_id = models.UUIDField(null=True, blank=True)
     last_known_head = models.CharField(max_length=40, blank=True, default="")
     last_seen_at = models.DateTimeField(null=True, blank=True)
     last_seen_branch = models.CharField(max_length=120, blank=True, default="")
     last_seen_cwd = models.CharField(max_length=500, blank=True, default="")
-    # Redeclara status (heredado de SoftDeleteModel) solo para agregar choices.
+
     status = models.CharField(
         max_length=20, default=STATUS_ACTIVE, choices=STATUS_CHOICES
     )
@@ -140,8 +140,8 @@ class ProjectRepository(SoftDeleteModel):
     is_default = models.BooleanField(default=False)
     workflow = models.CharField(max_length=40, blank=True, default="", choices=WORKFLOW_CHOICES)
     notes = models.TextField(blank=True, default="")
-    # root_path: carpeta del checkout donde vive este repo (ej. "/" o
-    # "/domain/services/"). Opcional. Migracion 000159 en domain-mcp.
+
+
     root_path = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:

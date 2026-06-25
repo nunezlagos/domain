@@ -67,7 +67,7 @@ func (c *Client) do(
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// Propagar ctx.Err() limpio si el caller canceló.
+
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -75,7 +75,7 @@ func (c *Client) do(
 	}
 	defer resp.Body.Close()
 
-	// 204 No Content: no hay body para parsear.
+
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, nil
 	}
@@ -89,7 +89,7 @@ func (c *Client) do(
 		if len(raw) == 0 || out == nil {
 			return nil, nil
 		}
-		// Intentar parsear envelope; fallback a parseo directo si no encaja.
+
 		var env envelope
 		if err := json.Unmarshal(raw, &env); err == nil && len(env.Data) > 0 {
 			if err := json.Unmarshal(env.Data, out); err != nil {

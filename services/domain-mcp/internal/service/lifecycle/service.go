@@ -83,7 +83,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	if !ok {
 		return ErrEntityNotSupported
 	}
-	// Validar dentro de la retention window
+
 	var deletedAt *time.Time
 	var entityOrg *uuid.UUID
 	var query string
@@ -99,11 +99,11 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	if deletedAt == nil {
 		return ErrNotFound
 	}
-	// Cross-org guard
+
 	if orgID != nil && entityOrg != nil && *entityOrg != *orgID {
 		return ErrNotFound
 	}
-	// Retention
+
 	if time.Since(*deletedAt) > time.Duration(s.retentionDays())*24*time.Hour {
 		return ErrRetentionExpired
 	}
@@ -126,7 +126,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	return nil
 }
 
-// --- GDPR Export ---
+
 
 // UserExport bundle con todos los datos del user en formato portable.
 type UserExport struct {
@@ -154,7 +154,7 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		UserID:     userID,
 	}
 
-	// 1. user record
+
 	usr, err := scanRow(ctx, s.q(ctx),
 		`SELECT id, email, name, role, created_at, updated_at, deleted_at
 		 FROM users WHERE id = $1`,
@@ -167,10 +167,10 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 	}
 	out.User = usr
 
-	// 2. organization (one, the user's).
-	// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
-	// Fase C. En single-org mode, el user siempre pertenece a la org
-	// canónica. Devolvemos un placeholder con id/name/slug default.
+
+
+
+
 	out.Organizations = []map[string]any{
 		{
 			"id":         "00000000-0000-0000-0000-000000000001",
@@ -182,15 +182,15 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		},
 	}
 
-	// 3-N. Tablas con created_by = userID
+
 	out.Projects, _ = scanRows(ctx, s.Pool,
 		`SELECT id, name, slug, description, created_at FROM projects
 		 ORDER BY created_at DESC`)
 	out.Observations, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, content, observation_type, tags, metadata, created_at
 		 FROM knowledge_observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)
-	// REQ-42.3: sessions dropeada — sin export de sesiones (campo queda vacío
-	// por compatibilidad de shape del export GDPR).
+
+
 	out.Prompts, _ = scanRows(ctx, s.Pool,
 		`SELECT id, project_id, slug, version, body, is_active, created_at
 		 FROM prompts WHERE created_by = $1 AND deleted_at IS NULL`, userID)
@@ -201,11 +201,11 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		`SELECT id, agent_id, status, inputs, outputs, tokens_input, tokens_output,
 		        cost_usd, iterations, started_at, finished_at
 		 FROM agent_runs WHERE user_id = $1`, userID)
-	// auth_api_keys: solo metadata (key_prefix), NUNCA key_hash ni secrets
+
 	out.APIKeys, _ = scanRows(ctx, s.Pool,
 		`SELECT id, name, key_prefix, last_used_at, expires_at, revoked_at, created_at
 		 FROM auth_api_keys WHERE user_id = $1`, userID)
-	// audit_log: entradas con actor=this user
+
 	out.AuditEntries, _ = scanRows(ctx, s.Pool,
 		`SELECT id, action, entity_type, entity_id, new_values, occurred_at
 		 FROM audit_log WHERE actor_id = $1 ORDER BY occurred_at DESC LIMIT 5000`, userID)
@@ -297,7 +297,7 @@ func normalizeValue(v any) any {
 		}
 		return string(x)
 	case [16]byte:
-		// UUID raw bytes — convertir a string
+
 		u := uuid.UUID(x)
 		return u.String()
 	default:

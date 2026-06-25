@@ -30,10 +30,10 @@ var (
 	ErrExpired           = errors.New("draft expired")
 	ErrUnsupportedMode   = errors.New("mode not yet supported")
 
-	// ErrProjectIDRequired Fase 2: el wizard scopea el draft (y el issue/REQ que
-	// materializa al Commit) a un proyecto. Sin project_id no hay scoping, asi
-	// que Start lo rechaza ANTES de insertar el draft (issue_drafts.project_id
-	// es NOT NULL tras 000167).
+
+
+
+
 	ErrProjectIDRequired = errors.New("project_id required")
 )
 
@@ -72,11 +72,11 @@ type Draft struct {
 	ExpiresAt             time.Time       `json:"expires_at"`
 	CreatedAt             time.Time       `json:"created_at"`
 	UpdatedAt             time.Time       `json:"updated_at"`
-	// IssueID se persiste en issue_drafts.issue_id (mig 000165) cuando el
-	// Commit materializa el draft. Nil si el draft no fue materializado.
+
+
 	IssueID *uuid.UUID `json:"issue_id,omitempty"`
-	// IssueSlug NO se persiste: lo llena Commit en memoria para que el handler
-	// MCP lo devuelva al cliente sin un segundo round-trip a DB.
+
+
 	IssueSlug string `json:"issue_slug,omitempty"`
 }
 
@@ -124,16 +124,16 @@ type AttachmentInitResult struct {
 // para evitar acoplar issuebuilder al paquete requirement (mismo patron que
 // AttachmentService). Se inyecta via adapter en main.go.
 type RequirementService interface {
-	// Create inserta un requirement. Firma espejo de requirement.Service.Create.
+
 	Create(ctx context.Context, slug, title, description, status, priority, parentSlug string, projectID *uuid.UUID) (*MaterializedRequirement, error)
 }
 
 // IssueService es el subset de internal/service/issue.Service que el Commit
 // necesita para materializar el draft en un issue real.
 type IssueService interface {
-	// Create inserta un issue con sus escenarios. Firma espejo de
-	// issue.Service.Create (scenarios se pasa vacio: el draft no genera
-	// Gherkin estructurado, solo el issue.md como description).
+
+
+
 	Create(ctx context.Context, slug, title, description, status, priority, reqSlug string) (*MaterializedIssue, error)
 }
 
@@ -157,10 +157,10 @@ type Service struct {
 	Audit       *audit.PGRecorder
 	Attachments AttachmentService // opcional; si nil → AttachToDraft falla con ErrAttachmentsNotConfigured
 	DraftTTLHrs int               // Default 24
-	// ReqSvc / IssueSvc opcionales: si ambos estan presentes, Commit
-	// materializa el draft en sdd_requirements + issues. Si alguno es nil,
-	// Commit conserva el comportamiento legacy (solo marca status=committed)
-	// para no romper clientes que aun no los inyectan.
+
+
+
+
 	ReqSvc   RequirementService
 	IssueSvc IssueService
 }
@@ -190,8 +190,8 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 	if strings.TrimSpace(initialIdea) == "" {
 		return nil, nil, fmt.Errorf("initial_idea required")
 	}
-	// Fase 2: project_id obligatorio. Se valida antes del insert para no
-	// depender del not-null constraint (000167) y dar un error estable.
+
+
 	if projectID == nil || *projectID == uuid.Nil {
 		return nil, nil, ErrProjectIDRequired
 	}
@@ -199,9 +199,9 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 	expires := time.Now().Add(s.ttl())
 
 	var d Draft
-	// ISSUE-21.6: RETURNING sin organization_id.
-	// project_id (nullable, mig 000161): scopea el draft al proyecto. *uuid.UUID
-	// nil -> NULL. Antes quedaba siempre NULL porque Start no lo recibia.
+
+
+
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO issue_drafts (created_by, project_id, mode, initial_idea, total_steps, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -263,7 +263,7 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 	newAnswers, _ := json.Marshal(answers)
 	nextStep := d.CurrentStep + 1
 
-	// Log step
+
 	optsJSON, _ := json.Marshal(step.options)
 	answerJSON, _ := json.Marshal(rawAnswer)
 	_, _ = s.Pool.Exec(ctx,
@@ -272,7 +272,7 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 		draftID, step.Key, step.Prompt, optsJSON, answerJSON,
 	)
 
-	// Determine new status
+
 	newStatus := StatusInProgress
 	if nextStep >= len(flow) {
 		newStatus = StatusFinished
@@ -306,7 +306,7 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 // Get retrieve un draft por ID.
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Draft, error) {
 	var d Draft
-	// ISSUE-21.6: SELECT sin organization_id.
+
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, created_by, mode, initial_idea, answers,
 		       current_step, total_steps, status, pending_clarifications,
@@ -383,7 +383,7 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 		return nil, fmt.Errorf("init upload: %w", err)
 	}
 
-	// Persist attachment_id + filename en answers["attachments"].
+
 	answers := map[string]any{}
 	_ = json.Unmarshal(d.Answers, &answers)
 	existing, _ := answers["attachments"].([]any)
@@ -439,10 +439,10 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 		return nil, fmt.Errorf("%w: status=%s", ErrInvalidStatus, d.Status)
 	}
 
-	// Materializacion (best-effort transaccional por service): cada Create de
-	// requirement/issue es internamente transaccional. No envolvemos todo en una
-	// unica tx porque ReqSvc/IssueSvc no aceptan un pgx.Tx externo; el riesgo es
-	// minimo (insert REQ + insert issue) y la idempotencia la da el slug unico.
+
+
+
+
 	var issueID *uuid.UUID
 	var issueSlug string
 	if s.ReqSvc != nil && s.IssueSvc != nil {
@@ -508,43 +508,43 @@ func (s *Service) materialize(ctx context.Context, d *Draft) (*uuid.UUID, string
 		return nil, "", fmt.Errorf("answers incompletos: req_parent=%q slug=%q", reqParent, slug)
 	}
 
-	// 1) Validar el formato del REQ padre ANTES de cualquier escritura. Si el
-	//    slug no tiene la forma REQ-NN, abortamos sin auto-crear un REQ huerfano
-	//    (evita el estado parcial que detecto la revision adversarial).
+
+
+
 	reqNum := reqNumberFromSlug(reqParent)
 	if reqNum == "" {
 		return nil, "", fmt.Errorf("req_parent %q invalido: se espera formato REQ-NN", reqParent)
 	}
 
-	// 2) Resolver el REQ padre. Si no existe en DB, auto-crearlo (status active)
-	//    scopeado al project_id del draft. El title sale del slug del REQ.
+
+
 	reqID, err := s.resolveOrCreateReq(ctx, d, reqParent)
 	if err != nil {
 		return nil, "", err
 	}
 
-	// 3) Derivar issue slug real issue-NN.M-<slug>. M = siguiente correlativo
-	//    entre los issues ya colgados de ese REQ. Capamos el largo a 50 chars
-	//    (issues.slug es VARCHAR(50)): truncamos el sufijo <slug> si hace falta.
+
+
+
 	next, err := s.nextIssueOrdinal(ctx, reqID)
 	if err != nil {
 		return nil, "", err
 	}
 	issueSlug := cappedIssueSlug(reqNum, next, slug)
 
-	// 3) Mapear prioridad del wizard (alta/media/baja) -> issue (high/medium/low).
+
 	issuePriority := mapPriority(priority)
 
-	// 4) Title + description. El title sale del goal (1 linea); description = el
-	//    issue.md del preview ya renderizado (fallback: render on-the-fly).
+
+
 	title := goal
 	if title == "" {
 		title = slug
 	}
 	description := s.issueMarkdownFromPreview(d, answers, summary)
 
-	// IssueSvc.Create re-resuelve el REQ por slug internamente; reqID ya nos
-	// sirvio para contar el correlativo y para garantizar que el padre existe.
+
+
 	created, err := s.IssueSvc.Create(ctx, issueSlug, title, description,
 		"proposed", issuePriority, reqParent)
 	if err != nil {
@@ -567,7 +567,7 @@ func (s *Service) resolveOrCreateReq(ctx context.Context, d *Draft, reqSlug stri
 		return uuid.Nil, fmt.Errorf("buscar REQ padre: %w", err)
 	}
 
-	// No existe: auto-crear. project_id sale del draft (puede ser NULL).
+
 	projectID := s.draftProjectID(ctx, d.ID)
 	created, cerr := s.ReqSvc.Create(ctx, reqSlug, reqSlug, "", "active", "medium", "", projectID)
 	if cerr != nil {
@@ -626,7 +626,7 @@ func cappedIssueSlug(reqNum string, ordinal int, slug string) string {
 	prefix := fmt.Sprintf("issue-%s.%d-", reqNum, ordinal)
 	avail := maxLen - len(prefix)
 	if avail <= 0 {
-		// Caso patologico (REQ-NN muy largo): devolvemos sin sufijo.
+
 		return strings.TrimRight(fmt.Sprintf("issue-%s.%d", reqNum, ordinal), "-")
 	}
 	if len(slug) > avail {
@@ -727,7 +727,7 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 
 // List devuelve drafts filtrados por status (vacío = todos los activos).
 func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
-	// ISSUE-21.6: SELECT sin organization_id.
+
 	q := `SELECT id, created_by, mode, initial_idea, answers,
 	             current_step, total_steps, status, pending_clarifications,
 	             preview, target_path, committed_at, expires_at, created_at, updated_at

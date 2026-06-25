@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// issue-23.2 — Tests de comportamiento de la regla de negocio "retention window".
-// retentionDays() es la funcion pura que decide cuantos dias un entity
-// soft-deleted puede ser restaurado. El default es 30 dias (compliance
-// GDPR + razonabilidad operativa).
+
+
+
+
 
 // Comportamiento: default = 30 dias cuando no se setea.
 func TestRetentionDays_DefaultIs30(t *testing.T) {
@@ -69,6 +69,6 @@ func TestRestore_UnsupportedEntity_NoDBRequired(t *testing.T) {
 	s := &Service{}
 	err := s.Restore(nil, "no_existe", uuid.New(), uuid.New(), nil)
 	require.ErrorIs(t, err, ErrEntityNotSupported)
-	// Si llega aca sin panic, significa que el switch rechaza ANTES
-	// de tocar la DB. Defense in depth: handler bug no causa SQL injection.
+
+
 }

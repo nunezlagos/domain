@@ -19,8 +19,8 @@ import (
 )
 
 func registerHealthTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// Wrappear con withOrgTxHandler para que los SELECTs respeten RLS y
-	// vean los rows del org del principal (app_user, no BYPASSRLS).
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -44,7 +44,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		},
 	}
 
-	// Auth
+
 	if d.Principal == nil {
 		resp["auth"] = map[string]any{"ok": false, "reason": "no principal — set DOMAIN_API_KEY"}
 		return toolResultJSON(resp)
@@ -62,7 +62,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		return toolResultJSON(resp)
 	}
 
-	// Schema migration version
+
 	var schemaVer int
 	var dirty bool
 	dbStatus := map[string]any{"ok": true}
@@ -77,8 +77,8 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 
 	userID, _ := uuid.Parse(d.Principal.UserID)
 
-	// Counts de objetos del usuario en su org (queries simples,
-	// app_admin pool si esta disponible para BYPASSRLS).
+
+
 	counts := map[string]any{}
 	queries := []struct {
 		key string
@@ -88,7 +88,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		{"clients", "SELECT COUNT(*) FROM project_clients WHERE deleted_at IS NULL"},
 		{"tickets", "SELECT COUNT(*) FROM project_tickets WHERE deleted_at IS NULL"},
 		{"observations", "SELECT COUNT(*) FROM knowledge_observations WHERE deleted_at IS NULL"},
-		// REQ-42.3: sessions_open removido (tabla sessions dropeada).
+
 		{"crons", "SELECT COUNT(*) FROM crons WHERE deleted_at IS NULL"},
 		{"proposals_pending", "SELECT COUNT(*) FROM project_policies WHERE proposed=true AND deleted_at IS NULL"},
 		{"verifications_open", "SELECT COUNT(*) FROM tdd_verifications WHERE status IN ('pending','running','failed','partial')"},
@@ -101,7 +101,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 			counts[q.key] = nil
 		}
 	}
-	// Captured prompts del usuario (filtrado por user_id en lugar de org)
+
 	var promptCount int
 	if err := d.q(ctx).QueryRow(ctx,
 		"SELECT COUNT(*) FROM prompt_captured WHERE user_id=$1",
@@ -111,7 +111,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	resp["counts"] = counts
 
-	// Ultimo project_session_bootstrap del usuario (proyecto mas recientemente tocado)
+
 	var lastSlug, lastSeenStr string
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT slug, to_char(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
@@ -125,7 +125,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		}
 	}
 
-	// Servicios opcionales: detectar cuales NO estan configurados
+
 	missing := []string{}
 	if d.PromptRouter == nil {
 		missing = append(missing, "prompt_router")
@@ -141,7 +141,7 @@ func (d *Deps) handleHealth(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	resp["optional_services_not_configured"] = missing
 
-	// Verdict global
+
 	ok := true
 	if dbStatus["ok"] != true {
 		ok = false

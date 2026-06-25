@@ -91,8 +91,8 @@ func (a *Adapters) RunSkillForDispatcher() RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		// skillRunner.Execute no retorna un ID; generamos uno para
-		// mantener la shape uniforme de Result.
+
+
 		execID := uuid.New()
 		return Result{RunID: execID, Status: "completed", Output: json.RawMessage(out)}, nil
 	}

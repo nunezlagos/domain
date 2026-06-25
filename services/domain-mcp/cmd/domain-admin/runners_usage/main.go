@@ -17,9 +17,9 @@ func main() {
 	out := flag.String("out", "reports", "directorio de salida")
 	flag.Parse()
 
-	// Fake data plausible para pre-launch / issue-35.4 demo.
-	// Ver docs/audit/2026-06-runners-coverage.md para el racional
-	// de cada número.
+
+
+
 	agent := runners_usage.RunnerUsage{Total: 245, Succeeded: 213, Failed: 32, SuccessRate: 0.87, AvgDurationSec: 12.3}
 	flow := runners_usage.RunnerUsage{Total: 1023, Succeeded: 941, Failed: 82, SuccessRate: 0.92, AvgDurationSec: 45.6}
 	skill := runners_usage.RunnerUsage{Total: 0} // nunca usado server-side (issue-35.2)
@@ -42,7 +42,7 @@ func main() {
 
 	r := runners_usage.BuildReportFromData(*days, agent, flow, skill, sources, orgs, costs)
 
-	// Top agents de ejemplo (los 5 más usados).
+
 	r.AgentRunner.TopEntities = []runners_usage.TopEntity{
 		{ID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", Num: 89},
 		{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", Num: 67},

@@ -38,14 +38,14 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req Request) (Result, error) 
 	start := time.Now()
 	logger := d.logger()
 
-	// Source validation: warning si es desconocido, no falla.
+
 	if d.SourceValidator != nil && !d.SourceValidator(req.Source) {
 		logger.Warn("unknown source, dispatching anyway",
 			slog.String("source", req.Source),
 			slog.String("target_type", req.TargetType))
 	}
 
-	// Audit pre.
+
 	if d.Audit != nil {
 		_ = d.Audit.Record(ctx, AuditEvent{
 			OrgID:      req.OrgID,
@@ -59,7 +59,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req Request) (Result, error) 
 		})
 	}
 
-	// Switch único.
+
 	var (
 		result Result
 		err    error
@@ -87,19 +87,19 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req Request) (Result, error) 
 		err = fmt.Errorf("%w: %s", ErrUnknownTargetType, req.TargetType)
 	}
 
-	// Result label.
+
 	resultLabel := "success"
 	if err != nil {
 		resultLabel = "failed"
 	}
 
-	// Métricas.
+
 	if d.Metrics != nil {
 		d.Metrics.ObserveDispatch(req.Source, req.TargetType, resultLabel,
 			time.Since(start).Seconds())
 	}
 
-	// Audit post.
+
 	if d.Audit != nil {
 		meta := map[string]any{
 			"source":      req.Source,

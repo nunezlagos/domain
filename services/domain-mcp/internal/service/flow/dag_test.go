@@ -152,7 +152,7 @@ func TestTopologicalSort_CycleError(t *testing.T) {
 }
 
 func TestSpecValidate_IntegratesDAG(t *testing.T) {
-	// Spec.Validate debe rechazar steps con ciclo
+
 	spec := Spec{
 		Version: 1,
 		Steps: []Step{

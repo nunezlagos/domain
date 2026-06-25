@@ -1,7 +1,7 @@
-// Tests para InstallProgress y helpers del wizard (issue-01.10).
-//
-// Cobertura: formato, acumulacion, summary, edge cases (EndStep
-// sin StartStep, zero steps, etc.).
+
+
+
+
 
 package main
 
@@ -52,14 +52,14 @@ func TestInstallProgress_EndStep_WithoutStartStep_NoPanic(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewInstallProgress(3, &buf)
 
-	// No debe panic. Invariante documentada: EndStep sin StartStep
-	// previo es un no-op silencioso (los callers DEBEN llamar
-	// StartStep primero). El step huérfano no se acumula.
+
+
+
 	require.NotPanics(t, func() {
 		p.EndStep(StepOK, "orphan")
 	})
 
-	// El summary refleja 0 steps (el orphan fue ignorado).
+
 	p.Summary()
 	require.Contains(t, buf.String(), "total=0")
 	require.NotContains(t, buf.String(), "ok=1",
@@ -100,7 +100,7 @@ func TestInstallProgress_Summary_ListsFailedSteps(t *testing.T) {
 func TestInstallProgress_Summary_ZeroSteps(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewInstallProgress(5, &buf)
-	// No llamamos StartStep/EndStep. Summary debe funcionar igual.
+
 	p.Summary()
 	require.Contains(t, buf.String(), "total=0")
 }
@@ -117,15 +117,15 @@ func TestInstallProgress_Steps_ReturnsCopy(t *testing.T) {
 	require.Equal(t, StepOK, steps[0].Status)
 	require.Equal(t, "ok", steps[0].Summary)
 
-	// Mutating el retorno NO debe afectar el internal state
+
 	steps[0].Name = "mutated"
 	steps2 := p.Steps()
 	require.Equal(t, "x", steps2[0].Name, "Steps() must return a defensive copy")
 }
 
 func TestStatusGlyph_AllStatuses(t *testing.T) {
-	// Cada status conocido tiene un glyph visible. Si agregamos
-	// un status nuevo sin glyph, esto cae (defense in depth).
+
+
 	cases := map[StepStatus]string{
 		StepOK:      "✓",
 		StepSkipped: "·",
@@ -135,7 +135,7 @@ func TestStatusGlyph_AllStatuses(t *testing.T) {
 	for status, want := range cases {
 		require.Equal(t, want, statusGlyph(status), "glyph for %s", status)
 	}
-	// Status desconocido: glyph genérico
+
 	require.Equal(t, "?", statusGlyph(StepStatus("unknown")))
 }
 

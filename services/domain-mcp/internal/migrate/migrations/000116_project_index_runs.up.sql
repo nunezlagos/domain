@@ -1,12 +1,12 @@
--- migration: project_index_runs
--- author: mnunez@saargo.com
--- issue: REQ-62 project indexer estilo Cursor
--- description: tracking de cada "indexing run" del proyecto. El LLM
---   dispara domain_project_index_start al primer bootstrap (o re-index
---   manual), submitéa archivos del repo, server clasifica y persiste
---   en project_policies / knowledge_base / observations.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE project_index_runs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17,8 +17,8 @@ CREATE TABLE project_index_runs (
     CHECK (status IN ('running','completed','failed','partial')),
   git_head        VARCHAR(40),
   files_submitted INTEGER NOT NULL DEFAULT 0,
-  -- summary: { policies_created, knowledge_created, skills_created,
-  --           observations_created, tech_stack: {...}, ignored: [] }
+
+
   summary         JSONB NOT NULL DEFAULT '{}',
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at    TIMESTAMPTZ

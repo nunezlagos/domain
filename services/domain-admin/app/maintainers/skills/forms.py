@@ -76,7 +76,7 @@ class SkillForm(InstanceAwareMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Skill | None = None, **kwargs):
-        # InstanceAwareMixin captura instance -> self.instance (para clean_slug).
+
         super().__init__(*args, instance=instance, **kwargs)
         if instance is not None and not self.is_bound:
             self.fields["slug"].initial = instance.slug
@@ -91,9 +91,9 @@ class SkillForm(InstanceAwareMixin, forms.Form):
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
-        # La unicidad real es (project_id, slug). En edicion el scope no cambia,
-        # asi que validamos contra el project_id del instance; en alta el scope
-        # es global (project_id NULL) desde el admin.
+
+
+
         project_id = self.instance.project_id if self.instance is not None else None
         qs = Skill.objects.filter(deleted_at__isnull=True, slug=slug)
         if project_id in (None, ""):

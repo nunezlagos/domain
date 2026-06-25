@@ -31,7 +31,7 @@ class Role(models.Model):
     slug = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
-    # En la DB es text[] (no jsonb), por eso ArrayField en lugar de JSONField.
+
     permissions = ArrayField(models.CharField(max_length=100), default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -70,7 +70,7 @@ class User(SoftDeleteModel):
     erased_at = models.DateTimeField(null=True, blank=True)
     password_hash = models.BinaryField(null=True, blank=True)
     password_set_at = models.DateTimeField(null=True, blank=True)
-    # Redeclara status (heredado de SoftDeleteModel) solo para agregar choices.
+
     status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:

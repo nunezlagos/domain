@@ -93,12 +93,12 @@ class MaintainerViews:
         self.per_page = per_page
         self.search_param = search_param
 
-        # Fallback service generico (si el modulo del app no define list/signal).
+
         self._base = MaintainerService()
         self._base.model = model
         self._base.search_fields = self.search_fields
 
-    # ---- naming / urls ---------------------------------------------------
+
 
     def url(self, name: str, *args) -> str:
         return reverse(f"{self.app_name}:{name}", args=args)
@@ -106,9 +106,9 @@ class MaintainerViews:
     def tpl(self, name: str) -> str:
         return f"{self.templates}/{name}"
 
-    # ---- service hooks (sobreescribibles) --------------------------------
-    # Por defecto buscan funciones por convencion de nombre en `service`;
-    # si no existen, usan el MaintainerService generico o lanzan.
+
+
+
 
     @property
     def error_class(self):
@@ -122,8 +122,8 @@ class MaintainerViews:
             search=search, search_fields=self.search_fields,
             page=page, per_page=self.per_page,
         )
-        # Renombrar `items` -> list_key para que el template del app lo reciba
-        # bajo el nombre que ya usa (p.ej. users espera `users`).
+
+
         if self.list_key != "items":
             data[self.list_key] = data.pop("items")
         return data
@@ -183,7 +183,7 @@ class MaintainerViews:
         (p.ej. users mapea role->role_slug y agrega hashed_password())."""
         return dict(form.cleaned_data)
 
-    # ---- context builders (sobreescribibles) -----------------------------
+
 
     def list_context(self, data: dict, search: str) -> dict:
         ctx = {
@@ -209,7 +209,7 @@ class MaintainerViews:
         kwarg (ModelForm usa `instance=`; el UserForm del ref tambien)."""
         return self.form_class(*args, instance=instance, **kwargs)
 
-    # ---- vistas ----------------------------------------------------------
+
 
     def list(self, request):
         if (redir := require_auth(request)):
@@ -220,12 +220,12 @@ class MaintainerViews:
         data = self.do_list(search=search, page=page)
         ctx = self.list_context(data, search)
 
-        # ?fragment=table -> solo tabla + paginacion (para auto-refresh).
+
         if request.GET.get("fragment") == "table":
             return render(request, self.tpl("_table_partial.html"), ctx)
 
-        # Señal inicial embebida en el render (evita perder cambios entre
-        # render y primer poll).
+
+
         sig = self.do_signal()
         ctx["signal_count"] = sig["count"]
         ctx["signal_version"] = sig["version"]

@@ -19,15 +19,15 @@ type LLMClassifier struct {
 	Provider llm.Provider
 	Model    string  // "claude-haiku-4-5-20251001" recomendado (rápido + cheap)
 	Fallback Classifier
-	// MaxTokens default 256 — suficiente para JSON corto.
+
 	MaxTokens int
-	// Temperature default 0.0 — clasificación, no creatividad.
+
 	Temperature float64
-	// PromptLoader opcional: si está seteado y devuelve un body no vacío,
-	// ESE body se usa como SystemPrompt en lugar de la const hardcodeada.
-	// Esto permite editar el prompt de triage desde el dashboard (tabla
-	// prompts, slug='triage') sin recompilar. Si es nil, devuelve "" o
-	// devuelve error, el classifier cae al const llmClassifierSystemPrompt.
+
+
+
+
+
 	PromptLoader func(ctx context.Context) (string, error)
 }
 
@@ -126,7 +126,7 @@ type classifierParsed struct {
 }
 
 func parseClassifierResponse(raw string) (*classifierParsed, error) {
-	// Algunos providers envuelven JSON en fences ```json...```.
+
 	cleaned := strings.TrimSpace(raw)
 	cleaned = strings.TrimPrefix(cleaned, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")

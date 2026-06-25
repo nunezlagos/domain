@@ -1,12 +1,12 @@
--- migration: create_mcp_providers
--- author: nunezlagos
--- issue: F1 (catálogo de MCPs instalables)
--- description: catálogo de MCP servers que domain puede autoinstalar
---              en clientes IA (opencode, claude-code, claude-desktop).
---              Diferente de mcp_servers (HU-12.4) que es para MCPs EXTERNOS
---              que domain CONSUME.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE mcp_providers (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -30,12 +30,12 @@ from core.service import MaintainerService
 from .models import Project, ProjectRepository, ProjectTemplate
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class ProjectError(Exception):
     """Error de operacion sobre proyectos."""
 
 
-# Service base reusado: search (name/slug/description/repository_url) + signal.
+
 class ProjectService(MaintainerService):
     model = Project
     search_fields = ("name", "slug", "description", "repository_url")
@@ -123,11 +123,11 @@ def list_available_templates() -> list[ProjectTemplate]:
     return list(ProjectTemplate.objects.all().order_by("slug"))
 
 
-# --- Skills aplicables al proyecto (modelo hibrido: auto + excluibles) -------
-# Las skills GLOBALES (project_id NULL) aplican AUTOMATICAMENTE a todos los
-# proyectos; las INTERNAS (project_id = proyecto) son propias del proyecto.
-# project_skills se usa SOLO para EXCLUIR (fila con is_enabled=FALSE). Esto
-# espeja el resolver del MCP (skill.ApplicableSkillIDs).
+
+
+
+
+
 
 def _excluded_skill_ids(project: Project) -> set:
     """IDs de skills EXCLUIDAS para el proyecto (project_skills.is_enabled=FALSE)."""
@@ -199,7 +199,7 @@ def set_skill_excluded(project: Project, skill_id: str, excluded: bool) -> None:
         ProjectSkill.objects.filter(project=project, skill_id=skill_id).delete()
 
 
-# --- Reglas (policies) que aplican al proyecto ------------------------------
+
 
 def list_platform_policies() -> list[dict]:
     """Reglas de plataforma (globales) activas. Aplican AUTOMATICAMENTE a todos los
@@ -271,7 +271,7 @@ def toggle_project_policy(project: Project, policy_id: str) -> None:
         pp_services.toggle_policy_status(policy)
 
 
-# --- Repos git por proyecto -------------------------------------------------
+
 
 def _derive_repo_name(url: str, index: int) -> str:
     """Alias del remoto derivado de la URL (ultimo segmento sin .git).
@@ -326,13 +326,13 @@ def _sync_repositories(project: Project, rows: list[dict]) -> None:
                 is_default=is_default,
             )
 
-    # Sobrantes: soft-delete (deleted_at) y quitarles el flag default.
+
     for repo in existing[len(rows):]:
         repo.deleted_at = timezone.now()
         repo.is_default = False
         repo.save()
 
-    # Backfill de la URL principal legacy desde el repo default (primero).
+
     project.repository_url = rows[0]["url"] if rows else ""
     project.save(update_fields=["repository_url", "updated_at"])
 
@@ -411,12 +411,12 @@ def update_project(
         project.current_branch = current_branch
     project.client_id = client_id or None
     if repositories is None:
-        # Sin gestion de repos: respetar la URL principal recibida (legacy).
+
         project.repository_url = repository_url or ""
     project.save()
 
     if repositories is not None:
-        # _sync_repositories backfillea project.repository_url desde el default.
+
         _sync_repositories(project, repositories)
     return project
 
@@ -461,10 +461,10 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
-# entity_label="Proyecto" -> _entity_attr() == "proyecto", core busca
-# get_proyecto / create_proyecto / update_proyecto / delete_proyecto /
-# toggle_proyecto_status. Apuntamos esos nombres a las funciones reales.
+
+
+
+
 get_proyecto = get_project
 create_proyecto = create_project
 update_proyecto = update_project

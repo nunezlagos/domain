@@ -1,4 +1,4 @@
-// issue-02.7 OTP unit tests.
+
 
 package otp
 
@@ -14,7 +14,7 @@ func TestGenerateCode_LengthSix(t *testing.T) {
 		code, err := generateCode(6)
 		require.NoError(t, err)
 		require.Len(t, code, 6)
-		// Solo dígitos
+
 		for _, c := range code {
 			require.Contains(t, "0123456789", string(c))
 		}
@@ -35,7 +35,7 @@ func TestGenerateCode_Random(t *testing.T) {
 		c, _ := generateCode(6)
 		seen[c]++
 	}
-	// Con 200 generaciones de espacio 1M, esperamos casi todos únicos
+
 	require.Greater(t, len(seen), 190, "duplicados sospechosamente altos: %d unique de 200", len(seen))
 }
 
@@ -49,7 +49,7 @@ func TestIsEmail(t *testing.T) {
 
 // Sabotaje: padding de zeros funciona (code < 10^6).
 func TestSabotage_CodePadding(t *testing.T) {
-	// Generamos muchos códigos y verificamos que NO contienen length variable
+
 	for i := 0; i < 100; i++ {
 		c, _ := generateCode(6)
 		require.Len(t, c, 6, "code %q debe ser exactly 6 chars con padding", c)

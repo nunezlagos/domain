@@ -1,8 +1,8 @@
 //go:build integration
 
-// MCP integration test del orquestador SDD (issue-08.10 mcp-001..004).
-// Usa mcptest.NewServer in-process para invocar tools como un cliente
-// real (Claude Code, Cline) lo haria sobre stdio, sin levantar binario.
+
+
+
 
 package mcpserver_test
 
@@ -109,7 +109,7 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	f := setupOrchMCP(t)
 	defer f.cleanup()
 
-	// 1. domain_orchestrate → recibe flow_run + plan
+
 	startTxt := callOrchTool(t, f.srv, "domain_orchestrate", map[string]any{
 		"raw_text": "fix typo en README",
 		"mode":     "express",
@@ -142,7 +142,7 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	applyStepID := startRes.Plan.Steps[0].ID
 	verifyStepID := startRes.Plan.Steps[1].ID
 
-	// 2. domain_orchestrate_phase_result para apply CON code_reference
+
 	applyTxt := callOrchTool(t, f.srv, "domain_orchestrate_phase_result", map[string]any{
 		"flow_run_step_id": applyStepID,
 		"output": map[string]any{
@@ -163,7 +163,7 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	require.Equal(t, "running", applyRes.FlowRunStatus)
 	require.Equal(t, "sdd-verify", applyRes.NextStepKey)
 
-	// 3. domain_orchestrate_phase_result para verify
+
 	verifyTxt := callOrchTool(t, f.srv, "domain_orchestrate_phase_result", map[string]any{
 		"flow_run_step_id": verifyStepID,
 		"output": map[string]any{
@@ -179,7 +179,7 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	require.Equal(t, "completed", verifyRes.StepStatus)
 	require.Equal(t, "completed", verifyRes.FlowRunStatus)
 
-	// 4. domain_flow_status
+
 	statusTxt := callOrchTool(t, f.srv, "domain_flow_status", map[string]any{
 		"flow_run_id": startRes.FlowRunID,
 	})
@@ -210,7 +210,7 @@ func TestMCP_Orchestrate_NotConfigured_ReturnsError(t *testing.T) {
 			OrganizationID: uuid.New().String(),
 			Role:           "owner",
 		},
-		// Orchestrator: nil — deliberadamente
+
 		ServerName: "test", ServerVer: "0.0.0",
 	}
 	srv, err := mcptest.NewServer(t, mcpserver.Tools(deps)...)

@@ -23,7 +23,7 @@ from core.service import MaintainerService
 from .models import AgentTemplate
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class AgentTemplateError(Exception):
     """Error de operacion sobre plantillas de agentes."""
 
@@ -140,14 +140,14 @@ def delete_agenttemplate(template: AgentTemplate) -> None:
     template.delete()
 
 
-# --- Alias por convencion de core.views (entity_label -> attr) ---------------
-# entity_label="Plantilla de Agente" -> _entity_attr() = "plantilla_de_agente".
-# core busca get_<attr>/create_<attr>/update_<attr>/delete_<attr>.
+
+
+
 get_plantilla_de_agente = get_agenttemplate
 create_plantilla_de_agente = create_agenttemplate
 update_plantilla_de_agente = update_agenttemplate
 delete_plantilla_de_agente = delete_agenttemplate
 
 
-# Excepcion de dominio que el core descubre como `ServiceError`.
+
 ServiceError = AgentTemplateError

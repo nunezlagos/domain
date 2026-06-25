@@ -1,9 +1,9 @@
--- migration: create_platform_policies
--- author: nunezlagos
--- issue: HU-01.8
--- description: policies de la plataforma (conventions, security, architecture) en BD como SOT
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS platform_policies (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,7 +33,7 @@ CREATE TRIGGER set_updated_at_platform_policies
   BEFORE UPDATE ON platform_policies
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Versiones históricas (cada update crea row aquí)
+
 CREATE TABLE IF NOT EXISTS platform_policy_versions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   policy_id       UUID NOT NULL REFERENCES platform_policies(id) ON DELETE CASCADE,

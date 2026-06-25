@@ -244,7 +244,7 @@ func TestSpecValidate_OnErrorValidRefs(t *testing.T) {
 }
 
 func TestSpecValidate_OnErrorFailContinue(t *testing.T) {
-	// "fail" y "continue" son valores reservados, no step ids
+
 	spec := Spec{
 		Version: 1,
 		Steps: []Step{

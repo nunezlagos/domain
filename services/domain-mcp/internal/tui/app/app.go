@@ -1,12 +1,12 @@
-// Package app — root state machine del TUI de domain (HU-01.11).
-//
-// State machine: stateMenu ↔ stateFeature.
-//   stateMenu: muestra el menu principal.
-//   stateFeature: una feature activa (install/update/backups).
-//                 Cuando termina, envia BackMsg{} → vuelve al menu.
-//   stateExit: tea.Quit.
-//
-// Patron copiado de ptools/internal/app/app.go.
+
+
+
+
+
+
+
+
+
 
 package app
 
@@ -78,14 +78,14 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		feat := featureFor(msg.Index)
 		if feat == nil {
-			// Unknown feature: stay in menu
+
 			return m, nil
 		}
 		m.state = stateFeature
 		m.current = feat
 		return m, feat.Init()
 	}
-	// Delegate key updates al menu
+
 	var cmd tea.Cmd
 	updated, cmd := m.menu.Update(msg)
 	if concrete, ok := updated.(menu.Model); ok {
@@ -95,14 +95,14 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateFeature(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Si la feature envia BackMsg, volvemos al menu.
+
 	if _, ok := msg.(BackMsg); ok {
 		m.state = stateMenu
 		m.current = nil
 		return m, nil
 	}
-	// ctrl+c SIEMPRE sale, esté donde esté la feature. Sin esto el user
-	// queda atrapado en features que no manejan la key.
+
+
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
 		return m, tea.Quit
 	}

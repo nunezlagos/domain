@@ -29,15 +29,15 @@ from .models import Agent
 class AgentViews(MaintainerViews):
     """MaintainerViews especializado para agents (list filtrado + contextos)."""
 
-    # --- list con filtros (proveedor multi-select / estado). Guardamos el
-    #     request para que do_list/list_context lean los GET; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
 
-    # --- listado: usa el service que EXCLUYE soft-deleted (el list generico
-    #     del core no filtra deleted_at) + aplica los filtros activos.
-    #     list_key="agents" ya viene seteado.
+
+
+
     def do_list(self, search: str, page: int) -> dict:
         req = getattr(self, "_list_request", None)
         providers = req.GET.getlist("provider") if req else []
@@ -47,11 +47,11 @@ class AgentViews(MaintainerViews):
             providers=providers, statuses=[status] if status else None,
         )
 
-    # --- contextos: los templates de agents usan `agent_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el container de filtros.
+
         ctx["provider_options"] = services.list_provider_options()
         ctx["status_options"] = Agent.STATUS_CHOICES
         ctx["selected_providers"] = req.GET.getlist("provider") if req else []
@@ -76,8 +76,8 @@ class AgentViews(MaintainerViews):
         }
 
 
-# Instancia que cablea todo. list_key="agents" -> el template recibe la lista
-# bajo `agents`. id_kwarg="agent_id" -> casa con <uuid:agent_id> de las URLs.
+
+
 views = AgentViews(
     app_name="agents",
     model=Agent,

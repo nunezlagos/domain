@@ -99,7 +99,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 		info("detectado WSL2 — instalando para clientes IDE corriendo en WSL")
 	}
 
-	// 1. Cargar valores persistidos
+
 	env, _ := loadEnv(paths.GlobalEnv)
 	if urlFlag == "" {
 		urlFlag = env.VPSURL
@@ -114,7 +114,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 		ok("Email (desde " + paths.GlobalEnv + "): " + emailFlag)
 	}
 
-	// 2. Prompts faltantes
+
 	in := bufio.NewReader(os.Stdin)
 	if urlFlag == "" {
 		urlFlag = strings.TrimSpace(prompt(in, "  URL del VPS (ej. http://1.2.3.4): "))
@@ -146,7 +146,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 		ok("guardado en " + paths.GlobalEnv + " (modo 0600)")
 	}
 
-	// 3. Verificar conexión al VPS
+
 	step("Verificando conexión al VPS")
 	if pingVPS(urlFlag) {
 		ok("VPS responde en " + urlFlag)
@@ -154,7 +154,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 		warnL("VPS no responde en " + urlFlag + "/healthz (continuando igual)")
 	}
 
-	// 4. Detectar clientes
+
 	step("Detectando clientes MCP")
 	clients := p.DetectedClients()
 	if len(clients) == 0 {
@@ -170,7 +170,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 		return
 	}
 
-	// 5. Skill + subagent globales
+
 	step("Plantando skill + subagent globales")
 	if err := installGlobalAssets(paths); err != nil {
 		failL("install global assets: " + err.Error())
@@ -179,7 +179,7 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 	ok("skill: " + paths.GlobalSkillPath)
 	ok("agent: " + paths.GlobalAgentPath)
 
-	// 6. Configurar cada cliente
+
 	step("Configurando clientes (MCP transport)")
 	timestamp := Timestamp()
 	for _, c := range clients {

@@ -40,15 +40,15 @@ func Disable(agent, configPath string, providers []string) error {
 		return nil // nada que hacer
 	}
 
-	// Backup ANTES de cualquier cambio. Usa install.BackupFile
-	// (issue-29.2) — comparte formato y dedup con el resto del
-	// install. Sin esto perdemos el rollback del user que cambió
-	// de opinión.
+
+
+
+
 	if _, err := install.BackupFile(configPath); err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
 
-	// Aplicar disable a cada provider.
+
 	providerSet := make(map[string]bool, len(providers))
 	for _, p := range providers {
 		providerSet[p] = true
@@ -65,7 +65,7 @@ func Disable(agent, configPath string, providers []string) error {
 		servers[name] = entry
 	}
 
-	// Re-serializar.
+
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -99,8 +99,8 @@ func Reactivate(agent, configPath string) error {
 	if len(matches) == 0 {
 		return fmt.Errorf("no backup found for %s (pattern: %s)", configPath, pattern)
 	}
-	// Ordenar lexicográficamente — el formato YYYYMMDDTHHMMSSZ es
-	// comparable directamente.
+
+
 	sort.Strings(matches)
 	latest := matches[len(matches)-1]
 	body, err := os.ReadFile(latest)
@@ -110,8 +110,8 @@ func Reactivate(agent, configPath string) error {
 	if err := os.WriteFile(configPath, body, 0o600); err != nil {
 		return fmt.Errorf("restore: %w", err)
 	}
-	// Eliminar el backup usado para que la próxima reactivate tome
-	// el anterior. Esto da semántica "1 reactivate = 1 undo".
+
+
 	if err := os.Remove(latest); err != nil {
 		return fmt.Errorf("remove used backup: %w", err)
 	}

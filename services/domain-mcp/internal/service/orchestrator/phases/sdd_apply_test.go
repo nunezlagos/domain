@@ -27,8 +27,8 @@ func TestSDDApplyHandler_Build_DeclaresRequiredCodeReference_D5(t *testing.T) {
 	out, err := h.Build(context.Background(), Input{RawText: "refactor X"})
 	require.NoError(t, err)
 	require.Equal(t, "sdd-apply", out.AgentTemplateSlug)
-	// SystemPrompt llega vacío del handler — el Service lo hidrata desde
-	// agent_templates en BD antes de despachar. Ver Service.hydrateSystemPrompts.
+
+
 	require.Empty(t, out.SystemPrompt)
 	require.Contains(t, out.UserPrompt, "refactor X")
 	require.Len(t, out.SuggestedSaves, 1)
@@ -99,9 +99,9 @@ func TestSDDApplyHandler_Sabotage_SuggestedSaveTypeIsCodeReference(t *testing.T)
 	h := NewSDDApplyHandler()
 	out, err := h.Build(context.Background(), Input{RawText: "x"})
 	require.NoError(t, err)
-	// Si alguien cambiara este Type por error (digamos "code_ref"), la
-	// validación D5 del orchestrator no podría matchear nunca y
-	// silenciosamente todo apply pasaría sin requirement. Lock here.
+
+
+
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)
 }
 

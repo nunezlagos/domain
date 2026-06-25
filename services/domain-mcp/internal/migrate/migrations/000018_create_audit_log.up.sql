@@ -1,9 +1,9 @@
--- migration: create_audit_log
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-02.4 + RFC 0003
--- description: audit_log append-only inmutable (BIGSERIAL high volume)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE audit_log (
   id BIGSERIAL PRIMARY KEY,
@@ -28,5 +28,5 @@ CREATE INDEX audit_log_actor_idx ON audit_log (actor_id) WHERE actor_id IS NOT N
 CREATE INDEX audit_log_entity_idx ON audit_log (entity_type, entity_id);
 CREATE INDEX audit_log_action_idx ON audit_log (action, occurred_at DESC);
 
--- Bloquear UPDATE/DELETE a nivel DB (HU-02.4 inmutabilidad)
--- Esto se enforce a nivel role en HU-25.6; aquí solo doc note.
+
+

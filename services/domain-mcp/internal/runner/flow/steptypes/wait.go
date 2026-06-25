@@ -75,7 +75,7 @@ func (r *WaitRunner) waitCondition(ctx context.Context, condition string, input 
 	defer ticker.Stop()
 
 	for {
-		// Resolve and evaluate condition
+
 		resolved := ResolveTemplate(condition, input.Inputs, input.StepOutputs)
 		result, err := evalBool(resolved)
 		if err == nil && result {
@@ -97,7 +97,7 @@ func (r *WaitRunner) waitCondition(ctx context.Context, condition string, input 
 				"trigger":        "timeout",
 			}, fmt.Errorf("wait: condition not met within %d seconds: %q", timeoutSec, condition)
 		case <-ticker.C:
-			// Continue loop, re-evaluate
+
 		}
 	}
 }

@@ -101,7 +101,7 @@ class CreateViewTests(MaintainerTestCase):
             "password": "abc",
             "password_confirm": "abc",
         })
-        # Form invalido → re-render (200), sin crear.
+
         self.assertEqual(r.status_code, 200)
         self.assertFalse(User.objects.filter(email="corta@example.com").exists())
 

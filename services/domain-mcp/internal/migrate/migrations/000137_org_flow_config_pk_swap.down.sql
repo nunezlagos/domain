@@ -1,5 +1,5 @@
--- Revertir: restaurar PK original sobre organization_id.
--- Nota: falla si hay más de 1 fila.
+
+
 
 ALTER TABLE org_flow_config
   DROP CONSTRAINT IF EXISTS org_flow_config_org_unique;

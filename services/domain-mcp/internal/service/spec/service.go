@@ -83,7 +83,7 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
-// --- Proposals ---
+
 
 // CreateProposal inserta nueva versión de proposal para una HU.
 func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intention, scope, approach, risks, testingNotes string) (*Proposal, error) {
@@ -223,7 +223,7 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 	return &updated, nil
 }
 
-// --- Designs ---
+
 
 // CreateDesign inserta nuevo design para una HU.
 func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalID *uuid.UUID, archDecisions, alternatives, dataFlow, tddPlan, risksMitigation string) (*Design, error) {
@@ -323,7 +323,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 	return &updated, nil
 }
 
-// --- helpers ---
+
 
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
 	var exists bool

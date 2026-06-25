@@ -1,9 +1,9 @@
-// Tests para internal/tui/menu (HU-01.11 commit 2/5).
-//
-// Cobertura: Init, Update con KeyMsg (flechas, enter, q, 1-4), View
-// format, FeatureNames/IndexOf. NO usamos teatest (overhead para
-// estos tests simples); los bubbletea Models se testean con su API
-// directa (Update retorna Model+Cmd, View retorna string).
+
+
+
+
+
+
 
 package menu
 
@@ -119,7 +119,7 @@ func TestView_CursorVisible(t *testing.T) {
 	m := New()
 	m.cursor = 2
 	view := m.View()
-	// El item seleccionado debe tener un marker '> ' cerca de su título.
+
 	lines := strings.Split(view, "\n")
 	found := false
 	for _, l := range lines {

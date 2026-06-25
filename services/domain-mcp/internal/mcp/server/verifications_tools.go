@@ -95,7 +95,7 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 		return mcp.NewToolResultError("items debe ser un array no vacio"), nil
 	}
 
-	// Normalizar items: cada uno debe tener label, status arranca pending.
+
 	items := make([]map[string]any, 0, len(rawItems))
 	for _, ri := range rawItems {
 		m, ok := ri.(map[string]any)
@@ -119,7 +119,7 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	itemsJSON, _ := json.Marshal(items)
 	contextStr, _ := args["context"].(string)
 
-	// REQ-42.3: columna session_id dropeada de verifications (FK a sessions).
+
 
 	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
@@ -173,7 +173,7 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 		durationMs = int(v)
 	}
 
-	// Leer items actuales, actualizar el matching label, persistir.
+
 	var itemsRaw []byte
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT items FROM tdd_verifications WHERE id = $1`,
@@ -240,7 +240,7 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	var items []map[string]any
 	_ = json.Unmarshal(itemsRaw, &items)
 
-	// Calcular status final.
+
 	pass, fail, skipped, pending := 0, 0, 0, 0
 	for _, it := range items {
 		switch it["status"] {

@@ -1,4 +1,4 @@
-// issue-02.5 PII redaction unit tests.
+
 
 package pii
 
@@ -42,7 +42,7 @@ func TestRedact_Bearer(t *testing.T) {
 	require.Contains(t,
 		Redact("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"),
 		"Bearer [TOKEN]")
-	// Case insensitive
+
 	require.Contains(t,
 		Redact("BEARER abc123def456ghi789jkl012"),
 		"[TOKEN]")

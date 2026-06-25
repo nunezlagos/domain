@@ -18,12 +18,12 @@ from core.service import MaintainerService
 from .models import Role, User, UserRole
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class UserError(Exception):
     """Error de operacion sobre usuarios."""
 
 
-# Service base reusado: list (search email/name + paginacion) + signal.
+
 class UserService(MaintainerService):
     model = User
     search_fields = ("email", "name")
@@ -215,10 +215,10 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
-# entity_label="Usuario" -> _entity_attr() == "usuario", core busca
-# get_usuario / create_usuario / update_usuario / delete_usuario /
-# toggle_usuario_status. Apuntamos esos nombres a las funciones reales.
+
+
+
+
 get_usuario = get_user
 create_usuario = create_user
 update_usuario = update_user

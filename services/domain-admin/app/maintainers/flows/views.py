@@ -68,15 +68,15 @@ def _pretty_spec(flow) -> str:
 class FlowViews(MaintainerViews):
     """MaintainerViews especializado para flows (list filtrado + context keys)."""
 
-    # --- list con filtro is_active. Guardamos el request para que
-    #     do_list/list_context lean el GET `active`; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
 
-    # --- CREAR deshabilitado: el catalogo de flows lo gestiona el seeder de la
-    #     plataforma (sdd-pipeline-v1). El mantenedor es solo visualizar + editar.
-    #     Bloqueamos tanto el GET (form) como el POST: redirige al listado.
+
+
+
     def create(self, request):
         if (redir := require_auth(request)):
             return redir
@@ -86,10 +86,10 @@ class FlowViews(MaintainerViews):
         )
         return HttpResponseRedirect(self.url("list"))
 
-    # --- list: el default de core.views lista TODO; flows debe EXCLUIR los
-    #     soft-deleted (deleted_at != NULL). Se delega en services.list_flows,
-    #     que aplica ese filtro y ya devuelve la lista bajo `flows`. El GET
-    #     `active` ("1"/"0") se traduce a bool; "" = sin filtro de estado.
+
+
+
+
     def do_list(self, search: str, page: int) -> dict:
         req = getattr(self, "_list_request", None)
         val = req.GET.get("active") if req else None
@@ -99,15 +99,15 @@ class FlowViews(MaintainerViews):
             is_active=is_active,
         )
 
-    # --- contexto del listado: agrega la seleccion actual del filtro is_active
-    #     para que el container de filtros marque la opcion correcta.
+
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         req = getattr(self, "_list_request", None)
         ctx["selected_active"] = req.GET.get("active", "") if req else ""
         return ctx
 
-    # --- contextos: los templates de flows usan `flow_obj` (no `object`).
+
     def form_context(self, form, mode: str, instance, action: str) -> dict:
         ctx = {
             "form": form,
@@ -116,7 +116,7 @@ class FlowViews(MaintainerViews):
             "object": instance,
             "action": action,
         }
-        # En edicion mostramos tambien las versiones (read-only) en su tab.
+
         if mode == "edit" and instance is not None:
             ctx["flow_versions"] = services.get_flow_versions(instance)
         return ctx
@@ -130,8 +130,8 @@ class FlowViews(MaintainerViews):
         }
 
 
-# Instancia que cablea todo. list_key="flows" -> el template recibe la lista
-# bajo `flows`. id_kwarg="flow_id" -> casa con <uuid:flow_id> de las URLs.
+
+
 views = FlowViews(
     app_name="flows",
     model=Flow,

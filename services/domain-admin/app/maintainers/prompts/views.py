@@ -29,8 +29,8 @@ from .models import Prompt
 class PromptViews(MaintainerViews):
     """MaintainerViews especializado para prompts (payload + context keys)."""
 
-    # --- payload del service: project_id/created_by solo en alta; en edicion
-    #     el service no acepta project_id (no se edita una vez creado).
+
+
     def do_create(self, form):
         cd = form.cleaned_data
         return services.create_prompt(
@@ -55,8 +55,8 @@ class PromptViews(MaintainerViews):
             tags=cd["tags"],
         )
 
-    # --- list con filtro de estado (is_active). Guardamos el request para que
-    #     do_list/list_context lean el GET; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
@@ -70,12 +70,12 @@ class PromptViews(MaintainerViews):
             is_active=is_active,
         )
 
-    # --- contextos: los templates de prompts usan `prompt_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Prompts"
         req = getattr(self, "_list_request", None)
-        # Seleccion actual del filtro de estado para el container de filtros.
+
         ctx["selected_active"] = req.GET.get("active") if req else ""
         return ctx
 
@@ -92,8 +92,8 @@ class PromptViews(MaintainerViews):
         return {"prompt_obj": instance, "object": instance}
 
 
-# Instancia que cablea todo. list_key="prompts" -> el template recibe la lista
-# bajo `prompts`. id_kwarg="prompt_id" -> casa con <uuid:prompt_id> de las URLs.
+
+
 views = PromptViews(
     app_name="prompts",
     model=Prompt,

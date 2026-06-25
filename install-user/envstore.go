@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// envStore: persistir DOMAIN_VPS_URL y DOMAIN_USER_EMAIL en un archivo
-// ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env
-// (Windows) modo 0600. API_KEY NO se persiste por seguridad.
+
+
+
 
 type EnvData struct {
 	VPSURL string
@@ -63,6 +63,6 @@ func saveEnv(path string, data EnvData) error {
 
 func removeEnv(path string) {
 	_ = os.Remove(path)
-	// Intentar borrar el dir padre si quedó vacío (no rompe si tiene cosas).
+
 	_ = os.Remove(filepath.Dir(path))
 }

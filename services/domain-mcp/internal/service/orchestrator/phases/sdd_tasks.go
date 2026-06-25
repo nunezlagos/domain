@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// sddTasksHandler — fase sdd-tasks (descomposición atómica). system_prompt en BD.
+
 
 type sddTasksHandler struct{}
 
@@ -57,8 +57,8 @@ func (h *sddTasksHandler) Validate(_ context.Context, _ *Output, result ClientRe
 	if !ok || len(tasks) == 0 {
 		return errors.New("sdd-tasks: array 'tasks' requerido (al menos 1 task)")
 	}
-	// Sanity: cada task debe tener id + description. No validamos depends_on
-	// por shape (puede ser empty array); el handler de apply consume en orden.
+
+
 	for i, raw := range tasks {
 		m, ok := raw.(map[string]any)
 		if !ok {

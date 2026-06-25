@@ -28,7 +28,7 @@ type createTicketReq struct {
 	ParentID       string    `json:"parent_id"`
 	EstimatedHours *float64  `json:"estimated_hours"`
 	DueDate        string    `json:"due_date"` // YYYY-MM-DD
-	// REQ-58: external opcional al crear. Si vienen, link en mismo INSERT.
+
 	ExternalProvider string `json:"external_provider,omitempty"`
 	ExternalID       string `json:"external_id,omitempty"`
 	ExternalURL      string `json:"external_url,omitempty"`
@@ -72,7 +72,7 @@ func (a *API) createTicket(w http.ResponseWriter, r *http.Request) {
 		ReporterID:     userID,
 		Labels:         req.Labels,
 		EstimatedHours: req.EstimatedHours,
-		// REQ-58
+
 		ExternalProvider: req.ExternalProvider,
 		ExternalID:       req.ExternalID,
 		ExternalURL:      req.ExternalURL,
@@ -188,7 +188,7 @@ func (a *API) getTicket(w http.ResponseWriter, r *http.Request) {
 		writeData(w, http.StatusOK, t)
 		return
 	}
-	// Por key requiere project_slug
+
 	slug := r.URL.Query().Get("project_slug")
 	if slug == "" {
 		writeError(w, http.StatusBadRequest, "project_slug_required_for_key", "")

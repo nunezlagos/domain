@@ -103,10 +103,10 @@ func TestService_Run_DefaultMode_StaysFull(t *testing.T) {
 		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
 		RawText:        "x",
-		// Mode vacío → debe inferir Full, NO Lite.
+
 	})
-	// Full requiere los 10 handlers; con sólo 3 falla al armar el plan.
-	// Eso prueba que el default sigue siendo Full y no se desvió a Lite.
+
+
 	require.Error(t, err)
 	require.Nil(t, res)
 }

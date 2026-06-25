@@ -90,16 +90,16 @@ type seedTotals struct {
 // Mantenemos la firma para backward compat con callers pero el check
 // es best-effort: si la tabla no existe, retorna nil.
 func assertOrgExists(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) error {
-	// best-effort: intentar el check; si la tabla no existe (Fase C),
-	// considerar la org como existente.
+
+
 	var exists bool
 	err := pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1 AND deleted_at IS NULL)`,
 		orgID,
 	).Scan(&exists)
 	if err != nil {
-		// Tabla dropeada (Fase C) o cualquier error: best-effort pass.
-		// Log para visibilidad pero no falla el seed.
+
+
 		return nil
 	}
 	if !exists {
@@ -123,7 +123,7 @@ func withOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, fn func(p
 	return tx.Commit(ctx)
 }
 
-// --- helpers de lookup ---
+
 
 func demoUserID(ctx context.Context, tx pgx.Tx, email string) (uuid.UUID, error) {
 	var id uuid.UUID
@@ -149,7 +149,7 @@ func demoClientID(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, slug string) 
 	return id, err
 }
 
-// --- pasos ---
+
 
 var demoUsers = []struct{ email, name, role string }{
 	{"alice@demo.test", "Alice Dev", "admin"},
@@ -310,8 +310,8 @@ func seedDemoPolicies(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 }
 
 func seedDemoKnowledge(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, tot *seedTotals) error {
-	// knowledge_docs no tiene UNIQUE natural — usamos metadata.demo_slug
-	// para detectar duplicados sin migration nueva.
+
+
 	docs := []struct {
 		projectSlug, slug, title, body, source string
 		tags                                   []string
@@ -367,10 +367,10 @@ func seedDemoTickets(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t
 		if err != nil {
 			return fmt.Errorf("alice not seeded: %w", err)
 		}
-		// Para no colisionar con tickets pre-existentes en cada proyecto,
-		// usamos MAX(number)+1 como base y vamos incrementando por
-		// proyecto. Idempotencia por (org, project, key) sigue funcionando
-		// porque el key incluye un sufijo determinístico "demo-N".
+
+
+
+
 		nextNum := map[string]int{}
 		for _, slug := range projects {
 			pid, err := demoProjectID(ctx, tx, orgID, slug)

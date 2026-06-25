@@ -54,15 +54,15 @@ class ApiKey(BaseModel):
     )
     key_hash = models.BinaryField()
     key_prefix = models.CharField(max_length=20)
-    # key_plaintext: la key en claro. DEPRECADA para escritura desde la mig
-    # 000168: las keys NUEVAS van cifradas en key_ciphertext, esta queda NULL.
-    # Solo se lee como fallback para keys viejas que la tienen poblada.
+
+
+
     key_plaintext = models.TextField(null=True, blank=True)
-    # key_ciphertext: la key cifrada at-rest con pgcrypto/pgp_sym (mig 000168).
-    # BYTEA -> BinaryField. NO se lee/escribe como bytes crudos desde el ORM: se
-    # cifra/descifra con pgp_sym_encrypt/decrypt en SQL (services.create_api_key
-    # y get_api_key_plaintext), porque la passphrase vive fuera de la DB
-    # (DOMAIN_FIELD_ENC_KEY). Nullable: keys viejas no la tienen.
+
+
+
+
+
     key_ciphertext = models.BinaryField(null=True, blank=True)
     name = models.CharField(max_length=255)
     last_used_at = models.DateTimeField(null=True, blank=True)

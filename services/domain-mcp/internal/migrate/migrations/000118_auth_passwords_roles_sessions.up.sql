@@ -1,27 +1,27 @@
--- migration: auth_passwords_roles_sessions
--- author: mnunez@saargo.com
--- issue: REQ-71 dashboard login user+password + roles + sesiones web
--- description: extiende users con password_hash, agrega tablas roles +
---   user_roles (n:m) + auth_sessions (token persistente con role activo).
---   Coexiste con api_keys: el middleware acepta ambos formatos de Bearer.
--- breaking: false
--- estimated_duration: <1s
 
--- 1) password hash en users (NULLable para users de servicio / API-only).
+
+
+
+
+
+
+
+
+
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS password_hash BYTEA,
   ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
 
--- 2) roles globales del sistema. NO scoped por org porque son los
--- mismos en toda la instalación. La autorización combina rol +
--- RLS multi-tenant (ya existente).
+
+
+
 CREATE TABLE IF NOT EXISTS roles (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug        VARCHAR(40) UNIQUE NOT NULL,
   name        VARCHAR(120) NOT NULL,
   description TEXT,
-  -- permissions: array de strings (ej: 'tickets:read','tickets:write',
-  -- 'admin:all'). El backend interpreta. Sin RBAC formal — KISS.
+
+
   permissions TEXT[] NOT NULL DEFAULT '{}',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -44,8 +44,8 @@ INSERT INTO roles (slug, name, description, permissions) VALUES
    ARRAY['tickets:read','projects:read'])
 ON CONFLICT (slug) DO NOTHING;
 
--- 3) user_roles: many-to-many. Un user puede tener múltiples roles.
--- Al login, el frontend pide cuál usar para esa sesión.
+
+
 CREATE TABLE IF NOT EXISTS user_roles (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -56,9 +56,9 @@ CREATE TABLE IF NOT EXISTS user_roles (
 
 CREATE INDEX IF NOT EXISTS user_roles_user_idx ON user_roles (user_id);
 
--- 4) auth_sessions: tokens opacos persistentes (no JWT) — así revocar
--- es 1 DELETE. token_hash = SHA-256 del token plano (el plano nunca se
--- persiste). active_role_id es el rol seleccionado al login.
+
+
+
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

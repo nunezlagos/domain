@@ -1,11 +1,11 @@
--- migration: create_cost_views
--- author: nunezlagos
--- issue: HU-15.1+15.2
--- description: vistas agregadas de cost daily por org + agent (HU-15.1 tracking)
--- breaking: false
--- estimated_duration: <1s
 
--- Vista cost daily por org
+
+
+
+
+
+
+
 CREATE OR REPLACE VIEW domain_cost_daily_by_org AS
 SELECT
   organization_id,
@@ -19,7 +19,7 @@ FROM agent_runs
 WHERE status IN ('completed', 'failed') AND finished_at IS NOT NULL
 GROUP BY organization_id, DATE_TRUNC('day', created_at AT TIME ZONE 'UTC');
 
--- Vista cost por agent
+
 CREATE OR REPLACE VIEW domain_cost_daily_by_agent AS
 SELECT
   ar.organization_id,
@@ -36,7 +36,7 @@ WHERE ar.status IN ('completed', 'failed') AND ar.finished_at IS NOT NULL
 GROUP BY ar.organization_id, ar.agent_id, a.slug,
          DATE_TRUNC('day', ar.created_at AT TIME ZONE 'UTC');
 
--- GRANTs
+
 GRANT SELECT ON domain_cost_daily_by_org TO app_user, app_readonly;
 GRANT SELECT ON domain_cost_daily_by_agent TO app_user, app_readonly;
 GRANT ALL ON domain_cost_daily_by_org TO app_admin;

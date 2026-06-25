@@ -98,12 +98,12 @@ type API struct {
 	FlowRunner            *flowrunner.Runner
 	CronService           *cronsvc.Service
 	WebhookService        *webhooksvc.Service
-	// ISSUE-28.7: dispatcher para webhooks inbound. Bounded queue +
-	// WaitGroup + per-job timeout. Si nil, el handler cae al fallback
-	// legacy (go func() directo).
+
+
+
 	WebhookDispatcher *WebhookDispatcher
-	// Dispatcher (issue-35.1): si no nil, webhook dispatch delega aqui.
-	// Si nil, usa el switch legacy (compat).
+
+
 	Dispatcher                *dispatch.Dispatcher
 	CostService               *cost.Service
 	BillingService            *billing.Service
@@ -138,11 +138,11 @@ type API struct {
 	IntakeService             *intakesvc.Service
 	PromptRouter              *promptrouter.Router
 	WorkflowImport            *workflowimport.Service
-	// REQ-69 SSE event bus para broadcast de cambios al dashboard /
-	// otros clientes. Si nil, el endpoint /api/v1/events devuelve 503.
+
+
 	EventBus *events.Bus
-	// REQ-72 auth web (login + roles + sessions). Si nil, los endpoints
-	// /api/v1/auth/* devuelven 503.
+
+
 	AuthSessionService *session.Service
 }
 
@@ -156,157 +156,157 @@ func SessionFromContext(ctx context.Context) (*session.Active, bool) {
 func (a *API) Router() http.Handler {
 	mux := http.NewServeMux()
 
-	// REQ-43.10 (Ola 8): endpoints auth web + misc + lifecycle removidos.
-// Consumidos solo por el admin Angular archivado. Mantener handlers como dead code.
-//
-//	Removidos:
-//	  - /api/v1/auth/{login,select-role,me,refresh,logout} (vistas admin login/session)
-//	  - /api/v1/me/roles (switcher de rol del header)
-//	  - /api/v1/captured-prompts (vista admin-captured-prompts)
-//	  - /api/v1/usage/turn-summary (vista admin-usage)
-//	  - /api/v1/restore (admin restore UI)
-//	  - /api/v1/me/export, /api/v1/me/erase (GDPR endpoints del admin)
-//
-// Mantenidos (consumidos por CLI installer): /auth/request-otp, /auth/verify-otp, /auth/first-run, /auth/bootstrap, /auth/login
+
+
+
+
+
+
+
+
+
+
+
+
 	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
-	// REQ-72 auth web (login user+password con roles). /auth/login se mantiene
-	// por compat con CLI installer; el resto del flujo web se removio en Ola 8.
+
+
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
-	// Bootstrap (issue-01.9): first-run detection + auto-create primer user.
-	// Tambien sin Bearer: la primera request al sistema no tiene user todavia.
+
+
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 
-	// REQ-43.3 (Ola 1): endpoints solo-Angular removidos. Consumidos unicamente
-	// por el admin Angular archivado en openspec/archive/2026-06-19-domain-admin-angular/.
-	// Removidos: /audit-logs, /api-keys, /activity-logs, enrollment-token admin.
-	// Mantenidos: /auth/enroll (CLI installer consume).
 
-	// Organizacion (single-org): la entidad organization se removio. Los
-	// endpoints de org settings (GET/PATCH /organizations/{id}) y member
-	// management (/organizations/{id}/members) ya no existen. Se conserva
-	// solo /auth/enroll (onboarding global, consumido por CLI).
-	// issue-37.1: self-enrollment con token compartido (publico)
+
+
+
+
+
+
+
+
+
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 
-	// REQ-43.4 (Ola 2): endpoints SDD/TDD removidos. Consumidos solo por el admin
-	// Angular archivado (vistas admin-requirements, admin-user-stories, admin-proposals,
-//	admin-designs, admin-tasks, admin-traceability, admin-hu-builder). Mantener
-	// handlers en struct API como dead code hasta HU-43.13 (cleanup).
-//
-//	Removidos en esta ola:
-//	  - /api/v1/requirements/* (POST/GET/{slug}/PATCH/archive/tree)
-//	  - /api/v1/user-stories/* (POST/GET/{slug}/PATCH/DELETE/scenarios)
-//	  - /api/v1/user-stories/{slug}/{proposals,designs}/*
-//	  - /api/v1/proposals/{id}/status
-//	  - /api/v1/designs/{id}/status
-//	  - /api/v1/user-stories/{slug}/tasks
-//	  - /api/v1/tasks/{id} y sub-rutas (status, verification, sabotage, progress)
-//	  - /api/v1/traceability/* (req/{slug}, code, coverage, progress, consolidated, gaps/*, code-refs)
 
-	// REQ-43.6 (Ola 3): Projects + Clients + Project-Templates + Attachments removidos.
-// Consumidos solo por el admin Angular archivado Y mockeados en SDK tests (breaking
-// change en SDKs publicados aceptado por el dueño del proyecto, junio 2026).
-// El MCP no usa estos endpoints (consume Services directamente), asi que el sunset
-// del HTTP no afecta tools MCP.
-//
-// Removidos:
-//   - /api/v1/attachments/* (POST/POST confirm/GET download/GET list/DELETE)
-//   - /api/v1/projects/* (POST/GET/{slug}/PATCH/DELETE)
-//   - /api/v1/clients/* (POST/GET/{id_or_slug}/PUT/DELETE/restore/status)
 
-	// REQ-43.3 (Ola 1): endpoints Tickets, Users, Events SSE y Jira webhook removidos.
-// Consumidos unicamente por el admin Angular archivado. Mantener handler en codigo
-// (caller methods quedan en struct API) evita romper referencias en tests; el borrado
-// fisico de handlers + sus tests se difiere a la HU-43.13 (cleanup post-sunset).
-//
-// Removidos en esta ola:
-//   - /api/v1/projects/{slug}/tickets, /api/v1/tickets/*
-//   - /api/v1/users (modal reasignar)
-//   - /api/v1/events (SSE dashboard)
-//   - /api/v1/tickets/link-external-bulk
-//   - /api/v1/webhooks/jira/issue-updated
 
-	// REQ-43.10 (Ola 8): captured-prompts + usage/turn-summary removidos
-// (eran vistas admin-captured-prompts y admin-usage).
 
-	// REQ-43.7 (Ola 4/5): Project-Repositories + Project-Policies + Proposals + Verifications + Observations + Search removidos.
-// Consumidos solo por admin Angular Y mockeados en SDK tests. El MCP consume los Services
-// directamente (project_repo_tools.go, verifications_tools.go, etc.).
-//
-// Removidos:
-//   - /api/v1/projects/{slug}/repositories (GET/POST)
-//   - /api/v1/project-repositories/{id} (DELETE)
-//   - /api/v1/projects/{slug}/policies (GET)
-//   - /api/v1/proposals (GET) + /api/v1/proposals/{kind}/{id}/review (POST)
-//   - /api/v1/projects/{slug}/verifications (GET)
-//   - /api/v1/observations (POST/GET/{id}/DELETE/GET list/search)
 
-// REQ-42.3: rutas /api/v1/sessions removidas (tabla sessions dropeada,
-// feature legacy duplicada de auth_sessions).
 
-	// REQ-43.7 (Ola 4): Agents + Agent Runs endpoints removidos.
-// Consumidos solo por admin Angular (vistas admin-agents, admin-runs) Y mockeados
-// en SDK tests. El MCP consume AgentService/AgentRunner directamente.
-//
-// Removidos:
-//   - /api/v1/agents/* (POST/GET/{id}/PATCH/{id}/versions/DELETE/{id}/run)
-//   - /api/v1/agent-runs/{id}/logs (GET)
 
-	// REQ-43.7/43.8 (Ola 4/6): Inbound webhooks management + Crons + Flows + Flow-Runs removidos.
-// Consumidos solo por admin Angular (vistas admin-webhooks, admin-crons, admin-flows) Y mockeados
-// en SDK tests. El MCP consume WebhookService/CronService/FlowService/FlowRunner directamente.
-// El endpoint publico HMAC /api/v1/webhooks/{slug}/receive se mantiene (integraciones externas).
-//
-// Removidos:
-//   - /api/v1/inbound-webhooks/* (POST/GET/{id}/PATCH/DELETE/deliveries/replay)
-//   - /api/v1/crons/* (POST/GET/{id}/PATCH/DELETE/history)
-//   - /api/v1/flows/* (POST/GET/{id}/PATCH/PUT/DELETE/export/parents/import/run/dry-run)
-//   - /api/v1/runs/{id}/signals (POST)
-//   - /api/v1/flow-runs/{id} (GET/POST pause/resume/cancel/stream)
 
-	// Webhooks inbound (publico, HMAC auth — slug + secret en config)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
 
-	// REQ-43.7 (Ola 4): Skills + Prompts endpoints removidos.
-// Consumidos solo por admin Angular (vistas admin-skills, admin-prompts) Y mockeados
-// en SDK tests (breaking change aceptado). El MCP consume SkillService/PromptService
-// directamente, asi que tools MCP domain_skill_* y domain_prompt_* siguen funcionando.
-//
-// Removidos:
-//   - /api/v1/skills/* (POST/GET/search/{id}/PATCH/DELETE/execute)
-//   - /api/v1/executions/{id} (GET)
-//   - /api/v1/prompts/* (POST/GET/{id}/activate/DELETE/by-slug/{slug}/versions/search)
 
-	// REQ-43.10 (Ola 8): lifecycle endpoints (restore, GDPR export/erase) removidos.
-// Consumidos solo por admin Angular (vistas admin-lifecycle y admin-account).
 
-	// REQ-43.7 (Ola 4/5): Knowledge + Context + Timeline + Prompts removidos.
-// Consumidos solo por admin Angular (vistas admin-knowledge, admin-prompts, admin-context)
-// Y mockeados en SDK tests. El MCP consume KnowledgeService/PromptService directamente.
-//
-// Removidos:
-//   - /api/v1/knowledge/* (POST/GET/search/{id}/DELETE)
-//   - /api/v1/context (GET)
-//   - /api/v1/observations/{id}/timeline (GET)
-//   - /api/v1/prompts/* (POST/GET/{id}/activate/DELETE/by-slug/{slug}/versions/search)
 
-	// REQ-43.9 (Ola 7): Admin + Platform + Crons + Project-Templates + MCP-servers mgmt + Outbound-webhooks mgmt + Cost/Usage + Usage-alerts + DB-stats/schema/slow-queries removidos.
-// Consumidos solo por admin Angular (vistas admin-cost, admin-platform, admin-mcp-servers, admin-templates, admin-db, etc.) Y mockeados en SDK tests. El MCP consume los Services directamente.
-//
-// Removidos (~40 endpoints):
-//   - /api/v1/cost/daily (GET)
-//   - /api/v1/usage (GET) + /api/v1/usage/current (GET) + /api/v1/usage/history (GET)
-//   - /api/v1/admin/db-stats (GET)
-//   - /api/v1/admin/db-schema (GET)
-//   - /api/v1/admin/db/slow-queries (GET)
-//   - /api/v1/admin/org-overview (GET)
-//   - /api/v1/usage-alerts (POST/GET/PATCH/DELETE + /{id}/fires)
-//   - /api/v1/platform/policies (POST/GET/{slug}/{id} PATCH/DELETE)
-//   - /api/v1/project-templates (POST/GET/{id}/DELETE)
-//   - /api/v1/mcp-servers (POST/GET/{id}/DELETE/{id}/sync-tools/{id}/tools/{id}/invoke)
-//   - /api/v1/outbound-webhooks (POST/GET/{id}/DELETE/{id}/test/deliveries/{id}/replay)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	return mux
 }
@@ -329,7 +329,7 @@ func AuthAllowlist() []string {
 	}
 }
 
-// --- JSON helpers ---
+
 
 // ensureJSONSlice: si data es un slice nil, devuelve un []T{} vacio para que
 // JSON serialice como [] en vez de null. Si data es otro tipo (struct, map, string),
@@ -348,9 +348,9 @@ func ensureJSONSlice(data any) any {
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	// HU-28.5: status ya escrito → best effort. Si encode rompe (cliente
-	// desconectado, stream cerrado), loggeamos pero no podemos cambiar el
-	// status code. No enmascaramos el error tragandolo en `_`.
+
+
+
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Error("failed to encode response", "error", err, "status", status)
 	}
@@ -385,20 +385,20 @@ func decodeJSON(r *http.Request, v any) error {
 	return dec.Decode(v)
 }
 
-// --- Principal / cross-org helpers (HU-28.3) ---
-//
-// Estos helpers reemplazan el patron:
-//
-//   p, _ := principal(r)
-//   if p == nil { writeError(...) ; return }
-//   orgID, _ := uuid.Parse(p.OrganizationID)
-//   if resource.OrganizationID != orgID { writeError(404) ; return }
-//
-// El middleware middleware.PrincipalCtx (post-auth) ya parseo los UUIDs
-// y los inyecto en el ctx via ctxkeys. Los handlers solo llaman a estos
-// accesores. Si el caller NO esta autenticado (allowlist path), orgID(ctx)
-// devuelve uuid.Nil — los handlers de paths autenticados pueden asumir
-// no-nil porque apikey.Middleware bloquea antes.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ErrCrossOrg es el sentinel que devuelve authorizeOrg cuando el recurso
 // pertenece a otra org. Mismo trato que ErrNotFound de los services:

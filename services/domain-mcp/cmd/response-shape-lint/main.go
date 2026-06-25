@@ -196,7 +196,7 @@ func apiHandlerWriterName(fn *ast.FuncDecl) (string, bool) {
 	if fn.Type.Params == nil || len(fn.Type.Params.List) != 2 {
 		return "", false
 	}
-	// Param 0: w http.ResponseWriter
+
 	p0 := fn.Type.Params.List[0]
 	if len(p0.Names) != 1 {
 		return "", false
@@ -204,7 +204,7 @@ func apiHandlerWriterName(fn *ast.FuncDecl) (string, bool) {
 	if !isSelector(p0.Type, "http", "ResponseWriter") {
 		return "", false
 	}
-	// Param 1: r *http.Request
+
 	p1 := fn.Type.Params.List[1]
 	if len(p1.Names) != 1 {
 		return "", false
@@ -243,7 +243,7 @@ func scanHandler(fset *token.FileSet, path string, fn *ast.FuncDecl, writer stri
 		pos := fset.Position(call.Pos())
 		switch fun := call.Fun.(type) {
 		case *ast.SelectorExpr:
-			// w.Write([]byte...) / w.WriteHeader(status) / w.Header().Set(...)
+
 			if isIdent(fun.X, writer) {
 				switch fun.Sel.Name {
 				case "Write":
@@ -261,7 +261,7 @@ func scanHandler(fset *token.FileSet, path string, fn *ast.FuncDecl, writer stri
 				}
 				return true
 			}
-			// json.NewEncoder(w).Encode(...) — detect Encode whose receiver is NewEncoder(w)
+
 			if fun.Sel.Name == "Encode" && isJSONNewEncoderOnWriter(fun.X, writer) {
 				out = append(out, Violation{
 					File: path, Line: pos.Line, Handler: handlerName,
@@ -269,7 +269,7 @@ func scanHandler(fset *token.FileSet, path string, fn *ast.FuncDecl, writer stri
 				})
 				return true
 			}
-			// fmt.Fprintf(w, ...) / fmt.Fprintln(w, ...) / fmt.Fprint(w, ...)
+
 			if isSelector(fun, "fmt", "Fprintf") || isSelector(fun, "fmt", "Fprintln") || isSelector(fun, "fmt", "Fprint") {
 				if len(call.Args) >= 1 && isIdent(call.Args[0], writer) {
 					out = append(out, Violation{
@@ -278,7 +278,7 @@ func scanHandler(fset *token.FileSet, path string, fn *ast.FuncDecl, writer stri
 					})
 				}
 			}
-			// io.WriteString(w, ...) / io.Copy(w, ...)
+
 			if isSelector(fun, "io", "WriteString") || isSelector(fun, "io", "Copy") {
 				if len(call.Args) >= 1 && isIdent(call.Args[0], writer) {
 					out = append(out, Violation{

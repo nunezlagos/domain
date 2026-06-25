@@ -1,5 +1,5 @@
--- Revertir issue-21.6 Fase A: re-habilitar RLS org (ENABLE + FORCE) en las
--- tablas org-scoped. Las policies nunca se dropearon, así que vuelven a aplicar.
+
+
 
 ALTER TABLE activity_log                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_log                  FORCE  ROW LEVEL SECURITY;

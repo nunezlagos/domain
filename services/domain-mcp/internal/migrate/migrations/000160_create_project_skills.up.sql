@@ -1,12 +1,12 @@
--- migration: create_project_skills
--- author: mnunez@saargo.com
--- issue: scoping por proyecto — skills N:N
--- description: tabla puente proyecto<->skill. Una skill solo es usable en un
---   proyecto si tiene fila acá (regla "no usable si no enlazada"). Reemplaza
---   el fallback "global implicito" (project_id IS NULL). Una skill puede
---   enlazarse a N proyectos. Sin organization_id (sistema org-less, mig 000142).
--- breaking: false
--- estimated_duration: <1s (tabla nueva vacia)
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE project_skills (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

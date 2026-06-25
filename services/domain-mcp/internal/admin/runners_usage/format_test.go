@@ -13,9 +13,9 @@ func TestNewReport_PopulatesDefaults(t *testing.T) {
 	require.NotEmpty(t, r.GeneratedAt)
 	require.False(t, r.Insufficient)
 	require.Empty(t, r.Warning)
-	// Zero value of Category es "". El caller lo setea explícitamente
-	// cuando aplica Categorize() al Total. Acá verificamos el
-	// "shape" del report, no la clasificación.
+
+
+
 	require.Equal(t, "", string(r.AgentRunner.Category))
 }
 
@@ -45,9 +45,9 @@ func TestFormatTable_WarnsNeverUsed(t *testing.T) {
 	out := FormatTable(r)
 	require.Contains(t, out, "WARNING")
 	require.Contains(t, out, "NUNCA")
-	// El bloque final con "at least one runner is NUNCA USADO" es la
-	// acción decisional: el operador lo lee y decide si matar el runner.
-	// Sin ese bloque el reporte miente sobre el impacto.
+
+
+
 	require.Contains(t, out, "at least one runner is NUNCA USADO")
 }
 
@@ -78,18 +78,18 @@ func TestFormatJSON_NoPII(t *testing.T) {
 	require.NoError(t, err)
 	body := string(out)
 
-	// PII forbidden patterns.
+
 	require.NotContains(t, body, "@", "JSON contains @ — possible email")
 	require.NotRegexp(t, regexp.MustCompile(`(?i)"name"`), body, "JSON contains name field")
 	require.NotRegexp(t, regexp.MustCompile(`(?i)"email"`), body, "JSON contains email field")
 	require.NotRegexp(t, regexp.MustCompile(`(?i)"user"`), body, "JSON contains user field")
 
-	// Solo UUIDs como ID: hex + dashes.
+
 	uuidRe := regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 	matches := uuidRe.FindAllString(body, -1)
 	require.GreaterOrEqual(t, len(matches), 2, "expected at least 2 UUIDs in JSON output")
 
-	// Métricas sí están.
+
 	require.Contains(t, body, `"total": 50`)
 	require.Contains(t, body, `"category": "USADO"`)
 }

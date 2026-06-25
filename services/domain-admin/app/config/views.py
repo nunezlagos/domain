@@ -30,7 +30,7 @@ def _require_auth(request) -> HttpResponseRedirect | None:
 
 
 def login_view(request):
-    # Si ya esta autenticado, mandarlo al dashboard.
+
     if _is_authed(request):
         return HttpResponseRedirect("/dashboard/")
 
@@ -39,7 +39,7 @@ def login_view(request):
         password = request.POST.get("password", "")
         admin_email, admin_password = _admin_creds()
         if email == admin_email and password == admin_password:
-            # Anti session fixation: regenerar session key.
+
             request.session.cycle_key()
             request.session["authenticated"] = True
             request.session["email"] = admin_email
@@ -73,11 +73,11 @@ def components_demo(request):
     return render(request, "components_demo.html")
 
 
-# --- Flujo SDD (vista general, no-CRUD) --------------------------------------
-# Orden canonico de las 10 fases del pipeline SDD + el grupo (concern) de cada
-# una para colorear el diagrama. El grupo ata visualmente la fase a la taxonomia
-# sdd_/tdd_: spec (explore->tasks), exec (apply), tdd (verify/judge),
-# close (archive/onboard).
+
+
+
+
+
 _SDD_PHASES = [
     ("sdd-explore", "Explore", "spec", "Mapea el contexto y el codigo existente.", "search"),
     ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptacion.", "doc"),
@@ -105,7 +105,7 @@ def sdd_flow(request):
     if redir:
         return redir
 
-    # Import local: evita acoplar config a un app de mantenedor en import-time.
+
     from maintainers.agenttemplates.models import AgentTemplate
 
     slugs = [slug for slug, *_ in _SDD_PHASES]
@@ -114,12 +114,12 @@ def sdd_flow(request):
         for t in AgentTemplate.objects.filter(slug__in=slugs).only("id", "slug", "name")
     }
 
-    # Membresia de modos + gates por fase (para badges del diagrama HTML).
-    #   lite    = explore + apply + verify
-    #   express = apply + verify
-    #   gate    = pausa humana manual/hibrido (spec/design/apply/judge)
-    #   hardspec= reiteracion humana obligatoria del spec
-    #   loop    = nucleo de reintento "hasta que los tests pasen"
+
+
+
+
+
+
     _LITE = {"sdd-explore", "sdd-apply", "sdd-verify"}
     _EXPRESS = {"sdd-apply", "sdd-verify"}
     _GATE = {"sdd-spec", "sdd-design", "sdd-apply", "sdd-judge"}
@@ -148,9 +148,9 @@ def sdd_flow(request):
             }
         )
 
-    # pmap: mismo dato indexado por nombre corto de fase (sin prefijo "sdd-"),
-    # para que el flowchart SVG ubique cada fase en su shape por clave estable
-    # (ej. {{ pmap.verify }}) en vez de depender del orden de la lista.
+
+
+
     pmap = {p["slug"].removeprefix("sdd-"): p for p in phases}
 
     return render(request, "sdd_flow.html", {"phases": phases, "pmap": pmap})
@@ -162,10 +162,10 @@ def logout_view(request):
     return HttpResponseRedirect("/login/")
 
 
-# --- Error handlers (referenciados desde config.urls) ---
-# Renderizan templates/errors/{code}.html con el status correcto.
-# Firma: los handlers 400/403/404 reciben (request, exception); el 500 solo
-# (request). Mantener los kwargs/firmas que Django espera.
+
+
+
+
 
 def bad_request(request, exception=None):
     return render(request, "errors/400.html", status=400)

@@ -1,7 +1,7 @@
-// Store/Resolver Postgres para API keys.
-//
-// Issue: emite key plaintext (devuelta UNA vez), persiste hash bcrypt + prefix.
-// Resolve: lookup por prefix (cheap indexed) + verify bcrypt (costoso pero acotado).
+
+
+
+
 
 package apikey
 
@@ -32,10 +32,10 @@ var canonicalOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 // PGStore Postgres-backed.
 type PGStore struct {
 	Pool *pgxpool.Pool
-	// FieldEncKey passphrase simetrica para pgcrypto (pgp_sym_encrypt). Se inyecta
-	// desde config (DOMAIN_FIELD_ENC_KEY). Issue/Rotate cifran la key en claro en
-	// key_ciphertext con esta passphrase; si esta vacia, fallan con ErrNoEncKey.
-	// Resolve no la necesita (valida por bcrypt). Mig 000168.
+
+
+
+
 	FieldEncKey string
 }
 
@@ -52,11 +52,11 @@ func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env 
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
-	// Cifrado at-rest (mig 000168): la key en claro se persiste cifrada en
-	// key_ciphertext via pgp_sym_encrypt(plaintext, passphrase). key_plaintext
-	// queda NULL (ya no se escribe claro). El dashboard la descifra con
-	// pgp_sym_decrypt para mostrarla. El bcrypt (key_hash) sigue siendo lo que
-	// valida Resolve; el ciphertext es solo para display/copia.
+
+
+
+
+
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
 		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
@@ -88,8 +88,8 @@ type APIKeyInfo struct {
 // solo para devolver el campo en APIKeyInfo.OrgID).
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
 	_ = orgID
-	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C);
-	// se sigue retornando OrgID en APIKeyInfo con default canónico.
+
+
 	rows, err := s.Pool.Query(ctx, `
 		SELECT k.id, k.user_id, k.name, k.key_prefix,
 		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
@@ -104,8 +104,8 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	var keys []APIKeyInfo
 	for rows.Next() {
 		var k APIKeyInfo
-		// ISSUE-21.6: OrgID canónico single-org (la columna
-		// u.organization_id no se selecciona de la DB).
+
+
 		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix,
 			&k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt, &k.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan api key: %w", err)
@@ -134,8 +134,8 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 
-	// Cifrado at-rest (mig 000168): igual que Issue, la nueva key se persiste
-	// cifrada en key_ciphertext; key_plaintext queda NULL.
+
+
 	err = tx.QueryRow(ctx,
 		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
 		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
@@ -182,8 +182,8 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		return nil, ErrNotFound
 	}
 
-	// Buscar candidates por prefix (puede haber colision; prefix incluye 7 chars random)
-	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C).
+
+
 	rows, err := s.Pool.Query(ctx,
 		`SELECT k.id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
 		 FROM auth_api_keys k
@@ -199,7 +199,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	defer rows.Close()
 
 	for rows.Next() {
-		// ISSUE-21.6: orgID local al Scan (ya no se selecciona de la DB).
+
 		var (
 			id     uuid.UUID
 			userID uuid.UUID
@@ -213,7 +213,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		orgID := canonicalOrgID
 		_ = orgID
 		if Verify(plaintext, hash) == nil {
-			// touch last_used_at (best effort, no bloqueante)
+
 			go func(id uuid.UUID) {
 				ctx2, cancel := context.WithTimeout(context.Background(), 1e9) // 1s
 				defer cancel()
@@ -259,7 +259,7 @@ func (u *UserLookup) ByEmail(ctx context.Context, email string) (*UserRow, error
 }
 
 func (u *UserLookup) ByRUT(ctx context.Context, rut string) (*UserRow, error) {
-	// Tabla users no tiene columna RUT explícita en migration 000003;
-	// futura migración issue-02.7 puede agregarla. Por ahora: NotFound.
+
+
 	return nil, ErrNotFound
 }

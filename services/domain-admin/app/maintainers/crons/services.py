@@ -19,13 +19,13 @@ from core.service import MaintainerService
 from .models import Cron
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class CronError(Exception):
     """Error de operacion sobre crons."""
 
 
-# Service base reusado: list (search name/slug/expr/target_type + paginacion) +
-# signal. El queryset base excluye soft-deleted.
+
+
 class CronsService(MaintainerService):
     model = Cron
     search_fields = ("name", "slug", "cron_expression", "target_type")
@@ -75,7 +75,7 @@ def export_crons_csv(search: str = "", target_types=None, enabled=None) -> str:
 
     qs = _filtered_cron_qs(target_types, enabled)
     if search:
-        # Mismos campos que CronsService.search_fields (name/slug/expr/tipo).
+
         qs = qs.filter(
             Q(name__icontains=search)
             | Q(slug__icontains=search)
@@ -203,5 +203,5 @@ def get_stats() -> dict:
     }
 
 
-# Alias para el descubrimiento por convencion de core.views.MaintainerViews.
+
 ServiceError = CronError

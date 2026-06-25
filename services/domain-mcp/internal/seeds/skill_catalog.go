@@ -308,7 +308,7 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"nlp", "ner", "platform"},
 		},
-		// ─────────── REQ-61: skills nuevas reduce-token ───────────
+
 		{
 			Slug:        "diff-summarize",
 			Name:        "Diff Summarize",

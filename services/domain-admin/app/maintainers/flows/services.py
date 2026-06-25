@@ -26,12 +26,12 @@ from core.service import MaintainerService
 from .models import Flow, FlowVersion
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class FlowError(Exception):
     """Error de operacion sobre flows."""
 
 
-# Service base reusado: list (search name/slug/description + paginacion) + signal.
+
 class FlowService(MaintainerService):
     model = Flow
     search_fields = ("name", "slug", "description")
@@ -196,5 +196,5 @@ def get_stats() -> dict:
     }
 
 
-# Excepcion de dominio que core.views.MaintainerViews traduce a messages.error.
+
 ServiceError = FlowError

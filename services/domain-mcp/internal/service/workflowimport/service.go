@@ -78,7 +78,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 	rep := &ImportReport{Detected: files}
 
 	for _, df := range files {
-		// Check si ya está importado con mismo hash → skip.
+
 		var existingHash string
 		var existingStatus string
 		err := s.Pool.QueryRow(ctx,
@@ -91,7 +91,7 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 			continue
 		}
 
-		// UPSERT como backed_up (o replaced si WriteStub).
+
 		newStatus := StatusBackedUp
 		var stub *string
 		if in.WriteStub && in.StubTemplate != "" {

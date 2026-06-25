@@ -1,9 +1,9 @@
--- migration: create_activity_log
--- author: mnunez@saargo.com
--- issue: HU-02.6 + RFC 0003
--- description: activity_log user-facing (vs audit_log compliance), human summaries
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE activity_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	// ErrTimeout retornado por Acquire si maxWait vence antes de obtener el lock.
+
 	ErrTimeout = errors.New("dlock_acquire_timeout")
 )
 
@@ -41,7 +41,7 @@ const PollInterval = 200 * time.Millisecond
 func HashKey(name string) int64 {
 	h := sha256.Sum256([]byte(name))
 	u := binary.BigEndian.Uint64(h[:8])
-	// Mask al rango int64 positivo no es necesario; pg acepta int8 signed.
+
 	return int64(u)
 }
 

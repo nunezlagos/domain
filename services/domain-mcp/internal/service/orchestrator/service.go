@@ -45,31 +45,31 @@ type Service struct {
 	Pool    *pgxpool.Pool
 	Audit   audit.Recorder
 	Phases  *phases.Registry
-	// Repo encapsula la persistencia (flow lookup + flow_runs + steps).
-	// Si nil, Service.Run en modo Express NO persistirá y devolverá
-	// IDs in-memory — útil para tests unit sin DB. En boot real,
-	// pasarlo explícitamente via NewPGRepository(pool).
+
+
+
+
 	Repo Repository
-	// Env replica config.Env. Empty o "dev" deshabilita enforcements
-	// estrictos para iteración local; "prod" los habilita.
+
+
 	Env string
-	// Clock inyectable (default time.Now UTC). Tests sustituyen para
-	// hacer determinista StartedAt.
+
+
 	Clock Clock
-	// Metrics opcional (issue-08.10 obs-001). Si nil, las métricas no
-	// se incrementan; usado en tests que no levantan Prometheus.
+
+
 	Metrics *metrics.Registry
-	// LLM Factory para Mode=Solo (issue-08.10 svc-005). Si nil, RunSolo
-	// devuelve ErrLLMFactoryRequired. Tests inyectan un factory con
-	// providers fake; cmd/domain-mcp usa el global con providers reales.
+
+
+
 	LLM *llm.Factory
-	// SignalStore opcional para ModeAsync. Si nil, async mode funciona
-	// sin emitir flow_signals (modo degraded). Cuando está configurado,
-	// ProcessAsyncFlowRun emite señales por step completado/fallido y
-	// al finalizar el flow.
+
+
+
+
 	SignalStore *flow.SignalStore
-	// Skills opcional para auto-recomendación D3 (skill-001). Si nil,
-	// fetchRecommendedSkills devuelve nil sin error.
+
+
 	Skills *skillsvc.Service
 }
 
@@ -97,8 +97,8 @@ func New(pool *pgxpool.Pool, audit audit.Recorder, reg *phases.Registry, env str
 //     sin Plan. Los modos restantes vienen en próximos chunks junto con
 //     la persistencia flow_runs + dispatch loop MCP.
 func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateResult, error) {
-	// OTel span: orchestrator.run. SafeAttrs whitelist evita PII; raw_text
-	// NO se incluye porque puede contener datos sensibles del usuario.
+
+
 	ctx, span := tracing.Tracer("orchestrator").Start(ctx, "orchestrator.run",
 		trace.WithAttributes(
 			tracing.SafeAttr("orchestrator.mode", string(in.Mode)),
@@ -124,9 +124,9 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		StartedAt:         now,
 	}
 	if mode == ModeSolo {
-		// Solo NO admite Repo nil (necesita BD para agent_templates y flow_runs)
-		// ni LLM nil. Express/Full/Detect tienen un fallback in-memory útil
-		// para tests; Solo es server-side puro y no tiene sentido sin BD.
+
+
+
 		if s.Repo == nil {
 			return nil, errors.New("orchestrator: Repo required for Solo mode")
 		}
@@ -201,11 +201,11 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		return result, nil
 	}
 	if mode == ModeExpress || mode == ModeLite || mode == ModeFull || mode == ModeDetect {
-		// Si hay Repo configurado, resolver el flow_id ANTES de armar
-		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
-		// hecho trabajo de prompts si la org no está inicializada.
-		// Detect requiere el flow seedeado igual (queremos validar que
-		// la org está lista para Full antes de devolver preview).
+
+
+
+
+
 		var flowID uuid.UUID
 		if s.Repo != nil {
 			var err error
@@ -228,14 +228,14 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		case ModeExpress:
 			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
 		case ModeLite:
-			// Lite NO pasa por selectPhases/ValidateDAG: ejecuta el subset
-			// curado LitePhases tal cual (explore→apply→verify por default),
-			// igual que Express. StartingPhase/SkipPhases no aplican — el set
-			// ya es chico y fijo; tunearlo se hace editando modes.LitePhases.
+
+
+
+
 			plan, err = modes.BuildLitePlan(ctx, s.Phases, phaseInput, now)
 		case ModeFull, ModeDetect:
-			// Detect usa el mismo planner que Full — la diferencia es
-			// que NO persistimos abajo (dry-run).
+
+
 			plan, err = modes.BuildFullPlan(ctx, s.Phases, phaseInput,
 				phases.PhaseSlug(in.StartingPhase),
 				convertSkipPhases(in.SkipPhases), now)
@@ -243,21 +243,21 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		// Hydrate los system_prompts desde agent_templates (BD source-of-truth).
-		// Los handlers devuelven SystemPrompt="" intencionalmente; el Service
-		// hace lookup acá por cada step usando AgentTemplateSlug. Esto
-		// permite que operadores customicen prompts vía UI/MCP sin
-		// recompilar binario. Detect TAMBIÉN hidrata: el preview es útil
-		// sólo si refleja los prompts reales que correrá Full.
+
+
+
+
+
+
 		if s.Repo != nil {
 			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 				return nil, err
 			}
 		}
-		// Persistir SÓLO en modos no-dry-run. Detect devuelve plan
-		// in-memory para inspección sin ensuciar BD; si el caller
-		// quiere ejecutar de verdad, invoca el orquestador de nuevo
-		// con Mode=ModeFull.
+
+
+
+
 		if s.Repo != nil && mode != ModeDetect {
 			if err := s.persistPlan(ctx, in, mode,
 				res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
@@ -268,10 +268,10 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if len(res.Plan.Steps) > 0 {
 			res.SnapshotPrompt = res.Plan.Steps[0].UserPrompt
 		}
-		// Métricas: orchestrator_runs_total{mode, status="started"}.
-		// El status terminal (completed/failed) se incrementa cuando el
-		// flow_run cambia de estado vía propagateFlowStatusAfterFailure
-		// o cuando la última fase termina vía RecordPhaseResult.
+
+
+
+
 		if s.Metrics != nil {
 			s.Metrics.OrchestratorRunsTotal.WithLabelValues(string(mode), "started").Inc()
 		}
@@ -333,8 +333,8 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	if plan == nil {
 		return nil
 	}
-	// Reglas del proyecto (+ plataforma) leídas una vez y anexadas a cada fase:
-	// la lectura de reglas es parte del flujo SDD (scoping por proyecto).
+
+
 	rulesBlock := s.buildRulesBlock(ctx, projectID)
 	type cached struct {
 		systemPrompt string
@@ -460,8 +460,8 @@ func (s *Service) validate(in OrchestrateInput) error {
 	if strings.TrimSpace(in.RawText) == "" {
 		return ErrEmptyRawText
 	}
-	// Fase 2: project_id obligatorio. Se rechaza antes de construir el plan o
-	// persistir el flow_run para no depender del not-null constraint (000167).
+
+
 	if in.ProjectID == uuid.Nil {
 		return ErrProjectIDRequired
 	}
@@ -474,8 +474,8 @@ func (s *Service) validate(in OrchestrateInput) error {
 		return ErrInvalidExecMode
 	}
 	if in.Mode == ModeAsync && in.ExpressMaxLines > 0 {
-		// ExpressMaxLines>0 sólo tiene sentido para Express. Si el caller
-		// pidió async con ExpressMaxLines, es la combinación D6.
+
+
 		return ErrAsyncModeUnsupported
 	}
 	if s.Phases != nil {

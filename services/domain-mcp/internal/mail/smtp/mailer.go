@@ -51,7 +51,7 @@ func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
 	msg := buildMessage(m.cfg.From, to, subject, body)
 
-	// Si UseTLS, conectar STARTTLS-style
+
 	if m.cfg.UseTLS {
 		return m.sendTLS(ctx, addr, to, msg)
 	}

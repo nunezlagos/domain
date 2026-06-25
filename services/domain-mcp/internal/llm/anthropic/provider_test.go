@@ -104,7 +104,7 @@ func TestProvider_BuildRequest_MessageWithToolResult(t *testing.T) {
 	}, false)
 
 	require.Len(t, body.Messages, 3)
-	// El third message (tool) se convierte a role=user con tool_result block
+
 	require.Equal(t, "user", body.Messages[2].Role)
 	require.Equal(t, "tool_result", body.Messages[2].Content[0].Type)
 	require.Equal(t, "tu_1", body.Messages[2].Content[0].ToolUseID)

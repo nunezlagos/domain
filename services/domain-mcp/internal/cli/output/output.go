@@ -180,7 +180,7 @@ func pickColumns(m map[string]any) []string {
 			return out
 		}
 	}
-	// Fill con resto hasta 6
+
 	for k := range m {
 		if seen[k] {
 			continue

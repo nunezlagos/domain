@@ -1,9 +1,9 @@
--- migration: rename_org_flow_config_to_flow_config (down)
--- author: mnunez@saargo.com
--- issue: REQ-21.6 (Fase D — rename cleanup)
--- description: rename table `flow_config` → `org_flow_config` (rollback).
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 BEGIN;
 

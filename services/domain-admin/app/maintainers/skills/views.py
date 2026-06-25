@@ -33,16 +33,16 @@ from .models import Skill
 class SkillViews(MaintainerViews):
     """MaintainerViews especializado para skills (context keys propios)."""
 
-    # list con filtro de tipo (skill_type). Guardamos el request para que
-    # do_list/list_context lean el GET; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
 
-    # core.do_list usa el MaintainerService generico sobre model.objects.all(),
-    # que NO excluye los soft-deleted. skills SI debe excluirlos, asi que
-    # delegamos en services.list_skills (que parte de un queryset filtrado por
-    # deleted_at__isnull=True). Devuelve la lista bajo `skills` (list_key).
+
+
+
+
     def do_list(self, search: str, page: int) -> dict:
         req = getattr(self, "_list_request", None)
         skill_type = req.GET.get("skill_type") if req else ""
@@ -55,7 +55,7 @@ class SkillViews(MaintainerViews):
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Skills"
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el select de tipo del filtro.
+
         ctx["skill_type_options"] = Skill.SKILL_TYPE_CHOICES
         ctx["selected_skill_type"] = req.GET.get("skill_type") if req else ""
         return ctx
@@ -77,9 +77,9 @@ class SkillViews(MaintainerViews):
         }
 
 
-# Instancia que cablea todo. list_key="skills" -> el template recibe la lista
-# bajo `skills`. id_kwarg="skill_id" -> casa con <uuid:skill_id> de las URLs.
-# entity_label="Skill" -> core descubre get_skill/create_skill/... sin alias.
+
+
+
 views = SkillViews(
     app_name="skills",
     model=Skill,

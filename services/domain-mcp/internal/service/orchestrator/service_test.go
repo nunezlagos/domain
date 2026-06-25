@@ -64,8 +64,8 @@ func TestService_Run_UnknownStartingPhase(t *testing.T) {
 
 func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	t.Parallel()
-	// Default Mode (vacío) resuelve a Full. Para que el dispatcher
-	// Full no falle por handlers faltantes, registramos los 10.
+
+
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDExploreHandler())
 	reg.MustRegister(phases.NewSDDSpecHandler())

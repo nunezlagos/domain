@@ -28,7 +28,7 @@ func TestMCP_PolicyGetAndList(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// policy_get devuelve el body completo
+
 	out := callTool(t, f.srv, "domain_policy_get", map[string]any{"slug": "go"})
 	var p struct {
 		Slug    string `json:"slug"`
@@ -41,7 +41,7 @@ func TestMCP_PolicyGetAndList(t *testing.T) {
 	require.Equal(t, 1, p.Version)
 	require.Contains(t, p.BodyMD, "pgx v5")
 
-	// policy_list descubre las rules disponibles
+
 	out = callTool(t, f.srv, "domain_policy_list", map[string]any{})
 	var list struct {
 		Total    int `json:"total"`
@@ -52,7 +52,7 @@ func TestMCP_PolicyGetAndList(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &list))
 	require.Equal(t, 2, list.Total)
 
-	// slug inexistente → error claro
+
 	_, isErr := callToolRaw(t, f.srv, "domain_policy_get", map[string]any{"slug": "nope"})
 	require.True(t, isErr)
 }

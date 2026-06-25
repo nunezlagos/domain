@@ -45,7 +45,7 @@ func (a *API) startHubDraft(w http.ResponseWriter, r *http.Request) {
 		case isErr(err, issuebuilder.ErrUnsupportedMode):
 			code, status = "unsupported_mode", 422
 		case isErr(err, issuebuilder.ErrProjectIDRequired):
-			// Fase 2: project_id obligatorio. Error de cliente, no 500.
+
 			code, status = "project_id_required", 422
 		}
 		writeError(w, status, code, err.Error())

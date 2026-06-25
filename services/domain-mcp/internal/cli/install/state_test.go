@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// === ValidateDSN ===
+
 
 func TestValidateDSN_ValidLocal(t *testing.T) {
 	cases := []string{
@@ -61,7 +61,7 @@ func TestValidateDSN_RejectsMissingHost(t *testing.T) {
 	require.Error(t, err)
 }
 
-// === Cloud provider detection ===
+
 
 func TestValidateDSN_RejectsPlaintextInCloud(t *testing.T) {
 	cases := []struct {
@@ -97,7 +97,7 @@ func TestValidateDSN_AcceptsTLSInCloud(t *testing.T) {
 	}
 }
 
-// === Mode validation ===
+
 
 func TestMode_IsValid(t *testing.T) {
 	for _, m := range []Mode{ModeLocal, ModeCloud, ModeHybrid} {
@@ -107,7 +107,7 @@ func TestMode_IsValid(t *testing.T) {
 	}
 }
 
-// === HybridConfig ===
+
 
 func TestHybridConfig_Plan(t *testing.T) {
 	cases := []struct {
@@ -157,7 +157,7 @@ func TestLocalServices(t *testing.T) {
 	require.Contains(t, got, "mailpit")
 }
 
-// === InstallState ===
+
 
 func TestInstallState_Summary(t *testing.T) {
 	s := &InstallState{
@@ -176,7 +176,7 @@ func TestInstallState_Summary(t *testing.T) {
 	require.Contains(t, summary, "users=3")
 }
 
-// === CredentialsPath ===
+
 
 func TestCredentialsPath(t *testing.T) {
 	p := CredentialsPath()
@@ -185,10 +185,10 @@ func TestCredentialsPath(t *testing.T) {
 	require.Contains(t, p, "credentials.json")
 }
 
-// === WaitHealthy timeout ===
+
 
 func TestWaitHealthy_EmptyServices_ReturnsImmediately(t *testing.T) {
-	// Sin servicios, retorna nil inmediatamente (no hay nada que esperar).
+
 	require.NoError(t, WaitHealthy(t.Context(), nil, 1*time.Second))
 	require.NoError(t, WaitHealthy(t.Context(), []string{}, 1*time.Second))
 }

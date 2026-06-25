@@ -48,7 +48,7 @@ func TestExpress_FullHappyPath(t *testing.T) {
 	applyStepID := res.Plan.Steps[0].ID
 	verifyStepID := res.Plan.Steps[1].ID
 
-	// Cliente reporta apply OK con code_reference guardado
+
 	appRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: applyStepID,
 		Output: map[string]any{
@@ -67,7 +67,7 @@ func TestExpress_FullHappyPath(t *testing.T) {
 	require.Equal(t, "sdd-verify", appRes.NextStepKey)
 	require.NotEmpty(t, appRes.NextStepPrompt)
 
-	// Cliente reporta verify OK (no scenarios failed)
+
 	verRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: verifyStepID,
 		Output: map[string]any{
@@ -81,7 +81,7 @@ func TestExpress_FullHappyPath(t *testing.T) {
 	require.Equal(t, "completed", verRes.FlowRunStatus)
 	require.Nil(t, verRes.NextStepID)
 
-	// flow_status final
+
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "completed", st.Status)
@@ -123,12 +123,12 @@ func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
 	_, err = s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: applyStepID,
 		Output:        map[string]any{"summary": "looks good"},
-		// NO memory_refs_saved → D5 falla
+
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, orchestrator.ErrRequiredSaveMissing)
 
-	// El step quedó failed en BD
+
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "failed", st.Status, "flow_run pasa a failed por step failed")
@@ -162,7 +162,7 @@ func TestExpress_PhaseResult_OnAlreadyCompletedStep_Rejected(t *testing.T) {
 	require.NoError(t, err)
 	applyStepID := res.Plan.Steps[0].ID
 
-	// Primera vez: OK
+
 	_, err = s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID:   applyStepID,
 		Output:          map[string]any{"summary": "ok"},
@@ -170,7 +170,7 @@ func TestExpress_PhaseResult_OnAlreadyCompletedStep_Rejected(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Segunda vez sobre el mismo step (ya completed): rechazo
+
 	_, err = s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID:   applyStepID,
 		Output:          map[string]any{"summary": "retry"},

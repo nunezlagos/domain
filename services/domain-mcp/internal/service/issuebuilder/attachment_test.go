@@ -51,7 +51,7 @@ func TestAttachToDraft_InitsUploadAndPersistsRef(t *testing.T) {
 	require.NotEmpty(t, res.UploadURL)
 	require.Equal(t, "screenshot.png", res.Filename)
 
-	// Verifica que el attachment_id se persistió en answers.
+
 	got, err := svc.Get(ctx, d.ID)
 	require.NoError(t, err)
 	require.Contains(t, string(got.Answers), "attachments")
@@ -117,7 +117,7 @@ func TestPromoteAttachmentsToHU_AfterCommit(t *testing.T) {
 	d, _, err := svc.Start(ctx, hb.ModeFeature, "feature con screenshot", nil, &projectID)
 	require.NoError(t, err)
 
-	// Answer todos los 8 steps + attach
+
 	answers := []any{"feature", "dx-engineer", "REQ-04-opsx-sdd",
 		"M", "alta", "test-slug", "goal", "summary"}
 	for _, a := range answers {
@@ -130,7 +130,7 @@ func TestPromoteAttachmentsToHU_AfterCommit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hb.StatusCommitted, committed.Status)
 
-	// El agente IA creó el user_story; promueve attachments.
+
 	issueID := uuid.New()
 	moved, err := svc.PromoteAttachmentsToHU(ctx, d.ID, issueID)
 	require.NoError(t, err)

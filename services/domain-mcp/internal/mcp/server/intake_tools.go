@@ -1,4 +1,4 @@
-// MCP tools para intake pipeline — issue-04.8
+
 
 package mcpserver
 
@@ -84,7 +84,7 @@ func toolIntakeReject() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Intake == nil {
@@ -103,7 +103,7 @@ func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) 
 		rawPayload = v
 	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	// Fase 2: project_id obligatorio (issue_intake_payloads.project_id es NOT NULL).
+
 	pidStr := req.GetString("project_id", "")
 	if pidStr == "" {
 		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil

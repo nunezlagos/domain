@@ -40,7 +40,7 @@ func (s *AnalysisPromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Repor
 	const description = "System prompt del mini-pipeline de análisis read-only (intent analysis). Genera markdown estructurado. Editable desde el dashboard."
 	body := strings.TrimSpace(analysissvc.DefaultAnalysisSystemPrompt)
 
-	// ¿Ya existe una versión activa global (project_id NULL) del slug?
+
 	var existingID string
 	err := tx.QueryRow(ctx,
 		`SELECT id::text FROM prompts
@@ -52,7 +52,7 @@ func (s *AnalysisPromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Repor
 
 	switch {
 	case err == nil:
-		// Existe: actualizar body + description (refresh del catálogo).
+
 		if _, uerr := tx.Exec(ctx,
 			`UPDATE prompts SET body = $1, description = $2 WHERE id = $3::uuid`,
 			body, description, existingID,
@@ -61,7 +61,7 @@ func (s *AnalysisPromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Repor
 		}
 		rep.Updated++
 	case errors.Is(err, pgx.ErrNoRows):
-		// No existe: insertar version 1 activa, global (project_id NULL).
+
 		if _, ierr := tx.Exec(ctx,
 			`INSERT INTO prompts (project_id, created_by, slug, version,
 			                      body, variables, description, is_active, tags)

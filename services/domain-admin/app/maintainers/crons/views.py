@@ -30,9 +30,9 @@ from .models import Cron
 class CronViews(MaintainerViews):
     """MaintainerViews especializado para crons (payload + toggle + contextos)."""
 
-    # --- payload del service: los campos del form mapean 1:1 a create_cron /
-    #     update_cron (name/slug/description/cron_expression/timezone/
-    #     target_type/target_id/inputs/enabled).
+
+
+
     def _form_payload(self, form) -> dict:
         return {
             "name": form.cleaned_data["name"],
@@ -46,19 +46,19 @@ class CronViews(MaintainerViews):
             "enabled": form.cleaned_data["enabled"],
         }
 
-    # --- list con filtros (tipo/habilitado). Guardamos el request para que
-    #     do_list/list_context lean los GET; el resto lo arma el core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
 
-    # --- list: el listado de crons excluye los soft-deleted (el do_list
-    #     generico del core no filtra deleted_at). Se delega al service de
-    #     dominio, que ya devuelve la lista bajo la key `crons`.
+
+
+
     def do_list(self, search: str, page: int) -> dict:
         req = getattr(self, "_list_request", None)
         target_types = req.GET.getlist("target_type") if req else []
-        # enabled: "" = sin filtro, "1" = True, "0" = False.
+
         val = req.GET.get("enabled") if req else None
         enabled = None if not val else (val == "1")
         return services.list_crons(
@@ -66,22 +66,22 @@ class CronViews(MaintainerViews):
             target_types=target_types, enabled=enabled,
         )
 
-    # --- toggle: el cron se habilita/deshabilita por el flag `enabled`, no por
-    #     `status`. Se delega al service de dominio.
+
+
     def do_toggle(self, instance) -> str:
         enabled = services.toggle_cron_enabled(instance)
         return "habilitado" if enabled else "deshabilitado"
 
-    # --- delete: soft delete propio (deleted_at + enabled=False).
+
     def do_delete(self, instance) -> None:
         services.delete_cron(instance)
 
-    # --- contextos: los templates de crons usan `cron_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Crons"
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el container de filtros.
+
         ctx["target_type_options"] = Cron.TARGET_TYPE_CHOICES
         ctx["selected_target_type"] = req.GET.getlist("target_type") if req else []
         ctx["selected_enabled"] = (req.GET.get("enabled") or "") if req else ""
@@ -100,8 +100,8 @@ class CronViews(MaintainerViews):
         return {"cron_obj": instance, "object": instance}
 
 
-# Instancia que cablea todo. list_key="crons" -> el template recibe la lista
-# bajo `crons`. id_kwarg="cron_id" -> casa con <uuid:cron_id> de las URLs.
+
+
 views = CronViews(
     app_name="crons",
     model=Cron,

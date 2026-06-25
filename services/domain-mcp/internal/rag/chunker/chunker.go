@@ -15,8 +15,8 @@ import (
 const (
 	DefaultMaxChars = 2048
 	DefaultOverlap  = 200
-	// MinChunkChars: chunks finales con menos chars que esto se fusionan al
-	// anterior (evita chunks triviales).
+
+
 	MinChunkChars = 50
 )
 
@@ -59,7 +59,7 @@ func Chunk(text string, opt Options) []string {
 			chunks = append(chunks, strings.TrimSpace(text[start:]))
 			break
 		}
-		// Buscar boundary en el último 30% del rango [start, end]
+
 		lookback := start + (opt.MaxChars * 7 / 10)
 		cut := findBoundary(text, lookback, end)
 		if cut <= start {
@@ -69,10 +69,10 @@ func Chunk(text string, opt Options) []string {
 		if len(chunk) >= MinChunkChars {
 			chunks = append(chunks, chunk)
 		} else if n := len(chunks); n > 0 {
-			// fusionar con anterior
+
 			chunks[n-1] += " " + chunk
 		}
-		// Próximo arranca en cut - overlap (sin retroceder antes de start+1)
+
 		next := cut - opt.Overlap
 		if next <= start {
 			next = start + 1
@@ -89,19 +89,19 @@ func findBoundary(text string, lookback, end int) int {
 		end = len(text)
 	}
 	window := text[lookback:end]
-	// Doble newline (párrafo)
+
 	if i := strings.LastIndex(window, "\n\n"); i >= 0 {
 		return lookback + i + 2
 	}
-	// Single newline
+
 	if i := strings.LastIndex(window, "\n"); i >= 0 {
 		return lookback + i + 1
 	}
-	// Fin de frase (. seguido de espacio o newline)
+
 	if i := strings.LastIndex(window, ". "); i >= 0 {
 		return lookback + i + 2
 	}
-	// Espacio
+
 	if i := strings.LastIndex(window, " "); i >= 0 {
 		return lookback + i + 1
 	}

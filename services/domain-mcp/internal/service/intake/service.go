@@ -26,9 +26,9 @@ var (
 	ErrInvalidStatus = errors.New("invalid status for operation")
 	ErrInvalidSource = errors.New("invalid source")
 
-	// ErrProjectIDRequired Fase 2: el intake se scopea a un proyecto
-	// (issue_intake_payloads.project_id es NOT NULL tras 000167). Submit
-	// rechaza nil/uuid.Nil ANTES del insert para dar un error estable.
+
+
+
 	ErrProjectIDRequired = errors.New("project_id required")
 )
 
@@ -116,8 +116,8 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	if strings.TrimSpace(in.RawText) == "" {
 		return nil, fmt.Errorf("raw_text required")
 	}
-	// Fase 2: project_id obligatorio. Se valida antes del insert para no
-	// depender del not-null constraint (000167) y dar un error estable.
+
+
 	if in.ProjectID == nil || *in.ProjectID == uuid.Nil {
 		return nil, ErrProjectIDRequired
 	}
@@ -136,8 +136,8 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 	}
 
 	var p Payload
-	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
-	// (single-org, nullable post-000145).
+
+
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO issue_intake_payloads (source, source_ref, submitted_by,
 		                             raw_text, raw_payload, project_id)
@@ -169,7 +169,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
 	var p Payload
-	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
+
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
 		       status, classified_type, classified_severity, classified_confidence,
@@ -302,7 +302,7 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
+
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
 		       status, classified_type, classified_severity, classified_confidence,
@@ -331,8 +331,8 @@ func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error)
 }
 
 func scanPayloadCols(p *Payload) []any {
-	// ISSUE-21.6 Fase D clean Round 3: OrganizationID removido del scan
-	// (la columna ya no se selecciona en INSERT/SELECT).
+
+
 	return []any{
 		&p.ID, &p.Source, &p.SourceRef, &p.SubmittedBy,
 		&p.RawText, &p.RawPayload, &p.Status,

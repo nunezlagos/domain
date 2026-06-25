@@ -54,7 +54,7 @@ func TestBus_DifferentOrgsIsolated(t *testing.T) {
 	case ev := <-sB.Ch:
 		t.Fatalf("sB NO debería recibir nada (es de orgB), got %v", ev)
 	case <-time.After(50 * time.Millisecond):
-		// expected
+
 	}
 }
 
@@ -63,7 +63,7 @@ func TestBus_LossyWhenFull(t *testing.T) {
 	org := uuid.New()
 	s := b.Subscribe(org, 2)
 	defer b.Unsubscribe(s)
-	// 5 events; buffer es 2 → 3 perdidos pero el Publish no bloquea.
+
 	for i := 0; i < 5; i++ {
 		b.Publish(Event{OrgID: org, Topic: "ticket.update"})
 	}

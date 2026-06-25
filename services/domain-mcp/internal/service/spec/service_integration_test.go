@@ -340,7 +340,7 @@ func TestSabotage_ProposalUniqueConstraint(t *testing.T) {
 	_, err := f.svc.CreateProposal(ctx, f.issueID, "v1", "S", "A", "", "")
 	require.NoError(t, err)
 
-	// Force-insert duplicado (issue_id + version violando UNIQUE)
+
 	_, err = f.svc.Pool.Exec(ctx,
 		`INSERT INTO sdd_proposals (issue_id, version, intention, scope, approach)
 		 VALUES ($1, 1, 'dup', 'S', 'A')`, f.issueID)

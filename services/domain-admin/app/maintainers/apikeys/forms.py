@@ -55,17 +55,17 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: ApiKey | None = None, **kwargs):
-        # InstanceAwareMixin captura instance y lo expone como self.instance.
+
         super().__init__(*args, instance=instance, **kwargs)
 
-        # Choices de usuarios activos (dueño de la key).
+
         self.fields["user"].choices = [
             (str(u.pk), u.display_name)
             for u in User.objects.filter(status="active").order_by("email")
         ]
 
-        # En edicion el dueño NO se puede cambiar (regla de negocio): se
-        # bloquea el select y se rellena con el dueño actual.
+
+
         if instance is not None:
             self.fields["user"].required = False
             self.fields["user"].widget.attrs["disabled"] = "disabled"
@@ -86,8 +86,8 @@ class ApiKeyForm(InstanceAwareMixin, forms.Form):
         return name
 
     def clean_user(self):
-        # En edicion el campo viene disabled (sin valor en POST): conservamos
-        # el dueño original.
+
+
         if self.instance is not None:
             return str(self.instance.user.pk)
         user_id = self.cleaned_data.get("user")

@@ -1,9 +1,9 @@
--- migration: create_project_templates
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-01.4
--- description: templates de proyecto preconfigurados
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE project_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,7 +29,7 @@ CREATE TRIGGER set_updated_at_project_templates
   BEFORE UPDATE ON project_templates
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- FK projects.template_id agregada aquí (post-creation table)
+
 ALTER TABLE projects
   ADD CONSTRAINT projects_template_id_fkey
   FOREIGN KEY (template_id) REFERENCES project_templates(id) ON DELETE SET NULL;

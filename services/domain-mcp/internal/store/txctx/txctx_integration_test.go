@@ -1,7 +1,7 @@
 //go:build integration
 
-// issue-25.5 RLS integration tests con testcontainers.
-// Cubre defense-in-depth: queries SIN SET LOCAL deben devolver 0 rows.
+
+
 
 package txctx_test
 
@@ -38,11 +38,11 @@ func setupRLS(t *testing.T) (*pgxpool.Pool, func()) {
 	dsn, _ := pgC.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, dmigrate.Up(dsn))
 
-	// Hacer que cada connection del pool corra como app_user (NOBYPASSRLS).
-	// Sin esto el user test bypassa RLS (es DB owner) y los tests darían falsos verdes.
+
+
 	cfg, err := pgxpool.ParseConfig(dsn)
 	require.NoError(t, err)
-	// GRANT app_user TO test debe correr una vez, antes del AfterConnect.
+
 	bootstrap, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 	_, err = bootstrap.Exec(ctx, `GRANT app_user TO test`)
@@ -87,7 +87,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	ctx := context.Background()
 	orgA, orgB := seedTwoOrgs(t, pool)
 
-	// Insert secret A en org A
+
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
@@ -96,7 +96,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Insert secret B en org B
+
 	err = txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
@@ -105,7 +105,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Query con context A: ve solo 1 (la suya)
+
 	var countA int
 	err = txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&countA)
@@ -113,7 +113,7 @@ func TestRLS_Secrets_OrgIsolation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, countA, "org A debe ver solo SU secret")
 
-	// Query con context B: ve solo 1 (la suya)
+
 	var countB int
 	err = txctx.WithOrgTx(ctx, pool, orgB, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&countB)
@@ -130,7 +130,7 @@ func TestSabotage_RLS_NoSetLocal_ZeroRows(t *testing.T) {
 	ctx := context.Background()
 	orgA, _ := seedTwoOrgs(t, pool)
 
-	// Insert con SET LOCAL OK
+
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
@@ -139,7 +139,7 @@ func TestSabotage_RLS_NoSetLocal_ZeroRows(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Query directa SIN SET LOCAL → 0 rows (RLS deniega)
+
 	var count int
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&count)
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestSabotage_RLS_CrossOrgLeak_Blocked(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// App en context A intenta SELECT por id de B
+
 	var found int
 	err = txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets WHERE id = $1`, secretIDB).Scan(&found)
@@ -178,7 +178,7 @@ func TestSabotage_RLS_InsertWrongOrg_Rejected(t *testing.T) {
 	ctx := context.Background()
 	orgA, orgB := seedTwoOrgs(t, pool)
 
-	// App en context A intenta INSERT con organization_id=B (typo o bug)
+
 	err := txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
@@ -219,7 +219,7 @@ func TestRLS_APIKeys_OrgIsolation(t *testing.T) {
 	ctx := context.Background()
 	orgA, orgB := seedTwoOrgs(t, pool)
 
-	// crear user en cada org para satisfacer FK
+
 	makeUser := func(org uuid.UUID, email string) uuid.UUID {
 		var uid uuid.UUID
 		err := pool.QueryRow(ctx,
@@ -258,7 +258,7 @@ func TestRLS_SetLocalScopedToTx(t *testing.T) {
 	ctx := context.Background()
 	orgA, _ := seedTwoOrgs(t, pool)
 
-	// Insert en tx con SET LOCAL
+
 	require.NoError(t, txctx.WithOrgTx(ctx, pool, orgA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO auth_secrets (organization_id, slug, name, encrypted_value)
@@ -266,7 +266,7 @@ func TestRLS_SetLocalScopedToTx(t *testing.T) {
 		return err
 	}))
 
-	// Después de commit, nueva query SIN SET LOCAL → 0 rows
+
 	var count int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_secrets`).Scan(&count))
 	require.Equal(t, 0, count, "post-tx sin SET LOCAL: RLS deniega")

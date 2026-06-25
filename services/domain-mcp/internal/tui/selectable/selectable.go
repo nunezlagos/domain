@@ -1,21 +1,21 @@
-// Selectable list component (HU-01.13, semántica ptools 2026-06-12).
-//
-// Igual que personal-tools: ESPACIO selecciona/togglea sin avanzar;
-// ENTER confirma y AVANZA con la selección actual. En single, enter
-// sobre un item lo elige y avanza en un solo paso. El botón
-// [ Continuar ] queda como indicador visual (enter ahí también avanza).
-//
-// Diseño:
-//   - Cursor: >  (a la izquierda del item)
-//   - Single: (•) elegido / ( ) no elegido
-//   - Multi:  [X] marcado / [ ] desmarcado
-//   - Disabled: [-] (gris, no elegible)
-//   - Footer: botón [ Continuar ] (último slot navegable)
-//
-// Mensajes emitidos:
-//   - SelectMsg{Index}        al confirmar con enter (modo single)
-//   - MultiSelectMsg{Indices} al confirmar con enter (modo multi)
-//   - CancelMsg               en esc/q/ctrl+c
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package selectable
 
@@ -94,7 +94,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	key := keyMsg.String()
 
-	// Number keys: jump + elegir/togglear el item (sin avanzar).
+
 	if len(key) == 1 && key >= "1" && key <= "9" {
 		n := int(key[0]-'0') - 1
 		if n >= 0 && n < len(m.items) && !m.items[n].Disabled {
@@ -118,16 +118,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0 // wrap
 		}
 	case "tab":
-		// Atajo directo al botón Continuar.
+
 		m.cursor = m.continueSlot()
 	case " ", "space":
 		if m.cursor < len(m.items) {
 			m.pick(m.cursor)
 		}
 	case "enter":
-		// Estilo ptools: enter confirma y AVANZA. En single, enter sobre
-		// un item lo elige primero (elegir + avanzar en un solo paso).
-		// En multi, enter confirma lo marcado desde cualquier posición.
+
+
+
 		if !m.multi && m.cursor < len(m.items) {
 			if m.items[m.cursor].Disabled {
 				return m, nil
@@ -202,7 +202,7 @@ func (m Model) View() string {
 		}
 	}
 
-	// Botón Continuar
+
 	sb.WriteString("\n")
 	btn := styles.Button.Render("[ Continuar ]")
 	prefix := "    "

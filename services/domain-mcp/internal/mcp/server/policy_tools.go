@@ -19,19 +19,19 @@ import (
 )
 
 func registerPolicyTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// project_policies tiene RLS FORCE — necesita tx con SET LOCAL.
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
 	return []mcpgo.ServerTool{
-		// platform-level (sin scope project)
+
 		{Tool: toolPolicyGet(), Handler: wrap.Wrap("domain_policy_get", rls(deps.handlePolicyGet))},
 		{Tool: toolPolicyList(), Handler: wrap.Wrap("domain_policy_list", deps.handlePolicyList)},
-		// Fase 3 — alta/edicion de platform_policies globales desde MCP
-		// (antes solo seeder / Django admin).
+
+
 		{Tool: toolPlatformPolicyCreate(), Handler: wrap.Wrap("domain_platform_policy_create", rls(deps.handlePlatformPolicyCreate))},
 		{Tool: toolPlatformPolicyEdit(), Handler: wrap.Wrap("domain_platform_policy_edit", rls(deps.handlePlatformPolicyEdit))},
-		// project-level
+
 		{Tool: toolProjectPolicySet(), Handler: wrap.Wrap("domain_project_policy_set", rls(deps.handleProjectPolicySet))},
 		{Tool: toolProjectPolicyList(), Handler: wrap.Wrap("domain_project_policy_list", rls(deps.handleProjectPolicyList))},
 		{Tool: toolProjectPolicyDelete(), Handler: wrap.Wrap("domain_project_policy_delete", rls(deps.handleProjectPolicyDelete))},
@@ -62,7 +62,7 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("slug es requerido"), nil
 	}
 
-	// 1. Si hay project_slug y servicios disponibles, intentar project-scope.
+
 	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil && d.ProjectPolicies != nil && d.Principal != nil {
 		orgID, perr := uuid.Parse(d.Principal.OrganizationID)
 		if perr == nil {
@@ -70,8 +70,8 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 			if perr == nil && proj != nil {
 				pol, perr := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 				if perr == nil && pol != nil {
-					// Si override_platform=true, devolver solo project.
-					// Si false, intentar tambien la platform y concatenar.
+
+
 					payload := map[string]any{
 						"scope":             "project",
 						"project_slug":      projSlug,
@@ -95,7 +95,7 @@ func (d *Deps) handlePolicyGet(ctx context.Context, req mcp.CallToolRequest) (*m
 		}
 	}
 
-	// 2. Fallback platform.
+
 	p, err := d.Policies.GetBySlug(ctx, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("policy '%s' not found", slug)), nil
@@ -138,7 +138,7 @@ func (d *Deps) handlePolicyList(ctx context.Context, req mcp.CallToolRequest) (*
 	return toolResultJSON(map[string]any{"policies": out, "total": len(out)})
 }
 
-// --- project-scope tools ---
+
 
 func toolProjectPolicySet() mcp.Tool {
 	return mcp.NewTool("domain_project_policy_set",
@@ -181,7 +181,7 @@ func (d *Deps) handleProjectPolicySet(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Upsert: si existe activa con mismo slug, update; sino, create.
+
 	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 	if existing != nil {
 		upd := projectpolicysvc.UpdateInput{
@@ -265,10 +265,10 @@ func toolProjectPolicyImport() mcp.Tool {
 }
 
 func slugFromSourcePath(p string) string {
-	// AGENTS.md → imported-agents
-	// .claude/CLAUDE.md → imported-claude
-	// .cursorrules → imported-cursorrules
-	// .windsurf/rules/foo.md → imported-windsurf-rules-foo
+
+
+
+
 	cleaned := strings.ReplaceAll(p, "/", "-")
 	cleaned = strings.TrimPrefix(cleaned, ".")
 	cleaned = strings.ReplaceAll(cleaned, ".md", "")
@@ -304,9 +304,9 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 	slug := slugFromSourcePath(sourcePath)
 	name := "Imported: " + sourcePath
 
-	// Upsert: si ya hay una imported con mismo slug, update (bumpea version
-	// con snapshot a project_policy_versions). Idempotente — re-importar
-	// el mismo archivo crea una version nueva en lugar de duplicar.
+
+
+
 	existing, _ := d.ProjectPolicies.GetBySlug(ctx, orgID, proj.ID, slug)
 	if existing != nil {
 		userID, _ := uuid.Parse(d.Principal.UserID)
@@ -349,7 +349,7 @@ func (d *Deps) handleProjectPolicyImport(ctx context.Context, req mcp.CallToolRe
 	})
 }
 
-// --- Fase 3: alta/edicion de platform_policies globales ---
+
 
 // platformPolicyKinds son los kinds aceptados por el CHECK constraint de
 // platform_policies (mig 000045). OJO: project_policies acepta mas kinds
@@ -392,8 +392,8 @@ func (d *Deps) handlePlatformPolicyCreate(ctx context.Context, req mcp.CallToolR
 	}
 	sourceFile, _ := args["source_file"].(string)
 
-	// Marcamos is_user_modified=TRUE para que el seeder no pise esta policy
-	// (mismo contrato que el seeder con ediciones manuales).
+
+
 	var id uuid.UUID
 	var version int
 	err := d.q(ctx).QueryRow(ctx,
@@ -438,7 +438,7 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError("id o slug requerido"), nil
 	}
 
-	// Campos opcionales. Solo se actualiza lo provisto (string no vacio).
+
 	var (
 		newName *string
 		newKind *string
@@ -460,7 +460,7 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError("nada para actualizar: pasa al menos un campo"), nil
 	}
 
-	// Lookup de la fila actual (id directo o slug activo).
+
 	var (
 		curID      uuid.UUID
 		curSlug    string
@@ -488,7 +488,7 @@ func (d *Deps) handlePlatformPolicyEdit(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError("platform_policy no encontrada"), nil
 	}
 
-	// Si cambia el body, archivar la version actual antes de pisarla y bumpear.
+
 	bumpVersion := newBody != nil && *newBody != curBody
 	if bumpVersion {
 		var changedBy *uuid.UUID

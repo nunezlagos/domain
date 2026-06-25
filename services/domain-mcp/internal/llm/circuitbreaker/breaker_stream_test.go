@@ -47,9 +47,9 @@ func (s *streamingProvider) CompleteStream(ctx context.Context, opts llm.Complet
 // ISSUE-28.6: stream que termina con error mid-flight debe abrir el
 // breaker (no solo errores del handshake inicial).
 func TestBreaker_StreamErrorRecordsFailure(t *testing.T) {
-	// 3 chunks: 2 OK + 1 con Error. Stream termina en Done.
-	// Antes del fix: sawError=true pero `_ = sawError` descartaba el valor,
-	// el breaker llamaba recordSuccess y NUNCA se abría.
+
+
+
 	p := &streamingProvider{chunks: []streamChunkSpec{
 		{delta: "hola", isDone: false},
 		{delta: "mundo", isDone: false},
@@ -60,12 +60,12 @@ func TestBreaker_StreamErrorRecordsFailure(t *testing.T) {
 	out, err := b.CompleteStream(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)
 
-	// Drain the channel so the breaker goroutine completes.
+
 	for range out {
 	}
 
-	// Después de 1 stream-error, el breaker ya cuenta 1 failure.
-	// Necesitamos 2 más para llegar al threshold (3) y abrir.
+
+
 	p2 := &streamingProvider{chunks: []streamChunkSpec{
 		{delta: "x", isError: true, isDone: true},
 	}}
@@ -100,9 +100,9 @@ func TestBreaker_StreamSuccessRecordsSuccess(t *testing.T) {
 // el fix (vuelve a `_ = sawError` o no llama recordFailure), este test
 // falla.
 func TestSabotage_StreamError_DeliberatelyOpensBreaker(t *testing.T) {
-	// 5 streams que TODOS fallan mid-stream. Threshold=3.
-	// Antes del fix: el breaker quedaba en StateClosed para siempre
-	// (los errores mid-stream se descartaban). Post-fix: abre en el 3ro.
+
+
+
 	p := &streamingProvider{chunks: []streamChunkSpec{
 		{delta: "", isError: true, isDone: true},
 	}}

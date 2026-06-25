@@ -51,7 +51,7 @@ func TestWriteManifest(t *testing.T) {
 	require.Contains(t, string(data), `"install_id": "id1"`)
 }
 
-// --- Record tests ---
+
 
 func TestRecord_Appends(t *testing.T) {
 	dir := t.TempDir()
@@ -120,7 +120,7 @@ func TestRecord_NewInstallOnNewSession(t *testing.T) {
 	require.Equal(t, entry.Path, "/tmp/new")
 }
 
-// --- HashFile tests ---
+
 
 func TestHashFile_Deterministic(t *testing.T) {
 	dir := t.TempDir()
@@ -140,7 +140,7 @@ func TestHashFile_NonExistent(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- Reversers ---
+
 
 func TestBlockMarkerReverser_RemovesBlock(t *testing.T) {
 	dir := t.TempDir()
@@ -354,7 +354,7 @@ func TestUninstall_SkipsExternallyModified(t *testing.T) {
 	}
 	require.NoError(t, WriteManifest(path, m))
 
-	// Modify the file externally
+
 	require.NoError(t, os.WriteFile(file1, []byte("modified"), 0o644))
 
 	result, err := Uninstall(path, true, false)
@@ -363,17 +363,17 @@ func TestUninstall_SkipsExternallyModified(t *testing.T) {
 	require.Equal(t, 1, result.Skipped)
 	require.Contains(t, result.Errors[0], "modified externally")
 
-	// File should still exist
+
 	_, err = os.Stat(file1)
 	require.NoError(t, err)
 }
 
-// --- Sabotage tests ---
+
 
 func TestSabotage_UninstallNoConfirm(t *testing.T) {
-	// This test is the SABOTAGE test for T-sabotaje-1:
-	// If we skip the confirm check, uninstall proceeds without prompt.
-	// Expected: test_confirm_required would be the one that fails.
+
+
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.json")
 
@@ -391,14 +391,14 @@ func TestSabotage_UninstallNoConfirm(t *testing.T) {
 	}
 	require.NoError(t, WriteManifest(path, m))
 
-	// Without confirmed=true, uninstall should fail
+
 	_, err := Uninstall(path, false, false)
 	require.Error(t, err)
 }
 
 func TestSabotage_UninstallSkipsExtModifiedWithoutHashCheck(t *testing.T) {
-	// This test verifies the hash check: if we skip hash check,
-	// externally modified files get deleted.
+
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.json")
 
@@ -416,7 +416,7 @@ func TestSabotage_UninstallSkipsExtModifiedWithoutHashCheck(t *testing.T) {
 	}
 	require.NoError(t, WriteManifest(path, m))
 
-	// Modify the file - hash no longer matches
+
 	require.NoError(t, os.WriteFile(file1, []byte("modified"), 0o644))
 
 	result, err := Uninstall(path, true, false)
@@ -424,7 +424,7 @@ func TestSabotage_UninstallSkipsExtModifiedWithoutHashCheck(t *testing.T) {
 	require.Equal(t, 0, result.Reverted, "should skip because hash changed")
 	require.Equal(t, 1, result.Skipped)
 
-	// File should still exist
+
 	_, err = os.Stat(file1)
 	require.NoError(t, err)
 }

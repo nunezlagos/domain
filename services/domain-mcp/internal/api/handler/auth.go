@@ -46,7 +46,7 @@ func (a *API) requestOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.OTPService != nil {
 		_ = a.OTPService.Request(r.Context(), b.Identifier, r.RemoteAddr, r.UserAgent())
-		// Swallow ErrUserNotFound: anti-enumeration
+
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"message": "si el identifier corresponde a una cuenta, recibiras un codigo",
@@ -89,7 +89,7 @@ func (a *API) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// organization_id eliminado del schema (single-org). orgID queda en cero.
+
 	var orgID uuid.UUID
 
 	name := b.KeyName

@@ -114,7 +114,7 @@ func (s *VersionStore) List(ctx context.Context, skillID uuid.UUID) ([]Version, 
 // PinVersion setea pinned_version en el skill. Calls que invoquen el skill
 // usan esta versión específica en lugar de la latest.
 func (s *VersionStore) PinVersion(ctx context.Context, skillID uuid.UUID, version int) error {
-	// Valida que la versión existe
+
 	if _, err := s.Get(ctx, skillID, version); err != nil {
 		return err
 	}

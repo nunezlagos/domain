@@ -16,8 +16,8 @@ import (
 )
 
 func registerProjectTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls: projects tiene RLS FORCE (migration 000101). SET LOCAL
-	// app.current_org_id via tx para que las queries respeten la policy.
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}

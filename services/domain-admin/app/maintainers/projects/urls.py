@@ -16,12 +16,12 @@ from . import views
 app_name = "projects"
 
 urlpatterns = [
-    # Panes (skills/reglas) del ver/editar: filtro scope + paginacion (GET) +
-    # acciones (POST). Re-renderizan solo su pane (#project-skills-pane / -rules-).
+
+
     path("<uuid:project_id>/skills/pane/", views.skills_pane, name="skills_pane"),
     path("<uuid:project_id>/skills/toggle/", views.toggle_skill, name="toggle_skill"),
     path("<uuid:project_id>/reglas/pane/", views.rules_pane, name="rules_pane"),
     path("<uuid:project_id>/reglas/toggle/", views.toggle_rule, name="toggle_rule"),
-    # Export consolidado a CSV/Excel (respeta filtros activos).
+
     path("export/", views.export_projects, name="export"),
 ] + maintainer_urlpatterns(views.views, id_kwarg="project_id")

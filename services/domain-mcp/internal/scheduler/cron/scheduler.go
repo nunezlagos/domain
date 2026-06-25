@@ -29,8 +29,8 @@ type Scheduler struct {
 	Audit        audit.Recorder
 	Logger       *slog.Logger
 	PollInterval time.Duration // default 30s
-	// Dispatcher (issue-35.1): único path para ejecutar target_type.
-	// REQUERIDO: si es nil, runTarget retorna error.
+
+
 	Dispatcher *dispatch.Dispatcher
 }
 
@@ -81,7 +81,7 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 		slog.String("target_type", c.TargetType),
 		slog.String("target_id", c.TargetID.String()))
 
-	// Ejecutar en goroutine para no bloquear el scheduler si hay muchos
+
 	go func() {
 		dispatchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()

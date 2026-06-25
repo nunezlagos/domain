@@ -1,8 +1,8 @@
 //go:build integration
 
-// issue-21.6 Fase B: integration test del enrollment.Service que cubre S1.6
-// enrollment_tokens (drop FK a organizations + singleton global active).
-// Valida que el flujo single-org global funciona sin la FK a organizations.
+
+
+
 
 package enrollment
 
@@ -58,7 +58,7 @@ func TestRotate_CreatesNewAndRevokesPrevious(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, r1.Plaintext, r2.Plaintext, "cada rotate emite plaintext nuevo")
 
-	// Tras 2 rotates, debe haber exactamente 2 filas (1 revocada + 1 activa).
+
 	var total, active int
 	require.NoError(t, pool.QueryRow(context.Background(),
 		`SELECT COUNT(*) FROM enrollment_tokens`).Scan(&total))

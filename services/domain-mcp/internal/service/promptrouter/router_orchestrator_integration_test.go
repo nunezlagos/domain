@@ -88,7 +88,7 @@ func TestRouter_WithOrchestrator_FeaturePromptStartsFullOrchestrator(t *testing.
 	}
 
 	userID := owner.UserID
-	// Fase 2: feature → orquestador + intake, ambos exigen project_id.
+
 	projectID := seedProject(t, ctx, pools.App, org.ID)
 	res, err := router.RouteWithIntent(ctx, "agregar nueva feature de export CSV", &userID, &org.ID, &projectID, nil)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestRouter_WithOrchestrator_FixPromptStartsExpress(t *testing.T) {
 	}
 
 	userID := owner.UserID
-	// Fase 2: fix → orquestador + intake, ambos exigen project_id.
+
 	projectID := seedProject(t, ctx, pools.App, org.ID)
 	res, err := router.RouteWithIntent(ctx, "bug: el botón export no funciona", &userID, &org.ID, &projectID, nil)
 	require.NoError(t, err)

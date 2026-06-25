@@ -74,8 +74,8 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 			t.DefaultFlows = []string{}
 		}
 
-		// UNIQUE(organization_id, slug) no aplica con org NULL (NULLs distintos)
-		// → upsert manual: UPDATE respetando is_user_modified, INSERT si no existe.
+
+
 		tag, err := tx.Exec(ctx, `
 			UPDATE project_templates
 			SET name = $2, description = $3, is_default = $4, settings = $5,

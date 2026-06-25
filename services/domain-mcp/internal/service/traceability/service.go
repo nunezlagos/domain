@@ -152,19 +152,19 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 			return nil, fmt.Errorf("scan HU: %w", err)
 		}
 
-		// Latest proposal
+
 		s.Pool.QueryRow(ctx,
 			`SELECT version, status FROM sdd_proposals WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Proposal)
 
-		// Latest design
+
 		s.Pool.QueryRow(ctx,
 			`SELECT version, status FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1`,
 			n.HU.ID,
 		).Scan(&n.Design)
 
-		// Task progress
+
 		var tp TaskProgress
 		err := s.Pool.QueryRow(ctx,
 			`SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'completed'),
@@ -175,7 +175,7 @@ func (s *Service) getHUTraceNodes(ctx context.Context, reqID uuid.UUID) ([]HUTra
 			n.TaskProgress = &tp
 		}
 
-		// Code refs
+
 		codeRows, err := s.Pool.Query(ctx,
 			`SELECT id, file_path, repo, branch FROM issue_code_references WHERE issue_id = $1 ORDER BY file_path`, n.HU.ID)
 		if err == nil {
@@ -198,9 +198,9 @@ func (s *Service) GetCodeTrace(ctx context.Context, filePath string) (*CodeTrace
 	var ct CodeTrace
 	ct.File = filePath
 
-	// ct.HU es puntero: scanear a un struct local y asignar recién si hay
-	// match — &ct.HU.Slug con HU nil paniquea (y el panic dejaba la
-	// conexión adquirida, colgando pools.Close en los tests por 10 min).
+
+
+
 	var issueID uuid.UUID
 	var hu UserStorySummary
 	err := s.Pool.QueryRow(ctx,
@@ -390,7 +390,7 @@ func (s *Service) RemoveCodeReference(ctx context.Context, refID uuid.UUID) erro
 	return nil
 }
 
-// --- internal ---
+
 
 func (s *Service) gapQuery(ctx context.Context, joinClause string) ([]HUGap, error) {
 	q := `SELECT us.id, us.slug, us.title, COALESCE(r.slug, '') FROM issues us

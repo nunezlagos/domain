@@ -110,7 +110,7 @@ func (s *PGStore) Record(ctx context.Context, e Event) (uuid.UUID, error) {
 		metaJSON = []byte(`{}`)
 	}
 
-	// ISSUE-21.6: INSERT sin organization_id.
+
 	var id uuid.UUID
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO audit_activity_log (
@@ -136,7 +136,7 @@ func (s *PGStore) List(ctx context.Context, f Filter) ([]Entry, error) {
 		limit = 50
 	}
 
-	// ISSUE-21.6: SELECT sin organization_id.
+
 	_ = f.OrganizationID
 	args := []any{}
 	q := `

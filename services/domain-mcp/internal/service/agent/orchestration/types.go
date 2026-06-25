@@ -81,10 +81,10 @@ type OrchestrationResult struct {
 // Conductor es la interfaz que el orchestration usa para dispatcher tareas.
 // Implementación real conecta a agent runner + llm provider; mock para tests.
 type Conductor interface {
-	// RunAgent invoca un agent con una task y devuelve su output texto + result data.
+
 	RunAgent(ctx context.Context, agentSlug string, task Task) (string, json.RawMessage, error)
 
-	// LoadTemplate retorna la definition reutilizable de un agent slug.
+
 	LoadTemplate(ctx context.Context, slug string) (*AgentTemplate, error)
 }
 
@@ -113,7 +113,7 @@ func BuildHierarchicalContext(tasks []Task, currentTaskID uuid.UUID) Hierarchica
 	if !ok {
 		return HierarchicalContext{Depth: depth, ParentTaskID: cur.Parent}
 	}
-	// Recorrer hasta root para profundidad
+
 	cursor := parent
 	for cursor.Parent != nil {
 		next, ok := taskByID[*cursor.Parent]

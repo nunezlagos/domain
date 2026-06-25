@@ -1,9 +1,9 @@
-// `domain dev-bootstrap` — primer arranque dev plug-and-play.
-//
-// Crea org + admin user + emite api_key + escribe .env del repo current.
-// Quita la fricción del primer arranque tras `migrate up`.
-//
-// NO usar en prod — para prod usar el flow OTP normal.
+
+
+
+
+
+
 
 package main
 
@@ -98,12 +98,12 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	}
 	defer pool.Close()
 
-	// 1) Org idempotente.
-	// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
-	// Fase C. dev-bootstrap es una herramienta setup-time obsoleta en
-	// single-org (la org canónica existe implícita). Mantenemos el flujo
-	// best-effort: si la tabla no existe (Fase C), usamos un UUID fijo
-	// canónico sin intentar el INSERT.
+
+
+
+
+
+
 	var orgID string
 	err = pool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ($1, $2)
@@ -112,13 +112,13 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 		orgName, orgSlug,
 	).Scan(&orgID)
 	if err != nil {
-		// Tabla dropeada: usar UUID canónico single-org.
+
 		orgID = "00000000-0000-0000-0000-000000000001"
 		fmt.Fprintf(os.Stderr, "warn: organizations table not available, using canonical single-org UUID %s\n", orgID)
 	}
 	fmt.Printf("✓ org id=%s slug=%s\n", orgID, orgSlug)
 
-	// 2) Admin user idempotente.
+
 	var userID string
 	err = pool.QueryRow(ctx,
 		`INSERT INTO users (email, name, role)
@@ -133,7 +133,7 @@ Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
 	}
 	fmt.Printf("✓ user id=%s email=%s\n", userID, userEmail)
 
-	// 3) Emite api key fresh. --force revoca las dev-bootstrap previas.
+
 	if envOverride {
 		_, _ = pool.Exec(ctx,
 			`UPDATE auth_api_keys SET revoked_at = now()

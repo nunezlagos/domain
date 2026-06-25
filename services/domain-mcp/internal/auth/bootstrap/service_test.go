@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// issue-01.9 — tests de comportamiento de las funciones puras del seeder
-// de bootstrap. La lógica de DB (advisory lock, INSERT, etc.) se testea
-// en integration_test.go con testcontainers.
 
-// === Email validation ===
+
+
+
+
 
 func TestBehavior_EmailValidation(t *testing.T) {
 	valid := []string{
@@ -46,7 +46,7 @@ func TestBehavior_EmailValidation(t *testing.T) {
 	}
 }
 
-// === Org name derivation from email ===
+
 
 // Comportamiento: org name derivado del email domain (parte antes del
 // primer punto del domain), title-cased.
@@ -75,7 +75,7 @@ func TestBehavior_OrgNameFromEmail(t *testing.T) {
 	}
 }
 
-// === Slugify ===
+
 
 func TestSlugify(t *testing.T) {
 	cases := []struct {
@@ -108,7 +108,7 @@ func TestSlugify_MaxLength(t *testing.T) {
 	require.Equal(t, strings.Repeat("a", 50), got)
 }
 
-// === Sentinel errors ===
+
 
 func TestSentinels_AreDistinct(t *testing.T) {
 	sentinels := []error{
@@ -131,7 +131,7 @@ func TestSentinels_ErrorsIs(t *testing.T) {
 	require.True(t, errors.Is(wrapped, ErrNotFirstRun))
 }
 
-// === API key generation ===
+
 
 // generateAPIKey produce un plaintext con prefijo "domk_live_" + 32 chars random.
 // Total: 10 + 32 = 42 chars.
@@ -142,7 +142,7 @@ func TestGenerateAPIKey_Format(t *testing.T) {
 		"plaintext debe empezar con domk_live_, got: %s", plain)
 	require.Equal(t, 10+32, len(plain), "10 (domk_live_) + 32 random = 42 chars")
 
-	// hash es bcrypt: $2a$12$... (60 chars)
+
 	require.GreaterOrEqual(t, len(hash), 59, "bcrypt hash >= 59 chars")
 	require.True(t, strings.HasPrefix(string(hash), "$2"),
 		"bcrypt hash debe empezar con $2")
@@ -155,7 +155,7 @@ func TestGenerateAPIKey_Unique(t *testing.T) {
 	require.NotEqual(t, a, b, "dos keys generadas deben ser distintas")
 }
 
-// === BootstrapLockKey constante ===
+
 
 // El lock key es una constante fija. Si alguien lo cambia, el lock deja
 // de funcionar (race condition reintroducida).

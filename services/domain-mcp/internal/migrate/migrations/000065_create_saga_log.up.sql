@@ -1,9 +1,9 @@
--- migration: create_saga_compensation_log
--- author: nunezlagos
--- issue: HU-09.9
--- description: log audit de compensaciones Saga
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE saga_compensation_log (
   id BIGSERIAL PRIMARY KEY,

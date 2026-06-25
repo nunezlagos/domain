@@ -43,8 +43,8 @@ def _decrypt_api_keys(user_id) -> list:
     al atributo (managed=False, NO persiste) para que el template del detalle de
     usuario siga usando k.key_plaintext sin cambios.
     """
-    # No mostrar las revocadas en el detalle del usuario (la gestion completa,
-    # incl. revocadas, vive en el modal "Gestionar API Keys").
+
+
     keys = list(
         ApiKey.objects.filter(user_id=user_id, revoked_at__isnull=True)
         .exclude(status="revoked")
@@ -58,8 +58,8 @@ def _decrypt_api_keys(user_id) -> list:
 class UserViews(MaintainerViews):
     """MaintainerViews especializado para users (context keys + payload + msgs)."""
 
-    # --- payload del service: el form trae role/password; el service espera
-    #     role_slug + hashed_password y NO conoce password/password_confirm.
+
+
     def _form_payload(self, form) -> dict:
         return {
             "email": form.cleaned_data["email"],
@@ -69,8 +69,8 @@ class UserViews(MaintainerViews):
             "hashed_password": form.hashed_password(),
         }
 
-    # --- list con filtros multi-select (rol/estado). Guardamos el request para
-    #     que do_list/list_context lean los getlist; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
@@ -84,12 +84,12 @@ class UserViews(MaintainerViews):
             roles=roles, statuses=statuses,
         )
 
-    # --- contextos: los templates de users usan `user_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Usuarios"
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el container de filtros.
+
         ctx["role_options"] = services.list_role_options()
         ctx["status_options"] = User.STATUS_CHOICES
         ctx["selected_roles"] = req.GET.getlist("role") if req else []
@@ -112,13 +112,13 @@ class UserViews(MaintainerViews):
             "user_roles": services.get_user_roles(instance),
             "available_roles": services.list_available_roles(),
             "assign_form": UserRoleAssignForm(user=instance),
-            # API keys del usuario, para la seccion "API Keys" del modal de detalle.
+
             "api_keys": _decrypt_api_keys(instance.pk),
         }
 
 
-# Instancia que cablea todo. list_key="users" -> el template recibe la lista
-# bajo `users`. id_kwarg="user_id" -> casa con <uuid:user_id> de las URLs.
+
+
 views = UserViews(
     app_name="users",
     model=User,
@@ -134,7 +134,7 @@ views = UserViews(
 )
 
 
-# === Vistas propias del dominio roles (fuera del CRUD estandar) ===
+
 
 @require_http_methods(["POST"])
 def role_assign(request, user_id: str):
@@ -175,7 +175,7 @@ def role_revoke(request, user_id: str, role_id: str):
     return HttpResponseRedirect(reverse("users:detail", args=[user_id]))
 
 
-# === Consolidacion API Keys + Invitaciones dentro del mantenedor de Usuarios ===
+
 
 @require_http_methods(["GET"])
 def apikeys_modal(request):
@@ -192,8 +192,8 @@ def apikeys_modal(request):
     user_id = request.GET.get("user") or ""
     status = request.GET.get("status") or ""
     page = int(request.GET.get("page", 1) or 1)
-    # Paginado a 10 (como las tablas de los mantenedores) para que el modal no
-    # supere el viewport. La navegacion la maneja modals.js [data-modal-page].
+
+
     data = list_api_keys(search="", page=page, per_page=10,
                          user_id=user_id or None, status=status or None)
     return render(

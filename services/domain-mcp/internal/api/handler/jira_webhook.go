@@ -45,10 +45,10 @@ type jiraWebhookPayload struct {
 // POST /api/v1/webhooks/jira/issue-updated
 // Auth: header X-Jira-Webhook-Secret == env DOMAIN_JIRA_WEBHOOK_SECRET
 func (a *API) jiraWebhookIssueUpdated(w http.ResponseWriter, r *http.Request) {
-	// Shared-secret auth. NO usa apikey middleware porque viene de Jira.
+
 	expected := strings.TrimSpace(os.Getenv("DOMAIN_JIRA_WEBHOOK_SECRET"))
 	if expected == "" {
-		// Sin secret configurado, el endpoint esta deshabilitado.
+
 		writeError(w, http.StatusServiceUnavailable, "jira_webhook_not_configured",
 			"set DOMAIN_JIRA_WEBHOOK_SECRET to enable")
 		return
@@ -72,12 +72,12 @@ func (a *API) jiraWebhookIssueUpdated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// STUB: por ahora solo loggea + responde 202. Cuando se conecte
-	// Jira real, agregar aqui:
-	//   - lookup: a.TicketService.FindByExternal(ctx, orgID, "jira", payload.Issue.Key)
-	//   - map status Jira → status interno (project_policy 'jira-status-map')
-	//   - update title/description/status si difieren
-	//   - marcar external_synced_at = NOW()
+
+
+
+
+
+
 	slog.Info("jira webhook received (stub)",
 		"event", payload.WebhookEvent,
 		"issue_key", payload.Issue.Key,

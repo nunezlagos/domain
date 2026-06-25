@@ -110,16 +110,16 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 	}
 	defer tx.Rollback(ctx)
 
-	// project_id heredado del issue padre (scoping por proyecto).
+
 	var projectID *uuid.UUID
 	_ = tx.QueryRow(ctx, `SELECT project_id FROM issues WHERE id = $1`, issueID).Scan(&projectID)
 
-	// Compute next position per section
+
 	posMap := map[string]int{}
 	for _, in := range inputs {
 		posMap[in.Section]++
 	}
-	// Reset to actual next position from DB
+
 	for section := range posMap {
 		var maxPos int
 		_ = tx.QueryRow(ctx,
@@ -179,14 +179,14 @@ func (s *Service) GetTask(ctx context.Context, taskID uuid.UUID) (*Task, error) 
 		return nil, fmt.Errorf("get task: %w", err)
 	}
 
-	// Load verification
+
 	v, err := s.getVerification(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
 	t.Verification = v
 
-	// Load sabotages
+
 	sabs, err := s.ListSabotages(ctx, taskID)
 	if err != nil {
 		return nil, err
@@ -289,7 +289,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 		return nil, fmt.Errorf("invalid verification result: %s", result)
 	}
 
-	// Verify task is completed
+
 	var taskStatus string
 	err := s.Pool.QueryRow(ctx, `SELECT status FROM issue_tasks WHERE id = $1`, taskID).Scan(&taskStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -351,7 +351,7 @@ func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]Sabota
 	return scanSabotages(rows)
 }
 
-// --- internal ---
+
 
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
 	var exists bool

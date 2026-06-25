@@ -166,7 +166,7 @@ func handleErr(err error) int {
 	return 0
 }
 
-// === projects ===
+
 
 func projects(args []string) int {
 	if len(args) == 0 {
@@ -220,7 +220,7 @@ func projects(args []string) int {
 	return 2
 }
 
-// === observations ===
+
 
 func observations(args []string) int {
 	if len(args) == 0 {
@@ -275,7 +275,7 @@ func observations(args []string) int {
 	return 2
 }
 
-// === agents ===
+
 
 func agents(args []string) int {
 	if len(args) == 0 {
@@ -329,7 +329,7 @@ func agents(args []string) int {
 	return 2
 }
 
-// === flows ===
+
 
 func flows(args []string) int {
 	if len(args) == 0 {
@@ -367,7 +367,7 @@ func flows(args []string) int {
 	return 2
 }
 
-// === skills ===
+
 
 func skills(args []string) int {
 	gf, args := parseGlobalFlags(args)
@@ -397,7 +397,7 @@ func skills(args []string) int {
 	return 2
 }
 
-// === search ===
+
 
 func search(args []string) int {
 	gf, args := parseGlobalFlags(args)
@@ -425,7 +425,7 @@ func search(args []string) int {
 	return 0
 }
 
-// === context ===
+
 
 func contextCmd(args []string) int {
 	gf, args := parseGlobalFlags(args)

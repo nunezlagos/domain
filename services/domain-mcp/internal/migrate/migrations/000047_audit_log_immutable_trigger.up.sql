@@ -1,7 +1,7 @@
--- migration: 000047_audit_log_immutable_trigger
--- description: audit_log append-only inmutabilidad a nivel DB (HU-02.4)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
 
 CREATE OR REPLACE FUNCTION reject_audit_log_modification()
 RETURNS TRIGGER AS $$

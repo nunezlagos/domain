@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// === Backup ===
+
 
 func TestBackup_CreatesBakWithTimestamp(t *testing.T) {
 	dir := t.TempDir()
@@ -26,7 +26,7 @@ func TestBackup_CreatesBakWithTimestamp(t *testing.T) {
 		"backup debe empezar con %s.bak., got %s", path, res.Backup)
 	require.Equal(t, int64(len("original")), res.Bytes)
 
-	// El backup existe y tiene el contenido original
+
 	data, err := os.ReadFile(res.Backup)
 	require.NoError(t, err)
 	require.Equal(t, "original", string(data))
@@ -43,26 +43,26 @@ func TestBackup_SkipsIfFileNotExist(t *testing.T) {
 func TestBackup_PrunesOldBackups(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
-	// Crear 5 backups manuales con timestamps distintos
+
 	for i := 0; i < 5; i++ {
 		ts := time.Now().UTC().Add(time.Duration(i) * time.Second).Format("20060102T150405Z")
 		backup := path + ".bak." + ts
 		require.NoError(t, os.WriteFile(backup, []byte("v"+string(rune('0'+i))), 0o600))
 	}
-	// keepLast=2: debe borrar los 3 mas viejos, dejar los 2 mas nuevos
+
 	_, err := backupFile(path, 2) // 6to backup
-	// backupFile lee el archivo (que no existe en este test), retorna nil
-	// Asi que el prune no se llama. Test invalido, ajusto:
+
+
 	require.NoError(t, err)
 
-	// Test mas realista: creo el archivo, luego backup, luego verifico
-	// que keepLast funciona
+
+
 	require.NoError(t, os.WriteFile(path, []byte("current"), 0o600))
-	// Los 5 backups manuales + 1 nuevo = 6 totales
+
 	_, err = backupFile(path, 2)
 	require.NoError(t, err)
 
-	// Despues de backupFile con keepLast=2, deben quedar 2 backups
+
 	matches, _ := filepath.Glob(path + ".bak.*")
 	require.Len(t, matches, 2, "deben quedar 2 backups, hay %d", len(matches))
 }
@@ -88,7 +88,7 @@ func TestIsBackupPath(t *testing.T) {
 	}
 }
 
-// === IsDomainManaged ===
+
 
 func TestIsDomainManaged_WithMarker(t *testing.T) {
 	dir := t.TempDir()
@@ -117,7 +117,7 @@ func TestIsDomainManaged_FileNotExist(t *testing.T) {
 	require.False(t, ok)
 }
 
-// === ParseCredentials ===
+
 
 func TestParseCredentials_Valid(t *testing.T) {
 	creds := ParsedCredentials{APIKey: "domk_live_TEST123"}
@@ -132,7 +132,7 @@ func TestParseCredentials_InvalidJSON(t *testing.T) {
 	require.Error(t, err)
 }
 
-// === Restore ===
+
 
 func TestRestore_WritesFromBackup(t *testing.T) {
 	dir := t.TempDir()
@@ -148,7 +148,7 @@ func TestRestore_WritesFromBackup(t *testing.T) {
 	require.Equal(t, original, res.Target)
 	require.Equal(t, int64(len("backup content")), res.Bytes)
 
-	// Target debe tener el contenido del backup
+
 	data, _ := os.ReadFile(original)
 	require.Equal(t, "backup content", string(data))
 }
@@ -163,7 +163,7 @@ func TestRestore_BackupNotExist(t *testing.T) {
 	require.Error(t, err)
 }
 
-// === FileChecksum ===
+
 
 func TestFileChecksum_Deterministic(t *testing.T) {
 	dir := t.TempDir()
@@ -186,7 +186,7 @@ func TestFileChecksum_DifferentContent_DifferentHash(t *testing.T) {
 	require.NotEqual(t, ha, hb)
 }
 
-// === Dedup (issue-29.2) ===
+
 
 // TestBackup_DeduplicatesIfSameHash: si el archivo no cambió desde
 // el último backup, NO se crea uno nuevo — Deduplicated=true.
@@ -195,23 +195,23 @@ func TestBackup_DeduplicatesIfSameHash(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("original"), 0o600))
 
-	// Primer backup: crea .bak.<ts>.
+
 	first, err := backupFile(path, 0)
 	require.NoError(t, err)
 	require.NotNil(t, first)
 	require.False(t, first.Deduplicated, "primer backup siempre crea archivo")
 
-	// Esperar 1s para que el segundo timestamp difiera.
+
 	time.Sleep(1100 * time.Millisecond)
 
-	// Segundo backup sin cambios: dedup.
+
 	second, err := backupFile(path, 0)
 	require.NoError(t, err)
 	require.NotNil(t, second)
 	require.True(t, second.Deduplicated, "segundo backup sin cambios debe dedupear")
 	require.Equal(t, first.Backup, second.Backup, "el backup path debe ser el mismo")
 
-	// Solo debe haber 1 .bak.* (no 2).
+
 	matches, _ := filepath.Glob(path + ".bak.*")
 	require.Len(t, matches, 1, "debe haber 1 solo backup, hay %d", len(matches))
 }
@@ -230,7 +230,7 @@ func TestBackup_CreatesNewIfContentChanged(t *testing.T) {
 
 	time.Sleep(1100 * time.Millisecond)
 
-	// Cambiar el contenido.
+
 	require.NoError(t, os.WriteFile(path, []byte("v2"), 0o600))
 
 	second, err := backupFile(path, 0)
@@ -239,7 +239,7 @@ func TestBackup_CreatesNewIfContentChanged(t *testing.T) {
 	require.False(t, second.Deduplicated, "contenido distinto debe crear nuevo backup")
 	require.NotEqual(t, first.Backup, second.Backup)
 
-	// 2 .bak.* ahora.
+
 	matches, _ := filepath.Glob(path + ".bak.*")
 	require.Len(t, matches, 2)
 }
@@ -251,18 +251,18 @@ func TestBackup_TenRunsNoChange_OnlyOneBackup(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("unchanged"), 0o600))
 
-	// Primer backup.
+
 	_, err := backupFile(path, 0)
 	require.NoError(t, err)
 
-	// 9 backups más sin cambios.
+
 	for i := 0; i < 9; i++ {
 		_, err := backupFile(path, 0)
 		require.NoError(t, err)
 		time.Sleep(50 * time.Millisecond) // menos de 1s, ts puede coincidir pero Deduplicated=true de todos modos
 	}
 
-	// Solo 1 backup debe existir.
+
 	matches, _ := filepath.Glob(path + ".bak.*")
 	require.Len(t, matches, 1, "10 corridas sin cambios → 1 backup, hay %d", len(matches))
 }
@@ -288,7 +288,7 @@ func TestBackup_KeepLastZero_NoPrune(t *testing.T) {
 	path := filepath.Join(dir, "AGENTS.md")
 	require.NoError(t, os.WriteFile(path, []byte("v1"), 0o600))
 
-	// 5 cambios + 5 backups con keepLast=0.
+
 	for i := 0; i < 5; i++ {
 		require.NoError(t, os.WriteFile(path, []byte("v"+string(rune('0'+i))), 0o600))
 		time.Sleep(1100 * time.Millisecond)
@@ -296,12 +296,12 @@ func TestBackup_KeepLastZero_NoPrune(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// 5 .bak.* (sin prune).
+
 	matches, _ := filepath.Glob(path + ".bak.*")
 	require.Len(t, matches, 5, "con keepLast=0 se mantienen todos, hay %d", len(matches))
 }
 
-// === ListBackups ===
+
 
 func TestListBackups_ReturnsAllBackups(t *testing.T) {
 	dir := t.TempDir()

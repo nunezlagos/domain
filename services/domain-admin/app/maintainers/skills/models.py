@@ -43,9 +43,9 @@ class Skill(SoftDeleteModel):
     Las columnas declaradas aqui matchean EXACTO la tabla real `skills`.
     """
 
-    # skill_type no es un "status" alternable; lo usamos como choices para
-    # habilitar {{ skill.get_skill_type_display }} en templates. Los valores
-    # coinciden con el CHECK real de la tabla.
+
+
+
     SKILL_TYPE_CHOICES = [
         ("prompt", "Prompt"),
         ("code", "Codigo"),
@@ -65,7 +65,7 @@ class Skill(SoftDeleteModel):
     timeout_seconds = models.IntegerField(default=30)
     idempotent = models.BooleanField(default=False)
     has_side_effects = models.BooleanField(default=False)
-    # Columnas Postgres text[] → ArrayField (NO JSONField).
+
     depends_on = ArrayField(models.CharField(max_length=255), default=list, blank=True)
     tags = ArrayField(models.CharField(max_length=100), default=list, blank=True)
     seed_managed = models.BooleanField(default=False)

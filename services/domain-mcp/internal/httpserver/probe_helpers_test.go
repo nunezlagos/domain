@@ -21,7 +21,7 @@ func healthHandlerFunc(status int) http.Handler {
 // portFromURL extrae el port de una URL tipo "http://127.0.0.1:35443".
 func portFromURL(t *testing.T, url string) int {
 	t.Helper()
-	// Formato esperado: http://127.0.0.1:PORT
+
 	parts := strings.Split(url, ":")
 	require.Len(t, parts, 3, "URL no tiene formato host:port: %s", url)
 	port, err := strconv.Atoi(parts[2])

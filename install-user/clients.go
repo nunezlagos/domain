@@ -23,12 +23,12 @@ func configureClient(c Client, vpsURL, apiKey, timestamp string) error {
 	}
 	switch c.Name {
 	case "opencode":
-		// opencode usa "mcp" + type=remote + enabled=true.
+
 		entry["type"] = "remote"
 		entry["enabled"] = true
 		return upsertJSON(c.MCPPath, "mcp", entry, timestamp)
 	case "continue":
-		// Continue tiene shape distinto: array de servers bajo experimental.
+
 		return configureContinue(c.MCPPath, vpsURL, apiKey, timestamp)
 	default:
 		return upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
@@ -86,16 +86,16 @@ func uninstallClient(c Client) (removed bool, err error) {
 	}
 	r1 := removeMCPEntry(m, "mcpServers")
 	r2 := removeMCPEntry(m, "mcp")
-	// Continue: el shape es distinto — si el server tenía sólo nuestro entry,
-	// vaciamos el array. Si tiene más, no tocamos (no podemos diferenciar
-	// "el del usuario" de "el nuestro" sin más metadata).
+
+
+
 	r3 := false
 	if c.Name == "continue" {
 		if exp, ok := m["experimental"].(map[string]any); ok {
 			if arr, ok := exp["modelContextProtocolServers"].([]any); ok && len(arr) > 0 {
-				// Filtrar elementos cuya url contenga "/mcp" del VPS configurado
-				// no es trivial sin guardar la URL — borramos toda la entry
-				// si tiene solo 1 (asumimos era la nuestra). Si tiene >1, skip.
+
+
+
 				if len(arr) == 1 {
 					delete(exp, "modelContextProtocolServers")
 					r3 = true
@@ -145,7 +145,7 @@ func linkOpencodeToGlobal(paths Paths, osName string) error {
 		if err := os.MkdirAll(filepath.Dir(p.link), 0o755); err != nil {
 			return err
 		}
-		// Si ya existe (file o symlink), removerlo antes de crear el nuevo.
+
 		_ = os.Remove(p.link)
 		if osName == "windows" {
 			b, err := os.ReadFile(p.target)
@@ -167,7 +167,7 @@ func linkOpencodeToGlobal(paths Paths, osName string) error {
 func removeGlobalAssets(paths Paths) {
 	_ = os.Remove(paths.GlobalSkillPath)
 	_ = os.Remove(paths.GlobalAgentPath)
-	// Limpiar dirs padre si quedaron vacíos.
+
 	_ = os.Remove(filepath.Dir(paths.GlobalSkillPath))
 	_ = os.Remove(filepath.Dir(paths.GlobalAgentPath))
 }

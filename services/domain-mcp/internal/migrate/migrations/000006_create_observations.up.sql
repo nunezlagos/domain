@@ -1,9 +1,9 @@
--- migration: create_observations
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-03.1
--- description: observations con vector(1536) embedding + content_tsv FTS GIN
--- breaking: false
--- estimated_duration: <1s (empty)
+
+
+
+
+
+
 
 CREATE TABLE observations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,9 +1,9 @@
--- migration: create_sessions
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-03.2
--- description: sesiones de trabajo agrupan observations
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

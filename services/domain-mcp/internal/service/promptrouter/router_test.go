@@ -81,6 +81,6 @@ func TestHeuristicClassify_DefaultsToChat(t *testing.T) {
 func TestSabotage_EmptyPromptClassifierDefaults(t *testing.T) {
 	c := promptrouter.HeuristicClassifier{}
 	intent, _, _, _ := c.Classify(context.Background(), "")
-	// Empty string fall-through al default chat.
+
 	require.Equal(t, promptrouter.IntentChat, intent)
 }

@@ -1,9 +1,9 @@
--- migration: create_cost_logs
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-15.1 + RFC 0004
--- description: cost_logs source of truth de facturación (Prometheus solo SRE)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE cost_logs (
   id BIGSERIAL PRIMARY KEY,

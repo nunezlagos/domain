@@ -36,15 +36,15 @@ type RunInput struct {
 	UserID      *uuid.UUID
 	DefaultTimeout time.Duration
 
-	// Injected dependencies (may be nil for some runners).
+
 	SkillCaller    SkillCaller
 	LLMProvider    LLMProvider
 	AgentRunner     AgentRunner
 	SubFlowLauncher SubFlowLauncher
 	TaskCreator     TaskCreator
 
-	// Heartbeat reporta progreso de steps long-running (issue-09.10).
-	// progress en [0,1]. Throttled aguas arriba (5s); nil-safe vía guard.
+
+
 	Heartbeat func(ctx context.Context, progress float64, message string) error
 }
 

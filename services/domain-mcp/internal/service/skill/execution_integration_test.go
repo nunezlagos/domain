@@ -197,7 +197,7 @@ func TestExecute_CrossOrg_NotFound(t *testing.T) {
 	})
 	require.ErrorIs(t, err, skillsvc.ErrNotFound, "cross-org debe ser not found (anti-enumeration)")
 
-	// Get cross-org también 404
+
 	e, err := exec.Execute(ctx, skillsvc.ExecuteInput{OrganizationID: orgID, SkillID: sk.ID})
 	require.NoError(t, err)
 	_, err = exec.Get(ctx, uuid.New(), e.ID)

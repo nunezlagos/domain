@@ -175,7 +175,7 @@ func itoaT(n int) string {
 	return out
 }
 
-// ---------- tests ----------
+
 
 func TestCreate_EmptyTitleErr(t *testing.T) {
 	svc := NewService(newMockRepo())
@@ -281,7 +281,7 @@ func TestLinkExternal_ValidatesProvider(t *testing.T) {
 	if !errors.Is(err, ErrInvalidProvider) {
 		t.Errorf("err = %v, want ErrInvalidProvider", err)
 	}
-	// provider válido
+
 	out, err := svc.LinkExternal(context.Background(), uuid.Nil, tk.ID, ExternalLink{
 		Provider: "jira", ID: "ACME-1", URL: "https://x/ACME-1",
 	})

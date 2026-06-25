@@ -13,21 +13,21 @@ import "github.com/google/uuid"
 type RunOption func(*runOpts)
 
 type runOpts struct {
-	// flowRunID, si presente, persiste agent_runs.flow_run_id. La auditoría
-	// (issue-08.12) considera no-orphan cualquier run con flow_run_id NOT NULL.
+
+
 	flowRunID *uuid.UUID
-	// flowRunStepID puntea al step específico del DAG cuando el orquestador
-	// despacha por fase. Persistido en agent_runs.flow_run_step_id si la
-	// columna existe; ignorado si nil.
+
+
+
 	flowRunStepID *uuid.UUID
-	// standalone marca el run como direct_invocation legítimo. Cuando es true
-	// (default histórico) el runner persiste metadata.standalone='true' para
-	// que el cron orphan-runs-audit no lo cuente como bypass.
-	//
-	// El default es true para preservar compatibilidad: callers viejos
-	// (skip variadic) siguen siendo standalone. El orquestador SDD debe
-	// pasar WithStandalone(false) + WithFlowRun(id) para marcar el run como
-	// gobernado.
+
+
+
+
+
+
+
+
 	standalone bool
 }
 

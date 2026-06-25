@@ -53,7 +53,7 @@ func TestEvaluate_NoAlertsCuandoSano(t *testing.T) {
 }
 
 func TestEvaluate_DeadTuples_IgnoraTablasPequeñas(t *testing.T) {
-	// LiveTuples < 1000 → no alert (dead_ratio puede ser alto pero impacto bajo)
+
 	s := &Snapshot{Tables: []TableStats{{
 		Name: "small_table", LiveTuples: 50, DeadTuples: 100, DeadRatio: 2.0,
 	}}}

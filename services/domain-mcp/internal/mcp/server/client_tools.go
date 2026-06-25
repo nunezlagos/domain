@@ -28,9 +28,9 @@ import (
 )
 
 func registerClientTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls: tx + SET LOCAL app.current_org_id para que el pg_repository del
-	// service (clients tiene RLS FORCE en migration 000099) lea la tx via
-	// txctx.TxFromContext y respete las policies.
+
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -45,7 +45,7 @@ func registerClientTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	}
 }
 
-// --- tool builders ---
+
 
 func toolClientCreate() mcp.Tool {
 	return mcp.NewTool("domain_client_create",
@@ -149,7 +149,7 @@ func toolClientSetStatus() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
@@ -339,10 +339,10 @@ func (d *Deps) handleClientRestore(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	// Restore directo: Service.Get excluye soft-deleted, asi que un Get
-	// previo siempre devolveria "not found". El repo.Restore retorna
-	// ErrClientNotFound si el id no existe (RowsAffected=0). Tras restaurar,
-	// recargamos para devolver el client actualizado.
+
+
+
+
 	if err := d.Clients.Restore(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("restore client failed: %v", err)), nil
 	}

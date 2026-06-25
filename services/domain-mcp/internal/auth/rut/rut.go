@@ -13,13 +13,13 @@ import (
 )
 
 var (
-	// ErrEmpty input vacío.
+
 	ErrEmpty = errors.New("rut: empty")
-	// ErrInvalidFormat formato no parsable.
+
 	ErrInvalidFormat = errors.New("rut: invalid format")
-	// ErrInvalidCheckDigit DV (módulo 11) incorrecto.
+
 	ErrInvalidCheckDigit = errors.New("rut: invalid check digit")
-	// ErrOutOfRange número fuera de rango razonable (1..99M).
+
 	ErrOutOfRange = errors.New("rut: number out of range")
 )
 
@@ -29,7 +29,7 @@ func Normalize(raw string) (string, error) {
 	if raw == "" {
 		return "", ErrEmpty
 	}
-	// strip: puntos, espacios, lower→upper K
+
 	clean := strings.Map(func(r rune) rune {
 		switch {
 		case unicode.IsDigit(r):
@@ -52,7 +52,7 @@ func Normalize(raw string) (string, error) {
 	body := clean[:len(clean)-1]
 	dv := clean[len(clean)-1:]
 
-	// body debe ser numérico
+
 	bodyN, err := strconv.Atoi(body)
 	if err != nil {
 		return "", ErrInvalidFormat
@@ -61,7 +61,7 @@ func Normalize(raw string) (string, error) {
 		return "", ErrOutOfRange
 	}
 
-	// dv debe ser dígito 0-9 o K
+
 	if dv != "K" {
 		if _, err := strconv.Atoi(dv); err != nil {
 			return "", ErrInvalidFormat

@@ -1,20 +1,20 @@
-// issue-25.14 wireup para MCP — equivalente al middleware HTTP para tools MCP.
-//
-// El MCP server no tiene HTTP request: cuando un tool es invocado, el
-// principal ya esta validado por mcp/server/auth.go y guardado en Deps.
-// Antes de llamar al servicio, abrimos una tx con SET LOCAL app.current_org_id
-// y app.current_user_id y la inyectamos en el ctx via txctx.WithTxContext.
-// Asi, los queries de los servicios (observation, session, etc.) usan la tx
-// con RLS activa.
-//
-// Helper: withOrgCtx(ctx, pool, principal) -> (ctx, tx, release)
-//
-// Uso:
-//
-//	ctx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
-//	defer release()
-//	obs, err := d.Observations.Save(ctx, ...)
-//	if err == nil { _ = tx.Commit(ctx) }  // opcional, defer Rollback si se olvida
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package mcpserver
 
@@ -59,10 +59,10 @@ func withOrgCtx(ctx context.Context, pool *pgxpool.Pool, principal *apikey.Princ
 	}
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		// No abortamos el tool call: retornamos ctx sin wireup. RLS devolvera
-		// 0 rows si el query toca tablas protegidas, pero el caller vera el
-		// error y podra reportar. Mejor que matar el tool.
-		// Log via context (mcp logger).
+
+
+
+
 		_ = err
 		return ctx, nil, noop
 	}
@@ -89,10 +89,10 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		result, err := h(txCtx, req)
 		if tx != nil && err == nil && (result == nil || !result.IsError) {
 			if cerr := tx.Commit(txCtx); cerr != nil {
-				// ErrTxCommitRollback: la tx aborto por un error SQL que el
-				// handler ya manejo como caso esperado (e.g. dedup por unique
-				// violation en capture_passive → "captured: false"). El result
-				// del handler refleja el estado real; no es un fallo del tool.
+
+
+
+
 				if errors.Is(cerr, pgx.ErrTxCommitRollback) {
 					return result, nil
 				}

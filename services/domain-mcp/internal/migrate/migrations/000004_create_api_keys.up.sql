@@ -1,9 +1,9 @@
--- migration: create_api_keys
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-02.1
--- description: API keys bcrypt-hashed con prefix visible
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

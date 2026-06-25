@@ -25,7 +25,7 @@ type Handoff struct {
 // handoff_policy=forbid o policy=require_supervisor_approval sin supervisor.
 var ErrHandoffForbidden = errors.New("handoff forbidden by target policy")
 
-// Result is the same OrchestrationResult.
+
 
 // Run inicia conversación con startAgent y sigue handoffs hasta resolución.
 func (h *Handoff) Run(ctx context.Context, startAgent, initialInput string) (*OrchestrationResult, error) {
@@ -61,17 +61,17 @@ func (h *Handoff) Run(ctx context.Context, startAgent, initialInput string) (*Or
 		t.Status = "done"
 		res.Tasks = append(res.Tasks, t)
 
-		// Detecta marker de handoff en el output.
+
 		nextAgent, reason := detectHandoff(output)
 		if nextAgent == "" {
-			// No handoff → resolución final.
+
 			res.FinalOutput = output
 			res.Successful = true
 			res.CompletedAt = time.Now()
 			return res, nil
 		}
 
-		// Validar policy del target.
+
 		tmpl, err := h.Conductor.LoadTemplate(ctx, nextAgent)
 		if err != nil {
 			res.Error = fmt.Sprintf("load template %s: %v", nextAgent, err)
@@ -99,7 +99,7 @@ func (h *Handoff) Run(ctx context.Context, startAgent, initialInput string) (*Or
 // Heurística simple — para precisión real, el system_prompt del agent
 // instruye qué format usar.
 func detectHandoff(output string) (toAgent, reason string) {
-	// XML-style
+
 	if idx := strings.Index(output, "<handoff "); idx >= 0 {
 		seg := output[idx:]
 		if endIdx := strings.Index(seg, "/>"); endIdx > 0 {

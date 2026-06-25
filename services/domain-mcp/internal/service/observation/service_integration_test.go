@@ -144,7 +144,7 @@ func TestObservation_SearchHybrid_FindsBM25Match(t *testing.T) {
 	require.NotEmpty(t, results)
 	require.True(t, len(results) >= 2,
 		"al menos 2 obs sobre pgvector deben matchear")
-	// Top result debe ser sobre pgvector, no sobre clima
+
 	require.Contains(t, results[0].Content, "pgvector")
 }
 
@@ -153,7 +153,7 @@ func TestObservation_SearchHybrid_NopEmbedder_TSVectorOnly(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	// Cambiamos embedder a Nop después del setup
+
 	f.svc.Embedder = llm.NopEmbedder{}
 	_, _ = f.svc.Save(ctx, obssvc.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
@@ -243,7 +243,7 @@ func TestObservation_Save_StripsPrivateBlocks(t *testing.T) {
 	require.NotContains(t, o.Content, "SECRETO",
 		"contenido privado NO debe persistir")
 	require.NotContains(t, o.Content, "<private>")
-	// metadata.privacy_redacted_blocks debe estar
+
 	require.EqualValues(t, 1, o.Metadata["privacy_redacted_blocks"])
 }
 
@@ -258,7 +258,7 @@ func TestSabotage_Dedup_DBConstraintEnforces(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Intentar INSERT directo con mismo content_hash → DB rechaza
+
 	var hash []byte
 	require.NoError(t, f.svc.Pool.QueryRow(ctx,
 		`SELECT content_hash FROM knowledge_observations WHERE id = $1`, o.ID).Scan(&hash))
@@ -279,7 +279,7 @@ func TestSabotage_SearchHybrid_OrgIsolation(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Content: "secreto de org A: contraseña foobar"})
 
-	// Crear segunda org y project
+
 	rec := &audit.PGRecorder{Pool: f.svc.Pool}
 	projS := &projsvc.Service{Pool: f.svc.Pool, Audit: rec}
 	org2, owner2, err := seedOrgUser(ctx, f.svc.Pool, "Other", "other", "x@x.com", "X")
@@ -289,7 +289,7 @@ func TestSabotage_SearchHybrid_OrgIsolation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Search desde org2 con la misma query NO debe ver el secreto de org A
+
 	results, err := f.svc.SearchHybrid(ctx, org2.ID, "secreto contraseña", 10)
 	require.NoError(t, err)
 	for _, r := range results {

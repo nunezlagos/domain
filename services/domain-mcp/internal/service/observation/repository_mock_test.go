@@ -23,8 +23,8 @@ type mockRepo struct {
 	SoftDeleteHook    func(ctx context.Context, id uuid.UUID) error
 	SearchHook        func(ctx context.Context, in SearchInput) ([]SearchResult, error)
 
-	// Spying: número de invocaciones por método (útil para verificar que el
-	// Service llamó al repo y no al pool legacy).
+
+
 	InsertCalls, GetCalls, ListCalls, SoftDeleteCalls, SearchCalls int
 }
 
@@ -74,7 +74,7 @@ func (m *mockRepo) SearchHybrid(ctx context.Context, in SearchInput) ([]SearchRe
 type nopEmbedder struct{}
 
 func (nopEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
-	// Vector zero — useVector = false (path tsvector-only).
+
 	return make([]float32, 4), nil
 }
 

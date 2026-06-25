@@ -13,10 +13,10 @@ import (
 // promptRouterRequest body de POST /api/v1/prompt
 type promptRouterRequest struct {
 	RawText string `json:"raw_text"`
-	// Intent opcional: si el cliente ya clasifico (via prompt 'triage'),
-	// se usa directo y se saltea la clasificacion del servidor.
+
+
 	Intent string `json:"intent,omitempty"`
-	// ProjectID opcional: scopea el intake/triage al proyecto.
+
 	ProjectID string `json:"project_id,omitempty"`
 }
 

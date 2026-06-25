@@ -67,7 +67,7 @@ type CreateInput struct {
 	Variables      []Variable
 	Description    string
 	Tags           []string
-	// SetActive: si true marca esta versión como activa (y desactiva otras del mismo slug+project)
+
 	SetActive bool
 }
 
@@ -107,7 +107,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Calcular siguiente version (max + 1 por slug+project)
+
 	var nextVersion int
 	err = tx.QueryRow(ctx,
 		`SELECT COALESCE(MAX(version), 0) + 1
@@ -121,7 +121,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 		return nil, fmt.Errorf("calc version: %w", err)
 	}
 
-	// Si SetActive: desactivar las anteriores
+
 	if in.SetActive {
 		_, err = tx.Exec(ctx,
 			`UPDATE prompts SET is_active = false

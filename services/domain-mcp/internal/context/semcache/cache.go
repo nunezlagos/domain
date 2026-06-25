@@ -80,7 +80,7 @@ func (c *Cache) Lookup(ctx context.Context, orgID, provider, model, paramsHash s
 	var e Entry
 	var sim float64
 	vecLit := vectorLiteral(embedding)
-	// ISSUE-21.6: SELECT sin organization_id.
+
 	err := c.Pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT id, provider, model, params_hash, prompt_hash,
 		       prompt_preview, response, tokens, hit_count, created_at, last_used_at,
@@ -104,7 +104,7 @@ func (c *Cache) Lookup(ctx context.Context, orgID, provider, model, paramsHash s
 		return nil, fmt.Errorf("lookup: %w", err)
 	}
 
-	// Bump hit_count + last_used_at (fire-and-forget; no necesita tx)
+
 	_, _ = c.Pool.Exec(ctx,
 		`UPDATE llm_semantic_cache SET hit_count = hit_count + 1, last_used_at = now() WHERE id = $1`,
 		e.ID,

@@ -1,27 +1,27 @@
--- migration: drop_legacy_infra (down)
--- author: mnunez@saargo.com
--- issue: REQ-42.3 (taxonomía de naming — drop legacy/infra)
--- description: reverse de 000149. Recrea las 8 tablas legacy/infra con su shape
---   POST-FASE-C (sin organization_id, con status), índices/triggers/función/view
---   donde aplique, y re-agrega las columnas session_id (FK nullable ON DELETE
---   SET NULL) a captured_prompts y verifications. Incluye el esqueleto de
---   saga_compensation_log. NO recrea sabotage_records (se preserva como
---   tdd_sabotage_records, fuera del drop). Solo roundtrip; NO restaura datos.
--- breaking: false (down de roundtrip; sin restauración real de datos)
--- estimated_duration: <1s
---
--- Revertir: recrear las 8 tablas legacy/infra con su shape POST-FASE-C.
--- IMPORTANTE: NO se recrea el shape literal de las migraciones originales —
--- esas declaraban `organization_id NOT NULL REFERENCES organizations(id)`, pero
--- organizations ya no existe (dropeada en 000143) y organization_id fue removido
--- en 000141/142. Además 000120 agregó la columna `status` a todas. Por eso el
--- down recrea el estado consistente con las migraciones previas a esta HU.
--- Los DATOS no se restauran (las tablas estaban vacías; restore real: pgBackRest).
--- En roundtrip (DB fresca) deja la DB en estado consistente para re-aplicar 000149.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 BEGIN;
 
--- ===== sessions (000007 + 000085 RLS + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS sessions_project_idx ON sessions (project_id) WHERE d
 CREATE INDEX IF NOT EXISTS sessions_summary_tsv_idx ON sessions USING GIN (summary_tsv);
 CREATE INDEX IF NOT EXISTS sessions_status_idx ON sessions (status);
 
--- ===== model_registry (000034 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS model_registry (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider VARCHAR(50) NOT NULL
@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS model_registry_status_idx ON model_registry (status);
 GRANT SELECT ON model_registry TO app_user, app_readonly;
 GRANT ALL ON model_registry TO app_admin;
 
--- ===== entity_state_transitions (000060 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS entity_state_transitions (
   id BIGSERIAL PRIMARY KEY,
   entity_kind VARCHAR(30) NOT NULL
@@ -127,7 +127,7 @@ GRANT SELECT, INSERT ON entity_state_transitions TO app_user;
 GRANT USAGE, SELECT ON SEQUENCE entity_state_transitions_id_seq TO app_user;
 GRANT SELECT ON v_stuck_entities TO app_user;
 
--- ===== system_state (000074 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS system_state (
   key VARCHAR(100) PRIMARY KEY,
   value JSONB NOT NULL DEFAULT '{}',
@@ -145,14 +145,14 @@ DO $g$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $g$;
 
--- ===== saga_compensation_log (cluster saga/infra + status) =====
--- Recreación FIEL del shape real (verificado vía \d), al mismo nivel de
--- fidelidad que el resto del down. PK bigserial, FK saliente run_id → flow_runs
--- (NOT NULL, ON DELETE CASCADE), columnas de auditoría completas, los 2 índices
--- introspectados (saga_compensation_log_status_idx, saga_log_run_idx) y el
--- trigger set_updated_at. La tabla original tenía 0 filas; NO restaura datos.
--- NOTA: sabotage_records NO se recrea aquí: se preserva como tdd_sabotage_records
--- (rename en 000151), no es parte del drop de este lote.
+
+
+
+
+
+
+
+
 CREATE TABLE IF NOT EXISTS saga_compensation_log (
   id BIGSERIAL PRIMARY KEY,
   run_id UUID NOT NULL REFERENCES flow_runs(id) ON DELETE CASCADE,
@@ -174,7 +174,7 @@ CREATE TRIGGER trg_set_updated_at
 GRANT SELECT, INSERT, UPDATE, DELETE ON saga_compensation_log TO app_user;
 GRANT USAGE, SELECT ON SEQUENCE saga_compensation_log_id_seq TO app_user;
 
--- ===== runtime_configs (000041 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS runtime_configs (
   key             VARCHAR(80) PRIMARY KEY,
   value           JSONB NOT NULL,
@@ -190,7 +190,7 @@ GRANT SELECT ON runtime_configs TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON runtime_configs TO app_admin;
 GRANT SELECT ON runtime_configs TO app_readonly;
 
--- ===== dead_letter_queue (000079 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS dead_letter_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   flow_run_id UUID REFERENCES flow_runs(id) ON DELETE CASCADE,
@@ -204,14 +204,14 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
   resolved_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico (recreación en rollback)
+
+
 CREATE INDEX IF NOT EXISTS dead_letter_queue_pending_idx
   ON dead_letter_queue (failed_at DESC) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS dead_letter_queue_status_idx ON dead_letter_queue (status);
 GRANT SELECT, INSERT, UPDATE, DELETE ON dead_letter_queue TO app_user;
 
--- ===== idempotency_keys (000036 + 000120 status) =====
+
 CREATE TABLE IF NOT EXISTS idempotency_keys (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -234,10 +234,10 @@ GRANT USAGE, SELECT ON SEQUENCE idempotency_keys_id_seq TO app_user;
 GRANT ALL ON idempotency_keys TO app_admin;
 GRANT ALL ON SEQUENCE idempotency_keys_id_seq TO app_admin;
 
--- ===== FK entrantes a sessions (restaurar columnas nullable ON DELETE SET NULL) =====
--- Reverso de la limpieza del up (DROP CONSTRAINT + DROP COLUMN). El ADD COLUMN
--- con REFERENCES recrea la FK; Postgres regenera el nombre de constraint
--- (captured_prompts_session_id_fkey / verifications_session_id_fkey).
+
+
+
+
 ALTER TABLE IF EXISTS captured_prompts
   ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES sessions(id) ON DELETE SET NULL;
 ALTER TABLE IF EXISTS verifications

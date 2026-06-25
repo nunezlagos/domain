@@ -23,7 +23,7 @@ func registerProjectSkillTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Server
 	return []mcpgo.ServerTool{
 		{Tool: toolProjectSkillRegister(), Handler: wrap.Wrap("domain_project_skill_register", rls(deps.handleProjectSkillRegister))},
 		{Tool: toolProjectSkillList(), Handler: wrap.Wrap("domain_project_skill_list", rls(deps.handleProjectSkillList))},
-		// Fase 3 — ciclo de vida de skills desde MCP (antes solo seeder / Django admin).
+
 		{Tool: toolSkillCreate(), Handler: wrap.Wrap("domain_skill_create", rls(deps.handleSkillCreate))},
 		{Tool: toolSkillEdit(), Handler: wrap.Wrap("domain_skill_edit", rls(deps.handleSkillEdit))},
 		{Tool: toolProjectSkillUnlink(), Handler: wrap.Wrap("domain_project_skill_unlink", rls(deps.handleProjectSkillUnlink))},
@@ -81,9 +81,9 @@ func (d *Deps) handleProjectSkillRegister(ctx context.Context, req mcp.CallToolR
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register failed: %v", err)), nil
 	}
-	// Auto-enlace: registrar una skill de proyecto la deja USABLE de una. Sin
-	// esto la skill quedaba creada pero no enlazada (project_skills), y el flujo
-	// (fetchRecommendedSkills filtra por LinkedSkillIDs) nunca la usaba. Idempotente.
+
+
+
 	if _, lerr := d.q(ctx).Exec(ctx,
 		`INSERT INTO project_skills (project_id, skill_id)
 		 VALUES ($1, $2) ON CONFLICT (project_id, skill_id) DO NOTHING`,
@@ -129,10 +129,10 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Modelo hibrido (auto + excluibles): aplican las globales (project_id IS NULL,
-	// automaticas) + las del proyecto (project_id = $1), MENOS las excluidas
-	// (project_skills con is_enabled = FALSE). El scope 'global' vs 'project'
-	// refleja si la definicion de la skill es de plataforma o propia del proyecto.
+
+
+
+
 	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
 		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
 		   FROM skills s
@@ -177,7 +177,7 @@ func (d *Deps) handleProjectSkillList(ctx context.Context, req mcp.CallToolReque
 	})
 }
 
-// --- Fase 3: ciclo de vida de skills ---
+
 
 // domain_skill_create crea una skill GLOBAL (project_id IS NULL). Es el
 // equivalente desde MCP del seeder: la skill queda disponible para enlazar
@@ -218,8 +218,8 @@ func (d *Deps) handleSkillCreate(ctx context.Context, req mcp.CallToolRequest) (
 	desc, _ := args["description"].(string)
 	content, _ := args["content"].(string)
 
-	// project_id NULL = skill global. Sin organization_id (sistema org-less,
-	// mig 000142); la RLS de la tx maneja el scope.
+
+
 	var id uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
@@ -269,7 +269,7 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError("id o slug requerido"), nil
 	}
 
-	// Resolver la skill: por id (preciso) o por slug global (project_id NULL).
+
 	var target uuid.UUID
 	if idStr != "" {
 		parsed, perr := uuid.Parse(idStr)
@@ -294,10 +294,10 @@ func (d *Deps) handleSkillEdit(ctx context.Context, req mcp.CallToolRequest) (*m
 		}
 	}
 
-	// Update parcial: solo cambia los campos provistos. Para los string
-	// omitidos pasamos NULL y COALESCE conserva el valor actual. Para
-	// description usamos NULLIF('',...) — un string vacio explicito no se
-	// distingue de omitido aqui, asi que omitir = no tocar.
+
+
+
+
 	var (
 		name      *string
 		desc      *string
@@ -388,8 +388,8 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Resolver skill_id. Si vino slug, buscar primero la del proyecto y, si
-	// no hay, la global (mismo orden de scoping que list).
+
+
 	var target uuid.UUID
 	if skillID != "" {
 		parsed, idErr := uuid.Parse(skillID)
@@ -407,7 +407,7 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 			skillSlug, proj.ID,
 		).Scan(&target)
 		if err != nil {
-			// Idempotente: si la skill no existe, no hay enlace que borrar.
+
 			return toolResultJSON(map[string]any{
 				"project_slug": projSlug, "skill_slug": skillSlug,
 				"unlinked": false, "reason": "skill no encontrada",
@@ -415,9 +415,9 @@ func (d *Deps) handleProjectSkillUnlink(ctx context.Context, req mcp.CallToolReq
 		}
 	}
 
-	// Modelo hibrido: "unlink" = EXCLUIR (upsert is_enabled=FALSE), no borrar la
-	// fila. Borrarla haria que la skill global vuelva a aplicar (auto). La exclusion
-	// es la que hace que deje de aplicar.
+
+
+
 	if _, eerr := d.q(ctx).Exec(ctx,
 		`INSERT INTO project_skills (project_id, skill_id, is_enabled)
 		   VALUES ($1, $2, FALSE)

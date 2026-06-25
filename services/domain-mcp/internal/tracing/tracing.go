@@ -105,24 +105,24 @@ func Tracer(name string) trace.Tracer {
 	return otel.Tracer(name)
 }
 
-// ===== Safe Attrs (issue-17.2 + .claude/rules/security.md) =====
+
 
 // SafeAttrKeys whitelist explícita. Otros keys son rechazados por SafeAttr.
 var safeAttrKeys = map[string]bool{
-	// HTTP
+
 	"http.method": true, "http.status_code": true, "http.route": true,
 	"http.host": true, "http.scheme": true, "http.target": true,
-	// DB
+
 	"db.system": true, "db.statement_short": true, "db.operation": true,
 	"db.rows_affected": true,
-	// LLM
+
 	"llm.provider": true, "llm.model": true, "llm.input_tokens": true,
 	"llm.output_tokens": true, "llm.cost_usd": true,
-	// Domain
+
 	"agent.slug": true, "skill.slug": true, "flow.slug": true,
 	"org.id": true, "user.id": true, "project.id": true,
 	"run.id": true,
-	// Orchestrator SDD (issue-08.10 obs-003)
+
 	"orchestrator.mode":       true,
 	"orchestrator.run_id":     true,
 	"phase.slug":              true,
@@ -159,7 +159,7 @@ func IsSafeKey(key string) bool {
 	return safeAttrKeys[key]
 }
 
-// ===== HTTP Middleware =====
+
 
 // HTTPMiddleware envuelve handler con span automático.
 // Span name: "HTTP {METHOD} {path}". Attrs: http.method, http.status_code, http.route.

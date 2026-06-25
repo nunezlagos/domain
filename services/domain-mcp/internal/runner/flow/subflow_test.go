@@ -20,19 +20,19 @@ func TestFormatChain(t *testing.T) {
 }
 
 func TestSubflowCircular_DetectaCadenaRepetida(t *testing.T) {
-	// Simulamos el contexto que el runner construye.
+
 	ctx := context.WithValue(context.Background(), subflowCtxKey{}, []string{"a", "b", "c"})
 	chain, _ := ctx.Value(subflowCtxKey{}).([]string)
 
-	// Verificar que la cadena se mantiene.
+
 	if len(chain) != 3 {
 		t.Fatalf("chain length: %d", len(chain))
 	}
 
-	// El runner verifica si flowSlug está en la cadena antes de añadirlo.
+
 	for _, s := range chain {
 		if s == "b" {
-			// Esto sería el path que dispara el error.
+
 			return
 		}
 	}

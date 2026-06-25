@@ -1,20 +1,20 @@
-// req-21.6-dryrun.go
-//
-// Helper para el script req-21.6-fase-c-deploy.sh. Levanta un Postgres
-// efímero en testcontainers, carga TODAS las migraciones hasta el punto
-// pre-migración destructiva, aplica la migración destructiva, cuenta filas
-// y compara contra el pre-count. Imprime el DSN efímero por stdout.
-//
-// Uso (desde el script bash):
-//   go run scripts/req-21.6-dryrun.go \
-//     --pre-counts /tmp/req-21.6-backups-X/row-counts-pre-140.txt \
-//     --migration services/domain-backend/internal/migrate/migrations/000140_drop_organization_fks.up.sql \
-//     --mig-dir services/domain-backend/internal/migrate/migrations
-//
-// Salida:
-//   Primera línea (stdout): DSN efímero
-//   Resto (stdout): diff de filas pre/post
-//   Exit code: 0 si OK, 1 si diff != 0, 2 si setup falló
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //go:build req_21_6_dryrun
 
@@ -69,10 +69,10 @@ func main() {
 		log.Fatalf("ConnectionString: %v", err)
 	}
 
-	// Cargar schema completo (todas las migraciones excepto la destructiva)
-	// dmigrate.Up aplica TODAS las migraciones del dir. Necesitamos una variante
-	// que pare antes de la destructiva. Workaround: aplicar TODAS, luego la
-	// destructiva, y validar que el conteo de filas post == pre.
+
+
+
+
 	if err := dmigrate.Up(dsn); err != nil {
 		log.Fatalf("dmigrate.Up: %v", err)
 	}
@@ -83,7 +83,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Aplicar la migración destructiva
+
 	migSQL, err := os.ReadFile(*migration)
 	if err != nil {
 		log.Fatalf("ReadFile migration: %v", err)
@@ -92,20 +92,20 @@ func main() {
 		log.Fatalf("Exec migration: %v", err)
 	}
 
-	// Contar filas post
+
 	postCounts, err := countRows(ctx, pool)
 	if err != nil {
 		log.Fatalf("countRows post: %v", err)
 	}
 
-	// Cargar pre-counts
+
 	preData, err := os.ReadFile(*preCounts)
 	if err != nil {
 		log.Fatalf("ReadFile pre-counts: %v", err)
 	}
 	preMap := parseCounts(string(preData))
 
-	// Diff
+
 	var diffs []string
 	for table, post := range postCounts {
 		pre, hasPre := preMap[table]
@@ -123,7 +123,7 @@ func main() {
 		}
 	}
 
-	// Output
+
 	fmt.Println(dsn) // primera línea: DSN (el bash script lo lee)
 	if len(diffs) == 0 {
 		fmt.Println("DRY_RUN_OK: 0 diferencias en conteo de filas")

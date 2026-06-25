@@ -19,7 +19,7 @@ type Repository interface {
 
 // ListFilter (REQ-28.2): filtros opcionales para List.
 type ListFilter struct {
-	// ClientID — si non-nil, filtra por projects.client_id = ClientID.
+
 	ClientID *uuid.UUID
 }
 
@@ -32,8 +32,8 @@ type InsertParams struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	SettingsJSON   []byte
-	// ClientID (REQ-28.2): puede ser nil (proyecto interno). El trigger
-	// 000100 valida que pertenezca a la misma organization.
+
+
 	ClientID *uuid.UUID
 }
 
@@ -43,9 +43,9 @@ type UpdateParams struct {
 	Description   string
 	RepositoryURL string
 	SettingsJSON  []byte
-	// ClientID + ClientChanged (REQ-28.2): si ClientChanged == false, el
-	// UPDATE no toca client_id (mantiene valor previo). Si true, asigna
-	// ClientID (que puede ser nil para unset).
+
+
+
 	ClientID      *uuid.UUID
 	ClientChanged bool
 }

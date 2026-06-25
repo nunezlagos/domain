@@ -39,7 +39,7 @@ func TestStream_HeadersSet(t *testing.T) {
 }
 
 func TestStream_NoFlusher(t *testing.T) {
-	// Wrap recorder en algo que no expone Flusher
+
 	w := struct{ http.ResponseWriter }{httptest.NewRecorder()}
 	_, err := streaming.New(w)
 	require.Error(t, err)

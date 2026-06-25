@@ -142,7 +142,7 @@ Sabotaje test obligatorio por HU.`,
 	}
 
 	for _, p := range policies {
-		// is_user_modified=TRUE → el seeder no pisa la edición manual (mismo patrón que agent_templates).
+
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO platform_policies (slug, name, kind, body_md, source_file, is_active)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), TRUE)

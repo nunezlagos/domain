@@ -42,7 +42,7 @@ func setupHB(t *testing.T) (*hb.Service, uuid.UUID, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	// Org + proyecto fixture para scopear los drafts.
+
 	var orgID, projectID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
@@ -214,7 +214,7 @@ func TestSabotage_OvershootStep(t *testing.T) {
 	d, _, err := svc.Start(ctx, hb.ModeFeature, "idea", nil, &projectID)
 	require.NoError(t, err)
 
-	// Forzamos current_step más allá del último válido
+
 	_, err = svc.Pool.Exec(ctx,
 		`UPDATE issue_drafts SET current_step = total_steps + 5 WHERE id = $1`, d.ID,
 	)

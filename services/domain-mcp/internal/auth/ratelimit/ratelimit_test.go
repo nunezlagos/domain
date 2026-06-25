@@ -1,4 +1,4 @@
-// issue-02.5 rate-limit unit tests.
+
 
 package ratelimit
 
@@ -28,13 +28,13 @@ func TestLimiter_RefillsOverTime(t *testing.T) {
 	l := New(5, 1.0) // 1 token/sec
 	l.SetClock(c.now)
 
-	// Consume todos
+
 	for i := 0; i < 5; i++ {
 		require.True(t, l.Allow("k"))
 	}
 	require.False(t, l.Allow("k"))
 
-	// Avanzar 3 segundos → 3 tokens disponibles
+
 	c.advance(3 * time.Second)
 	for i := 0; i < 3; i++ {
 		require.True(t, l.Allow("k"), "should allow after refill %d", i+1)
@@ -47,7 +47,7 @@ func TestLimiter_PerKey_Isolated(t *testing.T) {
 	require.True(t, l.Allow("alice"))
 	require.True(t, l.Allow("alice"))
 	require.False(t, l.Allow("alice"))
-	// bob tiene su propio bucket
+
 	require.True(t, l.Allow("bob"))
 	require.True(t, l.Allow("bob"))
 	require.False(t, l.Allow("bob"))
@@ -66,7 +66,7 @@ func TestLimiter_DoesNotExceedCapacity(t *testing.T) {
 	l.SetClock(c.now)
 
 	require.True(t, l.Allow("k"))
-	// avanzar 100 segundos — refill cap at 5, no 100
+
 	c.advance(100 * time.Second)
 	require.Equal(t, float64(5), l.Tokens("k"))
 }
@@ -93,7 +93,7 @@ func TestLimiter_RetryAfter(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		l.Allow("k")
 	}
-	// 0 tokens, need 1 → 1 second
+
 	d := l.RetryAfter("k", 1)
 	require.InDelta(t, time.Second.Seconds(), d.Seconds(), 0.01)
 

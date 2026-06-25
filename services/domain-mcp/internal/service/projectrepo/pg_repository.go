@@ -134,7 +134,7 @@ func (r *pgRepository) GetByName(ctx context.Context, orgID, projectID uuid.UUID
 }
 
 func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in UpdateParams) (*Repo, error) {
-	// Build dinámico de SET — más simple que repetir COALESCE() para cada campo.
+
 	sets := []string{}
 	args := []any{id}
 	idx := 2
@@ -179,7 +179,7 @@ func (r *pgRepository) Update(ctx context.Context, orgID, id uuid.UUID, in Updat
 }
 
 func (r *pgRepository) SetDefault(ctx context.Context, orgID, id uuid.UUID) (*Repo, error) {
-	// Necesita tx para limpiar el default previo + setear el nuevo atómicamente.
+
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return r.setDefaultIn(ctx, tx, orgID, id)
 	}
@@ -199,7 +199,7 @@ func (r *pgRepository) SetDefault(ctx context.Context, orgID, id uuid.UUID) (*Re
 }
 
 func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uuid.UUID) (*Repo, error) {
-	// 1. Resolver project_id
+
 	var projectID uuid.UUID
 	if err := q.QueryRow(ctx,
 		`SELECT project_id FROM project_repositories
@@ -211,7 +211,7 @@ func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uu
 		}
 		return nil, fmt.Errorf("resolve project_id: %w", err)
 	}
-	// 2. Limpiar default actual del proyecto
+
 	if _, err := q.Exec(ctx,
 		`UPDATE project_repositories SET is_default = false
 		 WHERE project_id = $1 AND id <> $2 AND is_default = true`,
@@ -219,7 +219,7 @@ func (r *pgRepository) setDefaultIn(ctx context.Context, q querier, orgID, id uu
 	); err != nil {
 		return nil, fmt.Errorf("clear previous default: %w", err)
 	}
-	// 3. Setear nuevo default
+
 	row := q.QueryRow(ctx,
 		`UPDATE project_repositories SET is_default = true
 		 WHERE id = $1

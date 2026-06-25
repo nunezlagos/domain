@@ -32,7 +32,7 @@ func Estimate(text string) int {
 			latin++
 		}
 	}
-	// Tokens ≈ latin/4 + cjk/2 + other/3 (round up)
+
 	t := (latin+3)/4 + (cjk+1)/2 + (other+2)/3
 	if t < 1 {
 		t = 1

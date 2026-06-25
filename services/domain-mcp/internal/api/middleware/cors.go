@@ -52,7 +52,7 @@ func NewCORS(origins []string, logger *slog.Logger) *CORS {
 	}
 	switch {
 	case len(cleaned) == 0:
-		// default deny — no logueamos al boot acá; main.go decide qué decir.
+
 	case len(cleaned) == 1 && cleaned[0] == "*":
 		c.wildcardMode = true
 		c.AllowCredentials = false

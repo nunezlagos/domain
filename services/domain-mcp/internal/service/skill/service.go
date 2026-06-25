@@ -172,7 +172,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 		in.DependsOn = []string{}
 	}
 
-	// Embedding
+
 	embedText := in.Name + " " + in.Description
 	vec, err := s.Embedder.Embed(ctx, embedText)
 	if err != nil {
@@ -282,7 +282,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 	}
 	userMod := prev.IsUserModified || prev.SeedManaged
 
-	// Re-embed solo si name o description cambian
+
 	embedLit := ""
 	reembed := (in.Name != nil && *in.Name != prev.Name) ||
 		(in.Description != nil && *in.Description != prev.Description)
@@ -531,7 +531,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return err
 	}
 
-	// Si otro skill nos referencia en depends_on → conflict
+
 	var depCount int
 	err = s.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM skills

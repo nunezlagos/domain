@@ -119,7 +119,7 @@ class CreateViewTests(MaintainerTestCase):
         make_prompt("dup", version=1)
         r = self.client.post(reverse("prompts:create"),
                             self._data(slug="dup", version="1"))
-        # Form invalido (clean) → re-render 200, sin crear nuevo.
+
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Prompt.objects.filter(slug="dup").count(), 1)
 
@@ -143,7 +143,7 @@ class EditViewTests(MaintainerTestCase):
             "body": "despues",
             "description": "",
             "tags": "",
-            # is_active omitido → checkbox desmarcado → False
+
         })
         self.assertEqual(r.status_code, 302)
         p.refresh_from_db()

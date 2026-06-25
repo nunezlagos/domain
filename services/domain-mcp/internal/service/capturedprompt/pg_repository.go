@@ -69,9 +69,9 @@ func estimateTokens(chars int) int {
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, error) {
 	estIn := estimateTokens(in.CharCount)
-	// ISSUE-21.6 Fase D clean: organization_id ya no se persiste en
-	// captured_prompts. La columna existe pero se omite del INSERT
-	// (queda NULL por default). Dropeada en Fase C (migration 000142).
+
+
+
 	row := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO prompt_captured
 		   (user_id, project_id,
@@ -90,8 +90,8 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, er
 
 func (r *pgRepository) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error) {
 	estOut := estimateTokens(in.ResponseChars)
-	// ISSUE-21.6 Fase D clean: WHERE clause sin organization_id.
-	// El param in.OrganizationID se ignora (single-org).
+
+
 	row := r.q(ctx).QueryRow(ctx,
 		`UPDATE prompt_captured
 		   SET response_chars       = $2,

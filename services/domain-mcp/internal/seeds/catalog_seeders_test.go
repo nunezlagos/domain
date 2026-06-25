@@ -1,7 +1,7 @@
-// Tests de los Seeders de catálogo global (skills/agent_templates/flows).
-// Validan el contrato del interface Seeder sin tocar DB: identidad,
-// versión, orden (después de los seeders base) y no-dev-only. El UPSERT
-// real se cubre en los tests de integración con testcontainers.
+
+
+
+
 
 package seeds
 

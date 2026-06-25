@@ -1,7 +1,7 @@
-// Flujo OTP del install local (issue-01.10): cuando ya existen usuarios
-// pero no hay credentials.json (re-install), el install pide el código
-// por el camino REAL (request-otp → email → verify-otp) y, SOLO en
-// local, busca el código automáticamente en mailpit — cero fricción.
+
+
+
+
 
 package main
 
@@ -84,7 +84,7 @@ func tryFetchOTP(client *http.Client, email string, since time.Time) (string, er
 		if !match {
 			continue
 		}
-		// Bajar el contenido y extraer el código
+
 		body, err := client.Get(mailpitBaseURL() + "/api/v1/message/" + msg.ID)
 		if err != nil {
 			continue

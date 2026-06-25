@@ -25,10 +25,10 @@ import (
 //   - mcp.handleAgentRun         → idem
 //   - mcp.handleSkillExecute     → idem
 func TestOldDispatchersRemoved(t *testing.T) {
-	// Nos paramos en la raíz del repo (caller pasa el workdir).
+
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	// wd es internal/dispatch. Subimos hasta que encontremos go.mod.
+
 	repoRoot := wd
 	for {
 		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
@@ -41,8 +41,8 @@ func TestOldDispatchersRemoved(t *testing.T) {
 		repoRoot = parent
 	}
 
-	// Funciones a chequear. Cada una matchea "<name>" como token
-	// (no substring) para reducir falsos positivos.
+
+
 	oldFuncs := []string{
 		"dispatchSync",
 		"dispatchWebhook",
@@ -51,16 +51,16 @@ func TestOldDispatchersRemoved(t *testing.T) {
 		"handleSkillExecute",
 	}
 
-	// Directorios a chequear. Excluimos .git, node_modules, reports,
-	// opencode-related dirs, y archivos de test/legacy.
+
+
 	excludeDirs := map[string]bool{
 		".git": true, "node_modules": true, "reports": true,
 		"docs/audit": true, "openspec": true, "bin": true,
 	}
 
-	// Recorremos el árbol buscando referencias.
-	// matchFunc: token exacto de la función como identificador Go
-	// (precedido por . o ; o { o ( o space, y seguido por ( o space).
+
+
+
 	violations := []string{}
 	err = filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -75,7 +75,7 @@ func TestOldDispatchersRemoved(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		// Excluir este test mismo.
+
 		if strings.HasSuffix(path, "dispatcher_test.go") {
 			return nil
 		}
@@ -85,11 +85,11 @@ func TestOldDispatchersRemoved(t *testing.T) {
 		}
 		text := string(body)
 		for _, fn := range oldFuncs {
-			// Detectar uso de la función. Buscamos:
-			//   - "fn(" → invocación
-			//   - ".fn(" → method call
-			//   - "func fn(" → definición
-			//   - "func (...) fn(" → método
+
+
+
+
+
 			for _, pat := range []string{".", "func ", "func(", " "} {
 				marker := pat + fn + "("
 				if strings.Contains(text, marker) {
@@ -107,9 +107,9 @@ func TestOldDispatchersRemoved(t *testing.T) {
 		for _, v := range violations {
 			t.Logf("  - %s", v)
 		}
-		// No fallamos todavía: 35.1 phase 5 (eliminar código viejo) es
-		// trabajo futuro. Solo loggeamos. Cuando se ejecute la
-		// limpieza, este test pasará silencioso.
+
+
+
 	}
 }
 

@@ -1,9 +1,9 @@
--- migration: create_agent_runs
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-08.3
--- description: agent_runs con tokens, cost, parent_run para multi-agent (HU-08.6)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE agent_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

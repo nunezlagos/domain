@@ -1,4 +1,4 @@
-// issue-17.2 tracing unit tests.
+
 
 package tracing
 
@@ -17,7 +17,7 @@ func TestSetup_Disabled_NoopProvider(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, shutdown)
 
-	// Tracer del provider noop debe funcionar sin errores ni network calls
+
 	_, span := otel.Tracer("test").Start(context.Background(), "test-span")
 	span.End()
 	require.NoError(t, shutdown(context.Background()))
@@ -32,13 +32,13 @@ func TestClamp(t *testing.T) {
 }
 
 func TestIsSafeKey(t *testing.T) {
-	// Allowed
+
 	require.True(t, IsSafeKey("http.method"))
 	require.True(t, IsSafeKey("llm.provider"))
 	require.True(t, IsSafeKey("user.id"))
 	require.True(t, IsSafeKey("org.id"))
 
-	// Forbidden
+
 	require.False(t, IsSafeKey("user.email"))
 	require.False(t, IsSafeKey("password"))
 	require.False(t, IsSafeKey("api_key"))
@@ -54,7 +54,7 @@ func TestSafeAttr_AllowedKey(t *testing.T) {
 
 func TestSafeAttr_ForbiddenKey_ReturnsEmpty(t *testing.T) {
 	a := SafeAttr("password", "secret")
-	// empty key value when not in whitelist
+
 	require.Equal(t, "", string(a.Key))
 }
 
@@ -77,7 +77,7 @@ func TestNormalizeRoute(t *testing.T) {
 }
 
 func TestHTTPMiddleware_NoErrorOnRequest(t *testing.T) {
-	// Setup noop provider para test sin OTLP endpoint real
+
 	_, _ = Setup(context.Background(), Config{Enabled: false})
 
 	called := false
@@ -98,7 +98,7 @@ func TestHTTPMiddleware_PropagatesTraceContext(t *testing.T) {
 
 	mw := HTTPMiddleware("test")
 	h := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// El span debe estar en el context (no validamos no-op SpanContext, solo que no crashea)
+
 		span := otel.Tracer("inner").Start
 		_ = span
 		w.WriteHeader(http.StatusCreated)
@@ -140,7 +140,7 @@ func TestSabotage_WhitelistDoesNotLeak(t *testing.T) {
 		require.NotContainsf(t, k, "secret", "key %q leaks secret", k)
 		require.NotContainsf(t, k, "rut", "key %q leaks rut", k)
 		require.NotContainsf(t, k, "content", "key %q leaks content", k)
-		// "token" en auth sentido prohibido EXCEPTO llm.*_tokens (unidades)
+
 		if !allowedTokensContext[k] {
 			require.NotContainsf(t, k, "token", "key %q leaks auth token", k)
 		}

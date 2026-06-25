@@ -41,7 +41,7 @@ func TestFlowAPI_ExportImport(t *testing.T) {
 	defer cleanup()
 	id, _ := createTestFlow(t, srv.URL, key, "exp-flow")
 
-	// Export JSON
+
 	resp, body := doJSON(t, "GET", srv.URL+"/api/v1/flows/"+id+"/export?format=json", key, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, resp.Header.Get("Content-Type"), "application/json")
@@ -49,13 +49,13 @@ func TestFlowAPI_ExportImport(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, &doc))
 	require.Equal(t, "exp-flow", doc["slug"])
 
-	// Export YAML
+
 	resp, body = doJSON(t, "GET", srv.URL+"/api/v1/flows/"+id+"/export?format=yaml", key, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, resp.Header.Get("Content-Type"), "yaml")
 	require.Contains(t, string(body), "slug: exp-flow")
 
-	// Import del mismo slug → 409
+
 	doc["slug"] = "exp-flow"
 	raw, _ := json.Marshal(doc)
 	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/flows/import", bytes.NewReader(raw))
@@ -66,7 +66,7 @@ func TestFlowAPI_ExportImport(t *testing.T) {
 	resp2.Body.Close()
 	require.Equal(t, http.StatusConflict, resp2.StatusCode)
 
-	// Import con slug nuevo → 201 + fidelidad del spec
+
 	doc["slug"] = "exp-flow-copy"
 	raw, _ = json.Marshal(doc)
 	req, _ = http.NewRequest("POST", srv.URL+"/api/v1/flows/import", bytes.NewReader(raw))
@@ -77,7 +77,7 @@ func TestFlowAPI_ExportImport(t *testing.T) {
 	defer resp3.Body.Close()
 	require.Equal(t, http.StatusCreated, resp3.StatusCode)
 
-	// Payload >1MB → 413
+
 	big := bytes.Repeat([]byte("x"), (1<<20)+10)
 	req, _ = http.NewRequest("POST", srv.URL+"/api/v1/flows/import", bytes.NewReader(big))
 	req.Header.Set("Authorization", "Bearer "+key)
@@ -105,7 +105,7 @@ func TestFlowAPI_PutOptimisticLocking(t *testing.T) {
 		},
 	}
 
-	// Timestamp stale (1h atras) → 412
+
 	raw, _ := json.Marshal(newBody)
 	req, _ := http.NewRequest("PUT", srv.URL+"/api/v1/flows/"+id, bytes.NewReader(raw))
 	req.Header.Set("Authorization", "Bearer "+key)
@@ -116,7 +116,7 @@ func TestFlowAPI_PutOptimisticLocking(t *testing.T) {
 	resp.Body.Close()
 	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
 
-	// Timestamp correcto → 200
+
 	raw, _ = json.Marshal(newBody)
 	req, _ = http.NewRequest("PUT", srv.URL+"/api/v1/flows/"+id, bytes.NewReader(raw))
 	req.Header.Set("Authorization", "Bearer "+key)
@@ -127,7 +127,7 @@ func TestFlowAPI_PutOptimisticLocking(t *testing.T) {
 	defer resp2.Body.Close()
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	// Verificar rename aplicado
+
 	resp3, body := doJSON(t, "GET", srv.URL+"/api/v1/flows/"+id, key, nil)
 	require.Equal(t, http.StatusOK, resp3.StatusCode)
 	require.Contains(t, string(body), "Renamed")

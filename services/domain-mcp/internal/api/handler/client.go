@@ -27,7 +27,7 @@ import (
 	clientsvc "nunezlagos/domain/internal/service/client"
 )
 
-// --- request bodies ---
+
 
 type createClientBody struct {
 	Name         string         `json:"name"`
@@ -52,7 +52,7 @@ type setClientStatusBody struct {
 	Status string `json:"status"`
 }
 
-// --- handlers ---
+
 
 func (a *API) createClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

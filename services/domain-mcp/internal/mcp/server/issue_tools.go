@@ -1,4 +1,4 @@
-// MCP tools para HU builder — issue-04.7
+
 
 package mcpserver
 
@@ -89,7 +89,7 @@ func toolHUDraftsList() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Hubuilder == nil {
@@ -102,7 +102,7 @@ func (d *Deps) handleHUCreateStart(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError("mode e initial_idea son requeridos"), nil
 	}
 	userID, _ := uuid.Parse(d.Principal.UserID)
-	// Fase 2: project_id obligatorio (issue_drafts.project_id es NOT NULL).
+
 	pidStr := req.GetString("project_id", "")
 	if pidStr == "" {
 		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
@@ -141,7 +141,7 @@ func (d *Deps) handleHUCreateAnswer(ctx context.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError("draft_id invalido"), nil
 	}
-	// Intentar parsear answer como JSON primero; si falla, usar string literal
+
 	var rawAnswer any = answer
 	var parsed any
 	if json.Unmarshal([]byte(answer), &parsed) == nil {
@@ -203,7 +203,7 @@ func (d *Deps) handleHUCreateCommit(ctx context.Context, req mcp.CallToolRequest
 		"committed_at": draft.CommittedAt,
 		"target_path":  draft.TargetPath,
 	}
-	// Si el Commit materializo el draft en un issue real, devolver su slug + id.
+
 	if draft.IssueID != nil {
 		out["issue_id"] = draft.IssueID.String()
 		out["issue_slug"] = draft.IssueSlug
@@ -262,14 +262,14 @@ func (d *Deps) handleHUDraftsList(ctx context.Context, req mcp.CallToolRequest) 
 // que aun tipean los nombres viejos. Los handlers son los mismos.
 func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	return []mcpgo.ServerTool{
-		// Nuevos nombres (issue_create_*)
+
 		{Tool: toolIssueCreateStart(), Handler: wrap.Wrap("domain_issue_create_start", deps.handleHUCreateStart)},
 		{Tool: toolIssueCreateAnswer(), Handler: wrap.Wrap("domain_issue_create_answer", deps.handleHUCreateAnswer)},
 		{Tool: toolIssueCreatePreview(), Handler: wrap.Wrap("domain_issue_create_preview", deps.handleHUCreatePreview)},
 		{Tool: toolIssueCreateCommit(), Handler: wrap.Wrap("domain_issue_create_commit", deps.handleHUCreateCommit)},
 		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", deps.handleHUCreateAbandon)},
 		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", deps.handleHUDraftsList)},
-		// Aliases legacy domain_hu_* (deprecados pero funcionando)
+
 		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", deps.handleHUCreateStart)},
 		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", deps.handleHUCreateAnswer)},
 		{Tool: toolHUCreatePreview(), Handler: wrap.Wrap("domain_hu_create_preview", deps.handleHUCreatePreview)},
@@ -279,8 +279,8 @@ func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	}
 }
 
-// --- Nuevos tool builders con nombres domain_issue_* (REQ-56).
-// Los descriptions hablan de "issue" en vez de "HU".
+
+
 
 func toolIssueCreateStart() mcp.Tool {
 	return mcp.NewTool("domain_issue_create_start",

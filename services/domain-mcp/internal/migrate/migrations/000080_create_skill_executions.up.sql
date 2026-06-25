@@ -1,9 +1,9 @@
--- migration: create_skill_executions
--- author: nunezlagos
--- issue: issue-05.5
--- description: log de ejecuciones de skills (sync + async) con params scrubbed
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS skill_executions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -23,12 +23,12 @@ CREATE TABLE IF NOT EXISTS skill_executions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS skill_executions_org_created_idx
   ON skill_executions (organization_id, created_at DESC);
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS skill_executions_pending_idx
   ON skill_executions (status) WHERE status IN ('pending','running');
 

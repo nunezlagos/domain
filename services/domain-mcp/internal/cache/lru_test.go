@@ -35,7 +35,7 @@ func TestLRU_Eviction(t *testing.T) {
 	c := New(2)
 	c.Set("a", []byte("1"), time.Hour)
 	c.Set("b", []byte("2"), time.Hour)
-	// a is now LRU; promote it
+
 	c.Get("a")
 	c.Set("c", []byte("3"), time.Hour) // should evict b
 	if _, ok := c.Get("b"); ok {

@@ -93,7 +93,7 @@ func TestService_RecordPhaseResult_IncrementsCompletedMetric(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, repo.markedCompleted)
-	// La métrica de completed debe haber sido incrementada
+
 	val := testMetricValue(t, reg, "domain_orchestrator_phase_results_total",
 		map[string]string{"phase": "sdd-apply", "mode": "express", "result": "completed"})
 	require.Equal(t, 1.0, val)
@@ -121,7 +121,7 @@ func TestService_RecordPhaseResult_IncrementsRequiredSaveMissingMetric(t *testin
 	}
 	s := &Service{Repo: repo, Phases: phases.NewRegistry(), Metrics: reg}
 
-	// Cliente reporta SIN code_reference → D5 falla
+
 	_, err := s.RecordPhaseResult(context.Background(), PhaseResultInput{
 		FlowRunStepID: stepID,
 		Output:        map[string]any{"summary": "no save"},

@@ -27,9 +27,9 @@ from .models import AgentTemplate
 class AgentTemplateViews(MaintainerViews):
     """MaintainerViews especializado para plantillas de agentes."""
 
-    # core.do_list usa el MaintainerService generico; delegamos en
-    # services.list_agenttemplates para devolver la lista bajo `agenttemplates`
-    # (list_key) con el orden por name del service.
+
+
+
     def do_list(self, search: str, page: int) -> dict:
         return services.list_agenttemplates(
             search=search, page=page, per_page=self.per_page
@@ -56,10 +56,10 @@ class AgentTemplateViews(MaintainerViews):
         }
 
 
-# Instancia que cablea todo. list_key="agenttemplates" -> el template recibe la
-# lista bajo `agenttemplates`. id_kwarg="template_id" -> casa con
-# <uuid:template_id> de las URLs. entity_label="Plantilla de Agente" -> core
-# descubre get_plantilla_de_agente/create_…/update_…/delete_… (alias del service).
+
+
+
+
 views = AgentTemplateViews(
     app_name="agenttemplates",
     model=AgentTemplate,

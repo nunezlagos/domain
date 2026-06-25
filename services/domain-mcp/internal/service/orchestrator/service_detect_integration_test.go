@@ -42,7 +42,7 @@ func TestService_Run_Detect_BuildsPlanWithoutPersistence(t *testing.T) {
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt, "primer prompt construido")
 	require.NotEmpty(t, res.Plan.Steps[0].SystemPrompt, "system_prompt hidratado desde BD")
 
-	// NO debe existir flow_run con ese ID en BD (dry-run)
+
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT COUNT(*) FROM flow_runs WHERE id=$1`, res.FlowRunID,
@@ -65,7 +65,7 @@ func TestService_Run_Detect_RequiresSeededFlow(t *testing.T) {
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
 	projectID := newProjectID(t, pools, orgID)
-	// flow NO seedeado a propósito; agent_templates tampoco
+
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	_, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,

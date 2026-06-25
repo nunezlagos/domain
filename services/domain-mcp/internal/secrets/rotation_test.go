@@ -17,7 +17,7 @@ func TestGeneratePassword_LenYDistintos(t *testing.T) {
 	if a == b {
 		t.Fatal("two GeneratePassword calls produced same value (entropy issue)")
 	}
-	// 32 bytes → base64url sin padding ~ 43 chars.
+
 	if len(a) < 40 || len(a) > 50 {
 		t.Fatalf("unexpected length: %d", len(a))
 	}

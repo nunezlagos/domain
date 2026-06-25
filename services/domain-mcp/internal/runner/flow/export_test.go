@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Puentes para tests de integración externos (package flowrunner_test).
+
 
 func BeginStepRowForTest(ctx context.Context, r *Runner, runID uuid.UUID, stepKey string) uuid.UUID {
 	return r.beginStepRow(ctx, runID, stepKey)

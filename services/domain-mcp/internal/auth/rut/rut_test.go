@@ -1,4 +1,4 @@
-// issue-02.7 RUT chileno unit tests.
+
 
 package rut
 
@@ -90,7 +90,7 @@ func TestValidate_MalformedRejected(t *testing.T) {
 }
 
 func TestCheckDigit_KnownValues(t *testing.T) {
-	// Algoritmo módulo 11 chileno: pesos 2..7 cíclicos desde menos significativo.
+
 	cases := map[int]string{
 		1:        "9",
 		5:        "1",

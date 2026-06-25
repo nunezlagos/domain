@@ -1,11 +1,11 @@
-// Bridge entre la TUI install feature y la logica real de install
-// (cmd/domain/install_cli.go via sub-process). Esta capa existe para
-// que la TUI sea testable sin ejecutar install real.
-//
-// Rediseño 2026-06-11: el runner ahora STREAMEA el output (stdout +
-// stderr) línea a línea via callback, para que la TUI muestre el
-// progreso en vivo (instalación verbosa). stderr se captura además
-// en un buffer para propagar el error real si el exit code != 0.
+
+
+
+
+
+
+
+
 
 package install
 
@@ -46,7 +46,7 @@ func runInstallStreaming(ctx context.Context, flags []string, onLine func(string
 func defaultInstallRunner(ctx context.Context, flags []string, onLine func(string)) (error, string) {
 	bin, err := exec.LookPath("domain")
 	if err != nil {
-		// Fallback: buscar ./bin/domain (convencion del repo).
+
 		if _, statErr := os.Stat("./bin/domain"); statErr == nil {
 			bin, _ = filepath.Abs("./bin/domain")
 		} else {

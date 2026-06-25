@@ -131,7 +131,7 @@ func TestBackupIfExists(t *testing.T) {
 		t.Errorf("backup no creado: %v", err)
 	}
 
-	// Caso archivo inexistente: no-op, no error
+
 	backup2, err := backupIfExists(filepath.Join(tmp, "ghost.json"), "20260615T000000Z")
 	if err != nil {
 		t.Errorf("inexistente debería ser no-op, got err: %v", err)

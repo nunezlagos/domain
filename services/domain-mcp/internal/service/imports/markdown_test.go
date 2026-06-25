@@ -53,6 +53,6 @@ key: value
 This should be body, not front matter.`
 	doc := imports.ParseMarkdownFile("x.md", content)
 	require.Empty(t, doc.Tags)
-	// Sin front matter cerrado → todo es body, title cae al filename.
+
 	require.Equal(t, "x", doc.Title)
 }

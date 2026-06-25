@@ -14,7 +14,7 @@ import (
 
 // Config concentra toda la configuración runtime de Domain.
 type Config struct {
-	// Env / Server
+
 	Env      string // dev | staging | prod
 	HTTPBind string
 	HTTPPort int
@@ -22,13 +22,13 @@ type Config struct {
 	HTTPReadTimeoutSeconds  int
 	HTTPWriteTimeoutSeconds int
 
-	// Database
+
 	DatabaseURL     string // app_user pool — runtime queries (RLS enforced)
 	DatabaseAuthURL     string // app_admin pool — auth/audit lookups (BYPASSRLS).
 	DatabaseReadOnlyURL string // issue-25.9 read replica DSN (opcional, default vacío)
-	// Si DatabaseAuthURL vacío, dev-fallback al pool de DatabaseURL con warning.
 
-	// S3 (storage issue-04.6, GDPR export issue-23.3)
+
+
 	S3Endpoint     string
 	S3Region       string
 	S3Bucket       string
@@ -36,7 +36,7 @@ type Config struct {
 	S3SecretKey    string
 	S3UsePathStyle bool
 
-	// SMTP (issue-20.2, issue-02.7 OTP, issue-21.2 invitations)
+
 	SMTPHost     string
 	SMTPPort     int
 	SMTPAuth     string // none | plain | login | cram-md5
@@ -45,44 +45,44 @@ type Config struct {
 	SMTPTLS      bool
 	SMTPFrom     string
 
-	// Logging (issue-17.3)
+
 	LogLevel     string
 	LogFormat    string // text | json
 	LogOutput    string // stdout | stderr
 	LogAddSource bool
 
-	// Metrics (issue-17.1)
+
 	MetricsEnabled bool
 	MetricsBind    string
 	MetricsPort    int
 
-	// Tracing (issue-17.2)
+
 	OTelEnabled         bool
 	OTelExporterOTLPURL string
 	OTelExporterProto   string // grpc | http/protobuf
 	OTelSampleRatio     float64
 	OTelServiceName     string
 
-	// Cifrado de campos at-rest (pgcrypto / pgp_sym). Passphrase simetrica que
-	// usan Issue/Rotate de auth_api_keys para cifrar la key en claro
-	// (key_ciphertext) y el dashboard para descifrarla. DEBE estar tambien en el
-	// env de domain-admin (Django) bajo el mismo nombre. Vacio = no se puede
-	// emitir keys cifradas (Issue/Rotate fallan con error claro).
+
+
+
+
+
 	FieldEncKey string
 
-	// Seeders (issue-01.7)
+
 	SeedOnBoot bool
 
-	// Rate limiting (issue-02.5)
+
 	RateLimitRequests  int
 	RateLimitWindow    string // e.g. "60s"
 
-	// CORS (issue-32.2). CSV de origins permitidos para /api/v1/*.
-	// Vacío = default deny (sin headers CORS).
-	// "*" único = wildcard dev (sin credentials).
+
+
+
 	CORSOrigins []string
 
-	// System crons (issue-08.11 heartbeat-watcher, issue-08.12 orphan-runs-audit)
+
 	HeartbeatWatcherEnabled        bool
 	HeartbeatWatcherTimeoutMinutes int    // default 5
 	HeartbeatWatcherTickSeconds    int    // default 60

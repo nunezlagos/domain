@@ -1,6 +1,6 @@
-// Tests para internal/tui/features/install (rediseño 2026-06-11):
-// config completa primero → summary → instalación automática con
-// streaming. NO ejecutamos install real (mock runner).
+
+
+
 
 package install
 
@@ -60,11 +60,11 @@ func TestUpdate_PlatformErr_GoesToDone(t *testing.T) {
 // selectMode simula: elegir el item idx y confirmar con Continuar.
 func selectMode(t *testing.T, m *Model, idx int) *Model {
 	t.Helper()
-	// number key elige sin avanzar
+
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + idx)}})
 	require.Nil(t, cmd, "number key no avanza")
 	appM := updated.(*Model)
-	// tab → Continuar, enter → SelectMsg
+
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyTab})
 	appM = updated.(*Model)
 	updated, cmd = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -89,7 +89,7 @@ func TestFlow_ModeCloud_GoesToDSNAfterDeps(t *testing.T) {
 	require.Equal(t, modeCloud, appM.mode)
 	require.Equal(t, stateDepCheck, appM.state)
 
-	// deps OK → enter → DSN prompt (cloud)
+
 	updated, _ := appM.Update(depsMsg{deps: nil})
 	appM = updated.(*Model)
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -128,7 +128,7 @@ func TestPortPrompt_OnlyDigits(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
 	appM := updated.(*Model)
 	require.Equal(t, "9", appM.port)
-	// Letra: ignorada
+
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	require.Equal(t, "9", updated.(*Model).port)
 }
@@ -137,7 +137,7 @@ func TestPortPrompt_InvalidPortBlocksWithMessage(t *testing.T) {
 	m := New()
 	m.state = statePortPrompt
 
-	// Privilegiado (<1024): no avanza y muestra error
+
 	m.port = "80"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
@@ -145,13 +145,13 @@ func TestPortPrompt_InvalidPortBlocksWithMessage(t *testing.T) {
 	require.NotEmpty(t, appM.portErr)
 	require.Contains(t, appM.View(), "1024-65535")
 
-	// Editar limpia el error
+
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
 	require.Empty(t, updated.(*Model).portErr)
 }
 
 func TestValidatePort_OccupiedByForeignApp(t *testing.T) {
-	// Ocupamos un puerto nosotros (simula otra app: no responde /health)
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer ln.Close()
@@ -181,14 +181,14 @@ func TestEmailPrompt_ValidatesAndAdvances(t *testing.T) {
 	m := New()
 	m.state = stateEmailPrompt
 
-	// Email inválido: no avanza, muestra error
+
 	m.email = "sin-arroba"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM := updated.(*Model)
 	require.Equal(t, stateEmailPrompt, appM.state)
 	require.NotEmpty(t, appM.emailErr)
 
-	// Email válido: avanza a init
+
 	appM.email = "yo@example.com"
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	appM = updated.(*Model)
@@ -217,7 +217,7 @@ func TestDSNPrompt_EmptyDSNDoesNotAdvance(t *testing.T) {
 func TestInitPrompt_SelectNoViaContinue(t *testing.T) {
 	m := New()
 	m.state = stateInitPrompt
-	// down → "no", espacio elige, tab+enter confirma
+
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	appM := updated.(*Model)
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeySpace})
@@ -236,12 +236,12 @@ func TestInitPrompt_SelectNoViaContinue(t *testing.T) {
 func TestAgentsPrompt_MultiSelectBoth(t *testing.T) {
 	m := New()
 	m.state = stateAgentsPrompt
-	// opencode ya viene marcado; bajar a claude-code y marcarlo
+
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	appM := updated.(*Model)
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeySpace})
 	appM = updated.(*Model)
-	// confirmar
+
 	updated, _ = appM.Update(tea.KeyMsg{Type: tea.KeyTab})
 	appM = updated.(*Model)
 	updated, cmd := appM.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -274,8 +274,8 @@ func TestSummary_EnterStartsInstallWithFlags(t *testing.T) {
 	require.Equal(t, stateRunning, appM.state)
 	require.NotNil(t, cmd)
 
-	// Drenar el canal directo (el cmd real es un tea.Batch con el tick
-	// de animación; en tests leemos los mensajes del runner nomás).
+
+
 	appM = drainRun(t, appM)
 	require.NoError(t, appM.err)
 	require.Contains(t, appM.lines, "[1/9] Detecting state", "output streameado visible")
@@ -369,7 +369,7 @@ func TestView_Summary_ShowsConfig(t *testing.T) {
 	require.Contains(t, view, "Instalar")
 }
 
-// --- helpers ---
+
 
 type errFake struct{}
 

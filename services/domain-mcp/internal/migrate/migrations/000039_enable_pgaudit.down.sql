@@ -1,4 +1,4 @@
--- Quita security labels de pgaudit (no falla si la extension no está).
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgaudit') THEN
@@ -8,5 +8,5 @@ BEGIN
   END IF;
 END$$;
 
--- NO dropea la extension porque otros services/users pueden usarla.
--- DROP EXTENSION pgaudit; -- solo si decision explícita.
+
+

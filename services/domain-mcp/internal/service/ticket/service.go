@@ -129,8 +129,8 @@ func (s *Service) UpdateAs(ctx context.Context, orgID, id, actor uuid.UUID, in U
 		}
 		in.Priority = &v
 	}
-	// Si el caller solo está reasignando, no exigir holder del lock.
-	// El dashboard reasigna para "quitar" tickets a quien los retiene.
+
+
 	pureReassign := in.AssigneeID != nil &&
 		in.Title == nil && in.DescriptionMD == nil && in.IssueType == nil &&
 		in.Priority == nil && in.Labels == nil && in.ParentID == nil &&

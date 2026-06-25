@@ -1,9 +1,9 @@
--- migration: create_skills
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-05.1 + HU-05.6
--- description: skills 4 tipos (prompt/code/api/mcp_tool) + JSON schemas + contract
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE skills (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

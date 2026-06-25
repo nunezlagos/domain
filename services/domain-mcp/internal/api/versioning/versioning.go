@@ -111,7 +111,7 @@ func (c *Catalog) Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Sunset enforcement
+
 		if v.State == StateSunset || (!v.SunsetAt.IsZero() && time.Now().After(v.SunsetAt)) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			if v.MigrationDocsURL != "" {
@@ -121,7 +121,7 @@ func (c *Catalog) Middleware(next http.Handler) http.Handler {
 			_, _ = w.Write([]byte(`{"error":{"code":"version_sunset","message":"API version no longer supported"}}`))
 			return
 		}
-		// Deprecated headers
+
 		if v.State == StateDeprecated {
 			if !v.DeprecatedAt.IsZero() {
 				w.Header().Set("Deprecation", "@"+strconv.FormatInt(v.DeprecatedAt.Unix(), 10))

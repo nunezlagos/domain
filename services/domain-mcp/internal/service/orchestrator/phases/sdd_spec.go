@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// sddSpecHandler — fase sdd-spec. system_prompt en BD.
+
 
 type sddSpecHandler struct{}
 
@@ -41,8 +41,8 @@ func (h *sddSpecHandler) Build(_ context.Context, in Input) (*Output, error) {
 		AgentTemplateSlug: "sdd-spec",
 		SystemPrompt:      "",
 		UserPrompt:        b.String(),
-		// D5: la spec queda persistida en issues table; el orquestador
-		// guarda un knowledge_doc con el draft_id para indexar.
+
+
 		SuggestedSaves: []SuggestedSave{
 			{Type: "knowledge_doc", Required: false,
 				Hint: "guardar knowledge_doc apuntando al draft_id del issuebuilder si aplica"},

@@ -35,7 +35,7 @@ func AddDomainHook(doc map[string]any) map[string]any {
 	}
 
 	ss, _ := hooks["SessionStart"].([]any)
-	// Make a copy of the existing array plus the new hook
+
 	newSS := make([]any, 0, len(ss)+1)
 	newSS = append(newSS, ss...)
 	newSS = append(newSS, map[string]any{

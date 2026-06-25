@@ -129,7 +129,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_agent("Existente", slug="dup")
         r = self.client.post(reverse("agents:create"), self._data(slug="dup"))
-        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
+
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Agent.objects.filter(slug="dup").count(), 1)
 

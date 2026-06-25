@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-25.8 verifica timeouts y connection limits aplicados a roles.
+
 
 package migrate_test
 
@@ -37,14 +37,14 @@ func setupLimits(t *testing.T) (*pgxpool.Pool, func()) {
 
 	bootstrap, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
-	// Habilitar LOGIN + password en app_user para que las role-level GUC
-	// configuradas por migration 29 (statement_timeout, lock_timeout, etc.)
-	// se apliquen al login. SET ROLE NO re-aplica role-level GUCs en pg.
+
+
+
 	_, err = bootstrap.Exec(ctx, `ALTER ROLE app_user WITH LOGIN PASSWORD 'apppass'`)
 	require.NoError(t, err)
 	bootstrap.Close()
 
-	// Reconectar como app_user directamente.
+
 	host, _ := pgC.Host(ctx)
 	port, _ := pgC.MappedPort(ctx, "5432/tcp")
 	appDSN := "postgres://app_user:apppass@" + host + ":" + port.Port() + "/test?sslmode=disable"
@@ -94,7 +94,7 @@ func TestSabotage_StatementTimeout_AbortsLongQuery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Bajamos timeout a 200ms para no esperar 30s en test
+
 	conn, err := pool.Acquire(ctx)
 	require.NoError(t, err)
 	defer conn.Release()

@@ -57,11 +57,11 @@ type Service struct {
 	LLM     *llm.Factory
 	Knowledge *knowsvc.Service
 	Observation *obssvc.Service
-	// PromptLoader opcional: si está seteado y devuelve un body no vacío,
-	// ESE body se usa como SystemPrompt en lugar de la const hardcodeada.
-	// Esto permite editar el prompt de análisis desde el dashboard (tabla
-	// prompts, slug='analysis') sin recompilar. Si es nil, devuelve "" o
-	// devuelve error, el servicio cae al const DefaultAnalysisSystemPrompt.
+
+
+
+
+
 	PromptLoader func(ctx context.Context) (string, error)
 }
 
@@ -86,22 +86,22 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("analysis: LLM factory required")
 	}
 
-	// Resolver project_id desde la org (knowledge_docs y observations requieren FK)
+
 	projectID, err := s.resolveProjectID(ctx, in.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fase 1: explorar — generar contenido de análisis con el LLM
+
 	content, err := s.explore(ctx, in)
 	if err != nil {
 		return nil, fmt.Errorf("analysis explore: %w", err)
 	}
 
-	// Inferir título desde las primeras líneas del contenido
+
 	title := inferTitle(content, in.RawText)
 
-	// Fase 2: write_doc — persistir como knowledge_doc
+
 	doc, _, err := s.Knowledge.Save(ctx, knowsvc.SaveInput{
 		OrganizationID: in.OrganizationID,
 		ProjectID:      projectID,
@@ -119,7 +119,7 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("analysis save knowledge doc: %w", err)
 	}
 
-	// Fase 3: crear observation indexable apuntando al doc
+
 	obsContent := fmt.Sprintf("Analysis: %s\n\nSource prompt: %s\n\nKnowledge doc: %s",
 		title, in.RawText, doc.ID.String())
 	_, err = s.Observation.Save(ctx, obssvc.SaveInput{
@@ -204,7 +204,7 @@ func (s *Service) explore(ctx context.Context, in Input) (string, error) {
 // inferTitle extrae un título desde el contenido markdown o fallback al
 // prompt original truncado.
 func inferTitle(content, rawText string) string {
-	// Intentar extraer el primer heading h1/h2
+
 	lines := strings.SplitN(content, "\n", 5)
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -215,7 +215,7 @@ func inferTitle(content, rawText string) string {
 			return strings.TrimPrefix(trimmed, "## ")
 		}
 	}
-	// Fallback: primeras palabras del prompt original
+
 	words := strings.Fields(rawText)
 	if len(words) > 8 {
 		words = words[:8]

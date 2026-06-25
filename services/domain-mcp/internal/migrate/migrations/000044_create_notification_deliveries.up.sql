@@ -1,9 +1,9 @@
--- migration: create_notification_deliveries
--- author: nunezlagos
--- issue: HU-20.1
--- description: log de delivery de notificaciones (todos los canales)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS notification_deliveries (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

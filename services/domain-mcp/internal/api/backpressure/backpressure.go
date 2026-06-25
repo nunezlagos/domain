@@ -16,25 +16,25 @@ import (
 
 // Errores devueltos por CheckQueue.
 var (
-	// ErrQueueFull queue global excedida → 429 Retry-After.
+
 	ErrQueueFull = errors.New("queue_full")
-	// ErrOrgQuotaExceeded org excedió su límite concurrente → 429 sin retry inmediato.
+
 	ErrOrgQuotaExceeded = errors.New("org_queue_limit_exceeded")
 )
 
 // Queue describe una queue con cap global y per-org.
 type Queue struct {
-	// Name identifica la queue (usado en métricas y errores).
+
 	Name string
-	// Table es la tabla SQL que respalda la queue.
+
 	Table string
-	// PendingCondition es la WHERE clause que define "pending" (sin trailing AND).
+
 	PendingCondition string
-	// GlobalCap máximo total pending. 0 = sin cap global.
+
 	GlobalCap int
-	// PerOrgCap máximo pending por organización. 0 = sin cap per-org.
+
 	PerOrgCap int
-	// OrgColumn nombre de la columna de organization_id en la tabla.
+
 	OrgColumn string
 }
 
@@ -68,7 +68,7 @@ type Limiter struct {
 //
 // Hace 2 queries paralelas-conceptualmente (1 query con CTE para evitar 2 roundtrips).
 func (l *Limiter) CheckQueue(ctx context.Context, q Queue, orgID uuid.UUID) error {
-	// Si caps en 0 → skip
+
 	if q.GlobalCap == 0 && q.PerOrgCap == 0 {
 		return nil
 	}
@@ -80,7 +80,7 @@ func (l *Limiter) CheckQueue(ctx context.Context, q Queue, orgID uuid.UUID) erro
 		q.Table, q.PendingCondition, q.OrgColumn)
 	var globalCount, orgCount int
 	if err := l.Pool.QueryRow(ctx, sql, orgID).Scan(&globalCount, &orgCount); err != nil {
-		// En caso de fail del check, permitir (fail-open) — log en caller.
+
 		return fmt.Errorf("check queue: %w", err)
 	}
 	if q.GlobalCap > 0 && globalCount >= q.GlobalCap {

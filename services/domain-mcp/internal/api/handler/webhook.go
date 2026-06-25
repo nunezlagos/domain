@@ -32,7 +32,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 
 	hook, secret, err := a.WebhookService.ResolveBySlug(r.Context(), slug)
 	if errors.Is(err, webhook.ErrNotFound) {
-		// Mismo response que 404 para evitar enumeration
+
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -47,7 +47,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar HMAC segun source_type
+
 	if !verifyWebhookSignature(hook.SourceType, secret, body, r) {
 		_ = a.WebhookService.RecordDelivery(r.Context(), hook.ID, body,
 			collectHeaders(r), r.RemoteAddr, "signature_invalid", nil, "HMAC mismatch")
@@ -55,15 +55,15 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construir inputs segun mapping
+
 	inputs := buildInputs(body, hook.InputsMapping)
 
-	// ISSUE-28.7: dispatch via WebhookDispatcher (bounded queue + WaitGroup +
-	// per-job timeout). Si la cola esta llena o el dispatcher cerro → 503.
+
+
 	if a.WebhookDispatcher == nil {
-		// Fallback al comportamiento legacy si el dispatcher no esta
-		// configurado (backward compat para tests que no inicializan
-		// el struct completo).
+
+
+
 		go a.runWebhookTarget(r.Context(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
 	} else {
 		job := webhookJob{
@@ -92,11 +92,11 @@ func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Requ
 	case "github":
 		return webhook.VerifyHMAC(secret, body, r.Header.Get("X-Hub-Signature-256"))
 	case "gitlab":
-		// GitLab usa token plaintext en header (no HMAC)
+
 		token := r.Header.Get("X-Gitlab-Token")
 		return token != "" && token == string(secret)
 	case "bitbucket":
-		// Bitbucket no firma por default; verificacion por IP allowlist (no impl)
+
 		return true
 	case "generic":
 		return webhook.VerifyHMAC(secret, body, r.Header.Get("X-Domain-Signature"))
@@ -106,8 +106,8 @@ func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Requ
 
 func buildInputs(payload []byte, mapping map[string]any) map[string]any {
 	inputs := map[string]any{"raw": json.RawMessage(payload)}
-	// Mapping JSONPath-like simple: {"foo": "$.field.path"}
-	// Implementacion MVP: copia field-a-field si values son strings con prefix $.
+
+
 	var parsed map[string]any
 	_ = json.Unmarshal(payload, &parsed)
 	for k, v := range mapping {

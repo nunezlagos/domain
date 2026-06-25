@@ -50,12 +50,12 @@ type Wizard struct {
 	HTTPClient  *http.Client
 	NonInteractive bool
 	NoOpencode  bool
-	// Path al binario domain (para invocar `domain setup opencode`).
+
 	DomainBinPath string
-	// Path al binario domain-mcp (para configurar el agente).
+
 	DomainMCPPath string
-	// SaveCredentials es la funcion que persiste las credenciales.
-	// Inyectable para tests. Default: SaveCredentialsDefault.
+
+
 	SaveCredentials func(*Credentials) error
 }
 
@@ -76,7 +76,7 @@ func (w *Wizard) Run(ctx context.Context) error {
 	fmt.Fprintln(w.Err, "Domain Onboard Wizard")
 	fmt.Fprintln(w.Err, "")
 
-	// 1. Detectar first-run
+
 	fmt.Fprintln(w.Err, "Detecting first-run...")
 	isFirstRun, userCount, err := w.detectFirstRun(ctx)
 	if err != nil {
@@ -85,21 +85,21 @@ func (w *Wizard) Run(ctx context.Context) error {
 	fmt.Fprintf(w.Err, "  %s (DB has %d users)\n", boolLabel(isFirstRun, "yes", "no"), userCount)
 	fmt.Fprintln(w.Err, "")
 
-	// 2. Server URL (permite cambiarlo)
+
 	baseURL, err := w.ask("Server URL", w.BaseURL, w.NonInteractive)
 	if err != nil {
 		return err
 	}
 	w.BaseURL = strings.TrimRight(baseURL, "/")
 
-	// 3. Email
+
 	email, err := w.ask("Your email", "", w.NonInteractive)
 	if err != nil {
 		return err
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 
-	// 4. Bootstrap u OTP segun first-run
+
 	creds, err := w.auth(ctx, isFirstRun, email)
 	if err != nil {
 		return err
@@ -107,14 +107,14 @@ func (w *Wizard) Run(ctx context.Context) error {
 	creds.BaseURL = w.BaseURL
 	creds.IssuedAt = time.Now()
 
-	// 5. Save credenciales
+
 	if err := w.SaveCredentials(creds); err != nil {
 		return fmt.Errorf("save credentials: %w", err)
 	}
 	fmt.Fprintf(w.Err, "✓ API key saved to %s (mode 0600)\n", CredentialsPath())
 	fmt.Fprintln(w.Err, "")
 
-	// 6. Configurar opencode (opcional)
+
 	if w.NoOpencode {
 		fmt.Fprintln(w.Out, "✓ Onboard complete (skipping opencode config).")
 		return nil
@@ -132,7 +132,7 @@ func (w *Wizard) Run(ctx context.Context) error {
 	}
 
 	if err := w.setupOpencode(ctx, creds.APIKey); err != nil {
-		// No es fatal: el user puede correr `domain setup opencode` despues.
+
 		fmt.Fprintf(w.Err, "⚠ opencode setup failed: %v\n", err)
 		fmt.Fprintln(w.Err, "  You can run it later with: domain setup opencode")
 	} else {
@@ -188,7 +188,7 @@ func (w *Wizard) bootstrap(ctx context.Context, email string) (*Credentials, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
-		// DB ya no es first-run (race o segundo onboard simultaneo)
+
 		return nil, fmt.Errorf("bootstrap rejected: another user was created concurrently; re-run onboard")
 	}
 	if resp.StatusCode == 422 {
@@ -381,7 +381,7 @@ func SaveCredentialsDefault(c *Credentials) error {
 		return err
 	}
 	if _, err := os.Stat(path); err == nil {
-		// Backup
+
 		_ = os.Rename(path, path+".bak")
 	}
 	data, err := json.MarshalIndent(c, "", "  ")

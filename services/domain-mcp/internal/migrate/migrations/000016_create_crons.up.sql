@@ -1,9 +1,9 @@
--- migration: create_crons
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-10.1
--- description: cron schedules user-defined (no confundir con system_crons)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE crons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

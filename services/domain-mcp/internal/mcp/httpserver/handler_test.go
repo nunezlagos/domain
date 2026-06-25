@@ -1,14 +1,14 @@
-// issue-31.1 mcp-http-vps-mode — tests del handler HTTP /mcp.
-//
-// Cubre:
-//   - Sin header Authorization → 401 con body uniforme.
-//   - Header con formato invalido → 401.
-//   - Token resuelve a principal pero el cliente no envia request MCP
-//     valido → respuesta JSON-RPC error (lo emite mcp-go), pero el codigo
-//     HTTP indica que el handler PASO la fase de auth (delegacion al
-//     StreamableHTTPServer ocurrio).
-//   - Initialize MCP completo → handler responde con server info que
-//     incluye los tools `domain_*` registrados.
+
+
+
+
+
+
+
+
+
+
+
 
 package httpserver
 
@@ -52,10 +52,10 @@ func newTestHandler() (*Handler, *fakeResolver) {
 			Role:           "user",
 		},
 	}
-	// Builder con Deps vacios (servicios nil). Para tests de auth + boot
-	// del MCP basta: registramos las tools (que solo necesitan los builders
-	// estaticos, no los services) y respondemos initialize/tools/list. Los
-	// handlers concretos no se invocan en estos tests.
+
+
+
+
 	builder := &Builder{Base: mcptools.Deps{
 		ServerName: "domain-mcp-http-test",
 		ServerVer:  "test",
@@ -109,7 +109,7 @@ func TestHandler_InvalidBearerFormat_Returns401(t *testing.T) {
 
 func TestHandler_InvalidToken_Returns401(t *testing.T) {
 	h, _ := newTestHandler()
-	// Token con formato correcto pero que el resolver rechaza.
+
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer domk_test_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
 	rec := httptest.NewRecorder()
@@ -121,9 +121,9 @@ func TestHandler_InvalidToken_Returns401(t *testing.T) {
 
 func TestHandler_ValidToken_InitializeReturnsServerInfo(t *testing.T) {
 	h, _ := newTestHandler()
-	// Request MCP initialize. mcp-go responde 200 con el server info +
-	// capabilities, lo que demuestra que (a) el auth paso y (b) el MCP
-	// server fue construido + delegado.
+
+
+
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test-client","version":"0.0.1"}}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+validAPIKey)
@@ -135,9 +135,9 @@ func TestHandler_ValidToken_InitializeReturnsServerInfo(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want 200 — body=%s", rec.Code, rec.Body.String())
 	}
-	// La respuesta puede ser SSE o JSON segun headers; basta con que
-	// contenga el nombre del servidor + alguna mention de tools en la
-	// section capabilities.
+
+
+
 	raw, _ := io.ReadAll(rec.Body)
 	out := string(raw)
 	if !strings.Contains(out, "domain-mcp-http-test") {
@@ -150,7 +150,7 @@ func TestHandler_ValidToken_InitializeReturnsServerInfo(t *testing.T) {
 
 func TestHandler_ValidToken_ToolsListReturnsDomainTools(t *testing.T) {
 	h, _ := newTestHandler()
-	// Pedimos tools/list — la respuesta debe incluir varios tools con prefijo domain_*.
+
 	body := `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+validAPIKey)
@@ -162,7 +162,7 @@ func TestHandler_ValidToken_ToolsListReturnsDomainTools(t *testing.T) {
 		t.Fatalf("status: got %d, want 200 — body=%s", rec.Code, rec.Body.String())
 	}
 	out := rec.Body.String()
-	// Al menos uno de los tools core deberia aparecer en el listado.
+
 	for _, expect := range []string{"domain_mem_save", "domain_mem_search"} {
 		if !strings.Contains(out, expect) {
 			t.Errorf("tools/list does not contain %s — got: %s", expect, out)

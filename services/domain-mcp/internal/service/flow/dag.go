@@ -82,7 +82,7 @@ func kahnSort(nodes map[string]*node) ([]string, error) {
 			queue = append(queue, n.id)
 		}
 	}
-	// Orden alfabético para determinismo
+
 	sort.Strings(queue)
 	sorted := []string{}
 	visited := map[string]bool{}
@@ -148,7 +148,7 @@ func detectCycle(nodes map[string]*node) []string {
 		if color[id] == WHITE {
 			cycle = []string{}
 			if dfs(id) {
-				// Extraer el ciclo desde la primera aparición del nodo repetido
+
 				last := cycle[len(cycle)-1]
 				for i, c := range cycle {
 					if c == last && i < len(cycle)-1 {

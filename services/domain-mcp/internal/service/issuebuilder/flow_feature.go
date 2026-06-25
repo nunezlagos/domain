@@ -56,8 +56,8 @@ var featureFlow = []step{
 		Key:    "audience",
 		Prompt: "¿Quién es la audiencia principal?",
 		optionsFn: func(ctx context.Context, pool *pgxpool.Pool, d *Draft) ([]Option, error) {
-			// Tabla audiences fue archivada (ver issue-01.9 archivada). Devolvemos
-			// catálogo estático mientras se reemplaza por agent_personalities (issue-08.5).
+
+
 			return []Option{
 				{Value: "dx-engineer", Label: "DX engineer"},
 				{Value: "platform-engineer", Label: "Platform engineer"},

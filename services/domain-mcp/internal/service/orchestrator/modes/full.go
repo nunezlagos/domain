@@ -71,9 +71,9 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 			Slug:              slug,
 			AgentTemplateSlug: string(slug),
 		}
-		// Sólo el primer step se construye con su prompt. Los demás
-		// quedan con UserPrompt="" para ser rellenados por
-		// Service.RecordPhaseResult cuando llegue su turno.
+
+
+
 		if i == 0 {
 			stepInput := in
 			stepInput.PhaseSlug = slug
@@ -88,10 +88,10 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 			step.RetryPolicy = out.RetryPolicy
 			step.SkillThreshold = out.SkillThreshold
 		} else {
-			// Para los demás steps necesitamos al menos SuggestedSaves y
-			// RetryPolicy declarados — el cliente los ve en el plan al
-			// arrancar para entender expectativas del flow. UserPrompt
-			// se rellena cuando la fase anterior termine.
+
+
+
+
 			out, err := h.Build(ctx, phases.Input{
 				OrganizationID: in.OrganizationID,
 				UserID:         in.UserID,
@@ -101,14 +101,14 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 				PriorOutputs:   map[phases.PhaseSlug]map[string]any{},
 			})
 			if err != nil {
-				// Si el handler no tolera priors vacíos, dejamos los
-				// defaults — el RecordPhaseResult lo reconstruye después.
+
+
 				step.RetryPolicy = phases.RetryAutoEligible
 			} else {
 				step.SuggestedSaves = out.SuggestedSaves
 				step.RetryPolicy = out.RetryPolicy
 				step.SkillThreshold = out.SkillThreshold
-				// NO copio UserPrompt: lazy build via RecordPhaseResult
+
 			}
 		}
 		plan.Steps = append(plan.Steps, step)

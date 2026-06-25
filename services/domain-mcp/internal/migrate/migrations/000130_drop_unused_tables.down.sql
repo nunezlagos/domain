@@ -1,7 +1,7 @@
--- Re-create the dropped tables to support rollback.
--- Schemas copied from the original migrations (verbatim).
 
--- 1. intake_attachments (from 000058)
+
+
+
 CREATE TABLE IF NOT EXISTS intake_attachments (
     id          uuid PRIMARY KEY,
     intake_id   uuid NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS intake_attachments (
     status      text NOT NULL DEFAULT 'active'
 );
 
--- 2. project_links (from 000022)
+
 CREATE TABLE IF NOT EXISTS project_links (
     id                uuid PRIMARY KEY,
     organization_id   uuid NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS project_links (
     status            text NOT NULL DEFAULT 'active'
 );
 
--- 3. event_log (from 000090)
+
 CREATE TABLE IF NOT EXISTS event_log (
     id              uuid PRIMARY KEY,
     type            varchar(64) NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS event_log (
     status          text NOT NULL DEFAULT 'active'
 );
 
--- 4. llm_semantic_cache (from 000080)
+
 CREATE TABLE IF NOT EXISTS llm_semantic_cache (
     id               varchar(64) PRIMARY KEY,
     organization_id  uuid NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS llm_semantic_cache (
     status           text NOT NULL DEFAULT 'active'
 );
 
--- 5. domain_query_stats_history (from 000088)
+
 CREATE TABLE IF NOT EXISTS domain_query_stats_history (
     id               bigserial PRIMARY KEY,
     captured_at      timestamptz NOT NULL DEFAULT now(),

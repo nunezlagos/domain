@@ -19,7 +19,7 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
     (forms.JSONField parsea y valida que sea JSON bien formado).
     """
 
-    # core.forms.SlugNormalizationMixin usa estos atributos para la unicidad.
+
     slug_model = Flow
     slug_field = "slug"
 
@@ -42,8 +42,8 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
     spec = forms.JSONField(
         label="Spec (JSON)",
         required=False,  # {} es valido; Django trata {} como "empty", asi que
-                         # no lo marcamos required y normalizamos None/empty a {}
-                         # en clean_spec (la columna es NOT NULL pero {} la satisface).
+
+
         initial=dict,
         widget=forms.Textarea(attrs={
             "class": "form-control form-control--code",
@@ -76,10 +76,10 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Flow | None = None, **kwargs):
-        # InstanceAwareMixin (via SlugNormalizationMixin) captura instance para
-        # que clean_slug se excluya a si mismo en edicion.
+
+
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edicion (unbound).
+
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
@@ -91,9 +91,9 @@ class FlowForm(SlugNormalizationMixin, forms.Form):
             self.fields["seed_version"].initial = instance.seed_version
 
     def clean_spec(self):
-        # forms.JSONField ya parseo/valido el JSON (un string mal formado falla
-        # antes de llegar aqui). Solo normalizamos vacio -> {} (la columna jsonb
-        # es NOT NULL) y exigimos que sea un objeto JSON.
+
+
+
         spec = self.cleaned_data.get("spec")
         if spec in (None, "", [], (), {}):
             return {}

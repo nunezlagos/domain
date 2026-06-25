@@ -63,7 +63,7 @@ func backupFile(path string, keepLast int) (*BackupResult, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	// Dedup: si el último .bak tiene el mismo hash, skip.
+
 	if matches, prev := lastBackupMatchesHash(path, data); matches {
 		return &BackupResult{
 			Path:         path,
@@ -78,10 +78,10 @@ func backupFile(path string, keepLast int) (*BackupResult, error) {
 	if err := os.WriteFile(backupPath, data, 0o600); err != nil {
 		return nil, fmt.Errorf("write backup %s: %w", backupPath, err)
 	}
-	// Prune si keepLast > 0
+
 	if keepLast > 0 {
 		if err := pruneBackups(path, keepLast); err != nil {
-			// No fatal — loggeable, pero el backup actual se creó OK.
+
 			fmt.Fprintf(os.Stderr, "warn: prune backups for %s: %v\n", path, err)
 		}
 	}
@@ -125,10 +125,10 @@ func pruneBackups(originalPath string, keepLast int) error {
 	if len(matches) <= keepLast {
 		return nil
 	}
-	// Ordenar por nombre (los timestamps en el suffix son sortables
-	// lexicograficamente porque son RFC3339 sin separators).
-	// matches[0] es el más viejo, matches[len-1] es el más nuevo.
-	// Mantener los últimos keepLast.
+
+
+
+
 	toDelete := matches[:len(matches)-keepLast]
 	for _, p := range toDelete {
 		if err := os.Remove(p); err != nil {
@@ -175,7 +175,7 @@ func IsDomainManaged(path string) (bool, error) {
 	return strings.Contains(string(data), DomainManagedMarker), nil
 }
 
-// === Restore ===
+
 
 // RestoreResult resume una operacion de restore.
 type RestoreResult struct {
@@ -191,7 +191,7 @@ type RestoreResult struct {
 // y el path destino. Si el destino es credentials.json, valida
 // la key con un ping a /auth/first-run.
 func Restore(backupPath, targetPath, baseURL string) (*RestoreResult, error) {
-	// Verificar que el path parece un backup (tiene suffix .bak.<ts>)
+
 	if !isBackupPath(backupPath) {
 		return nil, fmt.Errorf("%w: %s", ErrNoBackup, backupPath)
 	}
@@ -199,7 +199,7 @@ func Restore(backupPath, targetPath, baseURL string) (*RestoreResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read backup: %w", err)
 	}
-	// Escribir sobre target
+
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func Restore(backupPath, targetPath, baseURL string) (*RestoreResult, error) {
 		Target: targetPath,
 		Bytes:  int64(len(data)),
 	}
-	// Validacion post-restore
+
 	if strings.HasSuffix(targetPath, "credentials.json") {
 		creds, err := ParseCredentials(data)
 		if err == nil {
@@ -234,13 +234,13 @@ func Restore(backupPath, targetPath, baseURL string) (*RestoreResult, error) {
 // isBackupPath retorna true si el path tiene el formato *.bak.<RFC3339>.
 func isBackupPath(path string) bool {
 	_, file := filepath.Split(path)
-	// file debe terminar en .bak.<ts> con ts = 15 chars (YYYYMMDDTHHMMSSZ)
+
 	if !strings.Contains(file, ".bak.") {
 		return false
 	}
 	idx := strings.LastIndex(file, ".bak.")
 	ts := file[idx+len(".bak."):]
-	// RFC3339 con Z: 20060102T150405Z = 16 chars
+
 	return len(ts) == 16 && strings.HasSuffix(ts, "Z")
 }
 
@@ -291,7 +291,7 @@ func ListBackups(originalPath string) ([]string, error) {
 	if matches == nil {
 		matches = []string{}
 	}
-	// Ya vienen ordenados lexicograficamente (RFC3339 format).
+
 	return matches, nil
 }
 

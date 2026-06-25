@@ -53,11 +53,11 @@ func TestCatalog_OverrideFromJSON(t *testing.T) {
 
 	cat, err := loadCatalogFromPath(path)
 	require.NoError(t, err)
-	// El nuevo provider del override está.
+
 	require.True(t, cat["mycompany_memory"], "override debe agregar mycompany_memory")
-	// engram (del hardcoded) sigue ahí.
+
 	require.True(t, cat["engram"], "hardcoded debe persistir")
-	// "memory" del hardcoded fue removido por non_memory_providers.
+
 	require.False(t, cat["memory"], "non_memory_providers debe ganar")
 }
 

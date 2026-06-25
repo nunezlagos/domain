@@ -59,7 +59,7 @@ class Agent(SoftDeleteModel):
     seed_managed = models.BooleanField(default=False)
     seed_version = models.IntegerField(null=True, blank=True)
     is_user_modified = models.BooleanField(default=False)
-    # Redeclara status (heredado de SoftDeleteModel) solo para agregar choices.
+
     status = models.CharField(max_length=20, default="active", choices=STATUS_CHOICES)
 
     class Meta:
@@ -76,7 +76,7 @@ class Agent(SoftDeleteModel):
 
     @property
     def is_active(self) -> bool:
-        # Activo = status 'active' y sin soft-delete.
+
         return self.status == "active" and self.deleted_at is None
 
 

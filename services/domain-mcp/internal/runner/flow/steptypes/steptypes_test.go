@@ -17,7 +17,7 @@ var (
 	testUserID = uuid.MustParse("00000000-0000-0000-0000-000000000002")
 )
 
-// --- Mock implementations ---
+
 
 type mockSkillCaller struct {
 	mu     sync.Mutex
@@ -132,7 +132,7 @@ func defaultInput() RunInput {
 	}
 }
 
-// --- Tests: Registry ---
+
 
 func TestRegistry(t *testing.T) {
 	r := NewRegistry()
@@ -158,7 +158,7 @@ func TestRegistryPanicOnDuplicate(t *testing.T) {
 	})
 }
 
-// --- Tests: SkillCallRunner ---
+
 
 func TestSkillCallRunner_Valid(t *testing.T) {
 	caller := &mockSkillCaller{result: "validated", err: nil}
@@ -196,7 +196,7 @@ func TestSkillCallRunner_MissingSlug(t *testing.T) {
 func TestSkillCallRunner_NoCaller(t *testing.T) {
 	input := defaultInput()
 	input.Config = map[string]any{"skill_slug": "test"}
-	// SkillCaller is nil
+
 
 	r := &SkillCallRunner{}
 	_, err := r.Run(context.Background(), input)
@@ -216,7 +216,7 @@ func TestSkillCallRunner_CallerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "skill not found")
 }
 
-// --- Tests: LLMCallRunner ---
+
 
 func TestLLMCallRunner_ValidWithTemplate(t *testing.T) {
 	provider := &mockLLMProvider{result: "Respuesta: este es un resumen."}
@@ -288,7 +288,7 @@ func TestLLMCallRunner_NoProvider(t *testing.T) {
 		"prompt_template": "Hello",
 		"model":           "gpt-4",
 	}
-	// LLMProvider is nil
+
 
 	r := &LLMCallRunner{}
 	_, err := r.Run(context.Background(), input)
@@ -296,7 +296,7 @@ func TestLLMCallRunner_NoProvider(t *testing.T) {
 	assert.Contains(t, err.Error(), "LLMProvider not configured")
 }
 
-// --- Tests: CodeExecRunner ---
+
 
 func TestCodeExecRunner_Stub(t *testing.T) {
 	input := defaultInput()
@@ -318,7 +318,7 @@ func TestCodeExecRunner_MissingScript(t *testing.T) {
 	assert.Contains(t, err.Error(), "script required")
 }
 
-// --- Tests: ConditionalRunner ---
+
 
 func TestConditionalRunner_IfBranch(t *testing.T) {
 	input := defaultInput()
@@ -382,7 +382,7 @@ func TestConditionalRunner_InvalidExpression(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot evaluate")
 }
 
-// --- Tests: ParallelRunner ---
+
 
 func TestParallelRunner_ThreeBranches(t *testing.T) {
 	skillCaller := &mockSkillCaller{result: "checked", err: nil}
@@ -458,7 +458,7 @@ func TestParallelRunner_MissingBranches(t *testing.T) {
 	assert.Contains(t, err.Error(), "branches[] required")
 }
 
-// --- Tests: WaitRunner ---
+
 
 func TestWaitRunner_Duration(t *testing.T) {
 	input := defaultInput()
@@ -477,7 +477,7 @@ func TestWaitRunner_Duration(t *testing.T) {
 }
 
 func TestWaitRunner_ConditionMet(t *testing.T) {
-	// Condition is true immediately
+
 	input := defaultInput()
 	input.Config = map[string]any{
 		"until_condition":          "true",
@@ -516,7 +516,7 @@ func TestWaitRunner_BothDurationAndCondition(t *testing.T) {
 	assert.Contains(t, err.Error(), "use either duration_seconds OR until_condition")
 }
 
-// --- Tests: HumanInputRunner ---
+
 
 func TestHumanInputRunner_CreatesTask(t *testing.T) {
 	taskCreator := &mockTaskCreator{
@@ -567,7 +567,7 @@ func TestHumanInputRunner_NoTaskCreator(t *testing.T) {
 	assert.Contains(t, err.Error(), "TaskCreator not configured")
 }
 
-// --- Tests: AgentRunRunner ---
+
 
 func TestAgentRunRunner_Valid(t *testing.T) {
 	agentRunner := &mockAgentRunner{
@@ -641,7 +641,7 @@ func TestAgentRunRunner_TemplateInInput(t *testing.T) {
 	assert.Equal(t, "Help John", agentRunner.calls[0].input)
 }
 
-// --- Tests: SubFlowRunner ---
+
 
 func TestSubFlowRunner_Valid(t *testing.T) {
 	subRunner := &mockSubFlowRunner{
@@ -689,7 +689,7 @@ func TestSubFlowRunner_NoRunner(t *testing.T) {
 	assert.Contains(t, err.Error(), "SubFlowLauncher not configured")
 }
 
-// --- Tests: TransformRunner ---
+
 
 func TestTransformRunner_JSONPath(t *testing.T) {
 	input := defaultInput()
@@ -785,7 +785,7 @@ func TestTransformRunner_UnsupportedEngine(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported engine")
 }
 
-// --- Tests: Template Resolver ---
+
 
 func TestResolveTemplate_Inputs(t *testing.T) {
 	result := ResolveTemplate("Hello {{input.name}}, you are {{input.age}}", map[string]any{"name": "Alice", "age": 30}, nil)
@@ -829,13 +829,13 @@ func TestResolveAllStrings(t *testing.T) {
 	resolved := ResolveAllStrings(cfg, inputs, nil)
 	assert.Equal(t, "Hello Alice", resolved["greeting"])
 	assert.Equal(t, 42, resolved["count"])
-	// Nested maps are not recursively resolved
+
 	nested, ok := resolved["nested"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "{{input.foo}}", nested["inner"])
 }
 
-// --- Tests: evalBool ---
+
 
 func TestEvalBool_TrueLiteral(t *testing.T) {
 	v, err := evalBool("true")
@@ -880,7 +880,7 @@ func TestEvalBool_Invalid(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- Integration test: mixed types sequence ---
+
 
 func TestRegistryRoundTrip(t *testing.T) {
 	r := NewRegistry()
@@ -893,14 +893,14 @@ func TestRegistryRoundTrip(t *testing.T) {
 	}
 }
 
-// --- Sabotaje: quitar validación de skill_slug → test falla ---
+
 
 func TestSkillCallRunner_Sabotage_NoValidation(t *testing.T) {
-	// This test verifies that the validation exists.
-	// If someone removes the "skill_slug required" check, this test fails.
+
+
 	input := defaultInput()
 	input.Config = map[string]any{
-		// Intentionally missing skill_slug
+
 		"params": map[string]any{"email": "test@example.com"},
 	}
 	input.SkillCaller = &mockSkillCaller{}
@@ -911,7 +911,7 @@ func TestSkillCallRunner_Sabotage_NoValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "skill_slug", "error MUST mention skill_slug")
 }
 
-// --- Test context cancellation ---
+
 
 func TestWaitRunner_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -926,7 +926,7 @@ func TestWaitRunner_ContextCancellation(t *testing.T) {
 	assert.Contains(t, err.Error(), "canceled")
 }
 
-// --- Test HumanInputRunner with template resolution ---
+
 
 func TestHumanInputRunner_TemplateInQuestion(t *testing.T) {
 	taskCreator := &mockTaskCreator{
@@ -949,7 +949,7 @@ func TestHumanInputRunner_TemplateInQuestion(t *testing.T) {
 	assert.Equal(t, "¿Aprobar el envío a Acme Corp?", resultMap["question"])
 }
 
-// --- Test ParallelRunner with context values ---
+
 
 func TestParallelRunner_ConfigPreservesContext(t *testing.T) {
 	skillCaller := &mockSkillCaller{result: "done"}
@@ -972,7 +972,7 @@ func TestParallelRunner_ConfigPreservesContext(t *testing.T) {
 	assert.Len(t, results, 1)
 }
 
-// --- Test ConditionalRunner with numeric comparison ---
+
 
 func TestConditionalRunner_NumericCondition(t *testing.T) {
 	input := defaultInput()
@@ -986,7 +986,7 @@ func TestConditionalRunner_NumericCondition(t *testing.T) {
 	assert.Equal(t, "if", out.(map[string]any)["branch"])
 }
 
-// --- Test sub_flow with template resolved inputs ---
+
 
 func TestSubFlowRunner_WithTemplates(t *testing.T) {
 	subRunner := &mockSubFlowRunner{
@@ -1001,8 +1001,8 @@ func TestSubFlowRunner_WithTemplates(t *testing.T) {
 	input.Inputs = map[string]any{"channel": "email", "name": "Alice"}
 	input.SubFlowLauncher = subRunner
 
-	// Note: flow_slug is NOT templated (it's a string lookup key), but sub-inputs can be.
-	// SubFlowRunner passes config as-is, the sub-flow resolves its own inputs.
+
+
 	r := &SubFlowRunner{}
 	out, err := r.Run(context.Background(), input)
 	require.NoError(t, err)
@@ -1010,7 +1010,7 @@ func TestSubFlowRunner_WithTemplates(t *testing.T) {
 	assert.Equal(t, "run-abc", out.(map[string]any)["flow_run_id"])
 }
 
-// --- Test: context timeout in WaitRunner duration ---
+
 
 func TestWaitRunner_DurationWithContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -1025,7 +1025,7 @@ func TestWaitRunner_DurationWithContextTimeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
-// --- Test: parallel with unknown branch type ---
+
 
 func TestParallelRunner_UnknownBranchType(t *testing.T) {
 	input := defaultInput()
@@ -1041,7 +1041,7 @@ func TestParallelRunner_UnknownBranchType(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown type")
 }
 
-// --- Test: jsonpath on nested array ---
+
 
 func TestTransformRunner_JSONPathArrayIndex(t *testing.T) {
 	input := defaultInput()
@@ -1065,7 +1065,7 @@ func TestTransformRunner_JSONPathArrayIndex(t *testing.T) {
 	assert.Equal(t, "alice@example.com", out)
 }
 
-// --- Test: JSONPath wildcard ---
+
 
 func TestTransformRunner_JSONPathWildcard(t *testing.T) {
 	input := defaultInput()
@@ -1088,7 +1088,7 @@ func TestTransformRunner_JSONPathWildcard(t *testing.T) {
 	assert.Len(t, arr, 2)
 }
 
-// --- Test: config helpers ---
+
 
 func TestConfigHelpers(t *testing.T) {
 	cfg := map[string]any{
@@ -1107,7 +1107,7 @@ func TestConfigHelpers(t *testing.T) {
 	assert.Equal(t, []any(nil), configSlice(cfg, "missing"))
 }
 
-// --- Test: Registry get all types ---
+
 
 func TestRegistry_AllTypesPresent(t *testing.T) {
 	r := NewRegistry()
@@ -1122,7 +1122,7 @@ func TestRegistry_AllTypesPresent(t *testing.T) {
 	}
 }
 
-// --- Test: LLMCallRunner resolved prompt with step outputs ---
+
 
 func TestLLMCallRunner_StepOutputsInPrompt(t *testing.T) {
 	provider := &mockLLMProvider{result: "analysis done"}
@@ -1154,7 +1154,7 @@ func TestEvalBool_NumberComparisonWithStrings(t *testing.T) {
 	assert.False(t, v)
 }
 
-// --- Test: Wait condition with resolved template ---
+
 
 func TestWaitRunner_ConditionFromStepOutput(t *testing.T) {
 	input := defaultInput()
@@ -1175,7 +1175,7 @@ func TestWaitRunner_ConditionFromStepOutput(t *testing.T) {
 	assert.Equal(t, "condition", resultMap["trigger"])
 }
 
-// --- Test: parallel with error on first branch ---
+
 
 func TestParallelRunner_OrderedErrors(t *testing.T) {
 	skillCaller := &mockSkillCaller{err: errors.New("skill failed")}
@@ -1203,7 +1203,7 @@ func TestParallelRunner_OrderedErrors(t *testing.T) {
 	assert.Equal(t, "", errs[1])
 }
 
-// --- Test: JQ simple pipe ---
+
 
 func TestTransformRunner_JQSimpleSelect(t *testing.T) {
 	input := defaultInput()

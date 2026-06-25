@@ -16,8 +16,8 @@ from core.tests.factories import make
 
 from maintainers.skills.models import Skill, SkillVersion
 
-# Proyecto por defecto para forzar choques de slug dentro de un mismo scope
-# no-global (la unicidad real es por (project_id, slug)).
+
+
 DEFAULT_PROJECT = uuid.UUID("22222222-2222-2222-2222-222222222222")
 
 

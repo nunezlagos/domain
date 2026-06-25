@@ -51,7 +51,7 @@ func TestFlow_LinearTraversal_ContextAccumulates(t *testing.T) {
 		require.Contains(t, res.Outputs, id, "output de %s debe estar en el contexto final", id)
 	}
 
-	// Las 3 filas de steps completadas en orden
+
 	rows, err := f.runner.Pool.Query(ctx, `
 		SELECT step_key FROM flow_run_steps
 		WHERE flow_run_id = $1 AND status = 'completed' ORDER BY created_at ASC`, res.RunID)
@@ -136,7 +136,7 @@ func TestSubFlow_LineagePersisted(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, flowrunner.StatusCompleted, res.Status)
 
-	// Run hijo con lineage completo
+
 	var parentRunID *string
 	var ancestors []string
 	var depth int
@@ -149,13 +149,13 @@ func TestSubFlow_LineagePersisted(t *testing.T) {
 	require.Equal(t, []string{"lineage-parent"}, ancestors)
 	require.Equal(t, 1, depth)
 
-	// ListParents: el padre referencia al hijo
+
 	parents, err := f.flows.ListParents(ctx, f.orgID, "lineage-child")
 	require.NoError(t, err)
 	require.Len(t, parents, 1)
 	require.Equal(t, "lineage-parent", parents[0].Slug)
 
-	// Un flow sin padres → vacío
+
 	none, err := f.flows.ListParents(ctx, f.orgID, "lineage-parent")
 	require.NoError(t, err)
 	require.Empty(t, none)

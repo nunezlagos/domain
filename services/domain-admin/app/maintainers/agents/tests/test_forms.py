@@ -65,7 +65,7 @@ class AgentFormCreateTests(MaintainerTestCase):
         self.assertIn("model", form.errors)
 
     def test_slug_invalido_falla(self):
-        # SlugField rechaza espacios a nivel de campo (antes del clean_slug).
+
         form = AgentForm(data=self._data(slug="con espacios"))
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)

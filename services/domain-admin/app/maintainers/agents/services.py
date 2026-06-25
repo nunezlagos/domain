@@ -20,13 +20,13 @@ from core.service import MaintainerService
 from .models import Agent, AgentTemplate, AgentVersion
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class AgentError(Exception):
     """Error de operacion sobre agentes."""
 
 
-# Service base reusado: list (search name/slug/provider/model + paginacion) +
-# signal. El list parte de un qs que excluye soft-deleted.
+
+
 class AgentsService(MaintainerService):
     model = Agent
     search_fields = ("name", "slug", "provider", "model")
@@ -208,10 +208,10 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convencion de core.views.MaintainerViews.
-# entity_label="Agente" -> _entity_attr() == "agente"; core busca
-# get_agente / create_agente / update_agente / delete_agente. Apuntamos esos
-# nombres a las funciones reales. (NO hay toggle: agents no alterna estado.)
+
+
+
+
 get_agente = get_agent
 create_agente = create_agent
 update_agente = update_agent

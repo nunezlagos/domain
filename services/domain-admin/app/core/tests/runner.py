@@ -25,10 +25,10 @@ class ManagedModelTestRunner(DiscoverRunner):
         super().setup_test_environment(**kwargs)
 
     def setup_databases(self, **kwargs):
-        # La DB de test la crea Django desde los modelos (NO corre las migs de
-        # domain-mcp), asi que la extension pgcrypto que instala la mig 000168 no
-        # existe aqui. La creamos a mano para que pgp_sym_encrypt/decrypt (cifrado
-        # at-rest de API keys) funcione en los tests.
+
+
+
+
         cfg = super().setup_databases(**kwargs)
         from django.db import connection
 

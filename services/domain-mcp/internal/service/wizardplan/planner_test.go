@@ -26,8 +26,8 @@ func TestPlanner_PrioritizesSeverityForBugFix(t *testing.T) {
 	planner := &wp.Planner{}
 	q, err := planner.NextQuestion(context.Background(), env)
 	require.NoError(t, err)
-	// Severity tiene prioridad 1 después de intent (que ya está provided por NewEnvelope+Touch).
-	// Como intent NO está touched aún, va primero. Forzamos intent ya conocido:
+
+
 	env.Touch(wp.SlotIntent, "fix", "intent_classifier", 0.9, "")
 	q, err = planner.NextQuestion(context.Background(), env)
 	require.NoError(t, err)

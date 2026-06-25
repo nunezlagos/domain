@@ -144,9 +144,9 @@ func TestSaveSnapshot_WithCompression(t *testing.T) {
 		return []byte("compressed-data"), 50, nil
 	}
 
-	// SaveSnapshot should compress via mockCompress and call Save
-	// We can't easily test persistence without DB, but we can verify
-	// the compression wrapper doesn't panic and returns no error
+
+
+
 	err := store.SaveSnapshot(context.Background(), snap, mockCompress)
 	if err != nil {
 		t.Fatalf("SaveSnapshot: %v", err)

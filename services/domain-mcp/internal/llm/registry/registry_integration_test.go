@@ -12,8 +12,8 @@ import (
 	"nunezlagos/domain/internal/llm/registry"
 )
 
-// REQ-42.3: model_registry dropeada. El catálogo de pricing vive en código
-// (constantes), por lo que estos tests ya no requieren DB ni testcontainers.
+
+
 
 func setup(t *testing.T) (*registry.Registry, func()) {
 	t.Helper()
@@ -35,8 +35,8 @@ func TestRegistry_CostUSD(t *testing.T) {
 	r, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	// claude-sonnet-4-6: 3 USD/M input + 15 USD/M output
-	// usage: 1M input + 100K output → 3 + 1.5 = 4.5 USD
+
+
 	cost, err := r.CostUSD(ctx, "anthropic", "claude-sonnet-4-6", llm.Usage{
 		PromptTokens: 1_000_000, CompletionTokens: 100_000,
 	})

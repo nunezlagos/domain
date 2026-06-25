@@ -35,7 +35,7 @@ func TestInstallShellWrapper_Fresh(t *testing.T) {
 	require.Contains(t, content, WrapperMarkerOpen)
 	require.Contains(t, content, WrapperMarkerClose)
 	require.Contains(t, content, "opencode() {")
-	// Original content preserved
+
 	require.Contains(t, content, "export FOO=bar")
 }
 
@@ -131,7 +131,7 @@ func TestSyntaxCheck(t *testing.T) {
 	require.NoError(t, os.WriteFile(rcfile, []byte("export A=1\n"), 0o600))
 	require.NoError(t, syntaxCheck("zsh", rcfile))
 
-	// Invalid syntax
+
 	require.NoError(t, os.WriteFile(rcfile, []byte("if broken\n"), 0o600))
 	err := syntaxCheck("zsh", rcfile)
 	require.Error(t, err)

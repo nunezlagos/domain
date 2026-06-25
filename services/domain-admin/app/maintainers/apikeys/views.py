@@ -32,9 +32,9 @@ from .models import ApiKey
 class ApiKeyViews(MaintainerViews):
     """MaintainerViews especializado para API keys (payload + secreto + ctx)."""
 
-    # --- payload: el service de update espera name/expires_at/status; el de
-    #     create ademas necesita el `user` resuelto a instancia (lo hace
-    #     do_create). update_api_key NO recibe user (dueño inmutable).
+
+
+
     def _form_payload(self, form) -> dict:
         return {
             "name": form.cleaned_data["name"],
@@ -57,10 +57,10 @@ class ApiKeyViews(MaintainerViews):
             user=owner,
             **self._form_payload(form),
         )
-        # Se cuela en el flash de create() via mensaje extra; el generico ya
-        # agrega "API Key creado correctamente.", aqui sumamos el secreto. Ahora
-        # tambien queda visible en el detalle (key_plaintext), asi que no es la
-        # unica chance de copiarlo.
+
+
+
+
         messages.warning(
             self._request,
             f"Secreto de '{api_key.name}' (tambien visible en el detalle): {secret}",
@@ -70,8 +70,8 @@ class ApiKeyViews(MaintainerViews):
     def do_update(self, instance, form):
         return services.update_api_key(instance, **self._form_payload(form))
 
-    # --- create/edit guardan el request para que do_create pueda emitir el
-    #     mensaje con el secreto (el hook do_create no recibe request).
+
+
     def create(self, request):
         self._request = request
         return super().create(request)
@@ -80,8 +80,8 @@ class ApiKeyViews(MaintainerViews):
         self._request = request
         return super().edit(request, **kwargs)
 
-    # --- list con filtros (usuario/estado). Guardamos el request para que
-    #     do_list/list_context lean los GET; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
@@ -95,12 +95,12 @@ class ApiKeyViews(MaintainerViews):
             user_id=user or None, status=status or None,
         )
 
-    # --- contextos: los templates de apikeys usan `apikey_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "API Keys"
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el container de filtros.
+
         ctx["user_options"] = User.objects.filter(status="active").order_by("email")
         ctx["status_options"] = ApiKey.STATUS_CHOICES
         ctx["selected_user"] = req.GET.get("user") if req else ""
@@ -117,16 +117,16 @@ class ApiKeyViews(MaintainerViews):
         }
 
     def detail_context(self, instance) -> dict:
-        # La key en claro para mostrarla/copiarla sale descifrada de
-        # key_ciphertext (pgp_sym_decrypt) con fallback al key_plaintext viejo. Se
-        # sobreescribe el atributo en la instancia (managed=False, NO persiste)
-        # para que el template siga usando apikey_obj.key_plaintext sin cambios.
+
+
+
+
         instance.key_plaintext = services.get_api_key_plaintext(instance.pk)
         return {"apikey_obj": instance, "object": instance}
 
 
-# Instancia que cablea todo. list_key="api_keys" -> el template recibe la lista
-# bajo `api_keys`. id_kwarg="apikey_id" -> casa con <uuid:apikey_id> de las URLs.
+
+
 views = ApiKeyViews(
     app_name="apikeys",
     model=services.ApiKey,

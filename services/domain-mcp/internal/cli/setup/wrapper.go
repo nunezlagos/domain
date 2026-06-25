@@ -78,7 +78,7 @@ func UninstallShellWrapper(rcfile string) error {
 		return nil
 	}
 
-	// Include the newline before the open marker if present
+
 	before := ""
 	if openIdx > 0 && content[openIdx-1] == '\n' {
 		before = content[:openIdx-1]

@@ -69,13 +69,13 @@ type Worker struct {
 	Embedder    llm.Embedder
 	Logger      *slog.Logger
 
-	// PollInterval es el tiempo entre intentos. Default 30s.
+
 	PollInterval time.Duration
-	// BatchSize es cuántos intakes procesa por tick. Default 5.
+
 	BatchSize int
-	// DedupThreshold default 0.75.
+
 	DedupThreshold float64
-	// MergeThreshold (≥) sugiere append_to_hu en lugar de create_new. Default 0.92.
+
 	MergeThreshold float64
 }
 
@@ -136,7 +136,7 @@ func (w *Worker) ProcessOne(ctx context.Context, p *intake.Payload) error {
 		return errors.New("classifier and structurer are required")
 	}
 
-	// 1. Classify
+
 	cls, err := w.Classifier.Classify(ctx, p.RawText)
 	if err != nil {
 		return fmt.Errorf("classify: %w", err)
@@ -146,13 +146,13 @@ func (w *Worker) ProcessOne(ctx context.Context, p *intake.Payload) error {
 		return fmt.Errorf("persist classification: %w", err)
 	}
 
-	// 2. Structure (produce proposed title + description + hu_draft).
+
 	st, err := w.Structurer.Structure(ctx, p.RawText, cls)
 	if err != nil {
 		return fmt.Errorf("structure: %w", err)
 	}
 
-	// 3. Dedup vs existing requirements/HUs.
+
 	var candidates []DedupCandidate
 	merge := intake.MergeActionCreateNew
 	if w.Embedder != nil && w.DedupSearch != nil {

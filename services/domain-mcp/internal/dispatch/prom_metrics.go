@@ -19,9 +19,9 @@ func (p *PromMetricsRecorder) ObserveDispatch(source, targetType, result string,
 	if p == nil || p.Reg == nil {
 		return
 	}
-	// Si los metrics no están registrados en el Registry (versión
-	// vieja), los creamos lazy. Esto evita romper tests que usan un
-	// Registry sin DispatchTotal.
+
+
+
 	counter := p.Reg.DispatchTotal
 	if counter == nil {
 		counter = p.Reg.RegisterDispatchTotal()

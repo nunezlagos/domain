@@ -138,7 +138,7 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 	}
 	rows.Close()
 
-	// Marca como "in flight" extendiendo el next_retry_at para que otro worker no la tome.
+
 	for _, j := range jobs {
 		_, _ = tx.Exec(ctx,
 			`UPDATE webhook_outbound_deliveries
@@ -161,14 +161,14 @@ func (d *Dispatcher) ProcessPending(ctx context.Context, limit int) (int, error)
 func (d *Dispatcher) deliver(ctx context.Context, deliveryID, subID uuid.UUID, eventType string, payload []byte, attempt int) {
 	sub, err := d.Svc.GetByIDInternal(ctx, subID)
 	if err != nil {
-		// La subscription fue borrada; cancelar delivery.
+
 		_, _ = d.Pool.Exec(ctx,
 			`UPDATE webhook_outbound_deliveries SET status='failed', error_message=$1
 			 WHERE id=$2`, "subscription_not_found", deliveryID)
 		return
 	}
-	// ow-006: circuit breaker — endpoint en cooldown, reprogramar sin
-	// gastar intento ni golpear el receptor.
+
+
 	if d.circuitOpen(sub) {
 		retryAt := sub.LastFailureAt.Add(CBCooldown)
 		_, _ = d.Pool.Exec(ctx,

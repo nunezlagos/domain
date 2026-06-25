@@ -71,12 +71,12 @@ func TestCreateValidation(t *testing.T) {
 func TestSabotage_UniqueViolationCheck(t *testing.T) {
 	require.False(t, isUniqueViolation(nil))
 	require.False(t, isUniqueViolation(ErrNotFound))
-	// PgError envuelto con código UniqueViolation
+
 	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "requirements_slug_idx"}
 	require.True(t, isUniqueViolation(pgErr))
 	require.True(t, isUniqueViolation(fmt.Errorf("wrapped: %w", pgErr)))
-	// Errores no-pg no califican
+
 	require.False(t, isUniqueViolation(fmt.Errorf("generic error mentioning 23505 in text")))
-	// Otro código pg (ej FK) no califica
+
 	require.False(t, isUniqueViolation(&pgconn.PgError{Code: pgerrcode.ForeignKeyViolation}))
 }

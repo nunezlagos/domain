@@ -27,7 +27,7 @@ type TableInfo struct {
 	Indexes      []IndexInfo  `json:"indexes"`
 	ForeignKeys  []FKInfo     `json:"foreign_keys"`
 	Category     string       `json:"category"`
-	// REQ-42.10: agrupamiento por FUNCIONALIDAD leido de table_catalog (HU 42.1).
+
 	GroupKey   string `json:"group_key"`   // grupo funcional, p.ej. "auth", "sdd" ("" si no esta en el catalogo)
 	GroupLabel string `json:"group_label"` // etiqueta legible del grupo
 	SortOrder  int    `json:"sort_order"`  // orden de presentacion (catalogo)
@@ -79,10 +79,10 @@ func (a *API) getDBSchema(w http.ResponseWriter, r *http.Request) {
 func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) {
 	info := &SchemaInfo{}
 
-	// 1. Tablas operativas (excluyendo schema_migrations y pg_*).
-	//    REQ-42.10: LEFT JOIN table_catalog para traer grupo/label/orden
-	//    funcional (HU 42.1). Las tablas sin entrada en el catalogo quedan
-	//    con group_key vacio (el front las agrupa por prefijo como fallback).
+
+
+
+
 	rows, err := pool.Query(ctx, `
 		SELECT t.table_name,
 		       COALESCE(c.grupo, ''),
@@ -112,7 +112,7 @@ func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) 
 	}
 	info.TotalCount = len(info.Tables)
 
-	// 2. Para cada tabla: columnas, FKs, indices, row count
+
 	for i := range info.Tables {
 		tbl := &info.Tables[i]
 		if err := loadTableInfo(ctx, pool, tbl); err != nil {
@@ -124,7 +124,7 @@ func loadDBSchema(ctx context.Context, pool *pgxpool.Pool) (*SchemaInfo, error) 
 }
 
 func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) error {
-	// Columnas
+
 	colRows, err := pool.Query(ctx, `
 		SELECT
 			c.column_name,
@@ -165,7 +165,7 @@ func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) erro
 		}
 	}
 
-	// Foreign keys
+
 	fkRows, err := pool.Query(ctx, `
 		SELECT
 			tc.constraint_name,
@@ -190,7 +190,7 @@ func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) erro
 				tbl.ForeignKeys = append(tbl.ForeignKeys, fk)
 			}
 		}
-		// marcar columnas FK
+
 		for i := range tbl.Columns {
 			for _, fk := range tbl.ForeignKeys {
 				if containsWord(fk.Columns, tbl.Columns[i].Name) {
@@ -200,7 +200,7 @@ func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) erro
 		}
 	}
 
-	// Indices
+
 	idxRows, err := pool.Query(ctx, `
 		SELECT
 			i.indexname,
@@ -225,7 +225,7 @@ func loadTableInfo(ctx context.Context, pool *pgxpool.Pool, tbl *TableInfo) erro
 		}
 	}
 
-	// Row count
+
 	if err := pool.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM %s.%s`, tbl.Schema, tbl.Name)).Scan(&tbl.RowCount); err != nil {
 		tbl.RowCount = 0
 	}
@@ -270,14 +270,14 @@ func contains(s, sub string) bool {
 }
 
 func containsWord(s, word string) bool {
-	// CSV split check
+
 	for i := 0; i < len(s); i++ {
 		j := i
 		for j < len(s) && s[j] != ',' {
 			j++
 		}
 		field := s[i:j]
-		// trim spaces
+
 		for len(field) > 0 && field[0] == ' ' {
 			field = field[1:]
 		}

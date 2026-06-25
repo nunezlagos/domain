@@ -84,7 +84,7 @@ func assertNotTracked(t *testing.T, repoRoot, path string) {
 	if err == nil {
 		t.Fatalf("%s está tracked en git (NO debería):\n%s", path, out)
 	}
-	// err != nil es lo esperado (archivo no está tracked).
-	// Silenciar el error real, ya asssertamos arriba.
+
+
 	_ = out
 }

@@ -1,6 +1,6 @@
--- Revierte a ON DELETE SET NULL (estado post-000161). OJO: con project_id NOT NULL
--- (000167) esto reintroduce el bug de borrado; solo tiene sentido si tambien se
--- revierte 000167.
+
+
+
 ALTER TABLE issue_drafts            DROP CONSTRAINT issue_drafts_project_id_fkey;
 ALTER TABLE issue_drafts            ADD CONSTRAINT issue_drafts_project_id_fkey            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 

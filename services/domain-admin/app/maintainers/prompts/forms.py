@@ -63,12 +63,12 @@ class PromptForm(InstanceAwareMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Prompt | None = None, **kwargs):
-        # InstanceAwareMixin captura instance -> self.instance.
+
         super().__init__(*args, instance=instance, **kwargs)
         if instance is not None:
-            # project_id no se edita una vez creado.
+
             self.fields["project_id"].widget.attrs["readonly"] = True
-            # Valores iniciales solo al renderizar (unbound).
+
             if not self.is_bound:
                 self.fields["project_id"].initial = instance.project_id
                 self.fields["slug"].initial = instance.slug
@@ -92,8 +92,8 @@ class PromptForm(InstanceAwareMixin, forms.Form):
         if not slug or version is None:
             return cleaned
 
-        # En edicion el proyecto no cambia; usamos el del instance. En alta
-        # usamos el project_id enviado en el form.
+
+
         if self.instance is not None:
             project_id = self.instance.project_id
         else:

@@ -1,8 +1,8 @@
 //go:build integration
 
-// issue-21.6 Fase B: integration test del BudgetCache que cubre S1.3
-// org_flow_config. Valida que la cache funciona con la nueva PK (id BIGSERIAL)
-// y que single-org (LIMIT 1 sin organization_id) sigue sirviendo el valor.
+
+
+
 
 package flow
 
@@ -81,21 +81,21 @@ func TestBudgetCache_InvalidateRefetches(t *testing.T) {
 
 	cache := NewBudgetCache(pool)
 
-	// Primera llamada: cache miss → fetch de DB.
+
 	dur1, err := cache.GetMaxDuration(ctx, uuid.Nil)
 	require.NoError(t, err)
 	require.Equal(t, 60*time.Second, dur1)
 
-	// Cambiamos el valor en DB (simulamos operator edit).
+
 	_, err = pool.Exec(ctx, `UPDATE org_flow_config SET max_flow_duration_seconds = 600`)
 	require.NoError(t, err)
 
-	// Sin invalidate, la cache todavía tiene el valor viejo.
+
 	dur2, err := cache.GetMaxDuration(ctx, uuid.Nil)
 	require.NoError(t, err)
 	require.Equal(t, 60*time.Second, dur2, "cache hit antes de invalidate")
 
-	// Tras invalidate, refetch debe traer el nuevo.
+
 	cache.Invalidate(uuid.Nil)
 	dur3, err := cache.GetMaxDuration(ctx, uuid.Nil)
 	require.NoError(t, err)

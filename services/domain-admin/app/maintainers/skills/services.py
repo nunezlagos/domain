@@ -23,13 +23,13 @@ from core.service import MaintainerService
 from .models import Skill, SkillVersion
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class SkillError(Exception):
     """Error de operacion sobre skills."""
 
 
-# Service base reusado. El listado parte de un queryset propio (excluye
-# soft-deleted) y busca sobre name/slug/description.
+
+
 class SkillService(MaintainerService):
     model = Skill
     search_fields = ("name", "slug", "description")
@@ -215,5 +215,5 @@ def get_stats() -> dict:
     }
 
 
-# Excepcion de dominio que el core descubre como `ServiceError`.
+
 ServiceError = SkillError

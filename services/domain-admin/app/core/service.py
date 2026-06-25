@@ -40,11 +40,11 @@ class MaintainerService:
     metodos aceptan overrides explicitos).
     """
 
-    #: model por defecto (puede sobreescribirse por subclase o por argumento).
+
     model = None
-    #: campos sobre los que aplica el `search` (icontains, OR entre ellos).
+
     search_fields: tuple[str, ...] = ()
-    #: orden por defecto del listado.
+
     ordering: tuple[str, ...] = ("-created_at",)
 
     def _resolve_model(self, model=None):

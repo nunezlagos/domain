@@ -160,7 +160,7 @@ func (s *Service) ResolveBySlug(ctx context.Context, slug string) (*Webhook, []b
 // VerifyHMAC verifica una signature HMAC-SHA256 sobre el body.
 // signatureHex viene del header (e.g. X-Hub-Signature-256 de GitHub).
 func VerifyHMAC(secret, body []byte, signatureHex string) bool {
-	// GitHub usa prefix "sha256="
+
 	sig := strings.TrimPrefix(signatureHex, "sha256=")
 	expected, err := hex.DecodeString(sig)
 	if err != nil {

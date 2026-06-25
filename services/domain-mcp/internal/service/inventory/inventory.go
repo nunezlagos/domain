@@ -1,9 +1,9 @@
-// Package inventory — issue F3 inventario de capacidades al iniciar sesión.
-// Devuelve el detalle completo de agents/skills/flows/mcp_providers/mcp_servers
-// /project_templates/policies disponibles en el proyecto detectado.
-//
-// Diseñado para alimentar `domain detect` con info útil al agente IA:
-// "qué tools/skills/agents tengo disponibles en este proyecto".
+
+
+
+
+
+
 
 package inventory
 

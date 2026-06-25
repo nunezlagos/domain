@@ -35,7 +35,7 @@ func Uninstall(manifestPath string, confirmed bool, dryRun bool) (*UninstallResu
 
 	result := &UninstallResult{}
 
-	// Process in reverse order
+
 	for i := len(m.Installs) - 1; i >= 0; i-- {
 		inst := &m.Installs[i]
 		var remainingEntries []Entry
@@ -47,7 +47,7 @@ func Uninstall(manifestPath string, confirmed bool, dryRun bool) (*UninstallResu
 				continue
 			}
 
-			// Hash check
+
 			if entry.AfterHash != "" {
 				currentHash, err := HashFile(entry.Path)
 				if err != nil || currentHash != entry.AfterHash {
@@ -84,7 +84,7 @@ func Uninstall(manifestPath string, confirmed bool, dryRun bool) (*UninstallResu
 		inst.Entries = remainingEntries
 	}
 
-	// Remove empty installs
+
 	var activeInstalls []Install
 	for _, inst := range m.Installs {
 		if len(inst.Entries) > 0 {

@@ -160,7 +160,7 @@ class EditViewTests(MaintainerTestCase):
         self.assertEqual(p.name, "Editado")
 
     def test_edit_preserva_current_branch(self):
-        # El modal ya no edita current_branch: debe preservarse al guardar.
+
         p = make_project("Edit2", slug="edit2", current_branch="develop")
         r = self.client.post(reverse("projects:edit", args=[p.pk]), {
             "name": "Edit2",

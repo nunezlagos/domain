@@ -76,10 +76,10 @@ func TestRestore_ProjectRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, f.proj.SoftDelete(ctx, f.projectID, f.userID))
 
-	// Restore con orgID
+
 	require.NoError(t, f.svc.Restore(ctx, "project", f.projectID, f.userID, &f.orgID))
 
-	// Project debe quedar visible de nuevo
+
 	p, err := f.proj.GetByID(ctx, f.projectID)
 	require.NoError(t, err)
 	require.Nil(t, p.DeletedAt)
@@ -104,7 +104,7 @@ func TestRestore_RetentionExpired(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	require.NoError(t, f.proj.SoftDelete(ctx, f.projectID, f.userID))
-	// Forzar deleted_at en el pasado (> 30 días)
+
 	_, err := f.svc.Pool.Exec(ctx,
 		`UPDATE projects SET deleted_at = NOW() - INTERVAL '60 days' WHERE id = $1`,
 		f.projectID)
@@ -144,7 +144,7 @@ func TestSabotage_ExportUserData_NoSecrets(t *testing.T) {
 	exp, err := f.svc.ExportUserData(ctx, f.userID, f.orgID)
 	require.NoError(t, err)
 
-	// auth_api_keys export: solo key_prefix, NUNCA key_hash
+
 	for _, k := range exp.APIKeys {
 		_, hasHash := k["key_hash"]
 		require.False(t, hasHash, "key_hash NO debe estar en export GDPR")
@@ -152,7 +152,7 @@ func TestSabotage_ExportUserData_NoSecrets(t *testing.T) {
 		_ = hasPrefix // puede haber 0 keys → omit check
 	}
 
-	// User export no debe incluir password fields (no existen en schema, pero check defensivo)
+
 	_, hasPw := exp.User["password"]
 	require.False(t, hasPw)
 }
@@ -174,7 +174,7 @@ func TestRestore_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, f.proj.SoftDelete(ctx, f.projectID, f.userID))
 	require.NoError(t, f.svc.Restore(ctx, "project", f.projectID, f.userID, &f.orgID))
-	// Segunda restore: project ya no está soft-deleted
+
 	err := f.svc.Restore(ctx, "project", f.projectID, f.userID, &f.orgID)
 	require.ErrorIs(t, err, lifecycle.ErrNotFound)
 	_ = time.Second

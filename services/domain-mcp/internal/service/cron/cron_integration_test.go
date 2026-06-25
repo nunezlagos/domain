@@ -186,13 +186,13 @@ func TestCronService_ExecutionHistory_Lifecycle(t *testing.T) {
 	cronID := insertCron(t, pool, orgID)
 	svc := &cron.Service{Pool: pool}
 
-	// Ejecución exitosa
+
 	execID, skipped, err := svc.StartExecution(ctx, cronID, "flow")
 	require.NoError(t, err)
 	require.False(t, skipped)
 	require.NoError(t, svc.FinishExecution(ctx, execID, nil))
 
-	// Ejecución fallida
+
 	execID2, skipped, err := svc.StartExecution(ctx, cronID, "flow")
 	require.NoError(t, err)
 	require.False(t, skipped, "sin running activa no hay overlap")
@@ -222,12 +222,12 @@ func TestSabotage_CronService_OverlapSkipped(t *testing.T) {
 	cronID := insertCron(t, pool, orgID)
 	svc := &cron.Service{Pool: pool}
 
-	// Primera ejecución queda running (no se cierra)
+
 	_, skipped, err := svc.StartExecution(ctx, cronID, "flow")
 	require.NoError(t, err)
 	require.False(t, skipped)
 
-	// Segunda: overlap → skipped
+
 	_, skipped, err = svc.StartExecution(ctx, cronID, "flow")
 	require.NoError(t, err)
 	require.True(t, skipped, "previous running debe forzar skip")
@@ -238,7 +238,7 @@ func TestSabotage_CronService_OverlapSkipped(t *testing.T) {
 	require.Equal(t, "skipped_overlap", hist[0].Status)
 	require.Equal(t, "running", hist[1].Status)
 
-	// Otro cron NO se ve afectado por la running ajena
+
 	otherID := insertCron(t, pool, orgID)
 	_, skipped, err = svc.StartExecution(ctx, otherID, "flow")
 	require.NoError(t, err)

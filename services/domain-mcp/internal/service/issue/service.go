@@ -42,9 +42,9 @@ var (
 	ErrInvalidStatus   = errors.New("invalid status")
 	ErrInvalidPriority = errors.New("invalid priority")
 
-	// ErrProjectIDRequired Fase 2: el issue hereda project_id del REQ padre. Si
-	// el REQ resuelto tiene project_id NULL, no hay scoping valido y se rechaza
-	// ANTES del insert (en vez de dejar pasar un not-null violation de PG).
+
+
+
 	ErrProjectIDRequired = errors.New("project_id required")
 )
 
@@ -128,9 +128,9 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 		}
 		return nil, fmt.Errorf("find req: %w", err)
 	}
-	// Fase 2: el REQ padre debe estar scopeado a un proyecto. Si su project_id
-	// es NULL el issue heredaria NULL y violaria el NOT NULL (000167); cortamos
-	// antes con un error estable.
+
+
+
 	if projectID == nil || *projectID == uuid.Nil {
 		return nil, ErrProjectIDRequired
 	}
@@ -267,7 +267,7 @@ func (s *Service) List(ctx context.Context, filter UserStoryFilter) ([]Issue, er
 		return nil, err
 	}
 
-	// Load scenarios for all returned HUs
+
 	ids := make([]uuid.UUID, len(out))
 	for i, hu := range out {
 		ids[i] = hu.ID
@@ -371,7 +371,7 @@ func (s *Service) AddScenario(ctx context.Context, huSlug string, sc Scenario) (
 		return nil, err
 	}
 
-	// Auto-assign position
+
 	var maxPos int
 	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(MAX(position), -1) FROM issue_gherkin_scenarios WHERE issue_id = $1`, hu.ID).Scan(&maxPos)
 	sc.Position = maxPos + 1
@@ -401,7 +401,7 @@ func (s *Service) RemoveScenario(ctx context.Context, scenarioID uuid.UUID) erro
 	return nil
 }
 
-// --- helpers ---
+
 
 func (s *Service) getBySlug(ctx context.Context, slug string) (*Issue, error) {
 	var hu Issue

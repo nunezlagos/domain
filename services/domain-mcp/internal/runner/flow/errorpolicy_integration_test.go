@@ -12,7 +12,7 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 )
 
-// REQ-42.3: withDLQ removido (dead_letter_queue dropeada, campo Runner.DLQ eliminado).
+
 
 // failingStep es un skill_run con slug inexistente: falla en todos los intentos.
 func failingStep(id string, extra func(*flow.Step)) flow.Step {
@@ -131,7 +131,7 @@ func TestErrorPolicy_FallbackFails_Aborts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, flowrunner.StatusFailed, res.Status)
 	require.Contains(t, res.Error, "fallback")
-	// REQ-42.3: dead_letter_queue dropeada — sin assert sobre DLQ.
+
 }
 
 // Escenario 8: default_step_error_policy del flow aplica cuando el step no

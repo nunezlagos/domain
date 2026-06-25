@@ -194,21 +194,21 @@ func TestGetTask_WithVerificationAndSabotage(t *testing.T) {
 	})
 	taskID := tasks[0].ID
 
-	// Complete it
+
 	_, _ = f.svc.UpdateTaskStatus(ctx, taskID, tsvc.StatusInProgress, "")
 	_, _ = f.svc.UpdateTaskStatus(ctx, taskID, tsvc.StatusCompleted, "me")
 
-	// Verify
+
 	v, err := f.svc.CreateVerification(ctx, taskID, "pass", "Suite green", "All tests passed", "tester")
 	require.NoError(t, err)
 	require.Equal(t, "pass", v.Result)
 	require.NotNil(t, v.Evidence)
 
-	// Sabotage
+
 	_, err = f.svc.CreateSabotage(ctx, taskID, "Drop index", "Search fails", "Got error", true)
 	require.NoError(t, err)
 
-	// Get with joins
+
 	got, err := f.svc.GetTask(ctx, taskID)
 	require.NoError(t, err)
 	require.NotNil(t, got.Verification)
@@ -238,7 +238,7 @@ func TestGetProgress(t *testing.T) {
 		{Section: "Cierre", Description: "T5"},
 	})
 
-	// Complete 3 out of 5
+
 	for i := 0; i < 3; i++ {
 		_, _ = f.svc.UpdateTaskStatus(ctx, tasks[i].ID, tsvc.StatusInProgress, "")
 		_, _ = f.svc.UpdateTaskStatus(ctx, tasks[i].ID, tsvc.StatusCompleted, "")
@@ -294,7 +294,7 @@ func TestSabotage_DropFKBreaksVerification(t *testing.T) {
 	_, _ = f.svc.UpdateTaskStatus(ctx, taskID, tsvc.StatusInProgress, "")
 	_, _ = f.svc.UpdateTaskStatus(ctx, taskID, tsvc.StatusCompleted, "")
 
-	// Sabotage: drop FK on verification_results
+
 	s, err := f.svc.CreateSabotage(ctx, taskID,
 		"DROP CONSTRAINT verification_results_task_id_fkey",
 		"INSERT verification fails",

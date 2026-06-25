@@ -24,7 +24,7 @@ from core.service import MaintainerService
 from .models import Prompt
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class PromptError(Exception):
     """Error de operacion sobre prompts."""
 
@@ -37,7 +37,7 @@ class PromptService(MaintainerService):
     ordering = ("-created_at",)
 
     def list(self, *args, **kwargs):
-        # El listado del mantenedor NO muestra soft-deleted.
+
         kwargs.setdefault("qs", Prompt.objects.filter(deleted_at__isnull=True))
         return super().list(*args, **kwargs)
 
@@ -224,5 +224,5 @@ def get_stats() -> dict:
     }
 
 
-# Error de dominio que core.views.MaintainerViews busca como `ServiceError`.
+
 ServiceError = PromptError

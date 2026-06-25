@@ -1,9 +1,9 @@
-// Package mcpinstaller — issue F1 catálogo de MCPs instalables.
-// Lee la tabla mcp_providers y escribe entries en configs de clientes IA
-// (opencode.json, .mcp.json de claude-code, claude_desktop_config.json).
-//
-// Diferente de internal/cli/setup que escribe el entry de domain-mcp:
-// mcpinstaller generaliza para N providers built-in (filesystem, fetch, etc.).
+
+
+
+
+
+
 
 package mcpinstaller
 
@@ -44,8 +44,8 @@ func New(pool *pgxpool.Pool) *Service {
 }
 
 func (s *Service) List(ctx context.Context) ([]Provider, error) {
-	// ISSUE-21.6: WHERE organization_id IS NULL eliminado (single-org:
-	// todos los providers son globales; la columna se dropea en Fase C).
+
+
 	rows, err := s.Pool.Query(ctx, `
 		SELECT name, description, command, default_args, env_template, required_env, tags
 		FROM mcp_providers

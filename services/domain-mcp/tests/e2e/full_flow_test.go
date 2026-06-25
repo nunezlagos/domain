@@ -96,7 +96,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	// Services
+
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
@@ -106,7 +106,7 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 	lifeS := &lifecycle.Service{Pool: pools.App, Audit: rec}
 	keys := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: "test-field-enc-key"}
 
-	// LLM factory con stub registrado como "ollama" (provider en whitelist del agent service)
+
 	factory := llm.NewFactory()
 	factory.Register("ollama", stubProvider{})
 
@@ -138,15 +138,15 @@ func setupE2E(t *testing.T) (*e2eFixture, func()) {
 		APIKeys:          keys,
 	}
 
-	// Setup inicial: org + user + API key (simula post-verify-OTP)
+
 	org, owner, err := seedOrgUser(ctx, pools.App, "Acme E2E", "acme-e2e", "owner@e2e.test", "Owner E2E")
 	require.NoError(t, err)
 
 	plaintext, _, err := keys.Issue(ctx, org.ID, owner.UserID, "e2e-key", "test")
 	require.NoError(t, err)
 
-	// Middleware stack
-	// REQ-42.3: idempotency middleware removido (idempotency_keys dropeada).
+
+
 	authMW := &apikey.Middleware{Resolver: keys, Allowlist: handler.AuthAllowlist()}
 	srv := httptest.NewServer(authMW.Wrap(api.Router()))
 
@@ -202,20 +202,20 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	f, cleanup := setupE2E(t)
 	defer cleanup()
 
-	// === FASE 1: Project + Observations + Search ===
 
-	// Crear project
+
+
 	st, body := f.req(t, "POST", "/api/v1/projects",
 		map[string]any{"name": "Demo", "slug": "demo", "description": "test"})
 	require.Equalf(t, 201, st, "create project failed: %+v", body)
 
-	// Listar projects
+
 	st, body = f.req(t, "GET", "/api/v1/projects", nil)
 	require.Equal(t, 200, st)
 	projects := body["data"].([]any)
 	require.Len(t, projects, 1)
 
-	// Save observation con privacy strip
+
 	st, body = f.req(t, "POST", "/api/v1/observations", map[string]any{
 		"project_slug":     "demo",
 		"content":          "Decidimos usar pgvector. <private>token_secreto_123</private> Es rápido.",
@@ -223,11 +223,11 @@ func TestE2E_FullClientFlow(t *testing.T) {
 		"tags":             []string{"arch", "db"},
 	})
 	require.Equalf(t, 201, st, "save observation: %+v", body)
-	// Content verification: serializa nuevamente como JSON y busca por substring
+
 	raw, _ := json.Marshal(body)
 	require.NotContains(t, string(raw), "token_secreto_123", "<private> stripped end-to-end")
 
-	// Save segunda observation (test dedup permite distinto content)
+
 	st, _ = f.req(t, "POST", "/api/v1/observations", map[string]any{
 		"project_slug": "demo",
 		"content":      "El clima en Santiago hoy es soleado",
@@ -235,7 +235,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	})
 	require.Equal(t, 201, st)
 
-	// Tercera observation con MISMO content que la primera → dedup rechaza
+
 	st, body = f.req(t, "POST", "/api/v1/observations", map[string]any{
 		"project_slug":     "demo",
 		"content":          "Decidimos usar pgvector. Es rápido.",
@@ -243,17 +243,17 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	})
 	require.NotEqual(t, 201, st, "dedup hash debe rechazar duplicate (mismo content+type+project)")
 
-	// Search global
+
 	st, body = f.req(t, "GET", "/api/v1/search?q=pgvector", nil)
 	require.Equal(t, 200, st)
 	results := body["data"].([]any)
 	require.NotEmpty(t, results, "search debe encontrar la observation de pgvector")
 
-	// === FASE 2: (REQ-42.3) sessions dropeada — fase de lifecycle de sesión removida ===
 
-	// === FASE 3: Skill + Agent + Run ===
 
-	// Crear skill tipo prompt
+
+
+
 	st, _ = f.req(t, "POST", "/api/v1/skills", map[string]any{
 		"slug":        "summarize",
 		"name":        "Summarize",
@@ -268,7 +268,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	})
 	require.Equal(t, 201, st)
 
-	// Crear agent que usa el skill
+
 	st, body = f.req(t, "POST", "/api/v1/agents", map[string]any{
 		"slug":          "summarizer",
 		"name":          "Summarizer Agent",
@@ -281,7 +281,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	agentID := pickID(body["data"])
 	require.NotEmpty(t, agentID, "agent id presente")
 
-	// Ejecutar agent
+
 	st, body = f.req(t, "POST", "/api/v1/agents/"+agentID+"/run",
 		map[string]any{"input": "Resumime el clima"})
 	require.Equalf(t, 200, st, "run agent: %+v", body)
@@ -290,15 +290,15 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	runID, _ := runData["run_id"].(string)
 	require.NotEmpty(t, runID)
 
-	// Logs del agent_run persistieron
+
 	st, body = f.req(t, "GET", "/api/v1/agent-runs/"+runID+"/logs", nil)
 	require.Equal(t, 200, st)
 	logs := body["data"].([]any)
 	require.NotEmpty(t, logs, "agent_run_logs deben tener al menos 1 entry (llm_call + final)")
 
-	// === FASE 4: Flow ===
 
-	// Crear flow simple
+
+
 	st, body = f.req(t, "POST", "/api/v1/flows", map[string]any{
 		"slug": "greet-flow", "name": "Greet Flow",
 		"spec": map[string]any{
@@ -324,13 +324,13 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	require.Equalf(t, 200, st, "run flow: %+v", body)
 	require.Equal(t, "completed", body["data"].(map[string]any)["status"])
 
-	// === FASE 5: Restore + GDPR export ===
 
-	// Soft delete project
+
+
 	st, _ = f.req(t, "DELETE", "/api/v1/projects/demo", nil)
 	require.Equal(t, 204, st)
 
-	// Restore
+
 	projID := pickID(projects[0])
 	require.NotEmpty(t, projID)
 	st, _ = f.req(t, "POST", "/api/v1/restore", map[string]any{
@@ -339,11 +339,11 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	})
 	require.Equal(t, 204, st)
 
-	// Project visible de nuevo
+
 	st, _ = f.req(t, "GET", "/api/v1/projects/demo", nil)
 	require.Equal(t, 200, st)
 
-	// GDPR export
+
 	st, body = f.req(t, "GET", "/api/v1/me/export", nil)
 	require.Equal(t, 200, st)
 	exp := body["data"].(map[string]any)
@@ -351,7 +351,7 @@ func TestE2E_FullClientFlow(t *testing.T) {
 	require.NotEmpty(t, exp["organizations"])
 	require.NotEmpty(t, exp["projects"])
 	require.NotEmpty(t, exp["observations"])
-	// Sin secrets en auth_api_keys
+
 	if apiKeys, ok := exp["api_keys_metadata"].([]any); ok {
 		for _, k := range apiKeys {
 			km := k.(map[string]any)
@@ -371,7 +371,7 @@ func TestE2E_Idempotency(t *testing.T) {
 	raw, _ := json.Marshal(body)
 	key := uuid.New().String()
 
-	// Primera request
+
 	r1, _ := http.NewRequest("POST", f.srv.URL+"/api/v1/projects", bytes.NewReader(raw))
 	r1.Header.Set("Authorization", "Bearer "+f.apiKey)
 	r1.Header.Set("Content-Type", "application/json")
@@ -382,7 +382,7 @@ func TestE2E_Idempotency(t *testing.T) {
 	require.Equal(t, 201, resp1.StatusCode)
 	require.Empty(t, resp1.Header.Get("Idempotent-Replayed"))
 
-	// Segunda request con MISMA key + mismo body → replayed
+
 	r2, _ := http.NewRequest("POST", f.srv.URL+"/api/v1/projects", bytes.NewReader(raw))
 	r2.Header.Set("Authorization", "Bearer "+f.apiKey)
 	r2.Header.Set("Content-Type", "application/json")
@@ -393,7 +393,7 @@ func TestE2E_Idempotency(t *testing.T) {
 	require.Equal(t, 201, resp2.StatusCode, "replay devuelve mismo status")
 	require.Equal(t, "true", resp2.Header.Get("Idempotent-Replayed"))
 
-	// Tercera request misma key con body DISTINTO → 409
+
 	differentBody, _ := json.Marshal(map[string]any{"name": "Otro", "slug": "demo-idemp"})
 	r3, _ := http.NewRequest("POST", f.srv.URL+"/api/v1/projects", bytes.NewReader(differentBody))
 	r3.Header.Set("Authorization", "Bearer "+f.apiKey)

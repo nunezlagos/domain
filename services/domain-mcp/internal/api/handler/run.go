@@ -37,7 +37,7 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Existence pre-flight
+
 	if _, err := a.AgentService.GetByID(r.Context(), id); err != nil {
 		if errors.Is(err, agent.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "")
@@ -56,7 +56,7 @@ func (a *API) runAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "input requerido")
 		return
 	}
-	// issue-26.6 backpressure: rechazar si queue agent_runs saturada
+
 	if a.Backpressure != nil {
 		orgID, _ := uuid.Parse(p.OrganizationID)
 		if err := a.Backpressure.CheckQueue(r.Context(),
@@ -111,8 +111,8 @@ func (a *API) getAgentRunLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	// organization_id eliminado del schema (single-org): se omite el chequeo
-	// de ownership por org.
+
+
 
 	rows, err := a.AgentService.Pool.Query(r.Context(),
 		`SELECT id, iteration, event_type, payload, tokens_input, tokens_output,

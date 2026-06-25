@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-25.6 least-privilege roles integration tests.
+
 
 package migrate_test
 
@@ -30,8 +30,8 @@ func setRolePassword(t *testing.T, adminDSN, role, password string) {
 // connect via specific role.
 func connectAs(t *testing.T, adminDSN, role, password string) *pgx.Conn {
 	t.Helper()
-	// admin DSN looks like: postgres://test:test@host:port/test?sslmode=disable
-	// reemplazamos user:pass por role:password
+
+
 	at := strings.Index(adminDSN, "@")
 	require.GreaterOrEqual(t, at, 0)
 	after := adminDSN[at:]
@@ -87,7 +87,7 @@ func TestRoles_AppUser_CannotUpdateAuditLog(t *testing.T) {
 	require.NoError(t, dmigrate.Up(dsn))
 	setRolePassword(t, dsn, "app_user", "testpass")
 
-	// INSERT seed
+
 	adminConn, _ := pgx.Connect(context.Background(), dsn)
 	defer adminConn.Close(context.Background())
 	_, err := adminConn.Exec(context.Background(), `
@@ -131,12 +131,12 @@ func TestRoles_AppReadonly_OnlySelect(t *testing.T) {
 	conn := connectAs(t, dsn, "app_readonly", "testpass")
 	defer conn.Close(context.Background())
 
-	// SELECT permitido
+
 	_, err := conn.Exec(context.Background(),
 		"SELECT count(*) FROM organizations")
 	require.NoError(t, err)
 
-	// INSERT denegado
+
 	_, err = conn.Exec(context.Background(),
 		"INSERT INTO organizations (name, slug) VALUES ('X', 'x')")
 	require.Error(t, err, "app_readonly INSERT debe fallar")
@@ -148,7 +148,7 @@ func TestRoles_Public_CannotCreateInPublic(t *testing.T) {
 	defer cleanup()
 	require.NoError(t, dmigrate.Up(dsn))
 
-	// crear role "guest" sin grants explícitos
+
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
 	require.NoError(t, err)

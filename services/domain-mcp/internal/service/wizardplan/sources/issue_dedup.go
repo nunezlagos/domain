@@ -67,9 +67,9 @@ func (s *IssueDedupSource) Run(ctx context.Context, env *wizardplan.ContextEnvel
 
 	env.HUMatches = &wizardplan.HUDedupFinding{Candidates: candidates}
 
-	// Si hay match strong, sugerir req_parent del candidate top.
+
 	if len(candidates) > 0 && candidates[0].Similarity > 0.3 {
-		// Lookup REQ del HU top.
+
 		var reqSlug string
 		err := s.Pool.QueryRow(ctx, `
 			SELECT r.slug

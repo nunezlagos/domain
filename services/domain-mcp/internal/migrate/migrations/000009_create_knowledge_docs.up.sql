@@ -1,9 +1,9 @@
--- migration: create_knowledge_docs
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-03.4
--- description: knowledge docs con chunking + embeddings + RAG-ready
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE knowledge_docs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

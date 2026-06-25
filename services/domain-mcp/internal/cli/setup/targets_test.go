@@ -31,7 +31,7 @@ func TestSetupClaudeCode_CreatesProjectConfig(t *testing.T) {
 	env := domain["env"].(map[string]any)
 	require.Equal(t, "dk_test", env["DOMAIN_API_KEY"])
 
-	// Segundo setup → ya configurado
+
 	_, err = SetupClaudeCode(dir, "/x", "", "")
 	require.ErrorIs(t, err, ErrAlreadyConfigured)
 }
@@ -49,7 +49,7 @@ func TestSetupClaudeCode_PreservesExistingServers(t *testing.T) {
 	require.Contains(t, servers, "otro", "no debe pisar servers existentes")
 	require.Contains(t, servers, "domain")
 
-	// Backup creado
+
 	matches, _ := filepath.Glob(filepath.Join(dir, ".mcp.json.backup-*"))
 	require.Len(t, matches, 1)
 }
@@ -62,20 +62,20 @@ func TestSetupOpenCode_InstallsAgentInstructions(t *testing.T) {
 	path, err := SetupOpenCode(dir, "/bin/domain-mcp", "dk_x", "")
 	require.NoError(t, err)
 
-	// El protocolo queda en ~/.config/opencode/instructions/domain.md
+
 	instr := home + "/.config/opencode/instructions/domain.md"
 	data, err := os.ReadFile(instr)
 	require.NoError(t, err, "instructions del agente deben instalarse")
 	require.Contains(t, string(data), "domain tiene prioridad")
 	require.Contains(t, string(data), "domain_mem_save")
 
-	// Y el opencode.json lo referencia en "instructions"
+
 	doc := readDoc(t, path)
 	list, _ := doc["instructions"].([]any)
 	require.Contains(t, list, any(instr))
 
-	// Upgrade: config ya configurado SIN instructions en el json (versión
-	// vieja del setup) → debe agregarlas, no responder no-op.
+
+
 	delete(doc, "instructions")
 	out, _ := json.MarshalIndent(doc, "", "  ")
 	require.NoError(t, os.WriteFile(path, out, 0o600))
@@ -85,7 +85,7 @@ func TestSetupOpenCode_InstallsAgentInstructions(t *testing.T) {
 	list, _ = doc["instructions"].([]any)
 	require.Contains(t, list, any(instr), "upgrade agrega instructions al json existente")
 
-	// Segunda corrida idéntica → idempotente (ErrAlreadyConfigured)
+
 	_, err = SetupOpenCode(dir, "/bin/domain-mcp", "dk_x", "")
 	require.ErrorIs(t, err, ErrAlreadyConfigured)
 }
@@ -139,12 +139,12 @@ func TestUninstall_RemovesOnlyDomain(t *testing.T) {
 	require.NotContains(t, servers, "domain")
 	require.Contains(t, servers, "otro", "uninstall solo quita domain")
 
-	// Doble uninstall → no-op
+
 	_, removed, err = Uninstall(AgentClaudeCode, dir)
 	require.NoError(t, err)
 	require.False(t, removed)
 
-	// Sin config → no-op sin error
+
 	_, removed, err = Uninstall(AgentOpenCode, dir)
 	require.NoError(t, err)
 	require.False(t, removed)

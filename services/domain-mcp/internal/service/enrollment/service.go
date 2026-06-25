@@ -207,8 +207,8 @@ func (s *Service) Revoke(ctx context.Context, actorID uuid.UUID) error {
 func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*EnrollResult, error) {
 	prefix, perr := ParsePrefix(plaintext)
 	if perr != nil {
-		// Aún corremos bcrypt dummy para que el timing del response no
-		// revele si el formato era válido.
+
+
 		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(plaintext))
 		return nil, ErrInvalidToken
 	}
@@ -218,7 +218,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 		return nil, ErrInvalidEmail
 	}
 
-	// Buscar candidatos (típicamente 0 o 1 por UNIQUE constraint)
+
 	rows, err := s.Pool.Query(ctx,
 		`SELECT id, token_hash, role_on_enroll
 		 FROM enrollment_tokens
@@ -246,7 +246,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	var matched *candidate
 	if len(candidates) == 0 {
-		// Constant-time dummy
+
 		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(plaintext))
 	} else {
 		for i := range candidates {
@@ -260,7 +260,7 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 		return nil, ErrInvalidToken
 	}
 
-	// Generar api key del nuevo user
+
 	apiPlain, apiPrefix, apiHash, err := apikey.Generate("live")
 	if err != nil {
 		return nil, fmt.Errorf("generate api key: %w", err)

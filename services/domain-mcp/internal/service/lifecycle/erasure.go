@@ -44,7 +44,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 	}
 	defer tx.Rollback(ctx)
 
-	// 1. Verificar existencia + no-erased
+
 	var isErased bool
 	err = tx.QueryRow(ctx,
 		`SELECT is_erased FROM users WHERE id = $1`, userID).Scan(&isErased)
@@ -60,7 +60,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 
 	res := &EraseResult{UserID: userID, UpdatedRows: make(map[string]int64)}
 
-	// 3. Anonimizar PII en users
+
 	tag, err := tx.Exec(ctx, `
 		UPDATE users SET
 			email = 'erased+' || id::text || '@example.invalid',
@@ -76,7 +76,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 	}
 	res.UpdatedRows["users"] = tag.RowsAffected()
 
-	// 4. Cascade NULL en tablas con created_by/user_id
+
 	for _, q := range []struct {
 		table string
 		sql   string
@@ -88,14 +88,14 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 	} {
 		tag, err := tx.Exec(ctx, q.sql, userID)
 		if err != nil {
-			// Si la tabla no existe (entorno incompleto), skip + cuenta 0.
+
 			res.UpdatedRows[q.table] = 0
 			continue
 		}
 		res.UpdatedRows[q.table] = tag.RowsAffected()
 	}
 
-	// 5. Revocar auth_api_keys del user
+
 	tag, err = tx.Exec(ctx,
 		`UPDATE auth_api_keys SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
 		userID)
@@ -107,7 +107,7 @@ func (s *Service) EraseUser(ctx context.Context, userID, actorID uuid.UUID, reas
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	// 6. Audit log fuera de la tx (best-effort, no bloquea el erase)
+
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			ActorID:    &actorID,

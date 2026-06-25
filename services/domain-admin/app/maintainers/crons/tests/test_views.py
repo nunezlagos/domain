@@ -117,7 +117,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_cron("Existente", slug="dup")
         r = self.client.post(reverse("crons:create"), self._data(slug="dup"))
-        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
+
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Cron.objects.filter(slug="dup").count(), 1)
 
@@ -149,7 +149,7 @@ class EditViewTests(MaintainerTestCase):
             "target_type": "agent",
             "target_id": str(DEFAULT_TARGET),
             "inputs": "{}",
-            # enabled ausente → checkbox off → enabled=False
+
         })
         self.assertEqual(r.status_code, 302)
         c.refresh_from_db()

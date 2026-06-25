@@ -48,8 +48,8 @@ func TestAuthorizeOrg_CrossOrg_DevuelveErrCrossOrg(t *testing.T) {
 }
 
 func TestAuthorizeOrg_SinCtx_Bloquea(t *testing.T) {
-	// Si el middleware nunca seteo OrgID en ctx, a.orgID() devuelve uuid.Nil.
-	// authorizeOrg debe rechazar cualquier resource (defense-in-depth).
+
+
 	a := &API{}
 	resource := uuid.New()
 	err := a.authorizeOrg(context.Background(), resource)

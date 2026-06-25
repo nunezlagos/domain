@@ -37,9 +37,9 @@ func RecoverMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 						slog.String("method", r.Method),
 					)
 				}
-				// Si el handler ya empezó a escribir el response,
-				// no podemos cambiar el status code. En ese caso
-				// el cliente verá el response parcial.
+
+
+
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 			}()
 			next.ServeHTTP(w, r)

@@ -1,8 +1,8 @@
-// Menu principal del TUI de domain (HU-01.11).
-//
-// 4 items: Install / Update / Backups / Exit.
-// Patron copiado de ptools/internal/tui/menu: bubbletea Model con
-// Init/Update/View, SelectMsg que envia el index elegido al app.
+
+
+
+
+
 
 package menu
 

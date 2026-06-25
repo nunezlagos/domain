@@ -6,10 +6,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Tests unitarios de la funcion pura validateFile.
-// No requiere DB ni S3 — solo valida reglas de negocio de upload.
-//
-// issue-04.6: limite 10MB + MIME types allowlist.
+
+
+
+
 
 func TestValidateFile_AllowedTypes(t *testing.T) {
 	cases := []struct {
@@ -35,7 +35,7 @@ func TestValidateFile_AllowedTypes(t *testing.T) {
 }
 
 func TestValidateFile_RejectsTooLarge(t *testing.T) {
-	// issue-04.6: limite estricto en 10MB
+
 	err := validateFile(maxFileSize+1, "image/png")
 	require.ErrorIs(t, err, ErrTooLarge)
 
@@ -69,23 +69,23 @@ func TestValidateFile_RejectsDisallowedTypes(t *testing.T) {
 // el comportamiento es defendible: size negativo es < maxFileSize, pasa.
 // Test documenta el comportamiento actual.
 func TestValidateFile_NegativeSize_Passes(t *testing.T) {
-	// NOTA: validateFile NO valida size >= 0. Si el handler pasa size
-	// negativo (bug o input manipulado), validateFile lo deja pasar
-	// (size negativo < maxFileSize). El handler deberia validar size >= 0
-	// antes de llamar a validateFile. Esto es un gap conocido, no un
-	// sabotaje que el test atrapa: el comportamiento es documentado.
+
+
+
+
+
 	err := validateFile(-1, "image/png")
 	require.NoError(t, err, "size negativo: pasa por diseño (caller valida)")
 }
 
 func TestRequireEntity_RejectsUnknownType(t *testing.T) {
-	// requireEntity hace query a DB, pero el switch inicial rechaza tipos
-	// desconocidos antes de tocar la DB. Cubrimos esa rama con un Service{}
-	// vacío (sin Pool) — si pasa el switch, falla con error de Pool nil.
+
+
+
 	s := &Service{}
 	err := s.requireEntity(t.Context(), "unknown_type", [16]byte{})
 	_ = err
-	// Si la implementacion cambia (agrega tipos sin check de Pool), este
-	// test sirve de canary. Por ahora solo validamos que tipos invalidos
-	// son rechazados, no que la implementacion completa funcione.
+
+
+
 }

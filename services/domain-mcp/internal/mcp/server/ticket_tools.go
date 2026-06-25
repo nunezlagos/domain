@@ -240,7 +240,7 @@ func toolTicketLinkExternal() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) requireTicketDeps() error {
 	if d.Principal == nil {

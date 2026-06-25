@@ -128,7 +128,7 @@ class CreateViewTests(MaintainerTestCase):
     def test_post_slug_duplicado_no_crea(self):
         make_flow("Existente", slug="dup")
         r = self.client.post(reverse("flows:create"), self._data(slug="dup"))
-        # Form invalido (clean_slug) → re-render 200, sin crear nuevo.
+
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Flow.objects.filter(slug="dup").count(), 1)
 
@@ -151,7 +151,7 @@ class EditViewTests(MaintainerTestCase):
             "description": "",
             "spec": "{}",
             "seed_version": "",
-            # is_active omitido → checkbox unchecked → False
+
         })
         self.assertEqual(r.status_code, 302)
         f.refresh_from_db()

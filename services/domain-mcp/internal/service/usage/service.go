@@ -164,14 +164,14 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 	}
 
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-		// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea
-		// en Fase C. En single-org, hardcodeamos el OrgRef. Si orgID es
-		// uuid.Nil (single-org mode), usamos un UUID fijo canónico.
+
+
+
 		snap.Organization = singleOrgRef(orgID)
 
-		// REQ-42.2: cost_logs se dropeó (dominio billing/costos eliminado).
-		// Los counters de costo/tokens quedan en 0 (no había writer de
-		// producción: la tabla siempre estuvo vacía).
+
+
+
 		if err := tx.QueryRow(ctx, `
 			SELECT
 			  (SELECT COUNT(*) FROM knowledge_observations
@@ -191,8 +191,8 @@ func (s *Service) Current(ctx context.Context, orgID uuid.UUID) (*Snapshot, erro
 			return fmt.Errorf("counters query: %w", err)
 		}
 
-		// flow_config es config global (single-org). Antes llamada
-		// org_flow_config (legacy pre-Fase C); renombrada en 000146.
+
+
 		var maxDur int
 		err := tx.QueryRow(ctx,
 			`SELECT max_flow_duration_seconds FROM flow_config LIMIT 1`,
@@ -230,11 +230,11 @@ func (s *Service) History(ctx context.Context, orgID uuid.UUID, days int) (*Hist
 	h := &History{}
 	obsByDay := make(map[string]int64)
 	if err := s.runInOrgTx(ctx, orgID, func(tx pgx.Tx) error {
-		// ISSUE-21.6 Fase D clean Round 3: ver singleOrgRef() en Current().
+
 		h.Organization = singleOrgRef(orgID)
 
-		// REQ-42.2: cost_logs se dropeó; el agregado de cost_usd ya no se
-		// consulta (CostUSD queda en 0 en cada fila).
+
+
 		rows, err := tx.Query(ctx, `
 			WITH series AS (
 			  SELECT generate_series($1::timestamptz, $2::timestamptz - interval '1 day', interval '1 day')::date AS day

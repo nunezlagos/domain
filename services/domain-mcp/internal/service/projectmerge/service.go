@@ -76,9 +76,9 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	}
 	defer tx.Rollback(ctx)
 
-	// 1. Validar ambos existen + misma org + source not deleted
-	// ISSUE-21.6: SELECT sin organization_id (single-org, no se necesita
-	// validar que source/target sean de la misma org). sourceOrg queda vacío.
+
+
+
 	var sourceDeleted *time.Time
 	var sourceSlug string
 	err = tx.QueryRow(ctx,
@@ -94,8 +94,8 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		return nil, ErrAlreadyMerged
 	}
 
-	// ISSUE-21.6: SELECT sin organization_id (single-org).
-	// targetOrg queda vacío (la validación cross-org ya no aplica).
+
+
 	err = tx.QueryRow(ctx,
 		`SELECT 1 FROM projects WHERE id = $1 AND deleted_at IS NULL`, targetID,
 	).Scan(new(int))
@@ -105,10 +105,10 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	if err != nil {
 		return nil, fmt.Errorf("lookup target: %w", err)
 	}
-	// ISSUE-21.6: validación cross-org eliminada (single-org, sourceOrg y
-	// targetOrg son siempre la misma org canónica implícita).
 
-	// 2. Mover observations (no conflict — no UNIQUE en slug por project).
+
+
+
 	tag, err := tx.Exec(ctx,
 		`UPDATE knowledge_observations SET project_id = $1 WHERE project_id = $2 AND deleted_at IS NULL`,
 		targetID, sourceID,
@@ -118,8 +118,8 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	}
 	report.ObservationsMoved = int(tag.RowsAffected())
 
-	// 3. Para tablas con UNIQUE(slug,project_id): skills, flows, agents, crons.
-	//    Por cada, renombrar slugs en conflict (sufijo -merged-<source_slug>).
+
+
 	for _, t := range []struct {
 		table   string
 		moved   *int
@@ -138,7 +138,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		*t.renamed = renamed
 	}
 
-	// 4. Soft-delete source project.
+
 	if _, err := tx.Exec(ctx,
 		`UPDATE projects SET deleted_at = now(), updated_at = now() WHERE id = $1`,
 		sourceID,
@@ -146,7 +146,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		return nil, fmt.Errorf("soft-delete source: %w", err)
 	}
 
-	// 5. Persistir entry en project_merges para audit.
+
 	report.CompletedAt = time.Now()
 	reportJSON, _ := json.Marshal(report)
 	if _, err := tx.Exec(ctx,
@@ -154,7 +154,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 		 VALUES ($1, $2, $3, $4, $5, now())`,
 		report.MergeID, sourceID, targetID, actorID, reportJSON,
 	); err != nil {
-		// Tabla puede no tener la columna 'report' — best effort.
+
 		_, _ = tx.Exec(ctx,
 			`INSERT INTO project_merges (id, source_id, target_id, merged_at)
 			 VALUES ($1, $2, $3, now())`,
@@ -192,7 +192,7 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 // moveWithRename actualiza project_id en source → target. Para slugs que
 // chocan con target, los sufijea con "-merged-<sourceSlug>" antes de mover.
 func moveWithRename(ctx context.Context, tx pgx.Tx, table string, sourceID, targetID uuid.UUID, sourceSlug string) (int, []string, error) {
-	// 1. Descubre conflictos
+
 	rows, err := tx.Query(ctx,
 		fmt.Sprintf(`
 			SELECT s.id, s.slug
@@ -236,7 +236,7 @@ func moveWithRename(ctx context.Context, tx pgx.Tx, table string, sourceID, targ
 		renamed = append(renamed, c.Slug+" → "+newSlug)
 	}
 
-	// 2. Move all remaining
+
 	tag, err := tx.Exec(ctx,
 		fmt.Sprintf(`UPDATE %s SET project_id = $1 WHERE project_id = $2`, table),
 		targetID, sourceID,

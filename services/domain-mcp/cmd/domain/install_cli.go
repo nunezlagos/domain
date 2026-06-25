@@ -1,25 +1,25 @@
-// Subcomandos `domain install`, `domain update`, `domain restore`,
-// `domain seed` (issue-01.10 deploy-modes-update).
-//
-//   domain install [--mode local|cloud|hybrid] [--base-url URL]
-//                  [--non-interactive|-y] [--no-backup] [--no-init]
-//                  [--no-opencode] [--dsn URL]
-//     Wizard idempotente: detecta estado, hace backups, corre migrate
-//     + seed, y opcionalmente configura el agente.
-//
-//   domain update [--no-backup] [--no-seed] [--no-migrate]
-//     Backups + migrate + seed. NO toca configs del agente.
-//
-//   domain restore <backup-path>
-//     One-shot: restaura un archivo desde un backup timestamped.
-//
-//   domain seed all
-//     Corre todos los seeders (skip-by-hash, idempotente).
-//
-// Cada subcomando es un wrapper delgado sobre las primitivas ya
-// implementadas (migrate.Up, seeds.Registry.RunAll, install.BackupFile,
-// install.Restore, install.ValidateDSN, install.StartDockerServices).
-// Sin TUI, sin shims, sin variables de paquete.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package main
 
@@ -68,9 +68,9 @@ func runInstall(args []string) int {
 		return 2
 	}
 
-	// Step 0: cwd guard. ANTES de cualquier side effect (loadEnv,
-	// backups, docker, etc). Si el cwd no es un root de repo válido
-	// y no se pasó --src, aborta con exit 1 y mensaje accionable.
+
+
+
 	if _, ok := checkProjectRootGuard(flags.src); !ok {
 		return 1
 	}
@@ -86,7 +86,7 @@ func runInstall(args []string) int {
 	progress := NewInstallProgress(12, os.Stderr)
 	printBanner(os.Stderr)
 
-	// 1. Detección de estado
+
 	progress.StartStep("Detecting state")
 	state, err := install.DetectState(flags.baseURL)
 	if err != nil {
@@ -96,7 +96,7 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, state.Summary())
 
-	// 2. Backups (idempotentes, skip si el archivo no existe)
+
 	progress.StartStep("Backing up configs")
 	if flags.noBackup {
 		progress.EndStep(StepSkipped, "--no-backup")
@@ -109,8 +109,8 @@ func runInstall(args []string) int {
 		}
 	}
 
-	// 3. Bootstrap .env: copia .env.example si falta, carga al env,
-	// y persiste el puerto/base-url elegidos (DOMAIN_HTTP_PORT).
+
+
 	progress.StartStep("Bootstrap .env")
 	if err := ensureLocalEnvFile(); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -124,8 +124,8 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, ".env present and loaded")
 	}
 
-	// 4. Infraestructura: docker (local) o DSN (cloud). ANTES de
-	// migrate — sin esto la BD no existe en fresh installs.
+
+
 	progress.StartStep(fmt.Sprintf("Starting services (%s)", mode))
 	if err := startInfra(mode, flags, state); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -134,7 +134,7 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, fmt.Sprintf("mode=%s ready", mode))
 
-	// 5. Migrate
+
 	cfg, err := config.Load()
 	if err != nil {
 		progress.StartStep("Applying migrations")
@@ -145,9 +145,9 @@ func runInstall(args []string) int {
 	progress.StartStep("Applying migrations")
 	if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
 		msg := err.Error()
-		// Caso clásico: la BD tiene migraciones MÁS NUEVAS que este código
-		// (e.g. install.sh corrido desde un clon desactualizado mientras el
-		// repo de desarrollo ya aplicó versiones nuevas a la misma BD).
+
+
+
 		if strings.Contains(msg, "no migration found for version") {
 			msg += " — tu BD tiene migraciones más nuevas que este código; " +
 				"actualizá el código y reintentá (re-corré install.sh, que hace git pull)"
@@ -158,7 +158,7 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "schema up to date")
 
-	// 6. Seeders
+
 	progress.StartStep("Running seeders")
 	if err := runSeedersViaRegistry(cfg.DatabaseURL, cfg.Env); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -167,8 +167,8 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "all catalogs at target version")
 
-	// 7. Env global para domain-mcp y el server systemd: DSN, base-url y
-	// puerto. Va ANTES del server para que arranque en el puerto elegido.
+
+
 	progress.StartStep("Global MCP env")
 	envPath, err := writeGlobalMCPEnv(cfg, flags.baseURL)
 	if err != nil {
@@ -177,10 +177,10 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, envPath)
 	}
 
-	// 8. Server como systemd user service: queda corriendo siempre y
-	// arranca al login (plug-and-play). Va ANTES de la API key porque el
-	// flujo OTP de re-installs necesita el server arriba. Skip limpio
-	// fuera de Linux o sin user manager (containers/macOS).
+
+
+
+
 	progress.StartStep("Starting server (systemd)")
 	serverUp := state.ServerReachable
 	switch {
@@ -197,13 +197,13 @@ func runInstall(args []string) int {
 		}
 	}
 
-	// 9. API key: tres caminos según estado (sin pasos manuales):
-	//    - credentials.json existe → skip
-	//    - BD sin usuarios (first-run) → crea org + user con TU email +
-	//      key directo a la BD
-	//    - BD con usuarios pero sin credentials (re-install) → flujo OTP
-	//      real: request-otp → auto-fetch del código en mailpit (local
-	//      only) → verify-otp
+
+
+
+
+
+
+
 	progress.StartStep("API key")
 	switch how, err := ensureAPIKey(cfg, flags, mode, serverUp); {
 	case err != nil:
@@ -216,7 +216,7 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, how)
 	}
 
-	// 10. Agentes MCP (multi: opencode y/o claude-code). Idempotente.
+
 	progress.StartStep("Configuring MCP agents")
 	if len(flags.agents) == 0 {
 		progress.EndStep(StepSkipped, "no agents selected")
@@ -225,7 +225,7 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, detail)
 	}
 
-	// 10.5 Shell wrapper (issue-30.2). Opt-in con confirm explícito.
+
 	progress.StartStep("Config shell wrapper")
 	if flags.withWrapper {
 		detail, wErr := installShellWrapperStep()
@@ -247,7 +247,7 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "--non-interactive (use --with-wrapper)")
 	}
 
-	// 10.6 Claude Code SessionStart hook (issue-30.3).
+
 	progress.StartStep("Claude Code SessionStart hook")
 	if flags.noClaudeHook {
 		progress.EndStep(StepSkipped, "--no-claude-hook")
@@ -269,9 +269,9 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "--non-interactive (use --with-claude-hook)")
 	}
 
-	// 10.7 Primary memory (issue-35.3). Opt-in: detecta engram/mem0
-	// en opencode.json + .claude.json y los desactiva (con backup)
-	// para que domain sea la única memory provider visible al LLM.
+
+
+
 	progress.StartStep("Primary memory (engram/mem0 detect)")
 	if !flags.primaryMemory {
 		progress.EndStep(StepSkipped, "use --primary-memory para detectar")
@@ -287,7 +287,7 @@ func runInstall(args []string) int {
 		}
 	}
 
-	// 11. Init (.md → BD). Requiere el server HTTP corriendo.
+
 	progress.StartStep("Importing .md files")
 	switch {
 	case flags.noInit:
@@ -319,7 +319,7 @@ func runInstall(args []string) int {
 // Si lo esta (por un install previo que fallo al encontrar
 // domain-mcp), borra el entry y re-crea con el path correcto.
 func configureOpencodeMCPServer(baseURL string) {
-	// Reparar tanto el opencode.json del cwd como el global.
+
 	cwd, _ := os.Getwd()
 	for _, p := range []string{
 		filepath.Join(cwd, "opencode.json"),
@@ -373,11 +373,11 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 	if !ok {
 		return false
 	}
-	// Roto si: slice vacío, primer elemento "" (install previo que no
-	// encontró domain-mcp), o el binario apuntado YA NO EXISTE (install
-	// legacy en otro dir, e.g. ~/.local/bin borrado). Borramos el entry
-	// para que el setup lo recree — sin esto el agente ve "-32000
-	// Connection closed" por ENOENT.
+
+
+
+
+
 	broken := len(cmd) == 0
 	if !broken {
 		if first, ok := cmd[0].(string); ok {
@@ -474,7 +474,7 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		case "--primary-memory-yes":
 			f.pmYes = true
 		case "--no-opencode":
-			// compat HU-01.14: equivale a sacar opencode de --agents
+
 			f.agents = removeAgent(f.agents, "opencode")
 		case "--src":
 			if i+1 >= len(args) {
@@ -552,16 +552,16 @@ func runBackupsCount() (int, int) {
 // Llamar ANTES de config.Load() para evitar "DOMAIN_DATABASE_URL is
 // required" en fresh installs (HU-01.13).
 func ensureLocalEnvFile() error {
-	// .env ya existe: skip
+
 	if _, err := os.Stat(".env"); err == nil {
 		return nil
 	}
-	// .env.example no existe: error claro (no estamos en el root del proyecto)
+
 	if _, err := os.Stat(".env.example"); err != nil {
 		return fmt.Errorf(".env.example not found in current directory; " +
 			"are you in the domain project root? (try: cd ~/.local/share/domain)")
 	}
-	// Copiar .env.example → .env
+
 	data, err := os.ReadFile(".env.example")
 	if err != nil {
 		return fmt.Errorf("read .env.example: %w", err)
@@ -617,10 +617,10 @@ func loadEnvFile(path string) error {
 		}
 		key := strings.TrimSpace(line[:eq])
 		val := strings.TrimSpace(line[eq+1:])
-		// Strip surrounding quotes si los tiene
+
 		val = strings.Trim(val, `"'`)
-		// NO pisar env vars que ya existen (el user podria haber
-		// seteado algo en su shell que queremos respetar).
+
+
 		if os.Getenv(key) == "" {
 			_ = os.Setenv(key, val)
 		}
@@ -660,7 +660,7 @@ func startInfra(mode string, f installFlags, state *install.InstallState) error 
 		if err := install.ValidateDSN(dsn); err != nil {
 			return fmt.Errorf("DSN invalid: %w", err)
 		}
-		// upsert (NO sobrescribir el .env entero: preserva el resto)
+
 		if err := upsertEnvFile(".env", "DOMAIN_DATABASE_URL", dsn); err != nil {
 			return fmt.Errorf("write .env: %w", err)
 		}
@@ -714,8 +714,8 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		return "", fmt.Errorf("count users: %w", err)
 	}
 
-	// First-run: la BD está vacía → crear la cuenta con el email del
-	// user, directo a la BD (no hay nada que validar por OTP todavía).
+
+
 	if userCount == 0 {
 		prefix, err := bootstrapFirstAccount(ctx, pool, email, flags.baseURL)
 		if err != nil {
@@ -724,8 +724,8 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		return fmt.Sprintf("account created for %s (key prefix %s)", email, prefix), nil
 	}
 
-	// Re-install (hay usuarios pero no credentials): flujo OTP real.
-	// SOLO en local buscamos el código automáticamente en mailpit.
+
+
 	if install.Mode(mode) == install.ModeLocal && serverUp && mailpitAvailable() {
 		result, err := otpFlowViaServer(flags.baseURL, email)
 		if err != nil {
@@ -831,10 +831,10 @@ func writeGlobalMCPEnv(cfg *config.Config, baseURL string) (string, error) {
 		{"DOMAIN_DATABASE_URL", cfg.DatabaseURL},
 		{"DOMAIN_BASE_URL", baseURL},
 	}
-	// CRÍTICO: el server de systemd corre con cwd=$HOME y lee SOLO este
-	// archivo. Sin DOMAIN_HTTP_PORT acá, escucha en el default 8000
-	// aunque el user haya elegido otro puerto — y el health-check del
-	// install espera en el puerto elegido → warning falso.
+
+
+
+
 	if u, err := url.Parse(baseURL); err == nil && u.Port() != "" {
 		pairs = append(pairs, [2]string{"DOMAIN_HTTP_PORT", u.Port()})
 	}
@@ -885,7 +885,7 @@ func runPrimaryMemoryStep(flags installFlags) (string, error) {
 		}
 		var names []string
 		for _, p := range providers {
-			// Filtrar por el catalog efectivo (override permite override).
+
 			if !catalog[p.Name] {
 				continue
 			}
@@ -905,13 +905,13 @@ func runPrimaryMemoryStep(flags installFlags) (string, error) {
 		return "no other memory providers detected", nil
 	}
 
-	// Preview
+
 	fmt.Fprintln(os.Stderr, "  found other memory MCP providers:")
 	for _, h := range hits {
 		fmt.Fprintf(os.Stderr, "    %s → %s: %s\n", h.agent, h.configPath, strings.Join(h.names, ", "))
 	}
 
-	// Confirm si no es --primary-memory-yes ni --non-interactive.
+
 	if !flags.pmYes && !flags.nonInter {
 		fmt.Fprint(os.Stderr, "  disable these (backup will be created)? [y/N] ")
 		line, err := readLine()
@@ -1112,7 +1112,7 @@ func guessTargetFromBackup(backupPath string) string {
 		return ".env"
 	}
 
-	// Generic: strip .bak.YYYY...Z
+
 	name := backupPath
 	if idx := strings.LastIndex(name, ".bak."); idx > 0 {
 		return name[:idx]
@@ -1132,12 +1132,12 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	defer pool.Close()
 
 	registry := seeds.NewRegistry()
-	// REQ-42.3: ModelRegistrySeeder removido (model_registry dropeada).
+
 	registry.Register(&seeds.PlatformPoliciesSeeder{})
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
 	registry.Register(&seeds.MCPProvidersSeeder{})
-	// Catálogos globales (skills/agent_templates/flows) — idempotentes vía
-	// seed_versions. Mismos seeders que registra main.go al bootear.
+
+
 	registry.Register(&seeds.SkillsCatalogSeeder{})
 	registry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	registry.Register(&seeds.FlowsCatalogSeeder{})
@@ -1150,7 +1150,7 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 		return fmt.Errorf("run all: %w", err)
 	}
 
-	// Print summary
+
 	fmt.Fprintln(os.Stderr, "  seeders:")
 	for name, rep := range reports {
 		if rep.Skipped > 0 && rep.Created == 0 && rep.Updated == 0 && rep.Preserved == 0 {
@@ -1163,7 +1163,7 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	return nil
 }
 
-// --- helpers ---
+
 
 // readLine lee una linea de stdin. Usado para el prompt de DSN en
 // cloud mode no-interactive.

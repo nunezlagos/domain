@@ -47,7 +47,7 @@ func setupHBWatcher(t *testing.T) (*hbFixture, *systemcron.HeartbeatWatcher, fun
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	// Crear org + flow base para los tests
+
 	orgID := uuid.New()
 	_, err = pool.Exec(ctx, `
 		INSERT INTO organizations (id, name, slug)
@@ -84,7 +84,7 @@ func TestHeartbeatWatcher_DetectsAndMarksFailed(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Insert flow_run + step running con heartbeat 6min atrás (stuck)
+
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
 		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
@@ -99,14 +99,14 @@ func TestHeartbeatWatcher_DetectsAndMarksFailed(t *testing.T) {
 	`, stepID, runID)
 	require.NoError(t, err)
 
-	// Ejecutar tick
+
 	stuck, err := watcher.DetectAndMark(ctx)
 	require.NoError(t, err)
 	require.Len(t, stuck, 1, "debe detectar 1 step stuck")
 	require.Equal(t, stepID.String(), stuck[0].StepID)
 	require.Equal(t, "sdd-design", stuck[0].StepKey)
 
-	// Verificar step marcado failed
+
 	var stepStatus, stepError string
 	err = fx.pool.QueryRow(ctx, `SELECT status, COALESCE(error, '') FROM flow_run_steps WHERE id = $1`,
 		stepID).Scan(&stepStatus, &stepError)
@@ -114,10 +114,10 @@ func TestHeartbeatWatcher_DetectsAndMarksFailed(t *testing.T) {
 	require.Equal(t, "failed", stepStatus)
 	require.Equal(t, "heartbeat_timeout", stepError)
 
-	// REQ-42.3: saga_compensation_log dropeada — la clasificación de compensación
-	// ya no se persiste (se emite como traza estructurada). No hay tabla que assertar.
 
-	// Verificar flow_runs.status = 'failed' (todos los steps terminados)
+
+
+
 	var runStatus string
 	err = fx.pool.QueryRow(ctx, `SELECT status FROM flow_runs WHERE id = $1`, runID).Scan(&runStatus)
 	require.NoError(t, err)
@@ -160,7 +160,7 @@ func TestHeartbeatWatcher_ConfigurableThreshold(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Reconfigurar timeout a 10min
+
 	watcher.Timeout = 10 * time.Minute
 
 	runID := uuid.New()
@@ -189,7 +189,7 @@ func TestHeartbeatWatcher_RaceCondition_SkipsLocked(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Step stuck que vamos a "lockear" en otra tx
+
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
 		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
@@ -204,21 +204,21 @@ func TestHeartbeatWatcher_RaceCondition_SkipsLocked(t *testing.T) {
 	`, stepID, runID)
 	require.NoError(t, err)
 
-	// Tomar lock explícito sobre el row en otra tx (simula cliente updating)
+
 	otherTx, err := fx.pool.Begin(ctx)
 	require.NoError(t, err)
 	_, err = otherTx.Exec(ctx, `SELECT id FROM flow_run_steps WHERE id = $1 FOR UPDATE`, stepID)
 	require.NoError(t, err)
 
-	// Watcher debe skip el step lockado
+
 	stuck, err := watcher.DetectAndMark(ctx)
 	require.NoError(t, err)
 	require.Empty(t, stuck, "watcher debe skip steps con lock concurrente (FOR UPDATE SKIP LOCKED)")
 
-	// Soltar lock
+
 	require.NoError(t, otherTx.Rollback(ctx))
 
-	// Ahora sí lo detecta
+
 	stuck, err = watcher.DetectAndMark(ctx)
 	require.NoError(t, err)
 	require.Len(t, stuck, 1, "post-rollback, watcher debe detectarlo")

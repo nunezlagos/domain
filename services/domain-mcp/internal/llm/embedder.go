@@ -69,18 +69,18 @@ func (f FakeEmbedder) Dimensions() int {
 func (f FakeEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	dim := f.Dimensions()
 	out := make([]float32, dim)
-	// Seed: sha256 del text. Replicamos el hash hasta llenar dim*4 bytes.
+
 	seed := sha256.Sum256([]byte(text))
 	var sumSq float64
 	for i := 0; i < dim; i++ {
 		idx := (i * 4) % len(seed)
 		bits := binary.BigEndian.Uint32(append(seed[idx:], seed[:idx]...)[:4])
-		// Map a [-1, 1]
+
 		v := float32(int32(bits)) / float32(math.MaxInt32)
 		out[i] = v
 		sumSq += float64(v) * float64(v)
 	}
-	// Normalizar a unit-norm (mejor para cosine)
+
 	if sumSq > 0 {
 		norm := float32(math.Sqrt(sumSq))
 		for i := range out {
@@ -109,12 +109,12 @@ func TruncateText(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""
 	}
-	// Estimación rough: ~4 chars por token
+
 	maxChars := maxTokens * 4
 	if len(text) <= maxChars {
 		return text
 	}
-	// Truncar en límite de palabra para no cortar a mitad
+
 	truncated := text[:maxChars]
 	if idx := lastSpace(truncated); idx > maxChars/2 {
 		truncated = truncated[:idx]

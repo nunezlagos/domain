@@ -1,6 +1,6 @@
 //go:build integration
 
-// F3: inventory service — tests integration con testcontainers + seeders.
+
 
 package inventory_test
 

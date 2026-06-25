@@ -45,7 +45,7 @@ func TestOptimize_PreservesPinned(t *testing.T) {
 		msg("2", "user", "recent", 30, base.Add(2*time.Minute), false),
 	}
 	r := optimizer.Optimize(msgs, optimizer.Config{MaxTokens: 80, KeepLast: 1})
-	// pinned + last1 quedan; el msg "1" (older) se va
+
 	ids := []string{}
 	for _, m := range r.Kept {
 		ids = append(ids, m.ID)

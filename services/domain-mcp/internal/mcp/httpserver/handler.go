@@ -38,8 +38,8 @@ import (
 // principal); solo el Principal y los wrappers dependientes de Principal
 // se rearman por request.
 type Builder struct {
-	// Base contiene todos los punteros a services + pool + dispatcher.
-	// El campo Principal de Base se ignora; se setea por request.
+
+
 	Base mcpserver.Deps
 }
 
@@ -88,8 +88,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clonar Deps con principal del request. Los punteros a services
-	// son compartidos (thread-safe); solo Principal cambia.
+
+
 	deps := h.Builder.Base
 	deps.Principal = principal
 	if deps.ServerName == "" {

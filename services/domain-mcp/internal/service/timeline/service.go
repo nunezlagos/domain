@@ -28,8 +28,8 @@ var ErrObservationNotFound = errors.New("anchor observation not found")
 type EntryKind string
 
 const (
-	// KindSession se conserva por compatibilidad histórica del enum, pero ya
-	// no se emite (REQ-42.3: tabla sessions dropeada).
+
+
 	KindSession     EntryKind = "session"
 	KindObservation EntryKind = "observation"
 	KindPrompt      EntryKind = "prompt"
@@ -84,19 +84,19 @@ func (s *Service) Context(ctx context.Context, orgID, userID, projectID uuid.UUI
 		snap.ProjectID = &projectID
 	}
 
-	// REQ-42.3: sessions dropeada — sin active/recent sessions.
+
 	_ = userID
 	snap.ActiveSession = nil
 	snap.RecentSessions = nil
 
-	// Recent observations
+
 	obs, err := s.queryObservations(ctx, orgID, projectID, 10)
 	if err != nil {
 		return nil, fmt.Errorf("recent observations: %w", err)
 	}
 	snap.RecentObservations = obs
 
-	// Recent active prompts
+
 	prompts, err := s.queryPrompts(ctx, orgID, projectID, 5)
 	if err != nil {
 		return nil, fmt.Errorf("recent prompts: %w", err)
@@ -123,7 +123,7 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 		after = 50
 	}
 
-	// Lookup anchor (project + created_at)
+
 	var (
 		anchorCreatedAt time.Time
 		anchorProjectID uuid.UUID
@@ -140,12 +140,12 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 		return nil, fmt.Errorf("anchor lookup: %w", err)
 	}
 
-	// Before: observaciones + prompts ANTERIORES
+
 	priorObs, err := s.queryEntriesAround(ctx, anchorProjectID, anchorCreatedAt, before, true)
 	if err != nil {
 		return nil, err
 	}
-	// After: posteriores (excluyendo el anchor)
+
 	nextObs, err := s.queryEntriesAround(ctx, anchorProjectID, anchorCreatedAt, after, false)
 	if err != nil {
 		return nil, err
@@ -168,7 +168,7 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 	return all, nil
 }
 
-// --- helpers ---
+
 
 func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.UUID, limit int) ([]Entry, error) {
 	var q string

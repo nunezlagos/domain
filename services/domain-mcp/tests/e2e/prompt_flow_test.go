@@ -56,7 +56,7 @@ func (m *mockAttSvc) PromoteEntity(_ context.Context, fromKind, toKind string, _
 func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 	ctx := context.Background()
 
-	// 1) Bootstrap DB
+
 	pgC, err := postgres.Run(ctx,
 		"pgvector/pgvector:pg16",
 		postgres.WithDatabase("test"),
@@ -76,7 +76,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 	require.NoError(t, err)
 	defer pools.Close()
 
-	// 2) Wire services
+
 	intakeSvc := &intake.Service{Pool: pools.App}
 	hbSvc := &issuebuilder.Service{Pool: pools.App, Attachments: &mockAttSvc{}}
 	router := &promptrouter.Router{
@@ -85,7 +85,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 		Classifier:       promptrouter.HeuristicClassifier{},
 	}
 
-	// === ESCENARIO 1: prompt de chat NO arranca wizard ===
+
 	t.Run("chat_no_wizard", func(t *testing.T) {
 		resp, err := router.Route(ctx,
 			"Cómo se configuran las migrations de postgres?", nil, nil)
@@ -97,7 +97,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 		require.NotEmpty(t, resp.Reply)
 	})
 
-	// === ESCENARIO 2: prompt de bug arranca wizard correctamente ===
+
 	t.Run("bug_starts_wizard", func(t *testing.T) {
 		resp, err := router.Route(ctx,
 			"El director no puede descargar la ficha aunque haya completado las 4 tasas. No funciona el botón de export, ya pasé el screenshot.",
@@ -112,24 +112,24 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 		require.NotNil(t, resp.NextQuestion)
 		require.Equal(t, "severity", resp.NextQuestion.Key)
 
-		// Verifica que el intake_payload se persistió con classification.
+
 		intakeP, err := intakeSvc.Get(ctx, *resp.IntakeID)
 		require.NoError(t, err)
 		require.NotNil(t, intakeP.ClassifiedType)
 		require.Equal(t, "fix", *intakeP.ClassifiedType)
 
-		// === Sigue el flow: responde 8 preguntas + attach screenshot ===
+
 		draftID := *resp.DraftID
 
-		// Steps del bugFixFlow:
-		// 1. severity → enum [critical|high|medium|low]
-		// 2. component → enum [api|db|cli|mcp|auth|webhook|runner|ui]
-		// 3. root_cause → enum [logic|race|perf|security|ux]
-		// 4. has_repro → enum [yes|no]
-		// 5. expected → string
-		// 6. actual → string
-		// 7. slug → slug regex
-		// 8. summary → string
+
+
+
+
+
+
+
+
+
 		bugAnswers := []any{
 			"high",
 			"ui",
@@ -145,7 +145,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 			require.NoErrorf(t, err, "step %d failed (answer=%v)", i+1, a)
 		}
 
-		// Attach screenshot mid-flow
+
 		att, err := hbSvc.AttachToDraft(ctx, draftID,
 			"screenshot-export-broken.png", "image/png", 512_000)
 		require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 		require.True(t, strings.HasPrefix(att.UploadURL, "https://s3.mock/hu_draft/"),
 			"upload URL debe apuntar a entity_type=hu_draft")
 
-		// Verifica que en issue_drafts.answers["attachments"] está la ref
+
 		got, err := hbSvc.Get(ctx, draftID)
 		require.NoError(t, err)
 		require.Contains(t, string(got.Answers), "screenshot-export-broken.png")
@@ -161,10 +161,10 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 }
 
 func TestE2E_WorkflowImport_DetectsRealRepoMDFiles(t *testing.T) {
-	// Test in-process del scanner sobre un fixture tmpdir realista.
+
 	tmp := t.TempDir()
 
-	// Simula un repo con varios tools IA configurados.
+
 	fs := map[string]string{
 		"CLAUDE.md":              "# Project rules\n\nTDD strict.",
 		".claude/rules/git.md":   "# Git conventions\n\nConventional commits.",
@@ -183,7 +183,7 @@ func TestE2E_WorkflowImport_DetectsRealRepoMDFiles(t *testing.T) {
 	files, err := scanner.Detect(true)
 	require.NoError(t, err)
 
-	// Esperamos 7 archivos IA detectados (los 3 src/README/node_modules NO).
+
 	require.Len(t, files, 7)
 
 	tools := map[string]int{}

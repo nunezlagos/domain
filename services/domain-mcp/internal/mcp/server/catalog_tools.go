@@ -18,8 +18,8 @@ import (
 )
 
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls wrappea handlers que tocan tablas con RLS FORCE (projects desde
-	// migration 000101). Abre tx + SET LOCAL app.current_org_id/user_id.
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -28,11 +28,11 @@ func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool 
 		{Tool: toolAgentCreate(), Handler: wrap.Wrap("domain_agent_create", deps.handleAgentCreate)},
 		{Tool: toolFlowCreate(), Handler: wrap.Wrap("domain_flow_create", deps.handleFlowCreate)},
 		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", deps.handleCronList)},
-		// REQ-28.2: gestion de projects desde MCP, con asociacion a client.
+
 		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(deps.handleProjectCreate))},
 		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(deps.handleProjectUpdate))},
 	}
-	// Clients (mandantes): CRUD + restore + set_status para consultoras.
+
 	tools = append(tools, registerClientTools(wrap, deps)...)
 	return tools
 }
@@ -165,9 +165,9 @@ func (d *Deps) handleProjectUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if v, ok := args["repository_url"].(string); ok {
 		upd.RepositoryURL = &v
 	}
-	// client_slug: solo lo agregamos si fue provisto (key presente). El
-	// MCP framework devuelve "" si la key no vino → distinguimos chequeando
-	// la presencia en el map.
+
+
+
 	if raw, ok := args["client_slug"]; ok {
 		if s, ok := raw.(string); ok {
 			upd.ClientSlug = &s

@@ -41,7 +41,7 @@ class ProjectSkillsServiceTests(MaintainerTestCase):
         self.assertEqual({s.slug for s in only_global["items"]}, {"g1", "g2"})
 
     def test_excluir_y_reincluir(self):
-        # excluir g1 -> fila is_enabled=FALSE
+
         services.set_skill_excluded(self.project, str(self.g1.id), excluded=True)
         row = ProjectSkill.objects.get(project=self.project, skill_id=self.g1.id)
         self.assertFalse(row.is_enabled)
@@ -49,7 +49,7 @@ class ProjectSkillsServiceTests(MaintainerTestCase):
         g1 = next(s for s in data["items"] if s.slug == "g1")
         self.assertTrue(g1.excluded)
         self.assertEqual(data["excluded_count"], 1)
-        # re-incluir -> borra la fila de exclusion
+
         services.set_skill_excluded(self.project, str(self.g1.id), excluded=False)
         self.assertFalse(
             ProjectSkill.objects.filter(project=self.project, skill_id=self.g1.id).exists()
@@ -63,7 +63,7 @@ class ProjectSkillsViewTests(MaintainerTestCase):
         self.g1 = make_skill("Global 1", slug="g1")
 
     def test_detalle_muestra_skills(self):
-        # El "ver" del proyecto ahora incluye el tab de skills (pane).
+
         r = self.client.get(reverse("projects:detail", args=[self.project.pk]) + "?partial=1")
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "g1")

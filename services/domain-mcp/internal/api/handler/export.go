@@ -62,7 +62,7 @@ func (h *ExportHandler) ExportGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func StreamOrgExport(ctx context.Context, pool *pgxpool.Pool, orgID, userID uuid.UUID, zw *zip.Writer, version string, now time.Time) error {
-	// Metadata first (logically; zip order doesn't matter)
+
 	if err := writeMetadata(ctx, zw, orgID, version, now); err != nil {
 		return fmt.Errorf("metadata: %w", err)
 	}

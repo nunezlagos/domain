@@ -104,7 +104,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		in.Timezone = "UTC"
 	}
 
-	// Validar expression + calc próximo
+
 	next, err := NextRun(in.CronExpression, in.Timezone, time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -115,9 +115,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 	}
 	inputsJSON, _ := json.Marshal(in.Inputs)
 
-	// ISSUE-21.6: INSERT sin organization_id (la columna se dropea en
-	// Fase C via 000142). Hasta entonces, crons.organization_id queda NULL
-	// (la tabla acepta NULL post-000145).
+
+
+
 	var c Cron
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO crons
@@ -158,11 +158,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
-	// El param orgID se ignora (_ = orgID) por compat de firma.
+
+
 	_ = orgID
 	rows, err := s.Pool.Query(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
+
 		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
@@ -188,7 +188,7 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Cron, error) {
 	var c Cron
 	err := s.Pool.QueryRow(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
+
 		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
@@ -220,7 +220,7 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
+
 		`SELECT id, created_by, slug, name, COALESCE(description,''),
 		        cron_expression, timezone, target_type, target_id, inputs, enabled,
 		        last_run_at, next_run_at, created_at, updated_at
@@ -248,9 +248,9 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 		return nil, err
 	}
 
-	// Avanzar next_run_at para todos los claimed para que otro worker no los
-	// reescoja inmediatamente. La ejecución real ocurre fuera de esta tx;
-	// si falla el caller llama MarkRan(success=false) y schedule sigue normal.
+
+
+
 	now := time.Now().UTC()
 	for i := range out {
 		next, _ := NextRun(out[i].CronExpression, out[i].Timezone, now)

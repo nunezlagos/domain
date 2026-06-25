@@ -50,20 +50,20 @@ class CreateApiKeyTests(MaintainerTestCase):
         owner = make_user("c@example.com")
         api_key, secret = services.create_api_key(user=owner, name="Nueva")
         self.assertTrue(ApiKey.objects.filter(pk=api_key.pk).exists())
-        # Formato compatible con el backend Go: domk_<env>_<secret>.
+
         self.assertTrue(secret.startswith("domk_live_"))
-        # El hash persistido es bcrypt y valida contra el secreto devuelto.
+
         self.assertTrue(bcrypt.checkpw(secret.encode(), bytes(api_key.key_hash)))
-        # El prefijo persistido es el visible del secreto (primeros 16 chars).
+
         self.assertEqual(api_key.key_prefix, secret[:16])
-        # Cifrado at-rest (mig 000168): key_plaintext NO se escribe en claro;
-        # el secreto se recupera descifrando key_ciphertext (pgp_sym_decrypt).
+
+
         api_key.refresh_from_db()
         self.assertIsNone(api_key.key_plaintext)
         self.assertEqual(services.get_api_key_plaintext(api_key.pk), secret)
 
     def test_get_plaintext_fallback_a_key_vieja(self):
-        # Keys viejas (pre-mig): sin ciphertext pero con key_plaintext en claro.
+
         owner = make_user("legacy@example.com")
         ak = ApiKey.objects.create(
             user=owner, name="Legacy", key_prefix="domk_live_legacy",
@@ -106,8 +106,8 @@ class DeleteApiKeyTests(MaintainerTestCase):
         ak = make_api_key("Borrable", status="active")
         pk = ak.pk
         services.delete_api_key(ak)
-        # Hard delete: la fila se elimina (no queda como revocada). Revocar sin
-        # borrar es el toggle.
+
+
         self.assertFalse(ApiKey.objects.filter(pk=pk).exists())
 
 

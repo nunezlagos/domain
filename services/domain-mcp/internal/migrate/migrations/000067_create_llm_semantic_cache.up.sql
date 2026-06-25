@@ -1,9 +1,9 @@
--- migration: create_llm_semantic_cache
--- author: nunezlagos
--- issue: HU-07.3
--- description: cache semántico de respuestas LLM por embedding similarity
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE llm_semantic_cache (
   id VARCHAR(64) PRIMARY KEY,

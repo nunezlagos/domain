@@ -1,6 +1,6 @@
 //go:build integration
 
-// F1: mcp_providers seeder — built-ins canónicos instalables.
+
 
 package seeds_test
 

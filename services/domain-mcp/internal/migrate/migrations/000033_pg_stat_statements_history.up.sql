@@ -1,18 +1,18 @@
--- migration: pg_stat_statements_history
--- author: mnunez@saargo.com
--- issue: HU-25.2
--- description: tabla snapshots semanales de pg_stat_statements + CREATE EXTENSION condicional
--- breaking: false
--- estimated_duration: <1s
---
--- pg_stat_statements requiere shared_preload_libraries en postgresql.conf
--- (no aplicable solo via SQL). En entornos sin la extensión, CREATE EXTENSION
--- IF NOT EXISTS falla SILENCIOSAMENTE solo si el binario no la incluye.
--- En containers oficiales postgres:16 + pgvector la lib viene compilada pero
--- requiere shared_preload_libraries para track de stats.
---
--- Esta migration no asume que pg_stat_statements esté cargado; solo crea la
--- tabla de historial. El service detecta runtime y skip si extensión ausente.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE domain_query_stats_history (
   id BIGSERIAL PRIMARY KEY,

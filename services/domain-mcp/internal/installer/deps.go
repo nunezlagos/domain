@@ -1,13 +1,13 @@
-// Dep check + auto-install (HU-01.11).
-//
-// Flujo:
-//   1. Llamador pide `Check(neededDeps)` → []Result
-//   2. Para cada Dep faltante, llama `OfferInstall(pm, dep, withConfirm)`
-//   3. Si el user confirma, ejecuta el install command
-//   4. Re-chequea para confirmar
-//
-// El callback `withConfirm` desacopla la UI: TUI bubbletea, CLI bufio,
-// o test puro pueden implementarlo diferente.
+
+
+
+
+
+
+
+
+
+
 
 package installer
 
@@ -112,7 +112,7 @@ func getVersion(binary string) (string, error) {
 		if s == "" {
 			continue
 		}
-		// Regex: digitos.puntos.digitos (opcional mas componentes)
+
 		match := versionRegexp.FindString(s)
 		if match != "" {
 			match = strings.TrimPrefix(match, "v")
@@ -207,7 +207,7 @@ func runInstallCommand(ctx context.Context, cmdStr string) error {
 	if len(parts) == 0 {
 		return errors.New("empty install command")
 	}
-	// Si el primer arg es sudo, mantenerlo.
+
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

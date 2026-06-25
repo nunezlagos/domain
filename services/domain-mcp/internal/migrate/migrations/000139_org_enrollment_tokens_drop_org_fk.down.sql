@@ -1,7 +1,7 @@
--- Revertir: restaurar FK a organizations(id) ON DELETE CASCADE y el UNIQUE
--- INDEX partial sobre (organization_id) WHERE revoked_at IS NULL.
--- Nota: falla si hay más de 1 fila con organization_id NULL y revoked_at IS NULL
--- (el UNIQUE INDEX original era per-org).
+
+
+
+
 DROP INDEX IF EXISTS org_enrollment_tokens_singleton_active_uniq;
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_enrollment_tokens_org_active_uniq

@@ -123,7 +123,7 @@ func TestFlowStateMachine_AllowedTransitions(t *testing.T) {
 			if len(allowed) < tc.min {
 				t.Fatalf("%s: expected at least %d allowed, got %d: %v", tc.from, tc.min, len(allowed), allowed)
 			}
-			// Verify all returned are actually valid
+
 			for _, to := range allowed {
 				if err := m.ValidateTransition(tc.from, to); err != nil {
 					t.Fatalf("AllowedTransitions returned %s→%s but ValidateTransition says: %v", tc.from, to, err)
@@ -260,7 +260,7 @@ func TestStepStateMachine_IsStepTerminal(t *testing.T) {
 // This test verifies the VALIDATION itself catches them.
 func TestFlowStateMachine_Sabotage_RemoveValidation(t *testing.T) {
 	m := NewFlowStateMachine()
-	// completed → running is ALWAYS invalid and must be caught
+
 	err := m.ValidateTransition(FlowStatusCompleted, FlowStatusRunning)
 	if err == nil {
 		t.Fatal("SABOTAGE: removed validation allows completed→running")
@@ -269,7 +269,7 @@ func TestFlowStateMachine_Sabotage_RemoveValidation(t *testing.T) {
 
 func TestStepStateMachine_Sabotage_RemoveValidation(t *testing.T) {
 	m := NewFlowStateMachine()
-	// completed → running is ALWAYS invalid for steps too
+
 	err := m.ValidateStepTransition(StepStatusCompleted, StepStatusRunning)
 	if err == nil {
 		t.Fatal("SABOTAGE: removed validation allows step_completed→step_running")

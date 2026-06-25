@@ -39,7 +39,7 @@ func TestBuildRetryPlan_FixedBackoff(t *testing.T) {
 	plan := buildRetryPlan(step)
 	require.Equal(t, 3, plan.maxAttempts)
 	require.True(t, plan.rich)
-	// Escenario 2: delays constantes
+
 	require.Equal(t, 5*time.Second, plan.delay(1))
 	require.Equal(t, 5*time.Second, plan.delay(2))
 }
@@ -49,7 +49,7 @@ func TestBuildRetryPlan_ExponentialBackoff(t *testing.T) {
 		MaxRetries: 3, Backoff: "exponential", InitialDelayMs: 1000,
 	}}
 	plan := buildRetryPlan(step)
-	// Escenario 1: 1000, 2000, 4000ms
+
 	require.Equal(t, 1*time.Second, plan.delay(1))
 	require.Equal(t, 2*time.Second, plan.delay(2))
 	require.Equal(t, 4*time.Second, plan.delay(3))
@@ -60,7 +60,7 @@ func TestBuildRetryPlan_RetryOnFilter(t *testing.T) {
 		MaxRetries: 2, RetryOn: []string{"timeout", "rate_limit"},
 	}}
 	plan := buildRetryPlan(step)
-	// Escenario 3
+
 	require.True(t, plan.shouldRetry(errors.New("context deadline exceeded (timeout)")))
 	require.True(t, plan.shouldRetry(errors.New("429 rate limit")))
 	require.False(t, plan.shouldRetry(errors.New("validation failed")))

@@ -29,28 +29,28 @@ import (
 )
 
 const (
-	// CodeLength dígitos del OTP (6 estándar).
+
 	CodeLength = 6
-	// BcryptCost cost para hash (10 = ~100ms; OTP ephemeral, costo más bajo OK).
+
 	BcryptCost = 10
-	// DefaultTTL TTL del código.
+
 	DefaultTTL = 10 * time.Minute
-	// DefaultMaxAttempts máximo intentos por código.
+
 	DefaultMaxAttempts = 5
 )
 
 var (
-	// ErrNoActiveOTP no hay OTP activo para el user.
+
 	ErrNoActiveOTP = errors.New("no active otp")
-	// ErrOTPExpired código expiró.
+
 	ErrOTPExpired = errors.New("otp expired")
-	// ErrOTPAlreadyUsed código ya consumido.
+
 	ErrOTPAlreadyUsed = errors.New("otp already used")
-	// ErrInvalidCode código incorrecto.
+
 	ErrInvalidCode = errors.New("invalid code")
-	// ErrTooManyAttempts exceeded max_attempts.
+
 	ErrTooManyAttempts = errors.New("too many attempts")
-	// ErrUserNotFound no se encontró user con identifier (uso interno, response 200 fake).
+
 	ErrUserNotFound = errors.New("user not found")
 )
 
@@ -109,7 +109,7 @@ func IsEmail(s string) bool {
 func (s *Service) Request(ctx context.Context, identifier, ipAddress, userAgent string) error {
 	user, err := s.resolveUser(ctx, identifier)
 	if err != nil {
-		// Anti-enumeration: caller sigue como si todo OK
+
 		return ErrUserNotFound
 	}
 
@@ -203,7 +203,7 @@ func (s *Service) Verify(ctx context.Context, identifier, code string) (*VerifyR
 	}
 
 	if err := bcrypt.CompareHashAndPassword(hash, []byte(code)); err != nil {
-		// Increment attempts
+
 		_, e2 := tx.Exec(ctx, `UPDATE auth_otp_codes SET attempts = attempts + 1 WHERE id = $1`, otpID)
 		if e2 == nil {
 			_ = tx.Commit(ctx)
@@ -215,13 +215,13 @@ func (s *Service) Verify(ctx context.Context, identifier, code string) (*VerifyR
 		return &VerifyResult{AttemptsLeft: left}, ErrInvalidCode
 	}
 
-	// Match — mark used
+
 	now := time.Now()
 	_, err = tx.Exec(ctx, `UPDATE auth_otp_codes SET used_at = $1 WHERE id = $2`, now, otpID)
 	if err != nil {
 		return nil, fmt.Errorf("mark used: %w", err)
 	}
-	// Update last_login_at del user
+
 	_, err = tx.Exec(ctx, `UPDATE users SET last_login_at = $1 WHERE id = $2`, now, user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update last_login: %w", err)
@@ -250,8 +250,8 @@ func (s *Service) resolveUser(ctx context.Context, identifier string) (*User, er
 		}
 		return u, nil
 	}
-	// Asumir RUT — caller debe haber pre-normalizado con rut.Normalize() ideal,
-	// pero también aceptamos input bruto.
+
+
 	u, err := s.Users.ByRUT(ctx, identifier)
 	if err != nil {
 		return nil, ErrUserNotFound

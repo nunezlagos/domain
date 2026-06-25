@@ -95,8 +95,8 @@ func SetupClaudeCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error)
 		servers = map[string]any{}
 	}
 	if _, ok := servers["domain"]; ok {
-		// Ya configurado. Aun asi, asegura que el slash command este
-		// instalado (issue-01.9).
+
+
 		if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
 			return path, fmt.Errorf("install slash command: %w", err)
 		}
@@ -111,7 +111,7 @@ func SetupClaudeCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error)
 	if err := writeJSONWithBackup(path, original, doc); err != nil {
 		return "", err
 	}
-	// issue-01.9: instala el slash command /domain-login.
+
 	if _, err := InstallSlashCommand(AgentClaudeCode); err != nil {
 		return path, fmt.Errorf("install slash command: %w", err)
 	}
@@ -134,9 +134,9 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		mcp = map[string]any{}
 	}
 	if _, ok := mcp["domain"]; ok {
-		// Ya configurado. Aun asi, asegura slash command + instrucciones
-		// del agente (pueden faltar en configs creados por versiones
-		// previas del setup — es el caso "engram gana en jerarquía").
+
+
+
 		if _, err := InstallSlashCommand(AgentOpenCode); err != nil {
 			return path, fmt.Errorf("install slash command: %w", err)
 		}
@@ -160,10 +160,10 @@ func SetupOpenCode(dir, mcpBinaryPath, apiKey, baseURL string) (string, error) {
 	if err := writeJSONWithBackup(path, original, doc); err != nil {
 		return "", err
 	}
-	// issue-01.9: instala el slash command /domain-login.
+
 	if _, err := InstallSlashCommand(AgentOpenCode); err != nil {
-		// No es fatal — el MCP server sigue funcionando, pero el slash
-		// command no estara disponible. Loguear via return.
+
+
 		return path, fmt.Errorf("install slash command: %w", err)
 	}
 	return path, nil
@@ -200,7 +200,7 @@ func ensureOpenCodeInstructions(cfgPath string, doc map[string]any, original []b
 		changed = true
 	}
 
-	// Merge en doc["instructions"] sin duplicar.
+
 	var list []any
 	if raw, ok := doc["instructions"].([]any); ok {
 		list = raw
@@ -208,8 +208,8 @@ func ensureOpenCodeInstructions(cfgPath string, doc map[string]any, original []b
 	for _, item := range list {
 		if s, ok := item.(string); ok && s == instrPath {
 			if changed && original != nil {
-				// El array ya estaba pero el .md cambió: nada que escribir
-				// en el json; el cambio del archivo alcanza.
+
+
 				return true, nil
 			}
 			return changed, nil
@@ -217,8 +217,8 @@ func ensureOpenCodeInstructions(cfgPath string, doc map[string]any, original []b
 	}
 	doc["instructions"] = append(list, instrPath)
 	if original != nil {
-		// doc venía de un config ya escrito (camino already-configured):
-		// persistir el agregado del array.
+
+
 		if err := writeJSONWithBackup(cfgPath, original, doc); err != nil {
 			return false, err
 		}
@@ -341,10 +341,10 @@ func Uninstall(agent Agent, dir string) (string, bool, error) {
 	return path, true, nil
 }
 
-// issue-01.9 — slash command /domain-login. Se instala en el dir de
-// commands del agente (opencode o claude-code) cuando se hace
-// `domain setup [agent]`. El user puede entonces invocar el wizard
-// desde dentro del chat del agente con /domain-login.
+
+
+
+
 
 // CommandsDir retorna el dir donde se ponen los slash commands para el
 // agente. Para opencode: ~/.config/opencode/commands. Para claude-code:

@@ -1,9 +1,9 @@
--- migration: create_agent_templates
--- author: nunezlagos
--- issue: HU-08.5
--- description: definitions reutilizables de agents con personality + handoff policy
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE agent_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

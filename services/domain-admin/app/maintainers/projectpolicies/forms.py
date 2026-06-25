@@ -62,7 +62,7 @@ class ProjectPolicyForm(InstanceAwareMixin, forms.Form):
             for p in Project.objects.filter(deleted_at__isnull=True).order_by("name")
         ]
         if instance is not None:
-            # El proyecto no se cambia una vez creada la regla.
+
             self.fields["project"].disabled = True
             if not self.is_bound:
                 self.fields["project"].initial = str(instance.project_id)
@@ -81,7 +81,7 @@ class ProjectPolicyForm(InstanceAwareMixin, forms.Form):
         slug = cleaned.get("slug")
         if not slug:
             return cleaned
-        # Proyecto: en edicion se preserva el del instance (disabled no envia valor).
+
         if self.instance is not None:
             project_id = self.instance.project_id
         else:

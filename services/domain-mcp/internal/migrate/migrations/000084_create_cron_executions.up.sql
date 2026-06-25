@@ -1,9 +1,9 @@
--- migration: create_cron_executions
--- author: nunezlagos
--- issue: issue-10.1
--- description: historial de ejecuciones de crons (running/completed/failed/skipped_overlap)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS cron_executions (
   id BIGSERIAL PRIMARY KEY,
@@ -17,12 +17,12 @@ CREATE TABLE IF NOT EXISTS cron_executions (
   duration_ms INT
 );
 
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS cron_executions_cron_started_idx
   ON cron_executions (cron_id, started_at DESC);
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS cron_executions_running_idx
   ON cron_executions (cron_id) WHERE status = 'running';
 

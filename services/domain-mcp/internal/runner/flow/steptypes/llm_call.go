@@ -29,7 +29,7 @@ func (r *LLMCallRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		return nil, fmt.Errorf("llm_call: model required")
 	}
 
-	// Resolve template with inputs and step outputs.
+
 	prompt := ResolveTemplate(promptTemplate, input.Inputs, input.StepOutputs)
 	if prompt == "" {
 		return nil, fmt.Errorf("llm_call: resolved prompt is empty")
@@ -39,7 +39,7 @@ func (r *LLMCallRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		return nil, fmt.Errorf("llm_call: LLMProvider not configured")
 	}
 
-	// Build LLM options from config (temperature, max_tokens, etc.).
+
 	opts := make(map[string]any)
 	if v, ok := input.Config["temperature"]; ok {
 		opts["temperature"] = v

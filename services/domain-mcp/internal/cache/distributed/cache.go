@@ -24,9 +24,9 @@ import (
 // Cache es la interfaz mínima que cualquier cache local debe satisfacer
 // para poder envolverla con WithInvalidation.
 type Cache interface {
-	// InvalidateKey borra una entrada específica.
+
 	InvalidateKey(key string)
-	// InvalidateAll vacía toda la cache (fallback si payload no parseable).
+
 	InvalidateAll()
 }
 
@@ -105,7 +105,7 @@ func (l *Listener) Start(ctx context.Context) error {
 			slog.Duration("backoff", backoff),
 		)
 
-		// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+
 		bt := time.NewTimer(backoff)
 		select {
 		case <-l.stopCh:
@@ -175,8 +175,8 @@ func (l *Listener) listenLoop(ctx context.Context) error {
 			continue
 		}
 
-		// Invalidación granular por ID. operation guía si fue insert/update/delete
-		// pero todos invalidan la entrada del cache (el cliente re-fetchea si necesita).
+
+
 		if payload.ID != "" {
 			l.Cache.InvalidateKey(payload.ID)
 		} else {

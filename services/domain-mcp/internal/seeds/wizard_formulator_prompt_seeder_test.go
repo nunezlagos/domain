@@ -1,6 +1,6 @@
-// Tests de contrato del WizardFormulatorPromptSeeder sin tocar DB: identidad,
-// versión, orden (después de analysis) y no-dev-only. El check-then-insert
-// real se cubre en integración con testcontainers.
+
+
+
 
 package seeds
 

@@ -58,7 +58,7 @@ func TestReEncryptAll_RotatesToCurrentVersion(t *testing.T) {
 	b641, _ := b64key(t)
 	b642, _ := b64key(t)
 
-	// Fase 1: cifrar con v1 (secrets tiene RLS → batch usa Auth BYPASSRLS)
+
 	c1, err := crypto.LoadKeyring("1:" + b641)
 	require.NoError(t, err)
 	storeV1 := &PGStore{Pool: pools.Auth, Cipher: c1}
@@ -74,7 +74,7 @@ func TestReEncryptAll_RotatesToCurrentVersion(t *testing.T) {
 		ids = append(ids, sec.ID)
 	}
 
-	// Fase 2: keyring rotado v1+v2 → re-encrypt
+
 	c2, err := crypto.LoadKeyring("1:" + b641 + ",2:" + b642)
 	require.NoError(t, err)
 	storeV2 := &PGStore{Pool: pools.Auth, Cipher: c2}
@@ -83,12 +83,12 @@ func TestReEncryptAll_RotatesToCurrentVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, n)
 
-	// Idempotente: segunda corrida no toca nada
+
 	n, err = storeV2.ReEncryptAll(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, n)
 
-	// Valores siguen legibles y la versión cambió
+
 	for i, id := range ids {
 		sec, err := storeV2.GetByID(ctx, id)
 		require.NoError(t, err)
@@ -98,8 +98,8 @@ func TestReEncryptAll_RotatesToCurrentVersion(t *testing.T) {
 		require.Contains(t, val, "valor-")
 	}
 
-	// Sabotaje: cipher solo-v2 sin la key vieja NO puede operar blobs v1
-	// (post re-encrypt todos son v2, así que GetValue funciona)
+
+
 	c3, err := crypto.LoadKeyring("2:" + b642)
 	require.NoError(t, err)
 	storeOnlyV2 := &PGStore{Pool: pools.Auth, Cipher: c3}

@@ -15,24 +15,24 @@ import (
 
 // Patterns regex compilados (orden importa: más específicos primero).
 var (
-	// Email común — RFC 5322 simplified, suficiente para PII detection.
+
 	emailRe = regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b`)
 
-	// RUT chileno con guión OBLIGATORIO para evitar matchear UUIDs/IDs random.
-	// Acepta: NN.NNN.NNN-X | NNNNNNNN-X (con guión) | N.NNN.NNN-X (RUT corto).
+
+
 	rutRe = regexp.MustCompile(`\b(?:\d{1,2}\.\d{3}\.\d{3}-[\dkK]|\d{7,8}-[\dkK])\b`)
 
-	// API key Domain: domk_{env}_{43chars b64url}
+
 	apiKeyRe = regexp.MustCompile(`\bdomk_(?:live|test|dev)_[A-Za-z0-9_\-]{20,}\b`)
 
-	// Bearer token genérico en header.
+
 	bearerRe = regexp.MustCompile(`(?i)Bearer\s+[A-Za-z0-9._\-]{20,}`)
 
-	// Phone Chile: +56 9 NNNN NNNN | +569NNNNNNNN | etc.
+
 	phoneRe = regexp.MustCompile(`\+?56\s?9\s?\d{4}\s?\d{4}`)
 
-	// Tarjeta crédito básico (4 grupos de 4 dígitos, opcional separadores).
-	// NO valida Luhn — solo pattern superficial.
+
+
 	creditCardRe = regexp.MustCompile(`\b(?:\d{4}[\s\-]?){3}\d{4}\b`)
 )
 
@@ -48,8 +48,8 @@ func Redact(s string) string {
 	if s == "" {
 		return s
 	}
-	// Orden: más específico primero (api key tiene "domk_" prefix antes que rutas
-	// genéricas)
+
+
 	s = apiKeyRe.ReplaceAllString(s, "[API_KEY]")
 	s = bearerRe.ReplaceAllString(s, "Bearer [TOKEN]")
 	s = emailRe.ReplaceAllString(s, "[EMAIL]")
@@ -83,7 +83,7 @@ func RedactMap(m map[string]string) map[string]string {
 func RedactHeader(headers map[string][]string) map[string][]string {
 	out := make(map[string][]string, len(headers))
 	for k, vals := range headers {
-		// Headers sensibles enteramente redacted (no aplicar regex, valor entero es secret).
+
 		lowKey := strings.ToLower(k)
 		if isSensitiveHeader(lowKey) {
 			out[k] = []string{"[REDACTED]"}

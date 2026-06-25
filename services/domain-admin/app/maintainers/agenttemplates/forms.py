@@ -17,7 +17,7 @@ from .models import AgentTemplate
 class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
     """Form para crear/editar plantillas de agentes."""
 
-    # SlugNormalizationMixin: model/field para el check de unicidad (global).
+
     slug_model = AgentTemplate
     slug_field = "slug"
 
@@ -85,8 +85,8 @@ class AgentTemplateForm(SlugNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: AgentTemplate | None = None, **kwargs):
-        # SlugNormalizationMixin(InstanceAwareMixin) captura instance ->
-        # self.instance (para excluirse en clean_slug).
+
+
         super().__init__(*args, instance=instance, **kwargs)
         if instance is not None and not self.is_bound:
             self.fields["slug"].initial = instance.slug

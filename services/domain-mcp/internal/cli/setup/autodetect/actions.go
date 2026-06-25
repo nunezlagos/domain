@@ -293,7 +293,7 @@ func recordManifest(projectDir string, actions []Action) error {
 	manifestDir := filepath.Join(projectDir, ".domain")
 	manifestPath := filepath.Join(manifestDir, "install-manifest.json")
 
-	// Try to write to project-local dir first
+
 	err := os.MkdirAll(manifestDir, 0o755)
 	if err != nil {
 		manifestPath = fallbackManifestPath(projectDir)

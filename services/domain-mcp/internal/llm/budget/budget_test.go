@@ -41,20 +41,20 @@ func TestComplete_BlocksWhenExhausted(t *testing.T) {
 	f := &fakeProvider{usagePerCall: 80}
 	p := New(f, mgr)
 
-	// 1ra llamada pasa (80/100)
+
 	_, err = p.Complete(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)
-	// 2da llamada pasa el Check (80 < 100) y consume → 160
+
 	_, err = p.Complete(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)
-	// 3ra llamada bloqueada en Check
+
 	_, err = p.Complete(context.Background(), llm.CompletionOptions{})
 	require.ErrorIs(t, err, tokens.ErrBudgetExceeded)
 	require.Equal(t, 2, f.calls, "el provider no se llama con budget agotado")
 }
 
 func TestCompleteStream_TruncatesGracefully(t *testing.T) {
-	// hard ~5 tokens; chunks largos para forzar el corte a mitad de stream
+
 	mgr, err := tokens.NewTokenBudget(0, 5, 0, tokens.ModeTruncate)
 	require.NoError(t, err)
 	long := strings.Repeat("palabra ", 20) // >>5 tokens estimados

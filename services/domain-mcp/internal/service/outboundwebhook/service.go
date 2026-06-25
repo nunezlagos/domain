@@ -95,14 +95,14 @@ func ValidateURL(raw string, requireTLS bool) error {
 		strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
 		return ErrSSRF
 	}
-	// IPv4 privadas
+
 	if strings.HasPrefix(host, "10.") ||
 		strings.HasPrefix(host, "192.168.") ||
 		strings.HasPrefix(host, "169.254.") {
 		return ErrSSRF
 	}
 	if strings.HasPrefix(host, "172.") {
-		// 172.16.0.0/12 → segundo octeto 16-31
+
 		parts := strings.Split(host, ".")
 		if len(parts) >= 2 {
 			var oct int

@@ -105,7 +105,7 @@ func TestApply_Idempotent(t *testing.T) {
 
 	actions1, err := Apply(dir)
 	require.NoError(t, err)
-	// Both symlink and MCP upsert needed
+
 	require.GreaterOrEqual(t, len(actions1), 1)
 
 	actions2, err := Apply(dir)
@@ -146,7 +146,7 @@ func TestApply_FullProject(t *testing.T) {
 
 	actions, err := Apply(dir)
 	require.NoError(t, err)
-	// Symlink + MCP upsert
+
 	require.GreaterOrEqual(t, len(actions), 2)
 
 	target, err := os.Readlink(filepath.Join(dir, "AGENTS.md"))

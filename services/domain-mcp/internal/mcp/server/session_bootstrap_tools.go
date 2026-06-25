@@ -85,7 +85,7 @@ func toolSessionRegister() mcp.Tool {
 //  2. projects.slug match al basename(cwd).
 //  3. projects.repository_url match exacto al git_remote (compat).
 func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID, cwd, gitRemote string) (uuid.UUID, string, bool) {
-	// 1. project_repositories.url
+
 	if gitRemote != "" {
 		var pid uuid.UUID
 		var pslug string
@@ -102,7 +102,7 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 			return pid, pslug, true
 		}
 	}
-	// 2. projects.slug = basename(cwd)
+
 	base := filepath.Base(strings.TrimRight(cwd, "/"))
 	if base != "" && base != "." && base != "/" {
 		var pid uuid.UUID
@@ -115,7 +115,7 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 			return pid, base, true
 		}
 	}
-	// 3. projects.repository_url (compat con columna legacy)
+
 	if gitRemote != "" {
 		var pid uuid.UUID
 		var pslug string
@@ -149,11 +149,11 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError("cwd requerido"), nil
 	}
 
-	// existing_rules_files: el cliente IDE lista que archivos AI-rules existen
-	// en el cwd. El server NO lee el filesystem del cliente — solo reporta
-	// estos paths en el response para que el LLM los lea con su tool Read y
-	// (opcional) los importe como project_policies con
-	// domain_project_policy_import_from_text.
+
+
+
+
+
 	rulesFiles := []string{}
 	if v, ok := args["existing_rules_files"].([]any); ok {
 		for _, item := range v {
@@ -165,9 +165,9 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 
 	projID, projSlug, matched := d.matchProjectFromCwdOrRemote(ctx, orgID, cwd, gitRemote)
 	if !matched {
-		// El project_id se resuelve SIEMPRE: si no hay match, se auto-crea desde
-		// el git de la sesion y se enlazan las skills de plataforma. Si el alta
-		// falla, caemos al cuestionario manual (comportamiento previo).
+
+
+
 		newID, newSlug, cerr := d.autoCreateProject(ctx, orgID, cwd, gitRemote, gitBranch, gitHead)
 		if cerr != nil {
 			suggestionSlug := sanitizeSlug(filepath.Base(strings.TrimRight(cwd, "/")))
@@ -204,7 +204,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		return toolResultJSON(resp)
 	}
 
-	// Proyecto conocido: leer estado previo + last_known_head
+
 	var (
 		lastHead   *string
 		lastBranch *string
@@ -230,7 +230,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		headChanged = true
 	}
 
-	// Bump last_seen_*
+
 	if _, err := d.q(ctx).Exec(ctx,
 		`UPDATE projects
 		   SET last_known_head  = COALESCE(NULLIF($2,''), last_known_head),
@@ -243,13 +243,13 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("update last_seen: %v", err)), nil
 	}
 
-	// Recent observations (top 5). observations no tiene `title` ni `type`
-	// — usa observation_type + content (truncamos a 80 chars para preview).
-	// CRITICO: cerrar rows EXPLICITO antes de las siguientes queries dentro
-	// de la misma tx; pgx no permite queries concurrentes en una sola tx,
-	// y un `defer rows.Close()` al final del handler dejaria las queries
-	// posteriores en estado "conn busy" → fallan silenciosamente con
-	// nuestros `if err == nil` y los counts quedan en 0.
+
+
+
+
+
+
+
 	recentObs := []map[string]any{}
 	rows, qerr := d.q(ctx).Query(ctx,
 		`SELECT id::text, observation_type,
@@ -274,8 +274,8 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		rows.Close() // explicito ANTES de las proximas queries en la misma tx
 	}
 
-	// Counts policies + project_repos. COUNT(*) en pg devuelve bigint;
-	// usar int64 para evitar scan mismatch silencioso.
+
+
 	var (
 		projPoliciesCount     int64
 		platformPoliciesCount int
@@ -290,7 +290,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		_ = err // count opcional, no abortar el bootstrap
 	}
 
-	// platform_policies no tiene RLS — usa el service.
+
 	if d.Policies != nil {
 		if pols, perr := d.Policies.List(ctx, ""); perr == nil {
 			platformPoliciesCount = len(pols)
@@ -365,7 +365,7 @@ func sanitizeSlug(s string) string {
 	if out == "" {
 		out = "proyecto"
 	}
-	// El slug debe empezar con letra (regex de projects.slug).
+
 	if out[0] >= '0' && out[0] <= '9' {
 		out = "p-" + out
 	}
@@ -382,8 +382,8 @@ func sanitizeSlug(s string) string {
 func (d *Deps) autoCreateProject(ctx context.Context, orgID uuid.UUID, cwd, gitRemote, gitBranch, gitHead string) (uuid.UUID, string, error) {
 	slug := sanitizeSlug(filepath.Base(strings.TrimRight(cwd, "/")))
 
-	// Idempotencia: si el slug ya existe (no matcheado por remote/basename),
-	// reusarlo en vez de fallar por UNIQUE.
+
+
 	if d.Projects != nil {
 		if existing, _ := d.Projects.GetBySlug(ctx, orgID, slug); existing != nil {
 			return existing.ID, existing.Slug, nil
@@ -402,7 +402,7 @@ func (d *Deps) autoCreateProject(ctx context.Context, orgID uuid.UUID, cwd, gitR
 		return uuid.Nil, "", fmt.Errorf("insert project: %w", err)
 	}
 
-	// Registrar el remoto detectado (best-effort, no aborta el alta).
+
 	if gitRemote != "" && d.ProjectRepos != nil {
 		_, _ = d.ProjectRepos.Add(ctx, projectreposvc.AddInput{
 			ProjectID:     projID,
@@ -412,7 +412,7 @@ func (d *Deps) autoCreateProject(ctx context.Context, orgID uuid.UUID, cwd, gitR
 		})
 	}
 
-	// Observacion de auditoria (best-effort).
+
 	_, _ = d.q(ctx).Exec(ctx,
 		`INSERT INTO knowledge_observations (project_id, observation_type, content, tags)
 		 VALUES ($1, 'discovery', $2, ARRAY['bootstrap','auto_created'])`,
@@ -455,7 +455,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError("slug y name requeridos"), nil
 	}
 
-	// Idempotencia: si slug ya existe, devolver known=true en lugar de duplicar.
+
 	if existing, _ := d.Projects.GetBySlug(ctx, orgID, slug); existing != nil {
 		return toolResultJSON(map[string]any{
 			"known":   true,
@@ -470,8 +470,8 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	cwd, _ := args["cwd"].(string)
 	desc, _ := args["description"].(string)
 
-	// Crear project con INSERT directo (Service.Create requiere muchos campos
-	// que no aplican aqui — slug/name/description bastan para bootstrap).
+
+
 	var projID uuid.UUID
 	err := d.q(ctx).QueryRow(ctx,
 		`INSERT INTO projects
@@ -487,7 +487,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("create project failed: %v", err)), nil
 	}
 
-	// Si hay remote_url, registrarlo en project_repositories.
+
 	var createdRepo *projectreposvc.Repo
 	if remoteURL != "" && d.ProjectRepos != nil {
 		remoteName, _ := args["remote_name"].(string)
@@ -515,9 +515,9 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		}
 	}
 
-	// Persistir observacion inicial de registro (audit).
-	// observations schema: (project_id, observation_type,
-	// content). No tiene title — lo embebemos en content como first-line.
+
+
+
 	if _, oerr := d.q(ctx).Exec(ctx,
 		`INSERT INTO knowledge_observations
 		   (project_id, observation_type, content, tags)
@@ -526,13 +526,13 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		fmt.Sprintf("# Proyecto registrado via session_bootstrap\n\nProyecto %s creado desde sesion MCP.\n- cwd: %s\n- remote: %s\n- branch: %s\n- head: %s",
 			slug, cwd, remoteURL, gitBranch, gitHead),
 	); oerr != nil {
-		// Log silencioso: el insert de observation NO debe abortar el registro
-		// del proyecto. Si falla, seguimos — la tx no se aborta porque el caller
-		// quiere que el proyecto quede creado igual.
+
+
+
 		_ = oerr
 	}
 
-	// Refetch para devolver el project completo.
+
 	proj, _ := d.Projects.GetByID(ctx, projID)
 	return toolResultJSON(map[string]any{
 		"known":   false, // recien creado

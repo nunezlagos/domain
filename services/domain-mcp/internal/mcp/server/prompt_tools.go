@@ -1,4 +1,4 @@
-// MCP tools — single-shot prompt router issue-12.7
+
 
 package mcpserver
 
@@ -56,7 +56,7 @@ func (d *Deps) handlePromptRoute(ctx context.Context, req mcp.CallToolRequest) (
 			orgID = &o
 		}
 	}
-	// Override desde args si el caller lo pasa explicito (tests, batch)
+
 	if s := req.GetString("created_by_user_id", ""); s != "" {
 		if u, err := uuid.Parse(s); err == nil {
 			createdBy = &u

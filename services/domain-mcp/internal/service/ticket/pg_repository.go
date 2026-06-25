@@ -60,7 +60,7 @@ func scanTicket(row pgx.Row) (*Ticket, error) {
 	); err != nil {
 		return nil, err
 	}
-	// REQ-58: display_key = external_id si está, sino key interno.
+
 	t.DisplayKey = t.Key
 	if t.ExternalID != "" {
 		t.DisplayKey = t.ExternalID
@@ -143,8 +143,8 @@ func (r *pgRepository) Insert(ctx context.Context, in CreateInput) (*Ticket, err
 			return nil, err
 		}
 		key := fmt.Sprintf("%s-%d", prefix, num)
-		// REQ-58: external_* opcional al crear. Si vienen, link en el
-		// mismo INSERT + external_synced_at=NOW(); sino, NULLs.
+
+
 		var extSyncedAt any
 		if in.ExternalProvider != "" {
 			extSyncedAt = "now"
@@ -520,13 +520,13 @@ func nullIfEmpty(s string) any {
 // REQ-58 — preparación pre-Jira.
 func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uuid.UUID, provider string, mappings []BulkLinkMapping) (*BulkLinkResult, error) {
 	out := &BulkLinkResult{}
-	// Si estamos dentro de una tx (típicamente sí — el handler MCP/REST
-	// abre tx por request), usamos SAVEPOINTs por item para aislar
-	// fallos. Si no hay tx, los Exec corren en autocommit y cada
-	// fallo es independiente de los demás (sin necesidad de savepoint).
+
+
+
+
 	tx := txctx.TxFromContext(ctx)
 	for i, m := range mappings {
-		// Resolver ticket_id por id o por key
+
 		var tid uuid.UUID
 		if m.TicketID != uuid.Nil {
 			tid = m.TicketID
@@ -545,8 +545,8 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 			out.Errors = append(out.Errors, "mapping sin TicketID ni TicketKey")
 			continue
 		}
-		// Savepoint si estamos en tx — permite rollback per-item sin
-		// abortar el batch entero.
+
+
 		spName := fmt.Sprintf("bulk_link_%d", i)
 		if tx != nil {
 			if _, err := tx.Exec(ctx, "SAVEPOINT "+spName); err != nil {
@@ -568,7 +568,7 @@ func (r *pgRepository) BulkLinkExternal(ctx context.Context, orgID, projectID uu
 				_, _ = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
 			}
 			if isExternalUniqueViolation(err) {
-				// REQ-59: el external_id ya está tomado por otro ticket.
+
 				out.Errors = append(out.Errors,
 					fmt.Sprintf("ticket %s: external_id %q ya está vinculado a otro ticket en esta org", tid, m.ExternalID))
 			} else {
@@ -617,7 +617,7 @@ func (r *pgRepository) Claim(ctx context.Context, orgID, ticketID, userID uuid.U
 	if ttlMinutes <= 0 || ttlMinutes > 240 {
 		ttlMinutes = 30 // default 30 min
 	}
-	// Verificar si está lockeado por otro user.
+
 	curr, err := r.Get(ctx, orgID, ticketID)
 	if err != nil {
 		return nil, err
@@ -655,7 +655,7 @@ func (r *pgRepository) Release(ctx context.Context, orgID, ticketID, userID uuid
 	}
 	if *curr.LockedBy != userID &&
 		curr.LockedUntil != nil && curr.LockedUntil.After(timeNow()) {
-		// Lock activo de otro user — solo el owner puede liberarlo.
+
 		return nil, ErrLockedByOther
 	}
 	row := r.q(ctx).QueryRow(ctx,

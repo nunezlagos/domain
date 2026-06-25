@@ -39,9 +39,9 @@ func (s *AgentHistorySource) Run(ctx context.Context, env *wizardplan.ContextEnv
 		return nil
 	}
 
-	// Query agent_runs recientes; usa ILIKE sobre nombre de agent + outputs
-	// JSONB. Sin embedding por ahora — heurística simple.
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+
+
+
 	_ = s // unused-org scoping
 	q := `
 		SELECT ar.id, COALESCE(a.slug, ''), ar.started_at,
@@ -75,7 +75,7 @@ func (s *AgentHistorySource) Run(ctx context.Context, env *wizardplan.ContextEnv
 		if err := rows.Scan(&r.AgentRunID, &r.AgentSlug, &r.StartedAt, &summary); err != nil {
 			continue
 		}
-		// Filtrar por keyword match.
+
 		summaryLower := lowerOnAscii(summary)
 		if !matchesAnyKeyword(summaryLower, keywords) {
 			continue

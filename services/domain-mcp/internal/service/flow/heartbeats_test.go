@@ -38,8 +38,8 @@ func TestHeartbeatStore_Defaults(t *testing.T) {
 
 func TestHeartbeatStore_FindStuckLimitDefaults(t *testing.T) {
 	store := &HeartbeatStore{}
-	// With nil pool, this will fail at DB call, not at limit validation
-	// Just confirm it doesn't panic due to limit computation
+
+
 	_ = store.HeartbeatTimeout
 	_ = store.Pool
 }

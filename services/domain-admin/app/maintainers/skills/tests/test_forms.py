@@ -72,7 +72,7 @@ class SkillFormCreateTests(MaintainerTestCase):
 
     def test_slug_se_normaliza_a_minusculas(self):
         form = SkillForm(data=self._data(slug="MiSkill"))
-        # clean_slug hace .strip().lower(): el slug es valido y queda en minusculas.
+
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["slug"], "miskill")
 

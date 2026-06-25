@@ -40,7 +40,7 @@ func (s *rateState) allow(maxPerMin int) bool {
 	defer s.mu.Unlock()
 	now := time.Now()
 	cutoff := now.Add(-1 * time.Minute)
-	// Compactar window: quitar timestamps < cutoff
+
 	kept := s.window[:0]
 	for _, t := range s.window {
 		if t.After(cutoff) {
@@ -79,7 +79,7 @@ func (s *cbState) record(failure bool, threshold int, cooldown time.Duration, no
 		return
 	}
 	s.consecutive++
-	// No se resetea consecutive al abrir: un fallo en half-open re-abre directo.
+
 	if s.consecutive >= threshold {
 		s.openUntil = now.Add(cooldown)
 	}
@@ -99,13 +99,13 @@ type ResilientWrapper struct {
 	defaults ToolBudget
 	now      func() time.Time
 
-	// REQ-67 cache
+
 	cacheLRU    CacheStore
 	cacheTTLs   map[string]time.Duration // tool -> ttl si es cacheable
 	invalidates map[string]bool          // tool -> true si invalida en escritura
 	orgIDFn     func() string            // accessor del orgID del principal vigente
 
-	// REQ-70 metricas. Hooks no-op si nil — el wrap sigue funcionando.
+
 	metricsOnCall  func(tool, status string, durationSeconds float64)
 	metricsOnCacheHit  func()
 	metricsOnCacheMiss func()
@@ -252,7 +252,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 		start := r.now()
 		b := r.budget(toolName)
 
-		// Circuit breaker check (fail-fast sin invocar handler)
+
 		var cb *cbState
 		if b.CBThreshold > 0 {
 			cb = r.breaker(toolName)
@@ -263,7 +263,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-		// Rate limit check
+
 		if b.CallsPerMinute > 0 {
 			if !r.state(toolName).allow(b.CallsPerMinute) {
 				return mcp.NewToolResultError(
@@ -272,7 +272,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-		// REQ-67 cache lookup (solo si el tool esta marcado cacheable).
+
 		r.mu.Lock()
 		orgIDFn := r.orgIDFn
 		r.mu.Unlock()
@@ -316,7 +316,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			cb.record(failure, b.CBThreshold, cooldown, r.now())
 		}
 
-		// REQ-67 cache write / invalidation tras exito del handler.
+
 		success := err == nil && (result == nil || !result.IsError)
 		if success {
 			if cacheable && orgID != "" && cacheKey != "" {
@@ -328,8 +328,8 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 				r.invalidateOrg(orgID)
 			}
 		}
-		// REQ-70 emit metrica del call (excepto cache_hits que ya
-		// se emitieron arriba con return).
+
+
 		r.mu.Lock()
 		oc := r.metricsOnCall
 		r.mu.Unlock()
@@ -368,7 +368,7 @@ func execWithRetry(ctx context.Context, b ToolBudget, handler mcpgo.ToolHandlerF
 		if err == nil && (result == nil || !result.IsError) {
 			return result, nil
 		}
-		// Transient error? (connection reset, deadline, timeout)
+
 		if err != nil && !isTransient(err) {
 			return result, err
 		}

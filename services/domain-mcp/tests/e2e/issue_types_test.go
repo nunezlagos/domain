@@ -61,7 +61,7 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	// Org + project base.
+
 	var orgID, projectID uuid.UUID
 	err = pools.App.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
@@ -72,7 +72,7 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	).Scan(&projectID)
 	require.NoError(t, err)
 
-	// Servicios wired.
+
 	classifier := &promptrouter.WizardplanAdapter{Inner: promptrouter.HeuristicClassifier{}}
 	analyzer := &wp.Analyzer{
 		Classifier: classifier,
@@ -117,7 +117,7 @@ func TestIssueType_Chat_SkipsWizardAndReplies(t *testing.T) {
 	require.Equal(t, promptrouter.IntentChat, resp.Intent)
 	require.NotEmpty(t, resp.Reply, "debe haber respuesta de chat")
 
-	// Asserts BD: NO se debe haber creado intake ni hu_draft.
+
 	var intakeCount, draftCount int
 	require.NoError(t, f.pools.App.QueryRow(ctx,
 		`SELECT COUNT(*) FROM issue_intake_payloads`).Scan(&intakeCount))
@@ -158,7 +158,7 @@ func TestIssueType_Feature_StartsAdaptiveWizard(t *testing.T) {
 	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
 	require.NotNil(t, q, "debe pedir al menos 1 input")
 
-	// Verifica envelope persistido.
+
 	env, err := f.adaptive.LoadEnvelope(ctx, d.ID)
 	require.NoError(t, err)
 	require.Equal(t, "feature", env.Intent.Intent)
@@ -181,14 +181,14 @@ func TestIssueType_Fix_PersistsClassificationAndDraft(t *testing.T) {
 	require.NotNil(t, resp.IntakeID)
 	require.NotNil(t, resp.DraftID)
 
-	// Verifica intake_payload.
+
 	intakeP, err := f.intakeSvc.Get(ctx, *resp.IntakeID)
 	require.NoError(t, err)
 	require.Equal(t, "fix", *intakeP.ClassifiedType)
 	require.Equal(t, "high", *intakeP.ClassifiedSeverity)
 	require.GreaterOrEqual(t, *intakeP.ClassifiedConfidence, 0.5)
 
-	// Verifica draft en issue_drafts.
+
 	var draftStatus, draftMode string
 	require.NoError(t, f.pools.App.QueryRow(ctx,
 		`SELECT status, mode FROM issue_drafts WHERE id = $1`, *resp.DraftID,
@@ -266,7 +266,7 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Sembrar HU existente que matche el prompt en spanish FTS.
+
 	var reqID uuid.UUID
 	require.NoError(t, f.pools.App.QueryRow(ctx,
 		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-13-http-api', 'API HTTP REST') RETURNING id`,
@@ -291,7 +291,7 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 	if len(env.HUMatches.Candidates) > 0 {
 		t.Logf("✓ HU dedup encontró %d candidatos; top sim=%.2f",
 			len(env.HUMatches.Candidates), env.HUMatches.Candidates[0].Similarity)
-		// req_parent debería haber sido inferido.
+
 		slot, ok := env.Slots[wp.SlotREQParent]
 		if ok && slot.Status != wp.SlotUnknown {
 			require.Equal(t, "REQ-13-http-api", slot.Value)
@@ -313,13 +313,13 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 	require.Equal(t, promptrouter.OutcomeWizardStarted, resp.Outcome)
 	draftID := *resp.DraftID
 
-	// Adaptive responds. El adaptive tiene un loop:
-	// next-question → answer → next-question → ... hasta finished.
+
+
 	q, err := f.adaptive.LoadEnvelope(ctx, draftID)
 	require.NoError(t, err)
 	_ = q
 
-	// Resolver TODOS los slots vía respuestas plausibles.
+
 	answers := map[string]any{
 		wp.SlotIntent:    "fix",
 		wp.SlotSeverity:  "high",
@@ -350,7 +350,7 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 	require.Equal(t, issuebuilder.StatusFinished, d.Status,
 		"el draft debe quedar en finished tras responder todos los slots")
 
-	// Asserts BD: envelope persistido + slots provided.
+
 	var answersRaw string
 	require.NoError(t, f.pools.App.QueryRow(ctx,
 		`SELECT answers::text FROM issue_drafts WHERE id = $1`, draftID,

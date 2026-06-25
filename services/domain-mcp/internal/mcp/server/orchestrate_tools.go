@@ -1,17 +1,17 @@
-// MCP tools — orquestador SDD (issue-08.10 mcp-001 + mcp-002 + mcp-004).
-//
-// Tres tools que el cliente IDE (Claude Code, Cline, etc.) usa para
-// driver el pipeline SDD del servidor:
-//
-//   domain_orchestrate(raw_text, mode?, starting_phase?, skip_phases?)
-//     Inicia un flow_run + devuelve el plan con prompts pre-construidos.
-//
-//   domain_orchestrate_phase_result(flow_run_step_id, output, memory_refs_saved)
-//     Reporta el resultado de una fase. Valida D5 + handler.Validate.
-//     Devuelve status + next step prompt si hay mas fases pending.
-//
-//   domain_flow_status(flow_run_id)
-//     Lee el estado completo de un flow_run gobernado por el orquestador.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package mcpserver
 
@@ -124,8 +124,8 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	startingPhase := req.GetString("starting_phase", "")
 	expressMax := req.GetInt("express_max_lines", 0)
 
-	// Fase 2: project_id obligatorio (flow_runs.project_id es NOT NULL; el
-	// orquestador lo valida con ErrProjectIDRequired).
+
+
 	pidStr := req.GetString("project_id", "")
 	if pidStr == "" {
 		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
@@ -145,7 +145,7 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
-	// hardspec OBLIGATORIO por defecto: solo se desactiva si se pasa false explicito.
+
 	hardspec := true
 	if v, ok := args["hardspec"].(bool); ok {
 		hardspec = v
@@ -217,8 +217,8 @@ func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToo
 		DurationMS:      durationMS,
 	})
 	if err != nil {
-		// Errores tipados se devuelven con codigo accionable para que el
-		// cliente decida si re-emitir, fallar o pedir input humano.
+
+
 		return mcp.NewToolResultError("phase_result: " + err.Error()), nil
 	}
 	body, _ := json.MarshalIndent(res, "", "  ")
@@ -276,7 +276,7 @@ func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// Mutators: tope conservador (60/min) como mem_save, agent_run, etc.
+
 	wrap.SetBudget("domain_orchestrate",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_phase_result",

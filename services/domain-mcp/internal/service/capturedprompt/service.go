@@ -22,7 +22,7 @@ func NewService(repo Repository) *Service {
 type CaptureInput struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
-	// REQ-42.3: SessionID removido (columna session_id dropeada de captured_prompts).
+
 	ProjectID  *uuid.UUID
 	Content    string
 	ClientKind string

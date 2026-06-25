@@ -43,11 +43,11 @@ func TestBuildReportFromData_LowUse(t *testing.T) {
 }
 
 func TestBuildReportFromData_ShortWindowAdjusts(t *testing.T) {
-	// 5 días: threshold = 1. 1 ejecución = USADO.
+
 	agent := RunnerUsage{Total: 1}
 	r := BuildReportFromData(5, agent, RunnerUsage{}, RunnerUsage{}, nil, nil, nil)
 	require.Equal(t, CategoryUsed, r.AgentRunner.Category)
-	// Pero con 0 sigue NUNCA.
+
 	agent2 := RunnerUsage{Total: 0}
 	r2 := BuildReportFromData(5, agent2, RunnerUsage{}, RunnerUsage{}, nil, nil, nil)
 	require.Equal(t, CategoryNeverUsed, r2.AgentRunner.Category)

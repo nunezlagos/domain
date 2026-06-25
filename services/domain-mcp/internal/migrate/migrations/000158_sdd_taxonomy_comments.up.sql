@@ -1,9 +1,9 @@
--- migration: sdd_taxonomy_comments
--- description: COMMENT ON TABLE para auto-documentar la taxonomía del pipeline
---   SDD/TDD/issue (mig 000151). No cambia schema; solo agrega descripciones
---   legibles para quien lee el modelo de datos. Guardado con to_regclass para
---   ser robusto si alguna tabla no existe en un entorno dado.
--- breaking: false
+
+
+
+
+
+
 
 DO $$
 DECLARE

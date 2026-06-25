@@ -37,12 +37,12 @@ def _field_enc_key() -> str:
     return key
 
 
-# Error de dominio (la view lo traduce a messages.error).
+
 class ApiKeyError(Exception):
     """Error de operacion sobre API keys."""
 
 
-# Service base reusado: list (search name/prefix + paginacion) + signal.
+
 class ApiKeyService(MaintainerService):
     model = ApiKey
     search_fields = ("name", "key_prefix")
@@ -112,9 +112,9 @@ def get_api_key(api_key_id: str) -> ApiKey:
         raise ApiKeyError(f"API Key {api_key_id} no existe.") from exc
 
 
-# Constantes espejadas del backend Go (internal/auth/apikey/apikey.go).
-# DEBEN coincidir o el MCP rechaza la key: formato domk_<env>_<secret>,
-# prefix = primeros 16 chars, hash = bcrypt(cost=12).
+
+
+
 _API_KEY_ENV = "live"
 _PREFIX_LEN = 16
 _SECRET_BYTES = 32
@@ -156,12 +156,12 @@ def create_api_key(
     if ApiKey.objects.filter(name=name).exists():
         raise ApiKeyError(f"Ya existe una API Key con nombre '{name}'.")
 
-    # La passphrase se valida ANTES de generar/crear nada: si no esta, abortamos
-    # sin tocar la DB (no queremos una key a medio crear).
+
+
     enc_key = _field_enc_key()
 
     full, prefix, key_hash = _generate_secret()
-    # key_plaintext queda NULL (mig 000168): ya no se escribe la key en claro.
+
     api_key = ApiKey.objects.create(
         user=user,
         name=name,
@@ -170,9 +170,9 @@ def create_api_key(
         expires_at=expires_at,
         status=status,
     )
-    # Cifrado at-rest: key_ciphertext = pgp_sym_encrypt(full, passphrase). Raw SQL
-    # porque la columna es BYTEA y el cifrado lo hace Postgres (pgcrypto), no el
-    # ORM. Va dentro del mismo @transaction.atomic que el create de arriba.
+
+
+
     with connection.cursor() as cursor:
         cursor.execute(
             "UPDATE auth_api_keys SET key_ciphertext = pgp_sym_encrypt(%s, %s) "
@@ -204,10 +204,10 @@ def get_api_key_plaintext(api_key_id: str) -> str | None:
         return None
     has_ciphertext, plaintext = row
     if has_ciphertext:
-        # Descifrado AISLADO en su propio savepoint: si la passphrase no coincide
-        # (ej. tras rotar DOMAIN_FIELD_ENC_KEY) o falta, pgp_sym_decrypt lanza error
-        # de DB. Lo capturamos y devolvemos None: el detalle del usuario descifra
-        # varias keys en loop, y un error NO debe tumbar (500) toda la pagina.
+
+
+
+
         try:
             with transaction.atomic(), connection.cursor() as cursor:
                 cursor.execute(
@@ -218,7 +218,7 @@ def get_api_key_plaintext(api_key_id: str) -> str | None:
                 return cursor.fetchone()[0]
         except Exception:
             return None
-    # Fallback: key vieja en claro (puede ser None tambien).
+
     return plaintext
 
 
@@ -286,5 +286,5 @@ def get_stats() -> dict:
     return {"total": total, "active": active, "revoked": revoked}
 
 
-# Excepcion de dominio que core.views.MaintainerViews captura (error_class).
+
 ServiceError = ApiKeyError

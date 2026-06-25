@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// sddProposeHandler — fase sdd-propose. system_prompt en BD.
+
 
 type sddProposeHandler struct{}
 
@@ -51,8 +51,8 @@ func (h *sddProposeHandler) Validate(_ context.Context, _ *Output, result Client
 		return errors.New("sdd-propose: campo 'proposal_md' requerido")
 	}
 	if status, _ := result.Output["status"].(string); status != "draft" {
-		// Forzamos draft per RFC 0006 D5: el orquestador no auto-promueve
-		// proposals; eso requiere acción humana o judge approval.
+
+
 		return errors.New("sdd-propose: status debe ser 'draft' — promoción requiere paso explícito")
 	}
 	return nil

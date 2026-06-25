@@ -74,7 +74,7 @@ func (a *API) listCapturedPrompts(w http.ResponseWriter, r *http.Request) {
 			filter.ProjectID = &pid
 		}
 	}
-	// REQ-42.3: filtro session_id removido (columna dropeada de captured_prompts).
+
 	if v := q.Get("limit"); v != "" {
 		filter.Limit, _ = strconv.Atoi(v)
 	}
@@ -223,8 +223,8 @@ func (a *API) listProposals(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	// Para read-only aqui usamos el pool admin que bypassa RLS — pero
-	// filtramos manualmente por current_org_id ya que el query lo hace.
+
+
 	if a.Pool == nil {
 		writeError(w, http.StatusServiceUnavailable, "pool_unavailable", "")
 		return

@@ -14,7 +14,7 @@ func setupFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 
-	// Estructura fixture: archivos de Claude Code, OpenCode, Cursor.
+
 	files := map[string]string{
 		"CLAUDE.md":             "# Claude global\n\nTono profesional.",
 		".claude/rules/git.md":  "# Git rules\n\nConventional commits.",
@@ -48,7 +48,7 @@ func TestScanner_DetectsAllKnownPatterns(t *testing.T) {
 		gotPaths[f.RelPath] = f.SourceTool
 	}
 
-	// Esperados (8 archivos):
+
 	require.Equal(t, "claude-code", gotPaths["CLAUDE.md"])
 	require.Equal(t, "claude-code", gotPaths[".claude/rules/git.md"])
 	require.Equal(t, "claude-code", gotPaths[".claude/rules/db.md"])
@@ -58,7 +58,7 @@ func TestScanner_DetectsAllKnownPatterns(t *testing.T) {
 	require.Equal(t, "windsurf", gotPaths[".windsurfrules"])
 	require.Equal(t, "generic", gotPaths["AGENTS.md"])
 
-	// NO esperados:
+
 	_, hasMain := gotPaths["src/main.go"]
 	require.False(t, hasMain, "no debe detectar .go files")
 	_, hasReadme := gotPaths["README.md"]

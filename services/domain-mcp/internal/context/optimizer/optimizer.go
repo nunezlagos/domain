@@ -49,7 +49,7 @@ func Optimize(messages []Message, cfg Config) Result {
 		cfg.KeepLast = 6
 	}
 
-	// Copy + sort cronológico ASC
+
 	sorted := make([]Message, len(messages))
 	copy(sorted, messages)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -61,7 +61,7 @@ func Optimize(messages []Message, cfg Config) Result {
 		return Result{Kept: sorted, Tokens: total}
 	}
 
-	// Mark evictables: NOT pinned AND NOT en los últimos KeepLast.
+
 	keepLastStart := len(sorted) - cfg.KeepLast
 	if keepLastStart < 0 {
 		keepLastStart = 0
@@ -84,7 +84,7 @@ func Optimize(messages []Message, cfg Config) Result {
 	}
 	evicted := []Message{}
 
-	// Evict desde el oldest evictable hasta caber.
+
 	for _, idx := range evictable {
 		if total <= cfg.MaxTokens {
 			break
@@ -94,7 +94,7 @@ func Optimize(messages []Message, cfg Config) Result {
 		total -= sorted[idx].Tokens
 	}
 
-	// Build result kept en orden cronológico.
+
 	out := make([]Message, 0, len(sorted))
 	for i, m := range sorted {
 		if kept[i] {
@@ -134,7 +134,7 @@ func sumTokens(msgs []Message) int {
 }
 
 func estimateTokens(text string) int {
-	// 4 chars per token aprox
+
 	return (len(text) + 3) / 4
 }
 

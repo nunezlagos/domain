@@ -1,13 +1,13 @@
--- migration: create_verifications
--- author: mnunez@saargo.com
--- issue: REQ-50 verify checkpoints post-cambios (Ola E)
--- description: tracking de verificaciones lightweight (build/test/lint/
---   smoke/custom) que el LLM dispara después de un cambio. El server NO
---   ejecuta nada — solo guarda checkpoints con items individuales + sus
---   resultados. El LLM ejecuta con sus tools nativas (Bash, Read) y
---   reporta back con domain_verify_complete.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE verifications (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17,9 +17,9 @@ CREATE TABLE verifications (
   session_id      UUID REFERENCES sessions(id) ON DELETE SET NULL,
   kind            VARCHAR(40) NOT NULL
     CHECK (kind IN ('build','test','lint','smoke','typecheck','migration','custom')),
-  -- items: array de checks individuales. Cada item:
-  --   { label: str, command?: str, status: pending|pass|fail|skipped,
-  --     output?: str, duration_ms?: int }
+
+
+
   items           JSONB NOT NULL DEFAULT '[]',
   status          VARCHAR(20) NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending','running','passed','failed','partial')),

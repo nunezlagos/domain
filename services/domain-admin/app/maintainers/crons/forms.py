@@ -81,9 +81,9 @@ class CronForm(InstanceAwareMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Cron | None = None, **kwargs):
-        # InstanceAwareMixin captura instance y lo expone como self.instance.
+
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edicion (unbound).
+
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug
@@ -97,7 +97,7 @@ class CronForm(InstanceAwareMixin, forms.Form):
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
-        # Unicidad por slug; en edicion se excluye el propio registro.
+
         qs = Cron.objects.filter(slug=slug)
         if self._exclude_self(qs).exists():
             raise forms.ValidationError("Ya existe un cron con ese slug.")

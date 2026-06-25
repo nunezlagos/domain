@@ -20,7 +20,7 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
     normaliza a lista en clean_skills_slugs().
     """
 
-    # core.forms.SlugNormalizationMixin usa estos atributos para la unicidad.
+
     slug_model = Agent
     slug_field = "slug"
 
@@ -89,10 +89,10 @@ class AgentForm(SlugNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: Agent | None = None, **kwargs):
-        # InstanceAwareMixin (via SlugNormalizationMixin) captura instance para
-        # que clean_slug se excluya a si mismo en edicion.
+
+
         super().__init__(*args, instance=instance, **kwargs)
-        # Valores iniciales solo al renderizar el form de edicion (unbound).
+
         if instance is not None and not self.is_bound:
             self.fields["name"].initial = instance.name
             self.fields["slug"].initial = instance.slug

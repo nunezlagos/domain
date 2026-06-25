@@ -77,8 +77,8 @@ func setupOW(t *testing.T) (*owFixture, func()) {
 func (f *owFixture) subscribe(t *testing.T, url, event string, filters string) *ow.Subscription {
 	t.Helper()
 	ctx := context.Background()
-	// El SSRF validator bloquea loopback (correcto en prod, test-005 implícito):
-	// se crea con URL pública válida y se apunta al receptor httptest vía SQL.
+
+
 	in := ow.CreateInput{Name: "sub-" + event, URL: "https://example.com/hook",
 		Events: []string{event}, Secret: "whsec_test_secret"}
 	if filters != "" {
@@ -130,7 +130,7 @@ func TestDelivery_HMACVerifiable(t *testing.T) {
 		t.Fatal("receptor nunca recibió el webhook")
 	}
 
-	// HMAC verificable: sha256=hex(hmac(secret, ts + "." + body))
+
 	secret, err := f.svc.DecryptSecret(ctx, sub.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, secret)
@@ -140,7 +140,7 @@ func TestDelivery_HMACVerifiable(t *testing.T) {
 	want := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 	require.Equal(t, want, gotSig, "la firma debe ser verificable por el receptor")
 
-	// Delivery marcada succeeded
+
 	var status string
 	require.NoError(t, f.pool.App.QueryRow(ctx,
 		`SELECT status FROM webhook_outbound_deliveries WHERE subscription_id = $1`,
@@ -163,14 +163,14 @@ func TestDelivery_FiltersApplied(t *testing.T) {
 
 	f.subscribe(t, recv.URL, "flow_run.completed", `{"flow_slug":"deploy"}`)
 
-	// Evento que NO matchea → ninguna delivery encolada
+
 	f.emitAndProcess(t, "flow_run.completed", `{"flow_slug":"otro","status":"completed"}`)
 	var count int
 	require.NoError(t, f.pool.App.QueryRow(ctx,
 		`SELECT COUNT(*) FROM webhook_outbound_deliveries`).Scan(&count))
 	require.Zero(t, count, "evento filtrado no debe encolar delivery")
 
-	// Evento que matchea → entrega
+
 	f.emitAndProcess(t, "flow_run.completed", `{"flow_slug":"deploy","status":"completed"}`)
 	require.Eventually(t, func() bool { return hits.Load() == 1 },
 		5*time.Second, 100*time.Millisecond)
@@ -199,7 +199,7 @@ func TestDelivery_RetryAndReplay(t *testing.T) {
 	require.Equal(t, "pending", status, "503 → sigue pending con backoff")
 	require.Equal(t, 2, attempt)
 
-	// Replay manual: resetea a pending NOW con ciclo fresco
+
 	_, err := f.pool.App.Exec(ctx, `
 		UPDATE webhook_outbound_deliveries
 		SET status='dead_letter', next_retry_at=NULL WHERE id=$1`, deliveryID)
@@ -232,7 +232,7 @@ func TestDelivery_CircuitBreakerSkips(t *testing.T) {
 
 	sub := f.subscribe(t, recv.URL, "agent_run.completed", "")
 
-	// Forzar estado de breaker abierto
+
 	_, err := f.pool.App.Exec(ctx, `
 		UPDATE webhook_outbound_subscriptions
 		SET failure_count = $2, last_failure_at = NOW()

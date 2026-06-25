@@ -1,16 +1,16 @@
-// MCP tools — workflow import / list / restore (issue-12.7)
-//
-// Tres tools para que el agente IA gestione el override de archivos .md
-// desde dentro del flow, sin tener que salirse al CLI:
-//
-//   domain_workflow_import(root, write_stub, dry_run)
-//     Escanea + backup + opcionalmente reemplaza .md por stubs.
-//
-//   domain_workflow_list(root)
-//     Lista archivos importados con su status.
-//
-//   domain_workflow_restore(rel_path, root)
-//     Reescribe el .md original desde el backup.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package mcpserver
 
@@ -100,8 +100,8 @@ func (d *Deps) handleWorkflowList(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError("list: " + err.Error()), nil
 	}
-	// Omitir original_content del response (puede ser grande); el caller usa
-	// restore si quiere el contenido completo.
+
+
 	lite := make([]map[string]any, 0, len(files))
 	for _, f := range files {
 		lite = append(lite, map[string]any{

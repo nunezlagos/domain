@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Tests sanity para los 8 handlers de fase agregados al catálogo.
-// Cada test cubre: Slug correcto, Build con RawText vacío rechaza,
-// Build happy path devuelve AgentTemplateSlug correcto + SystemPrompt
-// vacío (BD source-of-truth) + RetryPolicy y SuggestedSaves canónicos.
+
+
+
+
 
 func TestAllHandlers_SlugIdentity(t *testing.T) {
 	t.Parallel()
@@ -150,7 +150,7 @@ func TestSDDProposeHandler_Validate_RequiresDraftStatus(t *testing.T) {
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"proposal_md": "...", "status": "draft"},
 	}))
-	// status != draft debe ser rechazado (anti-promoción automática)
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"proposal_md": "...", "status": "approved"},
 	}))
@@ -180,7 +180,7 @@ func TestSDDTasksHandler_Validate_RequiresShapedTasks(t *testing.T) {
 			},
 		},
 	}))
-	// task sin id
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{
 			"tasks": []any{map[string]any{"description": "x"}},
@@ -215,15 +215,15 @@ func TestSDDArchiveHandler_Validate_RequiresArchivedFlag(t *testing.T) {
 func TestSDDOnboardHandler_Validate_SkippedOrDocCreated(t *testing.T) {
 	t.Parallel()
 	h := NewSDDOnboardHandler()
-	// skipped=true es válido (no había nada que documentar)
+
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"skipped": true},
 	}))
-	// doc_created=true también
+
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"doc_created": true},
 	}))
-	// ninguno → error (contract obliga a declarar explícito)
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{},
 	}))

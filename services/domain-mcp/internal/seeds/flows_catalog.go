@@ -103,9 +103,9 @@ func FlowsCatalog() []FlowCatalogEntry {
 			Description: "Pipeline canónico del orquestador SDD (RFC 0006). 10 fases: explore→spec→propose→design→tasks→apply→verify→judge→archive→onboard.",
 			Spec:        buildSDDPipelineSpec(),
 			IsActive:    true,
-			// deterministic_replay=false: las fases corren en el cliente IDE
-			// con LLM no-determinista (Claude/etc). El replay determinista
-			// no aplica a flows con steps tipo agent_run con modelos en vivo.
+
+
+
 			DeterministicReplay: false,
 		},
 	}
@@ -199,9 +199,9 @@ func seedFlows(ctx context.Context, db execer) (Report, error) {
 		if inserted {
 			rep.Created++
 		} else {
-			// Distinguimos preserved (user-modified, no se tocó) vs updated
-			// (se aplicaron cambios del catálogo). Para eso releemos la
-			// row: si is_user_modified=true → preserved, else updated.
+
+
+
 			var userModified bool
 			if scanErr := db.QueryRow(ctx,
 				`SELECT is_user_modified FROM flows WHERE slug=$1`,
@@ -214,8 +214,8 @@ func seedFlows(ctx context.Context, db execer) (Report, error) {
 		}
 	}
 
-	// Cleanup defensivo: borra seed_managed=true con slugs ya no en el
-	// catálogo actual Y sin flow_runs activos. Respeta is_user_modified=true.
+
+
 	currentSlugs := make([]string, len(catalog))
 	for i, e := range catalog {
 		currentSlugs[i] = e.Slug

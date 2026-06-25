@@ -25,7 +25,7 @@ func (p Platform) Home() string {
 	if h, err := os.UserHomeDir(); err == nil {
 		return h
 	}
-	// fallback (no debería pasar)
+
 	if h := os.Getenv("HOME"); h != "" {
 		return h
 	}
@@ -143,14 +143,14 @@ func (p Platform) DetectedClients() []Client {
 	}
 	out := []Client{}
 	for _, c := range candidates {
-		// claude-code se considera presente si ~/.claude existe (puede no haber
-		// mcp_servers.json todavía — el installer lo crea).
+
+
 		if dirExists(c.RootHint) {
 			out = append(out, c)
 		}
 	}
-	// opencode también disponible si el binario opencode está en PATH (incluso
-	// sin ~/.config/opencode aún).
+
+
 	hasOpencode := false
 	for _, c := range out {
 		if c.Name == "opencode" {

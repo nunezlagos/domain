@@ -41,7 +41,7 @@ func setupWithExtension(t *testing.T) (*dbstats.Service, func()) {
 
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
-	// Crear extensión (idempotente)
+
 	_, err = pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`)
 	require.NoError(t, err)
 
@@ -65,7 +65,7 @@ func TestDBStats_SlowQueries_Threshold(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Generar trafico contra la DB
+
 	for i := 0; i < 10; i++ {
 		_, _ = svc.Pool.Exec(ctx, `SELECT pg_sleep(0.05)`)
 	}
@@ -81,7 +81,7 @@ func TestDBStats_Snapshot(t *testing.T) {
 	svc, cleanup := setupWithExtension(t)
 	defer cleanup()
 	ctx := context.Background()
-	// Generar tráfico
+
 	for i := 0; i < 5; i++ {
 		_, _ = svc.Pool.Exec(ctx, `SELECT 1`)
 	}
@@ -90,7 +90,7 @@ func TestDBStats_Snapshot(t *testing.T) {
 	require.True(t, result.Inserted > 0)
 	require.True(t, time.Since(result.CapturedAt) < time.Minute)
 
-	// History debe devolver las filas insertadas
+
 	history, err := svc.HistorySince(ctx, time.Now().Add(-1*time.Minute), 100)
 	require.NoError(t, err)
 	require.NotEmpty(t, history)
@@ -103,10 +103,10 @@ func TestDBStats_Reset(t *testing.T) {
 	_, _ = svc.Pool.Exec(ctx, `SELECT 1`)
 	require.NoError(t, svc.Reset(ctx))
 
-	// Tras reset, pg_stat_statements queda casi vacío
+
 	queries, err := svc.SlowQueries(ctx, 0, 100)
 	require.NoError(t, err)
-	// Puede haber 1 (el reset mismo) o 0
+
 	require.True(t, len(queries) <= 5,
 		"post-reset, pg_stat_statements debe estar casi vacío")
 }

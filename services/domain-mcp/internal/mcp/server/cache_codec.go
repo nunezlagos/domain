@@ -9,12 +9,12 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// REQ-67: serializacion del resultado para guardar en cache LRU.
-//
-// El cache guarda bytes (lo que `LRU` espera). El handler MCP devuelve
-// *mcp.CallToolResult — JSON marshalable. encode → JSON → bytes;
-// decode → bytes → JSON → struct. La idempotencia es clave: hash de
-// args con sort de keys porque JSON.Marshal de un map no garantiza orden.
+
+
+
+
+
+
 
 // buildCacheKey: orgID + ":" + toolName + ":" + sha256(args ordenadas).
 func buildCacheKey(orgID, toolName string, req mcp.CallToolRequest) string {
@@ -70,9 +70,9 @@ func decodeCachedResult(b []byte) *mcp.CallToolResult {
 	}
 	var r mcp.CallToolResult
 	if err := json.Unmarshal(b, &r); err != nil {
-		// Defensivo: si el cache tiene basura (por ejemplo cambio de
-		// schema del mcp-go entre versiones), devolvemos nil para forzar
-		// que el caller re-ejecute el handler.
+
+
+
 		return nil
 	}
 	return &r

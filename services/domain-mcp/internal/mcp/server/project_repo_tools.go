@@ -144,7 +144,7 @@ func (d *Deps) handleProjectRepoList(ctx context.Context, req mcp.CallToolReques
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
-	// Helper para el LLM: ambiguity flag si hay >1 sin default claro.
+
 	ambiguous := len(list) > 1
 	for _, r := range list {
 		if r.IsDefault {

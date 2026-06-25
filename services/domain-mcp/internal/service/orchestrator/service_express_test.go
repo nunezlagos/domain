@@ -101,8 +101,8 @@ func TestService_Run_ExpressMode_RegistryWithoutHandlers_Fails(t *testing.T) {
 
 func TestService_Run_FullMode_WithoutAllHandlers_Fails(t *testing.T) {
 	t.Parallel()
-	// Full requiere los 10 handlers en el registry. Con sólo apply+verify
-	// el lookup de sdd-explore falla cuando intenta armar el plan.
+
+
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
@@ -127,8 +127,8 @@ func TestService_Sabotage_ApplyMissingRequiredCodeReference(t *testing.T) {
 		RawText: "any task",
 	})
 	require.NoError(t, err)
-	// Cliente reporta success pero NO incluye code_reference en
-	// MemoryRefsSaved → la D5 falla.
+
+
 	clientResult := phases.ClientResult{
 		Output: map[string]any{"summary": "looks good"},
 	}

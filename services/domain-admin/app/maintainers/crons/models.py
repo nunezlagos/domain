@@ -50,8 +50,8 @@ class Cron(SoftDeleteModel):
     estado se deriva del bool (`is_active`).
     """
 
-    # target_type es un CHECK, no un status; lo exponemos como choices del
-    # campo target_type para validar el form y para get_target_type_display.
+
+
     TARGET_TYPE_CHOICES = [
         ("flow", "Flow"),
         ("agent", "Agent"),
@@ -72,8 +72,8 @@ class Cron(SoftDeleteModel):
     enabled = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(null=True, blank=True)
     next_run_at = models.DateTimeField(null=True, blank=True)
-    # Redeclara status (heredado de SoftDeleteModel) solo para matchear el tipo
-    # real de la columna: en `crons` es `text`, no varchar(20).
+
+
     status = models.TextField(default="active")
 
     class Meta:

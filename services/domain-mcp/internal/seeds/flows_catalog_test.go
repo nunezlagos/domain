@@ -23,10 +23,10 @@ func TestFlowsCatalog_SDDPipelineSpec_HasAllTenPhasesInOrder(t *testing.T) {
 		require.Equal(t, slug, spec.Steps[i].ID, "orden canónico")
 		require.Equal(t, "agent_run", spec.Steps[i].Type)
 		require.Equal(t, "fail", spec.Steps[i].OnError)
-		// Config requerido por el orquestador
+
 		require.Equal(t, slug, spec.Steps[i].Config["agent_template_slug"])
 		require.Equal(t, slug, spec.Steps[i].Config["phase"])
-		// retry_policy del step debe coincidir con el mapeo RFC 0006
+
 		require.Equal(t, retryPolicyForPhase(slug), spec.Steps[i].Config["retry_policy"])
 	}
 }
@@ -48,8 +48,8 @@ func TestFlowsCatalog_SpecMarshalsToValidJSON(t *testing.T) {
 	c := FlowsCatalog()
 	raw, err := json.Marshal(c[0].Spec)
 	require.NoError(t, err)
-	// Round-trip sanity: el JSONB que persistimos debe deserializar
-	// idéntico al spec original (sin pérdida de campos).
+
+
 	var back FlowSpecJSON
 	require.NoError(t, json.Unmarshal(raw, &back))
 	require.Equal(t, c[0].Spec, back)

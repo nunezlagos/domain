@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- stubs (in-memory runners para tests sin DB) ---
+
 
 type stubFlowCall struct {
 	OrgID   uuid.UUID
@@ -107,7 +107,7 @@ func newTestDispatcher() (*Dispatcher, *[]stubFlowCall, *[]stubAgentCall, *[]stu
 	return d, flowCalls, agentCalls, skillCalls
 }
 
-// --- tests ---
+
 
 func TestDispatch_FlowTarget_CallsFlowRunner(t *testing.T) {
 	d, flowCalls, agentCalls, skillCalls := newTestDispatcher()
@@ -139,7 +139,7 @@ func TestDispatch_AgentTarget_CallsAgentRunner(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, *agentCalls, 1)
 	require.Equal(t, "hello", (*agentCalls)[0].UserPromp)
-	// JSON unmarshal convierte números a float64.
+
 	require.Equal(t, float64(1), (*agentCalls)[0].Vars["x"])
 	require.Empty(t, *flowCalls)
 }
@@ -188,7 +188,7 @@ func TestDispatch_RunnerErrorBubblesUp(t *testing.T) {
 }
 
 func TestDispatch_UnknownSource_DoesNotCrash(t *testing.T) {
-	// Source desconocido: warning, no falla.
+
 	d, flowCalls, _, _ := newTestDispatcher()
 	d.SourceValidator = func(s string) bool {
 		return s == SourceCron || s == SourceWebhook || s == SourceMCP || s == SourceManual
@@ -252,7 +252,7 @@ func TestDispatch_AuditRecorder_FailureIncludesError(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Len(t, rec.events, 2)
-	// El completed event debe tener result=failed y error=boom.
+
 	completed := rec.events[1]
 	require.Equal(t, "failed", completed.Metadata["result"])
 	require.Equal(t, "boom", completed.Metadata["error"])
@@ -293,7 +293,7 @@ func TestDispatch_MetricsRecorder_FailureLabel(t *testing.T) {
 	require.Equal(t, "failed", metrics.calls[0].Result)
 }
 
-// --- AuditRecorder / MetricsRecorder stubs ---
+
 
 type stubAuditRecorder struct {
 	events []AuditEvent

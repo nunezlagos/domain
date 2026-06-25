@@ -1,16 +1,16 @@
--- Revertir: re-crear organization_id como UUID nullable en TODAS las tablas
--- que la tenían. NO restaura los valores (esos se perdieron en el up). En
--- roundtrip (DB fresca) no hay filas, así que el reverse es seguro. En DB
--- con datos, queda una columna vacía — los joins/filtros por organization_id
--- dejarán de matchear nada.
+
+
+
+
+
 DO $$
 DECLARE
     r RECORD;
     add_count INT := 0;
 BEGIN
-    -- Para revertir limpiamente, restauramos las columnas en las 54 tablas
-    -- históricas. Si una tabla ya fue dropeada por otra migración, el
-    -- ADD COLUMN IF NOT EXISTS es no-op (no falla).
+
+
+
     FOR r IN (
         SELECT unnest(ARRAY[
             'users', 'api_keys', 'projects', 'observations', 'sessions',

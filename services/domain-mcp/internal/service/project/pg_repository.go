@@ -60,8 +60,8 @@ func scanProject(row pgx.Row, p *Project) error {
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Project, error) {
 	var id uuid.UUID
-	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
-	// (single-org, nullable post-000145; UNIQUE (org, slug) dropeado en 000145).
+
+
 	_ = in.OrganizationID
 	err := r.q(ctx).QueryRow(ctx,
 		`INSERT INTO projects (name, slug, description, repository_url, template_id, settings, client_id)
@@ -81,17 +81,17 @@ func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (*Project, err
 }
 
 func (r *pgRepository) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Project, error) {
-	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+
 	_ = orgID
 	return r.queryOne(ctx,
 		`WHERE p.slug = $1 AND p.deleted_at IS NULL`, slug)
 }
 
 func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Project, error) {
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
+
 	_ = orgID
-	// Construimos el WHERE dinámico — minimal para no recurrir a un builder
-	// completo. Solo dos variantes: con / sin filtro de client.
+
+
 	q := `SELECT ` + selectCols + ` ` + fromJoin +
 		` WHERE p.deleted_at IS NULL`
 	var args []any
@@ -118,8 +118,8 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 }
 
 func (r *pgRepository) Update(ctx context.Context, id uuid.UUID, in UpdateParams) (*Project, error) {
-	// Dos paths: si ClientChanged actualiza client_id; si no, lo mantiene.
-	// Mantenemos el path simple sin SQL builder porque el delta es pequeño.
+
+
 	var execErr error
 	if in.ClientChanged {
 		_, execErr = r.q(ctx).Exec(ctx,
@@ -144,8 +144,8 @@ func (r *pgRepository) Update(ctx context.Context, id uuid.UUID, in UpdateParams
 	}
 	p, err := r.GetByID(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		// Si el row no aparece después del UPDATE significa que no se tocó
-		// (deleted_at IS NOT NULL o id inexistente).
+
+
 		return nil, ErrNotFound
 	}
 	return p, err

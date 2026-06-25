@@ -46,21 +46,21 @@ const (
 type Outcome string
 
 const (
-	// OutcomeChat: el router NO disparó SDD; la respuesta es Reply directo.
+
 	OutcomeChat Outcome = "chat"
-	// OutcomeWizardStarted: el wizard arrancó, hay DraftID + NextQuestion.
-	// Path legacy — sólo si Router.Orchestrator es nil.
+
+
 	OutcomeWizardStarted Outcome = "wizard_started"
-	// OutcomeIntakeOnly: el intake_payload se persistió pero el wizard no
-	// arrancó (clasificador con confidence baja → review manual).
+
+
 	OutcomeIntakeOnly Outcome = "intake_only"
-	// OutcomeOrchestratorStarted: el orquestador SDD (issue-08.10) inició
-	// un flow_run. Hay FlowRunID + OrchestratorRunID + SnapshotPrompt para
-	// que el cliente IDE arranque la primera fase.
+
+
+
 	OutcomeOrchestratorStarted Outcome = "orchestrator_started"
-	// OutcomeAnalysis: el prompt se clasificó como analysis y se ejecutó
-	// el mini-pipeline de análisis read-only. Hay KnowledgeDocID con el
-	// documento generado.
+
+
+
 	OutcomeAnalysis Outcome = "analysis"
 )
 
@@ -74,14 +74,14 @@ type Response struct {
 	NextQuestion *issuebuilder.Question `json:"next_question,omitempty"`
 	Reply        string                 `json:"reply,omitempty"`
 	Reasoning    string                 `json:"reasoning,omitempty"`
-	// Campos del orquestador (issue-08.10): poblados cuando
-	// Outcome=OutcomeOrchestratorStarted.
+
+
 	FlowRunID         *uuid.UUID `json:"flow_run_id,omitempty"`
 	OrchestratorRunID *uuid.UUID `json:"orchestrator_run_id,omitempty"`
 	SnapshotPrompt    string     `json:"snapshot_prompt,omitempty"`
 	Mode              string     `json:"mode,omitempty"`
-	// KnowledgeDocID se popula cuando Outcome=OutcomeAnalysis: el ID del
-	// knowledge_document generado por el mini-pipeline de análisis.
+
+
 	KnowledgeDocID *uuid.UUID `json:"knowledge_doc_id,omitempty"`
 }
 
@@ -97,27 +97,27 @@ type Router struct {
 	IssueBuilderService *issuebuilder.Service
 	Classifier       Classifier
 
-	// Orchestrator opcional (issue-08.10). Si está inyectado, los intents
-	// feat/fix/refactor/hotfix/rfc/doc invocan orchestratorSvc.Run en
-	// lugar del wizard legacy (issuebuilder.Start). Esto es lo que
-	// activa el pipeline SDD plug-and-play del RFC 0006.
-	//
-	// Backward compat: si nil, el comportamiento previo se preserva
-	// (wizard arranca, devuelve NextQuestion).
+
+
+
+
+
+
+
 	Orchestrator *orchsvc.Service
 
-	// MinConfidenceForWizard: si la confianza del classifier es menor,
-	// el router devuelve OutcomeIntakeOnly (sin arrancar wizard) para
-	// que un humano revise. Default 0.5.
+
+
+
 	MinConfidenceForWizard float64
 
-	// ChatReplyTemplate: si Intent=chat, el router responde con este
-	// template. Si vacío, devuelve un default.
+
+
 	ChatReplyTemplate string
 
-	// AnalysisService opcional (issue-08.10 ana-002). Si está inyectado,
-	// los prompts clasificados como IntentAnalysis invocan el mini-pipeline
-	// de análisis read-only que produce un knowledge_doc + observation.
+
+
+
 	AnalysisService AnalysisRunner
 }
 
@@ -187,7 +187,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 		intent, conf, reasoning = heuristicClassify(rawText)
 	}
 
-	// Chat/idea: NO arranca SDD. Responde directo.
+
 	if intent == IntentChat || intent == IntentIdea {
 		reply := r.ChatReplyTemplate
 		if reply == "" {
@@ -202,7 +202,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 		}, nil
 	}
 
-	// Persistir intake_payload para audit incluso si arrancamos wizard.
+
 	intakeP, err := r.IntakeService.Submit(ctx, intake.SubmitInput{
 		Source:      intake.SourceAgent,
 		RawText:     rawText,
@@ -212,7 +212,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 	if err != nil {
 		return nil, fmt.Errorf("intake submit: %w", err)
 	}
-	// Update classification en el intake.
+
 	_, _ = r.IntakeService.UpdateClassification(ctx, intakeP.ID,
 		string(intent), severityFromIntent(intent), conf, reasoning)
 
@@ -221,7 +221,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 		minConf = 0.5
 	}
 
-	// Confianza baja: persistimos intake pero NO arrancamos wizard.
+
 	if conf < minConf {
 		return &Response{
 			Outcome:    OutcomeIntakeOnly,
@@ -232,15 +232,15 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 		}, nil
 	}
 
-	// Path analysis: mini-pipeline read-only que produce knowledge_doc + observation.
-	// NO pasa por el orquestador ni el wizard — es una operación de análisis puro
-	// que lee información y la persiste como documento.
+
+
+
 	if intent == IntentAnalysis {
 		return r.handleAnalysis(ctx, rawText, createdBy, orgID, intent, conf, reasoning, intakeP.ID)
 	}
 
-	// Path orquestador (issue-08.10): si está configurado, los intents
-	// SDD-capables invocan el orquestador en lugar del wizard legacy.
+
+
 	if r.Orchestrator != nil {
 		if orgID == nil {
 			return nil, ErrOrgIDRequiredForOrchestrator
@@ -250,7 +250,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 			userID = *createdBy
 		}
 		mode := orchestratorModeForIntent(intent)
-		// OrchestrateInput.ProjectID es uuid.UUID (valor); projectID es *uuid.UUID.
+
 		var projID uuid.UUID
 		if projectID != nil {
 			projID = *projectID
@@ -260,14 +260,14 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 			UserID:         userID,
 			RawText:        rawText,
 			Mode:           mode,
-			// project_id: scopea el flow_run al proyecto. Sin esto el flow_run
-			// quedaba con project_id NULL aunque el intake sí lo recibía
-			// (gap detectado en el test E2E del flujo via domain_prompt).
+
+
+
 			ProjectID: projID,
-			// Hardspec obligatorio por diseño: el camino domain_prompt es el que
-			// usa el agente; si no lo seteamos quedaba en false (zero value) y la
-			// reiteración humana en sdd-spec no se exigía. domain_orchestrate ya
-			// lo default-ea a true; acá replicamos para el path principal.
+
+
+
+
 			Hardspec: true,
 		})
 		if err != nil {
@@ -286,7 +286,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 		}, nil
 	}
 
-	// Path legacy (wizard): preservado para deploys sin Orchestrator configurado.
+
 	mode := wizardModeForIntent(intent)
 	draft, q, err := r.IssueBuilderService.Start(ctx, mode, rawText, createdBy, projectID)
 	if err != nil {
@@ -421,7 +421,7 @@ func (HeuristicClassifier) Classify(_ context.Context, rawText string) (Intent, 
 
 func heuristicClassify(rawText string) (Intent, float64, string) {
 	t := strings.ToLower(rawText)
-	// Patterns ordenados por especificidad.
+
 	switch {
 	case containsAny(t, "analiza", "analizá", "investiga", "cuántos", "cuantas",
 		"qué hu", "qué tables", "qué endpoints", "qué archivos", "qué módulos",

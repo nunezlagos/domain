@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-02.4 audit-log integration tests con testcontainers.
+
 
 package audit_test
 
@@ -150,15 +150,15 @@ func TestSabotage_AuditLog_AppUser_UpdateDenied(t *testing.T) {
 		EntityType:     "test",
 	}))
 
-	// Setear password al rol app_user para login y probar UPDATE
+
 	_, err := pool.Exec(ctx, `ALTER ROLE app_user WITH LOGIN PASSWORD 'testpass'`)
 	require.NoError(t, err)
 
-	// Conectar como app_user
+
 	dsn := pool.Config().ConnString()
-	// reemplazar credenciales (mismo host/db)
-	// formato: postgres://USER:PASS@host:port/db?...
-	// Asumimos formato estándar testcontainers.
+
+
+
 	pubConn, err := pgx.Connect(ctx, replaceCredentials(dsn, "app_user", "testpass"))
 	require.NoError(t, err)
 	defer pubConn.Close(ctx)
@@ -172,7 +172,7 @@ func TestSabotage_AuditLog_AppUser_UpdateDenied(t *testing.T) {
 
 // replaceCredentials reemplaza user:pass en un postgres:// URL.
 func replaceCredentials(dsn, user, pass string) string {
-	// formato: postgres://OLDUSER:OLDPASS@HOST...
+
 	atIdx := -1
 	schemeEnd := -1
 	for i := 0; i < len(dsn); i++ {

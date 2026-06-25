@@ -58,7 +58,7 @@ class PromptFormCreateTests(MaintainerTestCase):
 
     def test_slug_se_normaliza_minuscula(self):
         form = PromptForm(data=self._data(slug="MiSlug"))
-        # SlugField acepta "MiSlug"; clean_slug lo baja a minusculas.
+
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["slug"], "mislug")
 

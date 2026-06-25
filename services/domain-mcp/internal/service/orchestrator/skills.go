@@ -37,9 +37,9 @@ func (s *Service) fetchRecommendedSkills(ctx context.Context, orgID, projectID u
 	if err != nil {
 		return nil, fmt.Errorf("search skills: %w", err)
 	}
-	// Scoping por proyecto (modelo hibrido): aplican las globales (auto) + las del
-	// proyecto, menos las EXCLUIDAS (project_skills.is_enabled = FALSE). Si projectID
-	// es Nil, no se filtra (compat sin scope).
+
+
+
 	applicable, err := s.Skills.ApplicableSkillIDs(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("applicable skills: %w", err)

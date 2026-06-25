@@ -30,9 +30,9 @@ type Option struct {
 
 // Planner decide qué slot pendiente preguntar próximo y formula la pregunta.
 type Planner struct {
-	// QuestionFormulator opcional: si nil, usa el template fallback.
+
 	QuestionFormulator QuestionFormulator
-	// SlotThreshold para "ya inferido suficiente" (default 0.75).
+
 	SlotThreshold float64
 }
 
@@ -91,7 +91,7 @@ func (p *Planner) RecordAnswer(env *ContextEnvelope, slot string, value any) {
 // prioritizeSlot ordena los slots pendientes por importancia para el flow.
 // Intent siempre primero; después depende del intent.
 func prioritizeSlot(pending []string, env *ContextEnvelope) string {
-	// Mapa de prioridad: menor número = más prioritario.
+
 	prio := map[string]int{
 		SlotIntent:    0,
 		SlotSeverity:  1, // crítico para bug-fix
@@ -124,7 +124,7 @@ func suggestionsForSlot(slot string, env *ContextEnvelope) []Option {
 		if env.HUMatches != nil {
 			seen := map[string]bool{}
 			for _, c := range env.HUMatches.Candidates {
-				// Saltear duplicados de req (varios HUs comparten req)
+
 				if seen[c.Slug] {
 					continue
 				}
@@ -253,12 +253,12 @@ type FormulateInput struct {
 type LLMQuestionFormulator struct {
 	Provider llm.Provider
 	Model    string
-	// PromptLoader opcional: si está seteado y devuelve un body no vacío,
-	// ESE body se usa como SystemPrompt en lugar de la const hardcodeada.
-	// Esto permite editar el prompt del formulator desde el dashboard (tabla
-	// prompts, slug='wizard-formulator') sin recompilar. Si es nil, devuelve
-	// "" o devuelve error, cae al const DefaultFormulatorSystemPrompt. El
-	// envelope dinámico (interpolado en el mensaje user) NO se ve afectado.
+
+
+
+
+
+
 	PromptLoader func(ctx context.Context) (string, error)
 }
 

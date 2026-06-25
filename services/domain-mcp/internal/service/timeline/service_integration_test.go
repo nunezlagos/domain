@@ -89,15 +89,15 @@ func TestContext_Snapshot_PopulatedProject(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// REQ-42.3: sessions dropeada — el snapshot ya no incluye sesiones.
-	// Observations
+
+
 	for i, content := range []string{"obs uno", "obs dos", "obs tres"} {
 		_, _ = f.obs.Save(ctx, observation.SaveInput{
 			OrganizationID: f.orgID, ProjectID: f.projectID, Content: content,
 		})
 		_ = i
 	}
-	// Prompt
+
 	_, _ = f.prompts.Create(ctx, promptsvc.CreateInput{
 		OrganizationID: f.orgID, ProjectID: &f.projectID,
 		Slug: "test", Body: "Eres un asistente", SetActive: true,
@@ -116,7 +116,7 @@ func TestTimeline_AnchorMidStream(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear 5 observations en secuencia
+
 	var ids []uuid.UUID
 	for _, c := range []string{"a", "b", "c", "d", "e"} {
 		o, err := f.obs.Save(ctx, observation.SaveInput{
@@ -127,11 +127,11 @@ func TestTimeline_AnchorMidStream(t *testing.T) {
 		time.Sleep(20 * time.Millisecond) // ensure created_at distinct
 	}
 
-	// Anchor en la del medio (c)
+
 	tl, err := f.tl.Timeline(ctx, f.orgID, ids[2], 2, 2)
 	require.NoError(t, err)
 	require.Len(t, tl, 5, "2 before + anchor + 2 after")
-	// El anchor debe estar al medio
+
 	require.Equal(t, ids[2], tl[2].ID)
 	require.Equal(t, "a", tl[0].Preview)
 	require.Equal(t, "e", tl[4].Preview)
@@ -150,7 +150,7 @@ func TestTimeline_AnchorAtStart(t *testing.T) {
 	})
 	tl, err := f.tl.Timeline(ctx, f.orgID, o1.ID, 3, 3)
 	require.NoError(t, err)
-	// Anchor primero, después 1 entrada
+
 	require.Equal(t, o1.ID, tl[0].ID)
 	require.Equal(t, 2, len(tl))
 }
@@ -170,7 +170,7 @@ func TestSabotage_Timeline_CrossOrgBlocked(t *testing.T) {
 	o, _ := f.obs.Save(ctx, observation.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID, Content: "secret",
 	})
-	// Otro org id (random)
+
 	otherOrg := uuid.New()
 	_, err := f.tl.Timeline(ctx, otherOrg, o.ID, 1, 1)
 	require.ErrorIs(t, err, timelinesvc.ErrObservationNotFound)

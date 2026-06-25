@@ -11,16 +11,16 @@ import (
 	"nunezlagos/domain/internal/store/txctx"
 )
 
-// REQ-75: listar users de la org actual.
-// Lo consume el dashboard para llenar selects (assignee, reporter, etc).
-//
-// GET /api/v1/users
-//   ?role=admin|developer|pm|qa|viewer   filtro por users.role (legacy)
-//   ?limit=N   default 100, max 500
-//   ?offset=N  default 0
-//
-// El listado respeta RLS via la tx del middleware — solo retorna users
-// de la misma organizacion que el principal.
+
+
+
+
+
+
+
+
+
+
 
 type userListItem struct {
 	ID    uuid.UUID `json:"id"`

@@ -76,7 +76,7 @@ func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Client, er
 	)
 	c, err := scanClient(row)
 	if err != nil {
-		// El service interpreta pgErr para mapear a ErrClientSlugExists.
+
 		return nil, err
 	}
 	return c, nil
@@ -135,8 +135,8 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 		where = " WHERE " + strings.Join(conds, " AND ")
 	}
 
-	// Count total (sin limit/offset) en query separada — más simple que
-	// window function y compatible con los planners de PG sin issues.
+
+
 	var total int64
 	if err := r.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM project_clients`+where, args...,
@@ -144,7 +144,7 @@ func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, f ListFilter) 
 		return nil, 0, fmt.Errorf("count clients: %w", err)
 	}
 
-	// Append limit/offset al final.
+
 	args = append(args, f.Limit, f.Offset)
 	q := `SELECT ` + selectCols + ` FROM project_clients` + where +
 		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, len(args)-1, len(args))

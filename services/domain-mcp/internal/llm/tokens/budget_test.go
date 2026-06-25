@@ -7,23 +7,23 @@ import (
 )
 
 func TestNewTokenBudget_Validation(t *testing.T) {
-	// Sabotaje: hard=0 → error inmediato
+
 	_, err := NewTokenBudget(0, 0, 0, ModeError)
 	require.Error(t, err)
 
-	// hard > model.max_tokens → rechazado
+
 	_, err = NewTokenBudget(0, 200_000, 100_000, ModeError)
 	require.Error(t, err)
 
-	// soft > hard → rechazado
+
 	_, err = NewTokenBudget(150, 100, 0, ModeError)
 	require.Error(t, err)
 
-	// modo inválido → rechazado
+
 	_, err = NewTokenBudget(50, 100, 0, "explode")
 	require.Error(t, err)
 
-	// válido (sin modelMax)
+
 	m, err := NewTokenBudget(80, 100, 0, ModeError)
 	require.NoError(t, err)
 	require.NoError(t, m.Check(), "Check inicial debe ser ok")

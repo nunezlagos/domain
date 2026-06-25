@@ -104,7 +104,7 @@ func (s *ExecutionService) Execute(ctx context.Context, in ExecuteInput) (*Execu
 		in.Mode = "sync"
 	}
 
-	// Validación de parámetros contra input_schema (issue-05.6 contract)
+
 	schemaJSON, _ := json.Marshal(sk.InputSchema)
 	payloadJSON, _ := json.Marshal(in.Parameters)
 	if res := ValidatePayload(schemaJSON, payloadJSON); !res.Valid {
@@ -115,8 +115,8 @@ func (s *ExecutionService) Execute(ctx context.Context, in ExecuteInput) (*Execu
 		return nil, fmt.Errorf("%w: %s", ErrInvalidParams, strings.Join(msgs, "; "))
 	}
 
-	// Resolución de versión: pinned (Effective) tiene precedencia sobre
-	// el content actual del skill.
+
+
 	var versionUsed *int
 	if s.Versions != nil {
 		if v, err := s.Versions.Effective(ctx, sk.ID); err == nil && v != nil {
@@ -133,7 +133,7 @@ func (s *ExecutionService) Execute(ctx context.Context, in ExecuteInput) (*Execu
 	}
 
 	if in.Mode == "async" {
-		// Worker en background actualiza la fila al terminar.
+
 		go func() {
 			bg := context.WithoutCancel(ctx)
 			s.runAndComplete(bg, exec.ID, sk, in)

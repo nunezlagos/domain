@@ -216,7 +216,7 @@ func (s *Service) CleanupOrphans(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// --- helpers ---
+
 
 func validateFile(size int64, mimeType string) error {
 	if size > maxFileSize {

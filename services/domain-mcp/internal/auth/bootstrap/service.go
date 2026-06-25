@@ -61,8 +61,8 @@ type BootstrapResult struct {
 	APIKey   string // plaintext, mostrado UNA sola vez
 	APIKeyID uuid.UUID
 	Email    string
-	// issue-37.1: el bootstrap también emite un enrollment_token (global) para
-	// que el primer owner pueda invitar a su equipo sin SMTP. Plaintext UNA vez.
+
+
 	EnrollmentToken   string
 	EnrollmentTokenID uuid.UUID
 	EnrollmentRole    string
@@ -71,7 +71,7 @@ type BootstrapResult struct {
 // Service ejecuta el bootstrap. Stateless: cada llamada abre su propia tx.
 type Service struct {
 	Pool *pgxpool.Pool
-	// Now se inyecta para tests (default: time.Now).
+
 	Now func() time.Time
 }
 
@@ -89,31 +89,31 @@ func New(pool *pgxpool.Pool) *Service {
 //  5. Emite enrollment_token global
 //  6. Commit (o rollback si algo falla)
 func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapResult, error) {
-	// Validar email
+
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	if !emailRegex.MatchString(email) {
 		return nil, ErrInvalidEmail
 	}
 
-	// Defaults
+
 	keyName := in.KeyName
 	if keyName == "" {
 		keyName = "default"
 	}
 
-	// 1. Begin tx
+
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	// 2. Lock advisory: solo un bootstrap a la vez
+
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", BootstrapLockKey); err != nil {
 		return nil, fmt.Errorf("advisory lock: %w", err)
 	}
 
-	// 3. Verificar first-run dentro del lock (read committed isolation)
+
 	var userCount int
 	if err := tx.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount); err != nil {
 		return nil, fmt.Errorf("count users: %w", err)
@@ -124,8 +124,8 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 
 	now := s.Now()
 
-	// 4. Crear user owner (password_hash dummy porque el user no usa
-	// password — usa API key + OTP). Single-org: sin organization_id.
+
+
 	userID := uuid.New()
 	dummyHash, _ := bcrypt.GenerateFromPassword([]byte(uuid.New().String()), 10)
 	_, err = tx.Exec(ctx,
@@ -137,15 +137,15 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
-	// 5. Generar API key: plaintext + bcrypt hash
+
 	plaintext, keyHash, err := generateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 
-	// 6. Insertar api_key. expires_at = NULL (no expira automáticamente).
-	//    environment = 'live' (no 'test' — bootstrap es para uso real).
-	//    Single-org: sin organization_id.
+
+
+
 	keyID := uuid.New()
 	keyPrefix := plaintext[:len("domk_")+8] // "domk_xxxxxxxx"
 	_, err = tx.Exec(ctx,
@@ -157,7 +157,7 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 		return nil, fmt.Errorf("insert api_key: %w", err)
 	}
 
-	// 7. issue-37.1: emitir enrollment_token global con role_on_enroll="member"
+
 	enrollPlain, enrollPrefix, enrollHash, err := enrollment.GeneratePlaintext()
 	if err != nil {
 		return nil, fmt.Errorf("generate enrollment token: %w", err)
@@ -173,7 +173,7 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 		return nil, fmt.Errorf("insert enrollment token: %w", err)
 	}
 
-	// 8. Commit
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
@@ -221,7 +221,7 @@ func generateAPIKey() (plaintext string, hash []byte, err error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	const randomLen = 32
 	raw := make([]byte, randomLen)
-	// crypto/rand via uuid.New() para evitar import extra
+
 	for i := 0; i < randomLen; i++ {
 		b, err := randomByte(charset)
 		if err != nil {
@@ -243,8 +243,8 @@ func generateAPIKey() (plaintext string, hash []byte, err error) {
 func randomByte(charset string) (byte, error) {
 	id := uuid.New()
 	s := id.String()
-	// s es "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" hex
-	// Mapear cada char hex a un byte del charset via modulo
+
+
 	idx := int(s[0]) % len(charset)
 	return charset[idx], nil
 }

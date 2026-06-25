@@ -104,7 +104,7 @@ func nextEffectiveLine(lines []string, from int) int {
 	return from
 }
 
-// === Header ===
+
 
 var headerFields = []string{"migration:", "author:", "issue:", "description:", "breaking:", "estimated_duration:"}
 
@@ -121,17 +121,17 @@ func checkHeader(file string, lines []string, add func(int, string, string)) {
 	}
 }
 
-// === Tipos prohibidos ===
+
 
 var (
-	// JSON (no JSONB): \b en cada lado evita matchear JSONB (B es word char,
-	// no hay boundary entre N y B).
+
+
 	reJSONNoB = regexp.MustCompile(`(?i)\bJSON\b`)
-	// TIMESTAMP sin tz: \b descarta TIMESTAMPTZ.
+
 	reTimestampPlain = regexp.MustCompile(`(?i)\bTIMESTAMP\b`)
-	// Cuando aparece TIMESTAMP debemos verificar que no sea "TIMESTAMP WITH TIME ZONE".
+
 	reTimestampWithTZ = regexp.MustCompile(`(?i)\bTIMESTAMP\s+WITH\s+TIME\s+ZONE\b`)
-	// FLOAT / REAL / DOUBLE PRECISION sospechosos cuando la columna parece money.
+
 	reMoneyCol = regexp.MustCompile(`(?i)\b([a-z_]*(_usd|_amount|price[a-z_]*))\b\s+(FLOAT|REAL|DOUBLE PRECISION)\b`)
 )
 
@@ -154,7 +154,7 @@ func checkProhibitedTypes(lines []string, add func(int, string, string)) {
 	}
 }
 
-// === FK naming ===
+
 
 // REFERENCES table(col) sin _id terminal en la columna previa.
 var reFKLine = regexp.MustCompile(`(?i)^\s*([a-z_][a-z0-9_]*)\s+UUID\b[^,]*REFERENCES\s+`)
@@ -172,8 +172,8 @@ func checkFKNaming(lines []string, add func(int, string, string)) {
 		if col == "id" {
 			continue
 		}
-		// _id es el ideal; _by (created_by, triggered_by) se acepta por convención
-		// de actor-tracking. Cualquier otro sufijo es violación.
+
+
 		if !strings.HasSuffix(col, "_id") && !strings.HasSuffix(col, "_by") {
 			add(i+1, "fk-naming-suffix",
 				fmt.Sprintf("FK column '%s' should end with '_id' (or '_by' for actor FKs)", col))
@@ -181,7 +181,7 @@ func checkFKNaming(lines []string, add func(int, string, string)) {
 	}
 }
 
-// === CREATE TABLE conventions ===
+
 
 var reCreateTableHeader = regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 
@@ -200,7 +200,7 @@ func extractCreateTables(src string) []struct {
 	for _, m := range reCreateTableHeader.FindAllStringSubmatchIndex(src, -1) {
 		name := src[m[2]:m[3]]
 		openParen := m[1] - 1 // posición del '('
-		// Encontrar el ')' que cierra el balance
+
 		depth := 1
 		j := openParen + 1
 		for j < len(src) && depth > 0 {
@@ -210,7 +210,7 @@ func extractCreateTables(src string) []struct {
 			case ')':
 				depth--
 			case '\'':
-				// saltar string literal
+
 				j++
 				for j < len(src) && src[j] != '\'' {
 					if src[j] == '\\' {
@@ -281,17 +281,17 @@ func checkCreateTableConventions(src string, lines []string, add func(int, strin
 		body := t.Body
 		line := lineOf(src, t.StartIdx)
 
-		// snake_case
+
 		if !isSnakeCase(name) {
 			add(line, "naming-snake-case",
 				fmt.Sprintf("table '%s' should be snake_case", name))
 		}
-		// plural heuristic
+
 		if !commonNonPluralAllowed[name] && !looksPlural(name) {
 			add(line, "naming-plural-table",
 				fmt.Sprintf("table '%s' should be plural (e.g. '%ss')", name, name))
 		}
-		// require-table-prefix: la tabla debe agruparse por dominio
+
 		if !canonicalTableExceptions[name] && !hasValidTablePrefix(name) {
 			add(line, "require-table-prefix",
 				fmt.Sprintf("table '%s' must start with a functional-domain prefix (%s) "+
@@ -299,13 +299,13 @@ func checkCreateTableConventions(src string, lines []string, add func(int, strin
 					"Override: -- domain-lint-ignore-next: require-table-prefix",
 					name, strings.Join(validTablePrefixes, ", ")))
 		}
-		// required created_at (o equivalente: cualquier *_at TIMESTAMPTZ NOT NULL DEFAULT NOW
-		// — audit_log usa 'occurred_at', agent_runs usa 'started_at', etc.).
+
+
 		if !hasTimestamptzDefaultNow(body) {
 			add(line, "require-created-at",
 				fmt.Sprintf("table '%s' missing required column 'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()' (or equivalent *_at)", name))
 		}
-		// FK ON DELETE strategy
+
 		for j, bl := range strings.Split(body, "\n") {
 			if matched, _ := regexp.MatchString(`(?i)REFERENCES\s+`, bl); !matched {
 				continue
@@ -319,7 +319,7 @@ func checkCreateTableConventions(src string, lines []string, add func(int, strin
 	_ = lines
 }
 
-// === Helpers ===
+
 
 func isCommentLine(l string) bool {
 	return strings.HasPrefix(strings.TrimSpace(l), "--")
@@ -379,7 +379,7 @@ func Fix(src string) (string, bool) {
 	lines := strings.Split(src, "\n")
 	overrides := parseOverrides(lines)
 
-	// prefer-jsonb: reemplazar JSON no-comment donde no sea JSONB ya.
+
 	for i, l := range lines {
 		if isCommentLine(l) {
 			continue
@@ -391,7 +391,7 @@ func Fix(src string) (string, bool) {
 		if !reJSONNoB.MatchString(stripped) {
 			continue
 		}
-		// Reemplazar JSON solitario (word boundary asegura no tocar JSONB)
+
 		newL := reJSONNoB.ReplaceAllString(l, "JSONB")
 		if newL != l {
 			lines[i] = newL
@@ -399,7 +399,7 @@ func Fix(src string) (string, bool) {
 		}
 	}
 
-	// prefer-timestamptz: reemplazar TIMESTAMP solo donde no sea "WITH TIME ZONE".
+
 	for i, l := range lines {
 		if isCommentLine(l) {
 			continue
@@ -414,7 +414,7 @@ func Fix(src string) (string, bool) {
 		if reTimestampWithTZ.MatchString(stripped) {
 			continue
 		}
-		// Reemplazar TIMESTAMP -> TIMESTAMPTZ uno por uno evitando WITH TIME ZONE.
+
 		newL := reTimestampPlain.ReplaceAllString(l, "TIMESTAMPTZ")
 		if newL != l {
 			lines[i] = newL
@@ -425,20 +425,20 @@ func Fix(src string) (string, bool) {
 	return strings.Join(lines, "\n"), fixed
 }
 
-// === Migration Safety (issue-25.3) ===
-//
-// Reglas que detectan patrones peligrosos para producción:
-//   * CREATE INDEX sin CONCURRENTLY → bloquea writes en tablas grandes
-//   * ALTER TABLE ADD COLUMN NOT NULL sin DEFAULT → rewrite full table
-//   * DROP TABLE/COLUMN sin IF EXISTS → fail si already removed (bloquea deploy)
-//   * VACUUM FULL → exclusive lock, downtime
-//   * LOCK TABLE explícito → uso disciplinado solamente, requiere override
-//   * ALTER TABLE ADD FOREIGN KEY sin NOT VALID → table-wide lock durante validación
+
+
+
+
+
+
+
+
+
 
 var (
 	reCreateIndex = regexp.MustCompile(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX\s`)
-	// reCreateIndexStmt captura el statement completo CREATE INDEX ... ON table
-	// (multilínea, hasta ;) — el grupo capturado es el nombre de la tabla.
+
+
 	reCreateIndexStmt  = regexp.MustCompile(`(?is)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*)[^;]*;`)
 	reConcurrently     = regexp.MustCompile(`(?i)\bCONCURRENTLY\b`)
 	reAddColumnNotNull = regexp.MustCompile(`(?i)\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?[a-z_]+\s+[a-zA-Z_(),0-9]+(?:\s+[a-zA-Z_(),0-9 ]+?)?\s+NOT\s+NULL\b`)
@@ -453,15 +453,15 @@ var (
 )
 
 func checkMigrationSafety(src string, lines []string, add func(int, string, string)) {
-	// Tablas creadas en este mismo archivo: sus indices iniciales NO requieren
-	// CONCURRENTLY (tabla está vacía durante la creación).
+
+
 	tablesInFile := map[string]bool{}
 	for _, t := range extractCreateTables(src) {
 		tablesInFile[strings.ToLower(t.Name)] = true
 	}
 
-	// Multiline scan: CREATE INDEX puede estar split en varias líneas.
-	// Buscamos statements completos sobre src y mapeamos a línea inicial.
+
+
 	indexStmts := reCreateIndexStmt.FindAllStringSubmatchIndex(src, -1)
 	for _, m := range indexStmts {
 		stmt := src[m[0]:m[1]]
@@ -482,32 +482,32 @@ func checkMigrationSafety(src string, lines []string, add func(int, string, stri
 			continue
 		}
 		stripped := stripInlineComment(l)
-		// ADD COLUMN NOT NULL sin DEFAULT
+
 		if reAddColumnNotNull.MatchString(stripped) && !reDefaultClause.MatchString(stripped) {
 			add(i+1, "require-default-for-not-null",
 				"ADD COLUMN ... NOT NULL must have DEFAULT (else rewrites whole table; use backfill + ALTER COLUMN SET NOT NULL pattern instead)")
 		}
-		// DROP TABLE sin IF EXISTS
+
 		if reDropTable.MatchString(stripped) && !reIfExists.MatchString(stripped) {
 			add(i+1, "require-if-exists-drop",
 				"DROP TABLE should use IF EXISTS for idempotent down migrations")
 		}
-		// DROP COLUMN sin IF EXISTS
+
 		if reDropColumn.MatchString(stripped) && !reIfExists.MatchString(stripped) {
 			add(i+1, "require-if-exists-drop",
 				"DROP COLUMN should use IF EXISTS")
 		}
-		// VACUUM FULL — error
+
 		if reVacuumFull.MatchString(stripped) {
 			add(i+1, "no-vacuum-full",
 				"VACUUM FULL takes exclusive lock; use pg_repack or routine VACUUM instead")
 		}
-		// LOCK TABLE explícito
+
 		if reLockTable.MatchString(stripped) {
 			add(i+1, "no-explicit-lock-table",
 				"explicit LOCK TABLE is rarely safe in migrations; statement_timeout (issue-25.8) protects against runaways")
 		}
-		// ADD FOREIGN KEY sin NOT VALID
+
 		if reAddFK.MatchString(stripped) && !reNotValid.MatchString(stripped) {
 			add(i+1, "require-not-valid-fk",
 				"ALTER TABLE ADD FOREIGN KEY should use NOT VALID + separate VALIDATE CONSTRAINT to avoid full table scan lock")

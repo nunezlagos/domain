@@ -1,4 +1,4 @@
-// MCP tools para external provider sync — issue-04.9
+
 
 package mcpserver
 
@@ -108,7 +108,7 @@ func toolSyncGetState() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleSyncRegisterProvider(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.ExtSync == nil {

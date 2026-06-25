@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// sddJudgeHandler — fase sdd-judge. Sabotage records D5 required.
-// system_prompt en BD.
+
+
 
 type sddJudgeHandler struct{}
 
@@ -45,8 +45,8 @@ func (h *sddJudgeHandler) Build(_ context.Context, in Input) (*Output, error) {
 		AgentTemplateSlug: "sdd-judge",
 		SystemPrompt:      "",
 		UserPrompt:        b.String(),
-		// RFC 0006 D5: sabotage_records son REQUIRED. La auditoría futura
-		// puede reconstruir QUÉ se sabotó y CÓMO, evitando "always green tests".
+
+
 		SuggestedSaves: []SuggestedSave{
 			{Type: "sabotage_record", Required: true,
 				Hint: "guardar 1 sabotage_record por test de sabotaje ejecutado (invariante + verdict)"},

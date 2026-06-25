@@ -55,7 +55,7 @@ func (a *OrphanAuditor) Start(ctx context.Context) {
 
 	logger.Info("orphan-runs-audit started", slog.Duration("tick", a.Tick))
 
-	// Primera ejecución inmediata (útil al boot), luego periodic
+
 	a.runTick(ctx, logger)
 
 	ticker := time.NewTicker(a.Tick)
@@ -126,7 +126,7 @@ func (a *OrphanAuditor) Audit(ctx context.Context) ([]orphanRow, time.Time, erro
 	if err := rows.Err(); err != nil {
 		return nil, time.Time{}, fmt.Errorf("iterate: %w", err)
 	}
-	// Si no hubo rows, igual avanzamos last_ack a NOW() para no re-escanear ventana
+
 	if maxSeen.IsZero() {
 		maxSeen = time.Now()
 	}

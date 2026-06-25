@@ -1,4 +1,4 @@
-// issue-17.1 metrics-prometheus unit tests.
+
 
 package metrics
 
@@ -15,11 +15,11 @@ import (
 
 func TestNew_RegistersStandardCollectors(t *testing.T) {
 	r := New()
-	// Counters Prom solo aparecen tras Inc/Observe; gauges siempre.
-	// Forzamos increment para confirmar registration.
+
+
 	r.HTTPRequestsTotal.WithLabelValues("GET", "/x", "200").Inc()
 	r.AgentRunsTotal.WithLabelValues("chat", "ok").Inc()
-	// GaugeVec requieren un Set para aparecer en output
+
 	r.DBPoolInUse.WithLabelValues("app").Set(1)
 	r.DBPoolIdle.WithLabelValues("app").Set(2)
 	r.DBPoolTotal.WithLabelValues("app").Set(5)
@@ -27,10 +27,10 @@ func TestNew_RegistersStandardCollectors(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
 	body := rec.Body.String()
-	// Go runtime collectors siempre presentes
+
 	require.Contains(t, body, "go_goroutines")
 	require.Contains(t, body, "go_memstats_alloc_bytes")
-	// Custom registered
+
 	require.Contains(t, body, "domain_http_requests_total")
 	require.Contains(t, body, `domain_db_pool_in_use{pool="app"} 1`)
 	require.Contains(t, body, `domain_db_pool_idle{pool="app"} 2`)
@@ -139,7 +139,7 @@ func TestBasicAuth_RejectsBadCreds(t *testing.T) {
 // Sabotaje: issue-17.1 cardinality linter — el body /metrics NO debe tener `_id="<uuid>"`.
 func TestSabotage_NoUUIDLabelsInMetrics(t *testing.T) {
 	r := New()
-	// Simular tráfico
+
 	handler := r.HTTPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -148,7 +148,7 @@ func TestSabotage_NoUUIDLabelsInMetrics(t *testing.T) {
 		"/api/v1/users/01234567-89ab-cdef-0123-456789abcdef", nil))
 
 	metrics := scrape(t, r)
-	// regex que detecta UUIDs en labels
+
 	uuidLabel := regexp.MustCompile(`_id="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"`)
 	require.False(t, uuidLabel.MatchString(metrics),
 		"cardinality violation: UUID en label encontrado en /metrics body")
@@ -157,7 +157,7 @@ func TestSabotage_NoUUIDLabelsInMetrics(t *testing.T) {
 // Sabotaje: helper para verificar histogram buckets razonables.
 func TestSabotage_HistogramBucketsAreReasonable(t *testing.T) {
 	r := New()
-	// Trigger observe para que buckets aparezcan
+
 	handler := r.HTTPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

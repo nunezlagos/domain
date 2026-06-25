@@ -108,8 +108,8 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	// Crear como llm_generated. proposed=true se setea via SQL directo
-	// porque el service no expone ese flag — es contrato del workflow MCP.
+
+
 	created, err := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 		OrganizationID: orgID,
 		ProjectID:      proj.ID,
@@ -122,7 +122,7 @@ func (d *Deps) handleProposePolicy(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create proposal failed: %v", err)), nil
 	}
-	// Marcar proposed=true.
+
 	if _, err := d.q(ctx).Exec(ctx,
 		`UPDATE project_policies SET proposed = true
 		   WHERE id = $1`,
@@ -217,8 +217,8 @@ func (d *Deps) handleProposalList(ctx context.Context, req mcp.CallToolRequest) 
 	policies := []map[string]any{}
 	skills := []map[string]any{}
 
-	// to_char convierte timestamptz a string ISO. Sin esto, scan a string
-	// falla silenciosamente (pgx no auto-convierte timestamps).
+
+
 	const tsFmt = "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
 
 	if kind == "policy" || kind == "all" {
@@ -306,11 +306,11 @@ func (d *Deps) handleProposalReview(ctx context.Context, req mcp.CallToolRequest
 
 	var sql string
 	if action == "accept" {
-		// Quitar proposed → queda activa
+
 		sql = "UPDATE " + table + ` SET proposed = false
 		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	} else {
-		// reject → soft-delete
+
 		sql = "UPDATE " + table + ` SET deleted_at = NOW()
 		         WHERE id = $1 AND proposed = true AND deleted_at IS NULL`
 	}

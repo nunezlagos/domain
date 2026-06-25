@@ -40,8 +40,8 @@ class ApiKeyFormCreateTests(MaintainerTestCase):
 class ApiKeyFormEditTests(MaintainerTestCase):
     def test_edit_conserva_dueno_sin_user_en_post(self):
         ak = make_api_key("Editable")
-        # En edicion el select de user viene disabled (no llega en POST):
-        # el form debe conservar el dueño original sin marcar error.
+
+
         form = ApiKeyForm(
             data={"name": "Editable v2", "status": "active"},
             instance=ak,

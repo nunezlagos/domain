@@ -22,7 +22,7 @@ from pathlib import Path
 from django.apps import apps
 from django.test import SimpleTestCase
 
-# Apps de mantenedor cuyos models deben calzar con la BD real.
+
 MAINTAINER_APPS = (
     "users",
     "projects",
@@ -37,9 +37,9 @@ MAINTAINER_APPS = (
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "real_schema.json"
 
-# Tablas excluidas del guard. user_roles ya NO se excluye: el model UserRole se
-# reconcilio (sin columna `id`, user como primary_key db_column user_id), asi que
-# sus columnas calzan con la tabla real y el guard lo valida.
+
+
+
 _SKIP_TABLES: set[str] = set()
 
 
@@ -72,7 +72,7 @@ class SchemaDriftTests(SimpleTestCase):
 
         for app_label, model in self._iter_models():
             db_table = model._meta.db_table
-            # Saltar models cuya tabla no este en el snapshot o este excluida.
+
             if db_table not in self.real_schema or db_table in _SKIP_TABLES:
                 continue
 
@@ -95,8 +95,8 @@ class SchemaDriftTests(SimpleTestCase):
             "Schema drift detectado (model declara columnas que no existen en la "
             "BD viva):\n\n" + "\n\n".join(problems),
         )
-        # Sanity: el test debe haber chequeado al menos un model, si no el
-        # iterador/labels estan mal y el guard seria un falso verde.
+
+
         self.assertGreater(
             checked, 0,
             "El guard no chequeo ningun model: revisa MAINTAINER_APPS / labels.",

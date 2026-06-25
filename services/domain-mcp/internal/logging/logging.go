@@ -51,7 +51,7 @@ func Setup(cfg Config) *slog.Logger {
 	} else {
 		handler = slog.NewTextHandler(w, opts)
 	}
-	// envuelve para inyectar campos contextuales en cada log
+
 	logger := slog.New(&ctxEnrichHandler{inner: handler})
 	slog.SetDefault(logger)
 	return logger

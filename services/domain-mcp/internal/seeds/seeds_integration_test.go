@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-01.7 seeders integration tests con testcontainers.
+
 
 package seeds_test
 
@@ -74,7 +74,7 @@ func TestSeeds_RunAll_FirstRun(t *testing.T) {
 	require.Equal(t, 1, reports["test_seed"].Created)
 	require.Equal(t, int32(1), s.calls.Load())
 
-	// version applied?
+
 	v, ok, err := seeds.AppliedVersion(ctx, pool, "test_seed")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -109,7 +109,7 @@ func TestSeeds_RunAll_VersionBump_Reapplies(t *testing.T) {
 	_, err := reg.RunAll(ctx, pool, seeds.EnvDev)
 	require.NoError(t, err)
 
-	// bump version
+
 	s.version = 2
 	_, err = reg.RunAll(ctx, pool, seeds.EnvDev)
 	require.NoError(t, err)

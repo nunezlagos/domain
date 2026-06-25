@@ -103,7 +103,7 @@ func TestFlowRunAPI_Lifecycle(t *testing.T) {
 	srv, key, cleanup := setupFlowAPI(t)
 	defer cleanup()
 
-	// Crear flow
+
 	resp, body := doJSON(t, "POST", srv.URL+"/api/v1/flows", key, map[string]any{
 		"slug": "fr-flow", "name": "FR Flow",
 		"spec": map[string]any{
@@ -122,7 +122,7 @@ func TestFlowRunAPI_Lifecycle(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(body, &created))
 
-	// Ejecutar sync
+
 	resp, body = doJSON(t, "POST", srv.URL+"/api/v1/flows/"+created.Data.ID+"/run", key, map[string]any{})
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "body=%s", body)
 	var runResp struct {
@@ -134,7 +134,7 @@ func TestFlowRunAPI_Lifecycle(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, &runResp))
 	require.Equal(t, "completed", runResp.Data.Status)
 
-	// GET /flow-runs/{id} → run + steps con progreso
+
 	resp, body = doJSON(t, "GET", srv.URL+"/api/v1/flow-runs/"+runResp.Data.RunID, key, nil)
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "body=%s", body)
 	var got struct {
@@ -152,15 +152,15 @@ func TestFlowRunAPI_Lifecycle(t *testing.T) {
 	require.Equal(t, "s1", got.Data.Steps[0].StepKey)
 	require.Equal(t, "completed", got.Data.Steps[0].Status)
 
-	// Pause sobre run completado → 409 invalid transition
+
 	resp, _ = doJSON(t, "POST", srv.URL+"/api/v1/flow-runs/"+runResp.Data.RunID+"/pause", key, nil)
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 
-	// Cancel sobre run terminal → 409
+
 	resp, _ = doJSON(t, "POST", srv.URL+"/api/v1/flow-runs/"+runResp.Data.RunID+"/cancel", key, nil)
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 
-	// Run inexistente → 404 (anti-enumeration)
+
 	resp, _ = doJSON(t, "GET", srv.URL+"/api/v1/flow-runs/00000000-0000-0000-0000-000000000001", key, nil)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -190,14 +190,14 @@ func TestFlowRunAPI_PauseResumeCancel(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(body, &created))
 
-	// flow_run en vuelo (simula worker de otro pod)
+
 	var runID string
 	require.NoError(t, fx.pool.App.QueryRow(ctx, `
 		INSERT INTO flow_runs (organization_id, flow_id, trigger_type, status, inputs)
 		SELECT organization_id, id, 'manual', 'running', '{}' FROM flows WHERE id = $1
 		RETURNING id::text`, created.Data.ID).Scan(&runID))
 
-	// pause → resume → cancel via API
+
 	resp, body = doJSON(t, "POST", srv.URL+"/api/v1/flow-runs/"+runID+"/pause", key, nil)
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "body=%s", body)
 
@@ -207,7 +207,7 @@ func TestFlowRunAPI_PauseResumeCancel(t *testing.T) {
 	resp, body = doJSON(t, "POST", srv.URL+"/api/v1/flow-runs/"+runID+"/cancel", key, nil)
 	require.Equalf(t, http.StatusOK, resp.StatusCode, "body=%s", body)
 
-	// Estado final cancelled + transiciones invalidas post-terminal
+
 	resp, body = doJSON(t, "GET", srv.URL+"/api/v1/flow-runs/"+runID, key, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, string(body), `"cancelled"`)
@@ -247,7 +247,7 @@ func TestFlowRunAPI_SSEStream_TerminalRun(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(body, &runResp))
 
-	// Stream de run terminal: responde el snapshot de status y cierra
+
 	req, err := http.NewRequest("GET", srv.URL+"/api/v1/flow-runs/"+runResp.Data.RunID+"/stream", nil)
 	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer "+key)

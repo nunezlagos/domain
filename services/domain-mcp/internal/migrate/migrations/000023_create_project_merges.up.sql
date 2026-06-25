@@ -1,9 +1,9 @@
--- migration: create_project_merges
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-01.5
--- description: log de merges de proyectos con replay log para auditoría
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE project_merges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

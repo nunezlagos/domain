@@ -65,7 +65,7 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, rep.Created, 1, "primera pasada debe crear templates")
 
-	// Verificar 1 orchestrator
+
 	var orchCount int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates WHERE role='orchestrator'`,
@@ -73,7 +73,7 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, orchCount, "debe haber exactamente 1 orchestrator")
 
-	// Verificar 10 phase-workers (sdd-explore...sdd-onboard)
+
 	var workerCount int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates WHERE role='phase-worker' AND slug LIKE 'sdd-%'`,
@@ -81,7 +81,7 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 10, workerCount, "debe haber 10 phase-workers sdd-*")
 
-	// Verificar el orchestrator slug
+
 	var orchSlug string
 	err = pool.QueryRow(ctx,
 		`SELECT slug FROM agent_templates WHERE role='orchestrator'`,
@@ -96,11 +96,11 @@ func TestAgentTemplates_UniqueOrchestratorPerOrg(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Primero corro el seeder para insertar el sdd-orchestrator
+
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
 	require.NoError(t, err)
 
-	// Intento insertar segundo orchestrator manual
+
 	_, err = pool.Exec(ctx, `
 		INSERT INTO agent_templates
 		  (organization_id, slug, name, system_prompt, handoff_policy, role, seed_managed)
@@ -124,7 +124,7 @@ func TestAgentTemplates_SeederIdempotent(t *testing.T) {
 	require.Equal(t, 0, rep2.Created, "segunda pasada NO duplica")
 	require.Equal(t, 11, rep2.Updated, "segunda pasada updates 11")
 
-	// Confirmar total = 11
+
 	var total int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates`).Scan(&total)
@@ -138,7 +138,7 @@ func TestAgentTemplates_CleanupRemovesLegacy(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Simular slugs legacy seed_managed=true (lo que tenía el catálogo v2)
+
 	for _, slug := range []string{"researcher", "coder", "tester"} {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO agent_templates
@@ -152,7 +152,7 @@ func TestAgentTemplates_CleanupRemovesLegacy(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, rep.Deleted, "cleanup defensivo debe borrar los 3 legacy")
 
-	// Verificar que los legacy no están
+
 	var legacyCount int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates WHERE slug IN ('researcher','coder','tester')`,
@@ -167,7 +167,7 @@ func TestAgentTemplates_CleanupPreservesUserModified(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Insertar 1 legacy con is_user_modified=true (custom del user)
+
 	_, err := pool.Exec(ctx, `
 		INSERT INTO agent_templates
 		  (organization_id, slug, name, system_prompt, handoff_policy, role, seed_managed, is_user_modified)
@@ -179,7 +179,7 @@ func TestAgentTemplates_CleanupPreservesUserModified(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, rep.Deleted, "is_user_modified=true NO debe borrarse")
 
-	// Verificar que my-custom sigue ahí
+
 	var customCount int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates WHERE slug='my-custom'`,

@@ -1,4 +1,4 @@
-// issue-02.6 activity-log unit tests.
+
 
 package activity
 

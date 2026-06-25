@@ -57,8 +57,8 @@ func TestBuildLitePlan_HydratesUserPromptEager(t *testing.T) {
 	plan, err := BuildLitePlan(context.Background(), buildRegistryLite(t),
 		phases.Input{RawText: "fix de 1 línea"}, time.Now())
 	require.NoError(t, err)
-	// A diferencia de Full (lazy), Lite hidrata todos los UserPrompt al
-	// armar el plan (igual que Express).
+
+
 	for _, st := range plan.Steps {
 		require.NotEmpty(t, st.UserPrompt,
 			"Lite hidrata UserPrompt eager en cada step (fase %s)", st.Slug)
@@ -74,7 +74,7 @@ func TestBuildLitePlan_NilRegistry_Fails(t *testing.T) {
 
 func TestBuildLitePlan_MissingHandler_Fails(t *testing.T) {
 	t.Parallel()
-	// Registry sin sdd-explore: el lookup de la primera fase Lite falla.
+
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())

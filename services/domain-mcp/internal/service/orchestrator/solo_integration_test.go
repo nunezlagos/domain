@@ -24,12 +24,12 @@ type fakeProvider struct {
 func (p *fakeProvider) Name() string { return "fake" }
 func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
 	p.calls++
-	// El SystemPrompt llega completo desde agent_templates; lo
-	// inspeccionamos para inferir qué fase es y devolver la respuesta
-	// canned correspondiente.
+
+
+
 	for slug, body := range p.byPhase {
-		// El system_prompt seedeado contiene el slug en su texto
-		// (e.g. "sdd-explore", "sdd-spec", etc.) por convención de v3.
+
+
 		if contains(opts.SystemPrompt, slug) {
 			return &llm.Response{
 				Content:      body,
@@ -39,7 +39,7 @@ func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (
 			}, nil
 		}
 	}
-	// Default: explore output (en caso que el system_prompt no matchee)
+
 	return &llm.Response{
 		Content:      `{"intent":"feature","scope":"single-file","summary":"x"}`,
 		Model:        opts.Model,
@@ -118,9 +118,9 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// Factory con un solo provider 'anthropic' (los slugs sdd-* usan
-	// claude-* models seedeados, por lo que ProviderForModel resuelve
-	// 'anthropic').
+
+
+
 	factory := llm.NewFactory()
 	factory.Register("anthropic", &fakeProvider{byPhase: cannedSoloResponses()})
 
@@ -137,7 +137,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeSolo, res.Mode)
 
-	// Verificar que todos los steps quedaron completed en BD
+
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)
@@ -153,7 +153,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 	}
 	require.Equal(t, 10, count, "10 fases SDD ejecutadas en Solo")
 
-	// flow_run terminal
+
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT status FROM flow_runs WHERE id=$1`, res.FlowRunID,
@@ -176,7 +176,7 @@ func TestService_Run_Solo_RequiresLLMFactory(t *testing.T) {
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
-	// LLM intentionally not set
+
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
 		ProjectID:      projectID,
@@ -201,7 +201,7 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// Provider devuelve texto sin JSON para sdd-explore
+
 	canned := cannedSoloResponses()
 	canned["sdd-explore"] = "no json here, just prose"
 

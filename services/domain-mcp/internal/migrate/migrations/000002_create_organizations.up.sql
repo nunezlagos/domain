@@ -1,9 +1,9 @@
--- migration: create_organizations
--- author: mnunez@saargo.com
--- issue: HU-01.1
--- description: tabla organizations (root multi-tenant)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,9 +1,9 @@
--- migration: create_idempotency_keys
--- author: nunezlagos
--- issue: HU-13.4
--- description: caching de responses para keys Idempotency-Key (24h retention)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE idempotency_keys (
   id BIGSERIAL PRIMARY KEY,

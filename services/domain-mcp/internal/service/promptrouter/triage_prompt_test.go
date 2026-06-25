@@ -46,7 +46,7 @@ func TestLLMClassifier_PromptLoader_EmptyFallsBackToConst(t *testing.T) {
 	prov := &recordingProvider{response: `{"intent":"chat","confidence":0.9,"reasoning":"x"}`}
 	c := &promptrouter.LLMClassifier{
 		Provider: prov,
-		// Loader devuelve vacío → usa el const por defecto.
+
 		PromptLoader: func(_ context.Context) (string, error) {
 			return "   ", nil
 		},
@@ -104,7 +104,7 @@ func TestRouteWithIntent_Override_SkipsClassification(t *testing.T) {
 	spy := &spyClassifier{intent: promptrouter.IntentFeature}
 	r := &promptrouter.Router{Classifier: spy}
 
-	// Override a 'chat' → Route responde directo sin tocar services ni clasificar.
+
 	override := promptrouter.IntentChat
 	resp, err := r.RouteWithIntent(context.Background(), "el botón no funciona", nil, nil, nil, &override)
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestRouteWithIntent_InvalidOverride_FallsBackToClassifier(t *testing.T) {
 	spy := &spyClassifier{intent: promptrouter.IntentChat}
 	r := &promptrouter.Router{Classifier: spy}
 
-	// Un *Intent con valor inválido NO es del enum → se ignora, clasifica.
+
 	bad := promptrouter.Intent("garbage")
 	resp, err := r.RouteWithIntent(context.Background(), "x", nil, nil, nil, &bad)
 	require.NoError(t, err)

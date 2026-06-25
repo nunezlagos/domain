@@ -1,4 +1,4 @@
--- rollback: role_resource_limits
+
 
 ALTER ROLE app_user RESET statement_timeout;
 ALTER ROLE app_user RESET lock_timeout;

@@ -83,16 +83,16 @@ type Deps struct {
 	WorkflowImport  *workflowimport.Service // issue-12.7 override de .md
 	Pool            *pgxpool.Pool           // para queries de agent_run_logs
 	Principal       *apikey.Principal       // resuelto al boot
-	// Dispatcher (issue-35.1 phase 5): unico path para ejecutar
-	// flow/agent/skill desde MCP. REQUERIDO en produccion; los handlers
-	// retornan error si Dispatcher == nil.
+
+
+
 	Dispatcher *dispatch.Dispatcher
 	ServerName string
 	ServerVer  string
-	// SharedCache REQ-67: cache LRU compartido entre todos los requests
-	// (NO se clona por request). Si nil, cache desactivado.
+
+
 	SharedCache CacheStore
-	// REQ-70 metricas. Si nil, los hooks no se setean.
+
 	MetricsOnToolCall  func(tool, status string, dur float64)
 	MetricsOnCacheHit  func()
 	MetricsOnCacheMiss func()
@@ -114,27 +114,27 @@ var defaultBudget = ToolBudget{
 // Cada handler queda wrapped con ResilientWrapper (rate limit + retry).
 func Tools(deps Deps) []mcpgo.ServerTool {
 	wrap := NewResilientWrapper(defaultBudget)
-	// REQ-70 metricas — aplica con o sin cache.
+
 	if deps.MetricsOnToolCall != nil || deps.MetricsOnCacheHit != nil || deps.MetricsOnCacheMiss != nil {
 		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
 	}
 
-	// REQ-67 query cache. Si Deps.SharedCache esta configurado (lo
-	// hace el wireup principal en cmd/domain), activamos lookup +
-	// invalidacion. Si no, el wrap se comporta como antes.
+
+
+
 	if deps.SharedCache != nil {
 		wrap.SetCache(deps.SharedCache)
-		// Accessor del orgID del Principal vigente. Como deps se clona
-		// por request en httpserver/handler.go, este closure ve el
-		// Principal correcto para cada request.
+
+
+
 		wrap.SetOrgIDAccessor(func() string {
 			if deps.Principal == nil {
 				return ""
 			}
 			return deps.Principal.OrganizationID
 		})
-		// READs cacheables — TTL conservador para tolerar lag percibido
-		// tras una escritura (la invalidacion es sincrona, no eventual).
+
+
 		readTTLs := map[string]time.Duration{
 			"domain_ticket_list":           5 * time.Second,
 			"domain_ticket_get":            5 * time.Second,
@@ -152,8 +152,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		for tool, ttl := range readTTLs {
 			wrap.SetCacheable(tool, ttl)
 		}
-		// WRITES que invalidan el cache completo del org (granularidad
-		// gruesa pero segura — el cache es chico y el TTL corto).
+
+
 		for _, w := range []string{
 			"domain_ticket_create", "domain_ticket_update", "domain_ticket_delete",
 			"domain_ticket_change_status", "domain_ticket_claim", "domain_ticket_release",
@@ -169,7 +169,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			wrap.SetInvalidating(w)
 		}
 	}
-	// Tools que escriben (mutation): tope mas bajo (60/min)
+
 	for _, mutTool := range []string{
 		"domain_mem_save", "domain_knowledge_save",
 		"domain_agent_run",
@@ -186,8 +186,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			CBThreshold: 5, CBCooldown: 30 * time.Second,
 		})
 	}
-	// rls envuelve los handlers de tools que tocan tablas con RLS FORCE
-	// (observations, migration 000085): tx + SET LOCAL + commit.
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -196,7 +196,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", rls(deps.handleMemSearch))},
 		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", rls(deps.handleMemContext))},
 		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", rls(deps.handleMemGetObservation))},
-		// REQ-42.3: domain_session_start/end/active removidos (tabla sessions dropeada).
+
 		{Tool: toolPromptGet(), Handler: wrap.Wrap("domain_prompt_get", deps.handlePromptGet)},
 		{Tool: toolPromptSearch(), Handler: wrap.Wrap("domain_prompt_search", deps.handlePromptSearch)},
 		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", rls(deps.handleContext))},
@@ -256,7 +256,7 @@ func New(deps Deps) *mcpgo.MCPServer {
 	return srv
 }
 
-// --- tool builders (separados para reuso entre New y Tools list) ---
+
 
 func toolMemSave() mcp.Tool {
 	return mcp.NewTool("domain_mem_save",
@@ -308,7 +308,7 @@ func toolMemContext() mcp.Tool {
 	)
 }
 
-// REQ-42.3: toolSessionStart/End/Active removidos (tabla sessions dropeada).
+
 
 func toolPromptGet() mcp.Tool {
 	return mcp.NewTool("domain_prompt_get",
@@ -567,7 +567,7 @@ func toolMemGetObservation() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleMemSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil {
@@ -591,8 +591,8 @@ func (d *Deps) handleMemSave(ctx context.Context, req mcp.CallToolRequest) (*mcp
 
 	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
 	if err != nil {
-		// Auto-crear el project (plug-and-play): en un install fresco no
-		// existe ninguno y sin esto el agente no puede guardar memorias.
+
+
 		proj, err = d.Projects.Create(ctx, projsvc.CreateInput{
 			OrganizationID: orgID,
 			Name:           projectSlug,
@@ -714,7 +714,7 @@ func (d *Deps) handleMemContext(ctx context.Context, req mcp.CallToolRequest) (*
 	})
 }
 
-// REQ-42.3: handleSessionStart/End/Active removidos (tabla sessions dropeada).
+
 
 func (d *Deps) handlePromptGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Prompts == nil {
@@ -909,7 +909,7 @@ func (d *Deps) handleAgentRunLogs(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError("run_id invalido"), nil
 	}
-	// Existence guard
+
 	var exists bool
 	err = d.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM agent_runs WHERE id = $1)`, id).Scan(&exists)

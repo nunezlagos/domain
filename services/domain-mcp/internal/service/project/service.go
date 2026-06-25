@@ -43,12 +43,12 @@ type Project struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	// ClientID (REQ-28.2): asocia el project con un client (mandante). NULL
-	// = proyecto interno (no asignado a cliente). Migración 000100 agregó
-	// la FK con ON DELETE SET NULL.
+
+
+
 	ClientID *uuid.UUID
-	// ClientSlug / ClientName: read-only, populated via LEFT JOIN project_clients.
-	// "" si client_id IS NULL.
+
+
 	ClientSlug string
 	ClientName string
 	CreatedAt  time.Time
@@ -64,20 +64,20 @@ type CreateInput struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	// ClientSlug (REQ-28.2): si non-empty, el Service resuelve slug → id vía
-	// ClientSvc y setea project.client_id. Si "" → proyecto interno (NULL).
+
+
 	ClientSlug string
 	ActorID    uuid.UUID
 }
 
 type Service struct {
-	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
-	// &Service{Pool: ...} siguen funcionando.
+
+
 	Pool        *pgxpool.Pool
 	Audit       audit.Recorder
 	TemplateSvc *projecttemplate.Service // opcional — issue-01.4 apply template on create
-	// ClientSvc (REQ-28.2): opcional, resuelve client_slug → client_id en
-	// Create/Update/List. Si nil, los inputs con client_slug retornan error.
+
+
 	ClientSvc *clientsvc.Service
 
 	repo Repository
@@ -111,7 +111,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	if !reSlug.MatchString(in.Slug) {
 		return nil, ErrSlugInvalid
 	}
-	// issue-01.4: si se pasa template_id, mergear settings del template con override del request.
+
 	if in.TemplateID != nil && s.TemplateSvc != nil {
 		tpl, err := s.TemplateSvc.Get(ctx, in.OrganizationID, *in.TemplateID)
 		if err == nil && tpl != nil {
@@ -119,7 +119,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 			if len(tpl.Settings) > 0 {
 				_ = json.Unmarshal(tpl.Settings, &tplSettings)
 			}
-			// Template settings como base, request settings como override
+
 			merged := make(map[string]any, len(tplSettings)+len(in.Settings))
 			for k, v := range tplSettings {
 				merged[k] = v
@@ -135,7 +135,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	}
 	settingsJSON, _ := json.Marshal(in.Settings)
 
-	// REQ-28.2: resolver client_slug → client_id si viene presente.
+
 	var clientID *uuid.UUID
 	if strings.TrimSpace(in.ClientSlug) != "" {
 		if s.ClientSvc == nil {
@@ -221,10 +221,10 @@ type UpdateInput struct {
 	Description   *string
 	RepositoryURL *string
 	Settings      map[string]any
-	// ClientSlug (REQ-28.2) — PATCH semantics:
-	//   nil          → no tocar
-	//   non-nil ""   → unset (NULL)
-	//   non-nil slug → resolver y setear
+
+
+
+
 	ClientSlug *string
 	ActorID    uuid.UUID
 }
@@ -252,7 +252,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 	}
 	settingsJSON, _ := json.Marshal(settings)
 
-	// REQ-28.2: resolución de client_slug en update con PATCH semantics.
+
 	clientID := prev.ClientID
 	clientChanged := false
 	if in.ClientSlug != nil {

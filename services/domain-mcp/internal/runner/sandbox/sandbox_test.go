@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// issue-11.1 sandbox-execution.
-// Tests cubren: defaults del constructor, dry-run (sin red ni subprocesos),
-// validacion de cmd vacio, limitedWriter para truncado de output, y
-// modo no soportado.
+
+
+
+
 
 func TestNew_Defaults(t *testing.T) {
 	r := New(Config{})
@@ -41,8 +41,8 @@ func TestNew_PreservesCustomConfig(t *testing.T) {
 }
 
 func TestRun_DryRun_DoesNotExecute(t *testing.T) {
-	// Dry-run mode solo formatea el cmd como string, no spawnea procesos.
-	// Testeable sin red ni docker.
+
+
 	r := New(Config{Mode: ModeDryRun})
 	res, err := r.Run(context.Background(), Request{
 		Cmd: []string{"echo", "hello", "world"},
@@ -55,7 +55,7 @@ func TestRun_DryRun_DoesNotExecute(t *testing.T) {
 }
 
 func TestRun_UnsupportedMode(t *testing.T) {
-	// Modo desconocido o no soportado → ErrSandboxNotSupported.
+
 	r := New(Config{Mode: "weird-mode"})
 	_, err := r.Run(context.Background(), Request{Cmd: []string{"true"}})
 	require.Error(t, err)
@@ -70,9 +70,9 @@ func TestRun_ProcessMode_EmptyCmd(t *testing.T) {
 }
 
 func TestRun_ProcessMode_Echo(t *testing.T) {
-	// Ejecuta un comando trivial: echo "hello" — disponible en unix.
-	// Funciona en cualquier unix-like (linux, macos). En windows el
-	// constructor ya retorna error antes.
+
+
+
 	if testing.Short() {
 		t.Skip("skip en short mode (spawnea proceso)")
 	}
@@ -91,8 +91,8 @@ func TestRun_ProcessMode_StdinPassthrough(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode")
 	}
-	// cat lee de stdin y lo escribe a stdout — valida que el Stdin
-	// del Request se pasa al subproceso.
+
+
 	r := New(Config{Mode: ModeProcess, Timeout: 5 * time.Second})
 	res, err := r.Run(context.Background(), Request{
 		Cmd:   []string{"cat"},
@@ -107,7 +107,7 @@ func TestRun_ProcessMode_NonZeroExit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode")
 	}
-	// false retorna exit 1, pero comando valido.
+
 	r := New(Config{Mode: ModeProcess, Timeout: 5 * time.Second})
 	res, err := r.Run(context.Background(), Request{
 		Cmd: []string{"false"},
@@ -120,7 +120,7 @@ func TestRun_ProcessMode_Timeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode (sleep 2s)")
 	}
-	// sleep 2 con timeout 100ms → debe cortar.
+
 	r := New(Config{Mode: ModeProcess, Timeout: 100 * time.Millisecond})
 	res, err := r.Run(context.Background(), Request{
 		Cmd: []string{"sleep", "2"},
@@ -133,16 +133,16 @@ func TestRun_ProcessMode_ContextCancel(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode")
 	}
-	// Cancelar el ctx externally debe cortar la ejecucion (exec.CommandContext
-	// mata el subproceso). El subproceso NO completa normalmente, por lo que
-	// res.ExitCode queda en -1 o similar (kill signal), no 0.
-	//
-	// NOTA: la implementacion actual solo marca TimedOut=true si
-	// cctx.Err() == context.DeadlineExceeded. Si el caller cancela el ctx
-	// externo (no el deadline interno), cctx.Err() == context.Canceled
-	// y TimedOut queda false aunque el subproceso fue matado.
-	// Esto es un gap conocido — la implementacion deberia marcar TimedOut
-	// para AMBOS casos. Test documenta el comportamiento actual.
+
+
+
+
+
+
+
+
+
+
 	r := New(Config{Mode: ModeProcess, Timeout: 10 * time.Second})
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -153,8 +153,8 @@ func TestRun_ProcessMode_ContextCancel(t *testing.T) {
 		Cmd: []string{"sleep", "5"},
 	})
 	require.NoError(t, err)
-	// Comportamiento actual: el subproceso es matado (exit code != 0),
-	// pero TimedOut queda false. Documentamos.
+
+
 	require.NotEqual(t, 0, res.ExitCode, "subproceso matado por ctx cancel → exit code != 0")
 	_ = res.TimedOut // intencionalmente no assertamos: ver nota arriba
 }
@@ -163,7 +163,7 @@ func TestRun_ProcessMode_OutputTruncation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode (genera 2MB output)")
 	}
-	// Genera 2MB de output; maxOutputBytes es 1MB → debe truncar.
+
 	r := New(Config{Mode: ModeProcess, Timeout: 5 * time.Second})
 	res, err := r.Run(context.Background(), Request{
 		Cmd: []string{"sh", "-c", "head -c 2097152 /dev/urandom | base64"},
@@ -185,10 +185,10 @@ func TestLimitedWriter_Truncates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, n, "segundo write cabe exacto (10-5=5)")
 
-	// Despues de llenarse, lw retorna len(p) y nil error (pretende OK)
-	// pero descarta el contenido. Eso es valido per io.Writer contract
-	// (no se exige que Write persista, solo que reporte cuantos bytes
-	// "consumio" del input). El buffer destino no crece mas.
+
+
+
+
 	n, err = lw.Write([]byte("extra"))
 	require.NoError(t, err)
 	require.Equal(t, 5, n, "5 bytes 'consumidos' del input (aunque descartados)")
@@ -199,7 +199,7 @@ func TestLimitedWriter_Truncates(t *testing.T) {
 func TestLimitedWriter_ZeroMax_DropsAll(t *testing.T) {
 	var buf strings.Builder
 	lw := &limitedWriter{w: &buf, max: 0}
-	// max=0: lw.n >= lw.max desde el inicio, retorna len(p) y descarta.
+
 	n, err := lw.Write([]byte("anything"))
 	require.NoError(t, err)
 	require.Equal(t, 8, n, "8 bytes 'consumidos' aunque descartados")
@@ -210,8 +210,8 @@ func TestRun_ProcessMode_WorkdirAndEnv(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip en short mode")
 	}
-	// Verifica que Workdir y Env se pasan al subproceso.
-	// Usamos /tmp como workdir (existe en unix) y DOMAIN_TEST_ENV como env var.
+
+
 	r := New(Config{Mode: ModeProcess, Timeout: 5 * time.Second})
 	res, err := r.Run(context.Background(), Request{
 		Cmd:     []string{"sh", "-c", "pwd && echo $DOMAIN_TEST_ENV"},

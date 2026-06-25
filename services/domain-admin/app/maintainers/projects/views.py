@@ -33,8 +33,8 @@ from .models import Project
 class ProjectViews(MaintainerViews):
     """MaintainerViews especializado para projects (context keys + payload + msgs)."""
 
-    # --- repos: filas dinamicas (url + rama + folder) que viajan como arrays
-    #     paralelos repo_url[]/repo_branch[]/repo_folder[] en el POST.
+
+
     @staticmethod
     def _parse_repo_post(data) -> list[dict]:
         urls = data.getlist("repo_url")
@@ -52,12 +52,12 @@ class ProjectViews(MaintainerViews):
             })
         return rows
 
-    # --- payload del service: campos base + el set completo de repos parseado
-    #     del POST. La URL principal y el template ya no se mandan (la primera
-    #     se deriva del repo default; el template se quito).
+
+
+
     def _form_payload(self, form) -> dict:
-        # current_branch ya no se edita en el modal (cada repo tiene su rama);
-        # se omite para preservar el valor existente (es referencial / de sistema).
+
+
         return {
             "name": form.cleaned_data["name"],
             "slug": form.cleaned_data["slug"],
@@ -65,13 +65,13 @@ class ProjectViews(MaintainerViews):
             "repositories": self._parse_repo_post(form.data),
         }
 
-    # --- filas de repos para el template del form (pre-fill).
+
     def _repo_rows(self, form, instance) -> list[dict]:
-        # Re-render por error de validacion (form bound): preservar lo tipeado.
+
         if form.is_bound:
             return self._parse_repo_post(form.data)
-        # GET edit: repos existentes; si no hay pero hay URL principal legacy,
-        # sembrar una fila para no perder el dato.
+
+
         if instance is not None:
             repos = services.get_project_repositories(instance)
             if repos:
@@ -87,8 +87,8 @@ class ProjectViews(MaintainerViews):
                 }]
         return []
 
-    # --- list con filtro por estado. Guardamos el request para que
-    #     do_list/list_context lean el GET; el resto lo arma core.
+
+
     def list(self, request):
         self._list_request = request
         return super().list(request)
@@ -101,13 +101,13 @@ class ProjectViews(MaintainerViews):
             statuses=[status] if status else None,
         )
 
-    # --- contextos: los templates de projects usan `project_obj` (no `object`).
+
     def list_context(self, data: dict, search: str) -> dict:
         ctx = super().list_context(data, search)
         ctx["page_title"] = "Proyectos"
         ctx["stats"] = services.get_stats()
         req = getattr(self, "_list_request", None)
-        # Opciones + seleccion actual para el container de filtros.
+
         ctx["status_options"] = Project.STATUS_CHOICES
         ctx["selected_status"] = req.GET.get("status") if req else ""
         return ctx
@@ -121,9 +121,9 @@ class ProjectViews(MaintainerViews):
             "action": action,
             "repo_rows": self._repo_rows(form, instance),
         }
-        # En edicion exponemos skills + reglas para las tabs (mismo set que el ver).
+
         if mode == "edit" and instance is not None:
-            # En edicion las skills/reglas son gestionables (readonly=False).
+
             ctx.update(_skills_ctx(instance, readonly=False))
             ctx.update(_rules_ctx(instance, readonly=False))
         return ctx
@@ -134,12 +134,12 @@ class ProjectViews(MaintainerViews):
             "object": instance,
             "repositories": services.get_project_repositories(instance),
         }
-        # El "ver" es un visualizador: skills/reglas SOLO lectura (sin gestionar).
+
         ctx.update(_skills_ctx(instance, readonly=True))
         ctx.update(_rules_ctx(instance, readonly=True))
         return ctx
 
-    # --- toggle con feedback de dominio (archivado/restaurado).
+
     def toggle(self, request, **kwargs):
         from core.auth import require_auth
 
@@ -169,7 +169,7 @@ def _skills_ctx(project, scope="all", page=1, readonly=False) -> dict:
         "skills_global_count": data["global_count"],
         "skills_internal_count": data["internal_count"],
         "readonly": readonly,
-        # paginacion del pane
+
         "total": data["total"], "page": data["page"], "per_page": data["per_page"],
         "total_pages": data["total_pages"], "has_prev": data["has_prev"], "has_next": data["has_next"],
     }
@@ -262,8 +262,8 @@ def toggle_rule(request, project_id):
     return render(request, "projects/_rules_pane.html", _rules_ctx(project, scope, page))
 
 
-# Instancia que cablea todo. list_key="projects" -> el template recibe la lista
-# bajo `projects`. id_kwarg="project_id" -> casa con <uuid:project_id> de las URLs.
+
+
 views = ProjectViews(
     app_name="projects",
     model=Project,

@@ -88,7 +88,7 @@ class CreateProjectTests(MaintainerTestCase):
         project = services.create_project(
             name="Con tpl", slug="con-tpl", template_id=str(tpl.pk),
         )
-        # template_id es UUIDField; recien coacciona a UUID tras round-trip a BD.
+
         project.refresh_from_db()
         self.assertEqual(project.template_id, tpl.pk)
 
@@ -169,11 +169,11 @@ class SyncRepositoriesTests(MaintainerTestCase):
         )
         repos = services.get_project_repositories(project)
         self.assertEqual(len(repos), 2)
-        # default = primero; name derivado de la URL.
+
         self.assertTrue(repos[0].is_default)
         self.assertEqual(repos[0].name, "domain")
         self.assertEqual(repos[0].root_path, "/")
-        # URL principal legacy = repo default.
+
         project.refresh_from_db()
         self.assertEqual(project.repository_url, "https://github.com/org/domain")
 

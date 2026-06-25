@@ -1,5 +1,5 @@
--- Revertir: restaurar PK compuesta (organization_id, period_start).
--- Nota: falla si hay más de 1 fila para la misma (org, period).
+
+
 
 ALTER TABLE usage_counters
   DROP CONSTRAINT IF EXISTS usage_counters_period_unique;

@@ -39,7 +39,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// ===== Sesión 1: arranca flow + completa 2 fases =====
+
 	session1 := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -52,7 +52,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.Len(t, res.Plan.Steps, 10)
 	flowRunID := res.FlowRunID
 
-	// Cliente ejecuta sdd-explore + reporta resultado
+
 	exploreOut := map[string]any{
 		"intent":           "feature",
 		"scope":            "multi-file",
@@ -67,7 +67,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.Equal(t, "completed", r.StepStatus)
 	require.Equal(t, "sdd-spec", r.NextStepKey)
 
-	// Cliente ejecuta sdd-spec + reporta resultado
+
 	specOut := map[string]any{
 		"issue_slug": "issue-99.1-export-pdf",
 		"issue_md":   "# Spec del export PDF\n\nGherkin scenarios...",
@@ -82,31 +82,31 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.Equal(t, "sdd-propose", r2.NextStepKey)
 	proposeStepID := *r2.NextStepID
 
-	// ===== Sesión 1 muere acá. Simulamos creando session2 nueva =====
+
 	session2 := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 
-	// El cliente consulta status para saber dónde quedó
+
 	status, err := session2.GetFlowStatus(ctx, flowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "running", status.Status)
 	require.Equal(t, "full", status.Mode)
 	require.Len(t, status.Steps, 10)
-	// Los primeros 2 deben estar completed
+
 	require.Equal(t, "completed", status.Steps[0].Status, "sdd-explore completed")
 	require.Equal(t, "completed", status.Steps[1].Status, "sdd-spec completed")
-	// El resto pending
+
 	for i := 2; i < 10; i++ {
 		require.Equal(t, "pending", status.Steps[i].Status,
 			"step %d (%s) debe estar pending", i, status.Steps[i].StepKey)
 	}
 
-	// El próximo step pending es sdd-propose; su user_prompt debe
-	// haberse construido lazy cuando sdd-spec completó.
+
+
 	require.Equal(t, "sdd-propose", status.Steps[2].StepKey)
 	require.NotEmpty(t, status.Steps[2].UserPromptPreview,
 		"propose user_prompt debe estar persistido en BD (lazy build)")
 
-	// ===== Sesión 2 continúa el flow =====
+
 	proposeOut := map[string]any{
 		"proposal_md": "Scope: implementar export PDF...",
 		"status":      "draft",
@@ -122,7 +122,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.NotEmpty(t, r3.NextStepPrompt,
 		"el prompt de sdd-design se hizo lazy build con propose.output incluido")
 
-	// Verifica que el prompt de design incluyó info de propose
+
 	require.Contains(t, r3.NextStepPrompt, "Proposal",
 		"design prompt incluye proposal_md (lazy build con PriorOutputs)")
 }
@@ -142,7 +142,7 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// Sesión 1: arranca Express + apply con muchas líneas → verify blocked
+
 	session1 := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -165,21 +165,21 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Verifica que verify quedó blocked
+
 	var status string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT status FROM flow_run_steps WHERE id=$1`, verifyID).Scan(&status))
 	require.Equal(t, "blocked", status)
 
-	// ===== Sesión 1 muere. Sesión 2 nueva =====
+
 	session2 := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 
-	// El operador chequea status (vía CLI o MCP) y decide confirmar
+
 	st, err := session2.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "blocked", st.Steps[1].Status)
 
-	// Confirma desde session2 sin haber participado del apply
+
 	confirmRes, err := session2.ConfirmContinue(ctx, res.FlowRunID, true)
 	require.NoError(t, err)
 	require.Equal(t, "pending", confirmRes.StepStatus)

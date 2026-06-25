@@ -13,10 +13,10 @@ import (
 	"nunezlagos/domain/internal/service/cron"
 )
 
-// issue-35.1 phase 5: el switch local de target_type fue eliminado.
-// Los tests ahora verifican el contrato post-refactor:
-//   - runTarget delega al dispatcher (1 sola implementación).
-//   - Si Dispatcher == nil → error explícito.
+
+
+
+
 
 func TestRunTarget_DispatcherNotConfigured_ReturnsError(t *testing.T) {
 	s := &Scheduler{}

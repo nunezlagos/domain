@@ -151,7 +151,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 
-	// issue-13.6 cursor pagination
+
 	sortDir, err := cursor.NormalizeSort(r.URL.Query().Get("sort"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_sort", "sort must be asc|desc")
@@ -186,7 +186,7 @@ func (a *API) listObservations(w http.ResponseWriter, r *http.Request) {
 		in.CursorTime = &t
 		in.CursorID = &id
 	}
-	// Legacy offset deprecated (issue-13.6 escenario 6)
+
 	if offStr := r.URL.Query().Get("offset"); offStr != "" {
 		w.Header().Set("Deprecation", "true")
 		w.Header().Set("Sunset", "2026-12-31")

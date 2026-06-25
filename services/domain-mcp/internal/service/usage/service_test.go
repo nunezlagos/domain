@@ -86,7 +86,7 @@ func TestHistory_DaysValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// orgID válido (no uuid.Nil) para forzar a llegar a la validación de days.
+
 			_, err := s.History(nil, fixedUUID, tc.days) //nolint:staticcheck // nil ctx ok: cortamos en validation
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)

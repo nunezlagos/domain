@@ -15,22 +15,22 @@ import (
 // que aborta con exit 1 + mensaje claro. Si el guard de cwd
 // está deshabilitado (sabotaje), este test DEBE FALLAR.
 func TestRunInstall_AbortsOutsideRepo(t *testing.T) {
-	// Chdir a tempdir random (no es el repo)
+
 	empty := t.TempDir()
 	originalCwd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(originalCwd) }()
 	require.NoError(t, os.Chdir(empty))
 
-	// Capturar stderr del runInstall
+
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	defer func() { os.Stderr = oldStderr }()
 
-	// Correr runInstall con --non-interactive (evita prompt interactivo)
+
 	exit := runInstall([]string{"--non-interactive"})
 
-	// Cerrar write end y leer
+
 	_ = w.Close()
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)

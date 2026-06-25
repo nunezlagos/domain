@@ -50,7 +50,7 @@ func Serve(cfg Config, logger *slog.Logger) error {
 		return nil
 	}
 	mux := http.NewServeMux()
-	// Registrar handlers de pprof manualmente (stdlib).
+
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
@@ -110,12 +110,12 @@ func instrumentPPROF(next http.Handler, recorder audit.Recorder, reg *metrics.Re
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 
-		// Métrica: contador global de accesos a pprof.
+
 		if reg != nil {
 			reg.PprofAccessTotal.Add(1)
 		}
 
-		// Audit log: registrar accesos a pprof.
+
 		if recorder != nil && r.Method == http.MethodGet {
 			ctx := r.Context()
 			if ctx == nil {
@@ -160,7 +160,7 @@ func TuneRuntime(logger *slog.Logger) {
 		slog.Int("gomaxprocs", runtime.GOMAXPROCS(0)),
 		slog.Int("cpus", runtime.NumCPU()))
 
-	// GOMEMLIMIT: auto-setear a 80% del cgroup limit si no está configurado.
+
 	if os.Getenv("GOMEMLIMIT") != "" {
 		logger.Info("GOMEMLIMIT already set via env", slog.String("value", os.Getenv("GOMEMLIMIT")))
 		return
@@ -183,7 +183,7 @@ func TuneRuntime(logger *slog.Logger) {
 // Retorna 0 si no puede detectarlo.
 func readCgroupMemoryLimit() int64 {
 	const megabyte = 1 << 20
-	// cgroup v2: /sys/fs/cgroup/memory.max
+
 	if data, err := os.ReadFile("/sys/fs/cgroup/memory.max"); err == nil {
 		s := strings.TrimSpace(string(data))
 		if s == "max" {
@@ -193,7 +193,7 @@ func readCgroupMemoryLimit() int64 {
 			return n
 		}
 	}
-	// cgroup v1: /sys/fs/cgroup/memory/memory.limit_in_bytes
+
 	if data, err := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes"); err == nil {
 		s := strings.TrimSpace(string(data))
 		if n, err := strconv.ParseInt(s, 10, 64); err == nil && n > 0 && n < maxMemory {

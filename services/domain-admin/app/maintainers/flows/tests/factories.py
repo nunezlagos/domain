@@ -56,8 +56,8 @@ def make_flow_version(
     created_by: uuid.UUID | None = None,
 ) -> FlowVersion:
     if hash is None:
-        # Hash unico determinista por (flow, version) para no chocar con
-        # la unicidad (flow_id, hash).
+
+
         hash = f"{flow.pk.hex}{version:04d}".ljust(64, "0")[:64]
     return make(
         FlowVersion,

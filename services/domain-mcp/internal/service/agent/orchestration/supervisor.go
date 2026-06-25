@@ -44,7 +44,7 @@ func (s *Supervisor) Run(ctx context.Context, initialPrompt string) (*Orchestrat
 
 	currentContext := initialPrompt
 	for iter := 0; iter < maxIter; iter++ {
-		// 1. Supervisor planifica.
+
 		now := time.Now()
 		supTask := Task{
 			ID:            uuid.New(),
@@ -68,7 +68,7 @@ func (s *Supervisor) Run(ctx context.Context, initialPrompt string) (*Orchestrat
 
 		var plan SupervisorPlan
 		if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
-			// LLM no devolvió JSON parseable — interpretar como resultado final.
+
 			supTask.Status = "done"
 			res.Tasks = append(res.Tasks, supTask)
 			res.FinalOutput = planJSON
@@ -87,7 +87,7 @@ func (s *Supervisor) Run(ctx context.Context, initialPrompt string) (*Orchestrat
 			return res, nil
 		}
 
-		// 2. Ejecutar subtasks (cada una sub-task del supervisor parent).
+
 		results := make([]string, 0, len(plan.Subtasks))
 		for _, sub := range plan.Subtasks {
 			worker := sub.WorkerSlug
@@ -119,7 +119,7 @@ func (s *Supervisor) Run(ctx context.Context, initialPrompt string) (*Orchestrat
 			results = append(results, fmt.Sprintf("[%s] %s", worker, out))
 		}
 
-		// 3. Re-feed context al supervisor.
+
 		currentContext = initialPrompt + "\n\n## Resultados parciales:\n" +
 			fmt.Sprintf("%v", results)
 	}

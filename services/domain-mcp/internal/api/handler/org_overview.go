@@ -1,13 +1,13 @@
-// HU-41.2: handler de GET /api/v1/admin/org-overview. Devuelve stats
-// agregados de una org (members, agents, runs, tokens, cost), top 5
-// users del mes, actividad reciente, y (si super_admin) system health.
-//
-// RBAC:
-//   - admin de la org X → ve solo X
-//   - super_admin → ve cualquier org (con ?org_id=)
-//
-// Las queries respetan RLS porque se ejecutan dentro de la tx del
-// middleware de auth (issue-25.14) si esta disponible; sino en el Pool.
+
+
+
+
+
+
+
+
+
+
 
 package handler
 
@@ -135,7 +135,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	isSuperAdmin := principal.Role == "super_admin"
 
-	// Resolver org target. Default: org del caller.
+
 	targetOrgID := callerOrgID
 	if q := r.URL.Query().Get("org_id"); q != "" {
 		parsed, qerr := uuid.Parse(q)
@@ -151,19 +151,19 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Detectar si hay tx en ctx (middleware API key la inyecto post-auth).
-	// pgx.Tx NO es goroutine-safe: si usamos esa misma tx en errgroup → conn busy.
-	// Solucion: cada goroutine abre su PROPIA tx con WithOrgUserTx, scopeada a la org.
-	// Si NO hay tx en ctx, Pool directo (RLS como defense-in-depth).
+
+
+
+
 	hasTx := txctx.TxFromContext(ctx) != nil
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(4) // 3 queries + 1 DB health, paralelas
 
-	// Helper local: cada goroutine toma su propia conexion del pool
-	// y opcionalmente abre tx con SET LOCAL app.current_org_id.
+
+
 	openRunner := func() (queryRunner, error) {
 		if hasTx {
-			// Tomar una conexion del pool y abrir tx con SET LOCAL.
+
 			conn, err := a.Pool.Acquire(gctx)
 			if err != nil {
 				return nil, fmt.Errorf("acquire conn: %w", err)
@@ -173,13 +173,13 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 				conn.Release()
 				return nil, fmt.Errorf("begin tx: %w", err)
 			}
-			// Setear RLS context en esta tx.
+
 			if _, err := tx.Exec(gctx, "SELECT set_config('app.current_org_id', $1, true)", targetOrgID.String()); err != nil {
 				_ = tx.Rollback(gctx)
 				conn.Release()
 				return nil, fmt.Errorf("set_config: %w", err)
 			}
-			// Wrapper que rollback al final + release.
+
 			return &connRunner{tx: tx, conn: conn}, nil
 		}
 		return a.Pool, nil
@@ -193,7 +193,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		dbHealth       = "ok"
 	)
 
-	// Stats agregados.
+
 	g.Go(func() error {
 		runner, err := openRunner()
 		if err != nil {
@@ -202,8 +202,8 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
-		// REQ-42.2: cost_logs se dropeo; tokens/cost del mes quedan en 0
-		// (no habia writer de produccion para esa tabla).
+
+
 		row := runner.QueryRow(gctx, `
 			SELECT
 			  (SELECT count(*) FROM users WHERE deleted_at IS NULL),
@@ -217,7 +217,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		return row.Scan(&stats.MembersActive, &stats.Agents, &stats.RunsLast24h)
 	})
 
-	// Top 5 users del mes (por cost USD desc).
+
 	g.Go(func() error {
 		runner, err := openRunner()
 		if err != nil {
@@ -226,9 +226,9 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		if cr, ok := runner.(*connRunner); ok {
 			defer cr.Close(gctx)
 		}
-		// REQ-42.2: cost_logs se dropeo; el ranking por cost/tokens ya no
-		// aplica. Top users se ordena por prompts capturados del mes;
-		// tokens_in/out y cost_usd quedan en 0.
+
+
+
 		rows, err := runner.Query(gctx, `
 			SELECT
 			  u.id, COALESCE(u.name, ''), u.email,
@@ -258,7 +258,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		return rows.Err()
 	})
 
-	// Recent activity (ultimos 10 del audit_log).
+
 	g.Go(func() error {
 		runner, err := openRunner()
 		if err != nil {
@@ -293,7 +293,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		return rows.Err()
 	})
 
-	// DB health.
+
 	g.Go(func() error {
 		var ok int
 		if err := a.Pool.QueryRow(gctx, `SELECT 1`).Scan(&ok); err != nil {
@@ -316,7 +316,7 @@ func (a *API) getOrgOverview(w http.ResponseWriter, r *http.Request) {
 		RecentActivity:    ensureSlice(recentActivity),
 	}
 
-	// System health solo si super_admin.
+
 	if isSuperAdmin {
 		resp.SystemHealth = &SystemHealth{
 			API:         "ok",

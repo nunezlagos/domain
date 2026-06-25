@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// jsonOps: helpers para manipular configs JSON (mcp_servers.json,
-// opencode.json, claude_desktop_config.json) sin sobreescribir lo que el
-// usuario ya tiene configurado. Estrategia equivalente a jq:
-//   - Si el archivo existe → unmarshal, mutar el map, marshal y reescribir.
-//   - Si no existe → escribir un JSON mínimo con solo la entry de domain.
-//
-// Backup con timestamp cada vez que vamos a modificar.
+
+
+
+
+
+
+
 
 const entryNameNew = "domain-mcp" // nombre actual del MCP entry
 const entryNameLegacy = "domain"  // entries de instalaciones previas

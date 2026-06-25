@@ -163,7 +163,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 	}
 	defer tx.Rollback(ctx)
 
-	// Lock + lookup actual
+
 	var cur Policy
 	err = tx.QueryRow(ctx,
 		`SELECT id, slug, name, kind, body_md, body_structured, version,
@@ -179,7 +179,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		return nil, err
 	}
 
-	// Archivar versión actual
+
 	_, err = tx.Exec(ctx,
 		`INSERT INTO platform_policy_versions (policy_id, version, body_md, body_structured, changed_by)
 		 VALUES ($1,$2,$3,$4,$5)`,
@@ -188,7 +188,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		return nil, fmt.Errorf("archive version: %w", err)
 	}
 
-	// Apply update
+
 	newBody := cur.BodyMD
 	if in.BodyMD != nil {
 		newBody = *in.BodyMD
@@ -198,7 +198,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		j, _ := json.Marshal(in.BodyStructured)
 		newStructured = j
 	}
-	// is_user_modified=TRUE marca la policy para que el seeder no la pise.
+
 	_, err = tx.Exec(ctx,
 		`UPDATE platform_policies
 		 SET body_md=$1, body_structured=$2, version=version+1, is_user_modified=TRUE

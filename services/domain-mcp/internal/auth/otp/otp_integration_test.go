@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-02.7 OTP integration tests con testcontainers.
+
 
 package otp_test
 
@@ -131,7 +131,7 @@ func TestOTP_Request_HappyPath(t *testing.T) {
 	require.Equal(t, "alice@example.com", mail.lastTo)
 	require.Len(t, mail.lastCode, 6)
 
-	// Verifica que se persistió en auth_otp_codes
+
 	var count int
 	require.NoError(t, pool.QueryRow(context.Background(),
 		`SELECT COUNT(*) FROM auth_otp_codes WHERE used_at IS NULL`,
@@ -169,14 +169,14 @@ func TestOTP_Verify_HappyPath(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, result.UserID)
 	require.Equal(t, "alice@example.com", result.Email)
 
-	// otp marked used
+
 	var used *time.Time
 	require.NoError(t, pool.QueryRow(context.Background(),
 		`SELECT used_at FROM auth_otp_codes WHERE id = $1`, result.OTPID,
 	).Scan(&used))
 	require.NotNil(t, used)
 
-	// last_login_at del user updated
+
 	var lastLogin *time.Time
 	require.NoError(t, pool.QueryRow(context.Background(),
 		`SELECT last_login_at FROM users WHERE email = $1`, "alice@example.com",
@@ -198,7 +198,7 @@ func TestOTP_Verify_WrongCode_Attempts(t *testing.T) {
 	require.ErrorIs(t, err, otp.ErrInvalidCode)
 	require.Equal(t, 4, res.AttemptsLeft, "max 5, 1 attempt used")
 
-	// Verifica que attempts incrementó
+
 	var attempts int
 	require.NoError(t, pool.QueryRow(context.Background(),
 		`SELECT attempts FROM auth_otp_codes WHERE user_id = (SELECT id FROM users WHERE email='alice@example.com')`,
@@ -216,12 +216,12 @@ func TestOTP_Verify_TooManyAttempts(t *testing.T) {
 	svc := &otp.Service{Pool: pool, Users: &fakeLookup{Pool: pool}, Mail: mail, MaxAttempts: 3}
 	require.NoError(t, svc.Request(context.Background(), "alice@example.com", "", ""))
 
-	// 3 intentos malos
+
 	for i := 0; i < 3; i++ {
 		_, err := svc.Verify(context.Background(), "alice@example.com", "000000")
 		require.Error(t, err)
 	}
-	// 4to debe ser TooManyAttempts
+
 	_, err := svc.Verify(context.Background(), "alice@example.com", "000000")
 	require.ErrorIs(t, err, otp.ErrTooManyAttempts)
 }
@@ -236,7 +236,7 @@ func TestOTP_Verify_Expired(t *testing.T) {
 	svc := &otp.Service{Pool: pool, Users: &fakeLookup{Pool: pool}, Mail: mail, TTL: 100 * time.Millisecond}
 	require.NoError(t, svc.Request(context.Background(), "alice@example.com", "", ""))
 
-	// Force expire
+
 	_, err := pool.Exec(context.Background(),
 		`UPDATE auth_otp_codes SET expires_at = NOW() - interval '1 second' WHERE user_id = $1`, userID)
 	require.NoError(t, err)
@@ -258,7 +258,7 @@ func TestOTP_Verify_AlreadyUsed(t *testing.T) {
 	_, err := svc.Verify(context.Background(), "alice@example.com", mail.lastCode)
 	require.NoError(t, err)
 
-	// Segundo verify falla
+
 	_, err = svc.Verify(context.Background(), "alice@example.com", mail.lastCode)
 	require.True(t, errors.Is(err, otp.ErrOTPAlreadyUsed) || errors.Is(err, otp.ErrNoActiveOTP),
 		"second verify debe rechazar; got: %v", err)
@@ -289,18 +289,18 @@ func TestSabotage_OTP_BruteForceBlocked(t *testing.T) {
 	svc := &otp.Service{Pool: pool, Users: &fakeLookup{Pool: pool}, Mail: mail, MaxAttempts: 5}
 	require.NoError(t, svc.Request(context.Background(), "alice@example.com", "", ""))
 
-	// 5 intentos malos
+
 	var lastErr error
 	for i := 0; i < 5; i++ {
 		_, lastErr = svc.Verify(context.Background(), "alice@example.com", "999999")
 	}
 	require.Error(t, lastErr)
 
-	// El 6to debe ser blocked
+
 	_, err := svc.Verify(context.Background(), "alice@example.com", "999999")
 	require.ErrorIs(t, err, otp.ErrTooManyAttempts)
 
-	// Incluso con el código correcto, debe estar blocked
+
 	_, err = svc.Verify(context.Background(), "alice@example.com", mail.lastCode)
 	require.ErrorIs(t, err, otp.ErrTooManyAttempts, "código correcto NO debe funcionar después de N attempts")
 }

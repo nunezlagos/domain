@@ -41,7 +41,7 @@ func setupIntake(t *testing.T) (*intake.Service, uuid.UUID, func()) {
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
 
-	// Org + proyecto fixture para scopear los intakes.
+
 	var orgID, projectID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
@@ -185,7 +185,7 @@ func TestSabotage_ApproveOnCommittedRejected(t *testing.T) {
 	ctx := context.Background()
 	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
 
-	// Forzamos status=committed para verificar rechazo
+
 	_, err := svc.Pool.Exec(ctx,
 		`UPDATE issue_intake_payloads SET status = 'committed' WHERE id = $1`, p.ID)
 	require.NoError(t, err)

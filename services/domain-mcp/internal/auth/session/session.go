@@ -45,10 +45,10 @@ var (
 
 type Service struct {
 	Pool *pgxpool.Pool
-	// Tablas con BYPASSRLS porque login cruza varios scopes
-	// (users de cualquier org). Inyectar pool app_admin.
+
+
 	AuthPool *pgxpool.Pool
-	// Cripto reloj — sobrescribible para tests.
+
 	Now func() time.Time
 }
 
@@ -110,15 +110,15 @@ func (s *Service) LoginWithMeta(ctx context.Context, in LoginInput) (*LoginResul
 	var u User
 	var hash []byte
 	err := s.AuthPool.QueryRow(ctx,
-		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+
 		`SELECT id, email, name, password_hash
 		   FROM users
 		   WHERE email = $1 AND deleted_at IS NULL`,
 		in.Email,
 	).Scan(&u.ID, &u.Email, &u.Name, &hash)
 	if errors.Is(err, pgx.ErrNoRows) || len(hash) == 0 {
-		// constant-time: hace bcrypt aunque no haya hash, para no leak
-		// timing.
+
+
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$dummyhashfortimingsafety"), []byte(in.Password))
 		s.audit(ctx, authEvent{Kind: "login_attempt", EmailAttempted: in.Email,
 			Success: false, Reason: "invalid_credentials", IP: in.IP, UserAgent: in.UserAgent})
@@ -201,10 +201,10 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 			Reason: "token_invalid", IP: ip, UserAgent: userAgent})
 		return nil, ErrTokenInvalid
 	}
-	// Recargar user + verificar rol.
+
 	var u User
 	err = s.AuthPool.QueryRow(ctx,
-		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+
 		`SELECT id, email, name
 		   FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		userID,
@@ -230,7 +230,7 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 		return nil, ErrRoleNotGranted
 	}
 
-	// Generar session token + persistir.
+
 	plain, err := newSessionToken()
 	if err != nil {
 		return nil, err
@@ -239,8 +239,8 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 	expires := s.now().Add(SessionTTL)
 	var sessID uuid.UUID
 	ipVal := parseIP(ip)
-	// ISSUE-21.6 Fase C: organization_id dropeado de auth_sessions
-	// (migration 000142). INSERT sin la columna.
+
+
 	err = s.AuthPool.QueryRow(ctx,
 		`INSERT INTO auth_sessions
 		   (user_id, active_role_id, token_hash,
@@ -276,7 +276,7 @@ type Active struct {
 func (s *Service) Resolve(ctx context.Context, plainToken string) (*Active, error) {
 	hash := hashToken(plainToken)
 	row := s.AuthPool.QueryRow(ctx,
-		// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+
 		`SELECT s.id, s.user_id, s.expires_at,
 		        r.id, r.slug, r.name, r.permissions
 		   FROM auth_sessions s
@@ -295,7 +295,7 @@ func (s *Service) Resolve(ctx context.Context, plainToken string) (*Active, erro
 	if expiresAt.Before(s.now()) {
 		return nil, ErrTokenInvalid
 	}
-	// last_used_at refresh — best effort, no bloqueante.
+
 	go func() {
 		ctxBg, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -330,9 +330,9 @@ func (s *Service) Refresh(ctx context.Context, plainToken string) (*Active, time
 // Logout marca la sesión como revocada. Idempotente.
 func (s *Service) Logout(ctx context.Context, plainToken string) error {
 	hash := hashToken(plainToken)
-	// Tomamos los datos del session ANTES de revocar para que el audit
-	// log sepa quién hizo logout. Si el token ya no existe es no-op.
-	// ISSUE-21.6: organization_id dropeado en Fase C; omitido del SELECT.
+
+
+
 	var sessID, userID uuid.UUID
 	_ = s.AuthPool.QueryRow(ctx,
 		`SELECT id, user_id FROM auth_sessions WHERE token_hash = $1`,
@@ -345,8 +345,8 @@ func (s *Service) Logout(ctx context.Context, plainToken string) error {
 		hash,
 	)
 	if err == nil && sessID != uuid.Nil {
-		// ISSUE-21.6: orgID se omite del audit (single-org, no se selecciona
-		// de auth_sessions.organization_id).
+
+
 		s.audit(ctx, authEvent{Kind: "logout", UserID: &userID, OrgID: nil,
 			Success: true, Reason: "ok", SessionID: &sessID})
 	}
@@ -395,7 +395,7 @@ func (s *Service) GrantRole(ctx context.Context, userEmail, roleSlug string, gra
 	return err
 }
 
-// --- audit log REQ-79 ---
+
 
 type authEvent struct {
 	Kind           string
@@ -413,11 +413,11 @@ func (s *Service) audit(ctx context.Context, e authEvent) {
 	if s.AuthPool == nil {
 		return
 	}
-	// Best-effort: si falla la inserción no rompemos el login. Hacemos
-	// timeout corto para no bloquear el request principal.
+
+
 	c, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	// ISSUE-21.6: INSERT sin organization_id (la columna se dropea en Fase C).
+
 	_, _ = s.AuthPool.Exec(c,
 		`INSERT INTO auth_events
 		   (user_id, kind, email_attempted, success,
@@ -429,7 +429,7 @@ func (s *Service) audit(ctx context.Context, e authEvent) {
 	)
 }
 
-// --- helpers ---
+
 
 func newSessionToken() (string, error) {
 	var buf [32]byte

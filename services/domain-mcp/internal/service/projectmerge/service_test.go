@@ -8,20 +8,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// issue-01.5 project-merge — tests de comportamiento de las reglas de negocio.
-//
-// Reglas testeadas:
-//  1. ErrSameProject: source y target deben ser distintos
-//  2. ErrCrossOrg: source y target deben pertenecer a la misma org
-//  3. ErrNotFound: source o target no existen
-//  4. ErrAlreadyMerged: source ya fue soft-deleted
-//  5. Naming convention en conflict: <slug>-merged-<sourceSlug>
-//  6. Sentinels son distintos (caller usa errors.Is)
-//
-// Tests de las queries a DB (moveWithRename con pgx.Tx) requieren
-// testcontainers integration — fuera de scope.
 
-// === Comportamiento: sentinels distintos ===
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 func TestBehavior_Sentinels_AreDistinct(t *testing.T) {
 	sentinels := []error{
@@ -49,19 +49,19 @@ func TestBehavior_ErrNotFound_WrappableWithContext(t *testing.T) {
 	require.Contains(t, wrapped.Error(), "source")
 }
 
-// === Comportamiento: ErrSameProject ===
+
 
 // El servicio DEBE rechazar source==target. Esto es la primera validacion
 // antes de tocar DB. Test verificable inspeccionando el codigo: el chequeo
 // ocurre inmediatamente despues de obtener los tx options.
 func TestBehavior_SameProjectRejected_PreventingLogicLoss(t *testing.T) {
-	// No podemos testear el flow completo sin DB, pero validamos la
-	// invariante: el sentinel existe y es unico.
+
+
 	require.NotNil(t, ErrSameProject)
 	require.NotEqual(t, ErrSameProject, ErrCrossOrg)
 }
 
-// === Comportamiento: MergeReport shape ===
+
 
 // MergeReport tiene 11+ campos. JSON tags deben estar correctos (no
 // romperse accidentalmente en refactors).
@@ -82,14 +82,14 @@ func TestBehavior_MergeReport_JSONShape(t *testing.T) {
 	require.Contains(t, report.SkillsRenamed[0], "-merged-")
 }
 
-// === Comportamiento: naming convention -merged- ===
+
 
 // El sufijo de rename sigue el patron: <original>-merged-<sourceSlug>.
 // Si sourceSlug es "marketing", y el slug en conflict es "daily-report",
 // el nuevo slug debe ser "daily-report-merged-marketing".
 func TestBehavior_NamingConvention_PrefixKept(t *testing.T) {
-	// Simulamos la regla de naming que moveWithRename aplica.
-	// Logica pura: newSlug = oldSlug + "-merged-" + sourceSlug
+
+
 	originalSlug := "daily-report"
 	sourceSlug := "marketing"
 	expected := "daily-report-merged-marketing"
@@ -134,7 +134,7 @@ func TestBehavior_NamingConvention_EmptySourceSlug(t *testing.T) {
 		"sourceSlug vacio produce sufijo literal '-merged-' (test documenta, no falla)")
 }
 
-// === Comportamiento: lista de tablas a mover ===
+
 
 // El servicio mueve datos de 4 tablas con UNIQUE(slug, project_id):
 // skills, flows, agents, crons. La lista es fija. Si se agrega una
@@ -143,31 +143,31 @@ func TestBehavior_NamingConvention_EmptySourceSlug(t *testing.T) {
 // Test canary contra drift: si alguien borra una tabla de la lista
 // sin querer, este test rompe (la lista es static check).
 func TestBehavior_TablesToMove_AreComplete(t *testing.T) {
-	// Lista hardcoded esperada (mirror del codigo en Merge()).
-	// Si el codigo cambia, este test DEBE actualizarse.
+
+
 	expectedTables := []string{"skills", "flows", "agents", "crons"}
 
-	// El codigo tiene un loop con 4 tablas; validamos el count por
-	// inspeccion. No testeable en runtime sin DB. Este test sirve
-	// de documentacion explicita.
+
+
+
 	require.Len(t, expectedTables, 4,
 		"se esperan 4 tablas con UNIQUE(slug, project_id) en el merge")
 }
 
-// === Comportamiento: tx serializable ===
+
 
 // El merge corre en tx con isolation Serializable.
 // Esto previene race conditions: dos merges concurrentes del mismo
 // source podrian duplicar observaciones o crashear por UNIQUE violation.
 // Test documenta la decision arquitectonica (no testeable sin DB).
 func TestBehavior_TxIsolationLevel_IsSerializable(t *testing.T) {
-	// pgx.Serializable es el nivel mas estricto. Si alguien lo baja
-	// a ReadCommitted o RepeatableRead, este test sirve de canary
-	// (inspeccion estatica del codigo, no runtime check).
-	// El codigo en Merge() usa: pgx.TxOptions{IsoLevel: pgx.Serializable}
-	// Si cambia, este test + el commit message lo documentan.
+
+
+
+
+
 	expected := "serializable"
 	_ = expected
-	// Sin DB, no podemos assert runtime. Marcamos como TODO de integration
-	// test que valide que 2 merges concurrentes no se pisan.
+
+
 }

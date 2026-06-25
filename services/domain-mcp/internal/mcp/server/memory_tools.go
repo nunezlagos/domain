@@ -18,7 +18,7 @@ import (
 )
 
 func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls: tx + SET LOCAL para tablas con RLS FORCE (observations/sessions).
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -45,14 +45,14 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
+
 	args := req.GetArguments()
 	idRaw, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idRaw)
 	if err != nil {
 		return mcp.NewToolResultError("observation_id invalido"), nil
 	}
-	// Guard anti-enumeration: misma respuesta para no-existe.
+
 	if _, err := d.Observations.Get(ctx, id); err != nil {
 		return mcp.NewToolResultError("observation not found"), nil
 	}
@@ -149,7 +149,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 	if d.Principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
+
 	args := req.GetArguments()
 	projectSlug, _ := args["project_slug"].(string)
 	content, _ := args["content"].(string)
@@ -179,7 +179,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		Metadata:        map[string]any{"source": source, "passive": true},
 	})
 	if err != nil {
-		// Dedup hash: contenido identico ya capturado no es error para el caller.
+
 		if strings.Contains(err.Error(), "duplicate") {
 			return toolResultJSON(map[string]any{"captured": false, "reason": "duplicate"})
 		}
@@ -200,7 +200,7 @@ func toolMemSuggestTopicKey() mcp.Tool {
 
 var (
 	reWord = regexp.MustCompile(`[a-zaeiouñu0-9]+`)
-	// stopwords ES+EN minimas para keywords.
+
 	topicStopwords = map[string]bool{
 		"el": true, "la": true, "los": true, "las": true, "de": true, "del": true,
 		"en": true, "un": true, "una": true, "que": true, "con": true, "por": true,
@@ -228,7 +228,7 @@ func SuggestTopicKey(content string) string {
 	if len(order) == 0 {
 		return "general"
 	}
-	// Orden estable: frecuencia desc, luego orden de aparicion.
+
 	pos := map[string]int{}
 	for i, w := range order {
 		pos[w] = i
@@ -286,7 +286,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	byType := map[string]int64{}
-	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyecto withOrgTxHandler.
+
 	rows, err := d.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM knowledge_observations
 		WHERE deleted_at IS NULL`+projFilter+`
@@ -310,7 +310,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// REQ-42.3: sessions dropeada — sin conteo de sesiones.
+
 	var prompts int64
 	_ = d.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)

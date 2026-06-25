@@ -13,7 +13,7 @@ CREATE TABLE custom_roles (
 
 CREATE INDEX custom_roles_org_idx ON custom_roles (organization_id);
 
--- canal de notificación para invalidar cache cross-node
+
 CREATE OR REPLACE FUNCTION notify_custom_roles_changed() RETURNS trigger AS $$
 BEGIN
   PERFORM pg_notify('custom_roles_changed', '');

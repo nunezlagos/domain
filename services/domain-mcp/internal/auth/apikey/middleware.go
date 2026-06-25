@@ -1,11 +1,11 @@
-// issue-02.1 + issue-13.2 — middleware HTTP que extrae API key del header Authorization
-// y resuelve user/org context vía Resolver interface.
-//
-// issue-25.14: post-auth, abre una tx con SET LOCAL app.current_org_id y
-// app.current_user_id y la inyecta en el ctx via txctx.WithTxContext.
-// Esto permite que la RLS de Postgres (issue-25.5) actúe sobre tablas
-// observations/sessions/etc. sin necesidad de que cada handler/repo
-// conozca el patrón SET LOCAL.
+
+
+
+
+
+
+
+
 
 package apikey
 
@@ -69,10 +69,10 @@ type Middleware struct {
 	Resolver  Resolver
 	Allowlist []string // paths exactos que no requieren auth
 	Pool      *pgxpool.Pool // opcional; si nil, NO se abre tx (legacy auth-only)
-	// REQ-72: si está seteado, el middleware acepta también tokens
-	// de sesión web ("sess_*"). El callback devuelve un Principal
-	// equivalente + un ctx-mutator que el package session usa para
-	// guardar el Active completo (rol, etc) en el ctx.
+
+
+
+
 	SessionResolver SessionResolverFunc
 }
 
@@ -85,7 +85,7 @@ type SessionResolverFunc func(ctx context.Context, plainToken string) (*Principa
 // ServeHTTP wraps next con check de auth + (opcional) tx wireup.
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allowlist: match exacto o prefix con trailing "/*"
+
 		for _, p := range m.Allowlist {
 			if strings.HasSuffix(p, "/*") {
 				prefix := strings.TrimSuffix(p, "/*")
@@ -107,9 +107,9 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 		}
 		token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
 
-		// REQ-72: aceptar dos formatos.
-		//   - "domk_*"  → API key (resolver existente)
-		//   - "sess_*"  → session token web (SessionResolver)
+
+
+
 		var ctx context.Context
 		var p *Principal
 		if m.SessionResolver != nil && strings.HasPrefix(token, "sess_") {
@@ -138,27 +138,27 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 		}
 		ctx = WithPrincipal(ctx, p)
 
-		// issue-25.14: wireup tx con SET LOCAL post-auth.
-		// Si m.Pool es nil → modo legacy (solo Principal en ctx, sin tx).
-		// Si el Principal no tiene org/user parseable → no abrimos tx
-		// (es un caso borde; handler igual corre, queries fallarán si
-		// tocan tablas RLS, pero el contrato de auth no exige tx).
+
+
+
+
+
 		if m.Pool != nil {
 			orgID, orgErr := uuid.Parse(p.OrganizationID)
 			userID, userErr := uuid.Parse(p.UserID)
 			if orgErr == nil && userErr == nil && orgID != uuid.Nil {
 				tx, terr := m.openTxWithOrg(ctx, orgID, userID)
 				if terr != nil {
-					// No exponemos el error técnico al cliente (anti-enum),
-					// pero logueable vía metrics. 500 porque es bug nuestro.
+
+
 					http.Error(w, `{"error":{"code":"internal","message":"wireup failed"}}`,
 						http.StatusInternalServerError)
 					return
 				}
-				// Wireup: capturamos el status del response para decidir
-				// commit vs rollback. 2xx y 4xx → commit (4xx es error del
-				// cliente, los datos válidos persisten). 5xx → rollback
-				// (error de servidor, tx es probablemente inválida).
+
+
+
+
 				rec := &statusRecorder{ResponseWriter: w, status: 200}
 				defer func() {
 					if rec.status >= 500 {
@@ -202,7 +202,7 @@ func writeUnauthorized(w http.ResponseWriter, code, msg string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("WWW-Authenticate", `Bearer realm="domain"`)
 	w.WriteHeader(http.StatusUnauthorized)
-	// Anti-enumeration: mismo body para todas las causas
+
 	_, _ = w.Write([]byte(`{"error":{"code":"unauthorized","message":"unauthorized"}}`))
 	_ = code
 	_ = msg
@@ -230,7 +230,7 @@ func (r *statusRecorder) WriteHeader(code int) {
 
 func (r *statusRecorder) Write(b []byte) (int, error) {
 	if !r.wroteHeader {
-		// Write antes de WriteHeader → status default 200
+
 		r.wroteHeader = true
 	}
 	return r.ResponseWriter.Write(b)

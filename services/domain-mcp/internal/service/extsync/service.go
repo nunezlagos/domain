@@ -105,10 +105,10 @@ func (s *Service) RegisterProvider(ctx context.Context, orgID uuid.UUID, provide
 	}
 
 	var p Provider
-	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
-	// (la columna es nullable post-migration 000145; single-org = NULL).
-	// El UNIQUE constraint external_providers_org_provider_unique se dropeó
-	// en 000145 — el caller garantiza unicidad via app.
+
+
+
+
 	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO external_providers (provider, display_name, base_url, project_key, config)
 		VALUES ($1, $2, $3, $4, $5)

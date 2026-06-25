@@ -12,7 +12,7 @@ IMPORTANTE — contrato para las subclases:
 
         class User(SoftDeleteModel):
             email = models.EmailField(unique=True)
-            # ... campos propios ...
+
 
             class Meta:
                 db_table = "users"

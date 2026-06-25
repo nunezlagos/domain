@@ -76,7 +76,7 @@ func (e *AutoEngine) Materialize(ctx context.Context, t DiscoveredTool) (*Materi
 	).Scan(&existing)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		// create
+
 		var newID uuid.UUID
 		err = tx.QueryRow(ctx, `
 			INSERT INTO skills (slug, name, description, input_schema, output_schema, source, source_ref)
@@ -97,7 +97,7 @@ func (e *AutoEngine) Materialize(ctx context.Context, t DiscoveredTool) (*Materi
 		return nil, fmt.Errorf("lookup: %w", err)
 	}
 
-	// update — solo si schema cambió
+
 	_, err = tx.Exec(ctx, `
 		UPDATE skills
 		SET description = COALESCE(NULLIF($1, ''), description),

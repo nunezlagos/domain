@@ -31,7 +31,7 @@ type AlertFired struct {
 type RunnerEmitter struct {
 	Dispatcher *Dispatcher
 	Logger     *slog.Logger
-	// UsageAlerts (opcional) evalúa alerts post-run y emite eventos usage.alert.fired.
+
 	UsageAlerts UsageAlerter
 }
 
@@ -58,7 +58,7 @@ func (e *RunnerEmitter) EmitAgentRunFinished(ctx context.Context, orgID uuid.UUI
 			slog.String("error", err.Error()))
 	}
 
-	// issue-15.3: evaluar alerts y emitir evento usage.alert.fired por cada match.
+
 	if e.UsageAlerts != nil {
 		fired, err := e.UsageAlerts.EvaluateRunEvent(ctx, orgID, costUSD, tokensTotal)
 		if err != nil && e.Logger != nil {

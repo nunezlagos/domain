@@ -17,8 +17,8 @@ type createProjectBody struct {
 	RepositoryURL string         `json:"repository_url,omitempty"`
 	TemplateID    *uuid.UUID     `json:"template_id,omitempty"`
 	Settings      map[string]any `json:"settings,omitempty"`
-	// ClientSlug (REQ-28.2): opcional. Si presente, asocia el project a un
-	// client (mandante) de la misma organization.
+
+
 	ClientSlug string `json:"client_slug,omitempty"`
 }
 
@@ -74,7 +74,7 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "")
 		return
 	}
-	// REQ-28.2: filtro opcional ?client_slug=<slug>.
+
 	clientSlug := r.URL.Query().Get("client_slug")
 	var (
 		list []projsvc.Project
@@ -125,10 +125,10 @@ type updateProjectBody struct {
 	Description   *string        `json:"description,omitempty"`
 	RepositoryURL *string        `json:"repository_url,omitempty"`
 	Settings      map[string]any `json:"settings,omitempty"`
-	// ClientSlug (REQ-28.2) — PATCH semantics:
-	//   ausente / null     → no toca
-	//   string vacio ""    → unset (project queda interno)
-	//   string con slug    → reasigna a ese client
+
+
+
+
 	ClientSlug *string `json:"client_slug,omitempty"`
 }
 

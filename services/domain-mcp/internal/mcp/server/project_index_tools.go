@@ -78,7 +78,7 @@ func toolProjectIndexStatus() mcp.Tool {
 	)
 }
 
-// --- handlers ---
+
 
 func (d *Deps) handleProjectIndexStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Principal == nil || d.Projects == nil {
@@ -168,7 +168,7 @@ func classifyFile(path, content string) classifiedFile {
 	dir := filepath.Dir(path)
 	low := strings.ToLower(base)
 
-	// Agent protocol files
+
 	if low == "agents.md" || low == "claude.md" || low == "agent.md" ||
 		(strings.HasPrefix(path, ".claude/") && low == "claude.md") {
 		return classifiedFile{
@@ -177,7 +177,7 @@ func classifyFile(path, content string) classifiedFile {
 			Title: "Imported: " + path, Body: content,
 		}
 	}
-	// Rules files
+
 	if strings.HasPrefix(path, ".claude/rules/") && strings.HasSuffix(low, ".md") {
 		return classifiedFile{
 			Category: "policy", Kind: "convention",
@@ -194,14 +194,14 @@ func classifyFile(path, content string) classifiedFile {
 			Title: "Imported: " + path, Body: content,
 		}
 	}
-	// README
+
 	if strings.EqualFold(base, "README.md") && (dir == "." || dir == "" || dir == "/") {
 		return classifiedFile{
 			Category: "knowledge", Kind: "readme",
 			Slug: "readme", Title: "README", Body: content,
 		}
 	}
-	// Tech stack manifests
+
 	if base == "package.json" || base == "go.mod" || base == "composer.json" ||
 		base == "pyproject.toml" || base == "Cargo.toml" || base == "Gemfile" {
 		return classifiedFile{
@@ -211,7 +211,7 @@ func classifyFile(path, content string) classifiedFile {
 			Body:  techStackSummary(base, content),
 		}
 	}
-	// Commands
+
 	if base == "Makefile" || base == "makefile" || base == "Taskfile.yml" || base == "justfile" {
 		return classifiedFile{
 			Category: "policy", Kind: "convention",
@@ -220,7 +220,7 @@ func classifyFile(path, content string) classifiedFile {
 			Body:  "Comandos comunes del proyecto extraidos de `" + base + "`:\n\n```\n" + truncate(content, 4000) + "\n```",
 		}
 	}
-	// Docs
+
 	if (strings.HasPrefix(path, "docs/") || strings.HasPrefix(path, "doc/") ||
 		strings.HasPrefix(path, "documentation/")) && strings.HasSuffix(low, ".md") {
 		title := strings.TrimSuffix(base, ".md")
@@ -230,7 +230,7 @@ func classifyFile(path, content string) classifiedFile {
 			Title: title, Body: content,
 		}
 	}
-	// CI workflows
+
 	if strings.HasPrefix(path, ".github/workflows/") && (strings.HasSuffix(low, ".yml") || strings.HasSuffix(low, ".yaml")) {
 		return classifiedFile{
 			Category: "knowledge", Kind: "ci",
@@ -238,7 +238,7 @@ func classifyFile(path, content string) classifiedFile {
 			Title: "CI workflow: " + base, Body: content,
 		}
 	}
-	// Openspec
+
 	if strings.HasPrefix(path, "openspec/changes/") && strings.HasSuffix(low, ".md") {
 		return classifiedFile{
 			Category: "knowledge", Kind: "spec",
@@ -284,7 +284,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	}
 	complete, _ := args["complete"].(bool)
 
-	// Resolver project del run
+
 	var projectID uuid.UUID
 	if err := d.q(ctx).QueryRow(ctx,
 		`SELECT project_id FROM project_index_runs
@@ -297,12 +297,12 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 	policiesCreated, knowledgeCreated, ignored := 0, 0, 0
 	ignoredPaths := []string{}
 
-	// DOMAINSERV-1: cada archivo se procesa dentro de su propio SAVEPOINT.
-	// Si un statement falla (ej: unique violation, subquery multi-row),
-	// la tx queda "aborted" (SQLSTATE 25P02) y mata todos los statements
-	// subsiguientes. Con SAVEPOINT/RELEASE/ROLLBACK TO, un fallo se
-	// revierte al punto pre-iteracion y la tx sigue sana para los
-	// siguientes archivos.
+
+
+
+
+
+
 	for i, raw := range rawFiles {
 		m, ok := raw.(map[string]any)
 		if !ok {
@@ -316,10 +316,10 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 
 		spName := fmt.Sprintf("sp_idx_%d", i)
 		if _, err := d.q(ctx).Exec(ctx, "SAVEPOINT "+spName); err != nil {
-			// Si ni el SAVEPOINT funciona, la tx esta rota de verdad.
-			// Marcamos el archivo como ignored y continuamos con los
-			// siguientes (cada uno va a tener el mismo problema, pero
-			// al menos el handler no crashea).
+
+
+
+
 			ignored++
 			ignoredPaths = append(ignoredPaths, path+" (savepoint failed: "+err.Error()+")")
 			continue
@@ -329,8 +329,8 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 		var fileErr error
 		switch cls.Category {
 		case "policy":
-			// upsert via service.Create (si slug existe, falla — manejamos
-			// con ROLLBACK TO SAVEPOINT y luego UPDATE manual).
+
+
 			_, serr := d.ProjectPolicies.Create(ctx, projectpolicysvc.CreateInput{
 				OrganizationID: orgID, ProjectID: projectID,
 				Slug: cls.Slug, Name: cls.Title, Kind: cls.Kind,
@@ -339,12 +339,12 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			if serr == nil {
 				policiesCreated++
 			} else {
-				// Revertimos el Create fallido y probamos con UPDATE.
+
 				if _, rerr := d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName); rerr != nil {
 					fileErr = fmt.Errorf("create+rollback: %w / %v", serr, rerr)
 				} else {
-					// UPDATE usando CTE para evitar subquery multi-row que
-					// podia romper la tx con error de subquery.
+
+
 					ctag, uerr := d.q(ctx).Exec(ctx,
 						`WITH existing AS (
 						   SELECT id FROM project_policies
@@ -359,12 +359,12 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 						projectID, cls.Slug, cls.Body, cls.Title,
 					)
 					if uerr != nil {
-						// Update fallo — el savepoint sigue rolled back,
-						// marcamos ignored.
+
+
 						fileErr = fmt.Errorf("update policy: %w (create was: %v)", uerr, serr)
 					} else if ctag.RowsAffected() == 0 {
-						// No habia policy previa — el Create fallo por otra
-						// razon (ej: validation). Lo registramos como ignored.
+
+
 						fileErr = fmt.Errorf("policy create failed y no habia previa: %v", serr)
 					} else {
 						policiesCreated++
@@ -372,7 +372,7 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				}
 			}
 		case "knowledge":
-			// INSERT en knowledge_docs con upsert manual por metadata->>'slug'.
+
 			metaJSON, _ := json.Marshal(map[string]any{
 				"slug":        cls.Slug,
 				"source_path": path,
@@ -422,9 +422,9 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 			ignoredPaths = append(ignoredPaths, path)
 		}
 
-		// Si hubo error en este archivo, lo registramos como ignored
-		// pero la tx ya esta en el savepoint (rolled back), lista
-		// para el siguiente archivo.
+
+
+
 		if fileErr != nil {
 			ignored++
 			errMsg := fileErr.Error()
@@ -432,17 +432,17 @@ func (d *Deps) handleProjectIndexSubmit(ctx context.Context, req mcp.CallToolReq
 				errMsg = errMsg[:60]
 			}
 			ignoredPaths = append(ignoredPaths, path+" ("+errMsg+")")
-			// Asegurar que la tx esta limpia para el proximo archivo.
-			// Si el savepoint sigue activo (caso CREATE OK que no fue),
-			// ROLLBACK. Si ya esta rolled back, esto es no-op.
+
+
+
 			_, _ = d.q(ctx).Exec(ctx, "ROLLBACK TO SAVEPOINT "+spName)
 		} else {
-			// Todo OK en este archivo — liberar el savepoint.
+
 			_, _ = d.q(ctx).Exec(ctx, "RELEASE SAVEPOINT "+spName)
 		}
 	}
 
-	// Update summary del run.
+
 	summary := map[string]any{
 		"policies_created":     policiesCreated,
 		"knowledge_created":    knowledgeCreated,

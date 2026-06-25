@@ -1,4 +1,4 @@
-// issue-02.1 + issue-13.2 middleware unit tests.
+
 
 package apikey
 
@@ -111,7 +111,7 @@ func TestSabotage_401Body_Uniform(t *testing.T) {
 		}
 		m.Wrap(nextEchoHandler()).ServeHTTP(rec, req)
 		require.Equal(t, http.StatusUnauthorized, rec.Code)
-		// el body es siempre el mismo
+
 		body := rec.Body.String()
 		require.Contains(t, body, "unauthorized")
 		require.NotContains(t, body, "key")    // no leak detalle

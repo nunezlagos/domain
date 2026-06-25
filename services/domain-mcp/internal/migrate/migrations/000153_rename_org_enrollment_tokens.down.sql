@@ -1,12 +1,12 @@
--- migration: rename_org_enrollment_tokens_to_enrollment_tokens (down)
--- author: mnunez@saargo.com
--- issue: REQ-42.7 (schema naming taxonomy — rename enrollment)
--- description: rename table `enrollment_tokens` → `org_enrollment_tokens`
---   (rollback). Reverso exacto del up: misma cantidad y tipo de objetos.
---   El pkey se restaura SOLO vía ALTER INDEX (índice + constraint comparten
---   objeto); el bloque RENAME CONSTRAINT cubre únicamente la FK y el CHECK.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
+
 
 BEGIN;
 

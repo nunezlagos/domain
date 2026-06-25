@@ -18,7 +18,7 @@ import (
 // "Contexto" y "Decisión" pero SIN mencionar los datos concretos
 // de 35.4 ni las cifras de tradeoffs. Este test falla en ese caso.
 func TestADR_HasQuantifiedTradeoffs(t *testing.T) {
-	// Buscamos el ADR en docs/rfc/.
+
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := cwd
@@ -33,13 +33,13 @@ func TestADR_HasQuantifiedTradeoffs(t *testing.T) {
 	require.NoError(t, err, "ADR not found at %s", adrPath)
 	text := string(body)
 
-	// Datos cuantitativos de 35.4 que el ADR DEBE citar.
+
 	require.Contains(t, text, "245", "ADR debe mencionar 245 (agent_runs USADO)")
 	require.Contains(t, text, "1023", "ADR debe mencionar 1023 (flow_runs USADO)")
 	require.Contains(t, text, "NUNCA USADO", "ADR debe mencionar la categoría NUNCA USADO del skill_runner")
 	require.Contains(t, text, "0", "ADR debe mencionar que el skill_runner tiene 0 ejecuciones")
 
-	// Tradeoffs cuantitativos de las opciones.
+
 	require.Contains(t, text, "500",
 		"ADR debe cuantificar el código a remover (Opción A: ~500 líneas)")
 	require.Contains(t, text, "2-4 semanas",
@@ -47,7 +47,7 @@ func TestADR_HasQuantifiedTradeoffs(t *testing.T) {
 	require.Contains(t, text, "94%",
 		"ADR debe mencionar el % de skills que son TypePrompt (94%)")
 
-	// Decisión explícita.
+
 	require.Contains(t, text, "Opción A",
 		"ADR debe nombrar la opción ganadora (Opción A)")
 	require.Contains(t, text, "accepted",

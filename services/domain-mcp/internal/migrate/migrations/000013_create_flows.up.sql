@@ -1,9 +1,9 @@
--- migration: create_flows
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-09.1
--- description: flows DAG declarativos con spec JSONB
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE flows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

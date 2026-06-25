@@ -1,14 +1,14 @@
-// Wizard visual helpers para `domain install` (issue-01.10).
-//
-// Por qué existe: el install debe sentirse como un wizard, no como
-// un dump de logs. Estos helpers emiten output consistente:
-//   - [1/5] Step name
-//     ✓ result line
-//   - [2/5] ...
-//
-// Diseño: cada step retorna un InstallStepResult (status + summary)
-// que el summary printer formatea al final. No usa charmbracelet
-// (overkill para 4-5 steps); usa bufio + fmt directo.
+
+
+
+
+
+
+
+
+
+
+
 
 package main
 

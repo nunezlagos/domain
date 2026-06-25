@@ -78,51 +78,51 @@ const (
 // OrchestrateInput es el contrato externo del orquestador. PromptRouter,
 // MCP tools y CLI lo construyen y se lo pasan a Service.Run.
 type OrchestrateInput struct {
-	// OrganizationID + UserID identifican el caller. Obligatorios.
+
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
 
-	// ProjectID scopea la corrida a un proyecto (flow_runs.project_id + cadena
-	// SDD/TDD). Lo resuelve el bootstrap (siempre disponible al iniciar la
-	// conversación). uuid.Nil = sin scope (compat durante la ventana de deploy).
+
+
+
 	ProjectID uuid.UUID
 
-	// ExecMode controla el pausado entre fases: "auto" (corre todo), "manual"
-	// (pausa y pide aprobación tras CADA fase), "hybrid" (pausa solo en fases
-	// clave: spec/design/apply/judge). Vacío => "auto". El gate reusa el
-	// confirm existente (domain_orchestrate_confirm).
+
+
+
+
 	ExecMode string
 
-	// Hardspec (opcional): si true, al completar sdd-spec el orquestador pausa
-	// para una reiteración humana (revisar + enriquecer + re-redactar el spec) y
-	// la confirmación queda registrada en audit_log. Ortogonal a ExecMode.
+
+
+
 	Hardspec bool
 
-	// RawText es el prompt libre del usuario (después de PromptRouter
-	// classification). El orquestador NO re-clasifica.
+
+
 	RawText string
 
-	// Mode selecciona el modo de ejecución. Si vacío, el orquestador
-	// infiere (default ModeFull). Validación se hace en modes/validator.
+
+
 	Mode Mode
 
-	// StartingPhase permite reanudar/resumir desde una fase específica
-	// (caso resume cross-session). Si vacío, arranca en sdd-explore.
+
+
 	StartingPhase PhaseSlug
 
-	// SkipPhases lista fases a omitir (ej: ya hechas en sesión previa).
-	// El orquestador valida que el grafo resultante sigue siendo válido.
+
+
 	SkipPhases []PhaseSlug
 
-	// AsyncTimeout aplica sólo en ModeAsync. Si zero, default 30 min.
+
 	AsyncTimeout time.Duration
 
-	// ExpressMaxLines override del default 10. Sólo aplica en ModeExpress
-	// (D1). Si zero, se usa el default global.
+
+
 	ExpressMaxLines int
 
-	// Metadata viaja al flow_run.metadata sin procesamiento (correlación,
-	// origen del prompt, etc.).
+
+
 	Metadata map[string]any
 }
 
@@ -130,28 +130,28 @@ type OrchestrateInput struct {
 // asíncronos devuelven inmediatamente con OrchestratorRunID + FlowRunID
 // y status='pending'; el cliente debe pollear o suscribirse a signals.
 type OrchestrateResult struct {
-	// OrchestratorRunID identifica unívocamente esta invocación del
-	// orquestador. Persistido en flow_runs.metadata.orchestrator_run_id.
+
+
 	OrchestratorRunID uuid.UUID
 
-	// FlowRunID es el flow_run real que ejecuta el DAG sdd-pipeline-v1.
+
 	FlowRunID uuid.UUID
 
-	// Mode resuelto (puede diferir del input si era vacío o si hubo
-	// validación que lo cambió — p.ej. detect forzado por dry_run).
+
+
 	Mode Mode
 
-	// StartedAt es el wall-clock del primer step despachado.
+
 	StartedAt time.Time
 
-	// SnapshotPrompt opcional: cuando el caller pide preview (detect) o
-	// modo async, devolvemos el prompt rendered para que IDE lo muestre
-	// sin tener que polear inmediatamente.
+
+
+
 	SnapshotPrompt string
 
-	// Plan contiene los steps a despachar al cliente IDE para modos
-	// sincrónicos in-memory (Express principalmente). Nil para los modos
-	// async/persistidos donde el cliente debe pollear por flow_run_id.
+
+
+
 	Plan *PhasePlanSummary
 }
 

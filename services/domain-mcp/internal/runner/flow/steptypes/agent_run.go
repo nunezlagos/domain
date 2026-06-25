@@ -25,7 +25,7 @@ func (r *AgentRunRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		return nil, fmt.Errorf("domain_agent_run: input required")
 	}
 
-	// Resolve templates in input
+
 	agentInput = ResolveTemplate(agentInput, input.Inputs, input.StepOutputs)
 
 	if input.AgentRunner == nil {
@@ -37,7 +37,7 @@ func (r *AgentRunRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		return nil, fmt.Errorf("domain_agent_run %q: %w", agentSlug, err)
 	}
 
-	// result is already a map from the AgentRunner implementation
+
 	if resultMap, ok := result.(map[string]any); ok {
 		return resultMap, nil
 	}

@@ -1,10 +1,10 @@
--- HU-25.6 down: limpia DEFAULT PRIVILEGES primero, después grants, después DROP roles.
+
 
 DO $$
 DECLARE
   db_name TEXT := current_database();
 BEGIN
-  -- 1. Limpiar DEFAULT PRIVILEGES (necesario antes de DROP ROLE)
+
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_migrator') THEN
     ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
       REVOKE ALL ON TABLES FROM app_user;
@@ -18,7 +18,7 @@ BEGIN
       REVOKE ALL ON SEQUENCES FROM app_admin;
   END IF;
 
-  -- 2. Revocar grants explícitos sobre objetos existentes
+
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='app_user') THEN
     REVOKE ALL ON ALL TABLES IN SCHEMA public FROM app_user;
     REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM app_user;
@@ -44,12 +44,12 @@ BEGIN
     EXECUTE format('REVOKE ALL ON DATABASE %I FROM app_readonly', db_name);
   END IF;
 
-  -- 3. DROP ROLE (order: dependent first)
+
   DROP ROLE IF EXISTS app_user;
   DROP ROLE IF EXISTS app_admin;
   DROP ROLE IF EXISTS app_readonly;
   DROP ROLE IF EXISTS app_migrator;
 END $$;
 
--- Restaurar default público
+
 GRANT CREATE ON SCHEMA public TO PUBLIC;

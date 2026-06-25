@@ -44,9 +44,9 @@ var (
 	ErrAgentNotFound   = errors.New("agent not found")
 	ErrProviderMissing = errors.New("LLM provider not registered for agent.provider")
 	ErrMaxIterations   = errors.New("max iterations reached")
-	// issue-08.10: enforcement híbrido. En prod un run sin flow_run_id requiere
-	// WithStandalone(true) explícito. El cron orphan-runs-audit (issue-08.12)
-	// audita en métricas el caso ya admitido; este error bloquea proactivo.
+
+
+
 	ErrOrphanRunNotAllowed = errors.New("agent_run without flow_run_id requires WithStandalone in this environment")
 )
 
@@ -75,9 +75,9 @@ type Runner struct {
 	Models      *registry.Registry  // si nil, costo siempre 0
 	Emitter     EventEmitter        // si nil, no emite eventos outbound
 	Metrics     *metrics.Registry   // opcional, si nil no genera métricas
-	// Env es el entorno deployado (dev|staging|prod). En prod, runs sin
-	// flow_run_id requieren WithStandalone(true) explícito (issue-08.10).
-	// Si vacío, se asume dev (no enforcement).
+
+
+
 	Env string
 }
 
@@ -116,8 +116,8 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 		return nil, fmt.Errorf("get agent: %w", err)
 	}
 
-	// org se resuelve del context del request (issue-02.8: agents ya no
-	// portan organization_id; el tenant viaja en el ctx vía middleware).
+
+
 	orgID := ctxkeys.OrgID(ctx)
 
 	provider, err := r.Factory.Get(agent.Provider)
@@ -126,13 +126,13 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 			fmt.Errorf("%w: %v", ErrProviderMissing, err))
 	}
 
-	// Cargar skills asignadas como ToolDefs
+
 	tools, skillBySlug, err := r.loadSkillTools(ctx, agent)
 	if err != nil {
 		return r.failedRun(ctx, orgID, in, ro, "load_skills", err)
 	}
 
-	// Crear agent_run con status running
+
 	inputsJSON, _ := json.Marshal(map[string]any{
 		"user_prompt": in.UserPrompt,
 		"variables":   in.Variables,
@@ -150,8 +150,8 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 		return nil, fmt.Errorf("create run: %w", err)
 	}
 
-	// issue-07.4: token budget manager — soft warning (80%) + hard limit
-	// (clamp al context size del modelo según registry).
+
+
 	if agent.TokenBudget != nil && *agent.TokenBudget > 0 {
 		modelMax := 0
 		if r.Models != nil {
@@ -174,7 +174,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 		}
 	}
 
-	// Loop completion + tool calls
+
 	messages := []llm.Message{{Role: "user", Content: in.UserPrompt}}
 	totalIn, totalOut, iterations := 0, 0, 0
 	var finalText string
@@ -199,9 +199,9 @@ LOOP:
 			}
 		}
 
-		// snapshot del prompt efectivo que cae al agente en esta iteracion
-		// (issue-42.4). Best-effort: un error de persistencia NO debe abortar
-		// el run (mismo patron que appendLog).
+
+
+
 		r.appendPromptSnapshot(ctx, runID, iterations, opts, tools)
 
 		callStart := time.Now()
@@ -223,13 +223,13 @@ LOOP:
 			"tool_calls":    resp.ToolCalls,
 		}, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, latencyMS)
 
-		// Si no hay tool calls, terminamos
+
 		if len(resp.ToolCalls) == 0 {
 			finalText = resp.Content
 			break LOOP
 		}
 
-		// Si hay tool calls: append assistant message + ejecutar tools
+
 		messages = append(messages, llm.Message{
 			Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls,
 		})
@@ -259,7 +259,7 @@ LOOP:
 		finalErr = ErrMaxIterations
 	}
 
-	// Persistir resultado + accounting
+
 	status := StatusCompleted
 	errStr := ""
 	if finalErr != nil {
@@ -269,7 +269,7 @@ LOOP:
 	finishedAt := time.Now().UTC()
 	outputJSON, _ := json.Marshal(map[string]any{"text": finalText})
 
-	// CostUSD calc opcional (si registry disponible y model registrado)
+
 	var costUSD float64
 	if r.Models != nil {
 		if c, cerr := r.Models.CostUSD(ctx, agent.Provider, agent.Model, llm.Usage{
@@ -287,7 +287,7 @@ LOOP:
 		status, outputJSON, nullStr(errStr), totalIn, totalOut, costUSD,
 		iterations, finishedAt, runID)
 
-	// Log final entry con resumen
+
 	r.appendLog(ctx, runID, iterations, "final", map[string]any{
 		"status":   status,
 		"output":   finalText,
@@ -408,7 +408,7 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, ro
 	}, err
 }
 
-// Helpers de templating quedaron en internal/runner/skill (issue-05.5).
+
 
 // appendLog persiste una entry en agent_run_logs (issue-08.3). Best-effort:
 // errores de logging NO interrumpen el run principal.

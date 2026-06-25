@@ -20,7 +20,7 @@ import (
 )
 
 func TestSkill_TypeCleanup_MigrationExists(t *testing.T) {
-	// Encontrar la raíz del repo (busca go.mod subiendo).
+
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := cwd
@@ -38,7 +38,7 @@ func TestSkill_TypeCleanup_MigrationExists(t *testing.T) {
 	require.NoError(t, err, "migration debe existir en %s", migPath)
 	text := string(body)
 
-	// Debe contener el UPDATE que convierte los 3 tipos deprecated.
+
 	require.Contains(t, text, "UPDATE skills",
 		"migration debe contener UPDATE skills")
 	require.Contains(t, text, "'api'",

@@ -97,7 +97,7 @@ func TestService_Run_Express_WithoutSeededFlow_ReturnsErrFlowNotSeeded(t *testin
 	userID := newUserID(t, pools, orgID)
 	projectID := newProjectID(t, pools, orgID)
 
-	// Sin seedar el flow → debe fallar con error tipado
+
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	_, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -117,9 +117,9 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
 	projectID := newProjectID(t, pools, orgID)
-	// El orquestador depende de DOS catálogos seedeados:
-	// 1. flows (para lookup sdd-pipeline-v1)
-	// 2. agent_templates (para lookup system_prompt por slug, BD source-of-truth)
+
+
+
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -139,7 +139,7 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	require.NotNil(t, res.Plan)
 	require.Len(t, res.Plan.Steps, 2)
 
-	// Verifica flow_run persistido
+
 	var (
 		status      string
 		flowID      uuid.UUID
@@ -152,21 +152,21 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	).Scan(&status, &flowID, &triggeredBy, &metaRaw))
 	require.Equal(t, "pending", status)
 	require.Equal(t, userID, triggeredBy)
-	// flow_id debe matchear el seedeado
+
 	var seededID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT id FROM flows WHERE slug=$1`,
 		seeds.SDDPipelineFlowSlug).Scan(&seededID))
 	require.Equal(t, seededID, flowID)
 
-	// Verifica metadata JSONB
+
 	var meta map[string]any
 	require.NoError(t, json.Unmarshal(metaRaw, &meta))
 	require.Equal(t, res.OrchestratorRunID.String(), meta["orchestrator_run_id"])
 	require.Equal(t, "express", meta["mode"])
 	require.Equal(t, "implementar typo fix", meta["raw_text"])
 
-	// Verifica steps en orden + status pending + step_keys correctos
+
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)

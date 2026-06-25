@@ -16,7 +16,7 @@ from .models import Role, User, UserRole
 class UserForm(EmailNormalizationMixin, forms.Form):
     """Form para crear/editar usuarios. Password opcional en edicion."""
 
-    # core.forms.EmailNormalizationMixin usa estos atributos para la unicidad.
+
     email_model = User
     email_field = "email"
 
@@ -68,20 +68,20 @@ class UserForm(EmailNormalizationMixin, forms.Form):
     )
 
     def __init__(self, *args, instance: User | None = None, **kwargs):
-        # InstanceAwareMixin (via EmailNormalizationMixin) captura instance.
+
         super().__init__(*args, instance=instance, **kwargs)
-        # Choices de roles desde la DB (roles fijos/seeded).
+
         self.fields["role"].choices = [
             (r.slug, f"{r.name} ({r.slug})")
             for r in Role.objects.filter(status="active").order_by("slug")
         ]
-        # Password requerido en alta, opcional en edicion (vacio = no cambiar).
-        # Se setea SIEMPRE (tambien en form bound), si no un POST de alta sin
-        # password pasaria la validacion.
+
+
+
         is_create = instance is None
         self.fields["password"].required = is_create
         self.fields["password_confirm"].required = is_create
-        # Valores iniciales solo al renderizar el form de edicion (unbound).
+
         if instance is not None and not self.is_bound:
             self.fields["email"].initial = instance.email
             first, paternal, maternal = self._split_name(instance.name)

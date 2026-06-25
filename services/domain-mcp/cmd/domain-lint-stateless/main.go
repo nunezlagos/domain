@@ -96,7 +96,7 @@ func main() {
 					vspec := spec.(*ast.ValueSpec)
 					for _, name := range vspec.Names {
 						if name.IsExported() || isLowerSnake(name.Name) {
-							// inspecciona si el tipo es "mutable global crítico"
+
 							kind := mutableKind(vspec, gen)
 							if kind == "" {
 								continue
@@ -177,8 +177,8 @@ func (w *allowed) matches(path, name string) bool {
 }
 
 func mutableKind(vspec *ast.ValueSpec, gen *ast.GenDecl) string {
-	// Si tiene `const` no es problema (caso filtrado arriba)
-	// Si tiene comentario justificación inline (// stateless-allowed: reason) tampoco
+
+
 	if gen.Doc != nil {
 		for _, c := range gen.Doc.List {
 			if strings.Contains(c.Text, "stateless-allowed:") {
@@ -207,13 +207,13 @@ func mutableKind(vspec *ast.ValueSpec, gen *ast.GenDecl) string {
 			return fmt.Sprintf("slice global mutable (%s)", exprStr(t))
 		}
 	case *ast.SelectorExpr:
-		// sync.Map, sync.WaitGroup como global
+
 		sel := exprStr(t)
 		if sel == "sync.Map" || strings.HasSuffix(sel, ".Counter") {
 			return fmt.Sprintf("type compartido global (%s)", sel)
 		}
 	case *ast.StarExpr:
-		// punteros a tipos mutables
+
 		inner := exprStr(t.X)
 		if strings.HasPrefix(inner, "sync.") {
 			return ""

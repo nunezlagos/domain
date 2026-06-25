@@ -136,7 +136,7 @@ func TestSabotage_API_AllowlistEvaluatedAfterTemplating(t *testing.T) {
 	sk := &skillsvc.Skill{
 		ID: uuid.New(), SkillType: skillsvc.TypeAPI, Content: string(cfgJSON),
 	}
-	// Si el atacante pasa host="evil.example", debe ser rechazado tras render
+
 	_, err := r.Execute(context.Background(), sk, map[string]any{"host": "evil.example"})
 	require.ErrorIs(t, err, ErrURLNotAllowed)
 }
@@ -155,6 +155,6 @@ func TestSabotage_API_BodyCapped1MB(t *testing.T) {
 	}
 	out, err := r.Execute(context.Background(), sk, nil)
 	require.NoError(t, err)
-	// body es 1MB chars, total JSON output debe ser ~1MB no 2MB
+
 	require.Less(t, len(out), 2<<20)
 }

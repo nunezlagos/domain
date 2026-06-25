@@ -82,9 +82,9 @@ func runEmbedBackfill(args []string) {
 	}
 	if n, err := backfillTable(ctx, pool, embedder, orgID,
 		"knowledge_docs", "id", "body", "(SELECT id FROM knowledge_docs WHERE 1=0)", limit, dryRun); err != nil {
-		// knowledge_docs no tiene columna embedding directa — usa knowledge_chunks.
-		// Para el MVP, skipeamos knowledge_docs en backfill; lo cubrirá el
-		// pipeline de chunk al re-procesar.
+
+
+
 		_ = err
 	} else {
 		totKn = n

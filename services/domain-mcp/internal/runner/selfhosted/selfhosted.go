@@ -70,9 +70,9 @@ type Task struct {
 type Service struct {
 	Pool *pgxpool.Pool
 
-	// HeartbeatTimeout marca runner offline si último heartbeat > N (default 60s).
+
 	HeartbeatTimeout time.Duration
-	// ClaimTimeout devuelve la task al queue si no se completa en N (default 5min).
+
 	ClaimTimeout time.Duration
 }
 
@@ -136,8 +136,8 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	}
 	defer tx.Rollback(ctx)
 
-	// Carga labels del runner
-	// ISSUE-21.6: organization_id omitido del SELECT.
+
+
 	var labels []string
 	err = tx.QueryRow(ctx,
 		`SELECT labels FROM runner_selfhosted WHERE id = $1`,
@@ -151,7 +151,7 @@ func (s *Service) ClaimTask(ctx context.Context, runnerID uuid.UUID) (*Task, err
 	}
 
 	var t Task
-	// ISSUE-21.6 Fase D clean: single-org. SELECT sin organization_id.
+
 	err = tx.QueryRow(ctx, `
 		SELECT id, kind, required_labels, payload, status, created_at
 		FROM runner_selfhosted_tasks

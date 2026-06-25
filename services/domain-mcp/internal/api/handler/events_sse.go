@@ -59,7 +59,7 @@ func (a *API) sseEvents(w http.ResponseWriter, r *http.Request) {
 	sub := a.EventBus.Subscribe(orgID, 64)
 	defer a.EventBus.Unsubscribe(sub)
 
-	// Hello event para que el cliente sepa que la conexion esta viva.
+
 	fmt.Fprintf(w, "event: hello\ndata: {\"sub_id\":\"%s\"}\n\n", sub.ID)
 	flusher.Flush()
 

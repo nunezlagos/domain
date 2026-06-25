@@ -1,9 +1,9 @@
--- migration: create_event_log
--- author: nunezlagos
--- issue: HU-10.3
--- description: event log para event-execution bus
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE event_log (
   id UUID PRIMARY KEY,

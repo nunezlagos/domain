@@ -97,5 +97,5 @@ async def test_quota_exceeded(client_factory):
 
 def test_requires_api_key():
     with pytest.raises(AuthError):
-        # sin DOMAIN_API_KEY env y sin arg
+
         DomainClient(api_key="", base_url="http://x")

@@ -30,8 +30,8 @@ type EntityType string
 const (
 	EntityObservation EntityType = "observation"
 	EntityPrompt      EntityType = "prompt"
-	// EntitySession se conserva por compatibilidad del enum, pero ya no se
-	// busca (REQ-42.3: tabla sessions dropeada).
+
+
 	EntitySession      EntityType = "session"
 	EntityKnowledgeDoc EntityType = "knowledge_doc"
 )
@@ -109,7 +109,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		}
 		all = append(all, r...)
 	}
-	// REQ-42.3: sessions dropeada — sin búsqueda sobre sesiones.
+
 	if wantKnowledge {
 		r, err := s.searchKnowledgeDocs(ctx, orgID, query, limit, f)
 		if err != nil {
@@ -118,7 +118,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		all = append(all, r...)
 	}
 
-	// Sort por score DESC, truncar a limit
+
 	mergeSortByScore(all)
 	if len(all) > limit {
 		all = all[:limit]
@@ -280,7 +280,7 @@ WHERE kd.deleted_at IS NULL AND kd.body_tsv @@ qry
 }
 
 func mergeSortByScore(rs []Result) {
-	// insertion sort: tamaño esperado <= 3*limit (200) — simple y estable
+
 	for i := 1; i < len(rs); i++ {
 		for j := i; j > 0 && rs[j].Score > rs[j-1].Score; j-- {
 			rs[j], rs[j-1] = rs[j-1], rs[j]

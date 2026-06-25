@@ -48,13 +48,13 @@ func TestMCP_MemDelete(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &del))
 	require.True(t, del.Deleted)
 
-	// Doble delete → not found (soft-deleted)
+
 	_, isErr := callToolRaw(t, f.srv, "domain_mem_delete", map[string]any{
 		"observation_id": saved.ID,
 	})
 	require.True(t, isErr)
 
-	// id inexistente → not found (anti-enumeration: mismo mensaje)
+
 	_, isErr = callToolRaw(t, f.srv, "domain_mem_delete", map[string]any{
 		"observation_id": "00000000-0000-0000-0000-000000000001",
 	})
@@ -84,7 +84,7 @@ func TestMCP_MemSavePrompt_Versions(t *testing.T) {
 	require.Equal(t, 2, p2.Version)
 	require.True(t, p2.Active)
 
-	// project inexistente → error claro
+
 	_, isErr := callToolRaw(t, f.srv, "domain_mem_save_prompt", map[string]any{
 		"slug": "x", "body": "y", "project_slug": "no-existe",
 	})
@@ -106,7 +106,7 @@ func TestMCP_MemCapturePassive_Dedup(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &c1))
 	require.True(t, c1.Captured)
 
-	// Mismo contenido → dedup (no error, captured false)
+
 	out2 := callTool(t, f.srv, "domain_mem_capture_passive", map[string]any{
 		"project_slug": f.projectSlug, "content": "contexto capturado pasivamente",
 	})
@@ -152,7 +152,7 @@ func TestMCP_MemStats(t *testing.T) {
 	require.EqualValues(t, 2, stats.Total)
 	require.EqualValues(t, 1, stats.ByType["decision"])
 
-	// Scoped a project
+
 	out = callTool(t, f.srv, "domain_mem_stats", map[string]any{
 		"project_slug": f.projectSlug,
 	})
@@ -162,7 +162,7 @@ func TestMCP_MemStats(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &scoped))
 	require.EqualValues(t, 2, scoped.Total)
 
-	// project inexistente → error
+
 	_, isErr := callToolRaw(t, f.srv, "domain_mem_stats", map[string]any{
 		"project_slug": "nope",
 	})

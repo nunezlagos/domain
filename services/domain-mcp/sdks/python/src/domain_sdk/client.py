@@ -62,7 +62,7 @@ class DomainClient:
         )
         self._owns_http = http_client is None
 
-        # Resources
+
         self.projects = ProjectsResource(self)
         self.observations = ObservationsResource(self)
         self.sessions = SessionsResource(self)
@@ -106,7 +106,7 @@ class DomainClient:
             body = {}
         if 200 <= resp.status_code < 300:
             return body.get("data", body)
-        # Traducir error según code
+
         err = body.get("error", {})
         msg = err.get("message", resp.text or "error")
         code = err.get("code", "")

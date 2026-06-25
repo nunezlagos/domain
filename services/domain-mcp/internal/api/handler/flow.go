@@ -161,7 +161,7 @@ func (a *API) runFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := a.userID(ctx)
-	// issue-26.6 backpressure
+
 	if a.Backpressure != nil {
 		if err := a.Backpressure.CheckQueue(ctx,
 			backpressure.PredefinedQueues["flow_runs"], orgID); err != nil {
@@ -337,8 +337,8 @@ func (a *API) replaceFlow(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, "validation_failed", "invalid If-Unmodified-Since")
 			return
 		}
-		// Comparacion a resolucion de segundo (HTTP date no tiene sub-segundo):
-		// usamos el updated_at real si coincide truncado.
+
+
 		if prev.UpdatedAt.UTC().Truncate(time.Second).Equal(ts.UTC().Truncate(time.Second)) {
 			expected := prev.UpdatedAt
 			in.ExpectedUpdatedAt = &expected
@@ -400,7 +400,7 @@ func (a *API) exportFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/yaml")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", f.Slug))
-		// HU-28.5: best effort; headers ya escritos. Loggeamos write failures.
+
 		if _, err := w.Write(raw); err != nil {
 			slog.Warn("flow export write failed", "error", err, "format", "yaml", "slug", f.Slug)
 		}

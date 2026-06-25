@@ -12,15 +12,15 @@ import (
 	"nunezlagos/domain/internal/store/txctx"
 )
 
-// REQ-72: endpoints REST de login web.
-//
-//   POST /api/v1/auth/login         {email,password} → {temp_token, user, roles[]}
-//   POST /api/v1/auth/select-role   {temp_token, role_slug} → {session_token, expires_at}
-//   GET  /api/v1/auth/me            (Bearer sess_*) → {user, active_role}
-//   POST /api/v1/auth/logout        (Bearer sess_*) → {ok:true}
-//
-// El middleware acepta Bearer api key (domk_*) o session token (sess_*).
-// El handler /me y /logout solo aceptan session tokens.
+
+
+
+
+
+
+
+
+
 
 type loginReq struct {
 	Email    string `json:"email"`
@@ -28,11 +28,11 @@ type loginReq struct {
 }
 
 type loginResp struct {
-	// ISSUE-21.6 + REQ-UX: en single-org, el login devuelve el session_token
-	// directamente. En multi-tenant (futuro) se puede revertir al flow
-	// temp_token + select-role. Por ahora exponemos AMBOS campos para
-	// backward compat: el Angular actual puede usar session_token o
-	// seguir con select-role (legacy).
+
+
+
+
+
 	TempToken    string         `json:"temp_token"`
 	SessionToken string         `json:"session_token,omitempty"`
 	ExpiresAt    string         `json:"expires_at,omitempty"`
@@ -60,7 +60,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		IP: realIP(r), UserAgent: r.Header.Get("User-Agent"),
 	})
 	if err != nil {
-		// Defensa anti-enumeracion: mismo mensaje para todas las fallas.
+
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "credenciales invalidas"})
 		return
 	}
@@ -69,9 +69,9 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		User:      res.User,
 		Roles:     res.Roles,
 	}
-	// ISSUE-21.6 single-org: si el user tiene 1 solo rol, generar el
-	// session_token directamente (skip select-role). El dashboard single-org
-	// no tiene role switcher, asi que el flow de 2 pasos es overhead.
+
+
+
 	if len(res.Roles) == 1 {
 		sel, selErr := a.AuthSessionService.SelectRole(
 			r.Context(),
@@ -82,9 +82,9 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 			resp.SessionToken = sel.Token
 			resp.ExpiresAt = sel.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
 		} else {
-			// ISSUE-21.6: log el error para visibilidad. Si SelectRole
-			// falla (e.g. bug en INSERT), el flow de temp_token permite
-			// al cliente seguir intentando.
+
+
+
 			fmt.Printf("WARN authLogin SelectRole failed: %v\n", selErr)
 		}
 	}
@@ -147,9 +147,9 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "endpoint requiere session token"})
 		return
 	}
-	// Cargar email/name del user desde DB. Usar la tx del ctx para
-	// que herede el SET LOCAL app.current_org_id del middleware (sino
-	// RLS filtra el row porque a.Pool no tiene contexto multi-tenant).
+
+
+
 	u := session.User{ID: active.UserID, OrganizationID: active.OrganizationID}
 	if tx := txctx.TxFromContext(r.Context()); tx != nil {
 		_ = tx.QueryRow(r.Context(),
@@ -250,7 +250,7 @@ func (a *API) authMeRoles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no se pudieron cargar los roles"})
 		return
 	}
-	// Hidratar email/name del user
+
 	u := session.User{ID: active.UserID, OrganizationID: active.OrganizationID}
 	if tx := txctx.TxFromContext(r.Context()); tx != nil {
 		_ = tx.QueryRow(r.Context(),
@@ -263,7 +263,7 @@ func (a *API) authMeRoles(w http.ResponseWriter, r *http.Request) {
 
 func realIP(r *http.Request) string {
 	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		// solo la primera (la del cliente real, no la cadena de proxies).
+
 		if idx := strings.Index(v, ","); idx > 0 {
 			return strings.TrimSpace(v[:idx])
 		}

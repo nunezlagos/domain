@@ -45,7 +45,7 @@ func TestValidate_InvalidBackoff(t *testing.T) {
 }
 
 func TestValidate_FallbackChainDepthLimit(t *testing.T) {
-	// 3 niveles permitidos
+
 	lvl3 := &Step{ID: "f3", Type: StepTypeSkillRun, Config: map[string]any{}}
 	lvl2 := &Step{ID: "f2", Type: StepTypeSkillRun, Config: map[string]any{},
 		OnError: "fallback_step", FallbackStep: lvl3}
@@ -55,7 +55,7 @@ func TestValidate_FallbackChainDepthLimit(t *testing.T) {
 		OnError: "fallback_step", FallbackStep: lvl1}).Validate()
 	require.NoError(t, ok, "3 niveles de fallback deben ser válidos")
 
-	// 4to nivel rechazado
+
 	lvl4 := &Step{ID: "f4", Type: StepTypeSkillRun, Config: map[string]any{}}
 	lvl3.OnError = "fallback_step"
 	lvl3.FallbackStep = lvl4

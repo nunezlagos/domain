@@ -87,7 +87,7 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 		return nil, fmt.Errorf("open app pool: %w", err)
 	}
 	if authDSN == "" {
-		// dev fallback: reutilizar app pool. Documentado en .env.example.
+
 		return &Pools{App: app, Auth: app}, nil
 	}
 	auth, err := pgxpool.New(ctx, authDSN)
@@ -126,7 +126,7 @@ func OpenWithRoleOverride(ctx context.Context, dsn, appRole, authRole string) (*
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap pool: %w", err)
 	}
-	// Asegurar membership (idempotente)
+
 	for _, role := range []string{appRole, authRole} {
 		if _, err := bootstrap.Exec(ctx,
 			fmt.Sprintf(`GRANT %s TO CURRENT_USER`, pgIdent(role))); err != nil {

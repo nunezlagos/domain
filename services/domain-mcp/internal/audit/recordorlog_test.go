@@ -18,7 +18,7 @@ type failingRecorder struct{ err error }
 func (f *failingRecorder) Record(_ context.Context, _ Event) error { return f.err }
 
 func TestRecordOrLog_NilRecorder_NoPanic(t *testing.T) {
-	// No debe panicear ni loggear nada.
+
 	var buf bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))

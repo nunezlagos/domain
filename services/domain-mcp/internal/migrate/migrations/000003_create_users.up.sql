@@ -1,9 +1,9 @@
--- migration: create_users
--- author: mnunez@saargo.com
--- issue: HU-01.1
--- description: tabla users con FK a organizations, email unique per org
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

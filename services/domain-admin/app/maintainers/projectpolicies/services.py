@@ -135,7 +135,7 @@ def get_stats() -> dict:
     }
 
 
-# --- Alias para el descubrimiento por convencion (entity_label="Regla").
+
 get_regla = get_policy
 create_regla = create_policy
 update_regla = update_policy

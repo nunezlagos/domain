@@ -18,7 +18,7 @@ type IntentClassifier interface {
 type Analyzer struct {
 	Sources    []Source
 	Classifier IntentClassifier // intent classifier (LLM o heurístico)
-	// Timeout máximo TOTAL del pipeline. Si una source no termina, se ignora.
+
 	Timeout time.Duration
 }
 
@@ -33,7 +33,7 @@ func (a *Analyzer) Analyze(ctx context.Context, rawPrompt string) (*ContextEnvel
 		timeout = 10 * time.Second
 	}
 
-	// 1) Classify intent.
+
 	intent := "feature" // default safe
 	conf := 0.5
 	reasoning := ""
@@ -51,12 +51,12 @@ func (a *Analyzer) Analyze(ctx context.Context, rawPrompt string) (*ContextEnvel
 	env.Touch(SlotIntent, intent, "intent_classifier", conf, reasoning)
 	env.SourceErrors = map[string]string{}
 
-	// 2) Si chat/idea, NO corremos las 4 sources.
+
 	if intent == "chat" || intent == "idea" {
 		return env, nil
 	}
 
-	// 3) Corre sources en paralelo con timeout total.
+
 	pipelineCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -87,7 +87,7 @@ func (a *Analyzer) Analyze(ctx context.Context, rawPrompt string) (*ContextEnvel
 	select {
 	case <-done:
 	case <-pipelineCtx.Done():
-		// Timeout: las sources que no terminaron quedan con su contribución parcial.
+
 	}
 
 	return env, nil

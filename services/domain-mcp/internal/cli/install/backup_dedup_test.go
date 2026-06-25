@@ -16,20 +16,20 @@ func TestBackupFile_Dedup_SameContent(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("hello"), 0o600))
 
-	// Primer backup: crea .bak.<ts1>
+
 	res1, err := backupFile(path, 0)
 	require.NoError(t, err)
 	require.NotNil(t, res1)
 	require.False(t, res1.Deduplicated, "primer backup no es dedup")
 
-	// Contar archivos .bak.* actuales
+
 	countBak := func() int {
 		matches, _ := filepath.Glob(path + ".bak.*")
 		return len(matches)
 	}
 	require.Equal(t, 1, countBak(), "debe haber 1 .bak después del primer backup")
 
-	// 4 corridas más sin cambios -> todas dedup, sin nuevos .bak
+
 	for i := 0; i < 4; i++ {
 		res, err := backupFile(path, 0)
 		require.NoError(t, err)
@@ -49,12 +49,12 @@ func TestBackupFile_Dedup_ChangedContent(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res1.Deduplicated)
 
-	// Sleep para garantizar distinto timestamp (formato .bak.YYYYMMDDTHHMMSSZ
-	// tiene precisión de segundos; dos corridas en el mismo segundo
-	// sobrescribirían el archivo, comportamiento preexistente).
+
+
+
 	time.Sleep(1100 * time.Millisecond)
 
-	// Cambiar el contenido
+
 	require.NoError(t, os.WriteFile(path, []byte("v2"), 0o600))
 
 	res2, err := backupFile(path, 0)

@@ -1,12 +1,12 @@
--- migration: projects_track_session
--- author: mnunez@saargo.com
--- issue: REQ-45 auto-registro + detección de cambios (Ola C)
--- description: persistir el último git_head visto por sesión y la última
---   vez que el LLM tocó el proyecto. Sirve para que el próximo bootstrap
---   detecte cambios significativos (HEAD distinto) y proponga refrescar
---   memorias.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
+
 
 ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS last_known_head VARCHAR(40),  -- sha1 git

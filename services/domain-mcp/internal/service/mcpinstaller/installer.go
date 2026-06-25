@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 package mcpinstaller
 
 import (
@@ -15,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/mcpinstaller/mcpinstallerdb"
 )
 
 type Agent string
@@ -43,35 +38,37 @@ func New(pool *pgxpool.Pool) *Service {
 	return &Service{Pool: pool}
 }
 
+func (s *Service) q() *mcpinstallerdb.Queries { return mcpinstallerdb.New(s.Pool) }
+
 func (s *Service) List(ctx context.Context) ([]Provider, error) {
-
-
-	rows, err := s.Pool.Query(ctx, `
-		SELECT name, description, command, default_args, env_template, required_env, tags
-		FROM mcp_providers
-		ORDER BY name
-	`)
+	rows, err := s.q().ListProviders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query providers: %w", err)
 	}
-	defer rows.Close()
 
 	var out []Provider
-	for rows.Next() {
-		var p Provider
-		var envRaw []byte
-		if err := rows.Scan(&p.Name, &p.Description, &p.Command, &p.DefaultArgs, &envRaw, &p.RequiredEnv, &p.Tags); err != nil {
-			return nil, err
-		}
-		if len(envRaw) > 0 {
-			_ = json.Unmarshal(envRaw, &p.EnvTemplate)
-		}
-		if p.EnvTemplate == nil {
-			p.EnvTemplate = map[string]string{}
-		}
-		out = append(out, p)
+	for _, r := range rows {
+		out = append(out, toProvider(r))
 	}
 	return out, nil
+}
+
+func toProvider(r mcpinstallerdb.ListProvidersRow) Provider {
+	p := Provider{
+		Name:        r.Name,
+		Description: r.Description,
+		Command:     r.Command,
+		DefaultArgs: r.DefaultArgs,
+		RequiredEnv: r.RequiredEnv,
+		Tags:        r.Tags,
+	}
+	if len(r.EnvTemplate) > 0 {
+		_ = json.Unmarshal(r.EnvTemplate, &p.EnvTemplate)
+	}
+	if p.EnvTemplate == nil {
+		p.EnvTemplate = map[string]string{}
+	}
+	return p
 }
 
 func (s *Service) getProvider(ctx context.Context, name string) (*Provider, error) {

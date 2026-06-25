@@ -9,7 +9,7 @@ func TestNullStr(t *testing.T) {
 	if nullStr("") != nil {
 		t.Fatal("empty string must return nil")
 	}
-	if got := nullStr("x"); got != "x" {
+	if got := nullStr("x"); got == nil || *got != "x" {
 		t.Fatalf("got %v, want 'x'", got)
 	}
 }

@@ -69,14 +69,14 @@ Leyenda: **Q** = nº de queries SQL · **LOC** = service sin tests · **RLS** = 
 |---|--:|--:|:--:|---|
 | issue | 12 | 917 | no | `02715370` |
 
-### Ola 1 — Quick wins (inline, sin RLS, ≤10 Q)
+### ✅ Ola 1 — Quick wins (inline, sin RLS, ≤10 Q) — hecha
 | Service | Q | LOC | RLS | Estado |
 |---|--:|--:|:--:|:--:|
-| mcpinstaller | 1 | 261 | no | ⬜ |
-| projecttemplate | 5 | 162 | no | ⬜ |
-| policy | 8 | 232 | no | ⬜ |
-| mcpserver | 10 | 359 | no | ⬜ |
-| requirement | 10 | 402 | no | ⬜ |
+| mcpinstaller | 1 | 261 | no | ✅ |
+| projecttemplate | 5 | 162 | no | ✅ |
+| policy | 8 | 232 | no | ✅ |
+| mcpserver | 10 | 359 | no | ✅ |
+| requirement | 10 | 402 | no | ✅ |
 
 ### Ola 2 — Medianos inline, sin RLS
 | Service | Q | LOC | RLS | Estado |

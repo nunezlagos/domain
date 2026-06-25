@@ -3,6 +3,8 @@
 // Cada policy es un markdown body + structured JSONB versioned. Los agents
 // IA consumen las activas via MCP tool domain_policy_get(slug) para
 // asegurar consistencia cross-sesión.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package policy
 
 import (
@@ -16,12 +18,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/policy/policydb"
 )
 
 var (
-	ErrUnknown      = errors.New("not_found")
-	ErrInvalidSlug  = errors.New("invalid_slug")
-	ErrInvalidKind  = errors.New("invalid_kind")
+	ErrUnknown     = errors.New("not_found")
+	ErrInvalidSlug = errors.New("invalid_slug")
+	ErrInvalidKind = errors.New("invalid_kind")
 )
 
 var reSlug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,98}[a-z0-9]$|^[a-z]$`)
@@ -79,6 +83,8 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
+func (s *Service) q() *policydb.Queries { return policydb.New(s.Pool) }
+
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Policy, error) {
 	if !reSlug.MatchString(in.Slug) {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidSlug, in.Slug)
@@ -90,69 +96,45 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Policy, error) {
 		in.BodyStructured = map[string]any{}
 	}
 	bodyJSON, _ := json.Marshal(in.BodyStructured)
-	row := s.Pool.QueryRow(ctx,
-		`INSERT INTO platform_policies
-			(slug, name, kind, body_md, body_structured, source_file)
-		 VALUES ($1,$2,$3,$4,$5,$6)
-		 RETURNING id, version, created_at, updated_at`,
-		in.Slug, in.Name, in.Kind, in.BodyMD, bodyJSON, nullableStr(in.SourceFile))
-	p := &Policy{
-		Slug: in.Slug, Name: in.Name, Kind: in.Kind,
-		BodyMD: in.BodyMD, BodyStructured: bodyJSON,
-		SourceFile: in.SourceFile, IsActive: true,
-	}
-	if err := row.Scan(&p.ID, &p.Version, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	row, err := s.q().InsertPolicy(ctx, policydb.InsertPolicyParams{
+		Slug:           in.Slug,
+		Name:           in.Name,
+		Kind:           in.Kind,
+		BodyMd:         in.BodyMD,
+		BodyStructured: bodyJSON,
+		SourceFile:     optStr(in.SourceFile),
+	})
+	if err != nil {
 		return nil, fmt.Errorf("insert: %w", err)
 	}
-	return p, nil
+	p := toPolicy(row)
+	return &p, nil
 }
 
 // GetBySlug retorna la versión active del policy slug.
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*Policy, error) {
-	row := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, name, kind, body_md, body_structured, version,
-			is_active, COALESCE(source_file,''), created_at, updated_at
-		 FROM platform_policies WHERE slug=$1 AND is_active=TRUE`, slug)
-	var p Policy
-	err := row.Scan(&p.ID, &p.Slug, &p.Name, &p.Kind, &p.BodyMD,
-		&p.BodyStructured, &p.Version, &p.IsActive, &p.SourceFile,
-		&p.CreatedAt, &p.UpdatedAt)
+	row, err := s.q().GetActivePolicyBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
 	if err != nil {
 		return nil, err
 	}
+	p := toPolicy(row)
 	return &p, nil
 }
 
 // List por kind opcional. kind="" → todos.
 func (s *Service) List(ctx context.Context, kind string) ([]Policy, error) {
-	q := `SELECT id, slug, name, kind, body_md, body_structured, version,
-		is_active, COALESCE(source_file,''), created_at, updated_at
-	   FROM platform_policies WHERE is_active=TRUE`
-	args := []any{}
-	if kind != "" {
-		q += " AND kind=$1"
-		args = append(args, kind)
-	}
-	q += " ORDER BY kind, slug"
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q().ListActivePolicies(ctx, optStr(kind))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []Policy
-	for rows.Next() {
-		var p Policy
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Kind, &p.BodyMD,
-			&p.BodyStructured, &p.Version, &p.IsActive, &p.SourceFile,
-			&p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
+	for _, row := range rows {
+		out = append(out, toPolicy(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Update genera nueva versión, archiva la anterior en platform_policy_versions.
@@ -163,15 +145,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 	}
 	defer tx.Rollback(ctx)
 
+	q := policydb.New(tx)
 
-	var cur Policy
-	err = tx.QueryRow(ctx,
-		`SELECT id, slug, name, kind, body_md, body_structured, version,
-			is_active, COALESCE(source_file,''), created_at, updated_at
-		 FROM platform_policies WHERE id=$1 FOR UPDATE`, id).
-		Scan(&cur.ID, &cur.Slug, &cur.Name, &cur.Kind, &cur.BodyMD,
-			&cur.BodyStructured, &cur.Version, &cur.IsActive, &cur.SourceFile,
-			&cur.CreatedAt, &cur.UpdatedAt)
+	cur, err := q.GetPolicyForUpdate(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
@@ -179,17 +155,17 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		return nil, err
 	}
 
-
-	_, err = tx.Exec(ctx,
-		`INSERT INTO platform_policy_versions (policy_id, version, body_md, body_structured, changed_by)
-		 VALUES ($1,$2,$3,$4,$5)`,
-		cur.ID, cur.Version, cur.BodyMD, cur.BodyStructured, in.ChangedBy)
-	if err != nil {
+	if err := q.InsertPolicyVersion(ctx, policydb.InsertPolicyVersionParams{
+		PolicyID:       cur.ID,
+		Version:        cur.Version,
+		BodyMd:         cur.BodyMd,
+		BodyStructured: cur.BodyStructured,
+		ChangedBy:      in.ChangedBy,
+	}); err != nil {
 		return nil, fmt.Errorf("archive version: %w", err)
 	}
 
-
-	newBody := cur.BodyMD
+	newBody := cur.BodyMd
 	if in.BodyMD != nil {
 		newBody = *in.BodyMD
 	}
@@ -199,11 +175,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 		newStructured = j
 	}
 
-	_, err = tx.Exec(ctx,
-		`UPDATE platform_policies
-		 SET body_md=$1, body_structured=$2, version=version+1, is_user_modified=TRUE
-		 WHERE id=$3`, newBody, newStructured, id)
-	if err != nil {
+	if err := q.UpdatePolicyBody(ctx, policydb.UpdatePolicyBodyParams{
+		ID:             id,
+		BodyMd:         newBody,
+		BodyStructured: newStructured,
+	}); err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -213,20 +189,39 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Po
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	ct, err := s.Pool.Exec(ctx,
-		`UPDATE platform_policies SET is_active=FALSE WHERE id=$1 AND is_active=TRUE`, id)
+	n, err := s.q().DeactivatePolicy(ctx, id)
 	if err != nil {
 		return err
 	}
-	if ct.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrUnknown
 	}
 	return nil
 }
 
-func nullableStr(s string) any {
+func toPolicy(r policydb.PlatformPolicy) Policy {
+	src := ""
+	if r.SourceFile != nil {
+		src = *r.SourceFile
+	}
+	return Policy{
+		ID:             r.ID,
+		Slug:           r.Slug,
+		Name:           r.Name,
+		Kind:           r.Kind,
+		BodyMD:         r.BodyMd,
+		BodyStructured: json.RawMessage(r.BodyStructured),
+		Version:        int(r.Version),
+		IsActive:       r.IsActive,
+		SourceFile:     src,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}
+}
+
+func optStr(s string) *string {
 	if s == "" {
 		return nil
 	}
-	return s
+	return &s
 }

@@ -1,10 +1,3 @@
-// Package timeline — issue-03.5 cross-entity feed.
-//
-// Combina observations + prompts en respuestas estructuradas para que un
-// agente IA pueda recuperar contexto rápido sin múltiples roundtrips.
-// REQ-42.3: la tabla sessions fue dropeada — el feed ya no incluye sesiones
-// (los campos ActiveSession/RecentSessions del snapshot quedan vacíos por
-// compatibilidad de API).
 package timeline
 
 import (
@@ -16,37 +9,32 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/timeline/timelinedb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
 var ErrObservationNotFound = errors.New("anchor observation not found")
 
-// EntryKind tipo de entrada del feed.
 type EntryKind string
 
 const (
-
-
 	KindSession     EntryKind = "session"
 	KindObservation EntryKind = "observation"
 	KindPrompt      EntryKind = "prompt"
 )
 
-// Entry registro abstracto en la timeline.
 type Entry struct {
 	Kind      EntryKind  `json:"kind"`
 	ID        uuid.UUID  `json:"id"`
-	Title     string     `json:"title,omitempty"`   // session.title, prompt.slug, observation type
-	Preview   string     `json:"preview,omitempty"` // content/body truncado
+	Title     string     `json:"title,omitempty"`
+	Preview   string     `json:"preview,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	ProjectID *uuid.UUID `json:"project_id,omitempty"`
 	UserID    *uuid.UUID `json:"user_id,omitempty"`
 }
 
-// Snapshot agrupa secciones del contexto del project (devuelto por Context).
 type Snapshot struct {
 	ProjectID          *uuid.UUID `json:"project_id"`
 	ActiveSession      *Entry     `json:"active_session,omitempty"`
@@ -59,43 +47,28 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
-// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
-// (issue-25.14), o el pool como fallback. issue-25.14 wireup.
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func (s *Service) q(ctx context.Context) querier {
+func (s *Service) q(ctx context.Context) *timelinedb.Queries {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
+		return timelinedb.New(tx)
 	}
-	return s.Pool
+	return timelinedb.New(s.Pool)
 }
 
-// Context arma un snapshot del project. Si projectID == uuid.Nil, scope =
-// org-wide (cross-project). userID requerido para filtrar active_session.
-//
-// Límites: 5 sesiones, 10 observations, 5 prompts. Si limit override > 0 ajusta.
 func (s *Service) Context(ctx context.Context, orgID, userID, projectID uuid.UUID) (*Snapshot, error) {
 	snap := &Snapshot{}
 	if projectID != uuid.Nil {
 		snap.ProjectID = &projectID
 	}
 
-
 	_ = userID
 	snap.ActiveSession = nil
 	snap.RecentSessions = nil
-
 
 	obs, err := s.queryObservations(ctx, orgID, projectID, 10)
 	if err != nil {
 		return nil, fmt.Errorf("recent observations: %w", err)
 	}
 	snap.RecentObservations = obs
-
 
 	prompts, err := s.queryPrompts(ctx, orgID, projectID, 5)
 	if err != nil {
@@ -106,9 +79,6 @@ func (s *Service) Context(ctx context.Context, orgID, userID, projectID uuid.UUI
 	return snap, nil
 }
 
-// Timeline devuelve N entradas antes y después de la observación ancla,
-// ordenadas cronológicamente. Combina observations + prompts del mismo project.
-// before+after = ventana total; anchor entry incluida.
 func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, before, after int) ([]Entry, error) {
 	if before < 0 {
 		before = 3
@@ -123,44 +93,34 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 		after = 50
 	}
 
-
-	var (
-		anchorCreatedAt time.Time
-		anchorProjectID uuid.UUID
-		anchorContent   string
-	)
-	err := s.q(ctx).QueryRow(ctx,
-		`SELECT created_at, project_id, content
-		 FROM knowledge_observations WHERE id = $1 AND deleted_at IS NULL`, observationID,
-	).Scan(&anchorCreatedAt, &anchorProjectID, &anchorContent)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrObservationNotFound
-	}
+	anchor, err := s.q(ctx).GetAnchorObservation(ctx, observationID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrObservationNotFound
+		}
 		return nil, fmt.Errorf("anchor lookup: %w", err)
 	}
 
-
-	priorObs, err := s.queryEntriesAround(ctx, anchorProjectID, anchorCreatedAt, before, true)
+	priorObs, err := s.queryEntriesAround(ctx, anchor.ProjectID, anchor.CreatedAt, before, true)
 	if err != nil {
 		return nil, err
 	}
 
-	nextObs, err := s.queryEntriesAround(ctx, anchorProjectID, anchorCreatedAt, after, false)
+	nextObs, err := s.queryEntriesAround(ctx, anchor.ProjectID, anchor.CreatedAt, after, false)
 	if err != nil {
 		return nil, err
 	}
 
-	anchor := Entry{
+	anchorEntry := Entry{
 		Kind:      KindObservation,
 		ID:        observationID,
 		Title:     "observation",
-		Preview:   truncate(anchorContent, 200),
-		CreatedAt: anchorCreatedAt,
-		ProjectID: &anchorProjectID,
+		Preview:   truncate(anchor.Content, 200),
+		CreatedAt: anchor.CreatedAt,
+		ProjectID: &anchor.ProjectID,
 	}
 
-	all := append(priorObs, anchor)
+	all := append(priorObs, anchorEntry)
 	all = append(all, nextObs...)
 	sort.SliceStable(all, func(i, j int) bool {
 		return all[i].CreatedAt.Before(all[j].CreatedAt)
@@ -168,135 +128,138 @@ func (s *Service) Timeline(ctx context.Context, orgID, observationID uuid.UUID, 
 	return all, nil
 }
 
-
-
 func (s *Service) queryObservations(ctx context.Context, orgID, projectID uuid.UUID, limit int) ([]Entry, error) {
-	var q string
-	var args []any
 	if projectID == uuid.Nil {
-		q = `SELECT id, observation_type, content, created_at
-		     FROM knowledge_observations
-		     WHERE deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $1`
-		args = []any{limit}
-	} else {
-		q = `SELECT id, observation_type, content, created_at
-		     FROM knowledge_observations
-		     WHERE project_id = $1 AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $2`
-		args = []any{projectID, limit}
+		rows, err := s.q(ctx).ListObservations(ctx, int32(limit))
+		if err != nil {
+			return nil, err
+		}
+		out := make([]Entry, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, Entry{
+				Kind:      KindObservation,
+				ID:        r.ID,
+				Title:     r.ObservationType,
+				Preview:   truncate(r.Content, 200),
+				CreatedAt: r.CreatedAt,
+			})
+		}
+		return out, nil
 	}
-	rows, err := s.q(ctx).Query(ctx, q, args...)
+
+	rows, err := s.q(ctx).ListObservationsByProject(ctx, timelinedb.ListObservationsByProjectParams{
+		ProjectID: projectID,
+		Lim:       int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Entry
-	for rows.Next() {
-		var e Entry
-		var content string
-		if err := rows.Scan(&e.ID, &e.Title, &content, &e.CreatedAt); err != nil {
-			return nil, err
-		}
-		e.Kind = KindObservation
-		e.Preview = truncate(content, 200)
-		if projectID != uuid.Nil {
-			pid := projectID
-			e.ProjectID = &pid
-		}
-		out = append(out, e)
+	out := make([]Entry, 0, len(rows))
+	for _, r := range rows {
+		pid := projectID
+		out = append(out, Entry{
+			Kind:      KindObservation,
+			ID:        r.ID,
+			Title:     r.ObservationType,
+			Preview:   truncate(r.Content, 200),
+			CreatedAt: r.CreatedAt,
+			ProjectID: &pid,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) queryPrompts(ctx context.Context, orgID, projectID uuid.UUID, limit int) ([]Entry, error) {
-	var q string
-	var args []any
 	if projectID == uuid.Nil {
-		q = `SELECT id, slug, body, created_at FROM prompts
-		     WHERE is_active = true AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $1`
-		args = []any{limit}
-	} else {
-		q = `SELECT id, slug, body, created_at FROM prompts
-		     WHERE project_id = $1
-		       AND is_active = true AND deleted_at IS NULL
-		     ORDER BY created_at DESC LIMIT $2`
-		args = []any{projectID, limit}
+		rows, err := s.q(ctx).ListPrompts(ctx, int32(limit))
+		if err != nil {
+			return nil, err
+		}
+		out := make([]Entry, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, Entry{
+				Kind:      KindPrompt,
+				ID:        r.ID,
+				Title:     r.Slug,
+				Preview:   truncate(r.Body, 200),
+				CreatedAt: r.CreatedAt,
+			})
+		}
+		return out, nil
 	}
-	rows, err := s.q(ctx).Query(ctx, q, args...)
+
+	rows, err := s.q(ctx).ListPromptsByProject(ctx, timelinedb.ListPromptsByProjectParams{
+		ProjectID: &projectID,
+		Lim:       int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Entry
-	for rows.Next() {
-		var e Entry
-		var body string
-		if err := rows.Scan(&e.ID, &e.Title, &body, &e.CreatedAt); err != nil {
-			return nil, err
-		}
-		e.Kind = KindPrompt
-		e.Preview = truncate(body, 200)
-		if projectID != uuid.Nil {
-			pid := projectID
-			e.ProjectID = &pid
-		}
-		out = append(out, e)
+	out := make([]Entry, 0, len(rows))
+	for _, r := range rows {
+		pid := projectID
+		out = append(out, Entry{
+			Kind:      KindPrompt,
+			ID:        r.ID,
+			Title:     r.Slug,
+			Preview:   truncate(r.Body, 200),
+			CreatedAt: r.CreatedAt,
+			ProjectID: &pid,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-// queryEntriesAround retorna observations + prompts antes o después de ts,
-// limitadas a `limit` entries. before=true → created_at < ts; else > ts.
 func (s *Service) queryEntriesAround(ctx context.Context, projectID uuid.UUID, ts time.Time, limit int, before bool) ([]Entry, error) {
 	if limit == 0 {
 		return nil, nil
 	}
-	cmp := ">"
-	order := "ASC"
+
 	if before {
-		cmp = "<"
-		order = "DESC"
+		rows, err := s.q(ctx).ListEntriesBefore(ctx, timelinedb.ListEntriesBeforeParams{
+			Lim:       int32(limit),
+			ProjectID: projectID,
+			Ts:        ts,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("around: %w", err)
+		}
+		out := make([]Entry, 0, len(rows))
+		for _, r := range rows {
+			pid := projectID
+			out = append(out, Entry{
+				Kind:      EntryKind(r.Kind),
+				ID:        r.ID,
+				Title:     r.ObservationType,
+				Preview:   truncate(r.Content, 200),
+				CreatedAt: r.CreatedAt,
+				ProjectID: &pid,
+			})
+		}
+		return out, nil
 	}
-	q := fmt.Sprintf(`
-		SELECT 'observation' AS kind, id, observation_type, content, created_at
-		FROM knowledge_observations
-		WHERE project_id = $1 AND created_at %s $2 AND deleted_at IS NULL
-		UNION ALL
-		SELECT 'prompt' AS kind, id, slug, body, created_at
-		FROM prompts
-		WHERE project_id = $1 AND created_at %s $2 AND is_active = true AND deleted_at IS NULL
-		ORDER BY 5 %s LIMIT $3
-	`, cmp, cmp, order)
-	rows, err := s.q(ctx).Query(ctx, q, projectID, ts, limit)
+
+	rows, err := s.q(ctx).ListEntriesAfter(ctx, timelinedb.ListEntriesAfterParams{
+		Lim:       int32(limit),
+		ProjectID: projectID,
+		Ts:        ts,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("around: %w", err)
 	}
-	defer rows.Close()
-	var out []Entry
-	for rows.Next() {
-		var (
-			kind    string
-			id      uuid.UUID
-			title   string
-			preview string
-			created time.Time
-		)
-		if err := rows.Scan(&kind, &id, &title, &preview, &created); err != nil {
-			return nil, err
-		}
+	out := make([]Entry, 0, len(rows))
+	for _, r := range rows {
 		pid := projectID
 		out = append(out, Entry{
-			Kind:      EntryKind(kind),
-			ID:        id,
-			Title:     title,
-			Preview:   truncate(preview, 200),
-			CreatedAt: created,
+			Kind:      EntryKind(r.Kind),
+			ID:        r.ID,
+			Title:     r.ObservationType,
+			Preview:   truncate(r.Content, 200),
+			CreatedAt: r.CreatedAt,
 			ProjectID: &pid,
 		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func truncate(s string, n int) string {

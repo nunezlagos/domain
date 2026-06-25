@@ -12,7 +12,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/skill/skilldb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // Executor ejecuta el skill ya resuelto (implementado por runner/skill).
@@ -47,6 +51,59 @@ type ExecutionService struct {
 	Skills   *Service
 	Versions *VersionStore
 	Runner   Executor
+}
+
+func (s *ExecutionService) q(ctx context.Context) *skilldb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return skilldb.New(tx)
+	}
+	return skilldb.New(s.Pool)
+}
+
+func buildExecution(id uuid.UUID, skillID uuid.UUID, versionUsed *int32, mode, status string, parameters []byte, output, error *string, executionTimeMs *int32, startedAt pgtype.Timestamptz, completedAt pgtype.Timestamptz, createdAt time.Time) Execution {
+	var params map[string]any
+	if len(parameters) > 0 {
+		_ = json.Unmarshal(parameters, &params)
+	}
+	return Execution{
+		ID:              id,
+		SkillID:         skillID,
+		VersionUsed:     int32PtrToPtr(versionUsed),
+		Mode:            mode,
+		Status:          status,
+		Parameters:      params,
+		Output:          output,
+		Error:           error,
+		ExecutionTimeMs: int32PtrToPtr(executionTimeMs),
+		StartedAt:       timestamptzPtr(startedAt),
+		CompletedAt:     timestamptzPtr(completedAt),
+		CreatedAt:       createdAt,
+	}
+}
+
+func toExecutionFromCreate(e skilldb.ExecutionCreateRow) Execution {
+	return buildExecution(e.ID, e.SkillID, e.VersionUsed, e.Mode, e.Status, e.Parameters,
+		e.Output, e.Error, e.ExecutionTimeMs, e.StartedAt, e.CompletedAt, e.CreatedAt)
+}
+
+func toExecutionFromGet(e skilldb.ExecutionGetByIDRow) Execution {
+	return buildExecution(e.ID, e.SkillID, e.VersionUsed, e.Mode, e.Status, e.Parameters,
+		e.Output, e.Error, e.ExecutionTimeMs, e.StartedAt, e.CompletedAt, e.CreatedAt)
+}
+
+func int32PtrToPtr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	x := int(*v)
+	return &x
+}
+
+func timestamptzPtr(t pgtype.Timestamptz) *time.Time {
+	if t.Valid {
+		return &t.Time
+	}
+	return nil
 }
 
 // scrubKeys según security.md: nunca persistir valores de estas keys.
@@ -151,22 +208,26 @@ func (s *ExecutionService) insertExecution(ctx context.Context, in ExecuteInput,
 	if in.Mode == "async" {
 		status = "pending"
 	}
-	var e Execution
-	var paramsRaw []byte
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO skill_executions
-			(skill_id, version_used, mode, status, parameters, started_at)
-		VALUES ($1, $2, $3, $4, $5, NOW())
-		RETURNING id, skill_id, version_used, mode, status, parameters, output, error,
-		          execution_time_ms, started_at, completed_at, created_at`,
-		sk.ID, versionUsed, in.Mode, status, scrubbed,
-	).Scan(&e.ID, &e.SkillID, &e.VersionUsed, &e.Mode, &e.Status, &paramsRaw,
-		&e.Output, &e.Error, &e.ExecutionTimeMs, &e.StartedAt, &e.CompletedAt, &e.CreatedAt)
+	row, err := s.q(ctx).ExecutionCreate(ctx, skilldb.ExecutionCreateParams{
+		SkillID:     sk.ID,
+		VersionUsed: int32Ptr(versionUsed),
+		Mode:        in.Mode,
+		Status:      status,
+		Parameters:  scrubbed,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert execution: %w", err)
 	}
-	_ = json.Unmarshal(paramsRaw, &e.Parameters)
-	return &e, nil
+	exec := toExecutionFromCreate(row)
+	return &exec, nil
+}
+
+func int32Ptr(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+	x := int32(*v)
+	return &x
 }
 
 // runAndComplete ejecuta y persiste el resultado (success o failure).
@@ -181,44 +242,38 @@ func (s *ExecutionService) runAndComplete(ctx context.Context, execID uuid.UUID,
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	_, _ = s.Pool.Exec(ctx,
-		`UPDATE skill_executions SET status = 'running' WHERE id = $1 AND status = 'pending'`, execID)
+	q := s.q(ctx)
+	_ = q.ExecutionSetRunning(ctx, execID)
 
 	start := time.Now()
 	output, err := s.Runner.Execute(runCtx, sk, in.Parameters)
-	elapsed := int(time.Since(start).Milliseconds())
+	elapsed := int32(time.Since(start).Milliseconds())
 
 	if err != nil {
 		msg := err.Error()
-		_, _ = s.Pool.Exec(ctx, `
-			UPDATE skill_executions SET status = 'failed', error = $2,
-			  execution_time_ms = $3, completed_at = NOW() WHERE id = $1`,
-			execID, msg, elapsed)
+		_ = q.ExecutionSetFailed(ctx, skilldb.ExecutionSetFailedParams{
+			Error:           &msg,
+			ExecutionTimeMs: &elapsed,
+			ID:              execID,
+		})
 		return
 	}
-	_, _ = s.Pool.Exec(ctx, `
-		UPDATE skill_executions SET status = 'completed', output = $2,
-		  execution_time_ms = $3, completed_at = NOW() WHERE id = $1`,
-		execID, output, elapsed)
+	_ = q.ExecutionSetCompleted(ctx, skilldb.ExecutionSetCompletedParams{
+		Output:          &output,
+		ExecutionTimeMs: &elapsed,
+		ID:              execID,
+	})
 }
 
 // Get retorna una execution con guard de org (anti-enumeration).
 func (s *ExecutionService) Get(ctx context.Context, orgID, id uuid.UUID) (*Execution, error) {
-	var e Execution
-	var paramsRaw []byte
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, skill_id, version_used, mode, status, parameters, output, error,
-		       execution_time_ms, started_at, completed_at, created_at
-		FROM skill_executions WHERE id = $1`,
-		id,
-	).Scan(&e.ID, &e.SkillID, &e.VersionUsed, &e.Mode, &e.Status, &paramsRaw,
-		&e.Output, &e.Error, &e.ExecutionTimeMs, &e.StartedAt, &e.CompletedAt, &e.CreatedAt)
+	row, err := s.q(ctx).ExecutionGetByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrExecutionNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get execution: %w", err)
 	}
-	_ = json.Unmarshal(paramsRaw, &e.Parameters)
-	return &e, nil
+	exec := toExecutionFromGet(row)
+	return &exec, nil
 }

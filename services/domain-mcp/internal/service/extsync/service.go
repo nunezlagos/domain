@@ -1,8 +1,3 @@
-// Package extsync — issue-04.9 external provider sync state tracking.
-//
-// MVP scope: schema + state CRUD + drift marker. Los drivers reales (Jira HTTP
-// client, GitHub Issues API, webhooks pull) viven en HUs siguientes que
-// implementarán la interface ExternalProviderDriver consumida por workers.
 package extsync
 
 import (
@@ -15,6 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/extsync/extsyncdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -33,8 +31,8 @@ const (
 	EntityREQ = "req"
 	EntityHU  = "hu"
 
-	DirPushOnly    = "push_only"
-	DirPullOnly    = "pull_only"
+	DirPushOnly      = "push_only"
+	DirPullOnly      = "pull_only"
 	DirBidirectional = "bidirectional"
 
 	StatusPending  = "pending"
@@ -59,26 +57,26 @@ type Provider struct {
 }
 
 type SyncState struct {
-	ID                 uuid.UUID       `json:"id"`
-	ProviderID         uuid.UUID       `json:"provider_id"`
-	EntityKind         string          `json:"entity_kind"`
-	EntityID           uuid.UUID       `json:"entity_id"`
-	ExternalKey        string          `json:"external_key"`
-	ExternalURL        string          `json:"external_url"`
-	ExternalType       *string         `json:"external_type,omitempty"`
-	SyncDirection      string          `json:"sync_direction"`
-	SyncStatus         string          `json:"sync_status"`
-	FieldMapping       json.RawMessage `json:"field_mapping"`
-	LastPushedAt       *time.Time      `json:"last_pushed_at,omitempty"`
-	LastPulledAt       *time.Time      `json:"last_pulled_at,omitempty"`
-	LastSyncedAt       *time.Time      `json:"last_synced_at,omitempty"`
-	DriftDetectedAt    *time.Time      `json:"drift_detected_at,omitempty"`
-	DriftFields        json.RawMessage `json:"drift_fields,omitempty"`
-	PartialFailures    json.RawMessage `json:"partial_failures,omitempty"`
-	RetryCount         int             `json:"retry_count"`
-	NextRetryAt        *time.Time      `json:"next_retry_at,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	ID              uuid.UUID       `json:"id"`
+	ProviderID      uuid.UUID       `json:"provider_id"`
+	EntityKind      string          `json:"entity_kind"`
+	EntityID        uuid.UUID       `json:"entity_id"`
+	ExternalKey     string          `json:"external_key"`
+	ExternalURL     string          `json:"external_url"`
+	ExternalType    *string         `json:"external_type,omitempty"`
+	SyncDirection   string          `json:"sync_direction"`
+	SyncStatus      string          `json:"sync_status"`
+	FieldMapping    json.RawMessage `json:"field_mapping"`
+	LastPushedAt    *time.Time      `json:"last_pushed_at,omitempty"`
+	LastPulledAt    *time.Time      `json:"last_pulled_at,omitempty"`
+	LastSyncedAt    *time.Time      `json:"last_synced_at,omitempty"`
+	DriftDetectedAt *time.Time      `json:"drift_detected_at,omitempty"`
+	DriftFields     json.RawMessage `json:"drift_fields,omitempty"`
+	PartialFailures json.RawMessage `json:"partial_failures,omitempty"`
+	RetryCount      int             `json:"retry_count"`
+	NextRetryAt     *time.Time      `json:"next_retry_at,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 type Service struct {
@@ -90,7 +88,63 @@ var validProviders = map[string]bool{
 	ProviderLinear: true, ProviderAsana: true,
 }
 
-// RegisterProvider crea o actualiza un provider.
+func (s *Service) q(ctx context.Context) *extsyncdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return extsyncdb.New(tx)
+	}
+	return extsyncdb.New(s.Pool)
+}
+
+func syncStateFromRow(row extsyncdb.ExternalSyncState) SyncState {
+	st := SyncState{
+		ID:              row.ID,
+		ProviderID:      row.ProviderID,
+		EntityKind:      row.EntityKind,
+		EntityID:        row.EntityID,
+		ExternalKey:     row.ExternalKey,
+		ExternalURL:     row.ExternalUrl,
+		ExternalType:    row.ExternalType,
+		SyncDirection:   row.SyncDirection,
+		SyncStatus:      row.SyncStatus,
+		FieldMapping:    json.RawMessage(row.FieldMapping),
+		DriftFields:     json.RawMessage(row.DriftFields),
+		PartialFailures: json.RawMessage(row.PartialFailures),
+		RetryCount:      int(row.RetryCount),
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+	if row.LastPushedAt.Valid {
+		st.LastPushedAt = &row.LastPushedAt.Time
+	}
+	if row.LastPulledAt.Valid {
+		st.LastPulledAt = &row.LastPulledAt.Time
+	}
+	if row.LastSyncedAt.Valid {
+		st.LastSyncedAt = &row.LastSyncedAt.Time
+	}
+	if row.DriftDetectedAt.Valid {
+		st.DriftDetectedAt = &row.DriftDetectedAt.Time
+	}
+	if row.NextRetryAt.Valid {
+		st.NextRetryAt = &row.NextRetryAt.Time
+	}
+	return st
+}
+
+func providerFromRow(row extsyncdb.RegisterProviderRow) Provider {
+	return Provider{
+		ID:          row.ID,
+		Provider:    row.Provider,
+		DisplayName: row.DisplayName,
+		BaseURL:     row.BaseUrl,
+		ProjectKey:  row.ProjectKey,
+		Config:      json.RawMessage(row.Config),
+		Enabled:     row.Enabled,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
+}
+
 func (s *Service) RegisterProvider(ctx context.Context, orgID uuid.UUID, provider, displayName, baseURL, projectKey string, config map[string]any) (*Provider, error) {
 	if !validProviders[provider] {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, provider)
@@ -104,31 +158,20 @@ func (s *Service) RegisterProvider(ctx context.Context, orgID uuid.UUID, provide
 		pk = &projectKey
 	}
 
-	var p Provider
-
-
-
-
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO external_providers (provider, display_name, base_url, project_key, config)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (provider, project_key)
-		DO UPDATE SET display_name = EXCLUDED.display_name,
-		              base_url = EXCLUDED.base_url,
-		              config = EXCLUDED.config,
-		              updated_at = now()
-		RETURNING id, provider, display_name, base_url, project_key,
-		          config, enabled, created_at, updated_at`,
-		provider, displayName, baseURL, pk, cfgJSON,
-	).Scan(&p.ID, &p.Provider, &p.DisplayName, &p.BaseURL,
-		&p.ProjectKey, &p.Config, &p.Enabled, &p.CreatedAt, &p.UpdatedAt)
+	row, err := s.q(ctx).RegisterProvider(ctx, extsyncdb.RegisterProviderParams{
+		Provider:    provider,
+		DisplayName: displayName,
+		BaseUrl:     baseURL,
+		ProjectKey:  pk,
+		Config:      cfgJSON,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("register provider: %w", err)
 	}
+	p := providerFromRow(row)
 	return &p, nil
 }
 
-// RegisterPush registra un sync state nuevo después de un push exitoso inicial.
 func (s *Service) RegisterPush(ctx context.Context, providerID uuid.UUID, entityKind string, entityID uuid.UUID, externalKey, externalURL, externalType string, fieldMapping map[string]any) (*SyncState, error) {
 	if entityKind != EntityREQ && entityKind != EntityHU {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidEntity, entityKind)
@@ -142,40 +185,34 @@ func (s *Service) RegisterPush(ctx context.Context, providerID uuid.UUID, entity
 		et = &externalType
 	}
 
-	var st SyncState
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO external_sync_state (provider_id, entity_kind, entity_id, external_key,
-		                                  external_url, external_type, sync_direction,
-		                                  sync_status, field_mapping, last_pushed_at,
-		                                  last_synced_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())
-		RETURNING id, provider_id, entity_kind, entity_id, external_key, external_url,
-		          external_type, sync_direction, sync_status, field_mapping,
-		          last_pushed_at, last_pulled_at, last_synced_at, drift_detected_at,
-		          drift_fields, partial_failures, retry_count, next_retry_at,
-		          created_at, updated_at`,
-		providerID, entityKind, entityID, externalKey, externalURL, et,
-		DirPushOnly, StatusOK, fmJSON,
-	).Scan(scanStateCols(&st)...)
+	row, err := s.q(ctx).RegisterPush(ctx, extsyncdb.RegisterPushParams{
+		ProviderID:    providerID,
+		EntityKind:    entityKind,
+		EntityID:      entityID,
+		ExternalKey:   externalKey,
+		ExternalUrl:   externalURL,
+		ExternalType:  et,
+		SyncDirection: DirPushOnly,
+		SyncStatus:    StatusOK,
+		FieldMapping:  fmJSON,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("register sync state: %w", err)
 	}
+	st := syncStateFromRow(row)
 	s.recordEvent(ctx, st.ID, "push.ok", "push", map[string]any{
 		"external_key": externalKey, "external_type": externalType,
 	}, "")
 	return &st, nil
 }
 
-// MarkDrift marca un sync state como conflicto por edición externa.
 func (s *Service) MarkDrift(ctx context.Context, stateID uuid.UUID, driftFields map[string]any) (*SyncState, error) {
 	dfJSON, _ := json.Marshal(driftFields)
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE external_sync_state
-		SET sync_status = $1, drift_detected_at = now(), drift_fields = $2,
-		    updated_at = now()
-		WHERE id = $3`,
-		StatusConflict, dfJSON, stateID,
-	)
+	err := s.q(ctx).MarkDrift(ctx, extsyncdb.MarkDriftParams{
+		SyncStatus:  StatusConflict,
+		DriftFields: dfJSON,
+		ID:          stateID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mark drift: %w", err)
 	}
@@ -183,15 +220,13 @@ func (s *Service) MarkDrift(ctx context.Context, stateID uuid.UUID, driftFields 
 	return s.Get(ctx, stateID)
 }
 
-// MarkPartial marca push parcial (algunos attachments fallaron).
 func (s *Service) MarkPartial(ctx context.Context, stateID uuid.UUID, failures []any) (*SyncState, error) {
 	fJSON, _ := json.Marshal(failures)
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE external_sync_state
-		SET sync_status = $1, partial_failures = $2, updated_at = now()
-		WHERE id = $3`,
-		StatusPartial, fJSON, stateID,
-	)
+	err := s.q(ctx).MarkPartial(ctx, extsyncdb.MarkPartialParams{
+		SyncStatus:      StatusPartial,
+		PartialFailures: fJSON,
+		ID:              stateID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mark partial: %w", err)
 	}
@@ -199,15 +234,11 @@ func (s *Service) MarkPartial(ctx context.Context, stateID uuid.UUID, failures [
 	return s.Get(ctx, stateID)
 }
 
-// MarkResolved resuelve un conflict cuando humano elige una versión.
 func (s *Service) MarkResolved(ctx context.Context, stateID uuid.UUID) (*SyncState, error) {
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE external_sync_state
-		SET sync_status = $1, drift_detected_at = NULL, drift_fields = NULL,
-		    last_synced_at = now(), updated_at = now()
-		WHERE id = $2`,
-		StatusOK, stateID,
-	)
+	err := s.q(ctx).MarkResolved(ctx, extsyncdb.MarkResolvedParams{
+		SyncStatus: StatusOK,
+		ID:         stateID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mark resolved: %w", err)
 	}
@@ -216,76 +247,49 @@ func (s *Service) MarkResolved(ctx context.Context, stateID uuid.UUID) (*SyncSta
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*SyncState, error) {
-	var st SyncState
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, provider_id, entity_kind, entity_id, external_key, external_url,
-		       external_type, sync_direction, sync_status, field_mapping,
-		       last_pushed_at, last_pulled_at, last_synced_at, drift_detected_at,
-		       drift_fields, partial_failures, retry_count, next_retry_at,
-		       created_at, updated_at
-		FROM external_sync_state WHERE id = $1`, id,
-	).Scan(scanStateCols(&st)...)
+	row, err := s.q(ctx).GetSyncState(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrStateNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get state: %w", err)
 	}
+	st := syncStateFromRow(row)
 	return &st, nil
 }
 
-// GetByEntity busca sync_state por (entity_kind, entity_id, provider).
 func (s *Service) GetByEntity(ctx context.Context, providerID uuid.UUID, entityKind string, entityID uuid.UUID) (*SyncState, error) {
-	var st SyncState
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, provider_id, entity_kind, entity_id, external_key, external_url,
-		       external_type, sync_direction, sync_status, field_mapping,
-		       last_pushed_at, last_pulled_at, last_synced_at, drift_detected_at,
-		       drift_fields, partial_failures, retry_count, next_retry_at,
-		       created_at, updated_at
-		FROM external_sync_state
-		WHERE provider_id = $1 AND entity_kind = $2 AND entity_id = $3`,
-		providerID, entityKind, entityID,
-	).Scan(scanStateCols(&st)...)
+	row, err := s.q(ctx).GetByEntity(ctx, extsyncdb.GetByEntityParams{
+		ProviderID: providerID,
+		EntityKind: entityKind,
+		EntityID:   entityID,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrStateNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get by entity: %w", err)
 	}
+	st := syncStateFromRow(row)
 	return &st, nil
 }
 
-// ListConflicts retorna sync states con drift sin resolver.
 func (s *Service) ListConflicts(ctx context.Context, limit int) ([]SyncState, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, provider_id, entity_kind, entity_id, external_key, external_url,
-		       external_type, sync_direction, sync_status, field_mapping,
-		       last_pushed_at, last_pulled_at, last_synced_at, drift_detected_at,
-		       drift_fields, partial_failures, retry_count, next_retry_at,
-		       created_at, updated_at
-		FROM external_sync_state
-		WHERE sync_status = $1
-		ORDER BY drift_detected_at DESC NULLS LAST LIMIT $2`,
-		StatusConflict, limit,
-	)
+	rows, err := s.q(ctx).ListConflicts(ctx, extsyncdb.ListConflictsParams{
+		SyncStatus: StatusConflict,
+		Limit:      int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list conflicts: %w", err)
 	}
-	defer rows.Close()
-
-	var out []SyncState
-	for rows.Next() {
-		var st SyncState
-		if err := rows.Scan(scanStateCols(&st)...); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		out = append(out, st)
+	out := make([]SyncState, len(rows))
+	for i, row := range rows {
+		out[i] = syncStateFromRow(row)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) recordEvent(ctx context.Context, stateID uuid.UUID, eventType, direction string, payload map[string]any, errMsg string) {
@@ -297,21 +301,11 @@ func (s *Service) recordEvent(ctx context.Context, stateID uuid.UUID, eventType,
 	if errMsg != "" {
 		em = &errMsg
 	}
-	_, _ = s.Pool.Exec(ctx, `
-		INSERT INTO external_sync_events (sync_state_id, event_type, direction, payload, error_message)
-		VALUES ($1, $2, $3, $4, $5)`,
-		stateID, eventType, direction, pJSON, em,
-	)
-}
-
-func scanStateCols(st *SyncState) []any {
-	return []any{
-		&st.ID, &st.ProviderID, &st.EntityKind, &st.EntityID,
-		&st.ExternalKey, &st.ExternalURL, &st.ExternalType,
-		&st.SyncDirection, &st.SyncStatus, &st.FieldMapping,
-		&st.LastPushedAt, &st.LastPulledAt, &st.LastSyncedAt,
-		&st.DriftDetectedAt, &st.DriftFields, &st.PartialFailures,
-		&st.RetryCount, &st.NextRetryAt,
-		&st.CreatedAt, &st.UpdatedAt,
-	}
+	_ = s.q(ctx).InsertSyncEvent(ctx, extsyncdb.InsertSyncEventParams{
+		SyncStateID:  stateID,
+		EventType:    eventType,
+		Direction:    direction,
+		Payload:      pJSON,
+		ErrorMessage: em,
+	})
 }

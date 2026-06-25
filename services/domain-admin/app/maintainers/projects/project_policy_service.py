@@ -3,7 +3,8 @@ from __future__ import annotations
 from django.core.paginator import Paginator
 from django.db import connection
 
-from .models import Project, ProjectPolicy
+from .models import Project
+from maintainers.projectpolicies.models import ProjectPolicy
 
 
 class ProjectPolicyService:

@@ -1,13 +1,3 @@
-// Package knowledge — issue-03.4 knowledge documents con chunking + RAG.
-//
-// Lifecycle:
-//   - Save(title, body): persiste doc + chunkea + genera embedding por chunk
-//   - Get(id): doc + chunks ordenados por chunk_index
-//   - SearchSemantic(orgID, query, limit): cosine sobre chunks
-//   - SearchHybrid(orgID, query, limit): BM25 chunks + cosine fused con RRF
-//
-// La generación de embeddings se delega a llm.Embedder inyectado. Si es
-// NopEmbedder (vector zero), search degrada a tsvector-only.
 package knowledge
 
 import (
@@ -21,10 +11,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pgvector/pgvector-go"
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/rag/chunker"
+	"nunezlagos/domain/internal/service/knowledge/knowledgedb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -86,9 +79,134 @@ type Service struct {
 	ChunkOptions chunker.Options
 }
 
-// Save persiste el doc + sus chunks. Atómico: si falla un chunk, rollback todo.
-// El embedding de cada chunk se genera ANTES de la tx (Embedder puede ser slow);
-// si llm.Embedder.Embed falla, abortamos sin tocar DB.
+func (s *Service) q(ctx context.Context) *knowledgedb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return knowledgedb.New(tx)
+	}
+	return knowledgedb.New(s.Pool)
+}
+
+func toDocument(d knowledgedb.GetDocRow) Document {
+	var srcURL string
+	if d.SourceUrl != nil {
+		srcURL = *d.SourceUrl
+	}
+	var meta map[string]any
+	if d.Metadata != nil {
+		_ = json.Unmarshal(d.Metadata, &meta)
+	}
+	return Document{
+		ID:             d.ID,
+		ProjectID:      d.ProjectID,
+		CreatedBy:      d.CreatedBy,
+		Title:          d.Title,
+		Body:           d.Body,
+		Source:         d.Source,
+		SourceURL:      srcURL,
+		Tags:           d.Tags,
+		Metadata:       meta,
+		HasAttachments: d.HasAttachments,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
+	}
+}
+
+func toDocumentFromList(d knowledgedb.ListDocsByProjectRow) Document {
+	var srcURL string
+	if d.SourceUrl != nil {
+		srcURL = *d.SourceUrl
+	}
+	var meta map[string]any
+	if d.Metadata != nil {
+		_ = json.Unmarshal(d.Metadata, &meta)
+	}
+	return Document{
+		ID:             d.ID,
+		ProjectID:      d.ProjectID,
+		CreatedBy:      d.CreatedBy,
+		Title:          d.Title,
+		Body:           d.Body,
+		Source:         d.Source,
+		SourceURL:      srcURL,
+		Tags:           d.Tags,
+		Metadata:       meta,
+		HasAttachments: d.HasAttachments,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
+	}
+}
+
+func toDocumentFromInsert(d knowledgedb.InsertDocRow) Document {
+	var srcURL string
+	if d.SourceUrl != nil {
+		srcURL = *d.SourceUrl
+	}
+	var meta map[string]any
+	if d.Metadata != nil {
+		_ = json.Unmarshal(d.Metadata, &meta)
+	}
+	return Document{
+		ID:             d.ID,
+		ProjectID:      d.ProjectID,
+		CreatedBy:      d.CreatedBy,
+		Title:          d.Title,
+		Body:           d.Body,
+		Source:         d.Source,
+		SourceURL:      srcURL,
+		Tags:           d.Tags,
+		Metadata:       meta,
+		HasAttachments: d.HasAttachments,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
+	}
+}
+
+func toChunk(c knowledgedb.InsertChunkRow) Chunk {
+	return Chunk{
+		ID:         c.ID,
+		DocumentID: c.KnowledgeDocID,
+		ChunkIndex: int(c.ChunkIndex),
+		Content:    c.Content,
+		CreatedAt:  c.CreatedAt,
+	}
+}
+
+func toChunkFromGet(c knowledgedb.GetChunksRow) Chunk {
+	return Chunk{
+		ID:         c.ID,
+		DocumentID: c.KnowledgeDocID,
+		ChunkIndex: int(c.ChunkIndex),
+		Content:    c.Content,
+		CreatedAt:  c.CreatedAt,
+	}
+}
+
+func toSearchResult(r knowledgedb.SearchHybridRow) SearchResult {
+	return SearchResult{
+		DocumentID: r.KnowledgeDocID,
+		ChunkID:    r.ID,
+		ChunkIndex: int(r.ChunkIndex),
+		Title:      r.Title,
+		Snippet:    r.Content,
+		Score:      r.Score,
+		ProjectID:  r.ProjectID,
+		CreatedAt:  r.CreatedAt,
+	}
+}
+
+func toSearchResultBM25(r knowledgedb.SearchBm25Row) SearchResult {
+	return SearchResult{
+		DocumentID: r.KnowledgeDocID,
+		ChunkID:    r.ID,
+		ChunkIndex: int(r.ChunkIndex),
+		Title:      r.Title,
+		Snippet:    r.Content,
+		Score:      r.Score,
+		ProjectID:  r.ProjectID,
+		CreatedAt:  r.CreatedAt,
+	}
+}
+
 func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return nil, nil, ErrTitleRequired
@@ -107,7 +225,6 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	}
 	metaJSON, _ := json.Marshal(in.Metadata)
 
-
 	rawChunks := chunker.Chunk(in.Body, s.ChunkOptions)
 	if len(rawChunks) == 0 {
 		return nil, nil, ErrBodyRequired
@@ -123,42 +240,51 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var doc Document
-	err = tx.QueryRow(ctx,
-		`INSERT INTO knowledge_docs
-		   (project_id, created_by, title, body, source, source_url,
-		    tags, metadata)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, project_id, created_by, title, body,
-		           source, COALESCE(source_url,''), tags, metadata,
-		           has_attachments, created_at, updated_at`,
-		in.ProjectID, in.CreatedBy, in.Title, in.Body,
-		in.Source, nullStr(in.SourceURL), in.Tags, metaJSON,
-	).Scan(&doc.ID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
-		&doc.Source, &doc.SourceURL, &doc.Tags, &doc.Metadata,
-		&doc.HasAttachments, &doc.CreatedAt, &doc.UpdatedAt)
+	q := knowledgedb.New(tx)
+
+	var srcURL *string
+	if in.SourceURL != "" {
+		srcURL = &in.SourceURL
+	}
+
+	docRow, err := q.InsertDoc(ctx, knowledgedb.InsertDocParams{
+		ProjectID: in.ProjectID,
+		CreatedBy: in.CreatedBy,
+		Title:     in.Title,
+		Body:      in.Body,
+		Source:    in.Source,
+		SourceUrl: srcURL,
+		Tags:      in.Tags,
+		Metadata:  metaJSON,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("insert doc: %w", err)
 	}
 
 	chunks := make([]Chunk, 0, len(rawChunks))
 	for i, content := range rawChunks {
-		var ch Chunk
-		err := tx.QueryRow(ctx,
-			`INSERT INTO knowledge_chunks (knowledge_doc_id, chunk_index, content, embedding)
-			 VALUES ($1, $2, $3, $4::vector)
-			 RETURNING id, knowledge_doc_id, chunk_index, content, created_at`,
-			doc.ID, i, content, vectorLiteral(embeds[i]),
-		).Scan(&ch.ID, &ch.DocumentID, &ch.ChunkIndex, &ch.Content, &ch.CreatedAt)
+		var emb *pgvector.Vector
+		if i < len(embeds) && len(embeds[i]) > 0 {
+			v := pgvector.NewVector(embeds[i])
+			emb = &v
+		}
+		chRow, err := q.InsertChunk(ctx, knowledgedb.InsertChunkParams{
+			KnowledgeDocID: docRow.ID,
+			ChunkIndex:     int32(i),
+			Content:        content,
+			Embedding:      emb,
+		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("insert chunk %d: %w", i, err)
 		}
-		chunks = append(chunks, ch)
+		chunks = append(chunks, toChunk(chRow))
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, nil, fmt.Errorf("commit: %w", err)
 	}
+
+	doc := toDocumentFromInsert(docRow)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -176,17 +302,8 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	return &doc, chunks, nil
 }
 
-// Get devuelve doc + sus chunks ordenados por chunk_index.
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Document, []Chunk, error) {
-	var doc Document
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, project_id, created_by, title, body,
-		        source, COALESCE(source_url,''), tags, metadata,
-		        has_attachments, created_at, updated_at
-		 FROM knowledge_docs WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&doc.ID, &doc.ProjectID, &doc.CreatedBy, &doc.Title, &doc.Body,
-		&doc.Source, &doc.SourceURL, &doc.Tags, &doc.Metadata,
-		&doc.HasAttachments, &doc.CreatedAt, &doc.UpdatedAt)
+	docRow, err := s.q(ctx).GetDoc(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
@@ -194,27 +311,19 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Document, []Chunk, er
 		return nil, nil, fmt.Errorf("get doc: %w", err)
 	}
 
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, knowledge_doc_id, chunk_index, content, created_at
-		 FROM knowledge_chunks WHERE knowledge_doc_id = $1
-		 ORDER BY chunk_index ASC`, id)
+	chunkRows, err := s.q(ctx).GetChunks(ctx, id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get chunks: %w", err)
 	}
-	defer rows.Close()
-	var chunks []Chunk
-	for rows.Next() {
-		var ch Chunk
-		if err := rows.Scan(&ch.ID, &ch.DocumentID, &ch.ChunkIndex, &ch.Content, &ch.CreatedAt); err != nil {
-			return nil, nil, err
-		}
-		chunks = append(chunks, ch)
+
+	doc := toDocument(docRow)
+	chunks := make([]Chunk, len(chunkRows))
+	for i, c := range chunkRows {
+		chunks[i] = toChunkFromGet(c)
 	}
 	return &doc, chunks, nil
 }
 
-// SearchHybrid combina BM25 sobre chunks + cosine RRF fusion.
-// Si Embedder es Nop (zero), degrada a tsvector-only.
 func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]SearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, nil
@@ -231,79 +340,45 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 	const rrfK = 60
 	const candidates = 100
 
-	var rows pgx.Rows
 	if useVector {
-		rows, err = s.Pool.Query(ctx, `
-WITH bm25 AS (
-  SELECT c.id, ROW_NUMBER() OVER (ORDER BY ts_rank(c.content_tsv, q) DESC) AS r
-  FROM knowledge_chunks c
-  JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.deleted_at IS NULL,
-       plainto_tsquery('spanish', $1) AS q
-  WHERE c.content_tsv @@ q
-  LIMIT $3
-),
-vec AS (
-  SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $2::vector ASC) AS r
-  FROM knowledge_chunks c
-  JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.deleted_at IS NULL
-  WHERE c.embedding IS NOT NULL
-  LIMIT $3
-),
-fused AS (
-  SELECT id,
-         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score
-  FROM bm25 FULL OUTER JOIN vec USING (id)
-)
-SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
-       d.project_id, c.created_at, f.score
-FROM fused f
-JOIN knowledge_chunks c ON c.id = f.id
-JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-ORDER BY f.score DESC
-LIMIT $5
-`, query, vectorLiteral(vec), candidates, rrfK, limit)
-	} else {
-		rows, err = s.Pool.Query(ctx, `
-SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
-       d.project_id, c.created_at,
-       ts_rank(c.content_tsv, q)::float8 AS score
-FROM knowledge_chunks c
-JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-     AND d.deleted_at IS NULL,
-     plainto_tsquery('spanish', $1) AS q
-WHERE c.content_tsv @@ q
-ORDER BY score DESC
-LIMIT $2
-`, query, limit)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("hybrid search: %w", err)
-	}
-	defer rows.Close()
-	var out []SearchResult
-	for rows.Next() {
-		var r SearchResult
-		if err := rows.Scan(&r.ChunkID, &r.DocumentID, &r.ChunkIndex, &r.Title, &r.Snippet,
-			&r.ProjectID, &r.CreatedAt, &r.Score); err != nil {
-			return nil, err
+		qvec := pgvector.NewVector(vec)
+		rows, err := s.q(ctx).SearchHybrid(ctx, knowledgedb.SearchHybridParams{
+			ResultLimit: int32(limit),
+			QueryText:   query,
+			Candidates:  int32(candidates),
+			QueryVec:    &qvec,
+			RrfK:        int32(rrfK),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("hybrid search: %w", err)
 		}
-		out = append(out, r)
+		out := make([]SearchResult, len(rows))
+		for i, r := range rows {
+			out[i] = toSearchResult(r)
+		}
+		return out, nil
 	}
-	return out, rows.Err()
+
+	rows, err := s.q(ctx).SearchBm25(ctx, knowledgedb.SearchBm25Params{
+		QueryText:   query,
+		ResultLimit: int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("hybrid search (bm25 fallback): %w", err)
+	}
+	out := make([]SearchResult, len(rows))
+	for i, r := range rows {
+		out[i] = toSearchResultBM25(r)
+	}
+	return out, nil
 }
 
-// SoftDelete marca el doc como deleted; los chunks viven CASCADE ON DELETE
-// pero quedan accesibles para audit (no soft-delete en chunks individuales).
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE knowledge_docs SET deleted_at = NOW()
-		 WHERE id = $1 AND deleted_at IS NULL`, id)
+	n, err := s.q(ctx).SoftDeleteDoc(ctx, id)
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
@@ -318,54 +393,20 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	return nil
 }
 
-// ListByProject docs activos del project, sin chunks (lite).
 func (s *Service) ListByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]Document, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, project_id, created_by, title, body,
-		        source, COALESCE(source_url,''), tags, metadata,
-		        has_attachments, created_at, updated_at
-		 FROM knowledge_docs
-		 WHERE project_id = $1 AND deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT $2`, projectID, limit)
+	rows, err := s.q(ctx).ListDocsByProject(ctx, knowledgedb.ListDocsByProjectParams{
+		ProjectID:   projectID,
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
-	defer rows.Close()
-	var out []Document
-	for rows.Next() {
-		var d Document
-		if err := rows.Scan(&d.ID, &d.ProjectID, &d.CreatedBy, &d.Title, &d.Body,
-			&d.Source, &d.SourceURL, &d.Tags, &d.Metadata,
-			&d.HasAttachments, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, d)
+	out := make([]Document, len(rows))
+	for i, r := range rows {
+		out[i] = toDocumentFromList(r)
 	}
-	return out, rows.Err()
-}
-
-func vectorLiteral(v []float32) string {
-	if len(v) == 0 {
-		return "[]"
-	}
-	var sb strings.Builder
-	sb.WriteByte('[')
-	for i, f := range v {
-		if i > 0 {
-			sb.WriteByte(',')
-		}
-		fmt.Fprintf(&sb, "%g", f)
-	}
-	sb.WriteByte(']')
-	return sb.String()
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
+	return out, nil
 }

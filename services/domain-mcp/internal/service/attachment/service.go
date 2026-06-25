@@ -1,4 +1,3 @@
-// Package attachment — issue-04.6 S3 file attachments for entities.
 package attachment
 
 import (
@@ -13,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/attachment/attachmentdb"
 	s3client "nunezlagos/domain/internal/storage/s3"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const maxFileSize int64 = 10 * 1024 * 1024 // 10MB
@@ -51,14 +52,33 @@ type ConfirmResult struct {
 	DownloadURL string     `json:"download_url"`
 }
 
-// Service manages file attachments with S3 presigned URLs.
 type Service struct {
 	Pool  *pgxpool.Pool
 	S3    *s3client.Client
 	Audit *audit.PGRecorder
 }
 
-// InitUpload creates attachment record + presigned PUT URL.
+func (s *Service) q(ctx context.Context) *attachmentdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return attachmentdb.New(tx)
+	}
+	return attachmentdb.New(s.Pool)
+}
+
+func toAttachment(fa attachmentdb.FileAttachment) Attachment {
+	return Attachment{
+		ID:         fa.ID,
+		EntityType: fa.EntityType,
+		EntityID:   fa.EntityID,
+		Filename:   fa.Filename,
+		S3Key:      fa.S3Key,
+		SizeBytes:  fa.SizeBytes,
+		MimeType:   fa.MimeType,
+		CreatedBy:  fa.CreatedBy,
+		CreatedAt:  fa.CreatedAt,
+	}
+}
+
 func (s *Service) InitUpload(ctx context.Context, entityType, entityIDStr, filename, mimeType, createdBy string, size int64) (*InitUploadResult, error) {
 	if err := validateFile(size, mimeType); err != nil {
 		return nil, err
@@ -78,13 +98,15 @@ func (s *Service) InitUpload(ctx context.Context, entityType, entityIDStr, filen
 		cb = &createdBy
 	}
 
-	var a Attachment
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO file_attachments (entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at`,
-		entityType, entityID, filename, s3Key, size, mimeType, cb,
-	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt)
+	fa, err := s.q(ctx).InsertAttachment(ctx, attachmentdb.InsertAttachmentParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+		Filename:   filename,
+		S3Key:      s3Key,
+		SizeBytes:  size,
+		MimeType:   mimeType,
+		CreatedBy:  cb,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert attachment: %w", err)
 	}
@@ -94,16 +116,11 @@ func (s *Service) InitUpload(ctx context.Context, entityType, entityIDStr, filen
 		return nil, fmt.Errorf("generate upload url: %w", err)
 	}
 
-	return &InitUploadResult{Attachment: a, UploadURL: uploadURL}, nil
+	return &InitUploadResult{Attachment: toAttachment(fa), UploadURL: uploadURL}, nil
 }
 
-// ConfirmUpload verifies the object exists in S3 and returns download URL.
 func (s *Service) ConfirmUpload(ctx context.Context, attachmentID uuid.UUID) (*ConfirmResult, error) {
-	var a Attachment
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
-		 FROM file_attachments WHERE id = $1`, attachmentID,
-	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt)
+	fa, err := s.q(ctx).GetAttachment(ctx, attachmentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -111,7 +128,7 @@ func (s *Service) ConfirmUpload(ctx context.Context, attachmentID uuid.UUID) (*C
 		return nil, fmt.Errorf("get attachment: %w", err)
 	}
 
-	exists, err := s.S3.ConfirmObject(ctx, a.S3Key)
+	exists, err := s.S3.ConfirmObject(ctx, fa.S3Key)
 	if err != nil {
 		return nil, fmt.Errorf("confirm s3: %w", err)
 	}
@@ -119,21 +136,16 @@ func (s *Service) ConfirmUpload(ctx context.Context, attachmentID uuid.UUID) (*C
 		return nil, fmt.Errorf("object not found in s3 after upload")
 	}
 
-	dlURL, err := s.S3.GenerateDownloadURL(ctx, a.S3Key)
+	dlURL, err := s.S3.GenerateDownloadURL(ctx, fa.S3Key)
 	if err != nil {
 		return nil, fmt.Errorf("generate download url: %w", err)
 	}
 
-	return &ConfirmResult{Attachment: a, DownloadURL: dlURL}, nil
+	return &ConfirmResult{Attachment: toAttachment(fa), DownloadURL: dlURL}, nil
 }
 
-// GetDownloadURL returns presigned GET URL for an attachment.
 func (s *Service) GetDownloadURL(ctx context.Context, attachmentID uuid.UUID) (*ConfirmResult, error) {
-	var a Attachment
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
-		 FROM file_attachments WHERE id = $1`, attachmentID,
-	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt)
+	fa, err := s.q(ctx).GetAttachment(ctx, attachmentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -141,44 +153,36 @@ func (s *Service) GetDownloadURL(ctx context.Context, attachmentID uuid.UUID) (*
 		return nil, fmt.Errorf("get attachment: %w", err)
 	}
 
-	dlURL, err := s.S3.GenerateDownloadURL(ctx, a.S3Key)
+	dlURL, err := s.S3.GenerateDownloadURL(ctx, fa.S3Key)
 	if err != nil {
 		return nil, fmt.Errorf("generate download url: %w", err)
 	}
 
-	return &ConfirmResult{Attachment: a, DownloadURL: dlURL}, nil
+	return &ConfirmResult{Attachment: toAttachment(fa), DownloadURL: dlURL}, nil
 }
 
-// ListByEntity returns attachments for a given entity.
 func (s *Service) ListByEntity(ctx context.Context, entityType, entityIDStr string) ([]Attachment, error) {
 	entityID, err := uuid.Parse(entityIDStr)
 	if err != nil {
 		return nil, ErrInvalidEntity
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
-		 FROM file_attachments WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC`,
-		entityType, entityID)
+	items, err := s.q(ctx).ListByEntity(ctx, attachmentdb.ListByEntityParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list attachments: %w", err)
 	}
-	defer rows.Close()
 
-	var out []Attachment
-	for rows.Next() {
-		var a Attachment
-		if err := rows.Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.S3Key, &a.SizeBytes, &a.MimeType, &a.CreatedBy, &a.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan attachment: %w", err)
-		}
-		out = append(out, a)
+	out := make([]Attachment, len(items))
+	for i, fa := range items {
+		out[i] = toAttachment(fa)
 	}
 	return out, nil
 }
 
-// Delete removes attachment record and S3 object.
 func (s *Service) Delete(ctx context.Context, attachmentID uuid.UUID) error {
-	var s3Key string
-	err := s.Pool.QueryRow(ctx, `DELETE FROM file_attachments WHERE id = $1 RETURNING s3_key`, attachmentID).Scan(&s3Key)
+	s3Key, err := s.q(ctx).DeleteAttachment(ctx, attachmentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -191,32 +195,17 @@ func (s *Service) Delete(ctx context.Context, attachmentID uuid.UUID) error {
 	return nil
 }
 
-// CleanupOrphans removes attachments and S3 objects for deleted entities.
 func (s *Service) CleanupOrphans(ctx context.Context) (int, error) {
-	rows, err := s.Pool.Query(ctx, `
-		DELETE FROM file_attachments fa
-		WHERE NOT EXISTS (SELECT 1 FROM issues WHERE id = fa.entity_id AND entity_type = 'user_story')
-		  AND NOT EXISTS (SELECT 1 FROM sdd_requirements WHERE id = fa.entity_id AND entity_type = 'requirement')
-		RETURNING s3_key
-	`)
+	keys, err := s.q(ctx).CleanupOrphans(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("cleanup orphans: %w", err)
 	}
-	defer rows.Close()
 
-	var count int
-	for rows.Next() {
-		var s3Key string
-		if err := rows.Scan(&s3Key); err != nil {
-			continue
-		}
+	for _, s3Key := range keys {
 		_ = s.S3.DeleteObject(ctx, s3Key)
-		count++
 	}
-	return count, nil
+	return len(keys), nil
 }
-
-
 
 func validateFile(size int64, mimeType string) error {
 	if size > maxFileSize {
@@ -260,21 +249,18 @@ func (s *Service) requireEntity(ctx context.Context, entityType string, entityID
 	return nil
 }
 
-// PromoteEntity reasigna todos los attachments de (fromKind, fromID) a
-// (toKind, toID). Usado cuando un draft (issue-04.7) se commit como user_story
-// real, o un intake_payload se transforma en HU/REQ. Idempotente.
 func (s *Service) PromoteEntity(ctx context.Context, fromKind, toKind string, fromID, toID uuid.UUID) (int, error) {
 	if err := s.requireEntity(ctx, toKind, toID); err != nil {
 		return 0, fmt.Errorf("target entity: %w", err)
 	}
-	tag, err := s.Pool.Exec(ctx, `
-		UPDATE file_attachments
-		SET entity_type = $1, entity_id = $2
-		WHERE entity_type = $3 AND entity_id = $4`,
-		toKind, toID, fromKind, fromID,
-	)
+	n, err := s.q(ctx).PromoteEntity(ctx, attachmentdb.PromoteEntityParams{
+		ToType:   toKind,
+		ToID:     toID,
+		FromType: fromKind,
+		FromID:   fromID,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("promote: %w", err)
 	}
-	return int(tag.RowsAffected()), nil
+	return int(n), nil
 }

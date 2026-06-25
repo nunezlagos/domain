@@ -1,10 +1,7 @@
-
-
-
-
-
-
-
+// Package inventory — catálogo de capacidades de la plataforma (agents, skills,
+// flows, MCP providers/servers, templates y policies) para exponer al onboarding.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package inventory
 
 import (
@@ -12,6 +9,9 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/inventory/inventorydb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type Service struct {
@@ -20,6 +20,15 @@ type Service struct {
 
 func New(pool *pgxpool.Pool) *Service {
 	return &Service{Pool: pool}
+}
+
+// q retorna un *Queries sobre la tx del contexto (si el wireup la inyectó, para
+// que RLS aplique) o sobre el pool crudo en su defecto.
+func (s *Service) q(ctx context.Context) *inventorydb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return inventorydb.New(tx)
+	}
+	return inventorydb.New(s.Pool)
 }
 
 type Inventory struct {
@@ -113,81 +122,45 @@ func (s *Service) Load(ctx context.Context, in LoadInput) (*Inventory, error) {
 }
 
 func (s *Service) loadMCPProviders(ctx context.Context, inv *Inventory) error {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT name, description, command, tags, required_env
-		FROM mcp_providers
-		ORDER BY name
-	`)
+	rows, err := s.q(ctx).ListMCPProviders(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var p MCPProviderSummary
-		if err := rows.Scan(&p.Name, &p.Description, &p.Command, &p.Tags, &p.RequiredEnv); err != nil {
-			return err
-		}
-		inv.MCPProviders = append(inv.MCPProviders, p)
+	for _, r := range rows {
+		inv.MCPProviders = append(inv.MCPProviders, toMCPProvider(r))
 	}
 	return nil
 }
 
 func (s *Service) loadMCPServers(ctx context.Context, orgID *string, inv *Inventory) error {
-	q := `SELECT name, transport, status, enabled FROM mcp_servers WHERE enabled = TRUE`
-	args := []any{}
-	q += ` ORDER BY name`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).ListMCPServers(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var m MCPServerSummary
-		if err := rows.Scan(&m.Name, &m.Transport, &m.Status, &m.Enabled); err != nil {
-			return err
-		}
-		inv.MCPServers = append(inv.MCPServers, m)
+	for _, r := range rows {
+		inv.MCPServers = append(inv.MCPServers, toMCPServer(r))
 	}
 	return nil
 }
 
 func (s *Service) loadTemplates(ctx context.Context, inv *Inventory) error {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT slug, name, COALESCE(description, '')
-		FROM project_templates
-		ORDER BY slug
-	`)
+	rows, err := s.q(ctx).ListProjectTemplates(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var t TemplateSummary
-		if err := rows.Scan(&t.Slug, &t.Name, &t.Description); err != nil {
-			return err
-		}
-		inv.Templates = append(inv.Templates, t)
+	for _, r := range rows {
+		inv.Templates = append(inv.Templates, toTemplate(r))
 	}
 	return nil
 }
 
 func (s *Service) loadPolicies(ctx context.Context, inv *Inventory) error {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT slug, name, LEFT(COALESCE(body_md, ''), 120)
-		FROM platform_policies
-		WHERE is_active = TRUE
-		ORDER BY slug
-	`)
+	rows, err := s.q(ctx).ListPlatformPolicies(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var p PolicySummary
-		if err := rows.Scan(&p.Slug, &p.Name, &p.Description); err != nil {
-			return err
-		}
-		inv.Policies = append(inv.Policies, p)
+	for _, r := range rows {
+		inv.Policies = append(inv.Policies, toPolicy(r))
 	}
 	return nil
 }
@@ -196,23 +169,12 @@ func (s *Service) loadAgents(ctx context.Context, orgID *string, inv *Inventory)
 	if orgID == nil {
 		return nil
 	}
-	rows, err := s.Pool.Query(ctx, `
-		SELECT slug, name, COALESCE(description, ''), COALESCE(model, ''),
-		       COALESCE(skills_slugs, '{}')
-		FROM agents
-		WHERE deleted_at IS NULL
-		ORDER BY slug
-	`)
+	rows, err := s.q(ctx).ListAgents(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var a AgentSummary
-		if err := rows.Scan(&a.Slug, &a.Name, &a.Description, &a.Model, &a.Capabilities); err != nil {
-			return err
-		}
-		inv.Agents = append(inv.Agents, a)
+	for _, r := range rows {
+		inv.Agents = append(inv.Agents, toAgent(r))
 	}
 	return nil
 }
@@ -221,22 +183,12 @@ func (s *Service) loadSkills(ctx context.Context, orgID *string, inv *Inventory)
 	if orgID == nil {
 		return nil
 	}
-	rows, err := s.Pool.Query(ctx, `
-		SELECT slug, name, COALESCE(description, ''), COALESCE(skill_type, 'prompt')
-		FROM skills
-		WHERE deleted_at IS NULL
-		ORDER BY slug
-	`)
+	rows, err := s.q(ctx).ListSkills(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var sk SkillSummary
-		if err := rows.Scan(&sk.Slug, &sk.Name, &sk.Description, &sk.Type); err != nil {
-			return err
-		}
-		inv.Skills = append(inv.Skills, sk)
+	for _, r := range rows {
+		inv.Skills = append(inv.Skills, toSkill(r))
 	}
 	return nil
 }
@@ -245,22 +197,74 @@ func (s *Service) loadFlows(ctx context.Context, orgID *string, inv *Inventory) 
 	if orgID == nil {
 		return nil
 	}
-	rows, err := s.Pool.Query(ctx, `
-		SELECT slug, name, COALESCE(description, '')
-		FROM flows
-		WHERE deleted_at IS NULL
-		ORDER BY slug
-	`)
+	rows, err := s.q(ctx).ListFlows(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var f FlowSummary
-		if err := rows.Scan(&f.Slug, &f.Name, &f.Description); err != nil {
-			return err
-		}
-		inv.Flows = append(inv.Flows, f)
+	for _, r := range rows {
+		inv.Flows = append(inv.Flows, toFlow(r))
 	}
 	return nil
+}
+
+func toMCPProvider(r inventorydb.ListMCPProvidersRow) MCPProviderSummary {
+	return MCPProviderSummary{
+		Name:        r.Name,
+		Description: r.Description,
+		Command:     r.Command,
+		Tags:        r.Tags,
+		RequiredEnv: r.RequiredEnv,
+	}
+}
+
+func toMCPServer(r inventorydb.ListMCPServersRow) MCPServerSummary {
+	return MCPServerSummary{
+		Name:      r.Name,
+		Transport: r.Transport,
+		Status:    r.Status,
+		Enabled:   r.Enabled,
+	}
+}
+
+func toTemplate(r inventorydb.ListProjectTemplatesRow) TemplateSummary {
+	return TemplateSummary{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		Description: r.Description,
+	}
+}
+
+func toPolicy(r inventorydb.ListPlatformPoliciesRow) PolicySummary {
+	return PolicySummary{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		Description: r.Description,
+	}
+}
+
+func toAgent(r inventorydb.ListAgentsRow) AgentSummary {
+	return AgentSummary{
+		Slug:         r.Slug,
+		Name:         r.Name,
+		Description:  r.Description,
+		Model:        r.Model,
+		Capabilities: r.SkillsSlugs,
+	}
+}
+
+func toSkill(r inventorydb.ListSkillsRow) SkillSummary {
+	return SkillSummary{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		Description: r.Description,
+		Type:        r.SkillType,
+	}
+}
+
+func toFlow(r inventorydb.ListFlowsRow) FlowSummary {
+	return FlowSummary{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		Description: r.Description,
+	}
 }

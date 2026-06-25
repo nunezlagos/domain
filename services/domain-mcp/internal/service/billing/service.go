@@ -10,6 +10,8 @@
 //   - GetUsage: lee el contador del período actual
 package billing
 
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+
 import (
 	"context"
 	"errors"
@@ -19,6 +21,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/billing/billingdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -57,6 +62,15 @@ func (s *Service) now() time.Time {
 	return time.Now().UTC()
 }
 
+// q honra tx-context: si el middleware inyectó una tx la query corre sobre
+// ella (RLS), si no contra el pool. Seguro con o sin RLS.
+func (s *Service) q(ctx context.Context) *billingdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return billingdb.New(tx)
+	}
+	return billingdb.New(s.Pool)
+}
+
 // ResolveLimits devuelve las cuotas vigentes.
 //
 // REQ-42.2: el dominio de planes se eliminó (single-org sin facturación).
@@ -86,22 +100,16 @@ func (s *Service) IncrementRuns(ctx context.Context, orgID uuid.UUID) (*Usage, e
 // (sin organization_id). El param orgID se conserva por compat de signatura.
 func (s *Service) incrementCounter(ctx context.Context, orgID uuid.UUID, period time.Time, tokens int64, runs int32, storage int64) (*Usage, error) {
 	_ = orgID
-	var u Usage
-	err := s.Pool.QueryRow(ctx, `
-INSERT INTO usage_counters (period_start, tokens_used, runs_count, storage_bytes)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (period_start) DO UPDATE
-  SET tokens_used   = usage_counters.tokens_used + EXCLUDED.tokens_used,
-      runs_count    = usage_counters.runs_count + EXCLUDED.runs_count,
-      storage_bytes = usage_counters.storage_bytes + EXCLUDED.storage_bytes
-RETURNING period_start, tokens_used, runs_count, storage_bytes,
-          cost_usd, warned_80pct, warned_100pct`,
-		period, tokens, runs, storage,
-	).Scan(&u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
-		&u.CostUSD, &u.Warned80, &u.Warned100)
+	row, err := s.q(ctx).UpsertUsageCounter(ctx, billingdb.UpsertUsageCounterParams{
+		PeriodStart:  period,
+		TokensUsed:   tokens,
+		RunsCount:    runs,
+		StorageBytes: storage,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("upsert counter: %w", err)
 	}
+	u := toUsage(usageRow(row))
 	return &u, nil
 }
 
@@ -110,21 +118,14 @@ RETURNING period_start, tokens_used, runs_count, storage_bytes,
 func (s *Service) GetUsage(ctx context.Context, orgID uuid.UUID) (*Usage, error) {
 	_ = orgID
 	period := monthStart(s.now())
-	var u Usage
-	err := s.Pool.QueryRow(ctx,
-		`SELECT period_start, tokens_used, runs_count, storage_bytes,
-		        cost_usd, warned_80pct, warned_100pct
-		 FROM usage_counters
-		 WHERE period_start = $1`,
-		period,
-	).Scan(&u.PeriodStart, &u.TokensUsed, &u.RunsCount, &u.StorageBytes,
-		&u.CostUSD, &u.Warned80, &u.Warned100)
+	row, err := s.q(ctx).GetUsageCounter(ctx, period)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return &Usage{PeriodStart: period}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get usage: %w", err)
 	}
+	u := toUsage(usageRow(row))
 	return &u, nil
 }
 
@@ -165,6 +166,31 @@ func (s *Service) CheckTokens(ctx context.Context, orgID uuid.UUID, additional i
 		return state, ErrQuotaExceeded
 	}
 	return state, nil
+}
+
+// usageRow es la intersección de columnas de las queries de usage_counters.
+// Tanto UpsertUsageCounterRow como GetUsageCounterRow la satisfacen, así un
+// único mapper toUsage cubre ambas.
+type usageRow struct {
+	PeriodStart  time.Time
+	TokensUsed   int64
+	RunsCount    int32
+	StorageBytes int64
+	CostUsd      float64
+	Warned80pct  bool
+	Warned100pct bool
+}
+
+func toUsage(r usageRow) Usage {
+	return Usage{
+		PeriodStart:  r.PeriodStart,
+		TokensUsed:   r.TokensUsed,
+		RunsCount:    r.RunsCount,
+		StorageBytes: r.StorageBytes,
+		CostUSD:      r.CostUsd,
+		Warned80:     r.Warned80pct,
+		Warned100:    r.Warned100pct,
+	}
 }
 
 // monthStart devuelve el primer día del mes UTC en time.Time.

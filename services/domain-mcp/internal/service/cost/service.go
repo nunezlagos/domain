@@ -10,7 +10,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/cost/costdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type DailyByOrg struct {
@@ -38,36 +42,30 @@ type Service struct {
 	Pool *pgxpool.Pool
 }
 
+// q devuelve las queries generadas atadas a la tx del contexto (si hay) o al
+// pool. Seguro con o sin RLS: si el caller abrió una tx org-scopeada, las
+// queries corren dentro de ella.
+func (s *Service) q(ctx context.Context) *costdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return costdb.New(tx)
+	}
+	return costdb.New(s.Pool)
+}
+
 // DailyByOrg devuelve cost daily aggregated por org. Rango: últimos N días.
 func (s *Service) DailyByOrg(ctx context.Context, orgID uuid.UUID, days int) ([]DailyByOrg, error) {
 	if days <= 0 || days > 365 {
 		days = 30
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT day, runs, tokens_input, tokens_output, cost_usd, avg_duration_s,
-		        LAG(cost_usd) OVER (ORDER BY day) AS prev_cost_usd
-		 FROM domain_cost_daily_by_org
-		 WHERE day >= CURRENT_DATE - $1::int
-		 ORDER BY day DESC`,
-		days)
+	rows, err := s.q(ctx).DailyByOrg(ctx, int32(days))
 	if err != nil {
 		return nil, fmt.Errorf("query daily by org: %w", err)
 	}
-	defer rows.Close()
-	var out []DailyByOrg
-	for rows.Next() {
-		var d DailyByOrg
-		if err := rows.Scan(&d.Day, &d.Runs, &d.TokensInput, &d.TokensOutput,
-			&d.CostUSD, &d.AvgDurationS, &d.PrevCostUSD); err != nil {
-			return nil, err
-		}
-		if d.PrevCostUSD != nil && *d.PrevCostUSD > 0 {
-			pct := ((d.CostUSD - *d.PrevCostUSD) / *d.PrevCostUSD) * 100
-			d.CostChangePCT = &pct
-		}
-		out = append(out, d)
+	out := make([]DailyByOrg, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toDailyByOrg(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // DailyByAgent devuelve cost daily aggregated por agent dentro de la org.
@@ -75,24 +73,62 @@ func (s *Service) DailyByAgent(ctx context.Context, orgID uuid.UUID, days int) (
 	if days <= 0 || days > 365 {
 		days = 30
 	}
-	rows, err := s.Pool.Query(ctx,
-		`SELECT day, agent_id, agent_slug, runs, tokens_input, tokens_output, cost_usd
-		 FROM domain_cost_daily_by_agent
-		 WHERE day >= CURRENT_DATE - $1::int
-		 ORDER BY day DESC, cost_usd DESC`,
-		days)
+	rows, err := s.q(ctx).DailyByAgent(ctx, int32(days))
 	if err != nil {
 		return nil, fmt.Errorf("query daily by agent: %w", err)
 	}
-	defer rows.Close()
-	var out []DailyByAgent
-	for rows.Next() {
-		var d DailyByAgent
-		if err := rows.Scan(&d.Day, &d.AgentID, &d.AgentSlug, &d.Runs,
-			&d.TokensInput, &d.TokensOutput, &d.CostUSD); err != nil {
-			return nil, err
-		}
-		out = append(out, d)
+	out := make([]DailyByAgent, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toDailyByAgent(r))
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+func toDailyByOrg(r costdb.DailyByOrgRow) DailyByOrg {
+	d := DailyByOrg{
+		Day:          r.Day,
+		Runs:         r.Runs,
+		TokensInput:  r.TokensInput,
+		TokensOutput: r.TokensOutput,
+		CostUSD:      numericToFloat(r.CostUsd),
+		AvgDurationS: numericToFloat(r.AvgDurationS),
+		PrevCostUSD:  numericToFloatPtr(r.PrevCostUsd),
+	}
+	if d.PrevCostUSD != nil && *d.PrevCostUSD > 0 {
+		pct := ((d.CostUSD - *d.PrevCostUSD) / *d.PrevCostUSD) * 100
+		d.CostChangePCT = &pct
+	}
+	return d
+}
+
+func toDailyByAgent(r costdb.DailyByAgentRow) DailyByAgent {
+	return DailyByAgent{
+		Day:          r.Day,
+		AgentID:      r.AgentID,
+		AgentSlug:    r.AgentSlug,
+		Runs:         r.Runs,
+		TokensInput:  r.TokensInput,
+		TokensOutput: r.TokensOutput,
+		CostUSD:      numericToFloat(r.CostUsd),
+	}
+}
+
+// numericToFloat convierte un pgtype.Numeric a float64; 0 si NULL/inválido.
+func numericToFloat(n pgtype.Numeric) float64 {
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return 0
+	}
+	return f.Float64
+}
+
+// numericToFloatPtr convierte un pgtype.Numeric nullable a *float64; nil si
+// NULL/inválido. prev_cost_usd es NULL en la primera fila (LAG sin previo).
+func numericToFloatPtr(n pgtype.Numeric) *float64 {
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return nil
+	}
+	v := f.Float64
+	return &v
 }

@@ -89,11 +89,11 @@ Leyenda: **Q** = nº de queries SQL · **LOC** = service sin tests · **RLS** = 
 ### Ola 3 — Inline CON RLS, chicos/medianos (usar `q(ctx)`)
 | Service | Q | LOC | Estado |
 |---|--:|--:|:--:|
-| promptrouter | 3 | 673 | ⬜ |
-| cost | 4 | 98 | ⬜ |
-| search | 5 | 296 | ⬜ |
-| billing | 7 | 174 | ⬜ |
-| inventory | 8 | 266 | ⬜ |
+| promptrouter | 3 | 673 | ⬛ N/A (orquestación pura, no toca DB) |
+| cost | 4 | 98 | ✅ (2q reales, vistas) |
+| search | 5 | 296 | ✅ |
+| billing | 7 | 174 | ✅ |
+| inventory | 8 | 266 | ✅ |
 | projectlink | 8 | 118 | ⬜ |
 | timeline | 9 | 307 | ⬜ |
 | enrollment | 9 | 420 | ⬜ |

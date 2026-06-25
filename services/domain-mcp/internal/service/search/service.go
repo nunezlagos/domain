@@ -7,6 +7,8 @@
 // Scoring: cada entity calcula su ts_rank propio. Se normaliza al mismo dominio
 // y se ordena DESC. NO usamos RRF aquí porque las entities son distintas
 // (no estamos fusionando dos rankings sobre la misma entity).
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package search
 
 import (
@@ -17,10 +19,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/search/searchdb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -30,7 +32,6 @@ type EntityType string
 const (
 	EntityObservation EntityType = "observation"
 	EntityPrompt      EntityType = "prompt"
-
 
 	EntitySession      EntityType = "session"
 	EntityKnowledgeDoc EntityType = "knowledge_doc"
@@ -64,17 +65,11 @@ type Service struct {
 
 // q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
 // (issue-25.14), o el pool como fallback.
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func (s *Service) q(ctx context.Context) querier {
+func (s *Service) q(ctx context.Context) *searchdb.Queries {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
+		return searchdb.New(tx)
 	}
-	return s.Pool
+	return searchdb.New(s.Pool)
 }
 
 var (
@@ -118,7 +113,6 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 		all = append(all, r...)
 	}
 
-
 	mergeSortByScore(all)
 	if len(all) > limit {
 		all = all[:limit]
@@ -144,139 +138,112 @@ func entitySelection(types []EntityType) (obs, prompt, knowledge bool) {
 }
 
 func (s *Service) searchObservations(ctx context.Context, orgID uuid.UUID, query string, limit int, f Filter) ([]Result, error) {
-	q := `
-SELECT o.id, o.observation_type, o.content, o.tags, o.project_id, o.created_at,
-       ts_rank(o.content_tsv, qry)::float8 AS score
-FROM knowledge_observations o, plainto_tsquery('spanish', $1) AS qry
-WHERE o.deleted_at IS NULL AND o.content_tsv @@ qry
-`
-	args := []any{query}
-	if len(f.ProjectIDs) > 0 {
-		q += fmt.Sprintf(" AND o.project_id = ANY($%d)", len(args)+1)
-		args = append(args, f.ProjectIDs)
-	}
-	if len(f.Tags) > 0 {
-		q += fmt.Sprintf(" AND o.tags @> $%d", len(args)+1)
-		args = append(args, f.Tags)
-	}
-	if f.DateFrom != nil {
-		q += fmt.Sprintf(" AND o.created_at >= $%d", len(args)+1)
-		args = append(args, *f.DateFrom)
-	}
-	if f.DateTo != nil {
-		q += fmt.Sprintf(" AND o.created_at < $%d", len(args)+1)
-		args = append(args, *f.DateTo)
-	}
-	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
-	args = append(args, limit)
-
-	rows, err := s.q(ctx).Query(ctx, q, args...)
+	rows, err := s.q(ctx).SearchObservations(ctx, searchdb.SearchObservationsParams{
+		Query:       query,
+		ProjectIds:  optProjectIDs(f.ProjectIDs),
+		Tags:        optTags(f.Tags),
+		DateFrom:    optTime(f.DateFrom),
+		DateTo:      optTime(f.DateTo),
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Result
-	for rows.Next() {
-		var r Result
-		r.EntityType = EntityObservation
-		var content string
-		var projectID uuid.UUID
-		if err := rows.Scan(&r.ID, &r.Title, &content, &r.Tags, &projectID, &r.CreatedAt, &r.Score); err != nil {
-			return nil, err
-		}
-		r.Snippet = truncate(content, 200)
-		r.ProjectID = &projectID
-		out = append(out, r)
+	out := make([]Result, 0, len(rows))
+	for _, row := range rows {
+		projectID := row.ProjectID
+		out = append(out, Result{
+			EntityType: EntityObservation,
+			ID:         row.ID,
+			Title:      row.ObservationType,
+			Snippet:    truncate(row.Content, 200),
+			Score:      row.Score,
+			ProjectID:  &projectID,
+			Tags:       row.Tags,
+			CreatedAt:  row.CreatedAt,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) searchPrompts(ctx context.Context, orgID uuid.UUID, query string, limit int, f Filter) ([]Result, error) {
-	q := `
-SELECT p.id, p.slug, p.body, p.tags, p.project_id, p.created_at,
-       ts_rank(p.body_tsv, qry)::float8 AS score
-FROM prompts p, plainto_tsquery('spanish', $1) AS qry
-WHERE p.deleted_at IS NULL AND p.body_tsv @@ qry
-`
-	args := []any{query}
-	if len(f.ProjectIDs) > 0 {
-		q += fmt.Sprintf(" AND p.project_id = ANY($%d)", len(args)+1)
-		args = append(args, f.ProjectIDs)
-	}
-	if f.DateFrom != nil {
-		q += fmt.Sprintf(" AND p.created_at >= $%d", len(args)+1)
-		args = append(args, *f.DateFrom)
-	}
-	if f.DateTo != nil {
-		q += fmt.Sprintf(" AND p.created_at < $%d", len(args)+1)
-		args = append(args, *f.DateTo)
-	}
-	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
-	args = append(args, limit)
-
-	rows, err := s.q(ctx).Query(ctx, q, args...)
+	rows, err := s.q(ctx).SearchPrompts(ctx, searchdb.SearchPromptsParams{
+		Query:       query,
+		ProjectIds:  optProjectIDs(f.ProjectIDs),
+		DateFrom:    optTime(f.DateFrom),
+		DateTo:      optTime(f.DateTo),
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Result
-	for rows.Next() {
-		var r Result
-		r.EntityType = EntityPrompt
-		var body string
-		var projectID *uuid.UUID
-		if err := rows.Scan(&r.ID, &r.Title, &body, &r.Tags, &projectID, &r.CreatedAt, &r.Score); err != nil {
-			return nil, err
-		}
-		r.Snippet = truncate(body, 200)
-		r.ProjectID = projectID
-		out = append(out, r)
+	out := make([]Result, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Result{
+			EntityType: EntityPrompt,
+			ID:         row.ID,
+			Title:      row.Slug,
+			Snippet:    truncate(row.Body, 200),
+			Score:      row.Score,
+			ProjectID:  row.ProjectID,
+			Tags:       row.Tags,
+			CreatedAt:  row.CreatedAt,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) searchKnowledgeDocs(ctx context.Context, orgID uuid.UUID, query string, limit int, f Filter) ([]Result, error) {
-	q := `
-SELECT kd.id, kd.title, kd.body, kd.project_id, kd.created_at,
-       ts_rank(kd.body_tsv, qry)::float8 AS score
-FROM knowledge_docs kd, plainto_tsquery('spanish', $1) AS qry
-WHERE kd.deleted_at IS NULL AND kd.body_tsv @@ qry
-`
-	args := []any{query}
-	if len(f.ProjectIDs) > 0 {
-		q += fmt.Sprintf(" AND kd.project_id = ANY($%d)", len(args)+1)
-		args = append(args, f.ProjectIDs)
-	}
-	if f.DateFrom != nil {
-		q += fmt.Sprintf(" AND kd.created_at >= $%d", len(args)+1)
-		args = append(args, *f.DateFrom)
-	}
-	if f.DateTo != nil {
-		q += fmt.Sprintf(" AND kd.created_at < $%d", len(args)+1)
-		args = append(args, *f.DateTo)
-	}
-	q += fmt.Sprintf(" ORDER BY score DESC LIMIT $%d", len(args)+1)
-	args = append(args, limit)
-
-	rows, err := s.q(ctx).Query(ctx, q, args...)
+	rows, err := s.q(ctx).SearchKnowledgeDocs(ctx, searchdb.SearchKnowledgeDocsParams{
+		Query:       query,
+		ProjectIds:  optProjectIDs(f.ProjectIDs),
+		DateFrom:    optTime(f.DateFrom),
+		DateTo:      optTime(f.DateTo),
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Result
-	for rows.Next() {
-		var r Result
-		r.EntityType = EntityKnowledgeDoc
-		var body string
-		var projectID *uuid.UUID
-		if err := rows.Scan(&r.ID, &r.Title, &body, &projectID, &r.CreatedAt, &r.Score); err != nil {
-			return nil, err
-		}
-		r.Snippet = truncate(body, 200)
-		r.ProjectID = projectID
-		out = append(out, r)
+	out := make([]Result, 0, len(rows))
+	for _, row := range rows {
+		projectID := row.ProjectID
+		out = append(out, Result{
+			EntityType: EntityKnowledgeDoc,
+			ID:         row.ID,
+			Title:      row.Title,
+			Snippet:    truncate(row.Body, 200),
+			Score:      row.Score,
+			ProjectID:  &projectID,
+			CreatedAt:  row.CreatedAt,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+// optProjectIDs devuelve nil (sin filtro) cuando el slice viene vacío, lo que
+// satisface el guard `$N::uuid[] IS NULL` de la query.
+func optProjectIDs(ids []uuid.UUID) []uuid.UUID {
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// optTags idem optProjectIDs para el filtro de tags (solo observations).
+func optTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	return tags
+}
+
+// optTime mapea un *time.Time opcional al pgtype.Timestamptz que espera el
+// param generado: nil => NULL (sin filtro).
+func optTime(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
 func mergeSortByScore(rs []Result) {

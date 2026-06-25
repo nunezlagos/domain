@@ -14,25 +14,17 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
-	"syscall"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	"nunezlagos/domain/internal/activity"
-	"nunezlagos/domain/internal/api/backpressure"
-	"nunezlagos/domain/internal/api/handler"
-	"nunezlagos/domain/internal/api/middleware"
-	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
-	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
 	"nunezlagos/domain/internal/auth/otp"
-	"nunezlagos/domain/internal/auth/ratelimit"
-	"nunezlagos/domain/internal/auth/rbac"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/cli/onboard"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
@@ -41,84 +33,21 @@ import (
 	propagatepkg "nunezlagos/domain/internal/cli/setup/propagate"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/crypto"
-	"nunezlagos/domain/internal/db"
-	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/dbstats"
 	debugpkg "nunezlagos/domain/internal/debug"
-	"nunezlagos/domain/internal/dispatch"
-	"nunezlagos/domain/internal/httpserver"
-	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/circuitbreaker"
-	"nunezlagos/domain/internal/secrets"
-	"nunezlagos/domain/internal/seeds"
-	s3client "nunezlagos/domain/internal/storage/s3"
-	"nunezlagos/domain/internal/tracing"
-	"strings"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"nunezlagos/domain/internal/auth/session"
-	"nunezlagos/domain/internal/events"
-	"nunezlagos/domain/internal/llm/anthropic"
-	"nunezlagos/domain/internal/llm/google"
-	"nunezlagos/domain/internal/llm/ollama"
-	llmopenai "nunezlagos/domain/internal/llm/openai"
-	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
-	llmregistry "nunezlagos/domain/internal/llm/registry"
-	llmretry "nunezlagos/domain/internal/llm/retry"
 	"nunezlagos/domain/internal/logging"
-	smtpmail "nunezlagos/domain/internal/mail/smtp"
-	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
-	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	agentrunner "nunezlagos/domain/internal/runner/agent"
-	flowrunner "nunezlagos/domain/internal/runner/flow"
-	skillrunner "nunezlagos/domain/internal/runner/skill"
-	cronsched "nunezlagos/domain/internal/scheduler/cron"
-	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
-	"nunezlagos/domain/internal/scheduler/leader"
-	agentsvc "nunezlagos/domain/internal/service/agent"
-	attSvc "nunezlagos/domain/internal/service/attachment"
-	"nunezlagos/domain/internal/service/billing"
-	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
-	clientsvc "nunezlagos/domain/internal/service/client"
-	"nunezlagos/domain/internal/service/cost"
-	cronsvc "nunezlagos/domain/internal/service/cron"
-	enrollsvc "nunezlagos/domain/internal/service/enrollment"
+	"nunezlagos/domain/internal/secrets"
+	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/flow"
-	intakesvc "nunezlagos/domain/internal/service/intake"
-	usvc "nunezlagos/domain/internal/service/issue"
-	"nunezlagos/domain/internal/service/issuebuilder"
-	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
-	"nunezlagos/domain/internal/service/mcpserver"
-	"nunezlagos/domain/internal/service/observation"
-	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
-	"nunezlagos/domain/internal/service/orchestrator/phases"
 	"nunezlagos/domain/internal/service/outboundwebhook"
-	"nunezlagos/domain/internal/service/policy"
-	projsvc "nunezlagos/domain/internal/service/project"
-	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	"nunezlagos/domain/internal/service/projecttemplate"
-	promptsvc "nunezlagos/domain/internal/service/prompt"
 	"nunezlagos/domain/internal/service/promptrouter"
-	reqsvc "nunezlagos/domain/internal/service/requirement"
-	searchsvc "nunezlagos/domain/internal/service/search"
-	skillsvc "nunezlagos/domain/internal/service/skill"
-	specsvc "nunezlagos/domain/internal/service/spec"
-	tsvc "nunezlagos/domain/internal/service/task"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
-	timelinesvc "nunezlagos/domain/internal/service/timeline"
-	tracesvc "nunezlagos/domain/internal/service/traceability"
-	usagesvc "nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
-	webhooksvc "nunezlagos/domain/internal/service/webhook"
-	wp "nunezlagos/domain/internal/service/wizardplan"
-	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
 	"nunezlagos/domain/internal/service/workflowimport"
+	"nunezlagos/domain/internal/tracing"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (issue-19.2).
@@ -316,6 +245,7 @@ func runServer() {
 		fmt.Fprintln(os.Stderr, "o exportá DOMAIN_DATABASE_URL manualmente.")
 		os.Exit(1)
 	}
+
 	logger := logging.Setup(logging.Config{
 		Level:     cfg.LogLevel,
 		Format:    cfg.LogFormat,
@@ -333,126 +263,16 @@ func runServer() {
 			}
 		}()
 	}
-
-
 	debugpkg.TuneRuntime(logger)
 
-
 	ctx := context.Background()
-	pools, err := db.OpenProductionWithReplica(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL, cfg.DatabaseReadOnlyURL)
+
+	pools, poolsClose, err := buildPools(ctx, cfg, logger, metricsReg)
 	if err != nil {
 		logger.Error("pools open failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer pools.Close()
-	metrics.RunPoolStatsReporter(ctx, metricsReg, pools.App, pools.Auth, pools.ReadOnly, logger)
-	if cfg.DatabaseAuthURL == "" && cfg.Env != "dev" {
-		logger.Warn("DOMAIN_DATABASE_AUTH_URL not set — auth pool reuses runtime user (NOT recommended outside dev)")
-	}
-	if pools.ReadOnly != nil {
-		pools.LagMonitor = &db.LagMonitor{
-			Pool: pools.ReadOnly, PollInterval: 30 * time.Second,
-			ThresholdSecs: 10.0, Logger: logger,
-			MetricsCB: func(lag float64) {
-				metricsReg.ReplicationLagSeconds.Set(lag)
-				if lag > 10.0 {
-					metricsReg.ReplicaFallbackTotal.Inc()
-				}
-			},
-		}
-		go pools.LagMonitor.Run(ctx)
-		logger.Info("read replica configured with lag monitor",
-			slog.Float64("threshold_secs", 10.0))
-	} else {
-		logger.Info("no read replica configured — all reads go to primary")
-	}
-
-
-	recorder := &audit.PGRecorder{Pool: pools.Auth}
-
-
-	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
-		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
-		go func() {
-			err := debugpkg.Serve(debugpkg.Config{
-				Enabled:       true,
-				Bind:          os.Getenv("DOMAIN_DEBUG_BIND"),
-				Port:          port,
-				AuthUser:      os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
-				AuthPass:      os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
-				AuditRecorder: recorder,
-				Metrics:       metricsReg,
-			}, logger)
-			if err != nil && err != http.ErrServerClosed {
-				logger.Error("debug server failed", slog.Any("err", err))
-			}
-		}()
-	}
-
-
-	clientService := clientsvc.NewService(pools.App, recorder, nil)
-	capturedPromptService := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
-	projectRepoService := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
-	projectPolicyService := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
-	ticketService := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
-
-
-	sessionSvc := session.New(pools.Auth)
-
-	eventBus := events.NewBus()
-	ticketService.SetEventSink(func(topic string, t *ticketsvc.Ticket, actor uuid.UUID, payload map[string]any) {
-		if t == nil {
-			return
-		}
-		var actorPtr *uuid.UUID
-		if actor != uuid.Nil {
-			a := actor
-			actorPtr = &a
-		}
-		tid := t.ID
-		eventBus.Publish(events.Event{
-			OrgID:    uuid.Nil,
-			Topic:    topic,
-			TicketID: &tid,
-			ActorID:  actorPtr,
-			Payload:  payload,
-		})
-	})
-
-
-	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
-		WithClientService(clientService)
-
-	embedder := chooseEmbedder(logger)
-	obsService := observation.NewService(pools.App, recorder, embedder, nil, nil)
-
-
-	var otpMailer otp.Mailer
-	if cfg.SMTPHost != "" {
-		realMailer := smtpmail.New(smtpmail.Config{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
-			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
-			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
-		})
-		otpMailer = realMailer
-		logger.Info("SMTP mailer configured", slog.String("host", cfg.SMTPHost))
-	} else {
-		logger.Warn("SMTP not configured — OTP no enviará mails reales (DOMAIN_SMTP_HOST missing)")
-	}
-
-
-	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
-	timelineService := &timelinesvc.Service{Pool: pools.App}
-	searchService := &searchsvc.Service{Pool: pools.App}
-	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
-	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
-	flowService := flow.NewService(pools.App, recorder, nil)
-	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
-	agentService := agentsvc.NewService(pools.App, recorder, nil)
-	billingService := &billing.Service{Pool: pools.App}
-	costService := &cost.Service{Pool: pools.App}
-
-
+	defer poolsClose()
 
 	otelSampleRatio := 0.1
 	if v := os.Getenv("DOMAIN_OTEL_SAMPLE_RATIO"); v != "" {
@@ -460,9 +280,7 @@ func runServer() {
 			otelSampleRatio = f
 		}
 	}
-
-
-	otelShutdown, oTelErr := tracing.Setup(context.Background(), tracing.Config{
+	otelShutdown, oTelErr := tracing.Setup(ctx, tracing.Config{
 		Enabled:      os.Getenv("DOMAIN_OTEL_ENABLED") == "true",
 		OTLPEndpoint: envOr("DOMAIN_OTEL_ENDPOINT", "localhost:4317"),
 		ServiceName:  "domain",
@@ -475,25 +293,17 @@ func runServer() {
 		logger.Error("tracing setup failed", slog.Any("err", oTelErr))
 		os.Exit(1)
 	}
-	defer otelShutdown(context.Background())
-
+	defer otelShutdown(ctx)
 
 	seedRegistry := seeds.NewRegistry()
-
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
-
-
-
 	seedRegistry.Register(&seeds.SkillsCatalogSeeder{})
 	seedRegistry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	seedRegistry.Register(&seeds.FlowsCatalogSeeder{})
-
 	seedRegistry.Register(&seeds.TriagePromptSeeder{})
-
 	seedRegistry.Register(&seeds.AnalysisPromptSeeder{})
-
 	seedRegistry.Register(&seeds.WizardFormulatorPromptSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
@@ -508,683 +318,46 @@ func runServer() {
 		)
 	}
 
-
-	var masterCipher *crypto.Cipher
-	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
-		c, err := crypto.LoadFromBase64(mk)
-		if err != nil {
-			logger.Warn("DOMAIN_MASTER_KEY invalid; outbound webhook secrets will fail",
-				slog.String("error", err.Error()))
-		} else {
-			masterCipher = c
-		}
-	}
-	outboundWebhookService := &outboundwebhook.Service{Pool: pools.App, Cipher: masterCipher}
-
-
-	var inboundWebhookService *webhooksvc.Service
-	if masterCipher != nil {
-		inboundWebhookService = &webhooksvc.Service{Pool: pools.App, Audit: recorder, Crypto: masterCipher}
-	}
-	outboundDispatcher := &outboundwebhook.Dispatcher{
-		Pool: pools.App, Svc: outboundWebhookService,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
-		Logger:     logger,
-	}
-	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
-
-
-
-
-	llmFactory := llm.NewFactory()
-	cbCfg := circuitbreaker.Config{
-		FailureThreshold: 5,
-		RecoveryTimeout:  30 * time.Second,
-	}
-	maxConc := 8
-	if v := os.Getenv("DOMAIN_LLM_MAX_CONCURRENT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxConc = n
-		}
-	}
-	wrapLLM := func(p llm.Provider) llm.Provider {
-		return circuitbreaker.New(
-			llmratelimit.New(llmretry.New(p, llmretry.Config{}), maxConc), cbCfg)
-	}
-	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
-		llmFactory.Register("anthropic", wrapLLM(anthropic.New(k)))
-	}
-	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
-		llmFactory.Register("openai", wrapLLM(llmopenai.New(k)))
-	}
-	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
-		llmFactory.Register("google", wrapLLM(google.New(k)))
-	}
-	llmFactory.Register("ollama", wrapLLM(ollama.New()))
-	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
-		llmFactory.SetDefault(def, def)
+	svc, err := buildServices(ctx, cfg, pools, logger, metricsReg)
+	if err != nil {
+		logger.Error("buildServices failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 
-	skillRunnerInst := skillrunner.New()
-
-	modelRegistry := llmregistry.New()
-	var alertEmailSender usagealerts.EmailSender
-	if cfg.SMTPHost != "" {
-		alertEmailSender = usagealerts.NewSMTPEmailSender(smtpmail.New(smtpmail.Config{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
-			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
-			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
-		}))
-	}
-	usageAlertsService := &usagealerts.Service{
-		Pool:        pools.App,
-		EmailSender: alertEmailSender,
-		Logger:      logger,
-	}
-	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
-	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
-	policyService := &policy.Service{Pool: pools.App}
-
-
-	issuebuilderSvc := &issuebuilder.Service{
-		Pool: pools.App, Audit: recorder, DraftTTLHrs: 24,
-	}
-
-
-	intakeSvc := &intakesvc.Service{Pool: pools.App, Audit: recorder}
-
-
-
-	var promptClassifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
-	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
-		promptClassifier = &promptrouter.LLMClassifier{
-			Provider: anthropicProv,
-			Model:    "claude-haiku-4-5-20251001",
-			Fallback: promptrouter.HeuristicClassifier{},
-
-
-
-			PromptLoader: func(ctx context.Context) (string, error) {
-				p, err := promptService.GetActive(ctx, uuid.Nil, nil, "triage")
-				if err != nil {
-					return "", err
-				}
-				return p.Body, nil
-			},
-		}
-		logger.Info("prompt classifier: LLM anthropic con fallback heurístico")
-	} else {
-		logger.Info("prompt classifier: heurístico (no anthropic provider)")
-	}
-
-	wizardAnalyzer := &wp.Analyzer{
-		Classifier: &promptrouter.WizardplanAdapter{Inner: promptClassifier},
-		Sources: []wp.Source{
-			&wpsources.IssueDedupSource{Pool: pools.App, Limit: 5},
-			&wpsources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
-			&wpsources.MemorySource{Search: searchService, Limit: 5},
-		},
-		Timeout: 10 * time.Second,
-	}
-	wizardPlanner := &wp.Planner{}
-
-	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
-		wizardPlanner.QuestionFormulator = &wp.LLMQuestionFormulator{
-			Provider: anthropicProv,
-			Model:    "claude-haiku-4-5-20251001",
-
-
-			PromptLoader: func(ctx context.Context) (string, error) {
-				p, err := promptService.GetActive(ctx, uuid.Nil, nil, "wizard-formulator")
-				if err != nil {
-					return "", err
-				}
-				return p.Body, nil
-			},
-		}
-	}
-
-	issuebuilderAdaptive := &issuebuilder.AdaptiveService{
-		Service:  issuebuilderSvc,
-		Analyzer: wizardAnalyzer,
-		Planner:  wizardPlanner,
-	}
-
-
-
-
-	orchPhases := phases.NewRegistry()
-	orchPhases.MustRegister(phases.NewSDDExploreHandler())
-	orchPhases.MustRegister(phases.NewSDDSpecHandler())
-	orchPhases.MustRegister(phases.NewSDDProposeHandler())
-	orchPhases.MustRegister(phases.NewSDDDesignHandler())
-	orchPhases.MustRegister(phases.NewSDDTasksHandler())
-	orchPhases.MustRegister(phases.NewSDDApplyHandler())
-	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
-	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
-	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
-	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
-	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
-	orchestratorSvc.LLM = llmFactory
-	orchestratorSvc.Skills = skillService
-
-
-	analysisSvc := &analysissvc.Service{
-		Pool: pools.App, Audit: recorder, LLM: llmFactory,
-		Knowledge: knowledgeService, Observation: obsService,
-
-
-		PromptLoader: func(ctx context.Context) (string, error) {
-			p, err := promptService.GetActive(ctx, uuid.Nil, nil, "analysis")
-			if err != nil {
-				return "", err
+	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
+		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
+		go func() {
+			err := debugpkg.Serve(debugpkg.Config{
+				Enabled:       true,
+				Bind:          os.Getenv("DOMAIN_DEBUG_BIND"),
+				Port:          port,
+				AuthUser:      os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
+				AuthPass:      os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
+				AuditRecorder: svc.Recorder,
+				Metrics:       metricsReg,
+			}, logger)
+			if err != nil && err != http.ErrServerClosed {
+				logger.Error("debug server failed", slog.Any("err", err))
 			}
-			return p.Body, nil
-		},
+		}()
 	}
 
-	promptRouterSvc := &promptrouter.Router{
-		IntakeService:       intakeSvc,
-		IssueBuilderService: issuebuilderSvc,
-		Classifier:          promptClassifier,
-		Orchestrator:        orchestratorSvc,
-		AnalysisService:     &analysisRunnerAdapter{inner: analysisSvc},
-	}
-
-
-	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
-
-	dbStatsService := &dbstats.Service{Pool: pools.App}
-
-	outboundEmitter := &outboundwebhook.RunnerEmitter{
-		Dispatcher:  outboundDispatcher,
-		Logger:      logger,
-		UsageAlerts: usageAlertsService.AsUsageAlerter(),
-	}
-
-	obsService.Events = outboundEmitter
-	agentRunnerInst := &agentrunner.Runner{
-		Pool: pools.App, Audit: recorder, Factory: llmFactory,
-		Agents: agentService, Skills: skillService,
-		SkillRunner: skillRunnerInst, Models: modelRegistry,
-		Emitter: outboundEmitter, Metrics: metricsReg,
-	}
-	flowRunnerInst := &flowrunner.Runner{
-		Pool: pools.App, Audit: recorder, Flows: flowService,
-		Agents: agentService, Skills: skillService, Observations: obsService,
-		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
-		Emitter: outboundEmitter, Metrics: metricsReg,
-		Signals: &flow.SignalStore{Pool: pools.App},
-
-	}
-
-
-
-
-	dispatcherAdapters := &dispatch.Adapters{
-		FlowRunner:  flowRunnerInst,
-		AgentRunner: agentRunnerInst,
-		SkillRunner: skillRunnerInst,
-		Agents:      agentService,
-		Skills:      skillService,
-	}
-	dispatcher := &dispatch.Dispatcher{
-		RunFlow:  dispatcherAdapters.RunFlowForDispatcher(),
-		RunAgent: dispatcherAdapters.RunAgentForDispatcher(),
-		RunSkill: dispatcherAdapters.RunSkillForDispatcher(),
-		Metrics:  &dispatch.PromMetricsRecorder{Reg: metricsReg},
-		Logger:   logger,
-		SourceValidator: func(s string) bool {
-			return s == dispatch.SourceCron || s == dispatch.SourceWebhook ||
-				s == dispatch.SourceMCP || s == dispatch.SourceManual
-		},
-	}
-
-
-	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
-	scheduler := &cronsched.Scheduler{
-		Crons: cronService,
-		Audit: recorder, Logger: logger, Dispatcher: dispatcher,
-	}
-	leaderElection := &leader.Election{
-		Pool: pools.App, LockKey: leader.LockKeyCronScheduler,
-		PollPeriod: 10 * time.Second, Logger: logger,
-	}
-	schedCtx, schedCancel := context.WithCancel(context.Background())
-	go leaderElection.RunAsLeader(schedCtx, func(leaderCtx context.Context) {
-
-
-
-
-		go flowRunnerInst.RunRecovery(leaderCtx, flowrunner.RecoveryConfig{
-			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
-		})
-		go runOutboundDispatcher(leaderCtx, outboundDispatcher, logger)
-		go runDBStatsAnalyzer(leaderCtx, dbStatsService, metricsReg, logger)
-		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
-
-		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
-		go runAuditPruneScheduler(leaderCtx, recorder, logger)
-		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
-
-		if cfg.HeartbeatWatcherEnabled {
-			watcher := &systemcron.HeartbeatWatcher{
-				Pool:    pools.App,
-				Metrics: metricsReg,
-				Timeout: time.Duration(cfg.HeartbeatWatcherTimeoutMinutes) * time.Minute,
-				Tick:    time.Duration(cfg.HeartbeatWatcherTickSeconds) * time.Second,
-				Logger:  logger,
-			}
-			go watcher.Start(leaderCtx)
-		}
-
-		go runFlowVersionArchiver(leaderCtx, pools.App, logger)
-
-		if cfg.OrphanAuditEnabled {
-			auditor := &systemcron.OrphanAuditor{
-				Pool:    pools.App,
-				Metrics: metricsReg,
-				Tick:    24 * time.Hour,
-				Batch:   1000,
-				Logger:  logger,
-			}
-			go auditor.Start(leaderCtx)
-		}
-		scheduler.Run(leaderCtx)
-	})
-	defer schedCancel()
-	apiKeyStore := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
-	otpUserLookup := &otpUserLookupAdapter{pool: pools.Auth}
-	otpService := &otp.Service{
-		Pool:  pools.Auth,
-		Users: otpUserLookup,
-		Mail:  otpMailer,
-	}
-
-	activityStore := &activity.PGStore{Pool: pools.App}
-	secretsStore := &secrets.PGStore{Pool: pools.App, Cipher: masterCipher}
-
-
-	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
-	refillRate := float64(cfg.RateLimitRequests) / windowDur.Seconds()
-	rateLimiter := ratelimit.New(cfg.RateLimitRequests, refillRate)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			rateLimiter.Cleanup(10 * time.Minute)
-		}
-	}()
-
-	otpRateLimiter := ratelimit.New(5, 5.0/60.0)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			otpRateLimiter.Cleanup(10 * time.Minute)
-		}
-	}()
-
-	rbacChecker := &rbac.Checker{}
-	requirementService := &reqsvc.Service{Pool: pools.App, Audit: recorder}
-	huService := &usvc.Service{Pool: pools.App, Audit: recorder}
-
-	specService := &specsvc.Service{Pool: pools.App, Audit: recorder}
-	taskService := &tsvc.Service{Pool: pools.App, Audit: recorder}
-	traceService := &tracesvc.Service{Pool: pools.App}
-
-
-	var attachmentService *attSvc.Service
-	if cfg.S3Bucket != "" {
-		s3Client, err := s3client.New(s3client.Config{
-			Endpoint: cfg.S3Endpoint,
-			Region:   cfg.S3Region,
-			Bucket:   cfg.S3Bucket,
-			Key:      cfg.S3AccessKey,
-			Secret:   cfg.S3SecretKey,
-		})
-		if err != nil {
-			logger.Warn("s3 client init failed; attachments disabled", slog.Any("err", err))
-		} else {
-			attachmentService = &attSvc.Service{Pool: pools.App, S3: s3Client, Audit: recorder}
-			logger.Info("s3 storage configured",
-				slog.String("bucket", cfg.S3Bucket),
-				slog.String("endpoint", cfg.S3Endpoint),
-			)
-		}
-	} else {
-		logger.Warn("DOMAIN_S3_BUCKET not set; file attachments disabled")
-	}
-
-
-
-	if attachmentService != nil {
-		issuebuilderSvc.Attachments = &issuebuilder.AttachmentServiceAdapter{Inner: attachmentService}
-	}
-
-
-
-
-	issuebuilderSvc.ReqSvc = &issuebuilder.RequirementServiceAdapter{Inner: requirementService}
-	issuebuilderSvc.IssueSvc = &issuebuilder.IssueServiceAdapter{Inner: huService}
-
-	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
-
-	api := &handler.API{
-		ProjectService:        projectService,
-		ClientService:         clientService,
-		TicketService:         ticketService,
-		EventBus:              eventBus,
-		AuthSessionService:    sessionSvc,
-		CapturedPromptService: capturedPromptService,
-		ProjectRepoService:    projectRepoService,
-		ProjectPolicyService:  projectPolicyService,
-		Pool:                  pools.App,
-		ObsService:            obsService,
-		PromptService:         promptService,
-		TimelineService:       timelineService,
-		SearchService:         searchService,
-		KnowledgeService:      knowledgeService,
-		LifecycleService:      lifecycleService,
-		SkillService:          skillService,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: skillService,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   skillRunnerInst,
-		},
-		AgentService:              agentService,
-		AgentRunner:               agentRunnerInst,
-		FlowService:               flowService,
-		FlowRunner:                flowRunnerInst,
-		CronService:               cronService,
-		WebhookService:            inboundWebhookService,
-		Dispatcher:                dispatcher, // issue-35.1
-		CostService:               costService,
-		BillingService:            billingService,
-		OutboundWebhookService:    outboundWebhookService,
-		OutboundWebhookDispatcher: outboundDispatcher,
-		OutboundWebhookRequireTLS: outboundRequireTLS,
-		Backpressure:              &backpressure.Limiter{Pool: pools.App},
-		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
-		UsageAlertsService:        usageAlertsService,
-		UsageSnapshot:             &usagesvc.Service{Pool: pools.App},
-		Enrollment:                &enrollsvc.Service{Pool: pools.App, Audit: recorder},
-		MCPServerService:          mcpServerService,
-		ProjectTemplateService:    projectTemplateService,
-		PolicyService:             policyService,
-		DBStatsService:            dbStatsService,
-		Hubuilder:                 issuebuilderSvc,
-		Audit:                     recorder,
-		ActivityRecorder:          activityStore,
-		ActivityQuerier:           activityStore,
-		OTPService:                otpService,
-		OTPRateLimiter:            otpRateLimiter,
-		APIKeys:                   apiKeyStore,
-		Bootstrap:                 bootstrapsvc.New(pools.App),
-		SecretsStore:              secretsStore,
-		ReqService:                requirementService,
-		HUService:                 huService,
-		SpecService:               specService,
-		TaskService:               taskService,
-		TraceService:              traceService,
-		AttachmentService:         attachmentService,
-
-		IssueBuilderAdaptive: issuebuilderAdaptive,
-		IntakeService:        intakeSvc,
-		PromptRouter:         promptRouterSvc,
-		WorkflowImport:       workflowImportSvc,
-	}
-
-	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
-	mux := http.NewServeMux()
-	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
-	healthH := &httpserver.HealthHandler{Info: info, StartedAt: time.Now()}
-	mux.Handle("/health", healthH)
-
-	mux.Handle("/healthz", healthH)
-	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
-
-
-	versionCatalog := versioning.NewCatalog("v1",
-		versioning.Version{Slug: "v1", State: versioning.StateActive})
-	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
-
-
-
-
-
-
-
-	corsMW := middleware.NewCORS(cfg.CORSOrigins, logger)
-	if !corsMW.Enabled() {
-		logger.Info("CORS not configured; set DOMAIN_CORS_ORIGINS to enable cross-origin requests")
-	} else {
-		logger.Info("CORS enabled", slog.Int("origins_count", len(cfg.CORSOrigins)))
-	}
-	requestLogMW := middleware.RequestLog(logger)
-	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
-
-	sessionResolver := func(ctx context.Context, plain string) (*apikey.Principal, func(context.Context) context.Context, error) {
-		active, err := sessionSvc.Resolve(ctx, plain)
-		if err != nil {
-			return nil, nil, err
-		}
-		p := &apikey.Principal{
-			UserID:         active.UserID.String(),
-			OrganizationID: active.OrganizationID.String(),
-		}
-		attacher := func(c context.Context) context.Context { return session.ToContext(c, active) }
-		return p, attacher, nil
-	}
-	authMW := &apikey.Middleware{
-		Resolver:        cachedResolver,
-		Allowlist:       handler.AuthAllowlist(),
-		Pool:            pools.App,
-		SessionResolver: sessionResolver,
-	}
-	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
-	auditMW := middleware.AuditMiddleware
-
-
-	activityMW := &activity.HTTPMiddleware{
-		Recorder: activityStore,
-		Logger:   logger,
-		Principal: func(r *http.Request) (uuid.UUID, *uuid.UUID, bool) {
-			p, ok := apikey.FromContext(r.Context())
-			if !ok || p == nil {
-				return uuid.Nil, nil, false
-			}
-			orgID, err := uuid.Parse(p.OrganizationID)
-			if err != nil {
-				return uuid.Nil, nil, false
-			}
-			var actor *uuid.UUID
-			if uid, err := uuid.Parse(p.UserID); err == nil {
-				actor = &uid
-			}
-			return orgID, actor, true
-		},
-	}
-	mux.Handle("/api/", corsMW.Wrap(
-		versionCatalog.Middleware(
-			requestLogMW(
-				authMW.Wrap(
-					middleware.PrincipalCtx(
-						rateLimitMW.Wrap(
-							auditMW(activityMW.Wrap(api.Router())))))))))
-
-
-
-
-
-
+	wireServices(svc)
+	runners := buildRunners(ctx, cfg, pools, svc, metricsReg, logger)
+	defer runners.SchedCancel()
 
 	queryCacheLRU := mcpQueryCache()
-
-	go runReq70Reporter(ctx, metricsReg, queryCacheLRU, eventBus, pools.App, logger)
-
-	mcpBuilder := &mcphttpserver.Builder{
-		Base: mcptools.Deps{
-			Observations: obsService,
-			Projects:     projectService,
-			Prompts:      promptService,
-			Timeline:     timelineService,
-			Search:       searchService,
-			Knowledge:    knowledgeService,
-			Skills:       skillService,
-			SkillExecution: &skillsvc.ExecutionService{
-				Pool: pools.App, Skills: skillService,
-				Versions: &skillsvc.VersionStore{Pool: pools.App},
-				Runner:   skillRunnerInst,
-			},
-			Agents:          agentService,
-			AgentRunner:     agentRunnerInst,
-			Crons:           cronService,
-			Clients:         clientService,
-			CapturedPrompts: capturedPromptService,
-			ProjectRepos:    projectRepoService,
-			ProjectPolicies: projectPolicyService,
-			Tickets:         ticketService,
-			Policies:        policyService,
-			Flows:           flowService,
-			FlowRunner:      flowRunnerInst,
-			Hubuilder:       issuebuilderSvc,
-			Intake:          intakeSvc,
-			Orchestrator:    orchestratorSvc,
-			PromptRouter:    promptRouterSvc,
-			WorkflowImport:  workflowImportSvc,
-			Pool:            pools.App,
-			Dispatcher:      dispatcher,
-			ServerName:      "domain-mcp-http",
-			ServerVer:       Version,
-
-
-
-			SharedCache: queryCacheLRU,
-
-			MetricsOnToolCall: func(tool, status string, dur float64) {
-				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
-				if status != "cache_hit" {
-					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
-				}
-			},
-			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
-			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
-		},
-	}
-	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver)
-	mux.Handle("/mcp", mcpHTTPHandler)
-	mux.Handle("/mcp/", mcpHTTPHandler)
-	logger.Info("MCP HTTP transport mounted",
-		slog.String("path", "/mcp"),
-		slog.String("auth", "Bearer api_key"))
-
-
-
-
-
-
-	handler := httpserver.RecoverMiddleware(logger)(
-		metricsReg.HTTPMiddleware(
-			tracing.HTTPMiddleware("domain")(mux),
-		),
-	)
+	httpHandler := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),
-		slog.String("addr", addr),
+		slog.String("addr", fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)),
 		slog.String("env", cfg.Env),
 		slog.Bool("metrics_enabled", cfg.MetricsEnabled),
 	)
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second,
-		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
-	}
-
-
-
-
-
-	shutdownCh := make(chan os.Signal, 1)
-	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-shutdownCh
-		shutdownStart := time.Now()
-		logger.Info("shutdown signal received", slog.String("signal", sig.String()))
-
-
-
-		grace := 5 * time.Second
-		if v := os.Getenv("DOMAIN_SHUTDOWN_GRACE_SECONDS"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 25 {
-				grace = time.Duration(n) * time.Second
-			}
-		}
-		httpserver.ShuttingDown.Store(true)
-		logger.Info("readiness flipped → unhealthy; waiting ELB drain",
-			slog.Duration("grace", grace))
-		time.Sleep(grace)
-
-
-		httpCtx, httpCancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer httpCancel()
-		forced := false
-		if err := srv.Shutdown(httpCtx); err != nil {
-			logger.Warn("http shutdown forced after timeout", slog.Any("err", err))
-			forced = true
-		}
-
-
-		schedCancel()
-
-
-		duration := time.Since(shutdownStart).Seconds()
-		logger.Info("graceful shutdown complete",
-			slog.Float64("duration_s", duration),
-			slog.Bool("forced", forced))
-	}()
-
-
-
-
-
-
-
-
-
-	listenErrCh := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			listenErrCh <- err
-		} else {
-			listenErrCh <- nil
-		}
-	}()
-
-
-
-
-
-	go func() {
-		time.Sleep(2 * time.Second)
-		for i := 0; i < 3; i++ {
-			if err := httpserver.ProbeHealth(cfg.HTTPPort); err == nil {
-				return
-			}
-			time.Sleep(1 * time.Second)
-		}
-		logger.Error("FATAL: health-check post-bind failed 3x — listener not responding",
-			slog.Int("port", cfg.HTTPPort))
-		os.Exit(1)
-	}()
-
-	if err := <-listenErrCh; err != nil {
-		logger.Error("FATAL: HTTP listener failed", slog.Any("err", err))
-		os.Exit(1)
-	}
+	startBackground(ctx, cfg, pools, svc, runners, metricsReg, httpHandler, queryCacheLRU, logger)
 }
+
 
 func runHealthcheckProbe() {
 	cfg, err := config.Load()

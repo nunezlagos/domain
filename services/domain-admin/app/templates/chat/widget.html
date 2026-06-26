@@ -38,6 +38,14 @@
   </header>
 
   <aside class="llm-widget-sidebar" id="llm-widget-sidebar">
+    <div class="llm-widget-sidebar-header">
+      <span class="llm-widget-sidebar-title">Conversaciones</span>
+      <button type="button" id="btn-toggle-list" class="llm-widget-btn" title="Ocultar lista" style="color: var(--color-text-secondary);">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+    </div>
     <div class="llm-widget-search">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/>
@@ -46,19 +54,11 @@
       <input
         type="search"
         id="chat-search-input"
-        placeholder="Buscar conversaciones..."
+        placeholder="Buscar..."
         autocomplete="off">
     </div>
     <div class="llm-widget-list" id="chat-list">
       <div class="llm-widget-list-empty">Cargando...</div>
-    </div>
-    <div class="llm-widget-sidebar-footer">
-      <button type="button" id="btn-toggle-list" class="llm-widget-footer-btn" title="Ocultar lista">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
-        Ocultar lista
-      </button>
     </div>
   </aside>
 
@@ -97,7 +97,7 @@
     </button>
 
     <form class="llm-widget-input-wrap" id="chat-form">
-      <div class="llm-widget-input-shell">
+      <div class="llm-widget-input-shell" id="chat-input-shell">
         <textarea
           id="chat-input"
           placeholder="Escribi tu pregunta..."
@@ -105,8 +105,13 @@
           maxlength="4000"
           autocomplete="off"></textarea>
         <button type="submit" id="btn-send" class="llm-widget-send" title="Enviar (Enter)" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-stop" class="llm-widget-stop" title="Detener" style="display:none">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="1"/>
           </svg>
         </button>
       </div>

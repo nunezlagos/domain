@@ -1,14 +1,17 @@
-/* HU-49.3: cliente del chat widget estilo burbuja.
+/* HU-49.3: cliente del chat widget estilo burbuja (ChatGPT-style).
 
-   Comportamiento:
    - Boton flotante visible en todas las paginas del admin
-   - Click en burbuja -> abre/cierra popup
+   - Click -> abre/cierra popup con animacion pop-in/out
    - Click fuera o X -> cerrar
-   - Ctrl+K abre nueva conversacion (y abre el popup si esta cerrado)
-   - Sidebar colapsable dentro del popup
-   - Sugerencias clickeables que completan el input
+   - Ctrl+K abre nueva conversacion
+   - Sidebar colapsable con search
+   - Sugerencias clickeables completan el input
    - Polling cada 1.5s mientras el bot procesa
-   - Typing indicator animado
+   - Typing indicator: 3 dots animados + shimmer (estilo ChatGPT)
+   - Boton toggle: send (paper plane) -> stop (cuadrado rojo) durante polling
+   - Burbuja con badge de no leidos + pulse animation
+   - Auto-resize textarea hasta 120px
+   - Scroll inteligente + boton "ir al fondo"
 */
 
 (function () {
@@ -88,7 +91,7 @@
     clearUnread();
     setTimeout(() => {
       const input = $("chat-input");
-      if (input) input.focus();
+      if (input && !input.disabled) input.focus();
     }, 300);
   }
 
@@ -127,16 +130,20 @@
     if (bubble) bubble.classList.remove("has-unread");
   }
 
+  /* ============================================================
+     RENDER: lista de conversaciones
+     ============================================================ */
+
   function renderConversations() {
     const list = $("chat-list");
     if (!list) return;
     const convs = state.filteredConversations;
     if (state.conversations.length === 0) {
-      list.innerHTML = '<div class="llm-widget-list-empty">Aun no tienes conversaciones.</div>';
+      list.innerHTML = '<div class="llm-widget-list-empty">Aun no tienes conversaciones.<br>Empezá una nueva con el boton +.</div>';
       return;
     }
     if (convs.length === 0) {
-      list.innerHTML = '<div class="llm-widget-list-empty">Sin resultados.</div>';
+      list.innerHTML = '<div class="llm-widget-list-empty">Sin resultados para la busqueda.</div>';
       return;
     }
     const titleCounts = {};
@@ -148,13 +155,22 @@
       const active = c.id === state.activeId ? " active" : "";
       const baseTitle = (c.title || "Nueva conversacion").trim();
       const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
-      const title = dupCount > 1 ? `${baseTitle} (${shortTime(c.created_at)})` : baseTitle;
+      const title = dupCount > 1 ? `${baseTitle} · ${shortTime(c.created_at)}` : baseTitle;
       const preview = (c.last_message_preview || "").slice(0, 50);
       return `
-        <div class="llm-widget-item${active}" data-id="${c.id}">
-          <div class="llm-widget-item-title">${escapeHtml(title)}</div>
+        <div class="llm-widget-item${active}" data-id="${c.id}" title="${escapeHtml(c.title || 'Nueva conversacion')}">
+          <div class="llm-widget-item-title">
+            <span class="llm-widget-item-dot"></span>
+            <span>${escapeHtml(title)}</span>
+          </div>
           ${preview ? `<div class="llm-widget-item-preview">${escapeHtml(preview)}</div>` : ""}
-          <div class="llm-widget-item-time">${relativeTime(c.updated_at)}</div>
+          <div class="llm-widget-item-time">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            ${relativeTime(c.updated_at)}
+          </div>
         </div>`;
     }).join("");
     list.querySelectorAll(".llm-widget-item").forEach((el) => {
@@ -186,6 +202,10 @@
     };
   }
 
+  /* ============================================================
+     RENDER: mensajes + typing indicator
+     ============================================================ */
+
   function renderSources(sources) {
     if (!sources || sources.length === 0) return "";
     return (
@@ -210,6 +230,20 @@
     }
   }
 
+  function renderTypingBubble(text) {
+    return `<div class="llm-widget-pending">
+      <div class="llm-widget-msg-avatar" style="background: var(--color-accent); color: var(--color-text-inverse);">B</div>
+      <div class="llm-widget-pending-bubble">
+        <span class="llm-widget-pending-dots">
+          <span class="llm-widget-pending-dot"></span>
+          <span class="llm-widget-pending-dot"></span>
+          <span class="llm-widget-pending-dot"></span>
+        </span>
+        ${text ? `<span class="llm-widget-pending-text">${escapeHtml(text)}</span>` : ""}
+      </div>
+    </div>`;
+  }
+
   function renderMessage(msg) {
     const isUser = msg.role === "user";
     const isPending = msg.status === "pending";
@@ -218,19 +252,29 @@
     const content = msg.content || msg.content_partial || "";
 
     if (isPending) {
-      return `<div class="llm-widget-pending">
-        <div class="llm-widget-spinner"></div>
-        <span>Pensando...</span>
-      </div>`;
+      return renderTypingBubble("Pensando...");
     }
     if (isProcessing && !content) {
-      return `<div class="llm-widget-pending">
-        <div class="llm-widget-spinner"></div>
-        <span>Generando respuesta...</span>
+      return renderTypingBubble("Generando respuesta...");
+    }
+    if (isProcessing && content) {
+      const processedHtml = renderMarkdown(content);
+      return `<div class="llm-widget-msg llm-widget-msg-assistant">
+        <div class="llm-widget-msg-avatar" style="background: var(--color-accent); color: var(--color-text-inverse);">B</div>
+        <div>
+          <div class="llm-widget-msg-bubble">${processedHtml}</div>
+          <div style="margin-top: 4px;">
+            <span class="llm-widget-pending-dots">
+              <span class="llm-widget-pending-dot"></span>
+              <span class="llm-widget-pending-dot"></span>
+              <span class="llm-widget-pending-dot"></span>
+            </span>
+          </div>
+        </div>
       </div>`;
     }
 
-    const cls = isUser ? "llm-widget-msg-user" : isError ? "llm-widget-msg-assistant" : "llm-widget-msg-assistant";
+    const cls = "llm-widget-msg-" + (isUser ? "user" : "assistant");
     const avatar = isUser ? "U" : "B";
     const errorCls = isError ? " llm-widget-msg-error" : "";
 
@@ -246,7 +290,9 @@
 
     return `<div class="llm-widget-msg ${cls}">
       <div class="llm-widget-msg-avatar">${avatar}</div>
-      <div class="llm-widget-msg-bubble${errorCls}">${html}${sourcesHtml}${meta}</div>
+      <div>
+        <div class="llm-widget-msg-bubble${errorCls}">${html}${sourcesHtml}${meta}</div>
+      </div>
     </div>`;
   }
 
@@ -286,6 +332,10 @@
     }
   }
 
+  /* ============================================================
+     API: conversaciones + mensajes
+     ============================================================ */
+
   async function loadConversations() {
     try {
       const data = await apiFetch("/conversations");
@@ -322,22 +372,34 @@
     }
   }
 
+  /* ============================================================
+     STATE: enviar / stop
+     ============================================================ */
+
   function setSendingState(sending) {
     const input = $("chat-input");
-    const btn = $("btn-send");
-    if (!input || !btn) return;
+    const btnSend = $("btn-send");
+    const btnStop = $("btn-stop");
+    const shell = $("chat-input-shell");
+    if (!input || !btnSend || !btnStop || !shell) return;
+
     input.disabled = sending;
-    btn.disabled = sending;
-    if (sending) input.placeholder = "Esperando respuesta...";
-    else input.placeholder = "Escribi tu pregunta...";
+    if (sending) {
+      input.placeholder = "Esperando respuesta...";
+      btnSend.style.display = "none";
+      btnStop.style.display = "flex";
+      shell.classList.add("processing");
+    } else {
+      input.placeholder = "Escribi tu pregunta...";
+      btnSend.style.display = "flex";
+      btnStop.style.display = "none";
+      shell.classList.remove("processing");
+      input.focus();
+    }
   }
 
   async function selectConversation(id) {
-    if (state.pollingId) {
-      state.pollingAbort = true;
-      clearTimeout(state.pollingId);
-      state.pollingId = null;
-    }
+    stopPolling();
     state.activeId = id;
     state.messages = [];
     document.querySelectorAll(".llm-widget-item").forEach((el) => {
@@ -352,6 +414,7 @@
     if (!text || !state.activeId) return;
     input.value = "";
     autoResizeTextarea();
+    updateSendButton();
     setSendingState(true);
     const tempMsg = {
       id: -Date.now(),
@@ -395,7 +458,7 @@
         else state.messages.push(msg);
         renderMessages();
         if (msg.status === "completed" || msg.status === "error") {
-          state.pollingId = null;
+          stopPolling();
           setSendingState(false);
           loadConversations();
           return;
@@ -406,11 +469,42 @@
     state.pollingId = setTimeout(tick, POLL_INTERVAL_MS);
   }
 
+  function stopPolling() {
+    if (state.pollingId) {
+      state.pollingAbort = true;
+      clearTimeout(state.pollingId);
+      state.pollingId = null;
+    }
+  }
+
+  function handleStop() {
+    stopPolling();
+    setSendingState(false);
+    if (state.messages.length > 0) {
+      const lastMsg = state.messages[state.messages.length - 1];
+      if (lastMsg && (lastMsg.status === "pending" || lastMsg.status === "processing")) {
+        lastMsg.status = "error";
+        lastMsg.content_partial = null;
+        lastMsg.content = "Generacion detenida por el usuario.";
+        lastMsg.error_message = "stopped_by_user";
+        renderMessages();
+      }
+    }
+  }
+
   function autoResizeTextarea() {
     const textarea = $("chat-input");
     if (!textarea) return;
     textarea.style.height = "auto";
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+  }
+
+  function updateSendButton() {
+    const input = $("chat-input");
+    const btn = $("btn-send");
+    if (!input || !btn) return;
+    if (input.disabled) return;
+    btn.disabled = !input.value.trim();
   }
 
   function handleSuggestionClick(e) {
@@ -419,32 +513,24 @@
     const q = btn.dataset.q;
     if (!q) return;
     if (!state.activeId) {
-      createConversation().then(() => {
-        const input = $("chat-input");
-        if (input) {
-          input.value = q;
-          input.focus();
-          autoResizeTextarea();
-          updateSendButton();
-        }
-      });
+      createConversation().then(() => fillInput(q));
     } else {
-      const input = $("chat-input");
-      if (input) {
-        input.value = q;
-        input.focus();
-        autoResizeTextarea();
-        updateSendButton();
-      }
+      fillInput(q);
     }
   }
 
-  function updateSendButton() {
+  function fillInput(q) {
     const input = $("chat-input");
-    const btn = $("btn-send");
-    if (!input || !btn) return;
-    btn.disabled = !input.value.trim();
+    if (!input) return;
+    input.value = q;
+    input.focus();
+    autoResizeTextarea();
+    updateSendButton();
   }
+
+  /* ============================================================
+     BIND
+     ============================================================ */
 
   function bind() {
     const bubble = $("llm-bubble");
@@ -459,15 +545,16 @@
     const newBtn = $("btn-new-chat-widget");
     if (newBtn) newBtn.addEventListener("click", createConversation);
 
+    const stopBtn = $("btn-stop");
+    if (stopBtn) stopBtn.addEventListener("click", handleStop);
+
     const toggleListBtn = $("btn-toggle-list");
     const sidebar = $("llm-widget-sidebar");
     if (toggleListBtn && sidebar) {
       toggleListBtn.addEventListener("click", () => {
         sidebar.classList.toggle("collapsed");
         const isCollapsed = sidebar.classList.contains("collapsed");
-        toggleListBtn.innerHTML = isCollapsed
-          ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg> Mostrar lista'
-          : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Ocultar lista';
+        toggleListBtn.title = isCollapsed ? "Mostrar lista" : "Ocultar lista";
       });
     }
 
@@ -522,7 +609,7 @@
       textarea.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
-          sendMessage();
+          if (!textarea.disabled) sendMessage();
         }
       });
       textarea.addEventListener("input", () => {

@@ -119,8 +119,9 @@ func buildRouter(
 
 	mcpBuilder := &mcphttpserver.Builder{
 		Base: mcptools.Deps{
-			Observations: s.ObsService,
-			Projects:     s.ProjectService,
+			Observations:     s.ObsService,
+			ObservationEdges: s.ObsEdgeService,
+			Projects:         s.ProjectService,
 			Prompts:      s.PromptService,
 			Timeline:     s.TimelineService,
 			Search:       s.SearchService,

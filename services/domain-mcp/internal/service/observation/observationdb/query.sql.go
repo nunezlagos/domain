@@ -10,7 +10,152 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const closeEdgeValidTo = `-- name: CloseEdgeValidTo :execrows
+UPDATE knowledge_observation_edges
+SET valid_to = NOW()
+WHERE id = $1 AND deleted_at IS NULL AND valid_to IS NULL
+`
+
+func (q *Queries) CloseEdgeValidTo(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, closeEdgeValidTo, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const findEdgeCandidatesByEmbedding = `-- name: FindEdgeCandidatesByEmbedding :many
+SELECT o.id, o.project_id, o.created_by, o.session_id,
+       o.content, o.observation_type, o.tags, o.metadata,
+       o.created_at, o.updated_at,
+       (1 - (o.embedding <=> $1::text::vector))::float8 AS score
+FROM knowledge_observations o
+WHERE o.project_id = $2
+  AND o.deleted_at IS NULL
+  AND o.embedding IS NOT NULL
+  AND o.id <> $3
+  AND NOT EXISTS (
+    SELECT 1 FROM knowledge_observation_edges e
+    WHERE e.project_id = o.project_id
+      AND e.source_id = $3
+      AND e.target_id = o.id
+      AND e.deleted_at IS NULL
+      AND e.valid_to IS NULL
+  )
+ORDER BY o.embedding <=> $1::text::vector ASC
+LIMIT $4
+`
+
+type FindEdgeCandidatesByEmbeddingParams struct {
+	Embedding   string    `json:"embedding"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	SourceID    uuid.UUID `json:"source_id"`
+	ResultLimit int32     `json:"result_limit"`
+}
+
+type FindEdgeCandidatesByEmbeddingRow struct {
+	ID              uuid.UUID  `json:"id"`
+	ProjectID       uuid.UUID  `json:"project_id"`
+	CreatedBy       *uuid.UUID `json:"created_by"`
+	SessionID       *uuid.UUID `json:"session_id"`
+	Content         string     `json:"content"`
+	ObservationType string     `json:"observation_type"`
+	Tags            []string   `json:"tags"`
+	Metadata        []byte     `json:"metadata"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	Score           float64    `json:"score"`
+}
+
+// Candidatos a relacionar con source_id: top-K observations del mismo project
+// por similitud coseno, excluyendo la propia source y las que ya tienen arista
+// activa source->target. score = 1 - distancia coseno (1.0 = idénticas).
+func (q *Queries) FindEdgeCandidatesByEmbedding(ctx context.Context, arg FindEdgeCandidatesByEmbeddingParams) ([]FindEdgeCandidatesByEmbeddingRow, error) {
+	rows, err := q.db.Query(ctx, findEdgeCandidatesByEmbedding,
+		arg.Embedding,
+		arg.ProjectID,
+		arg.SourceID,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindEdgeCandidatesByEmbeddingRow
+	for rows.Next() {
+		var i FindEdgeCandidatesByEmbeddingRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.CreatedBy,
+			&i.SessionID,
+			&i.Content,
+			&i.ObservationType,
+			&i.Tags,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEdge = `-- name: GetEdge :one
+SELECT id, project_id, source_id, target_id, edge_type,
+       origin, confidence, valid_from, valid_to, note, metadata, created_by,
+       created_at, updated_at
+FROM knowledge_observation_edges
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type GetEdgeRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) GetEdge(ctx context.Context, id uuid.UUID) (GetEdgeRow, error) {
+	row := q.db.QueryRow(ctx, getEdge, id)
+	var i GetEdgeRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.SourceID,
+		&i.TargetID,
+		&i.EdgeType,
+		&i.Origin,
+		&i.Confidence,
+		&i.ValidFrom,
+		&i.ValidTo,
+		&i.Note,
+		&i.Metadata,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const getObservation = `-- name: GetObservation :one
 SELECT id, project_id, created_by, session_id,
@@ -43,6 +188,174 @@ func (q *Queries) GetObservation(ctx context.Context, id uuid.UUID) (GetObservat
 		&i.ObservationType,
 		&i.Tags,
 		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertEdge = `-- name: InsertEdge :one
+
+INSERT INTO knowledge_observation_edges
+   (project_id, source_id, target_id, edge_type, origin,
+    confidence, valid_from, note, metadata, created_by)
+ VALUES ($1,
+         $2, $3, $4,
+         $5, $6,
+         COALESCE($7::timestamptz, NOW()),
+         $8, $9, $10)
+ RETURNING id, project_id, source_id, target_id, edge_type,
+           origin, confidence, valid_from, valid_to, note, metadata, created_by,
+           created_at, updated_at
+`
+
+type InsertEdgeParams struct {
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  pgtype.Timestamptz `json:"valid_from"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+}
+
+type InsertEdgeRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+// ===========================================================================
+// Memory graph — aristas tipadas y bi-temporales entre knowledge_observations
+// (tabla knowledge_observation_edges, mig 000175). Aislamiento por project_id
+// (single-tenant): el handler resuelve el project vía slug/observation.
+// ===========================================================================
+func (q *Queries) InsertEdge(ctx context.Context, arg InsertEdgeParams) (InsertEdgeRow, error) {
+	row := q.db.QueryRow(ctx, insertEdge,
+		arg.ProjectID,
+		arg.SourceID,
+		arg.TargetID,
+		arg.EdgeType,
+		arg.Origin,
+		arg.Confidence,
+		arg.ValidFrom,
+		arg.Note,
+		arg.Metadata,
+		arg.CreatedBy,
+	)
+	var i InsertEdgeRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.SourceID,
+		&i.TargetID,
+		&i.EdgeType,
+		&i.Origin,
+		&i.Confidence,
+		&i.ValidFrom,
+		&i.ValidTo,
+		&i.Note,
+		&i.Metadata,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertEdgeIfAbsent = `-- name: InsertEdgeIfAbsent :one
+INSERT INTO knowledge_observation_edges
+   (project_id, source_id, target_id, edge_type, origin,
+    confidence, valid_from, note, metadata, created_by)
+ VALUES ($1,
+         $2, $3, $4,
+         $5, $6,
+         COALESCE($7::timestamptz, NOW()),
+         $8, $9, $10)
+ ON CONFLICT (project_id, source_id, target_id, edge_type)
+   WHERE deleted_at IS NULL AND valid_to IS NULL
+   DO NOTHING
+ RETURNING id, project_id, source_id, target_id, edge_type,
+           origin, confidence, valid_from, valid_to, note, metadata, created_by,
+           created_at, updated_at
+`
+
+type InsertEdgeIfAbsentParams struct {
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  pgtype.Timestamptz `json:"valid_from"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+}
+
+type InsertEdgeIfAbsentRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+// Inserción idempotente para inferencia masiva: si ya existe una arista activa
+// (mismo project/source/target/tipo, no borrada y vigente) NO inserta y NO lanza
+// excepción (evita abortar la tx con UniqueViolation/25P02 dentro del loop).
+// RETURNING vacío => no se insertó (ya existía). El conflict target replica el
+// predicado del índice único parcial de la mig 000175.
+func (q *Queries) InsertEdgeIfAbsent(ctx context.Context, arg InsertEdgeIfAbsentParams) (InsertEdgeIfAbsentRow, error) {
+	row := q.db.QueryRow(ctx, insertEdgeIfAbsent,
+		arg.ProjectID,
+		arg.SourceID,
+		arg.TargetID,
+		arg.EdgeType,
+		arg.Origin,
+		arg.Confidence,
+		arg.ValidFrom,
+		arg.Note,
+		arg.Metadata,
+		arg.CreatedBy,
+	)
+	var i InsertEdgeIfAbsentRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.SourceID,
+		&i.TargetID,
+		&i.EdgeType,
+		&i.Origin,
+		&i.Confidence,
+		&i.ValidFrom,
+		&i.ValidTo,
+		&i.Note,
+		&i.Metadata,
+		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -115,6 +428,217 @@ func (q *Queries) InsertObservation(ctx context.Context, arg InsertObservationPa
 	return i, err
 }
 
+const listEdgesByProject = `-- name: ListEdgesByProject :many
+SELECT id, project_id, source_id, target_id, edge_type,
+       origin, confidence, valid_from, valid_to, note, metadata, created_by,
+       created_at, updated_at
+FROM knowledge_observation_edges
+WHERE project_id = $1
+  AND deleted_at IS NULL
+  AND valid_to IS NULL
+  AND ($2::text IS NULL OR edge_type = $2::text)
+ORDER BY created_at DESC
+`
+
+type ListEdgesByProjectParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	EdgeType  *string   `json:"edge_type"`
+}
+
+type ListEdgesByProjectRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) ListEdgesByProject(ctx context.Context, arg ListEdgesByProjectParams) ([]ListEdgesByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listEdgesByProject, arg.ProjectID, arg.EdgeType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEdgesByProjectRow
+	for rows.Next() {
+		var i ListEdgesByProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.SourceID,
+			&i.TargetID,
+			&i.EdgeType,
+			&i.Origin,
+			&i.Confidence,
+			&i.ValidFrom,
+			&i.ValidTo,
+			&i.Note,
+			&i.Metadata,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEdgesBySource = `-- name: ListEdgesBySource :many
+SELECT id, project_id, source_id, target_id, edge_type,
+       origin, confidence, valid_from, valid_to, note, metadata, created_by,
+       created_at, updated_at
+FROM knowledge_observation_edges
+WHERE project_id = $1
+  AND source_id = $2
+  AND deleted_at IS NULL
+  AND valid_to IS NULL
+  AND ($3::text IS NULL OR edge_type = $3::text)
+ORDER BY created_at DESC
+`
+
+type ListEdgesBySourceParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	SourceID  uuid.UUID `json:"source_id"`
+	EdgeType  *string   `json:"edge_type"`
+}
+
+type ListEdgesBySourceRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) ListEdgesBySource(ctx context.Context, arg ListEdgesBySourceParams) ([]ListEdgesBySourceRow, error) {
+	rows, err := q.db.Query(ctx, listEdgesBySource, arg.ProjectID, arg.SourceID, arg.EdgeType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEdgesBySourceRow
+	for rows.Next() {
+		var i ListEdgesBySourceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.SourceID,
+			&i.TargetID,
+			&i.EdgeType,
+			&i.Origin,
+			&i.Confidence,
+			&i.ValidFrom,
+			&i.ValidTo,
+			&i.Note,
+			&i.Metadata,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEdgesByTarget = `-- name: ListEdgesByTarget :many
+SELECT id, project_id, source_id, target_id, edge_type,
+       origin, confidence, valid_from, valid_to, note, metadata, created_by,
+       created_at, updated_at
+FROM knowledge_observation_edges
+WHERE project_id = $1
+  AND target_id = $2
+  AND deleted_at IS NULL
+  AND valid_to IS NULL
+  AND ($3::text IS NULL OR edge_type = $3::text)
+ORDER BY created_at DESC
+`
+
+type ListEdgesByTargetParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	TargetID  uuid.UUID `json:"target_id"`
+	EdgeType  *string   `json:"edge_type"`
+}
+
+type ListEdgesByTargetRow struct {
+	ID         uuid.UUID          `json:"id"`
+	ProjectID  uuid.UUID          `json:"project_id"`
+	SourceID   uuid.UUID          `json:"source_id"`
+	TargetID   uuid.UUID          `json:"target_id"`
+	EdgeType   string             `json:"edge_type"`
+	Origin     string             `json:"origin"`
+	Confidence float32            `json:"confidence"`
+	ValidFrom  time.Time          `json:"valid_from"`
+	ValidTo    pgtype.Timestamptz `json:"valid_to"`
+	Note       *string            `json:"note"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedBy  *uuid.UUID         `json:"created_by"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) ListEdgesByTarget(ctx context.Context, arg ListEdgesByTargetParams) ([]ListEdgesByTargetRow, error) {
+	rows, err := q.db.Query(ctx, listEdgesByTarget, arg.ProjectID, arg.TargetID, arg.EdgeType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEdgesByTargetRow
+	for rows.Next() {
+		var i ListEdgesByTargetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.SourceID,
+			&i.TargetID,
+			&i.EdgeType,
+			&i.Origin,
+			&i.Confidence,
+			&i.ValidFrom,
+			&i.ValidTo,
+			&i.Note,
+			&i.Metadata,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listObservations = `-- name: ListObservations :many
 SELECT id, project_id, created_by, session_id,
        content, observation_type, tags, metadata, created_at, updated_at
@@ -171,6 +695,23 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const softDeleteEdge = `-- name: SoftDeleteEdge :execrows
+UPDATE knowledge_observation_edges
+SET deleted_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+// Borrado por id (single-tenant): 0 filas si no existe o ya fue borrada; el
+// service lo mapea a ErrEdgeNotFound. Mismo patrón que SoftDeleteObservation.
+func (q *Queries) SoftDeleteEdge(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteEdge, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const softDeleteObservation = `-- name: SoftDeleteObservation :execrows

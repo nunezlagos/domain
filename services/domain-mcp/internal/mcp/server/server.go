@@ -53,8 +53,9 @@ import (
 
 // Deps colecciona las dependencias del servidor MCP.
 type Deps struct {
-	Observations    *obssvc.Service
-	Projects        *projsvc.Service
+	Observations     *obssvc.Service
+	ObservationEdges *obssvc.EdgeService // fase 1 memory graph — aristas tipadas
+	Projects         *projsvc.Service
 	Prompts         *promptsvc.Service
 	Timeline        *timelinesvc.Service
 	Search          *searchsvc.Service
@@ -102,6 +103,7 @@ type toolRegistrar func(*ResilientWrapper, Deps) []mcpgo.ServerTool
 
 var toolGroups = []toolRegistrar{
 	registerMemoryTools,
+	registerMemoryGraphTools,
 	registerCatalogTools,
 	registerPolicyTools,
 	registerProjectTools,

@@ -552,40 +552,89 @@ class RetrievalService:
     scorer lexico (fallback sin API key). Esto permite tests sin
     dependencias externas.
 
-    Si el scoring (lexico o embedding) no encuentra nada por encima de
-    MIN_SCORE, se activa un "summary mode" que devuelve 1 chunk por tabla
-    principal para que el LLM tenga contexto amplio del sistema.
+    Estrategia de retrieval (permisiva, estilo chatbot):
+    1. Si la query es claramente general (count/list/resumen) y matchea
+       una tabla, devuelve aggregate counts.
+    2. Si la query matchea bien (lexical o embedding), devuelve top-K chunks.
+    3. SIEMPRE combina el contexto principal con un "background context"
+       minimo: 1 chunk por tabla principal + conteos. Asi el LLM nunca
+       se queda sin informacion para responder algo util.
     """
 
     def __init__(self, embedding_provider: EmbeddingProvider | None = None) -> None:
         self._embedder = embedding_provider
 
     def retrieve(self, question: str) -> RagContext:
-        """Dado una pregunta, devuelve el contexto RAG (chunks + sources)."""
+        """Dado una pregunta, devuelve el contexto RAG (chunks + sources).
+
+        NUNCA devuelve empty (salvo que la DB este totalmente vacia).
+        El LLM siempre tiene contexto amplio para responder algo util.
+        """
         question = question.strip()
         if not question:
             return RagContext(is_empty=True)
 
-        if _is_general_query(question):
-            target = _detect_target_table(question)
-            ctx = self._general_aggregate(question, target)
-            if not ctx.is_empty:
-                return ctx
-
         rows = _fetch_source_rows()
-        if not rows:
+        aggregates = self._general_aggregate(question, _detect_target_table(question))
+
+        if not rows and not aggregates.chunks:
             return RagContext(is_empty=True)
 
+        if _is_general_query(question) and aggregates.chunks:
+            return self._merge_with_background(aggregates, rows, question)
+
         query_tokens = _tokenize(question)
-
         if self._embedder is not None:
-            ctx = self._retrieve_with_embeddings(question, rows)
+            primary = self._retrieve_with_embeddings(question, rows)
         else:
-            ctx = self._retrieve_lexical(question, rows, query_tokens)
+            primary = self._retrieve_lexical(question, rows, query_tokens)
 
-        if ctx.is_empty:
-            ctx = self._summary_fallback(rows)
-        return ctx
+        if primary.is_empty:
+            primary = self._summary_fallback(rows)
+
+        return self._merge_with_background(primary, rows, question)
+
+    def _merge_with_background(
+        self,
+        primary: RagContext,
+        rows: list[tuple[str, str, str, str]],
+        question: str,
+    ) -> RagContext:
+        """Combina el contexto principal con un background minimo.
+
+        El background es 1 chunk representativo de cada tabla que el
+        LLM no vio en el primary. Asi el LLM siempre tiene una vision
+        global del sistema y puede responder preguntas ambiguas sin
+        tener que inventar.
+        """
+        seen_tables: set[str] = {s.table for s in primary.sources}
+        background_chunks: list[str] = []
+        background_sources: list[Source] = []
+        seen_per_table: dict[str, int] = {}
+
+        for row in rows:
+            table, rid, title, text = row
+            if table in seen_tables:
+                continue
+            count = seen_per_table.get(table, 0)
+            if count >= 1:
+                continue
+            seen_per_table[table] = count + 1
+            background_chunks.append(text)
+            background_sources.append(Source(
+                table=table, id=rid, title=title,
+                snippet=text[:200], score=0.0,
+                url=f"{_url_prefix_for(table)}{rid}" if rid else "",
+            ))
+
+        if not background_chunks and not primary.chunks:
+            return RagContext(is_empty=True)
+
+        return RagContext(
+            chunks=primary.chunks + background_chunks,
+            sources=primary.sources + background_sources,
+            is_empty=False,
+        )
 
     def _general_aggregate(self, question: str, target: str | None) -> RagContext:
         """Para preguntas generales (cuantos/lista/resumen).

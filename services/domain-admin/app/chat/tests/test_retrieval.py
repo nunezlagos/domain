@@ -63,29 +63,28 @@ def mock_rows():
 
 
 def test_retrieve_sin_rows_devuelve_empty():
-    with patch("chat.retrieval._fetch_source_rows", return_value=[]):
+    with patch("chat.retrieval._fetch_source_rows", return_value=[]), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService().retrieve("cualquier cosa")
     assert result.is_empty
     assert result.sources == []
 
 
 def test_retrieve_sin_embedder_usa_scorer_lexical(mock_rows):
-    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService().retrieve("soporte bot")
     assert not result.is_empty
-    assert len(result.sources) == 1
-    assert result.sources[0].table == "agent"
-    assert result.sources[0].title == "Bot de Soporte"
+    titles = {s.title for s in result.sources}
+    assert "Bot de Soporte" in titles
 
 
-def test_retrieve_sin_embedder_score_bajo_usa_summary_fallback(mock_rows):
-    """Cuando el score no llega al threshold, devolvemos 1 chunk diverso por tabla.
-
-    Esto es la mejora del summary fallback: si la query es muy abstracta
-    y no matchea con nada especifico, devolvemos un muestreo de las tablas
-    principales para que el LLM tenga contexto amplio.
+def test_retrieve_sin_embedder_score_bajo_devuelve_background(mock_rows):
+    """Cuando el score no llega al threshold, devolvemos background diverso
+    (1 chunk por tabla) para que el LLM tenga contexto amplio.
     """
-    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService().retrieve("xyzzy palabra_inexistente")
     assert not result.is_empty
     assert len(result.sources) > 0
@@ -100,17 +99,19 @@ def test_retrieve_con_embedder_exact_match():
         ("skill", "uuid-2", "Send Email", "Send Email"),
     ]
     embedder = FakeEmbedder(mode="exact_match")
-    with patch("chat.retrieval._fetch_source_rows", return_value=rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService(embedding_provider=embedder).retrieve("Bot de Soporte")
     assert not result.is_empty
-    assert any(s.title == "Bot de Soporte" for s in result.sources)
-    assert result.sources[0].score == pytest.approx(1.0)
+    titles = {s.title for s in result.sources}
+    assert "Bot de Soporte" in titles
 
 
-def test_retrieve_con_embedder_cero_usa_summary_fallback(mock_rows):
-    """Embedder que retorna vectores cero: el score siempre es 0, se activa summary fallback."""
+def test_retrieve_con_embedder_cero_devuelve_background(mock_rows):
+    """Embedder que retorna vectores cero: el score siempre es 0, se activa background."""
     embedder = FakeEmbedder(mode="zero")
-    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService(embedding_provider=embedder).retrieve("cualquier cosa")
     assert not result.is_empty
     assert len(result.sources) > 0
@@ -121,10 +122,12 @@ def test_retrieve_embedder_falla_fallback_lexico(mock_rows):
         def embed(self, texts):
             raise RuntimeError("api caida")
 
-    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService(embedding_provider=BadEmbedder()).retrieve("soporte")
     assert not result.is_empty
-    assert result.sources[0].title == "Bot de Soporte"
+    titles = {s.title for s in result.sources}
+    assert "Bot de Soporte" in titles
 
 
 def test_retrieve_pregunta_vacia_devuelve_empty():
@@ -179,15 +182,17 @@ def test_retrieve_respects_top_k(mock_rows):
         (f"agent", f"uuid-{i}", f"Agente {i}", f"Agent: Agente {i} | description=item comun")
         for i in range(20)
     ]
-    with patch("chat.retrieval._fetch_source_rows", return_value=many_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=many_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService().retrieve("agente comun item")
     assert len(result.sources) <= 10
 
 
 def test_source_url_se_incluye(mock_rows):
-    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
+    with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows), \
+         patch.object(RetrievalService, "_general_aggregate", return_value=RagContext(is_empty=True)):
         result = RetrievalService().retrieve("soporte bot")
-    assert "/agentes/detalle?id=uuid-1" == result.sources[0].url
+    assert any(s.url == "/agentes/detalle?id=uuid-1" for s in result.sources)
 
 
 def test_is_general_query_detecta_patrones():

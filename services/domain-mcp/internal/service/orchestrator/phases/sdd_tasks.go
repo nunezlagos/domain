@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-
-
 type sddTasksHandler struct{}
 
 func NewSDDTasksHandler() Handler { return &sddTasksHandler{} }
@@ -40,9 +38,12 @@ func (h *sddTasksHandler) Build(_ context.Context, in Input) (*Output, error) {
 		AgentTemplateSlug: "sdd-tasks",
 		SystemPrompt:      "",
 		UserPrompt:        b.String(),
+		// RFC 0006 D5 + Feature B: la descomposición en tasks es un
+		// DOCUMENTO de primera clase. Required=true obliga al cliente a
+		// persistirla como knowledge_doc antes de avanzar (registro en BD).
 		SuggestedSaves: []SuggestedSave{
-			{Type: "knowledge_doc", Required: false,
-				Hint: "guardar knowledge_doc con la descomposición si el run es complejo (>5 tasks)"},
+			{Type: "knowledge_doc", Required: true,
+				Hint: "persistí la descomposición de tasks como knowledge_doc para que quede registro en BD"},
 		},
 		SkillThreshold: 0,
 		RetryPolicy:    RetryReemit,
@@ -57,7 +58,6 @@ func (h *sddTasksHandler) Validate(_ context.Context, _ *Output, result ClientRe
 	if !ok || len(tasks) == 0 {
 		return errors.New("sdd-tasks: array 'tasks' requerido (al menos 1 task)")
 	}
-
 
 	for i, raw := range tasks {
 		m, ok := raw.(map[string]any)

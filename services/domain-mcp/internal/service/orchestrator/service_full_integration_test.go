@@ -58,16 +58,13 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[9].Slug))
 
-
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
 	for i := 1; i < 10; i++ {
 		require.Empty(t, res.Plan.Steps[i].UserPrompt,
 			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
 
-
 	require.Equal(t, res.Plan.Steps[0].UserPrompt, res.SnapshotPrompt)
-
 
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status, inputs FROM flow_run_steps WHERE flow_run_id=$1 ORDER BY created_at`,
@@ -118,13 +115,12 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-
 	exploreStepID := res.Plan.Steps[0].ID
 	nextRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: exploreStepID,
 		Output: map[string]any{
-			"intent": "feature",
-			"scope":  "multi-file",
+			"intent":           "feature",
+			"scope":            "multi-file",
 			"modules_affected": []any{"internal/logging", "cmd/domain"},
 			"summary":          "agregar slog estructurado",
 		},
@@ -135,14 +131,11 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	require.NotNil(t, nextRes.NextStepID)
 	require.Equal(t, "sdd-spec", nextRes.NextStepKey)
 
-
-
 	require.NotEmpty(t, nextRes.NextStepPrompt, "lazy build debe rellenar NextStepPrompt")
 	require.Contains(t, nextRes.NextStepPrompt, "feature", "prompt de spec debe incluir intent del explore")
 	require.Contains(t, nextRes.NextStepPrompt, "multi-file", "debe incluir scope")
 	require.Contains(t, nextRes.NextStepPrompt, "internal/logging", "debe incluir módulos afectados")
 	require.Contains(t, nextRes.NextStepPrompt, "implementar logging estructurado", "raw_text propagado")
-
 
 	var inputsRaw []byte
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -242,27 +235,29 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Plan.Steps, 10)
 
-
 	outputs := []map[string]any{
-		{"intent": "feature", "scope": "single-file", "summary": "x"}, // explore
-		{"issue_slug": "issue-99.1-foo", "issue_md": "# spec"},        // spec
-		{"proposal_md": "scope X", "status": "draft"},                  // propose
+		{"intent": "feature", "scope": "single-file", "summary": "x"},           // explore
+		{"issue_slug": "issue-99.1-foo", "issue_md": "# spec"},                  // spec
+		{"proposal_md": "scope X", "status": "draft"},                           // propose
 		{"design_md": "design X", "adrs": []any{map[string]any{"id": "ADR-1"}}}, // design
 		{"tasks": []any{map[string]any{"id": "T01", "description": "do x"}}},    // tasks
-		{"summary": "implemented", "files_changed": []any{"a.go"}},     // apply
-		{"scenarios_failed": []any{}, "tests_passed": 5},               // verify
-		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},  // judge
-		{"archived": true},                                              // archive
-		{"skipped": true},                                               // onboard
+		{"summary": "implemented", "files_changed": []any{"a.go"}},              // apply
+		{"scenarios_failed": []any{}, "tests_passed": 5},                        // verify
+		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},           // judge
+		{"archived": true}, // archive
+		{"skipped": true},  // onboard
 	}
 
 	memrefs := []map[string][]phases.MemoryRef{
 		{}, // explore
 		{}, // spec
-		{}, // propose
-		{"saves": {{Type: "adr", ID: uuid.New()}}},             // design
-		{}, // tasks
-		{"saves": {{Type: "code_reference", ID: uuid.New()}}},  // apply
+		{"saves": {{Type: "knowledge_doc", ID: uuid.New()}}}, // propose (Feature B)
+		{"saves": { // design: adr (D5) + knowledge_doc (Feature B)
+			{Type: "adr", ID: uuid.New()},
+			{Type: "knowledge_doc", ID: uuid.New()},
+		}},
+		{"saves": {{Type: "knowledge_doc", ID: uuid.New()}}},  // tasks (Feature B)
+		{"saves": {{Type: "code_reference", ID: uuid.New()}}}, // apply
 		{}, // verify
 		{"saves": {{Type: "sabotage_record", ID: uuid.New()}}}, // judge
 		{}, // archive
@@ -293,7 +288,6 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 			require.Nil(t, out.NextStepID)
 		}
 	}
-
 
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)

@@ -7,11 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
-
-
-
-
 func TestAllHandlers_SlugIdentity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -78,8 +73,9 @@ func TestAllHandlers_BuildReturnsEmptySystemPrompt_BDSourceOfTruth(t *testing.T)
 	}
 }
 
-// D5 contract: design + apply + judge tienen un SuggestedSave Required=true;
-// el resto no.
+// D5 contract: propose + design + tasks + apply + judge tienen un
+// SuggestedSave Required=true (propose/design/tasks por Feature B: el
+// documento de la fase queda registrado en BD); el resto no.
 func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -88,9 +84,9 @@ func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 	}{
 		{NewSDDExploreHandler, ""},
 		{NewSDDSpecHandler, ""},
-		{NewSDDProposeHandler, ""},
+		{NewSDDProposeHandler, "knowledge_doc"},
 		{NewSDDDesignHandler, "adr"},
-		{NewSDDTasksHandler, ""},
+		{NewSDDTasksHandler, "knowledge_doc"},
 		{NewSDDApplyHandler, "code_reference"},
 		{NewSDDVerifyHandler, ""},
 		{NewSDDJudgeHandler, "sabotage_record"},

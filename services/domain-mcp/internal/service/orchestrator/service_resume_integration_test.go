@@ -18,9 +18,9 @@ import (
 //
 // Escenario: usuario arranca un flow Full, completa 2 fases (sdd-explore
 // + sdd-spec), la sesión se corta. Después abre una nueva sesión:
-//   1. Usa GetFlowStatus para ver dónde quedó
-//   2. Recupera el prompt del próximo step pending (sdd-propose)
-//   3. Continúa reportando phase_results normalmente
+//  1. Usa GetFlowStatus para ver dónde quedó
+//  2. Recupera el prompt del próximo step pending (sdd-propose)
+//  3. Continúa reportando phase_results normalmente
 //
 // La separación state-vs-exec del RFC 0006 garantiza que el Service NO
 // tiene estado in-memory crítico — todo vive en BD (flow_runs, flow_run_steps,
@@ -39,7 +39,6 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-
 	session1 := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -51,7 +50,6 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Plan.Steps, 10)
 	flowRunID := res.FlowRunID
-
 
 	exploreOut := map[string]any{
 		"intent":           "feature",
@@ -67,7 +65,6 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.Equal(t, "completed", r.StepStatus)
 	require.Equal(t, "sdd-spec", r.NextStepKey)
 
-
 	specOut := map[string]any{
 		"issue_slug": "issue-99.1-export-pdf",
 		"issue_md":   "# Spec del export PDF\n\nGherkin scenarios...",
@@ -82,9 +79,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.Equal(t, "sdd-propose", r2.NextStepKey)
 	proposeStepID := *r2.NextStepID
 
-
 	session2 := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
-
 
 	status, err := session2.GetFlowStatus(ctx, flowRunID)
 	require.NoError(t, err)
@@ -100,12 +95,9 @@ func TestService_ResumeCrossSession(t *testing.T) {
 			"step %d (%s) debe estar pending", i, status.Steps[i].StepKey)
 	}
 
-
-
 	require.Equal(t, "sdd-propose", status.Steps[2].StepKey)
 	require.NotEmpty(t, status.Steps[2].UserPromptPreview,
 		"propose user_prompt debe estar persistido en BD (lazy build)")
-
 
 	proposeOut := map[string]any{
 		"proposal_md": "Scope: implementar export PDF...",
@@ -114,6 +106,8 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	r3, err := session2.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: proposeStepID,
 		Output:        proposeOut,
+		// Feature B: sdd-propose exige knowledge_doc Required=true.
+		MemoryRefsSaved: []phases.MemoryRef{{Type: "knowledge_doc", ID: uuid.New()}},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "completed", r3.StepStatus)
@@ -121,7 +115,6 @@ func TestService_ResumeCrossSession(t *testing.T) {
 		"session2 reanuda sin saber del corte; aggregateFlowStatus calcula el next correcto")
 	require.NotEmpty(t, r3.NextStepPrompt,
 		"el prompt de sdd-design se hizo lazy build con propose.output incluido")
-
 
 	require.Contains(t, r3.NextStepPrompt, "Proposal",
 		"design prompt incluye proposal_md (lazy build con PriorOutputs)")
@@ -141,7 +134,6 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
-
 
 	session1 := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := session1.Run(ctx, orchestrator.OrchestrateInput{
@@ -165,20 +157,16 @@ func TestService_ResumeCrossSession_PendingConfirm(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-
 	var status string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT status FROM flow_run_steps WHERE id=$1`, verifyID).Scan(&status))
 	require.Equal(t, "blocked", status)
 
-
 	session2 := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
-
 
 	st, err := session2.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "blocked", st.Steps[1].Status)
-
 
 	confirmRes, err := session2.ConfirmContinue(ctx, res.FlowRunID, true)
 	require.NoError(t, err)

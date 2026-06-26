@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-
-
 type sddProposeHandler struct{}
 
 func NewSDDProposeHandler() Handler { return &sddProposeHandler{} }
@@ -34,9 +32,12 @@ func (h *sddProposeHandler) Build(_ context.Context, in Input) (*Output, error) 
 		AgentTemplateSlug: "sdd-propose",
 		SystemPrompt:      "",
 		UserPrompt:        b.String(),
+		// RFC 0006 D5 + Feature B: el proposal es un DOCUMENTO de primera
+		// clase. Required=true obliga al cliente a persistirlo como
+		// knowledge_doc antes de avanzar, garantizando registro en BD.
 		SuggestedSaves: []SuggestedSave{
-			{Type: "knowledge_doc", Required: false,
-				Hint: "guardar knowledge_doc apuntando al proposal en draft"},
+			{Type: "knowledge_doc", Required: true,
+				Hint: "persistí el proposal como knowledge_doc para que quede registro del change en BD"},
 		},
 		SkillThreshold: 0,
 		RetryPolicy:    RetryReemit,
@@ -51,7 +52,6 @@ func (h *sddProposeHandler) Validate(_ context.Context, _ *Output, result Client
 		return errors.New("sdd-propose: campo 'proposal_md' requerido")
 	}
 	if status, _ := result.Output["status"].(string); status != "draft" {
-
 
 		return errors.New("sdd-propose: status debe ser 'draft' — promoción requiere paso explícito")
 	}

@@ -86,10 +86,16 @@ crea una copia versionada en BD; el archivo del usuario queda intacto.
 - domain_project_repo_list(project_slug) → si ambiguous=true (>1
   remoto sin default), preguntale al usuario antes de pushear.
 
-## Crear skills/políticas (confirmá ANTES de persistir + scope)
-Toda skill o policy nueva pasa por confirmación humana SÍNCRONA antes de
-escribirse, sin importar el origen (la detectaste, el usuario la pidió, o
-la inferiste de un patrón). NO persistas a ciegas.
+## Crear/editar skills/políticas (confirmá ANTES de persistir + scope)
+Toda skill o policy nueva — Y toda edición de una ya activa — pasa por
+confirmación humana SÍNCRONA antes de escribirse, sin importar el origen
+(la detectaste, el usuario la pidió, o la inferiste de un patrón). NO
+persistas a ciegas.
+
+¿Hay humano para confirmar? Si estás respondiendo a un mensaje del usuario
+en un turn conversacional → SÍ, confirmá (pasos 1-6). Si estás ejecutando
+una fase del pipeline SDD invocada por el orchestrator sin intervención
+humana (modo headless/batch) → NO interrumpas: usá domain_propose_* (paso 7).
 
 1. Armá el contenido completo (slug, name, body/content, kind si es policy).
 2. Inferí el SCOPE y proponelo:
@@ -108,9 +114,13 @@ la inferiste de un patrón). NO persistas a ciegas.
    falta hasta que confirme o descarte. NO persistas nada en medio del ciclo.
 5. Si descarta: no escribas nada y seguí con la conversación.
 6. Solo al confirmar, persistí YA ACTIVA con el scope acordado:
-   - skill: domain_project_skill_register (interna) o domain_skill_create
-     (global). Ambas crean activas (proposed=false).
-   - policy: domain_project_policy_set. Crea activa.
+   - skill nueva: domain_project_skill_register (interna) o
+     domain_skill_create (global). Edición: domain_skill_edit.
+   - policy nueva: domain_project_policy_set (interna) o
+     domain_platform_policy_create (global). Edición de global:
+     domain_platform_policy_edit. Todas crean/dejan activas (proposed=false).
+   - Tras persistir, dejá traza de la aprobación con domain_mem_save (qué se
+     creó/editó, que el usuario lo confirmó, y por qué) — audit liviano.
 7. domain_propose_skill / domain_propose_policy (proposed=true, review
    diferido) son SOLO para modo headless/batch donde NO hay un humano que
    confirme en el momento. Con usuario presente, confirmá y creá activa —
@@ -124,6 +134,10 @@ la inferiste de un patrón). NO persistas a ciegas.
 - **ticket** (operativo, tipo Jira/Linear): se crea con
   domain_ticket_create. Para bugs, tasks, features simples, sin
   Gherkin. Soporta status workflow kanban, comments, sync externo.
+  Nace en status 'backlog'. Si el ticket corresponde a algo ya decidido
+  o en curso, movelo al estado real con domain_ticket_change_status
+  (todo/in_progress/...) — no lo dejes en backlog por inercia. Usá
+  change_status (no un update directo) para que quede en el status_history.
 - Si un ticket implementa una issue formal, vincularlos con
   domain_ticket_link_issue(ticket_id, issue_id). La BD es source of
   truth de ambos.
@@ -146,13 +160,21 @@ Pasos para configurar (UNA vez por stack, no por sesión):
    prefijando el subpath si no está en el root: "web-nextjs-15-stack",
    "api-go-1-stack"; content = role + patrones_obligatorios + antipatrones
    + gotchas + tooling) y pasala por el flujo de confirmación de "Crear
-   skills/políticas": mostrásela al usuario, y al confirmar persistila
-   activa con domain_project_skill_register (scope interna, es de ESTE repo).
-   La detección es silenciosa; la CONFIRMACIÓN previa a persistir no.
-4. Si el stack vive en un subpath o submódulo, registrá ese path como
-   project_repository (domain_project_repo_add con root_path=<subpath>)
-   para dejar la estructura del monorepo explícita en BD. Así futuras
-   sesiones saben qué skill aplica según en qué subdir estás trabajando.
+   skills/políticas": mostrásela al usuario, y al confirmar persistila activa
+   con domain_project_skill_register pasando root_path=<subpath del stack>
+   (scope interna, es de ESTE repo). La detección es silenciosa; la
+   CONFIRMACIÓN previa a persistir no.
+4. Si el stack vive en un subpath o submódulo, registrá ese path también como
+   project_repository (domain_project_repo_add con root_path=<subpath>) para
+   dejar la estructura del monorepo explícita en BD. domain_project_skill_list
+   devuelve el root_path de cada skill → usá el cwd para elegir qué skill de
+   stack aplica al subdir donde estás trabajando.
+
+DRIFT DE STACK: cuando bootstrap devuelve head.changed=true, además de revisar
+el git log, mirá si los manifiestos de stack (composer.json, go.mod, package.json,
+etc.) cambiaron entre last_known_head y current. Si cambió la versión del
+framework, el runtime, la DB o el test runner, la skill de stack quedó stale →
+proponé su actualización vía el flujo de confirmación (domain_skill_edit).
 
 El cliente IDE (Claude Code/OpenCode) solo reporta cwd+remote+branch+head;
 la inteligencia de stack vive acá, no en el cliente. Si abrís el IDE

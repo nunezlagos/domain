@@ -169,7 +169,7 @@ def test_retrieve_respects_top_k(mock_rows):
     ]
     with patch("chat.retrieval._fetch_source_rows", return_value=many_rows):
         result = RetrievalService().retrieve("agente comun item")
-    assert len(result.sources) <= 8
+    assert len(result.sources) <= 10
 
 
 def test_source_url_se_incluye(mock_rows):

@@ -1,20 +1,22 @@
 """HU-49.2: retrieval RAG con live-read + embeddings + ranking.
 
 Pipeline:
-1. Live-read de las tablas del dominio (agents, skills, flows, prompts,
-   projects, users). NO usa cache precomputado: cada pregunta relee.
+1. Live-read de TODAS las tablas relevantes del dominio (agents, skills,
+   flows, prompts, projects, users, clients, project_tickets, issues,
+   knowledge_docs, etc). NO usa cache precomputado: cada pregunta relee.
 2. Formatea cada row a 1+ chunks de texto (texto + metadata).
 3. Genera el embedding de la pregunta con el EmbeddingProvider.
 4. Calcula similitud coseno contra todos los chunks (en memoria).
 5. Filtra por `score >= MIN_SCORE` y devuelve los top-K.
 
 Decisiones de diseno:
-- `MIN_SCORE = 0.7` (decision del usuario: strict).
+- `MIN_SCORE = 0.5` (decision del usuario: balance recall/precision).
 - `TOP_K = 8` chunks max.
 - EmbeddingProvider es una interfaz (en el consumidor, ver AGENTS.md)
   con implementacion `OpenAIEmbeddingProvider`. Mockeable en tests.
 - Live-read escala bien para MVP (<10k rows total). Cuando llegue a
   >100k rows, migrar a precompute con pgvector.
+- PRIVACY: NUNCA pedimos columnas sensibles (api_key_ciphertext, etc).
 """
 from __future__ import annotations
 
@@ -30,12 +32,13 @@ from .models import RagContext, Source
 
 log = logging.getLogger(__name__)
 
-MIN_SCORE = 0.5
-TOP_K = 8
+MIN_SCORE = 0.3
+TOP_K = 10
 
 # Tablas del dominio que se incluyen en el RAG. Cada entry: (table,
-# detail_url_prefix, sql_query, format_fn_name).
+# url_prefix, sql_query, format_fn_name).
 # Mantener alineado con el admin de Django (maintainers.*).
+# PRIVACY: NUNCA pedir columnas sensibles (api_key_ciphertext, password_hash, etc).
 _SOURCES_CONFIG: list[dict] = [
     {
         "table": "agent",
@@ -43,7 +46,7 @@ _SOURCES_CONFIG: list[dict] = [
         "sql": """
             SELECT CAST(id AS TEXT) AS id, slug, name, description, provider, model, status
             FROM agents
-            WHERE deleted_at IS NULL AND status = 'active'
+            WHERE deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT 200
         """,
@@ -54,7 +57,7 @@ _SOURCES_CONFIG: list[dict] = [
         "sql": """
             SELECT CAST(id AS TEXT) AS id, slug, name, description, skill_type, status
             FROM skills
-            WHERE deleted_at IS NULL AND status = 'active'
+            WHERE deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT 200
         """,
@@ -74,9 +77,9 @@ _SOURCES_CONFIG: list[dict] = [
         "table": "prompt",
         "url_prefix": "/prompts/detalle?id=",
         "sql": """
-            SELECT CAST(id AS TEXT) AS id, slug, name, description, model, status
+            SELECT CAST(id AS TEXT) AS id, slug, description
             FROM prompts
-            WHERE deleted_at IS NULL
+            WHERE is_active = true
             ORDER BY created_at DESC
             LIMIT 200
         """,
@@ -89,7 +92,7 @@ _SOURCES_CONFIG: list[dict] = [
             FROM projects
             WHERE deleted_at IS NULL AND status != 'archived'
             ORDER BY created_at DESC
-            LIMIT 100
+            LIMIT 200
         """,
     },
     {
@@ -100,7 +103,129 @@ _SOURCES_CONFIG: list[dict] = [
             FROM users
             WHERE deleted_at IS NULL
             ORDER BY created_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "client",
+        "url_prefix": "/clientes?nombre=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, name, slug, kind, status
+            FROM clients
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "project_ticket",
+        "url_prefix": "/tickets?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, title, description_md, status, priority, issue_type
+            FROM project_tickets
+            WHERE deleted_at IS NULL
+            ORDER BY updated_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "issue",
+        "url_prefix": "/issues?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, title, description, status, issue_type, priority
+            FROM issues
+            WHERE deleted_at IS NULL
+            ORDER BY updated_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "knowledge_doc",
+        "url_prefix": "/knowledge?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, title, kind, summary
+            FROM knowledge_docs
+            WHERE deleted_at IS NULL
+            ORDER BY updated_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "knowledge_chunk",
+        "url_prefix": "/knowledge/chunks?id=",
+        "sql": """
+            SELECT CAST(kc.id AS TEXT) AS id, kc.chunk_text, kc.section_title, kd.title AS doc_title
+            FROM knowledge_chunks kc
+            JOIN knowledge_docs kd ON kd.id = kc.document_id
+            WHERE kc.deleted_at IS NULL AND kd.deleted_at IS NULL
+            ORDER BY kc.created_at DESC
+            LIMIT 200
+        """,
+    },
+    {
+        "table": "mcp_server",
+        "url_prefix": "/mcpservers/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, transport
+            FROM mcp_servers
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
             LIMIT 100
+        """,
+    },
+    {
+        "table": "cron",
+        "url_prefix": "/crons/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, schedule
+            FROM crons
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 100
+        """,
+    },
+    {
+        "table": "webhook",
+        "url_prefix": "/webhooks/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, kind
+            FROM webhooks
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 100
+        """,
+    },
+    {
+        "table": "platform_policy",
+        "url_prefix": "/politicas-plataforma/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, kind, status
+            FROM platform_policies
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 100
+        """,
+    },
+    {
+        "table": "project_policy",
+        "url_prefix": "/politicas-proyecto/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, kind, status
+            FROM project_policies
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 100
+        """,
+    },
+    {
+        "table": "agent_template",
+        "url_prefix": "/plantillas-agentes/detalle?id=",
+        "sql": """
+            SELECT CAST(id AS TEXT) AS id, slug, name, description, role, status
+            FROM agent_templates
+            WHERE deleted_at IS NULL
+            ORDER BY name
+            LIMIT 200
         """,
     },
 ]
@@ -130,17 +255,25 @@ def _format_chunk(table: str, row: dict) -> str:
     """Convierte un row SQL a texto de chunk legible.
 
     Se excluyen campos sensibles (api_key_ciphertext, password_hash, etc).
-    Se priorizan campos semanticos (name, description, slug).
+    Se priorizan campos semanticos (name, description, slug, summary,
+    chunk_text, doc_title).
     """
     parts: list[str] = []
-    name = row.get("name") or row.get("slug") or row.get("email")
+    name = row.get("name") or row.get("slug") or row.get("email") or row.get("title")
     if name:
         parts.append(f"{table.capitalize()}: {name}")
-    for key in ("slug", "description", "provider", "model", "skill_type",
-                "status", "role", "email"):
+    for key in (
+        "slug", "description", "provider", "model", "skill_type",
+        "status", "role", "email", "kind", "schedule", "transport",
+        "issue_type", "priority", "summary", "chunk_text", "section_title",
+        "doc_title", "title",
+    ):
         v = row.get(key)
         if v and str(v).strip():
-            parts.append(f"{key}={v}")
+            text = str(v).strip()
+            if len(text) > 500:
+                text = text[:500] + "..."
+            parts.append(f"{key}={text}")
     return " | ".join(parts)
 
 

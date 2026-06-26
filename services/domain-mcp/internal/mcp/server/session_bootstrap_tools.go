@@ -32,10 +32,10 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	policysvc "nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type bootstrapPoliciesLister interface {
@@ -363,10 +363,10 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		"recent_observations":  recentObs,
 		"existing_rules_files": rulesFiles,
 		"counts": map[string]any{
-			"project_policies":   projPoliciesCount,
-			"platform_policies":  platformPoliciesCount,
-			"project_repos":      projRepoCount,
-			"existing_rules":     len(rulesFiles),
+			"project_policies":    projPoliciesCount,
+			"platform_policies":   platformPoliciesCount,
+			"project_repos":       projRepoCount,
+			"existing_rules":      len(rulesFiles),
 			"project_skill_count": projectSkillCount,
 		},
 		"next_step": nextStep,

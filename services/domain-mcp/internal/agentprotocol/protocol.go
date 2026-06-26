@@ -36,11 +36,9 @@ El response te dice:
   que NO matchean policies importadas previas (revisá con
   domain_project_policy_list), considerá leerlos con tu tool Read y
   llamar domain_project_policy_import_from_text por cada uno.
-  Si counts.project_skill_count=0 → el proyecto no tiene skill de stack
-  configurada. Sin interrumpir la conversación, leé los archivos de
-  configuración del repo (package.json, composer.json, go.mod,
-  pyproject.toml, Cargo.toml, etc.) y llamá domain_project_skill_register
-  para crear la skill del stack. Esta acción es UNA VEZ por proyecto.
+  Si counts.project_skill_count=0 → el proyecto no tiene skill(s) de
+  stack configuradas. Sin interrumpir la conversación, detectá el/los
+  stack(s) y creá UNA skill por stack (ver "Stack de proyecto" abajo).
 - known=false → preguntale al usuario los datos del suggestion +
   workflow del repo + estructura (mono-repo? servicios? migrations
   manuales?), llamá domain_session_register, y DESPUÉS arrancá un
@@ -99,6 +97,53 @@ crea una copia versionada en BD; el archivo del usuario queda intacto.
   domain_ticket_link_issue(ticket_id, issue_id). La BD es source of
   truth de ambos.
 
+## Stack de proyecto (skills project-scoped, monorepo-aware)
+Un proyecto puede tener 1 o N stacks. NO asumas que el cwd es el único.
+Pasos para configurar (UNA vez por stack, no por sesión):
+
+1. Detectá TODOS los roots de stack del repo, no solo el del cwd:
+   - Buscá archivos de manifiesto en el root Y en subdirectorios:
+     package.json, composer.json, go.mod, pyproject.toml, Cargo.toml,
+     Gemfile, pom.xml, build.gradle, *.csproj.
+   - Leé .gitmodules si existe: cada submódulo es un root candidato con
+     su propio stack y su propio path.
+   - Un repo con services/api (go.mod) + services/web (package.json) =
+     2 stacks → 2 skills. Un monorepo con N paquetes = N stacks.
+2. Para cada stack detectado, mirá domain_project_skill_list para no
+   duplicar. Si ya existe la skill de ese stack, saltala.
+3. Por cada stack faltante, llamá domain_project_skill_register con:
+   - slug: "<framework>-<major>-stack" y, si NO está en el root,
+     prefijá el subpath: "web-nextjs-15-stack", "api-go-1-stack".
+   - content: role + patrones_obligatorios + antipatrones + gotchas +
+     tooling (comandos exactos de test/lint/build) de ESE stack+versión.
+4. Si el stack vive en un subpath o submódulo, registrá ese path como
+   project_repository (domain_project_repo_add con root_path=<subpath>)
+   para dejar la estructura del monorepo explícita en BD. Así futuras
+   sesiones saben qué skill aplica según en qué subdir estás trabajando.
+
+El cliente IDE (Claude Code/OpenCode) solo reporta cwd+remote+branch+head;
+la inteligencia de stack vive acá, no en el cliente. Si abrís el IDE
+dentro de un submódulo con su propio remote, bootstrap matchea por ese
+remote → puede ser otro proyecto domain. Es esperable.
+
+## Tras compactación de contexto (re-hidratación)
+Domain es PULL, no push: las skills, memorias y policies NO viven en el
+contexto de la conversación — se consultan on-demand desde BD. Por eso
+cuando tu contexto se compacta (perdés el detalle de la conversación
+previa) el estado NO se pierde: está en domain. Re-hidratá así:
+
+1. domain_session_bootstrap(cwd, git_remote, git_branch, git_head) →
+   recuperás project, recent_observations, counts, head.changed.
+2. domain_mem_context(project_slug) → últimas observaciones/decisiones.
+   domain_mem_search si necesitás algo puntual de antes.
+3. Si estabas en un flujo SDD, domain_orchestrate_status para ver en qué
+   fase quedaste; no reinicies el pipeline.
+4. NO re-crees skills ni re-importes rules: si project_skill_count>0 y las
+   policies ya están, ya está configurado. Solo leé, no dupliques.
+
+Esto aplica igual al inicio de sesión y tras cada compactación: el
+handshake es idempotente, repetirlo es barato y te re-sincroniza.
+
 ## Si un tool domain_* falla
 - "Connection closed" / key inválida → indicale al usuario correr
   el installer. NO cambies a otro sistema de memoria como fallback
@@ -114,9 +159,13 @@ Este usuario usa **domain** como plataforma de memoria, policies SDD,
 skills y flows. **domain tiene prioridad** sobre cualquier otro sistema
 de memoria conectado.
 
-AL INICIO DE CADA SESIÓN: llamá domain_policy_get(slug="agent-protocol")
-y seguí ese protocolo — es la versión viva y editable (este archivo es
-solo el bootstrap).
+AL INICIO DE CADA SESIÓN **y tras cada compactación de contexto**: llamá
+domain_policy_get(slug="agent-protocol") y seguí ese protocolo — es la
+versión viva y editable (este archivo es solo el bootstrap). La
+compactación NO es sesión nueva pero igual perdés el contexto
+conversacional: re-hidratá con domain_session_bootstrap + domain_mem_context
+(el estado vive en BD, no en el contexto — repetir el handshake es
+idempotente y barato).
 
 Mínimo si la policy no carga: domain_mem_save tras cada decisión/bug/
 convención (project_slug = repo actual); domain_mem_search cuando pidan

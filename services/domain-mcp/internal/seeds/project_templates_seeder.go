@@ -13,7 +13,7 @@ import (
 type ProjectTemplatesSeeder struct{}
 
 func (s *ProjectTemplatesSeeder) Name() string    { return "project_templates" }
-func (s *ProjectTemplatesSeeder) Version() int    { return 3 }
+func (s *ProjectTemplatesSeeder) Version() int    { return 4 }
 func (s *ProjectTemplatesSeeder) Order() int      { return 35 }
 func (s *ProjectTemplatesSeeder) IsDevOnly() bool { return false }
 
@@ -31,12 +31,13 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 
 	templates := []templateEntry{
 		{
+			// Único template built-in. NO gestiona skills: la config de stack
+			// se genera on-demand como skills project-scoped (ver agent template
+			// 'project-stack-init' + policy 'agent-protocol'). El template solo
+			// aporta settings base mergeables al crear un project con template_id.
 			Slug: "default", Name: "Default", IsDefault: true,
-			Description: "Proyecto general sin preconfiguración específica",
-			Settings: map[string]any{
-				"language": "any",
-				"skill_generation_guide": "Detectá el stack del proyecto leyendo sus archivos de configuración (package.json, composer.json, go.mod, pyproject.toml, Cargo.toml, Gemfile, pom.xml). Llamá domain_project_skill_register con: slug '<framework>-<version-major>-stack', role (especialista en el stack+versión exacta), patrones_obligatorios (3-5 convenciones del framework), antipatrones_prohibidos, gotchas detectables, tooling (comandos de test/lint/build). Esta skill se crea UNA VEZ por proyecto.",
-			},
+			Description: "Proyecto general. El stack se detecta y configura como skills project-scoped, no por template.",
+			Settings:    map[string]any{"language": "any"},
 		},
 	}
 
@@ -51,8 +52,6 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 		if t.DefaultFlows == nil {
 			t.DefaultFlows = []string{}
 		}
-
-
 
 		tag, err := tx.Exec(ctx, `
 			UPDATE project_templates

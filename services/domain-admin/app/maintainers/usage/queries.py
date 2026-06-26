@@ -100,6 +100,33 @@ def by_client(days: int = 30) -> list[dict]:
     return [dict(zip(cols, r)) for r in rows]
 
 
+def by_user(days: int = 30) -> list[dict]:
+    sql = """
+        SELECT
+            COALESCE(u.email, u.name, '(sin usuario)')         AS user_name,
+            u.email                                            AS user_email,
+            COUNT(pc.id)                                       AS turns,
+            COALESCE(SUM(pc.estimated_tokens_in),  0)         AS tokens_in,
+            COALESCE(SUM(pc.estimated_tokens_out), 0)         AS tokens_out,
+            COALESCE(SUM(pc.estimated_tokens_in + pc.estimated_tokens_out), 0)
+                                                               AS tokens_total,
+            MAX(pc.captured_at)                                AS last_turn
+        FROM prompt_captured pc
+        LEFT JOIN users u ON u.id = pc.user_id
+        WHERE pc.captured_at >= NOW() - (%s || ' days')::INTERVAL
+        GROUP BY u.email, u.name
+        ORDER BY tokens_total DESC
+        LIMIT 100
+    """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            _set_org(cur)
+            cur.execute(sql, [str(days)])
+            cols = [c.name for c in cur.description]
+            rows = cur.fetchall()
+    return [dict(zip(cols, r)) for r in rows]
+
+
 def by_model(days: int = 30) -> list[dict]:
     sql = """
         SELECT
@@ -127,6 +154,8 @@ def recent_prompts(days: int = 30, limit: int = 50) -> list[dict]:
             cp.id,
             cp.captured_at,
             COALESCE(p.slug, '—')                       AS project_slug,
+            COALESCE(u.email, u.name, '—')             AS user_name,
+            COALESCE(u.email, '—')                     AS user_email,
             COALESCE(NULLIF(cp.client_kind, ''), '—')   AS client_kind,
             COALESCE(NULLIF(cp.model, ''), '—')         AS model,
             cp.estimated_tokens_in,
@@ -137,6 +166,7 @@ def recent_prompts(days: int = 30, limit: int = 50) -> list[dict]:
             LEFT(cp.content, 140)                       AS content_preview
         FROM prompt_captured cp
         LEFT JOIN projects p ON p.id = cp.project_id
+        LEFT JOIN users u ON u.id = cp.user_id
         WHERE cp.captured_at >= NOW() - (%s || ' days')::INTERVAL
         ORDER BY cp.captured_at DESC
         LIMIT %s

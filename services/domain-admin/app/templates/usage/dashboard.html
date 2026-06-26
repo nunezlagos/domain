@@ -182,17 +182,25 @@
 {% block content %}
 <div class="card" style="padding: var(--space-lg);">
 
-  {# ── Encabezado + filtro de días ─────────────────────────────────── #}
+  {# ── Encabezado + filtros ─────────────────────────────────────────── #}
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-sm);margin-bottom:var(--space-lg);">
     <div>
       <h2 style="margin:0;font-size:var(--fs-xl);">Uso del agente</h2>
       <p style="margin:0;color:var(--color-text-muted);font-size:var(--fs-sm);">Prompts capturados · tokens estimados (chars ÷ 4) · últimos {{ days }} días</p>
     </div>
-    <div class="usage-filter">
-      <span class="usage-filter__label">Período:</span>
-      <a href="?days=7"  class="usage-filter__btn {% if days == 7  %}active{% endif %}">7 días</a>
-      <a href="?days=30" class="usage-filter__btn {% if days == 30 %}active{% endif %}">30 días</a>
-      <a href="?days=90" class="usage-filter__btn {% if days == 90 %}active{% endif %}">90 días</a>
+    <div style="display:flex;align-items:center;gap:var(--space-lg);flex-wrap:wrap;">
+      <div class="usage-filter">
+        <span class="usage-filter__label">Período:</span>
+        <a href="?days={{ days }}&by={{ by }}"  class="usage-filter__btn {% if days == 7  %}active{% endif %}">7 días</a>
+        <a href="?days=30&by={{ by }}" class="usage-filter__btn {% if days == 30 %}active{% endif %}">30 días</a>
+        <a href="?days=90&by={{ by }}" class="usage-filter__btn {% if days == 90 %}active{% endif %}">90 días</a>
+      </div>
+      <div class="usage-filter">
+        <span class="usage-filter__label">Agrupar por:</span>
+        <a href="?days={{ days }}&by=client"  class="usage-filter__btn {% if by == "client"  %}active{% endif %}">Cliente</a>
+        <a href="?days={{ days }}&by=user"    class="usage-filter__btn {% if by == "user"    %}active{% endif %}">Usuario</a>
+        <a href="?days={{ days }}&by=project" class="usage-filter__btn {% if by == "project" %}active{% endif %}">Proyecto</a>
+      </div>
     </div>
   </div>
 
@@ -256,6 +264,55 @@
           {% for row in by_project %}
           <tr>
             <td><code>{{ row.project_slug }}</code></td>
+            <td class="num">{{ row.turns }}</td>
+            <td class="num">{{ row.tokens_in }}</td>
+            <td class="num">{{ row.tokens_out }}</td>
+            <td>
+              {% if max_tot > 0 %}
+              <div class="usage-bar">
+                <div class="usage-bar__track">
+                  <div class="usage-bar__fill" style="width:{% widthratio row.tokens_total max_tot 100 %}%"></div>
+                </div>
+                <span class="usage-bar__num">{{ row.tokens_total }}</span>
+              </div>
+              {% else %}{{ row.tokens_total }}{% endif %}
+            </td>
+            <td class="muted" style="white-space:nowrap;font-size:var(--fs-xs);">
+              {{ row.last_turn|date:"d/m/Y H:i"|default:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endwith %}
+  </div>
+  {% endif %}
+
+  {# ── Por usuario ─────────────────────────────────────────────────── #}
+  {% if by_user %}
+  <div class="usage-section">
+    <div class="usage-section__title">Por usuario</div>
+    {% with max_tot=by_user.0.tokens_total %}
+    <div class="table-wrapper">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th class="num">Turns</th>
+            <th class="num">Tokens In</th>
+            <th class="num">Tokens Out</th>
+            <th>Tokens Total</th>
+            <th>Último turn</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in by_user %}
+          <tr>
+            <td>
+              <span style="font-weight:var(--fw-semibold);">{{ row.user_name|default:"—"|default:"(sin usuario)" }}</span>
+              {% if row.user_email %}<br><span style="font-size:var(--fs-xs);color:var(--color-text-muted);">{{ row.user_email }}</span>{% endif %}
+            </td>
             <td class="num">{{ row.turns }}</td>
             <td class="num">{{ row.tokens_in }}</td>
             <td class="num">{{ row.tokens_out }}</td>
@@ -362,6 +419,7 @@
           <tr>
             <th style="width:130px;">Fecha</th>
             <th>Proyecto</th>
+            <th>Usuario</th>
             <th>Cliente</th>
             <th>Modelo</th>
             <th class="num">In</th>
@@ -377,6 +435,7 @@
               {{ row.captured_at|date:"d/m/Y H:i" }}
             </td>
             <td><code style="font-size:11px;">{{ row.project_slug }}</code></td>
+            <td style="font-size:var(--fs-xs);color:var(--color-text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ row.user_email|default:row.user_name|default:"" }}">{{ row.user_email|default:row.user_name|default:"—" }}</td>
             <td>
               {% if row.client_kind == "claude-code" %}
                 <span class="client-badge cb-claude-code">CC</span>

@@ -116,6 +116,39 @@ _INJECTION_PATTERNS = (
     "dame tu prompt",
 )
 
+# Indirect injection via markdown / hidden text
+_INJECTION_MARKDOWN_PATTERNS = (
+    "![",  # markdown image
+    "[click here](",
+    "<script",
+    "javascript:",
+    "data:text/html",
+    "<!--",  # html comment
+)
+
+# Indirect injection via Unicode
+_INJECTION_UNICODE_PATTERNS = (
+    "\u200b",  # zero-width space
+    "\u200c",  # zero-width non-joiner
+    "\u200d",  # zero-width joiner
+    "\ufeff",  # BOM / zero-width no-break space
+)
+
+# Multi-turn injection: detectar si el historial previo contiene
+# contenido que intente re-instruir al modelo
+_MULTI_TURN_INJECTION_PATTERNS = (
+    "from now on",
+    "de ahora en adelante",
+    "a partir de ahora",
+    "ignore the above",
+    "ignore lo anterior",
+    "olvida la conversacion",
+    "reset your instructions",
+    "forget everything",
+    "new role",
+    "cambio de rol",
+)
+
 
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _UUID_RE = re.compile(
@@ -125,6 +158,18 @@ _UUID_RE = re.compile(
 _API_KEY_RE = re.compile(r"\bsk-[a-zA-Z0-9_-]{20,}\b")
 _DOMK_KEY_RE = re.compile(r"\bdomk_[a-zA-Z0-9_-]{10,}\b")
 _BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._-]{10,}\b")
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
+_IPV4_PRIVATE_RE = re.compile(
+    r"(?<![\d.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|172\.(?:1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3})(?![\d.])"
+)
+_PASSWORD_FIELD_RE = re.compile(
+    r'(?i)(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*["\']?([^\s"\'<>]+)'
+)
+_CREDIT_CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
+_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
 
 def detect_code_generation(question: str) -> str | None:
@@ -160,11 +205,35 @@ def detect_prompt_injection(question: str) -> str | None:
     for pattern in _INJECTION_PATTERNS:
         if pattern in q:
             return pattern
+    for pattern in _MULTI_TURN_INJECTION_PATTERNS:
+        if pattern in q:
+            return f"multi-turn: {pattern}"
+    for pattern in _INJECTION_MARKDOWN_PATTERNS:
+        if pattern in q:
+            return f"markdown-injection: {pattern!r}"
+    for char in _INJECTION_UNICODE_PATTERNS:
+        if char in question:
+            return f"unicode-injection: {hex(ord(char))}"
+    return None
+
+
+def has_unicode_injection(question: str) -> bool:
+    """Detecta caracteres Unicode invisibles (zero-width, BOM, etc)."""
+    return any(c in question for c in _INJECTION_UNICODE_PATTERNS)
+
+
+def has_markdown_injection(question: str) -> str | None:
+    """Detecta patrones de markdown que podrian esconder instrucciones."""
+    q = question.lower()
+    for pattern in _INJECTION_MARKDOWN_PATTERNS:
+        if pattern in q:
+            return pattern
     return None
 
 
 def censor_sensitive_text(text: str) -> tuple[str, int]:
-    """Censura emails/UUIDs/api keys/bearer tokens en la respuesta del LLM.
+    """Censura emails/UUIDs/api keys/bearer tokens/JWTs/IPs privadas/tarjetas/SSN
+    en la respuesta del LLM.
 
     Returns (texto_censurado, cantidad_de_reemplazos).
     El admin@admin.com (email publico del login) NO se censura.
@@ -179,31 +248,22 @@ def censor_sensitive_text(text: str) -> tuple[str, int]:
         count += 1
         return "[email censurado]"
 
-    def replace_uuid(_m: re.Match) -> str:
-        nonlocal count
-        count += 1
-        return "[uuid censurado]"
-
-    def replace_api_key(_m: re.Match) -> str:
-        nonlocal count
-        count += 1
-        return "[api-key censurada]"
-
-    def replace_domk(_m: re.Match) -> str:
-        nonlocal count
-        count += 1
-        return "[key censurada]"
-
-    def replace_bearer(_m: re.Match) -> str:
-        nonlocal count
-        count += 1
-        return "Bearer [token censurado]"
+    def make_replacer(replacement: str):
+        def replacer(_m: re.Match) -> str:
+            nonlocal count
+            count += 1
+            return replacement
+        return replacer
 
     text = _EMAIL_RE.sub(censor_email, text)
-    text = _UUID_RE.sub(replace_uuid, text)
-    text = _API_KEY_RE.sub(replace_api_key, text)
-    text = _DOMK_KEY_RE.sub(replace_domk, text)
-    text = _BEARER_RE.sub(replace_bearer, text)
+    text = _UUID_RE.sub(make_replacer("[uuid censurado]"), text)
+    text = _API_KEY_RE.sub(make_replacer("[api-key censurada]"), text)
+    text = _DOMK_KEY_RE.sub(make_replacer("[key censurada]"), text)
+    text = _BEARER_RE.sub(make_replacer("Bearer [token censurado]"), text)
+    text = _JWT_RE.sub(make_replacer("[jwt censurado]"), text)
+    text = _IPV4_PRIVATE_RE.sub(make_replacer("[ip privada censurada]"), text)
+    text = _CREDIT_CARD_RE.sub(make_replacer("[tarjeta censurada]"), text)
+    text = _SSN_RE.sub(make_replacer("[ssn censurado]"), text)
     return text, count
 
 

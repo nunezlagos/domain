@@ -14,6 +14,9 @@ Pagina HTML (HU-49.3 la implementa, pero el view ya existe):
 Auth: mismo patron que el resto del admin (HU-47.1 single-user). El
 "user_email" se toma de `request.session["email"]`. Para multi-user
 futuro, cambiar por `request.user.email`.
+
+Seguridad: rate limit por usuario (10 req/min) implementado en
+`rate_limit.py` (defense contra LLM04 Model DoS).
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ from core.auth import require_auth
 from core.llm import LlmFactory, LlmProviderError
 
 from .admin_models import Conversation, Message
+from .rate_limit import check_default
 from .retrieval import RetrievalService
 from .services import ChatService
 
@@ -130,6 +134,18 @@ def create_message(request: HttpRequest, conversation_id: str) -> JsonResponse:
     redir = require_auth(request)
     if redir:
         return redir
+    email = _current_email(request)
+    rl = check_default(email)
+    if not rl.allowed:
+        return JsonResponse(
+            {
+                "error": "rate limit exceeded",
+                "message": f"demasiadas requests. intenta en {rl.reset_in_seconds}s",
+                "reset_in": rl.reset_in_seconds,
+            },
+            status=429,
+        )
+
     body = _parse_body(request)
     if not body or "content" not in body:
         return JsonResponse({"error": "content requerido"}, status=400)
@@ -139,7 +155,7 @@ def create_message(request: HttpRequest, conversation_id: str) -> JsonResponse:
 
     service = _get_service()
     try:
-        conv = service._get_owned(conversation_id, _current_email(request))
+        conv = service._get_owned(conversation_id, email)
     except PermissionError:
         return JsonResponse({"error": "forbidden"}, status=403)
 

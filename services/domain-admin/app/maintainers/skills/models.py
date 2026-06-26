@@ -74,6 +74,7 @@ class Skill(SoftDeleteModel):
     pinned_version = models.IntegerField(null=True, blank=True)
     project_id = models.UUIDField(null=True, blank=True)
     proposed = models.BooleanField(default=False)
+    root_path = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = "skills"

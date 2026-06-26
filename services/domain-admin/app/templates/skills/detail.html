@@ -51,6 +51,7 @@
       </tr>
       <tr><th>Version fijada</th><td>{{ skill_obj.pinned_version|default:"—" }}</td></tr>
       <tr><th>Proyecto</th><td>{% if skill_obj.project_id %}<code>{{ skill_obj.project_id }}</code>{% else %}<span class="text-muted">Global</span>{% endif %}</td></tr>
+      <tr><th>Root path</th><td>{% if skill_obj.root_path %}<code>{{ skill_obj.root_path }}</code> <span class="text-muted mnt-text-sm">(stack del subdir)</span>{% else %}<span class="text-muted">—</span>{% endif %}</td></tr>
       <tr><th>Creado</th><td>{{ skill_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Actualizado</th><td>{{ skill_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
     </tbody>

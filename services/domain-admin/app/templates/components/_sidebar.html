@@ -113,6 +113,14 @@
       Flujo SDD
     </a>
 
+    <div class="sidebar-section mt-3">Analytics</div>
+    <a href="{% url 'usage:dashboard' %}" class="sidebar-link {% if 'uso' in request.path %}active{% endif %}">
+      <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Uso
+    </a>
+
     <div class="sidebar-section mt-3">Proximamente</div>
     <span class="sidebar-link disabled" title="Proxima HU">
       <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

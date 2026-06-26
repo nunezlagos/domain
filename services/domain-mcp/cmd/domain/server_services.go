@@ -41,6 +41,7 @@ import (
 	"nunezlagos/domain/internal/service/billing"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/flow"
@@ -93,6 +94,7 @@ type serverServices struct {
 	ProjectService        *projsvc.Service
 	ObsService            *observation.Service
 	ObsEdgeService        *observation.EdgeService
+	CodeGraphService      *codegraphsvc.CodegraphService
 	PromptService         *promptsvc.Service
 	TimelineService       *timelinesvc.Service
 	SearchService         *searchsvc.Service
@@ -189,6 +191,7 @@ func buildServices(
 		WithClientService(s.ClientService)
 	s.ObsService = observation.NewService(pools.App, s.Recorder, s.Embedder, nil, nil)
 	s.ObsEdgeService = observation.NewEdgeService(pools.App, s.Embedder, s.Recorder)
+	s.CodeGraphService = codegraphsvc.NewCodegraphService(pools.App)
 
 	s.PromptService = &promptsvc.Service{Pool: pools.App, Audit: s.Recorder}
 	s.TimelineService = &timelinesvc.Service{Pool: pools.App}

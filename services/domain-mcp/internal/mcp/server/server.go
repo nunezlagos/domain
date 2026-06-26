@@ -29,6 +29,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
@@ -54,7 +55,8 @@ import (
 // Deps colecciona las dependencias del servidor MCP.
 type Deps struct {
 	Observations     *obssvc.Service
-	ObservationEdges *obssvc.EdgeService // fase 1 memory graph — aristas tipadas
+	ObservationEdges *obssvc.EdgeService            // fase 1 memory graph — aristas tipadas
+	CodeGraph        *codegraphsvc.CodegraphService // fase 2 code graph — nodos/aristas de código
 	Projects         *projsvc.Service
 	Prompts         *promptsvc.Service
 	Timeline        *timelinesvc.Service
@@ -104,6 +106,7 @@ type toolRegistrar func(*ResilientWrapper, Deps) []mcpgo.ServerTool
 var toolGroups = []toolRegistrar{
 	registerMemoryTools,
 	registerMemoryGraphTools,
+	registerCodeGraphTools,
 	registerCatalogTools,
 	registerPolicyTools,
 	registerProjectTools,

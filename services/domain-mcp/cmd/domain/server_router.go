@@ -121,6 +121,7 @@ func buildRouter(
 		Base: mcptools.Deps{
 			Observations:     s.ObsService,
 			ObservationEdges: s.ObsEdgeService,
+			CodeGraph:        s.CodeGraphService,
 			Projects:         s.ProjectService,
 			Prompts:      s.PromptService,
 			Timeline:     s.TimelineService,

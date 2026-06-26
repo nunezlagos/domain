@@ -44,6 +44,7 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
@@ -157,6 +158,7 @@ func main() {
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
 	observationEdges := observation.NewEdgeService(pools.App, llm.NopEmbedder{}, recorder)
+	codeGraph := codegraphsvc.NewCodegraphService(pools.App)
 
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
@@ -313,6 +315,7 @@ func main() {
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations:     observations,
 		ObservationEdges: observationEdges,
+		CodeGraph:        codeGraph,
 		Projects:         projects,
 		Prompts:      prompts,
 		Timeline:     timeline,

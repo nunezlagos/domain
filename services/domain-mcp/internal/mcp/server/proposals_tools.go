@@ -1,13 +1,13 @@
 // REQ-49 — proposals de policies/skills auto-generadas por el LLM.
 //
 // Workflow:
-//   1. LLM detecta un patron recurrente del proyecto (workflow git,
-//      convention de migrations, tech stack constraint, etc).
-//   2. Llama domain_propose_policy o domain_propose_skill con
-//      source='llm_generated' + proposed=true. Queda invisible para los
-//      resolvers (policy_get, skill_search) hasta que el usuario apruebe.
-//   3. domain_proposal_list muestra las propuestas pendientes.
-//   4. domain_proposal_review(kind, id, action: accept|reject) decide.
+//  1. LLM detecta un patron recurrente del proyecto (workflow git,
+//     convention de migrations, tech stack constraint, etc).
+//  2. Llama domain_propose_policy o domain_propose_skill con
+//     source='llm_generated' + proposed=true. Queda invisible para los
+//     resolvers (policy_get, skill_search) hasta que el usuario apruebe.
+//  3. domain_proposal_list muestra las propuestas pendientes.
+//  4. domain_proposal_review(kind, id, action: accept|reject) decide.
 //
 // Por que no aprobacion automatica: el LLM puede malinterpretar un
 // pattern. Mantener al humano en el loop evita reglas equivocadas que
@@ -27,9 +27,9 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type proposalsPoliciesStore interface {
@@ -78,7 +78,7 @@ func registerProposalsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerToo
 
 func toolProposePolicy() mcp.Tool {
 	return mcp.NewTool("domain_propose_policy",
-		mcp.WithDescription("LLM propone una nueva project_policy basada en lo que aprendio del proyecto. Queda en estado proposed=true — invisible para policy_get hasta que el usuario apruebe con domain_proposal_review. NO usar para reglas obvias (ej. 'usar git') — usar para patterns especificos del repo (workflow, migrations, convention)."),
+		mcp.WithDescription("SOLO modo headless/batch (sin humano presente para confirmar). Propone una project_policy en estado proposed=true — invisible para policy_get hasta domain_proposal_review. Con usuario presente NO uses esto: confirmá el contenido en el momento (AskUserQuestion) y creá activa con domain_project_policy_set. NO usar para reglas obvias (ej. 'usar git') — usar para patterns especificos del repo (workflow, migrations, convention)."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica"), mcp.Required()),
 		mcp.WithString("slug", mcp.Description("Slug de la policy propuesta"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
@@ -90,7 +90,7 @@ func toolProposePolicy() mcp.Tool {
 
 func toolProposeSkill() mcp.Tool {
 	return mcp.NewTool("domain_propose_skill",
-		mcp.WithDescription("LLM propone una nueva skill basada en una tarea recurrente del proyecto. Queda proposed=true — invisible hasta aprobacion. Util cuando haces N veces el mismo comando con variantes (ej. 'php artisan migrate manual + reload cache + clear views' = una skill 'reset-db')."),
+		mcp.WithDescription("SOLO modo headless/batch (sin humano presente para confirmar). Propone una skill en estado proposed=true — invisible hasta aprobacion. Con usuario presente NO uses esto: confirmá el contenido en el momento (AskUserQuestion) y creá activa con domain_project_skill_register (interna) o domain_skill_create (global). Util cuando haces N veces el mismo comando con variantes (ej. 'php artisan migrate manual + reload cache + clear views' = una skill 'reset-db')."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que aplica (null = global de la org)")),
 		mcp.WithString("slug", mcp.Description("Slug de la skill"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),

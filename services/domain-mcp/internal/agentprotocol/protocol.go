@@ -75,15 +75,42 @@ crea una copia versionada en BD; el archivo del usuario queda intacto.
   la devuelve; si override_platform=false trae también la platform
   como contexto adicional; si no hay, fallback a platform.
 - domain_project_policy_set para registrar reglas que aprendiste del
-  proyecto (workflow=pr/mr, migrations manuales, tech_stack, etc.)
-  con source='llm_generated'.
+  proyecto (workflow=pr/mr, migrations manuales, tech_stack, etc.).
+  ANTES de persistir, confirmá con el usuario (ver "Crear skills/
+  políticas" abajo).
 
 ## Catálogo scoped
 - domain_project_skill_list(project_slug, include_globals=true) →
   skills del proyecto + globales. Para registrar una skill que
-  aprendiste del proyecto: domain_project_skill_register.
+  aprendiste del proyecto: domain_project_skill_register (confirmá antes).
 - domain_project_repo_list(project_slug) → si ambiguous=true (>1
   remoto sin default), preguntale al usuario antes de pushear.
+
+## Crear skills/políticas (confirmá ANTES de persistir + scope)
+Toda skill o policy nueva pasa por confirmación humana SÍNCRONA antes de
+escribirse, sin importar el origen (la detectaste, el usuario la pidió, o
+la inferiste de un patrón). NO persistas a ciegas.
+
+1. Armá el contenido completo (slug, name, body/content, kind si es policy).
+2. Inferí el SCOPE y proponelo:
+   - interna (project-scoped, project_id=<proyecto>): es lo DEFAULT. Todo
+     lo específico del repo — stack, workflow, convención propia, comando
+     recurrente. Casi todo cae acá.
+   - global (project_id NULL): SOLO si es una verdad universal aplicable a
+     CUALQUIER proyecto de la org. Es raro: las globales suelen venir del
+     seed curado. Ante la duda → interna.
+3. Mostrale al usuario el contenido + el scope propuesto y pedí confirmación
+   explícita (en Claude Code: AskUserQuestion; en otro cliente: una pregunta
+   directa). Ofrecé: confirmar / ajustar / descartar.
+4. Si pide ajustes, aplicálos y volvé a confirmar.
+5. Al confirmar, persistí YA ACTIVA con el scope acordado:
+   - skill: domain_project_skill_register (interna) o domain_skill_create
+     (global). Ambas crean activas (proposed=false).
+   - policy: domain_project_policy_set. Crea activa.
+6. domain_propose_skill / domain_propose_policy (proposed=true, review
+   diferido) son SOLO para modo headless/batch donde NO hay un humano que
+   confirme en el momento. Con usuario presente, confirmá y creá activa —
+   no dejes proposals colgadas.
 
 ## Issues vs Tickets (REQ-56)
 - **issue** (workflow SDD formal con Gherkin): se crea con
@@ -111,11 +138,13 @@ Pasos para configurar (UNA vez por stack, no por sesión):
      2 stacks → 2 skills. Un monorepo con N paquetes = N stacks.
 2. Para cada stack detectado, mirá domain_project_skill_list para no
    duplicar. Si ya existe la skill de ese stack, saltala.
-3. Por cada stack faltante, llamá domain_project_skill_register con:
-   - slug: "<framework>-<major>-stack" y, si NO está en el root,
-     prefijá el subpath: "web-nextjs-15-stack", "api-go-1-stack".
-   - content: role + patrones_obligatorios + antipatrones + gotchas +
-     tooling (comandos exactos de test/lint/build) de ESE stack+versión.
+3. Por cada stack faltante, armá la skill (slug "<framework>-<major>-stack",
+   prefijando el subpath si no está en el root: "web-nextjs-15-stack",
+   "api-go-1-stack"; content = role + patrones_obligatorios + antipatrones
+   + gotchas + tooling) y pasala por el flujo de confirmación de "Crear
+   skills/políticas": mostrásela al usuario, y al confirmar persistila
+   activa con domain_project_skill_register (scope interna, es de ESTE repo).
+   La detección es silenciosa; la CONFIRMACIÓN previa a persistir no.
 4. Si el stack vive en un subpath o submódulo, registrá ese path como
    project_repository (domain_project_repo_add con root_path=<subpath>)
    para dejar la estructura del monorepo explícita en BD. Así futuras

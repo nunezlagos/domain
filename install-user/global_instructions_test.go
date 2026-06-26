@@ -1,0 +1,107 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+// upsertDomainBlock en contenido vacío: escribe solo el bloque.
+func TestUpsertDomainBlock_InsertIntoEmpty(t *testing.T) {
+	out := upsertDomainBlock("")
+	if !strings.Contains(out, domainBlockStart) || !strings.Contains(out, domainBlockEnd) {
+		t.Fatal("falta el par de marcadores domain")
+	}
+	if !hasUpToDateDomainBlock(out) {
+		t.Fatal("el bloque insertado debería reconocerse como up-to-date")
+	}
+	if strings.Count(out, domainBlockStart) != 1 {
+		t.Fatalf("se esperaba 1 marcador start, hay %d", strings.Count(out, domainBlockStart))
+	}
+}
+
+// upsertDomainBlock preserva el contenido del usuario fuera de los marcadores
+// y agrega el bloque al final.
+func TestUpsertDomainBlock_PreservesUserContent(t *testing.T) {
+	user := "# Mi CLAUDE.md\n\n- regla propia del usuario\n"
+	out := upsertDomainBlock(user)
+	if !strings.Contains(out, "regla propia del usuario") {
+		t.Fatal("se perdió contenido del usuario")
+	}
+	if !strings.Contains(out, domainBlockStart) {
+		t.Fatal("no se agregó el bloque domain")
+	}
+	// El bloque domain debe quedar DESPUÉS del contenido del usuario.
+	if strings.Index(out, "regla propia") > strings.Index(out, domainBlockStart) {
+		t.Fatal("el bloque domain debería ir al final, tras el contenido del usuario")
+	}
+}
+
+// upsertDomainBlock reemplaza un bloque viejo sin duplicar y preserva lo de
+// afuera (antes y después del bloque).
+func TestUpsertDomainBlock_ReplacesOldBlockNoDuplicate(t *testing.T) {
+	old := "# Header del usuario\n\n" +
+		domainBlockStart + "\nCONTENIDO VIEJO DE DOMAIN\n" + domainBlockEnd +
+		"\n\n# Footer del usuario\n"
+	out := upsertDomainBlock(old)
+
+	if strings.Contains(out, "CONTENIDO VIEJO DE DOMAIN") {
+		t.Fatal("el contenido viejo del bloque no fue reemplazado")
+	}
+	if strings.Count(out, domainBlockStart) != 1 {
+		t.Fatalf("se duplicó el marcador start: %d", strings.Count(out, domainBlockStart))
+	}
+	if strings.Count(out, domainBlockEnd) != 1 {
+		t.Fatalf("se duplicó el marcador end: %d", strings.Count(out, domainBlockEnd))
+	}
+	if !strings.Contains(out, "# Header del usuario") || !strings.Contains(out, "# Footer del usuario") {
+		t.Fatal("se perdió contenido del usuario alrededor del bloque")
+	}
+	if !hasUpToDateDomainBlock(out) {
+		t.Fatal("el bloque reemplazado debería ser up-to-date")
+	}
+}
+
+// upsertDomainBlock es idempotente: aplicarlo dos veces da el mismo resultado.
+func TestUpsertDomainBlock_Idempotent(t *testing.T) {
+	user := "# Usuario\n\ntexto\n"
+	once := upsertDomainBlock(user)
+	twice := upsertDomainBlock(once)
+	if once != twice {
+		t.Fatalf("no es idempotente:\n--- once ---\n%s\n--- twice ---\n%s", once, twice)
+	}
+	if strings.Count(twice, domainBlockStart) != 1 {
+		t.Fatalf("idempotencia rota: %d marcadores start", strings.Count(twice, domainBlockStart))
+	}
+}
+
+// upsertStringInArray: agrega si falta, no duplica, preserva existentes.
+func TestUpsertStringInArray(t *testing.T) {
+	m := map[string]any{"instructions": []any{"AGENTS.md"}}
+
+	if !upsertStringInArray(m, "instructions", "instructions/domain.md") {
+		t.Fatal("debería haber modificado el map agregando la nueva entry")
+	}
+	arr := m["instructions"].([]any)
+	if len(arr) != 2 {
+		t.Fatalf("se esperaban 2 entradas, hay %d", len(arr))
+	}
+
+	// Segunda aplicación: no duplica.
+	if upsertStringInArray(m, "instructions", "instructions/domain.md") {
+		t.Fatal("no debería modificar si la entry ya existe")
+	}
+	if len(m["instructions"].([]any)) != 2 {
+		t.Fatal("se duplicó una entry existente")
+	}
+
+	// Preserva la entry del usuario.
+	found := false
+	for _, e := range m["instructions"].([]any) {
+		if e == "AGENTS.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("se perdió la entry del usuario 'AGENTS.md'")
+	}
+}

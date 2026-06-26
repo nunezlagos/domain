@@ -49,15 +49,15 @@ func info(s string)  { fmt.Printf("%s    ·%s %s\n", cDim, cReset, s) }
 
 func main() {
 	var (
-		vpsURL           string
-		email            string
-		apiKey           string
-		uninstall        bool
-		dryRun           bool
-		target           string
-		installOpencode  bool
-		bootstrapGuided  bool
-		yes              bool
+		vpsURL          string
+		email           string
+		apiKey          string
+		uninstall       bool
+		dryRun          bool
+		target          string
+		installOpencode bool
+		bootstrapGuided bool
+		yes             bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
@@ -87,13 +87,13 @@ func main() {
 	}
 
 	runInstall(platform, paths, installOptions{
-		URL:              vpsURL,
-		Email:            email,
-		APIKey:           apiKey,
-		DryRun:           dryRun,
-		Target:           target,
-		AutoInstall:      installOpencode,
-		NonInteractive:   yes,
+		URL:            vpsURL,
+		Email:          email,
+		APIKey:         apiKey,
+		DryRun:         dryRun,
+		Target:         target,
+		AutoInstall:    installOpencode,
+		NonInteractive: yes,
 	})
 }
 
@@ -252,6 +252,14 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	}
 	ok("skill: " + paths.GlobalSkillPath)
 	ok("agent: " + paths.GlobalAgentPath)
+
+	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
+	step("Escribiendo precedencia global de domain")
+	if err := installGlobalInstructions(paths, p.Home(), Timestamp()); err != nil {
+		warnL("precedencia global: " + err.Error())
+	} else {
+		ok("CLAUDE.md global: " + claudeGlobalPath(p.Home()))
+	}
 
 	step("Configurando clientes (MCP transport)")
 	if err := Apply(plan, opts.URL, opts.APIKey); err != nil {

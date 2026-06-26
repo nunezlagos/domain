@@ -25,7 +25,7 @@ class Conversation(models.Model):
     (truncado a 60 chars).
     """
 
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     user_email = models.TextField()
     title = models.TextField(default="")
     created_at = models.DateTimeField()

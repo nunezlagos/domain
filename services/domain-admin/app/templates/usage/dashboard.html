@@ -165,6 +165,11 @@
     .turn-ok  { color: var(--color-success); }
     .turn-pen { color: var(--color-text-muted); }
 
+    /* Fila activa en filtro por usuario */
+    .table-active td { background: var(--color-accent-soft) !important; }
+    .usage-table tbody tr:hover td { background: var(--color-bg-elevated); }
+    .usage-table tbody tr.table-active:hover td { background: var(--color-accent-soft) !important; }
+
     .empty-state {
       text-align: center;
       padding: var(--space-xl);
@@ -205,10 +210,10 @@
   </div>
 
   {% if user_filter %}
-  <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md);padding:var(--space-sm) var(--space-md);background:var(--color-accent-soft);border:1px solid var(--color-accent);border-radius:var(--radius-md);">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    <span style="font-size:var(--fs-sm);color:var(--color-text-link);">Filtrando por usuario: <strong>{{ user_filter }}</strong></span>
-    <a href="?days={{ days }}&by={{ by }}" style="margin-left:auto;font-size:var(--fs-xs);color:var(--color-text-muted);text-decoration:none;">✕ Limpiar</a>
+  <div style="display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-md);padding:var(--space-md) var(--space-lg);background:var(--color-accent);color:#fff;border-radius:var(--radius-md);font-size:var(--fs-sm);">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>Filtrando por: <strong>{{ user_filter }}</strong></span>
+    <a href="?days={{ days }}&by={{ by }}" style="margin-left:auto;background:rgba(255,255,255,0.2);color:#fff;padding:4px 12px;border-radius:var(--radius-full);text-decoration:none;font-weight:var(--fw-semibold);">✕ Quitar filtro</a>
   </div>
   {% endif %}
 
@@ -316,9 +321,17 @@
         </thead>
         <tbody>
           {% for row in by_user %}
-          <tr class="{% if user_filter == row.user_email %}table-active{% endif %}" style="cursor:pointer;" onclick="window.location='?days={{ days }}&by={{ by }}&user={{ row.user_email|urlencode }}'">
+          <tr class="{% if user_filter == row.user_email %}table-active{% endif %}"
+              style="cursor:pointer;"
+              onclick="window.location='?days={{ days }}&by={{ by }}&user={{ row.user_email|urlencode }}'"
+              title="Click para filtrar prompts de {{ row.user_email }}">
             <td>
-              <span style="font-weight:var(--fw-semibold);">{{ row.user_name|default:"—"|default:"(sin usuario)" }}</span>
+              <span style="font-weight:var(--fw-semibold);display:flex;align-items:center;gap:6px;">
+                {% if user_filter == row.user_email %}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                {% endif %}
+                {{ row.user_name|default:"—"|default:"(sin usuario)" }}
+              </span>
               {% if row.user_email %}<br><span style="font-size:var(--fs-xs);color:var(--color-text-muted);">{{ row.user_email }}</span>{% endif %}
             </td>
             <td class="num">{{ row.turns }}</td>

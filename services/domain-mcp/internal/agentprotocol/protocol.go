@@ -101,13 +101,17 @@ la inferiste de un patrón). NO persistas a ciegas.
      seed curado. Ante la duda → interna.
 3. Mostrale al usuario el contenido + el scope propuesto y pedí confirmación
    explícita (en Claude Code: AskUserQuestion; en otro cliente: una pregunta
-   directa). Ofrecé: confirmar / ajustar / descartar.
-4. Si pide ajustes, aplicálos y volvé a confirmar.
-5. Al confirmar, persistí YA ACTIVA con el scope acordado:
+   directa). Ofrecé tres opciones: confirmar / modificar / descartar.
+4. Si elige modificar: aplicá los ajustes, volvé a MOSTRAR el contenido ya
+   ajustado (con los cambios reflejados, no solo describirlos) y re-ofrecé
+   confirmar / modificar / descartar. Repetí este ciclo cuantas veces haga
+   falta hasta que confirme o descarte. NO persistas nada en medio del ciclo.
+5. Si descarta: no escribas nada y seguí con la conversación.
+6. Solo al confirmar, persistí YA ACTIVA con el scope acordado:
    - skill: domain_project_skill_register (interna) o domain_skill_create
      (global). Ambas crean activas (proposed=false).
    - policy: domain_project_policy_set. Crea activa.
-6. domain_propose_skill / domain_propose_policy (proposed=true, review
+7. domain_propose_skill / domain_propose_policy (proposed=true, review
    diferido) son SOLO para modo headless/batch donde NO hay un humano que
    confirme en el momento. Con usuario presente, confirmá y creá activa —
    no dejes proposals colgadas.

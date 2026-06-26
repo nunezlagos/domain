@@ -314,13 +314,27 @@
   font-size: var(--fs-xs, 12px);
 }
 
+.llm-widget-list-group {
+  margin-bottom: 8px;
+}
+
+.llm-widget-list-group-title {
+  font-size: 10px;
+  font-weight: var(--fw-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary, #74788d);
+  padding: 6px 12px 4px;
+}
+
 .llm-widget-item {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
-  margin-bottom: 2px;
-  transition: background 0.12s;
+  margin-bottom: 1px;
+  transition: background 0.12s, border-color 0.12s;
   border: 1px solid transparent;
+  position: relative;
 }
 
 .llm-widget-item:hover {
@@ -332,6 +346,26 @@
   border-color: var(--color-accent, #556ee6);
 }
 
+.llm-widget-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--color-accent, #556ee6);
+  border-radius: 0 2px 2px 0;
+}
+
+.llm-widget-item-empty {
+  opacity: 0.6;
+}
+
+.llm-widget-item-empty .llm-widget-item-title-text {
+  font-style: italic;
+  color: var(--color-text-secondary, #74788d);
+}
+
 .llm-widget-item-title {
   font-weight: var(--fw-medium, 500);
   font-size: var(--fs-sm, 13px);
@@ -339,7 +373,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -347,20 +381,29 @@
 
 .llm-widget-item.active .llm-widget-item-title {
   color: var(--color-text-heading, #343a40);
+  font-weight: var(--fw-semibold, 600);
 }
 
 .llm-widget-item-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--color-text-secondary, #74788d);
-  opacity: 0.4;
+  opacity: 0.3;
   flex-shrink: 0;
 }
 
 .llm-widget-item.active .llm-widget-item-dot {
   background: var(--color-accent, #556ee6);
   opacity: 1;
+}
+
+.llm-widget-item-title-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .llm-widget-item-preview {
@@ -370,16 +413,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
+  padding-left: 11px;
 }
 
 .llm-widget-item-time {
   font-size: 10px;
   color: var(--color-text-secondary, #74788d);
-  margin-top: 4px;
+  margin-top: 3px;
   opacity: 0.7;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  padding-left: 11px;
 }
 
 .llm-widget-sidebar-footer {

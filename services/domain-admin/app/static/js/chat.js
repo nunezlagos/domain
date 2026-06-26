@@ -134,6 +134,19 @@
      RENDER: lista de conversaciones
      ============================================================ */
 
+  function dayBucket(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((todayStart - dStart) / 86400000);
+    if (diffDays === 0) return "Hoy";
+    if (diffDays === 1) return "Ayer";
+    if (diffDays < 7) return "Esta semana";
+    if (diffDays < 30) return "Este mes";
+    return "Mas antiguo";
+  }
+
   function renderConversations() {
     const list = $("chat-list");
     if (!list) return;
@@ -146,33 +159,51 @@
       list.innerHTML = '<div class="llm-widget-list-empty">Sin resultados para la busqueda.</div>';
       return;
     }
+
     const titleCounts = {};
     convs.forEach((c) => {
       const k = (c.title || "Nueva conversacion").trim().toLowerCase();
       titleCounts[k] = (titleCounts[k] || 0) + 1;
     });
-    list.innerHTML = convs.map((c) => {
-      const active = c.id === state.activeId ? " active" : "";
-      const baseTitle = (c.title || "Nueva conversacion").trim();
-      const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
-      const title = dupCount > 1 ? `${baseTitle} · ${shortTime(c.created_at)}` : baseTitle;
-      const preview = (c.last_message_preview || "").slice(0, 50);
-      return `
-        <div class="llm-widget-item${active}" data-id="${c.id}" title="${escapeHtml(c.title || 'Nueva conversacion')}">
-          <div class="llm-widget-item-title">
-            <span class="llm-widget-item-dot"></span>
-            <span>${escapeHtml(title)}</span>
-          </div>
-          ${preview ? `<div class="llm-widget-item-preview">${escapeHtml(preview)}</div>` : ""}
-          <div class="llm-widget-item-time">
-            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-            ${relativeTime(c.updated_at)}
-          </div>
-        </div>`;
-    }).join("");
+
+    const groups = { "Hoy": [], "Ayer": [], "Esta semana": [], "Este mes": [], "Mas antiguo": [] };
+    convs.forEach((c) => {
+      const bucket = dayBucket(c.updated_at || c.created_at);
+      groups[bucket].push(c);
+    });
+
+    const html = Object.entries(groups)
+      .filter(([_, items]) => items.length > 0)
+      .map(([bucket, items]) => {
+        const itemsHtml = items.map((c) => {
+          const active = c.id === state.activeId ? " active" : "";
+          const baseTitle = (c.title || "").trim();
+          const isEmpty = !baseTitle || baseTitle.toLowerCase() === "nueva conversacion";
+          const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
+          const titleText = isEmpty
+            ? "Conversacion vacia"
+            : (dupCount > 1 ? baseTitle : baseTitle);
+          const preview = (c.last_message_preview || "").slice(0, 60);
+          const isEmptyClass = isEmpty ? " llm-widget-item-empty" : "";
+          return `
+            <div class="llm-widget-item${active}${isEmptyClass}" data-id="${c.id}" title="${escapeHtml(c.title || 'Nueva conversacion')}">
+              <div class="llm-widget-item-title">
+                <span class="llm-widget-item-dot"></span>
+                <span class="llm-widget-item-title-text">${escapeHtml(titleText)}</span>
+              </div>
+              ${preview ? `<div class="llm-widget-item-preview">${escapeHtml(preview)}</div>` : ""}
+              <div class="llm-widget-item-time">${relativeTime(c.updated_at)}</div>
+            </div>`;
+        }).join("");
+        return `
+          <div class="llm-widget-list-group">
+            <div class="llm-widget-list-group-title">${bucket}</div>
+            ${itemsHtml}
+          </div>`;
+      })
+      .join("");
+
+    list.innerHTML = html;
     list.querySelectorAll(".llm-widget-item").forEach((el) => {
       el.addEventListener("click", () => selectConversation(el.dataset.id));
     });

@@ -13,7 +13,7 @@ import (
 type ProjectTemplatesSeeder struct{}
 
 func (s *ProjectTemplatesSeeder) Name() string    { return "project_templates" }
-func (s *ProjectTemplatesSeeder) Version() int    { return 1 }
+func (s *ProjectTemplatesSeeder) Version() int    { return 2 }
 func (s *ProjectTemplatesSeeder) Order() int      { return 35 }
 func (s *ProjectTemplatesSeeder) IsDevOnly() bool { return false }
 
@@ -59,6 +59,136 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 				"language": "typescript", "test_framework": "vitest",
 			},
 			DefaultSkills: []string{"summarize", "code-review"},
+		},
+		// ── Templates v2: extraídos del análisis cross-project (9 proyectos Saargo) ──
+		{
+			Slug: "laravel-backend", Name: "Laravel Backend",
+			Description: "Laravel 12 + PHP 8.3+ + PostgreSQL: service layer, Pest, Pint, Larastan, Scramble, serverless (Bref/Lambda). Estándar Saargo Curriculum y MJ-Observatorio.",
+			Settings: map[string]any{
+				"language":        "php",
+				"framework":       "laravel",
+				"version":         "12.x",
+				"test_framework":  "pest",
+				"db":              "postgresql",
+				"deployment":      "serverless-lambda",
+				"package_manager": "composer",
+				"conventions": []string{
+					"file-size-limit", "yagni-simplicity", "no-n-plus-one",
+					"migration-safety", "openspec-spec-format", "openspec-naming-convention",
+					"audit-tasks-checklist",
+				},
+				"patterns": []string{
+					"service-layer", "form-request-validation",
+					"soft-deletes", "uuid-primary-keys", "observer-side-effects",
+				},
+				"tooling": map[string]string{
+					"linter":          "pint",
+					"static_analysis": "larastan",
+					"api_docs":        "scramble",
+				},
+			},
+			DefaultSkills: []string{"laravel-specialist", "summarize", "sql-explain-impact", "requesting-code-review"},
+		},
+		{
+			Slug: "adonisjs-legacy", Name: "AdonisJS Legacy (ACE)",
+			Description: "AdonisJS 4.1 + Lucid ORM + Vue 2 + Element UI + MySQL: stack ACE (DID/DIDE). Factory pattern para generación de documentos. Playwright E2E.",
+			Settings: map[string]any{
+				"language":       "javascript",
+				"framework":      "adonisjs",
+				"version":        "4.x",
+				"frontend":       "vue2",
+				"ui_library":     "element-ui",
+				"db":             "mysql",
+				"test_framework": "japa+playwright",
+				"deployment":     "pm2-server",
+				"docker":         true,
+				"conventions": []string{
+					"file-size-limit", "conventional-commits-spanish",
+					"openspec-spec-format", "openspec-naming-convention",
+				},
+				"patterns": []string{
+					"factory-pattern-documents", "mvc-thin-controllers",
+					"docker-first-dev",
+				},
+				"gotchas": []string{
+					"curly-quotes-break-vue",
+					"lucid-computed-use-getRelated",
+					"always-run-inside-container",
+				},
+			},
+			DefaultSkills: []string{"adonisjs-patterns", "summarize", "requesting-code-review"},
+		},
+		{
+			Slug: "astro-cloudflare", Name: "Astro + Cloudflare Workers",
+			Description: "Astro 5 (server output) + Cloudflare Workers + Drizzle ORM + D1 (SQLite) + R2: stack quien-sabe-de-web. Vitest + Playwright E2E.",
+			Settings: map[string]any{
+				"language":        "typescript",
+				"framework":       "astro",
+				"version":         "5.x",
+				"runtime":         "cloudflare-workers",
+				"orm":             "drizzle",
+				"db":              "d1-sqlite",
+				"storage":         "r2",
+				"test_framework":  "vitest+playwright",
+				"package_manager": "bun",
+				"conventions": []string{
+					"file-size-limit", "yagni-simplicity",
+					"openspec-spec-format", "openspec-naming-convention",
+					"audit-tasks-checklist",
+				},
+			},
+			DefaultSkills: []string{"nextjs-app-router", "summarize"},
+		},
+		{
+			Slug: "fastapi-serverless", Name: "FastAPI + AWS Lambda",
+			Description: "FastAPI async + SQLAlchemy 2 + Alembic + Mangum (ASGI→Lambda) + Pydantic v2 + structlog + AWS CDK. Stack ACE-Perfilador.",
+			Settings: map[string]any{
+				"language":        "python",
+				"framework":       "fastapi",
+				"version":         "0.115+",
+				"deployment":      "aws-lambda-mangum",
+				"orm":             "sqlalchemy2",
+				"db":              "postgresql",
+				"test_framework":  "pytest",
+				"infrastructure":  "aws-cdk-typescript",
+				"package_manager": "pip+requirements.txt",
+				"conventions": []string{
+					"file-size-limit", "no-n-plus-one", "migration-safety",
+					"openspec-spec-format",
+				},
+				"patterns": []string{
+					"async-everywhere", "pydantic-validation",
+					"structlog-structured", "alembic-migrations",
+					"soft-delete-is-active",
+				},
+			},
+			DefaultSkills: []string{"fastapi-async", "summarize", "sql-explain-impact"},
+		},
+		{
+			Slug: "nextjs-fullstack", Name: "Next.js Fullstack",
+			Description: "Next.js 15 App Router + TypeScript + TanStack Query + shadcn/ui + Tailwind v4 + Bun. Deploy como static export en S3+CloudFront.",
+			Settings: map[string]any{
+				"language":        "typescript",
+				"framework":       "nextjs",
+				"version":         "15.x",
+				"router":          "app-router",
+				"state":           "tanstack-query",
+				"ui":              "shadcn-ui",
+				"styles":          "tailwind-v4",
+				"test_framework":  "vitest+playwright",
+				"package_manager": "bun",
+				"deployment":      "s3-cloudfront-static",
+				"conventions": []string{
+					"file-size-limit", "yagni-simplicity", "no-n-plus-one",
+					"openspec-spec-format", "openspec-naming-convention",
+					"audit-tasks-checklist",
+				},
+				"patterns": []string{
+					"server-components-default", "tanstack-query-client",
+					"shadcn-primitives", "static-export-search-params",
+				},
+			},
+			DefaultSkills: []string{"nextjs-app-router", "summarize", "wcag-audit", "requesting-code-review"},
 		},
 	}
 

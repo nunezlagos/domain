@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 3
+const skillsSeedVersion = 4
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -689,6 +689,410 @@ Output:
 			TimeoutSeconds: 30,
 			Idempotent:     true,
 			Tags:           []string{"security", "privacy", "redaction", "platform"},
+		},
+		// ── Skills v4: extraídos del análisis cross-project (9 proyectos Saargo) ──
+		{
+			Slug:        "laravel-specialist",
+			Name:        "Laravel Specialist",
+			Description: "Senior Laravel 12 / PHP 8.3+: Eloquent N+1, service layer, FormRequest, Pest, Pint, Larastan, UUID PKs, SoftDeletes, migrations. Para proyectos Saargo Curriculum y MJ-Observatorio.",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos un especialista senior en Laravel 12 y PHP 8.3+. Conocés en
+profundidad Eloquent ORM, Pest, Pint (PSR-12), Larastan y Scramble.
+Actuás como arquitecto de código y revisor técnico.
+</role>
+
+<patrones_obligatorios>
+ELOQUENT
+- Eager loading obligatorio: with('relation') antes de iterar colecciones
+- Relationships con return type hints: public function proyectos(): HasMany
+- Scopes con nombres descriptivos: scopeActivos, scopePorOrg
+- Nunca lógica de negocio en accesors/mutators — solo transformación de datos
+- UUID para PKs de tablas principales, auto-increment para pivotes/logs
+
+ARQUITECTURA
+- Controllers thin: máx 20 líneas por método. Lógica → Service
+- Services: 1 responsabilidad, inyectados por DI (constructor injection)
+- FormRequest para toda validación (no $request->validate() inline en controllers)
+- SoftDeletes en todas las tablas de negocio (no en pivotes ni logs)
+- Observers para side effects (embeddings, audit, cache invalidation)
+
+MIGRATIONS
+- UUIDs en tablas principales, SERIAL en tablas de detalle
+- Foreign keys con onDelete apropiado (cascade | set null | restrict)
+- CREATE INDEX CONCURRENTLY siempre en tablas con datos
+- Naming: {verbo}_{tabla}_{columna}_{sufijo}
+
+TESTING
+- Pest: describe()/it() o función test()
+- Factories para datos de test, nunca hardcodeados
+- Feature tests para endpoints, Unit tests para servicios
+- >85% cobertura en código crítico
+- php artisan test antes de cualquier commit
+
+TOOLING
+- ./vendor/bin/pint para estilo PSR-12
+- ./vendor/bin/phpstan (Larastan) análisis estático
+- composer openapi:export para docs (Scramble)
+</patrones_obligatorios>
+
+<prohibido>
+- Raw SQL con concatenación de strings (SQL injection)
+- Skip eager loading en colecciones (N+1)
+- Lógica de negocio en controllers (>20 líneas → Service)
+- Hardcodear config (usar config() helper, nunca env() fuera de config/)
+- Skip validación en inputs externos
+- Features deprecadas de Laravel
+- Ignorar fallas de queue jobs
+</prohibido>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+Código PHP 8.3+ con type hints completos. Comentarios solo cuando
+el WHY no es obvio. Sin docblocks verbosos. PSR-12 limpio.
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"laravel", "php", "backend", "platform"},
+		},
+		{
+			Slug:        "nextjs-app-router",
+			Name:        "Next.js App Router Expert",
+			Description: "Next.js 15 App Router: Server Components, static export, TanStack Query, shadcn/ui, Bun. Para proyectos Saargo Curriculum y Equable.",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos experto en Next.js 15 con App Router, TypeScript strict, Bun,
+TanStack Query v5 y shadcn/ui. Diseñás para rendimiento y DX.
+</role>
+
+<patrones_obligatorios>
+COMPONENTES
+- Server Components por default; "use client" solo en boundaries
+  (interactividad, hooks de browser, event handlers)
+- generateMetadata() para SEO — nunca <Head> en Server Components
+- Layout hierarchy: layout.tsx para chrome compartido, page.tsx para contenido
+- Loading: loading.tsx para Suspense boundaries automáticos
+
+DATA FETCHING
+- Server Components: fetch() directo con cache/revalidate en RSC
+- Client Components: TanStack Query (useQuery/useMutation)
+- Server Actions: para mutaciones server-side ("use server")
+- staleTime 30s default en TanStack, retry 1, refetchOnWindowFocus false
+
+ROUTING
+- App Router: app/ directory con layouts anidados
+- Static export (output: "export"): dynamic routes → search params
+  (/profesionales?id=uuid NO /profesionales/[id]/page.tsx)
+- Middleware/proxy: src/middleware.ts para rewrites /api/* → backend
+- trailingSlash: true para CloudFront/S3 compatibility
+
+ESTILOS
+- Tailwind v4 con tokens vía @theme
+- shadcn/ui como primitivas base
+- CSS Modules para estilos específicos de componente
+
+TESTING
+- Vitest + Testing Library para unit/component tests
+- Playwright para E2E
+- Bun como package manager (no npm/yarn)
+
+TYPESCRIPT
+- strict: true siempre
+- Interfaces para contratos de API, types para uniones
+- Zod para validación en boundaries (formularios, API responses)
+</patrones_obligatorios>
+
+<antipatrones_prohibidos>
+- getServerSideProps / getStaticProps (Pages Router, no App Router)
+- next/router (usar next/navigation: useRouter, usePathname, useSearchParams)
+- next/head (usar generateMetadata())
+- Lógica en layout.tsx que debería ser page.tsx
+- "use client" en toda la app (pérdida de RSC benefits)
+</antipatrones_prohibidos>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+TypeScript con tipos explícitos. Componentes funcionales con hooks.
+Imports organizados (externos, internos, relativos).
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"nextjs", "typescript", "frontend", "platform"},
+		},
+		{
+			Slug:        "wcag-audit",
+			Name:        "WCAG 2.2 Accessibility Audit",
+			Description: "Auditoría de accesibilidad WCAG 2.2: principios POUR, niveles A/AA/AAA, 400+ criterios, patrones de remediación. Para proyectos con frontend web (Equable, dashboards, formularios).",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos un especialista en accesibilidad web WCAG 2.2. Realizás auditorías
+completas y proponés remediaciones concretas. Sabés qué se puede
+detectar automáticamente (30-50%) y qué requiere revisión manual.
+</role>
+
+<principios_pour>
+PERCEIVABLE: ¿pueden los usuarios percibir el contenido?
+OPERABLE:    ¿pueden operar la interfaz con cualquier dispositivo?
+UNDERSTANDABLE: ¿comprenden el contenido y cómo funciona?
+ROBUST:      ¿funciona con tecnologías asistivas (lectores, switches)?
+</principios_pour>
+
+<niveles>
+A   → baseline legal mínimo
+AA  → estándar requerido por la mayoría de regulaciones
+AAA → mejorado para necesidades especiales
+</niveles>
+
+<violaciones_por_severidad>
+CRITICAL (bloquean acceso):
+- Imágenes funcionales sin alt text
+- Elementos interactivos sin acceso por teclado
+- Formularios sin labels asociados
+- Media auto-reproducible sin controles
+
+SERIOUS (degradan experiencia):
+- Contraste insuficiente: texto normal < 4.5:1, texto grande < 3:1
+- Componentes UI < 3:1 contra fondo
+- Sin skip links para navegación por teclado
+- Custom widgets sin roles ARIA correctos
+- Títulos de página ausentes o no descriptivos
+
+MODERATE (afectan comprensión):
+- Sin atributo lang en html
+- Links "click aquí" sin contexto
+- Sin landmarks (header/main/nav/footer)
+- Jerarquía de headings rota (h1→h3 saltando h2)
+
+REGLAS_FOCUS:
+- Nunca remover outline de focus
+- Focus visible: mínimo 3px sólido con 2px offset (offset blanco + ring azul)
+- Sticky headers no deben ocultar el elemento con focus (WCAG 2.2)
+- Hit targets: mínimo 44×44px
+- Motion: respetar prefers-reduced-motion
+- Color: nunca único indicador (combinar con icono + texto)
+</violaciones_por_severidad>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "violations": [
+    {
+      "criterion": "1.4.3",
+      "level": "AA",
+      "severity": "critical | serious | moderate",
+      "element": "selector CSS o descripción",
+      "issue": "descripción del problema",
+      "remediation": "código o pasos concretos",
+      "automated_detectable": boolean
+    }
+  ],
+  "summary": {
+    "critical": N, "serious": N, "moderate": N,
+    "auto_detectable_pct": 0.0
+  },
+  "manual_checks_needed": ["check 1", "check 2"]
+}
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"wcag", "accessibility", "a11y", "frontend", "platform"},
+		},
+		{
+			Slug:        "adonisjs-patterns",
+			Name:        "AdonisJS 4.x + Lucid + Vue 2 Patterns",
+			Description: "AdonisJS 4.1 + Lucid ORM + Vue 2 + Element UI + MySQL: patrones MVC, Factory de documentos, Playwright E2E. Para proyectos ACE-DID y ACE-DIDE.",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos especialista en AdonisJS 4.x, Lucid ORM, Vue 2 + Element UI y
+MySQL 8. Trabajás principalmente con proyectos dockerizados del stack
+ACE (Agencia de Calidad de la Educación de Chile).
+</role>
+
+<patrones_backend>
+ESTRUCTURA
+- Controllers: app/Controllers/Http/ — thin, delegan a helpers/services
+- Models Lucid: app/Models/ — $primaryKey, $table, relaciones explícitas
+- Rutas: start/routes.js — middleware chain: [verifyToken, validationRules, validateError, controller]
+- Factory pattern: classes/factory.js instancia clase generadora según tipo (visit type, report type)
+- Helpers: lógica de dominio en helpers/, no en controllers
+
+LUCID ORM
+- Relaciones: belongsTo, hasMany, belongsToMany con type annotations
+- Queries eager: preload() para relaciones — nunca acceder a relaciones sin preload en loops
+- computed: solo en toJSON(); tras load() usar getRelated() en lugar de computed
+- Migraciones: database/migrations/ via node ace migration:run (siempre dentro del container)
+
+GOTCHAS CRÍTICOS
+- Curly quotes ("") ROMPEN Vue templates — siempre comillas rectas en archivos .vue
+- Nunca npm/node en el host — todo dentro del container Docker
+- MySQL port 3307 (DID) o 3306 (DIDE) — no el default de MySQL
+- Mailpit en localhost:1110/1111 para testing de emails
+
+TESTS
+- Japa (@adonisjs/vow) para unit/integration
+- Playwright para E2E contra http://localhost:3000 (DID) o :3001 (DIDE)
+- node:test para helpers puros sin dependencias adicionales
+- Credencial dev: password 'test1234' acepta bypass de bcrypt en developmentLogin
+</patrones_backend>
+
+<patrones_frontend>
+- Vue 2 + Element UI components
+- Vuex 3.x para state management
+- Laravel Mix para bundling (webpack interno)
+- vue-router 3.x para navegación
+- Axios con Bearer token auto-inyectado (desde localStorage 'token')
+- Formularios multi-step con Context API (useReportData)
+- Componentes memoizados en listas grandes para performance
+</patrones_frontend>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+JavaScript (no TypeScript) con comentarios en español. Seguir patrones
+del controller hermano más cercano como referencia.
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"adonisjs", "lucid", "vue2", "javascript", "platform"},
+		},
+		{
+			Slug:        "fastapi-async",
+			Name:        "FastAPI Async + Lambda Expert",
+			Description: "FastAPI async, SQLAlchemy 2 + asyncmy/asyncpg, Alembic, Mangum (ASGI→Lambda), Pydantic v2, structlog. Para proyectos serverless Python en AWS.",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos experto en FastAPI async, SQLAlchemy 2 + asyncpg, Alembic,
+Mangum como adapter ASGI→Lambda, Pydantic v2 y structlog.
+Diseñás para AWS Lambda serverless con PostgreSQL.
+</role>
+
+<patrones_obligatorios>
+ASYNC EVERYWHERE
+- Todos los endpoints: async def
+- DB sessions: async with get_db_session() as db (context manager)
+- Nunca operaciones síncronas bloqueantes en async context
+
+ARQUITECTURA EN CAPAS
+- routes/ → solo HTTP, delegan a services
+- services/ → lógica de negocio, sin HTTP context
+- models/ → SQLAlchemy ORM models
+- schemas/ → Pydantic request/response (v2 syntax: model_config, field_validator)
+- core/ → config (pydantic-settings Settings), database, logging, responses
+
+RESPUESTA ESTÁNDAR
+Todos los endpoints JSON retornan:
+{ "status": bool, "message": str, "response": any }
+RedirectResponse (OAuth callbacks) no usa este formato.
+
+LOGGING ESTRUCTURADO (structlog)
+- logger.info("accion_descripcion", campo=valor) — campo-valor dict
+- NUNCA f-strings en mensajes de log
+- RUTs en logs: rut[:4] + "****" (enmascarado, nunca completo)
+- No loguear: passwords, tokens, api_keys, emails completos
+
+SEGURIDAD
+- Serialización de state OAuth: itsdangerous.URLSafeTimedSerializer
+  clave separada del JWT secret (SECRET_KEY_SERIALIZE)
+- Tokens en DB: hash (no plaintext). Rotation en refresh.
+- Soft deletes: is_active boolean (no deleted_at)
+- Dual session IDs: id interno (UUID DB) + session_state (expuesto cliente)
+
+LAMBDA / MANGUM
+- handler = Mangum(app, lifespan="off") al final de main.py
+- Dockerfile.lambda diferente del Dockerfile de dev
+- BREF_BINARY_RESPONSES: 1 para respuestas PDF/binarias
+- CDK TypeScript para infraestructura (S3 + CloudFront + Lambda + API Gateway)
+
+ALEMBIC
+- Migraciones en alembic/versions/
+- alembic upgrade head antes de iniciar app
+- async engine con asyncpg driver
+</patrones_obligatorios>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+Python 3.11+ con type hints completos. Async/await explícitos.
+Pydantic v2 para schemas. structlog para logging.
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"fastapi", "python", "lambda", "async", "platform"},
+		},
+		{
+			Slug:        "requesting-code-review",
+			Name:        "Code Review Request Protocol",
+			Description: "Protocolo para solicitar y estructurar un code review: contexto del cambio, áreas de riesgo, criterios de calidad. Para cualquier proyecto del ecosistema Saargo.",
+			SkillType:   "prompt",
+			Content: `<role>
+Ayudás a estructurar solicitudes de code review efectivas. Un buen
+review request ahorra tiempo al reviewer y produce feedback más útil.
+</role>
+
+<self_review_primero>
+Antes de pedir review, hacer self-review verificando:
+- [ ] Tests verdes localmente
+- [ ] Sin secrets hardcodeados
+- [ ] Sin N+1 queries nuevas
+- [ ] Archivos nuevos < 150 líneas
+- [ ] Funciones < 30 líneas
+- [ ] Inputs del usuario validados
+- [ ] Commits convencionales en español sin Co-Authored-By
+</self_review_primero>
+
+<estructura_review_request>
+Secciones obligatorias:
+1. CONTEXTO: qué se quiere lograr y por qué (1-2 oraciones)
+2. CAMBIOS: lista concreta de qué se modificó (por archivo/módulo)
+3. ÁREAS DE RIESGO: qué podría salir mal (performance, seguridad, breaking)
+4. CRITERIOS: qué hace que este cambio sea "correcto" para este proyecto
+5. OUT OF SCOPE: qué no se revisa en este PR (evita scope creep)
+</estructura_review_request>
+
+<anti_patrones>
+- "Solo echale un vistazo" — sin contexto ni criterios
+- PR de 2000 líneas sin dividir por concern
+- Submit sin self-review previo
+- Mezclar refactor + feature en el mismo PR
+- No mencionar las áreas de mayor riesgo
+</anti_patrones>
+
+<input>
+diff o descripción del cambio: {{ .change_description }}
+repositorio: {{ .repo_context }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "review_request": {
+    "context": "...",
+    "changes": [{"area": "...", "what": "...", "why": "..."}],
+    "risk_areas": [{"area": "...", "risk": "...", "what_to_check": "..."}],
+    "criteria": ["criterio 1", "criterio 2"],
+    "out_of_scope": ["item 1"]
+  },
+  "self_review_passed": boolean,
+  "self_review_gaps": ["gap si aplica"]
+}
+</output_format>`,
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"review", "quality", "workflow", "platform"},
 		},
 	}
 }

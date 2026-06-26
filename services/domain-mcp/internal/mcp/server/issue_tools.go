@@ -12,6 +12,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
+	issuesvc "nunezlagos/domain/internal/service/issue"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 )
 
@@ -24,8 +25,14 @@ type huService interface {
 	List(ctx context.Context, status string) ([]husvc.Draft, error)
 }
 
+type issueCRUD interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*issuesvc.Issue, error)
+	Update(ctx context.Context, slug string, title *string, description *string, status *string, priority *string) (*issuesvc.Issue, error)
+}
+
 type issueHandlers struct {
 	hu        huService
+	issue     issueCRUD
 	principal *apikey.Principal
 }
 
@@ -269,12 +276,41 @@ func (h *issueHandlers) handleHUDraftsList(ctx context.Context, req mcp.CallTool
 	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
 }
 
+func (h *issueHandlers) handleIssueSetStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.issue == nil {
+		return mcp.NewToolResultError("issue service no configurado"), nil
+	}
+	issueIDStr := req.GetString("issue_id", "")
+	statusVal := req.GetString("status", "")
+	if issueIDStr == "" || statusVal == "" {
+		return mcp.NewToolResultError("issue_id y status son requeridos"), nil
+	}
+	id, err := uuid.Parse(issueIDStr)
+	if err != nil {
+		return mcp.NewToolResultError("issue_id invalido"), nil
+	}
+	existing, err := h.issue.GetByID(ctx, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("issue no encontrada: %v", err)), nil
+	}
+	updated, err := h.issue.Update(ctx, existing.Slug, nil, nil, &statusVal, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("update status: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"issue_id":   updated.ID.String(),
+		"slug":       updated.Slug,
+		"status":     updated.Status,
+		"updated_at": updated.UpdatedAt,
+	})
+}
+
 // registerHUTools registra los tools del wizard de issues (HU → issue
 // rename del REQ-56). Se registran tanto los NUEVOS nombres
 // domain_issue_* como los LEGACY domain_hu_* para no romper clientes
 // que aun tipean los nombres viejos. Los handlers son los mismos.
 func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	h := &issueHandlers{hu: deps.Hubuilder, principal: deps.Principal}
+	h := &issueHandlers{hu: deps.Hubuilder, issue: deps.IssueSvc, principal: deps.Principal}
 	return []mcpgo.ServerTool{
 
 		{Tool: toolIssueCreateStart(), Handler: wrap.Wrap("domain_issue_create_start", h.handleHUCreateStart)},
@@ -283,6 +319,7 @@ func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolIssueCreateCommit(), Handler: wrap.Wrap("domain_issue_create_commit", h.handleHUCreateCommit)},
 		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", h.handleHUCreateAbandon)},
 		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", h.handleHUDraftsList)},
+		{Tool: toolIssueSetStatus(), Handler: wrap.Wrap("domain_issue_set_status", h.handleIssueSetStatus)},
 
 		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", h.handleHUCreateStart)},
 		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", h.handleHUCreateAnswer)},
@@ -298,6 +335,7 @@ func toolIssueCreateStart() mcp.Tool {
 		mcp.WithDescription("Inicia un wizard de creacion de issue (workflow SDD con Gherkin scenarios). Crea un borrador y devuelve la primera pregunta. NOTA: para tickets operativos (bug/task/feature basicos sin Gherkin) usar domain_ticket_create."),
 		mcp.WithString("mode", mcp.Description("Modo del wizard: feature"), mcp.Required()),
 		mcp.WithString("initial_idea", mcp.Description("Idea inicial del issue"), mcp.Required()),
+		mcp.WithString("project_id", mcp.Description("UUID del proyecto activo (de domain_session_bootstrap)"), mcp.Required()),
 	)
 }
 
@@ -335,5 +373,13 @@ func toolIssueDraftsList() mcp.Tool {
 	return mcp.NewTool("domain_issue_drafts_list",
 		mcp.WithDescription("Lista drafts de issue (workflow SDD), filtrables por status."),
 		mcp.WithString("status", mcp.Description("Filtrar: in_progress | finished | committed | abandoned")),
+	)
+}
+
+func toolIssueSetStatus() mcp.Tool {
+	return mcp.NewTool("domain_issue_set_status",
+		mcp.WithDescription("Actualiza el status de una issue. Usado por sdd-archive para marcar la issue como implemented al cerrar el ciclo SDD. Valores validos: proposed | active | implemented | archived."),
+		mcp.WithString("issue_id", mcp.Description("UUID de la issue a actualizar"), mcp.Required()),
+		mcp.WithString("status", mcp.Description("Nuevo status: proposed | active | implemented | archived"), mcp.Required()),
 	)
 }

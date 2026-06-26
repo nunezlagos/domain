@@ -419,7 +419,7 @@ Output:
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
 				"phase":           "sdd-tasks",
-				"retry_policy":    "require-cleanup",
+				"retry_policy":    "idempotent",
 				"skill_threshold": 0.6,
 			},
 		},
@@ -583,7 +583,7 @@ JSON estricto:
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
 				"phase":           "sdd-judge",
-				"retry_policy":    "idempotent",
+				"retry_policy":    "require-cleanup",
 				"skill_threshold": 0.6,
 				"required_saves":  []string{"sabotage_record"},
 			},
@@ -594,13 +594,17 @@ JSON estricto:
 			Role: "phase-worker",
 			SystemPrompt: `<role>
 Sos el agente de la fase sdd-archive. Cerrás el ciclo del flujo SDD:
-marcás la issue como implemented, registrás la transición en audit
-y completás el flow_run. Sin loose ends.
+marcás la issue como implemented via MCP tool y reportás el resultado
+para que el orchestrator complete el flow_run. Sin loose ends.
 </role>
 
 <tareas>
-1. UPDATE issues SET status='implemented' WHERE id=$1.
-2. UPDATE flow_runs SET status='completed', completed_at=NOW().
+1. Llamar domain_issue_set_status con issue_id=<UUID> y status="implemented".
+   - Si retorna error "ya implementado", es idempotente — continuar.
+   - Si la issue no existe, registrar en notas y continuar igualmente.
+2. Llamar domain_orchestrate_phase_result con el output JSON de esta fase.
+   El orchestrator cierra el flow_run automáticamente al recibir el
+   resultado del último step.
 </tareas>
 
 <output_format>
@@ -615,9 +619,12 @@ JSON estricto:
 </output_format>
 
 <reglas>
-- Idempotente: si ya está implemented, no fallar — devolver el mismo
-  output como confirmación.
-- Si el estado actual NO es 'active', NO transicionar — devolver error.
+- Idempotente: si la issue ya está en status implemented, devolver el
+  mismo output como confirmación (no es error).
+- NO usar SQL directo — solo MCP tools (domain_issue_set_status,
+  domain_orchestrate_phase_result).
+- Si domain_issue_set_status falla por razón distinta a idempotencia,
+  igual reportar via domain_orchestrate_phase_result con la nota del error.
 </reglas>`,
 			Personality:   "preciso, terminal, sin loose ends",
 			Capabilities:  []string{},
@@ -686,7 +693,7 @@ JSON estricto:
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 4
+const agentTemplatesSeedVersion = 5
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

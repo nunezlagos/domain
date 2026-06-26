@@ -33,6 +33,7 @@ import (
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	intakesvc "nunezlagos/domain/internal/service/intake"
+	issuesvc "nunezlagos/domain/internal/service/issue"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
@@ -73,6 +74,7 @@ type Deps struct {
 	FlowRunner      *flowrunner.Runner
 	Orchestrator    *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
 	Hubuilder       *husvc.Service          // issue-04.7 interactive HU wizard
+	IssueSvc        *issuesvc.Service       // domain_issue_set_status — cierre SDD
 	Intake          *intakesvc.Service      // issue-04.8 intake pipeline
 	ExtSync         *syncsvc.Service        // issue-04.9 external provider sync
 	PromptRouter    *prouter.Router         // issue-12.7 single-shot prompt router

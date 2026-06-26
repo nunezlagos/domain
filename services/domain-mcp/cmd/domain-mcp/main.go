@@ -334,6 +334,7 @@ func main() {
 		FlowRunner:      flowRunnerInst,
 		Orchestrator:    orchestratorSvc,
 		Hubuilder:       issuebuilderSvc,
+		IssueSvc:        &issuesvc.Service{Pool: pools.App, Audit: recorder},
 		Intake:          intakeSvc,
 		ExtSync:         extsyncSvc,
 		PromptRouter:    promptRouterSvc,

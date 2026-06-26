@@ -78,10 +78,20 @@ def test_retrieve_sin_embedder_usa_scorer_lexical(mock_rows):
     assert result.sources[0].title == "Bot de Soporte"
 
 
-def test_retrieve_sin_embedder_score_bajo_devuelve_empty(mock_rows):
+def test_retrieve_sin_embedder_score_bajo_usa_summary_fallback(mock_rows):
+    """Cuando el score no llega al threshold, devolvemos 1 chunk diverso por tabla.
+
+    Esto es la mejora del summary fallback: si la query es muy abstracta
+    y no matchea con nada especifico, devolvemos un muestreo de las tablas
+    principales para que el LLM tenga contexto amplio.
+    """
     with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
         result = RetrievalService().retrieve("xyzzy palabra_inexistente")
-    assert result.is_empty
+    assert not result.is_empty
+    assert len(result.sources) > 0
+    tables = {s.table for s in result.sources}
+    assert "agent" in tables
+    assert "skill" in tables
 
 
 def test_retrieve_con_embedder_exact_match():
@@ -97,11 +107,13 @@ def test_retrieve_con_embedder_exact_match():
     assert result.sources[0].score == pytest.approx(1.0)
 
 
-def test_retrieve_con_embedder_cero_devuelve_empty(mock_rows):
+def test_retrieve_con_embedder_cero_usa_summary_fallback(mock_rows):
+    """Embedder que retorna vectores cero: el score siempre es 0, se activa summary fallback."""
     embedder = FakeEmbedder(mode="zero")
     with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
         result = RetrievalService(embedding_provider=embedder).retrieve("cualquier cosa")
-    assert result.is_empty
+    assert not result.is_empty
+    assert len(result.sources) > 0
 
 
 def test_retrieve_embedder_falla_fallback_lexico(mock_rows):

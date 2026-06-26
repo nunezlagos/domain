@@ -84,25 +84,31 @@
 
   function openWidget() {
     const widget = $("llm-widget");
+    const backdrop = $("llm-widget-backdrop");
     if (!widget) return;
     state.open = true;
-    widget.classList.add("open");
     widget.classList.remove("closing");
+    widget.classList.add("open");
+    widget.setAttribute("aria-hidden", "false");
+    if (backdrop) backdrop.classList.add("active");
     clearUnread();
     setTimeout(() => {
       const input = $("chat-input");
       if (input && !input.disabled) input.focus();
-    }, 300);
+    }, 350);
   }
 
   function closeWidget() {
     const widget = $("llm-widget");
+    const backdrop = $("llm-widget-backdrop");
     if (!widget || !state.open) return;
     widget.classList.add("closing");
+    widget.setAttribute("aria-hidden", "true");
+    if (backdrop) backdrop.classList.remove("active");
     setTimeout(() => {
       widget.classList.remove("open", "closing");
       state.open = false;
-    }, 200);
+    }, 300);
   }
 
   function toggleWidget() {
@@ -593,9 +599,16 @@
       if (!state.open) return;
       const widget = $("llm-widget");
       const bubbleEl = $("llm-bubble");
+      const backdrop = $("llm-widget-backdrop");
       if (widget && widget.contains(e.target)) return;
       if (bubbleEl && bubbleEl.contains(e.target)) return;
-      closeWidget();
+      if (backdrop && e.target === backdrop) {
+        closeWidget();
+        return;
+      }
+      if (window.innerWidth < 600) {
+        closeWidget();
+      }
     });
 
     const searchInput = $("chat-search-input");

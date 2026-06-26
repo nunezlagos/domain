@@ -6,7 +6,9 @@
   <span class="llm-bubble-badge" id="llm-bubble-badge" style="display:none">0</span>
 </button>
 
-<div class="llm-widget" id="llm-widget">
+<div class="llm-widget-backdrop" id="llm-widget-backdrop"></div>
+
+<aside class="llm-widget" id="llm-widget" aria-hidden="true">
   <header class="llm-widget-header">
     <div class="llm-widget-header-info">
       <div class="llm-widget-avatar">B</div>
@@ -14,7 +16,7 @@
         <div class="llm-widget-title">Bot de Soporte</div>
         <div class="llm-widget-subtitle">
           <span class="llm-widget-status-dot"></span>
-          <span id="llm-widget-status">en linea</span>
+          <span>en linea</span>
         </div>
       </div>
     </div>
@@ -24,12 +26,7 @@
           <path d="M12 5v14M5 12h14"/>
         </svg>
       </button>
-      <button type="button" id="btn-minimize-widget" class="llm-widget-btn" title="Minimizar">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M5 12h14"/>
-        </svg>
-      </button>
-      <button type="button" id="btn-close-widget" class="llm-widget-btn" title="Cerrar">
+      <button type="button" id="btn-close-widget" class="llm-widget-btn" title="Cerrar (Esc)">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
@@ -37,91 +34,84 @@
     </div>
   </header>
 
-  <aside class="llm-widget-sidebar" id="llm-widget-sidebar">
-    <div class="llm-widget-sidebar-header">
-      <span class="llm-widget-sidebar-title">Conversaciones</span>
-      <button type="button" id="btn-toggle-list" class="llm-widget-btn" title="Ocultar lista" style="color: var(--color-text-secondary);">
+  <div class="llm-widget-body">
+    <aside class="llm-widget-sidebar" id="llm-widget-sidebar">
+      <div class="llm-widget-sidebar-header">
+        <span class="llm-widget-sidebar-title">Conversaciones</span>
+        <button type="button" id="btn-toggle-list" class="llm-widget-btn" title="Ocultar lista" style="color: var(--color-text-secondary);">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+      </div>
+      <div class="llm-widget-search">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 18l-6-6 6-6"/>
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="search" id="chat-search-input" placeholder="Buscar..." autocomplete="off">
+      </div>
+      <div class="llm-widget-list" id="chat-list">
+        <div class="llm-widget-list-empty">Cargando...</div>
+      </div>
+    </aside>
+
+    <main class="llm-widget-main">
+      <div class="llm-widget-messages" id="chat-messages">
+        <div class="llm-widget-welcome" id="chat-empty">
+          <div class="llm-widget-welcome-icon">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h2 class="llm-widget-welcome-title">Hola! Soy el Bot de Soporte</h2>
+          <p class="llm-widget-welcome-subtitle">Preguntame sobre el panel de total-domain.</p>
+          <div class="llm-widget-suggestions">
+            <button type="button" class="llm-widget-suggestion" data-q="cuantos proyectos tienes?">
+              Cuantos proyectos tienes?
+            </button>
+            <button type="button" class="llm-widget-suggestion" data-q="que hace el bot de soporte?">
+              Que hace el bot de soporte?
+            </button>
+            <button type="button" class="llm-widget-suggestion" data-q="lista los skills activos">
+              Lista los skills activos
+            </button>
+            <button type="button" class="llm-widget-suggestion" data-q="describe el sistema">
+              Describe el sistema
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="btn-scroll-down" class="llm-widget-scroll-down" style="display:none" title="Ir al fondo">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
         </svg>
       </button>
-    </div>
-    <div class="llm-widget-search">
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/>
-        <path d="M21 21l-4.35-4.35"/>
-      </svg>
-      <input
-        type="search"
-        id="chat-search-input"
-        placeholder="Buscar..."
-        autocomplete="off">
-    </div>
-    <div class="llm-widget-list" id="chat-list">
-      <div class="llm-widget-list-empty">Cargando...</div>
-    </div>
-  </aside>
 
-  <main class="llm-widget-main">
-
-    <div class="llm-widget-messages" id="chat-messages">
-      <div class="llm-widget-welcome" id="chat-empty">
-        <div class="llm-widget-welcome-icon">
-          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-        </div>
-        <h2 class="llm-widget-welcome-title">Hola! Soy el Bot de Soporte</h2>
-        <p class="llm-widget-welcome-subtitle">Preguntame sobre el panel de total-domain.</p>
-        <div class="llm-widget-suggestions">
-          <button type="button" class="llm-widget-suggestion" data-q="cuantos proyectos tienes?">
-            Cuantos proyectos tienes?
+      <form class="llm-widget-input-wrap" id="chat-form">
+        <div class="llm-widget-input-shell" id="chat-input-shell">
+          <textarea
+            id="chat-input"
+            placeholder="Escribi tu pregunta..."
+            rows="1"
+            maxlength="4000"
+            autocomplete="off"></textarea>
+          <button type="submit" id="btn-send" class="llm-widget-send" title="Enviar (Enter)" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
           </button>
-          <button type="button" class="llm-widget-suggestion" data-q="que hace el bot de soporte?">
-            Que hace el bot de soporte?
-          </button>
-          <button type="button" class="llm-widget-suggestion" data-q="lista los skills activos">
-            Lista los skills activos
-          </button>
-          <button type="button" class="llm-widget-suggestion" data-q="describe el sistema">
-            Describe el sistema
+          <button type="button" id="btn-stop" class="llm-widget-stop" title="Detener" style="display:none">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="1"/>
+            </svg>
           </button>
         </div>
-      </div>
-    </div>
-
-    <button type="button" id="btn-scroll-down" class="llm-widget-scroll-down" style="display:none" title="Ir al fondo">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-      </svg>
-    </button>
-
-    <form class="llm-widget-input-wrap" id="chat-form">
-      <div class="llm-widget-input-shell" id="chat-input-shell">
-        <textarea
-          id="chat-input"
-          placeholder="Escribi tu pregunta..."
-          rows="1"
-          maxlength="4000"
-          autocomplete="off"></textarea>
-        <button type="submit" id="btn-send" class="llm-widget-send" title="Enviar (Enter)" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 19V5M5 12l7-7 7 7"/>
-          </svg>
-        </button>
-        <button type="button" id="btn-stop" class="llm-widget-stop" title="Detener" style="display:none">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12" rx="1"/>
-          </svg>
-        </button>
-      </div>
-    </form>
-  </main>
-</div>
-
-<audio id="llm-notification-sound" preload="none">
-  <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav">
-</audio>
+      </form>
+    </main>
+  </div>
+</aside>
 
 {% block extra_js %}
   <script src="{% static 'js/marked.min.js' %}"></script>

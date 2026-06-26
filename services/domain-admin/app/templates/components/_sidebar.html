@@ -120,6 +120,12 @@
       </svg>
       Uso
     </a>
+    <a href="{% url 'mcpuptime:dashboard' %}" class="sidebar-link {% if 'uptime-mcp' in request.path %}active{% endif %}">
+      <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+      Uptime MCP
+    </a>
 
     <div class="sidebar-section mt-3">Proximamente</div>
     <span class="sidebar-link disabled" title="Proxima HU">

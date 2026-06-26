@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "maintainers.projectpolicies",  # mantenedor de politicas por proyecto
     "maintainers.platformpolicies",  # mantenedor de politicas de plataforma
     "maintainers.usage",            # dashboard de uso (captured_prompts KPIs)
+    "maintainers.mcpuptime",        # monitoreo uptime/health del server domain-mcp
     "chat",                          # HU-49.2: chat IA estilo NotebookLM
 ]
 
@@ -119,6 +120,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # en consultas a tablas con FORCE RLS (ej. captured_prompts). En prod debe
 # coincidir con el org_id real del deployment.
 DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
+
+
+# Monitoreo de uptime/health del server domain-mcp.
+# El command `poll_mcp_health` hace GET aca y registra en mcp_health_checks.
+# Prioridad: DOMAIN_MCP_HEALTH_URL > DOMAIN_BASE_URL + "/health" > default interno.
+DOMAIN_MCP_HEALTH_URL = os.environ.get("DOMAIN_MCP_HEALTH_URL", "")
+DOMAIN_BASE_URL = os.environ.get("DOMAIN_BASE_URL", "")
 
 
 

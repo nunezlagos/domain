@@ -35,6 +35,7 @@ urlpatterns = [
     path("politicas-plataforma/", include("maintainers.platformpolicies.urls")),
 
     path("uso/", include("maintainers.usage.urls")),
+    path("uptime-mcp/", include("maintainers.mcpuptime.urls")),
 
     path("chat/", include("chat.urls")),
 ]

@@ -188,12 +188,20 @@ cuando tu contexto se compacta (perdés el detalle de la conversación
 previa) el estado NO se pierde: está en domain. Re-hidratá así:
 
 1. domain_session_bootstrap(cwd, git_remote, git_branch, git_head) →
-   recuperás project, recent_observations, counts, head.changed.
+   recuperás project, recent_observations, counts, head.changed y
+   work_summary (open_tickets, open_issues, active_flow_run).
 2. domain_mem_context(project_slug) → últimas observaciones/decisiones.
    domain_mem_search si necesitás algo puntual de antes.
-3. Si estabas en un flujo SDD, domain_orchestrate_status para ver en qué
-   fase quedaste; no reinicies el pipeline.
-4. NO re-crees skills ni re-importes rules: si project_skill_count>0 y las
+3. Abrí la sesión con un mini-resumen para el usuario a partir de
+   work_summary + recent_observations: "venís trabajando en X, hay N
+   tickets / M issues abiertos" y, si work_summary.active_flow_run != null,
+   "quedó una tarea SDD en estado <status>".
+4. Si active_flow_run != null: domain_orchestrate_status para ver la fase y
+   RETOMÁ (no reinicies). Si el usuario ordena suspenderla/archivarla, NO
+   reinicies ni borres: cambiá el estado — flow_run a paused/cancelled
+   (domain_orchestrate_*), issue con domain_issue_set_status(archived),
+   ticket con domain_ticket_change_status(cancelled/blocked).
+5. NO re-crees skills ni re-importes rules: si project_skill_count>0 y las
    policies ya están, ya está configurado. Solo leé, no dupliques.
 
 Esto aplica igual al inicio de sesión y tras cada compactación: el

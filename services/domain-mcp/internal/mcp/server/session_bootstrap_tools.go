@@ -339,9 +339,56 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		_ = err
 	}
 
+	// Resumen de trabajo pendiente: tickets/issues abiertos + flow_run en curso.
+	// Solo counts y un QueryRow del último flow_run activo — sin rows abiertos
+	// concurrentes (mismo cuidado que recent_observations en la misma tx).
+	var openTickets, openIssues int64
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM project_tickets
+		   WHERE project_id = $1 AND deleted_at IS NULL
+		     AND status NOT IN ('done','cancelled')`,
+		projID,
+	).Scan(&openTickets)
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM user_stories
+		   WHERE project_id = $1 AND deleted_at IS NULL
+		     AND status IN ('proposed','active')`,
+		projID,
+	).Scan(&openIssues)
+
+	// flow_run en curso (running o pausado esperando algo): lo más relevante
+	// para "retomar lo último". NULL si no hay tarea SDD a medias.
+	var (
+		activeRunID     *string
+		activeRunStatus *string
+		activeRunAt     *string
+	)
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT id::text, status,
+		        to_char(COALESCE(started_at, created_at) AT TIME ZONE 'UTC',
+		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+		   FROM flow_runs
+		   WHERE project_id = $1
+		     AND status IN ('running','paused','paused_awaiting_signal','paused_awaiting_human')
+		   ORDER BY created_at DESC LIMIT 1`,
+		projID,
+	).Scan(&activeRunID, &activeRunStatus, &activeRunAt)
+
+	activeRun := map[string]any(nil)
+	if activeRunID != nil {
+		activeRun = map[string]any{
+			"id":         safeDeref(activeRunID),
+			"status":     safeDeref(activeRunStatus),
+			"started_at": safeDeref(activeRunAt),
+		}
+	}
+
 	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considerá leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llamá domain_policy_list o domain_project_policy_list según corresponda."
 	if headChanged {
 		nextStep = "HEAD cambió desde la última sesión. Ejecutá `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persistilos con domain_mem_save antes de seguir."
+	}
+	if activeRun != nil {
+		nextStep = "Hay un flow_run SDD en estado '" + safeDeref(activeRunStatus) + "' — quedó una tarea a medias. Llamá domain_orchestrate_status para ver en qué fase está y retomá; o si el usuario ordena suspenderla/archivarla, cambiá su estado en vez de reiniciar. " + nextStep
 	}
 
 	return toolResultJSON(map[string]any{
@@ -368,6 +415,13 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 			"project_repos":       projRepoCount,
 			"existing_rules":      len(rulesFiles),
 			"project_skill_count": projectSkillCount,
+		},
+		// Mini-resumen de "dónde quedamos": pendientes + tarea SDD en curso.
+		// El LLM lo usa para abrir la sesión con contexto sin pedir nada más.
+		"work_summary": map[string]any{
+			"open_tickets":    openTickets,
+			"open_issues":     openIssues,
+			"active_flow_run": activeRun,
 		},
 		"next_step": nextStep,
 	})

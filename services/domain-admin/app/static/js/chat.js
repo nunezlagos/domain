@@ -122,13 +122,21 @@
       list.innerHTML = '<div class="chat-list-empty">Sin resultados para la busqueda.</div>';
       return;
     }
+    const titleCounts = {};
+    convs.forEach((c) => {
+      const k = (c.title || "Nueva conversacion").trim().toLowerCase();
+      titleCounts[k] = (titleCounts[k] || 0) + 1;
+    });
     list.innerHTML = convs
       .map((c) => {
         const active = c.id === state.activeId ? " active" : "";
+        const baseTitle = (c.title || "Nueva conversacion").trim();
+        const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
+        const title = dupCount > 1 ? `${baseTitle} (${shortTime(c.created_at)})` : baseTitle;
         const preview = (c.last_message_preview || "").slice(0, 60);
         return `
           <div class="chat-list-item${active}" data-id="${c.id}">
-            <div class="title">${escapeHtml(c.title || "Nueva conversacion")}</div>
+            <div class="title">${escapeHtml(title)}</div>
             ${preview ? `<div class="preview">${escapeHtml(preview)}</div>` : ""}
             <div class="date">${relativeTime(c.updated_at)}</div>
           </div>
@@ -138,6 +146,12 @@
     list.querySelectorAll(".chat-list-item").forEach((el) => {
       el.addEventListener("click", () => selectConversation(el.dataset.id));
     });
+  }
+
+  function shortTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   }
 
   function filterConversations() {

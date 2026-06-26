@@ -207,6 +207,29 @@ previa) el estado NO se pierde: está en domain. Re-hidratá así:
 Esto aplica igual al inicio de sesión y tras cada compactación: el
 handshake es idempotente, repetirlo es barato y te re-sincroniza.
 
+## Ejecución con subagentes del cliente (paralelización SDD)
+El server de domain NO tiene LLM: solo planifica y persiste estado. TODO el
+trabajo lo ejecutás VOS (el agente del cliente: Claude Code / OpenCode) con tu
+propio LLM y tus subagentes nativos. El orchestrator describe el plan; vos lo
+corrés.
+
+Cuando una fase SDD emite trabajo paralelizable, usá tus subagentes nativos
+(Task tool en Claude Code; subagents en OpenCode) para fan-out:
+
+- sdd-explore con multi_concern=true → cada concern es un sub-flow SDD
+  independiente. Lanzá un subagente por concern EN PARALELO (no comparten
+  archivos por definición). Agregá los resultados al terminar.
+- sdd-tasks: las tasks traen parallel_group. Ejecutá los grupos en orden
+  ascendente; dentro de un grupo, lanzá las tasks en paralelo con un subagente
+  cada una. La task "verify" (último grupo) va sola, después de todo.
+- Cada subagente recibe un prompt auto-contenido (no asume contexto del otro).
+  Vos sos el supervisor: repartís, esperás, agregás, y reportás con
+  domain_orchestrate_phase_result.
+
+Fallback: si tu cliente NO soporta subagentes, ejecutá secuencialmente en el
+orden de position. El resultado es el mismo, solo más lento. Nunca paralelices
+tasks de distinto parallel_group ni concerns marcados como dependientes.
+
 ## Si un tool domain_* falla
 - "Connection closed" / key inválida → indicale al usuario correr
   el installer. NO cambies a otro sistema de memoria como fallback

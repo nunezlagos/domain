@@ -144,6 +144,10 @@ JSON estricto:
 - Si no encontrás similares, similar_issues=[]. NO inventes IDs.
 - confidence: 0.0–1.0. <0.5 indica que la siguiente fase debe pedir aclaración.
 - Idioma: respetá el del prompt original.
+- multi_concern=true → cada concern es un SUB-FLOW SDD independiente. El cliente
+  IDE puede correrlos en PARALELO con sus subagentes nativos (Task tool de
+  Claude Code / subagents de OpenCode): un subagente por concern. Solo marcá
+  multi_concern=true si los concerns NO comparten archivos ni dependen entre sí.
 </reglas>
 
 <example>
@@ -412,6 +416,21 @@ schema | code | tests | sabotage | docs | verify
 - max_hours se estima conservadoramente: 1 o 2 (default 2).
 </reglas_de_granularidad>
 
+<paralelizacion>
+Marcá cada task con "parallel_group" (int) para que el CLIENTE IDE pueda
+ejecutarlas con sus subagentes nativos (Task tool de Claude Code / subagents
+de OpenCode). El server NO ejecuta nada — solo describe el plan.
+
+- Mismo parallel_group = tasks INDEPENDIENTES entre sí (no comparten archivos
+  ni dependen del output de la otra) → el cliente las corre en PARALELO.
+- Grupos distintos se ejecutan en ORDEN ascendente (group 1, luego 2, ...).
+- Default conservador: si dudás de la independencia, dales groups distintos
+  (secuencial). Mejor secuencial-correcto que paralelo-con-conflicto.
+- La task "verify" SIEMPRE va sola en el último grupo (depende de todo).
+- Regla típica: las tasks de "code" que tocan archivos distintos suelen ser
+  el mismo group; schema va antes (group menor); tests después.
+</paralelizacion>
+
 <task_verify_obligatoria>
 SIEMPRE agregar como última task (sección "verify"):
 {
@@ -430,6 +449,7 @@ JSON estricto:
     {
       "section": "schema | code | tests | sabotage | docs | verify",
       "position": 1,
+      "parallel_group": 1,
       "max_hours": 1,
       "description": "verb + objeto + criterio de done"
     }
@@ -442,14 +462,17 @@ Input: design ADR={"Usar pgx tx para atomicidad"}
 Output:
 {
   "tasks": [
-    {"section":"schema","position":1,"max_hours":1,"description":"Crear migration 000115 con tabla foo + UNIQUE (org,slug)"},
-    {"section":"code","position":2,"max_hours":2,"description":"Implementar Foo.Insert con pgx tx — debe pasar TestFoo_Insert_OK"},
-    {"section":"tests","position":3,"max_hours":1,"description":"Escribir TestFoo_Insert_Duplicate_ReturnsErrSlugTaken"},
-    {"section":"sabotage","position":4,"max_hours":1,"description":"Quitar el UNIQUE de mig 115 → confirmar que test del paso 3 falla → restaurar"},
-    {"section":"docs","position":5,"max_hours":1,"description":"Agregar entry en README sobre el nuevo endpoint"},
-    {"section":"verify","position":6,"max_hours":1,"description":"Auditar change: ningún archivo nuevo >150 líneas, inputs validados, sin secrets, sin N+1, tests pasan"}
+    {"section":"schema","position":1,"parallel_group":1,"max_hours":1,"description":"Crear migration 000115 con tabla foo + UNIQUE (org,slug)"},
+    {"section":"code","position":2,"parallel_group":2,"max_hours":2,"description":"Implementar Foo.Insert con pgx tx — debe pasar TestFoo_Insert_OK"},
+    {"section":"code","position":3,"parallel_group":2,"max_hours":2,"description":"Implementar Foo.List (archivo distinto, independiente de Insert)"},
+    {"section":"tests","position":4,"parallel_group":3,"max_hours":1,"description":"Escribir TestFoo_Insert_Duplicate_ReturnsErrSlugTaken"},
+    {"section":"sabotage","position":5,"parallel_group":4,"max_hours":1,"description":"Quitar el UNIQUE de mig 115 → confirmar que test del paso 4 falla → restaurar"},
+    {"section":"docs","position":6,"parallel_group":4,"max_hours":1,"description":"Agregar entry en README sobre el nuevo endpoint"},
+    {"section":"verify","position":7,"parallel_group":5,"max_hours":1,"description":"Auditar change: ningún archivo nuevo >150 líneas, inputs validados, sin secrets, sin N+1, tests pasan"}
   ]
 }
+// group 1 (schema) → group 2 (las 2 code en paralelo) → group 3 (tests) →
+// group 4 (sabotage + docs en paralelo) → group 5 (verify sola).
 </example>`,
 			Personality:   "ordenado, atómico, sin tasks ambiguas",
 			Capabilities:  []string{},
@@ -830,7 +853,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 8
+const agentTemplatesSeedVersion = 9
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

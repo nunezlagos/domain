@@ -35,6 +35,7 @@ from .admin_models import Conversation, Message
 from .models import Source
 from .prompts import build_system_prompt, build_user_message
 from .retrieval import RetrievalService
+from .sanitization import pre_check, censor_sensitive_text
 
 log = logging.getLogger(__name__)
 
@@ -131,6 +132,15 @@ class ChatService:
         assistant.content_partial = "Buscando informacion relevante..."
         assistant.save(update_fields=["status", "content_partial"])
 
+        pre = pre_check(question)
+        if not pre.is_safe:
+            log.warning("chat: pre-check rejected question: %s", pre.reason)
+            self._mark_error(
+                assistant,
+                pre.sanitized_text or "Tu mensaje no se puede procesar.",
+            )
+            return
+
         try:
             context = self._retrieval.retrieve(question)
         except Exception as e:
@@ -170,8 +180,12 @@ class ChatService:
             self._mark_error(assistant, f"Error del LLM: {e}")
             return
 
+        safe_content, _censor_count = censor_sensitive_text(response.content)
+        if _censor_count:
+            log.warning("chat: respuesta censurada, %d items removidos", _censor_count)
+
         duration_ms = int((time.monotonic() - start) * 1000)
-        assistant.content = response.content
+        assistant.content = safe_content
         assistant.status = Message.STATUS_COMPLETED
         assistant.sources = [s.to_dict() for s in context.sources]
         assistant.tokens_in = response.usage.input_tokens

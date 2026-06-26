@@ -66,7 +66,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 		"notification_deliveries",
 
 
-		"auth_otp_codes", "custom_roles", "auth_invitations", "auth_secrets",
+		"custom_roles", "auth_invitations", "auth_secrets",
 
 		"platform_policies", "platform_policy_versions",
 		"project_templates", "project_links", "project_merges",

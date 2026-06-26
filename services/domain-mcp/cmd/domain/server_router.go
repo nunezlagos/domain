@@ -101,8 +101,6 @@ func buildRouter(
 	}
 
 	api := &handler.API{
-		OTPService:         s.OTPService,
-		OTPRateLimiter:     s.OTPRateLimiter,
 		APIKeys:            s.APIKeyStore,
 		AuthSessionService: s.SessionSvc,
 		Bootstrap:          bootstrapsvc.New(pools.App),

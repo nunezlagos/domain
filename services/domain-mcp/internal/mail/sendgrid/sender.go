@@ -79,10 +79,3 @@ func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
 	)
 	return nil
 }
-
-func (s *Sender) SendOTP(ctx context.Context, to, code string, expiresIn time.Duration) error {
-	subject := "Tu código de acceso a Domain"
-	body := fmt.Sprintf("Tu código: %s\nVence en: %s\n\nSi no lo solicitaste, ignorá este correo.",
-		code, expiresIn.String())
-	return s.Send(ctx, to, subject, body)
-}

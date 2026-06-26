@@ -1,14 +1,13 @@
 // Package onboard — issue-01.9 TUI wizard minimalista para first-run setup.
 //
-// Filosofia: el flow es de 4 inputs (server URL, email, codigo OTP opcional,
-// y/N opencode). No justifica una TUI pesada (charmbracelet = 20MB binario).
+// Filosofia: el flow es de 3 inputs (server URL, email, y/N opencode).
+// No justifica una TUI pesada (charmbracelet = 20MB binario).
 // Usamos bufio.Scanner + fmt.Scanln para prompts en stderr, resultados en stdout.
 //
 // El flow:
 //   1. Detectar first-run via GET /auth/first-run
 //   2. Si first-run: POST /auth/bootstrap, save creds, exit
-//   3. Si no: pedir email, POST /auth/request-otp, pedir codigo,
-//      POST /auth/verify-otp, save creds
+//   3. Si no: pedir creds preexistentes o re-bootstrap con admin token
 //   4. Preguntar si configurar opencode, si Y: invocar domain setup opencode
 //   5. Exit 0
 package onboard
@@ -149,16 +148,8 @@ func (w *Wizard) auth(ctx context.Context, isFirstRun bool, email string) (*Cred
 		fmt.Fprintf(w.Err, "→ Bootstrapping organization + user %s...\n", email)
 		return w.bootstrap(ctx, email)
 	}
-	fmt.Fprintf(w.Err, "→ Sending OTP to %s...\n", email)
-	if err := w.requestOTP(ctx, email); err != nil {
-		return nil, err
-	}
-	code, err := w.ask("Enter 6-digit code from your email", "", w.NonInteractive)
-	if err != nil {
-		return nil, err
-	}
-	code = strings.TrimSpace(code)
-	return w.verifyOTP(ctx, email, code)
+	return nil, fmt.Errorf("server ya tiene usuarios; no hay flujo OTP. " +
+		"Pedile al admin que cree un miembro con /auth/member-create y pasame la API key via --api-key")
 }
 
 func (w *Wizard) detectFirstRun(ctx context.Context) (bool, int, error) {
@@ -208,51 +199,6 @@ func (w *Wizard) bootstrap(ctx context.Context, email string) (*Credentials, err
 		return nil, err
 	}
 	fmt.Fprintf(w.Err, "✓ Organization + user created\n")
-	return &Credentials{
-		APIKey:   out.APIKey,
-		APIKeyID: out.KeyID,
-		UserID:   out.UserID,
-		OrgID:    out.OrgID,
-		Email:    out.Email,
-	}, nil
-}
-
-func (w *Wizard) requestOTP(ctx context.Context, email string) error {
-	body, _ := json.Marshal(map[string]string{"identifier": email})
-	resp, err := w.doPOST(ctx, "/api/v1/auth/request-otp", body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("request-otp status %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func (w *Wizard) verifyOTP(ctx context.Context, email, code string) (*Credentials, error) {
-	body, _ := json.Marshal(map[string]string{"identifier": email, "code": code})
-	resp, err := w.doPOST(ctx, "/api/v1/auth/verify-otp", body)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 401 {
-		return nil, fmt.Errorf("invalid code (or expired)")
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("verify-otp status %d", resp.StatusCode)
-	}
-	var out struct {
-		UserID uuid.UUID `json:"user_id"`
-		OrgID  uuid.UUID `json:"organization_id"`
-		APIKey string    `json:"api_key"`
-		KeyID  uuid.UUID `json:"api_key_id"`
-		Email  string    `json:"email"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
-	}
 	return &Credentials{
 		APIKey:   out.APIKey,
 		APIKeyID: out.KeyID,

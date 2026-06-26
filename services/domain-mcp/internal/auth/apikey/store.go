@@ -231,7 +231,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	return nil, ErrNotFound
 }
 
-// UserLookup adapter para otp.UserLookup interface.
+// UserLookup adapter para interfaces que necesitan lookup por email/RUT.
 type UserLookup struct {
 	Pool *pgxpool.Pool
 }

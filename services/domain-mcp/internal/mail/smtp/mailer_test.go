@@ -143,20 +143,6 @@ func TestSend_HappyPath(t *testing.T) {
 	require.Contains(t, srv.captured.Data(), "Cuerpo del mail")
 }
 
-func TestSendOTP(t *testing.T) {
-	srv := startMockSMTP(t)
-	defer srv.Close()
-	host, port := srv.Addr()
-	m := New(Config{Host: host, Port: port, From: "noreply@test", Auth: "none"})
-
-	err := m.SendOTP(context.Background(), "alice@x.com", "123456", 10*time.Minute)
-	require.NoError(t, err)
-	data := srv.captured.Data()
-	require.Contains(t, data, "código de acceso")
-	require.Contains(t, data, "123456")
-	require.Contains(t, data, "10m")
-}
-
 func TestSend_EmptyToRejected(t *testing.T) {
 	m := New(Config{Host: "x", Port: 25})
 	err := m.Send(context.Background(), "", "x", "y")

@@ -676,19 +676,8 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		return fmt.Sprintf("account created for %s (key prefix %s)", email, prefix), nil
 	}
 
-	if install.Mode(mode) == install.ModeLocal && serverUp && mailpitAvailable() {
-		result, err := otpFlowViaServer(flags.baseURL, email)
-		if err != nil {
-			return "", fmt.Errorf("OTP flow: %w (alternativa: domain onboard)", err)
-		}
-		if err := saveCredentialsFromOTP(result, flags.baseURL); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("OTP verified via mailpit for %s", result.Email), nil
-	}
-
 	return "", fmt.Errorf("hay usuarios en la BD pero no credentials.json; "+
-		"corré 'domain onboard --base-url %s' para autenticarte (OTP por email)", flags.baseURL)
+		"corré 'domain onboard --base-url %s' para autenticarte", flags.baseURL)
 }
 
 // bootstrapFirstAccount crea el primer user (owner) + API key directo a la BD.
@@ -727,27 +716,6 @@ func bootstrapFirstAccount(ctx context.Context, pool *pgxpool.Pool, email, baseU
 		IssuedAt: time.Now().UTC(),
 	}
 	return prefix, persistCredentials(creds)
-}
-
-// saveCredentialsFromOTP arma y persiste credentials desde el resultado
-// del verify-otp.
-func saveCredentialsFromOTP(r *otpVerifyResult, baseURL string) error {
-	creds := &onboard.Credentials{
-		APIKey:   r.APIKey,
-		Email:    r.Email,
-		BaseURL:  baseURL,
-		IssuedAt: time.Now().UTC(),
-	}
-	if id, err := uuid.Parse(r.APIKeyID); err == nil {
-		creds.APIKeyID = id
-	}
-	if id, err := uuid.Parse(r.UserID); err == nil {
-		creds.UserID = id
-	}
-	if id, err := uuid.Parse(r.OrgID); err == nil {
-		creds.OrgID = id
-	}
-	return persistCredentials(creds)
 }
 
 // persistCredentials guarda credentials.json (0600) + DOMAIN_API_KEY en

@@ -12,8 +12,6 @@ import (
 
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
-	"nunezlagos/domain/internal/auth/otp"
-	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/dispatch"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
@@ -22,8 +20,6 @@ import (
 
 // API agrupa las dependencias del router /api/v1/*.
 type API struct {
-	OTPService         *otp.Service
-	OTPRateLimiter     *ratelimit.Limiter
 	APIKeys            *apikey.PGStore
 	AuthSessionService *session.Service
 	Bootstrap          *bootstrap.Service
@@ -37,8 +33,6 @@ type API struct {
 func (a *API) Router() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /api/v1/auth/request-otp", a.requestOTP)
-	mux.HandleFunc("POST /api/v1/auth/verify-otp", a.verifyOTP)
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
@@ -55,8 +49,6 @@ func AuthAllowlist() []string {
 		"/healthz",
 		"/health/ready",
 		"/health/startup",
-		"/api/v1/auth/request-otp",
-		"/api/v1/auth/verify-otp",
 		"/api/v1/auth/login",
 		"/api/v1/auth/enroll", // issue-37.1: gating por X-Enrollment-Token, no Bearer
 		"/api/v1/webhooks/*",  // webhooks usan HMAC, no Bearer

@@ -165,7 +165,7 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	if opts.Email == "" {
 		opts.Email = strings.TrimSpace(prompt(in, "  Email: "))
 	}
-	if opts.APIKey == "" {
+	if !opts.DryRun && opts.APIKey == "" {
 		opts.APIKey = strings.TrimSpace(promptHidden(in, "  API key (domk_live_xxx): "))
 	}
 
@@ -177,24 +177,28 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		failL("Email requerido")
 		os.Exit(1)
 	}
-	if opts.APIKey == "" {
+	if !opts.DryRun && opts.APIKey == "" {
 		failL("API key requerida. Usá --bootstrap para modo guiado o corré 'domain bootstrap --email ...' en el VPS primero.")
 		os.Exit(1)
 	}
 	opts.URL = strings.TrimRight(opts.URL, "/")
 
 	if warning, _ := detectURLMismatch(paths.GlobalEnv, opts.URL); warning != "" {
-		if !opts.NonInteractive && !confirm(in, "  "+warning+" ") {
+		if !opts.DryRun && !opts.NonInteractive && !confirm(in, "  "+warning+" ") {
 			failL("abortado por el usuario")
 			os.Exit(1)
 		}
 		warnL("re-apuntando install.env a " + opts.URL)
 	}
 
-	if err := saveEnv(paths.GlobalEnv, EnvData{VPSURL: opts.URL, Email: opts.Email}); err != nil {
-		warnL("no se pudo guardar " + paths.GlobalEnv + ": " + err.Error())
+	if !opts.DryRun {
+		if err := saveEnv(paths.GlobalEnv, EnvData{VPSURL: opts.URL, Email: opts.Email}); err != nil {
+			warnL("no se pudo guardar " + paths.GlobalEnv + ": " + err.Error())
+		} else {
+			ok("guardado en " + paths.GlobalEnv + " (modo 0600)")
+		}
 	} else {
-		ok("guardado en " + paths.GlobalEnv + " (modo 0600)")
+		info("DRY-RUN: no modifico " + paths.GlobalEnv)
 	}
 
 	step("Verificando conexión al VPS")

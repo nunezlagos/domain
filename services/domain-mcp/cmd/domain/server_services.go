@@ -15,7 +15,6 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/auth/otp"
 	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/config"
@@ -128,11 +127,9 @@ type serverServices struct {
 	Dispatcher                *dispatch.Dispatcher
 	CronService               *cronsvc.Service
 	APIKeyStore               *apikey.PGStore
-	OTPService                *otp.Service
 	ActivityStore             *activity.PGStore
 	SecretsStore              *secrets.PGStore
 	RateLimiter               *ratelimit.Limiter
-	OTPRateLimiter            *ratelimit.Limiter
 	RequirementService        *reqsvc.Service
 	HUService                 *usvc.Service
 	SpecService               *specsvc.Service
@@ -140,7 +137,6 @@ type serverServices struct {
 	TraceService              *tracesvc.Service
 	AttachmentService         *attSvc.Service
 	MasterCipher              *crypto.Cipher
-	OtpMailer                 otp.Mailer
 	Embedder                  llm.Embedder
 }
 
@@ -191,18 +187,6 @@ func buildServices(
 	s.ProjectService = projsvc.NewService(pools.App, s.Recorder, nil, nil).
 		WithClientService(s.ClientService)
 	s.ObsService = observation.NewService(pools.App, s.Recorder, s.Embedder, nil, nil)
-
-	if cfg.SMTPHost != "" {
-		realMailer := smtpmail.New(smtpmail.Config{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
-			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
-			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
-		})
-		s.OtpMailer = realMailer
-		logger.Info("SMTP mailer configured", slog.String("host", cfg.SMTPHost))
-	} else {
-		logger.Warn("SMTP not configured — OTP no enviará mails reales (DOMAIN_SMTP_HOST missing)")
-	}
 
 	s.PromptService = &promptsvc.Service{Pool: pools.App, Audit: s.Recorder}
 	s.TimelineService = &timelinesvc.Service{Pool: pools.App}
@@ -334,12 +318,6 @@ func buildServices(
 	s.CronService = &cronsvc.Service{Pool: pools.App, Audit: s.Recorder}
 
 	s.APIKeyStore = &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
-	otpUserLookup := &otpUserLookupAdapter{pool: pools.Auth}
-	s.OTPService = &otp.Service{
-		Pool:  pools.Auth,
-		Users: otpUserLookup,
-		Mail:  s.OtpMailer,
-	}
 
 	s.ActivityStore = &activity.PGStore{Pool: pools.App}
 	s.SecretsStore = &secrets.PGStore{Pool: pools.App, Cipher: s.MasterCipher}
@@ -352,15 +330,6 @@ func buildServices(
 		defer ticker.Stop()
 		for range ticker.C {
 			s.RateLimiter.Cleanup(10 * time.Minute)
-		}
-	}()
-
-	s.OTPRateLimiter = ratelimit.New(5, 5.0/60.0)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			s.OTPRateLimiter.Cleanup(10 * time.Minute)
 		}
 	}()
 

@@ -71,7 +71,7 @@ content_length. PII redaction regex en issue-02.5.`,
 			Name:       "RLS obligatorio en tablas sensibles",
 			Kind:       "security_rule",
 			SourceFile: ".claude/rules/db.md",
-			BodyMD: `Tablas en migration 000028 (auth_secrets, audit_log, auth_otp_codes,
+			BodyMD: `Tablas en migration 000028 (auth_secrets, audit_log,
 activity_log, auth_api_keys) tienen RLS FORCE. Queries DEBEN envolver en
 db.WithOrgTx para SET LOCAL app.current_org_id. Sabotaje: query sin
 SET LOCAL → 0 rows. app_user es NOBYPASSRLS; app_admin BYPASSRLS solo

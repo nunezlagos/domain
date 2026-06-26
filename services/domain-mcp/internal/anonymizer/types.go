@@ -83,7 +83,6 @@ func DefaultConfig() Config {
 				},
 			},
 			"auth_api_keys":                  {Skip: true},
-			"auth_otp_codes":                 {Skip: true},
 			"webhook_outbound_subscriptions": {Columns: map[string]Rule{"secret_cipher": RuleNullify}},
 		},
 	}

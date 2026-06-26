@@ -1,15 +1,15 @@
-/* HU-49.3: cliente del chat IA estilo NotebookLM.
-   Vanilla JS + fetch + marked.js (local). Sin dependencias npm.
+/* HU-49.3: cliente del chat IA estilo LLM moderno (ChatGPT/Claude).
 
    Funcionalidad:
-   - Sidebar: lista conversaciones del usuario, boton nueva, search local.
-   - Crear/seleccionar/eliminar conversaciones.
-   - Enviar mensaje con optimistic update.
-   - Polling 1.5s que para solo en completed|error.
-   - Render Markdown + SourceCards inline.
-   - Mobile: back button para volver a la lista.
-   - Scroll: badge "Nuevo mensaje" cuando user esta arriba y llega respuesta.
-   - Typing indicator animado durante el polling.
+   - Sidebar colapsable (toggle con Ctrl+B o boton hamburguesa)
+   - Command palette (Ctrl+K) para nueva conversacion
+   - Busqueda con debounce en sidebar
+   - Mobile: sidebar overlay con backdrop
+   - Sugerencias de bienvenida (click llena el input)
+   - Scroll inteligente + badge "ir al fondo"
+   - Polling cada 1.5s mientras el bot procesa
+   - Typing indicator animado (spinner CSS)
+   - Fade-in animation para mensajes nuevos
 */
 
 (function () {
@@ -19,7 +19,6 @@
   const POLL_INTERVAL_MS = 1500;
   const SCROLL_BOTTOM_THRESHOLD = 100;
   const SEARCH_DEBOUNCE_MS = 200;
-  const TYPING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
   const state = {
     conversations: [],
@@ -29,8 +28,7 @@
     pollingId: null,
     pollingAbort: false,
     searchQuery: "",
-    typingFrameIdx: 0,
-    typingIntervalId: null,
+    sidebarCollapsed: window.innerWidth >= 1024 ? false : true,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -46,19 +44,14 @@
 
   async function apiFetch(path, opts = {}) {
     const headers = { "X-Requested-With": "fetch", ...(opts.headers || {}) };
-    if (opts.method && opts.method !== "GET") {
-      headers["Content-Type"] = "application/json";
-    }
+    if (opts.method && opts.method !== "GET") headers["Content-Type"] = "application/json";
     const res = await fetch(API + path, {
       method: opts.method || "GET",
       headers,
       credentials: "same-origin",
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error("HTTP " + res.status + ": " + text);
-    }
+    if (!res.ok) throw new Error("HTTP " + res.status + ": " + await res.text());
     if (res.status === 204) return null;
     return res.json();
   }
@@ -66,12 +59,11 @@
   function relativeTime(iso) {
     if (!iso) return "";
     const d = new Date(iso);
-    const now = new Date();
-    const diff = (now - d) / 1000;
-    if (diff < 60) return "hace instantes";
-    if (diff < 3600) return "hace " + Math.floor(diff / 60) + "m";
-    if (diff < 86400) return "hace " + Math.floor(diff / 3600) + "h";
-    if (diff < 604800) return "hace " + Math.floor(diff / 86400) + "d";
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return "ahora";
+    if (diff < 3600) return Math.floor(diff / 60) + "m";
+    if (diff < 86400) return Math.floor(diff / 3600) + "h";
+    if (diff < 604800) return Math.floor(diff / 86400) + "d";
     return d.toLocaleDateString();
   }
 
@@ -87,27 +79,17 @@
     c.scrollTo({ top: c.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }
 
-  function showNewBadge(show) {
-    const badge = $("chat-new-badge");
-    if (!badge) return;
-    badge.style.display = show ? "block" : "none";
+  function isMobile() {
+    return window.innerWidth < 768;
   }
 
-  function startTypingAnimation() {
-    stopTypingAnimation();
-    const el = $("typing-indicator");
-    if (!el) return;
-    state.typingFrameIdx = 0;
-    state.typingIntervalId = setInterval(() => {
-      state.typingFrameIdx = (state.typingFrameIdx + 1) % TYPING_FRAMES.length;
-      el.textContent = TYPING_FRAMES[state.typingFrameIdx];
-    }, 100);
-  }
-
-  function stopTypingAnimation() {
-    if (state.typingIntervalId) {
-      clearInterval(state.typingIntervalId);
-      state.typingIntervalId = null;
+  function setSidebarCollapsed(collapsed) {
+    state.sidebarCollapsed = collapsed;
+    const shell = $("llm-shell");
+    if (isMobile()) {
+      shell.classList.toggle("mobile-open", !collapsed);
+    } else {
+      shell.classList.toggle("collapsed", collapsed);
     }
   }
 
@@ -115,11 +97,11 @@
     const list = $("chat-list");
     const convs = state.filteredConversations;
     if (state.conversations.length === 0) {
-      list.innerHTML = '<div class="chat-list-empty">Aun no tienes conversaciones. Crea una para empezar.</div>';
+      list.innerHTML = '<div class="llm-list-empty">Aun no tienes conversaciones.<br>Pulsa <kbd>Ctrl</kbd>+<kbd>K</kbd> o el boton "+ Nueva".</div>';
       return;
     }
     if (convs.length === 0) {
-      list.innerHTML = '<div class="chat-list-empty">Sin resultados para la busqueda.</div>';
+      list.innerHTML = '<div class="llm-list-empty">Sin resultados.</div>';
       return;
     }
     const titleCounts = {};
@@ -127,23 +109,20 @@
       const k = (c.title || "Nueva conversacion").trim().toLowerCase();
       titleCounts[k] = (titleCounts[k] || 0) + 1;
     });
-    list.innerHTML = convs
-      .map((c) => {
-        const active = c.id === state.activeId ? " active" : "";
-        const baseTitle = (c.title || "Nueva conversacion").trim();
-        const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
-        const title = dupCount > 1 ? `${baseTitle} (${shortTime(c.created_at)})` : baseTitle;
-        const preview = (c.last_message_preview || "").slice(0, 60);
-        return `
-          <div class="chat-list-item${active}" data-id="${c.id}">
-            <div class="title">${escapeHtml(title)}</div>
-            ${preview ? `<div class="preview">${escapeHtml(preview)}</div>` : ""}
-            <div class="date">${relativeTime(c.updated_at)}</div>
-          </div>
-        `;
-      })
-      .join("");
-    list.querySelectorAll(".chat-list-item").forEach((el) => {
+    list.innerHTML = convs.map((c) => {
+      const active = c.id === state.activeId ? " active" : "";
+      const baseTitle = (c.title || "Nueva conversacion").trim();
+      const dupCount = titleCounts[baseTitle.toLowerCase()] || 0;
+      const title = dupCount > 1 ? `${baseTitle} (${shortTime(c.created_at)})` : baseTitle;
+      const preview = (c.last_message_preview || "").slice(0, 60);
+      return `
+        <div class="llm-item${active}" data-id="${c.id}">
+          <div class="llm-item-title">${escapeHtml(title)}</div>
+          ${preview ? `<div class="llm-item-preview">${escapeHtml(preview)}</div>` : ""}
+          <div class="llm-item-time">${relativeTime(c.updated_at)}</div>
+        </div>`;
+    }).join("");
+    list.querySelectorAll(".llm-item").forEach((el) => {
       el.addEventListener("click", () => selectConversation(el.dataset.id));
     });
   }
@@ -156,41 +135,44 @@
 
   function filterConversations() {
     const q = state.searchQuery.toLowerCase().trim();
-    if (!q) {
-      state.filteredConversations = state.conversations;
-    } else {
-      state.filteredConversations = state.conversations.filter((c) =>
-        (c.title || "").toLowerCase().includes(q) ||
-        (c.last_message_preview || "").toLowerCase().includes(q)
-      );
-    }
+    state.filteredConversations = !q
+      ? state.conversations
+      : state.conversations.filter((c) =>
+          (c.title || "").toLowerCase().includes(q) ||
+          (c.last_message_preview || "").toLowerCase().includes(q)
+        );
   }
 
   function debounce(fn, ms) {
-    let timer;
+    let t;
     return function (...args) {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn.apply(this, args), ms);
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), ms);
     };
   }
 
   function renderSources(sources) {
     if (!sources || sources.length === 0) return "";
     return (
-      '<div class="sources">' +
-      sources
-        .map((s) => {
-          const scorePct = Math.round((s.score || 0) * 100);
-          const url = s.url || "#";
-          const snippet = (s.snippet || "").slice(0, 80);
-          return `<a class="source-chip" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(snippet)}">
-            <span class="source-title">${escapeHtml(s.titulo || s.id)}</span>
-            ${scorePct > 0 ? `<span class="score">${scorePct}%</span>` : ""}
-          </a>`;
-        })
-        .join("") +
+      '<div class="llm-msg-sources">' +
+      sources.map((s) => {
+        const scorePct = Math.round((s.score || 0) * 100);
+        const url = s.url || "#";
+        return `<a class="llm-source" href="${escapeHtml(url)}" target="_blank" rel="noopener">
+          ${escapeHtml(s.titulo || s.id)} ${scorePct > 0 ? `<span class="llm-source-score">${scorePct}%</span>` : ""}
+        </a>`;
+      }).join("") +
       "</div>"
     );
+  }
+
+  function renderMarkdown(text) {
+    if (typeof window.marked === "undefined") return escapeHtml(text).replace(/\n/g, "<br>");
+    try {
+      return window.marked.parse(text, { breaks: true, gfm: true });
+    } catch (e) {
+      return escapeHtml(text);
+    }
   }
 
   function renderMessage(msg) {
@@ -201,28 +183,25 @@
     const content = msg.content || msg.content_partial || "";
 
     if (isPending) {
-      return `<div class="chat-pending">
-        <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
+      return `<div class="llm-pending">
+        <div class="llm-msg-avatar" style="background:var(--llm-primary);color:white">B</div>
+        <div class="llm-spinner"></div>
         <span>Pensando...</span>
       </div>`;
     }
     if (isProcessing && !content) {
-      return `<div class="chat-pending">
-        <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
+      return `<div class="llm-pending">
+        <div class="llm-msg-avatar" style="background:var(--llm-primary);color:white">B</div>
+        <div class="llm-spinner"></div>
         <span>Generando respuesta...</span>
       </div>`;
     }
-    if (isProcessing && content) {
-      const processedHtml = renderMarkdown(content);
-      return `<div class="chat-bubble assistant processing">
-        <div class="bubble-content">${processedHtml}</div>
-        <div class="typing-footer">
-          <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
-          <span>generando...</span>
-        </div>
-      </div>`;
-    }
-    const bubbleClass = isUser ? "user" : isError ? "assistant error" : "assistant";
+
+    const cls = isUser ? "llm-msg-user" : isError ? "llm-msg-assistant llm-error" : "llm-msg-assistant";
+    const avatar = isUser ? "U" : "B";
+    const avatarBg = isUser ? "var(--llm-text-muted)" : "var(--llm-primary)";
+    const avatarColor = isUser ? "var(--llm-bg-elevated)" : "white";
+
     let html;
     if (isUser) {
       html = escapeHtml(content).replace(/\n/g, "<br>");
@@ -230,55 +209,43 @@
       html = renderMarkdown(content);
     }
     const sourcesHtml = isError ? "" : renderSources(msg.sources);
-    const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : "";
-    const meta = isUser
-      ? `<div class="meta">${time}</div>`
-      : (msg.tokens_in || msg.tokens_out)
-      ? `<div class="meta">${time} · ${escapeHtml(msg.model || "")} · ${msg.tokens_in || 0}/${msg.tokens_out || 0} tokens</div>`
-      : time
-      ? `<div class="meta">${time}</div>`
-      : "";
-    return `<div class="chat-bubble ${bubbleClass} fade-in">${html}${sourcesHtml}${meta}</div>`;
-  }
+    const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+    const metaParts = [];
+    if (time) metaParts.push(time);
+    if (msg.model) metaParts.push(escapeHtml(msg.model));
+    if (msg.tokens_in || msg.tokens_out) metaParts.push(`${msg.tokens_in || 0} / ${msg.tokens_out || 0} tokens`);
+    const meta = metaParts.length ? `<div class="llm-msg-meta">${metaParts.join('<span class="llm-msg-meta-sep">·</span>')}</div>` : "";
 
-  function renderMarkdown(text) {
-    if (typeof window.marked === "undefined") {
-      return escapeHtml(text).replace(/\n/g, "<br>");
-    }
-    try {
-      return window.marked.parse(text, { breaks: true, gfm: true });
-    } catch (e) {
-      return escapeHtml(text);
-    }
+    return `<div class="llm-msg ${cls}">
+      <div class="llm-msg-avatar" style="background:${avatarBg};color:${avatarColor}">${avatar}</div>
+      <div class="llm-msg-content">${html}${sourcesHtml}${meta}</div>
+    </div>`;
   }
 
   function renderMessages(opts) {
     const container = $("chat-messages");
     if (!state.activeId) {
       container.innerHTML = "";
-      const empty = $("chat-empty");
-      if (empty) container.appendChild(empty);
-      stopTypingAnimation();
+      const welcome = $("chat-empty");
+      if (welcome) container.appendChild(welcome);
       return;
     }
     const form = $("chat-form");
-    form.style.display = "flex";
-    const empty = $("chat-empty");
-    if (empty) empty.style.display = "none";
+    form.style.display = "block";
+    const welcome = $("chat-empty");
+    if (welcome) welcome.remove();
     const wasAtBottom = isScrolledToBottom();
     container.innerHTML = state.messages.map(renderMessage).join("");
+    const btnDown = $("btn-scroll-down");
     if (opts && opts.initial) {
       scrollToBottom(false);
+      if (btnDown) btnDown.style.display = "none";
     } else if (wasAtBottom) {
       scrollToBottom(true);
+      if (btnDown) btnDown.style.display = "none";
     } else {
-      showNewBadge(true);
+      if (btnDown) btnDown.style.display = "flex";
     }
-    const hasProcessing = state.messages.some(
-      (m) => m.status === "pending" || m.status === "processing"
-    );
-    if (hasProcessing) startTypingAnimation();
-    else stopTypingAnimation();
   }
 
   async function loadConversations() {
@@ -287,9 +254,7 @@
       state.conversations = data.data || [];
       filterConversations();
       renderConversations();
-    } catch (e) {
-      console.error("loadConversations", e);
-    }
+    } catch (e) { console.error("loadConversations", e); }
   }
 
   async function createConversation() {
@@ -300,6 +265,7 @@
       filterConversations();
       renderConversations();
       await selectConversation(conv.id);
+      if (isMobile()) setSidebarCollapsed(true);
     } catch (e) {
       console.error("createConversation", e);
       alert("Error creando conversacion: " + e.message);
@@ -338,9 +304,9 @@
     input.disabled = sending;
     btn.disabled = sending;
     if (sending) {
-      input.placeholder = "Esperando respuesta del asistente...";
+      input.placeholder = "Esperando respuesta del bot...";
     } else {
-      input.placeholder = "Escribi tu pregunta y presiona Enter (Shift+Enter para nueva linea)";
+      input.placeholder = "Preguntale algo al bot...";
       input.focus();
     }
   }
@@ -351,29 +317,13 @@
       clearTimeout(state.pollingId);
       state.pollingId = null;
     }
-    stopTypingAnimation();
     state.activeId = id;
     state.messages = [];
-    showNewBadge(false);
-    document.querySelectorAll(".chat-list-item").forEach((el) => {
+    document.querySelectorAll(".llm-item").forEach((el) => {
       el.classList.toggle("active", el.dataset.id === id);
     });
-    document.getElementById("chat-shell").classList.add("show-chat");
+    if (isMobile()) setSidebarCollapsed(true);
     await loadMessages(id);
-    updateHeader();
-  }
-
-  function goBackToList() {
-    if (state.pollingId) {
-      state.pollingAbort = true;
-      clearTimeout(state.pollingId);
-      state.pollingId = null;
-    }
-    stopTypingAnimation();
-    state.activeId = null;
-    state.messages = [];
-    document.getElementById("chat-shell").classList.remove("show-chat");
-    renderMessages();
     updateHeader();
   }
 
@@ -382,7 +332,7 @@
     const text = input.value.trim();
     if (!text || !state.activeId) return;
     input.value = "";
-    input.style.height = "auto";
+    autoResizeTextarea();
     setSendingState(true);
     const tempMsg = {
       id: -Date.now(),
@@ -395,7 +345,8 @@
     };
     state.messages.push(tempMsg);
     renderMessages();
-    showNewBadge(false);
+    const btnDown = $("btn-scroll-down");
+    if (btnDown) btnDown.style.display = "none";
     try {
       const data = await apiFetch(
         "/conversations/" + state.activeId + "/messages/new",
@@ -416,7 +367,6 @@
 
   function startPolling(messageId) {
     state.pollingAbort = false;
-    startTypingAnimation();
     const tick = async () => {
       if (state.pollingAbort) return;
       try {
@@ -429,14 +379,11 @@
         updateHeader();
         if (msg.status === "completed" || msg.status === "error") {
           state.pollingId = null;
-          stopTypingAnimation();
           setSendingState(false);
           loadConversations();
           return;
         }
-      } catch (e) {
-        console.error("polling", e);
-      }
+      } catch (e) { console.error("polling", e); }
       state.pollingId = setTimeout(tick, POLL_INTERVAL_MS);
     };
     state.pollingId = setTimeout(tick, POLL_INTERVAL_MS);
@@ -446,24 +393,45 @@
     const textarea = $("chat-input");
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
+  }
+
+  function handleSuggestionClick(e) {
+    const btn = e.target.closest(".llm-suggestion");
+    if (!btn) return;
+    const q = btn.dataset.q;
+    if (!q) return;
+    if (!state.activeId) {
+      createConversation().then(() => {
+        const input = $("chat-input");
+        if (input) {
+          input.value = q;
+          input.focus();
+          autoResizeTextarea();
+        }
+      });
+    } else {
+      const input = $("chat-input");
+      if (input) {
+        input.value = q;
+        input.focus();
+        autoResizeTextarea();
+      }
+    }
   }
 
   function bind() {
-    $("btn-new-conversation").addEventListener("click", createConversation);
-    const btnEmpty = $("btn-empty-new");
-    if (btnEmpty) btnEmpty.addEventListener("click", createConversation);
+    $("btn-new-chat").addEventListener("click", createConversation);
 
-    const btnBack = $("btn-back-mobile");
-    if (btnBack) btnBack.addEventListener("click", goBackToList);
+    $("btn-sidebar-toggle").addEventListener("click", () => {
+      setSidebarCollapsed(!state.sidebarCollapsed);
+    });
+    $("btn-sidebar-open").addEventListener("click", () => {
+      setSidebarCollapsed(false);
+    });
 
-    const btnScrollDown = $("btn-scroll-down");
-    if (btnScrollDown) {
-      btnScrollDown.addEventListener("click", () => {
-        showNewBadge(false);
-        scrollToBottom(true);
-      });
-    }
+    const backdrop = $("llm-backdrop");
+    if (backdrop) backdrop.addEventListener("click", () => setSidebarCollapsed(true));
 
     const searchInput = $("chat-search-input");
     if (searchInput) {
@@ -478,9 +446,23 @@
     const messagesContainer = $("chat-messages");
     if (messagesContainer) {
       messagesContainer.addEventListener("scroll", () => {
-        if (isScrolledToBottom()) showNewBadge(false);
+        if (isScrolledToBottom()) {
+          const btnDown = $("btn-scroll-down");
+          if (btnDown) btnDown.style.display = "none";
+        }
       });
     }
+
+    const btnDown = $("btn-scroll-down");
+    if (btnDown) {
+      btnDown.addEventListener("click", () => {
+        btnDown.style.display = "none";
+        scrollToBottom(true);
+      });
+    }
+
+    const messages = $("chat-messages");
+    if (messages) messages.addEventListener("click", handleSuggestionClick);
 
     const form = $("chat-form");
     form.addEventListener("submit", (e) => {
@@ -490,17 +472,42 @@
 
     const textarea = $("chat-input");
     textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         sendMessage();
       }
     });
     textarea.addEventListener("input", autoResizeTextarea);
+
+    document.addEventListener("keydown", (e) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (isMod && e.key === "b") {
+        e.preventDefault();
+        setSidebarCollapsed(!state.sidebarCollapsed);
+      }
+      if (isMod && e.key === "k") {
+        e.preventDefault();
+        createConversation();
+      }
+      if (e.key === "Escape" && !state.sidebarCollapsed && isMobile()) {
+        setSidebarCollapsed(true);
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (isMobile()) {
+        $("llm-shell").classList.remove("collapsed");
+      }
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     bind();
     loadConversations();
     renderMessages();
+    setTimeout(() => {
+      const input = $("chat-input");
+      if (input && !state.activeId) input.focus();
+    }, 200);
   });
 })();

@@ -58,14 +58,6 @@ func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
 	return m.sendPlain(ctx, addr, to, msg)
 }
 
-// SendOTP — adapter para otp.Mailer interface.
-func (m *Mailer) SendOTP(ctx context.Context, to, code string, expiresIn time.Duration) error {
-	subject := "Tu código de acceso a Domain"
-	body := fmt.Sprintf("Tu código: %s\nVence en: %s\n\nSi no lo solicitaste, ignorá este correo.",
-		code, expiresIn.String())
-	return m.Send(ctx, to, subject, body)
-}
-
 func (m *Mailer) sendPlain(ctx context.Context, addr, to, msg string) error {
 	dialer := &net.Dialer{Timeout: m.cfg.Timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)

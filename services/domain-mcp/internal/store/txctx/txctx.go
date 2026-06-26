@@ -3,7 +3,7 @@
 // Cada query sobre tablas con RLS debe ir dentro de un tx con
 // `SET LOCAL app.current_org_id = $1` ejecutado primero. Este helper lo automatiza.
 //
-// Sin WithOrgTx → queries sobre auth_secrets/audit_log/auth_otp_codes/activity_log/auth_api_keys
+// Sin WithOrgTx → queries sobre auth_secrets/audit_log/activity_log/auth_api_keys
 // devuelven 0 rows (RLS deniega). Es defense-in-depth contra bugs RBAC en app.
 package txctx
 
@@ -38,7 +38,7 @@ func WithOrgTx(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, fn func
 	return tx.Commit(ctx)
 }
 
-// WithUserTx setea app.current_user_id (para tablas como auth_otp_codes con RLS user-scoped).
+// WithUserTx setea app.current_user_id (para tablas con RLS user-scoped).
 func WithUserTx(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID, fn func(pgx.Tx) error) error {
 	if userID == uuid.Nil {
 		return fmt.Errorf("WithUserTx: userID required")

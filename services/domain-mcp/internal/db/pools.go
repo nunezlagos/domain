@@ -12,8 +12,8 @@
 //	AuthPool → connection como app_admin (BYPASSRLS).
 //	           SOLO para queries del path de auth donde org_id aún no se conoce:
 //	           - apikey.PGStore.Resolve (lookup auth_api_keys por prefix)
-//	           - apikey.PGStore.Issue   (INSERT auth_api_keys post-verify-otp)
-//	           - otp.Service.Request    (lookup users por email)
+//	           - apikey.PGStore.Issue   (INSERT auth_api_keys)
+//	           - apikey.PGStore.Resolve (auth path)
 //	           - audit.PGRecorder       (audit_log INSERT — orto, INSERT policy
 //	                                     ya es WITH CHECK true, pero por consistencia
 //	                                     queries de SELECT cross-org las hace audit

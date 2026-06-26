@@ -2,7 +2,7 @@
 
 Todas las consultas se ejecutan dentro de una transaccion con
 SET LOCAL app.current_org_id para cumplir con el FORCE RLS de
-la tabla captured_prompts.
+la tabla prompt_captured (renombrada desde captured_prompts en mig 000155).
 
 DEFAULT_ORG_ID se lee de settings; si no esta configurado usa el
 UUID canonico del single-org deployment (00000000-0000-0000-0000-000000000001).
@@ -33,7 +33,7 @@ def kpis(days: int = 30) -> dict:
             COALESCE(AVG(estimated_tokens_in + estimated_tokens_out)
                 FILTER (WHERE turn_completed_at IS NOT NULL), 0)
                                                            AS avg_tokens_turn
-        FROM captured_prompts
+        FROM prompt_captured
         WHERE captured_at >= NOW() - (%s || ' days')::INTERVAL
     """
     with transaction.atomic():
@@ -61,7 +61,7 @@ def by_project(days: int = 30) -> list[dict]:
             COALESCE(SUM(cp.estimated_tokens_in + cp.estimated_tokens_out), 0)
                                                            AS tokens_total,
             MAX(cp.captured_at)                            AS last_turn
-        FROM captured_prompts cp
+        FROM prompt_captured cp
         LEFT JOIN projects p ON p.id = cp.project_id
         WHERE cp.captured_at >= NOW() - (%s || ' days')::INTERVAL
         GROUP BY p.slug
@@ -86,7 +86,7 @@ def by_client(days: int = 30) -> list[dict]:
             COALESCE(SUM(estimated_tokens_out), 0)             AS tokens_out,
             COALESCE(SUM(estimated_tokens_in + estimated_tokens_out), 0)
                                                                AS tokens_total
-        FROM captured_prompts
+        FROM prompt_captured
         WHERE captured_at >= NOW() - (%s || ' days')::INTERVAL
         GROUP BY client_kind
         ORDER BY tokens_total DESC
@@ -107,7 +107,7 @@ def by_model(days: int = 30) -> list[dict]:
             COUNT(*)                                      AS turns,
             COALESCE(SUM(estimated_tokens_in),  0)        AS tokens_in,
             COALESCE(SUM(estimated_tokens_out), 0)        AS tokens_out
-        FROM captured_prompts
+        FROM prompt_captured
         WHERE captured_at >= NOW() - (%s || ' days')::INTERVAL
         GROUP BY model
         ORDER BY turns DESC
@@ -135,7 +135,7 @@ def recent_prompts(days: int = 30, limit: int = 50) -> list[dict]:
                                                         AS tokens_total,
             cp.turn_completed_at,
             LEFT(cp.content, 140)                       AS content_preview
-        FROM captured_prompts cp
+        FROM prompt_captured cp
         LEFT JOIN projects p ON p.id = cp.project_id
         WHERE cp.captured_at >= NOW() - (%s || ' days')::INTERVAL
         ORDER BY cp.captured_at DESC

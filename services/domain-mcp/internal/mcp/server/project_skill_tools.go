@@ -19,8 +19,8 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type skillProjectGetter interface {
@@ -72,6 +72,7 @@ func toolProjectSkillRegister() mcp.Tool {
 		mcp.WithString("description", mcp.Description("Descripcion 1-2 lineas. Sirve al matching de skill_search.")),
 		mcp.WithString("skill_type", mcp.Description("prompt|code|api|mcp_tool. Default: prompt")),
 		mcp.WithString("content", mcp.Description("Cuerpo de la skill (template prompt, codigo, etc).")),
+		mcp.WithString("root_path", mcp.Description("Subpath del repo al que aplica la skill en un monorepo (ej. 'services/api'). Vacío/omitido = aplica a todo el proyecto. Usar para skills de stack cuando hay >1 stack en el repo.")),
 	)
 }
 
@@ -95,6 +96,7 @@ func (h *projectSkillHandlers) handleProjectSkillRegister(ctx context.Context, r
 	}
 	desc, _ := args["description"].(string)
 	content, _ := args["content"].(string)
+	rootPath, _ := args["root_path"].(string)
 
 	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
@@ -106,10 +108,10 @@ func (h *projectSkillHandlers) handleProjectSkillRegister(ctx context.Context, r
 	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO skills
 		   (project_id, slug, name, description,
-		    skill_type, content, input_schema, output_schema)
-		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),'{}','{}')
+		    skill_type, content, input_schema, output_schema, root_path)
+		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),'{}','{}',NULLIF($7,''))
 		 RETURNING id`,
-		proj.ID, slug, name, desc, skillType, content,
+		proj.ID, slug, name, desc, skillType, content, rootPath,
 	).Scan(&id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("register failed: %v", err)), nil
@@ -125,7 +127,8 @@ func (h *projectSkillHandlers) handleProjectSkillRegister(ctx context.Context, r
 	return toolResultJSON(map[string]any{
 		"id": id.String(), "scope": "project", "project_slug": projSlug,
 		"slug": slug, "name": name, "skill_type": skillType,
-		"linked": true,
+		"root_path": rootPath,
+		"linked":    true,
 	})
 }
 
@@ -161,7 +164,8 @@ func (h *projectSkillHandlers) handleProjectSkillList(ctx context.Context, req m
 	}
 
 	q := `SELECT s.id, s.slug, s.name, COALESCE(s.description,''), s.skill_type,
-		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope
+		    CASE WHEN s.project_id IS NULL THEN 'global' ELSE 'project' END AS scope,
+		    COALESCE(s.root_path,'') AS root_path
 		   FROM skills s
 		   WHERE s.deleted_at IS NULL
 		     AND s.proposed = false
@@ -188,11 +192,12 @@ func (h *projectSkillHandlers) handleProjectSkillList(ctx context.Context, req m
 		Description string `json:"description"`
 		SkillType   string `json:"skill_type"`
 		Scope       string `json:"scope"`
+		RootPath    string `json:"root_path"`
 	}
 	out := make([]item, 0)
 	for rows.Next() {
 		var it item
-		if err := rows.Scan(&it.ID, &it.Slug, &it.Name, &it.Description, &it.SkillType, &it.Scope); err != nil {
+		if err := rows.Scan(&it.ID, &it.Slug, &it.Name, &it.Description, &it.SkillType, &it.Scope, &it.RootPath); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("scan failed: %v", err)), nil
 		}
 		out = append(out, it)

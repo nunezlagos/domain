@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="{% static 'css/components.css' %}">
   <link rel="stylesheet" href="{% static 'css/maintainers.css' %}">
   <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
+  <link rel="stylesheet" href="{% static 'css/chat.css' %}">
 
   {% block extra_head %}{% endblock %}
 </head>
@@ -53,6 +54,10 @@
   <script src="{% static 'js/password-toggle.js' %}"></script>
   <script src="{% static 'js/sidebar.js' %}"></script>
   <script src="{% static 'js/clock.js' %}"></script>
+
+  {# Chat IA widget flotante (HU-49) #}
+  {% include "chat/widget.html" %}
+
   {% block extra_js %}{% endblock %}
 </body>
 </html>

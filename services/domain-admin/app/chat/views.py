@@ -89,7 +89,7 @@ def chat_page(request: HttpRequest) -> HttpResponse:
     redir = require_auth(request)
     if redir:
         return redir
-    return render(request, "chat/list.html", {})
+    return render(request, "dashboard.html", {})
 
 
 @require_http_methods(["GET"])

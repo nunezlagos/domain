@@ -11,13 +11,13 @@ from __future__ import annotations
 
 from django.db import models
 
-from core.models import SoftDeleteModel
+from core.models import BaseModel
 
 
-class PlatformPolicy(SoftDeleteModel):
+class PlatformPolicy(BaseModel):
     """Politica global de plataforma.
 
-    id / created_at / updated_at / status vienen de SoftDeleteModel.
+    id / created_at / updated_at vienen de BaseModel.
     is_active controla la habilitacion.
     """
 
@@ -54,4 +54,4 @@ class PlatformPolicy(SoftDeleteModel):
 
     @property
     def is_enabled(self) -> bool:
-        return self.is_active and self.deleted_at is None
+        return self.is_active

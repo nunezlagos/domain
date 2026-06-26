@@ -7,7 +7,6 @@ update_politica/delete_politica/toggle_politica_status.
 from __future__ import annotations
 
 from django.db import transaction
-from django.utils import timezone
 
 from core.service import MaintainerService
 
@@ -24,7 +23,7 @@ class PlatformPolicyService(MaintainerService):
     ordering = ("-created_at",)
 
     def list(self, *args, **kwargs):
-        kwargs.setdefault("qs", PlatformPolicy.objects.filter(deleted_at__isnull=True))
+        kwargs.setdefault("qs", PlatformPolicy.objects.filter(is_active=True))
         return super().list(*args, **kwargs)
 
 
@@ -49,7 +48,7 @@ def get_policy(policy_id: str) -> PlatformPolicy:
 
 
 def _slug_taken(slug: str, exclude_pk=None) -> bool:
-    qs = PlatformPolicy.objects.filter(slug=slug, deleted_at__isnull=True)
+    qs = PlatformPolicy.objects.filter(slug=slug, is_active=True)
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.exists()
@@ -98,24 +97,19 @@ def update_policy(
 
 @transaction.atomic
 def delete_policy(policy: PlatformPolicy) -> None:
-    policy.deleted_at = timezone.now()
     policy.is_active = False
     policy.save()
 
 
 @transaction.atomic
 def toggle_policy_status(policy: PlatformPolicy) -> bool:
-    if policy.is_active:
-        policy.is_active = False
-    else:
-        policy.is_active = True
-        policy.deleted_at = None
+    policy.is_active = not policy.is_active
     policy.save()
     return policy.is_active
 
 
 def get_stats() -> dict:
-    base = PlatformPolicy.objects.filter(deleted_at__isnull=True)
+    base = PlatformPolicy.objects.all()
     return {
         "total": base.count(),
         "active": base.filter(is_active=True).count(),

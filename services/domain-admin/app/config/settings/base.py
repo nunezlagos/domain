@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "maintainers.agenttemplates",   # mantenedor de plantillas de agentes
     "maintainers.projectpolicies",  # mantenedor de politicas por proyecto
     "maintainers.platformpolicies",  # mantenedor de politicas de plataforma
+    "maintainers.usage",            # dashboard de uso (captured_prompts KPIs)
 ]
 
 MIDDLEWARE = [
@@ -112,6 +113,11 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# UUID de la org por defecto (single-org). Se usa para SET LOCAL app.current_org_id
+# en consultas a tablas con FORCE RLS (ej. captured_prompts). En prod debe
+# coincidir con el org_id real del deployment.
+DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
 
 
 

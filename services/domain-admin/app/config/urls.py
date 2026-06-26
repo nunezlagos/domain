@@ -33,6 +33,8 @@ urlpatterns = [
 
     path("politicas-proyecto/", include("maintainers.projectpolicies.urls")),
     path("politicas-plataforma/", include("maintainers.platformpolicies.urls")),
+
+    path("uso/", include("maintainers.usage.urls")),
 ]
 
 

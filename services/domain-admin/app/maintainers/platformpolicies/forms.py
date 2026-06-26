@@ -62,7 +62,7 @@ class PlatformPolicyForm(InstanceAwareMixin, forms.Form):
         if not slug:
             return cleaned
 
-        qs = PlatformPolicy.objects.filter(slug=slug, deleted_at__isnull=True)
+        qs = PlatformPolicy.objects.filter(slug=slug, is_active=True)
         if self._exclude_self(qs).exists():
             raise forms.ValidationError(
                 "Ya existe una politica con ese slug en plataforma."

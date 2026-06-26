@@ -80,3 +80,24 @@ class ListTests(MaintainerTestCase):
         make_policy("Convencion", slug="conv")
         data = services.list_policies(search="Seguridad", page=1, per_page=20)
         self.assertEqual(data["total"], 1)
+
+
+class ApproveRejectPolicyTests(MaintainerTestCase):
+    def test_approve_activa_policy_propuesta(self):
+        p = make_policy("Propuesta", slug="prop", is_active=False)
+        p.proposed = True
+        p.save()
+        services.approve_policy(p)
+        p.refresh_from_db()
+        self.assertFalse(p.proposed)
+        self.assertTrue(p.is_active)
+
+    def test_reject_soft_delete_propuesta(self):
+        p = make_policy("Propuesta", slug="prop2")
+        p.proposed = True
+        p.save()
+        services.reject_policy(p)
+        p.refresh_from_db()
+        self.assertIsNotNone(p.deleted_at)
+        self.assertFalse(p.is_active)
+        self.assertTrue(ProjectPolicy.objects.filter(pk=p.pk).exists())

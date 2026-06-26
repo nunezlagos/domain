@@ -138,6 +138,44 @@ class DeleteSkillTests(MaintainerTestCase):
         self.assertTrue(Skill.objects.filter(pk=s.pk).exists())
 
 
+class RootPathTests(MaintainerTestCase):
+    def test_crea_skill_con_root_path(self):
+        skill = services.create_skill(
+            slug="api-stack", name="API Stack",
+            project_id=DEFAULT_PROJECT, root_path="services/api",
+        )
+        skill.refresh_from_db()
+        self.assertEqual(skill.root_path, "services/api")
+
+    def test_root_path_vacio_queda_null(self):
+        skill = services.create_skill(slug="global-skill", name="Global", root_path="")
+        skill.refresh_from_db()
+        self.assertIsNone(skill.root_path)
+
+    def test_update_ajusta_root_path(self):
+        s = make_skill("Stack", slug="stack", project_id=DEFAULT_PROJECT)
+        services.update_skill(s, slug="stack", name="Stack", root_path="services/web")
+        s.refresh_from_db()
+        self.assertEqual(s.root_path, "services/web")
+
+
+class ApproveRejectSkillTests(MaintainerTestCase):
+    def test_approve_activa_skill_propuesta(self):
+        s = make_skill("Propuesta", slug="prop", proposed=True)
+        self.assertFalse(s.is_active)  # proposed=True => no activa
+        services.approve_skill(s)
+        s.refresh_from_db()
+        self.assertFalse(s.proposed)
+        self.assertTrue(s.is_active)
+
+    def test_reject_soft_delete_propuesta(self):
+        s = make_skill("Propuesta", slug="prop2", proposed=True)
+        services.reject_skill(s)
+        s.refresh_from_db()
+        self.assertIsNotNone(s.deleted_at)
+        self.assertTrue(Skill.objects.filter(pk=s.pk).exists())
+
+
 class SkillVersionsTests(MaintainerTestCase):
     def test_getter_devuelve_versiones_ordenadas_desc(self):
         s = make_skill("Versionada", slug="versionada")

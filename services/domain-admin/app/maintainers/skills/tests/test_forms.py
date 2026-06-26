@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from core.tests.base import MaintainerTestCase
 
+from maintainers.projects.tests.factories import make_project
 from maintainers.skills.forms import SkillForm
 
 from .factories import make_skill
@@ -108,3 +109,39 @@ class SkillFormEditTests(MaintainerTestCase):
         form = SkillForm(data=self._edit_data(s, slug="otra"), instance=s)
         self.assertFalse(form.is_valid())
         self.assertIn("slug", form.errors)
+
+
+class SkillFormScopeTests(MaintainerTestCase):
+    def _data(self, **over):
+        base = {
+            "name": "Scoped",
+            "slug": "scoped",
+            "skill_type": "prompt",
+            "description": "",
+            "content": "",
+            "timeout_seconds": "30",
+            "tags": "",
+        }
+        base.update(over)
+        return base
+
+    def test_alta_global_sin_scope(self):
+        form = SkillForm(data=self._data(slug="g1"))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_root_path_se_captura(self):
+        form = SkillForm(data=self._data(slug="g2", root_path="services/api"))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["root_path"], "services/api")
+
+    def test_alta_con_proyecto_valida(self):
+        proj = make_project("Demo", slug="demo")
+        form = SkillForm(data=self._data(slug="p1", project=str(proj.pk)))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["project"], str(proj.pk))
+
+    def test_mismo_slug_global_y_proyecto_no_choca(self):
+        proj = make_project("Demo2", slug="demo2")
+        make_skill("Global", slug="shared")  # scope global
+        form = SkillForm(data=self._data(slug="shared", project=str(proj.pk)))
+        self.assertTrue(form.is_valid(), form.errors)

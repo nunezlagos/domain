@@ -165,7 +165,7 @@ Output:
 }
 </example>`,
 			Personality:   "metódico, exhaustivo, busca contexto",
-			Capabilities:  []string{"code-search", "file-read", "issue-dedup"},
+			Capabilities:  []string{"issue-dedup"},
 			Model:         "claude-sonnet-4-6",
 			Temperature:   0.3,
 			MaxTokens:     8192,
@@ -380,7 +380,7 @@ JSON estricto:
 - Sabotage debe ser CONCRETO ('cambiar < por <= en línea X') no genérico.
 </reglas>`,
 			Personality:   "rigurroso, documenta tradeoffs explícitos",
-			Capabilities:  []string{"code-search", "summarize"},
+			Capabilities:  []string{"summarize"},
 			Model:         "claude-opus-4-7",
 			Temperature:   0.3,
 			MaxTokens:     12288,
@@ -532,7 +532,7 @@ JSON estricto por task completada:
 }
 </output_format>`,
 			Personality:   "TDD strict, code conventions, no over-engineering",
-			Capabilities:  []string{"code-search", "file-read", "go-test-runner", "git-commit-conventional"},
+			Capabilities:  []string{"go-test-runner", "git-commit-conventional"},
 			Model:         "claude-opus-4-7",
 			Temperature:   0.2,
 			MaxTokens:     12288,
@@ -853,7 +853,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 9
+const agentTemplatesSeedVersion = 10
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 5
+const skillsSeedVersion = 6
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -182,33 +182,11 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"intake", "structure", "platform"},
 		},
-		{
-			Slug:        "code-search",
-			Name:        "Code Search",
-			Description: "Búsqueda semántica + fts sobre repo del proyecto. Retorna files + line ranges.",
-			SkillType:   "code",
-			TimeoutSeconds: 15,
-			Idempotent:     true,
-			Tags:           []string{"code", "search", "platform"},
-		},
-		{
-			Slug:        "file-read",
-			Name:        "File Read",
-			Description: "Lee contenido de un archivo del repo (sandboxed; readonly).",
-			SkillType:   "code",
-			TimeoutSeconds: 10,
-			Idempotent:     true,
-			Tags:           []string{"code", "file", "platform"},
-		},
-		{
-			Slug:        "web-fetch",
-			Name:        "Web Fetch",
-			Description: "Descarga URL → markdown text. SSRF guarded.",
-			SkillType:   "api",
-			TimeoutSeconds: 30,
-			Idempotent:     true,
-			Tags:           []string{"web", "fetch", "platform"},
-		},
+		// code-search / file-read / web-fetch eliminadas (v6): eran stubs no
+		// ejecutables (code/api sin implementación, issue-11.1/12.4). En la
+		// arquitectura client-side el cliente (Claude Code/OpenCode) ya provee
+		// esas capacidades nativas (Read, Grep/Glob, WebFetch). domain no las
+		// reimplementa.
 		{
 			Slug:        "summarize",
 			Name:        "Summarize",
@@ -453,7 +431,7 @@ JSON estricto:
   "file_line": "path/to/file.go:42",
   "function": "Package.Function",
   "root_cause_hint": "1 oración con la pista más probable",
-  "suggested_skill": "code-search | file-read | sql-explain-impact | null",
+  "suggested_skill": "sql-explain-impact | null",
   "confidence": 0.0
 }
 </output_format>
@@ -461,7 +439,9 @@ JSON estricto:
 <reglas>
 - file_line: extraer el frame MÁS PROFUNDO del código del usuario (no del runtime).
 - root_cause_hint: 1 oración. No inventes — si dudás, pista genérica + confidence<0.5.
-- suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno aplica.
+- suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno
+  aplica (para leer archivos o buscar en el código, usá tus tools nativos del
+  cliente —Read, Grep— no una skill de domain).
 - critical solo si: data loss, exposed secrets, prod down, security breach.
 </reglas>
 
@@ -474,7 +454,7 @@ Output:
   "file_line": "/app/internal/foo/svc.go:42",
   "function": "",
   "root_cause_hint": "Nil pointer dereference en internal/foo/svc.go:42. Probablemente falta nil-check antes de acceder a un puntero.",
-  "suggested_skill": "file-read",
+  "suggested_skill": null,
   "confidence": 0.85
 }
 </example>`,

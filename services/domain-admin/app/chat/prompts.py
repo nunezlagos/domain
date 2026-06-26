@@ -50,8 +50,11 @@ FORMATO DE RESPUESTA:
 - Tablas Markdown para listas largas (>=3 items).
 - Links: si una fuente tiene `url`, inclui un link Markdown al detalle.
 - Extremos: si la respuesta tiene >5 bullets, resumilos en una tabla.
-- Para conteos (cuantos X hay?), hace un SELECT count si tenes la info, \
-o decí "no tengo un conteo exacto pero el contexto muestra N X visibles"."""
+- Para conteos (cuantos X hay?): el contexto ya viene con totales y
+  conteos precomputados. Usalos directamente. Ej: si el contexto dice
+  "PROJECT: total=5, 4 activos", respondé "Tenes 5 proyectos, 4 activos".
+- Para listas generales: el contexto ya viene con los primeros 10 nombres.
+  Presentá la info en formato tabla Markdown."""
 
 
 def build_system_prompt(context: RagContext) -> str:

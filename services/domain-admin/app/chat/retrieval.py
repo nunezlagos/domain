@@ -35,6 +35,191 @@ log = logging.getLogger(__name__)
 MIN_SCORE = 0.3
 TOP_K = 10
 
+# Palabras clave que activan el "general query mode" (aggregate queries).
+# Si la query matchea alguno de estos patrones, devolvemos conteos y top
+# items por tabla en vez del scoring normal.
+_GENERAL_QUERY_PATTERNS = (
+    "cuantos", "cuantas", "cuanto", "cuanta",
+    "lista", "listame", "listar", "listado",
+    "todos", "todas",
+    "total", "totales",
+    "que hay", "que tenes", "que tienes",
+    "dame un resumen", "resumen", "describe",
+    "explicame", "explica",
+    "mostrame", "mostrar", "mostrarme",
+    "informacion general", "overview",
+)
+
+
+def _is_general_query(question: str) -> bool:
+    """Detecta si la pregunta es muy abstracta (count/list/resumen)."""
+    q = question.lower().strip()
+    if len(q) < 5:
+        return False
+    return any(p in q for p in _GENERAL_QUERY_PATTERNS)
+
+
+def _detect_target_table(question: str) -> str | None:
+    """Si la pregunta menciona una entidad especifica (proyectos, agentes, etc),
+    devuelve el nombre de la tabla. None si es general."""
+    q = question.lower()
+    table_aliases = {
+        "agent": ("agente", "agentes", "agent", "agents"),
+        "skill": ("skill", "skills", "habilidad", "habilidades"),
+        "flow": ("flow", "flows", "flujo", "flujos"),
+        "prompt": ("prompt", "prompts"),
+        "project": ("proyecto", "proyectos", "project", "projects"),
+        "user": ("usuario", "usuarios", "user", "users", "persona", "personas"),
+        "client": ("cliente", "clientes", "client", "clients"),
+        "project_ticket": ("ticket", "tickets"),
+        "issue": ("issue", "issues", "incidencia", "incidencias"),
+        "knowledge_doc": ("knowledge", "documento", "documentos", "docs"),
+        "mcp_server": ("mcp", "mcps", "mcp server", "mcp servers"),
+        "cron": ("cron", "crons", "schedule", "schedules"),
+        "webhook": ("webhook", "webhooks"),
+        "platform_policy": ("politica de plataforma", "politicas de plataforma", "platform policy"),
+        "project_policy": ("politica de proyecto", "politicas de proyecto", "project policy"),
+        "agent_template": ("plantilla", "plantillas", "template", "templates"),
+    }
+    for table, aliases in table_aliases.items():
+        for alias in aliases:
+            if alias in q:
+                return table
+    return None
+
+
+_AGGREGATE_SQL: dict[str, str] = {
+    "agent": """
+        SELECT
+            (SELECT count(*) FROM agents WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM agents WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(name || ' (' || slug || ')', ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, slug, created_at FROM agents
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "skill": """
+        SELECT
+            (SELECT count(*) FROM skills WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM skills WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(name || ' (' || slug || ')', ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, slug, created_at FROM skills
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "flow": """
+        SELECT
+            (SELECT count(*) FROM flows WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM flows WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(name || ' (' || slug || ')', ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, slug, created_at FROM flows
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "prompt": """
+        SELECT
+            (SELECT count(*) FROM prompts WHERE is_active = true) AS total,
+            (SELECT count(*) FROM prompts WHERE is_active = true) AS active,
+            (SELECT string_agg(slug, ', ' ORDER BY created_at DESC)
+             FROM (SELECT slug, created_at FROM prompts
+                   WHERE is_active = true ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "project": """
+        SELECT
+            (SELECT count(*) FROM projects WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM projects WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(name || ' (' || slug || ')', ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, slug, created_at FROM projects
+                   WHERE deleted_at IS NULL AND status != 'archived'
+                   ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "user": """
+        SELECT
+            (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM users WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(coalesce(name, email) || ' (' || role || ')', ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, email, role, created_at FROM users
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "client": """
+        SELECT
+            (SELECT count(*) FROM clients WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM clients WHERE deleted_at IS NULL AND status = 'active') AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM clients
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "project_ticket": """
+        SELECT
+            (SELECT count(*) FROM project_tickets WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM project_tickets WHERE deleted_at IS NULL AND status != 'done') AS active,
+            (SELECT string_agg(title, ', ' ORDER BY updated_at DESC)
+             FROM (SELECT title, updated_at FROM project_tickets
+                   WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "issue": """
+        SELECT
+            (SELECT count(*) FROM issues WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM issues WHERE deleted_at IS NULL AND status != 'done') AS active,
+            (SELECT string_agg(title, ', ' ORDER BY updated_at DESC)
+             FROM (SELECT title, updated_at FROM issues
+                   WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "knowledge_doc": """
+        SELECT
+            (SELECT count(*) FROM knowledge_docs WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM knowledge_docs WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(title, ', ' ORDER BY updated_at DESC)
+             FROM (SELECT title, updated_at FROM knowledge_docs
+                   WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "mcp_server": """
+        SELECT
+            (SELECT count(*) FROM mcp_servers WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM mcp_servers WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM mcp_servers
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "cron": """
+        SELECT
+            (SELECT count(*) FROM crons WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM crons WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM crons
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "webhook": """
+        SELECT
+            (SELECT count(*) FROM webhooks WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM webhooks WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM webhooks
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "platform_policy": """
+        SELECT
+            (SELECT count(*) FROM platform_policies WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM platform_policies WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM platform_policies
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "project_policy": """
+        SELECT
+            (SELECT count(*) FROM project_policies WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM project_policies WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name, ', ' ORDER BY created_at DESC)
+             FROM (SELECT name, created_at FROM project_policies
+                   WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10) sub) AS top_names
+    """,
+    "agent_template": """
+        SELECT
+            (SELECT count(*) FROM agent_templates WHERE deleted_at IS NULL) AS total,
+            (SELECT count(*) FROM agent_templates WHERE deleted_at IS NULL) AS active,
+            (SELECT string_agg(name || ' (' || slug || ')', ', ' ORDER BY name)
+             FROM (SELECT name, slug FROM agent_templates
+                   WHERE deleted_at IS NULL ORDER BY name LIMIT 10) sub) AS top_names
+    """,
+}
+
 # Tablas del dominio que se incluyen en el RAG. Cada entry: (table,
 # url_prefix, sql_query, format_fn_name).
 # Mantener alineado con el admin de Django (maintainers.*).
@@ -362,6 +547,12 @@ class RetrievalService:
         if not question:
             return RagContext(is_empty=True)
 
+        if _is_general_query(question):
+            target = _detect_target_table(question)
+            ctx = self._general_aggregate(question, target)
+            if not ctx.is_empty:
+                return ctx
+
         rows = _fetch_source_rows()
         if not rows:
             return RagContext(is_empty=True)
@@ -376,6 +567,47 @@ class RetrievalService:
         if ctx.is_empty:
             ctx = self._summary_fallback(rows)
         return ctx
+
+    def _general_aggregate(self, question: str, target: str | None) -> RagContext:
+        """Para preguntas generales (cuantos/lista/resumen).
+
+        Si `target` es None, hace aggregate de TODAS las tablas (resumen
+        global). Si `target` apunta a una tabla, hace aggregate SOLO de
+        esa tabla (ej: "cuantos proyectos").
+        """
+        tables = [target] if target else list(_AGGREGATE_SQL.keys())
+        chunks: list[str] = []
+        sources: list[Source] = []
+
+        with connection.cursor() as cur:
+            for table in tables:
+                sql = _AGGREGATE_SQL.get(table)
+                if not sql:
+                    continue
+                try:
+                    cur.execute(sql)
+                    row = cur.fetchone()
+                except Exception as e:
+                    log.warning("aggregate skip %s: %s", table, e)
+                    continue
+                if not row:
+                    continue
+                total, active, top_names = row
+                if not total:
+                    continue
+                active_str = f", {active} activos" if active != total else ""
+                top_str = f". Primeros: {top_names}" if top_names else ""
+                chunk = f"{table.upper()}: total={total}{active_str}{top_str}"
+                chunks.append(chunk)
+                sources.append(Source(
+                    table=table, id="", title=f"{table} ({total} total)",
+                    snippet=chunk, score=0.0,
+                    url=_url_prefix_for(table) if table in [c["table"] for c in _SOURCES_CONFIG] else "",
+                ))
+
+        if not chunks:
+            return RagContext(is_empty=True)
+        return RagContext(chunks=chunks, sources=sources, is_empty=False)
 
     def _summary_fallback(self, rows: list[tuple[str, str, str, str]]) -> RagContext:
         """Devuelve 1 chunk diverso por tabla para preguntas abstractas.

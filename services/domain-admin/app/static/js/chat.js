@@ -9,6 +9,7 @@
    - Render Markdown + SourceCards inline.
    - Mobile: back button para volver a la lista.
    - Scroll: badge "Nuevo mensaje" cuando user esta arriba y llega respuesta.
+   - Typing indicator animado durante el polling.
 */
 
 (function () {
@@ -18,6 +19,7 @@
   const POLL_INTERVAL_MS = 1500;
   const SCROLL_BOTTOM_THRESHOLD = 100;
   const SEARCH_DEBOUNCE_MS = 200;
+  const TYPING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
   const state = {
     conversations: [],
@@ -27,6 +29,8 @@
     pollingId: null,
     pollingAbort: false,
     searchQuery: "",
+    typingFrameIdx: 0,
+    typingIntervalId: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -89,6 +93,24 @@
     badge.style.display = show ? "block" : "none";
   }
 
+  function startTypingAnimation() {
+    stopTypingAnimation();
+    const el = $("typing-indicator");
+    if (!el) return;
+    state.typingFrameIdx = 0;
+    state.typingIntervalId = setInterval(() => {
+      state.typingFrameIdx = (state.typingFrameIdx + 1) % TYPING_FRAMES.length;
+      el.textContent = TYPING_FRAMES[state.typingFrameIdx];
+    }, 100);
+  }
+
+  function stopTypingAnimation() {
+    if (state.typingIntervalId) {
+      clearInterval(state.typingIntervalId);
+      state.typingIntervalId = null;
+    }
+  }
+
   function renderConversations() {
     const list = $("chat-list");
     const convs = state.filteredConversations;
@@ -149,7 +171,7 @@
           const snippet = (s.snippet || "").slice(0, 80);
           return `<a class="source-chip" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(snippet)}">
             <span class="source-title">${escapeHtml(s.titulo || s.id)}</span>
-            <span class="score">${scorePct}%</span>
+            ${scorePct > 0 ? `<span class="score">${scorePct}%</span>` : ""}
           </a>`;
         })
         .join("") +
@@ -165,21 +187,33 @@
     const content = msg.content || msg.content_partial || "";
 
     if (isPending) {
-      return `<div class="chat-pending"><span class="dots">Pensando</span></div>`;
+      return `<div class="chat-pending">
+        <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
+        <span>Pensando...</span>
+      </div>`;
     }
     if (isProcessing && !content) {
-      return `<div class="chat-pending"><span class="dots">Generando respuesta</span></div>`;
+      return `<div class="chat-pending">
+        <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
+        <span>Generando respuesta...</span>
+      </div>`;
+    }
+    if (isProcessing && content) {
+      const processedHtml = renderMarkdown(content);
+      return `<div class="chat-bubble assistant processing">
+        <div class="bubble-content">${processedHtml}</div>
+        <div class="typing-footer">
+          <span class="typing-spinner" id="typing-indicator">${TYPING_FRAMES[0]}</span>
+          <span>generando...</span>
+        </div>
+      </div>`;
     }
     const bubbleClass = isUser ? "user" : isError ? "assistant error" : "assistant";
     let html;
     if (isUser) {
       html = escapeHtml(content).replace(/\n/g, "<br>");
     } else {
-      try {
-        html = window.marked.parse(content, { breaks: true, gfm: true });
-      } catch (e) {
-        html = escapeHtml(content);
-      }
+      html = renderMarkdown(content);
     }
     const sourcesHtml = isError ? "" : renderSources(msg.sources);
     const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : "";
@@ -190,7 +224,18 @@
       : time
       ? `<div class="meta">${time}</div>`
       : "";
-    return `<div class="chat-bubble ${bubbleClass}">${html}${sourcesHtml}${meta}</div>`;
+    return `<div class="chat-bubble ${bubbleClass} fade-in">${html}${sourcesHtml}${meta}</div>`;
+  }
+
+  function renderMarkdown(text) {
+    if (typeof window.marked === "undefined") {
+      return escapeHtml(text).replace(/\n/g, "<br>");
+    }
+    try {
+      return window.marked.parse(text, { breaks: true, gfm: true });
+    } catch (e) {
+      return escapeHtml(text);
+    }
   }
 
   function renderMessages(opts) {
@@ -199,6 +244,7 @@
       container.innerHTML = "";
       const empty = $("chat-empty");
       if (empty) container.appendChild(empty);
+      stopTypingAnimation();
       return;
     }
     const form = $("chat-form");
@@ -214,6 +260,11 @@
     } else {
       showNewBadge(true);
     }
+    const hasProcessing = state.messages.some(
+      (m) => m.status === "pending" || m.status === "processing"
+    );
+    if (hasProcessing) startTypingAnimation();
+    else stopTypingAnimation();
   }
 
   async function loadConversations() {
@@ -266,12 +317,27 @@
     }
   }
 
+  function setSendingState(sending) {
+    const input = $("chat-input");
+    const btn = $("btn-send");
+    if (!input || !btn) return;
+    input.disabled = sending;
+    btn.disabled = sending;
+    if (sending) {
+      input.placeholder = "Esperando respuesta del asistente...";
+    } else {
+      input.placeholder = "Escribi tu pregunta y presiona Enter (Shift+Enter para nueva linea)";
+      input.focus();
+    }
+  }
+
   async function selectConversation(id) {
     if (state.pollingId) {
       state.pollingAbort = true;
       clearTimeout(state.pollingId);
       state.pollingId = null;
     }
+    stopTypingAnimation();
     state.activeId = id;
     state.messages = [];
     showNewBadge(false);
@@ -289,6 +355,7 @@
       clearTimeout(state.pollingId);
       state.pollingId = null;
     }
+    stopTypingAnimation();
     state.activeId = null;
     state.messages = [];
     document.getElementById("chat-shell").classList.remove("show-chat");
@@ -302,8 +369,7 @@
     if (!text || !state.activeId) return;
     input.value = "";
     input.style.height = "auto";
-    input.disabled = true;
-    $("btn-send").disabled = true;
+    setSendingState(true);
     const tempMsg = {
       id: -Date.now(),
       role: "user",
@@ -330,15 +396,13 @@
     } catch (e) {
       console.error("sendMessage", e);
       alert("Error enviando mensaje: " + e.message);
-    } finally {
-      input.disabled = false;
-      $("btn-send").disabled = false;
-      input.focus();
+      setSendingState(false);
     }
   }
 
   function startPolling(messageId) {
     state.pollingAbort = false;
+    startTypingAnimation();
     const tick = async () => {
       if (state.pollingAbort) return;
       try {
@@ -351,6 +415,8 @@
         updateHeader();
         if (msg.status === "completed" || msg.status === "error") {
           state.pollingId = null;
+          stopTypingAnimation();
+          setSendingState(false);
           loadConversations();
           return;
         }
@@ -360,6 +426,13 @@
       state.pollingId = setTimeout(tick, POLL_INTERVAL_MS);
     };
     state.pollingId = setTimeout(tick, POLL_INTERVAL_MS);
+  }
+
+  function autoResizeTextarea() {
+    const textarea = $("chat-input");
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
   }
 
   function bind() {
@@ -408,10 +481,7 @@
         sendMessage();
       }
     });
-    textarea.addEventListener("input", () => {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
-    });
+    textarea.addEventListener("input", autoResizeTextarea);
   }
 
   document.addEventListener("DOMContentLoaded", () => {

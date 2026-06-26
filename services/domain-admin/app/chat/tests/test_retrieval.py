@@ -1,7 +1,7 @@
 """Tests del retrieval service (HU-49.2)."""
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -188,3 +188,41 @@ def test_source_url_se_incluye(mock_rows):
     with patch("chat.retrieval._fetch_source_rows", return_value=mock_rows):
         result = RetrievalService().retrieve("soporte bot")
     assert "/agentes/detalle?id=uuid-1" == result.sources[0].url
+
+
+def test_is_general_query_detecta_patrones():
+    from chat.retrieval import _is_general_query
+    assert _is_general_query("cuantos proyectos tienes?")
+    assert _is_general_query("lista todos los agentes")
+    assert _is_general_query("dame un resumen del sistema")
+    assert _is_general_query("describe el sistema")
+    assert not _is_general_query("que hace el bot de soporte")
+    assert not _is_general_query("que proyectos usan python")
+    assert not _is_general_query("hola")
+    assert not _is_general_query("a")
+
+
+def test_detect_target_table_encontrla_tabla():
+    from chat.retrieval import _detect_target_table
+    assert _detect_target_table("cuantos proyectos tienes?") == "project"
+    assert _detect_target_table("lista los agentes") == "agent"
+    assert _detect_target_table("que skills hay?") == "skill"
+    assert _detect_target_table("dame un resumen") is None
+    assert _detect_target_table("que hace el bot") is None
+
+
+def test_general_aggregate_cuenta_proyectos():
+    """Una pregunta general con target=project devuelve conteo de proyectos."""
+    from chat.retrieval import _AGGREGATE_SQL
+
+    mock_result = (5, 4, "Api Gateway (api-gateway), Web App (web-app), Bot (bot)")
+
+    with patch("chat.retrieval.connection.cursor") as mock_cursor_cls:
+        cur = MagicMock()
+        cur.fetchone.return_value = mock_result
+        mock_cursor_cls.return_value.__enter__.return_value = cur
+        result = RetrievalService().retrieve("cuantos proyectos tienes?")
+
+    assert not result.is_empty
+    assert any("PROJECT" in c.upper() for c in result.chunks)
+    assert any("total=5" in c for c in result.chunks)

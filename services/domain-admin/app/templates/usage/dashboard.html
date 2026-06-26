@@ -191,18 +191,26 @@
     <div style="display:flex;align-items:center;gap:var(--space-lg);flex-wrap:wrap;">
       <div class="usage-filter">
         <span class="usage-filter__label">Período:</span>
-        <a href="?days={{ days }}&by={{ by }}"  class="usage-filter__btn {% if days == 7  %}active{% endif %}">7 días</a>
-        <a href="?days=30&by={{ by }}" class="usage-filter__btn {% if days == 30 %}active{% endif %}">30 días</a>
-        <a href="?days=90&by={{ by }}" class="usage-filter__btn {% if days == 90 %}active{% endif %}">90 días</a>
+        <a href="?days={{ days }}&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}"  class="usage-filter__btn {% if days == 7  %}active{% endif %}">7 días</a>
+        <a href="?days=30&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if days == 30 %}active{% endif %}">30 días</a>
+        <a href="?days=90&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if days == 90 %}active{% endif %}">90 días</a>
       </div>
       <div class="usage-filter">
         <span class="usage-filter__label">Agrupar por:</span>
-        <a href="?days={{ days }}&by=client"  class="usage-filter__btn {% if by == "client"  %}active{% endif %}">Cliente</a>
-        <a href="?days={{ days }}&by=user"    class="usage-filter__btn {% if by == "user"    %}active{% endif %}">Usuario</a>
-        <a href="?days={{ days }}&by=project" class="usage-filter__btn {% if by == "project" %}active{% endif %}">Proyecto</a>
+        <a href="?days={{ days }}&by=client{% if user_filter %}&user={{ user_filter }}{% endif %}"  class="usage-filter__btn {% if by == "client"  %}active{% endif %}">Cliente</a>
+        <a href="?days={{ days }}&by=user{% if user_filter %}&user={{ user_filter }}{% endif %}"    class="usage-filter__btn {% if by == "user"    %}active{% endif %}">Usuario</a>
+        <a href="?days={{ days }}&by=project{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if by == "project" %}active{% endif %}">Proyecto</a>
       </div>
     </div>
   </div>
+
+  {% if user_filter %}
+  <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md);padding:var(--space-sm) var(--space-md);background:var(--color-accent-soft);border:1px solid var(--color-accent);border-radius:var(--radius-md);">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span style="font-size:var(--fs-sm);color:var(--color-text-link);">Filtrando por usuario: <strong>{{ user_filter }}</strong></span>
+    <a href="?days={{ days }}&by={{ by }}" style="margin-left:auto;font-size:var(--fs-xs);color:var(--color-text-muted);text-decoration:none;">✕ Limpiar</a>
+  </div>
+  {% endif %}
 
   {# ── KPIs ────────────────────────────────────────────────────────── #}
   {% if kpis.total_turns == 0 %}
@@ -308,7 +316,7 @@
         </thead>
         <tbody>
           {% for row in by_user %}
-          <tr>
+          <tr class="{% if user_filter == row.user_email %}table-active{% endif %}" style="cursor:pointer;" onclick="window.location='?days={{ days }}&by={{ by }}&user={{ row.user_email|urlencode }}'">
             <td>
               <span style="font-weight:var(--fw-semibold);">{{ row.user_name|default:"—"|default:"(sin usuario)" }}</span>
               {% if row.user_email %}<br><span style="font-size:var(--fs-xs);color:var(--color-text-muted);">{{ row.user_email }}</span>{% endif %}

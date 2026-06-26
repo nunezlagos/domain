@@ -27,20 +27,23 @@ def dashboard(request):
     if by not in _VALID_BY:
         by = _DEFAULT_BY
 
+    user_filter = request.GET.get("user", "").strip()
+
     kpis        = queries.kpis(days)
     by_project  = queries.by_project(days)
     by_client   = queries.by_client(days)
     by_user     = queries.by_user(days)
     by_model    = queries.by_model(days)
-    recent      = queries.recent_prompts(days)
+    recent      = queries.recent_prompts(days, user_email=user_filter)
 
     return render(request, "usage/dashboard.html", {
-        "days":       days,
-        "by":         by,
-        "kpis":       kpis,
-        "by_project": by_project,
-        "by_client":  by_client,
-        "by_user":    by_user,
-        "by_model":   by_model,
-        "recent":     recent,
+        "days":         days,
+        "by":           by,
+        "user_filter":  user_filter,
+        "kpis":         kpis,
+        "by_project":   by_project,
+        "by_client":    by_client,
+        "by_user":      by_user,
+        "by_model":     by_model,
+        "recent":       recent,
     })

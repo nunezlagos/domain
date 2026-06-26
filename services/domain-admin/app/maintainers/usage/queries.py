@@ -148,33 +148,38 @@ def by_model(days: int = 30) -> list[dict]:
     return [dict(zip(cols, r)) for r in rows]
 
 
-def recent_prompts(days: int = 30, limit: int = 50) -> list[dict]:
-    sql = """
+def recent_prompts(days: int = 30, limit: int = 50, user_email: str = "") -> list[dict]:
+    base_sql = """
         SELECT
             cp.id,
             cp.captured_at,
             COALESCE(p.slug, '—')                       AS project_slug,
-            COALESCE(u.email, u.name, '—')             AS user_name,
-            COALESCE(u.email, '—')                     AS user_email,
+            COALESCE(u.email, u.name, '—')              AS user_name,
+            COALESCE(u.email, '—')                      AS user_email,
             COALESCE(NULLIF(cp.client_kind, ''), '—')   AS client_kind,
-            COALESCE(NULLIF(cp.model, ''), '—')         AS model,
+            COALESCE(NULLIF(cp.model, ''), '—')          AS model,
             cp.estimated_tokens_in,
             cp.estimated_tokens_out,
             cp.estimated_tokens_in + cp.estimated_tokens_out
-                                                        AS tokens_total,
+                                                             AS tokens_total,
             cp.turn_completed_at,
-            LEFT(cp.content, 140)                       AS content_preview
+            LEFT(cp.content, 140)                        AS content_preview
         FROM prompt_captured cp
         LEFT JOIN projects p ON p.id = cp.project_id
         LEFT JOIN users u ON u.id = cp.user_id
         WHERE cp.captured_at >= NOW() - (%s || ' days')::INTERVAL
-        ORDER BY cp.captured_at DESC
-        LIMIT %s
     """
+    if user_email:
+        sql = base_sql + "  AND u.email = %s\nORDER BY cp.captured_at DESC LIMIT %s"
+        params = [str(days), user_email, limit]
+    else:
+        sql = base_sql + "ORDER BY cp.captured_at DESC LIMIT %s"
+        params = [str(days), limit]
+
     with transaction.atomic():
         with connection.cursor() as cur:
             _set_org(cur)
-            cur.execute(sql, [str(days), limit])
+            cur.execute(sql, params)
             cols = [c.name for c in cur.description]
             rows = cur.fetchall()
     return [dict(zip(cols, r)) for r in rows]

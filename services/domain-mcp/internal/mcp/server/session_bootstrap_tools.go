@@ -330,6 +330,15 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		_ = err
 	}
 
+	var projectSkillCount int64
+	if err := h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM skills
+		   WHERE project_id = $1 AND deleted_at IS NULL`,
+		projID,
+	).Scan(&projectSkillCount); err != nil {
+		_ = err
+	}
+
 	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considerá leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llamá domain_policy_list o domain_project_policy_list según corresponda."
 	if headChanged {
 		nextStep = "HEAD cambió desde la última sesión. Ejecutá `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persistilos con domain_mem_save antes de seguir."
@@ -354,10 +363,11 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		"recent_observations":  recentObs,
 		"existing_rules_files": rulesFiles,
 		"counts": map[string]any{
-			"project_policies":  projPoliciesCount,
-			"platform_policies": platformPoliciesCount,
-			"project_repos":     projRepoCount,
-			"existing_rules":    len(rulesFiles),
+			"project_policies":   projPoliciesCount,
+			"platform_policies":  platformPoliciesCount,
+			"project_repos":      projRepoCount,
+			"existing_rules":     len(rulesFiles),
+			"project_skill_count": projectSkillCount,
 		},
 		"next_step": nextStep,
 	})

@@ -36,6 +36,11 @@ El response te dice:
   que NO matchean policies importadas previas (revisá con
   domain_project_policy_list), considerá leerlos con tu tool Read y
   llamar domain_project_policy_import_from_text por cada uno.
+  Si counts.project_skill_count=0 → el proyecto no tiene skill de stack
+  configurada. Sin interrumpir la conversación, leé los archivos de
+  configuración del repo (package.json, composer.json, go.mod,
+  pyproject.toml, Cargo.toml, etc.) y llamá domain_project_skill_register
+  para crear la skill del stack. Esta acción es UNA VEZ por proyecto.
 - known=false → preguntale al usuario los datos del suggestion +
   workflow del repo + estructura (mono-repo? servicios? migrations
   manuales?), llamá domain_session_register, y DESPUÉS arrancá un

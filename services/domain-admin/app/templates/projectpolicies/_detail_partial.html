@@ -7,7 +7,8 @@
   <p class="text-secondary mb-3">
     <code>{{ policy_obj.slug }}</code> · {{ policy_obj.get_kind_display }}
     · Estado:
-    {% if policy_obj.is_enabled %}<span class="badge badge-success">Activa</span>
+    {% if policy_obj.proposed %}<span class="badge badge-warning">Propuesta (pendiente de aprobación)</span>
+    {% elif policy_obj.is_enabled %}<span class="badge badge-success">Activa</span>
     {% else %}<span class="badge badge-warning">Inactiva</span>{% endif %}
   </p>
 
@@ -31,6 +32,16 @@
 {% endblock %}
 
 {% block detail_actions %}
+  {% if policy_obj.proposed %}
+    <form method="post" action="{% url 'projectpolicies:approve' policy_obj.pk %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Aprobar propuesta</button>
+    </form>
+    <form method="post" action="{% url 'projectpolicies:reject' policy_obj.pk %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-warning">Rechazar</button>
+    </form>
+  {% endif %}
   <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ policy_obj.pk }}">Editar</button>
   {% if policy_obj.is_enabled %}
     <button type="button" class="btn btn-warning" data-action="toggle" data-id="{{ policy_obj.pk }}">Desactivar</button>

@@ -21,6 +21,7 @@ core.auth (antes estaban duplicados como _require_auth/_is_ajax).
 from __future__ import annotations
 
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 
 from core.auth import require_auth
 from core.views import MaintainerViews
@@ -108,3 +109,21 @@ def export_skills(request):
     resp = HttpResponse(csv_data, content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = 'attachment; filename="skills.csv"'
     return resp
+
+
+def approve_skill(request, skill_id):
+    """Aprueba una skill propuesta (proposed=true -> false). POST."""
+    if (redir := require_auth(request)):
+        return redir
+    skill = get_object_or_404(Skill, pk=skill_id, deleted_at__isnull=True)
+    services.approve_skill(skill)
+    return redirect("skills:detail", skill_id=skill.pk)
+
+
+def reject_skill(request, skill_id):
+    """Rechaza una skill propuesta (soft-delete). POST."""
+    if (redir := require_auth(request)):
+        return redir
+    skill = get_object_or_404(Skill, pk=skill_id, deleted_at__isnull=True)
+    services.reject_skill(skill)
+    return redirect("skills:list")

@@ -116,6 +116,25 @@ def delete_policy(policy: ProjectPolicy) -> None:
 
 
 @transaction.atomic
+def approve_policy(policy: ProjectPolicy) -> ProjectPolicy:
+    """Aprueba una policy propuesta (proposed=true -> false): queda activa y
+    visible para el resolver. Equivale a domain_proposal_review accept."""
+    policy.proposed = False
+    policy.is_active = True
+    policy.save()
+    return policy
+
+
+@transaction.atomic
+def reject_policy(policy: ProjectPolicy) -> None:
+    """Rechaza una policy propuesta: soft-delete. Equivale a
+    domain_proposal_review reject."""
+    policy.deleted_at = timezone.now()
+    policy.is_active = False
+    policy.save()
+
+
+@transaction.atomic
 def toggle_policy_status(policy: ProjectPolicy) -> bool:
     if policy.is_active:
         policy.is_active = False

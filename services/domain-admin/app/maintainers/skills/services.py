@@ -205,6 +205,25 @@ def delete_skill(skill: Skill) -> None:
     skill.save()
 
 
+@transaction.atomic
+def approve_skill(skill: Skill) -> Skill:
+    """Aprueba una skill propuesta (proposed=true -> false): queda activa y
+    visible para los resolvers. Equivale a domain_proposal_review accept."""
+    skill.proposed = False
+    skill.save()
+    return skill
+
+
+@transaction.atomic
+def reject_skill(skill: Skill) -> None:
+    """Rechaza una skill propuesta: soft-delete. Equivale a
+    domain_proposal_review reject."""
+    from django.utils import timezone
+
+    skill.deleted_at = timezone.now()
+    skill.save()
+
+
 def get_stats() -> dict:
     """Stats agregadas para el header del listado."""
     base = Skill.objects.filter(deleted_at__isnull=True)

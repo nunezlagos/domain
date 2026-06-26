@@ -18,6 +18,16 @@
     </p>
   </div>
   <div class="d-flex gap-2">
+    {% if skill_obj.proposed %}
+      <form method="post" action="{% url 'skills:approve' skill_obj.pk %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">Aprobar propuesta</button>
+      </form>
+      <form method="post" action="{% url 'skills:reject' skill_obj.pk %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning">Rechazar</button>
+      </form>
+    {% endif %}
     <a href="{% url 'skills:edit' skill_obj.pk %}" class="btn btn-secondary">Editar</a>
     <button class="btn btn-danger"
             data-modal-open="modal-delete-{{ skill_obj.pk }}">Eliminar</button>

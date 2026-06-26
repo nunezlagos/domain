@@ -10,6 +10,7 @@ app_name="skills" -> {% url 'skills:list' %} sigue funcionando igual que antes.
 id_kwarg="skill_id" debe coincidir con el id_kwarg del MaintainerViews.
 """
 from django.urls import path
+from django.views.decorators.http import require_http_methods
 
 from core.urls import maintainer_urlpatterns
 
@@ -19,4 +20,6 @@ app_name = "skills"
 
 urlpatterns = maintainer_urlpatterns(views.views, id_kwarg="skill_id") + [
     path("export/", views.export_skills, name="export"),
+    path("<uuid:skill_id>/aprobar/", require_http_methods(["POST"])(views.approve_skill), name="approve"),
+    path("<uuid:skill_id>/rechazar/", require_http_methods(["POST"])(views.reject_skill), name="reject"),
 ]

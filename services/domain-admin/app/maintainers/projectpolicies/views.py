@@ -6,6 +6,9 @@ proyecto no cambia) y los context keys (`policy_obj`).
 """
 from __future__ import annotations
 
+from django.shortcuts import get_object_or_404, redirect
+
+from core.auth import require_auth
 from core.views import MaintainerViews
 
 from . import services
@@ -69,3 +72,21 @@ views = ProjectPolicyViews(
     per_page=10,
     search_param="q",
 )
+
+
+def approve_policy(request, policy_id):
+    """Aprueba una policy propuesta (proposed=true -> false). POST."""
+    if (redir := require_auth(request)):
+        return redir
+    policy = get_object_or_404(ProjectPolicy, pk=policy_id, deleted_at__isnull=True)
+    services.approve_policy(policy)
+    return redirect("projectpolicies:detail", policy_id=policy.pk)
+
+
+def reject_policy(request, policy_id):
+    """Rechaza una policy propuesta (soft-delete). POST."""
+    if (redir := require_auth(request)):
+        return redir
+    policy = get_object_or_404(ProjectPolicy, pk=policy_id, deleted_at__isnull=True)
+    services.reject_policy(policy)
+    return redirect("projectpolicies:list")

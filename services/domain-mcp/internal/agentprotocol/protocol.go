@@ -226,6 +226,21 @@ Cuando una fase SDD emite trabajo paralelizable, usá tus subagentes nativos
   Vos sos el supervisor: repartís, esperás, agregás, y reportás con
   domain_orchestrate_phase_result.
 
+REGLAS EN CADA SUBAGENTE (crítico): las reglas del proyecto van inyectadas en
+el system_prompt que el orchestrator te da (buildRulesBlock: platform_policies
++ project_policies). Cuando delegás a un subagente, ese contexto NO viaja solo
+— PROPAGÁ las reglas vigentes en el prompt de cada subagente. Un subagente sin
+las reglas las viola (no-N+1, conventions, commits, etc.). Las reglas se
+aplican SIEMPRE en cada subagente; las skills, por relevancia a su tarea.
+
+CONTEXTO ACOTADO (anti-saturación): este es el punto de paralelizar. Vos
+(supervisor) mantené contexto MÍNIMO — el plan + los resúmenes. A cada
+subagente dale SOLO su slice (su concern/task + las reglas + lo que necesita
+leer), NO todo el repo ni el trabajo de los otros. Pediles que devuelvan un
+RESUMEN del resultado (qué cambiaron, archivos, estado), no el detalle crudo
+— usá las skills reduce-token (summarize, diff-summarize) si el output es
+grande. Así ni vos ni los subagentes saturan su ventana de contexto.
+
 Fallback: si tu cliente NO soporta subagentes, ejecutá secuencialmente en el
 orden de position. El resultado es el mismo, solo más lento. Nunca paralelices
 tasks de distinto parallel_group ni concerns marcados como dependientes.

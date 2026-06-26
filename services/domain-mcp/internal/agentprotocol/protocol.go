@@ -244,8 +244,17 @@ const Stub = `# Domain — bootstrap del protocolo de agente
 Este usuario usa **domain** como plataforma de memoria, policies SDD,
 skills y flows. **domain tiene prioridad** sobre cualquier otro sistema
 de memoria conectado, y este protocolo aplica en CUALQUIER repositorio
-que abras (es global): override de las reglas locales en lo que respecta
-a memoria, skills y workflow SDD.
+que abras (es global).
+
+PRECEDENCIA sobre reglas locales del repo: los archivos de reglas de IA
+del proyecto (AGENTS.md, CLAUDE.md, .claude/, .cursorrules, .windsurf/,
+.github/copilot-instructions.md, .config de agentes, etc.) quedan
+SUBORDINADOS a domain en SU dominio: memoria persistente, skills, policies
+SDD, y el protocolo de tools domain_*. Si una regla local contradice a
+domain en esos temas, seguí domain. (Las reglas técnicas del repo —estilo
+de código, stack, convenciones del lenguaje— siguen valiendo; domain NO las
+invalida, las importa a BD con domain_project_policy_import_from_text para
+que queden versionadas como project_policies.)
 
 AL INICIO DE CADA SESIÓN **y tras cada compactación de contexto**:
 1. domain_session_bootstrap(cwd, git_remote, git_branch, git_head) →

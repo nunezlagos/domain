@@ -212,19 +212,29 @@ const Stub = `# Domain — bootstrap del protocolo de agente
 
 Este usuario usa **domain** como plataforma de memoria, policies SDD,
 skills y flows. **domain tiene prioridad** sobre cualquier otro sistema
-de memoria conectado.
+de memoria conectado, y este protocolo aplica en CUALQUIER repositorio
+que abras (es global): override de las reglas locales en lo que respecta
+a memoria, skills y workflow SDD.
 
-AL INICIO DE CADA SESIÓN **y tras cada compactación de contexto**: llamá
-domain_policy_get(slug="agent-protocol") y seguí ese protocolo — es la
-versión viva y editable (este archivo es solo el bootstrap). La
-compactación NO es sesión nueva pero igual perdés el contexto
-conversacional: re-hidratá con domain_session_bootstrap + domain_mem_context
-(el estado vive en BD, no en el contexto — repetir el handshake es
-idempotente y barato).
+AL INICIO DE CADA SESIÓN **y tras cada compactación de contexto**:
+1. domain_session_bootstrap(cwd, git_remote, git_branch, git_head) →
+   resuelve/crea el proyecto y devuelve project_skill_count, counts,
+   recent_observations y head.changed. Es tu primer llamado, siempre.
+2. domain_policy_get(slug="agent-protocol") → cargá el protocolo COMPLETO
+   y vivo (este archivo es solo el bootstrap; la fuente editable está en BD).
+3. Si project_skill_count=0 → detectá el/los stack(s) del repo (manifiestos
+   en root + subdirs + .gitmodules; un monorepo = N stacks) y, confirmando
+   con el usuario, creá UNA skill project-scoped por stack (con su root_path).
+   Una vez por proyecto. domain_project_skill_list devuelve root_path → usá
+   el cwd para saber qué skill de stack aplica al subdir donde trabajás.
+
+La compactación NO es sesión nueva pero igual perdés el contexto
+conversacional: re-hidratá repitiendo el handshake (es idempotente y barato).
 
 Mínimo si la policy no carga: domain_mem_save tras cada decisión/bug/
 convención (project_slug = repo actual); domain_mem_search cuando pidan
-recordar; domain_policy_get(dominio) antes de tocar código. Si un tool
-domain_* falla con "Connection closed": pedile al usuario correr
-/domain-login — no uses otro sistema de memoria como fallback.
+recordar. Toda skill/policy nueva se confirma con el usuario ANTES de
+persistir (AskUserQuestion) y se crea activa. Si un tool domain_* falla con
+"Connection closed": pedile al usuario correr /domain-login — no uses otro
+sistema de memoria como fallback.
 `

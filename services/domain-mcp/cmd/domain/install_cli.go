@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -68,9 +45,6 @@ func runInstall(args []string) int {
 		return 2
 	}
 
-
-
-
 	if _, ok := checkProjectRootGuard(flags.src); !ok {
 		return 1
 	}
@@ -86,7 +60,6 @@ func runInstall(args []string) int {
 	progress := NewInstallProgress(12, os.Stderr)
 	printBanner(os.Stderr)
 
-
 	progress.StartStep("Detecting state")
 	state, err := install.DetectState(flags.baseURL)
 	if err != nil {
@@ -95,7 +68,6 @@ func runInstall(args []string) int {
 		return 1
 	}
 	progress.EndStep(StepOK, state.Summary())
-
 
 	progress.StartStep("Backing up configs")
 	if flags.noBackup {
@@ -108,8 +80,6 @@ func runInstall(args []string) int {
 			progress.EndStep(StepOK, fmt.Sprintf("%d backed up, %d skipped", backed, skipped))
 		}
 	}
-
-
 
 	progress.StartStep("Bootstrap .env")
 	if err := ensureLocalEnvFile(); err != nil {
@@ -124,8 +94,6 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, ".env present and loaded")
 	}
 
-
-
 	progress.StartStep(fmt.Sprintf("Starting services (%s)", mode))
 	if err := startInfra(mode, flags, state); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -133,7 +101,6 @@ func runInstall(args []string) int {
 		return 1
 	}
 	progress.EndStep(StepOK, fmt.Sprintf("mode=%s ready", mode))
-
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -146,8 +113,6 @@ func runInstall(args []string) int {
 	if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
 		msg := err.Error()
 
-
-
 		if strings.Contains(msg, "no migration found for version") {
 			msg += " — tu BD tiene migraciones más nuevas que este código; " +
 				"actualizá el código y reintentá (re-corré install.sh, que hace git pull)"
@@ -158,7 +123,6 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "schema up to date")
 
-
 	progress.StartStep("Running seeders")
 	if err := runSeedersViaRegistry(cfg.DatabaseURL, cfg.Env); err != nil {
 		progress.EndStep(StepFailed, err.Error())
@@ -167,8 +131,6 @@ func runInstall(args []string) int {
 	}
 	progress.EndStep(StepOK, "all catalogs at target version")
 
-
-
 	progress.StartStep("Global MCP env")
 	envPath, err := writeGlobalMCPEnv(cfg, flags.baseURL)
 	if err != nil {
@@ -176,10 +138,6 @@ func runInstall(args []string) int {
 	} else {
 		progress.EndStep(StepOK, envPath)
 	}
-
-
-
-
 
 	progress.StartStep("Starting server (systemd)")
 	serverUp := state.ServerReachable
@@ -197,13 +155,6 @@ func runInstall(args []string) int {
 		}
 	}
 
-
-
-
-
-
-
-
 	progress.StartStep("API key")
 	switch how, err := ensureAPIKey(cfg, flags, mode, serverUp); {
 	case err != nil:
@@ -216,7 +167,6 @@ func runInstall(args []string) int {
 		progress.EndStep(StepOK, how)
 	}
 
-
 	progress.StartStep("Configuring MCP agents")
 	if len(flags.agents) == 0 {
 		progress.EndStep(StepSkipped, "no agents selected")
@@ -224,7 +174,6 @@ func runInstall(args []string) int {
 		detail := configureAgents(flags.agents, flags.baseURL)
 		progress.EndStep(StepOK, detail)
 	}
-
 
 	progress.StartStep("Config shell wrapper")
 	if flags.withWrapper {
@@ -247,7 +196,6 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "--non-interactive (use --with-wrapper)")
 	}
 
-
 	progress.StartStep("Claude Code SessionStart hook")
 	if flags.noClaudeHook {
 		progress.EndStep(StepSkipped, "--no-claude-hook")
@@ -269,8 +217,20 @@ func runInstall(args []string) int {
 		progress.EndStep(StepSkipped, "--non-interactive (use --with-claude-hook)")
 	}
 
-
-
+	// Enforcement global Claude Code: el protocolo (Stub) en ~/.claude/CLAUDE.md
+	// para que aplique en TODOS los repos (OpenCode ya lo tiene vía instructions).
+	progress.StartStep("Claude Code global instructions (~/.claude/CLAUDE.md)")
+	if flags.noClaudeHook {
+		progress.EndStep(StepSkipped, "--no-claude-hook")
+	} else {
+		autoAccept := flags.withClaudeHook || flags.nonInter
+		action, gErr := claudehook.InstallGlobalInstructions(autoAccept)
+		if gErr != nil {
+			progress.EndStep(StepWarning, gErr.Error())
+		} else {
+			progress.EndStep(StepOK, action)
+		}
+	}
 
 	progress.StartStep("Primary memory (engram/mem0 detect)")
 	if !flags.primaryMemory {
@@ -286,7 +246,6 @@ func runInstall(args []string) int {
 			progress.EndStep(StepOK, detail)
 		}
 	}
-
 
 	progress.StartStep("Importing .md files")
 	switch {
@@ -373,10 +332,6 @@ func repairOpencodeEmptyCommandAt(cfgPath string) bool {
 	if !ok {
 		return false
 	}
-
-
-
-
 
 	broken := len(cmd) == 0
 	if !broken {
@@ -620,7 +575,6 @@ func loadEnvFile(path string) error {
 
 		val = strings.Trim(val, `"'`)
 
-
 		if os.Getenv(key) == "" {
 			_ = os.Setenv(key, val)
 		}
@@ -714,8 +668,6 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		return "", fmt.Errorf("count users: %w", err)
 	}
 
-
-
 	if userCount == 0 {
 		prefix, err := bootstrapFirstAccount(ctx, pool, email, flags.baseURL)
 		if err != nil {
@@ -723,8 +675,6 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 		}
 		return fmt.Sprintf("account created for %s (key prefix %s)", email, prefix), nil
 	}
-
-
 
 	if install.Mode(mode) == install.ModeLocal && serverUp && mailpitAvailable() {
 		result, err := otpFlowViaServer(flags.baseURL, email)
@@ -832,9 +782,6 @@ func writeGlobalMCPEnv(cfg *config.Config, baseURL string) (string, error) {
 		{"DOMAIN_BASE_URL", baseURL},
 	}
 
-
-
-
 	if u, err := url.Parse(baseURL); err == nil && u.Port() != "" {
 		pairs = append(pairs, [2]string{"DOMAIN_HTTP_PORT", u.Port()})
 	}
@@ -905,12 +852,10 @@ func runPrimaryMemoryStep(flags installFlags) (string, error) {
 		return "no other memory providers detected", nil
 	}
 
-
 	fmt.Fprintln(os.Stderr, "  found other memory MCP providers:")
 	for _, h := range hits {
 		fmt.Fprintf(os.Stderr, "    %s → %s: %s\n", h.agent, h.configPath, strings.Join(h.names, ", "))
 	}
-
 
 	if !flags.pmYes && !flags.nonInter {
 		fmt.Fprint(os.Stderr, "  disable these (backup will be created)? [y/N] ")
@@ -1112,7 +1057,6 @@ func guessTargetFromBackup(backupPath string) string {
 		return ".env"
 	}
 
-
 	name := backupPath
 	if idx := strings.LastIndex(name, ".bak."); idx > 0 {
 		return name[:idx]
@@ -1137,7 +1081,6 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
 	registry.Register(&seeds.MCPProvidersSeeder{})
 
-
 	registry.Register(&seeds.SkillsCatalogSeeder{})
 	registry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	registry.Register(&seeds.FlowsCatalogSeeder{})
@@ -1150,7 +1093,6 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 		return fmt.Errorf("run all: %w", err)
 	}
 
-
 	fmt.Fprintln(os.Stderr, "  seeders:")
 	for name, rep := range reports {
 		if rep.Skipped > 0 && rep.Created == 0 && rep.Updated == 0 && rep.Preserved == 0 {
@@ -1162,8 +1104,6 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	}
 	return nil
 }
-
-
 
 // readLine lee una linea de stdin. Usado para el prompt de DSN en
 // cloud mode no-interactive.

@@ -1,5 +1,5 @@
 {% extends "maintainers/_form_base.html" %}
-{% comment %}Form de regla de proyecto para el modal dinamico.{% endcomment %}
+{% comment %}Form de politica de plataforma para el modal dinamico.{% endcomment %}
 
 {% block form_title %}{% if mode == "create" %}Nueva politica{% else %}Editar politica{% endif %}{% endblock %}
 {% block submit_label %}{% if mode == "create" %}Crear politica{% else %}Guardar cambios{% endif %}{% endblock %}
@@ -7,30 +7,22 @@
 {% block fields %}
   <div class="d-flex gap-3">
     <div class="form-group" style="flex: 1;">
-      <label class="form-label" for="{{ form.project.id_for_label }}">Proyecto *</label>
-      {{ form.project }}
-      {% if form.project.help_text %}<div class="form-help">{{ form.project.help_text }}</div>{% endif %}
-      {% if form.project.errors %}<div class="form-help text-danger">{{ form.project.errors|join:", " }}</div>{% endif %}
-    </div>
-    <div class="form-group" style="flex: 1;">
       <label class="form-label" for="{{ form.kind.id_for_label }}">Tipo *</label>
       {{ form.kind }}
       {% if form.kind.errors %}<div class="form-help text-danger">{{ form.kind.errors|join:", " }}</div>{% endif %}
     </div>
-  </div>
-
-  <div class="d-flex gap-3">
     <div class="form-group" style="flex: 2;">
       <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
       {{ form.name }}
       {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
     </div>
-    <div class="form-group" style="flex: 1;">
-      <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
-      {{ form.slug }}
-      {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
-      {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
-    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+    {{ form.slug }}
+    {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+    {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
   </div>
 
   <div class="form-group">
@@ -38,11 +30,6 @@
     {{ form.body_md }}
     {% if form.body_md.help_text %}<div class="form-help">{{ form.body_md.help_text }}</div>{% endif %}
     {% if form.body_md.errors %}<div class="form-help text-danger">{{ form.body_md.errors|join:", " }}</div>{% endif %}
-  </div>
-
-  <div class="form-group">
-    <label class="form-check-label">{{ form.override_platform }} Reemplaza la regla de plataforma del mismo tipo</label>
-    {% if form.override_platform.help_text %}<div class="form-help">{{ form.override_platform.help_text }}</div>{% endif %}
   </div>
 
   <div class="form-group">

@@ -1,6 +1,6 @@
-"""URL routing del mantenedor de Reglas por proyecto.
+"""URL routing del mantenedor de Politicas por proyecto.
 
-Mounted at /reglas-proyecto/ en config/urls.py. Las 7 rutas estandar las arma
+Mounted at /politicas-proyecto/ en config/urls.py. Las 7 rutas estandar las arma
 core.urls.maintainer_urlpatterns. id_kwarg="policy_id".
 """
 from core.urls import maintainer_urlpatterns

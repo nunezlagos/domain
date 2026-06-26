@@ -31,7 +31,8 @@ urlpatterns = [
     path("plantillas-agentes/", include("maintainers.agenttemplates.urls")),
 
 
-    path("reglas-proyecto/", include("maintainers.projectpolicies.urls")),
+    path("politicas-proyecto/", include("maintainers.projectpolicies.urls")),
+    path("politicas-plataforma/", include("maintainers.platformpolicies.urls")),
 ]
 
 

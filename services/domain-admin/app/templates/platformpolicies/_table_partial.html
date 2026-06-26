@@ -1,14 +1,14 @@
 {% extends "maintainers/_table_base.html" %}
 {% comment %}
-Tabla de reglas por proyecto. La lista viene bajo `policies`.
+Tabla de politicas de plataforma. La lista viene bajo `policies`.
 {% endcomment %}
 
 {% block columns %}
   <th>Nombre</th>
   <th>Slug</th>
   <th>Tipo</th>
-  <th>Override</th>
   <th>Estado</th>
+  <th>Version</th>
   <th>Creada</th>
   <th style="width: 1%; white-space: nowrap;">Acciones</th>
 {% endblock %}
@@ -22,11 +22,11 @@ Tabla de reglas por proyecto. La lista viene bajo `policies`.
       <td>{{ r.name }}</td>
       <td><code>{{ r.slug }}</code></td>
       <td><span class="badge">{{ r.get_kind_display }}</span></td>
-      <td>{% if r.override_platform %}<span class="badge badge-warning">reemplaza</span>{% else %}<span class="text-muted">amplia</span>{% endif %}</td>
       <td>
         {% if r.is_enabled %}<span class="badge badge-success">Activa</span>
         {% else %}<span class="badge badge-warning">Inactiva</span>{% endif %}
       </td>
+      <td>v{{ r.version }}</td>
       <td>{{ r.created_at|date:"d/m/Y" }}</td>
       <td>
         <div class="d-flex gap-1" style="justify-content: flex-end;">

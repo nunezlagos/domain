@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     "maintainers.crons",            # mantenedor de crons (schedules)
     "maintainers.prompts",          # mantenedor de prompts
     "maintainers.agenttemplates",   # mantenedor de plantillas de agentes
-    "maintainers.projectpolicies",  # mantenedor de reglas por proyecto
+    "maintainers.projectpolicies",  # mantenedor de politicas por proyecto
+    "maintainers.platformpolicies",  # mantenedor de politicas de plataforma
 ]
 
 MIDDLEWARE = [

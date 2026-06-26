@@ -560,6 +560,7 @@ textarea.form-control {
 .htabs-nav label:hover { color: var(--color-text-primary); }
 .vtab-count { background: var(--color-bg-elevated); border-radius: 999px; padding: 0 7px; font-size: 11px; }
 .vpane { display: none; }
+.vpane { display: none; }
 #ut-info:checked ~ .htabs-nav label[for="ut-info"],
 #ut-roles:checked ~ .htabs-nav label[for="ut-roles"],
 #ut-keys:checked ~ .htabs-nav label[for="ut-keys"] {
@@ -568,21 +569,13 @@ textarea.form-control {
 #ut-info:checked ~ .htabs-body .vpane-info,
 #ut-roles:checked ~ .htabs-body .vpane-roles,
 #ut-keys:checked ~ .htabs-body .vpane-keys { display: block; }
-.htabs-body {
-  display: grid;
-  grid-template-rows: 1fr;
-  overflow: auto;
-  max-height: 60vh;
-}
-.htabs-body > .vpane { display: block; visibility: hidden; pointer-events: none; }
-#ut-info:checked ~ .htabs-body .vpane-info,
-#ut-roles:checked ~ .htabs-body .vpane-roles,
-#ut-keys:checked ~ .htabs-body .vpane-keys { visibility: visible; pointer-events: auto; }
+.htabs-body { flex: 1; overflow-y: auto; }
 
 .modal-body:has(.htabs),
 .modal-body:has(.vtabs) {
   display: flex;
   flex-direction: column;
+  max-height: 70vh;
   overflow: hidden;
 }
 
@@ -602,15 +595,8 @@ textarea.form-control {
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
 }
 .vtabs-nav label:hover { color: var(--color-text-primary); }
-.vtabs-body {
-  display: grid;
-  grid-template-rows: 1fr;
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  max-height: 60vh;
-}
-.vtabs .vpane { display: block; visibility: hidden; pointer-events: none; overflow: auto; }
+.vtabs-body { flex: 1; min-width: 0; overflow-y: auto; max-height: 70vh; }
+.vtabs .vpane { display: none; }
 /* Tab activo: SOLO una linea a la izquierda en el color principal de la
    plataforma (--color-accent). Sin fondo ni bordes redondeados. */
 #pt-datos:checked ~ .vtabs-nav label[for="pt-datos"],
@@ -626,7 +612,7 @@ textarea.form-control {
 #pt-skills:checked ~ .vtabs-body .vpane-skills,
 #pt-reglas:checked ~ .vtabs-body .vpane-reglas,
 #pt-json:checked ~ .vtabs-body .vpane-json,
-#pt-versiones:checked ~ .vtabs-body .vpane-versiones { visibility: visible; pointer-events: auto; }
+#pt-versiones:checked ~ .vtabs-body .vpane-versiones { display: block; max-height: 100%; overflow-y: auto; }
 /* Skill excluida: se ve atenuada con el texto tachado en el nombre. */
 .skill-excluded { opacity: 0.6; }
 .skill-excluded .skill-name { text-decoration: line-through; }

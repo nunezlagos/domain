@@ -347,6 +347,10 @@ class RetrievalService:
     Constructor recibe un EmbeddingProvider. Si no se provee, usa el
     scorer lexico (fallback sin API key). Esto permite tests sin
     dependencias externas.
+
+    Si el scoring (lexico o embedding) no encuentra nada por encima de
+    MIN_SCORE, se activa un "summary mode" que devuelve 1 chunk por tabla
+    principal para que el LLM tenga contexto amplio del sistema.
     """
 
     def __init__(self, embedding_provider: EmbeddingProvider | None = None) -> None:
@@ -365,8 +369,41 @@ class RetrievalService:
         query_tokens = _tokenize(question)
 
         if self._embedder is not None:
-            return self._retrieve_with_embeddings(question, rows)
-        return self._retrieve_lexical(question, rows, query_tokens)
+            ctx = self._retrieve_with_embeddings(question, rows)
+        else:
+            ctx = self._retrieve_lexical(question, rows, query_tokens)
+
+        if ctx.is_empty:
+            ctx = self._summary_fallback(rows)
+        return ctx
+
+    def _summary_fallback(self, rows: list[tuple[str, str, str, str]]) -> RagContext:
+        """Devuelve 1 chunk diverso por tabla para preguntas abstractas.
+
+        Si la query no matchea nada (ej: "dame un resumen", "describe el
+        sistema"), devolvemos una muestra diversa (1 chunk por tabla)
+        para que el LLM tenga contexto amplio.
+        """
+        seen_tables: set[str] = set()
+        diverse: list[tuple[str, str, str, str]] = []
+        for row in rows:
+            if row[0] not in seen_tables:
+                seen_tables.add(row[0])
+                diverse.append(row)
+            if len(diverse) >= 8:
+                break
+        if not diverse:
+            return RagContext(is_empty=True)
+        return RagContext(
+            chunks=[r[3] for r in diverse],
+            sources=[
+                Source(table=r[0], id=r[1], title=r[2],
+                       snippet=r[3][:200], score=0.0,
+                       url=f"{_url_prefix_for(r[0])}{r[1]}" if r[1] else "")
+                for r in diverse
+            ],
+            is_empty=False,
+        )
 
     def _retrieve_with_embeddings(
         self, question: str, rows: list[tuple[str, str, str, str]]

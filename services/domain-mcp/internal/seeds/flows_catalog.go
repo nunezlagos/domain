@@ -89,6 +89,7 @@ var SDDPipelinePhaseSlugs = []string{
 	"sdd-apply",
 	"sdd-verify",
 	"sdd-judge",
+	"sdd-review",
 	"sdd-archive",
 	"sdd-onboard",
 }
@@ -100,7 +101,7 @@ func FlowsCatalog() []FlowCatalogEntry {
 		{
 			Slug:        SDDPipelineFlowSlug,
 			Name:        "SDD Pipeline v1",
-			Description: "Pipeline canónico del orquestador SDD (RFC 0006). 10 fases: explore→spec→propose→design→tasks→apply→verify→judge→archive→onboard.",
+			Description: "Pipeline canónico del orquestador SDD (RFC 0006). 11 fases: explore→spec→propose→design→tasks→apply→verify→judge→review→archive→onboard.",
 			Spec:        buildSDDPipelineSpec(),
 			IsActive:    true,
 
@@ -140,7 +141,7 @@ func retryPolicyForPhase(phase string) string {
 	switch phase {
 	case "sdd-apply":
 		return "require-cleanup"
-	case "sdd-verify":
+	case "sdd-verify", "sdd-review":
 		return "re-emit"
 	default:
 		return ""
@@ -149,7 +150,7 @@ func retryPolicyForPhase(phase string) string {
 
 // flowsSeedVersion bump por cambio semántico del spec (Version del
 // FlowSpecJSON refleja la API; este int controla el seeder dedup).
-const flowsSeedVersion = 1
+const flowsSeedVersion = 2
 
 // SeedFlowsForOrg aplica el catalog global de flows usando un pool.
 // El parámetro orgID quedó vestigial; se conserva como helper pool-based

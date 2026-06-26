@@ -20,7 +20,8 @@ var phaseDependencies = map[phases.PhaseSlug][]phases.PhaseSlug{
 	"sdd-apply":   {"sdd-tasks"},
 	"sdd-verify":  {"sdd-apply"},
 	"sdd-judge":   {"sdd-verify"},
-	"sdd-archive": {"sdd-judge"},
+	"sdd-review":  {"sdd-judge"},
+	"sdd-archive": {"sdd-review"},
 	"sdd-onboard": {"sdd-archive"},
 }
 

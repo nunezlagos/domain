@@ -26,6 +26,7 @@ var FullPhases = []phases.PhaseSlug{
 	phases.PhaseSlug("sdd-apply"),
 	phases.PhaseSlug("sdd-verify"),
 	phases.PhaseSlug("sdd-judge"),
+	phases.PhaseSlug("sdd-review"),
 	phases.PhaseSlug("sdd-archive"),
 	phases.PhaseSlug("sdd-onboard"),
 }

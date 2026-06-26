@@ -21,6 +21,7 @@ func TestAllHandlers_SlugIdentity(t *testing.T) {
 		{"sdd-apply", NewSDDApplyHandler},
 		{"sdd-verify", NewSDDVerifyHandler},
 		{"sdd-judge", NewSDDJudgeHandler},
+		{"sdd-review", NewSDDReviewHandler},
 		{"sdd-archive", NewSDDArchiveHandler},
 		{"sdd-onboard", NewSDDOnboardHandler},
 	}
@@ -39,7 +40,8 @@ func TestAllHandlers_BuildRejectsEmptyRawText(t *testing.T) {
 	handlers := []Handler{
 		NewSDDExploreHandler(), NewSDDSpecHandler(), NewSDDProposeHandler(),
 		NewSDDDesignHandler(), NewSDDTasksHandler(),
-		NewSDDJudgeHandler(), NewSDDArchiveHandler(), NewSDDOnboardHandler(),
+		NewSDDJudgeHandler(), NewSDDReviewHandler(), NewSDDArchiveHandler(),
+		NewSDDOnboardHandler(),
 	}
 	for _, h := range handlers {
 		h := h
@@ -56,8 +58,8 @@ func TestAllHandlers_BuildReturnsEmptySystemPrompt_BDSourceOfTruth(t *testing.T)
 	handlers := []Handler{
 		NewSDDExploreHandler(), NewSDDSpecHandler(), NewSDDProposeHandler(),
 		NewSDDDesignHandler(), NewSDDTasksHandler(), NewSDDApplyHandler(),
-		NewSDDVerifyHandler(), NewSDDJudgeHandler(), NewSDDArchiveHandler(),
-		NewSDDOnboardHandler(),
+		NewSDDVerifyHandler(), NewSDDJudgeHandler(), NewSDDReviewHandler(),
+		NewSDDArchiveHandler(), NewSDDOnboardHandler(),
 	}
 	for _, h := range handlers {
 		h := h
@@ -90,6 +92,7 @@ func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 		{NewSDDApplyHandler, "code_reference"},
 		{NewSDDVerifyHandler, ""},
 		{NewSDDJudgeHandler, "sabotage_record"},
+		{NewSDDReviewHandler, ""},
 		{NewSDDArchiveHandler, ""},
 		{NewSDDOnboardHandler, ""},
 	}
@@ -195,6 +198,25 @@ func TestSDDJudgeHandler_Validate_RequiresSabotageRecords(t *testing.T) {
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"sabotage_records": []any{}},
 	}))
+}
+
+func TestSDDReviewHandler_Validate_GatesOnVerdict(t *testing.T) {
+	t.Parallel()
+	h := NewSDDReviewHandler()
+	// compliant → pasa
+	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{"verdict": "compliant"},
+	}))
+	// violations_found → bloquea el flow (error sentinela)
+	err := h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{"verdict": "violations_found"},
+	})
+	require.ErrorIs(t, err, ErrPolicyReviewFailed)
+	// verdict ausente o desconocido → error
+	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{},
+	}))
+	require.Error(t, h.Validate(context.Background(), nil, ClientResult{Output: nil}))
 }
 
 func TestSDDArchiveHandler_Validate_RequiresArchivedFlag(t *testing.T) {

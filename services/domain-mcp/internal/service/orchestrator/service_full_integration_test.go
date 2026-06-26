@@ -26,6 +26,7 @@ func buildFullRegistry() *phases.Registry {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
 	return reg
@@ -54,12 +55,12 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeFull, res.Mode)
-	require.Len(t, res.Plan.Steps, 10)
+	require.Len(t, res.Plan.Steps, 11)
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[9].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[10].Slug))
 
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < 11; i++ {
 		require.Empty(t, res.Plan.Steps[i].UserPrompt,
 			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
@@ -88,7 +89,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	}
 	require.Equal(t, []string{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
-		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard",
+		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard",
 	}, keys)
 }
 
@@ -172,7 +173,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 8, "10 - 2 skipped = 8 steps")
+	require.Len(t, res.Plan.Steps, 9, "11 - 2 skipped = 9 steps")
 	for _, st := range res.Plan.Steps {
 		require.NotEqual(t, "sdd-archive", string(st.Slug))
 		require.NotEqual(t, "sdd-onboard", string(st.Slug))
@@ -203,15 +204,15 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Len(t, res.Plan.Steps, 5)
+	require.Len(t, res.Plan.Steps, 6)
 	require.Equal(t, "sdd-apply", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[4].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[5].Slug))
 }
 
-// Happy path completo: ejecutar las 10 fases en orden con outputs encadenados.
+// Happy path completo: ejecutar las 11 fases en orden con outputs encadenados.
 // Verifica que cada fase recibe los outputs de la anterior vía PriorOutputs
 // (la firma de Full mode).
-func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
+func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -233,7 +234,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 10)
+	require.Len(t, res.Plan.Steps, 11)
 
 	outputs := []map[string]any{
 		{"intent": "feature", "scope": "single-file", "summary": "x"},           // explore
@@ -244,6 +245,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		{"summary": "implemented", "files_changed": []any{"a.go"}},              // apply
 		{"scenarios_failed": []any{}, "tests_passed": 5},                        // verify
 		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},           // judge
+		{"verdict": "compliant", "policies_checked": 3},                         // review
 		{"archived": true}, // archive
 		{"skipped": true},  // onboard
 	}
@@ -260,6 +262,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		{"saves": {{Type: "code_reference", ID: uuid.New()}}}, // apply
 		{}, // verify
 		{"saves": {{Type: "sabotage_record", ID: uuid.New()}}}, // judge
+		{}, // review
 		{}, // archive
 		{}, // onboard
 	}
@@ -276,7 +279,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		})
 		require.NoErrorf(t, err, "fase %d (%s) falló inesperado", i, step.Slug)
 		require.Equal(t, "completed", out.StepStatus)
-		if i < 9 {
+		if i < 10 {
 			require.Equal(t, "running", out.FlowRunStatus,
 				"flow sigue running tras fase %d", i)
 			require.NotNil(t, out.NextStepID)

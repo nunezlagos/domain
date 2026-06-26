@@ -51,7 +51,7 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 
 	var spec seeds.FlowSpecJSON
 	require.NoError(t, json.Unmarshal(specRaw, &spec))
-	require.Len(t, spec.Steps, 10)
+	require.Len(t, spec.Steps, 11)
 	for i, ph := range seeds.SDDPipelinePhaseSlugs {
 		require.Equal(t, ph, spec.Steps[i].ID)
 	}

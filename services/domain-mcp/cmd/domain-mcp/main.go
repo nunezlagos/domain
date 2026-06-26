@@ -156,6 +156,7 @@ func main() {
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
+	observationEdges := observation.NewEdgeService(pools.App, llm.NopEmbedder{}, recorder)
 
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
@@ -220,6 +221,7 @@ func main() {
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
 	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDDReviewHandler())
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
@@ -309,8 +311,9 @@ func main() {
 	}
 
 	srv := mcpserver.New(mcpserver.Deps{
-		Observations: observations,
-		Projects:     projects,
+		Observations:     observations,
+		ObservationEdges: observationEdges,
+		Projects:         projects,
 		Prompts:      prompts,
 		Timeline:     timeline,
 		Search:       search,

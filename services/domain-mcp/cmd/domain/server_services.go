@@ -92,6 +92,7 @@ type serverServices struct {
 	EventBus              *events.Bus
 	ProjectService        *projsvc.Service
 	ObsService            *observation.Service
+	ObsEdgeService        *observation.EdgeService
 	PromptService         *promptsvc.Service
 	TimelineService       *timelinesvc.Service
 	SearchService         *searchsvc.Service
@@ -187,6 +188,7 @@ func buildServices(
 	s.ProjectService = projsvc.NewService(pools.App, s.Recorder, nil, nil).
 		WithClientService(s.ClientService)
 	s.ObsService = observation.NewService(pools.App, s.Recorder, s.Embedder, nil, nil)
+	s.ObsEdgeService = observation.NewEdgeService(pools.App, s.Embedder, s.Recorder)
 
 	s.PromptService = &promptsvc.Service{Pool: pools.App, Audit: s.Recorder}
 	s.TimelineService = &timelinesvc.Service{Pool: pools.App}
@@ -404,6 +406,7 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
 	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDDReviewHandler())
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 

@@ -14,11 +14,11 @@ func TestFlowsCatalog_HasExactlySDDPipeline(t *testing.T) {
 	require.Equal(t, SDDPipelineFlowSlug, c[0].Slug)
 }
 
-func TestFlowsCatalog_SDDPipelineSpec_HasAllTenPhasesInOrder(t *testing.T) {
+func TestFlowsCatalog_SDDPipelineSpec_HasAllElevenPhasesInOrder(t *testing.T) {
 	t.Parallel()
 	spec := buildSDDPipelineSpec()
 	require.Equal(t, 1, spec.Version)
-	require.Len(t, spec.Steps, 10, "10 fases SDD")
+	require.Len(t, spec.Steps, 11, "11 fases SDD")
 	for i, slug := range SDDPipelinePhaseSlugs {
 		require.Equal(t, slug, spec.Steps[i].ID, "orden canónico")
 		require.Equal(t, "agent_run", spec.Steps[i].Type)
@@ -37,6 +37,8 @@ func TestRetryPolicyForPhase_RFC0006Mapping(t *testing.T) {
 		"apply muta workspace — RFC 0006 ADR-1")
 	require.Equal(t, "re-emit", retryPolicyForPhase("sdd-verify"),
 		"verify es read-only — RFC 0006 ADR-1")
+	require.Equal(t, "re-emit", retryPolicyForPhase("sdd-review"),
+		"review es read-only — gate de cumplimiento")
 	require.Equal(t, "", retryPolicyForPhase("sdd-design"),
 		"resto: auto-retry default")
 	require.Equal(t, "", retryPolicyForPhase("phase-no-existe"),
@@ -56,14 +58,14 @@ func TestFlowsCatalog_SpecMarshalsToValidJSON(t *testing.T) {
 }
 
 // Sabotage sanity: si alguien borrara una phase del slice canónico,
-// el spec resultante tendría menos de 10 steps. Esto rompe el orden
+// el spec resultante tendría menos de 11 steps. Esto rompe el orden
 // del pipeline → este test atrapa esa regresión.
 func TestSDDPipelinePhaseSlugs_NoMissingPhases(t *testing.T) {
 	t.Parallel()
 	expected := []string{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design",
 		"sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge",
-		"sdd-archive", "sdd-onboard",
+		"sdd-review", "sdd-archive", "sdd-onboard",
 	}
 	require.Equal(t, expected, SDDPipelinePhaseSlugs,
 		"ningún reorder/drop del pipeline canónico sin actualizar este test + RFC")

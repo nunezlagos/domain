@@ -46,7 +46,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 	require.Equal(t, orchestrator.ModeAsync, res.Mode)
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.NotNil(t, res.Plan, "Async debe devolver el plan")
-	require.Len(t, res.Plan.Steps, 10, "Async plan = 10 fases sin skips")
+	require.Len(t, res.Plan.Steps, 11, "Async plan = 11 fases sin skips")
 
 
 	rows, err := pools.App.Query(ctx,
@@ -62,7 +62,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 			"step %s debe estar pending tras Run async (sin Process)", k)
 		count++
 	}
-	require.Equal(t, 10, count, "10 fases SDD persistidas")
+	require.Equal(t, 11, count, "11 fases SDD persistidas")
 
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -72,7 +72,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 }
 
 // TestService_ProcessAsyncFlowRun_ExecutesAllSteps verifica que
-// ProcessAsyncFlowRun ejecuta las 10 fases, emite signals, y marca
+// ProcessAsyncFlowRun ejecuta las 11 fases, emite signals, y marca
 // flow_run + steps como completed.
 func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
@@ -119,7 +119,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 		require.Equal(t, "completed", st, "step %s debe estar completed", k)
 		count++
 	}
-	require.Equal(t, 10, count, "10 fases ejecutadas por ProcessAsyncFlowRun")
+	require.Equal(t, 11, count, "11 fases ejecutadas por ProcessAsyncFlowRun")
 
 
 	var flowStatus string
@@ -132,7 +132,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 	signals, err := s.SignalStore.List(ctx, res.FlowRunID, true)
 	require.NoError(t, err)
 
-	require.GreaterOrEqual(t, len(signals), 11, "debe haber al menos 11 signals (10 step + 1 flow)")
+	require.GreaterOrEqual(t, len(signals), 12, "debe haber al menos 12 signals (11 step + 1 flow)")
 
 	stepCompletedCount := 0
 	flowCompletedCount := 0
@@ -435,10 +435,10 @@ func TestService_Async_WithSkipPhases_OmittedPhases(t *testing.T) {
 		SkipPhases:     []orchestrator.PhaseSlug{"sdd-archive", "sdd-onboard"},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 8, "10 - 2 skip = 8 (archive + onboard son sufijo válido)")
+	require.Len(t, res.Plan.Steps, 9, "11 - 2 skip = 9 (archive + onboard son sufijo válido)")
 
 	last := res.Plan.Steps[len(res.Plan.Steps)-1]
-	require.Equal(t, "sdd-judge", string(last.Slug))
+	require.Equal(t, "sdd-review", string(last.Slug))
 }
 
 // TestService_Async_RequiresRepo verifica que ModeAsync sin Repo falla.

@@ -15,7 +15,7 @@ import (
 )
 
 // fakeProvider devuelve respuestas canned por slug para que el orquestador
-// Solo pueda iterar las 10 fases en orden sin necesitar un LLM real.
+// Solo pueda iterar las 11 fases en orden sin necesitar un LLM real.
 type fakeProvider struct {
 	byPhase map[string]string
 	calls   int
@@ -66,7 +66,7 @@ func indexOfSubstring(s, sub string) int {
 
 // cannedSoloResponses produce un mapeo phase_slug → JSON output válido
 // según el Validate de cada handler, suficiente para que el flow pase
-// las 10 fases sin error.
+// las 11 fases sin error.
 func cannedSoloResponses() map[string]string {
 	must := func(v any) string {
 		b, _ := json.Marshal(v)
@@ -100,12 +100,15 @@ func cannedSoloResponses() map[string]string {
 		"sdd-judge": must(map[string]any{
 			"sabotage_records": []any{map[string]any{"invariant": "x"}},
 		}),
+		"sdd-review": must(map[string]any{
+			"verdict": "compliant", "policies_checked": 2,
+		}),
 		"sdd-archive": must(map[string]any{"archived": true}),
 		"sdd-onboard": must(map[string]any{"skipped": true}),
 	}
 }
 
-func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
+func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -151,7 +154,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 			"step %s debe estar completed tras Solo run", k)
 		count++
 	}
-	require.Equal(t, 10, count, "10 fases SDD ejecutadas en Solo")
+	require.Equal(t, 11, count, "11 fases SDD ejecutadas en Solo")
 
 
 	var flowStatus string

@@ -71,6 +71,7 @@ const (
 	PhaseApply    PhaseSlug = "sdd-apply"
 	PhaseVerify   PhaseSlug = "sdd-verify"
 	PhaseJudge    PhaseSlug = "sdd-judge"
+	PhaseReview   PhaseSlug = "sdd-review"
 	PhaseArchive  PhaseSlug = "sdd-archive"
 	PhaseOnboard  PhaseSlug = "sdd-onboard"
 )

@@ -245,6 +245,39 @@ Fallback: si tu cliente NO soporta subagentes, ejecutá secuencialmente en el
 orden de position. El resultado es el mismo, solo más lento. Nunca paralelices
 tasks de distinto parallel_group ni concerns marcados como dependientes.
 
+## Import/sync de OpenSpec a domain (resumible, consultable)
+El server NO lee el filesystem: VOS (LLM cliente) leés los openspec y los subís;
+domain los persiste y trackea el progreso para poder reanudar. No es un comando
+atómico del server — vos orquestás el loop.
+
+SUBIR ("subí todos los openspec a domain"):
+- domain_project_index_start(project_slug, git_head) → devuelve un manifest que
+  incluye openspec/changes/*/proposal.md, design.md, tasks.md. Leé cada uno con
+  tu Read tool y mandalos con domain_project_index_submit. Quedan como
+  knowledge_docs (Kind=spec, slug determinístico imported-spec-<path>).
+- Si querés que un change quede como issue ESTRUCTURADA con Gherkin (no solo
+  doc), usá domain_issue_create_start en lugar del index para ese change.
+
+CONSULTAR el estado:
+- domain_project_index_status(project_slug) → has_run, status
+  (running|completed|partial|failed), files_submitted, git_head.
+
+CONTINUAR lo inconcluso (resumible):
+- Si status='partial' (o al re-entrar y ves openspec sin subir): NO reempieces
+  de cero. Listá los openspec del repo, compará con lo ya persistido (buscá
+  knowledge_docs con slug imported-spec-<path>) y subí SOLO los faltantes o los
+  cambiados (git_head distinto). El submit es idempotente (mismo slug = upsert).
+  Marcá el run 'completed' al terminar.
+- En el bootstrap: si index_status devuelve status='partial', ofrecé continuar.
+
+ACTUALIZAR el openspec LOCAL ("actualizá los openspec/tareas"):
+- El server NO escribe archivos. Consultá los datos vivos en domain (issues,
+  tasks, specs) y escribí los archivos openspec del repo con tu Write/Edit tool.
+  domain provee el contenido; la escritura es tuya.
+
+VOLUMEN ALTO: si son muchos changes, paralelizá con subagentes (un slice de
+archivos por subagente), propagando las reglas. Ver "Ejecución con subagentes".
+
 ## Si un tool domain_* falla
 - "Connection closed" / key inválida → indicale al usuario correr
   el installer. NO cambies a otro sistema de memoria como fallback

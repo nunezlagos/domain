@@ -79,8 +79,8 @@ Opts:
 
 Requiere DOMAIN_DATABASE_URL apuntando a la BD ya migrada.
 
-NO USAR EN PROD — el user no tiene OTP real; el api_key sale en stdout.
-Para prod usar el flow normal: domain server + POST /auth/request-otp.`)
+NO USAR EN PROD — el user no tiene verificación real; el api_key sale en stdout.
+Para prod usar el flow normal: domain server + "domain bootstrap --email".`)
 			return
 		}
 	}

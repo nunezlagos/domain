@@ -3,7 +3,8 @@
 // SEMÁNTICA:
 //   - Bootstrap SOLO funciona si la DB no tiene users (COUNT(users) == 0).
 //   - Después del primer user, el endpoint retorna ErrNotFirstRun. El caller
-//     debe usar /auth/request-otp + /auth/verify-otp (flujo OTP normal).
+//     debe pedirle a un admin que cree el miembro con POST /auth/member-create
+//     (HU-36.1) o usar un enrollment token (HU-37.1) para self-enroll.
 //   - Defense: pg_advisory_xact_lock para evitar race entre dos onboard
 //     simultáneos. Solo uno crea el primer user.
 //
@@ -35,8 +36,8 @@ import (
 const BootstrapLockKey int64 = 0x424F4F54
 
 // ErrNotFirstRun returned cuando ya hay users en la DB. El caller debe
-// usar el flujo OTP normal en vez de bootstrap.
-var ErrNotFirstRun = errors.New("bootstrap is first-run only; use /auth/request-otp instead")
+// pedirle a un admin que use member-create (HU-36.1) o enrollment token (HU-37.1).
+var ErrNotFirstRun = errors.New("bootstrap is first-run only; admin debe usar member-create o enrollment token")
 
 // ErrInvalidEmail returned cuando el email no tiene formato válido.
 var ErrInvalidEmail = errors.New("email format invalid")

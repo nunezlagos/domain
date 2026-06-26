@@ -502,8 +502,8 @@ func (m *Model) viewDSNPrompt() string {
 func (m *Model) viewEmailPrompt() string {
 	s := "\n  " + styles.Title.Render("Tu email") + "\n\n"
 	s += styles.ItemDesc.Render("  Es la cuenta admin de tu instalación. En el primer install se") + "\n"
-	s += styles.ItemDesc.Render("  crea con este email; en re-installs el código OTP llega acá") + "\n"
-	s += styles.ItemDesc.Render("  (en local lo buscamos solos en mailpit, sin pasos manuales).") + "\n\n"
+	s += styles.ItemDesc.Render("  crea con este email; en re-installs el admin emite nueva API key") + "\n"
+	s += styles.ItemDesc.Render("  (vía `domain member-create` o dev-bootstrap, sin email).") + "\n\n"
 	s += "  Email: " + styles.Accent.Render(m.email) + styles.Prompt.Render("▌") + "\n"
 	if m.emailErr != "" {
 		s += "\n  " + styles.Fail.Render("✗ "+m.emailErr) + "\n"

@@ -1194,7 +1194,7 @@ func printInstallHelp() {
 	fmt.Println("  --mode {local|cloud|hybrid}    Deployment mode (default: interactive prompt)")
 	fmt.Println("  --base-url URL                  Domain server URL (default: $DOMAIN_BASE_URL or http://localhost:8000)")
 	fmt.Println("  --agents LIST                   MCP agents to configure, csv (default: opencode; e.g. opencode,claude-code)")
-	fmt.Println("  --email ADDR                    Email de la cuenta (first-run la crea; re-installs reciben OTP ahí)")
+	fmt.Println("  --email ADDR                    Email de la cuenta (first-run la crea; re-installs admin emite nueva API key)")
 	fmt.Println("  --non-interactive, -y           Skip prompts (use defaults or flags)")
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
 	fmt.Println("  --no-init                       Skip init (archiving .md to BD)")

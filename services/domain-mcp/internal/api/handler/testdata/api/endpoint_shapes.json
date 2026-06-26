@@ -146,18 +146,8 @@
   },
   {
     "method": "POST",
-    "path": "/api/v1/auth/request-otp",
-    "handler": "requestOTP"
-  },
-  {
-    "method": "POST",
     "path": "/api/v1/auth/select-role",
     "handler": "authSelectRole"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/auth/verify-otp",
-    "handler": "verifyOTP"
   },
   {
     "method": "GET",

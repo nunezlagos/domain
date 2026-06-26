@@ -15,11 +15,19 @@
 {% comment %}
   Diagrama de SECUENCIA del pipeline SDD en HTML/CSS (reemplaza el viejo SVG de
   coordenadas a mano que solapaba textos). Mismo formato secuencia: 5 lifelines
-  (Usuario/Router/Orchestrator/Agente/Datos), tiempo hacia abajo, flechas entre
-  lifelines (solidas=llamada, punteadas=retorno). Cada mensaje en su propia fila:
-  el layout evita el solapamiento. Las 10 fases son <button> clickeables
-  (data-action/data-id) que abren el editor del agent_template via modals.js.
-  El diagrama escala para entrar en el viewport (igual que el SVG) via fitSeq().
+  (Usuario/Cliente LLM/Router server/Agente server/Datos), tiempo hacia abajo.
+
+  ARQUITECTURA (2026-06):
+  - El server NO corre LLMs. Solo storage + tools (MCP) + orquestador.
+  - El LLM corre del lado del cliente (opencode, claude-code, etc).
+  - El "agente" del cliente ejecuta la mayoria del trabajo (explore, spec,
+    propose, design, tasks, apply, verify, judge). El server solo aporta
+    tools (RAG, knowledge, observations, ticket/issue/task persistence).
+  - ModeSolo (server-side, trivial): regex + intake. No LLM. Sin cliente.
+  - Modos express/lite/full (cliente, con LLM): el agente cliente invoca
+    tools del server via MCP hasta cerrar el ciclo.
+
+  10 fases con subagentes paralelos nativos del cliente (post-match-B).
 {% endcomment %}
 <div class="sdd-flow-page">
   <div class="card sdd-card">
@@ -27,18 +35,23 @@
     <h1 class="sdd-hd-title">Flujo SDD</h1>
     <div class="sdd-modes">
       <span class="sdd-modes-label">Modos:</span>
-      <span class="sdd-chip c-solo">solo &middot; server-side (trivial)</span>
-      <span class="sdd-chip c-exp">express &middot; apply+verify (simple)</span>
-      <span class="sdd-chip c-lite">lite &middot; explore+apply+verify (moderado)</span>
-      <span class="sdd-chip c-full">full &middot; 10 fases (complejo)</span>
+      <span class="sdd-chip c-solo">solo &middot; server-side (trivial, sin LLM)</span>
+      <span class="sdd-chip c-exp">express &middot; cliente (simple)</span>
+      <span class="sdd-chip c-lite">lite &middot; cliente (moderado, paralelizable)</span>
+      <span class="sdd-chip c-full">full &middot; cliente (complejo, todas las fases)</span>
+    </div>
+    <div class="sdd-arch">
+      <span class="sdd-chip c-arch">Arquitectura: LLM siempre del lado del cliente &middot; server solo tools + storage</span>
+      <span class="sdd-chip c-pre">Precedencia: domain (BD policy) &gt; AGENTS.md del repo &gt; reglas del cliente</span>
     </div>
   </header>
 
   <div class="sdd-diagram">
     <div class="seq">
       <div class="actors">
-        <div class="actor">Usuario</div><div class="actor">Router</div>
-        <div class="actor">Orchestrator</div><div class="actor">Agente (LLM)</div><div class="actor">Datos</div>
+        <div class="actor">Usuario</div><div class="actor">Cliente LLM</div>
+        <div class="actor">Router</div>
+        <div class="actor">Agente server (orquestador)</div><div class="actor">Datos</div>
       </div>
       <div class="body">
         <div class="lifelines"><i class="ll1"></i><i class="ll2"></i><i class="ll3"></i><i class="ll4"></i><i class="ll5"></i></div>
@@ -48,8 +61,9 @@
         <div class="msg"><span class="lbl" style="left:34%">si project_skill_count=0 &rarr; detecta stack(s) del repo (root + subdirs + .gitmodules)</span><span class="self" style="left:30%"></span></div>
         <div class="msg"><span class="lbl" style="left:30%">&#9995; confirma skill(s) de stack (confirmar / modificar / descartar)</span><span class="line to-left" style="left:10%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:30%">OK &rarr; crea skill project-scoped activa (con root_path)</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
+        <div class="msg"><span class="lbl" style="left:30%">hook SessionStart &rarr; inyecta precedencia domain (additionalContext)</span><span class="self" style="left:30%"></span></div>
         <div class="msg"><span class="lbl" style="left:20%">prompt (con project_id)</span><span class="line to-right" style="left:10%;width:20%"></span></div>
-        <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake)</span><span class="self" style="left:30%"></span></div>
+        <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake) &mdash; server-side regex/heuristica</span><span class="self" style="left:30%"></span></div>
         <div class="msg">
           <span class="lbl" style="left:40%">intent + project_id</span>
           <span class="line to-right" style="left:30%;width:20%"></span>
@@ -61,20 +75,20 @@
           <span class="decision-box">
             <span class="decision-title">&#9670; Decision Engine</span>
             <span class="decision-line">trivial / simple / moderado / complejo</span>
-            <span class="decision-line">→ solo / express / lite / full</span>
+            <span class="decision-line">&rarr; <strong>solo server-side</strong> / <strong>cliente LLM</strong></span>
           </span>
         </div>
 
         <div class="msg">
-          <span class="lbl" style="left:34%">si <strong>trivial+LLM</strong> → ModeSolo (server-side)</span>
+          <span class="lbl" style="left:34%">si <strong>trivial</strong> &rarr; ModeSolo (server-side, sin LLM)</span>
           <span class="self" style="left:30%"></span>
         </div>
         <div class="msg">
-          <span class="lbl" style="left:40%">si <strong>simple/mod/compl</strong> → plan + FlowRunContext al IDE</span>
+          <span class="lbl" style="left:40%">si <strong>simple/mod/compl</strong> &rarr; plan + FlowRunContext al cliente</span>
           <span class="line to-right" style="left:30%;width:20%"></span>
         </div>
 
-        <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto</span><span class="line to-right" style="left:50%;width:40%"></span></div>
+        <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto (tools MCP)</span><span class="line to-right" style="left:50%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:70%">ok</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
 
         {% with p=pmap.explore %}<div class="msg">{% include "_sdd_phase.html" with p=p step=1 tag="lite" %}</div>{% endwith %}
@@ -92,7 +106,7 @@
         {% with p=pmap.tasks %}<div class="msg">{% include "_sdd_phase.html" with p=p step=5 %}</div>{% endwith %}
         <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
 
-        <div class="loop"><span class="tag">&#8635; loop &middot; hasta que los tests pasen</span>
+        <div class="loop"><span class="tag">&#8635; loop &middot; subagentes paralelos nativos del cliente &middot; hasta que los tests pasen</span>
           <div class="exp-band" style="top:6px;bottom:46px"></div>
           <span class="exp-lbl">nucleo express / lite</span>
           {% with p=pmap.apply %}<div class="msg">{% include "_sdd_phase.html" with p=p step=6 tag="lite/exp" %}</div>{% endwith %}

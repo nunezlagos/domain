@@ -29,6 +29,14 @@ services:
       # Passphrase de cifrado at-rest de API keys (pgcrypto). DEBE ser identica a
       # la de domain-mcp; el admin descifra key_ciphertext para mostrar la key.
       DOMAIN_FIELD_ENC_KEY: ${DOMAIN_FIELD_ENC_KEY}
+      # HU-49.1: provider LLM del chat IA (default: minimax).
+      LLM_PROVIDER: ${LLM_PROVIDER:-minimax}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
+      MINIMAX_REGION: ${MINIMAX_REGION:-international}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
     networks:
       - domain_internal
     expose:

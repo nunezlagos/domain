@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Chat IA — total-domain{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/chat.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="chat-shell" id="chat-shell">
+  <aside class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <button type="button" id="btn-new-conversation" title="Nueva conversacion">+ Nueva</button>
+    </div>
+    <div class="chat-search">
+      <input
+        type="search"
+        id="chat-search-input"
+        placeholder="Buscar conversaciones..."
+        autocomplete="off">
+    </div>
+    <div class="chat-list" id="chat-list">
+      <div class="chat-list-empty">Cargando conversaciones...</div>
+    </div>
+  </aside>
+
+  <main class="chat-main">
+    <div class="chat-header">
+      <button type="button" id="btn-back-mobile" class="btn-icon" title="Volver" aria-label="Volver a la lista">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <span id="chat-header-title">Chat IA</span>
+      <span class="badge" id="chat-header-badge" style="display:none"></span>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-empty" id="chat-empty">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <div class="title">Asistente IA de total-domain</div>
+        <div class="subtitle">Preguntame sobre agentes, skills, flows, prompts, proyectos y uso del panel.</div>
+        <button type="button" id="btn-empty-new" class="chat-input-action" style="padding:8px 16px;background:var(--primary);color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">
+          Empezar una conversacion
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-new-badge" id="chat-new-badge" style="display:none">
+      <button type="button" id="btn-scroll-down">Nuevo mensaje ↓</button>
+    </div>
+
+    <form class="chat-input" id="chat-form" style="display:none">
+      <textarea
+        id="chat-input"
+        placeholder="Escribi tu pregunta y presiona Enter (Shift+Enter para nueva linea)"
+        rows="1"
+        maxlength="4000"
+        autocomplete="off"></textarea>
+      <button type="submit" id="btn-send">Enviar</button>
+    </form>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/marked.min.js' %}"></script>
+  <script src="{% static 'js/chat.js' %}"></script>
+{% endblock %}

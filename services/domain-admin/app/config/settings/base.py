@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "maintainers.projectpolicies",  # mantenedor de politicas por proyecto
     "maintainers.platformpolicies",  # mantenedor de politicas de plataforma
     "maintainers.usage",            # dashboard de uso (captured_prompts KPIs)
+    "chat",                          # HU-49.2: chat IA estilo NotebookLM
 ]
 
 MIDDLEWARE = [

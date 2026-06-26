@@ -35,6 +35,8 @@ urlpatterns = [
     path("politicas-plataforma/", include("maintainers.platformpolicies.urls")),
 
     path("uso/", include("maintainers.usage.urls")),
+
+    path("chat/", include("chat.urls")),
 ]
 
 

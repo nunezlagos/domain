@@ -30,7 +30,7 @@ from .models import RagContext, Source
 
 log = logging.getLogger(__name__)
 
-MIN_SCORE = 0.7
+MIN_SCORE = 0.5
 TOP_K = 8
 
 # Tablas del dominio que se incluyen en el RAG. Cada entry: (table,

@@ -77,6 +77,33 @@ class SkillViews(MaintainerViews):
             "skill_versions": services.get_skill_versions(instance),
         }
 
+    def do_create(self, form):
+        # Mapea el ChoiceField "project" -> project_id y pasa root_path; el
+        # payload genérico no sirve porque create_skill espera project_id.
+        cd = form.cleaned_data
+        return services.create_skill(
+            slug=cd["slug"], name=cd["name"], skill_type=cd["skill_type"],
+            description=cd.get("description", ""), content=cd.get("content", ""),
+            timeout_seconds=cd["timeout_seconds"],
+            idempotent=cd.get("idempotent", False),
+            has_side_effects=cd.get("has_side_effects", False),
+            tags=cd.get("tags", []),
+            project_id=(cd.get("project") or None),
+            root_path=(cd.get("root_path") or None),
+        )
+
+    def do_update(self, instance, form):
+        cd = form.cleaned_data
+        return services.update_skill(
+            instance, slug=cd["slug"], name=cd["name"], skill_type=cd["skill_type"],
+            description=cd.get("description", ""), content=cd.get("content", ""),
+            timeout_seconds=cd["timeout_seconds"],
+            idempotent=cd.get("idempotent", False),
+            has_side_effects=cd.get("has_side_effects", False),
+            tags=cd.get("tags", []),
+            root_path=(cd.get("root_path") or None),
+        )
+
 
 
 

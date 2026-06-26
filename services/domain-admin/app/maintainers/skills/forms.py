@@ -9,6 +9,7 @@ de tags, choices de skill_type— queda aqui.
 from django import forms
 
 from core.forms import InstanceAwareMixin
+from maintainers.projects.models import Project
 
 from .models import Skill
 
@@ -17,11 +18,25 @@ class SkillForm(InstanceAwareMixin, forms.Form):
     """Form para crear/editar skills.
 
     Usa forms.Form (no ModelForm) porque el modelo es managed=False.
-    El slug es unico dentro de su scope (project_id); en edicion se excluye el
-    propio registro de la validacion de unicidad. El scope (project_id) no se
-    edita desde el admin.
+    El slug es unico dentro de su scope (project_id). El scope se elige al
+    crear (Global o un proyecto); en edicion no cambia. root_path acota la
+    skill a un subpath del repo (monorepo): vacio = todo el proyecto.
     """
 
+    project = forms.ChoiceField(
+        label="Scope",
+        required=False,
+        choices=[],  # se completa en __init__ (Global + proyectos)
+        widget=forms.Select(attrs={"class": "form-control form-select"}),
+        help_text="Global (toda la org) o un proyecto especifico.",
+    )
+    root_path = forms.CharField(
+        label="Root path (monorepo)",
+        required=False,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}),
+        help_text="Subpath al que aplica en un monorepo (ej. services/api). Vacio = todo el proyecto.",
+    )
     slug = forms.SlugField(
         label="Slug",
         max_length=100,
@@ -78,23 +93,34 @@ class SkillForm(InstanceAwareMixin, forms.Form):
     def __init__(self, *args, instance: Skill | None = None, **kwargs):
 
         super().__init__(*args, instance=instance, **kwargs)
-        if instance is not None and not self.is_bound:
-            self.fields["slug"].initial = instance.slug
-            self.fields["name"].initial = instance.name
-            self.fields["skill_type"].initial = instance.skill_type
-            self.fields["description"].initial = instance.description
-            self.fields["content"].initial = instance.content
-            self.fields["timeout_seconds"].initial = instance.timeout_seconds
-            self.fields["tags"].initial = ", ".join(instance.tags or [])
-            self.fields["idempotent"].initial = instance.idempotent
-            self.fields["has_side_effects"].initial = instance.has_side_effects
+        self.fields["project"].choices = [("", "— Global (toda la org) —")] + [
+            (str(p.pk), f"{p.name} ({p.slug})")
+            for p in Project.objects.filter(deleted_at__isnull=True).order_by("name")
+        ]
+        if instance is not None:
+            # El scope no se cambia en edicion: se muestra fijo.
+            self.fields["project"].disabled = True
+            if not self.is_bound:
+                self.fields["project"].initial = str(instance.project_id) if instance.project_id else ""
+                self.fields["root_path"].initial = instance.root_path or ""
+                self.fields["slug"].initial = instance.slug
+                self.fields["name"].initial = instance.name
+                self.fields["skill_type"].initial = instance.skill_type
+                self.fields["description"].initial = instance.description
+                self.fields["content"].initial = instance.content
+                self.fields["timeout_seconds"].initial = instance.timeout_seconds
+                self.fields["tags"].initial = ", ".join(instance.tags or [])
+                self.fields["idempotent"].initial = instance.idempotent
+                self.fields["has_side_effects"].initial = instance.has_side_effects
 
     def clean_slug(self):
         slug = self.cleaned_data["slug"].strip().lower()
 
-
-
-        project_id = self.instance.project_id if self.instance is not None else None
+        # En edicion el scope es el del registro; en alta, el elegido en el form.
+        if self.instance is not None:
+            project_id = self.instance.project_id
+        else:
+            project_id = self.data.get("project") or None
         qs = Skill.objects.filter(deleted_at__isnull=True, slug=slug)
         if project_id in (None, ""):
             qs = qs.filter(project_id__isnull=True)

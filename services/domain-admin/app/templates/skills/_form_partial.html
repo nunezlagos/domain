@@ -9,6 +9,22 @@ los campos y el label del submit.
 {% block submit_label %}{% if mode == "create" %}Crear skill{% else %}Guardar cambios{% endif %}{% endblock %}
 
 {% block fields %}
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.project.id_for_label }}">Scope</label>
+      {{ form.project }}
+      {% if form.project.help_text %}<div class="form-help">{{ form.project.help_text }}</div>{% endif %}
+      {% if form.project.errors %}<div class="form-help text-danger">{{ form.project.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.root_path.id_for_label }}">Root path (monorepo)</label>
+      {{ form.root_path }}
+      {% if form.root_path.help_text %}<div class="form-help">{{ form.root_path.help_text }}</div>{% endif %}
+      {% if form.root_path.errors %}<div class="form-help text-danger">{{ form.root_path.errors|join:", " }}</div>{% endif %}
+    </div>
+  </div>
+
   <div class="form-group">
     <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
     {{ form.name }}

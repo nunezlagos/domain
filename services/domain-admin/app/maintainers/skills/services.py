@@ -142,6 +142,7 @@ def create_skill(
     has_side_effects: bool = False,
     tags: list[str] | None = None,
     project_id=None,
+    root_path: str | None = None,
 ) -> Skill:
     """Crea una skill nueva. slug debe ser unico dentro de su scope."""
     if _slug_taken(slug, project_id):
@@ -158,6 +159,7 @@ def create_skill(
         has_side_effects=has_side_effects,
         tags=tags or [],
         project_id=project_id or None,
+        root_path=root_path or None,
     )
 
 
@@ -174,11 +176,13 @@ def update_skill(
     idempotent: bool = False,
     has_side_effects: bool = False,
     tags: list[str] | None = None,
+    root_path: str | None = None,
 ) -> Skill:
     """Actualiza una skill. El slug sigue siendo unico dentro de su scope.
 
     El scope (project_id) no se cambia desde el admin; se valida contra el
-    project_id actual del registro, excluyendose a si mismo.
+    project_id actual del registro, excluyendose a si mismo. root_path sí se
+    puede ajustar (mueve la skill a otro subpath del monorepo).
     """
     if slug != skill.slug and _slug_taken(slug, skill.project_id, exclude_pk=skill.pk):
         raise SkillError(f"Ya existe otra skill con slug '{slug}' en este scope.")
@@ -192,6 +196,7 @@ def update_skill(
     skill.idempotent = idempotent
     skill.has_side_effects = has_side_effects
     skill.tags = tags or []
+    skill.root_path = root_path or None
     skill.save()
     return skill
 

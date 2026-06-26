@@ -41,13 +41,6 @@ func setupSeedDB(t *testing.T) (pools *db.Pools, cleanup func()) {
 	}
 }
 
-
-
-
-
-
-
-
 func TestPlatformPoliciesSeeder_PopulatesBaseline(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)
 	defer cleanup()
@@ -59,13 +52,10 @@ func TestPlatformPoliciesSeeder_PopulatesBaseline(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, results["platform_policies"].Created, 5)
 
-
 	var name string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT name FROM platform_policies WHERE slug='sdd-tdd-strict'`).Scan(&name))
 	require.Contains(t, name, "TDD")
-
-
 
 	var body string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -84,13 +74,11 @@ func TestPlatformPoliciesSeeder_PreservesUserModified(t *testing.T) {
 	_, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
 	require.NoError(t, err)
 
-
 	_, err = pools.App.Exec(ctx,
 		`UPDATE platform_policies
 		 SET body_md='CONTENIDO CUSTOM DEL USUARIO', is_user_modified=TRUE
 		 WHERE slug='sdd-tdd-strict'`)
 	require.NoError(t, err)
-
 
 	tx, err := pools.Auth.Begin(ctx)
 	require.NoError(t, err)
@@ -98,13 +86,11 @@ func TestPlatformPoliciesSeeder_PreservesUserModified(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
-
 	var body string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT body_md FROM platform_policies WHERE slug='sdd-tdd-strict'`).Scan(&body))
 	require.Equal(t, "CONTENIDO CUSTOM DEL USUARIO", body,
 		"seeder no debe pisar policy con is_user_modified=TRUE")
-
 
 	var modified bool
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -121,22 +107,21 @@ func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
 	reg.Register(&seeds.ProjectTemplatesSeeder{})
 	results, err := reg.RunAll(ctx, pools.Auth, seeds.EnvDev)
 	require.NoError(t, err)
-	require.Equal(t, 4, results["project_templates"].Created)
-
+	// Tras el refactor a meta-template, solo se siembra el built-in "default".
+	require.Equal(t, 1, results["project_templates"].Created)
 
 	var publics, defaults int
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT COUNT(*), COUNT(*) FILTER (WHERE is_default)
 		 FROM project_templates WHERE organization_id IS NULL AND is_public`).
 		Scan(&publics, &defaults))
-	require.Equal(t, 4, publics)
+	require.Equal(t, 1, publics)
 	require.Equal(t, 1, defaults)
-
 
 	_, err = pools.App.Exec(ctx,
 		`UPDATE project_templates
-		 SET name='Mi Go Custom', is_user_modified=TRUE
-		 WHERE organization_id IS NULL AND slug='go-backend'`)
+		 SET name='Mi Default Custom', is_user_modified=TRUE
+		 WHERE organization_id IS NULL AND slug='default'`)
 	require.NoError(t, err)
 
 	tx, err := pools.Auth.Begin(ctx)
@@ -144,21 +129,20 @@ func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
 	rep, err := (&seeds.ProjectTemplatesSeeder{}).Run(ctx, tx, seeds.EnvDev)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
-	require.Equal(t, 1, rep.Skipped, "go-backend editado debe skipearse")
-	require.Equal(t, 3, rep.Updated)
+	require.Equal(t, 1, rep.Skipped, "default editado debe skipearse")
+	require.Equal(t, 0, rep.Updated)
 
 	var name string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT name FROM project_templates
-		 WHERE organization_id IS NULL AND slug='go-backend'`).Scan(&name))
-	require.Equal(t, "Mi Go Custom", name, "edición del usuario preservada")
+		 WHERE organization_id IS NULL AND slug='default'`).Scan(&name))
+	require.Equal(t, "Mi Default Custom", name, "edición del usuario preservada")
 }
 
 func TestSeedSkillsForOrg_BuiltinCatalog(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)
 	defer cleanup()
 	ctx := context.Background()
-
 
 	var orgID uuid.UUID
 	err := pools.App.QueryRow(ctx,
@@ -192,13 +176,11 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, rep.Created, 8, "11 agent templates v3 (1 orchestrator + 10 workers)")
 
-
 	var slug string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT slug FROM agent_templates WHERE slug='sdd-orchestrator'`,
 	).Scan(&slug))
 	require.Equal(t, "sdd-orchestrator", slug)
-
 
 	var caps []string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -222,12 +204,10 @@ func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 	_, err = seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1)
 	require.NoError(t, err)
 
-
 	_, err = pools.App.Exec(ctx,
 		`UPDATE skills SET description = 'CUSTOM USER VERSION', is_user_modified = TRUE
 		 WHERE slug = 'summarize'`)
 	require.NoError(t, err)
-
 
 	rep, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 2)
 	require.NoError(t, err)

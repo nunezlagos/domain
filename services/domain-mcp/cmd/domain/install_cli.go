@@ -57,7 +57,7 @@ func runInstall(args []string) int {
 		mode = string(install.ModeLocal)
 	}
 
-	progress := NewInstallProgress(12, os.Stderr)
+	progress := NewInstallProgress(13, os.Stderr)
 	printBanner(os.Stderr)
 
 	progress.StartStep("Detecting state")

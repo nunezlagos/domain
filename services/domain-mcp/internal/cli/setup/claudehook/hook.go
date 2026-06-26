@@ -10,9 +10,9 @@ import (
 	"nunezlagos/domain/internal/cli/install"
 )
 
+// HasDomainHook indica si existe CUALQUIER hook domain (viejo o actual).
 func HasDomainHook(doc map[string]any) bool {
-	hooks := getSessionStart(doc)
-	for _, h := range hooks {
+	for _, h := range getSessionStart(doc) {
 		typ, _ := h["type"].(string)
 		cmd, _ := h["command"].(string)
 		if typ == "command" && strings.HasPrefix(strings.TrimSpace(cmd), "domain setup auto-detect") {
@@ -22,6 +22,21 @@ func HasDomainHook(doc map[string]any) bool {
 	return false
 }
 
+// DomainHookUpToDate indica si el hook domain existe Y tiene el comando ACTUAL
+// (con --session-context). Si está pero desactualizado → false (toca upgrade).
+func DomainHookUpToDate(doc map[string]any) bool {
+	for _, h := range getSessionStart(doc) {
+		typ, _ := h["type"].(string)
+		cmd, _ := h["command"].(string)
+		if typ == "command" && strings.TrimSpace(cmd) == domainHookCommand {
+			return true
+		}
+	}
+	return false
+}
+
+// AddDomainHook hace UPSERT: si ya hay un hook domain (viejo), reemplaza su
+// command por el actual; si no hay ninguno, lo agrega. No duplica.
 func AddDomainHook(doc map[string]any) map[string]any {
 	result := make(map[string]any, len(doc)+1)
 	for k, v := range doc {
@@ -35,13 +50,26 @@ func AddDomainHook(doc map[string]any) map[string]any {
 	}
 
 	ss, _ := hooks["SessionStart"].([]any)
-
 	newSS := make([]any, 0, len(ss)+1)
-	newSS = append(newSS, ss...)
-	newSS = append(newSS, map[string]any{
-		"type":    "command",
-		"command": domainHookCommand,
-	})
+	upgraded := false
+	for _, item := range ss {
+		h, ok := item.(map[string]any)
+		if ok {
+			typ, _ := h["type"].(string)
+			cmd, _ := h["command"].(string)
+			if typ == "command" && strings.HasPrefix(strings.TrimSpace(cmd), "domain setup auto-detect") {
+				h["command"] = domainHookCommand // upgrade in-place
+				upgraded = true
+			}
+		}
+		newSS = append(newSS, item)
+	}
+	if !upgraded {
+		newSS = append(newSS, map[string]any{
+			"type":    "command",
+			"command": domainHookCommand,
+		})
+	}
 	hooks["SessionStart"] = newSS
 
 	return result
@@ -55,9 +83,10 @@ func InstallClaudeHook(nonInteractive bool, autoAccept bool) (string, error) {
 		return "", fmt.Errorf("read settings: %w", err)
 	}
 
-	if HasDomainHook(doc) {
+	if DomainHookUpToDate(doc) {
 		return "already_installed", nil
 	}
+	wasUpgrade := HasDomainHook(doc) // existe pero desactualizado → upgrade
 
 	if nonInteractive && !autoAccept {
 		return "skipped", nil
@@ -100,5 +129,8 @@ func InstallClaudeHook(nonInteractive bool, autoAccept bool) (string, error) {
 		return "", fmt.Errorf("write settings: %w", err)
 	}
 
+	if wasUpgrade {
+		return "updated", nil
+	}
 	return "installed", nil
 }

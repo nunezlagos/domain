@@ -9,7 +9,7 @@ import (
 type State int
 
 const (
-	StateNone             State = iota
+	StateNone State = iota
 	StateClaudeMDOnly
 	StateMCPJSONOnly
 	StateOpenCodeConfigOnly
@@ -24,6 +24,35 @@ var detectionPaths = []string{
 	"AGENTS.md",
 	"CLAUDE.md",
 	"opencode.json",
+}
+
+// ruleFilePaths son los archivos/dirs de reglas de IA que un repo puede traer.
+// Su presencia es relevante para la precedencia: domain manda sobre ellos en
+// memoria/skills/SDD (ver agentprotocol.Stub).
+var ruleFilePaths = []string{
+	"AGENTS.md",
+	"CLAUDE.md",
+	"CLAUDE.local.md",
+	".claude",
+	".cursorrules",
+	".cursor",
+	".windsurf",
+	".github/copilot-instructions.md",
+	".aider.conf.yml",
+	".clinerules",
+}
+
+// DetectRuleFiles devuelve los paths (relativos a dir) de archivos de reglas
+// de IA presentes en el repo. Se usa para informar al cliente qué reglas
+// locales quedan subordinadas a domain.
+func DetectRuleFiles(dir string) []string {
+	var found []string
+	for _, p := range ruleFilePaths {
+		if _, err := os.Stat(filepath.Join(dir, p)); err == nil {
+			found = append(found, p)
+		}
+	}
+	return found
 }
 
 func Detect(path string) (State, error) {

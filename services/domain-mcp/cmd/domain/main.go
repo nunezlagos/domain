@@ -56,13 +56,9 @@ var (
 
 func main() {
 
-
-
-
 	loadEnvCascade()
 
 	if len(os.Args) < 2 {
-
 
 		if isTerminal(os.Stdin) {
 			os.Exit(runTUI(nil))
@@ -118,7 +114,6 @@ func main() {
 
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
 	case "tui":
-
 
 		os.Exit(runTUI(os.Args[2:]))
 	default:
@@ -355,7 +350,6 @@ func runServer() {
 	startBackground(ctx, cfg, pools, svc, runners, metricsReg, httpHandler, queryCacheLRU, logger)
 }
 
-
 func runHealthcheckProbe() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -428,7 +422,6 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 				reg.DBLongestQuerySeconds.Set(longestSeconds)
 			}
 
-
 			lockRows, err := app.Query(ctx, `
 				SELECT pg_locks.mode, COALESCE(pg_class.relname, 'unknown')
 				FROM pg_locks
@@ -449,7 +442,6 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 				}
 				lockRows.Close()
 			}
-
 
 			tupRows, err := app.Query(ctx, `
 				SELECT relname, n_dead_tup
@@ -563,8 +555,6 @@ func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slo
 		}
 	}
 }
-
-
 
 // runDBStatsAnalyzer corre cada 5min: slow queries → métricas + snapshot weekly.
 // Solo en el pod leader (issue-26.2 + issue-25.2).
@@ -779,7 +769,6 @@ func runRotateDBPassword(args []string) {
 		os.Exit(1)
 	}
 
-
 	fmt.Println(newPass)
 	fmt.Fprintf(os.Stderr, "rotated role=%s — update Secret Manager + rolling deploy app pods.\n", role)
 }
@@ -797,9 +786,6 @@ func runOnboard(args []string) int {
 	nonInteractive := false
 	noOpencode := false
 	email := ""
-
-
-
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -844,11 +830,7 @@ func runOnboard(args []string) int {
 		w.DomainMCPPath = mcp
 	}
 
-
 	if nonInteractive && email != "" {
-
-
-
 
 		original := w.SaveCredentials
 		w.SaveCredentials = func(c *onboard.Credentials) error {
@@ -908,17 +890,21 @@ func runAutoDetect(args []string) {
 	projectDir := "."
 	quiet := false
 	dryRun := false
+	sessionContext := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--quiet", "-q":
 			quiet = true
 		case "--dry-run":
 			dryRun = true
+		case "--session-context":
+			sessionContext = true
 		case "--help", "-h":
-			fmt.Println("Usage: domain setup auto-detect [path] [--quiet] [--dry-run]")
-			fmt.Println("  path          Project directory (default: .)")
-			fmt.Println("  --quiet, -q   Suppress non-error output")
-			fmt.Println("  --dry-run     Show what would be done without modifying files")
+			fmt.Println("Usage: domain setup auto-detect [path] [--quiet] [--dry-run] [--session-context]")
+			fmt.Println("  path               Project directory (default: .)")
+			fmt.Println("  --quiet, -q        Suppress non-error output")
+			fmt.Println("  --dry-run          Show what would be done without modifying files")
+			fmt.Println("  --session-context  Emit Claude Code SessionStart additionalContext JSON")
 			os.Exit(0)
 		default:
 			if !strings.HasPrefix(args[i], "-") {
@@ -934,6 +920,17 @@ func runAutoDetect(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Modo hook de Claude Code: aplica las actions en silencio y emite el
+	// additionalContext (precedencia domain + reglas locales detectadas). Se
+	// emite SIEMPRE — el hook quiere el contexto en cada sesión, haya o no
+	// cambios de config. No comparte salida con el wrapper de OpenCode (que
+	// llama sin este flag).
+	if sessionContext {
+		_, _ = autodetect.Apply(absDir) // best-effort: no abortar el contexto si falla
+		emitSessionContext(absDir)
+		os.Exit(0)
 	}
 
 	if dryRun {
@@ -989,6 +986,34 @@ func runAutoDetect(args []string) {
 				fmt.Printf("  generated %s (minimal opencode.json)\n", a.Path)
 			}
 		}
+	}
+}
+
+// emitSessionContext imprime el JSON que Claude Code consume como
+// additionalContext en el hook SessionStart. Recuerda el handshake domain y
+// declara la precedencia sobre las reglas locales detectadas en el repo.
+func emitSessionContext(absDir string) {
+	var b strings.Builder
+	b.WriteString("[domain] Protocolo domain ACTIVO en este repo. ")
+	b.WriteString("Primer llamado SIEMPRE: domain_session_bootstrap(cwd, git_remote, git_branch, git_head); ")
+	b.WriteString("luego domain_policy_get(slug=\"agent-protocol\") para el protocolo completo. ")
+	b.WriteString("domain tiene PRIORIDAD sobre las reglas locales del repo en: memoria persistente, skills, policies SDD y tools domain_*.")
+
+	if rules := autodetect.DetectRuleFiles(absDir); len(rules) > 0 {
+		b.WriteString(" Reglas de IA locales detectadas (SUBORDINADAS a domain en esos temas; sus reglas técnicas —estilo/stack— siguen valiendo y domain las importa a BD): ")
+		b.WriteString(strings.Join(rules, ", "))
+		b.WriteString(".")
+	}
+
+	out := map[string]any{
+		"hookSpecificOutput": map[string]any{
+			"hookEventName":     "SessionStart",
+			"additionalContext": b.String(),
+		},
+	}
+	// Si el encode falla (no debería), no imprimas nada roto: mejor vacío.
+	if data, err := json.Marshal(out); err == nil {
+		fmt.Println(string(data))
 	}
 }
 
@@ -1225,14 +1250,12 @@ func runSetup(args []string) {
 			os.Exit(1)
 		}
 
-
 		if found, err := findDomainMCPSibling(ex); err == nil {
 			mcpBinary = found
 		} else if found, lpErr := exec.LookPath("domain-mcp"); lpErr == nil {
 
 			mcpBinary = found
 		} else {
-
 
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			fmt.Fprintln(os.Stderr, "domain-mcp tampoco está en PATH. Compilalo primero:")
@@ -1306,8 +1329,6 @@ func runSetup(args []string) {
 
 	if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
 
-
-
 		fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
 		return
 	}
@@ -1322,9 +1343,6 @@ func runSetup(args []string) {
 		}
 	}
 	fmt.Println("\n" + restartHint)
-
-
-
 
 	if skipInit || cwd == "" {
 		return
@@ -1354,7 +1372,6 @@ func offerOrRunAutoInit(cwd string, autoInit bool) {
 		fmt.Println("Para hacerlo automático en el próximo setup: --auto-init")
 		return
 	}
-
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -1403,4 +1420,3 @@ func (a *analysisRunnerAdapter) RunAnalysis(ctx context.Context, in promptrouter
 		Body:           result.Body,
 	}, nil
 }
-

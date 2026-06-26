@@ -35,28 +35,47 @@ log = logging.getLogger(__name__)
 MIN_SCORE = 0.3
 TOP_K = 10
 
-# Palabras clave que activan el "general query mode" (aggregate queries).
-# Si la query matchea alguno de estos patrones, devolvemos conteos y top
-# items por tabla en vez del scoring normal.
-_GENERAL_QUERY_PATTERNS = (
-    "cuantos", "cuantas", "cuanto", "cuanta",
-    "lista", "listame", "listar", "listado",
-    "todos", "todas",
-    "total", "totales",
-    "que hay", "que tenes", "que tienes",
-    "dame un resumen", "resumen", "describe",
-    "explicame", "explica",
-    "mostrame", "mostrar", "mostrarme",
-    "informacion general", "overview",
-)
+# Patrones que activan el "general query mode" (aggregate queries).
+# Estructura: (substring_a_buscar, requiere_target_table)
+# Si requiere_target=True, solo activa si la query menciona una tabla
+# especifica. Esto evita falsos positivos tipo "que proyectos usan python"
+# que NO es general sino especifica.
+_GENERAL_QUERY_PATTERNS: list[tuple[str, bool]] = [
+    ("cuantos", False), ("cuantas", False), ("cuanto", False), ("cuanta", False),
+    ("lista", False), ("listame", False), ("listar", False), ("listado", False),
+    ("total", False), ("totales", False),
+    ("que hay", True), ("que tenes", True), ("que tienes", True), ("que teneis", True),
+    ("tienes", True), ("tenes", True),
+    ("hay", True),
+    ("dame un resumen", False), ("resumen", False), ("describe", False),
+    ("explicame", False), ("explica", False),
+    ("mostrame", False), ("mostrar", False), ("mostrarme", False),
+    ("informacion general", False), ("overview", False),
+    ("podrias buscar", True), ("puedes buscar", True), ("poodrias buscar", True),
+    ("podrias", True),
+    ("cuales son", True), ("cuáles son", True), ("cual es", True), ("cuál es", True),
+    ("existen", True), ("existe", True), ("hay en", True),
+]
 
 
 def _is_general_query(question: str) -> bool:
-    """Detecta si la pregunta es muy abstracta (count/list/resumen)."""
+    """Detecta si la pregunta es muy abstracta (count/list/resumen).
+
+    Algunos patrones requieren que la query mencione una tabla especifica
+    (ej: "que proyectos tienes" requiere target=project para activar).
+    Esto evita falsos positivos en preguntas concretas como
+    "que proyectos usan python" que NO son general.
+    """
     q = question.lower().strip()
     if len(q) < 5:
         return False
-    return any(p in q for p in _GENERAL_QUERY_PATTERNS)
+    target = _detect_target_table(q)
+    for pattern, require_target in _GENERAL_QUERY_PATTERNS:
+        if pattern in q:
+            if require_target and target is None:
+                continue
+            return True
+    return False
 
 
 def _detect_target_table(question: str) -> str | None:

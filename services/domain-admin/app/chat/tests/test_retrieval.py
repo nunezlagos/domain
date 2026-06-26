@@ -196,10 +196,16 @@ def test_is_general_query_detecta_patrones():
     assert _is_general_query("lista todos los agentes")
     assert _is_general_query("dame un resumen del sistema")
     assert _is_general_query("describe el sistema")
+    assert _is_general_query("que proyectos tienes")
+    assert _is_general_query("que agentes hay")
+    assert _is_general_query("que skills existen")
+    assert _is_general_query("cuales son los proyectos")
+    assert _is_general_query("podrias buscar dentro de tus proyectos que habilidades tienen")
     assert not _is_general_query("que hace el bot de soporte")
     assert not _is_general_query("que proyectos usan python")
     assert not _is_general_query("hola")
     assert not _is_general_query("a")
+    assert not _is_general_query("que pasa")
 
 
 def test_detect_target_table_encontrla_tabla():

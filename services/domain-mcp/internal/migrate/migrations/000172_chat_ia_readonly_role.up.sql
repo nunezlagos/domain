@@ -9,52 +9,57 @@
 -- ============================================================
 -- 1) Crear rol readonly para el chat
 -- ============================================================
-DO $$
-BEGIN
+DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'domain_chat_reader') THEN
         CREATE ROLE domain_chat_reader NOLOGIN;
     END IF;
-END
-$$;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO domain_chat_reader;
 
 -- ============================================================
 -- 2) Permisos: SELECT en todas las tablas del dominio (read-only)
+--    GRANTs en SQL plano (no DO block) para evitar syntax issues con
+--    quoting en plpgsql.
 -- ============================================================
-GRANT USAGE ON SCHEMA public TO domain_chat_reader;
-
--- Solo lectura sobre las tablas del dominio (agents, skills, flows, etc).
--- No incluye las tablas de chat_* (esas tienen INSERT para el bot).
-DO $$
-DECLARE
-    t TEXT;
-    domain_tables TEXT[] := ARRAY[
-        'agents', 'agent_templates', 'agent_versions', 'agent_runs',
-        'skills', 'skill_versions', 'skill_executions',
-        'flows', 'flow_versions', 'flow_runs', 'flow_run_steps',
-        'prompts',
-        'projects', 'project_templates', 'project_repositories', 'project_skills',
-        'project_tickets', 'project_ticket_comments', 'project_policies',
-        'users', 'roles', 'user_roles',
-        'clients', 'client_contacts',
-        'issues',
-        'knowledge_docs', 'knowledge_chunks', 'knowledge_observations',
-        'mcp_servers', 'mcp_server_tools', 'mcp_providers',
-        'crons', 'cron_executions',
-        'webhooks', 'webhook_deliveries', 'webhook_outbound_subscriptions',
-        'platform_policies', 'platform_policy_versions',
-        'prompt_captured', 'usage_counters', 'usage_alerts',
-        'sdd_proposals', 'sdd_designs', 'sdd_requirements',
-        'organizations', 'org_members',
-    ];
-BEGIN
-    FOREACH t IN ARRAY domain_tables
-    LOOP
-        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = t) THEN
-            EXECUTE format('GRANT SELECT ON %I TO domain_chat_reader', t);
-        END IF;
-    END LOOP;
-END
-$$;
+GRANT SELECT ON agents TO domain_chat_reader;
+GRANT SELECT ON agent_templates TO domain_chat_reader;
+GRANT SELECT ON agent_versions TO domain_chat_reader;
+GRANT SELECT ON agent_runs TO domain_chat_reader;
+GRANT SELECT ON skills TO domain_chat_reader;
+GRANT SELECT ON skill_versions TO domain_chat_reader;
+GRANT SELECT ON skill_executions TO domain_chat_reader;
+GRANT SELECT ON flows TO domain_chat_reader;
+GRANT SELECT ON flow_versions TO domain_chat_reader;
+GRANT SELECT ON flow_runs TO domain_chat_reader;
+GRANT SELECT ON flow_run_steps TO domain_chat_reader;
+GRANT SELECT ON prompts TO domain_chat_reader;
+GRANT SELECT ON projects TO domain_chat_reader;
+GRANT SELECT ON project_templates TO domain_chat_reader;
+GRANT SELECT ON project_repositories TO domain_chat_reader;
+GRANT SELECT ON project_skills TO domain_chat_reader;
+GRANT SELECT ON project_tickets TO domain_chat_reader;
+GRANT SELECT ON project_ticket_comments TO domain_chat_reader;
+GRANT SELECT ON project_policies TO domain_chat_reader;
+GRANT SELECT ON users TO domain_chat_reader;
+GRANT SELECT ON roles TO domain_chat_reader;
+GRANT SELECT ON user_roles TO domain_chat_reader;
+GRANT SELECT ON clients TO domain_chat_reader;
+GRANT SELECT ON issues TO domain_chat_reader;
+GRANT SELECT ON knowledge_docs TO domain_chat_reader;
+GRANT SELECT ON knowledge_chunks TO domain_chat_reader;
+GRANT SELECT ON knowledge_observations TO domain_chat_reader;
+GRANT SELECT ON mcp_servers TO domain_chat_reader;
+GRANT SELECT ON mcp_server_tools TO domain_chat_reader;
+GRANT SELECT ON mcp_providers TO domain_chat_reader;
+GRANT SELECT ON crons TO domain_chat_reader;
+GRANT SELECT ON cron_executions TO domain_chat_reader;
+GRANT SELECT ON webhooks TO domain_chat_reader;
+GRANT SELECT ON platform_policies TO domain_chat_reader;
+GRANT SELECT ON platform_policy_versions TO domain_chat_reader;
+GRANT SELECT ON prompt_captured TO domain_chat_reader;
+GRANT SELECT ON usage_counters TO domain_chat_reader;
+GRANT SELECT ON usage_alerts TO domain_chat_reader;
 
 -- ============================================================
 -- 3) Permisos: INSERT/UPDATE/DELETE en tablas de chat
@@ -67,5 +72,6 @@ GRANT USAGE, SELECT ON SEQUENCE chat_messages_id_seq TO domain_chat_reader;
 -- ============================================================
 -- 4) Grants al app_admin (sigue teniendo control total para mantenedores)
 -- ============================================================
-GRANT ALL ON chat_conversations, chat_messages TO app_admin;
+GRANT ALL ON chat_conversations TO app_admin;
+GRANT ALL ON chat_messages TO app_admin;
 GRANT USAGE, SELECT ON SEQUENCE chat_messages_id_seq TO app_admin;

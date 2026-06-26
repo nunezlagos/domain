@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 
 from django.db import models
+from django.utils import timezone
 
 
 class Conversation(models.Model):
@@ -28,8 +29,8 @@ class Conversation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     user_email = models.TextField()
     title = models.TextField(default="")
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -80,7 +81,7 @@ class Message(models.Model):
     model = models.TextField(default="")
     duration_ms = models.IntegerField(default=0)
     error_message = models.TextField(null=True, blank=True)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "chat_messages"
@@ -106,7 +107,7 @@ class DocumentEmbedding(models.Model):
     chunk_text = models.TextField()
     chunk_index = models.IntegerField(default=0)
     model = models.TextField(default="")
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=timezone.now)
     valid_until = models.DateTimeField(null=True, blank=True)
 
     class Meta:

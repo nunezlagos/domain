@@ -390,6 +390,85 @@ func skills(args []string) int {
 	if args[0] == "suggest" {
 		return skillSuggest(gf, c, args[1:])
 	}
+	if args[0] == "ab-test" {
+		return skillABTest(gf, c, args[1:])
+	}
+	return 2
+}
+
+// skillABTest maneja `domain skill ab-test <start|results|stop>` (HU-52.4).
+//
+//   - start:   crea+arranca un experimento A/B (POST /skill-ab-tests).
+//   - results: muestra los agregados de ambas variantes (GET /skill-ab-tests/<id>/results).
+//   - stop:    cancela el experimento (POST /skill-ab-tests/<id>/stop).
+func skillABTest(gf *globalFlags, c *clicli.Client, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: domain skill ab-test <start|results|stop>")
+		return 2
+	}
+	render := func(data any) int {
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
+		return 0
+	}
+	switch args[0] {
+	case "start":
+		fs := flag.NewFlagSet("ab-test start", flag.ContinueOnError)
+		slug := fs.String("slug", "", "skill slug")
+		versionA := fs.Int("version-a", 0, "version A (skill_versions)")
+		versionB := fs.Int("version-b", 0, "version B (skill_versions)")
+		split := fs.Float64("traffic-split-a", 0.50, "fraccion de trafico a la variante A (0..1)")
+		minInv := fs.Int("min-invocations", 100, "minimo de invocaciones por variante")
+		autoApply := fs.Bool("auto-apply", false, "pinear la version ganadora automaticamente")
+		_ = fs.Parse(args[1:])
+		if *slug == "" || *versionA == 0 || *versionB == 0 {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test start --slug=X --version-a=N --version-b=M [--min-invocations=100]")
+			return 2
+		}
+		body := map[string]any{
+			"skill_slug":        *slug,
+			"version_a":         *versionA,
+			"version_b":         *versionB,
+			"traffic_split_a":   *split,
+			"min_invocations":   *minInv,
+			"auto_apply_winner": *autoApply,
+			"start_now":         true,
+		}
+		data, err := c.Do("POST", "/skill-ab-tests", body, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "results":
+		fs := flag.NewFlagSet("ab-test results", flag.ContinueOnError)
+		id := fs.String("id", "", "ab test id")
+		_ = fs.Parse(args[1:])
+		if *id == "" {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test results --id=...")
+			return 2
+		}
+		data, err := c.Do("GET", "/skill-ab-tests/"+*id+"/results", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "stop":
+		fs := flag.NewFlagSet("ab-test stop", flag.ContinueOnError)
+		id := fs.String("id", "", "ab test id")
+		_ = fs.Parse(args[1:])
+		if *id == "" {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test stop --id=...")
+			return 2
+		}
+		data, err := c.Do("POST", "/skill-ab-tests/"+*id+"/stop", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	}
+	fmt.Fprintf(os.Stderr, "accion desconocida: ab-test %s\n", args[0])
 	return 2
 }
 

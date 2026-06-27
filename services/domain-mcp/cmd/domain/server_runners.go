@@ -92,6 +92,24 @@ func buildRunners(
 			go aggregator.Start(leaderCtx)
 		}
 
+		if cfg.SkillMetricsEnabled {
+			smAgg := &systemcron.SkillMetricsAggregator{
+				Aggregator: s.SkillMetricsAggregator,
+				Tick:       time.Duration(cfg.SkillMetricsTickHours) * time.Hour,
+				Logger:     logger,
+			}
+			go smAgg.Start(leaderCtx)
+
+			smRollup := &systemcron.SkillMetricsRollup{
+				Aggregator:      s.SkillMetricsAggregator,
+				Tick:            time.Duration(cfg.SkillMetricsRollupTickHours) * time.Hour,
+				DailyRetention:  cfg.SkillMetricsDailyRetention,
+				WeeklyRetention: cfg.SkillMetricsWeeklyRetention,
+				Logger:          logger,
+			}
+			go smRollup.Start(leaderCtx)
+		}
+
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
 				Pool:    pools.App,

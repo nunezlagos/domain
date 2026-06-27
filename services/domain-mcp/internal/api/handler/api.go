@@ -18,6 +18,7 @@ import (
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	skillabtestsvc "nunezlagos/domain/internal/service/skill_ab_test"
 	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
 	skillsuggestionssvc "nunezlagos/domain/internal/service/skill_suggestions"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
@@ -47,6 +48,9 @@ type API struct {
 	SkillSuggestions *skillsuggestionssvc.Service
 	// SkillJudge — el aggregator del judge, para el run manual del batch.
 	SkillJudge *skillsuggestionssvc.Aggregator
+
+	// SkillABTest — HU-52.4: A/B testing de prompts (create/results/stop).
+	SkillABTest *skillabtestsvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -79,6 +83,13 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/approve", a.skillSuggestionsApprove)
 	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/reject", a.skillSuggestionsReject)
 	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/apply", a.skillSuggestionsApply)
+
+	// HU-52.4 — A/B testing de prompts. start (create+start), results, stop.
+	// El opt-in se deriva de la existencia de un test 'running' para el slug
+	// (sin columna ab_test en skills). created_by sale del Principal.
+	mux.HandleFunc("POST /api/v1/skill-ab-tests", a.skillABTestCreate)
+	mux.HandleFunc("GET /api/v1/skill-ab-tests/{id}/results", a.skillABTestResults)
+	mux.HandleFunc("POST /api/v1/skill-ab-tests/{id}/stop", a.skillABTestStop)
 
 	return mux
 }

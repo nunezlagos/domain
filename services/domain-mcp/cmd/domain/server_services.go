@@ -70,6 +70,7 @@ import (
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	"nunezlagos/domain/internal/service/skill/skilldb"
+	skillabtestsvc "nunezlagos/domain/internal/service/skill_ab_test"
 	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
 	skillsuggestionssvc "nunezlagos/domain/internal/service/skill_suggestions"
 	specsvc "nunezlagos/domain/internal/service/spec"
@@ -154,6 +155,8 @@ type serverServices struct {
 	SkillMetricsAggregator *skillmetricssvc.Aggregator
 	SkillSuggestionsSvc    *skillsuggestionssvc.Service
 	SkillJudgeAggregator   *skillsuggestionssvc.Aggregator
+	SkillABTestService     *skillabtestsvc.Service
+	SkillABTestRouter      *skillabtestsvc.Router
 }
 
 // buildServices construye los ~40 servicios del servidor a partir de los pools
@@ -185,6 +188,16 @@ func buildServices(
 		smRepo := skillmetricssvc.NewPgRepository(pools.App)
 		s.SkillMetricsService = skillmetricssvc.NewService(smRepo)
 		s.SkillMetricsAggregator = skillmetricssvc.NewAggregator(smRepo)
+	}
+	// HU-52.4 — A/B testing de prompts. Service (ciclo de vida + analyzer) y
+	// Router (enrutamiento determinista request-time) comparten el Repository.
+	// El Router loguea la asignacion de variante en audit (slug, version, user_id),
+	// NUNCA el input. Single-tenant: el pin del ganador usa skills.pinned_version,
+	// JAMAS organization_id.
+	{
+		abRepo := skillabtestsvc.NewPgRepository(pools.App)
+		s.SkillABTestService = skillabtestsvc.NewService(abRepo)
+		s.SkillABTestRouter = skillabtestsvc.NewRouter(abRepo, s.Recorder, logger)
 	}
 	s.ProjectRepoService = projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	s.ProjectPolicyService = projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))

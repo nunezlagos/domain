@@ -57,7 +57,7 @@ func runInstall(args []string) int {
 		mode = string(install.ModeLocal)
 	}
 
-	progress := NewInstallProgress(14, os.Stderr)
+	progress := NewInstallProgress(15, os.Stderr)
 	printBanner(os.Stderr)
 
 	progress.StartStep("Detecting state")
@@ -149,6 +149,16 @@ func runInstall(args []string) int {
 		progress.EndStep(StepWarning, err.Error())
 	} else {
 		progress.EndStep(StepOK, envPath)
+	}
+
+	progress.StartStep("Feature flags (opt-in)")
+	switch detail, err := persistFeatureFlags(flags.features); {
+	case err != nil:
+		progress.EndStep(StepWarning, err.Error())
+	case detail == "":
+		progress.EndStep(StepSkipped, "ninguna feature activada (defaults: off)")
+	default:
+		progress.EndStep(StepOK, "habilitadas: "+detail)
 	}
 
 	progress.StartStep("Starting server (systemd)")
@@ -381,6 +391,79 @@ type installFlags struct {
 	primaryMemory  bool // opt-in: detecta engram/mem0 y los desactiva
 	pmReactivate   bool // restaurar desde backup en vez de disable
 	pmYes          bool // skip confirm en --primary-memory
+
+	// features son los flags opt-in de crons de features (default FALSE).
+	// Solo se persisten los que el usuario activa explícitamente (--enable-X
+	// o prompt interactivo). Ver featureFlags / persistFeatureFlags.
+	features map[string]bool
+}
+
+// featureFlagDef describe un flag opt-in de feature: la env var que lo
+// activa y una descripción human-readable para help/prompt.
+type featureFlagDef struct {
+	flag string // --enable-...
+	env  string // DOMAIN_..._ENABLED
+	desc string
+}
+
+// featureFlags es el catálogo de features opt-in. Defaults SEGUROS (false):
+// el instalador solo persiste DOMAIN_*_ENABLED=true para los que el usuario
+// activa. Sin activación, config.go ya defaultea a false y el cron no corre.
+var featureFlags = []featureFlagDef{
+	{"--enable-edge-inference", "DOMAIN_EDGE_INFERENCE_ENABLED", "infiere edges de relación entre observaciones (LLM)"},
+	{"--enable-feedback-aggregator", "DOMAIN_FEEDBACK_AGGREGATOR_ENABLED", "agrega feedback de uso de skills"},
+	{"--enable-skill-metrics", "DOMAIN_SKILL_METRICS_ENABLED", "rollup de métricas de skills (hourly/daily/weekly)"},
+	{"--enable-skill-judge", "DOMAIN_SKILL_JUDGE_ENABLED", "evalúa calidad de skills semanalmente (LLM)"},
+	{"--enable-ab-test", "DOMAIN_AB_TEST_ENABLED", "analiza experimentos A/B de skills"},
+}
+
+// lookupFeatureFlag busca en el catálogo featureFlags el def cuyo flag
+// coincide con arg (ej. "--enable-skill-judge"). Devuelve (def, true) si
+// matchea; (zero, false) si no es un flag de feature conocido.
+func lookupFeatureFlag(arg string) (featureFlagDef, bool) {
+	for _, def := range featureFlags {
+		if def.flag == arg {
+			return def, true
+		}
+	}
+	return featureFlagDef{}, false
+}
+
+// persistFeatureFlags escribe DOMAIN_*_ENABLED=true en ~/.config/domain/env
+// (el mismo env global idempotente que usa writeGlobalMCPEnv) para cada
+// feature que el usuario activó explícitamente. Defaults SEGUROS: las
+// features NO activadas no se escriben (config.go ya defaultea a false), por
+// lo que una reinstalación sin --enable-X PRESERVA lo previamente persistido
+// (upsertEnvFile no borra claves) y nunca activa nada por sorpresa.
+func persistFeatureFlags(features map[string]bool) (string, error) {
+	if len(features) == 0 {
+		return "", nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".config", "domain")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "env")
+	// Orden determinista (recorremos el catálogo, no el map) para escritura
+	// estable y reproducible.
+	var written []string
+	for _, def := range featureFlags {
+		if !features[def.env] {
+			continue
+		}
+		if err := upsertEnvFile(path, def.env, "true"); err != nil {
+			return "", err
+		}
+		written = append(written, def.env)
+	}
+	if len(written) == 0 {
+		return "", nil
+	}
+	return strings.Join(written, ", "), nil
 }
 
 func parseInstallFlags(args []string) (installFlags, error) {
@@ -389,9 +472,15 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		// Por default registramos el MCP en AMBOS asistentes (idempotente:
 		// si ya está, no duplica). --agents <csv> sobreescribe; --no-opencode
 		// / --no-claude-code quitan uno puntualmente.
-		agents: []string{"opencode", "claude-code"},
+		agents:   []string{"opencode", "claude-code"},
+		features: map[string]bool{},
 	}
 	for i := 0; i < len(args); i++ {
+		// Flags opt-in de features: --enable-X → marca la env DOMAIN_X_ENABLED.
+		if def, ok := lookupFeatureFlag(args[i]); ok {
+			f.features[def.env] = true
+			continue
+		}
 		switch args[i] {
 		case "--mode":
 			if i+1 >= len(args) {
@@ -1228,6 +1317,11 @@ func printInstallHelp() {
 	fmt.Println("                                  válido (faltan .env.example / docker-compose.yml), aborta con mensaje claro.")
 	fmt.Println("  --dsn URL                       Database URL (cloud mode, non-interactive)")
 	fmt.Println("  --help, -h                      Show this help")
+	fmt.Println()
+	fmt.Println("Feature flags opt-in (default: OFF; persisten DOMAIN_*_ENABLED=true en ~/.config/domain/env):")
+	for _, def := range featureFlags {
+		fmt.Printf("  %-30s %s\n", def.flag, def.desc)
+	}
 }
 
 func printUpdateHelp() {

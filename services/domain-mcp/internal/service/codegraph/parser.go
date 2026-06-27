@@ -1,5 +1,5 @@
 // Package codegraph — fase 2: grafo de CÓDIGO del repo (Go-only v1). Las tablas
-// code_nodes / code_edges / code_index_files (mig 000176) materializan el grafo;
+// code_nodes / code_edges / code_index_files (mig 000178) materializan el grafo;
 // el aislamiento es single-tenant por project_id.
 //
 // Este archivo (parser.go) es la capa de PARSING PURA: dado el path y los bytes
@@ -20,7 +20,7 @@ import (
 	"strings"
 )
 
-// Kinds de nodo soportados. Replican el CHECK de code_nodes.kind (mig 000176).
+// Kinds de nodo soportados. Replican el CHECK de code_nodes.kind (mig 000178).
 const (
 	KindFile      = "file"
 	KindPackage   = "package"

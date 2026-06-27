@@ -1,6 +1,6 @@
 -- ===========================================================================
 -- Code graph — grafo de CÓDIGO del repo (Go-only v1), tablas code_nodes /
--- code_edges / code_index_files (mig 000176). Aislamiento por project_id
+-- code_edges / code_index_files (mig 000178). Aislamiento por project_id
 -- (single-tenant). El binario domain-mcp parsea el AST client-side y materializa
 -- el grafo aquí; code_index_files da incrementalidad por content_hash.
 -- ===========================================================================
@@ -13,7 +13,7 @@
 -- Upsert idempotente por (project_id, qualified_name, kind) sobre nodos activos.
 -- Si el nodo existe (no borrado) actualiza ubicación/firma/doc/hash y reabre por
 -- si estaba borrado (deleted_at = NULL). El conflict target replica el predicado
--- del índice único parcial de la mig 000176.
+-- del índice único parcial de la mig 000178.
 INSERT INTO code_nodes
    (project_id, kind, name, qualified_name, file_path, line_start, line_end,
     signature, doc, language, content_hash, metadata)
@@ -216,7 +216,7 @@ WHERE project_id = sqlc.arg('project_id')
   AND file_path = sqlc.arg('file_path');
 
 -- ---------------------------------------------------------------------------
--- Observation <-> Code links (cruce memoria/código, mig 000177)
+-- Observation <-> Code links (cruce memoria/código, mig 000179)
 -- ---------------------------------------------------------------------------
 
 -- name: GetCodeNodeProject :one

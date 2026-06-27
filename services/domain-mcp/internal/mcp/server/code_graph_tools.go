@@ -1,5 +1,5 @@
 // fase 2d — code graph: tools MCP del grafo de CÓDIGO (tablas code_nodes /
-// code_edges / code_index_files, mig 000176). Sigue el patrón EXACTO de
+// code_edges / code_index_files, mig 000178). Sigue el patrón EXACTO de
 // memory_graph_tools.go: toolXxx() + handleXxx + registerCodeGraphTools, wrapper
 // rls (withOrgTxHandler) y resolución de Principal/project_slug vía
 // projects.GetBySlug.
@@ -40,7 +40,7 @@ type codeGraphService interface {
 	CodeForObservation(ctx context.Context, observationID uuid.UUID) ([]codegraphsvc.ObsCodeLink, []codegraphsvc.CodeNode, error)
 }
 
-// validCodeLinkTypes refleja el CHECK de la mig 000177.
+// validCodeLinkTypes refleja el CHECK de la mig 000179.
 var validCodeLinkTypes = map[string]bool{
 	"affects":    true,
 	"decided_in": true,

@@ -1,6 +1,6 @@
 // Package codegraph — fase 2c: CodegraphService, la capa de servicio que
 // materializa el grafo de CÓDIGO (tablas code_nodes / code_edges /
-// code_index_files, mig 000176) usando el parser PURO de la fase 2b
+// code_index_files, mig 000178) usando el parser PURO de la fase 2b
 // (parser.go) y las queries generadas por sqlc (codegraphdb).
 //
 // Aislamiento single-tenant: TODO se acota por project_id. NADA de
@@ -478,7 +478,7 @@ func (s *CodegraphService) resolveAndInsertEdges(ctx context.Context, projectID 
 				continue // target no resuelto: se omite (externo/cross-package).
 			}
 			if e.sourceID == tgtID {
-				continue // la mig 000176 prohíbe source == target.
+				continue // la mig 000178 prohíbe source == target.
 			}
 			meta, _ := json.Marshal(map[string]any{})
 			_, err = qx.InsertEdgeIfAbsent(ctx, codegraphdb.InsertEdgeIfAbsentParams{

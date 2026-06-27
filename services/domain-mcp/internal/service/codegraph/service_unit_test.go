@@ -248,7 +248,7 @@ func TestLinkObservationToCode_GuardsBeforeDB(t *testing.T) {
 	if _, err := s.LinkObservationToCode(context.Background(), LinkInput{ProjectID: pid, ObservationID: uuid.Nil}); err == nil {
 		t.Fatal("observation_id nil debe fallar antes de la DB")
 	}
-	// link_type inválido: validado contra el CHECK de la mig 000177 antes de la DB.
+	// link_type inválido: validado contra el CHECK de la mig 000179 antes de la DB.
 	_, err := s.LinkObservationToCode(context.Background(), LinkInput{
 		ProjectID:     pid,
 		ObservationID: uuid.New(),
@@ -279,7 +279,7 @@ func TestUnlinkObservationFromCode_GuardsBeforeDB(t *testing.T) {
 	}
 }
 
-// TestValidLinkTypes documenta el set permitido por la mig 000177.
+// TestValidLinkTypes documenta el set permitido por la mig 000179.
 func TestValidLinkTypes(t *testing.T) {
 	for _, lt := range []string{"affects", "decided_in", "references", "implements"} {
 		if !validLinkTypes[lt] {

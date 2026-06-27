@@ -1,6 +1,6 @@
 // Package codegraph — fase 3: CRUCE memoria/código. Vincula decisiones/memorias
 // (knowledge_observations) con nodos del grafo de CÓDIGO (code_nodes) vía la
-// tabla knowledge_observation_code_links (mig 000177).
+// tabla knowledge_observation_code_links (mig 000179).
 //
 // Los métodos del cruce viven en CodegraphService (ya tiene Pool + acceso a las
 // queries de nodos para resolver símbolos). Aislamiento single-tenant: TODO se
@@ -32,11 +32,11 @@ var (
 	ErrObservationNotFound = errors.New("observation not found")
 	// ErrLinkCrossProject: observation y code_node pertenecen a projects distintos.
 	ErrLinkCrossProject = errors.New("observation and code node must belong to the same project")
-	// ErrLinkBadType: link_type fuera del CHECK de la mig 000177.
+	// ErrLinkBadType: link_type fuera del CHECK de la mig 000179.
 	ErrLinkBadType = errors.New("invalid link_type")
 )
 
-// validLinkTypes refleja el CHECK de la mig 000177.
+// validLinkTypes refleja el CHECK de la mig 000179.
 var validLinkTypes = map[string]bool{
 	"affects":    true,
 	"decided_in": true,

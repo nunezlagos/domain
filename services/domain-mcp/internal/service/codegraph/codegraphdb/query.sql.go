@@ -90,7 +90,7 @@ type GetCodeNodeProjectRow struct {
 }
 
 // ---------------------------------------------------------------------------
-// Observation <-> Code links (cruce memoria/código, mig 000177)
+// Observation <-> Code links (cruce memoria/código, mig 000179)
 // ---------------------------------------------------------------------------
 // Devuelve el project del nodo (para validar mismo-project en el cruce).
 func (q *Queries) GetCodeNodeProject(ctx context.Context, id uuid.UUID) (GetCodeNodeProjectRow, error) {
@@ -1127,7 +1127,7 @@ type UpsertNodeRow struct {
 
 // ===========================================================================
 // Code graph — grafo de CÓDIGO del repo (Go-only v1), tablas code_nodes /
-// code_edges / code_index_files (mig 000176). Aislamiento por project_id
+// code_edges / code_index_files (mig 000178). Aislamiento por project_id
 // (single-tenant). El binario domain-mcp parsea el AST client-side y materializa
 // el grafo aquí; code_index_files da incrementalidad por content_hash.
 // ===========================================================================
@@ -1137,7 +1137,7 @@ type UpsertNodeRow struct {
 // Upsert idempotente por (project_id, qualified_name, kind) sobre nodos activos.
 // Si el nodo existe (no borrado) actualiza ubicación/firma/doc/hash y reabre por
 // si estaba borrado (deleted_at = NULL). El conflict target replica el predicado
-// del índice único parcial de la mig 000176.
+// del índice único parcial de la mig 000178.
 func (q *Queries) UpsertNode(ctx context.Context, arg UpsertNodeParams) (UpsertNodeRow, error) {
 	row := q.db.QueryRow(ctx, upsertNode,
 		arg.ProjectID,

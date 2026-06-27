@@ -386,7 +386,10 @@ type installFlags struct {
 func parseInstallFlags(args []string) (installFlags, error) {
 	f := installFlags{
 		baseURL: envOr("DOMAIN_BASE_URL", "http://localhost:8000"),
-		agents:  []string{"opencode"},
+		// Por default registramos el MCP en AMBOS asistentes (idempotente:
+		// si ya está, no duplica). --agents <csv> sobreescribe; --no-opencode
+		// / --no-claude-code quitan uno puntualmente.
+		agents: []string{"opencode", "claude-code"},
 	}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -443,6 +446,9 @@ func parseInstallFlags(args []string) (installFlags, error) {
 		case "--no-opencode":
 
 			f.agents = removeAgent(f.agents, "opencode")
+		case "--no-claude-code":
+
+			f.agents = removeAgent(f.agents, "claude-code")
 		case "--src":
 			if i+1 >= len(args) {
 				return f, errors.New("missing value for --src")
@@ -1205,7 +1211,7 @@ func printInstallHelp() {
 	fmt.Println()
 	fmt.Println("  --mode {local|cloud|hybrid}    Deployment mode (default: interactive prompt)")
 	fmt.Println("  --base-url URL                  Domain server URL (default: $DOMAIN_BASE_URL or http://localhost:8000)")
-	fmt.Println("  --agents LIST                   MCP agents to configure, csv (default: opencode; e.g. opencode,claude-code)")
+	fmt.Println("  --agents LIST                   MCP agents to configure, csv (default: opencode,claude-code)")
 	fmt.Println("  --email ADDR                    Email de la cuenta (first-run la crea; re-installs admin emite nueva API key)")
 	fmt.Println("  --non-interactive, -y           Skip prompts (use defaults or flags)")
 	fmt.Println("  --no-backup                     Skip automatic backups before mutations")
@@ -1213,6 +1219,7 @@ func printInstallHelp() {
 	fmt.Println("  --no-service                    Skip systemd user service (server queda manual)")
 	fmt.Println("  --with-wrapper                  Install shell wrapper for opencode+domain (auto-detect on open)")
 	fmt.Println("  --no-opencode                   Remove opencode from --agents (compat)")
+	fmt.Println("  --no-claude-code                Remove claude-code from --agents")
 	fmt.Println("  --primary-memory                Detect and disable other memory MCP providers (engram, mem0, ...)")
 	fmt.Println("                                  so domain queda como la única fuente de memoria visible al LLM")
 	fmt.Println("  --primary-memory-yes            Skip confirm prompt para --primary-memory")

@@ -1,28 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000153_rename_org_enrollment_tokens
+-- author: NunezLagos
+-- issue: legacy
+-- description: renombra la tabla org_enrollment_tokens a la nueva nomenclatura (ALTER TABLE RENAME)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

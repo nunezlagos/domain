@@ -1,5 +1,11 @@
 -- migration: 000176_create_code_graph
--- description: grafo de CÓDIGO del repo (Go-only v1) persistido en Postgres.
+-- author: NunezLagos
+-- issue: REQ-knowledge-graph
+-- description: grafo de codigo del repo (code_nodes, code_edges, code_index_files) persistido en Postgres
+-- breaking: no
+-- estimated_duration: unknown
+--
+-- detalle: grafo de CÓDIGO del repo (Go-only v1) persistido en Postgres.
 --   El binario domain-mcp stdio corre client-side, parsea el AST del filesystem
 --   y materializa el grafo en estas tablas para luego cruzarlo con las memorias
 --   (knowledge_observations). Tres tablas:
@@ -18,7 +24,7 @@
 --   de todas las tablas; mig 000143 dropeó la tabla organizations). El sistema es
 --   single-tenant: el aislamiento es por project_id. Estas tablas NO llevan
 --   organization_id ni FK a organizations.
--- breaking: no (tablas nuevas, sin backfill).
+-- nota: tablas nuevas, sin backfill.
 
 -- ===========================================================================
 -- code_nodes — entidades del grafo de código

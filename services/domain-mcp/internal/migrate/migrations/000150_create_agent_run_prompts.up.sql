@@ -1,18 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000150_create_agent_run_prompts
+-- author: NunezLagos
+-- issue: legacy
+-- description: crea la tabla agent_run_prompts para persistir prompts por corrida de agente
+-- breaking: no
+-- estimated_duration: unknown
 
 BEGIN;
 

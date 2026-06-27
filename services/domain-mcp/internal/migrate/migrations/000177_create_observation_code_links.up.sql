@@ -1,5 +1,11 @@
 -- migration: 000177_create_observation_code_links
--- description: CRUCE entre el grafo de MEMORIA (knowledge_observations) y el grafo
+-- author: NunezLagos
+-- issue: REQ-knowledge-graph
+-- description: cruce entre grafo de memoria (knowledge_observations) y grafo de codigo (code_nodes)
+-- breaking: no
+-- estimated_duration: unknown
+--
+-- detalle: CRUCE entre el grafo de MEMORIA (knowledge_observations) y el grafo
 --   de CÓDIGO (code_nodes, mig 000176). Una decisión/memoria puede afectar, haberse
 --   decidido sobre, referenciar o implementar un nodo de código concreto. Esta tabla
 --   materializa ese vínculo dirigido observation -> code_node con un tipo semántico:
@@ -17,7 +23,7 @@
 --   single-tenant: el aislamiento es por project_id, igual que las tablas que cruza.
 --   Por eso esta tabla NO lleva organization_id ni FK a organizations. El project_id
 --   debe coincidir con el de la observation y el del code_node (validado en la app).
--- breaking: no (tabla nueva, sin backfill).
+-- nota: tabla nueva, sin backfill.
 
 CREATE TABLE IF NOT EXISTS knowledge_observation_code_links (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

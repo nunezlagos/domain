@@ -1,30 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000147_create_table_catalog
+-- author: NunezLagos
+-- issue: legacy
+-- description: crea la tabla catalogo de tablas (table_catalog) para registro/inventario de tablas
+-- breaking: no
+-- estimated_duration: unknown
 
 BEGIN;
 

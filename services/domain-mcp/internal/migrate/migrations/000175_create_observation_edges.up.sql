@@ -1,5 +1,11 @@
 -- migration: 000175_create_observation_edges
--- description: grafo de relaciones explícitas y tipadas entre knowledge_observations
+-- author: NunezLagos
+-- issue: REQ-knowledge-graph
+-- description: grafo de relaciones explicitas y tipadas entre knowledge_observations (memory graph)
+-- breaking: no
+-- estimated_duration: unknown
+--
+-- detalle: grafo de relaciones explícitas y tipadas entre knowledge_observations
 --   (memorias). Hasta ahora las relaciones eran implícitas (project_id, session_id,
 --   metadata). Esta tabla las hace explícitas: una decisión que revierte a otra
 --   (supersedes), dos que se contradicen (contradicts), linaje causal (derived_from /
@@ -21,7 +27,7 @@
 --   todas las tablas; mig 000143 dropeó la tabla organizations). El sistema es
 --   single-tenant: el aislamiento es por project_id, igual que knowledge_observations.
 --   Por eso esta tabla NO lleva organization_id ni FK a organizations.
--- breaking: no (tabla nueva, sin backfill).
+-- nota: tabla nueva, sin backfill.
 
 CREATE TABLE IF NOT EXISTS knowledge_observation_edges (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,42 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000149_drop_legacy_infra
+-- author: NunezLagos
+-- issue: legacy
+-- description: limpia infraestructura legacy (DROP TABLE, DROP COLUMN, DROP CONSTRAINT)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

@@ -1,27 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000152_rename_gherkin_scenarios
+-- author: NunezLagos
+-- issue: legacy
+-- description: renombra la tabla gherkin_scenarios a la nueva nomenclatura (ALTER TABLE RENAME)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

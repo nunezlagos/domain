@@ -1,48 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000154_rename_auth_users_group
+-- author: NunezLagos
+-- issue: legacy
+-- description: renombra tablas de auth/users al grupo/prefijo estandar (multiples ALTER TABLE RENAME)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

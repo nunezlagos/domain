@@ -1,51 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000151_rename_sdd_tdd_issue_taxonomy
+-- author: NunezLagos
+-- issue: legacy
+-- description: renombra tablas a la taxonomia sdd_/tdd_/issue_ (multiples ALTER TABLE RENAME)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

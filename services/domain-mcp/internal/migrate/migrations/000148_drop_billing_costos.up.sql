@@ -1,36 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000148_drop_billing_costos
+-- author: NunezLagos
+-- issue: legacy
+-- description: elimina las tablas de billing/costos en desuso (DROP TABLE)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

@@ -922,3 +922,107 @@
     height: 54px;
   }
 }
+
+/* ============================================================
+   HU-52.1: feedback loop (👍/👎) bajo cada respuesta del assistant.
+   Aditivo: no toca ningun estilo existente del chat.
+   ============================================================ */
+.llm-feedback {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.llm-feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border, #e2e2e2);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-secondary, #666);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.llm-feedback-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover, #f3f3f3);
+}
+
+.llm-feedback-btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.llm-feedback-up:hover:not(:disabled) {
+  color: var(--color-success, #2e7d32);
+  border-color: var(--color-success, #2e7d32);
+}
+
+.llm-feedback-down:hover:not(:disabled) {
+  color: var(--color-danger, #e5484d);
+  border-color: var(--color-danger, #e5484d);
+}
+
+.llm-feedback-done .llm-feedback-thanks,
+.llm-feedback-thanks {
+  font-size: var(--fs-xs, 12px);
+  color: var(--color-text-secondary, #666);
+  font-style: italic;
+}
+
+.llm-feedback-error {
+  font-size: var(--fs-xs, 12px);
+  color: var(--color-danger, #e5484d);
+  margin-left: 6px;
+}
+
+.llm-feedback-comment {
+  width: 100%;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.llm-feedback-comment-input {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font-base, inherit);
+  font-size: var(--fs-sm, 13px);
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e2e2e2);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-primary, #222);
+}
+
+.llm-feedback-comment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.llm-feedback-comment-send,
+.llm-feedback-comment-skip {
+  font-size: var(--fs-xs, 12px);
+  padding: 4px 12px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-border, #e2e2e2);
+  cursor: pointer;
+}
+
+.llm-feedback-comment-send {
+  background: var(--color-accent, #2563eb);
+  color: var(--color-text-inverse, #fff);
+  border-color: var(--color-accent, #2563eb);
+}
+
+.llm-feedback-comment-skip {
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-secondary, #666);
+}

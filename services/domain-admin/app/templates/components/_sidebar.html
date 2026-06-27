@@ -126,6 +126,12 @@
       </svg>
       Uptime MCP
     </a>
+    <a href="{% url 'feedback:list' %}" class="sidebar-link {% if request.path|slice:':10' == '/feedback/' %}active{% endif %}">
+      <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+      </svg>
+      Feedback
+    </a>
 
     <div class="sidebar-section mt-3">Proximamente</div>
     <span class="sidebar-link disabled" title="Proxima HU">

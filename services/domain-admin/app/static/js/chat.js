@@ -32,7 +32,13 @@
     searchQuery: "",
     open: false,
     unread: 0,
+    // HU-52.1: feedback enviado por message_id -> rating (1 / -1). Persiste en
+    // memoria durante la sesion para no re-mostrar los botones tras votar.
+    feedback: {},
   };
+
+  // HU-52.1: endpoint del feedback loop (view del Django, session-auth).
+  const FEEDBACK_URL = "/feedback/api/submit";
 
   const $ = (id) => document.getElementById(id);
 
@@ -281,6 +287,128 @@
     </div>`;
   }
 
+  /* ============================================================
+     HU-52.1: feedback loop (👍/👎) bajo cada respuesta del assistant
+     ============================================================ */
+
+  // Deriva el skill_slug del mensaje desde sus sources. Las sources guardan
+  // tabla/id/titulo/snippet; el chunk (snippet) embebe "slug=<slug>" cuando la
+  // fuente es un skill. Si no se puede derivar, devuelve "" (NULL en la DB:
+  // el backend lo agrupa en el bucket "sin skill").
+  function skillSlugFromMessage(msg) {
+    const sources = msg.sources || [];
+    const skillSrc = sources.find((s) => (s.tabla || s.table) === "skill");
+    if (!skillSrc) return "";
+    const snippet = skillSrc.snippet || "";
+    const m = snippet.match(/slug=([^|\s]+)/);
+    if (m) return m[1].trim();
+    return "";
+  }
+
+  // Renderiza los botones (o el "gracias" si ya se voto). Solo para respuestas
+  // del assistant ya completas y persistidas (id > 0, no placeholders temp).
+  function renderFeedback(msg) {
+    if (msg.role !== "assistant") return "";
+    if (msg.status !== "completed") return "";
+    if (typeof msg.id !== "number" || msg.id <= 0) return "";
+
+    const voted = state.feedback[msg.id];
+    if (voted === 1 || voted === -1) {
+      return `<div class="llm-feedback llm-feedback-done">
+        <span class="llm-feedback-thanks">Gracias por tu feedback ${voted === 1 ? "👍" : "👎"}</span>
+      </div>`;
+    }
+    return `<div class="llm-feedback" data-msg-id="${msg.id}">
+      <button type="button" class="llm-feedback-btn llm-feedback-up" data-rating="1" title="Respuesta util" aria-label="Me gusta">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+        </svg>
+      </button>
+      <button type="button" class="llm-feedback-btn llm-feedback-down" data-rating="-1" title="Respuesta poco util" aria-label="No me gusta">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+        </svg>
+      </button>
+    </div>`;
+  }
+
+  // Envia el voto al backend. rating: 1 (👍) | -1 (👎). comment opcional.
+  async function submitFeedback(messageId, rating, comment, skillSlug) {
+    const res = await fetch(FEEDBACK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        message_id: messageId,
+        rating: rating,
+        comment: comment || "",
+        skill_slug: skillSlug || "",
+      }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  // Maneja clicks en los botones de feedback (delegado en #chat-messages).
+  async function handleFeedbackClick(e) {
+    const btn = e.target.closest(".llm-feedback-btn");
+    if (!btn) return;
+    e.stopPropagation();
+    const wrap = btn.closest(".llm-feedback");
+    if (!wrap) return;
+    const msgId = parseInt(wrap.dataset.msgId, 10);
+    const rating = parseInt(btn.dataset.rating, 10);
+    if (!msgId || (rating !== 1 && rating !== -1)) return;
+
+    const msg = state.messages.find((m) => m.id === msgId);
+    const skillSlug = msg ? skillSlugFromMessage(msg) : "";
+
+    // 👎 -> ofrecer textbox inline opcional antes de enviar.
+    if (rating === -1 && !wrap.querySelector(".llm-feedback-comment")) {
+      showFeedbackComment(wrap, msgId, skillSlug);
+      return;
+    }
+    await sendAndLock(wrap, msgId, rating, "", skillSlug);
+  }
+
+  function showFeedbackComment(wrap, msgId, skillSlug) {
+    const box = document.createElement("div");
+    box.className = "llm-feedback-comment";
+    box.innerHTML = `
+      <textarea class="llm-feedback-comment-input" rows="2" maxlength="1000"
+        placeholder="¿Qué falló? (opcional)"></textarea>
+      <div class="llm-feedback-comment-actions">
+        <button type="button" class="llm-feedback-comment-send">Enviar</button>
+        <button type="button" class="llm-feedback-comment-skip">Omitir</button>
+      </div>`;
+    wrap.appendChild(box);
+    const ta = box.querySelector(".llm-feedback-comment-input");
+    if (ta) ta.focus();
+    box.querySelector(".llm-feedback-comment-send").addEventListener("click", () => {
+      sendAndLock(wrap, msgId, -1, ta ? ta.value.trim() : "", skillSlug);
+    });
+    box.querySelector(".llm-feedback-comment-skip").addEventListener("click", () => {
+      sendAndLock(wrap, msgId, -1, "", skillSlug);
+    });
+  }
+
+  async function sendAndLock(wrap, msgId, rating, comment, skillSlug) {
+    wrap.querySelectorAll("button, textarea").forEach((el) => (el.disabled = true));
+    try {
+      await submitFeedback(msgId, rating, comment, skillSlug);
+      state.feedback[msgId] = rating;
+      wrap.classList.add("llm-feedback-done");
+      wrap.innerHTML = `<span class="llm-feedback-thanks">Gracias por tu feedback ${rating === 1 ? "👍" : "👎"}</span>`;
+    } catch (err) {
+      console.error("feedback", err);
+      wrap.querySelectorAll("button, textarea").forEach((el) => (el.disabled = false));
+      const errSpan = document.createElement("span");
+      errSpan.className = "llm-feedback-error";
+      errSpan.textContent = "No se pudo enviar. Reintentá.";
+      wrap.appendChild(errSpan);
+    }
+  }
+
   function renderMessage(msg) {
     const isUser = msg.role === "user";
     const isPending = msg.status === "pending";
@@ -324,11 +452,14 @@
     const sourcesHtml = isError ? "" : renderSources(msg.sources);
     const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
     const meta = time ? `<div class="llm-widget-msg-meta">${time}${msg.model ? " · " + escapeHtml(msg.model) : ""}</div>` : "";
+    // HU-52.1: feedback solo bajo respuestas del assistant (no del user).
+    const feedbackHtml = isUser ? "" : renderFeedback(msg);
 
     return `<div class="llm-widget-msg ${cls}">
       <div class="llm-widget-msg-avatar">${avatar}</div>
       <div>
         <div class="llm-widget-msg-bubble${errorCls}">${html}${sourcesHtml}${meta}</div>
+        ${feedbackHtml}
       </div>
     </div>`;
   }
@@ -624,6 +755,7 @@
     const messagesContainer = $("chat-messages");
     if (messagesContainer) {
       messagesContainer.addEventListener("click", handleSuggestionClick);
+      messagesContainer.addEventListener("click", handleFeedbackClick);  // HU-52.1
       messagesContainer.addEventListener("scroll", () => {
         if (isScrolledToBottom()) {
           const btnDown = $("btn-scroll-down");

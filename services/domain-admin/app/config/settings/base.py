@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "maintainers.platformpolicies",  # mantenedor de politicas de plataforma
     "maintainers.usage",            # dashboard de uso (captured_prompts KPIs)
     "maintainers.mcpuptime",        # monitoreo uptime/health del server domain-mcp
+    "maintainers.feedback",         # HU-52.1: feedback loop (👍/👎) sobre respuestas del chat
     "chat",                          # HU-49.2: chat IA estilo NotebookLM
 ]
 

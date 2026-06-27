@@ -1,4 +1,4 @@
--- migration: 000176_create_code_graph
+-- migration: 000178_create_code_graph
 -- author: NunezLagos
 -- issue: REQ-knowledge-graph
 -- description: grafo de codigo del repo (code_nodes, code_edges, code_index_files) persistido en Postgres

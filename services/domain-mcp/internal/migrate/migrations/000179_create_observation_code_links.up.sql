@@ -1,4 +1,4 @@
--- migration: 000177_create_observation_code_links
+-- migration: 000179_create_observation_code_links
 -- author: NunezLagos
 -- issue: REQ-knowledge-graph
 -- description: cruce entre grafo de memoria (knowledge_observations) y grafo de codigo (code_nodes)
@@ -6,7 +6,7 @@
 -- estimated_duration: unknown
 --
 -- detalle: CRUCE entre el grafo de MEMORIA (knowledge_observations) y el grafo
---   de CÓDIGO (code_nodes, mig 000176). Una decisión/memoria puede afectar, haberse
+--   de CÓDIGO (code_nodes, mig 000178). Una decisión/memoria puede afectar, haberse
 --   decidido sobre, referenciar o implementar un nodo de código concreto. Esta tabla
 --   materializa ese vínculo dirigido observation -> code_node con un tipo semántico:
 --     - affects     : la memoria/decisión impacta a ese nodo de código.

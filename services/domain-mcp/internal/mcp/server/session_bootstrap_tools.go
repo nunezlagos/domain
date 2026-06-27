@@ -383,12 +383,23 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		}
 	}
 
+	// Estado del grafo de CÓDIGO: ¿existe? ¿está desactualizado respecto al
+	// HEAD actual? Esto NO dispara un build (sería caro y bloqueante en el
+	// primer turn: walk del filesystem + parse AST + writes masivos). Solo
+	// detecta staleness comparando el git_head con el que quedó registrado en
+	// code_index_files y devuelve una sugerencia accionable. El build sigue
+	// siendo explícito vía domain_code_build.
+	codeGraph := h.codeGraphStaleness(ctx, projID, gitHead)
+
 	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considerá leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llamá domain_policy_list o domain_project_policy_list según corresponda."
 	if headChanged {
 		nextStep = "HEAD cambió desde la última sesión. Ejecutá `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persistilos con domain_mem_save antes de seguir."
 	}
 	if activeRun != nil {
 		nextStep = "Hay un flow_run SDD en estado '" + safeDeref(activeRunStatus) + "' — quedó una tarea a medias. Llamá domain_orchestrate_status para ver en qué fase está y retomá; o si el usuario ordena suspenderla/archivarla, cambiá su estado en vez de reiniciar. " + nextStep
+	}
+	if cgSug, _ := codeGraph["suggestion"].(string); cgSug != "" {
+		nextStep = cgSug + " " + nextStep
 	}
 
 	return toolResultJSON(map[string]any{
@@ -423,8 +434,91 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 			"open_issues":     openIssues,
 			"active_flow_run": activeRun,
 		},
-		"next_step": nextStep,
+		// Estado del grafo de código (existe / stale / git_head) + sugerencia.
+		// El client decide si correr domain_code_build; no se dispara acá.
+		"code_graph": codeGraph,
+		"next_step":  nextStep,
 	})
+}
+
+// codeGraphStaleness inspecciona el estado del grafo de CÓDIGO del project
+// (tablas code_index_files / mig 000178) y devuelve un mapa con:
+//   - built: ¿hay al menos un archivo indexado?
+//   - indexed_files: cuántos archivos hay en el índice.
+//   - indexed_head: el git_head con el que se construyó el grafo (el del último
+//     archivo indexado; en una corrida normal de domain_code_build todos los
+//     archivos comparten el mismo HEAD).
+//   - current_head: el git_head reportado por el client en este bootstrap.
+//   - stale: true si current_head != indexed_head (ambos no vacíos) → el grafo
+//     no refleja el árbol actual.
+//   - last_indexed_at: timestamp del último indexado.
+//   - suggestion: texto accionable (prefijo del next_step) o "" si está fresco.
+//
+// NO dispara un build: detectar staleness es barato (un solo QueryRow), pero un
+// rebuild incremental (walk del filesystem + parse AST + writes) sería caro y
+// bloqueante en el primer turn de la sesión. El build sigue siendo explícito
+// vía domain_code_build; acá solo sugerimos correrlo cuando hace falta.
+//
+// Single-tenant: filtra exclusivamente por project_id. Best-effort: si la query
+// falla (p.ej. el grafo nunca se usó), reporta built=false sin abortar el
+// bootstrap.
+func (h *sessionBootstrapHandlers) codeGraphStaleness(ctx context.Context, projID uuid.UUID, currentHead string) map[string]any {
+	out := map[string]any{
+		"built":        false,
+		"current_head": currentHead,
+	}
+
+	var (
+		fileCount   int64
+		indexedHead *string
+		lastIndexed *string
+	)
+	// MAX(indexed_at) + el git_head de la fila más reciente. Un único QueryRow:
+	// sin rows abiertos concurrentes en la tx (mismo cuidado que el resto del
+	// handler).
+	err := h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*),
+		        (SELECT git_head FROM code_index_files
+		           WHERE project_id = $1
+		           ORDER BY indexed_at DESC LIMIT 1),
+		        to_char(MAX(indexed_at) AT TIME ZONE 'UTC',
+		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+		   FROM code_index_files
+		   WHERE project_id = $1`,
+		projID,
+	).Scan(&fileCount, &indexedHead, &lastIndexed)
+	if err != nil {
+		// Grafo inexistente o no consultable: sugerir construirlo una vez.
+		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
+		return out
+	}
+
+	out["indexed_files"] = fileCount
+	out["indexed_head"] = safeDeref(indexedHead)
+	out["last_indexed_at"] = safeDeref(lastIndexed)
+
+	if fileCount == 0 {
+		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
+		return out
+	}
+
+	out["built"] = true
+
+	stale := codeGraphIsStale(safeDeref(indexedHead), currentHead)
+	out["stale"] = stale
+	if stale {
+		out["suggestion"] = "El grafo de código está desactualizado (se construyó en " + safeDeref(indexedHead) + " y el HEAD actual es " + currentHead + "). Si vas a navegar el código, corré domain_code_build (root_path = cwd) para refrescarlo incrementalmente."
+	}
+	return out
+}
+
+// codeGraphIsStale decide si el grafo está desactualizado: lo está cuando el
+// HEAD con el que se construyó y el HEAD actual son ambos conocidos y distintos.
+// Si alguno es vacío (el client no mandó git_head, o el índice no guardó uno),
+// NO se marca stale: sin la info no se puede afirmar desactualización, y marcar
+// stale a ciegas generaría ruido (sugerir rebuild en cada bootstrap).
+func codeGraphIsStale(indexedHead, currentHead string) bool {
+	return indexedHead != "" && currentHead != "" && indexedHead != currentHead
 }
 
 func safeDeref(s *string) string {

@@ -1,15 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000156_reconcile_table_catalog
+-- author: NunezLagos
+-- issue: legacy
+-- description: reconcilia los nombres registrados en table_catalog con la nueva taxonomia por prefijo (UPDATE de datos del catalogo, sin DDL)
+-- breaking: no
+-- estimated_duration: unknown
 
 BEGIN;
 

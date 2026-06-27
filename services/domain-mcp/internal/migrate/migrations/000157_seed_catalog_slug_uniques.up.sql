@@ -1,12 +1,9 @@
-
-
-
-
-
-
-
-
-
+-- migration: 000157_seed_catalog_slug_uniques
+-- author: NunezLagos
+-- issue: legacy
+-- description: indices unicos de slug para skills (global), agent_templates y flows
+-- breaking: no
+-- estimated_duration: unknown
 
 CREATE UNIQUE INDEX IF NOT EXISTS skills_slug_global_uniq
   ON skills (slug)

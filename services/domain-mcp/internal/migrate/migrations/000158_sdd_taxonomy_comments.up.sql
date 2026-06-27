@@ -1,9 +1,9 @@
-
-
-
-
-
-
+-- migration: 000158_sdd_taxonomy_comments
+-- author: NunezLagos
+-- issue: legacy
+-- description: agrega COMMENT ON descriptivos a las tablas del pipeline SDD/TDD (issues, sdd_*, tdd_*, etc.)
+-- breaking: no
+-- estimated_duration: unknown
 
 DO $$
 DECLARE

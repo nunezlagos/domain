@@ -1,4 +1,7 @@
 -- migration: 000171_chat_ia
+-- author: NunezLagos
+-- issue: legacy
+-- estimated_duration: unknown
 -- description: tablas para el chat IA estilo NotebookLM (HU-49.2).
 --   3 tablas: chat_conversations, chat_messages, chat_document_embeddings.
 --   Persisten conversaciones del admin + embeddings para RAG sobre las

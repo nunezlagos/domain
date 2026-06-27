@@ -1,15 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000161_add_project_id_scoping
+-- author: NunezLagos
+-- issue: legacy
+-- description: agrega columna project_id (nullable) para aislar por proyecto en sdd_requirements, issues, flow_runs e issue_* + indices
+-- breaking: no
+-- estimated_duration: unknown
 
 ALTER TABLE sdd_requirements ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE issues           ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE CASCADE;

@@ -1,12 +1,9 @@
-
-
-
-
-
-
-
-
-
+-- migration: 000160_create_project_skills
+-- author: NunezLagos
+-- issue: legacy
+-- description: tabla project_skills (vinculo project<->skill con is_enabled) e indices por project/skill
+-- breaking: no
+-- estimated_duration: unknown
 
 CREATE TABLE project_skills (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

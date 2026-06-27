@@ -1,26 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000166_backfill_project_id
+-- author: NunezLagos
+-- issue: legacy
+-- description: backfill de project_id en issue_* y sdd_requirements a partir de datos existentes
+-- breaking: no
+-- estimated_duration: unknown
 
 UPDATE issue_gherkin_scenarios s
 SET project_id = i.project_id

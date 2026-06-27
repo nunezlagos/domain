@@ -1,4 +1,7 @@
 -- migration: 000174_mcp_health_checks
+-- author: NunezLagos
+-- issue: legacy
+-- estimated_duration: unknown
 -- description: tabla de metrica de plataforma para el monitoreo de uptime/health
 --   del propio server domain-mcp. domain-admin (Django) hace polling al /health
 --   del MCP y registra una fila por chequeo (up/down/degraded + latencia).

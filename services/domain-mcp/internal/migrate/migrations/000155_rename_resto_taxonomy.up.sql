@@ -1,44 +1,9 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- migration: 000155_rename_resto_taxonomy
+-- author: NunezLagos
+-- issue: legacy
+-- description: renombra tablas/indices/constraints legacy a la taxonomia por prefijo de dominio (captured_prompts->prompt_captured, clients->project_clients, observations->knowledge_observations, outbound_webhook_*->webhook_outbound_*, etc.)
+-- breaking: yes
+-- estimated_duration: unknown
 
 BEGIN;
 

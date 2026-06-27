@@ -1,4 +1,7 @@
 -- migration: 000172_chat_ia_readonly_role
+-- author: NunezLagos
+-- issue: legacy
+-- estimated_duration: unknown
 -- description: crea rol `domain_chat_reader` con permisos minimos para que
 --   domain-admin (chat) NO pueda escribir sobre tablas del dominio.
 --   Previene LLM08 (Excessive Agency) y limita el blast radius si el

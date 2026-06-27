@@ -44,6 +44,7 @@ import (
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
+	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	"nunezlagos/domain/internal/service/flow"
 	intakesvc "nunezlagos/domain/internal/service/intake"
 	usvc "nunezlagos/domain/internal/service/issue"
@@ -141,6 +142,8 @@ type serverServices struct {
 	AttachmentService         *attSvc.Service
 	MasterCipher              *crypto.Cipher
 	Embedder                  llm.Embedder
+	FeedbackService           *feedbacksvc.Service
+	FeedbackLimiter           *ratelimit.Limiter
 }
 
 // buildServices construye los ~40 servicios del servidor a partir de los pools
@@ -162,6 +165,10 @@ func buildServices(
 
 	s.ClientService = clientsvc.NewService(pools.App, s.Recorder, nil)
 	s.CapturedPromptService = capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
+	// HU-52.1 — feedback loop. Limiter dedicado 30/min por user_email (anti-spam):
+	// capacity=30, refill=30/60s = 0.5 tokens/s.
+	s.FeedbackService = feedbacksvc.NewService(feedbacksvc.NewPgRepository(pools.App))
+	s.FeedbackLimiter = ratelimit.New(30, 30.0/60.0)
 	s.ProjectRepoService = projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	s.ProjectPolicyService = projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
 	s.TicketService = ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
@@ -338,6 +345,9 @@ func buildServices(
 		defer ticker.Stop()
 		for range ticker.C {
 			s.RateLimiter.Cleanup(10 * time.Minute)
+			if s.FeedbackLimiter != nil {
+				s.FeedbackLimiter.Cleanup(10 * time.Minute)
+			}
 		}
 	}()
 

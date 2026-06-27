@@ -12,9 +12,11 @@ import (
 
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
+	"nunezlagos/domain/internal/auth/ratelimit"
 	"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/dispatch"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
+	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 )
 
@@ -27,6 +29,11 @@ type API struct {
 	WebhookService     *webhooksvc.Service
 	WebhookDispatcher  *WebhookDispatcher
 	Dispatcher         *dispatch.Dispatcher
+
+	// Feedback — HU-52.1: user feedback loop (👍/👎) del chat IA.
+	Feedback *feedbacksvc.Service
+	// FeedbackLimiter — rate limit dedicado por user_email (30/min, anti-spam).
+	FeedbackLimiter *ratelimit.Limiter
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -38,6 +45,11 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)
+
+	// HU-52.1 — feedback loop. CSRF-exempt (Bearer auth, sin cookies); rate
+	// limit 30/min por user_email se aplica dentro de createFeedback.
+	mux.HandleFunc("POST /api/v1/feedback", a.createFeedback)
+	mux.HandleFunc("GET /api/v1/feedback", a.listFeedback)
 
 	return mux
 }

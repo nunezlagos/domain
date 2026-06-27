@@ -107,6 +107,8 @@ func buildRouter(
 		Enrollment:         &enrollsvc.Service{Pool: pools.App, Audit: s.Recorder},
 		WebhookService:     s.InboundWebhookService,
 		Dispatcher:         s.Dispatcher,
+		Feedback:           s.FeedbackService,
+		FeedbackLimiter:    s.FeedbackLimiter,
 	}
 
 	mux.Handle("/api/", corsMW.Wrap(

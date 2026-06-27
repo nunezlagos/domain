@@ -95,6 +95,12 @@ type Config struct {
 	EdgeInferenceTickHours    int // default 6
 	EdgeInferenceMaxPairs     int // pares candidatos por proyecto por pasada; default 30
 	EdgeInferenceProjectBatch int // proyectos por pasada; default 50
+
+	// FeedbackAggregator — system cron (HU-52.1) que consolida skill_feedback
+	// en skill_feedback_daily cada N horas. Default disabled: opt-in explicito.
+	FeedbackAggregatorEnabled   bool
+	FeedbackAggregatorTickHours int // default 6
+	FeedbackAggregatorDays      int // ventana a consolidar por pasada; default 7
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -159,6 +165,10 @@ func Load() (*Config, error) {
 		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),
 		EdgeInferenceMaxPairs:     getEnvInt("DOMAIN_EDGE_INFERENCE_MAX_PAIRS", 30),
 		EdgeInferenceProjectBatch: getEnvInt("DOMAIN_EDGE_INFERENCE_PROJECT_BATCH", 50),
+
+		FeedbackAggregatorEnabled:   getEnvBool("DOMAIN_FEEDBACK_AGGREGATOR_ENABLED", false),
+		FeedbackAggregatorTickHours: getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_TICK_HOURS", 6),
+		FeedbackAggregatorDays:      getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_DAYS", 7),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

@@ -82,6 +82,16 @@ func buildRunners(
 			go inferencer.Start(leaderCtx)
 		}
 
+		if cfg.FeedbackAggregatorEnabled {
+			aggregator := &systemcron.FeedbackAggregator{
+				Feedback: s.FeedbackService,
+				Tick:     time.Duration(cfg.FeedbackAggregatorTickHours) * time.Hour,
+				Days:     cfg.FeedbackAggregatorDays,
+				Logger:   logger,
+			}
+			go aggregator.Start(leaderCtx)
+		}
+
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
 				Pool:    pools.App,

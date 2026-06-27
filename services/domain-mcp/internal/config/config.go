@@ -98,6 +98,14 @@ type Config struct {
 	SkillJudgeWeekday   int // 0=domingo .. 1=lunes (default); ventana semanal
 	SkillJudgeHour      int // hora local de la corrida; default 3 (03:00)
 	SkillJudgeMaxSkills int // skills escaneados por corrida; default 200
+
+	// ABTest — system cron (HU-52.4): Analyzer (z-test de proporciones) sobre los
+	// skill_ab_tests 'running' cada N horas. Default disabled: opt-in explicito.
+	// AutoApply (global) por default FALSE: solo declara el ganador, no pinea.
+	ABTestEnabled   bool
+	ABTestTickHours int     // analyzer cada N horas; default 6
+	ABTestAlpha     float64 // nivel de significancia del z-test; default 0.05
+	ABTestAutoApply bool    // pin global del ganador; default false
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -177,6 +185,11 @@ func Load() (*Config, error) {
 		SkillJudgeWeekday:   getEnvInt("DOMAIN_SKILL_JUDGE_WEEKDAY", 1),
 		SkillJudgeHour:      getEnvInt("DOMAIN_SKILL_JUDGE_HOUR", 3),
 		SkillJudgeMaxSkills: getEnvInt("DOMAIN_SKILL_JUDGE_MAX_SKILLS", 200),
+
+		ABTestEnabled:   getEnvBool("DOMAIN_AB_TEST_ENABLED", false),
+		ABTestTickHours: getEnvInt("DOMAIN_AB_TEST_TICK_HOURS", 6),
+		ABTestAlpha:     getEnvFloat("DOMAIN_AB_TEST_ALPHA", 0.05),
+		ABTestAutoApply: getEnvBool("DOMAIN_AB_TEST_AUTO_APPLY", false),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

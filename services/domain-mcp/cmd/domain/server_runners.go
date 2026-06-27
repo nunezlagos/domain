@@ -120,6 +120,17 @@ func buildRunners(
 			go judge.Start(leaderCtx)
 		}
 
+		if cfg.ABTestEnabled {
+			abAnalyzer := &systemcron.ABTestAnalyzer{
+				Service:   s.SkillABTestService,
+				Tick:      time.Duration(cfg.ABTestTickHours) * time.Hour,
+				Alpha:     cfg.ABTestAlpha,
+				AutoApply: cfg.ABTestAutoApply,
+				Logger:    logger,
+			}
+			go abAnalyzer.Start(leaderCtx)
+		}
+
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
 				Pool:    pools.App,

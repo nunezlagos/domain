@@ -63,6 +63,10 @@ func buildCatalog() map[string]*Model {
 
 		{"google", "gemini-1.5-pro", "Gemini 1.5 Pro", "completion", 2_000_000, 1.25, 5.0, 0},
 		{"google", "gemini-1.5-flash", "Gemini 1.5 Flash", "completion", 1_000_000, 0.075, 0.3, 0},
+
+		// MiniMax-M3 vía endpoint anthropic-compatible. Tarifas pendientes de
+		// confirmar: 0/0 es seguro (no rompe el hot path, solo no contabiliza costo).
+		{"minimax", "MiniMax-M3", "MiniMax M3", "completion", 1_000_000, 0, 0, 0},
 	}
 	out := make(map[string]*Model, len(entries))
 	for _, e := range entries {

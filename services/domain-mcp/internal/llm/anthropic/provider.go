@@ -43,6 +43,20 @@ func New(apiKey string) *Provider {
 	}
 }
 
+// NewWithBaseURL crea un Provider anthropic-compatible apuntando a un BaseURL
+// y modelo distintos (ej: endpoint anthropic-compatible de MiniMax). Reusa toda
+// la lógica HTTP/auth existente (x-api-key + anthropic-version). No modifica New.
+func NewWithBaseURL(apiKey, baseURL, model string) *Provider {
+	p := New(apiKey)
+	if baseURL != "" {
+		p.BaseURL = baseURL
+	}
+	if model != "" {
+		p.Model = model
+	}
+	return p
+}
+
 func (p *Provider) Name() string { return "anthropic" }
 
 // requestMessage formato del request body.

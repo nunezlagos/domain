@@ -31,6 +31,17 @@ type memoryEdgeService interface {
 	InferEdges(ctx context.Context, in obssvc.InferInput) (created int, candidates int, err error)
 }
 
+// memoryInferenceService abstrae el InferenceService (métodos sobre
+// observation.Service) para los tools suggest_links / infer_edges_llm.
+//
+// SuggestLinks no usa LLM (señales baratas, siempre disponible). InferEdgesLLM
+// requiere MiniMax y recibe el edgeLinker para crear las aristas inferidas;
+// degrada con ErrInferenceUnavailable si no hay MINIMAX_API_KEY.
+type memoryInferenceService interface {
+	SuggestLinks(ctx context.Context, in obssvc.SuggestLinksInput) ([]obssvc.CandidatePair, error)
+	InferEdgesLLM(ctx context.Context, edges obssvc.EdgeLinker, in obssvc.InferEdgesLLMInput) (*obssvc.InferEdgesLLMResult, error)
+}
+
 // validEdgeTypes refleja el CHECK de la mig 000175.
 var validEdgeTypes = map[string]bool{
 	"supersedes":   true,
@@ -42,6 +53,7 @@ var validEdgeTypes = map[string]bool{
 
 type memoryGraphHandlers struct {
 	edges     memoryEdgeService
+	inference memoryInferenceService
 	projects  memoryProjectGetter
 	principal *apikey.Principal
 }
@@ -49,6 +61,7 @@ type memoryGraphHandlers struct {
 func registerMemoryGraphTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	h := &memoryGraphHandlers{
 		edges:     deps.ObservationEdges,
+		inference: deps.Observations,
 		projects:  deps.Projects,
 		principal: deps.Principal,
 	}
@@ -62,6 +75,8 @@ func registerMemoryGraphTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		{Tool: toolMemGraph(), Handler: wrap.Wrap("domain_mem_graph", rls(h.handleMemGraph))},
 		{Tool: toolMemPath(), Handler: wrap.Wrap("domain_mem_path", rls(h.handleMemPath))},
 		{Tool: toolMemInferEdges(), Handler: wrap.Wrap("domain_mem_infer_edges", rls(h.handleMemInferEdges))},
+		{Tool: toolMemSuggestLinks(), Handler: wrap.Wrap("domain_mem_suggest_links", rls(h.handleMemSuggestLinks))},
+		{Tool: toolMemInferEdgesLLM(), Handler: wrap.Wrap("domain_mem_infer_edges_llm", rls(h.handleMemInferEdgesLLM))},
 	}
 }
 
@@ -504,6 +519,175 @@ func (h *memoryGraphHandlers) handleMemInferEdges(ctx context.Context, req mcp.C
 	return toolResultJSON(map[string]any{
 		"created":    created,
 		"candidates": candidates,
+	})
+}
+
+// resolveProjectArg resuelve el project del slug en los args (single-tenant:
+// orgID del principal es vestigial, GetBySlug lo ignora) y opcionalmente parsea
+// observation_id como ancla. Devuelve un errRes listo si algo falla.
+func (h *memoryGraphHandlers) resolveProjectArg(ctx context.Context, req mcp.CallToolRequest) (projID uuid.UUID, slug string, anchor *uuid.UUID, errRes *mcp.CallToolResult) {
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
+	if err != nil {
+		return uuid.Nil, "", nil, mcp.NewToolResultError("invalid principal org_id")
+	}
+	args := req.GetArguments()
+	slug = strOf(args["project_slug"])
+	if slug == "" {
+		return uuid.Nil, "", nil, mcp.NewToolResultError("project_slug es requerido")
+	}
+	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return uuid.Nil, "", nil, mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug))
+	}
+	if oid := strOf(args["observation_id"]); oid != "" {
+		id, perr := uuid.Parse(oid)
+		if perr != nil {
+			return uuid.Nil, "", nil, mcp.NewToolResultError("observation_id invalido")
+		}
+		anchor = &id
+	}
+	return proj.ID, slug, anchor, nil
+}
+
+func toolMemSuggestLinks() mcp.Tool {
+	return mcp.NewTool("domain_mem_suggest_links",
+		mcp.WithDescription("Arma PARES CANDIDATOS de memorias para analizar relaciones, SIN embeddings ni LLM, por señales baratas: co-sesion (mismo session_id), solapamiento de tags y solapamiento lexico (tsvector en espanol). Devuelve los pares con su contenido acotado y las señales, ordenados por un score heuristico. Util para que un subagente (IDE) razone las relaciones y luego las cree con domain_mem_link, o como insumo de domain_mem_infer_edges_llm."),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project"),
+			mcp.Required(),
+		),
+		mcp.WithString("observation_id",
+			mcp.Description("UUID de una observation ancla (opcional; si se indica solo se devuelven pares que la incluyan)"),
+		),
+		mcp.WithNumber("max_pairs",
+			mcp.Description("Maximo de pares a devolver (default 30, tope 100)"),
+		),
+	)
+}
+
+func (h *memoryGraphHandlers) handleMemSuggestLinks(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if h.inference == nil {
+		return mcp.NewToolResultError("inference service no disponible"), nil
+	}
+	projID, slug, anchor, errRes := h.resolveProjectArg(ctx, req)
+	if errRes != nil {
+		return errRes, nil
+	}
+	args := req.GetArguments()
+	maxPairs := 0
+	if v, ok := args["max_pairs"].(float64); ok {
+		maxPairs = int(v)
+	}
+
+	pairs, err := h.inference.SuggestLinks(ctx, obssvc.SuggestLinksInput{
+		ProjectID: projID,
+		AnchorID:  anchor,
+		MaxPairs:  maxPairs,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("suggest_links failed: %v", err)), nil
+	}
+
+	out := make([]map[string]any, 0, len(pairs))
+	for _, p := range pairs {
+		out = append(out, map[string]any{
+			"source_id":       p.SourceID,
+			"target_id":       p.TargetID,
+			"source_content":  p.SourceContent,
+			"target_content":  p.TargetContent,
+			"source_type":     p.SourceType,
+			"target_type":     p.TargetType,
+			"source_tags":     p.SourceTags,
+			"target_tags":     p.TargetTags,
+			"same_session":    p.SameSession,
+			"shared_tags":     p.SharedTags,
+			"lexical_overlap": p.LexicalOverlap,
+			"signal_score":    p.SignalScore,
+		})
+	}
+	return toolResultJSON(map[string]any{
+		"project_slug": slug,
+		"pairs":        out,
+		"count":        len(out),
+		"edge_types":   []string{"supersedes", "contradicts", "derived_from", "depends_on", "relates_to"},
+		"hint":         "Razona cada par y crea las relaciones que correspondan con domain_mem_link (source_id, target_id, edge_type).",
+	})
+}
+
+func toolMemInferEdgesLLM() mcp.Tool {
+	return mcp.NewTool("domain_mem_infer_edges_llm",
+		mcp.WithDescription("Razonador server-side: arma pares candidatos (como suggest_links), le pide a MiniMax-M3 que clasifique la relacion de cada par (supersedes|contradicts|derived_from|depends_on|relates_to|none) y crea las aristas resultantes con origin='inferred' (idempotente). REQUIERE MINIMAX_API_KEY; si no esta seteada devuelve un error claro sin crashear (suggest_links sigue funcionando). Devuelve {candidates, created, skipped, existing, edges}."),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project"),
+			mcp.Required(),
+		),
+		mcp.WithString("observation_id",
+			mcp.Description("UUID de una observation ancla (opcional; acota los pares a los que la incluyan)"),
+		),
+		mcp.WithNumber("max_pairs",
+			mcp.Description("Maximo de pares a evaluar por el LLM (default 30, tope 100)"),
+		),
+	)
+}
+
+func (h *memoryGraphHandlers) handleMemInferEdgesLLM(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if h.inference == nil {
+		return mcp.NewToolResultError("inference service no disponible"), nil
+	}
+	if h.edges == nil {
+		return mcp.NewToolResultError("edge service no disponible"), nil
+	}
+	projID, slug, anchor, errRes := h.resolveProjectArg(ctx, req)
+	if errRes != nil {
+		return errRes, nil
+	}
+	args := req.GetArguments()
+	maxPairs := 0
+	if v, ok := args["max_pairs"].(float64); ok {
+		maxPairs = int(v)
+	}
+	var createdBy *uuid.UUID
+	if uid, err := uuid.Parse(h.principal.UserID); err == nil {
+		createdBy = &uid
+	}
+
+	res, err := h.inference.InferEdgesLLM(ctx, h.edges, obssvc.InferEdgesLLMInput{
+		ProjectID: projID,
+		AnchorID:  anchor,
+		MaxPairs:  maxPairs,
+		CreatedBy: createdBy,
+	})
+	if err != nil {
+		if errors.Is(err, obssvc.ErrInferenceUnavailable) {
+			return mcp.NewToolResultError("inferencia LLM requiere MINIMAX_API_KEY (usa domain_mem_suggest_links para obtener los pares y crearlos manualmente con domain_mem_link)"), nil
+		}
+		return mcp.NewToolResultError(fmt.Sprintf("infer_edges_llm failed: %v", err)), nil
+	}
+
+	edgesOut := make([]map[string]any, 0, len(res.Edges))
+	for _, e := range res.Edges {
+		edgesOut = append(edgesOut, map[string]any{
+			"source_id": e.SourceID,
+			"target_id": e.TargetID,
+			"edge_type": e.EdgeType,
+			"reason":    e.Reason,
+			"created":   e.Created,
+			"existing":  e.Existing,
+		})
+	}
+	return toolResultJSON(map[string]any{
+		"project_slug": slug,
+		"candidates":   res.Candidates,
+		"created":      res.Created,
+		"skipped":      res.Skipped,
+		"existing":     res.Existing,
+		"edges":        edgesOut,
 	})
 }
 

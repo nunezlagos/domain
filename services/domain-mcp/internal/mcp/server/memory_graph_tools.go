@@ -68,17 +68,17 @@ func registerMemoryGraphTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 // edgeJSON serializa una arista para la respuesta del tool.
 func edgeJSON(e obssvc.Edge) map[string]any {
 	m := map[string]any{
-		"id":          e.ID,
-		"project_id":  e.ProjectID,
-		"source_id":   e.SourceID,
-		"target_id":   e.TargetID,
-		"edge_type":   e.EdgeType,
-		"origin":      e.Origin,
-		"confidence":  e.Confidence,
-		"valid_from":  e.ValidFrom,
-		"valid_to":    e.ValidTo, // nil = vigente
-		"created_at":  e.CreatedAt,
-		"updated_at":  e.UpdatedAt,
+		"id":         e.ID,
+		"project_id": e.ProjectID,
+		"source_id":  e.SourceID,
+		"target_id":  e.TargetID,
+		"edge_type":  e.EdgeType,
+		"origin":     e.Origin,
+		"confidence": e.Confidence,
+		"valid_from": e.ValidFrom,
+		"valid_to":   e.ValidTo, // nil = vigente
+		"created_at": e.CreatedAt,
+		"updated_at": e.UpdatedAt,
 	}
 	if e.Note != nil {
 		m["note"] = *e.Note
@@ -91,8 +91,6 @@ func edgeJSON(e obssvc.Edge) map[string]any {
 	}
 	return m
 }
-
-// ---- domain_mem_link --------------------------------------------------------
 
 func toolMemLink() mcp.Tool {
 	return mcp.NewTool("domain_mem_link",
@@ -172,8 +170,6 @@ func (h *memoryGraphHandlers) handleMemLink(ctx context.Context, req mcp.CallToo
 	return toolResultJSON(map[string]any{"edge": edgeJSON(*edge)})
 }
 
-// ---- domain_mem_unlink ------------------------------------------------------
-
 func toolMemUnlink() mcp.Tool {
 	return mcp.NewTool("domain_mem_unlink",
 		mcp.WithDescription("Elimina (soft-delete) una arista del grafo de memoria por id."),
@@ -202,8 +198,6 @@ func (h *memoryGraphHandlers) handleMemUnlink(ctx context.Context, req mcp.CallT
 	return toolResultJSON(map[string]any{"deleted": true, "edge_id": edgeID})
 }
 
-// ---- domain_mem_related -----------------------------------------------------
-
 func toolMemRelated() mcp.Tool {
 	return mcp.NewTool("domain_mem_related",
 		mcp.WithDescription("Devuelve las observations vecinas (aristas vigentes) de una observation. direction: forward (salientes) | backward (entrantes) | both (default). edge_type opcional filtra por tipo."),
@@ -220,29 +214,37 @@ func toolMemRelated() mcp.Tool {
 	)
 }
 
-func (h *memoryGraphHandlers) handleMemRelated(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if h.principal == nil {
-		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
-	}
+// parseMemRelatedArgs parsea y valida los args de domain_mem_related.
+func parseMemRelatedArgs(req mcp.CallToolRequest) (obsID uuid.UUID, direction string, edgeType *string, errRes *mcp.CallToolResult) {
 	args := req.GetArguments()
 	obsID, err := uuid.Parse(strOf(args["observation_id"]))
 	if err != nil {
-		return mcp.NewToolResultError("observation_id invalido"), nil
+		return uuid.Nil, "", nil, mcp.NewToolResultError("observation_id invalido")
 	}
-	direction := strOf(args["direction"])
+	direction = strOf(args["direction"])
 	switch direction {
 	case "", "both":
 		direction = "both"
 	case "forward", "backward":
 	default:
-		return mcp.NewToolResultError("direction invalida: usar forward | backward | both"), nil
+		return uuid.Nil, "", nil, mcp.NewToolResultError("direction invalida: usar forward | backward | both")
 	}
-	var edgeType *string
 	if et := strOf(args["edge_type"]); et != "" {
 		if !validEdgeTypes[et] {
-			return mcp.NewToolResultError("edge_type invalido"), nil
+			return uuid.Nil, "", nil, mcp.NewToolResultError("edge_type invalido")
 		}
 		edgeType = &et
+	}
+	return obsID, direction, edgeType, nil
+}
+
+func (h *memoryGraphHandlers) handleMemRelated(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	obsID, direction, edgeType, errRes := parseMemRelatedArgs(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// El service resuelve la observation por id y deriva el project.
@@ -277,8 +279,6 @@ func (h *memoryGraphHandlers) handleMemRelated(ctx context.Context, req mcp.Call
 		"count":          len(edgesOut),
 	})
 }
-
-// ---- domain_mem_graph -------------------------------------------------------
 
 // graphEdgeLimit acota el output del subgrafo para no explotar el contexto.
 const graphEdgeLimit = 500
@@ -363,8 +363,6 @@ func sumInts(m map[string]int) int {
 	return t
 }
 
-// ---- domain_mem_path --------------------------------------------------------
-
 func toolMemPath() mcp.Tool {
 	return mcp.NewTool("domain_mem_path",
 		mcp.WithDescription("Camino mas corto (en numero de aristas) entre dos observations recorriendo aristas vigentes en direccion source -> target. Devuelve la cadena de aristas o found=false si no hay camino."),
@@ -428,8 +426,6 @@ func (h *memoryGraphHandlers) handleMemPath(ctx context.Context, req mcp.CallToo
 	})
 }
 
-// ---- domain_mem_infer_edges -------------------------------------------------
-
 func toolMemInferEdges() mcp.Tool {
 	return mcp.NewTool("domain_mem_infer_edges",
 		mcp.WithDescription("Infiere aristas relates_to (origin='inferred') por similitud de embedding entre observations del project. observation_id opcional acota a una sola fuente. Devuelve {created, candidates}."),
@@ -449,31 +445,28 @@ func toolMemInferEdges() mcp.Tool {
 	)
 }
 
-func (h *memoryGraphHandlers) handleMemInferEdges(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if h.principal == nil {
-		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
-	}
+// buildInferInput resuelve el project del slug y arma el InferInput desde los
+// args de domain_mem_infer_edges (observation_id/threshold/limit/created_by).
+func (h *memoryGraphHandlers) buildInferInput(ctx context.Context, req mcp.CallToolRequest) (obssvc.InferInput, *mcp.CallToolResult) {
 	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
-		return mcp.NewToolResultError("invalid principal org_id"), nil
+		return obssvc.InferInput{}, mcp.NewToolResultError("invalid principal org_id")
 	}
 	args := req.GetArguments()
 	slug := strOf(args["project_slug"])
 	if slug == "" {
-		return mcp.NewToolResultError("project_slug es requerido"), nil
+		return obssvc.InferInput{}, mcp.NewToolResultError("project_slug es requerido")
 	}
 	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+		return obssvc.InferInput{}, mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug))
 	}
 
-	in := obssvc.InferInput{
-		ProjectID: proj.ID,
-	}
+	in := obssvc.InferInput{ProjectID: proj.ID}
 	if oid := strOf(args["observation_id"]); oid != "" {
 		id, err := uuid.Parse(oid)
 		if err != nil {
-			return mcp.NewToolResultError("observation_id invalido"), nil
+			return obssvc.InferInput{}, mcp.NewToolResultError("observation_id invalido")
 		}
 		in.ObservationID = &id
 	}
@@ -485,6 +478,17 @@ func (h *memoryGraphHandlers) handleMemInferEdges(ctx context.Context, req mcp.C
 	}
 	if uid, err := uuid.Parse(h.principal.UserID); err == nil {
 		in.CreatedBy = &uid
+	}
+	return in, nil
+}
+
+func (h *memoryGraphHandlers) handleMemInferEdges(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	in, errRes := h.buildInferInput(ctx, req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	created, candidates, err := h.edges.InferEdges(ctx, in)

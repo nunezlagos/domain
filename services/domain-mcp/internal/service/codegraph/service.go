@@ -83,9 +83,25 @@ func (s *CodegraphService) q(ctx context.Context) *codegraphdb.Queries {
 	return codegraphdb.New(s.Pool)
 }
 
-// ---------------------------------------------------------------------------
-// Build (incremental)
-// ---------------------------------------------------------------------------
+// withTx ejecuta fn dentro de una tx: reusa la del ctx si existe (no anida) o
+// abre una propia sobre el pool con rollback/commit.
+func (s *CodegraphService) withTx(ctx context.Context, fn func(context.Context) error) error {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return fn(ctx)
+	}
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(txctx.WithTxContext(ctx, tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
+}
 
 // BuildInput describe una corrida de construcción/actualización del grafo.
 //
@@ -278,19 +294,9 @@ type pendingEdge struct {
 	edgeType string
 }
 
-// indexFileNodes es la FASE 1 del build para UN archivo modificado/nuevo, en una
-// tx atómica. NO soft-deletea antes de upsertar (eso rompía la identidad del
-// nodo): primero UPSERTEA los nodos parseados —el ON CONFLICT ... DO UPDATE reusa
-// el id existente, así que la identidad del nodo es ESTABLE— y recién después
-// soft-deletea los nodos del archivo cuyo id NO quedó retenido (símbolos que
-// desaparecieron). Para los nodos eliminados se hard-deletean sus aristas
-// entrantes y salientes (evita huérfanos hacia nodos muertos). Para los nodos
-// retenidos se borran solo sus aristas SALIENTES, que se re-resuelven en la
-// fase 2. Las aristas parseadas se devuelven como pendingEdge (con el source ya
-// resuelto) para la fase 2. Devuelve (nodosUpserted, aristasPendientes).
-//
-// Si el ctx ya trae una tx (txctx), reusa esa tx (no anida). Si no, abre una
-// tx propia sobre el pool.
+// indexFileNodes es la fase 1 del build para un archivo: upsert de sus nodos en
+// una tx (identidad estable); devuelve (nodosUpserted, aristasPendientes) para
+// resolver en la fase 2
 func (s *CodegraphService) indexFileNodes(ctx context.Context, in BuildInput, rel string, parsed *ParsedFile) (int, []pendingEdge, error) {
 	var nodesUpserted int
 	var pending []pendingEdge
@@ -434,26 +440,21 @@ func (s *CodegraphService) resolveAndInsertEdges(ctx context.Context, projectID 
 
 	work := func(ctx context.Context) error {
 		qx := s.q(ctx)
-		// Cache QN -> node_id para no reconsultar el mismo target repetido.
+		// cache QN -> node_id para no reconsultar el mismo target repetido
 		resolved := make(map[string]uuid.UUID)
 		for _, e := range edges {
-			tgtID, ok := resolved[e.targetQN]
-			if !ok {
-				id, found, err := s.resolveTarget(ctx, projectID, e.targetQN)
-				if err != nil {
-					return fmt.Errorf("resolve target %s: %w", e.targetQN, err)
-				}
-				if !found {
-					continue // target no resuelto: se omite (externo/cross-package).
-				}
-				tgtID = id
-				resolved[e.targetQN] = id
+			tgtID, found, err := s.resolveTargetCached(ctx, projectID, e.targetQN, resolved)
+			if err != nil {
+				return err
+			}
+			if !found {
+				continue // target no resuelto: se omite (externo/cross-package).
 			}
 			if e.sourceID == tgtID {
 				continue // la mig 000176 prohíbe source == target.
 			}
 			meta, _ := json.Marshal(map[string]any{})
-			_, err := qx.InsertEdgeIfAbsent(ctx, codegraphdb.InsertEdgeIfAbsentParams{
+			_, err = qx.InsertEdgeIfAbsent(ctx, codegraphdb.InsertEdgeIfAbsentParams{
 				ProjectID:    projectID,
 				SourceNodeID: e.sourceID,
 				TargetNodeID: tgtID,
@@ -471,25 +472,27 @@ func (s *CodegraphService) resolveAndInsertEdges(ctx context.Context, projectID 
 		return nil
 	}
 
-	if tx := txctx.TxFromContext(ctx); tx != nil {
-		if err := work(ctx); err != nil {
-			return 0, err
-		}
-		return created, nil
-	}
-
-	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return 0, fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := work(txctx.WithTxContext(ctx, tx)); err != nil {
+	if err := s.withTx(ctx, work); err != nil {
 		return 0, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit tx: %w", err)
-	}
 	return created, nil
+}
+
+// resolveTargetCached resuelve un targetQN a node_id usando (y poblando) el
+// cache local resolved. Devuelve (id, found, err).
+func (s *CodegraphService) resolveTargetCached(ctx context.Context, projectID uuid.UUID, targetQN string, resolved map[string]uuid.UUID) (uuid.UUID, bool, error) {
+	if id, ok := resolved[targetQN]; ok {
+		return id, true, nil
+	}
+	id, found, err := s.resolveTarget(ctx, projectID, targetQN)
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("resolve target %s: %w", targetQN, err)
+	}
+	if !found {
+		return uuid.Nil, false, nil
+	}
+	resolved[targetQN] = id
+	return id, true, nil
 }
 
 // resolveTarget mapea un TargetQN de una arista a un node_id buscando un nodo
@@ -564,23 +567,8 @@ func (s *CodegraphService) removeFile(ctx context.Context, projectID uuid.UUID, 
 		return nil
 	}
 
-	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return work(ctx)
-	}
-	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := work(txctx.WithTxContext(ctx, tx)); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return s.withTx(ctx, work)
 }
-
-// ---------------------------------------------------------------------------
-// Explore (blast-radius)
-// ---------------------------------------------------------------------------
 
 // CodeNode es la representación de dominio de un nodo de código.
 type CodeNode struct {
@@ -677,7 +665,17 @@ func (s *CodegraphService) Explore(ctx context.Context, projectID uuid.UUID, sym
 //  2. fallback: SearchNodesByName con patrón exacto (sin comodines) sobre
 //     name/qualified_name; si tampoco hay, patrón %symbol% (substring).
 func (s *CodegraphService) resolveNodes(ctx context.Context, projectID uuid.UUID, symbol string) ([]CodeNode, error) {
-	// 1) qualified_name exacto.
+	if node, found, err := s.resolveExact(ctx, projectID, symbol); err != nil {
+		return nil, err
+	} else if found {
+		return []CodeNode{node}, nil
+	}
+	return s.resolveByName(ctx, projectID, symbol)
+}
+
+// resolveExact intenta resolver el símbolo por qualified_name exacto sobre los
+// kinds destacados. Devuelve (node, found, err).
+func (s *CodegraphService) resolveExact(ctx context.Context, projectID uuid.UUID, symbol string) (CodeNode, bool, error) {
 	for _, kind := range []string{KindFunc, KindMethod, KindType, KindInterface, KindConst, KindVar, KindFile} {
 		row, err := s.q(ctx).GetNodeByQualified(ctx, codegraphdb.GetNodeByQualifiedParams{
 			ProjectID:     projectID,
@@ -685,14 +683,18 @@ func (s *CodegraphService) resolveNodes(ctx context.Context, projectID uuid.UUID
 			Kind:          kind,
 		})
 		if err == nil {
-			return []CodeNode{nodeFromGet(row)}, nil
+			return nodeFromGet(row), true, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("resolve qualified: %w", err)
+			return CodeNode{}, false, fmt.Errorf("resolve qualified: %w", err)
 		}
 	}
+	return CodeNode{}, false, nil
+}
 
-	// 2) búsqueda por nombre. Primero exacto, luego substring.
+// resolveByName busca el símbolo por nombre: primero patrón exacto y, si no hay
+// match, substring (%symbol%) sobre name/qualified_name.
+func (s *CodegraphService) resolveByName(ctx context.Context, projectID uuid.UUID, symbol string) ([]CodeNode, error) {
 	exact := symbol
 	rows, err := s.q(ctx).SearchNodesByName(ctx, codegraphdb.SearchNodesByNameParams{
 		ProjectID:   projectID,
@@ -719,10 +721,6 @@ func (s *CodegraphService) resolveNodes(ctx context.Context, projectID uuid.UUID
 	}
 	return out, nil
 }
-
-// ---------------------------------------------------------------------------
-// Path (BFS source->target)
-// ---------------------------------------------------------------------------
 
 // Path busca el camino más corto (en número de aristas) desde fromSymbol hasta
 // toSymbol recorriendo aristas del project en dirección source->target.
@@ -838,10 +836,6 @@ func reconstructPath(prevEdge map[uuid.UUID]CodeEdge, fromID, toID uuid.UUID) []
 	return rev
 }
 
-// ---------------------------------------------------------------------------
-// Overview (conteos + god-nodes)
-// ---------------------------------------------------------------------------
-
 // KindCount es el conteo de nodos activos de un kind dado.
 type KindCount struct {
 	Kind  string
@@ -893,23 +887,38 @@ func (s *CodegraphService) Overview(ctx context.Context, projectID uuid.UUID) (*
 
 	ov := &Overview{TotalNodes: len(nodes), TotalEdges: len(edges)}
 
-	// Conteos por kind (orden determinista por kind).
-	kindCounts := map[string]int{}
 	nodeByID := make(map[uuid.UUID]CodeNode, len(nodes))
 	for _, n := range nodes {
-		kindCounts[n.Kind]++
 		nodeByID[n.ID] = nodeFromList(n)
+	}
+	ov.ByKind = countByKind(nodes)
+	ov.GodNodes = computeGodNodes(nodeByID, edges)
+	return ov, nil
+}
+
+// countByKind cuenta los nodos por kind y los devuelve ordenados por kind asc
+// (determinista).
+func countByKind(nodes []codegraphdb.ListNodesByProjectRow) []KindCount {
+	kindCounts := map[string]int{}
+	for _, n := range nodes {
+		kindCounts[n.Kind]++
 	}
 	kinds := make([]string, 0, len(kindCounts))
 	for k := range kindCounts {
 		kinds = append(kinds, k)
 	}
 	sort.Strings(kinds)
+	out := make([]KindCount, 0, len(kinds))
 	for _, k := range kinds {
-		ov.ByKind = append(ov.ByKind, KindCount{Kind: k, Count: kindCounts[k]})
+		out = append(out, KindCount{Kind: k, Count: kindCounts[k]})
 	}
+	return out
+}
 
-	// Grado por nodo (solo nodos activos; aristas a nodos borrados se ignoran).
+// computeGodNodes calcula el grado in/out de cada nodo activo (aristas a nodos
+// borrados se ignoran), ordena por grado desc + qualified_name asc y trunca al
+// top.
+func computeGodNodes(nodeByID map[uuid.UUID]CodeNode, edges []codegraphdb.CodeEdge) []GodNode {
 	inDeg := map[uuid.UUID]int{}
 	outDeg := map[uuid.UUID]int{}
 	for _, e := range edges {
@@ -931,7 +940,6 @@ func (s *CodegraphService) Overview(ctx context.Context, projectID uuid.UUID) (*
 		}
 		gods = append(gods, GodNode{Node: n, InDegree: in, OutDegree: out, Degree: deg})
 	}
-	// Orden determinista: por grado desc, luego qualified_name asc.
 	sort.Slice(gods, func(i, j int) bool {
 		if gods[i].Degree != gods[j].Degree {
 			return gods[i].Degree > gods[j].Degree
@@ -941,13 +949,10 @@ func (s *CodegraphService) Overview(ctx context.Context, projectID uuid.UUID) (*
 	if len(gods) > defaultGodNodesTop {
 		gods = gods[:defaultGodNodesTop]
 	}
-	ov.GodNodes = gods
-	return ov, nil
+	return gods
 }
 
-// ---------------------------------------------------------------------------
 // mappers + helpers
-// ---------------------------------------------------------------------------
 
 func edgeFromDB(r codegraphdb.CodeEdge) CodeEdge {
 	return CodeEdge{

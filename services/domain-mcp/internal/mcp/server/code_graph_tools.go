@@ -102,8 +102,6 @@ func (h *codeGraphHandlers) resolveProject(ctx context.Context, slug string) (pr
 	return proj.ID, nil
 }
 
-// ---- domain_code_build ------------------------------------------------------
-
 func toolCodeBuild() mcp.Tool {
 	return mcp.NewTool("domain_code_build",
 		mcp.WithDescription("Construye/refresca el grafo de CÓDIGO Go de un project recorriendo el repo en root_path (ruta ABSOLUTA en el filesystem local). Incremental: saltea archivos sin cambios (content_hash) y soft-deletea los que ya no existen. Excluye vendor/, testdata/, node_modules/, dirs ocultos y *_test.go (salvo include_tests). Devuelve BuildStats. Corre esto antes de domain_code_explore/path/graph."),
@@ -174,8 +172,6 @@ func deriveGitHead(ctx context.Context, dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// ---- domain_code_explore ----------------------------------------------------
-
 func toolCodeExplore() mcp.Tool {
 	return mcp.NewTool("domain_code_explore",
 		mcp.WithDescription("Blast-radius de un símbolo Go: nodo(s) que matchean (qualified_name exacto o nombre vía ILIKE) + callers (quién lo llama) + callees (a quién llama), con file:line y signature. Útil para saber el impacto de cambiar una función/método antes de tocarla."),
@@ -236,8 +232,6 @@ func (h *codeGraphHandlers) handleCodeExplore(ctx context.Context, req mcp.CallT
 		},
 	})
 }
-
-// ---- domain_code_path -------------------------------------------------------
 
 func toolCodePath() mcp.Tool {
 	return mcp.NewTool("domain_code_path",
@@ -309,8 +303,6 @@ func (h *codeGraphHandlers) handleCodePath(ctx context.Context, req mcp.CallTool
 	})
 }
 
-// ---- domain_code_graph ------------------------------------------------------
-
 func toolCodeGraph() mcp.Tool {
 	return mcp.NewTool("domain_code_graph",
 		mcp.WithDescription("Overview del grafo de código del project: total de nodos/aristas, conteo por kind (file/func/method/type/...) y los god-nodes (mayor grado entrada+salida, candidatos a hotspot/acoplamiento alto). Útil para entender la forma del codebase de un vistazo."),
@@ -365,8 +357,6 @@ func (h *codeGraphHandlers) handleCodeGraph(ctx context.Context, req mcp.CallToo
 	})
 }
 
-// ---- serializers ------------------------------------------------------------
-
 // codeNodeJSON serializa un nodo de código para la respuesta del tool.
 func codeNodeJSON(n codegraphsvc.CodeNode) map[string]any {
 	m := map[string]any{
@@ -402,10 +392,6 @@ func codeEdgeJSON(e codegraphsvc.CodeEdge) map[string]any {
 	return m
 }
 
-// ---- fase 3: cruce memoria/código -------------------------------------------
-
-// ---- domain_mem_link_code ---------------------------------------------------
-
 func toolMemLinkCode() mcp.Tool {
 	return mcp.NewTool("domain_mem_link_code",
 		mcp.WithDescription("Vincula una memoria/decisión (observation_id) con un nodo del grafo de CÓDIGO del mismo project. El nodo se identifica por code_node_id (UUID) o por symbol (qualified_name o nombre simple, debe resolver a UN solo nodo). link_type: affects | decided_in | references | implements. Idempotente: si el vínculo ya existe lo reporta. Corré domain_code_build antes para tener nodos."),
@@ -433,21 +419,17 @@ func toolMemLinkCode() mcp.Tool {
 	)
 }
 
-func (h *codeGraphHandlers) handleMemLinkCode(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// parseMemLinkCodeArgs valida los args de domain_mem_link_code y arma el
+// LinkInput (el nodo se identifica por code_node_id o por symbol).
+func (h *codeGraphHandlers) parseMemLinkCodeArgs(req mcp.CallToolRequest, projectID uuid.UUID) (codegraphsvc.LinkInput, *mcp.CallToolResult) {
 	args := req.GetArguments()
-	slug := strOf(args["project_slug"])
-	projectID, errRes := h.resolveProject(ctx, slug)
-	if errRes != nil {
-		return errRes, nil
-	}
-
 	obsID, err := uuid.Parse(strOf(args["observation_id"]))
 	if err != nil {
-		return mcp.NewToolResultError("observation_id invalido"), nil
+		return codegraphsvc.LinkInput{}, mcp.NewToolResultError("observation_id invalido")
 	}
 	linkType := strOf(args["link_type"])
 	if !validCodeLinkTypes[linkType] {
-		return mcp.NewToolResultError("link_type invalido: usar affects | decided_in | references | implements"), nil
+		return codegraphsvc.LinkInput{}, mcp.NewToolResultError("link_type invalido: usar affects | decided_in | references | implements")
 	}
 
 	in := codegraphsvc.LinkInput{
@@ -459,19 +441,33 @@ func (h *codeGraphHandlers) handleMemLinkCode(ctx context.Context, req mcp.CallT
 	if cnid := strOf(args["code_node_id"]); cnid != "" {
 		id, err := uuid.Parse(cnid)
 		if err != nil {
-			return mcp.NewToolResultError("code_node_id invalido"), nil
+			return codegraphsvc.LinkInput{}, mcp.NewToolResultError("code_node_id invalido")
 		}
 		in.CodeNodeID = id
 	} else {
 		in.Symbol = strOf(args["symbol"])
 		if in.Symbol == "" {
-			return mcp.NewToolResultError("symbol o code_node_id es requerido"), nil
+			return codegraphsvc.LinkInput{}, mcp.NewToolResultError("symbol o code_node_id es requerido")
 		}
 	}
 	if h.principal != nil {
 		if uid, err := uuid.Parse(h.principal.UserID); err == nil {
 			in.CreatedBy = &uid
 		}
+	}
+	return in, nil
+}
+
+func (h *codeGraphHandlers) handleMemLinkCode(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	slug := strOf(req.GetArguments()["project_slug"])
+	projectID, errRes := h.resolveProject(ctx, slug)
+	if errRes != nil {
+		return errRes, nil
+	}
+
+	in, errRes := h.parseMemLinkCodeArgs(req, projectID)
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	link, err := h.graph.LinkObservationToCode(ctx, in)
@@ -497,8 +493,6 @@ func (h *codeGraphHandlers) handleMemLinkCode(ctx context.Context, req mcp.CallT
 		"link":         obsCodeLinkJSON(*link),
 	})
 }
-
-// ---- domain_code_observations -----------------------------------------------
 
 func toolCodeObservations() mcp.Tool {
 	return mcp.NewTool("domain_code_observations",
@@ -549,8 +543,6 @@ func (h *codeGraphHandlers) handleCodeObservations(ctx context.Context, req mcp.
 	})
 }
 
-// ---- domain_mem_code_links --------------------------------------------------
-
 func toolMemCodeLinks() mcp.Tool {
 	return mcp.NewTool("domain_mem_code_links",
 		mcp.WithDescription("Lista los nodos de CÓDIGO vinculados a una memoria/decisión (observation_id), con el tipo de vínculo y el detalle de cada nodo (kind/qualified_name/file:line). Responde '¿qué código toca esta decisión?'."),
@@ -598,8 +590,6 @@ func (h *codeGraphHandlers) handleMemCodeLinks(ctx context.Context, req mcp.Call
 		"count":          len(out),
 	})
 }
-
-// ---- serializers (cruce) ----------------------------------------------------
 
 // obsCodeLinkJSON serializa un vínculo memoria->código para la respuesta.
 func obsCodeLinkJSON(l codegraphsvc.ObsCodeLink) map[string]any {

@@ -137,27 +137,10 @@ func (s *EdgeService) Link(ctx context.Context, in LinkInput) (*Edge, error) {
 		return nil, ErrEdgeSelf
 	}
 
-	// Validar que ambos extremos existan y pertenezcan al mismo project.
-	src, err := s.q(ctx).GetObservation(ctx, in.SourceID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("source: %w", ErrNotFound)
-	}
+	projectID, err := s.loadAndValidateEndpoints(ctx, in)
 	if err != nil {
-		return nil, fmt.Errorf("get source: %w", err)
+		return nil, err
 	}
-	tgt, err := s.q(ctx).GetObservation(ctx, in.TargetID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("target: %w", ErrNotFound)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get target: %w", err)
-	}
-	// El project_id efectivo es el del source ya validado (no el del caller).
-	// Ambos extremos deben compartir project.
-	if src.ProjectID != tgt.ProjectID {
-		return nil, ErrEdgeCrossProject
-	}
-	projectID := src.ProjectID
 
 	confidence := in.Confidence
 	if confidence <= 0 {
@@ -176,16 +159,16 @@ func (s *EdgeService) Link(ctx context.Context, in LinkInput) (*Edge, error) {
 	// historial bi-temporal).
 
 	row, err := s.q(ctx).InsertEdge(ctx, observationdb.InsertEdgeParams{
-		ProjectID:      projectID,
-		SourceID:       in.SourceID,
-		TargetID:       in.TargetID,
-		EdgeType:       in.EdgeType,
-		Origin:         "manual",
-		Confidence:     confidence,
-		ValidFrom:      pgtype.Timestamptz{}, // NULL -> COALESCE(NOW())
-		Note:           in.Note,
-		Metadata:       metaJSON,
-		CreatedBy:      in.CreatedBy,
+		ProjectID:  projectID,
+		SourceID:   in.SourceID,
+		TargetID:   in.TargetID,
+		EdgeType:   in.EdgeType,
+		Origin:     "manual",
+		Confidence: confidence,
+		ValidFrom:  pgtype.Timestamptz{}, // NULL -> COALESCE(NOW())
+		Note:       in.Note,
+		Metadata:   metaJSON,
+		CreatedBy:  in.CreatedBy,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -198,22 +181,52 @@ func (s *EdgeService) Link(ctx context.Context, in LinkInput) (*Edge, error) {
 	}
 
 	e := edgeFromInsert(row)
-
-	if s.Audit != nil {
-		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorID:    in.CreatedBy,
-			ActorType:  audit.ActorUser,
-			Action:     "observation.edge.linked",
-			EntityType: "observation_edge",
-			EntityID:   &e.ID,
-			NewValues: map[string]any{
-				"source_id": e.SourceID,
-				"target_id": e.TargetID,
-				"edge_type": e.EdgeType,
-			},
-		})
-	}
+	s.recordEdgeLinked(ctx, in, e)
 	return &e, nil
+}
+
+// loadAndValidateEndpoints carga source y target por id, valida que existan y
+// que compartan project, y devuelve el project_id derivado del source validado
+// (no se confía en un project del caller).
+func (s *EdgeService) loadAndValidateEndpoints(ctx context.Context, in LinkInput) (uuid.UUID, error) {
+	src, err := s.q(ctx).GetObservation(ctx, in.SourceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("source: %w", ErrNotFound)
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("get source: %w", err)
+	}
+	tgt, err := s.q(ctx).GetObservation(ctx, in.TargetID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("target: %w", ErrNotFound)
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("get target: %w", err)
+	}
+	if src.ProjectID != tgt.ProjectID {
+		return uuid.Nil, ErrEdgeCrossProject
+	}
+	return src.ProjectID, nil
+}
+
+// recordEdgeLinked registra el evento de auditoría de una arista creada (no-op
+// si no hay Recorder).
+func (s *EdgeService) recordEdgeLinked(ctx context.Context, in LinkInput, e Edge) {
+	if s.Audit == nil {
+		return
+	}
+	audit.RecordOrLog(ctx, s.Audit, audit.Event{
+		ActorID:    in.CreatedBy,
+		ActorType:  audit.ActorUser,
+		Action:     "observation.edge.linked",
+		EntityType: "observation_edge",
+		EntityID:   &e.ID,
+		NewValues: map[string]any{
+			"source_id": e.SourceID,
+			"target_id": e.TargetID,
+			"edge_type": e.EdgeType,
+		},
+	})
 }
 
 // Unlink hace soft-delete de la arista por id.
@@ -450,87 +463,106 @@ func (s *EdgeService) InferEdges(ctx context.Context, in InferInput) (created in
 		topK = defaultInferTopK
 	}
 
-	// Determinar las observations fuente.
-	var sources []observationdb.ListObservationsRow
-	if in.ObservationID != nil {
-		o, err := s.q(ctx).GetObservation(ctx, *in.ObservationID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, 0, ErrNotFound
-		}
-		if err != nil {
-			return 0, 0, fmt.Errorf("get source observation: %w", err)
-		}
-		if o.ProjectID != in.ProjectID {
-			return 0, 0, ErrEdgeCrossProject
-		}
-		sources = append(sources, observationdb.ListObservationsRow{
-			ID: o.ID, ProjectID: o.ProjectID, Content: o.Content,
-		})
-	} else {
-		rows, err := s.q(ctx).ListObservations(ctx, observationdb.ListObservationsParams{
-			ProjectID:   in.ProjectID,
-			ResultLimit: 200,
-		})
-		if err != nil {
-			return 0, 0, fmt.Errorf("list source observations: %w", err)
-		}
-		sources = rows
+	sources, err := s.resolveInferSources(ctx, in)
+	if err != nil {
+		return 0, 0, err
 	}
 
 	for _, src := range sources {
-		vec, err := s.Embedder.Embed(ctx, src.Content)
+		c, cand, err := s.inferEdgesForSource(ctx, in, src, threshold, topK)
 		if err != nil {
-			return created, candidates, fmt.Errorf("embed source %s: %w", src.ID, err)
+			return created, candidates, err
 		}
-		if llm.IsZero(vec) {
-			continue // sin embedder real no hay similitud útil.
-		}
-		cands, err := s.q(ctx).FindEdgeCandidatesByEmbedding(ctx, observationdb.FindEdgeCandidatesByEmbeddingParams{
-			Embedding:   vectorLiteral(vec),
-			ProjectID:   in.ProjectID,
-			SourceID:    src.ID,
-			ResultLimit: int32(topK),
-		})
-		if err != nil {
-			return created, candidates, fmt.Errorf("find candidates for %s: %w", src.ID, err)
-		}
-		for _, c := range cands {
-			if c.Score < threshold {
-				continue
-			}
-			candidates++
-			confidence := float32(c.Score)
-			if confidence > 1 {
-				confidence = 1
-			}
-			meta, _ := json.Marshal(map[string]any{"inferred_score": c.Score})
-			_, err := s.q(ctx).InsertEdgeIfAbsent(ctx, observationdb.InsertEdgeIfAbsentParams{
-				ProjectID:      in.ProjectID,
-				SourceID:       src.ID,
-				TargetID:       c.ID,
-				EdgeType:       "relates_to",
-				Origin:         "inferred",
-				Confidence:     confidence,
-				ValidFrom:      pgtype.Timestamptz{},
-				Note:           nil,
-				Metadata:       meta,
-				CreatedBy:      in.CreatedBy,
-			})
-			if errors.Is(err, pgx.ErrNoRows) {
-				// ON CONFLICT DO NOTHING: la arista ya existía (RETURNING vacío).
-				// Idempotente y sin abortar la tx. No se cuenta como created.
-				continue
-			}
-			if err != nil {
-				return created, candidates, fmt.Errorf("insert inferred edge %s->%s: %w", src.ID, c.ID, err)
-			}
-			created++
-		}
+		created += c
+		candidates += cand
 	}
 	return created, candidates, nil
 }
 
-// --- mappers row -> Edge -----------------------------------------------------
+// resolveInferSources resuelve las observations fuente de la inferencia: la
+// indicada (validando que sea del project) o todas las del project.
+func (s *EdgeService) resolveInferSources(ctx context.Context, in InferInput) ([]observationdb.ListObservationsRow, error) {
+	if in.ObservationID != nil {
+		o, err := s.q(ctx).GetObservation(ctx, *in.ObservationID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("get source observation: %w", err)
+		}
+		if o.ProjectID != in.ProjectID {
+			return nil, ErrEdgeCrossProject
+		}
+		return []observationdb.ListObservationsRow{{
+			ID: o.ID, ProjectID: o.ProjectID, Content: o.Content,
+		}}, nil
+	}
+	rows, err := s.q(ctx).ListObservations(ctx, observationdb.ListObservationsParams{
+		ProjectID:   in.ProjectID,
+		ResultLimit: 200,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list source observations: %w", err)
+	}
+	return rows, nil
+}
+
+// inferEdgesForSource embebe el content de src, pide los topK candidatos por
+// coseno y crea una arista relates_to por candidato con score >= threshold.
+// Devuelve (created, candidates) para esa fuente.
+func (s *EdgeService) inferEdgesForSource(ctx context.Context, in InferInput, src observationdb.ListObservationsRow, threshold float64, topK int) (created int, candidates int, err error) {
+	vec, err := s.Embedder.Embed(ctx, src.Content)
+	if err != nil {
+		return 0, 0, fmt.Errorf("embed source %s: %w", src.ID, err)
+	}
+	if llm.IsZero(vec) {
+		return 0, 0, nil // sin embedder real no hay similitud útil
+	}
+	cands, err := s.q(ctx).FindEdgeCandidatesByEmbedding(ctx, observationdb.FindEdgeCandidatesByEmbeddingParams{
+		Embedding:   vectorLiteral(vec),
+		ProjectID:   in.ProjectID,
+		SourceID:    src.ID,
+		ResultLimit: int32(topK),
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("find candidates for %s: %w", src.ID, err)
+	}
+	for _, c := range cands {
+		if c.Score < threshold {
+			continue
+		}
+		candidates++
+		confidence := float32(c.Score)
+		if confidence > 1 {
+			confidence = 1
+		}
+		meta, _ := json.Marshal(map[string]any{"inferred_score": c.Score})
+		_, err := s.q(ctx).InsertEdgeIfAbsent(ctx, observationdb.InsertEdgeIfAbsentParams{
+			ProjectID:  in.ProjectID,
+			SourceID:   src.ID,
+			TargetID:   c.ID,
+			EdgeType:   "relates_to",
+			Origin:     "inferred",
+			Confidence: confidence,
+			ValidFrom:  pgtype.Timestamptz{},
+			Note:       nil,
+			Metadata:   meta,
+			CreatedBy:  in.CreatedBy,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// ON CONFLICT DO NOTHING: la arista ya existía (RETURNING vacío).
+			// Idempotente y sin abortar la tx. No se cuenta como created.
+			continue
+		}
+		if err != nil {
+			return created, candidates, fmt.Errorf("insert inferred edge %s->%s: %w", src.ID, c.ID, err)
+		}
+		created++
+	}
+	return created, candidates, nil
+}
+
+// mappers row -> Edge
 
 func validToPtr(t pgtype.Timestamptz) *time.Time {
 	if !t.Valid {

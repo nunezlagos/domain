@@ -130,8 +130,23 @@ func ParseFile(filePath string, src []byte) (*ParsedFile, error) {
 		return fset.Position(p).Line
 	}
 
-	// Nodo file. QN = filePath para que defined_in/imports tengan source estable.
-	fileNode := ParsedNode{
+	fileNode := collectFileNode(astFile, filePath, lineOf)
+	pf.Nodes = append(pf.Nodes, fileNode)
+
+	// set de QN locales para resolución best-effort de calls
+	localQNs := map[string]string{}
+	collectTopLevelDecls(pf, astFile, pkg, filePath, lineOf, localQNs)
+	collectDefinedInEdges(pf, fileNode.QualifiedName)
+	collectImportEdges(pf, astFile, fileNode.QualifiedName)
+	collectCallEdges(pf, astFile, pkg, localQNs)
+
+	return pf, nil
+}
+
+// collectFileNode arma el nodo file. QN = filePath para que defined_in/imports
+// tengan un source estable.
+func collectFileNode(astFile *ast.File, filePath string, lineOf func(token.Pos) int) ParsedNode {
+	return ParsedNode{
 		Kind:          KindFile,
 		Name:          baseName(filePath),
 		QualifiedName: filePath,
@@ -140,81 +155,101 @@ func ParseFile(filePath string, src []byte) (*ParsedFile, error) {
 		LineEnd:       lineOf(astFile.End()),
 		Doc:           docText(astFile.Doc),
 	}
-	pf.Nodes = append(pf.Nodes, fileNode)
+}
 
-	// Set de QN locales para resolución best-effort de calls.
-	localQNs := map[string]string{} // nombre simple -> QN
-
+// collectTopLevelDecls es la pasada 1: emite nodos func/method/type/const/var y
+// las aristas method_of, poblando localQNs para la resolución de calls.
+func collectTopLevelDecls(
+	pf *ParsedFile,
+	astFile *ast.File,
+	pkg, filePath string,
+	lineOf func(token.Pos) int,
+	localQNs map[string]string,
+) {
 	addNode := func(n ParsedNode) {
 		pf.Nodes = append(pf.Nodes, n)
 	}
-
-	// Pasada 1: declaraciones top-level (nodos).
 	for _, decl := range astFile.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			name := d.Name.Name
-			doc := docText(d.Doc)
-			sig := renderFuncSig(d)
-			start, end := lineOf(d.Pos()), lineOf(d.End())
-
-			if d.Recv != nil && len(d.Recv.List) > 0 {
-				// Método: QN = pkg.Tipo.Metodo.
-				recv := receiverTypeName(d.Recv.List[0].Type)
-				qn := joinQN(pkg, recv, name)
-				addNode(ParsedNode{
-					Kind:          KindMethod,
-					Name:          name,
-					QualifiedName: qn,
-					FilePath:      filePath,
-					LineStart:     start,
-					LineEnd:       end,
-					Signature:     sig,
-					Doc:           doc,
-				})
-				localQNs[name] = qn
-				// method_of: method -> type receiver.
-				if recv != "" {
-					pf.Edges = append(pf.Edges, ParsedEdge{
-						SourceQN: qn,
-						TargetQN: joinQN(pkg, recv),
-						EdgeType: EdgeMethodOf,
-					})
-				}
-			} else {
-				// Func top-level: QN = pkg.Nombre.
-				qn := joinQN(pkg, name)
-				addNode(ParsedNode{
-					Kind:          KindFunc,
-					Name:          name,
-					QualifiedName: qn,
-					FilePath:      filePath,
-					LineStart:     start,
-					LineEnd:       end,
-					Signature:     sig,
-					Doc:           doc,
-				})
-				localQNs[name] = qn
-			}
-
+			collectFuncDecl(pf, d, pkg, filePath, lineOf, addNode, localQNs)
 		case *ast.GenDecl:
 			collectGenDecl(d, pkg, filePath, lineOf, addNode, localQNs)
 		}
 	}
+}
 
-	// defined_in: cada símbolo (no-file) -> file.
+// collectFuncDecl emite el nodo func o method y, para métodos, la arista
+// method_of hacia su type receiver.
+func collectFuncDecl(
+	pf *ParsedFile,
+	d *ast.FuncDecl,
+	pkg, filePath string,
+	lineOf func(token.Pos) int,
+	addNode func(ParsedNode),
+	localQNs map[string]string,
+) {
+	name := d.Name.Name
+	doc := docText(d.Doc)
+	sig := renderFuncSig(d)
+	start, end := lineOf(d.Pos()), lineOf(d.End())
+
+	if d.Recv != nil && len(d.Recv.List) > 0 {
+		recv := receiverTypeName(d.Recv.List[0].Type)
+		qn := joinQN(pkg, recv, name)
+		addNode(ParsedNode{
+			Kind:          KindMethod,
+			Name:          name,
+			QualifiedName: qn,
+			FilePath:      filePath,
+			LineStart:     start,
+			LineEnd:       end,
+			Signature:     sig,
+			Doc:           doc,
+		})
+		localQNs[name] = qn
+		if recv != "" {
+			pf.Edges = append(pf.Edges, ParsedEdge{
+				SourceQN: qn,
+				TargetQN: joinQN(pkg, recv),
+				EdgeType: EdgeMethodOf,
+			})
+		}
+		return
+	}
+
+	qn := joinQN(pkg, name)
+	addNode(ParsedNode{
+		Kind:          KindFunc,
+		Name:          name,
+		QualifiedName: qn,
+		FilePath:      filePath,
+		LineStart:     start,
+		LineEnd:       end,
+		Signature:     sig,
+		Doc:           doc,
+	})
+	localQNs[name] = qn
+}
+
+// collectDefinedInEdges agrega una arista defined_in de cada símbolo no-file
+// hacia el nodo file.
+func collectDefinedInEdges(pf *ParsedFile, fileQN string) {
 	for _, n := range pf.Nodes {
 		if n.Kind == KindFile {
 			continue
 		}
 		pf.Edges = append(pf.Edges, ParsedEdge{
 			SourceQN: n.QualifiedName,
-			TargetQN: fileNode.QualifiedName,
+			TargetQN: fileQN,
 			EdgeType: EdgeDefinedIn,
 		})
 	}
+}
 
-	// imports: file -> import path. Se de-duplican y ordenan.
+// collectImportEdges de-duplica y ordena los import paths y agrega una arista
+// imports file -> path por cada uno.
+func collectImportEdges(pf *ParsedFile, astFile *ast.File, fileQN string) {
 	importSet := map[string]struct{}{}
 	for _, imp := range astFile.Imports {
 		if imp.Path == nil {
@@ -232,13 +267,16 @@ func ParseFile(filePath string, src []byte) (*ParsedFile, error) {
 	sort.Strings(pf.ImportPaths)
 	for _, path := range pf.ImportPaths {
 		pf.Edges = append(pf.Edges, ParsedEdge{
-			SourceQN: fileNode.QualifiedName,
+			SourceQN: fileQN,
 			TargetQN: path,
 			EdgeType: EdgeImports,
 		})
 	}
+}
 
-	// Pasada 2: calls. Recorre el cuerpo de cada func/method y registra aristas.
+// collectCallEdges es la pasada 2: recorre el cuerpo de cada func/method y
+// agrega una arista calls por cada callee resuelto.
+func collectCallEdges(pf *ParsedFile, astFile *ast.File, pkg string, localQNs map[string]string) {
 	for _, decl := range astFile.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
@@ -259,8 +297,6 @@ func ParseFile(filePath string, src []byte) (*ParsedFile, error) {
 			})
 		}
 	}
-
-	return pf, nil
 }
 
 // collectGenDecl extrae nodos type/interface/const/var de un *ast.GenDecl
@@ -279,25 +315,7 @@ func collectGenDecl(
 			if !ok {
 				continue
 			}
-			kind := KindType
-			if _, isIface := ts.Type.(*ast.InterfaceType); isIface {
-				kind = KindInterface
-			}
-			doc := docText(ts.Doc)
-			if doc == "" {
-				doc = docText(d.Doc)
-			}
-			qn := joinQN(pkg, ts.Name.Name)
-			addNode(ParsedNode{
-				Kind:          kind,
-				Name:          ts.Name.Name,
-				QualifiedName: qn,
-				FilePath:      filePath,
-				LineStart:     lineOf(ts.Pos()),
-				LineEnd:       lineOf(ts.End()),
-				Doc:           doc,
-			})
-			localQNs[ts.Name.Name] = qn
+			collectTypeSpec(ts, d, pkg, filePath, lineOf, addNode, localQNs)
 		}
 	case token.CONST, token.VAR:
 		kind := KindConst
@@ -309,27 +327,70 @@ func collectGenDecl(
 			if !ok {
 				continue
 			}
-			doc := docText(vs.Doc)
-			if doc == "" {
-				doc = docText(d.Doc)
-			}
-			for _, name := range vs.Names {
-				if name.Name == "_" {
-					continue
-				}
-				qn := joinQN(pkg, name.Name)
-				addNode(ParsedNode{
-					Kind:          kind,
-					Name:          name.Name,
-					QualifiedName: qn,
-					FilePath:      filePath,
-					LineStart:     lineOf(name.Pos()),
-					LineEnd:       lineOf(name.End()),
-					Doc:           doc,
-				})
-				localQNs[name.Name] = qn
-			}
+			collectValueSpec(vs, d, kind, pkg, filePath, lineOf, addNode, localQNs)
 		}
+	}
+}
+
+// collectTypeSpec emite un nodo type/interface a partir de un TypeSpec.
+func collectTypeSpec(
+	ts *ast.TypeSpec,
+	d *ast.GenDecl,
+	pkg, filePath string,
+	lineOf func(token.Pos) int,
+	addNode func(ParsedNode),
+	localQNs map[string]string,
+) {
+	kind := KindType
+	if _, isIface := ts.Type.(*ast.InterfaceType); isIface {
+		kind = KindInterface
+	}
+	doc := docText(ts.Doc)
+	if doc == "" {
+		doc = docText(d.Doc)
+	}
+	qn := joinQN(pkg, ts.Name.Name)
+	addNode(ParsedNode{
+		Kind:          kind,
+		Name:          ts.Name.Name,
+		QualifiedName: qn,
+		FilePath:      filePath,
+		LineStart:     lineOf(ts.Pos()),
+		LineEnd:       lineOf(ts.End()),
+		Doc:           doc,
+	})
+	localQNs[ts.Name.Name] = qn
+}
+
+// collectValueSpec emite un nodo const/var por cada nombre de un ValueSpec
+// (omite el blank identifier).
+func collectValueSpec(
+	vs *ast.ValueSpec,
+	d *ast.GenDecl,
+	kind, pkg, filePath string,
+	lineOf func(token.Pos) int,
+	addNode func(ParsedNode),
+	localQNs map[string]string,
+) {
+	doc := docText(vs.Doc)
+	if doc == "" {
+		doc = docText(d.Doc)
+	}
+	for _, name := range vs.Names {
+		if name.Name == "_" {
+			continue
+		}
+		qn := joinQN(pkg, name.Name)
+		addNode(ParsedNode{
+			Kind:          kind,
+			Name:          name.Name,
+			QualifiedName: qn,
+			FilePath:      filePath,
+			LineStart:     lineOf(name.Pos()),
+			LineEnd:       lineOf(name.End()),
+			Doc:           doc,
+		})
+		localQNs[name.Name] = qn
 	}
 }
 

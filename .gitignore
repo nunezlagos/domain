@@ -51,3 +51,7 @@ opencode.json.backup-*
 
 # SDD specs (NO en repo, solo local)
 openspec/
+# excepción: el paquete Go internal/service/openspec SÍ va al repo
+# (la regla openspec/ era para los árboles SDD exportados, no para el código).
+!services/domain-mcp/internal/service/openspec/
+!services/domain-mcp/internal/service/openspec/**

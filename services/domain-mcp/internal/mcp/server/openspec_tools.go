@@ -8,6 +8,10 @@
 // El server nunca escribe en el filesystem del cliente: export devuelve
 // {path: contenido} y el cliente MCP los escribe; apply recibe los archivos
 // editados. Mismo patrón que domain_project_index_*.
+//
+// La lógica de negocio (render/status/apply) vive en internal/service/openspec
+// (Engine), compartida con el handler HTTP REST. Estos handlers son adaptadores
+// MCP: extraen args, invocan el Engine y serializan la respuesta.
 package mcpserver
 
 import (
@@ -15,80 +19,31 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	issuesvc "nunezlagos/domain/internal/service/issue"
-	specsvc "nunezlagos/domain/internal/service/spec"
-	tasksvc "nunezlagos/domain/internal/service/task"
-	"nunezlagos/domain/internal/store/txctx"
+	"nunezlagos/domain/internal/service/openspec"
 )
 
-type specReader interface {
-	GetLatestProposal(ctx context.Context, issueID uuid.UUID) (*specsvc.Proposal, error)
-	GetLatestDesign(ctx context.Context, issueID uuid.UUID) (*specsvc.Design, error)
-}
-
-type specWriter interface {
-	CreateProposal(ctx context.Context, issueID uuid.UUID, intention, scope, approach, risks, testingNotes string) (*specsvc.Proposal, error)
-	CreateDesign(ctx context.Context, issueID uuid.UUID, proposalID *uuid.UUID, archDecisions, alternatives, dataFlow, tddPlan, risksMitigation string) (*specsvc.Design, error)
-}
-
-type taskReader interface {
-	ListTasks(ctx context.Context, issueID uuid.UUID) ([]tasksvc.Task, error)
-}
-
-type taskWriter interface {
-	UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newStatus, completedBy string) (*tasksvc.Task, error)
-}
-
-type issueReader interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*issuesvc.Issue, error)
-}
-
-type issueWriter interface {
-	Update(ctx context.Context, slug string, title, description, status, priority *string) (*issuesvc.Issue, error)
-	AddScenario(ctx context.Context, huSlug string, sc issuesvc.Scenario) (*issuesvc.Scenario, error)
-	RemoveScenario(ctx context.Context, scenarioID uuid.UUID) error
-}
-
 type openspecHandlers struct {
-	issuesR   issueReader
-	issuesW   issueWriter
-	specR     specReader
-	specW     specWriter
-	tasksR    taskReader
-	tasksW    taskWriter
+	engine    *openspec.Engine
 	projects  indexProjectGetter
-	pool      *pgxpool.Pool
 	principal *apikey.Principal
-}
-
-func (h *openspecHandlers) q(ctx context.Context) interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-} {
-	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
-	}
-	return h.pool
 }
 
 func registerOpenspecTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	h := &openspecHandlers{
-		issuesR:   deps.IssueSvc,
-		issuesW:   deps.IssueSvc,
-		specR:     deps.Spec,
-		specW:     deps.Spec,
-		tasksR:    deps.Tasks,
-		tasksW:    deps.Tasks,
+		engine: &openspec.Engine{
+			IssuesR: deps.IssueSvc,
+			IssuesW: deps.IssueSvc,
+			SpecR:   deps.Spec,
+			SpecW:   deps.Spec,
+			TasksR:  deps.Tasks,
+			TasksW:  deps.Tasks,
+			Pool:    deps.Pool,
+		},
 		projects:  deps.Projects,
-		pool:      deps.Pool,
 		principal: deps.Principal,
 	}
 	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
@@ -139,22 +94,21 @@ func (h *openspecHandlers) handleExport(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
 	}
 	scope, _ := args["scope"].(string)
-	rows, err := h.queryIssues(ctx, proj.ID, scope)
+	changes, err := h.engine.Export(ctx, proj.ID, scope)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("query issues: %v", err)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
-	changes := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		rendered, err := h.renderIssue(ctx, row)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("render issue %s: %v", row.slug, err)), nil
-		}
-		changes = append(changes, rendered)
+	out := make([]map[string]any, 0, len(changes))
+	for _, c := range changes {
+		out = append(out, map[string]any{
+			"issue_slug": c.IssueSlug, "dir": c.Dir,
+			"status": c.Status, "files": c.Files,
+		})
 	}
 	return toolResultJSON(map[string]any{
 		"project_slug": slug,
-		"change_count": len(changes),
-		"changes":      changes,
+		"change_count": len(out),
+		"changes":      out,
 		"next_step":    "Escribí cada archivo de changes[].files (key=path, value=contenido) con tu tool Write. Después editás los .md y corrés domain_openspec_apply.",
 	})
 }
@@ -163,18 +117,87 @@ func (h *openspecHandlers) handleStatus(ctx context.Context, req mcp.CallToolReq
 	if _, errResult := h.requireOrg(); errResult != nil {
 		return errResult, nil
 	}
-	byDir, errResult := groupFilesByChange(req)
+	files, errResult := openspecFilesArg(req)
 	if errResult != nil {
 		return errResult, nil
 	}
-	results := make([]map[string]any, 0, len(byDir))
-	for dir, files := range byDir {
-		results = append(results, h.statusForChange(ctx, dir, files))
+	results := h.engine.Status(ctx, files)
+	out := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		out = append(out, statusResultMap(r))
 	}
 	return toolResultJSON(map[string]any{
-		"change_count": len(results),
-		"changes":      results,
+		"change_count": len(out),
+		"changes":      out,
 	})
+}
+
+func (h *openspecHandlers) handleApply(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if _, errResult := h.requireOrg(); errResult != nil {
+		return errResult, nil
+	}
+	files, errResult := openspecFilesArg(req)
+	if errResult != nil {
+		return errResult, nil
+	}
+	force, _ := req.GetArguments()["force"].(bool)
+	results := h.engine.Apply(ctx, files, force, h.principalUserID())
+	out := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		out = append(out, applyResultMap(r))
+	}
+	return toolResultJSON(map[string]any{
+		"change_count": len(out),
+		"changes":      out,
+	})
+}
+
+// openspecFilesArg extrae el array files ({path, content}) de la request MCP.
+func openspecFilesArg(req mcp.CallToolRequest) ([]openspec.File, *mcp.CallToolResult) {
+	rawFiles, _ := req.GetArguments()["files"].([]any)
+	if len(rawFiles) == 0 {
+		return nil, mcp.NewToolResultError("files requerido (no vacío)")
+	}
+	files := make([]openspec.File, 0, len(rawFiles))
+	for _, raw := range rawFiles {
+		mp, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		path, _ := mp["path"].(string)
+		content, _ := mp["content"].(string)
+		if path == "" {
+			continue
+		}
+		files = append(files, openspec.File{Path: path, Content: content})
+	}
+	return files, nil
+}
+
+func statusResultMap(r openspec.StatusResult) map[string]any {
+	m := map[string]any{"dir": r.Dir, "verdict": r.Verdict}
+	if r.IssueSlug != "" {
+		m["issue_slug"] = r.IssueSlug
+	}
+	if r.Reason != "" {
+		m["reason"] = r.Reason
+	}
+	if r.Files != nil {
+		m["files"] = r.Files
+	}
+	return m
+}
+
+func applyResultMap(r openspec.ApplyResult) map[string]any {
+	m := map[string]any{"dir": r.Dir}
+	if r.Error != "" {
+		m["error"] = r.Error
+		return m
+	}
+	m["issue_slug"] = r.IssueSlug
+	m["applied"] = r.Applied
+	m["conflicts"] = r.Conflicts
+	return m
 }
 
 func (h *openspecHandlers) requireOrg() (uuid.UUID, *mcp.CallToolResult) {
@@ -186,4 +209,11 @@ func (h *openspecHandlers) requireOrg() (uuid.UUID, *mcp.CallToolResult) {
 		return uuid.Nil, mcp.NewToolResultError("invalid principal org_id")
 	}
 	return orgID, nil
+}
+
+func (h *openspecHandlers) principalUserID() string {
+	if h.principal == nil {
+		return "openspec-sync"
+	}
+	return h.principal.UserID
 }

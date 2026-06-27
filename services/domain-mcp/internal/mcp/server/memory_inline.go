@@ -93,8 +93,18 @@ func (d *Deps) handleMemSearch(ctx context.Context, req mcp.CallToolRequest) (*m
 	if v, ok := args["limit"].(float64); ok {
 		limit = int(v)
 	}
+	rerank, _ := args["rerank"].(bool)
+	rerankTopN := 0
+	if v, ok := args["rerank_top_n"].(float64); ok {
+		rerankTopN = int(v)
+	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Observations.SearchHybrid(ctx, orgID, query, limit)
+	// SearchHybridReranked degrada al orden BM25/RRF si rerank=false o si el LLM
+	// no esta disponible/falla — nunca devuelve error por culpa del rerank.
+	results, err := d.Observations.SearchHybridReranked(ctx, orgID, query, limit, obssvc.RerankOptions{
+		Enabled: rerank,
+		TopN:    rerankTopN,
+	})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}

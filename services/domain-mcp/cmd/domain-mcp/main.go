@@ -184,10 +184,15 @@ func main() {
 	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
 		factory.Register("google", wrapLLM(google.New(k)))
 	}
+	anthropic.RegisterMiniMax(factory, wrapLLM)
 	factory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)
 	}
+
+	// Inyectar el Factory en observations para el RERANK opcional de mem_search
+	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
+	observations.LLM = factory
 
 	skillRunnerInst := skillrunner.New()
 

@@ -302,13 +302,19 @@ func toolMemSave() mcp.Tool {
 
 func toolMemSearch() mcp.Tool {
 	return mcp.NewTool("domain_mem_search",
-		mcp.WithDescription("Busca observations relevantes a una query usando busqueda hibrida BM25 + cosine + RRF fusion."),
+		mcp.WithDescription("Busca observations relevantes a una query usando busqueda hibrida BM25 + cosine + RRF fusion. Opcionalmente reordena con un LLM (rerank=true) para mejorar la relevancia del top; si el LLM no esta disponible degrada al orden BM25/RRF sin error."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximo resultados (default 20, max 100)"),
+		),
+		mcp.WithBoolean("rerank",
+			mcp.Description("Si true, reordena los candidatos con un LLM (MiniMax-M3) para mejorar relevancia. Default false (no gasta tokens). Best-effort: si el LLM no esta configurado o falla, devuelve el orden BM25/RRF original."),
+		),
+		mcp.WithNumber("rerank_top_n",
+			mcp.Description("Cuantos candidatos del BM25/RRF se mandan al LLM para reordenar cuando rerank=true (default 30, max 50). Solo aplica si rerank=true."),
 		),
 	)
 }

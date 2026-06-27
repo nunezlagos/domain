@@ -86,7 +86,11 @@ type Service struct {
 	Embedder llm.Embedder
 	Events   EventEmitter // nil = sin webhooks
 
-
+	// LLM es el Factory de providers para el paso opcional de RERANK
+	// (SearchHybridReranked). Opcional: si es nil, el rerank degrada al orden
+	// BM25/RRF original sin error. Se inyecta post-construcción porque el
+	// Factory se arma después del Service en el wiring (ver cmd/*).
+	LLM *llm.Factory
 
 	repo Repository
 }

@@ -226,6 +226,9 @@ func buildServices(
 	s.OutboundRequireTLS = os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
 
 	s.LLMFactory = buildLLMFactory()
+	// Inyectar el Factory en ObsService para el RERANK opcional de mem_search
+	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
+	s.ObsService.LLM = s.LLMFactory
 	s.SkillRunnerInst = skillrunner.New()
 	s.ModelRegistry = llmregistry.New()
 
@@ -391,6 +394,7 @@ func buildLLMFactory() *llm.Factory {
 	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
 		factory.Register("google", wrapLLM(google.New(k)))
 	}
+	anthropic.RegisterMiniMax(factory, wrapLLM)
 	factory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)

@@ -8,9 +8,11 @@
 --   OR (status='completed' AND (output IS NULL OR output='' OR execution_time_ms >= 60000))
 -- Las invocaciones 'pending'/'running' NO cuentan como exito ni fallo (en vuelo).
 --
--- skill_executions NO tiene columna de caller (created_by removido/inexistente,
--- ver mig 000080 + 000142): unique_callers_count se computa como 0 hasta que
--- exista esa columna. La query lo deja explicito.
+-- skill_executions.created_by (UUID nullable, FK users(id) ON DELETE SET NULL,
+-- agregada en 000184): caller que origino la ejecucion. unique_callers_count =
+-- COUNT(DISTINCT created_by) FILTER (created_by IS NOT NULL) sobre las
+-- invocaciones contables del dia. Las filas sin caller (cron/webhook de sistema
+-- o ejecuciones historicas previas a 000184) tienen created_by NULL y NO suman.
 
 -- name: AggregateDay :one
 -- Computa los agregados de UN dia (UTC) para UN skill desde skill_executions.
@@ -20,6 +22,7 @@
 WITH ex AS (
     SELECT
         execution_time_ms,
+        created_by,
         (status = 'completed'
             AND output IS NOT NULL AND output <> ''
             AND execution_time_ms > 0 AND execution_time_ms < 60000) AS is_success,
@@ -35,6 +38,9 @@ counted AS (
         COUNT(*) FILTER (WHERE is_success OR is_failure)::int        AS invocations_count,
         COUNT(*) FILTER (WHERE is_success)::int                      AS success_count,
         COUNT(*) FILTER (WHERE is_failure)::int                      AS failure_count,
+        COUNT(DISTINCT created_by) FILTER (
+            WHERE (is_success OR is_failure) AND created_by IS NOT NULL
+        )::int                                                       AS unique_callers_count,
         AVG(execution_time_ms) FILTER (WHERE is_success OR is_failure) AS avg_ms,
         percentile_cont(0.95) WITHIN GROUP (
             ORDER BY execution_time_ms
@@ -56,7 +62,7 @@ SELECT
         WHEN p95_ms IS NULL THEN NULL
         ELSE ROUND(p95_ms)
     END)::numeric                                                   AS p95_duration_ms,
-    0::int                                                           AS unique_callers_count
+    unique_callers_count
 FROM counted;
 
 -- name: UpsertDaily :exec

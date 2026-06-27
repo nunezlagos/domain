@@ -145,6 +145,10 @@ type ExecuteInput struct {
 	Parameters     map[string]any
 	Mode           string // "sync" (default) | "async"
 	TimeoutSeconds int    // 0 = timeout del skill
+	// CreatedBy es el usuario que origina la ejecución (Principal del MCP/HTTP).
+	// nil en triggers de sistema (cron, webhook): se persiste created_by NULL.
+	// Alimenta unique_callers_count del aggregator (HU-52.2).
+	CreatedBy *uuid.UUID
 }
 
 // Execute corre el skill. En sync bloquea y retorna la execution completa;
@@ -214,6 +218,7 @@ func (s *ExecutionService) insertExecution(ctx context.Context, in ExecuteInput,
 		Mode:        in.Mode,
 		Status:      status,
 		Parameters:  scrubbed,
+		CreatedBy:   in.CreatedBy,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("insert execution: %w", err)

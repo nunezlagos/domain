@@ -177,8 +177,8 @@ SELECT pinned_version FROM skills WHERE id = sqlc.arg('id');
 
 -- skill: execution.go
 -- name: ExecutionCreate :one
-INSERT INTO skill_executions (skill_id, version_used, mode, status, parameters, started_at)
-VALUES (sqlc.arg('skill_id'), sqlc.arg('version_used'), sqlc.arg('mode'), sqlc.arg('status'), sqlc.arg('parameters'), NOW())
+INSERT INTO skill_executions (skill_id, version_used, mode, status, parameters, created_by, started_at)
+VALUES (sqlc.arg('skill_id'), sqlc.arg('version_used'), sqlc.arg('mode'), sqlc.arg('status'), sqlc.arg('parameters'), sqlc.narg('created_by'), NOW())
 RETURNING id, skill_id, version_used, mode, status, parameters, output, error, execution_time_ms, started_at, completed_at, created_at;
 
 -- name: ExecutionGetByID :one

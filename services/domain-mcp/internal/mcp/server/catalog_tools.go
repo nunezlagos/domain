@@ -273,9 +273,18 @@ func (h *catalogHandlers) runSkillDispatch(ctx context.Context, req mcp.CallTool
 	mode, _ := args["mode"].(string)
 
 	inputsRaw, _ := json.Marshal(params)
+	// created_by (HU-52.2): el caller que origina la ejecucion es el user del
+	// Principal MCP. Se propaga como TriggeredBy → el adapter de skill lo
+	// persiste en skill_executions.created_by, que alimenta el
+	// unique_callers_count del aggregator. Si el principal no trae un user id
+	// parseable (no deberia en MCP, pero defensivo), queda nil → created_by NULL.
+	var triggeredBy *uuid.UUID
+	if uid, uerr := uuid.Parse(h.principal.UserID); uerr == nil {
+		triggeredBy = &uid
+	}
 	res, dispatchErr := h.dispatcher.Dispatch(ctx, dispatch.Request{
 		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
-		TargetID: sk.ID, Inputs: inputsRaw,
+		TargetID: sk.ID, Inputs: inputsRaw, TriggeredBy: triggeredBy,
 	})
 	out := map[string]any{
 		"execution_id": res.RunID.String(),

@@ -302,12 +302,20 @@ func main() {
 
 
 
+	// ExecutionService compartido: lo usan tanto el dispatcher (para persistir
+	// skill_executions con created_by, HU-52.2) como el tool MCP domain_skill_execute.
+	skillExecSvc := &skillsvc.ExecutionService{
+		Pool: pools.App, Skills: skills,
+		Versions: &skillsvc.VersionStore{Pool: pools.App},
+		Runner:   skillRunnerInst,
+	}
 	mcpDispatcherAdapters := &dispatch.Adapters{
 		FlowRunner:  flowRunnerInst,
 		AgentRunner: agentRunnerInst,
 		SkillRunner: skillRunnerInst,
 		Agents:      agents,
 		Skills:      skills,
+		SkillExec:   skillExecSvc,
 	}
 	mcpDispatcher := &dispatch.Dispatcher{
 		RunFlow:  mcpDispatcherAdapters.RunFlowForDispatcher(),
@@ -328,12 +336,8 @@ func main() {
 		Timeline:     timeline,
 		Search:       search,
 		Knowledge:    knowledgeSvc,
-		Skills:       skills,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: skills,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   skillRunnerInst,
-		},
+		Skills:         skills,
+		SkillExecution: skillExecSvc,
 		Crons:           &cronsvc.Service{Pool: pools.App, Audit: recorder},
 		Clients:         clients,
 		CapturedPrompts: capturedPrompts,

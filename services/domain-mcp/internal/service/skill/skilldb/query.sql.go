@@ -15,17 +15,18 @@ import (
 )
 
 const executionCreate = `-- name: ExecutionCreate :one
-INSERT INTO skill_executions (skill_id, version_used, mode, status, parameters, started_at)
-VALUES ($1, $2, $3, $4, $5, NOW())
+INSERT INTO skill_executions (skill_id, version_used, mode, status, parameters, created_by, started_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW())
 RETURNING id, skill_id, version_used, mode, status, parameters, output, error, execution_time_ms, started_at, completed_at, created_at
 `
 
 type ExecutionCreateParams struct {
-	SkillID     uuid.UUID `json:"skill_id"`
-	VersionUsed *int32    `json:"version_used"`
-	Mode        string    `json:"mode"`
-	Status      string    `json:"status"`
-	Parameters  []byte    `json:"parameters"`
+	SkillID     uuid.UUID  `json:"skill_id"`
+	VersionUsed *int32     `json:"version_used"`
+	Mode        string     `json:"mode"`
+	Status      string     `json:"status"`
+	Parameters  []byte     `json:"parameters"`
+	CreatedBy   *uuid.UUID `json:"created_by"`
 }
 
 type ExecutionCreateRow struct {
@@ -51,6 +52,7 @@ func (q *Queries) ExecutionCreate(ctx context.Context, arg ExecutionCreateParams
 		arg.Mode,
 		arg.Status,
 		arg.Parameters,
+		arg.CreatedBy,
 	)
 	var i ExecutionCreateRow
 	err := row.Scan(

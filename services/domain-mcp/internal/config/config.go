@@ -90,6 +90,14 @@ type Config struct {
 	SkillMetricsRollupTickHours int // rollup+cleanup; default 24
 	SkillMetricsDailyRetention  int // dias; default 90
 	SkillMetricsWeeklyRetention int // dias; default 365
+
+	// SkillJudge — system cron (HU-52.3): LLM-as-judge semanal que genera
+	// sugerencias 'pending' (split/merge/refine/archive). Human-in-the-loop:
+	// NADA se auto-aplica. Default disabled: opt-in explicito. Degrada sin LLM.
+	SkillJudgeEnabled   bool
+	SkillJudgeWeekday   int // 0=domingo .. 1=lunes (default); ventana semanal
+	SkillJudgeHour      int // hora local de la corrida; default 3 (03:00)
+	SkillJudgeMaxSkills int // skills escaneados por corrida; default 200
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -164,6 +172,11 @@ func Load() (*Config, error) {
 		SkillMetricsRollupTickHours: getEnvInt("DOMAIN_SKILL_METRICS_ROLLUP_TICK_HOURS", 24),
 		SkillMetricsDailyRetention:  getEnvInt("DOMAIN_SKILL_METRICS_DAILY_RETENTION_DAYS", 90),
 		SkillMetricsWeeklyRetention: getEnvInt("DOMAIN_SKILL_METRICS_WEEKLY_RETENTION_DAYS", 365),
+
+		SkillJudgeEnabled:   getEnvBool("DOMAIN_SKILL_JUDGE_ENABLED", false),
+		SkillJudgeWeekday:   getEnvInt("DOMAIN_SKILL_JUDGE_WEEKDAY", 1),
+		SkillJudgeHour:      getEnvInt("DOMAIN_SKILL_JUDGE_HOUR", 3),
+		SkillJudgeMaxSkills: getEnvInt("DOMAIN_SKILL_JUDGE_MAX_SKILLS", 200),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

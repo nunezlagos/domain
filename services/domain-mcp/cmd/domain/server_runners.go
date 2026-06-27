@@ -110,6 +110,16 @@ func buildRunners(
 			go smRollup.Start(leaderCtx)
 		}
 
+		if cfg.SkillJudgeEnabled {
+			judge := &systemcron.SkillJudge{
+				Aggregator: s.SkillJudgeAggregator,
+				Weekday:    time.Weekday(cfg.SkillJudgeWeekday),
+				Hour:       cfg.SkillJudgeHour,
+				Logger:     logger,
+			}
+			go judge.Start(leaderCtx)
+		}
+
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
 				Pool:    pools.App,

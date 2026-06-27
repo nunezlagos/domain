@@ -69,7 +69,9 @@ import (
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	"nunezlagos/domain/internal/service/skill/skilldb"
 	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
+	skillsuggestionssvc "nunezlagos/domain/internal/service/skill_suggestions"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
@@ -81,6 +83,9 @@ import (
 	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
 	"nunezlagos/domain/internal/service/workflowimport"
 	s3client "nunezlagos/domain/internal/storage/s3"
+	"nunezlagos/domain/internal/store/txctx"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // serverServices agrupa todos los servicios construidos por buildServices.
@@ -147,6 +152,8 @@ type serverServices struct {
 	FeedbackLimiter        *ratelimit.Limiter
 	SkillMetricsService    *skillmetricssvc.Service
 	SkillMetricsAggregator *skillmetricssvc.Aggregator
+	SkillSuggestionsSvc    *skillsuggestionssvc.Service
+	SkillJudgeAggregator   *skillsuggestionssvc.Aggregator
 }
 
 // buildServices construye los ~40 servicios del servidor a partir de los pools
@@ -246,6 +253,27 @@ func buildServices(
 	// Inyectar el Factory en ObsService para el RERANK opcional de mem_search
 	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
 	s.ObsService.LLM = s.LLMFactory
+
+	// HU-52.3 — LLM-as-judge (skill suggestions). El judge resuelve el provider
+	// 'minimax' del Factory; degrada solo si no hay MINIMAX_API_KEY. El Service
+	// expone Create (cron) / Approve / Reject / Apply (accion humana). El Refiner
+	// (genera content en refine/split al aplicar) lo cubre el propio judge.
+	{
+		judge := &skillsuggestionssvc.LLMJudge{LLM: s.LLMFactory}
+		s.SkillSuggestionsSvc = &skillsuggestionssvc.Service{
+			Pool:     pools.App,
+			Audit:    s.Recorder,
+			Refiner:  judge,
+			Versions: &skillVersionRecorder{pool: pools.App},
+		}
+		s.SkillJudgeAggregator = &skillsuggestionssvc.Aggregator{
+			Pool:      pools.App,
+			Service:   s.SkillSuggestionsSvc,
+			Judge:     judge,
+			MaxSkills: cfg.SkillJudgeMaxSkills,
+			Logger:    logger,
+		}
+	}
 	s.SkillRunnerInst = skillrunner.New()
 	s.ModelRegistry = llmregistry.New()
 
@@ -494,4 +522,39 @@ func buildWizardPlan(pools serverPools, s *serverServices, promptClassifier prom
 		}
 	}
 	return analyzer, planner
+}
+
+// skillVersionRecorder adapta skill_versions a skill_suggestions.VersionRecorder.
+// HONRA la tx-context: cuando el Apply de un REFINE lo invoca dentro de su
+// transaccion (via txctx), el snapshot de la version queda atomico con el UPDATE
+// del content (no abre una tx propia, a diferencia de skill.VersionStore.Create).
+type skillVersionRecorder struct {
+	pool *pgxpool.Pool
+}
+
+func (r *skillVersionRecorder) q(ctx context.Context) *skilldb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return skilldb.New(tx)
+	}
+	return skilldb.New(r.pool)
+}
+
+// RecordVersion crea un snapshot inmutable (version = MAX+1) y devuelve el numero.
+func (r *skillVersionRecorder) RecordVersion(ctx context.Context, skillID uuid.UUID, content *string, changelog *string, createdBy *uuid.UUID) (int, error) {
+	q := r.q(ctx)
+	next, err := q.VersionMaxVersion(ctx, skillID)
+	if err != nil {
+		return 0, err
+	}
+	v, err := q.VersionCreate(ctx, skilldb.VersionCreateParams{
+		SkillID:   skillID,
+		Version:   next,
+		Content:   content,
+		Changelog: changelog,
+		CreatedBy: createdBy,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int(v.Version), nil
 }

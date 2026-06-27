@@ -71,7 +71,7 @@ type Config struct {
 	OrphanAuditSchedule            string // formato cron; default "0 4 * * *"
 
 	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
-	// Default disabled: requiere MINIMAX_API_KEY y consume tokens; opt-in explícito.
+	// Default disabled: requiere LLM_API_KEY (alias: MINIMAX_API_KEY) y consume tokens; opt-in explícito.
 	EdgeInferenceEnabled      bool
 	EdgeInferenceTickHours    int // default 6
 	EdgeInferenceMaxPairs     int // pares candidatos por proyecto por pasada; default 30

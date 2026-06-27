@@ -41,10 +41,42 @@ def test_make_minimax_con_env(monkeypatch):
 
 def test_make_minimax_sin_key_falla(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", PROVIDER_MINIMAX)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
 
-    with pytest.raises(LlmProviderError, match="MINIMAX_API_KEY"):
+    with pytest.raises(LlmProviderError, match="LLM_API_KEY"):
         LlmFactory.make()
+
+
+def test_make_minimax_usa_llm_api_key_primaria(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", PROVIDER_MINIMAX)
+    monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_API_KEY", "sk-cp-llm")
+
+    provider = LlmFactory.make()
+
+    assert isinstance(provider, MinimaxProvider)
+
+
+def test_make_minimax_fallback_minimax_api_key(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", PROVIDER_MINIMAX)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-legacy")
+
+    provider = LlmFactory.make()
+
+    assert isinstance(provider, MinimaxProvider)
+
+
+def test_make_minimax_llm_model_primaria(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", PROVIDER_MINIMAX)
+    monkeypatch.setenv("LLM_API_KEY", "sk-cp-test")
+    monkeypatch.delenv("MINIMAX_MODEL", raising=False)
+    monkeypatch.setenv("LLM_MODEL", "custom-llm-model")
+
+    provider = LlmFactory.make()
+
+    assert provider._model == "custom-llm-model"
 
 
 def test_make_anthropic_con_env(monkeypatch):

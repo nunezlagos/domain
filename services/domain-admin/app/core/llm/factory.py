@@ -38,13 +38,19 @@ class LlmFactory:
 
     @staticmethod
     def _make_minimax() -> MinimaxProvider:
-        api_key = os.environ.get("MINIMAX_API_KEY", "")
+        # LLM_API_KEY es la primaria/generica; MINIMAX_API_KEY queda como alias deprecado.
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("MINIMAX_API_KEY", "")
         if not api_key:
             raise LlmProviderError(
-                "MINIMAX_API_KEY no configurada. "
+                "LLM_API_KEY no configurada (alias deprecado: MINIMAX_API_KEY). "
                 "Configurala en .env o cambia LLM_PROVIDER=anthropic."
             )
-        model = os.environ.get("MINIMAX_MODEL") or MinimaxProvider.DEFAULT_MODEL
+        # LLM_MODEL es la primaria/generica; MINIMAX_MODEL queda como alias deprecado.
+        model = (
+            os.environ.get("LLM_MODEL")
+            or os.environ.get("MINIMAX_MODEL")
+            or MinimaxProvider.DEFAULT_MODEL
+        )
         region = os.environ.get("MINIMAX_REGION", "international")
         base_url = os.environ.get("MINIMAX_BASE_URL")
         log.info("llm.provider: minimax model=%s region=%s", model, region)

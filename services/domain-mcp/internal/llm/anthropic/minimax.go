@@ -15,7 +15,8 @@ const (
 	// y al que resuelve ProviderForModel("MiniMax-M3").
 	MiniMaxProviderName = "minimax"
 
-	// MiniMaxModel es el nombre de modelo enviado tal cual en el body (case-sensitive).
+	// MiniMaxModel es el modelo por default enviado tal cual en el body (case-sensitive).
+	// Se puede sobreescribir con LLM_MODEL (o MINIMAX_MODEL, alias deprecado) vía MiniMaxModelName().
 	MiniMaxModel = "MiniMax-M3"
 
 	// MiniMaxBaseURL es el endpoint internacional anthropic-compatible.
@@ -24,17 +25,39 @@ const (
 	MiniMaxBaseURL = "https://api.minimax.io/anthropic"
 )
 
-// MiniMaxAPIKey resuelve la API key de MiniMax desde el entorno.
+// MiniMaxAPIKey resuelve la API key del LLM desde el entorno.
 //
-// Preferencia: MINIMAX_API_KEY (misma key que consume el Django domain-admin,
-// comparten VPS — única excepción deliberada a la convención DOMAIN_*).
-// Fallback: DOMAIN_MINIMAX_API_KEY para quien prefiera mantener el prefijo.
+// Orden de preferencia (primera no-vacía gana):
+//  1. LLM_API_KEY            — nombre genérico/primario (recomendado).
+//  2. MINIMAX_API_KEY        — alias deprecado (compat; misma key que consume el
+//     Django domain-admin, comparten VPS).
+//  3. DOMAIN_MINIMAX_API_KEY — fallback legacy con prefijo DOMAIN_*.
+//
 // Devuelve "" si ninguna está seteada (degradación: el provider no se registra).
 func MiniMaxAPIKey() string {
+	if k := os.Getenv("LLM_API_KEY"); k != "" {
+		return k
+	}
 	if k := os.Getenv("MINIMAX_API_KEY"); k != "" {
 		return k
 	}
 	return os.Getenv("DOMAIN_MINIMAX_API_KEY")
+}
+
+// MiniMaxModelName resuelve el modelo del LLM desde el entorno.
+//
+// Orden de preferencia (primera no-vacía gana):
+//  1. LLM_MODEL     — nombre genérico/primario (recomendado).
+//  2. MINIMAX_MODEL — alias deprecado (compat).
+//  3. MiniMaxModel  — default hardcodeado ("MiniMax-M3").
+func MiniMaxModelName() string {
+	if m := os.Getenv("LLM_MODEL"); m != "" {
+		return m
+	}
+	if m := os.Getenv("MINIMAX_MODEL"); m != "" {
+		return m
+	}
+	return MiniMaxModel
 }
 
 // MiniMaxAvailable indica si MiniMax está configurado (hay key en el entorno).
@@ -54,7 +77,7 @@ func RegisterMiniMax(factory *llm.Factory, wrap func(llm.Provider) llm.Provider)
 	if k == "" {
 		return false
 	}
-	p := NewWithBaseURL(k, MiniMaxBaseURL, MiniMaxModel)
+	p := NewWithBaseURL(k, MiniMaxBaseURL, MiniMaxModelName())
 	if wrap != nil {
 		factory.Register(MiniMaxProviderName, wrap(p))
 	} else {

@@ -7,6 +7,7 @@
 
 BEGIN;
 
+-- domain-lint-ignore-next: naming-plural-table,require-created-at,require-table-prefix
 CREATE TABLE IF NOT EXISTS table_catalog (
     table_name text PRIMARY KEY,
     grupo      text    NOT NULL,

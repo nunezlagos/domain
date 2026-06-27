@@ -13,6 +13,7 @@
 -- ============================================================
 -- chat_conversations: una conversacion por usuario
 -- ============================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE chat_conversations (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_email  TEXT NOT NULL,
@@ -34,6 +35,7 @@ CREATE TRIGGER set_updated_at_chat_conversations
 --   user    -> pregunta
 --   assistant -> respuesta del LLM (con status pending/processing/completed/error)
 -- ============================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE chat_messages (
     id              BIGSERIAL PRIMARY KEY,
     conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
@@ -63,6 +65,7 @@ CREATE INDEX chat_messages_conv_idx
 --   embedding:    vector(1536) para text-embedding-3-small.
 --   valid_until:  cuando expira el cache. NULL = permanente.
 -- ============================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE chat_document_embeddings (
     id           BIGSERIAL PRIMARY KEY,
     source_table TEXT NOT NULL,

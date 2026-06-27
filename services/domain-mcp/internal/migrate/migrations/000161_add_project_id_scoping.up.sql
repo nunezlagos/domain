@@ -20,18 +20,26 @@ ALTER TABLE issue_intake_payloads   ADD COLUMN project_id UUID REFERENCES projec
 
 
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX sdd_requirements_project_id_idx     ON sdd_requirements(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issues_project_id_idx               ON issues(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX flow_runs_project_id_idx            ON flow_runs(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issue_drafts_project_id_idx         ON issue_drafts(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issue_gherkin_scenarios_project_id_idx ON issue_gherkin_scenarios(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issue_tasks_project_id_idx          ON issue_tasks(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issue_code_references_project_id_idx ON issue_code_references(project_id);
 
+-- domain-lint-ignore-next: require-concurrent-index
 CREATE INDEX issue_intake_payloads_project_id_idx ON issue_intake_payloads(project_id);

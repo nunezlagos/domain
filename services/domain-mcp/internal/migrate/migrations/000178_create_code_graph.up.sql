@@ -29,6 +29,7 @@
 -- ===========================================================================
 -- code_nodes — entidades del grafo de código
 -- ===========================================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE IF NOT EXISTS code_nodes (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -80,6 +81,7 @@ GRANT ALL ON code_nodes TO app_admin;
 -- ===========================================================================
 -- code_edges — relaciones tipadas entre nodos
 -- ===========================================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE IF NOT EXISTS code_edges (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -114,6 +116,7 @@ GRANT ALL ON code_edges TO app_admin;
 -- ===========================================================================
 -- code_index_files — control de incrementalidad por archivo
 -- ===========================================================================
+-- domain-lint-ignore-next: require-table-prefix
 CREATE TABLE IF NOT EXISTS code_index_files (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

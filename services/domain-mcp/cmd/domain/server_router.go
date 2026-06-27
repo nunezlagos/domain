@@ -22,7 +22,7 @@ import (
 	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
-	skillsvc "nunezlagos/domain/internal/service/skill"
+	openspecsvc "nunezlagos/domain/internal/service/openspec"
 	"nunezlagos/domain/internal/tracing"
 )
 
@@ -114,6 +114,16 @@ func buildRouter(
 		SkillSuggestions:   s.SkillSuggestionsSvc,
 		SkillJudge:         s.SkillJudgeAggregator,
 		SkillABTest:        s.SkillABTestService,
+		Projects:           s.ProjectService,
+		Openspec: &openspecsvc.Engine{
+			IssuesR: s.HUService,
+			IssuesW: s.HUService,
+			SpecR:   s.SpecService,
+			SpecW:   s.SpecService,
+			TasksR:  s.TaskService,
+			TasksW:  s.TaskService,
+			Pool:    pools.App,
+		},
 	}
 
 	mux.Handle("/api/", corsMW.Wrap(
@@ -135,11 +145,7 @@ func buildRouter(
 			Search:           s.SearchService,
 			Knowledge:        s.KnowledgeService,
 			Skills:           s.SkillService,
-			SkillExecution: &skillsvc.ExecutionService{
-				Pool: pools.App, Skills: s.SkillService,
-				Versions: &skillsvc.VersionStore{Pool: pools.App},
-				Runner:   s.SkillRunnerInst,
-			},
+			SkillExecution:   s.SkillExecService,
 			Agents:          s.AgentService,
 			AgentRunner:     s.AgentRunnerInst,
 			Crons:           s.CronService,

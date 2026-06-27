@@ -17,6 +17,8 @@ import (
 	"nunezlagos/domain/internal/dispatch"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
+	openspecsvc "nunezlagos/domain/internal/service/openspec"
+	projsvc "nunezlagos/domain/internal/service/project"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	skillabtestsvc "nunezlagos/domain/internal/service/skill_ab_test"
 	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
@@ -51,6 +53,12 @@ type API struct {
 
 	// SkillABTest — HU-52.4: A/B testing de prompts (create/results/stop).
 	SkillABTest *skillabtestsvc.Service
+
+	// Openspec — round-trip de specs SDD por HTTP (CLI export/status/apply).
+	// Comparte el Engine con los tools MCP (cero duplicación de lógica).
+	Openspec *openspecsvc.Engine
+	// Projects — resuelve project_slug -> id en openspecExport.
+	Projects *projsvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -90,6 +98,12 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/skill-ab-tests", a.skillABTestCreate)
 	mux.HandleFunc("GET /api/v1/skill-ab-tests/{id}/results", a.skillABTestResults)
 	mux.HandleFunc("POST /api/v1/skill-ab-tests/{id}/stop", a.skillABTestStop)
+
+	// openspec — round-trip de specs SDD por HTTP (CLI export/status/apply).
+	// Rutas literales (sin colisión con {slug}); Bearer auth (NO allowlist).
+	mux.HandleFunc("GET /api/v1/openspec/export", a.openspecExport)
+	mux.HandleFunc("POST /api/v1/openspec/status", a.openspecStatus)
+	mux.HandleFunc("POST /api/v1/openspec/apply", a.openspecApply)
 
 	return mux
 }

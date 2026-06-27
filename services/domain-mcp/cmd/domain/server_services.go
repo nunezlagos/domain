@@ -119,6 +119,7 @@ type serverServices struct {
 	OutboundRequireTLS     bool
 	LLMFactory             *llm.Factory
 	SkillRunnerInst        *skillrunner.Runner
+	SkillExecService       *skillsvc.ExecutionService
 	ModelRegistry          *llmregistry.Registry
 	UsageAlertsService     *usagealerts.Service
 	MCPServerService       *mcpserver.Service
@@ -362,12 +363,20 @@ func buildServices(
 		Signals: &flow.SignalStore{Pool: pools.App},
 	}
 
+	// ExecutionService compartido: lo usan el dispatcher (persiste
+	// skill_executions con created_by, HU-52.2) y el tool MCP domain_skill_execute.
+	s.SkillExecService = &skillsvc.ExecutionService{
+		Pool: pools.App, Skills: s.SkillService,
+		Versions: &skillsvc.VersionStore{Pool: pools.App},
+		Runner:   s.SkillRunnerInst,
+	}
 	dispatcherAdapters := &dispatch.Adapters{
 		FlowRunner:  s.FlowRunnerInst,
 		AgentRunner: s.AgentRunnerInst,
 		SkillRunner: s.SkillRunnerInst,
 		Agents:      s.AgentService,
 		Skills:      s.SkillService,
+		SkillExec:   s.SkillExecService,
 	}
 	s.Dispatcher = &dispatch.Dispatcher{
 		RunFlow:  dispatcherAdapters.RunFlowForDispatcher(),

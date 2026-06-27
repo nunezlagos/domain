@@ -69,4 +69,5 @@ func suggest(input string, candidates []string) string {
 var knownCommands = []string{
 	"projects", "observations", "obs", "agents", "flows", "skills", "skill",
 	"search", "context", "completion", "policies", "config", "man", "help",
+	"openspec",
 }

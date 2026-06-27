@@ -38,6 +38,8 @@ func Dispatch(args []string) int {
 		return completion(rest)
 	case "policies":
 		return policies(rest)
+	case "openspec":
+		return openspec(rest)
 	case "config":
 		return configCmd(rest)
 	case "man":
@@ -71,6 +73,7 @@ Recursos:
   search        <query> [--limit N] [--type csv]
   context       [--project <slug>]
   policies      import-md <dir> | export-md [dir]
+  openspec      export --project <slug> [--out dir] | status [dir] | apply [dir] [--force]
   audit         prune [--retention N] [--dry-run]
   completion    bash|zsh|fish|powershell
   config        view (API key solo prefix)

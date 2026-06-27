@@ -101,6 +101,24 @@
 }
 .sidebar-link.disabled:hover { background: transparent; }
 
+/* HU-52.3: badge de conteo (ej. skill suggestions pendientes). */
+.sidebar-badge {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 6px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  border-radius: var(--radius-full);
+  background: var(--color-danger, #e5484d);
+  color: #fff;
+}
+body.sidebar-collapsed .sidebar-badge { display: none; }
+
 .sidebar-icon {
   width: 16px;
   height: 16px;

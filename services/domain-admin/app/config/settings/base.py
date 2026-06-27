@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "maintainers.usage",            # dashboard de uso (captured_prompts KPIs)
     "maintainers.mcpuptime",        # monitoreo uptime/health del server domain-mcp
     "maintainers.feedback",         # HU-52.1: feedback loop (👍/👎) sobre respuestas del chat
+    "maintainers.skillsuggestions",  # HU-52.3: LLM-as-judge (human-in-the-loop) sobre skills
     "chat",                          # HU-49.2: chat IA estilo NotebookLM
 ]
 
@@ -60,6 +61,8 @@ TEMPLATES = [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
                 "django.contrib.messages.context_processors.messages",
+                # HU-52.3: badge de pendientes en el sidebar (todas las paginas).
+                "maintainers.skillsuggestions.context_processors.pending_badge",
             ],
         },
     },
@@ -128,6 +131,15 @@ DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "00000000-0000-0000-0000-00000
 # Prioridad: DOMAIN_MCP_HEALTH_URL > DOMAIN_BASE_URL + "/health" > default interno.
 DOMAIN_MCP_HEALTH_URL = os.environ.get("DOMAIN_MCP_HEALTH_URL", "")
 DOMAIN_BASE_URL = os.environ.get("DOMAIN_BASE_URL", "")
+
+
+# HU-52.3: cliente server-to-server al REST del domain-mcp para transicionar
+# skill_suggestions (approve/reject/apply). El Bearer NUNCA llega al browser.
+# - DOMAIN_API_BASE_URL: base del REST (default DOMAIN_BASE_URL, luego interno).
+# - DOMAIN_API_TOKEN: Bearer de una API key con permiso. Si falta, las
+#   transiciones devuelven error claro (no se auto-aplica nada; regla dura 6/7).
+DOMAIN_API_BASE_URL = os.environ.get("DOMAIN_API_BASE_URL", "")
+DOMAIN_API_TOKEN = os.environ.get("DOMAIN_API_TOKEN", "")
 
 
 

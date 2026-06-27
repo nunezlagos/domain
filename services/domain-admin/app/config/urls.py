@@ -37,6 +37,7 @@ urlpatterns = [
     path("uso/", include("maintainers.usage.urls")),
     path("uptime-mcp/", include("maintainers.mcpuptime.urls")),
     path("feedback/", include("maintainers.feedback.urls")),
+    path("skill-suggestions/", include("maintainers.skillsuggestions.urls")),
 
     path("chat/", include("chat.urls")),
 ]

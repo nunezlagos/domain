@@ -27,6 +27,131 @@ func (q *Queries) CloseEdgeValidTo(ctx context.Context, id uuid.UUID) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const findCandidatePairsBySignals = `-- name: FindCandidatePairsBySignals :many
+WITH obs AS (
+  SELECT ko.id, ko.session_id, ko.content, ko.observation_type, ko.tags, ko.content_tsv, ko.created_at
+  FROM knowledge_observations ko
+  WHERE ko.project_id = $2
+    AND ko.deleted_at IS NULL
+  ORDER BY ko.created_at DESC
+  LIMIT $3
+),
+pairs AS (
+  SELECT
+    a.id            AS source_id,
+    b.id            AS target_id,
+    a.content       AS source_content,
+    b.content       AS target_content,
+    a.observation_type AS source_type,
+    b.observation_type AS target_type,
+    a.tags          AS source_tags,
+    b.tags          AS target_tags,
+    (a.session_id IS NOT NULL AND a.session_id = b.session_id) AS same_session,
+    COALESCE(cardinality(ARRAY(SELECT unnest(a.tags) INTERSECT SELECT unnest(b.tags))), 0)::int AS shared_tags,
+    (a.content_tsv @@ plainto_tsquery('spanish', b.content)
+       OR b.content_tsv @@ plainto_tsquery('spanish', a.content)) AS lexical_overlap,
+    ts_rank(a.content_tsv, plainto_tsquery('spanish', b.content))::float8 AS lexical_rank
+  FROM obs a
+  JOIN obs b ON a.id < b.id
+  WHERE
+    ($4::uuid IS NULL
+       OR a.id = $4::uuid
+       OR b.id = $4::uuid)
+    AND NOT EXISTS (
+      SELECT 1 FROM knowledge_observation_edges e
+      WHERE e.project_id = $2
+        AND e.deleted_at IS NULL
+        AND e.valid_to IS NULL
+        AND ((e.source_id = a.id AND e.target_id = b.id)
+          OR (e.source_id = b.id AND e.target_id = a.id))
+    )
+)
+SELECT
+  source_id, target_id, source_content, target_content,
+  source_type, target_type, source_tags, target_tags,
+  same_session, shared_tags, lexical_overlap,
+  LEAST(1.0,
+    (CASE WHEN same_session THEN 0.34 ELSE 0 END)
+    + LEAST(0.33, shared_tags * 0.17)
+    + (CASE WHEN lexical_overlap THEN 0.33 + LEAST(0.0, lexical_rank) ELSE 0 END)
+  )::float8 AS signal_score
+FROM pairs
+WHERE same_session OR shared_tags > 0 OR lexical_overlap
+ORDER BY signal_score DESC, source_id, target_id
+LIMIT $1
+`
+
+type FindCandidatePairsBySignalsParams struct {
+	ResultLimit int32      `json:"result_limit"`
+	ProjectID   uuid.UUID  `json:"project_id"`
+	ScanLimit   int32      `json:"scan_limit"`
+	AnchorID    *uuid.UUID `json:"anchor_id"`
+}
+
+type FindCandidatePairsBySignalsRow struct {
+	SourceID       uuid.UUID `json:"source_id"`
+	TargetID       uuid.UUID `json:"target_id"`
+	SourceContent  string    `json:"source_content"`
+	TargetContent  string    `json:"target_content"`
+	SourceType     string    `json:"source_type"`
+	TargetType     string    `json:"target_type"`
+	SourceTags     []string  `json:"source_tags"`
+	TargetTags     []string  `json:"target_tags"`
+	SameSession    *bool     `json:"same_session"`
+	SharedTags     int32     `json:"shared_tags"`
+	LexicalOverlap *bool     `json:"lexical_overlap"`
+	SignalScore    float64   `json:"signal_score"`
+}
+
+// Pares candidatos a relacionar SIN embeddings, por señales baratas:
+//
+//	co-sesión (mismo session_id), solapamiento de tags (intersección de arrays),
+//	y solapamiento léxico (content_tsv de a contra ts_query del content de b vía
+//	plainto_tsquery en español). Devuelve pares dirigidos a.id (source) -> b.id
+//	(target) con a.id < b.id para evitar duplicados (i,j)/(j,i), excluyendo pares
+//	que ya tienen una arista activa en CUALQUIER dirección y tipo. Opcionalmente
+//	ancla a una observation (sqlc.narg('anchor_id')): solo pares que la incluyan.
+//
+// Cada señal suma a un score heurístico [0..1] usado para ordenar los candidatos
+// más prometedores primero; el LLM decide el tipo final.
+func (q *Queries) FindCandidatePairsBySignals(ctx context.Context, arg FindCandidatePairsBySignalsParams) ([]FindCandidatePairsBySignalsRow, error) {
+	rows, err := q.db.Query(ctx, findCandidatePairsBySignals,
+		arg.ResultLimit,
+		arg.ProjectID,
+		arg.ScanLimit,
+		arg.AnchorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindCandidatePairsBySignalsRow
+	for rows.Next() {
+		var i FindCandidatePairsBySignalsRow
+		if err := rows.Scan(
+			&i.SourceID,
+			&i.TargetID,
+			&i.SourceContent,
+			&i.TargetContent,
+			&i.SourceType,
+			&i.TargetType,
+			&i.SourceTags,
+			&i.TargetTags,
+			&i.SameSession,
+			&i.SharedTags,
+			&i.LexicalOverlap,
+			&i.SignalScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findEdgeCandidatesByEmbedding = `-- name: FindEdgeCandidatesByEmbedding :many
 SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata,

@@ -621,11 +621,10 @@ func (q *Queries) SuggestionSkillBySlug(ctx context.Context, slug string) (Sugge
 
 const suggestionSkillCreateChild = `-- name: SuggestionSkillCreateChild :one
 INSERT INTO skills (
-    organization_id, slug, name, description, skill_type, content,
+    slug, name, description, skill_type, content,
     parent_skill_id, seed_managed, proposed
 )
-SELECT parent.organization_id,
-       $1, $2, $3,
+SELECT $1, $2, $3,
        parent.skill_type, $4,
        $5, false, false
 FROM skills parent
@@ -647,9 +646,8 @@ type SuggestionSkillCreateChildRow struct {
 }
 
 // SPLIT/MERGE: crea un skill nuevo (hijo o consolidado). parent_skill_id enlaza
-// el linaje. proposed=false (visible). organization_id se hereda del padre para
-// no romper el NOT NULL legacy (single-tenant: la columna existe pero no se usa
-// para aislar lo nuevo; el judge no la consulta).
+// el linaje. proposed=false (visible). single-tenant: skills NO tiene
+// organization_id (la dropeo la mig 000142 de todas las tablas), por eso no se inserta.
 func (q *Queries) SuggestionSkillCreateChild(ctx context.Context, arg SuggestionSkillCreateChildParams) (SuggestionSkillCreateChildRow, error) {
 	row := q.db.QueryRow(ctx, suggestionSkillCreateChild,
 		arg.Slug,

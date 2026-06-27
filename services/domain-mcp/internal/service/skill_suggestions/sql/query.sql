@@ -101,15 +101,13 @@ WHERE id = sqlc.arg('id') AND deleted_at IS NULL;
 
 -- name: SuggestionSkillCreateChild :one
 -- SPLIT/MERGE: crea un skill nuevo (hijo o consolidado). parent_skill_id enlaza
--- el linaje. proposed=false (visible). organization_id se hereda del padre para
--- no romper el NOT NULL legacy (single-tenant: la columna existe pero no se usa
--- para aislar lo nuevo; el judge no la consulta).
+-- el linaje. proposed=false (visible). single-tenant: skills NO tiene
+-- organization_id (la dropeo la mig 000142 de todas las tablas), por eso no se inserta.
 INSERT INTO skills (
-    organization_id, slug, name, description, skill_type, content,
+    slug, name, description, skill_type, content,
     parent_skill_id, seed_managed, proposed
 )
-SELECT parent.organization_id,
-       sqlc.arg('slug'), sqlc.arg('name'), sqlc.narg('description'),
+SELECT sqlc.arg('slug'), sqlc.arg('name'), sqlc.narg('description'),
        parent.skill_type, sqlc.narg('content'),
        sqlc.arg('parent_skill_id'), false, false
 FROM skills parent

@@ -46,15 +46,13 @@ func setupDB(t *testing.T) (*pgxpool.Pool, func()) {
 func seedSkill(t *testing.T, pool *pgxpool.Pool, slug, content string, seed bool) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
-	// La migracion 000143 dropea la tabla organizations (CASCADE), pero la columna
-	// skills.organization_id sobrevive como NOT NULL sin FK. Single-tenant: un UUID
-	// arbitrario satisface el NOT NULL sin necesidad de fila padre.
-	orgID := uuid.New()
+	// single-tenant: skills NO tiene organization_id (la dropeo la mig 000142 de
+	// todas las tablas), por eso el INSERT no la incluye.
 	var id uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO skills (organization_id, slug, name, description, skill_type, content, seed_managed)
-		VALUES ($1, $2, $3, $4, 'prompt', $5, $6) RETURNING id`,
-		orgID, slug, slug, "desc "+slug, content, seed,
+		INSERT INTO skills (slug, name, description, skill_type, content, seed_managed)
+		VALUES ($1, $2, $3, 'prompt', $4, $5) RETURNING id`,
+		slug, slug, "desc "+slug, content, seed,
 	).Scan(&id)
 	require.NoError(t, err)
 	return id

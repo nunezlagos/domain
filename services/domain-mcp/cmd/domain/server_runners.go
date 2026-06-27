@@ -69,6 +69,19 @@ func buildRunners(
 
 		go runFlowVersionArchiver(leaderCtx, pools.App, logger)
 
+		if cfg.EdgeInferenceEnabled {
+			inferencer := &systemcron.EdgeInferencer{
+				Obs:          s.ObsService,
+				Edges:        s.ObsEdgeService,
+				Pool:         pools.App,
+				Tick:         time.Duration(cfg.EdgeInferenceTickHours) * time.Hour,
+				MaxPairs:     cfg.EdgeInferenceMaxPairs,
+				ProjectBatch: cfg.EdgeInferenceProjectBatch,
+				Logger:       logger,
+			}
+			go inferencer.Start(leaderCtx)
+		}
+
 		if cfg.OrphanAuditEnabled {
 			auditor := &systemcron.OrphanAuditor{
 				Pool:    pools.App,

@@ -88,6 +88,13 @@ type Config struct {
 	HeartbeatWatcherTickSeconds    int    // default 60
 	OrphanAuditEnabled             bool
 	OrphanAuditSchedule            string // formato cron; default "0 4 * * *"
+
+	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
+	// Default disabled: requiere MINIMAX_API_KEY y consume tokens; opt-in explícito.
+	EdgeInferenceEnabled      bool
+	EdgeInferenceTickHours    int // default 6
+	EdgeInferenceMaxPairs     int // pares candidatos por proyecto por pasada; default 30
+	EdgeInferenceProjectBatch int // proyectos por pasada; default 50
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -147,6 +154,11 @@ func Load() (*Config, error) {
 		HeartbeatWatcherTickSeconds:    getEnvInt("DOMAIN_HEARTBEAT_WATCHER_TICK_SECONDS", 60),
 		OrphanAuditEnabled:             getEnvBool("DOMAIN_ORPHAN_AUDIT_ENABLED", true),
 		OrphanAuditSchedule:            getEnv("DOMAIN_ORPHAN_AUDIT_SCHEDULE", "0 4 * * *"),
+
+		EdgeInferenceEnabled:      getEnvBool("DOMAIN_EDGE_INFERENCE_ENABLED", false),
+		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),
+		EdgeInferenceMaxPairs:     getEnvInt("DOMAIN_EDGE_INFERENCE_MAX_PAIRS", 30),
+		EdgeInferenceProjectBatch: getEnvInt("DOMAIN_EDGE_INFERENCE_PROJECT_BATCH", 50),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

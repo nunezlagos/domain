@@ -67,7 +67,7 @@ Recursos:
   observations  ls --project <slug> | save --project <slug> <content>
   agents        ls | get <id_or_slug> | run <id> <input>
   flows         ls | run <id>
-  skills        ls [--type X] [--tag Y]
+  skills        ls [--type X] [--tag Y] | metrics ... | suggest <run|list>
   search        <query> [--limit N] [--type csv]
   context       [--project <slug>]
   policies      import-md <dir> | export-md [dir]
@@ -387,6 +387,60 @@ func skills(args []string) int {
 	if args[0] == "metrics" {
 		return skillMetrics(gf, c, args[1:])
 	}
+	if args[0] == "suggest" {
+		return skillSuggest(gf, c, args[1:])
+	}
+	return 2
+}
+
+// skillSuggest maneja `domain skill suggest <run|list>` (HU-52.3).
+//
+//   - run:  corre el batch del judge manualmente (POST /skill-suggestions/run).
+//           SOLO persiste pending; jamas aplica (regla dura 6).
+//   - list: lista sugerencias (default status=pending). Filtros skill/kind/status.
+func skillSuggest(gf *globalFlags, c *clicli.Client, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: domain skill suggest <run|list>")
+		return 2
+	}
+	render := func(data any) int {
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
+		return 0
+	}
+	switch args[0] {
+	case "run":
+		data, err := c.Do("POST", "/skill-suggestions/run", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "list":
+		fs := flag.NewFlagSet("suggest list", flag.ContinueOnError)
+		status := fs.String("status", "pending", "estado (pending|approved|rejected|applied)")
+		kind := fs.String("kind", "", "tipo (split|merge|refine|archive)")
+		slug := fs.String("skill", "", "skill slug")
+		limit := fs.Int("limit", 50, "limite")
+		_ = fs.Parse(args[1:])
+		q := map[string]string{"limit": fmt.Sprint(*limit)}
+		if *status != "" {
+			q["status"] = *status
+		}
+		if *kind != "" {
+			q["kind"] = *kind
+		}
+		if *slug != "" {
+			q["skill_slug"] = *slug
+		}
+		data, err := c.Do("GET", "/skill-suggestions", nil, q)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	}
+	fmt.Fprintf(os.Stderr, "accion desconocida: suggest %s\n", args[0])
 	return 2
 }
 

@@ -19,6 +19,7 @@ import (
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
+	skillsuggestionssvc "nunezlagos/domain/internal/service/skill_suggestions"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 )
 
@@ -41,6 +42,11 @@ type API struct {
 	SkillMetrics *skillmetricssvc.Service
 	// Skills — usado por SkillMetrics para resolver slug -> skill_id.
 	Skills *skillsvc.Service
+
+	// SkillSuggestions — HU-52.3: LLM-as-judge (list/get/approve/reject/apply).
+	SkillSuggestions *skillsuggestionssvc.Service
+	// SkillJudge — el aggregator del judge, para el run manual del batch.
+	SkillJudge *skillsuggestionssvc.Aggregator
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -63,6 +69,16 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/skills/metrics/top-failed", a.skillMetricsTopFailed)
 	mux.HandleFunc("GET /api/v1/skills/metrics/slowest", a.skillMetricsSlowest)
 	mux.HandleFunc("GET /api/v1/skills/{slug}/metrics", a.skillMetricsShow)
+
+	// HU-52.3 — LLM-as-judge (human-in-the-loop). Ruta /run antes de /{id}
+	// para que el path literal gane a la parametrizada. approve/reject/apply
+	// son acciones humanas separadas (regla dura 6: approve NO aplica).
+	mux.HandleFunc("GET /api/v1/skill-suggestions", a.skillSuggestionsList)
+	mux.HandleFunc("POST /api/v1/skill-suggestions/run", a.skillSuggestionsRun)
+	mux.HandleFunc("GET /api/v1/skill-suggestions/{id}", a.skillSuggestionsShow)
+	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/approve", a.skillSuggestionsApprove)
+	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/reject", a.skillSuggestionsReject)
+	mux.HandleFunc("POST /api/v1/skill-suggestions/{id}/apply", a.skillSuggestionsApply)
 
 	return mux
 }

@@ -111,6 +111,8 @@ func buildRouter(
 		FeedbackLimiter:    s.FeedbackLimiter,
 		SkillMetrics:       s.SkillMetricsService,
 		Skills:             s.SkillService,
+		SkillSuggestions:   s.SkillSuggestionsSvc,
+		SkillJudge:         s.SkillJudgeAggregator,
 	}
 
 	mux.Handle("/api/", corsMW.Wrap(

@@ -52,8 +52,30 @@ const defaultPathMaxDepth = 8
 // defaultSearchLimit: tope de candidatos al resolver un símbolo por nombre.
 const defaultSearchLimit = 50
 
-// defaultLanguage: lenguaje de los nodos (Go-only v1).
+// defaultLanguage: lenguaje por defecto si el parser no fijó uno (no debería
+// pasar; los parsers siempre setean ParsedFile.Language).
 const defaultLanguage = "go"
+
+// languageOf devuelve el lenguaje del archivo parseado, cayendo a
+// defaultLanguage si el parser no lo fijó (defensa; no esperado).
+func languageOf(parsed *ParsedFile) string {
+	if parsed.Language != "" {
+		return parsed.Language
+	}
+	return defaultLanguage
+}
+
+// isTestFile reporta si name es un archivo de test según convención por
+// lenguaje: Go (*_test.go) y JS/TS/PHP/Python (*.test.*, *.spec.*).
+func isTestFile(name string) bool {
+	if strings.HasSuffix(name, "_test.go") {
+		return true
+	}
+	lower := strings.ToLower(name)
+	ext := extOf(lower)
+	stem := strings.TrimSuffix(lower, ext)
+	return strings.HasSuffix(stem, ".test") || strings.HasSuffix(stem, ".spec")
+}
 
 // excludedDirs: directorios que NUNCA se recorren al construir el grafo.
 var excludedDirs = map[string]struct{}{
@@ -205,10 +227,15 @@ func (s *CodegraphService) Build(ctx context.Context, in BuildInput) (*BuildStat
 			}
 			return nil
 		}
-		if !strings.HasSuffix(name, ".go") {
+		// Despacho por extensión vía el registry de lenguajes. Si no hay parser
+		// registrado para la extensión, el archivo no es elegible y se ignora.
+		lp, ok := parserForPath(name)
+		if !ok {
 			return nil
 		}
-		if !in.IncludeTests && strings.HasSuffix(name, "_test.go") {
+		// Tests: Go usa el sufijo *_test.go; el resto, *.test.<ext> o
+		// *.spec.<ext> (convención JS/TS/PHP/Python comunes).
+		if !in.IncludeTests && isTestFile(name) {
 			return nil
 		}
 
@@ -226,7 +253,7 @@ func (s *CodegraphService) Build(ctx context.Context, in BuildInput) (*BuildStat
 		}
 
 		// Incrementalidad: comparar hash con el índice.
-		parsed, err := ParseFile(rel, src)
+		parsed, err := lp.Parse(rel, src)
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", rel, err)
 		}
@@ -322,7 +349,7 @@ func (s *CodegraphService) indexFileNodes(ctx context.Context, in BuildInput, re
 				LineEnd:       int32Ptr(n.LineEnd),
 				Signature:     strPtr(n.Signature),
 				Doc:           strPtr(n.Doc),
-				Language:      defaultLanguage,
+				Language:      languageOf(parsed),
 				ContentHash:   parsed.ContentHash,
 				Metadata:      meta,
 			})

@@ -64,13 +64,16 @@ type ParsedEdge struct {
 	EdgeType string
 }
 
-// ParsedFile es el resultado de parsear un archivo .go.
+// ParsedFile es el resultado de parsear un archivo de código.
 type ParsedFile struct {
 	FilePath    string
 	ContentHash []byte
 	Nodes       []ParsedNode
 	Edges       []ParsedEdge
 	ImportPaths []string
+	// Language es el lenguaje del archivo (ej. "go", "python"). Lo fija el
+	// LanguageParser que lo produjo; se propaga al campo Language de los nodos.
+	Language string
 }
 
 // PackageName devuelve el nombre de paquete declarado en src, parseando solo el
@@ -121,6 +124,7 @@ func ParseFile(filePath string, src []byte) (*ParsedFile, error) {
 	pf := &ParsedFile{
 		FilePath:    filePath,
 		ContentHash: sum[:],
+		Language:    "go",
 	}
 
 	lineOf := func(p token.Pos) int {

@@ -47,6 +47,8 @@ import (
 	prouter "nunezlagos/domain/internal/service/promptrouter"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tasksvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -78,6 +80,8 @@ type Deps struct {
 	Orchestrator    *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
 	Hubuilder       *husvc.Service          // issue-04.7 interactive HU wizard
 	IssueSvc        *issuesvc.Service       // domain_issue_set_status — cierre SDD
+	Spec            *specsvc.Service        // domain_openspec_* — round-trip specs DB↔repo
+	Tasks           *tasksvc.Service        // domain_openspec_* — sync de tasks por checkbox
 	Intake          *intakesvc.Service      // issue-04.8 intake pipeline
 	ExtSync         *syncsvc.Service        // issue-04.9 external provider sync
 	PromptRouter    *prouter.Router         // issue-12.7 single-shot prompt router
@@ -125,6 +129,7 @@ var toolGroups = []toolRegistrar{
 	registerTicketTools,
 	registerHealthTools,
 	registerProjectIndexTools,
+	registerOpenspecTools,
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).

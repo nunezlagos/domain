@@ -65,6 +65,8 @@ import (
 	requirementsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tasksvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -341,6 +343,8 @@ func main() {
 		Orchestrator:    orchestratorSvc,
 		Hubuilder:       issuebuilderSvc,
 		IssueSvc:        &issuesvc.Service{Pool: pools.App, Audit: recorder},
+		Spec:            &specsvc.Service{Pool: pools.App, Audit: recorder},
+		Tasks:           &tasksvc.Service{Pool: pools.App, Audit: recorder},
 		Intake:          intakeSvc,
 		ExtSync:         extsyncSvc,
 		PromptRouter:    promptRouterSvc,

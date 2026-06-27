@@ -146,6 +146,8 @@ func buildRouter(
 			FlowRunner:      s.FlowRunnerInst,
 			Hubuilder:       s.IssuebuilderSvc,
 			IssueSvc:        s.HUService,
+			Spec:            s.SpecService,
+			Tasks:           s.TaskService,
 			Intake:          s.IntakeSvc,
 			Orchestrator:    s.OrchestratorSvc,
 			PromptRouter:    s.PromptRouterSvc,

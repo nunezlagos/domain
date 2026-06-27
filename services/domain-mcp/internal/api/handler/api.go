@@ -17,6 +17,8 @@ import (
 	"nunezlagos/domain/internal/dispatch"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
+	skillsvc "nunezlagos/domain/internal/service/skill"
+	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 )
 
@@ -34,6 +36,11 @@ type API struct {
 	Feedback *feedbacksvc.Service
 	// FeedbackLimiter — rate limit dedicado por user_email (30/min, anti-spam).
 	FeedbackLimiter *ratelimit.Limiter
+
+	// SkillMetrics — HU-52.2: lectura de skill success rate tracking.
+	SkillMetrics *skillmetricssvc.Service
+	// Skills — usado por SkillMetrics para resolver slug -> skill_id.
+	Skills *skillsvc.Service
 }
 
 // Router devuelve un http.Handler montado en /api/v1/*.
@@ -50,6 +57,12 @@ func (a *API) Router() http.Handler {
 	// limit 30/min por user_email se aplica dentro de createFeedback.
 	mux.HandleFunc("POST /api/v1/feedback", a.createFeedback)
 	mux.HandleFunc("GET /api/v1/feedback", a.listFeedback)
+
+	// HU-52.2 — skill success rate tracking (lectura). Rutas mas especificas
+	// (top-failed/slowest) antes de la parametrizada {slug}.
+	mux.HandleFunc("GET /api/v1/skills/metrics/top-failed", a.skillMetricsTopFailed)
+	mux.HandleFunc("GET /api/v1/skills/metrics/slowest", a.skillMetricsSlowest)
+	mux.HandleFunc("GET /api/v1/skills/{slug}/metrics", a.skillMetricsShow)
 
 	return mux
 }

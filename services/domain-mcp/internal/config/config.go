@@ -14,7 +14,6 @@ import (
 
 // Config concentra toda la configuración runtime de Domain.
 type Config struct {
-
 	Env      string // dev | staging | prod
 	HTTPBind string
 	HTTPPort int
@@ -22,12 +21,9 @@ type Config struct {
 	HTTPReadTimeoutSeconds  int
 	HTTPWriteTimeoutSeconds int
 
-
-	DatabaseURL     string // app_user pool — runtime queries (RLS enforced)
+	DatabaseURL         string // app_user pool — runtime queries (RLS enforced)
 	DatabaseAuthURL     string // app_admin pool — auth/audit lookups (BYPASSRLS).
 	DatabaseReadOnlyURL string // issue-25.9 read replica DSN (opcional, default vacío)
-
-
 
 	S3Endpoint     string
 	S3Region       string
@@ -35,7 +31,6 @@ type Config struct {
 	S3AccessKey    string
 	S3SecretKey    string
 	S3UsePathStyle bool
-
 
 	SMTPHost     string
 	SMTPPort     int
@@ -45,17 +40,14 @@ type Config struct {
 	SMTPTLS      bool
 	SMTPFrom     string
 
-
 	LogLevel     string
 	LogFormat    string // text | json
 	LogOutput    string // stdout | stderr
 	LogAddSource bool
 
-
 	MetricsEnabled bool
 	MetricsBind    string
 	MetricsPort    int
-
 
 	OTelEnabled         bool
 	OTelExporterOTLPURL string
@@ -63,29 +55,18 @@ type Config struct {
 	OTelSampleRatio     float64
 	OTelServiceName     string
 
-
-
-
-
-
 	FieldEncKey string
-
 
 	SeedOnBoot bool
 
-
-	RateLimitRequests  int
-	RateLimitWindow    string // e.g. "60s"
-
-
-
+	RateLimitRequests int
+	RateLimitWindow   string // e.g. "60s"
 
 	CORSOrigins []string
 
-
 	HeartbeatWatcherEnabled        bool
-	HeartbeatWatcherTimeoutMinutes int    // default 5
-	HeartbeatWatcherTickSeconds    int    // default 60
+	HeartbeatWatcherTimeoutMinutes int // default 5
+	HeartbeatWatcherTickSeconds    int // default 60
 	OrphanAuditEnabled             bool
 	OrphanAuditSchedule            string // formato cron; default "0 4 * * *"
 
@@ -101,6 +82,14 @@ type Config struct {
 	FeedbackAggregatorEnabled   bool
 	FeedbackAggregatorTickHours int // default 6
 	FeedbackAggregatorDays      int // ventana a consolidar por pasada; default 7
+
+	// SkillMetrics — system crons (HU-52.2): agregan skill_executions en
+	// skill_metrics_daily/weekly. Default disabled: opt-in explicito.
+	SkillMetricsEnabled         bool
+	SkillMetricsTickHours       int // aggregator hourly; default 1
+	SkillMetricsRollupTickHours int // rollup+cleanup; default 24
+	SkillMetricsDailyRetention  int // dias; default 90
+	SkillMetricsWeeklyRetention int // dias; default 365
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -112,7 +101,7 @@ func Load() (*Config, error) {
 		HTTPReadTimeoutSeconds:  getEnvInt("DOMAIN_HTTP_READ_TIMEOUT_SECONDS", 30),
 		HTTPWriteTimeoutSeconds: getEnvInt("DOMAIN_HTTP_WRITE_TIMEOUT_SECONDS", 30),
 
-		DatabaseURL:     getEnv("DOMAIN_DATABASE_URL", ""),
+		DatabaseURL:         getEnv("DOMAIN_DATABASE_URL", ""),
 		DatabaseAuthURL:     getEnv("DOMAIN_DATABASE_AUTH_URL", ""),
 		DatabaseReadOnlyURL: getEnv("DOMAIN_DATABASE_READONLY_URL", ""),
 
@@ -169,6 +158,12 @@ func Load() (*Config, error) {
 		FeedbackAggregatorEnabled:   getEnvBool("DOMAIN_FEEDBACK_AGGREGATOR_ENABLED", false),
 		FeedbackAggregatorTickHours: getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_TICK_HOURS", 6),
 		FeedbackAggregatorDays:      getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_DAYS", 7),
+
+		SkillMetricsEnabled:         getEnvBool("DOMAIN_SKILL_METRICS_ENABLED", false),
+		SkillMetricsTickHours:       getEnvInt("DOMAIN_SKILL_METRICS_TICK_HOURS", 1),
+		SkillMetricsRollupTickHours: getEnvInt("DOMAIN_SKILL_METRICS_ROLLUP_TICK_HOURS", 24),
+		SkillMetricsDailyRetention:  getEnvInt("DOMAIN_SKILL_METRICS_DAILY_RETENTION_DAYS", 90),
+		SkillMetricsWeeklyRetention: getEnvInt("DOMAIN_SKILL_METRICS_WEEKLY_RETENTION_DAYS", 365),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

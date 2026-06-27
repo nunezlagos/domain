@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nunezlagos/domain/internal/activity"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/ratelimit"
@@ -26,16 +27,17 @@ import (
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
 	"nunezlagos/domain/internal/llm/google"
+	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
 	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	llmretry "nunezlagos/domain/internal/llm/retry"
-	"nunezlagos/domain/internal/llm/ollama"
 	smtpmail "nunezlagos/domain/internal/mail/smtp"
 	"nunezlagos/domain/internal/metrics"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
+	"nunezlagos/domain/internal/secrets"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/service/billing"
@@ -67,6 +69,7 @@ import (
 	reqsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	skillmetricssvc "nunezlagos/domain/internal/service/skill_metrics"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
@@ -76,74 +79,74 @@ import (
 	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	wp "nunezlagos/domain/internal/service/wizardplan"
 	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
-	"nunezlagos/domain/internal/activity"
-	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/service/workflowimport"
 	s3client "nunezlagos/domain/internal/storage/s3"
 )
 
 // serverServices agrupa todos los servicios construidos por buildServices.
 type serverServices struct {
-	Recorder              *audit.PGRecorder
-	ClientService         *clientsvc.Service
-	CapturedPromptService *capturedpromptsvc.Service
-	ProjectRepoService    *projectreposvc.Service
-	ProjectPolicyService  *projectpolicysvc.Service
-	TicketService         *ticketsvc.Service
-	SessionSvc            *session.Service
-	EventBus              *events.Bus
-	ProjectService        *projsvc.Service
-	ObsService            *observation.Service
-	ObsEdgeService        *observation.EdgeService
-	CodeGraphService      *codegraphsvc.CodegraphService
-	PromptService         *promptsvc.Service
-	TimelineService       *timelinesvc.Service
-	SearchService         *searchsvc.Service
-	KnowledgeService      *knowledge.Service
-	LifecycleService      *lifecycle.Service
-	FlowService           *flow.Service
-	SkillService          *skillsvc.Service
-	AgentService          *agentsvc.Service
-	BillingService        *billing.Service
-	CostService           *cost.Service
-	OutboundWebhookService    *outboundwebhook.Service
-	InboundWebhookService     *webhooksvc.Service
-	OutboundDispatcher        *outboundwebhook.Dispatcher
-	OutboundRequireTLS        bool
-	LLMFactory                *llm.Factory
-	SkillRunnerInst           *skillrunner.Runner
-	ModelRegistry             *llmregistry.Registry
-	UsageAlertsService        *usagealerts.Service
-	MCPServerService          *mcpserver.Service
-	ProjectTemplateService    *projecttemplate.Service
-	PolicyService             *policy.Service
-	IssuebuilderSvc           *issuebuilder.Service
-	IssuebuilderAdaptive      *issuebuilder.AdaptiveService
-	IntakeSvc                 *intakesvc.Service
-	OrchestratorSvc           *orchestrator.Service
-	AnalysisSvc               *analysissvc.Service
-	PromptRouterSvc           *promptrouter.Router
-	WorkflowImportSvc         *workflowimport.Service
-	DBStatsService            *dbstats.Service
-	OutboundEmitter           *outboundwebhook.RunnerEmitter
-	AgentRunnerInst           *agentrunner.Runner
-	FlowRunnerInst            *flowrunner.Runner
-	Dispatcher                *dispatch.Dispatcher
-	CronService               *cronsvc.Service
-	APIKeyStore               *apikey.PGStore
-	ActivityStore             *activity.PGStore
-	SecretsStore              *secrets.PGStore
-	RateLimiter               *ratelimit.Limiter
-	RequirementService        *reqsvc.Service
-	HUService                 *usvc.Service
-	SpecService               *specsvc.Service
-	TaskService               *tsvc.Service
-	TraceService              *tracesvc.Service
-	AttachmentService         *attSvc.Service
-	MasterCipher              *crypto.Cipher
-	Embedder                  llm.Embedder
-	FeedbackService           *feedbacksvc.Service
-	FeedbackLimiter           *ratelimit.Limiter
+	Recorder               *audit.PGRecorder
+	ClientService          *clientsvc.Service
+	CapturedPromptService  *capturedpromptsvc.Service
+	ProjectRepoService     *projectreposvc.Service
+	ProjectPolicyService   *projectpolicysvc.Service
+	TicketService          *ticketsvc.Service
+	SessionSvc             *session.Service
+	EventBus               *events.Bus
+	ProjectService         *projsvc.Service
+	ObsService             *observation.Service
+	ObsEdgeService         *observation.EdgeService
+	CodeGraphService       *codegraphsvc.CodegraphService
+	PromptService          *promptsvc.Service
+	TimelineService        *timelinesvc.Service
+	SearchService          *searchsvc.Service
+	KnowledgeService       *knowledge.Service
+	LifecycleService       *lifecycle.Service
+	FlowService            *flow.Service
+	SkillService           *skillsvc.Service
+	AgentService           *agentsvc.Service
+	BillingService         *billing.Service
+	CostService            *cost.Service
+	OutboundWebhookService *outboundwebhook.Service
+	InboundWebhookService  *webhooksvc.Service
+	OutboundDispatcher     *outboundwebhook.Dispatcher
+	OutboundRequireTLS     bool
+	LLMFactory             *llm.Factory
+	SkillRunnerInst        *skillrunner.Runner
+	ModelRegistry          *llmregistry.Registry
+	UsageAlertsService     *usagealerts.Service
+	MCPServerService       *mcpserver.Service
+	ProjectTemplateService *projecttemplate.Service
+	PolicyService          *policy.Service
+	IssuebuilderSvc        *issuebuilder.Service
+	IssuebuilderAdaptive   *issuebuilder.AdaptiveService
+	IntakeSvc              *intakesvc.Service
+	OrchestratorSvc        *orchestrator.Service
+	AnalysisSvc            *analysissvc.Service
+	PromptRouterSvc        *promptrouter.Router
+	WorkflowImportSvc      *workflowimport.Service
+	DBStatsService         *dbstats.Service
+	OutboundEmitter        *outboundwebhook.RunnerEmitter
+	AgentRunnerInst        *agentrunner.Runner
+	FlowRunnerInst         *flowrunner.Runner
+	Dispatcher             *dispatch.Dispatcher
+	CronService            *cronsvc.Service
+	APIKeyStore            *apikey.PGStore
+	ActivityStore          *activity.PGStore
+	SecretsStore           *secrets.PGStore
+	RateLimiter            *ratelimit.Limiter
+	RequirementService     *reqsvc.Service
+	HUService              *usvc.Service
+	SpecService            *specsvc.Service
+	TaskService            *tsvc.Service
+	TraceService           *tracesvc.Service
+	AttachmentService      *attSvc.Service
+	MasterCipher           *crypto.Cipher
+	Embedder               llm.Embedder
+	FeedbackService        *feedbacksvc.Service
+	FeedbackLimiter        *ratelimit.Limiter
+	SkillMetricsService    *skillmetricssvc.Service
+	SkillMetricsAggregator *skillmetricssvc.Aggregator
 }
 
 // buildServices construye los ~40 servicios del servidor a partir de los pools
@@ -169,6 +172,13 @@ func buildServices(
 	// capacity=30, refill=30/60s = 0.5 tokens/s.
 	s.FeedbackService = feedbacksvc.NewService(feedbacksvc.NewPgRepository(pools.App))
 	s.FeedbackLimiter = ratelimit.New(30, 30.0/60.0)
+	// HU-52.2 — skill success rate tracking. Service (lectura) + Aggregator
+	// (crons) comparten el mismo Repository sobre pools.App.
+	{
+		smRepo := skillmetricssvc.NewPgRepository(pools.App)
+		s.SkillMetricsService = skillmetricssvc.NewService(smRepo)
+		s.SkillMetricsAggregator = skillmetricssvc.NewAggregator(smRepo)
+	}
 	s.ProjectRepoService = projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
 	s.ProjectPolicyService = projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
 	s.TicketService = ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))

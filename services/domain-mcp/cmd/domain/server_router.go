@@ -14,14 +14,14 @@ import (
 	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/auth/apikey"
 	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
-"nunezlagos/domain/internal/auth/session"
+	"nunezlagos/domain/internal/auth/session"
 	"nunezlagos/domain/internal/cache"
 	"nunezlagos/domain/internal/config"
-	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	"nunezlagos/domain/internal/httpserver"
 	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
 	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
+	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	"nunezlagos/domain/internal/tracing"
 )
@@ -109,6 +109,8 @@ func buildRouter(
 		Dispatcher:         s.Dispatcher,
 		Feedback:           s.FeedbackService,
 		FeedbackLimiter:    s.FeedbackLimiter,
+		SkillMetrics:       s.SkillMetricsService,
+		Skills:             s.SkillService,
 	}
 
 	mux.Handle("/api/", corsMW.Wrap(
@@ -125,11 +127,11 @@ func buildRouter(
 			ObservationEdges: s.ObsEdgeService,
 			CodeGraph:        s.CodeGraphService,
 			Projects:         s.ProjectService,
-			Prompts:      s.PromptService,
-			Timeline:     s.TimelineService,
-			Search:       s.SearchService,
-			Knowledge:    s.KnowledgeService,
-			Skills:       s.SkillService,
+			Prompts:          s.PromptService,
+			Timeline:         s.TimelineService,
+			Search:           s.SearchService,
+			Knowledge:        s.KnowledgeService,
+			Skills:           s.SkillService,
 			SkillExecution: &skillsvc.ExecutionService{
 				Pool: pools.App, Skills: s.SkillService,
 				Versions: &skillsvc.VersionStore{Pool: pools.App},

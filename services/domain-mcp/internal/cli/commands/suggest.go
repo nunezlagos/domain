@@ -67,6 +67,6 @@ func suggest(input string, candidates []string) string {
 
 // knownCommands para sugerencias del dispatcher.
 var knownCommands = []string{
-	"projects", "observations", "obs", "agents", "flows", "skills",
+	"projects", "observations", "obs", "agents", "flows", "skills", "skill",
 	"search", "context", "completion", "policies", "config", "man", "help",
 }

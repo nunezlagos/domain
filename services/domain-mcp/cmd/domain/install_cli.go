@@ -57,7 +57,7 @@ func runInstall(args []string) int {
 		mode = string(install.ModeLocal)
 	}
 
-	progress := NewInstallProgress(13, os.Stderr)
+	progress := NewInstallProgress(14, os.Stderr)
 	printBanner(os.Stderr)
 
 	progress.StartStep("Detecting state")
@@ -130,6 +130,18 @@ func runInstall(args []string) int {
 		return 1
 	}
 	progress.EndStep(StepOK, "all catalogs at target version")
+
+	progress.StartStep("Field encryption key")
+	switch detail, err := ensureFieldEncKey(cfg.DatabaseURL); {
+	case err != nil:
+		// Si la validación canary falla, ABORTAR: pisar la enc-key dejaría
+		// las API keys cifradas (auth_api_keys.key_ciphertext) inaccesibles.
+		progress.EndStep(StepFailed, "ABORT: "+err.Error())
+		progress.Summary()
+		return 1
+	default:
+		progress.EndStep(StepOK, detail)
+	}
 
 	progress.StartStep("Global MCP env")
 	envPath, err := writeGlobalMCPEnv(cfg, flags.baseURL)

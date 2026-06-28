@@ -1,21 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="url(#brandGrad)" stroke-width="1" stroke-linecap="round" role="img" aria-label="Domain Admin">
-  <defs>
-    <linearGradient id="brandGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#79aec8"/>
-      <stop offset="0.5" stop-color="#447e9b"/>
-      <stop offset="1" stop-color="#417690"/>
-    </linearGradient>
-  </defs>
-  <!-- anillo conector: pasa por el centro de los 4 nodos exteriores -->
-  <circle cx="24" cy="24" r="18"/>
-  <!-- conexiones radiales -->
-  <line x1="24" y1="6" x2="24" y2="42" />
-  <line x1="6" y1="24" x2="42" y2="24" />
-  <!-- nodos exteriores (huecos) -->
-  <circle cx="24" cy="6" r="4" />
-  <circle cx="42" cy="24" r="4" />
-  <circle cx="24" cy="42" r="4" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#2b2b2b" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Domain Admin">
+  <mask id="holesGlobe" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+    <rect x="0" y="0" width="48" height="48" fill="white"/>
+    <circle cx="6" cy="24" r="4" fill="black"/>
+    <circle cx="42" cy="24" r="4" fill="black"/>
+    <circle cx="24" cy="6" r="4" fill="black"/>
+    <circle cx="24" cy="42" r="4" fill="black"/>
+    <circle cx="24" cy="24" r="5" fill="black"/>
+  </mask>
+  <g mask="url(#holesGlobe)">
+    <!-- interconexiones nodo-a-nodo -->
+    <g stroke-width="1.1">
+      <polygon points="24,6 42,24 24,42 6,24"/>
+      <line x1="6" y1="24" x2="42" y2="24" />
+      <line x1="24" y1="6" x2="24" y2="42" />
+    </g>
+    <!-- circulo exterior: al frente, oscuro (marco del dominio) -->
+    <circle cx="24" cy="24" r="18" stroke-width="1.4"/>
+  </g>
+  <!-- nodos (huecos) -->
   <circle cx="6" cy="24" r="4" />
-  <!-- nodo central (hueco) -->
+  <circle cx="42" cy="24" r="4" />
+  <circle cx="24" cy="6" r="4" />
+  <circle cx="24" cy="42" r="4" />
   <circle cx="24" cy="24" r="5" />
 </svg>

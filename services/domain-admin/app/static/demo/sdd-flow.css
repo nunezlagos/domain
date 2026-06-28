@@ -179,6 +179,46 @@
   background: var(--dj-glass); padding: 1px 6px; border-radius: 5px; color: var(--dj-secondary);
 }
 
+/* ============================ BOTÓN EXPANDIR ============================ */
+.sdf-expand {
+  margin-left: auto;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--dj-text-muted);
+  background: var(--dj-glass); border: 1px solid var(--dj-border);
+  cursor: pointer; transition: all 0.2s;
+}
+.sdf-expand:hover { color: var(--dj-secondary); border-color: var(--dj-secondary); background: var(--dj-accent-alpha); }
+
+/* ============================ MODAL ============================ */
+.sdf-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(20,30,40,0.45);
+  backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity 0.2s;
+}
+.sdf-modal.open { opacity: 1; }
+.sdf-modal-card {
+  width: min(1100px, 94vw); height: min(680px, 86vh);
+  display: flex; flex-direction: column;
+  background: var(--dj-bg); border: 1px solid var(--dj-border);
+  border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+  overflow: hidden;
+  transform: scale(0.97); transition: transform 0.2s;
+}
+.sdf-modal.open .sdf-modal-card { transform: scale(1); }
+.sdf-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--dj-border);
+  font-size: 13px; font-weight: 700; color: var(--dj-text);
+}
+.sdf-modal-head i { color: var(--dj-secondary); margin-right: 6px; }
+.sdf-modal-x { width: 30px; height: 30px; border-radius: 8px; color: var(--dj-text-muted); font-size: 15px; }
+.sdf-modal-x:hover { background: var(--dj-glass); color: var(--dj-text); }
+.sdf-modal-body { flex: 1; overflow: auto; position: relative; padding: 16px 18px; }
+
 /* ============================ ANIMACIONES ============================ */
 @keyframes sdf-pulse {
   0% { box-shadow: 0 0 0 0 rgba(121,174,200,0.5); }

@@ -1,20 +1,22 @@
 /*
  * sdd-flow.js — Workflows en curso por proyecto (card del dashboard).
  *
- * Cada proyecto corre un flujo (uno de los tipos reales de domain-mcp) y el
- * componente muestra su ESTADO: fase en curso, progreso y detalle por paso.
+ * Cada proyecto corre un flujo (tipo real de domain-mcp) y se muestra su ESTADO:
  *   - card normal (chica)   -> LISTA de proyectos con su flujo + estado
- *   - card .hero (centrada)  -> selector de proyectos + panel de estado + GRAFO n8n
- * Click en un paso del grafo abre un POPOVER con el detalle real (tool, output, tabla).
+ *   - card .hero (centrada)  -> GraphPanel: selector + estado + grafo n8n centrado
+ *   - botón expandir         -> MODAL con el mismo GraphPanel en grande
+ * Click en un paso abre un POPOVER con el detalle real (tool, output, tabla).
  *
  * Autónomo y desacoplado (IIFE, sin globals). No depende de focus.js: detecta el
- * estado hero por MutationObserver. SRP: catálogo · proyectos · vistas · popover · controlador.
+ * estado hero por MutationObserver. Un único ticker simula el avance en vivo y
+ * refresca todas las vistas registradas (card + modal). SRP por componente.
+ * En vivo: reemplazar PROJECTS por fetch a domain_flow_list/domain_flow_status.
  */
 (function () {
   'use strict';
 
   /* ------------------------------------------------------------------ *
-   *  Catálogo de flujos (tipos reales de domain-mcp) — pasos + tool + output + tabla
+   *  Catálogo de flujos (tipos reales de domain-mcp)
    * ------------------------------------------------------------------ */
   const WORKFLOWS = {
     sdd: {
@@ -52,9 +54,6 @@
     },
   };
 
-  /* ------------------------------------------------------------------ *
-   *  Proyectos con un flujo EN CURSO (instancias)
-   * ------------------------------------------------------------------ */
   const PROJECTS = [
     { id: 'domain-mcp',   name: 'domain-mcp',   flow: 'sdd',    active: 5, since: 'hace 12 min', run: '#run-4812' },
     { id: 'domain-admin', name: 'domain-admin', flow: 'sdd',    active: 8, since: 'hace 3 min',  run: '#run-4813' },
@@ -63,10 +62,23 @@
   ];
 
   const ST = Object.freeze({ DONE: 'done', ACTIVE: 'active', PENDING: 'pending' });
-  const wfOf = (proj) => WORKFLOWS[proj.flow];
-  const stepsOf = (proj) => wfOf(proj).steps;
+  const wfOf = (p) => WORKFLOWS[p.flow];
+  const stepsOf = (p) => wfOf(p).steps;
   const stateAt = (i, active) => (i < active ? ST.DONE : i === active ? ST.ACTIVE : ST.PENDING);
-  const progressPct = (proj) => Math.round(((proj.active) / (stepsOf(proj).length - 1)) * 100);
+  const progressPct = (p) => Math.round((p.active / (stepsOf(p).length - 1)) * 100);
+
+  /* ------------------------------------------------------------------ *
+   *  Registro de vistas vivas + ticker único (avance simulado)
+   * ------------------------------------------------------------------ */
+  const live = new Set();
+  let ticker = null;
+  function ensureTicker() {
+    if (ticker) return;
+    ticker = setInterval(() => {
+      PROJECTS.forEach((p) => { const len = stepsOf(p).length; p.active = p.active + 1 > len - 1 ? 0 : p.active + 1; });
+      live.forEach((v) => v.update && v.update());
+    }, 2800);
+  }
 
   /* ------------------------------------------------------------------ *
    *  Util DOM
@@ -85,7 +97,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   *  Popover de detalle de un paso (solo en grafo)
+   *  Popover de detalle de un paso
    * ------------------------------------------------------------------ */
   function Popover(host) {
     const pop = h('div', 'sdf-pop', { role: 'dialog' });
@@ -129,38 +141,33 @@
    * ------------------------------------------------------------------ */
   function ListView(host) {
     let rows = [];
-    function mount() {
-      const ul = h('ul', 'sdf-plist');
-      rows = PROJECTS.map((proj) => {
-        const li = h('li', 'sdf-prow', { 'data-id': proj.id });
-        li.innerHTML =
-          '<span class="sdf-pdot"></span>' +
-          '<div class="sdf-pinfo">' +
-            '<b>' + proj.name + '</b>' +
-            '<span class="sdf-pmeta"><i class="fas fa-' + wfOf(proj).icon + '"></i> ' + wfOf(proj).name + ' · <span class="sdf-pphase"></span></span>' +
-          '</div>' +
-          '<div class="sdf-pprog"><span class="sdf-pprog-bar"><i></i></span><span class="sdf-pprog-num"></span></div>';
-        ul.appendChild(li);
-        return li;
-      });
-      host.appendChild(ul);
-    }
+    const ul = h('ul', 'sdf-plist');
+    rows = PROJECTS.map((proj) => {
+      const li = h('li', 'sdf-prow', { 'data-id': proj.id });
+      li.innerHTML =
+        '<span class="sdf-pdot"></span>' +
+        '<div class="sdf-pinfo"><b>' + proj.name + '</b>' +
+          '<span class="sdf-pmeta"><i class="fas fa-' + wfOf(proj).icon + '"></i> ' + wfOf(proj).name + ' · <span class="sdf-pphase"></span></span></div>' +
+        '<div class="sdf-pprog"><span class="sdf-pprog-bar"><i></i></span><span class="sdf-pprog-num"></span></div>';
+      ul.appendChild(li);
+      return li;
+    });
+    host.appendChild(ul);
     function update() {
       PROJECTS.forEach((proj, i) => {
-        const steps = stepsOf(proj);
-        const cur = steps[proj.active];
-        const li = rows[i];
+        const steps = stepsOf(proj), li = rows[i];
         li.dataset.state = proj.active >= steps.length - 1 ? 'done' : 'active';
-        li.querySelector('.sdf-pphase').textContent = cur.name;
+        li.querySelector('.sdf-pphase').textContent = steps[proj.active].name;
         li.querySelector('.sdf-pprog-bar i').style.width = progressPct(proj) + '%';
         li.querySelector('.sdf-pprog-num').textContent = (proj.active + 1) + '/' + steps.length;
       });
     }
-    return { mount, update };
+    update();
+    return { update, destroy() {} };
   }
 
   /* ------------------------------------------------------------------ *
-   *  Vista GRAFO — panel de estado + grafo n8n del proyecto seleccionado
+   *  Vista GRAFO — panel de estado + grafo n8n centrado
    * ------------------------------------------------------------------ */
   const NODE_W = 138, NODE_H = 50, GAP_X = 46, GAP_Y = 34, PAD = 12;
 
@@ -189,13 +196,11 @@
     }
 
     function renderStatus() {
-      const steps = stepsOf(proj);
-      const cur = steps[proj.active];
+      const steps = stepsOf(proj), cur = steps[proj.active];
       const done = proj.active >= steps.length - 1;
       statusEl.innerHTML =
         '<span class="sdf-status-flow"><i class="fas fa-' + wfOf(proj).icon + '"></i> ' + wfOf(proj).name + '</span>' +
-        '<span class="sdf-status-phase' + (done ? ' is-done' : '') + '">' +
-          '<i class="fas fa-' + (done ? 'circle-check' : 'circle-notch fa-spin') + '"></i> ' + cur.name + '</span>' +
+        '<span class="sdf-status-phase' + (done ? ' is-done' : '') + '"><i class="fas fa-' + (done ? 'circle-check' : 'circle-notch fa-spin') + '"></i> ' + cur.name + '</span>' +
         '<span class="sdf-status-bar"><i style="width:' + progressPct(proj) + '%"></i></span>' +
         '<span class="sdf-status-meta">' + (proj.active + 1) + '/' + steps.length + ' · ' + proj.since + ' · <code>' + proj.run + '</code></span>';
     }
@@ -205,18 +210,20 @@
       const steps = stepsOf(proj);
       const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP_X) / (NODE_W + GAP_X)));
       const rows = Math.ceil(steps.length / cols);
+      const usedCols = Math.min(cols, steps.length);
+      const contentW = usedCols * NODE_W + (usedCols - 1) * GAP_X;
+      const offX = Math.max(PAD, Math.round((width - contentW) / 2)); // centrado
       pos = steps.map((_, i) => {
         const row = Math.floor(i / cols);
         const within = i % cols;
         const col = row % 2 === 0 ? within : cols - 1 - within;
-        return { x: PAD + col * (NODE_W + GAP_X), y: PAD + row * (NODE_H + GAP_Y), row };
+        return { x: offX + col * (NODE_W + GAP_X), y: PAD + row * (NODE_H + GAP_Y), row };
       });
       nodes.forEach((n, i) => { n.style.transform = 'translate(' + pos[i].x + 'px,' + pos[i].y + 'px)'; });
-      const totalW = PAD * 2 + cols * NODE_W + (cols - 1) * GAP_X;
       const totalH = PAD * 2 + rows * NODE_H + (rows - 1) * GAP_Y;
       canvas.style.height = totalH + 'px';
-      svg.setAttribute('viewBox', '0 0 ' + totalW + ' ' + totalH);
-      svg.setAttribute('width', totalW);
+      svg.setAttribute('viewBox', '0 0 ' + width + ' ' + totalH);
+      svg.setAttribute('width', width);
       svg.setAttribute('height', totalH);
       drawEdges();
       update(proj);
@@ -258,38 +265,96 @@
   }
 
   /* ------------------------------------------------------------------ *
-   *  Controlador
+   *  GraphPanel — selector de proyectos + grafo (reutilizable: card y modal)
    * ------------------------------------------------------------------ */
-  function Controller(host) {
-    const card = host.closest('.mosaic-item') || host.parentElement;
-    let mode = null, projIdx = 0, tickTimer = null, pop = null, view = null;
+  function GraphPanel(container, opts) {
+    opts = opts || {};
+    let projIdx = opts.projIdx || 0;
+    let pop = null, view = null;
     const proj = () => PROJECTS[projIdx];
-    const isHero = () => !!(card && card.classList.contains('hero'));
 
     function buildSelector() {
       const bar = h('div', 'sdf-tabs');
       PROJECTS.forEach((p, i) => {
         const b = h('button', 'sdf-tab' + (i === projIdx ? ' on' : ''));
         b.innerHTML = '<span class="sdf-tab-dot"></span> ' + p.name;
-        b.addEventListener('click', () => { if (i !== projIdx) { projIdx = i; rebuild(); } });
+        b.addEventListener('click', () => { if (i !== projIdx) { projIdx = i; build(); } });
         bar.appendChild(b);
       });
+      if (opts.onExpand) {
+        const ex = h('button', 'sdf-expand', { title: 'Expandir', 'aria-label': 'Expandir' });
+        ex.innerHTML = '<i class="fas fa-expand"></i>';
+        ex.addEventListener('click', opts.onExpand);
+        bar.appendChild(ex);
+      }
       return bar;
     }
 
-    function rebuild() {
+    function build() {
+      container.innerHTML = '';
+      pop = Popover(container);
+      container.appendChild(buildSelector());
+      view = GraphView(container, pop);
+      view.mount(proj());
+      view.layout();
+    }
+
+    const api = {
+      update() { if (view) view.update(proj()); },
+      relayout() { if (view) view.layout(); },
+      closePopover() { if (pop) pop.close(); },
+      currentProj() { return projIdx; },
+      destroy() { live.delete(api); },
+    };
+    build();
+    live.add(api);
+    ensureTicker();
+    return api;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Modal — versión ampliada del GraphPanel
+   * ------------------------------------------------------------------ */
+  function openModal(projIdx) {
+    const overlay = h('div', 'sdf-modal');
+    overlay.innerHTML =
+      '<div class="sdf-modal-card" role="dialog" aria-modal="true">' +
+        '<div class="sdf-modal-head"><span><i class="fas fa-diagram-project"></i> Workflows en curso</span>' +
+        '<button class="sdf-modal-x" aria-label="Cerrar"><i class="fas fa-xmark"></i></button></div>' +
+        '<div class="sdf-modal-body" data-sdd-flow data-mode="graph"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector('.sdf-modal-body');
+    const panel = GraphPanel(body, { projIdx: projIdx });
+    const ro = new ResizeObserver(() => panel.relayout());
+    ro.observe(body);
+
+    function close() {
+      overlay.classList.remove('open');
+      panel.destroy();
+      ro.disconnect();
+      document.removeEventListener('keydown', onKey);
+      setTimeout(() => overlay.remove(), 200);
+    }
+    function onKey(e) { if (e.key === 'Escape') { panel.closePopover(); close(); } }
+    overlay.querySelector('.sdf-modal-x').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    requestAnimationFrame(() => { overlay.classList.add('open'); panel.relayout(); });
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Controlador de la card
+   * ------------------------------------------------------------------ */
+  function Controller(host) {
+    const card = host.closest('.mosaic-item') || host.parentElement;
+    let mode = null, panel = null;
+    const isHero = () => !!(card && card.classList.contains('hero'));
+
+    function teardown() {
+      if (panel && panel.destroy) panel.destroy();
+      panel = null;
       host.innerHTML = '';
-      pop = Popover(host);
-      if (mode === 'graph') {
-        host.appendChild(buildSelector());
-        view = GraphView(host, pop);
-        view.mount(proj());
-        view.layout();
-      } else {
-        view = ListView(host);
-        view.mount();
-        view.update();
-      }
     }
 
     function render() {
@@ -297,35 +362,27 @@
       if (next === mode) return;
       mode = next;
       host.dataset.mode = mode;
-      rebuild();
+      teardown();
+      if (mode === 'graph') {
+        panel = GraphPanel(host, { onExpand: () => openModal(panel.currentProj()) });
+      } else {
+        panel = ListView(host);
+        live.add(panel);
+        ensureTicker();
+      }
     }
-
-    function startTicking() {
-      stopTicking();
-      tickTimer = setInterval(() => {
-        // todos los flujos avanzan (simula ejecución en vivo)
-        PROJECTS.forEach((p) => {
-          const len = stepsOf(p).length;
-          p.active = p.active + 1 > len - 1 ? 0 : p.active + 1;
-        });
-        if (view) view.update(proj());
-      }, 2800);
-    }
-    function stopTicking() { if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
 
     const mo = new MutationObserver(() => render());
     if (card) mo.observe(card, { attributes: true, attributeFilter: ['class'] });
-    const ro = new ResizeObserver(() => { if (mode === 'graph' && view) view.layout(); });
+    const ro = new ResizeObserver(() => { if (mode === 'graph' && panel) panel.relayout(); });
     ro.observe(host);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pop) pop.close(); });
-    host.addEventListener('click', (e) => { if (pop && e.target === host) pop.close(); });
+    host.addEventListener('click', (e) => { if (panel && panel.closePopover && e.target === host) panel.closePopover(); });
 
     render();
-    startTicking();
   }
 
   function init() {
-    document.querySelectorAll('[data-sdd-flow]').forEach((host) => Controller(host));
+    document.querySelectorAll('[data-sdd-flow]:not(.sdf-modal-body)').forEach((host) => Controller(host));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

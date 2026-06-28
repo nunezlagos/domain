@@ -68,7 +68,7 @@ type Paths struct {
 	GlobalEnv        string // ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env (Windows)
 	GlobalSkillPath  string // ~/.claude/skills/domain/SKILL.md (todos los OS)
 	GlobalAgentPath  string // ~/.claude/agents/domain-memory.md
-	ClaudeCodeMCP    string // ~/.claude/mcp_servers.json (todos los OS)
+	ClaudeCodeMCP    string // ~/.claude.json (config global real que lee Claude Code; top-level "mcpServers")
 	OpencodeMCP      string // ~/.config/opencode/opencode.json
 	CursorMCP        string // ~/.cursor/mcp.json
 	ClineMCP         string // path largo bajo VS Code data dir
@@ -90,7 +90,7 @@ func (p Platform) Paths() Paths {
 		GlobalEnv:       filepath.Join(configDir, "domain", "install.env"),
 		GlobalSkillPath: filepath.Join(home, ".claude", "skills", "domain", "SKILL.md"),
 		GlobalAgentPath: filepath.Join(home, ".claude", "agents", "domain-memory.md"),
-		ClaudeCodeMCP:   filepath.Join(home, ".claude", "mcp_servers.json"),
+		ClaudeCodeMCP:   filepath.Join(home, ".claude.json"),
 		OpencodeDir:     filepath.Join(configDir, "opencode"),
 		OpencodeMCP:     filepath.Join(configDir, "opencode", "opencode.json"),
 		CursorMCP:       filepath.Join(home, ".cursor", "mcp.json"),
@@ -139,7 +139,10 @@ func (p Platform) IsWSL() bool {
 func (p Platform) DetectedClients() []Client {
 	paths := p.Paths()
 	candidates := []Client{
-		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath))},
+		// claude-code: el config global vive en ~/.claude.json (file), pero el
+		// dir ~/.claude (skills/agents/sessions) es el signal de instalación.
+		// FileHint cubre el caso de un install fresco con .claude.json y sin dir.
+		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath)), FileHint: paths.ClaudeCodeMCP},
 		{Name: "cursor", MCPPath: paths.CursorMCP, RootHint: filepath.Dir(paths.CursorMCP)},
 		{Name: "cline", MCPPath: paths.ClineMCP, RootHint: filepath.Dir(paths.ClineMCP)},
 		{Name: "continue", MCPPath: paths.ContinueMCP, RootHint: filepath.Dir(paths.ContinueMCP)},
@@ -148,13 +151,10 @@ func (p Platform) DetectedClients() []Client {
 	}
 	out := []Client{}
 	for _, c := range candidates {
-
-
-		if dirExists(c.RootHint) {
+		if dirExists(c.RootHint) || (c.FileHint != "" && fileExists(c.FileHint)) {
 			out = append(out, c)
 		}
 	}
-
 
 	hasOpencode := false
 	for _, c := range out {
@@ -172,7 +172,8 @@ func (p Platform) DetectedClients() []Client {
 type Client struct {
 	Name     string
 	MCPPath  string
-	RootHint string
+	RootHint string // dir cuya existencia indica que el cliente está instalado
+	FileHint string // archivo alternativo que también indica instalación (opcional)
 }
 
 func dirExists(p string) bool {

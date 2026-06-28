@@ -11,7 +11,7 @@
 //     opencode y aborta pidiendo confirmación humana
 //   - --target: filtra a un cliente específico (opencode|claude-code|...)
 //   - escribe el config MCP de domain-mcp en cada uno, preservando otros
-//     servers y migrando entry legacy "domain" si existía
+//     servers y migrando entry legacy "domain" REMOTA si existía
 //   - planta skill global (~/.claude/skills/domain/SKILL.md) y subagent
 //     (~/.claude/agents/domain-memory.md) — embebidos en el binario
 //   - opencode comparte vía symlink (Linux/macOS) o copia (Windows)
@@ -20,6 +20,25 @@
 //   - si install.env ya tiene URL distinta, avisa antes de sobrescribir
 //   - --uninstall: borra solo lo que el installer creó, preserva el resto
 //     del archivo del usuario (operación determinista, no restore de backup)
+//
+// Convención de entry names (documentada y deliberada):
+//   - "domain"     → instalación LOCAL (instalador del SERVER: cmd/domain +
+//     internal/cli/setup). transport=local, command=binario
+//     domain-mcp. Vive en ~/.claude.json y opencode.json.
+//   - "domain-mcp" → instalación REMOTA (ESTE instalador de usuario).
+//     transport=http/remote, url=VPS/mcp + Bearer api-key.
+//
+// Dedup local↔remoto: si ya hay un "domain" LOCAL vivo, NO se agrega un
+// "domain-mcp" remoto contradictorio (la instalación local es la fuente de
+// verdad y se respeta). El uninstall del user nunca toca un "domain" local.
+//
+// Config MCP que lee cada cliente (verificado):
+//   - claude-code:    ~/.claude.json           top-level "mcpServers" (type:http)
+//   - opencode:       ~/.config/opencode/opencode.json  "mcp" (type:remote)
+//   - cursor:         ~/.cursor/mcp.json        "mcpServers"
+//   - cline:          .../saoudrizwan.claude-dev/settings/cline_mcp_settings.json  "mcpServers"
+//   - continue:       ~/.continue/config.json   experimental.modelContextProtocolServers
+//   - claude-desktop: NO soporta http remoto (solo stdio) → se omite con aviso
 package main
 
 import (
@@ -28,6 +47,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -262,12 +283,21 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	}
 
 	step("Configurando clientes (MCP transport)")
-	if err := Apply(plan, opts.URL, opts.APIKey); err != nil {
+	results, err := Apply(plan, opts.URL, opts.APIKey)
+	if err != nil {
 		failL(err.Error())
 		os.Exit(1)
 	}
+	skipByClient := map[string]ApplyResult{}
+	for _, r := range results {
+		skipByClient[r.Client] = r
+	}
 	for _, c := range plan.Targets {
-		ok(c.Name + ": " + c.MCPPath)
+		if r, found := skipByClient[c.Name]; found && r.Skipped {
+			warnL(c.Name + ": omitido — " + r.Reason)
+		} else {
+			ok(c.Name + ": " + c.MCPPath)
+		}
 		if c.Name == "opencode" {
 			if err := linkOpencodeToGlobal(paths, p.OS); err != nil {
 				warnL("opencode symlinks: " + err.Error())
@@ -393,16 +423,30 @@ func prompt(r *bufio.Reader, q string) string {
 	return s
 }
 
+// promptHidden pide un secreto sin eco en terminal cuando es posible
+// (Unix: stty -echo; best-effort). Si no hay TTY o falla, cae al modo visible
+// para no romper pipes/CI. Stdlib puro + 'stty' (presente en Unix).
 func promptHidden(r *bufio.Reader, q string) string {
 	fmt.Print(q)
+	restore := disableEcho()
 	s, _ := r.ReadString('\n')
+	if restore != nil {
+		restore()
+		fmt.Println() // newline que el eco habría producido al presionar Enter
+	}
 	return s
 }
 
+// confirm devuelve true para 'y'/'yes' y, dado que los prompts usan "(Y/n)"
+// (default afirmativo), también para input vacío (Enter). Solo 'n'/'no' o
+// cualquier otra respuesta explícita niega.
 func confirm(r *bufio.Reader, q string) bool {
 	fmt.Print(q)
 	s, _ := r.ReadString('\n')
 	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return true // default-yes, consistente con "(Y/n)"
+	}
 	return s == "y" || s == "yes"
 }
 
@@ -411,4 +455,50 @@ func linkVerb(osName string) string {
 		return "copias"
 	}
 	return "symlinks"
+}
+
+// disableEcho apaga el eco de la terminal (Unix) para leer secretos sin
+// mostrarlos. Devuelve una función para restaurar el estado, o nil si no se
+// pudo (sin TTY, no-Unix, falta 'stty'): en ese caso el caller lee en claro,
+// que es preferible a romper el flujo en CI/pipes.
+func disableEcho() func() {
+	if runtime.GOOS == "windows" {
+		return nil // Windows: sin soporte stdlib-only; lectura visible
+	}
+	if !isTTY() {
+		return nil // pipe/redirección: no hay terminal que silenciar
+	}
+	// Guardar estado actual y apagar eco.
+	saved, err := sttyState()
+	if err != nil {
+		return nil
+	}
+	if err := sttyApply("-echo"); err != nil {
+		return nil
+	}
+	return func() { _ = sttyApply(saved) }
+}
+
+func isTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+func sttyState() (string, error) {
+	cmd := exec.Command("stty", "-g")
+	cmd.Stdin = os.Stdin
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func sttyApply(arg string) error {
+	cmd := exec.Command("stty", arg)
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }

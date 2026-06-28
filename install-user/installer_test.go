@@ -79,7 +79,7 @@ func TestBuildInstallPlan_TargetFilter(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	writeFakeClientConfig(t, filepath.Join(home, ".config", "opencode"), "opencode.json", `{}`)
-	writeFakeClientConfig(t, filepath.Join(home, ".claude"), "mcp_servers.json", `{}`)
+	writeFakeClientConfig(t, home, ".claude.json", `{}`)
 
 	plan, err := BuildInstallPlan(InstallOptions{Target: "opencode"})
 	if err != nil {
@@ -161,7 +161,7 @@ func TestApply_OpencodeRemoteEntry(t *testing.T) {
 	plan := InstallPlan{
 		Targets: []Client{{Name: "opencode", MCPPath: filepath.Join(cfgDir, "opencode.json")}},
 	}
-	if err := Apply(plan, "http://test.local", "domk_live_test"); err != nil {
+	if _, err := Apply(plan, "http://test.local", "domk_live_test"); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 
@@ -201,7 +201,7 @@ func TestApply_OpencodeSchemaUpgrade(t *testing.T) {
 	plan := InstallPlan{
 		Targets: []Client{{Name: "opencode", MCPPath: filepath.Join(cfgDir, "opencode.json")}},
 	}
-	if err := Apply(plan, "http://test.local", "domk_live_test"); err != nil {
+	if _, err := Apply(plan, "http://test.local", "domk_live_test"); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 

@@ -88,43 +88,36 @@
           <span class="line to-right" style="left:30%;width:20%"></span>
         </div>
 
-        <div class="msg"><span class="lbl" style="left:70%">flow_run + reglas/skills del proyecto (tools MCP)</span><span class="line to-right" style="left:50%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:70%">ok</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
+        {% for op in pre_ops %}
+        <div class="msg db-op-row">
+          <span class="lbl db-op db-{{ op.type }}" style="left:80%">{{ op.label }}</span>
+          <span class="line to-right" style="left:70%;width:20%"></span>
+        </div>
+        {% endfor %}
+        <div class="msg"><span class="lbl ret" style="left:70%">plan ok → flow_run + steps persistidos</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
 
-        {% with p=pmap.explore %}<div class="msg">{% include "_sdd_phase.html" with p=p step=1 tag="lite" %}</div>{% endwith %}
-        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-        {% with p=pmap.spec %}<div class="msg">{% include "_sdd_phase.html" with p=p step=2 %}</div>{% endwith %}
+        {% include "_sdd_phase_section.html" with p=pmap.explore step=1 tag="lite" %}
+        {% include "_sdd_phase_section.html" with p=pmap.spec step=2 %}
         <div class="msg"><span class="lbl" style="left:30%">&#9995; hardspec (obligatorio): revisar el spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:30%">OK o rehacer parte (auditado)</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-        {% with p=pmap.propose %}<div class="msg">{% include "_sdd_phase.html" with p=p step=3 %}</div>{% endwith %}
-        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-        {% with p=pmap.design %}<div class="msg">{% include "_sdd_phase.html" with p=p step=4 %}</div>{% endwith %}
+        {% include "_sdd_phase_section.html" with p=pmap.propose step=3 %}
+        {% include "_sdd_phase_section.html" with p=pmap.design step=4 %}
         <div class="msg"><span class="lbl" style="left:30%">&#9939; gate (manual/hibrido): aprobacion humana</span><span class="line to-left" style="left:10%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:30%">confirm: aprueba / rechaza</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-        {% with p=pmap.tasks %}<div class="msg">{% include "_sdd_phase.html" with p=p step=5 %}</div>{% endwith %}
-        <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% include "_sdd_phase_section.html" with p=pmap.tasks step=5 %}
 
         <div class="loop"><span class="tag">&#8635; loop &middot; subagentes paralelos nativos del cliente &middot; hasta que los tests pasen</span>
           <div class="exp-band" style="top:6px;bottom:46px"></div>
           <span class="exp-lbl">nucleo express / lite</span>
-          {% with p=pmap.apply %}<div class="msg">{% include "_sdd_phase.html" with p=p step=6 tag="lite/exp" %}</div>{% endwith %}
-          <div class="msg"><span class="lbl" style="left:80%">itera: crea req/issue/tasks</span><span class="self acc" style="left:70%"></span></div>
-          <div class="msg"><span class="lbl" style="left:80%">crea/persiste (req&middot;issue&middot;tasks)</span><span class="line to-right" style="left:70%;width:20%"></span></div>
-          <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-          {% with p=pmap.verify %}<div class="msg">{% include "_sdd_phase.html" with p=p step=7 tag="lite/exp" %}</div>{% endwith %}
-          <div class="msg"><span class="lbl ret" style="left:60%">resultado</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
-          {% with p=pmap.judge %}<div class="msg">{% include "_sdd_phase.html" with p=p step=8 %}</div>{% endwith %}
-          <div class="msg"><span class="lbl ret" style="left:60%">resultado &middot; reintento si falla</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+          {% include "_sdd_phase_section.html" with p=pmap.apply step=6 tag="lite/exp" %}
+          {% include "_sdd_phase_section.html" with p=pmap.verify step=7 tag="lite/exp" %}
+          {% include "_sdd_phase_section.html" with p=pmap.judge step=8 %}
         </div>
 
-        {% with p=pmap.archive %}<div class="msg">{% include "_sdd_phase.html" with p=p step=9 %}</div>{% endwith %}
+        {% include "_sdd_phase_section.html" with p=pmap.archive step=9 %}
         <div class="msg"><span class="lbl" style="left:30%">asistencia: &iquest;omitir tareas? &rarr; re-editar spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
         <div class="msg"><span class="lbl ret" style="left:30%">decision humana</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl" style="left:80%">persiste</span><span class="line to-right" style="left:70%;width:20%"></span></div>
-        {% with p=pmap.onboard %}<div class="msg">{% include "_sdd_phase.html" with p=p step=10 %}</div>{% endwith %}
-        <div class="msg"><span class="lbl ret" style="left:60%">onboarding (doc opcional)</span><span class="line ret to-left" style="left:50%;width:20%"></span></div>
+        {% include "_sdd_phase_section.html" with p=pmap.onboard step=10 %}
         <div class="msg"><span class="lbl" style="left:30%">issue implementado</span><span class="line to-left" style="left:10%;width:40%"></span></div>
       </div>
     </div>

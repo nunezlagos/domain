@@ -91,6 +91,135 @@ _SDD_PHASES = [
     ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio.", "book"),
 ]
 
+_SDD_PHASE_OPS = {
+    "sdd-explore": {
+        "output": "intent + directorio → contexto mapeado",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations",
+            "domain_mem_save → INSERT knowledge_observations (intent)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations (BM25/FTS: plainto_tsquery spanish)"},
+            {"type": "write", "label": "knowledge_observations (opcional)"},
+        ],
+    },
+    "sdd-spec": {
+        "output": "issue_slug + issue_md → especificación formal",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations",
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (spec)",
+            "domain_mem_save → INSERT knowledge_observations (issue slug)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations (FT: contexto similar)"},
+            {"type": "write", "label": "knowledge_docs + doc_chunks (body del spec con embeddings)"},
+            {"type": "write", "label": "knowledge_observations (opcional)"},
+        ],
+    },
+    "sdd-propose": {
+        "output": "proposal_md → enfoque con tradeoffs",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations",
+            "domain_propose_skill → INSERT project_skills (propuesta)",
+            "domain_propose_policy → INSERT project_policies (propuesta)",
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (proposal)",
+            "domain_mem_save → INSERT knowledge_observations (REQUERIDO)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations (BM25/FTS: enfoques similares)"},
+            {"type": "write", "label": "knowledge_docs + doc_chunks (contenido de la propuesta)"},
+            {"type": "write", "label": "knowledge_observations (observación REQUERIDA del análisis)"},
+            {"type": "write", "label": "project_skills / project_policies (skills/policies propuestas)"},
+        ],
+    },
+    "sdd-design": {
+        "output": "design_md + ADRs → arquitectura detallada",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations / docs",
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (design_md)",
+            "domain_mem_save → INSERT knowledge_observations (ADRs REQUERIDOS)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations + knowledge_docs (BM25/FTS)"},
+            {"type": "write", "label": "knowledge_docs + doc_chunks (diseño completo con embeddings)"},
+            {"type": "write", "label": "knowledge_observations (ADRs como observaciones REQUERIDAS)"},
+        ],
+    },
+    "sdd-tasks": {
+        "output": "tasks[] → descomposición atómica (id + desc + effort + depends_on)",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations",
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (task breakdown)",
+            "domain_mem_save → INSERT knowledge_observations (REQUERIDO)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations (BM25/FTS)"},
+            {"type": "write", "label": "knowledge_docs + doc_chunks (descomposición en tareas)"},
+            {"type": "write", "label": "knowledge_observations (observación REQUERIDA)"},
+        ],
+    },
+    "sdd-apply": {
+        "output": "files_changed → implementación + code_reference",
+        "tools_mcp": [
+            "domain_mem_search → SELECT FTS en knowledge_observations",
+            "domain_project_skill_list → SELECT project_skills",
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (code summary)",
+            "domain_mem_save → INSERT knowledge_observations (code_reference REQUERIDO)",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "knowledge_observations + project_skills (BM25/FTS + skills)"},
+            {"type": "write", "label": "knowledge_docs + doc_chunks (resumen de implementación)"},
+            {"type": "write", "label": "knowledge_observations (code_reference REQUERIDO)"},
+        ],
+    },
+    "sdd-verify": {
+        "output": "scenarios_failed + blockers → validación contra contrato",
+        "tools_mcp": [
+            "Test runner local (TDD: red → green → refactor → sabotage)",
+            "domain_mem_save → INSERT knowledge_observations (resultados opcional)",
+        ],
+        "db_ops": [
+            {"type": "write", "label": "knowledge_observations (verification result opcional)"},
+        ],
+    },
+    "sdd-judge": {
+        "output": "sabotage_records[] → revisión adversarial",
+        "tools_mcp": [
+            "Subagentes paralelos nativos del cliente (adversarial review)",
+            "domain_mem_save → INSERT knowledge_observations (sabotage_record REQUERIDO)",
+        ],
+        "db_ops": [
+            {"type": "write", "label": "knowledge_observations (sabotage_record REQUERIDO)"},
+        ],
+    },
+    "sdd-archive": {
+        "output": "archived=true → issue cerrado + artefactos",
+        "tools_mcp": [
+            "domain_mem_save → INSERT knowledge_observations (resumen opcional)",
+        ],
+        "db_ops": [
+            {"type": "write", "label": "flow_run_steps (archived=true)"},
+            {"type": "write", "label": "knowledge_observations (resumen opcional)"},
+        ],
+    },
+    "sdd-onboard": {
+        "output": "doc_created (opcional) → onboarding del cambio",
+        "tools_mcp": [
+            "domain_knowledge_save → INSERT knowledge_docs + chunks (guía de onboarding)",
+            "domain_mem_save → INSERT knowledge_observations (opcional)",
+        ],
+        "db_ops": [
+            {"type": "write", "label": "knowledge_docs + doc_chunks (documentación de onboarding)"},
+            {"type": "write", "label": "knowledge_observations (opcional)"},
+        ],
+    },
+}
+
+_SDD_PRE_OPS = [
+    {"type": "read", "label": "flows (slug→id), agent_templates (system prompt), policies (platform + project)"},
+    {"type": "write", "label": "flow_runs (nuevo run), flow_run_steps (N steps del plan)"},
+]
+
 
 @csrf_protect
 def sdd_flow(request):
@@ -129,6 +258,7 @@ def sdd_flow(request):
     phases = []
     for index, (slug, name, group, desc, icon) in enumerate(_SDD_PHASES):
         tpl = by_slug.get(slug)
+        ops = _SDD_PHASE_OPS.get(slug, {})
         phases.append(
             {
                 "index": index,
@@ -145,15 +275,15 @@ def sdd_flow(request):
                 "gate": slug in _GATE,
                 "hardspec": slug in _HARDSPEC,
                 "loop": slug in _LOOP,
+                "output": ops.get("output", "resultado"),
+                "tools_mcp": ops.get("tools_mcp", []),
+                "db_ops": ops.get("db_ops", []),
             }
         )
 
-
-
-
     pmap = {p["slug"].removeprefix("sdd-"): p for p in phases}
 
-    return render(request, "sdd_flow.html", {"phases": phases, "pmap": pmap})
+    return render(request, "sdd_flow.html", {"phases": phases, "pmap": pmap, "pre_ops": _SDD_PRE_OPS})
 
 
 def logout_view(request):

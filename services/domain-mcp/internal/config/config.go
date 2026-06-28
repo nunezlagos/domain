@@ -70,6 +70,10 @@ type Config struct {
 	OrphanAuditEnabled             bool
 	OrphanAuditSchedule            string // formato cron; default "0 4 * * *"
 
+	// HealthPoller — system cron de auto-monitoreo del MCP. Escribe heartbeats
+	// en mcp_health_checks cada 60s. Default enabled (bajo consumo).
+	HealthPollerEnabled bool
+
 	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
 	// Default disabled: requiere LLM_API_KEY (alias: MINIMAX_API_KEY) y consume tokens; opt-in explícito.
 	EdgeInferenceEnabled      bool
@@ -165,6 +169,8 @@ func Load() (*Config, error) {
 		HeartbeatWatcherTickSeconds:    getEnvInt("DOMAIN_HEARTBEAT_WATCHER_TICK_SECONDS", 60),
 		OrphanAuditEnabled:             getEnvBool("DOMAIN_ORPHAN_AUDIT_ENABLED", true),
 		OrphanAuditSchedule:            getEnv("DOMAIN_ORPHAN_AUDIT_SCHEDULE", "0 4 * * *"),
+
+		HealthPollerEnabled: getEnvBool("DOMAIN_HEALTH_POLLER_ENABLED", true),
 
 		EdgeInferenceEnabled:      getEnvBool("DOMAIN_EDGE_INFERENCE_ENABLED", false),
 		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),

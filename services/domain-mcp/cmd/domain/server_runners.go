@@ -142,6 +142,15 @@ func buildRunners(
 			go auditor.Start(leaderCtx)
 		}
 
+		if cfg.HealthPollerEnabled {
+			poller := &systemcron.HealthPoller{
+				Pool:   pools.App,
+				Tick:   60 * time.Second,
+				Logger: logger,
+			}
+			go poller.Start(leaderCtx)
+		}
+
 		scheduler.Run(leaderCtx)
 	})
 

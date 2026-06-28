@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-
-
-
-
-
-
-
-
 const entryNameNew = "domain-mcp" // nombre actual del MCP entry
 const entryNameLegacy = "domain"  // entries de instalaciones previas
 
@@ -74,22 +66,65 @@ func Timestamp() string {
 }
 
 // Install entry: dado un map JSON ya cargado, sirve para:
-//   1. borrar entry legacy "domain"
-//   2. setear entry "domain-mcp" con la nueva URL+headers
+//  1. borrar entry legacy "domain" (solo si NO es una instalación local viva)
+//  2. setear entry "domain-mcp" con la nueva URL+headers
 //
 // container es la key superior (ej: "mcpServers" o "mcp"). Si no existe,
 // se crea. Otras entries del container se preservan.
-func upsertMCPEntry(m map[string]any, container string, entry map[string]any) {
+//
+// Devuelve skipped=true cuando ya existe una entry LOCAL funcional del server
+// (key "domain" con transporte local/command): en ese caso NO tocamos nada
+// para no romper esa instalación ni crear un duplicado remoto contradictorio.
+// El instalador del SERVER usa transporte local; el del USER, remoto. Si el
+// usuario corrió el del server, esa es la fuente de verdad y la respetamos.
+func upsertMCPEntry(m map[string]any, container string, entry map[string]any) (skipped bool) {
 	c, ok := m[container].(map[string]any)
 	if !ok {
 		c = map[string]any{}
 	}
-	delete(c, entryNameLegacy) // migración
+	// Dedup local↔remoto: si hay un 'domain' local vivo, no lo pisamos ni
+	// agregamos un 'domain-mcp' remoto contradictorio.
+	if isLocalEntry(c[entryNameLegacy]) {
+		return true
+	}
+	// Si ya hay un 'domain-mcp' local (raro, pero posible), idem.
+	if isLocalEntry(c[entryNameNew]) {
+		return true
+	}
+	delete(c, entryNameLegacy) // migración de entry legacy remota
 	c[entryNameNew] = entry
 	m[container] = c
+	return false
 }
 
-// removeMCPEntry borra entry "domain-mcp" Y "domain" del container.
+// isLocalEntry reporta si una entry MCP corresponde a un transporte LOCAL
+// (command/stdio), señal de que el server domain está instalado localmente.
+// Cubre el formato de Claude Code/Cursor ("command": "...") y el de OpenCode
+// ("type": "local" o "command": [...]). Una entry remota (solo "url") → false.
+func isLocalEntry(v any) bool {
+	e, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	if t, ok := e["type"].(string); ok && t == "local" {
+		return true
+	}
+	if _, ok := e["command"]; ok {
+		// command presente (string o array) → transporte local.
+		// Excluimos command:false (deshabilitado) que no es "vivo".
+		if b, isBool := e["command"].(bool); isBool && !b {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+// removeMCPEntry borra la entry remota "domain-mcp" del container. También
+// borra la entry legacy "domain" PERO solo si es remota (creada por una
+// versión vieja de este instalador). Una entry "domain" LOCAL es del
+// instalador del SERVER y NO la tocamos: el uninstall del user no debe
+// romper una instalación local ajena.
 // Si el container queda vacío, lo elimina (más limpio).
 func removeMCPEntry(m map[string]any, container string) bool {
 	c, ok := m[container].(map[string]any)
@@ -97,9 +132,14 @@ func removeMCPEntry(m map[string]any, container string) bool {
 		return false
 	}
 	_, hadNew := c[entryNameNew]
-	_, hadLegacy := c[entryNameLegacy]
 	delete(c, entryNameNew)
-	delete(c, entryNameLegacy)
+
+	hadLegacy := false
+	if legacy, exists := c[entryNameLegacy]; exists && !isLocalEntry(legacy) {
+		delete(c, entryNameLegacy)
+		hadLegacy = true
+	}
+
 	if len(c) == 0 {
 		delete(m, container)
 	} else {

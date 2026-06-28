@@ -83,19 +83,30 @@ func pingVPS(ctx context.Context, baseURL string) error {
 	return nil
 }
 
+// ApplyResult reporta, por cliente, si se configuró o se omitió (y por qué).
+type ApplyResult struct {
+	Client  string
+	Skipped bool
+	Reason  string
+}
+
 // Apply ejecuta la configuración de los Targets con la URL+key.
 // No instala opencode ni hace ping (eso es responsabilidad del caller).
-func Apply(plan InstallPlan, vpsURL, apiKey string) error {
+// Devuelve un resultado por cliente para que el caller informe skips/dedup.
+func Apply(plan InstallPlan, vpsURL, apiKey string) ([]ApplyResult, error) {
 	if len(plan.Targets) == 0 {
-		return fmt.Errorf("Apply: plan sin targets")
+		return nil, fmt.Errorf("Apply: plan sin targets")
 	}
 	ts := Timestamp()
+	results := make([]ApplyResult, 0, len(plan.Targets))
 	for _, c := range plan.Targets {
-		if err := configureClient(c, vpsURL, apiKey, ts); err != nil {
-			return fmt.Errorf("%s: %w", c.Name, err)
+		res, err := configureClient(c, vpsURL, apiKey, ts)
+		if err != nil {
+			return results, fmt.Errorf("%s: %w", c.Name, err)
 		}
+		results = append(results, ApplyResult{Client: c.Name, Skipped: res.Skipped, Reason: res.Reason})
 	}
-	return nil
+	return results, nil
 }
 
 // runInstallCmd ejecuta InstallCmd.Primary; si falla corre Fallback.

@@ -245,6 +245,14 @@ cd "$INSTALL_DIR/services"
 # Makefile usa --env-file .env (relativo al CWD). El .env real está en
 # $INSTALL_DIR/.env (parent). Symlink para que make lo encuentre.
 [[ -L .env ]] || ln -sf ../.env .env
+# docker-compose.yml de cada servicio busca .env en su propio directorio.
+# Sin esto, variables como APP_USER_PASSWORD quedan vacías → DB connection fail.
+for _svc in "$INSTALL_DIR/services"/*/; do
+  _name=$(basename "$_svc")
+  [[ "$_name" == "certs" || "$_name" == "systemd" ]] && continue
+  [[ -f "$_svc/docker-compose.yml" ]] || continue
+  [[ -L "$_svc/.env" ]] || ln -sf ../../.env "$_svc/.env"
+done
 make down 2>/dev/null || true
 make build
 make up

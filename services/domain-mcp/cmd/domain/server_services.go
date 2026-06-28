@@ -490,6 +490,9 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 	svc := orchestrator.New(pools.App, s.Recorder, orchPhases, cfg.Env)
 	svc.LLM = s.LLMFactory
 	svc.Skills = s.SkillService
+	svc.Spec = s.SpecService
+	svc.Tasks = s.TaskService
+	svc.IssueSvc = s.HUService
 	return svc
 }
 

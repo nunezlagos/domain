@@ -15,7 +15,10 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	usvc "nunezlagos/domain/internal/service/issue"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tsvc "nunezlagos/domain/internal/service/task"
 	"nunezlagos/domain/internal/tracing"
 
 	"go.opentelemetry.io/otel/trace"
@@ -46,6 +49,9 @@ type Service struct {
 	Audit   audit.Recorder
 	Phases  *phases.Registry
 
+	Spec     *specsvc.Service
+	Tasks    *tsvc.Service
+	IssueSvc *usvc.Service
 
 
 

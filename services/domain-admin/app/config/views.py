@@ -130,6 +130,7 @@ _SDD_PHASE_OPS = {
             {"type": "write", "label": "knowledge_docs + doc_chunks (contenido de la propuesta)"},
             {"type": "write", "label": "knowledge_observations (observación REQUERIDA del análisis)"},
             {"type": "write", "label": "project_skills / project_policies (skills/policies propuestas)"},
+            {"type": "save", "label": "sdd_proposals (auto: ParseProposal → CreateProposal)"},
         ],
     },
     "sdd-design": {
@@ -143,6 +144,7 @@ _SDD_PHASE_OPS = {
             {"type": "read", "label": "knowledge_observations + knowledge_docs (BM25/FTS)"},
             {"type": "write", "label": "knowledge_docs + doc_chunks (diseño completo con embeddings)"},
             {"type": "write", "label": "knowledge_observations (ADRs como observaciones REQUERIDAS)"},
+            {"type": "save", "label": "sdd_designs (auto: ParseDesign → CreateDesign)"},
         ],
     },
     "sdd-tasks": {
@@ -156,6 +158,7 @@ _SDD_PHASE_OPS = {
             {"type": "read", "label": "knowledge_observations (BM25/FTS)"},
             {"type": "write", "label": "knowledge_docs + doc_chunks (descomposición en tareas)"},
             {"type": "write", "label": "knowledge_observations (observación REQUERIDA)"},
+            {"type": "save", "label": "issue_tasks (auto: CreateTasks)"},
         ],
     },
     "sdd-apply": {

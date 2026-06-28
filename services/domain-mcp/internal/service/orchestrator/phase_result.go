@@ -9,7 +9,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"nunezlagos/domain/internal/audit"
+	usvc "nunezlagos/domain/internal/service/issue"
+	"nunezlagos/domain/internal/service/openspec"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	tsvc "nunezlagos/domain/internal/service/task"
 	"nunezlagos/domain/internal/tracing"
 )
 
@@ -164,6 +167,8 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		return nil, fmt.Errorf("mark completed: %w", err)
 	}
 	span.SetAttributes(tracing.SafeAttr("phase.result", "completed"))
+
+	s.persistOpenspec(ctx, step, flowRun, in, span)
 
 	if s.Metrics != nil {
 		modeStr, _ := step.Inputs["mode"].(string)
@@ -624,6 +629,129 @@ func extractConcerns(output map[string]any) []ConcernInfo {
 		concerns = append(concerns, ConcernInfo{Name: name, Description: desc})
 	}
 	return concerns
+}
+
+// persistOpenspec materializa el output de la fase en las tablas openspec
+// (sdd_proposals, sdd_designs, issue_tasks). Best-effort: si falla registra
+// error en span pero nunca interrumpe el flujo del orchestrator.
+func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flowRun *FlowRunRow, in PhaseResultInput, span trace.Span) {
+	if s.IssueSvc == nil || (s.Spec == nil && s.Tasks == nil) {
+		return
+	}
+
+	issueSlug, _ := in.Output["issue_slug"].(string)
+	if issueSlug == "" {
+		steps, err := s.Repo.ListFlowRunSteps(ctx, flowRun.ID)
+		if err != nil {
+			span.RecordError(err)
+			return
+		}
+		issueSlug = findIssueSlug(steps)
+	}
+
+	if issueSlug == "" {
+		return
+	}
+
+	issue, err := s.IssueSvc.GetBySlug(ctx, issueSlug)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: get issue %s: %w", issueSlug, err))
+		return
+	}
+
+	switch step.StepKey {
+	case "sdd-propose":
+		s.persistProposalOpenspec(ctx, issue, in, span)
+	case "sdd-design":
+		s.persistDesignOpenspec(ctx, issue, in, span)
+	case "sdd-tasks":
+		s.persistTasksOpenspec(ctx, issue, in, span)
+	}
+}
+
+func findIssueSlug(steps []FlowRunStepRow) string {
+	for _, st := range steps {
+		if st.Status != "completed" {
+			continue
+		}
+		if slug, ok := st.Outputs["issue_slug"].(string); ok && slug != "" {
+			return slug
+		}
+	}
+	return ""
+}
+
+func (s *Service) persistProposalOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Spec == nil {
+		return
+	}
+	proposalMD, ok := in.Output["proposal_md"].(string)
+	if !ok || proposalMD == "" {
+		return
+	}
+	doc := openspec.ParseProposal(proposalMD)
+	_, err := s.Spec.CreateProposal(ctx, issue.ID, doc.Intention, doc.Scope, doc.Approach, doc.Risks, doc.TestingNotes)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create proposal for %s: %w", issue.Slug, err))
+	}
+}
+
+func (s *Service) persistDesignOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Spec == nil {
+		return
+	}
+	designMD, ok := in.Output["design_md"].(string)
+	if !ok || designMD == "" {
+		return
+	}
+	doc := openspec.ParseDesign(designMD)
+
+	var proposalID *uuid.UUID
+	prop, err := s.Spec.GetLatestProposal(ctx, issue.ID)
+	if err == nil {
+		proposalID = &prop.ID
+	}
+
+	_, err = s.Spec.CreateDesign(ctx, issue.ID, proposalID, doc.ArchDecisions, doc.Alternatives, doc.DataFlow, doc.TDDPlan, doc.RisksMitigation)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create design for %s: %w", issue.Slug, err))
+	}
+}
+
+func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Tasks == nil {
+		return
+	}
+	tasksRaw, ok := in.Output["tasks"].([]any)
+	if !ok || len(tasksRaw) == 0 {
+		return
+	}
+
+	inputs := make([]tsvc.CreateTaskInput, 0, len(tasksRaw))
+	for _, raw := range tasksRaw {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		desc, _ := m["description"].(string)
+		if desc == "" {
+			continue
+		}
+		section, _ := m["section"].(string)
+		if section == "" {
+			section = "general"
+		}
+		inputs = append(inputs, tsvc.CreateTaskInput{Section: section, Description: desc})
+	}
+
+	if len(inputs) == 0 {
+		return
+	}
+
+	_, err := s.Tasks.CreateTasks(ctx, issue.ID, inputs)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create tasks for %s: %w", issue.Slug, err))
+	}
 }
 
 // rebuildOutputFromStepInputs reconstruye un phases.Output desde el

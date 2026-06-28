@@ -41,44 +41,52 @@
   border-color: var(--dj-secondary);
   box-shadow: 0 4px 12px rgba(65,118,144,0.25);
 }
+.sdf-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.55; }
+.sdf-tab.on .sdf-tab-dot { opacity: 1; }
 
-/* ============================ VISTA LISTA ============================ */
-.sdf-list { list-style: none; display: flex; flex-direction: column; gap: 2px; padding: 2px 2px 2px 0; }
-.sdf-row {
-  position: relative;
-  display: flex; align-items: center; gap: 9px;
-  padding: 5px 6px 5px 4px;
-  border-radius: 7px;
-  cursor: pointer;
+/* ============================ VISTA LISTA — proyectos en curso ============================ */
+.sdf-plist { list-style: none; display: flex; flex-direction: column; gap: 4px; padding: 2px; }
+.sdf-prow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 9px; border-radius: 9px;
+  background: var(--dj-glass); border: 1px solid var(--dj-border);
   transition: background 0.2s;
 }
-.sdf-row:hover { background: var(--dj-glass); }
-.sdf-row::before {
-  content: ""; position: absolute; left: 9px; top: 17px; bottom: -2px;
-  width: 1.5px; background: var(--dj-border);
+.sdf-prow:hover { background: var(--dj-glass-strong); }
+.sdf-pdot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--dj-primary); animation: sdf-pulse 1.6s ease-out infinite;
 }
-.sdf-row:last-child::before { display: none; }
-.sdf-dot {
-  position: relative; z-index: 1;
-  width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
-  border: 1.5px solid var(--dj-text-muted); background: var(--dj-bg);
-  transition: all 0.25s;
-}
-.sdf-ic { font-size: 11px; width: 14px; text-align: center; color: var(--dj-text-muted); transition: color 0.25s; }
-.sdf-name { font-size: 11px; font-weight: 500; color: var(--dj-text-muted); transition: color 0.25s; }
-.sdf-tag { margin-left: auto; font-size: 9px; font-weight: 600; color: var(--dj-primary); white-space: nowrap; opacity: 0; transition: opacity 0.25s; }
-.sdf-chev { font-size: 9px; color: var(--dj-text-muted); opacity: 0; transition: opacity 0.2s; margin-left: 6px; }
-.sdf-row:hover .sdf-chev { opacity: 0.6; }
-.sdf-row .sdf-tag:not(:empty) + .sdf-chev { margin-left: 6px; }
+.sdf-prow[data-state="done"] .sdf-pdot { background: var(--dj-success); animation: none; }
+.sdf-pinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.sdf-pinfo b { font-size: 12px; font-weight: 700; color: var(--dj-text); }
+.sdf-pmeta { font-size: 9.5px; color: var(--dj-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sdf-pmeta i { margin-right: 2px; }
+.sdf-pphase { color: var(--dj-secondary); font-weight: 600; }
+.sdf-pprog { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.sdf-pprog-bar { width: 46px; height: 4px; border-radius: 2px; background: var(--dj-glass-strong); overflow: hidden; }
+.sdf-pprog-bar i { display: block; height: 100%; background: var(--dj-primary); border-radius: 2px; transition: width 0.5s ease; }
+.sdf-prow[data-state="done"] .sdf-pprog-bar i { background: var(--dj-success); }
+.sdf-pprog-num { font-size: 9.5px; font-weight: 700; color: var(--dj-text-muted); min-width: 30px; text-align: right; }
 
-.sdf-row[data-state="done"] .sdf-dot { background: var(--dj-success); border-color: var(--dj-success); }
-.sdf-row[data-state="done"] .sdf-ic, .sdf-row[data-state="done"] .sdf-name { color: var(--dj-text); }
-.sdf-row[data-state="done"]::before { background: var(--dj-success); opacity: 0.5; }
-.sdf-row[data-state="active"] { background: var(--dj-accent-alpha); }
-.sdf-row[data-state="active"] .sdf-dot { background: var(--dj-primary); border-color: var(--dj-primary); animation: sdf-pulse 1.6s ease-out infinite; }
-.sdf-row[data-state="active"] .sdf-ic, .sdf-row[data-state="active"] .sdf-name { color: var(--dj-secondary); font-weight: 700; }
-.sdf-row[data-state="active"] .sdf-tag { opacity: 1; }
-.sdf-row[data-state="pending"] { opacity: 0.55; }
+/* ============================ PANEL DE ESTADO (grafo) ============================ */
+.sdf-status {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: var(--dj-glass); border: 1px solid var(--dj-border); border-radius: 10px;
+}
+.sdf-status-flow { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--dj-text); }
+.sdf-status-flow i { color: var(--dj-secondary); }
+.sdf-status-phase {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; color: var(--dj-secondary);
+  padding: 2px 8px; border-radius: 999px; background: var(--dj-accent-alpha);
+}
+.sdf-status-phase.is-done { color: var(--dj-success-strong); background: var(--dj-success-a10); }
+.sdf-status-bar { flex: 1; min-width: 80px; height: 5px; border-radius: 3px; background: var(--dj-glass-strong); overflow: hidden; }
+.sdf-status-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--dj-primary), var(--dj-secondary)); border-radius: 3px; transition: width 0.5s ease; }
+.sdf-status-meta { font-size: 9.5px; color: var(--dj-text-muted); white-space: nowrap; }
+.sdf-status-meta code { font-family: ui-monospace, monospace; font-size: 9px; background: var(--dj-glass-strong); padding: 1px 5px; border-radius: 4px; color: var(--dj-secondary); }
 
 /* ============================ VISTA GRAFO (n8n) ============================ */
 .sdf-graph {

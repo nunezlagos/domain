@@ -1,25 +1,24 @@
 /*
- * sdd-flow.js — Componente de Workflows para la card del dashboard.
+ * sdd-flow.js — Workflows en curso por proyecto (card del dashboard).
  *
- * Autónomo y desacoplado: no depende de focus.js / charts.js / portal.js.
- * Se monta sobre [data-sdd-flow] y decide su vista según el estado de la card:
- *   - card normal (chica)   -> vista LISTA (stepper vertical)
- *   - card .hero (centrada)  -> vista GRAFO estilo n8n + selector de workflows
- * Al hacer click en un paso se abre un POPOVER con el detalle real (tool MCP,
- * output y tabla que escribe), modelado a partir de domain-mcp.
+ * Cada proyecto corre un flujo (uno de los tipos reales de domain-mcp) y el
+ * componente muestra su ESTADO: fase en curso, progreso y detalle por paso.
+ *   - card normal (chica)   -> LISTA de proyectos con su flujo + estado
+ *   - card .hero (centrada)  -> selector de proyectos + panel de estado + GRAFO n8n
+ * Click en un paso del grafo abre un POPOVER con el detalle real (tool, output, tabla).
  *
- * SRP: modelo (WORKFLOWS) · ListView · GraphView · Popover · Selector · Controller.
- * Todo encapsulado en un IIFE: no expone nada al scope global.
+ * Autónomo y desacoplado (IIFE, sin globals). No depende de focus.js: detecta el
+ * estado hero por MutationObserver. SRP: catálogo · proyectos · vistas · popover · controlador.
  */
 (function () {
   'use strict';
 
   /* ------------------------------------------------------------------ *
-   *  Modelo: workflows reales de domain-mcp (fases + tool + output + tabla)
+   *  Catálogo de flujos (tipos reales de domain-mcp) — pasos + tool + output + tabla
    * ------------------------------------------------------------------ */
-  const WORKFLOWS = [
-    {
-      id: 'sdd', name: 'SDD Pipeline', icon: 'diagram-project', active: 5,
+  const WORKFLOWS = {
+    sdd: {
+      name: 'SDD Pipeline', icon: 'diagram-project',
       steps: [
         { id: 'explore', name: 'Explore', icon: 'magnifying-glass', desc: 'Analiza el prompt: intent, scope y módulos afectados', tool: 'domain_orchestrate', out: 'intent · scope · modules[]', table: '—' },
         { id: 'spec',     name: 'Spec',     icon: 'file-lines',       desc: 'Construye issue.md con escenarios Gherkin', tool: 'domain_issue_create_*', out: 'issue.md + Gherkin', table: 'sdd_requirements' },
@@ -33,8 +32,8 @@
         { id: 'archive',  name: 'Archive',  icon: 'box-archive',      desc: 'Marca el issue como implemented y actualiza el CHANGELOG', tool: 'domain_issue_set_status', out: 'archived', table: 'CHANGELOG.md' },
       ],
     },
-    {
-      id: 'intake', name: 'Issue Intake', icon: 'inbox', active: 1,
+    intake: {
+      name: 'Issue Intake', icon: 'inbox',
       steps: [
         { id: 'submit',  name: 'Submit',  icon: 'paper-plane',       desc: 'Entrada externa desde jira / github / slack / email', tool: 'domain_intake_submit', out: 'payload (pending)', table: 'issue_intake_payloads' },
         { id: 'review',  name: 'Review',  icon: 'magnifying-glass',   desc: 'Triage del reviewer sobre los pendientes', tool: 'domain_intake_list_pending', out: 'reviewing', table: 'issue_intake_payloads' },
@@ -42,8 +41,8 @@
         { id: 'commit',  name: 'Commit',  icon: 'code-branch',        desc: 'Confirma el issue para entrar al pipeline SDD', tool: 'domain_issue_create_commit', out: 'issue committed', table: 'sdd_requirements' },
       ],
     },
-    {
-      id: 'flow', name: 'Flow / Cron', icon: 'bolt', active: 2,
+    flow: {
+      name: 'Flow / Cron', icon: 'bolt',
       steps: [
         { id: 'create',   name: 'Create',   icon: 'diagram-next', desc: 'Define un DAG de pasos (agent / skill / http / condition)', tool: 'domain_flow_create', out: 'flow (spec DAG)', table: 'flows' },
         { id: 'schedule', name: 'Schedule', icon: 'clock',        desc: 'Programa ejecución periódica (cron 5 campos)', tool: 'domain_cron_create', out: 'cron', table: 'crons' },
@@ -51,9 +50,23 @@
         { id: 'status',   name: 'Status',   icon: 'wave-square',  desc: 'Estado, outputs y prompts del run', tool: 'domain_flow_status', out: 'status · outputs', table: 'flow_runs' },
       ],
     },
+  };
+
+  /* ------------------------------------------------------------------ *
+   *  Proyectos con un flujo EN CURSO (instancias)
+   * ------------------------------------------------------------------ */
+  const PROJECTS = [
+    { id: 'domain-mcp',   name: 'domain-mcp',   flow: 'sdd',    active: 5, since: 'hace 12 min', run: '#run-4812' },
+    { id: 'domain-admin', name: 'domain-admin', flow: 'sdd',    active: 8, since: 'hace 3 min',  run: '#run-4813' },
+    { id: 'saargo-cv',    name: 'saargo-cv',    flow: 'intake', active: 1, since: 'hace 1 min',  run: '#run-4814' },
+    { id: 'licitalab',    name: 'licitalab',    flow: 'flow',   active: 2, since: 'hace 45 min', run: '#run-4815' },
   ];
 
   const ST = Object.freeze({ DONE: 'done', ACTIVE: 'active', PENDING: 'pending' });
+  const wfOf = (proj) => WORKFLOWS[proj.flow];
+  const stepsOf = (proj) => wfOf(proj).steps;
+  const stateAt = (i, active) => (i < active ? ST.DONE : i === active ? ST.ACTIVE : ST.PENDING);
+  const progressPct = (proj) => Math.round(((proj.active) / (stepsOf(proj).length - 1)) * 100);
 
   /* ------------------------------------------------------------------ *
    *  Util DOM
@@ -70,21 +83,15 @@
     if (attrs) for (const k in attrs) n.setAttribute(k, attrs[k]);
     return n;
   }
-  function stateAt(i, activeIdx) {
-    return i < activeIdx ? ST.DONE : i === activeIdx ? ST.ACTIVE : ST.PENDING;
-  }
 
   /* ------------------------------------------------------------------ *
-   *  Popover de detalle (compartido por ambas vistas)
+   *  Popover de detalle de un paso (solo en grafo)
    * ------------------------------------------------------------------ */
   function Popover(host) {
-    const pop = h('div', 'sdf-pop');
-    pop.setAttribute('role', 'dialog');
+    const pop = h('div', 'sdf-pop', { role: 'dialog' });
     host.appendChild(pop);
     let openId = null;
-
     function close() { pop.classList.remove('open'); openId = null; }
-
     function openFor(step, state, anchor) {
       openId = step.id;
       pop.innerHTML =
@@ -100,8 +107,6 @@
           '<div><dt><i class="fas fa-database"></i> Tabla</dt><dd><code>' + step.table + '</code></dd></div>' +
         '</dl>';
       pop.querySelector('.sdf-pop-x').addEventListener('click', close);
-
-      // posiciona bajo el ancla, relativo al host (con scroll)
       const hr = host.getBoundingClientRect();
       const ar = anchor.getBoundingClientRect();
       pop.classList.add('open');
@@ -110,66 +115,66 @@
       let top = ar.bottom - hr.top + host.scrollTop + 8;
       left = Math.max(6, Math.min(left, host.scrollWidth - pw - 6));
       if (top + ph > host.scrollTop + host.clientHeight && ar.top - hr.top - ph - 8 > 0) {
-        top = ar.top - hr.top + host.scrollTop - ph - 8; // arriba si no cabe abajo
+        top = ar.top - hr.top + host.scrollTop - ph - 8;
       }
       pop.style.left = left + 'px';
       pop.style.top = top + 'px';
     }
-
-    function toggle(step, state, anchor) {
-      if (openId === step.id) { close(); return; }
-      openFor(step, state, anchor);
-    }
-    return { toggle, close, el: pop };
+    function toggle(step, state, anchor) { if (openId === step.id) close(); else openFor(step, state, anchor); }
+    return { toggle, close };
   }
 
   /* ------------------------------------------------------------------ *
-   *  Vista LISTA — stepper vertical (card chica)
+   *  Vista LISTA — proyectos con su flujo en curso (card chica)
    * ------------------------------------------------------------------ */
-  function ListView(host, pop) {
+  function ListView(host) {
     let rows = [];
-    function mount(wf) {
-      const ul = h('ul', 'sdf-list');
-      rows = wf.steps.map((step, i) => {
-        const li = h('li', 'sdf-row', { 'data-id': step.id, role: 'button', tabindex: '0' });
+    function mount() {
+      const ul = h('ul', 'sdf-plist');
+      rows = PROJECTS.map((proj) => {
+        const li = h('li', 'sdf-prow', { 'data-id': proj.id });
         li.innerHTML =
-          '<span class="sdf-dot"></span>' +
-          '<i class="sdf-ic fas fa-' + step.icon + '"></i>' +
-          '<span class="sdf-name">' + step.name + '</span>' +
-          '<span class="sdf-tag"></span>' +
-          '<i class="sdf-chev fas fa-chevron-right"></i>';
-        const onClick = () => pop.toggle(step, li.dataset.state, li);
-        li.addEventListener('click', onClick);
-        li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } });
+          '<span class="sdf-pdot"></span>' +
+          '<div class="sdf-pinfo">' +
+            '<b>' + proj.name + '</b>' +
+            '<span class="sdf-pmeta"><i class="fas fa-' + wfOf(proj).icon + '"></i> ' + wfOf(proj).name + ' · <span class="sdf-pphase"></span></span>' +
+          '</div>' +
+          '<div class="sdf-pprog"><span class="sdf-pprog-bar"><i></i></span><span class="sdf-pprog-num"></span></div>';
         ul.appendChild(li);
         return li;
       });
       host.appendChild(ul);
     }
-    function update(wf) {
-      wf.steps.forEach((step, i) => {
-        const st = stateAt(i, wf.active);
-        rows[i].dataset.state = st;
-        rows[i].querySelector('.sdf-tag').textContent = st === ST.ACTIVE ? step.desc : '';
+    function update() {
+      PROJECTS.forEach((proj, i) => {
+        const steps = stepsOf(proj);
+        const cur = steps[proj.active];
+        const li = rows[i];
+        li.dataset.state = proj.active >= steps.length - 1 ? 'done' : 'active';
+        li.querySelector('.sdf-pphase').textContent = cur.name;
+        li.querySelector('.sdf-pprog-bar i').style.width = progressPct(proj) + '%';
+        li.querySelector('.sdf-pprog-num').textContent = (proj.active + 1) + '/' + steps.length;
       });
     }
     return { mount, update };
   }
 
   /* ------------------------------------------------------------------ *
-   *  Vista GRAFO — nodos + bezier serpenteante (card centrada, estilo n8n)
+   *  Vista GRAFO — panel de estado + grafo n8n del proyecto seleccionado
    * ------------------------------------------------------------------ */
   const NODE_W = 138, NODE_H = 50, GAP_X = 46, GAP_Y = 34, PAD = 12;
 
   function GraphView(host, pop) {
-    let canvas, svg, nodes = [], edges = [], pos = [], wf = null;
+    let statusEl, canvas, svg, nodes = [], edges = [], pos = [], proj = null;
 
-    function mount(workflow) {
-      wf = workflow;
+    function mount(project) {
+      proj = project;
+      statusEl = h('div', 'sdf-status');
+      host.appendChild(statusEl);
       canvas = h('div', 'sdf-graph');
       svg = s('svg', { class: 'sdf-edges' });
       canvas.appendChild(svg);
-      nodes = wf.steps.map((step, i) => {
+      nodes = stepsOf(proj).map((step) => {
         const n = h('div', 'sdf-node', { 'data-id': step.id, role: 'button', tabindex: '0' });
         n.innerHTML =
           '<span class="sdf-node-ic"><i class="fas fa-' + step.icon + '"></i></span>' +
@@ -183,11 +188,24 @@
       host.appendChild(canvas);
     }
 
+    function renderStatus() {
+      const steps = stepsOf(proj);
+      const cur = steps[proj.active];
+      const done = proj.active >= steps.length - 1;
+      statusEl.innerHTML =
+        '<span class="sdf-status-flow"><i class="fas fa-' + wfOf(proj).icon + '"></i> ' + wfOf(proj).name + '</span>' +
+        '<span class="sdf-status-phase' + (done ? ' is-done' : '') + '">' +
+          '<i class="fas fa-' + (done ? 'circle-check' : 'circle-notch fa-spin') + '"></i> ' + cur.name + '</span>' +
+        '<span class="sdf-status-bar"><i style="width:' + progressPct(proj) + '%"></i></span>' +
+        '<span class="sdf-status-meta">' + (proj.active + 1) + '/' + steps.length + ' · ' + proj.since + ' · <code>' + proj.run + '</code></span>';
+    }
+
     function layout() {
       const width = host.clientWidth || 600;
+      const steps = stepsOf(proj);
       const cols = Math.max(1, Math.floor((width - PAD * 2 + GAP_X) / (NODE_W + GAP_X)));
-      const rows = Math.ceil(wf.steps.length / cols);
-      pos = wf.steps.map((_, i) => {
+      const rows = Math.ceil(steps.length / cols);
+      pos = steps.map((_, i) => {
         const row = Math.floor(i / cols);
         const within = i % cols;
         const col = row % 2 === 0 ? within : cols - 1 - within;
@@ -201,13 +219,14 @@
       svg.setAttribute('width', totalW);
       svg.setAttribute('height', totalH);
       drawEdges();
-      update(wf);
+      update(proj);
     }
 
     function drawEdges() {
       svg.innerHTML = '';
       edges = [];
-      for (let i = 0; i < wf.steps.length - 1; i++) {
+      const steps = stepsOf(proj);
+      for (let i = 0; i < steps.length - 1; i++) {
         const a = pos[i], b = pos[i + 1];
         let d;
         if (a.row === b.row) {
@@ -229,10 +248,11 @@
       }
     }
 
-    function update(workflow) {
-      wf = workflow;
-      wf.steps.forEach((_, i) => { if (nodes[i]) nodes[i].dataset.state = stateAt(i, wf.active); });
-      edges.forEach((edge, i) => edge.classList.toggle('on', i + 1 <= wf.active));
+    function update(project) {
+      proj = project;
+      stepsOf(proj).forEach((_, i) => { if (nodes[i]) nodes[i].dataset.state = stateAt(i, proj.active); });
+      edges.forEach((edge, i) => edge.classList.toggle('on', i + 1 <= proj.active));
+      renderStatus();
     }
     return { mount, layout, update };
   }
@@ -242,20 +262,16 @@
    * ------------------------------------------------------------------ */
   function Controller(host) {
     const card = host.closest('.mosaic-item') || host.parentElement;
-    let mode = null;          // 'list' | 'graph'
-    let wfIdx = 0;            // workflow seleccionado
-    let tickTimer = null;
-    let pop = null, view = null, selectorEl = null;
-
-    const wf = () => WORKFLOWS[wfIdx];
+    let mode = null, projIdx = 0, tickTimer = null, pop = null, view = null;
+    const proj = () => PROJECTS[projIdx];
     const isHero = () => !!(card && card.classList.contains('hero'));
 
     function buildSelector() {
       const bar = h('div', 'sdf-tabs');
-      WORKFLOWS.forEach((w, i) => {
-        const b = h('button', 'sdf-tab' + (i === wfIdx ? ' on' : ''));
-        b.innerHTML = '<i class="fas fa-' + w.icon + '"></i> ' + w.name;
-        b.addEventListener('click', () => { if (i !== wfIdx) { wfIdx = i; rebuild(); } });
+      PROJECTS.forEach((p, i) => {
+        const b = h('button', 'sdf-tab' + (i === projIdx ? ' on' : ''));
+        b.innerHTML = '<span class="sdf-tab-dot"></span> ' + p.name;
+        b.addEventListener('click', () => { if (i !== projIdx) { projIdx = i; rebuild(); } });
         bar.appendChild(b);
       });
       return bar;
@@ -265,15 +281,14 @@
       host.innerHTML = '';
       pop = Popover(host);
       if (mode === 'graph') {
-        selectorEl = buildSelector();
-        host.appendChild(selectorEl);
+        host.appendChild(buildSelector());
         view = GraphView(host, pop);
-        view.mount(wf());
+        view.mount(proj());
         view.layout();
       } else {
-        view = ListView(host, pop);
-        view.mount(wf());
-        view.update(wf());
+        view = ListView(host);
+        view.mount();
+        view.update();
       }
     }
 
@@ -288,10 +303,13 @@
     function startTicking() {
       stopTicking();
       tickTimer = setInterval(() => {
-        const w = wf();
-        w.active = w.active + 1 > w.steps.length - 1 ? 0 : w.active + 1;
-        if (view) view.update(w);
-      }, 2600);
+        // todos los flujos avanzan (simula ejecución en vivo)
+        PROJECTS.forEach((p) => {
+          const len = stepsOf(p).length;
+          p.active = p.active + 1 > len - 1 ? 0 : p.active + 1;
+        });
+        if (view) view.update(proj());
+      }, 2800);
     }
     function stopTicking() { if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
 

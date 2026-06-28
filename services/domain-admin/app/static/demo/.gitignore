@@ -1,3 +1,6 @@
 node_modules/
 *.png
 *.log
+
+# assets de marca SÍ versionados (excepción a *.png)
+!brand/*.png

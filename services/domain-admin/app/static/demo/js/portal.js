@@ -11,10 +11,7 @@ function buildHeaderNav() {
     const btn = document.createElement('button');
     btn.className = 'header-nav-item';
     btn.innerHTML = `<i class="fas fa-${seg.icon}"></i>${seg.label}`;
-    btn.addEventListener('click', () => {
-      if (focusActive) exitFocus();
-      openSegment(seg);
-    });
+    btn.addEventListener('click', () => openSegment(seg));
     headerNav.appendChild(btn);
   });
 }
@@ -93,7 +90,7 @@ function bindMosaicClicks() {
 
 function bindEscapeKey() {
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && focusActive) exitFocus();
+    if (e.key === 'Escape' && focusActive && !activeSegment) exitFocus();
   });
 }
 

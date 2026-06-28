@@ -202,7 +202,9 @@ function renderView(seg) {
 }
 
 function openSegment(seg) {
-  if (activeSegment || focusActive) return;
+  // se puede abrir aunque el mosaico esté en focus: la vista lo tapa y, al
+  // cerrarla, el mosaico conserva su estado (no se reinicia a la base).
+  if (activeSegment) return;
   activeSegment = seg;
   searchFilter = '';
   renderView(seg);

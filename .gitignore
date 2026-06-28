@@ -49,6 +49,9 @@ opencode.json.backup-*
 .ai/
 .claude/
 
+# Artefactos temporales de playwright-mcp (screenshots, scripts de render)
+.playwright-mcp/
+
 # SDD specs (NO en repo, solo local)
 openspec/
 # excepción: el paquete Go internal/service/openspec SÍ va al repo

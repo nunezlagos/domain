@@ -8,10 +8,6 @@ import (
 	"strings"
 )
 
-
-
-
-
 type EnvData struct {
 	VPSURL string
 	Email  string

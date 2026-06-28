@@ -1,9 +1,52 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// installOpencodeGlobalInstruction es idempotente: la 2a corrida no debe
+// crear un backup nuevo de opencode.json (no muta nada).
+func TestInstallOpencodeGlobalInstruction_Idempotent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := Platform{OS: "linux"}.Paths()
+
+	// Simular opencode instalado con un opencode.json del usuario.
+	if err := os.MkdirAll(paths.OpencodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.OpencodeMCP, []byte(`{"instructions":["AGENTS.md"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := installOpencodeGlobalInstruction(paths, "20260101T000000Z"); err != nil {
+		t.Fatalf("1a corrida: %v", err)
+	}
+	backups1, _ := filepath.Glob(paths.OpencodeMCP + ".backup-*")
+	if len(backups1) != 1 {
+		t.Fatalf("1a corrida: esperaba 1 backup, hay %d", len(backups1))
+	}
+
+	// 2a corrida con distinto timestamp: no debe agregar otro backup.
+	if err := installOpencodeGlobalInstruction(paths, "20260202T000000Z"); err != nil {
+		t.Fatalf("2a corrida: %v", err)
+	}
+	backups2, _ := filepath.Glob(paths.OpencodeMCP + ".backup-*")
+	if len(backups2) != 1 {
+		t.Errorf("2a corrida no idempotente: %d backups, want 1: %v", len(backups2), backups2)
+	}
+
+	raw, _ := os.ReadFile(paths.OpencodeMCP)
+	if !strings.Contains(string(raw), "AGENTS.md") {
+		t.Error("se perdió la instruction del usuario 'AGENTS.md'")
+	}
+	if !strings.Contains(string(raw), "instructions/domain.md") {
+		t.Error("no se agregó 'instructions/domain.md'")
+	}
+}
 
 // upsertDomainBlock en contenido vacío: escribe solo el bloque.
 func TestUpsertDomainBlock_InsertIntoEmpty(t *testing.T) {

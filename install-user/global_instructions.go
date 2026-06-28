@@ -113,14 +113,16 @@ func installOpencodeGlobalInstruction(paths Paths, timestamp string) error {
 	// Referencia relativa al dir de config de opencode, para que el JSON sea
 	// portable y consistente con cómo opencode resuelve instructions.
 	ref := "instructions/domain.md"
-	if _, err := backupIfExists(paths.OpencodeMCP, timestamp); err != nil {
-		return fmt.Errorf("backup opencode.json: %w", err)
-	}
 	m, err := loadOrEmptyJSON(paths.OpencodeMCP)
 	if err != nil {
 		return err
 	}
+	// Solo respaldamos + escribimos si realmente hay que mutar el JSON, para
+	// que re-ejecutar el instalador sea idempotente (no acumule backups).
 	if upsertStringInArray(m, "instructions", ref) {
+		if _, err := backupIfExists(paths.OpencodeMCP, timestamp); err != nil {
+			return fmt.Errorf("backup opencode.json: %w", err)
+		}
 		return writeJSON(paths.OpencodeMCP, m)
 	}
 	return nil

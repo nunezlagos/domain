@@ -1,7 +1,9 @@
 let charts = {};
 
 function initTokenChart() {
-  const ctx = document.getElementById('chartTokens').getContext('2d');
+  const canvas = document.getElementById('chartTokens');
+  if (!canvas) return; // la card aloja el flujo SDD (sdd-flow.js), no el chart
+  const ctx = canvas.getContext('2d');
   const days = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
   charts.tokens = new Chart(ctx, {
     type: 'line',

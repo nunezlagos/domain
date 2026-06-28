@@ -1,0 +1,171 @@
+/* sdd-flow.css — estilos del componente de flujo SDD (lista + grafo n8n).
+   Desacoplado: namespace .sdf-*, usa las variables --dj-* del portal. */
+
+[data-sdd-flow] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+/* ============================ VISTA LISTA ============================ */
+.sdf-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 2px 2px 0;
+}
+.sdf-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 6px 5px 4px;
+  border-radius: 7px;
+  transition: background 0.2s;
+}
+/* línea conectora del stepper */
+.sdf-row::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 17px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--dj-border);
+}
+.sdf-row:last-child::before { display: none; }
+
+.sdf-dot {
+  position: relative;
+  z-index: 1;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1.5px solid var(--dj-text-muted);
+  background: var(--dj-bg);
+  transition: all 0.25s;
+}
+.sdf-ic { font-size: 11px; width: 14px; text-align: center; color: var(--dj-text-muted); transition: color 0.25s; }
+.sdf-name { font-size: 11px; font-weight: 500; color: var(--dj-text-muted); transition: color 0.25s; }
+.sdf-tag {
+  margin-left: auto;
+  font-size: 9px; font-weight: 600;
+  color: var(--dj-primary);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+/* estados — lista */
+.sdf-row[data-state="done"] .sdf-dot { background: var(--dj-success); border-color: var(--dj-success); }
+.sdf-row[data-state="done"] .sdf-ic,
+.sdf-row[data-state="done"] .sdf-name { color: var(--dj-text); }
+.sdf-row[data-state="done"]::before { background: var(--dj-success); opacity: 0.5; }
+
+.sdf-row[data-state="active"] { background: var(--dj-accent-alpha); }
+.sdf-row[data-state="active"] .sdf-dot {
+  background: var(--dj-primary); border-color: var(--dj-primary);
+  box-shadow: 0 0 0 0 rgba(121,174,200,0.5);
+  animation: sdf-pulse 1.6s ease-out infinite;
+}
+.sdf-row[data-state="active"] .sdf-ic,
+.sdf-row[data-state="active"] .sdf-name { color: var(--dj-secondary); font-weight: 700; }
+.sdf-row[data-state="active"] .sdf-tag { opacity: 1; }
+
+.sdf-row[data-state="pending"] { opacity: 0.55; }
+
+/* ============================ VISTA GRAFO (n8n) ============================ */
+.sdf-graph {
+  position: relative;
+  min-height: 100%;
+  /* fondo de puntos estilo editor de workflows */
+  background-image: radial-gradient(var(--dj-border) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: -1px -1px;
+}
+.sdf-edges {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+}
+.sdf-edge { fill: none; stroke: var(--dj-border); stroke-width: 2; }
+.sdf-edge-flow {
+  fill: none;
+  stroke: var(--dj-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 5 9;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.sdf-edge-flow.on {
+  opacity: 0.9;
+  animation: sdf-flow 0.8s linear infinite;
+}
+
+.sdf-node {
+  position: absolute;
+  top: 0; left: 0;
+  width: 132px; height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  z-index: 2;
+  background: var(--dj-bg);
+  border: 1.5px solid var(--dj-border);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.3s, transform 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.sdf-node-ic {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--dj-glass);
+  color: var(--dj-text-muted);
+  transition: all 0.3s;
+}
+.sdf-node-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.sdf-node-txt b { font-size: 11px; font-weight: 700; color: var(--dj-text); }
+.sdf-node-txt em { font-size: 8.5px; font-style: normal; color: var(--dj-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* estados — grafo */
+.sdf-node[data-state="done"] { border-color: var(--dj-success); }
+.sdf-node[data-state="done"] .sdf-node-ic { background: var(--dj-success-a15); color: var(--dj-success-strong); }
+
+.sdf-node[data-state="active"] {
+  border-color: var(--dj-primary);
+  box-shadow: 0 0 0 3px var(--dj-accent-alpha), 0 6px 18px rgba(121,174,200,0.25);
+  animation: sdf-node-pulse 1.8s ease-in-out infinite;
+}
+.sdf-node[data-state="active"] .sdf-node-ic { background: var(--dj-primary); color: var(--dj-on-accent); }
+
+.sdf-node[data-state="pending"] { opacity: 0.5; }
+
+/* ============================ ANIMACIONES ============================ */
+@keyframes sdf-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(121,174,200,0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(121,174,200,0); }
+  100% { box-shadow: 0 0 0 0 rgba(121,174,200,0); }
+}
+@keyframes sdf-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--dj-accent-alpha), 0 6px 18px rgba(121,174,200,0.18); }
+  50%      { box-shadow: 0 0 0 5px var(--dj-accent-alpha), 0 8px 22px rgba(121,174,200,0.35); }
+}
+@keyframes sdf-flow {
+  to { stroke-dashoffset: -14; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sdf-row[data-state="active"] .sdf-dot,
+  .sdf-node[data-state="active"],
+  .sdf-edge-flow.on { animation: none; }
+}

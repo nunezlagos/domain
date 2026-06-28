@@ -47,7 +47,7 @@ GRANT SELECT ON project_policies TO domain_chat_reader;
 GRANT SELECT ON users TO domain_chat_reader;
 GRANT SELECT ON roles TO domain_chat_reader;
 GRANT SELECT ON user_roles TO domain_chat_reader;
-GRANT SELECT ON clients TO domain_chat_reader;
+GRANT SELECT ON project_clients TO domain_chat_reader;
 GRANT SELECT ON issues TO domain_chat_reader;
 GRANT SELECT ON knowledge_docs TO domain_chat_reader;
 GRANT SELECT ON knowledge_chunks TO domain_chat_reader;

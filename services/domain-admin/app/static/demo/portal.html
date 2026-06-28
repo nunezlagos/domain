@@ -70,50 +70,50 @@
       <div class="mosaic-item">
         <div class="phone-widget" id="phoneWidget">
           <div class="pw-row">
-            <div class="pw-icon" style="background:rgba(121,174,200,0.15);color:#79aec8;"><i class="fas fa-robot"></i></div>
+            <div class="pw-icon pw-icon--agents"><i class="fas fa-robot"></i></div>
             <div class="pw-info"><div class="pw-label">Agentes</div><div class="pw-value">3</div></div>
-            <div class="pw-trend" style="color:#4ade80;">+12%</div>
+            <div class="pw-trend pw-trend--up">+12%</div>
           </div>
           <div class="pw-row">
-            <div class="pw-icon" style="background:rgba(245,221,93,0.15);color:#f5dd5d;"><i class="fas fa-bolt"></i></div>
+            <div class="pw-icon pw-icon--skills"><i class="fas fa-bolt"></i></div>
             <div class="pw-info"><div class="pw-label">Skills</div><div class="pw-value">2.7k</div></div>
-            <div class="pw-trend" style="color:#4ade80;">98%</div>
+            <div class="pw-trend pw-trend--up">98%</div>
           </div>
           <div class="pw-row">
-            <div class="pw-icon" style="background:rgba(68,126,155,0.15);color:#447e9b;"><i class="fas fa-database"></i></div>
+            <div class="pw-icon pw-icon--requests"><i class="fas fa-database"></i></div>
             <div class="pw-info"><div class="pw-label">Total Requests</div><div class="pw-value">5.4k</div></div>
-            <div class="pw-trend" style="color:var(--dj-c2);">+8%</div>
+            <div class="pw-trend pw-trend--neutral">+8%</div>
           </div>
         </div>
       </div>
       <div class="mosaic-item glass">
         <div class="mi-title"><i class="fas fa-sync-alt"></i> Workflows</div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px;padding:2px 0;">
-          <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;border-radius:6px;background:rgba(255,255,255,0.03);">
-            <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;margin-top:4px;flex-shrink:0;"></span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:11px;font-weight:500;">SDD Pipeline</div>
-              <div style="display:flex;gap:6px;font-size:9px;color:var(--dj-text-muted);"><span>10 phases</span><span>2h</span></div>
+        <div class="wf-list">
+          <div class="wf-row">
+            <span class="wf-dot wf-dot--ok"></span>
+            <div class="wf-info">
+              <div class="wf-name">SDD Pipeline</div>
+              <div class="wf-meta"><span>10 phases</span><span>2h</span></div>
             </div>
-            <span style="font-size:10px;font-weight:600;color:var(--dj-c1);white-space:nowrap;">98%</span>
+            <span class="wf-rate wf-rate--c1">98%</span>
           </div>
-          <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;border-radius:6px;background:rgba(255,255,255,0.03);">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--dj-c2);margin-top:4px;flex-shrink:0;"></span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:11px;font-weight:500;">Issue Intake</div>
-              <div style="display:flex;gap:6px;font-size:9px;color:var(--dj-text-muted);"><span>5 phases</span><span>1m</span></div>
+          <div class="wf-row">
+            <span class="wf-dot wf-dot--neutral"></span>
+            <div class="wf-info">
+              <div class="wf-name">Issue Intake</div>
+              <div class="wf-meta"><span>5 phases</span><span>1m</span></div>
             </div>
-            <span style="font-size:10px;font-weight:600;color:#4ade80;white-space:nowrap;">100%</span>
+            <span class="wf-rate wf-rate--ok">100%</span>
           </div>
-          <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;border-radius:6px;background:rgba(255,255,255,0.03);">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--dj-c5);margin-top:4px;flex-shrink:0;"></span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:11px;font-weight:500;">Deploy Pipeline</div>
-              <div style="display:flex;gap:6px;font-size:9px;color:var(--dj-text-muted);"><span>8 phases</span><span>45m</span></div>
+          <div class="wf-row">
+            <span class="wf-dot wf-dot--alt"></span>
+            <div class="wf-info">
+              <div class="wf-name">Deploy Pipeline</div>
+              <div class="wf-meta"><span>8 phases</span><span>45m</span></div>
             </div>
-            <span style="font-size:10px;font-weight:600;color:var(--dj-c2);white-space:nowrap;">92%</span>
+            <span class="wf-rate wf-rate--c2">92%</span>
           </div>
-          <div style="margin-top:auto;font-size:9px;color:var(--dj-text-muted);text-align:center;padding-top:4px;border-top:1px solid var(--dj-border);">3 active · 59 runs</div>
+          <div class="wf-footer">3 active · 59 runs</div>
         </div>
       </div>
       <div class="mosaic-item glass">
@@ -130,28 +130,28 @@
       </div>
       <div class="mosaic-item glass">
         <div class="mi-title"><i class="fas fa-thumbs-up"></i> Feedback</div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:4px 0;">
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.18);">
-            <i class="fas fa-thumbs-up" style="color:#4ade80;font-size:14px;width:18px;text-align:center;"></i>
-            <div style="flex:1;">
-              <div style="font-size:9px;color:var(--dj-text-muted);text-transform:uppercase;letter-spacing:0.04em;">Positivos 7d</div>
-              <div style="font-size:18px;font-weight:700;line-height:1.1;">847</div>
+        <div class="fb-list">
+          <div class="fb-row fb-row--positive">
+            <i class="fas fa-thumbs-up fb-icon fb-icon--positive"></i>
+            <div class="fb-info">
+              <div class="fb-label">Positivos 7d</div>
+              <div class="fb-value">847</div>
             </div>
-            <span style="font-size:11px;font-weight:600;color:#4ade80;">+12</span>
+            <span class="fb-delta fb-delta--positive">+12</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.18);">
-            <i class="fas fa-thumbs-down" style="color:#f87171;font-size:14px;width:18px;text-align:center;"></i>
-            <div style="flex:1;">
-              <div style="font-size:9px;color:var(--dj-text-muted);text-transform:uppercase;letter-spacing:0.04em;">Negativos 7d</div>
-              <div style="font-size:18px;font-weight:700;line-height:1.1;">23</div>
+          <div class="fb-row fb-row--negative">
+            <i class="fas fa-thumbs-down fb-icon fb-icon--negative"></i>
+            <div class="fb-info">
+              <div class="fb-label">Negativos 7d</div>
+              <div class="fb-value">23</div>
             </div>
-            <span style="font-size:11px;font-weight:600;color:#f87171;">−3</span>
+            <span class="fb-delta fb-delta--negative">−3</span>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);">
-            <div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;">
-              <div style="width:97.3%;height:100%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div>
+          <div class="fb-bar-row">
+            <div class="fb-bar-track">
+              <div class="fb-bar-fill"></div>
             </div>
-            <span style="font-size:11px;font-weight:700;color:#4ade80;">97.3%</span>
+            <span class="fb-bar-pct">97.3%</span>
           </div>
         </div>
       </div>

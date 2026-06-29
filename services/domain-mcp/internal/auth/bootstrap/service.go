@@ -148,7 +148,7 @@ func (s *Service) Bootstrap(ctx context.Context, in BootstrapInput) (*BootstrapR
 
 
 	keyID := uuid.New()
-	keyPrefix := plaintext[:len("domk_")+8] // "domk_xxxxxxxx"
+	keyPrefix := plaintext[:16] // PrefixLen = "domk_live_xxxxxxxxx" (16)
 	_, err = tx.Exec(ctx,
 		`INSERT INTO auth_api_keys (id, user_id, key_hash, key_prefix,
 		                    name, environment, expires_at, created_at, updated_at)

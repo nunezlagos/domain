@@ -58,7 +58,7 @@ func (q *Queries) DeactivatePriorVersions(ctx context.Context, arg DeactivatePri
 }
 
 const getActive = `-- name: GetActive :one
-SELECT id, organization_id, project_id, created_by, slug, version,
+SELECT id, project_id, created_by, slug, version,
        body, variables, COALESCE(description,'')::text AS description, is_active,
        parent_version_id, tags, created_at, updated_at
 FROM prompts
@@ -76,7 +76,6 @@ type GetActiveParams struct {
 
 type GetActiveRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -96,7 +95,6 @@ func (q *Queries) GetActive(ctx context.Context, arg GetActiveParams) (GetActive
 	var i GetActiveRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.ProjectID,
 		&i.CreatedBy,
 		&i.Slug,
@@ -114,7 +112,7 @@ func (q *Queries) GetActive(ctx context.Context, arg GetActiveParams) (GetActive
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, organization_id, project_id, created_by, slug, version,
+SELECT id, project_id, created_by, slug, version,
        body, variables, COALESCE(description,'')::text AS description, is_active,
        parent_version_id, tags, created_at, updated_at
 FROM prompts
@@ -123,7 +121,6 @@ WHERE id = $1 AND deleted_at IS NULL
 
 type GetByIDRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -143,7 +140,6 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	var i GetByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.ProjectID,
 		&i.CreatedBy,
 		&i.Slug,
@@ -161,7 +157,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 }
 
 const getByIDForUpdate = `-- name: GetByIDForUpdate :one
-SELECT id, organization_id, project_id, created_by, slug, version,
+SELECT id, project_id, created_by, slug, version,
        body, variables, COALESCE(description,'')::text AS description, is_active,
        parent_version_id, tags, created_at, updated_at
 FROM prompts
@@ -171,7 +167,6 @@ FOR UPDATE
 
 type GetByIDForUpdateRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -191,7 +186,6 @@ func (q *Queries) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (GetByIDFo
 	var i GetByIDForUpdateRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.ProjectID,
 		&i.CreatedBy,
 		&i.Slug,
@@ -212,7 +206,7 @@ const insertPrompt = `-- name: InsertPrompt :one
 INSERT INTO prompts (project_id, created_by, slug, version,
                      body, variables, description, is_active, tags)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, organization_id, project_id, created_by, slug, version,
+RETURNING id, project_id, created_by, slug, version,
           body, variables, COALESCE(description,'')::text AS description, is_active,
           parent_version_id, tags, created_at, updated_at
 `
@@ -231,7 +225,6 @@ type InsertPromptParams struct {
 
 type InsertPromptRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -261,7 +254,6 @@ func (q *Queries) InsertPrompt(ctx context.Context, arg InsertPromptParams) (Ins
 	var i InsertPromptRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.ProjectID,
 		&i.CreatedBy,
 		&i.Slug,
@@ -279,7 +271,7 @@ func (q *Queries) InsertPrompt(ctx context.Context, arg InsertPromptParams) (Ins
 }
 
 const listVersions = `-- name: ListVersions :many
-SELECT id, organization_id, project_id, created_by, slug, version,
+SELECT id, project_id, created_by, slug, version,
        body, variables, COALESCE(description,'')::text AS description, is_active,
        parent_version_id, tags, created_at, updated_at
 FROM prompts
@@ -296,7 +288,6 @@ type ListVersionsParams struct {
 
 type ListVersionsRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -322,7 +313,6 @@ func (q *Queries) ListVersions(ctx context.Context, arg ListVersionsParams) ([]L
 		var i ListVersionsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.ProjectID,
 			&i.CreatedBy,
 			&i.Slug,
@@ -367,7 +357,7 @@ func (q *Queries) NextVersion(ctx context.Context, arg NextVersionParams) (int32
 }
 
 const searchPrompts = `-- name: SearchPrompts :many
-SELECT p.id, p.organization_id, p.project_id, p.created_by, p.slug, p.version,
+SELECT p.id, p.project_id, p.created_by, p.slug, p.version,
        p.body, p.variables, COALESCE(p.description,'')::text AS description, p.is_active,
        p.parent_version_id, p.tags, p.created_at, p.updated_at,
        ts_rank(p.body_tsv, q)::float8 AS score,
@@ -385,7 +375,6 @@ type SearchPromptsParams struct {
 
 type SearchPromptsRow struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedBy       *uuid.UUID `json:"created_by"`
 	Slug            string     `json:"slug"`
@@ -413,7 +402,6 @@ func (q *Queries) SearchPrompts(ctx context.Context, arg SearchPromptsParams) ([
 		var i SearchPromptsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.ProjectID,
 			&i.CreatedBy,
 			&i.Slug,

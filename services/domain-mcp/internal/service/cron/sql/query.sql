@@ -3,12 +3,12 @@ INSERT INTO crons
    (created_by, slug, name, description, cron_expression,
     timezone, target_type, target_id, inputs, enabled, next_run_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+RETURNING id, created_by, slug, name, COALESCE(description,'')::text AS description,
           cron_expression, timezone, target_type, target_id, inputs, enabled,
           last_run_at, next_run_at, created_at, updated_at;
 
 -- name: ListCrons :many
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons WHERE deleted_at IS NULL
@@ -16,13 +16,13 @@ ORDER BY created_at DESC
 LIMIT sqlc.arg('result_limit')::int;
 
 -- name: GetCronByID :one
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: PickDueCrons :many
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons

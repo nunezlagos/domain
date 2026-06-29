@@ -13,7 +13,7 @@ import (
 )
 
 const getCronByID = `-- name: GetCronByID :one
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons WHERE id = $1 AND deleted_at IS NULL
@@ -21,7 +21,6 @@ FROM crons WHERE id = $1 AND deleted_at IS NULL
 
 type GetCronByIDRow struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	CreatedBy      *uuid.UUID `json:"created_by"`
 	Slug           string     `json:"slug"`
 	Name           string     `json:"name"`
@@ -43,7 +42,6 @@ func (q *Queries) GetCronByID(ctx context.Context, id uuid.UUID) (GetCronByIDRow
 	var i GetCronByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.CreatedBy,
 		&i.Slug,
 		&i.Name,
@@ -67,7 +65,7 @@ INSERT INTO crons
    (created_by, slug, name, description, cron_expression,
     timezone, target_type, target_id, inputs, enabled, next_run_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+RETURNING id, created_by, slug, name, COALESCE(description,'')::text AS description,
           cron_expression, timezone, target_type, target_id, inputs, enabled,
           last_run_at, next_run_at, created_at, updated_at
 `
@@ -88,7 +86,6 @@ type InsertCronParams struct {
 
 type InsertCronRow struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	CreatedBy      *uuid.UUID `json:"created_by"`
 	Slug           string     `json:"slug"`
 	Name           string     `json:"name"`
@@ -122,7 +119,6 @@ func (q *Queries) InsertCron(ctx context.Context, arg InsertCronParams) (InsertC
 	var i InsertCronRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.CreatedBy,
 		&i.Slug,
 		&i.Name,
@@ -142,7 +138,7 @@ func (q *Queries) InsertCron(ctx context.Context, arg InsertCronParams) (InsertC
 }
 
 const listCrons = `-- name: ListCrons :many
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons WHERE deleted_at IS NULL
@@ -152,7 +148,6 @@ LIMIT $1::int
 
 type ListCronsRow struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	CreatedBy      *uuid.UUID `json:"created_by"`
 	Slug           string     `json:"slug"`
 	Name           string     `json:"name"`
@@ -180,7 +175,6 @@ func (q *Queries) ListCrons(ctx context.Context, resultLimit int32) ([]ListCrons
 		var i ListCronsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.CreatedBy,
 			&i.Slug,
 			&i.Name,
@@ -207,7 +201,7 @@ func (q *Queries) ListCrons(ctx context.Context, resultLimit int32) ([]ListCrons
 }
 
 const pickDueCrons = `-- name: PickDueCrons :many
-SELECT id, organization_id, created_by, slug, name, COALESCE(description,'')::text AS description,
+SELECT id, created_by, slug, name, COALESCE(description,'')::text AS description,
        cron_expression, timezone, target_type, target_id, inputs, enabled,
        last_run_at, next_run_at, created_at, updated_at
 FROM crons
@@ -220,7 +214,6 @@ FOR UPDATE SKIP LOCKED
 
 type PickDueCronsRow struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
 	CreatedBy      *uuid.UUID `json:"created_by"`
 	Slug           string     `json:"slug"`
 	Name           string     `json:"name"`
@@ -248,7 +241,6 @@ func (q *Queries) PickDueCrons(ctx context.Context, resultLimit int32) ([]PickDu
 		var i PickDueCronsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.CreatedBy,
 			&i.Slug,
 			&i.Name,

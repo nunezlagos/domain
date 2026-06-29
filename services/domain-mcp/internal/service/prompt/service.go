@@ -53,11 +53,11 @@ type Prompt struct {
 
 type CreateInput struct {
 	OrganizationID uuid.UUID
-	ProjectID      *uuid.UUID
-	CreatedBy      *uuid.UUID
-	Slug           string
-	Body           string
-	Variables      []Variable
+	ProjectID *uuid.UUID
+	CreatedBy *uuid.UUID
+	Slug      string
+	Body      string
+	Variables []Variable
 	Description    string
 	Tags           []string
 
@@ -82,7 +82,7 @@ func (s *Service) q(ctx context.Context) *promptdb.Queries {
 	return promptdb.New(s.Pool)
 }
 
-func toPrompt(id uuid.UUID, _ uuid.UUID, projectID *uuid.UUID, createdBy *uuid.UUID, slug string, version int32, body string, variables []byte, description string, isActive bool, parentVersionID *uuid.UUID, tags []string, createdAt time.Time, updatedAt time.Time) Prompt {
+func toPrompt(id uuid.UUID, projectID *uuid.UUID, createdBy *uuid.UUID, slug string, version int32, body string, variables []byte, description string, isActive bool, parentVersionID *uuid.UUID, tags []string, createdAt time.Time, updatedAt time.Time) Prompt {
 	var vars []Variable
 	if variables != nil {
 		_ = json.Unmarshal(variables, &vars)
@@ -105,23 +105,23 @@ func toPrompt(id uuid.UUID, _ uuid.UUID, projectID *uuid.UUID, createdBy *uuid.U
 }
 
 func toPromptFromGetByID(r promptdb.GetByIDRow) Prompt {
-	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+	return toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
 }
 
 func toPromptFromGetActive(r promptdb.GetActiveRow) Prompt {
-	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+	return toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
 }
 
 func toPromptFromGetByIDForUpdate(r promptdb.GetByIDForUpdateRow) Prompt {
-	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+	return toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
 }
 
 func toPromptFromInsert(r promptdb.InsertPromptRow) Prompt {
-	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+	return toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
 }
 
 func toPromptFromList(r promptdb.ListVersionsRow) Prompt {
-	return toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
+	return toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt)
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
@@ -315,7 +315,7 @@ func (s *Service) Search(ctx context.Context, orgID uuid.UUID, query string, lim
 	out := make([]SearchResult, len(rows))
 	for i, r := range rows {
 		out[i] = SearchResult{
-			Prompt:   toPrompt(r.ID, r.OrganizationID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt),
+			Prompt:   toPrompt(r.ID, r.ProjectID, r.CreatedBy, r.Slug, r.Version, r.Body, r.Variables, r.Description, r.IsActive, r.ParentVersionID, r.Tags, r.CreatedAt, r.UpdatedAt),
 			Score:    r.Score,
 			Headline: r.Headline,
 		}

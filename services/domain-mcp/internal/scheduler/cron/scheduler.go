@@ -116,7 +116,6 @@ func (s *Scheduler) dispatch(ctx context.Context, c cron.Cron, logger *slog.Logg
 			}
 			cid := c.ID
 			_ = s.Audit.Record(dispatchCtx, audit.Event{
-				OrganizationID: &c.OrganizationID,
 				ActorType:      audit.ActorSystem,
 				Action:         action,
 				EntityType:     "cron",
@@ -147,7 +146,7 @@ func (s *Scheduler) runTarget(ctx context.Context, c cron.Cron) error {
 		inputsRaw = b
 	}
 	_, err := s.Dispatcher.Dispatch(ctx, dispatch.Request{
-		OrgID:      c.OrganizationID,
+		OrgID:      uuid.Nil,
 		Source:     dispatch.SourceCron,
 		TargetType: c.TargetType,
 		TargetID:   c.TargetID,

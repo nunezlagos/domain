@@ -38,7 +38,6 @@ var (
 
 type Cron struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	CreatedBy      *uuid.UUID
 	Slug           string
 	Name           string
@@ -94,14 +93,13 @@ func NextRun(expression, timezone string, from time.Time) (time.Time, error) {
 	return sched.Next(from.In(loc)), nil
 }
 
-func toCron(id uuid.UUID, organizationID uuid.UUID, createdBy *uuid.UUID, slug, name, description string, cronExpression, timezone, targetType string, targetID uuid.UUID, inputs []byte, enabled bool, lastRunAt, nextRunAt *time.Time, createdAt, updatedAt time.Time) Cron {
+func toCron(id uuid.UUID, createdBy *uuid.UUID, slug, name, description string, cronExpression, timezone, targetType string, targetID uuid.UUID, inputs []byte, enabled bool, lastRunAt, nextRunAt *time.Time, createdAt, updatedAt time.Time) Cron {
 	var in map[string]any
 	if inputs != nil {
 		_ = json.Unmarshal(inputs, &in)
 	}
 	return Cron{
 		ID:             id,
-		OrganizationID: organizationID,
 		CreatedBy:      createdBy,
 		Slug:           slug,
 		Name:           name,
@@ -120,19 +118,19 @@ func toCron(id uuid.UUID, organizationID uuid.UUID, createdBy *uuid.UUID, slug, 
 }
 
 func toCronFromInsert(r cronsdb.InsertCronRow) Cron {
-	return toCron(r.ID, r.OrganizationID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
 }
 
 func toCronFromGet(r cronsdb.GetCronByIDRow) Cron {
-	return toCron(r.ID, r.OrganizationID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
 }
 
 func toCronFromList(r cronsdb.ListCronsRow) Cron {
-	return toCron(r.ID, r.OrganizationID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
 }
 
 func toCronFromPick(r cronsdb.PickDueCronsRow) Cron {
-	return toCron(r.ID, r.OrganizationID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {

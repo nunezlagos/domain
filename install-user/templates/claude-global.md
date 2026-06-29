@@ -46,3 +46,39 @@ TODOS los agentes sin tocar archivos.
 
 "Connection closed" o key inválida → indicale al usuario correr /domain-login o
 el installer. NO cambies a otro sistema de memoria como fallback silencioso.
+
+## Comportamiento automático de persistencia
+
+En TODA sesión de trabajo — sin importar el proyecto — domain-mcp persiste
+automáticamente la actividad relevante. No esperes a que el usuario te lo pida.
+
+### Al iniciar (después del bootstrap)
+
+1. Si `domain_session_bootstrap` devuelve `head.changed != []` o
+   `recent_observations` no leídas → cargalas en contexto con
+   `domain_knowledge_get` antes de actuar.
+2. Si hay policies SDD activas para el proyecto → cargalas con
+   `domain_policy_get(slug="...")`.
+
+### Durante el trabajo
+
+- Cada descubrimiento, decisión, patrón o fix → `domain_knowledge_save` con
+  `project_slug`, `type` (decision|fix|pattern|context|artifact),
+  `topic_key` semántico, y `body` con contexto suficiente.
+- Si el usuario corrige algo importante → `domain_knowledge_save` con
+  `type=decision`.
+- Si ejecutás un comando significativo (deploy, migration, test suite)
+  → considerar `domain_knowledge_save` con el resultado.
+
+### Al cerrar sesión
+
+1. `domain_session_summary` con accomplished + next_steps.
+2. Si hay tasks pendientes detectadas → guardalas como observations.
+
+### Excepciones (cuándo NO persistir)
+
+- Comandos triviales (ls, cat, git status sin cambios).
+- Conversación pura sin aprendizaje técnico.
+- Outputs efímeros (logs de runtime que ya están en otra BD).
+
+Regla de oro: si te generó un "aha" técnico, persistilo. Si fue ruido, omitilo.

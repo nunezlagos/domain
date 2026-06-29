@@ -2,6 +2,7 @@
 
 Single-user hardcoded auth via env vars. CSRF + Messages activados.
 """
+import json
 import os
 
 from django.contrib import messages
@@ -57,12 +58,140 @@ def home_view(request):
     return HttpResponseRedirect("/login/")
 
 
+def _build_portal_ctx():
+    """Construye el contexto del portal con datos reales de todos los modelos."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from maintainers.agents.models import Agent
+    from maintainers.crons.models import Cron
+    from maintainers.feedback.models import SkillFeedback
+    from maintainers.flows.models import Flow
+    from maintainers.platformpolicies.models import PlatformPolicy
+    from maintainers.projectpolicies.models import ProjectPolicy
+    from maintainers.projects.models import Project
+    from maintainers.prompts.models import Prompt
+    from maintainers.skills.models import Skill
+    from maintainers.users.models import User
+
+    now = timezone.now()
+    week_ago = now - timedelta(days=7)
+
+    def _q(fn):
+        try:
+            return fn()
+        except Exception:
+            return []
+
+    def _c(fn):
+        try:
+            return fn()
+        except Exception:
+            return 0
+
+    def _fmt_dt(dt):
+        if not dt:
+            return "nunca"
+        delta = now - dt
+        if delta.seconds < 60:
+            return "ahora"
+        if delta.days == 0 and delta.seconds < 3600:
+            return f"hace {delta.seconds // 60}m"
+        if delta.days == 0:
+            return f"hace {delta.seconds // 3600}h"
+        return f"hace {delta.days}d"
+
+    agents = _q(lambda: [
+        {"name": a.name, "slug": a.slug, "provider": a.provider,
+         "model": a.model, "status": a.status, "calls": 0}
+        for a in Agent.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    skills = _q(lambda: [
+        {"name": s.name, "slug": s.slug, "type": s.skill_type,
+         "desc": (s.description or "")[:80], "status": s.status, "calls": 0, "success": 100}
+        for s in Skill.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    flows = _q(lambda: [
+        {"name": f.name, "slug": f.slug,
+         "phases": len(f.spec.get("phases", [])) if isinstance(f.spec, dict) else 0,
+         "status": "active" if f.is_active else "inactive", "runs": 0}
+        for f in Flow.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    prompts = _q(lambda: [
+        {"name": p.slug, "slug": p.slug, "model": "",
+         "status": "active" if p.is_active else "inactive", "uses": 0}
+        for p in Prompt.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    crons = _q(lambda: [
+        {"name": c.name, "slug": c.slug, "schedule": c.cron_expression,
+         "status": c.status if c.status in ("active", "inactive")
+                  else ("active" if c.enabled else "inactive"),
+         "last_run": _fmt_dt(c.last_run_at)}
+        for c in Cron.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    projects = _q(lambda: [
+        {"name": p.name, "slug": p.slug, "status": p.status,
+         "skills": 0, "agents": 0, "flows": 0}
+        for p in Project.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    users = _q(lambda: [
+        {"name": u.name or u.email, "email": u.email, "role": u.role, "status": u.status}
+        for u in User.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+
+    proj_policies = _q(lambda: [
+        {"name": p.name, "slug": p.slug, "scope": "project", "kind": p.kind,
+         "status": "active" if p.is_active else "inactive"}
+        for p in ProjectPolicy.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    ])
+    plat_policies = _q(lambda: [
+        {"name": p.name, "slug": p.slug, "scope": "platform", "kind": p.kind,
+         "status": "active" if p.is_active else "inactive"}
+        for p in PlatformPolicy.objects.all().order_by("-created_at")
+    ])
+    policies = proj_policies + plat_policies
+
+    feedback_pos   = _c(lambda: SkillFeedback.objects.filter(rating=1,  created_at__gte=week_ago).count())
+    feedback_neg   = _c(lambda: SkillFeedback.objects.filter(rating=-1, created_at__gte=week_ago).count())
+    feedback_total = feedback_pos + feedback_neg
+    feedback_pct   = round(feedback_pos / feedback_total * 100, 1) if feedback_total > 0 else 0.0
+
+    agent_count   = sum(1 for a in agents   if a["status"] == "active")
+    skill_count   = sum(1 for s in skills   if s["status"] == "active")
+    project_count = sum(1 for p in projects if p["status"] == "active")
+    flow_count    = sum(1 for f in flows    if f["status"] == "active")
+
+    portal_data = {
+        "agents": agents, "skills": skills, "flows": flows,
+        "prompts": prompts, "crons": crons, "projects": projects,
+        "users": users, "policies": policies,
+    }
+
+    return {
+        "portal_data_json": json.dumps(portal_data, default=str),
+        "feedback_pos":     feedback_pos,
+        "feedback_neg":     feedback_neg,
+        "feedback_pct":     feedback_pct,
+        "agent_count":      agent_count,
+        "skill_count":      skill_count,
+        "project_count":    project_count,
+        "flow_count":       flow_count,
+    }
+
+
 @csrf_protect
 def dashboard(request):
     redir = _require_auth(request)
     if redir:
         return redir
-    return render(request, "dashboard.html")
+    return render(request, "portal.html", _build_portal_ctx())
 
 
 @csrf_protect
@@ -218,25 +347,29 @@ _SDD_PHASE_OPS = {
     },
 }
 
-_SDD_PRE_OPS = [
-    {"type": "read", "label": "flows (slug→id), agent_templates (system prompt), policies (platform + project)"},
-    {"type": "write", "label": "flow_runs (nuevo run), flow_run_steps (N steps del plan)"},
+_SDD_WORKFLOWS = [
+    {"slug": "full",    "name": "Full",    "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "lite",    "name": "Lite",    "phases": ["sdd-explore", "sdd-apply", "sdd-verify"]},
+    {"slug": "express", "name": "Express", "phases": ["sdd-apply", "sdd-verify"]},
+    {"slug": "solo",    "name": "Solo",    "phases": ["sdd-spec", "sdd-archive"]},
+    {"slug": "async",   "name": "Async",   "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "detect",  "name": "Detect",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "hybrid",  "name": "Hybrid",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "manual",  "name": "Manual",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
 ]
 
 
 @csrf_protect
 def sdd_flow(request):
-    """Vista general del pipeline SDD como diagrama de loop.
+    """Vista general del pipeline SDD como grafo de nodos.
 
     Resuelve los agent_templates por slug sdd-* (una sola query) y arma la lista
-    ordenada de las 10 fases. Cada fase lleva el id del template si esta seedeado
-    (el nodo abre el modal de edicion del prompt reusando agenttemplates); si no,
-    el nodo se muestra deshabilitado.
+    ordenada de las 10 fases. Cada nodo lleva el id del template si esta seedeado.
+    Workflow tabs filtran las fases por modo de ejecucion.
     """
     redir = _require_auth(request)
     if redir:
         return redir
-
 
     from maintainers.agenttemplates.models import AgentTemplate
 
@@ -246,47 +379,52 @@ def sdd_flow(request):
         for t in AgentTemplate.objects.filter(slug__in=slugs).only("id", "slug", "name")
     }
 
+    # Build workflow-phase mapping: for each phase, which workflows include it
+    wf_phase_map = {}
+    for wf in _SDD_WORKFLOWS:
+        for ps in wf["phases"]:
+            wf_phase_map.setdefault(ps, []).append(wf["slug"])
 
-
-
-
-
-
-    _LITE = {"sdd-explore", "sdd-apply", "sdd-verify"}
-    _EXPRESS = {"sdd-apply", "sdd-verify"}
-    _GATE = {"sdd-spec", "sdd-design", "sdd-apply", "sdd-judge"}
-    _HARDSPEC = {"sdd-spec"}
-    _LOOP = {"sdd-apply", "sdd-verify", "sdd-judge"}
+    # Pre-serialize workflows with JSON phases list for JS
+    for wf in _SDD_WORKFLOWS:
+        wf["phases_json"] = json.dumps(wf["phases"])
 
     phases = []
     for index, (slug, name, group, desc, icon) in enumerate(_SDD_PHASES):
         tpl = by_slug.get(slug)
         ops = _SDD_PHASE_OPS.get(slug, {})
+        tools_mcp = ops.get("tools_mcp", [])
+        db_ops = ops.get("db_ops", [])
         phases.append(
             {
-                "index": index,
-                "step": index + 1,
                 "slug": slug,
                 "name": name,
-                "group": group,
                 "desc": desc,
                 "icon": icon,
+                "agent_slug": slug,
                 "id": str(tpl.id) if tpl else None,
                 "seeded": tpl is not None,
-                "lite": slug in _LITE,
-                "express": slug in _EXPRESS,
-                "gate": slug in _GATE,
-                "hardspec": slug in _HARDSPEC,
-                "loop": slug in _LOOP,
                 "output": ops.get("output", "resultado"),
-                "tools_mcp": ops.get("tools_mcp", []),
-                "db_ops": ops.get("db_ops", []),
+                "tools_mcp": tools_mcp,
+                "tools_mcp_json": json.dumps(tools_mcp),
+                "db_ops": db_ops,
+                "db_ops_json": json.dumps(db_ops),
+                "modes": ",".join(wf_phase_map.get(slug, ["full"])),
             }
         )
 
-    pmap = {p["slug"].removeprefix("sdd-"): p for p in phases}
+    phases_json = json.dumps([
+        {"id": p["slug"], "name": p["name"], "desc": p["desc"],
+         "icon": p["icon"], "output": p["output"],
+         "tools": p["tools_mcp"], "ops": p["db_ops"]}
+        for p in phases
+    ])
 
-    return render(request, "sdd_flow.html", {"phases": phases, "pmap": pmap, "pre_ops": _SDD_PRE_OPS})
+    return render(request, "sdd_flow.html", {
+        "phases": phases,
+        "phases_json": phases_json,
+        "workflows": _SDD_WORKFLOWS,
+    })
 
 
 def logout_view(request):

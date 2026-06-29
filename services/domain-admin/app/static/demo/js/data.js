@@ -9,41 +9,45 @@ const SEGMENTS = [
   { id: 'crons',    label: 'Crons',     icon: 'clock',      color: DJ.segments[7] },
 ];
 
-const MOCK_DATA = {
+const _MOCK_FALLBACK = {
   agents: [
-    { name: 'Bot de Soporte',     slug: 'soporte-bot',  provider: 'minimax',   model: 'MiniMax-M3',  status: 'active',   calls: 847 },
-    { name: 'Code Reviewer',      slug: 'code-reviewer', provider: 'anthropic', model: 'claude-sonnet-4-5', status: 'active', calls: 312 },
-    { name: 'SDD Generator',      slug: 'sdd-generator', provider: 'openai',   model: 'gpt-4o',     status: 'inactive', calls: 0 },
+    { name: 'Bot de Soporte',      slug: 'soporte-bot',   provider: 'minimax',   model: 'MiniMax-M3',          status: 'active',   calls: 847 },
+    { name: 'Code Reviewer',       slug: 'code-reviewer', provider: 'anthropic', model: 'claude-sonnet-4-5',   status: 'active',   calls: 312 },
+    { name: 'SDD Generator',       slug: 'sdd-generator', provider: 'openai',    model: 'gpt-4o',              status: 'inactive', calls: 0 },
   ],
   skills: [
-    { name: 'Send Email',         slug: 'send-email',    type: 'mcp', desc: 'Envia emails transaccionales',     calls: 1247, success: 98 },
-    { name: 'Query Database',     slug: 'query-db',      type: 'code', desc: 'Queries SQL de solo lectura',     calls: 892,  success: 99 },
-    { name: 'Web Search',         slug: 'web-search',    type: 'mcp', desc: 'Busqueda web via Brave API',       calls: 654,  success: 68 },
+    { name: 'Send Email',          slug: 'send-email',    type: 'mcp',  desc: 'Envia emails transaccionales',  calls: 1247, success: 98, status: 'active' },
+    { name: 'Query Database',      slug: 'query-db',      type: 'code', desc: 'Queries SQL de solo lectura',   calls: 892,  success: 99, status: 'active' },
+    { name: 'Web Search',          slug: 'web-search',    type: 'mcp',  desc: 'Busqueda web via Brave API',    calls: 654,  success: 68, status: 'active' },
   ],
   flows: [
-    { name: 'SDD Pipeline v1',  slug: 'sdd-pipeline-v1', phases: 10, status: 'active',   runs: 12 },
-    { name: 'Issue Intake',     slug: 'issue-intake',   phases: 5,  status: 'active',   runs: 47 },
+    { name: 'SDD Pipeline v1',     slug: 'sdd-pipeline-v1', phases: 10, status: 'active',   runs: 12 },
+    { name: 'Issue Intake',        slug: 'issue-intake',    phases: 5,  status: 'active',   runs: 47 },
   ],
   prompts: [
-    { name: 'Code Review',        slug: 'code-review',     model: 'claude-sonnet-4-5', status: 'active',   uses: 312 },
-    { name: 'SDD Phase: Spec',    slug: 'sdd-spec',        model: 'claude-sonnet-4-5', status: 'active',   uses: 89 },
+    { name: 'Code Review',         slug: 'code-review',   model: 'claude-sonnet-4-5', status: 'active',  uses: 312 },
+    { name: 'SDD Phase: Spec',     slug: 'sdd-spec',      model: 'claude-sonnet-4-5', status: 'active',  uses: 89  },
   ],
   projects: [
-    { name: 'test-kanban',        slug: 'test-kanban',   status: 'active',   skills: 8, agents: 1, flows: 1 },
+    { name: 'test-kanban',         slug: 'test-kanban',   status: 'active', skills: 8, agents: 1, flows: 1 },
   ],
   users: [
-    { name: 'admin@admin.com',    email: 'admin@admin.com', role: 'admin',   status: 'active' },
+    { name: 'admin@admin.com',     email: 'admin@admin.com',     role: 'admin',    status: 'active' },
     { name: 'operator@saargo.com', email: 'operator@saargo.com', role: 'operator', status: 'active' },
   ],
   policies: [
-    { name: 'No PII in logs',     scope: 'platform', kind: 'security_rule',  status: 'active' },
-    { name: 'No PII in commits',  scope: 'platform', kind: 'security_rule',  status: 'active' },
+    { name: 'No PII in logs',      slug: 'no-pii-logs',     scope: 'platform', kind: 'security_rule', status: 'active' },
+    { name: 'No PII in commits',   slug: 'no-pii-commits',  scope: 'platform', kind: 'security_rule', status: 'active' },
   ],
   crons: [
-    { name: 'Backup diario',      schedule: '0 2 * * *',     status: 'active',   last_run: 'hace 2h' },
-    { name: 'Health check',       schedule: '*/5 * * * *',   status: 'active',   last_run: 'hace 1m' },
+    { name: 'Backup diario',       slug: 'backup-diario',   schedule: '0 2 * * *',   status: 'active', last_run: 'hace 2h' },
+    { name: 'Health check',        slug: 'health-check',    schedule: '*/5 * * * *', status: 'active', last_run: 'hace 1m' },
   ],
 };
+
+/* En el portal Django, window.PORTAL_DATA viene del backend (datos reales).
+   En el demo estático (portal.html directo) usa el fallback con mock data.  */
+const MOCK_DATA = window.PORTAL_DATA || _MOCK_FALLBACK;
 
 const SEGMENT_SUBTITLES = {
   agents: 'Agentes LLM del sistema',

@@ -117,6 +117,7 @@ func AuthAllowlist() []string {
 		"/health/startup",
 		"/api/v1/auth/login",
 		"/api/v1/auth/first-run",
+		"/api/v1/auth/bootstrap", // issue-01.9: primer usuario sin auth previa
 		"/api/v1/auth/enroll", // issue-37.1: gating por X-Enrollment-Token, no Bearer
 		"/api/v1/webhooks/*",  // webhooks usan HMAC, no Bearer
 		"/metrics",

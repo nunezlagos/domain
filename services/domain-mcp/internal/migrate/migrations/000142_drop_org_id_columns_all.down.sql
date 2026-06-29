@@ -13,19 +13,19 @@ BEGIN
 
     FOR r IN (
         SELECT unnest(ARRAY[
-            'users', 'api_keys', 'projects', 'observations', 'sessions',
+            'users', 'auth_api_keys', 'projects', 'observations', 'sessions',
             'prompts', 'knowledge_docs', 'knowledge_chunks', 'skills',
             'agents', 'flows', 'flow_runs', 'agent_runs', 'crons',
-            'webhooks', 'webhook_deliveries', 'audit_log', 'secrets',
+            'webhooks', 'webhook_deliveries', 'audit_log', 'auth_secrets',
             'cost_logs', 'project_templates', 'project_links',
             'project_merges', 'otp_codes', 'activity_log',
-            'cost_alerts_sent', 'org_cost_alert_thresholds',
+            'auth_otp_codes', 'org_cost_alert_thresholds',
             'org_flow_config', 'usage_counters', 'org_enrollment_tokens',
             'idempotency_keys', 'outbound_webhook_subscriptions',
             'outbound_webhook_deliveries', 'usage_alerts',
             'usage_alert_fires', 'mcp_servers', 'mcp_server_tools',
             'notification_deliveries', 'roles', 'user_roles',
-            'auth_sessions', 'auth_events', 'hu_drafts',
+            'auth_invitations', 'auth_events', 'hu_drafts',
             'intake_payloads', 'external_providers', 'external_sync_state',
             'external_sync_events', 'event_log', 'llm_semantic_cache',
             'agent_templates', 'selfhosted_runners',

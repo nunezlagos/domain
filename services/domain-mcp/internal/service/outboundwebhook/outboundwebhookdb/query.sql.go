@@ -25,25 +25,24 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id uuid.UUID) (int64, 
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, organization_id, name, url, events, filters, active,
+SELECT id, name, url, events, filters, active,
 	failure_count, last_success_at, last_failure_at, created_at, updated_at
 FROM webhook_outbound_subscriptions
 WHERE id = $1
 `
 
 type GetByIDRow struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	Name           string     `json:"name"`
-	Url            string     `json:"url"`
-	Events         []string   `json:"events"`
-	Filters        []byte     `json:"filters"`
-	Active         bool       `json:"active"`
-	FailureCount   int32      `json:"failure_count"`
-	LastSuccessAt  *time.Time `json:"last_success_at"`
-	LastFailureAt  *time.Time `json:"last_failure_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	Url           string     `json:"url"`
+	Events        []string   `json:"events"`
+	Filters       []byte     `json:"filters"`
+	Active        bool       `json:"active"`
+	FailureCount  int32      `json:"failure_count"`
+	LastSuccessAt *time.Time `json:"last_success_at"`
+	LastFailureAt *time.Time `json:"last_failure_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
@@ -51,7 +50,6 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	var i GetByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.OrganizationID,
 		&i.Name,
 		&i.Url,
 		&i.Events,
@@ -79,18 +77,17 @@ func (q *Queries) GetSecretCipher(ctx context.Context, id uuid.UUID) ([]byte, er
 
 const insertSubscription = `-- name: InsertSubscription :one
 INSERT INTO webhook_outbound_subscriptions
-	(organization_id, name, url, events, filters, secret_cipher)
-VALUES ($1, $2, $3, $4, $5, $6)
+	(name, url, events, filters, secret_cipher)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, created_at, updated_at
 `
 
 type InsertSubscriptionParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Name           string    `json:"name"`
-	Url            string    `json:"url"`
-	Events         []string  `json:"events"`
-	Filters        []byte    `json:"filters"`
-	SecretCipher   []byte    `json:"secret_cipher"`
+	Name         string   `json:"name"`
+	Url          string   `json:"url"`
+	Events       []string `json:"events"`
+	Filters      []byte   `json:"filters"`
+	SecretCipher []byte   `json:"secret_cipher"`
 }
 
 type InsertSubscriptionRow struct {
@@ -101,7 +98,6 @@ type InsertSubscriptionRow struct {
 
 func (q *Queries) InsertSubscription(ctx context.Context, arg InsertSubscriptionParams) (InsertSubscriptionRow, error) {
 	row := q.db.QueryRow(ctx, insertSubscription,
-		arg.OrganizationID,
 		arg.Name,
 		arg.Url,
 		arg.Events,
@@ -114,25 +110,24 @@ func (q *Queries) InsertSubscription(ctx context.Context, arg InsertSubscription
 }
 
 const listAll = `-- name: ListAll :many
-SELECT id, organization_id, name, url, events, filters, active,
+SELECT id, name, url, events, filters, active,
 	failure_count, last_success_at, last_failure_at, created_at, updated_at
 FROM webhook_outbound_subscriptions
 ORDER BY created_at DESC
 `
 
 type ListAllRow struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	Name           string     `json:"name"`
-	Url            string     `json:"url"`
-	Events         []string   `json:"events"`
-	Filters        []byte     `json:"filters"`
-	Active         bool       `json:"active"`
-	FailureCount   int32      `json:"failure_count"`
-	LastSuccessAt  *time.Time `json:"last_success_at"`
-	LastFailureAt  *time.Time `json:"last_failure_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	Url           string     `json:"url"`
+	Events        []string   `json:"events"`
+	Filters       []byte     `json:"filters"`
+	Active        bool       `json:"active"`
+	FailureCount  int32      `json:"failure_count"`
+	LastSuccessAt *time.Time `json:"last_success_at"`
+	LastFailureAt *time.Time `json:"last_failure_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) ListAll(ctx context.Context) ([]ListAllRow, error) {
@@ -146,7 +141,6 @@ func (q *Queries) ListAll(ctx context.Context) ([]ListAllRow, error) {
 		var i ListAllRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.Name,
 			&i.Url,
 			&i.Events,
@@ -169,7 +163,7 @@ func (q *Queries) ListAll(ctx context.Context) ([]ListAllRow, error) {
 }
 
 const listByEvent = `-- name: ListByEvent :many
-SELECT id, organization_id, name, url, events, filters, active,
+SELECT id, name, url, events, filters, active,
 	failure_count, last_success_at, last_failure_at, created_at, updated_at
 FROM webhook_outbound_subscriptions
 WHERE active = TRUE
@@ -177,18 +171,17 @@ WHERE active = TRUE
 `
 
 type ListByEventRow struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	Name           string     `json:"name"`
-	Url            string     `json:"url"`
-	Events         []string   `json:"events"`
-	Filters        []byte     `json:"filters"`
-	Active         bool       `json:"active"`
-	FailureCount   int32      `json:"failure_count"`
-	LastSuccessAt  *time.Time `json:"last_success_at"`
-	LastFailureAt  *time.Time `json:"last_failure_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	Url           string     `json:"url"`
+	Events        []string   `json:"events"`
+	Filters       []byte     `json:"filters"`
+	Active        bool       `json:"active"`
+	FailureCount  int32      `json:"failure_count"`
+	LastSuccessAt *time.Time `json:"last_success_at"`
+	LastFailureAt *time.Time `json:"last_failure_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 func (q *Queries) ListByEvent(ctx context.Context, eventType string) ([]ListByEventRow, error) {
@@ -202,7 +195,6 @@ func (q *Queries) ListByEvent(ctx context.Context, eventType string) ([]ListByEv
 		var i ListByEventRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
 			&i.Name,
 			&i.Url,
 			&i.Events,

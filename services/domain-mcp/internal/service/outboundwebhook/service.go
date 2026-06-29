@@ -141,7 +141,7 @@ func toSubscriptionFromListAll(r outboundwebhookdb.ListAllRow) Subscription {
 	return toSubscription(r.ID, r.Name, r.Url, r.Events, r.Filters, r.Active, r.FailureCount, r.LastSuccessAt, r.LastFailureAt, r.CreatedAt, r.UpdatedAt)
 }
 
-func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, requireTLS bool) (*Subscription, error) {
+func (s *Service) Create(ctx context.Context, in CreateInput, requireTLS bool) (*Subscription, error) {
 	if err := ValidateURL(in.URL, requireTLS); err != nil {
 		return nil, err
 	}
@@ -170,12 +170,11 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 
 	q := s.q(ctx)
 	row, err := q.InsertSubscription(ctx, outboundwebhookdb.InsertSubscriptionParams{
-		OrganizationID: orgID,
-		Name:           in.Name,
-		Url:            in.URL,
-		Events:         in.Events,
-		Filters:        in.Filters,
-		SecretCipher:   secretCipher,
+		Name:         in.Name,
+		Url:          in.URL,
+		Events:       in.Events,
+		Filters:      in.Filters,
+		SecretCipher: secretCipher,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("insert subscription: %w", err)
@@ -192,7 +191,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput, r
 	}, nil
 }
 
-func (s *Service) ListByEvent(ctx context.Context, orgID uuid.UUID, eventType string) ([]Subscription, error) {
+func (s *Service) ListByEvent(ctx context.Context, eventType string) ([]Subscription, error) {
 	rows, err := s.q(ctx).ListByEvent(ctx, eventType)
 	if err != nil {
 		return nil, err

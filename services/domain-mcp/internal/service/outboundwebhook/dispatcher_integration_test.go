@@ -84,7 +84,7 @@ func (f *owFixture) subscribe(t *testing.T, url, event string, filters string) *
 	if filters != "" {
 		in.Filters = json.RawMessage(filters)
 	}
-	sub, err := f.svc.Create(ctx, f.orgID, in, false)
+	sub, err := f.svc.Create(ctx, in, false)
 	require.NoError(t, err)
 	_, err = f.pool.App.Exec(ctx,
 		`UPDATE webhook_outbound_subscriptions SET url = $1 WHERE id = $2`, url, sub.ID)

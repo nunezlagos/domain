@@ -65,10 +65,13 @@ func (d *Dispatcher) httpClient() *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
 }
 
-// Emit toma un event y encola deliveries para cada subscription matcheada de la org.
+// Emit toma un event y encola deliveries para cada subscription matcheada.
 // Es síncrono pero rápido: solo INSERT, el dispatcher worker hace el POST HTTP.
-func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, ev Event) error {
-	subs, err := d.Svc.ListByEvent(ctx, orgID, ev.Type)
+// orgID se acepta pero se ignora — la tabla webhook_outbound_subscriptions
+// ya no tiene columna organization_id (drop 000142). Las subs son globales
+// al deployment; el matching por event_type sigue funcionando.
+func (d *Dispatcher) Emit(ctx context.Context, _ uuid.UUID, ev Event) error {
+	subs, err := d.Svc.ListByEvent(ctx, ev.Type)
 	if err != nil {
 		return fmt.Errorf("list subs: %w", err)
 	}

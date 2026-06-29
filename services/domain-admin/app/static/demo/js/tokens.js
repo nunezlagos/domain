@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var s = getComputedStyle(document.documentElement);
+  var s = getComputedStyle(document.body);
   function v(n) { return s.getPropertyValue(n).trim(); }
 
   window.DJ = {

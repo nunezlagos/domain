@@ -94,10 +94,10 @@ def google_login(request):
 
 
 def home_view(request):
-    """Raiz: redirige al panel o al login."""
+    """Raiz: landing pública o panel si ya está autenticado."""
     if _is_authed(request):
         return HttpResponseRedirect("/dashboard/")
-    return HttpResponseRedirect("/login/")
+    return render(request, "landing.html")
 
 
 def _build_portal_ctx():

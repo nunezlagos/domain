@@ -1,13 +1,5 @@
 ---
 description: Subagent read-only de memoria domain. Delegale "buscá todo lo que domain recuerda sobre X" cuando el recall sea profundo y no quieras bloatear el contexto principal. Devuelve un resumen estructurado en menos de 400 palabras.
-tools:
-  - mcp__domain__domain_mem_search
-  - mcp__domain__domain_mem_context
-  - mcp__domain__domain_mem_get_observation
-  - mcp__domain__domain_knowledge_search
-  - mcp__domain__domain_knowledge_get
-  - mcp__domain__domain_search_global
-  - mcp__domain__domain_timeline
 ---
 
 # domain-memory

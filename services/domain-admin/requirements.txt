@@ -4,3 +4,4 @@ whitenoise==6.6.0
 psycopg2-binary==2.9.10  # HU-48: driver Postgres para Django
 bcrypt==4.2.1  # API keys formato domk_ + bcrypt (compat con backend Go)
 anthropic==0.40.0  # HU-49.1: SDK Anthropic (compatible con MiniMax via base_url)
+google-auth>=2.38,<3.0  # login con Gmail: verificación de token OAuth2

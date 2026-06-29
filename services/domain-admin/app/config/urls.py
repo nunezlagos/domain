@@ -6,6 +6,7 @@ from config import views
 urlpatterns = [
     path("", views.home_view, name="home"),
     path("login/", views.login_view, name="login"),
+    path("login/google/", views.google_login, name="google_login"),
     path("logout/", views.logout_view, name="logout"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("componentes/", views.components_demo, name="components"),

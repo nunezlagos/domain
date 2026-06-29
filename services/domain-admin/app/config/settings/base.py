@@ -98,6 +98,12 @@ SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 FIELD_ENC_KEY = os.environ.get("DOMAIN_FIELD_ENC_KEY", "")
 
 
+# Google OAuth para login con Gmail.
+# Client ID del proyecto en Google Cloud Console (credencial OAuth Web).
+# Si está vacío, el botón "Login con Gmail" no se muestra.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+
+
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"  # collectstatic destination

@@ -34,13 +34,14 @@
       min-height: 100dvh;
     }
 
-    /* ── Layout split 20/80 ───────────────────────────────────── */
+    /* ── Layout split 80/20 ───────────────────────────────────── */
     .ls {
       display: flex;
       min-height: 100dvh;
+      flex-direction: row-reverse;
     }
 
-    /* Panel izquierdo: form */
+    /* Panel derecho: form */
     .ls-form {
       width: 320px;
       flex-shrink: 0;
@@ -50,10 +51,10 @@
       padding: 48px 36px;
       position: relative;
       z-index: 2;
-      border-right: 1px solid var(--cream-warm);
+      border-left: 1px solid var(--cream-warm);
     }
 
-    /* Panel derecho: visual */
+    /* Panel izquierdo: visual */
     .ls-visual {
       flex: 1;
       position: relative;
@@ -165,6 +166,35 @@
     .ls-btn:hover  { background: var(--green); }
     .ls-btn:active { transform: translateY(1px); }
 
+    /* ── Divider "o continúa con" ─────────────────────────────── */
+    .ls-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0 20px;
+    }
+    .ls-divider::before,
+    .ls-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--cream-warm);
+    }
+    .ls-divider-text {
+      font-size: 11px;
+      color: var(--ash);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+
+    /* ── Gmail button ─────────────────────────────────────────── */
+    .ls-gmail-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+
     /* ── Footer del panel ─────────────────────────────────────── */
     .ls-foot {
       margin-top: auto;
@@ -252,7 +282,7 @@
         min-height: 100dvh;
         padding: 40px 28px;
         background: transparent;
-        border-right: none;
+        border-left: none;
       }
 
       body {
@@ -272,7 +302,7 @@
 <body>
 <div class="ls">
 
-  <!-- ── Panel izquierdo: login form ────────────────────────── -->
+  <!-- ── Panel derecho: login form ──────────────────────────── -->
   <aside class="ls-form">
 
     <div class="ls-brand">
@@ -313,13 +343,38 @@
       <button type="submit" class="ls-btn">Entrar</button>
     </form>
 
+    {% if google_client_id %}
+    <div class="ls-divider">
+      <span class="ls-divider-text">o continúa con</span>
+    </div>
+
+    <div id="gmail-button-container" class="ls-gmail-wrap">
+      <div id="g_id_onload"
+           data-client_id="{{ google_client_id }}"
+           data-context="signin"
+           data-ux_mode="popup"
+           data-callback="handleGoogleCredential"
+           data-auto_prompt="false">
+      </div>
+      <div class="g_id_signin"
+           data-type="standard"
+           data-shape="rectangular"
+           data-theme="outline"
+           data-text="signin_with"
+           data-size="large"
+           data-logo_alignment="left"
+           data-width="248">
+      </div>
+    </div>
+    {% endif %}
+
     <footer class="ls-foot">
       Domain Admin &middot; v1.3<br>
       <a href="https://github.com/saargo/domain-services" tabindex="-1">docs</a>
     </footer>
   </aside>
 
-  <!-- ── Panel derecho: visual decorativo ───────────────────── -->
+  <!-- ── Panel izquierdo: visual decorativo ──────────────────── -->
   <main class="ls-visual" aria-hidden="true">
     <div class="ls-visual-dots"></div>
     <div class="ls-visual-orb ls-visual-orb--tl"></div>
@@ -376,5 +431,28 @@
   </main>
 
 </div>
+{% if google_client_id %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+function handleGoogleCredential(response) {
+  if (!response || !response.credential) return;
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{% url "google_login" %}';
+  const csrf = document.createElement('input');
+  csrf.type = 'hidden';
+  csrf.name = 'csrfmiddlewaretoken';
+  csrf.value = '{{ csrf_token }}';
+  form.appendChild(csrf);
+  const cred = document.createElement('input');
+  cred.type = 'hidden';
+  cred.name = 'credential';
+  cred.value = response.credential;
+  form.appendChild(cred);
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
+{% endif %}
 </body>
 </html>

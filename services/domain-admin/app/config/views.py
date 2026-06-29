@@ -3,13 +3,18 @@
 Single-user hardcoded auth via env vars. CSRF + Messages activados.
 """
 import json
+import logging
 import os
 
+from django.conf import settings
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import path
 from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+
+logger = logging.getLogger(__name__)
 
 
 def _admin_creds() -> tuple[str, str]:
@@ -48,7 +53,44 @@ def login_view(request):
             return HttpResponseRedirect("/dashboard/")
         messages.error(request, "Email o contraseña incorrectos.")
 
-    return render(request, "login.html")
+    return render(request, "login.html", {
+        "google_client_id": settings.GOOGLE_CLIENT_ID,
+    })
+
+
+@require_POST
+@csrf_protect
+def google_login(request):
+    """Verifica credential de Google Sign-In y autentica al admin."""
+    client_id = settings.GOOGLE_CLIENT_ID
+    if not client_id:
+        return JsonResponse({"error": "Google login no configurado"}, status=400)
+
+    credential = request.POST.get("credential", "")
+    if not credential:
+        return JsonResponse({"error": "Credencial vacía"}, status=400)
+
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests
+
+        info = id_token.verify_oauth2_token(credential, requests.Request(), client_id)
+        email = info.get("email", "")
+        admin_email, _ = _admin_creds()
+        if email != admin_email:
+            logger.warning("google_login: email %s no es el admin (%s)", email, admin_email)
+            messages.error(request, f"La cuenta {email} no tiene acceso.")
+            return HttpResponseRedirect("/login/")
+
+        request.session.cycle_key()
+        request.session["authenticated"] = True
+        request.session["email"] = admin_email
+        messages.success(request, f"Bienvenido, {admin_email}")
+        return HttpResponseRedirect("/dashboard/")
+    except ValueError as e:
+        logger.error("google_login: token inválido: %s", e)
+        messages.error(request, "Token de Google inválido o expirado.")
+        return HttpResponseRedirect("/login/")
 
 
 def home_view(request):

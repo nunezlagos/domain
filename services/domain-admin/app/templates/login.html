@@ -1,23 +1,380 @@
-{% extends "_base.html" %}
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Domain Admin — Acceso</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'demo/brand/favicon.svg' %}">
+  <link rel="icon" href="{% static 'demo/brand/favicon.ico' %}" sizes="any">
+  <style>
+    /* ── Reset mínimo ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-{% block content %}
-<form method="post" action="/login/" class="card" style="max-width: 420px; width: 100%;">
-  {% csrf_token %}
-  <h1 class="mb-1" style="font-size: var(--fs-2xl);">Domain Admin</h1>
-  <p class="text-secondary mb-3" style="font-size: var(--fs-sm);">Inicia sesion para continuar</p>
+    :root {
+      --ink:         #141412;
+      --charcoal:    #24231e;
+      --slate:       #3e3e38;
+      --ash:         #8a8a80;
+      --stone:       #c8c5bb;
+      --cream-soft:  #faf8f2;
+      --cream:       #f4f0e3;
+      --cream-warm:  #ebe5d6;
+      --green:       #2e5c3e;
+      --green-mid:   #3d7a54;
+      --green-light: #6aac82;
+      --green-pale:  #b5d4bc;
+      --green-mist:  #e6f1e8;
+      --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
 
-  <div class="form-group">
-    <label class="form-label" for="email">Email</label>
-    <input type="email" name="email" id="email" required autofocus autocomplete="username"
-           class="form-control" placeholder="admin@admin.com">
-  </div>
+    body {
+      font-family: var(--font);
+      background: var(--cream-soft);
+      color: var(--ink);
+      min-height: 100dvh;
+    }
 
-  <div class="form-group">
-    <label class="form-label" for="password">Contraseña</label>
-    <input type="password" name="password" id="password" required autocomplete="current-password"
-           class="form-control" placeholder="••••••••">
-  </div>
+    /* ── Layout split 20/80 ───────────────────────────────────── */
+    .ls {
+      display: flex;
+      min-height: 100dvh;
+    }
 
-  <button type="submit" class="btn btn-primary btn-block btn-lg mt-2">Entrar</button>
-</form>
-{% endblock %}
+    /* Panel izquierdo: form */
+    .ls-form {
+      width: 320px;
+      flex-shrink: 0;
+      background: var(--cream-soft);
+      display: flex;
+      flex-direction: column;
+      padding: 48px 36px;
+      position: relative;
+      z-index: 2;
+      border-right: 1px solid var(--cream-warm);
+    }
+
+    /* Panel derecho: visual */
+    .ls-visual {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(140deg,
+        #1a3328 0%,
+        var(--green) 22%,
+        var(--green-mid) 48%,
+        var(--green-light) 72%,
+        var(--green-pale) 86%,
+        var(--cream) 100%
+      );
+    }
+
+    /* ── Logo / brand ─────────────────────────────────────────── */
+    .ls-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+    .ls-brand img {
+      width: 32px;
+      height: 32px;
+      display: block;
+    }
+    .ls-brand-name {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--charcoal);
+    }
+
+    /* ── Encabezado del form ──────────────────────────────────── */
+    .ls-heading { margin-bottom: 32px; }
+    .ls-heading h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .ls-heading p {
+      font-size: 13px;
+      color: var(--ash);
+    }
+
+    /* ── Campos del form ──────────────────────────────────────── */
+    .ls-field { margin-bottom: 20px; }
+    .ls-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--slate);
+      margin-bottom: 6px;
+    }
+    .ls-field input {
+      width: 100%;
+      padding: 10px 0;
+      font-size: 14px;
+      font-family: var(--font);
+      color: var(--ink);
+      background: transparent;
+      border: none;
+      border-bottom: 1.5px solid var(--stone);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .ls-field input::placeholder { color: var(--stone); }
+    .ls-field input:focus { border-bottom-color: var(--green-mid); }
+
+    /* ── Alerta de error ──────────────────────────────────────── */
+    .ls-alert {
+      margin-bottom: 20px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .ls-alert--error {
+      background: rgba(180,50,50,0.08);
+      color: #8b2020;
+      border: 1px solid rgba(180,50,50,0.18);
+    }
+    .ls-alert--success {
+      background: rgba(61,122,84,0.10);
+      color: var(--green);
+      border: 1px solid rgba(61,122,84,0.22);
+    }
+
+    /* ── Botón ────────────────────────────────────────────────── */
+    .ls-btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      letter-spacing: 0.02em;
+      color: #fff;
+      background: var(--green-mid);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .ls-btn:hover  { background: var(--green); }
+    .ls-btn:active { transform: translateY(1px); }
+
+    /* ── Footer del panel ─────────────────────────────────────── */
+    .ls-foot {
+      margin-top: auto;
+      padding-top: 32px;
+      font-size: 11px;
+      color: var(--stone);
+    }
+    .ls-foot a {
+      color: var(--ash);
+      text-decoration: none;
+    }
+    .ls-foot a:hover { color: var(--green-mid); }
+
+    /* ── Visual panel interior ────────────────────────────────── */
+    .ls-visual-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px;
+      color: rgba(250,248,242,0.92);
+    }
+
+    .ls-visual-logo {
+      width: 96px;
+      height: 96px;
+      margin-bottom: 32px;
+      opacity: 0.88;
+      filter: drop-shadow(0 4px 24px rgba(0,0,0,0.22));
+    }
+
+    .ls-visual-title {
+      font-size: clamp(28px, 3vw, 44px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-align: center;
+      color: rgba(250,248,242,0.95);
+      line-height: 1.15;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.20);
+    }
+
+    .ls-visual-sub {
+      font-size: clamp(13px, 1.4vw, 16px);
+      text-align: center;
+      color: rgba(250,248,242,0.65);
+      max-width: 420px;
+      line-height: 1.6;
+    }
+
+    /* Puntos de grilla decorativos */
+    .ls-visual-dots {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle, rgba(250,248,242,0.12) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+
+    /* Orbe difuminado */
+    .ls-visual-orb {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(250,248,242,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .ls-visual-orb--tl { top: -100px; left: -100px; }
+    .ls-visual-orb--br { bottom: -120px; right: -80px; }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 680px) {
+      .ls { flex-direction: column; }
+
+      .ls-visual {
+        display: none; /* ocultar visual en mobile, fondo en body */
+      }
+
+      .ls-form {
+        width: 100%;
+        min-height: 100dvh;
+        padding: 40px 28px;
+        background: transparent;
+        border-right: none;
+      }
+
+      body {
+        background: linear-gradient(160deg,
+          var(--green-mist) 0%,
+          var(--cream-soft) 40%,
+          var(--cream) 100%
+        );
+      }
+    }
+
+    @media (min-width: 681px) and (max-width: 1024px) {
+      .ls-form { width: 300px; }
+    }
+  </style>
+</head>
+<body>
+<div class="ls">
+
+  <!-- ── Panel izquierdo: login form ────────────────────────── -->
+  <aside class="ls-form">
+
+    <div class="ls-brand">
+      <img src="{% static 'demo/brand/logo-animated.svg' %}" alt="Domain Admin">
+      <span class="ls-brand-name">Domain Admin</span>
+    </div>
+
+    <div class="ls-heading">
+      <h1>Bienvenido</h1>
+      <p>Iniciá sesión para continuar</p>
+    </div>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="ls-alert ls-alert--{{ message.tags|default:'error' }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{% url 'login' %}">
+      {% csrf_token %}
+
+      <div class="ls-field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email"
+               required autofocus autocomplete="username"
+               placeholder="admin@domain.app">
+      </div>
+
+      <div class="ls-field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password"
+               required autocomplete="current-password"
+               placeholder="••••••••">
+      </div>
+
+      <button type="submit" class="ls-btn">Entrar</button>
+    </form>
+
+    <footer class="ls-foot">
+      Domain Admin &middot; v1.3<br>
+      <a href="https://github.com/saargo/domain-services" tabindex="-1">docs</a>
+    </footer>
+  </aside>
+
+  <!-- ── Panel derecho: visual decorativo ───────────────────── -->
+  <main class="ls-visual" aria-hidden="true">
+    <div class="ls-visual-dots"></div>
+    <div class="ls-visual-orb ls-visual-orb--tl"></div>
+    <div class="ls-visual-orb ls-visual-orb--br"></div>
+    <div class="ls-visual-inner">
+      <!-- logo grande en crema -->
+      <svg class="ls-visual-logo" xmlns="http://www.w3.org/2000/svg"
+           viewBox="0 0 48 48" fill="none"
+           stroke="rgba(250,248,242,0.88)" stroke-width="0.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <mask id="vMask" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect x="0" y="0" width="48" height="48" fill="white"/>
+          <circle cx="9"  cy="24" r="3.6" fill="black"/>
+          <circle cx="39" cy="24" r="3.6" fill="black"/>
+          <circle cx="24" cy="9"  r="3.6" fill="black"/>
+          <circle cx="24" cy="39" r="3.6" fill="black"/>
+          <circle cx="24" cy="24" r="4.6" fill="black"/>
+        </mask>
+        <g mask="url(#vMask)">
+          <polygon points="24,9 39,24 24,39 9,24"/>
+          <line x1="9" y1="24" x2="39" y2="24"/>
+          <line x1="24" y1="9" x2="24" y2="39"/>
+          <circle cx="24" cy="24" r="15"/>
+        </g>
+        <circle cx="9"  cy="24" r="3.6"/>
+        <circle cx="39" cy="24" r="3.6"/>
+        <circle cx="24" cy="9"  r="3.6"/>
+        <circle cx="24" cy="39" r="3.6"/>
+        <circle cx="24" cy="24" r="4.6"/>
+        <!-- pulsos animados -->
+        <g fill="rgba(250,248,242,0.70)" stroke="none">
+          <circle r="1.4">
+            <animateMotion dur="5s" repeatCount="indefinite"
+              path="M24,9 L39,24 L24,39 L9,24 Z"/>
+          </circle>
+          <circle r="1.4">
+            <animateMotion dur="5s" begin="2.5s" repeatCount="indefinite"
+              path="M24,9 L39,24 L24,39 L9,24 Z"/>
+          </circle>
+          <circle r="1.2" opacity="0">
+            <animateMotion dur="2.2s" repeatCount="indefinite" path="M9,24 L39,24"/>
+            <animate attributeName="opacity" dur="2.2s" repeatCount="indefinite"
+              values="0;1;1;0" keyTimes="0;0.15;0.85;1"/>
+          </circle>
+        </g>
+      </svg>
+
+      <div class="ls-visual-title">Grafo de conocimiento<br>y código</div>
+      <p class="ls-visual-sub">
+        Administrá agentes, skills, flows y políticas<br>
+        desde un único panel de control.
+      </p>
+    </div>
+  </main>
+
+</div>
+</body>
+</html>

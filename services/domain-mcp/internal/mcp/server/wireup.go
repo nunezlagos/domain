@@ -89,12 +89,12 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		result, err := h(txCtx, req)
 		if tx != nil && err == nil && (result == nil || !result.IsError) {
 			if cerr := tx.Commit(txCtx); cerr != nil {
-
-
-
-
 				if errors.Is(cerr, pgx.ErrTxCommitRollback) {
-					return result, nil
+					// tx aborted mid-flight: cualquier INSERT/UPDATE ejecutado
+					// por el handler se pierde. Devolver success aca seria
+					// mentir al cliente — retornamos el error de rollback
+					// para que el caller sepa que la operacion NO se persisto.
+					return mcp.NewToolResultError(fmt.Sprintf("transaction aborted before commit (Rollback): %v", cerr)), nil
 				}
 				return mcp.NewToolResultError(fmt.Sprintf("commit failed: %v", cerr)), nil
 			}

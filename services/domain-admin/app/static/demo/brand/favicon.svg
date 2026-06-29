@@ -1,27 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Domain Admin">
-  <style>
-    .s { stroke: #2b2b2b; }
-    @media (prefers-color-scheme: dark) { .s { stroke: #ffffff; } }
-  </style>
-  <g class="s" fill="none" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round">
-    <mask id="holesFav" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+  <defs>
+    <!-- difuminado: blur al rect para que los bordes se desvanezcan suavemente -->
+    <filter id="softEdge" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.8"/>
+    </filter>
+    <style>
+      .logo-s { stroke: #3d7a54; }
+      @media (prefers-color-scheme: dark) {
+        .logo-s  { stroke: #6aac82; }
+        .bg      { fill: #2a2a24; }
+      }
+    </style>
+  </defs>
+
+  <!-- fondo crema redondeado con bordes difuminados -->
+  <rect class="bg" x="2" y="2" width="44" height="44" rx="9" ry="9"
+        fill="#faf8f2" filter="url(#softEdge)"/>
+
+  <!-- logo en verde WAG -->
+  <g class="logo-s" fill="none" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round">
+    <mask id="hF" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
       <rect x="0" y="0" width="48" height="48" fill="white"/>
-      <circle cx="9" cy="24" r="3.6" fill="black"/>
+      <circle cx="9"  cy="24" r="3.6" fill="black"/>
       <circle cx="39" cy="24" r="3.6" fill="black"/>
-      <circle cx="24" cy="9" r="3.6" fill="black"/>
+      <circle cx="24" cy="9"  r="3.6" fill="black"/>
       <circle cx="24" cy="39" r="3.6" fill="black"/>
       <circle cx="24" cy="24" r="4.6" fill="black"/>
     </mask>
-    <g mask="url(#holesFav)">
+    <g mask="url(#hF)">
       <polygon points="24,9 39,24 24,39 9,24"/>
-      <line x1="9" y1="24" x2="39" y2="24" />
-      <line x1="24" y1="9" x2="24" y2="39" />
+      <line x1="9"  y1="24" x2="39" y2="24"/>
+      <line x1="24" y1="9"  x2="24" y2="39"/>
       <circle cx="24" cy="24" r="15"/>
     </g>
-    <circle cx="9" cy="24" r="3.6" />
-    <circle cx="39" cy="24" r="3.6" />
-    <circle cx="24" cy="9" r="3.6" />
-    <circle cx="24" cy="39" r="3.6" />
-    <circle cx="24" cy="24" r="4.6" />
+    <circle cx="9"  cy="24" r="3.6"/>
+    <circle cx="39" cy="24" r="3.6"/>
+    <circle cx="24" cy="9"  r="3.6"/>
+    <circle cx="24" cy="39" r="3.6"/>
+    <circle cx="24" cy="24" r="4.6"/>
   </g>
 </svg>

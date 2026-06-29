@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 10 }
+func (s *PlatformPoliciesSeeder) Version() int    { return 11 }
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -279,6 +279,23 @@ DETECCIÓN
 ÍNDICES RELACIONADOS
 Columnas usadas en JOIN y WHERE frecuentes deben tener índice.
 CREATE INDEX CONCURRENTLY para no bloquear en tablas con datos.`,
+		},
+		{
+			Slug:       "sdd-minimo-directo",
+			Name:       "SDD mínimo incluso para cambios directos sin HU",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `TODO cambio en el código, incluso sin HU asociada (fixes directos,
+experimentos one-shot, refactors sin issue), DEBE incluir documentación
+SDD mínima en el PR description o commit body:
+
+1. QUÉ cambia (archivos y responsabilidad)
+2. POR QUÉ (problema, no solución)
+3. RIESGOS (tradeoffs, efectos secundarios, datos sensibles)
+4. CÓMO se verificó (test, screenshots, curl, etc.)
+
+Sin excepción. Un commit sin esto es un commit incompleto.
+La documentación se escribe para el humano que lee el diff, no para la máquina.`,
 		},
 	}
 

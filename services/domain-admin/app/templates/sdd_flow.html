@@ -1,127 +1,246 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Flujo SDD - Domain Admin{% endblock %}
+{% block title %}Workflow SDD - Domain Admin{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/sdd_flow.css' %}">
 {% endblock %}
 
 {% block navbar %}
-  {% include "components/_navbar.html" with title="Flujo SDD" %}
+  {% include "components/_navbar.html" with title="Workflow SDD" %}
 {% endblock %}
 
 {% block content %}
-{% comment %}
-  Diagrama de SECUENCIA del pipeline SDD en HTML/CSS (reemplaza el viejo SVG de
-  coordenadas a mano que solapaba textos). Mismo formato secuencia: 5 lifelines
-  (Usuario/Cliente LLM/Router server/Agente server/Datos), tiempo hacia abajo.
-
-  ARQUITECTURA (2026-06):
-  - El server NO corre LLMs. Solo storage + tools (MCP) + orquestador.
-  - El LLM corre del lado del cliente (opencode, claude-code, etc).
-  - El "agente" del cliente ejecuta la mayoria del trabajo (explore, spec,
-    propose, design, tasks, apply, verify, judge). El server solo aporta
-    tools (RAG, knowledge, observations, ticket/issue/task persistence).
-  - ModeSolo (server-side, trivial): regex + intake. No LLM. Sin cliente.
-  - Modos express/lite/full (cliente, con LLM): el agente cliente invoca
-    tools del server via MCP hasta cerrar el ciclo.
-
-  10 fases con subagentes paralelos nativos del cliente (post-match-B).
-{% endcomment %}
 <div class="sdd-flow-page">
   <div class="card sdd-card">
-  <header class="sdd-hd">
-    <h1 class="sdd-hd-title">Flujo SDD</h1>
-    <div class="sdd-modes">
-      <span class="sdd-modes-label">Modos:</span>
-      <span class="sdd-chip c-solo">solo &middot; server-side (trivial, sin LLM)</span>
-      <span class="sdd-chip c-exp">express &middot; cliente (simple)</span>
-      <span class="sdd-chip c-lite">lite &middot; cliente (moderado, paralelizable)</span>
-      <span class="sdd-chip c-full">full &middot; cliente (complejo, todas las fases)</span>
-    </div>
-    <div class="sdd-arch">
-      <span class="sdd-chip c-arch">Arquitectura: LLM siempre del lado del cliente &middot; server solo tools + storage</span>
-      <span class="sdd-chip c-pre">Precedencia: domain (BD policy) &gt; AGENTS.md del repo &gt; reglas del cliente</span>
-    </div>
-  </header>
+    <header class="sdd-hd">
+      <h1 class="sdd-hd-title">Workflow SDD</h1>
+    </header>
 
-  <div class="sdd-diagram">
-    <div class="seq">
-      <div class="actors">
-        <div class="actor">Usuario</div><div class="actor">Cliente LLM</div>
-        <div class="actor">Router</div>
-        <div class="actor">Agente server (orquestador)</div><div class="actor">Datos</div>
+    <div data-sdd-flow>
+      <div class="sdf-tabs">
+        <span class="sdf-tabs-label">Workflow:</span>
+        {% for wf in workflows %}
+        <button class="sdf-tab {% if forloop.first %}on{% endif %}" data-wf="{{ wf.slug }}" data-phases="{{ wf.phases_json }}">
+          <span class="sdf-tab-dot"></span> {{ wf.name }}
+        </button>
+        {% endfor %}
       </div>
-      <div class="body">
-        <div class="lifelines"><i class="ll1"></i><i class="ll2"></i><i class="ll3"></i><i class="ll4"></i><i class="ll5"></i></div>
 
-        <div class="msg"><span class="lbl" style="left:50%">session_bootstrap: git &rarr; resuelve / auto-crea proyecto</span><span class="line to-right" style="left:10%;width:80%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:50%">project_id + counts (incl. project_skill_count)</span><span class="line ret to-left" style="left:10%;width:80%"></span></div>
-        <div class="msg"><span class="lbl" style="left:34%">si project_skill_count=0 &rarr; detecta stack(s) del repo (root + subdirs + .gitmodules)</span><span class="self" style="left:30%"></span></div>
-        <div class="msg"><span class="lbl" style="left:30%">&#9995; confirma skill(s) de stack (confirmar / modificar / descartar)</span><span class="line to-left" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:30%">OK &rarr; crea skill project-scoped activa (con root_path)</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl" style="left:30%">hook SessionStart &rarr; inyecta precedencia domain (additionalContext)</span><span class="self" style="left:30%"></span></div>
-        <div class="msg"><span class="lbl" style="left:20%">prompt (con project_id)</span><span class="line to-right" style="left:10%;width:20%"></span></div>
-        <div class="msg"><span class="lbl" style="left:34%">triage (clasifica intent + intake) &mdash; server-side regex/heuristica</span><span class="self" style="left:30%"></span></div>
-        <div class="msg">
-          <span class="lbl" style="left:40%">intent + project_id</span>
-          <span class="line to-right" style="left:30%;width:20%"></span>
-        </div>
+      <div class="sdf-status" id="sdfStatus">
+        <span class="sdf-status-flow"><i class="fas fa-diagram-project"></i> SDD Pipeline</span>
+        <span class="sdf-status-phase" id="sdfPhase"><i class="fas fa-circle-notch fa-spin"></i> —</span>
+        <span class="sdf-status-bar"><i id="sdfBar" style="width:0%"></i></span>
+        <span class="sdf-status-meta" id="sdfMeta">0/10 fases</span>
+      </div>
 
-        <div class="msg decision-row">
-          <span class="lbl de-in" style="left:40%">analyzeComplexity</span>
-          <span class="line to-right" style="left:30%;width:10%"></span>
-          <span class="decision-box">
-            <span class="decision-title">&#9670; Decision Engine</span>
-            <span class="decision-line">trivial / simple / moderado / complejo</span>
-            <span class="decision-line">&rarr; <strong>solo server-side</strong> / <strong>cliente LLM</strong></span>
+      <div class="sdf-graph" id="sdfGraph">
+        <svg class="sdf-edges" id="sdfEdges"></svg>
+        {% for phase in phases %}
+        <div class="sdf-node is-pending"
+             data-id="{{ phase.slug }}"
+             tabindex="0" role="button"
+             data-desc="{{ phase.desc }}"
+             data-output="{{ phase.output }}"
+             data-tools='{{ phase.tools_mcp_json|safe }}'
+             data-ops='{{ phase.db_ops_json|safe }}'
+             data-modes="{{ phase.modes }}">
+          <span class="sdf-node-ic"><i class="fas fa-{{ phase.icon }}"></i></span>
+          <span class="sdf-node-txt">
+            <b>{{ phase.name }}</b>
+            <em>{{ phase.agent_slug }}</em>
           </span>
         </div>
-
-        <div class="msg">
-          <span class="lbl" style="left:34%">si <strong>trivial</strong> &rarr; ModeSolo (server-side, sin LLM)</span>
-          <span class="self" style="left:30%"></span>
-        </div>
-        <div class="msg">
-          <span class="lbl" style="left:40%">si <strong>simple/mod/compl</strong> &rarr; plan + FlowRunContext al cliente</span>
-          <span class="line to-right" style="left:30%;width:20%"></span>
-        </div>
-
-        {% for op in pre_ops %}
-        <div class="msg db-op-row">
-          <span class="lbl db-op db-{{ op.type }}" style="left:80%">{{ op.label }}</span>
-          <span class="line to-right" style="left:70%;width:20%"></span>
-        </div>
         {% endfor %}
-        <div class="msg"><span class="lbl ret" style="left:70%">plan ok → flow_run + steps persistidos</span><span class="line ret to-left" style="left:50%;width:40%"></span></div>
-
-        {% include "_sdd_phase_section.html" with p=pmap.explore step=1 tag="lite" %}
-        {% include "_sdd_phase_section.html" with p=pmap.spec step=2 %}
-        <div class="msg"><span class="lbl" style="left:30%">&#9995; hardspec (obligatorio): revisar el spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:30%">OK o rehacer parte (auditado)</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        {% include "_sdd_phase_section.html" with p=pmap.propose step=3 %}
-        {% include "_sdd_phase_section.html" with p=pmap.design step=4 %}
-        <div class="msg"><span class="lbl" style="left:30%">&#9939; gate (manual/hibrido): aprobacion humana</span><span class="line to-left" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:30%">confirm: aprueba / rechaza</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        {% include "_sdd_phase_section.html" with p=pmap.tasks step=5 %}
-
-        <div class="loop"><span class="tag">&#8635; loop &middot; subagentes paralelos nativos del cliente &middot; hasta que los tests pasen</span>
-          <div class="exp-band" style="top:6px;bottom:46px"></div>
-          <span class="exp-lbl">nucleo express / lite</span>
-          {% include "_sdd_phase_section.html" with p=pmap.apply step=6 tag="lite/exp" %}
-          {% include "_sdd_phase_section.html" with p=pmap.verify step=7 tag="lite/exp" %}
-          {% include "_sdd_phase_section.html" with p=pmap.judge step=8 %}
-        </div>
-
-        {% include "_sdd_phase_section.html" with p=pmap.archive step=9 %}
-        <div class="msg"><span class="lbl" style="left:30%">asistencia: &iquest;omitir tareas? &rarr; re-editar spec</span><span class="line to-left" style="left:10%;width:40%"></span></div>
-        <div class="msg"><span class="lbl ret" style="left:30%">decision humana</span><span class="line ret to-right" style="left:10%;width:40%"></span></div>
-        {% include "_sdd_phase_section.html" with p=pmap.onboard step=10 %}
-        <div class="msg"><span class="lbl" style="left:30%">issue implementado</span><span class="line to-left" style="left:10%;width:40%"></span></div>
       </div>
     </div>
   </div>
-  </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+'use strict';
+
+var graph = document.getElementById('sdfGraph');
+var edges = document.getElementById('sdfEdges');
+var statusEl = document.getElementById('sdfStatus');
+var phaseEl = document.getElementById('sdfPhase');
+var barEl = document.getElementById('sdfBar');
+var metaEl = document.getElementById('sdfMeta');
+var allPhases = JSON.parse('{{ phases_json|safe }}');
+
+// Build popover
+function popoverHTML(step, state) {
+  var tools = step.tools || [];
+  var ops = step.ops || [];
+  var toolsHtml = tools.length
+    ? '<dd>' + tools.map(function(t){ return '<code>'+esc(t)+'</code>' }).join('') + '</dd>'
+    : '<dd>—</dd>';
+  var opsHtml = ops.length
+    ? '<dd>' + ops.map(function(o){ return '<span class="db-op-pill db-'+esc(o.type)+'">'+esc(o.label)+'</span>' }).join(' ') + '</dd>'
+    : '<dd>—</dd>';
+  return (
+    '<div class="sdf-pop-head">' +
+      '<span class="sdf-pop-ic is-'+state+'"><i class="fas fa-'+esc(step.icon)+'"></i></span>' +
+      '<div><b>'+esc(step.name)+'</b><span class="sdf-pop-state is-'+state+'">'+state+'</span></div>' +
+      '<button class="sdf-pop-x" aria-label="Cerrar"><i class="fas fa-xmark"></i></button>' +
+    '</div>' +
+    '<p class="sdf-pop-desc">'+esc(step.desc)+'</p>' +
+    '<dl class="sdf-pop-detail">' +
+      '<div><dt><i class="fas fa-wrench"></i> MCP Tools</dt>'+toolsHtml+'</div>' +
+      '<div><dt><i class="fas fa-database"></i> DB Ops</dt>'+opsHtml+'</div>' +
+      '<div><dt><i class="fas fa-arrow-right-from-bracket"></i> Output</dt><dd>'+esc(step.output)+'</dd></div>' +
+    '</dl>'
+  );
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Draw SVG edges between consecutive nodes
+function drawEdges() {
+  var nodes = graph.querySelectorAll('.sdf-node');
+  if (nodes.length < 2) return;
+  var pos = [];
+  nodes.forEach(function(n) {
+    var x = n.offsetLeft, y = n.offsetTop;
+    var w = n.offsetWidth, h = n.offsetHeight;
+    pos.push({ x: x, y: y, w: w, h: h });
+  });
+  var w = graph.scrollWidth, h = graph.scrollHeight;
+  edges.innerHTML = '';
+  edges.setAttribute('viewBox', '0 0 '+w+' '+h);
+  edges.setAttribute('width', w);
+  edges.setAttribute('height', h);
+  for (var i = 0; i < pos.length - 1; i++) {
+    var a = pos[i], b = pos[i+1];
+    var sameRow = Math.abs(a.y - b.y) < 10;
+    var x1, y1, x2, y2;
+    if (sameRow) {
+      x1 = a.x + a.w; y1 = a.y + a.h/2;
+      x2 = b.x; y2 = b.y + b.h/2;
+    } else {
+      x1 = a.x + a.w/2; y1 = a.y + a.h;
+      x2 = b.x + b.w/2; y2 = b.y;
+    }
+    var dx = (x2 - x1) * 0.4, dy = (y2 - y1) * 0.5;
+    var d = 'M'+x1+','+y1+' C'+(x1+dx)+','+(y1+dy)+' '+(x2-dx)+','+(y2-dy)+' '+x2+','+y2;
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'sdf-edge');
+    path.setAttribute('d', d);
+    edges.appendChild(path);
+    var flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    flow.setAttribute('class', 'sdf-edge-flow');
+    flow.setAttribute('d', d);
+    edges.appendChild(flow);
+  }
+}
+
+// Popover management
+var popover = null;
+function closePop() { if (popover) { popover.classList.remove('open'); popover = null; } }
+
+function openPop(node, step, state) {
+  closePop();
+  var pop = document.createElement('div');
+  pop.className = 'sdf-pop';
+  pop.innerHTML = popoverHTML(step, state);
+  graph.appendChild(pop);
+  pop.querySelector('.sdf-pop-x').addEventListener('click', closePop);
+  // position
+  var gr = graph.getBoundingClientRect();
+  var nr = node.getBoundingClientRect();
+  pop.classList.add('open');
+  var pw = pop.offsetWidth, ph = pop.offsetHeight;
+  var left = nr.left - gr.left + graph.scrollLeft + nr.width/2 - pw/2;
+  var top = nr.bottom - gr.top + graph.scrollTop + 8;
+  left = Math.max(6, Math.min(left, graph.scrollWidth - pw - 6));
+  if (top + ph > graph.scrollTop + graph.clientHeight && nr.top - gr.top - ph - 8 > 0) {
+    top = nr.top - gr.top + graph.scrollTop - ph - 8;
+  }
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  popover = pop;
+}
+
+// Build step lookup from allPhases
+var stepMap = {};
+allPhases.forEach(function(p){ stepMap[p.id] = p; });
+
+// Node click
+graph.addEventListener('click', function(e) {
+  var node = e.target.closest('.sdf-node');
+  if (!node) { closePop(); return; }
+  var id = node.dataset.id;
+  var step = stepMap[id];
+  if (!step) return;
+  var state = 'pending';
+  if (node.classList.contains('is-done')) state = 'done';
+  else if (node.classList.contains('is-active')) state = 'active';
+  if (popover && popover.parentNode && popover.style.opacity === '1') {
+    closePop();
+    if (popover._node === node) return;
+  }
+  openPop(node, step, state);
+  popover._node = node;
+});
+
+// Tab switching — filter nodes by workflow mode
+var tabs = document.querySelectorAll('.sdf-tab');
+tabs.forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    tabs.forEach(function(t){ t.classList.remove('on'); });
+    tab.classList.add('on');
+    closePop();
+    var activeIds = (tab.dataset.phases || '').split(',');
+    graph.querySelectorAll('.sdf-node').forEach(function(n) {
+      var modes = (n.dataset.modes || '').split(',');
+      var match = activeIds.indexOf(n.dataset.id) >= 0;
+      n.classList.remove('is-pending', 'is-done', 'is-active', 'is-skipped');
+      n.classList.add(match ? 'is-pending' : 'is-skipped');
+    });
+    setTimeout(drawEdges, 50);
+  });
+});
+
+// Simulate live ticker (demo mode — cycles phases)
+var tick = 0;
+setInterval(function() {
+  var activeNodes = graph.querySelectorAll('.sdf-node:not(.is-skipped)');
+  var activeCount = activeNodes.length;
+  if (activeCount === 0) return;
+  tick = (tick + 1) % (activeCount + 1);
+  activeNodes.forEach(function(n, i) {
+    n.classList.remove('is-done', 'is-active', 'is-pending', 'is-skipped');
+    if (i < tick) n.classList.add('is-done');
+    else if (i === tick) n.classList.add('is-active');
+    else n.classList.add('is-pending');
+  });
+  // Update status bar
+  var pct = activeCount > 0 ? Math.round(tick / activeCount * 100) : 0;
+  barEl.style.width = pct + '%';
+  var curName = tick < activeCount ? (activeNodes[tick].querySelector('b') || {}).textContent : 'Completado';
+  phaseEl.innerHTML = '<i class="fas fa-'+(tick >= activeCount ? 'circle-check' : 'circle-notch fa-spin')+'"></i> '+curName;
+  metaEl.textContent = Math.min(tick, activeCount)+'/'+activeCount+' fases';
+  // Flow edges
+  edges.querySelectorAll('.sdf-edge-flow').forEach(function(e, i) {
+    e.classList.toggle('on', i < tick);
+  });
+}, 3000);
+
+// Layout after render
+setTimeout(function() {
+  drawEdges();
+  // Trigger first tick
+  var ev = new Event('click');
+  document.querySelector('.sdf-tab.on') && document.querySelector('.sdf-tab.on').dispatchEvent(ev);
+}, 100);
+
+})();
+</script>
 {% endblock %}

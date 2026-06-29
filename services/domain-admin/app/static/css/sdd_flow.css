@@ -1,206 +1,244 @@
-/* sdd_flow.css — Diagrama de SECUENCIA del pipeline SDD en HTML/CSS.
+/* sdd_flow.css — Diagrama de NODOS del pipeline SDD.
    ---------------------------------------------------------------------------
-   Reemplaza el viejo SVG de coordenadas a mano (textos que se solapaban). Mismo
-   formato secuencia (5 lifelines, tiempo hacia abajo, flechas entre lifelines)
-   pero en HTML: cada mensaje es una fila que el layout apila -> sin solapamiento.
-   El diagrama escala para entrar en el viewport (igual que hacia el SVG) via el
-   fitSeq() del template. Reusa SIEMPRE los tokens del design system. */
+   Reemplaza el viejo diagrama de secuencia HTML/CSS (lifelines + flechas).
+   Ahora: workflow selector tabs + status bar + grafo de nodos conectados por
+   SVG edges. Cada nodo representa una fase del pipeline SDD y al clickear
+   muestra un popover con tools MCP, DB ops y output. */
 
-/* Pagina: alto = viewport menos navbar+footer+padding. Header arriba, diagrama
-   ocupa el resto y se escala para entrar. */
+/* ============================ PAGE LAYOUT ============================ */
 .sdd-flow-page {
   --sdd-reserve: calc(var(--navbar-height) + var(--footer-height) + (2 * var(--space-lg)));
-  display: flex;
-  flex-direction: column;
+  display: flex; flex-direction: column;
   height: calc(100dvh - var(--sdd-reserve));
-  min-height: 460px;
-  overflow: hidden;
+  min-height: 460px; overflow: hidden;
 }
-/* Card contenedor (estilo mantenedores: bordes redondeados + sombra abajo/
-   derecha, de la clase .card). Llena el alto y deja scrollear el diagrama
-   adentro. */
 .sdd-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-
-/* Header: titulo a la izquierda, leyenda de modos a la derecha (misma linea) */
 .sdd-hd {
-  flex: 0 0 auto;
-  margin-bottom: var(--space-sm);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
+  flex: 0 0 auto; margin-bottom: var(--space-sm);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--space-sm);
 }
 .sdd-hd-title { margin: 0; }
 
-/* Leyenda de modos: grupo prolijo de pills con punto de color */
-.sdd-modes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: 4px 10px;
+/* ============================ WORKFLOW TABS ============================ */
+.sdf-tabs {
+  display: flex; gap: 5px; padding: 0 0 8px;
+  flex-wrap: wrap; align-items: center;
 }
-.sdd-modes-label { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-right: 2px; }
-.sdd-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid; white-space: nowrap;
-}
-.sdd-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.c-full { color: var(--color-accent);  border-color: var(--color-accent);  background: var(--color-accent-soft); }
-.c-lite { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
-.c-exp  { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
-.c-solo { color: var(--color-info);    border-color: var(--color-info);    background: var(--color-info-soft, rgba(59,130,246,.1)); }
-
-/* Area del diagrama: ocupa el resto del alto. El diagrama llena TODO el ancho;
-   si queda mas alto que la caja, scrollea adentro (la pagina no scrollea). */
-.sdd-diagram {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
-/* El diagrama llena el ancho disponible (lifelines en %). min-width para que en
-   pantallas chicas siga legible y scrollee en X en vez de apretarse. */
-.seq { width: 100%; min-width: 700px; }
-
-/* Cabecera de participantes: 5 columnas iguales con caja + sombra */
-.actors { display: grid; grid-template-columns: repeat(5, 1fr); margin-bottom: 6px; }
-.actor {
-  justify-self: center;
+.sdf-tabs-label { font-size: 11px; font-weight: 600; color: var(--color-text-muted); margin-right: 4px; }
+.sdf-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  color: var(--color-text-muted);
   background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-light);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-weight: 600;
-  font-size: 13px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border);
+  cursor: pointer; transition: all 0.2s;
 }
+.sdf-tab:hover { color: var(--color-text-primary); border-color: var(--color-border-light); }
+.sdf-tab.on {
+  color: var(--color-text-inverse);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 12px rgba(85,110,230,0.25);
+}
+.sdf-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.55; }
+.sdf-tab.on .sdf-tab-dot { opacity: 1; }
 
-/* Cuerpo: lifelines absolutas detras + filas de mensajes en flujo */
-.body { position: relative; padding-top: 6px; }
-.lifelines { position: absolute; inset: 0; pointer-events: none; }
-.lifelines i {
-  position: absolute; top: 0; bottom: 0; width: 0;
-  border-left: 1.5px dashed var(--color-border-light);
-  transform: translateX(-50%);
+/* ============================ STATUS BAR ============================ */
+.sdf-status {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
 }
-.ll1 { left: 10%; } .ll2 { left: 30%; } .ll3 { left: 50%; } .ll4 { left: 70%; } .ll5 { left: 90%; }
-
-/* Cada mensaje ocupa su propio alto -> nunca se solapan verticalmente */
-.msg { position: relative; min-height: 36px; }
-.msg .lbl {
-  position: absolute; top: 0;
-  font-size: 11.5px; color: var(--color-text-secondary);
-  white-space: nowrap; transform: translateX(-50%);
+.sdf-status-flow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; color: var(--color-text-primary);
 }
-.msg .lbl.ret { color: var(--color-text-muted); font-style: italic; }
-
-/* Linea de la flecha + cabeza por pseudo-elemento */
-.msg .line { position: absolute; top: 23px; height: 0; border-top: 2px solid var(--color-text-secondary); }
-.msg .line.ret { border-top: 1.6px dashed var(--color-text-muted); }
-.msg .line.to-right::after, .msg .line.to-left::after {
-  content: ""; position: absolute; top: -5px; border: 5px solid transparent;
-}
-.msg .line.to-right::after { right: -1px; border-left-color: var(--color-text-secondary); border-right: 0; }
-.msg .line.to-left::after  { left: -1px;  border-right-color: var(--color-text-secondary); border-left: 0; }
-.msg .line.ret.to-right::after { border-left-color: var(--color-text-muted); }
-.msg .line.ret.to-left::after  { border-right-color: var(--color-text-muted); }
-
-/* Self-message (triage / itera): bucle corto sobre la lifeline */
-.msg .self {
-  position: absolute; top: 11px; width: 46px; height: 18px;
-  border: 1.6px solid var(--color-text-secondary); border-left: 0; border-radius: 0 8px 8px 0;
-}
-.msg .self.acc { border-color: var(--color-info); }
-
-/* Fase: boton clickeable Orchestrator -> Agente, coloreado por grupo */
-.ph {
-  position: absolute; top: 13px; left: 50%; width: 20%; height: 22px;
-  border: 0; cursor: pointer; display: flex; align-items: center; gap: 6px;
-  padding: 0 8px; border-radius: 5px; font: inherit; color: #fff;
-  font-size: 11.5px; font-weight: 600; background: var(--g, var(--color-text-link));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  transition: filter var(--transition-fast);
-}
-.ph::after {
-  content: ""; position: absolute; right: -9px; top: 50%; transform: translateY(-50%);
-  border: 6px solid transparent; border-left-color: var(--g, var(--color-text-link)); border-right: 0;
-}
-.ph:hover:not(.is-disabled) { filter: brightness(1.12); }
-.ph.is-disabled { opacity: 0.45; cursor: not-allowed; }
-.ph .n { background: rgba(0, 0, 0, 0.25); border-radius: 3px; padding: 0 5px; font-weight: 700; }
-.ph .tag { margin-left: auto; font-size: 9.5px; background: rgba(255, 255, 255, 0.22); border-radius: 3px; padding: 0 4px; }
-.g-spec { --g: var(--color-info); } .g-exec { --g: var(--color-warning); }
-.g-tdd  { --g: var(--color-success); } .g-close { --g: var(--color-accent); }
-
-/* Recuadro del loop (apply -> verify -> judge) */
-.loop {
-  position: relative; border: 1.5px dashed var(--color-warning); border-radius: 10px;
-  margin: 6px 0; padding-top: 20px; background: rgba(210, 153, 34, 0.05);
-}
-.loop > .tag {
-  position: absolute; top: -11px; left: 44%;
-  background: var(--color-bg-surface); color: var(--color-warning);
-  font-size: 11px; font-weight: 700; padding: 0 8px;
-  border: 1px solid var(--color-warning); border-radius: 6px;
-}
-/* Banda express/lite: borde sobre apply+verify dentro del loop */
-.exp-band { position: absolute; left: 48%; width: 24%; border: 1.5px solid var(--color-success); border-radius: 8px; pointer-events: none; }
-.exp-lbl { position: absolute; left: 73%; top: 2px; font-size: 10.5px; color: var(--color-success); font-weight: 700; }
-
-/* DB ops row: mas compacto que .msg normal (sin boton, solo label + flecha) */
-.msg.db-op-row { min-height: 24px; }
-.msg.db-op-row .lbl { top: 2px; }
-.msg.db-op-row .line { top: 13px; }
-
-/* Pills de operaciones de DB — coloreados por tipo */
-.db-op {
-  display: inline-block;
+.sdf-status-flow i { color: var(--color-accent); }
+.sdf-status-phase {
+  display: inline-flex; align-items: center; gap: 5px;
   font-size: 10px; font-weight: 600;
-  padding: 1px 8px; border-radius: 999px;
-  white-space: nowrap; border: 1px solid; line-height: 1.6;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--color-accent-soft); color: var(--color-accent);
 }
-.db-read     { color: var(--color-info);    border-color: var(--color-info);    background: rgba(59,130,246,.1); }
-.db-write    { color: var(--color-warning); border-color: var(--color-warning); background: rgba(210,153,34,.1); }
-.db-search   { color: var(--color-success); border-color: var(--color-success); background: rgba(22,163,74,.1); }
-.db-tool     { color: #a855f7;              border-color: #a855f7;              background: rgba(168,85,247,.1); }
-.db-save     { color: #14b8a6;              border-color: #14b8a6;              background: rgba(20,184,166,.1); }
-.db-gate     { color: var(--color-accent);  border-color: var(--color-accent);  background: var(--color-accent-soft); }
-.db-hardspec { color: #dc2626;              border-color: #dc2626;              background: rgba(220,38,38,.1); }
-.db-mcp      { color: #a855f7;              border-color: #a855f7;              background: rgba(168,85,247,.1); }
-
-code { background: var(--color-bg-elevated); border: 1px solid var(--color-border); border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
-
-/* Decision Engine: nodo de decisión centrado en la lifeline del Orchestrator
-   (izquierda de la caja en 50%, que es donde está ll3=Orchestrator) */
-.decision-row { position: relative; min-height: 54px; }
-
-.de-in {
-  color: var(--color-info, #3b82f6);
-  font-weight: 600;
-  transform: translateX(-50%) translateY(-16px);
+.sdf-status-phase.is-done { background: var(--color-success-soft); color: var(--color-success); }
+.sdf-status-bar {
+  flex: 1; min-width: 60px; height: 5px; border-radius: 3px;
+  background: var(--color-border); overflow: hidden;
+}
+.sdf-status-bar i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-info));
+  border-radius: 3px; transition: width 0.5s ease;
+}
+.sdf-status-meta {
+  font-size: 9px; color: var(--color-text-muted); white-space: nowrap;
+}
+.sdf-status-meta code {
+  font-family: ui-monospace, monospace; font-size: 9px;
+  background: var(--color-bg-elevated); padding: 1px 5px; border-radius: 4px;
 }
 
-.decision-box {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  background: rgba(59,130,246,.08); border: 1.5px solid var(--color-info, #3b82f6);
-  border-radius: 8px; padding: 6px 12px;
-  min-width: 220px; max-width: 300px;
+/* ============================ GRAPH AREA ============================ */
+.sdf-graph {
+  position: relative; min-height: 300px; flex: 1;
+  background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+  background-size: 18px 18px;
+  overflow: hidden; padding: 10px;
 }
-.decision-title {
-  font-weight: 700; color: var(--color-info, #3b82f6); font-size: 11.5px;
-  margin-bottom: 2px;
+.sdf-edges {
+  position: absolute; top: 0; left: 0;
+  overflow: visible; pointer-events: none; z-index: 1;
 }
-.decision-line { color: var(--color-text-secondary); font-family: monospace; font-size: 10px; line-height: 1.35; }
+.sdf-edge { fill: none; stroke: var(--color-border); stroke-width: 2; }
+.sdf-edge-flow {
+  fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linecap: round;
+  stroke-dasharray: 5 9; opacity: 0; transition: opacity 0.3s;
+}
+.sdf-edge-flow.on { opacity: 0.8; animation: sdf-flow 0.8s linear infinite; }
+
+/* ============================ NODES ============================ */
+.sdf-node {
+  position: absolute; top: 0; left: 0;
+  width: 138px; height: 48px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  z-index: 2; cursor: pointer;
+  background: var(--color-bg-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: 11px;
+  box-shadow: 0 2px 6px var(--color-shadow-sm);
+  transition:
+    border-color 0.25s, box-shadow 0.25s,
+    opacity 0.3s, transform 0.35s cubic-bezier(0.22,1,0.36,1);
+  user-select: none;
+}
+.sdf-node:hover { box-shadow: 0 6px 16px var(--color-shadow-md); z-index: 3; }
+.sdf-node:focus-visible {
+  outline: 2px solid var(--color-accent); outline-offset: 2px;
+}
+.sdf-node-ic {
+  flex-shrink: 0; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 13px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  transition: all 0.25s;
+}
+.sdf-node-txt {
+  display: flex; flex-direction: column; min-width: 0; line-height: 1.25;
+}
+.sdf-node-txt b { font-size: 11px; font-weight: 700; color: var(--color-text-primary); }
+.sdf-node-txt em {
+  font-size: 8px; font-style: normal; color: var(--color-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;
+}
+
+/* Node states */
+.sdf-node.is-done { border-color: var(--color-success); }
+.sdf-node.is-done .sdf-node-ic { background: var(--color-success-soft); color: var(--color-success); }
+.sdf-node.is-active {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft), 0 6px 18px rgba(85,110,230,0.18);
+  animation: sdf-node-pulse 1.8s ease-in-out infinite;
+}
+.sdf-node.is-active .sdf-node-ic { background: var(--color-accent); color: var(--color-text-inverse); }
+.sdf-node.is-pending { opacity: 0.5; }
+.sdf-node.is-skipped { opacity: 0.3; }
+.sdf-node.is-skipped .sdf-node-txt b { text-decoration: line-through; }
+
+/* ============================ POPOVER ============================ */
+.sdf-pop {
+  position: absolute; z-index: 20;
+  width: 260px; max-width: calc(100% - 12px);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.05);
+  padding: 12px;
+  opacity: 0; transform: translateY(-6px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.sdf-pop.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.sdf-pop-head { display: flex; align-items: center; gap: 9px; }
+.sdf-pop-ic {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; font-size: 12px;
+  background: var(--color-bg-elevated); color: var(--color-text-muted);
+}
+.sdf-pop-ic.is-done { background: var(--color-success-soft); color: var(--color-success); }
+.sdf-pop-ic.is-active { background: var(--color-accent); color: var(--color-text-inverse); }
+.sdf-pop-head > div {
+  display: flex; flex-direction: column; line-height: 1.2; flex: 1; min-width: 0;
+}
+.sdf-pop-head b { font-size: 12px; font-weight: 700; color: var(--color-text-heading); }
+.sdf-pop-state {
+  font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-muted); margin-top: 1px;
+}
+.sdf-pop-state.is-done { color: var(--color-success); }
+.sdf-pop-state.is-active { color: var(--color-accent); }
+.sdf-pop-x {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px;
+  color: var(--color-text-muted); font-size: 12px; background: transparent; border: 0;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.sdf-pop-x:hover { background: var(--color-bg-elevated); color: var(--color-text-heading); }
+.sdf-pop-desc {
+  font-size: 10.5px; color: var(--color-text-primary); opacity: 0.85;
+  margin: 8px 0; line-height: 1.4;
+}
+.sdf-pop-detail { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-border); padding-top: 8px; }
+.sdf-pop-detail > div { display: flex; flex-direction: column; gap: 2px; }
+.sdf-pop-detail dt {
+  font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.sdf-pop-detail dt i { margin-right: 3px; }
+.sdf-pop-detail dd { font-size: 10px; color: var(--color-text-primary); }
+.sdf-pop-detail code, .sdf-pop-detail .db-op-pill {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9.5px;
+  background: var(--color-bg-elevated); padding: 1px 6px; border-radius: 5px;
+  color: var(--color-accent);
+}
+
+/* DB op pills inside popover */
+.db-op-pill {
+  display: inline-block;
+  font-size: 9px; font-weight: 600;
+  padding: 1px 6px; border-radius: 999px;
+  white-space: nowrap; border: 1px solid; line-height: 1.5;
+}
+.db-op-pill.db-read    { color: var(--color-info);    border-color: var(--color-info);    background: rgba(80,165,241,.1); }
+.db-op-pill.db-write   { color: var(--color-warning); border-color: var(--color-warning); background: rgba(241,180,76,.1); }
+.db-op-pill.db-save    { color: #14b8a6;              border-color: #14b8a6;              background: rgba(20,184,166,.1); }
+.db-op-pill.db-search  { color: var(--color-success); border-color: var(--color-success); background: rgba(52,195,143,.1); }
+
+/* ============================ LOOP BADGE ============================ */
+.sdf-loop {
+  position: absolute; z-index: 1;
+  border: 1.5px dashed var(--color-warning); border-radius: 10px;
+  pointer-events: none;
+}
+.sdf-loop-tag {
+  position: absolute; font-size: 9px; font-weight: 700; color: var(--color-warning);
+  background: var(--color-bg-surface); padding: 0 6px;
+}
+
+/* ============================ ANIMATIONS ============================ */
+@keyframes sdf-flow { to { stroke-dashoffset: -14; } }
+@keyframes sdf-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--color-accent-soft), 0 6px 18px rgba(85,110,230,0.12); }
+  50% { box-shadow: 0 0 0 5px var(--color-accent-soft), 0 8px 22px rgba(85,110,230,0.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sdf-node.is-active, .sdf-edge-flow.on { animation: none; }
+}
+
+/* ============================ LEGACY (sequence diagram) — removed ============================ */

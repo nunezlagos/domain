@@ -1,12 +1,12 @@
 const SEGMENTS = [
-  { id: 'agents',   label: 'Agents',   icon: 'robot',      color: '#79aec8' },
-  { id: 'skills',   label: 'Skills',   icon: 'bolt',       color: '#f5dd5d' },
-  { id: 'flows',    label: 'Flows',    icon: 'repeat',     color: '#417690' },
-  { id: 'prompts',  label: 'Prompts',  icon: 'file-lines', color: '#447e9b' },
-  { id: 'projects', label: 'Proyectos',icon: 'folder',     color: '#609ab6' },
-  { id: 'users',    label: 'Usuarios', icon: 'users',      color: '#5b80b2' },
-  { id: 'policies', label: 'Politicas',icon: 'shield',     color: '#86b9d0' },
-  { id: 'crons',    label: 'Crons',    icon: 'clock',      color: '#306080' },
+  { id: 'agents',   label: 'Agents',    icon: 'robot',      color: DJ.segments[0] },
+  { id: 'skills',   label: 'Skills',    icon: 'bolt',       color: DJ.segments[1] },
+  { id: 'flows',    label: 'Flows',     icon: 'repeat',     color: DJ.segments[2] },
+  { id: 'prompts',  label: 'Prompts',   icon: 'file-lines', color: DJ.segments[3] },
+  { id: 'projects', label: 'Proyectos', icon: 'folder',     color: DJ.segments[4] },
+  { id: 'users',    label: 'Usuarios',  icon: 'users',      color: DJ.segments[5] },
+  { id: 'policies', label: 'Politicas', icon: 'shield',     color: DJ.segments[6] },
+  { id: 'crons',    label: 'Crons',     icon: 'clock',      color: DJ.segments[7] },
 ];
 
 const MOCK_DATA = {

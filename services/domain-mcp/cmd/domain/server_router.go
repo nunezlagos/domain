@@ -21,6 +21,7 @@ import (
 	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
 	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
+	"nunezlagos/domain/internal/observability"
 	enrollsvc "nunezlagos/domain/internal/service/enrollment"
 	openspecsvc "nunezlagos/domain/internal/service/openspec"
 	"nunezlagos/domain/internal/tracing"
@@ -35,7 +36,12 @@ func buildRouter(
 	metricsReg *metrics.Registry,
 	logger *slog.Logger,
 	queryCacheLRU *cache.LRU,
-) http.Handler {
+) (http.Handler, *observability.InvocationLogger) {
+	invocationLogger := observability.NewInvocationLogger(
+		&observability.PGInvocationStore{Pool: pools.App},
+		logger,
+		0, 0,
+	)
 	mux := http.NewServeMux()
 
 	info := httpserver.VersionInfo{Version: serverVersion, Commit: Commit, BuildTime: BuildTime}
@@ -146,35 +152,44 @@ func buildRouter(
 			Knowledge:        s.KnowledgeService,
 			Skills:           s.SkillService,
 			SkillExecution:   s.SkillExecService,
-			Agents:          s.AgentService,
-			AgentRunner:     s.AgentRunnerInst,
-			Crons:           s.CronService,
-			Clients:         s.ClientService,
-			CapturedPrompts: s.CapturedPromptService,
-			ProjectRepos:    s.ProjectRepoService,
-			ProjectPolicies: s.ProjectPolicyService,
-			Tickets:         s.TicketService,
-			Policies:        s.PolicyService,
-			Flows:           s.FlowService,
-			FlowRunner:      s.FlowRunnerInst,
-			Hubuilder:       s.IssuebuilderSvc,
-			IssueSvc:        s.HUService,
-			Spec:            s.SpecService,
-			Tasks:           s.TaskService,
-			Intake:          s.IntakeSvc,
-			Orchestrator:    s.OrchestratorSvc,
-			PromptRouter:    s.PromptRouterSvc,
-			WorkflowImport:  s.WorkflowImportSvc,
-			Pool:            pools.App,
-			Dispatcher:      s.Dispatcher,
-			ServerName:      "domain-mcp-http",
-			ServerVer:       serverVersion,
-			SharedCache:     queryCacheLRU,
+			Agents:           s.AgentService,
+			AgentRunner:      s.AgentRunnerInst,
+			Crons:            s.CronService,
+			Clients:          s.ClientService,
+			CapturedPrompts:  s.CapturedPromptService,
+			ProjectRepos:     s.ProjectRepoService,
+			ProjectPolicies:  s.ProjectPolicyService,
+			Tickets:          s.TicketService,
+			Policies:         s.PolicyService,
+			Flows:            s.FlowService,
+			FlowRunner:       s.FlowRunnerInst,
+			Hubuilder:        s.IssuebuilderSvc,
+			IssueSvc:         s.HUService,
+			Spec:             s.SpecService,
+			Tasks:            s.TaskService,
+			Intake:           s.IntakeSvc,
+			Orchestrator:     s.OrchestratorSvc,
+			PromptRouter:     s.PromptRouterSvc,
+			WorkflowImport:   s.WorkflowImportSvc,
+			Pool:             pools.App,
+			Dispatcher:       s.Dispatcher,
+			ServerName:       "domain-mcp-http",
+			ServerVer:        serverVersion,
+			SharedCache:      queryCacheLRU,
 			MetricsOnToolCall: func(tool, status string, dur float64) {
 				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
 				if status != "cache_hit" {
 					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
 				}
+				invocationLogger.Log(observability.Invocation{
+					ToolName:   tool,
+					Status:     status,
+					DurationMS: int(dur * 1000),
+				})
+				logger.Info("tool invocation",
+					slog.String("tool", tool),
+					slog.String("status", status),
+					slog.Int64("duration_ms", int64(dur*1000)))
 			},
 			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
 			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
@@ -192,5 +207,5 @@ func buildRouter(
 			tracing.HTTPMiddleware("domain")(mux),
 		),
 	)
-	return finalHandler
+	return finalHandler, invocationLogger
 }

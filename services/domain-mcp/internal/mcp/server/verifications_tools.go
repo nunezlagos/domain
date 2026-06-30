@@ -30,8 +30,8 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type verificationsProjectGetter interface {

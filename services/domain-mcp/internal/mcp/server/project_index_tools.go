@@ -2,26 +2,26 @@
 //
 // Flow:
 //
-//   1. LLM: domain_project_index_start(project_slug, git_head, force?)
-//      → server crea project_index_runs(status=running) + devuelve un
-//        manifest de path patterns que el LLM debe leer del repo
-//        (AGENTS.md, README.md, .claude/CLAUDE.md, package.json, etc).
+//  1. LLM: domain_project_index_start(project_slug, git_head, force?)
+//     → server crea project_index_runs(status=running) + devuelve un
+//     manifest de path patterns que el LLM debe leer del repo
+//     (AGENTS.md, README.md, .claude/CLAUDE.md, package.json, etc).
 //
-//   2. LLM lee cada archivo del manifest con su tool nativa Read y los
-//      submitea con domain_project_index_submit(run_id, files[]).
-//      Server clasifica cada archivo:
-//        - AGENTS.md / CLAUDE.md / .claude/CLAUDE.md → project_policy
-//          (kind=agent_protocol, slug=imported-<name>, source=seed_imported)
-//        - .claude/rules/*.md → project_policy (kind=convention)
-//        - README.md → knowledge_doc (category=readme)
-//        - docs/**.md, doc/*.md → knowledge_doc (category=docs)
-//        - package.json/go.mod/composer.json/pyproject.toml → project_policy
-//          (kind=tech_stack) extrayendo nombre del lenguaje + version
-//        - Makefile / Taskfile.yml → project_policy (kind=convention)
-//          listando los targets como "comandos comunes del proyecto"
-//        - .github/workflows/*.yml → knowledge_doc (category=ci)
+//  2. LLM lee cada archivo del manifest con su tool nativa Read y los
+//     submitea con domain_project_index_submit(run_id, files[]).
+//     Server clasifica cada archivo:
+//     - AGENTS.md / CLAUDE.md / .claude/CLAUDE.md → project_policy
+//     (kind=agent_protocol, slug=imported-<name>, source=seed_imported)
+//     - .claude/rules/*.md → project_policy (kind=convention)
+//     - README.md → knowledge_doc (category=readme)
+//     - docs/**.md, doc/*.md → knowledge_doc (category=docs)
+//     - package.json/go.mod/composer.json/pyproject.toml → project_policy
+//     (kind=tech_stack) extrayendo nombre del lenguaje + version
+//     - Makefile / Taskfile.yml → project_policy (kind=convention)
+//     listando los targets como "comandos comunes del proyecto"
+//     - .github/workflows/*.yml → knowledge_doc (category=ci)
 //
-//   3. domain_project_index_status(project_slug) → ultimo run + counts.
+//  3. domain_project_index_status(project_slug) → ultimo run + counts.
 //
 // Aspecto Cursor-like: una sola call al LLM "indexar este proyecto" deja
 // persistido todo el contexto del repo en project_policies + knowledge.
@@ -43,9 +43,9 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type knowledgeChecker interface{}

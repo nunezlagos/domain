@@ -36,8 +36,6 @@ func startMCPAsOpenCode(t *testing.T) *mcpSession {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-
-
 	candidates := []string{
 		filepath.Join(home, "Proyectos", "domain", "opencode.json"),
 		filepath.Join(home, ".config", "opencode", "opencode.json"),
@@ -168,7 +166,6 @@ func TestE2E_MCPSmoke_ToolsWorkAsOpenCode(t *testing.T) {
 	}
 	s := startMCPAsOpenCode(t)
 
-
 	initRes := s.call(1, "initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
@@ -176,7 +173,6 @@ func TestE2E_MCPSmoke_ToolsWorkAsOpenCode(t *testing.T) {
 	})
 	require.NotNil(t, initRes["serverInfo"], "initialize debe traer serverInfo")
 	s.notify("notifications/initialized")
-
 
 	toolsRes := s.call(2, "tools/list", nil)
 	tools, _ := toolsRes["tools"].([]any)
@@ -196,16 +192,13 @@ func TestE2E_MCPSmoke_ToolsWorkAsOpenCode(t *testing.T) {
 	}
 	t.Logf("tools/list OK: %d tools expuestos", len(tools))
 
-
 	policyOut, isErr := s.callTool(3, "domain_policy_list", map[string]any{})
 	require.False(t, isErr, "domain_policy_list error: %s", policyOut)
 	require.Contains(t, policyOut, "sdd-tdd-strict", "policies seeded visibles vía MCP")
 
-
 	getOut, isErr := s.callTool(4, "domain_policy_get", map[string]any{"slug": "sdd-tdd-strict"})
 	require.False(t, isErr, "domain_policy_get error: %s", getOut)
 	require.Contains(t, getOut, "TDD", "body de la policy presente")
-
 
 	marker := fmt.Sprintf("smoke-opencode-%d", os.Getpid())
 	saveOut, isErr := s.callTool(5, "domain_mem_save", map[string]any{
@@ -222,7 +215,6 @@ func TestE2E_MCPSmoke_ToolsWorkAsOpenCode(t *testing.T) {
 	})
 	require.False(t, isErr, "domain_mem_search error: %s", searchOut)
 	require.Contains(t, searchOut, marker, "la observación guardada se encuentra")
-
 
 	projOut, isErr := s.callTool(7, "domain_project_list", map[string]any{})
 	require.False(t, isErr, "domain_project_list error: %s", projOut)

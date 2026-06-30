@@ -36,7 +36,7 @@ func buildRouter(
 	metricsReg *metrics.Registry,
 	logger *slog.Logger,
 	queryCacheLRU *cache.LRU,
-) (http.Handler, *observability.InvocationLogger, *observability.HTTPLogger, *observability.ResourceCollector, *observability.FnLogger) {
+) (http.Handler, *observability.InvocationLogger, *observability.HTTPLogger, *observability.ResourceCollector, *observability.FnLogger, *observability.Tracker) {
 	invocationLogger := observability.NewInvocationLogger(
 		&observability.PGInvocationStore{Pool: pools.App},
 		logger,
@@ -57,6 +57,11 @@ func buildRouter(
 		&observability.PGFnLogStore{Pool: pools.App},
 		logger,
 		0,
+	)
+	workflowTracker := observability.NewTracker(
+		&observability.PGWorkflowStore{Pool: pools.App},
+		logger,
+		0, 0,
 	)
 	mux := http.NewServeMux()
 
@@ -192,20 +197,34 @@ func buildRouter(
 			ServerName:       "domain-mcp-http",
 			ServerVer:        serverVersion,
 			SharedCache:      queryCacheLRU,
-			MetricsOnToolCall: func(tool, status string, dur float64) {
+			MetricsOnToolCall: func(ctx context.Context, tool, status string, dur float64) {
 				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
 				if status != "cache_hit" {
 					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
 				}
+				wfID := observability.WorkflowIDFromContext(ctx)
 				invocationLogger.Log(observability.Invocation{
 					ToolName:   tool,
 					Status:     status,
 					DurationMS: int(dur * 1000),
+					WorkflowID: wfID.String(),
 				})
+				if wfID != uuid.Nil {
+					workflowTracker.Touch(ctx, observability.WorkflowRow{
+						ID:              wfID,
+						Name:            observability.WorkflowNameFromContext(ctx),
+						Status:          observability.WorkflowRunning,
+						LastActivityAt:  time.Now(),
+						TotalToolCalls:  1,
+						TotalErrors:     boolToInt(status == "error"),
+						TotalDurationMS: int64(dur * 1000),
+					})
+				}
 				logger.Info("tool invocation",
 					slog.String("tool", tool),
 					slog.String("status", status),
-					slog.Int64("duration_ms", int64(dur*1000)))
+					slog.Int64("duration_ms", int64(dur*1000)),
+					slog.String("workflow_id", wfID.String()))
 			},
 			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
 			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
@@ -225,5 +244,13 @@ func buildRouter(
 			),
 		),
 	)
-	return finalHandler, invocationLogger, httpLogger, resourceCollector, fnLogger
+	return finalHandler, invocationLogger, httpLogger, resourceCollector, fnLogger, workflowTracker
+}
+
+// boolToInt returns 1 if cond, else 0. Small helper for tool invocation counters.
+func boolToInt(cond bool) int {
+	if cond {
+		return 1
+	}
+	return 0
 }

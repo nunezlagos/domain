@@ -21,15 +21,12 @@ func TestRunInstall_AbortsOutsideRepo(t *testing.T) {
 	defer func() { _ = os.Chdir(originalCwd) }()
 	require.NoError(t, os.Chdir(empty))
 
-
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	defer func() { os.Stderr = oldStderr }()
 
-
 	exit := runInstall([]string{"--non-interactive"})
-
 
 	_ = w.Close()
 	var buf bytes.Buffer

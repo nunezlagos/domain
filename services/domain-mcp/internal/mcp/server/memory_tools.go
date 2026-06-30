@@ -355,7 +355,6 @@ func (h *memoryHandlers) handleMemStats(ctx context.Context, req mcp.CallToolReq
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-
 	var prompts int64
 	_ = h.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)

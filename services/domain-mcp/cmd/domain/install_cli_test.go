@@ -1,5 +1,3 @@
-
-
 package main
 
 import (
@@ -16,11 +14,9 @@ func TestLoadEnvCascade_ShellWinsOverDotEnv(t *testing.T) {
 	defer os.Chdir(oldWd)
 	require.NoError(t, os.WriteFile(".env", []byte("DOMAIN_TEST_CASCADE=from_dotenv\n"), 0o600))
 
-
 	t.Setenv("DOMAIN_TEST_CASCADE", "from_shell")
 	loadEnvCascade()
 	require.Equal(t, "from_shell", os.Getenv("DOMAIN_TEST_CASCADE"))
-
 
 	require.NoError(t, os.Unsetenv("DOMAIN_TEST_CASCADE"))
 	loadEnvCascade()
@@ -36,7 +32,6 @@ func TestEnsureLocalEnvFile_SkipsIfEnvExists(t *testing.T) {
 	require.NoError(t, os.WriteFile(".env", []byte("EXISTING=1"), 0o600))
 
 	require.NoError(t, ensureLocalEnvFile())
-
 
 	data, _ := os.ReadFile(".env")
 	require.Equal(t, "EXISTING=1", string(data))
@@ -55,7 +50,6 @@ func TestEnsureLocalEnvFile_CopiesExampleIfMissing(t *testing.T) {
 	data, err := os.ReadFile(".env")
 	require.NoError(t, err)
 	require.Equal(t, "KEY=value\nFOO=bar", string(data))
-
 
 	info, err := os.Stat(".env")
 	require.NoError(t, err)

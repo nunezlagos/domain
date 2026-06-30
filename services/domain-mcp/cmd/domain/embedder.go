@@ -11,10 +11,10 @@ import (
 
 // chooseEmbedder elige el embedder según env. REQ-68.
 //
-//   DOMAIN_EMBEDDING_PROVIDER=noop     → NopEmbedder (default; vector zero)
-//   DOMAIN_EMBEDDING_PROVIDER=openai   → openai.Embedder con DOMAIN_OPENAI_API_KEY
-//   DOMAIN_EMBEDDING_PROVIDER=fake     → FakeEmbedder (determinístico,
-//                                        solo para tests E2E)
+//	DOMAIN_EMBEDDING_PROVIDER=noop     → NopEmbedder (default; vector zero)
+//	DOMAIN_EMBEDDING_PROVIDER=openai   → openai.Embedder con DOMAIN_OPENAI_API_KEY
+//	DOMAIN_EMBEDDING_PROVIDER=fake     → FakeEmbedder (determinístico,
+//	                                     solo para tests E2E)
 //
 // Si openai está pedido pero falta la key → log.Warn + NopEmbedder.
 // Se prefiere arrancar el server con búsqueda semántica desactivada

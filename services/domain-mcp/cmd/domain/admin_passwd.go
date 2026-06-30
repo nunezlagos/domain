@@ -15,9 +15,10 @@ import (
 // primera vez no hay forma de loguear si nadie tiene password seteado.
 //
 // Uso:
-//   domain admin-passwd <email>                       # solo password
-//   domain admin-passwd <email> --role=admin          # password + role
-//   domain admin-passwd <email> --role=admin --role=developer
+//
+//	domain admin-passwd <email>                       # solo password
+//	domain admin-passwd <email> --role=admin          # password + role
+//	domain admin-passwd <email> --role=admin --role=developer
 //
 // Lee password de stdin (no echo). Si STDIN no es tty, lee 1 línea.
 func runAdminPasswd(args []string) {

@@ -43,12 +43,7 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 		t.Skip("pasar -args -e2e para correr el E2E real")
 	}
 
-
 	chdirRepoRoot(t)
-
-
-
-
 
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -73,7 +68,6 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	})
 	require.Equal(t, 0, code, "install debe terminar exit 0")
 
-
 	credPath := filepath.Join(home, ".config", "domain", "credentials.json")
 	data, err := os.ReadFile(credPath)
 	require.NoError(t, err, "credentials.json debe existir post-install")
@@ -83,13 +77,11 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &creds))
 	require.NotEmpty(t, creds.APIKey, "API key generada automáticamente")
 
-
 	envPath := filepath.Join(home, ".config", "domain", "env")
 	envData, err := os.ReadFile(envPath)
 	require.NoError(t, err, "~/.config/domain/env debe existir")
 	require.Contains(t, string(envData), "DOMAIN_DATABASE_URL=")
 	require.Contains(t, string(envData), "DOMAIN_BASE_URL=")
-
 
 	ocPath := filepath.Join(home, ".config", "opencode", "opencode.json")
 	ocData, err := os.ReadFile(ocPath)
@@ -104,8 +96,6 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	first, _ := cmd[0].(string)
 	require.NotEmpty(t, first, "command[0] apunta al binario domain-mcp")
 	t.Logf("opencode command: %v", cmd)
-
-
 
 	if systemdUserAvailable() {
 		out, _ := exec.Command("systemctl", "--user", "is-active", serviceName).CombinedOutput()
@@ -143,7 +133,6 @@ func TestE2EInstall_ServerBootsWithoutEnv(t *testing.T) {
 	cmd.Stderr = &output
 	require.NoError(t, cmd.Start())
 	defer func() { _ = cmd.Process.Kill() }()
-
 
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {

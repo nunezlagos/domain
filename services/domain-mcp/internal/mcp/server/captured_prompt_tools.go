@@ -214,7 +214,6 @@ func (h *capturedPromptHandlers) handleUsageSummary(ctx context.Context, req mcp
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 
-
 	if projSlug == "" {
 		return mcp.NewToolResultError("debe pasarse project_slug"), nil
 	}

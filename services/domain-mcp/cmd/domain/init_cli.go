@@ -1,20 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -306,9 +289,6 @@ func runWorkflowResume(args []string) {
 		os.Exit(1)
 	}
 	defer pool.Close()
-
-
-
 
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDExploreHandler())

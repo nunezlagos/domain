@@ -1,18 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -30,7 +15,6 @@ func TestRepairOpencodeEmptyCommand_NoFile(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
 
-
 	require.False(t, repairOpencodeEmptyCommand())
 }
 
@@ -42,7 +26,6 @@ func TestRepairOpencodeEmptyCommand_NoMcpKey(t *testing.T) {
 
 	require.NoError(t, os.WriteFile("opencode.json", []byte(`{"mcp":{}}`), 0o600))
 
-
 	require.False(t, repairOpencodeEmptyCommand())
 }
 
@@ -52,15 +35,12 @@ func TestRepairOpencodeEmptyCommand_ValidCommand_NoRepair(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
 
-
 	binPath := dir + "/domain-mcp"
 	require.NoError(t, os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755))
 	content := `{"mcp":{"domain":{"command":["` + binPath + `"],"enabled":true,"type":"local"}}}`
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
 
-
 	require.False(t, repairOpencodeEmptyCommand())
-
 
 	data, _ := os.ReadFile("opencode.json")
 	require.Equal(t, content, string(data))
@@ -71,8 +51,6 @@ func TestRepairOpencodeEmptyCommand_MissingBinary_Repairs(t *testing.T) {
 	oldWd, _ := os.Getwd()
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
-
-
 
 	content := `{"mcp":{"domain":{"command":["/home/x/.local/bin/domain-mcp"],"enabled":true,"type":"local"}}}`
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
@@ -93,13 +71,10 @@ func TestRepairOpencodeEmptyCommand_EmptyString_Repairs(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
 
-
 	content := `{"mcp":{"domain":{"command":[""],"enabled":true,"type":"local"},"other":{"x":1}}}`
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
 
-
 	require.True(t, repairOpencodeEmptyCommand())
-
 
 	data, _ := os.ReadFile("opencode.json")
 	var doc map[string]any
@@ -118,7 +93,6 @@ func TestRepairOpencodeEmptyCommand_MissingField_Repairs(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
 
-
 	content := `{"mcp":{"domain":{"command":[],"enabled":true}}}`
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
 
@@ -130,7 +104,6 @@ func TestRepairOpencodeEmptyCommand_PreservesOtherKeys(t *testing.T) {
 	oldWd, _ := os.Getwd()
 	require.NoError(t, os.Chdir(dir))
 	defer os.Chdir(oldWd)
-
 
 	content := `{
 		"$schema": "https://opencode.ai/config.json",
@@ -144,7 +117,6 @@ func TestRepairOpencodeEmptyCommand_PreservesOtherKeys(t *testing.T) {
 	require.NoError(t, os.WriteFile("opencode.json", []byte(content), 0o600))
 
 	require.True(t, repairOpencodeEmptyCommand())
-
 
 	data, _ := os.ReadFile("opencode.json")
 	var doc map[string]any
@@ -169,7 +141,6 @@ func TestRepairOpencodeEmptyCommand_InvalidJSON_NoCrash(t *testing.T) {
 	defer os.Chdir(oldWd)
 
 	require.NoError(t, os.WriteFile("opencode.json", []byte("not valid json{{{"), 0o600))
-
 
 	require.False(t, repairOpencodeEmptyCommand())
 }

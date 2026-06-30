@@ -1,9 +1,5 @@
 //go:build integration
 
-
-
-
-
 package mcpserver_test
 
 import (
@@ -109,7 +105,6 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	f := setupOrchMCP(t)
 	defer f.cleanup()
 
-
 	startTxt := callOrchTool(t, f.srv, "domain_orchestrate", map[string]any{
 		"raw_text": "fix typo en README",
 		"mode":     "express",
@@ -142,7 +137,6 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	applyStepID := startRes.Plan.Steps[0].ID
 	verifyStepID := startRes.Plan.Steps[1].ID
 
-
 	applyTxt := callOrchTool(t, f.srv, "domain_orchestrate_phase_result", map[string]any{
 		"flow_run_step_id": applyStepID,
 		"output": map[string]any{
@@ -163,7 +157,6 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	require.Equal(t, "running", applyRes.FlowRunStatus)
 	require.Equal(t, "sdd-verify", applyRes.NextStepKey)
 
-
 	verifyTxt := callOrchTool(t, f.srv, "domain_orchestrate_phase_result", map[string]any{
 		"flow_run_step_id": verifyStepID,
 		"output": map[string]any{
@@ -178,7 +171,6 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(verifyTxt), &verifyRes))
 	require.Equal(t, "completed", verifyRes.StepStatus)
 	require.Equal(t, "completed", verifyRes.FlowRunStatus)
-
 
 	statusTxt := callOrchTool(t, f.srv, "domain_flow_status", map[string]any{
 		"flow_run_id": startRes.FlowRunID,

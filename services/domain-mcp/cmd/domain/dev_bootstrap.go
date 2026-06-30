@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 package main
 
 import (
@@ -98,12 +91,6 @@ Para prod usar el flow normal: domain server + "domain bootstrap --email".`)
 	}
 	defer pool.Close()
 
-
-
-
-
-
-
 	var orgID string
 	err = pool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ($1, $2)
@@ -118,7 +105,6 @@ Para prod usar el flow normal: domain server + "domain bootstrap --email".`)
 	}
 	fmt.Printf("✓ org id=%s slug=%s\n", orgID, orgSlug)
 
-
 	var userID string
 	err = pool.QueryRow(ctx,
 		`INSERT INTO users (email, name, role)
@@ -132,7 +118,6 @@ Para prod usar el flow normal: domain server + "domain bootstrap --email".`)
 		os.Exit(1)
 	}
 	fmt.Printf("✓ user id=%s email=%s\n", userID, userEmail)
-
 
 	if envOverride {
 		_, _ = pool.Exec(ctx,

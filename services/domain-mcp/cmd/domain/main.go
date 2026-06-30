@@ -347,11 +347,13 @@ func runServer() {
 	defer runners.SchedCancel()
 
 	queryCacheLRU := mcpQueryCache()
-	httpHandler, invocationLogger, httpLogger, resourceCollector, fnLogger := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
+	httpHandler, invocationLogger, httpLogger, resourceCollector, fnLogger, workflowTracker := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
 	defer invocationLogger.Close()
 	defer httpLogger.Close()
 	defer resourceCollector.Stop()
 	defer fnLogger.Close()
+	workflowTracker.Start(context.Background())
+	defer workflowTracker.Stop()
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),

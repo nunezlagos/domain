@@ -1,8 +1,3 @@
-
-
-
-
-
 package main
 
 import (
@@ -46,7 +41,6 @@ func runDomainDetect(ctx context.Context) int {
 		fmt.Fprintf(os.Stderr, "inventory: %v\n", err)
 		return 1
 	}
-
 
 	if projectID != "" && meta.CurrentBranch != "" {
 		if uerr := link.UpdateBranch(ctx, projectID, meta.CurrentBranch); uerr != nil {
@@ -147,5 +141,3 @@ func detectMemoryProvidersSummary() map[string]any {
 	}
 	return summary
 }
-
-

@@ -42,9 +42,6 @@ func checkProjectRootGuard(srcFlag string) (string, bool) {
 		return projectRoot, false
 	}
 
-
-
-
 	if srcFlag != "" {
 		absSrc, err := filepath.Abs(srcFlag)
 		if err != nil {

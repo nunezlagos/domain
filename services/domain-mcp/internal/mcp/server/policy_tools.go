@@ -19,10 +19,10 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	"nunezlagos/domain/internal/store/txctx"
 	policysvc "nunezlagos/domain/internal/service/policy"
 	projsvc "nunezlagos/domain/internal/service/project"
 	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type policiesReader interface {

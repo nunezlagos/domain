@@ -62,8 +62,6 @@ func registerClientTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	}
 }
 
-
-
 func toolClientCreate() mcp.Tool {
 	return mcp.NewTool("domain_client_create",
 		mcp.WithDescription("Crea un cliente/mandante en la org actual del principal. Util para consultoras que gestionan proyectos por cliente."),
@@ -165,8 +163,6 @@ func toolClientSetStatus() mcp.Tool {
 		),
 	)
 }
-
-
 
 func (h *clientHandlers) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.principal == nil {
@@ -356,9 +352,6 @@ func (h *clientHandlers) handleClientRestore(ctx context.Context, req mcp.CallTo
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-
-
-
 
 	if err := h.clients.Restore(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("restore client failed: %v", err)), nil

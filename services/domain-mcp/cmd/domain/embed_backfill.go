@@ -83,8 +83,6 @@ func runEmbedBackfill(args []string) {
 	if n, err := backfillTable(ctx, pool, embedder, orgID,
 		"knowledge_docs", "id", "body", "(SELECT id FROM knowledge_docs WHERE 1=0)", limit, dryRun); err != nil {
 
-
-
 		_ = err
 	} else {
 		totKn = n

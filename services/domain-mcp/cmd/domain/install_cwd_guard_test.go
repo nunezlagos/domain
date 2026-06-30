@@ -49,14 +49,12 @@ func findRepoRoot(t *testing.T) string {
 func TestCheckProjectRootGuard_FailsOutsideRepo(t *testing.T) {
 	empty := t.TempDir() // sin .env.example ni docker-compose.yml
 
-
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	defer func() { os.Stderr = oldStderr }()
 
 	_, ok := checkProjectRootGuard(empty)
-
 
 	_ = w.Close()
 	buf := make([]byte, 4096)
@@ -79,13 +77,11 @@ func TestCheckProjectRootGuard_SrcOverrideOK(t *testing.T) {
 	originalCwd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(originalCwd) }()
 
-
 	otherDir := t.TempDir()
 	require.NoError(t, os.Chdir(otherDir))
 
 	_, ok := checkProjectRootGuard(dir)
 	require.True(t, ok, "checkProjectRootGuard with --src should pass for valid dir")
-
 
 	cwd, _ := os.Getwd()
 	require.True(t, strings.HasSuffix(cwd, filepath.Base(dir)),
@@ -113,7 +109,6 @@ func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
 	require.False(t, ok, "checkProjectRootGuard should fail for nonexistent --src")
 	require.Contains(t, stderr, "could not determine cwd", "no stderr capture — el helper loguea distinto para path inexistente")
 
-
 }
 
 // TestCheckProjectRootGuard_OnlyOneMarker: con solo .env.example
@@ -124,7 +119,6 @@ func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
 func TestCheckProjectRootGuard_OnlyOneMarker(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.example"), []byte("EX"), 0o600))
-
 
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()

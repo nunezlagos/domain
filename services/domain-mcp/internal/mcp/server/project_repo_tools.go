@@ -13,8 +13,8 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	projsvc "nunezlagos/domain/internal/service/project"
+	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 )
 
 type projectRepoService interface {

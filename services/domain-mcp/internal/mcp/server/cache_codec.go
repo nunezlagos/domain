@@ -9,13 +9,6 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-
-
-
-
-
-
-
 // buildCacheKey: orgID + ":" + toolName + ":" + sha256(args ordenadas).
 func buildCacheKey(orgID, toolName string, req mcp.CallToolRequest) string {
 	args := req.GetArguments()
@@ -70,8 +63,6 @@ func decodeCachedResult(b []byte) *mcp.CallToolResult {
 	}
 	var r mcp.CallToolResult
 	if err := json.Unmarshal(b, &r); err != nil {
-
-
 
 		return nil
 	}

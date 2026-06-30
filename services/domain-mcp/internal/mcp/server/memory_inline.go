@@ -34,7 +34,6 @@ func (d *Deps) handleMemSave(ctx context.Context, req mcp.CallToolRequest) (*mcp
 	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
 	if err != nil {
 
-
 		proj, err = d.Projects.Create(ctx, projsvc.CreateInput{
 			OrganizationID: orgID,
 			Name:           projectSlug,

@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -94,19 +83,11 @@ func installUserService(baseURL string) error {
 	content := serviceUnitContent(bin)
 	port := portFromBaseURL(baseURL)
 
-
-
-
-
 	if existing, readErr := os.ReadFile(unitPath); readErr == nil && string(existing) == content {
 		if waitServerHealth(baseURL, 2*time.Second) == nil && listenerIsService(port) && !serviceRunsStaleBinary() {
 			return nil
 		}
 	}
-
-
-
-
 
 	if err := reapOrphanOnPort(port); err != nil {
 		return err
@@ -129,10 +110,7 @@ func installUserService(baseURL string) error {
 		}
 	}
 
-
-
 	if err := waitServerHealth(baseURL, 60*time.Second); err != nil {
-
 
 		if tail := journalTail(5); tail != "" {
 			return fmt.Errorf("%v | journal: %s", err, tail)
@@ -199,7 +177,6 @@ func reapOrphanOnPort(port int) error {
 	}
 	comm := procComm(pid)
 	if comm != "domain" {
-
 
 		return fmt.Errorf("puerto %d ocupado por otro proceso (%s, pid %d) — no lo toco; "+
 			"re-corré el install con --base-url http://localhost:%d (puerto libre sugerido)",

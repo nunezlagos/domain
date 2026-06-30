@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -22,7 +13,6 @@ import (
 // runTUI lanza el TUI bubbletea. Retorna exit code.
 func runTUI(args []string) int {
 
-
 	if len(args) > 0 {
 		idx := menu.IndexOf(args[0])
 		if idx >= 0 {
@@ -30,13 +20,11 @@ func runTUI(args []string) int {
 		}
 	}
 
-
 	if !isTerminal(os.Stdin) {
 		fmt.Fprintln(os.Stderr, "TUI requires a terminal. Use 'domain install', 'domain update', etc. for non-interactive mode.")
 		printUsage()
 		return 2
 	}
-
 
 	p := tea.NewProgram(app.New(), tea.WithAltScreen())
 	finalModel, err := p.Run()
@@ -66,7 +54,6 @@ func runTUIFeature(idx int) int {
 // isTerminal chequea si fd es un TTY.
 // Usa $TERM (heuristica) y os.Stat para evitar imports adicionales.
 func isTerminal(fd *os.File) bool {
-
 
 	term := os.Getenv("TERM")
 	if term == "" || term == "dumb" || term == "unknown" {

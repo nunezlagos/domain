@@ -284,8 +284,6 @@ func toolTicketLinkExternal() mcp.Tool {
 	)
 }
 
-
-
 func (h *ticketHandlers) requireDeps() error {
 	if h.principal == nil {
 		return fmt.Errorf("no authenticated principal")

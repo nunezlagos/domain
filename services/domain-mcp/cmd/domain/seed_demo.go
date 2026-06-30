@@ -91,14 +91,12 @@ type seedTotals struct {
 // es best-effort: si la tabla no existe, retorna nil.
 func assertOrgExists(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) error {
 
-
 	var exists bool
 	err := pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1 AND deleted_at IS NULL)`,
 		orgID,
 	).Scan(&exists)
 	if err != nil {
-
 
 		return nil
 	}
@@ -123,8 +121,6 @@ func withOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, fn func(p
 	return tx.Commit(ctx)
 }
 
-
-
 func demoUserID(ctx context.Context, tx pgx.Tx, email string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE email=$1 AND deleted_at IS NULL`, email).Scan(&id)
@@ -148,8 +144,6 @@ func demoClientID(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, slug string) 
 	).Scan(&id)
 	return id, err
 }
-
-
 
 var demoUsers = []struct{ email, name, role string }{
 	{"alice@demo.test", "Alice Dev", "admin"},
@@ -311,7 +305,6 @@ func seedDemoPolicies(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 
 func seedDemoKnowledge(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, tot *seedTotals) error {
 
-
 	docs := []struct {
 		projectSlug, slug, title, body, source string
 		tags                                   []string
@@ -367,9 +360,6 @@ func seedDemoTickets(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t
 		if err != nil {
 			return fmt.Errorf("alice not seeded: %w", err)
 		}
-
-
-
 
 		nextNum := map[string]int{}
 		for _, slug := range projects {

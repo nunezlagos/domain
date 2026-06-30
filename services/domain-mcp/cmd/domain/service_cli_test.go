@@ -1,5 +1,3 @@
-
-
 package main
 
 import (
@@ -17,14 +15,11 @@ const procNetTCPFixture = `  sl  local_address rem_address   st tx_queue rx_queu
 
 func TestListenInodesForPort_MatchesListenOnly(t *testing.T) {
 
-
 	inodes := listenInodesForPort(procNetTCPFixture, 8000)
 	require.Equal(t, []string{"123456"}, inodes)
 
-
 	inodes = listenInodesForPort(procNetTCPFixture, 8001)
 	require.Equal(t, []string{"654321"}, inodes)
-
 
 	require.Empty(t, listenInodesForPort(procNetTCPFixture, 9999))
 }

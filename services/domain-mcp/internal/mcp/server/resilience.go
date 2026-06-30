@@ -99,14 +99,12 @@ type ResilientWrapper struct {
 	defaults ToolBudget
 	now      func() time.Time
 
-
 	cacheLRU    CacheStore
 	cacheTTLs   map[string]time.Duration // tool -> ttl si es cacheable
 	invalidates map[string]bool          // tool -> true si invalida en escritura
 	orgIDFn     func() string            // accessor del orgID del principal vigente
 
-
-	metricsOnCall  func(tool, status string, durationSeconds float64)
+	metricsOnCall      func(ctx context.Context, tool, status string, durationSeconds float64)
 	metricsOnCacheHit  func()
 	metricsOnCacheMiss func()
 }
@@ -159,7 +157,7 @@ func (r *ResilientWrapper) SetInvalidating(toolName string) {
 // El wrapper no conoce de Prometheus; quien crea el wrapper (server.Tools)
 // pasa los hooks que tocan los Counter/Histogram del Registry.
 func (r *ResilientWrapper) SetMetricsHooks(
-	onCall func(tool, status string, dur float64),
+	onCall func(ctx context.Context, tool, status string, dur float64),
 	onCacheHit func(),
 	onCacheMiss func(),
 ) {
@@ -252,7 +250,6 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 		start := r.now()
 		b := r.budget(toolName)
 
-
 		var cb *cbState
 		if b.CBThreshold > 0 {
 			cb = r.breaker(toolName)
@@ -263,7 +260,6 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-
 		if b.CallsPerMinute > 0 {
 			if !r.state(toolName).allow(b.CallsPerMinute) {
 				return mcp.NewToolResultError(
@@ -271,7 +267,6 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 						toolName, b.CallsPerMinute)), nil
 			}
 		}
-
 
 		r.mu.Lock()
 		orgIDFn := r.orgIDFn
@@ -293,7 +288,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 					h()
 				}
 				if oc != nil {
-					oc(toolName, "cache_hit", time.Since(start).Seconds())
+					oc(ctx, toolName, "cache_hit", time.Since(start).Seconds())
 				}
 				return decodeCachedResult(cached), nil
 			}
@@ -316,7 +311,6 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			cb.record(failure, b.CBThreshold, cooldown, r.now())
 		}
 
-
 		success := err == nil && (result == nil || !result.IsError)
 		if success {
 			if cacheable && orgID != "" && cacheKey != "" {
@@ -329,7 +323,6 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			}
 		}
 
-
 		r.mu.Lock()
 		oc := r.metricsOnCall
 		r.mu.Unlock()
@@ -338,7 +331,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 			if err != nil || (result != nil && result.IsError) {
 				status = "error"
 			}
-			oc(toolName, status, time.Since(start).Seconds())
+			oc(ctx, toolName, status, time.Since(start).Seconds())
 		}
 		return result, err
 	}

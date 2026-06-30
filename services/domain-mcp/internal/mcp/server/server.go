@@ -14,6 +14,7 @@
 package mcpserver
 
 import (
+	"context"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -60,45 +61,42 @@ type Deps struct {
 	ObservationEdges *obssvc.EdgeService            // fase 1 memory graph — aristas tipadas
 	CodeGraph        *codegraphsvc.CodegraphService // fase 2 code graph — nodos/aristas de código
 	Projects         *projsvc.Service
-	Prompts         *promptsvc.Service
-	Timeline        *timelinesvc.Service
-	Search          *searchsvc.Service
-	Knowledge       *knowsvc.Service
-	Skills          *skillsvc.Service
-	SkillExecution  *skillsvc.ExecutionService // issue-12.3 domain_skill_execute
-	Agents          *agentsvc.Service
-	AgentRunner     *agentrunner.Runner
-	Crons           *cronsvc.Service           // issue-12.3 domain_cron_list
-	Clients         *clientsvc.Service         // clients/mandantes — consultoras gestionan proyectos por cliente
-	CapturedPrompts *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
-	ProjectRepos    *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
-	ProjectPolicies *projectpolicysvc.Service  // REQ-43 policies por proyecto
-	Tickets         *ticketsvc.Service         // REQ-51 sistema de tickets internos
-	Policies        *policysvc.Service         // issue-01.8 domain_policy_get/list
-	Flows           *flowsvc.Service
-	FlowRunner      *flowrunner.Runner
-	Orchestrator    *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
-	Hubuilder       *husvc.Service          // issue-04.7 interactive HU wizard
-	IssueSvc        *issuesvc.Service       // domain_issue_set_status — cierre SDD
-	Spec            *specsvc.Service        // domain_openspec_* — round-trip specs DB↔repo
-	Tasks           *tasksvc.Service        // domain_openspec_* — sync de tasks por checkbox
-	Intake          *intakesvc.Service      // issue-04.8 intake pipeline
-	ExtSync         *syncsvc.Service        // issue-04.9 external provider sync
-	PromptRouter    *prouter.Router         // issue-12.7 single-shot prompt router
-	WorkflowImport  *workflowimport.Service // issue-12.7 override de .md
-	Pool            *pgxpool.Pool           // para queries de agent_run_logs
-	Principal       *apikey.Principal       // resuelto al boot
-
-
+	Prompts          *promptsvc.Service
+	Timeline         *timelinesvc.Service
+	Search           *searchsvc.Service
+	Knowledge        *knowsvc.Service
+	Skills           *skillsvc.Service
+	SkillExecution   *skillsvc.ExecutionService // issue-12.3 domain_skill_execute
+	Agents           *agentsvc.Service
+	AgentRunner      *agentrunner.Runner
+	Crons            *cronsvc.Service           // issue-12.3 domain_cron_list
+	Clients          *clientsvc.Service         // clients/mandantes — consultoras gestionan proyectos por cliente
+	CapturedPrompts  *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
+	ProjectRepos     *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
+	ProjectPolicies  *projectpolicysvc.Service  // REQ-43 policies por proyecto
+	Tickets          *ticketsvc.Service         // REQ-51 sistema de tickets internos
+	Policies         *policysvc.Service         // issue-01.8 domain_policy_get/list
+	Flows            *flowsvc.Service
+	FlowRunner       *flowrunner.Runner
+	Orchestrator     *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
+	Hubuilder        *husvc.Service          // issue-04.7 interactive HU wizard
+	IssueSvc         *issuesvc.Service       // domain_issue_set_status — cierre SDD
+	Spec             *specsvc.Service        // domain_openspec_* — round-trip specs DB↔repo
+	Tasks            *tasksvc.Service        // domain_openspec_* — sync de tasks por checkbox
+	Intake           *intakesvc.Service      // issue-04.8 intake pipeline
+	ExtSync          *syncsvc.Service        // issue-04.9 external provider sync
+	PromptRouter     *prouter.Router         // issue-12.7 single-shot prompt router
+	WorkflowImport   *workflowimport.Service // issue-12.7 override de .md
+	Pool             *pgxpool.Pool           // para queries de agent_run_logs
+	Principal        *apikey.Principal       // resuelto al boot
 
 	Dispatcher *dispatch.Dispatcher
 	ServerName string
 	ServerVer  string
 
-
 	SharedCache CacheStore
 
-	MetricsOnToolCall  func(tool, status string, dur float64)
+	MetricsOnToolCall  func(ctx context.Context, tool, status string, dur float64)
 	MetricsOnCacheHit  func()
 	MetricsOnCacheMiss func()
 }
@@ -153,13 +151,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
 	}
 
-
-
-
 	if deps.SharedCache != nil {
 		wrap.SetCache(deps.SharedCache)
-
-
 
 		wrap.SetOrgIDAccessor(func() string {
 			if deps.Principal == nil {
@@ -167,7 +160,6 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			}
 			return deps.Principal.OrganizationID
 		})
-
 
 		readTTLs := map[string]time.Duration{
 			"domain_ticket_list":           5 * time.Second,
@@ -186,7 +178,6 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		for tool, ttl := range readTTLs {
 			wrap.SetCacheable(tool, ttl)
 		}
-
 
 		for _, w := range []string{
 			"domain_ticket_create", "domain_ticket_update", "domain_ticket_delete",
@@ -220,7 +211,6 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			CBThreshold: 5, CBCooldown: 30 * time.Second,
 		})
 	}
-
 
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
@@ -273,8 +263,6 @@ func New(deps Deps) *mcpgo.MCPServer {
 	srv.AddTools(Tools(deps)...)
 	return srv
 }
-
-
 
 func toolMemSave() mcp.Tool {
 	return mcp.NewTool("domain_mem_save",
@@ -331,8 +319,6 @@ func toolMemContext() mcp.Tool {
 		),
 	)
 }
-
-
 
 func toolPromptGet() mcp.Tool {
 	return mcp.NewTool("domain_prompt_get",

@@ -120,7 +120,6 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 	var calls atomic.Int64
 	wrapped := r.Wrap("cb_tool", failHandler(&calls))
 
-
 	for i := 0; i < 3; i++ {
 		_, err := wrapped(context.Background(), mcp.CallToolRequest{})
 		require.Error(t, err)
@@ -151,7 +150,6 @@ func TestCircuitBreaker_HalfOpenRecovery(t *testing.T) {
 	}
 	wrapped := r.Wrap("cb_recover", h)
 
-
 	for i := 0; i < 2; i++ {
 		_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
 	}
@@ -159,14 +157,12 @@ func TestCircuitBreaker_HalfOpenRecovery(t *testing.T) {
 	require.True(t, result.IsError)
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "circuit open")
 
-
 	current = base.Add(2 * time.Minute)
 	failing = false
 	result, err := wrapped(context.Background(), mcp.CallToolRequest{})
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.EqualValues(t, 1, oks.Load())
-
 
 	result, _ = wrapped(context.Background(), mcp.CallToolRequest{})
 	require.False(t, result.IsError)
@@ -210,7 +206,6 @@ func TestSabotage_CircuitBreaker_NonConsecutiveFailuresDontOpen(t *testing.T) {
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
 	}
 	wrapped := r.Wrap("cb_mixed", h)
-
 
 	for i := 0; i < 2; i++ {
 		fail = true

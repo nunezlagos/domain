@@ -1,8 +1,5 @@
 //go:build integration
 
-
-
-
 package mcpserver_test
 
 import (
@@ -89,8 +86,8 @@ func setupMCP(t *testing.T) *mcpFixture {
 			Versions: &skillsvc.VersionStore{Pool: pools.App},
 			Runner:   skillrunner.New(),
 		},
-		Agents: &agentsvc.Service{Pool: pools.App, Audit: rec},
-		Flows:  &flowsvc.Service{Pool: pools.App, Audit: rec},
+		Agents:   &agentsvc.Service{Pool: pools.App, Audit: rec},
+		Flows:    &flowsvc.Service{Pool: pools.App, Audit: rec},
 		Crons:    &cronsvc.Service{Pool: pools.App, Audit: rec},
 		Policies: policyS,
 		Pool:     pools.App,
@@ -230,7 +227,6 @@ func TestMCP_MemSave_AutoCreatesProject(t *testing.T) {
 		"content":      "primera memoria del proyecto nuevo",
 	})
 	require.Contains(t, out, "id", "save con project nuevo debe funcionar (auto-create)")
-
 
 	listOut := callTool(t, f.srv, "domain_project_list", map[string]any{})
 	require.Contains(t, listOut, "proyecto-nuevo")

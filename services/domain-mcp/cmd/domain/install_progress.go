@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 package main
 
 import (
@@ -29,10 +17,10 @@ type InstallStep struct {
 type StepStatus string
 
 const (
-	StepOK       StepStatus = "ok"
-	StepSkipped  StepStatus = "skipped"
-	StepWarning  StepStatus = "warning"
-	StepFailed   StepStatus = "failed"
+	StepOK      StepStatus = "ok"
+	StepSkipped StepStatus = "skipped"
+	StepWarning StepStatus = "warning"
+	StepFailed  StepStatus = "failed"
 )
 
 // InstallProgress es el reporter del wizard. No es thread-safe;

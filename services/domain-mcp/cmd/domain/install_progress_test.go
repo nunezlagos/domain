@@ -1,8 +1,3 @@
-
-
-
-
-
 package main
 
 import (
@@ -52,13 +47,9 @@ func TestInstallProgress_EndStep_WithoutStartStep_NoPanic(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewInstallProgress(3, &buf)
 
-
-
-
 	require.NotPanics(t, func() {
 		p.EndStep(StepOK, "orphan")
 	})
-
 
 	p.Summary()
 	require.Contains(t, buf.String(), "total=0")
@@ -69,10 +60,14 @@ func TestInstallProgress_EndStep_WithoutStartStep_NoPanic(t *testing.T) {
 func TestInstallProgress_Summary_CountsCorrect(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewInstallProgress(4, &buf)
-	p.StartStep("a"); p.EndStep(StepOK, "ok")
-	p.StartStep("b"); p.EndStep(StepOK, "ok")
-	p.StartStep("c"); p.EndStep(StepSkipped, "no change")
-	p.StartStep("d"); p.EndStep(StepFailed, "docker not running")
+	p.StartStep("a")
+	p.EndStep(StepOK, "ok")
+	p.StartStep("b")
+	p.EndStep(StepOK, "ok")
+	p.StartStep("c")
+	p.EndStep(StepSkipped, "no change")
+	p.StartStep("d")
+	p.EndStep(StepFailed, "docker not running")
 
 	p.Summary()
 
@@ -86,8 +81,10 @@ func TestInstallProgress_Summary_CountsCorrect(t *testing.T) {
 func TestInstallProgress_Summary_ListsFailedSteps(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewInstallProgress(2, &buf)
-	p.StartStep("Migrate"); p.EndStep(StepFailed, "schema mismatch")
-	p.StartStep("Seed"); p.EndStep(StepOK, "ok")
+	p.StartStep("Migrate")
+	p.EndStep(StepFailed, "schema mismatch")
+	p.StartStep("Seed")
+	p.EndStep(StepOK, "ok")
 
 	p.Summary()
 
@@ -117,14 +114,12 @@ func TestInstallProgress_Steps_ReturnsCopy(t *testing.T) {
 	require.Equal(t, StepOK, steps[0].Status)
 	require.Equal(t, "ok", steps[0].Summary)
 
-
 	steps[0].Name = "mutated"
 	steps2 := p.Steps()
 	require.Equal(t, "x", steps2[0].Name, "Steps() must return a defensive copy")
 }
 
 func TestStatusGlyph_AllStatuses(t *testing.T) {
-
 
 	cases := map[StepStatus]string{
 		StepOK:      "✓",

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	mcpgo "github.com/mark3labs/mcp-go/server"
@@ -334,7 +335,24 @@ func main() {
 		0,
 	)
 	defer fnLogger.Close()
+	workflowTracker := observability.NewTracker(
+		&observability.PGWorkflowStore{Pool: pools.App},
+		slog.Default(),
+		0, 0,
+	)
+	workflowTracker.Start(context.Background())
+	defer workflowTracker.Stop()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	workflowStore := &observability.PGWorkflowStore{}
+	workflowStore.SetPool(pools.App)
+
+	boolToIntLocal := func(cond bool) int {
+		if cond {
+			return 1
+		}
+		return 0
+	}
 
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations:     observations,
@@ -372,16 +390,30 @@ func main() {
 		Dispatcher:       mcpDispatcher, // issue-35.1
 		ServerName:       "domain-mcp",
 		ServerVer:        Version,
-		MetricsOnToolCall: func(tool, status string, dur float64) {
+		MetricsOnToolCall: func(ctx context.Context, tool, status string, dur float64) {
+			wfID := observability.WorkflowIDFromContext(ctx)
 			invLogger.Log(observability.Invocation{
 				ToolName:   tool,
 				Status:     status,
 				DurationMS: int(dur * 1000),
+				WorkflowID: wfID.String(),
 			})
+			if wfID != uuid.Nil {
+				workflowTracker.Touch(ctx, observability.WorkflowRow{
+					ID:              wfID,
+					Name:            observability.WorkflowNameFromContext(ctx),
+					Status:          observability.WorkflowRunning,
+					LastActivityAt:  time.Now(),
+					TotalToolCalls:  1,
+					TotalErrors:     boolToIntLocal(status == "error"),
+					TotalDurationMS: int64(dur * 1000),
+				})
+			}
 			slog.Info("tool invocation",
 				slog.String("tool", tool),
 				slog.String("status", status),
-				slog.Int64("duration_ms", int64(dur*1000)))
+				slog.Int64("duration_ms", int64(dur*1000)),
+				slog.String("workflow_id", wfID.String()))
 		},
 	})
 

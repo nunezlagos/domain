@@ -23,7 +23,7 @@ func TestWebhookNotifier_Send_PostsJSONPayload(t *testing.T) {
 	defer srv.Close()
 
 	wn := &WebhookNotifier{Client: srv.Client(), Retries: 2, sleep: noSleep}
-	cfg := AlertConfig{Channel: "webhook", ChannelConfig: map[string]string{"url": srv.URL}}
+	cfg := AlertConfig{Channel: "webhook", ChannelConfig: map[string]any{"url": srv.URL}}
 	if err := wn.Send(context.Background(), sqlEvent("error"), cfg); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestWebhookNotifier_Send_RetriesUntilSuccess(t *testing.T) {
 	defer srv.Close()
 
 	wn := &WebhookNotifier{Client: srv.Client(), Retries: 2, sleep: noSleep}
-	cfg := AlertConfig{Channel: "webhook", ChannelConfig: map[string]string{"url": srv.URL}}
+	cfg := AlertConfig{Channel: "webhook", ChannelConfig: map[string]any{"url": srv.URL}}
 	if err := wn.Send(context.Background(), sqlEvent("error"), cfg); err != nil {
 		t.Fatalf("Send should succeed on 3rd attempt: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestNtfyNotifier_Send_PostsToTopicWithTitle(t *testing.T) {
 	defer srv.Close()
 
 	nn := &NtfyNotifier{Client: srv.Client(), BaseURL: srv.URL, Retries: 1, sleep: noSleep}
-	cfg := AlertConfig{Channel: "ntfy", ChannelConfig: map[string]string{"topic": "domain-alerts"}}
+	cfg := AlertConfig{Channel: "ntfy", ChannelConfig: map[string]any{"topic": "domain-alerts"}}
 	if err := nn.Send(context.Background(), sqlEvent("critical"), cfg); err != nil {
 		t.Fatalf("Send: %v", err)
 	}

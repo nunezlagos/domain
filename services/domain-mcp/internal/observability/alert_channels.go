@@ -83,7 +83,7 @@ func NewWebhookNotifier() *WebhookNotifier {
 
 // Send postea el payload JSON. Requiere ChannelConfig["url"].
 func (w *WebhookNotifier) Send(ctx context.Context, e ErrorEvent, cfg AlertConfig) error {
-	url := cfg.ChannelConfig["url"]
+	url := cfgStr(cfg.ChannelConfig, "url")
 	if url == "" {
 		return fmt.Errorf("webhook: missing url in channel_config")
 	}
@@ -105,7 +105,7 @@ func NewNtfyNotifier() *NtfyNotifier {
 
 // Send publica el mensaje al topic. Topic de ChannelConfig["topic"] o DOMAIN_NTFY_TOPIC.
 func (n *NtfyNotifier) Send(ctx context.Context, e ErrorEvent, cfg AlertConfig) error {
-	topic := cfg.ChannelConfig["topic"]
+	topic := cfgStr(cfg.ChannelConfig, "topic")
 	if topic == "" {
 		topic = os.Getenv("DOMAIN_NTFY_TOPIC")
 	}

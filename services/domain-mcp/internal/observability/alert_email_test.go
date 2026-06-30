@@ -18,7 +18,7 @@ func TestEmailNotifier_Send_CallsSendMailWithSubject(t *testing.T) {
 			return nil
 		},
 	}
-	cfg := AlertConfig{Channel: "email", ChannelConfig: map[string]string{"to": "ops@local"}}
+	cfg := AlertConfig{Channel: "email", ChannelConfig: map[string]any{"to": "ops@local"}}
 	if err := em.Send(context.Background(), sqlEvent("error"), cfg); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestEmailNotifier_Send_MissingTo_Errors(t *testing.T) {
 
 func TestEmailNotifier_Send_MissingHost_Errors(t *testing.T) {
 	em := &EmailNotifier{send: func(string, smtp.Auth, string, []string, []byte) error { return nil }}
-	cfg := AlertConfig{Channel: "email", ChannelConfig: map[string]string{"to": "ops@local"}}
+	cfg := AlertConfig{Channel: "email", ChannelConfig: map[string]any{"to": "ops@local"}}
 	if err := em.Send(context.Background(), sqlEvent("error"), cfg); err == nil {
 		t.Fatal("missing host must error")
 	}

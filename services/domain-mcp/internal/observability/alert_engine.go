@@ -14,12 +14,22 @@ import (
 )
 
 // AlertConfig describe cuando y por donde alertar. Espejo de la tabla alert_configs.
+// ChannelConfig es map[string]any porque proviene de una columna jsonb que puede
+// contener valores no-string; usar cfgStr para extraer claves string de forma segura.
 type AlertConfig struct {
 	Category        Category
 	SeverityMin     string
 	Channel         string
-	ChannelConfig   map[string]string
+	ChannelConfig   map[string]any
 	ThrottleSeconds int
+}
+
+// cfgStr extrae un valor string de un map de config jsonb; "" si falta o no es string.
+func cfgStr(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
 }
 
 // Notifier envia una alerta por un canal concreto (webhook, ntfy, email...).

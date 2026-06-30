@@ -7,6 +7,7 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,7 +47,9 @@ func (s *PGAlertConfigStore) LoadConfigs(ctx context.Context) ([]AlertConfig, er
 		}
 		cfg.Category = Category(cat)
 		if len(params) > 0 {
-			_ = json.Unmarshal(params, &cfg.ChannelConfig)
+			if err := json.Unmarshal(params, &cfg.ChannelConfig); err != nil {
+				return nil, fmt.Errorf("decode channel_config (%s/%s): %w", cat, cfg.Channel, err)
+			}
 		}
 		out = append(out, cfg)
 	}

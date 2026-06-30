@@ -52,6 +52,11 @@ func (t *ErrorTracker) SetAlertHook(h AlertHook) { t.onAlert = h }
 
 // Record categoriza el error, calcula su fingerprint y lo deduplica.
 // Si el upsert falla, loguea WARN y NO dispara la alerta.
+//
+// HOTPATH: Record hace un upsert SINCRONO. NO lo enganches a paths de alta
+// frecuencia (pgx TraceQueryEnd, middleware HTTP por request) hasta refactorizar
+// a async (queue + workers, como SlowQueryTracer): un upsert por evento en el
+// hot-path degrada latencia y satura error_events ante cascadas (ej. 25P02).
 func (t *ErrorTracker) Record(ctx context.Context, err error, source string) {
 	if err == nil {
 		return

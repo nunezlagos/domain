@@ -33,7 +33,7 @@ func NewEmailNotifier() *EmailNotifier {
 
 // Send arma el mensaje y lo envia. Requiere Host y ChannelConfig["to"].
 func (em *EmailNotifier) Send(_ context.Context, e ErrorEvent, cfg AlertConfig) error {
-	to := cfg.ChannelConfig["to"]
+	to := cfgStr(cfg.ChannelConfig, "to")
 	if to == "" {
 		return fmt.Errorf("email: missing 'to' in channel_config")
 	}

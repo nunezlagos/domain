@@ -8,6 +8,7 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -27,12 +28,13 @@ const (
 const selfHealMaxAttempts = 3
 
 // KnownError es la entrada de known_errors con su remediacion.
+// ActionParams es map[string]any porque proviene de una columna jsonb.
 type KnownError struct {
 	Fingerprint    []byte
 	Name           string
 	Recoverable    bool
 	AutoHealAction string
-	ActionParams   map[string]string
+	ActionParams   map[string]any
 }
 
 // KnownErrorStore resuelve un fingerprint contra known_errors.
@@ -41,7 +43,7 @@ type KnownErrorStore interface {
 }
 
 // HealFunc ejecuta una accion de recuperacion concreta.
-type HealFunc func(ctx context.Context, params map[string]string) error
+type HealFunc func(ctx context.Context, params map[string]any) error
 
 // SelfHealer dispara acciones de recuperacion para errores conocidos.
 type SelfHealer struct {
@@ -133,7 +135,9 @@ func (s *PGKnownErrorStore) LookupKnownError(ctx context.Context, fingerprint []
 		return nil, false, err
 	}
 	if len(params) > 0 {
-		_ = json.Unmarshal(params, &ke.ActionParams)
+		if uerr := json.Unmarshal(params, &ke.ActionParams); uerr != nil {
+			return nil, false, fmt.Errorf("decode action_params (%s): %w", ke.Name, uerr)
+		}
 	}
 	return &ke, true, nil
 }

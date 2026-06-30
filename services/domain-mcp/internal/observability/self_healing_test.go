@@ -33,7 +33,7 @@ func knownRetry() *KnownError {
 
 func TestSelfHealer_Heal_RunsActionForKnownRecoverable(t *testing.T) {
 	var calls int32
-	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]any) error {
 		atomic.AddInt32(&calls, 1)
 		return nil
 	})
@@ -45,7 +45,7 @@ func TestSelfHealer_Heal_RunsActionForKnownRecoverable(t *testing.T) {
 
 func TestSelfHealer_Heal_SkipsUnknownFingerprint(t *testing.T) {
 	var calls int32
-	h := newHealer(&fakeKnownStore{hit: false}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{hit: false}, func(context.Context, map[string]any) error {
 		atomic.AddInt32(&calls, 1)
 		return nil
 	})
@@ -59,7 +59,7 @@ func TestSelfHealer_Heal_SkipsNonRecoverable(t *testing.T) {
 	var calls int32
 	ke := knownRetry()
 	ke.Recoverable = false
-	h := newHealer(&fakeKnownStore{ke: ke, hit: true}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{ke: ke, hit: true}, func(context.Context, map[string]any) error {
 		atomic.AddInt32(&calls, 1)
 		return nil
 	})
@@ -72,7 +72,7 @@ func TestSelfHealer_Heal_SkipsNonRecoverable(t *testing.T) {
 func TestSelfHealer_Heal_SkipsActionNone(t *testing.T) {
 	var calls int32
 	ke := &KnownError{Name: "manual", Recoverable: true, AutoHealAction: "none"}
-	h := newHealer(&fakeKnownStore{ke: ke, hit: true}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{ke: ke, hit: true}, func(context.Context, map[string]any) error {
 		atomic.AddInt32(&calls, 1)
 		return nil
 	})
@@ -84,7 +84,7 @@ func TestSelfHealer_Heal_SkipsActionNone(t *testing.T) {
 
 func TestSelfHealer_Heal_RetriesUpToMaxThenAborts(t *testing.T) {
 	var calls int32
-	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]any) error {
 		atomic.AddInt32(&calls, 1)
 		return errors.New("still failing")
 	})
@@ -96,7 +96,7 @@ func TestSelfHealer_Heal_RetriesUpToMaxThenAborts(t *testing.T) {
 
 func TestSelfHealer_Heal_StopsOnFirstSuccess(t *testing.T) {
 	var calls int32
-	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]string) error {
+	h := newHealer(&fakeKnownStore{ke: knownRetry(), hit: true}, func(context.Context, map[string]any) error {
 		if atomic.AddInt32(&calls, 1) < 2 {
 			return errors.New("first fails")
 		}

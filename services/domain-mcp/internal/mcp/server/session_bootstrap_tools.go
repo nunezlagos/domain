@@ -350,8 +350,8 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		projID,
 	).Scan(&openTickets)
 	_ = h.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM user_stories
-		   WHERE project_id = $1 AND deleted_at IS NULL
+		`SELECT COUNT(*) FROM issues
+		   WHERE project_id = $1
 		     AND status IN ('proposed','active')`,
 		projID,
 	).Scan(&openIssues)

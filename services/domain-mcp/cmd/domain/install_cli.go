@@ -1156,6 +1156,8 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.ProjectTemplatesSeeder{})
 	registry.Register(&seeds.MCPProvidersSeeder{})
 
+	registry.Register(&seeds.KnownErrorsSeeder{})
+
 	registry.Register(&seeds.SkillsCatalogSeeder{})
 	registry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	registry.Register(&seeds.FlowsCatalogSeeder{})

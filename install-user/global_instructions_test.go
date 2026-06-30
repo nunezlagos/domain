@@ -48,6 +48,47 @@ func TestInstallOpencodeGlobalInstruction_Idempotent(t *testing.T) {
 	}
 }
 
+// installGlobalInstructions escribe el cuerpo real en ~/.claude/domain.md y deja
+// SOLO un @import en ~/.claude/CLAUDE.md (no el cuerpo completo). issue-54.1.
+func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := Platform{OS: "linux"}.Paths()
+
+	if err := installGlobalInstructions(paths, home, "20260101T000000Z"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	dm, err := os.ReadFile(claudeDomainMdPath(home))
+	if err != nil {
+		t.Fatalf("read domain.md: %v", err)
+	}
+	if len(dm) == 0 {
+		t.Fatal("domain.md quedó vacío")
+	}
+
+	cm, err := os.ReadFile(claudeGlobalPath(home))
+	if err != nil {
+		t.Fatalf("read CLAUDE.md: %v", err)
+	}
+	if !strings.Contains(string(cm), "@domain.md") {
+		t.Fatal("CLAUDE.md no tiene el @import a domain.md")
+	}
+	// El cuerpo real NO debe duplicarse dentro de CLAUDE.md: solo el import.
+	if strings.Contains(string(cm), "@domain.md\n") && len(cm) > len(dm) {
+		t.Fatal("CLAUDE.md parece tener el cuerpo completo en vez de solo el import")
+	}
+
+	// Idempotente: segunda corrida no crea backups nuevos.
+	if err := installGlobalInstructions(paths, home, "20260202T000000Z"); err != nil {
+		t.Fatalf("2a corrida: %v", err)
+	}
+	bk, _ := filepath.Glob(claudeDomainMdPath(home) + ".backup-*")
+	if len(bk) != 0 {
+		t.Fatalf("corrida idempotente no debe backupear domain.md, hay %v", bk)
+	}
+}
+
 // upsertDomainBlock en contenido vacío: escribe solo el bloque.
 func TestUpsertDomainBlock_InsertIntoEmpty(t *testing.T) {
 	out := upsertDomainBlock("")

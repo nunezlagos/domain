@@ -16,9 +16,29 @@ const (
 )
 
 // domainBlock arma la sección gestionada: marcadores + el template embebido.
+// Se usa para el archivo dedicado de OpenCode (que se lee completo).
 func domainBlock() string {
 	body := strings.TrimRight(string(claudeGlobalMD), "\n")
 	return domainBlockStart + "\n" + body + "\n" + domainBlockEnd
+}
+
+// domainFileBody es el contenido del archivo dedicado ~/.claude/domain.md
+// (100% gestionado por domain, sin marcadores: el archivo es todo de domain).
+func domainFileBody() string {
+	return strings.TrimRight(string(claudeGlobalMD), "\n") + "\n"
+}
+
+// domainImportBlock es lo que va DENTRO de los marcadores en ~/.claude/CLAUDE.md:
+// un @import al archivo dedicado domain.md. Mantiene el contenido real FUERA del
+// CLAUDE.md (en domain.md, nombre propio) para que excluir CLAUDE.md/AGENTS.md de
+// proyecto NO neutralice el bloque global de domain. issue-54.1.
+func domainImportBlock() string {
+	return domainBlockStart + "\n@domain.md\n" + domainBlockEnd
+}
+
+// claudeDomainMdPath es ~/.claude/domain.md (archivo dedicado de domain).
+func claudeDomainMdPath(home string) string {
+	return filepath.Join(home, ".claude", "domain.md")
 }
 
 // upsertDomainBlock devuelve el contenido con la sección domain insertada o
@@ -31,7 +51,7 @@ func domainBlock() string {
 // Es idempotente: aplicarlo dos veces sobre su propia salida no duplica ni
 // muta nada.
 func upsertDomainBlock(content string) string {
-	block := domainBlock()
+	block := domainImportBlock()
 	start := strings.Index(content, domainBlockStart)
 	end := strings.Index(content, domainBlockEnd)
 	if start != -1 && end != -1 && end > start {
@@ -48,7 +68,7 @@ func upsertDomainBlock(content string) string {
 // hasUpToDateDomainBlock indica si el contenido ya tiene la sección domain con
 // el bloque actual (para reportar no-op vs upgrade).
 func hasUpToDateDomainBlock(content string) bool {
-	return strings.Contains(content, domainBlock())
+	return strings.Contains(content, domainImportBlock())
 }
 
 // claudeGlobalPath es el CLAUDE.md global de Claude Code (~/.claude/CLAUDE.md):
@@ -64,8 +84,29 @@ func claudeGlobalPath(home string) string {
 // Además, si existe la config global de OpenCode, registra el mismo archivo
 // como instruction global de OpenCode (ver installOpencodeGlobalInstruction).
 func installGlobalInstructions(paths Paths, home, timestamp string) error {
-	path := claudeGlobalPath(home)
+	// 1. Contenido real de domain en archivo dedicado ~/.claude/domain.md
+	//    (nombre propio, 100% gestionado: se sobreescribe entero). Backup si cambia.
+	domainPath := claudeDomainMdPath(home)
+	body := domainFileBody()
+	if cur, existed, err := readIfExists(domainPath); err != nil {
+		return fmt.Errorf("read %s: %w", domainPath, err)
+	} else if !existed || cur != body {
+		if err := os.MkdirAll(filepath.Dir(domainPath), 0o755); err != nil {
+			return fmt.Errorf("mkdir ~/.claude: %w", err)
+		}
+		if existed {
+			if _, err := backupIfExists(domainPath, timestamp); err != nil {
+				return fmt.Errorf("backup domain.md: %w", err)
+			}
+		}
+		if err := os.WriteFile(domainPath, []byte(body), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", domainPath, err)
+		}
+	}
 
+	// 2. ~/.claude/CLAUDE.md: solo el bloque marcado con @domain.md, preservando
+	//    el contenido del usuario fuera de los marcadores.
+	path := claudeGlobalPath(home)
 	content, existed, err := readIfExists(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)

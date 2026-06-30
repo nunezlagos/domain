@@ -8,10 +8,15 @@
 // devuelve "transaction aborted before commit" sin saber QUÉ falló.
 //
 // Solución: un pgx.QueryTracer global (instalado en el pool via
-// ConnConfig.Tracer) escribe el ÚLTIMO error SQL de cada query a un
-// SQLErrorLog atado al ctx. El wireup, antes de Commit, chequea
-// TxStatus() del conn; si es 'E' (aborted), lee el SQLErrorLog y lo
-// surface al cliente.
+// ConnConfig.Tracer) acumula TODOS los errores SQL de la tx en un
+// SQLErrorLog append-only atado al ctx. El wireup, antes de Commit,
+// chequea TxStatus() del conn; si es 'E' (aborted), lee el SQLErrorLog
+// y surface la cadena entera al cliente.
+//
+// Diseño append-only (no last-write-wins) porque en cascades la primera
+// query falla con error real (42P01, 42703, 42501) y las siguientes con
+// SQLSTATE 25P02 (tx aborted); si tomáramos solo el último, expondríamos
+// el síntoma genérico y ocultaríamos la causa raíz. Ver HU issue-51.1.
 //
 // El tracer NO reemplaza el manejo de errores del handler — sigue siendo
 // responsabilidad del handler devolver err en queries criticas. Esto es
@@ -28,35 +33,37 @@ import (
 // txErrLogKey es la key de ctx para el SQLErrorLog per-call.
 type txErrLogKey struct{}
 
-// SQLErrorLog captura el ÚLTIMO error SQL dentro de la tx actual.
+// SQLErrorLog acumula los errores SQL de la tx en orden de aparición.
 // Se accede desde el tracer (write) y el wireup (read). Mutex interno
 // para soportar pgxpool que puede multiplexar queries a distintos conns
 // bajo el mismo ctx si el caller lo permite (raro, pero Defense-in-Depth).
 type SQLErrorLog struct {
-	mu  sync.Mutex
-	err error
-	sql string
+	mu   sync.Mutex
+	errs []error
+	sqls []string
 }
 
-// Record guarda el (err, sql) si err != nil. Last-write-wins — el tracer
-// corre async al Exec y la ÚLTIMA query que falla es la que importa para
-// diagnosticar un rollback.
+// Record guarda el (err, sql) si err != nil. Append-only: cada error
+// nuevo se agrega al final del slice en orden cronológico. Soporta el
+// caso cascade donde el primer error es la causa raíz y los siguientes
+// son 25P02 (síntoma genérico que NO debe ocultar el primero).
 func (l *SQLErrorLog) Record(err error, sql string) {
 	if err == nil {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.err = err
-	l.sql = sql
+	l.errs = append(l.errs, err)
+	l.sqls = append(l.sqls, sql)
 }
 
-// Snapshot devuelve (err, sql) actuales. Err puede ser nil si ninguna
-// query fallo dentro de esta tx.
-func (l *SQLErrorLog) Snapshot() (error, string) {
+// Snapshot devuelve los errores y SQLs acumulados en orden de inserción.
+// Si ninguna query falló, devuelve slices vacíos (no nil) para que el
+// caller pueda hacer `len(errs) > 0` sin chequeo extra por nil.
+func (l *SQLErrorLog) Snapshot() ([]error, []string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.err, l.sql
+	return l.errs, l.sqls
 }
 
 // withSQLErrorLog devuelve un ctx donde podemos registrar errores SQL.

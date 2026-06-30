@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -82,10 +83,8 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 			// pgx en si no dice qué falló.
 			if status := tx.Conn().PgConn().TxStatus(); status == 'E' {
 				if log := sqLErrorLogFromContext(txCtx); log != nil {
-					if lastErr, lastSQL := log.Snapshot(); lastErr != nil {
-						return mcp.NewToolResultError(fmt.Sprintf(
-							"transaction aborted before commit; last SQL error: %v\n  in query: %s",
-							lastErr, truncateSQL(lastSQL, 240))), nil
+					if errs, sqls := log.Snapshot(); len(errs) > 0 {
+						return mcp.NewToolResultError(formatSQLErrorChain(errs, sqls, "transaction aborted before commit")), nil
 					}
 				}
 				return mcp.NewToolResultError("transaction aborted before commit; no SQL error captured by tracer (¿pool sin ConnConfig.Tracer?)"), nil
@@ -96,10 +95,8 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 					// 'E' pero Commit devuelve ROLLBACK — p.ej. trigger ON COMMIT o
 					// constraint deferrable). Caer al SQL log igual para diagnóstico.
 					if log := sqLErrorLogFromContext(txCtx); log != nil {
-						if lastErr, lastSQL := log.Snapshot(); lastErr != nil {
-							return mcp.NewToolResultError(fmt.Sprintf(
-								"transaction aborted before commit (Rollback); last SQL error: %v\n  in query: %s",
-								lastErr, truncateSQL(lastSQL, 240))), nil
+						if errs, sqls := log.Snapshot(); len(errs) > 0 {
+							return mcp.NewToolResultError(formatSQLErrorChain(errs, sqls, "transaction aborted before commit (Rollback)")), nil
 						}
 					}
 					return mcp.NewToolResultError(fmt.Sprintf("transaction aborted before commit (Rollback): %v", cerr)), nil
@@ -119,6 +116,20 @@ func truncateSQL(s string, n int) string {
 		return s
 	}
 	return s[:n] + "... (truncated)"
+}
+
+// formatSQLErrorChain arma el mensaje que el wireup surface al cliente MCP
+// cuando la tx aborta. Lista TODOS los errores capturados por el tracer en
+// orden de aparicion, con indice [i/N] y SQL truncado. El primero es la
+// causa raiz cuando hay cascade de 25P02 (ver HU issue-51.1).
+func formatSQLErrorChain(errs []error, sqls []string, prefix string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s; %d SQL error(s) captured:\n", prefix, len(errs))
+	total := len(errs)
+	for i, e := range errs {
+		fmt.Fprintf(&sb, "  [%d/%d] %v\n  in query: %s\n", i+1, total, e, truncateSQL(sqls[i], 240))
+	}
+	return sb.String()
 }
 
 // q retorna la tx del contexto (wireup activo) o el Pool como fallback.

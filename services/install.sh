@@ -244,14 +244,28 @@ log "6/8  Building + starting services (esto puede tardar 1-3 min)..."
 cd "$INSTALL_DIR/services"
 # Makefile usa --env-file .env (relativo al CWD). El .env real está en
 # $INSTALL_DIR/.env (parent). Symlink para que make lo encuentre.
-[[ -L .env ]] || ln -sf ../.env .env
+# Si por error alguien reemplazo el symlink con un archivo regular (ej.
+# editandolo a mano), ln -sf lo sobreescribe silenciosamente → perdemos
+# la sincronia con $INSTALL_DIR/.env y futuros updates no se propagan.
+# Detectamos el caso, respaldamos el archivo y dejamos el symlink.
+if [[ -e .env ]] && [[ ! -L .env ]]; then
+  warn "services/.env era un archivo regular (no symlink) — respaldando y recreando como symlink a ../.env"
+  mv .env ".env.broken-symlink.$(date +%Y%m%d-%H%M%S)"
+fi
+ln -sfn ../.env .env
 # docker-compose.yml de cada servicio busca .env en su propio directorio.
 # Sin esto, variables como APP_USER_PASSWORD quedan vacías → DB connection fail.
+# Misma proteccion que arriba: si .env en el subdir es un archivo regular,
+# lo respaldamos antes de recrear como symlink.
 for _svc in "$INSTALL_DIR/services"/*/; do
   _name=$(basename "$_svc")
   [[ "$_name" == "certs" || "$_name" == "systemd" ]] && continue
   [[ -f "$_svc/docker-compose.yml" ]] || continue
-  [[ -L "$_svc/.env" ]] || ln -sf ../../.env "$_svc/.env"
+  if [[ -e "$_svc/.env" ]] && [[ ! -L "$_svc/.env" ]]; then
+    warn "$_svc/.env era un archivo regular (no symlink) — respaldando y recreando"
+    mv "$_svc/.env" "$_svc/.env.broken-symlink.$(date +%Y%m%d-%H%M%S)"
+  fi
+  ln -sfn ../../.env "$_svc/.env"
 done
 make down 2>/dev/null || true
 make build

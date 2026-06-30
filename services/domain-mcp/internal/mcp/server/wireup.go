@@ -1,21 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 package mcpserver
 
 import (
@@ -39,6 +22,9 @@ import (
 //
 // Retorna:
 //   - ctx enriquecido con la tx (repos la extraen con txctx.TxFromContext)
+//     Y con un SQLErrorLog atado via ctx (ver wireup_txlog.go) — el
+//     tracer global del pool escribe aqui errores SQL que el handler
+//     pueda ignorar con `_ = err`.
 //   - la tx misma (por si el caller quiere Commit explicito; sino defer
 //     release() hace Rollback)
 //   - release func: el caller DEBE llamarla (defer release()).
@@ -57,23 +43,20 @@ func withOrgCtx(ctx context.Context, pool *pgxpool.Pool, principal *apikey.Princ
 	if orgErr != nil || userErr != nil || orgID == uuid.Nil {
 		return ctx, nil, noop
 	}
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	txCtx, sqLog := withSQLErrorLog(ctx)
+	_ = sqLog
+	tx, err := pool.BeginTx(txCtx, pgx.TxOptions{})
 	if err != nil {
-
-
-
-
-		_ = err
 		return ctx, nil, noop
 	}
-	if _, err := tx.Exec(ctx,
+	if _, err := tx.Exec(txCtx,
 		`SELECT set_config('app.current_org_id', $1, true), set_config('app.current_user_id', $2, true)`,
 		orgID.String(), userID.String()); err != nil {
-		_ = tx.Rollback(ctx)
+		_ = tx.Rollback(txCtx)
 		return ctx, nil, noop
 	}
-	release := func() { _ = tx.Rollback(ctx) }
-	return txctx.WithTxContext(ctx, tx), tx, release
+	release := func() { _ = tx.Rollback(txCtx) }
+	return txctx.WithTxContext(txCtx, tx), tx, release
 }
 
 // withOrgTxHandler envuelve un tool handler con el wireup RLS completo
@@ -82,18 +65,43 @@ func withOrgCtx(ctx context.Context, pool *pgxpool.Pool, principal *apikey.Princ
 // toman via txctx.TxFromContext) y COMMITEA si el tool termino sin
 // error. Aplicar a todo tool que toque tablas con RLS FORCE
 // (observations, sessions y las de 000028).
+//
+// Si Commit devuelve pgx.ErrTxCommitRollback (Postgres aceptó COMMIT
+// sobre tx abortada y devolvió command tag "ROLLBACK") ANTES de hacer
+// Commit se chequea TxStatus() del conn: si es 'E', la tx está
+// abortada y se surface el ultimo error SQL capturado por el tracer
+// global (ver wireup_txlog.go) via SQLErrorLog atado al ctx.
 func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		txCtx, tx, release := withOrgCtx(ctx, d.Pool, d.Principal)
 		defer release()
 		result, err := h(txCtx, req)
 		if tx != nil && err == nil && (result == nil || !result.IsError) {
+			// Pre-check: si la tx ya quedó en estado aborted ('E'), devolver
+			// el ultimo error SQL capturado por el tracer — el "ROLLBACK" de
+			// pgx en si no dice qué falló.
+			if status := tx.Conn().PgConn().TxStatus(); status == 'E' {
+				if log := sqLErrorLogFromContext(txCtx); log != nil {
+					if lastErr, lastSQL := log.Snapshot(); lastErr != nil {
+						return mcp.NewToolResultError(fmt.Sprintf(
+							"transaction aborted before commit; last SQL error: %v\n  in query: %s",
+							lastErr, truncateSQL(lastSQL, 240))), nil
+					}
+				}
+				return mcp.NewToolResultError("transaction aborted before commit; no SQL error captured by tracer (¿pool sin ConnConfig.Tracer?)"), nil
+			}
 			if cerr := tx.Commit(txCtx); cerr != nil {
 				if errors.Is(cerr, pgx.ErrTxCommitRollback) {
-					// tx aborted mid-flight: cualquier INSERT/UPDATE ejecutado
-					// por el handler se pierde. Devolver success aca seria
-					// mentir al cliente — retornamos el error de rollback
-					// para que el caller sepa que la operacion NO se persisto.
+					// tx aborted mid-flight (caso raro: el precheck de arriba no detectó
+					// 'E' pero Commit devuelve ROLLBACK — p.ej. trigger ON COMMIT o
+					// constraint deferrable). Caer al SQL log igual para diagnóstico.
+					if log := sqLErrorLogFromContext(txCtx); log != nil {
+						if lastErr, lastSQL := log.Snapshot(); lastErr != nil {
+							return mcp.NewToolResultError(fmt.Sprintf(
+								"transaction aborted before commit (Rollback); last SQL error: %v\n  in query: %s",
+								lastErr, truncateSQL(lastSQL, 240))), nil
+						}
+					}
 					return mcp.NewToolResultError(fmt.Sprintf("transaction aborted before commit (Rollback): %v", cerr)), nil
 				}
 				return mcp.NewToolResultError(fmt.Sprintf("commit failed: %v", cerr)), nil
@@ -101,6 +109,16 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		}
 		return result, err
 	}
+}
+
+// truncateSQL compacta whitespace en SQL para mensajes de error. SQL real
+// rara vez excede 1KB; el cap de 240 chars es suficiente para reconocer
+// la query en logs y dispara el ojo a "wheres" o joins.
+func truncateSQL(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "... (truncated)"
 }
 
 // q retorna la tx del contexto (wireup activo) o el Pool como fallback.

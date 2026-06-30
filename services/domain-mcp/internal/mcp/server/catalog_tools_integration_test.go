@@ -31,7 +31,7 @@ func TestMCP_SkillExecute(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Ejecución sync con params válidos
+
 	out := callTool(t, f.srv, "domain_skill_execute", map[string]any{
 		"skill_slug": "greeter",
 		"parameters": map[string]any{"name": "Alice"},
@@ -44,14 +44,14 @@ func TestMCP_SkillExecute(t *testing.T) {
 	require.Equal(t, "completed", res.Status)
 	require.Contains(t, res.Output, "Alice")
 
-	// Params inválidos (falta required) → error de validación
+
 	_, isErr := callToolRaw(t, f.srv, "domain_skill_execute", map[string]any{
 		"skill_slug": "greeter",
 		"parameters": map[string]any{},
 	})
 	require.True(t, isErr)
 
-	// Slug inexistente → error
+
 	_, isErr = callToolRaw(t, f.srv, "domain_skill_execute", map[string]any{
 		"skill_slug": "no-existe",
 	})
@@ -62,7 +62,7 @@ func TestMCP_CatalogTools_EndToEnd(t *testing.T) {
 	f := setupMCP(t)
 	defer f.cleanup()
 
-	// 1. agent_create
+
 	agentOut := callTool(t, f.srv, "domain_agent_create", map[string]any{
 		"slug": "mi-agent", "name": "Mi Agent",
 		"provider": "anthropic", "model": "claude-sonnet-4-6",
@@ -76,14 +76,14 @@ func TestMCP_CatalogTools_EndToEnd(t *testing.T) {
 	require.Equal(t, "mi-agent", ag.Slug)
 	require.NotEmpty(t, ag.AgentID)
 
-	// agent_create duplicado → error
+
 	_, isErr := callToolRaw(t, f.srv, "domain_agent_create", map[string]any{
 		"slug": "mi-agent", "name": "Dup",
 		"provider": "anthropic", "model": "claude-sonnet-4-6",
 	})
 	require.True(t, isErr)
 
-	// 2. flow_create con spec válido
+
 	flowOut := callTool(t, f.srv, "domain_flow_create", map[string]any{
 		"slug": "mi-flow", "name": "Mi Flow",
 		"spec": map[string]any{
@@ -101,9 +101,9 @@ func TestMCP_CatalogTools_EndToEnd(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(flowOut), &fl))
 	require.Equal(t, 1, fl.Steps)
 
-	// flow_create con ciclo → error de validación (sabotaje DAG)
+
 	_, isErr = callToolRaw(t, f.srv, "domain_flow_create", map[string]any{
-		"slug": "ciclico", "name": "Cíclico",
+		"slug": "ciclico", "name": "Ciclico",
 		"spec": map[string]any{
 			"version": 1,
 			"steps": []any{
@@ -116,7 +116,7 @@ func TestMCP_CatalogTools_EndToEnd(t *testing.T) {
 	})
 	require.True(t, isErr, "spec con ciclo debe ser rechazado")
 
-	// 3. cron_list (vacío)
+
 	cronOut := callTool(t, f.srv, "domain_cron_list", map[string]any{})
 	var crons struct {
 		Total int `json:"total"`

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ apikey_obj.display_name }} - API Keys{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de API Key" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'apikeys:list' %}" class="text-secondary mnt-text-sm">← Volver a API Keys</a>
+    <h1 class="mt-1">{{ apikey_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ apikey_obj.key_prefix }}…</code>
+      · Dueño: <span class="badge">{{ apikey_obj.user.display_name }}</span>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'apikeys:edit' apikey_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ apikey_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info de la API Key -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ apikey_obj.name }}</td></tr>
+      <tr><th>Prefijo</th><td><code>{{ apikey_obj.key_prefix }}…</code></td></tr>
+      <tr><th>Dueño</th><td>{{ apikey_obj.user.display_name }} (<code>{{ apikey_obj.user.email }}</code>)</td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if apikey_obj.status == 'active' %}<span class="badge badge-success">{{ apikey_obj.get_status_display }}</span>
+          {% elif apikey_obj.status == 'expired' %}<span class="badge badge-warning">{{ apikey_obj.get_status_display }}</span>
+          {% else %}<span class="badge badge-danger">{{ apikey_obj.get_status_display }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Creada</th><td>{{ apikey_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Expira</th><td>{{ apikey_obj.expires_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Ultimo uso</th><td>{{ apikey_obj.last_used_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Revocada</th>
+        <td>
+          {% if apikey_obj.revoked_at %}
+            {{ apikey_obj.revoked_at|date:"d/m/Y H:i" }}
+          {% else %}
+            <span class="text-muted">No</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="text-muted mt-2 mnt-text-sm">
+    El secreto en claro nunca se almacena: solo el prefijo (visible) y el hash.
+  </p>
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ apikey_obj.pk }}">
+  <div class="modal modal-confirm">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar API Key?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar <strong>{{ apikey_obj.display_name }}</strong>.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: la key se revoca (deja de autenticar) pero el registro se conserva para auditoria.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'apikeys:delete' apikey_obj.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

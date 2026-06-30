@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Uso · Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Uso" %}
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    /* ── KPI grid ─────────────────────────────────────────────────────── */
+    .usage-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-lg);
+    }
+    .usage-kpi {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md) var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+    .usage-kpi__val {
+      font-size: var(--fs-2xl);
+      font-weight: var(--fw-bold);
+      color: var(--color-text-link);
+      line-height: 1;
+    }
+    .usage-kpi__val.accent-out { color: var(--color-success); }
+    .usage-kpi__val.accent-tot { color: var(--color-accent); }
+    .usage-kpi__label {
+      font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .usage-kpi__sub {
+      font-size: var(--fs-xs);
+      color: var(--color-text-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Filtro de días ───────────────────────────────────────────────── */
+    .usage-filter {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-lg);
+    }
+    .usage-filter__label {
+      font-size: var(--fs-sm);
+      color: var(--color-text-secondary);
+      font-weight: var(--fw-semibold);
+    }
+    .usage-filter__btn {
+      font-size: var(--fs-sm);
+      padding: 4px 14px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--color-border);
+      background: var(--color-bg-surface);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .usage-filter__btn:hover,
+    .usage-filter__btn.active {
+      background: var(--color-accent-soft);
+      color: var(--color-text-link);
+      border-color: var(--color-accent);
+    }
+
+    /* ── Secciones ────────────────────────────────────────────────────── */
+    .usage-section { margin-bottom: var(--space-xl); }
+    .usage-section__title {
+      font-size: var(--fs-base);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--color-border-light);
+      padding-bottom: var(--space-xs);
+    }
+
+    /* ── Tablas ───────────────────────────────────────────────────────── */
+    .usage-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .usage-table th {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg-elevated);
+    }
+    .usage-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-secondary);
+      vertical-align: top;
+    }
+    .usage-table tr:last-child td { border-bottom: none; }
+    .usage-table tr:hover td { background: var(--color-bg-elevated); }
+    .usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .usage-table .muted { color: var(--color-text-muted); font-style: italic; }
+
+    /* Barra de progreso relativa (%tokens_total del máximo de la tabla) */
+    .usage-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .usage-bar__track {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--color-border-light);
+      min-width: 60px;
+    }
+    .usage-bar__fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--color-text-link);
+    }
+    .usage-bar__num {
+      font-variant-numeric: tabular-nums;
+      min-width: 52px;
+      text-align: right;
+      font-size: var(--fs-xs);
+    }
+
+    /* Preview del prompt */
+    .prompt-preview {
+      font-size: var(--fs-xs);
+      color: var(--color-text-muted);
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 320px;
+    }
+
+    /* Badge de cliente */
+    .client-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10.5px;
+      font-weight: var(--fw-semibold);
+      border: 1px solid;
+    }
+    .cb-claude-code { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-soft); }
+    .cb-opencode    { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
+    .cb-cursor      { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
+    .cb-other       { color: var(--color-text-muted); border-color: var(--color-border); background: var(--color-bg-elevated); }
+
+    /* Estado completado */
+    .turn-ok  { color: var(--color-success); }
+    .turn-pen { color: var(--color-text-muted); }
+
+    /* Fila activa en filtro por usuario */
+    .table-active td { background: var(--color-accent-soft) !important; }
+    .usage-table tbody tr:hover td { background: var(--color-bg-elevated); }
+    .usage-table tbody tr.table-active:hover td { background: var(--color-accent-soft) !important; }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-xl);
+      color: var(--color-text-muted);
+      font-size: var(--fs-sm);
+    }
+
+    /* Layout 2 columnas para tablas secundarias */
+    @media (min-width: 900px) {
+      .usage-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: var(--space-lg);">
+
+  {# ── Encabezado + filtros ─────────────────────────────────────────── #}
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-sm);margin-bottom:var(--space-lg);">
+    <div>
+      <h2 style="margin:0;font-size:var(--fs-xl);">Uso del agente</h2>
+      <p style="margin:0;color:var(--color-text-muted);font-size:var(--fs-sm);">Prompts capturados · tokens estimados (chars ÷ 4) · últimos {{ days }} días</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-lg);flex-wrap:wrap;">
+      <div class="usage-filter">
+        <span class="usage-filter__label">Período:</span>
+        <a href="?days={{ days }}&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}"  class="usage-filter__btn {% if days == 7  %}active{% endif %}">7 días</a>
+        <a href="?days=30&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if days == 30 %}active{% endif %}">30 días</a>
+        <a href="?days=90&by={{ by }}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if days == 90 %}active{% endif %}">90 días</a>
+      </div>
+      <div class="usage-filter">
+        <span class="usage-filter__label">Agrupar por:</span>
+        <a href="?days={{ days }}&by=client{% if user_filter %}&user={{ user_filter }}{% endif %}"  class="usage-filter__btn {% if by == "client"  %}active{% endif %}">Cliente</a>
+        <a href="?days={{ days }}&by=user{% if user_filter %}&user={{ user_filter }}{% endif %}"    class="usage-filter__btn {% if by == "user"    %}active{% endif %}">Usuario</a>
+        <a href="?days={{ days }}&by=project{% if user_filter %}&user={{ user_filter }}{% endif %}" class="usage-filter__btn {% if by == "project" %}active{% endif %}">Proyecto</a>
+      </div>
+    </div>
+  </div>
+
+  {% if user_filter %}
+  <div style="display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-md);padding:var(--space-md) var(--space-lg);background:var(--color-accent);color:#fff;border-radius:var(--radius-md);font-size:var(--fs-sm);">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>Filtrando por: <strong>{{ user_filter }}</strong></span>
+    <a href="?days={{ days }}&by={{ by }}" style="margin-left:auto;background:rgba(255,255,255,0.2);color:#fff;padding:4px 12px;border-radius:var(--radius-full);text-decoration:none;font-weight:var(--fw-semibold);">✕ Quitar filtro</a>
+  </div>
+  {% endif %}
+
+  {# ── KPIs ────────────────────────────────────────────────────────── #}
+  {% if kpis.total_turns == 0 %}
+    <div class="empty-state">
+      <p>No hay datos de uso en los últimos {{ days }} días.</p>
+      <p style="font-size:var(--fs-xs);margin-top:var(--space-xs);">
+        El agente debe llamar <code>domain_prompt_capture</code> al inicio de cada turn y
+        <code>domain_turn_complete</code> al final para registrar tokens.
+      </p>
+    </div>
+  {% else %}
+
+  <div class="usage-kpi-grid">
+    <div class="usage-kpi">
+      <span class="usage-kpi__val">{{ kpis.total_turns }}</span>
+      <span class="usage-kpi__label">Turns totales</span>
+      <span class="usage-kpi__sub">{{ kpis.completed_turns }} completados</span>
+    </div>
+    <div class="usage-kpi">
+      <span class="usage-kpi__val">{{ kpis.tokens_in|floatformat:"0" }}</span>
+      <span class="usage-kpi__label">Tokens In (est.)</span>
+      <span class="usage-kpi__sub">prompts del usuario</span>
+    </div>
+    <div class="usage-kpi">
+      <span class="usage-kpi__val accent-out">{{ kpis.tokens_out|floatformat:"0" }}</span>
+      <span class="usage-kpi__label">Tokens Out (est.)</span>
+      <span class="usage-kpi__sub">respuestas del LLM</span>
+    </div>
+    <div class="usage-kpi">
+      <span class="usage-kpi__val accent-tot">{{ kpis.tokens_total|floatformat:"0" }}</span>
+      <span class="usage-kpi__label">Tokens total</span>
+      <span class="usage-kpi__sub">in + out combinados</span>
+    </div>
+    <div class="usage-kpi">
+      <span class="usage-kpi__val">{{ kpis.avg_tokens_turn|floatformat:"0" }}</span>
+      <span class="usage-kpi__label">Avg tokens / turn</span>
+      <span class="usage-kpi__sub">solo turns completos</span>
+    </div>
+  </div>
+
+  {# ── Por proyecto ─────────────────────────────────────────────────── #}
+  {% if by_project %}
+  <div class="usage-section">
+    <div class="usage-section__title">Por proyecto</div>
+    {% with max_tot=by_project.0.tokens_total %}
+    <div class="table-wrapper">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>Proyecto</th>
+            <th class="num">Turns</th>
+            <th class="num">Tokens In</th>
+            <th class="num">Tokens Out</th>
+            <th>Tokens Total</th>
+            <th>Último turn</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in by_project %}
+          <tr>
+            <td><code>{{ row.project_slug }}</code></td>
+            <td class="num">{{ row.turns }}</td>
+            <td class="num">{{ row.tokens_in }}</td>
+            <td class="num">{{ row.tokens_out }}</td>
+            <td>
+              {% if max_tot > 0 %}
+              <div class="usage-bar">
+                <div class="usage-bar__track">
+                  <div class="usage-bar__fill" style="width:{% widthratio row.tokens_total max_tot 100 %}%"></div>
+                </div>
+                <span class="usage-bar__num">{{ row.tokens_total }}</span>
+              </div>
+              {% else %}{{ row.tokens_total }}{% endif %}
+            </td>
+            <td class="muted" style="white-space:nowrap;font-size:var(--fs-xs);">
+              {{ row.last_turn|date:"d/m/Y H:i"|default:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endwith %}
+  </div>
+  {% endif %}
+
+  {# ── Por usuario ─────────────────────────────────────────────────── #}
+  {% if by_user %}
+  <div class="usage-section">
+    <div class="usage-section__title">Por usuario</div>
+    {% with max_tot=by_user.0.tokens_total %}
+    <div class="table-wrapper">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th class="num">Turns</th>
+            <th class="num">Tokens In</th>
+            <th class="num">Tokens Out</th>
+            <th>Tokens Total</th>
+            <th>Último turn</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in by_user %}
+          <tr class="{% if user_filter == row.user_email %}table-active{% endif %}"
+              style="cursor:pointer;"
+              onclick="window.location='?days={{ days }}&by={{ by }}&user={{ row.user_email|urlencode }}'"
+              title="Click para filtrar prompts de {{ row.user_email }}">
+            <td>
+              <span style="font-weight:var(--fw-semibold);display:flex;align-items:center;gap:6px;">
+                {% if user_filter == row.user_email %}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                {% endif %}
+                {{ row.user_name|default:"—"|default:"(sin usuario)" }}
+              </span>
+              {% if row.user_email %}<br><span style="font-size:var(--fs-xs);color:var(--color-text-muted);">{{ row.user_email }}</span>{% endif %}
+            </td>
+            <td class="num">{{ row.turns }}</td>
+            <td class="num">{{ row.tokens_in }}</td>
+            <td class="num">{{ row.tokens_out }}</td>
+            <td>
+              {% if max_tot > 0 %}
+              <div class="usage-bar">
+                <div class="usage-bar__track">
+                  <div class="usage-bar__fill" style="width:{% widthratio row.tokens_total max_tot 100 %}%"></div>
+                </div>
+                <span class="usage-bar__num">{{ row.tokens_total }}</span>
+              </div>
+              {% else %}{{ row.tokens_total }}{% endif %}
+            </td>
+            <td class="muted" style="white-space:nowrap;font-size:var(--fs-xs);">
+              {{ row.last_turn|date:"d/m/Y H:i"|default:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endwith %}
+  </div>
+  {% endif %}
+
+  {# ── Por cliente y por modelo (2 columnas) ────────────────────────── #}
+  <div class="usage-cols">
+
+    {% if by_client %}
+    <div class="usage-section">
+      <div class="usage-section__title">Por cliente IDE</div>
+      <div class="table-wrapper">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th class="num">Turns</th>
+              <th class="num">Tokens In</th>
+              <th class="num">Tokens Out</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in by_client %}
+            <tr>
+              <td>
+                {% if row.client == "claude-code" %}
+                  <span class="client-badge cb-claude-code">claude-code</span>
+                {% elif row.client == "opencode" %}
+                  <span class="client-badge cb-opencode">opencode</span>
+                {% elif row.client == "cursor" %}
+                  <span class="client-badge cb-cursor">cursor</span>
+                {% else %}
+                  <span class="client-badge cb-other">{{ row.client }}</span>
+                {% endif %}
+              </td>
+              <td class="num">{{ row.turns }}</td>
+              <td class="num">{{ row.tokens_in }}</td>
+              <td class="num">{{ row.tokens_out }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if by_model %}
+    <div class="usage-section">
+      <div class="usage-section__title">Por modelo LLM</div>
+      <div class="table-wrapper">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Modelo</th>
+              <th class="num">Turns</th>
+              <th class="num">Tokens In</th>
+              <th class="num">Tokens Out</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in by_model %}
+            <tr>
+              <td><code style="font-size:11px;">{{ row.model }}</code></td>
+              <td class="num">{{ row.turns }}</td>
+              <td class="num">{{ row.tokens_in }}</td>
+              <td class="num">{{ row.tokens_out }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# /.usage-cols #}
+
+  {# ── Prompts recientes ────────────────────────────────────────────── #}
+  {% if recent %}
+  <div class="usage-section">
+    <div class="usage-section__title">Turns recientes (últimos {{ recent|length }})</div>
+    <div class="table-wrapper">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th style="width:130px;">Fecha</th>
+            <th>Proyecto</th>
+            <th>Usuario</th>
+            <th>Cliente</th>
+            <th>Modelo</th>
+            <th class="num">In</th>
+            <th class="num">Out</th>
+            <th>Prompt</th>
+            <th style="width:24px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recent %}
+          <tr>
+            <td style="white-space:nowrap;font-size:var(--fs-xs);">
+              {{ row.captured_at|date:"d/m/Y H:i" }}
+            </td>
+            <td><code style="font-size:11px;">{{ row.project_slug }}</code></td>
+            <td style="font-size:var(--fs-xs);color:var(--color-text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ row.user_email|default:row.user_name|default:"" }}">{{ row.user_email|default:row.user_name|default:"—" }}</td>
+            <td>
+              {% if row.client_kind == "claude-code" %}
+                <span class="client-badge cb-claude-code">CC</span>
+              {% elif row.client_kind == "opencode" %}
+                <span class="client-badge cb-opencode">OC</span>
+              {% elif row.client_kind == "cursor" %}
+                <span class="client-badge cb-cursor">CUR</span>
+              {% else %}
+                <span class="client-badge cb-other">{{ row.client_kind|slice:":4" }}</span>
+              {% endif %}
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--color-text-muted);">
+              {{ row.model|slice:":20" }}
+            </td>
+            <td class="num">{{ row.estimated_tokens_in }}</td>
+            <td class="num">{{ row.estimated_tokens_out }}</td>
+            <td>
+              <div class="prompt-preview" title="{{ row.content_preview }}">
+                {{ row.content_preview }}
+              </div>
+            </td>
+            <td title="{% if row.turn_completed_at %}Completado{% else %}Pendiente{% endif %}">
+              {% if row.turn_completed_at %}
+                <span class="turn-ok">✓</span>
+              {% else %}
+                <span class="turn-pen">…</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# /kpis.total_turns #}
+
+</div>{# /.card #}
+{% endblock %}

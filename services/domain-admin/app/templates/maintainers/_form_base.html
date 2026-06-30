@@ -1,0 +1,67 @@
+{% comment %}
+============================================================
+Envoltorio BASE de formulario para el modal dinamico.
+Provee la estructura comun del form (data-modal-form + csrf +
+non_field_errors + header + footer) y deja que cada app
+defina unicamente sus campos en {% block fields %}.
+
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta
+modals.js via fetch al endpoint ?partial=1). NO extiende
+base.html: es un fragmento.
+
+Uso por app:
+
+  {% include "maintainers/_form_base.html" %}   ← NO, es include-only de bloques
+
+Como es un fragmento con bloques, cada app lo EXTIENDE:
+
+  {% extends "maintainers/_form_base.html" %}
+  {% block fields %}
+    <div class="form-group">...campos...</div>
+  {% endblock %}
+
+Contexto esperado:
+  action   URL POST del form (create o update)
+  mode     "create" | "edit"
+  form     el form de Django
+
+Bloques:
+  form_title    titulo del modal (default segun mode)
+  fields        campos del form (REQUERIDO)
+  submit_label  texto del boton submit (default segun mode)
+============================================================
+{% endcomment %}
+<form method="post" action="{{ action }}" data-modal-form novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      <span class="alert-icon">✕</span>
+      <div class="alert-content">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="modal-header">
+    <h3 class="modal-title">
+      {% block form_title %}{% if mode == "create" %}Nuevo registro{% else %}Editar registro{% endif %}{% endblock %}
+    </h3>
+    <button type="button" class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+
+  <div class="modal-body">
+    <div class="form-grid">
+      {% block fields %}{% endblock %}
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn btn-primary">
+      {% block submit_label %}{% if mode == "create" %}Crear{% else %}Guardar cambios{% endif %}{% endblock %}
+    </button>
+  </div>
+</form>

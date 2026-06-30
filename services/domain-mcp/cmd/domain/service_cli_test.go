@@ -1,4 +1,4 @@
-// Tests para domain service (systemd user service + orphan reaping).
+
 
 package main
 
@@ -16,16 +16,16 @@ const procNetTCPFixture = `  sl  local_address rem_address   st tx_queue rx_queu
 `
 
 func TestListenInodesForPort_MatchesListenOnly(t *testing.T) {
-	// 0x1F40 = 8000. La fila 2 es ESTABLISHED (st=01) en el mismo puerto:
-	// NO debe matchear.
+
+
 	inodes := listenInodesForPort(procNetTCPFixture, 8000)
 	require.Equal(t, []string{"123456"}, inodes)
 
-	// 0x1F41 = 8001
+
 	inodes = listenInodesForPort(procNetTCPFixture, 8001)
 	require.Equal(t, []string{"654321"}, inodes)
 
-	// Puerto sin listener
+
 	require.Empty(t, listenInodesForPort(procNetTCPFixture, 9999))
 }
 

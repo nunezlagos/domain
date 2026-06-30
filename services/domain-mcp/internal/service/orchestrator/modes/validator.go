@@ -20,7 +20,8 @@ var phaseDependencies = map[phases.PhaseSlug][]phases.PhaseSlug{
 	"sdd-apply":   {"sdd-tasks"},
 	"sdd-verify":  {"sdd-apply"},
 	"sdd-judge":   {"sdd-verify"},
-	"sdd-archive": {"sdd-judge"},
+	"sdd-review":  {"sdd-judge"},
+	"sdd-archive": {"sdd-review"},
 	"sdd-onboard": {"sdd-archive"},
 }
 
@@ -62,25 +63,25 @@ func ValidateDAG(base []phases.PhaseSlug, skipPhases []phases.PhaseSlug, startin
 			return fmt.Errorf("validate_dag: starting_phase %q not found in catalog", startingPhase)
 		}
 	}
-	// Construir el set de fases que SÍ se ejecutan en el rango
-	// [startingPhase..fin].
+
+
 	kept := make(map[phases.PhaseSlug]struct{}, len(base)-startIdx)
 	for _, slug := range base[startIdx:] {
 		if _, ok := skip[slug]; !ok {
 			kept[slug] = struct{}{}
 		}
 	}
-	// Para cada fase que se conserva, verificar que sus dependencias
-	// también se conservan (a menos que estén antes de startingPhase).
+
+
 	for slug := range kept {
 		deps, hasDeps := phaseDependencies[slug]
 		if !hasDeps {
 			continue
 		}
 		for _, dep := range deps {
-			// Si la dependencia está antes de startingPhase, se asume
-			// ya ejecutada (resume cross-session) — no necesita estar
-			// en el plan actual.
+
+
+
 			if isBeforeStart(base, dep, startIdx) {
 				continue
 			}

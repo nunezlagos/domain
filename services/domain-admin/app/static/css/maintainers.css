@@ -1,0 +1,190 @@
+/* ============================================================
+   maintainers.css — estilos compartidos de los mantenedores
+   (listados server-side, tablas, modales CRUD).
+
+   Complementa variables.css / base.css / layout.css /
+   components.css SIN redefinir nada de ellos: solo agrega
+   clases nuevas con prefijo .mnt- y helpers de la tabla base.
+   ============================================================ */
+
+/* Nota muted al lado del subtítulo ("se actualiza al detectar...") */
+.mnt-subtitle-note {
+  font-size: var(--fs-xs);
+  margin-left: var(--space-sm);
+  color: var(--color-text-muted);
+}
+
+/* Card de búsqueda (search bar de los listados) */
+.mnt-search-card {
+  padding: var(--space-md);
+}
+
+/* Celda de tabla vacía (estado "no hay registros") */
+.mnt-empty-cell {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--color-text-muted);
+}
+
+/* Columna de acciones: ancha lo mínimo, sin wrap */
+.mnt-col-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Grupo de botones de acción alineado a la derecha en la fila */
+.mnt-row-actions {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+}
+
+/* Botón de eliminar (icono) en color peligro */
+.mnt-action-danger {
+  color: var(--color-danger);
+}
+
+/* Anchos de modal por tipo (alineados al inline que había en base.html).
+   El modal de formularios (.modal-dynamic) es más ancho en desktop para que
+   los textareas / editores de prompt respiren. El body scrollea dentro
+   (overflow-y heredado de .modal) con max-height acotado. El de confirm-delete
+   queda chico. En mobile, responsive.css fuerza casi-fullscreen (no se toca). */
+/* Tamaño DINAMICO: se adapta al contenido. max-width acota el ancho y max-height
+   el alto (el body scrollea via overflow-y heredado de .modal si se pasa). */
+.modal-dynamic {
+  max-width: min(920px, 94vw);
+  max-height: 90vh;
+}
+.modal-confirm { max-width: 420px; }
+/* Variante GRANDE del modal dinamico (ver/editar de proyecto: mas espacio para
+   las tabs verticales + tablas). La activa modals.js cuando el contenido trae
+   [data-modal-lg]. */
+.modal-dynamic.modal-dynamic--lg { max-width: min(1140px, 96vw); }
+
+/* Filtro chico arriba de una tabla de pane (skills/reglas dentro del modal). */
+.pane-filter { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.pane-filter .form-select { min-width: 150px; }
+
+/* Tabla de detalle (key/value) dentro del modal de detalle */
+.mnt-detail-table {
+  font-size: var(--fs-sm);
+}
+.mnt-detail-table th {
+  width: 140px;
+}
+
+/* Subtítulo de sección dentro de un detalle */
+.mnt-detail-section {
+  font-size: var(--fs-base);
+  margin-top: var(--space-md);
+}
+
+/* ============================================================
+   Layout ESTANDAR de mantenedor (panel en card). Aplica a TODOS
+   los mantenedores via list_base.html. Estilos aca (no inline).
+   ============================================================ */
+.mnt-panel { display: flex; flex-direction: column; gap: var(--space-md); }
+.mnt-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md); flex-wrap: wrap;
+  padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);
+}
+.mnt-head-title { margin: 0; }
+.mnt-head-sub { margin: 2px 0 0; color: var(--color-text-secondary); font-size: var(--fs-sm); }
+.mnt-actions { display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; }
+
+/* Container de filtros: color distinto al fondo del card + borde + radius + sombra */
+.mnt-filters {
+  background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+  border-radius: 10px; box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.25);
+  padding: var(--space-md); display: flex; gap: var(--space-md);
+  align-items: flex-end; flex-wrap: wrap;
+}
+.mnt-filters-search { flex: 1 1 220px; }
+.mnt-filters-spacer { flex: 1 1 auto; }
+.mnt-filter-select { min-width: 150px; }
+.mnt-filter-select-wide { min-width: 190px; }
+/* Variante del container de filtros usada dentro de un modal (necesita margen
+   inferior antes del contador/tabla; en la pagina el gap del .mnt-panel basta). */
+.mnt-filters-mb { margin-bottom: var(--space-md); }
+/* Contador de resultados sobre una tabla ("N resultados") */
+.mnt-result-count { font-size: var(--fs-sm); margin: 0 0 var(--space-sm); }
+/* Tabla compacta (modales / listados densos) */
+.mnt-table-sm { font-size: var(--fs-sm); }
+/* Boton export estilo Excel (verde outline) */
+.btn-excel {
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+  background: var(--color-success-soft);
+}
+.btn-excel:hover { background: var(--color-success); color: #fff; }
+
+/* ============================================================
+   Clases compartidas de form/detail/tabla de mantenedor. Migran
+   los estilos inline repetidos (max-width, flex-end, pre, etc.)
+   a CSS, sin redefinir las utilidades base (.d-flex, .text-*).
+   ============================================================ */
+/* Card de formulario/detalle standalone (ancho acotado, centrado por su contenedor) */
+.mnt-form-card { max-width: 720px; }
+/* Enlace de navegacion "← Volver" (texto chico, secundario) */
+.mnt-back-link { font-size: var(--fs-sm); }
+/* Texto chico reutilizable (notas, ayudas, contadores) */
+.mnt-text-sm { font-size: var(--fs-sm); }
+/* Fila de acciones de un formulario: botones a la derecha */
+.mnt-form-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; }
+/* Form en linea (botones de revocar rol / submit embebidos) */
+.mnt-inline-form { display: inline; }
+/* Columna/celda angosta (slug, version, etc.): minima y sin wrap */
+.mnt-col-narrow { width: 1%; white-space: nowrap; }
+/* Encabezado key/value de detalle (th angosto) */
+.mnt-th-label { width: 200px; }
+/* Bloque <pre> (system prompt, body, variables): wrap + fondo elevado */
+.mnt-pre {
+  white-space: pre-wrap; font-size: var(--fs-sm);
+  background: var(--color-bg-elevated); padding: var(--space-sm);
+  border-radius: var(--radius-sm, 4px);
+}
+/* Subtitulo de seccion (UPPERCASE, muted) dentro de modales/detalles */
+.mnt-section-label {
+  font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em;
+  color: var(--color-text-muted); margin-bottom: var(--space-sm);
+}
+/* Encabezado de seccion con titulo izq + contador der */
+.mnt-section-head { display: flex; align-items: center; justify-content: space-between; }
+.mnt-section-head h3 { margin: 0; }
+/* Bloque embebido con borde (preview de email, etc.) */
+.mnt-embed-box { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+/* Variante de <pre> con fondo surface-alt (body de prompt, variables) */
+.mnt-pre-alt {
+  white-space: pre-wrap; font-size: var(--fs-sm);
+  background: var(--color-surface-alt); padding: var(--space-md);
+  border-radius: var(--radius-sm);
+}
+/* Campos de formulario que crecen dentro de una fila .d-flex (pareados).
+   En el grid del modal (.form-grid > .d-flex {display:contents}) el flex se
+   neutraliza; en el form standalone reparten el ancho. */
+.form-group--grow { flex: 1; }
+.form-group--grow2 { flex: 2; }
+/* Campo tipo checkbox en linea (label + control alineados) */
+.form-group--check { flex: 1; display: flex; align-items: center; gap: var(--space-sm); }
+/* Label/control en linea (checkbox suelto) */
+.form-check-inline { display: flex; align-items: center; gap: var(--space-sm); }
+/* Utilidad: sin margen (titulos de seccion inline) */
+.m-0 { margin: 0; }
+/* Utilidades flex de alineacion (reusables, sin redefinir .d-flex) */
+.align-center { align-items: center; }
+.align-end { align-items: end; }
+.align-stretch { align-items: stretch; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-grow { flex: 1; }
+.nowrap { white-space: nowrap; }
+.mt-sm { margin-top: var(--space-sm); }
+/* Texto monoespaciado chico (valor de key/token) */
+.mono-sm { font-family: var(--font-mono, monospace); font-size: var(--fs-sm); }
+/* Nota chica con separacion inferior (ayudas / notas de seccion) */
+.mnt-note { font-size: var(--fs-sm); margin-bottom: var(--space-md); }
+/* Input fuera de pantalla (target de copiar al portapapeles, accesible) */
+.offscreen { position: absolute; left: -9999px; }
+/* Campo de formulario angosto (ej. cron expr / numero) */
+.mnt-field-narrow { max-width: 220px; }

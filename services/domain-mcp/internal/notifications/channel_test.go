@@ -82,8 +82,8 @@ func TestSlackChannel_Send_OK(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// El check `https://hooks.slack.com/` rechaza httptest URLs. Para test
-	// real con prefix override, validamos parsing del body con un mock match.
+
+
 	ch := NewSlackChannel()
 	_, err := ch.Send(context.Background(), Message{
 		Recipient: srv.URL, // NOT hooks.slack.com → debe fallar
@@ -96,7 +96,7 @@ func TestSlackChannel_Send_OK(t *testing.T) {
 }
 
 func TestSlackChannel_FormatsPayload(t *testing.T) {
-	// Test isolation del payload sin pegar a un servidor real.
+
 	msg := Message{Subject: "Hello", Body: "World"}
 	expected := "*Hello*\nWorld"
 	text := msg.Body

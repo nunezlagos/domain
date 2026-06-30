@@ -8,10 +8,6 @@ import (
 	"strings"
 )
 
-// envStore: persistir DOMAIN_VPS_URL y DOMAIN_USER_EMAIL en un archivo
-// ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env
-// (Windows) modo 0600. API_KEY NO se persiste por seguridad.
-
 type EnvData struct {
 	VPSURL string
 	Email  string
@@ -63,6 +59,22 @@ func saveEnv(path string, data EnvData) error {
 
 func removeEnv(path string) {
 	_ = os.Remove(path)
-	// Intentar borrar el dir padre si quedó vacío (no rompe si tiene cosas).
-	_ = os.Remove(filepath.Dir(path))
+}
+
+// detectURLMismatch lee install.env y compara la URL guardada con newURL.
+// Retorna warning string si difieren (no es error — el operador decide).
+// Retorna "" si son iguales, archivo no existe, o no se puede parsear.
+func detectURLMismatch(path, newURL string) (string, error) {
+	data, err := loadEnv(path)
+	if err != nil {
+		return "", err
+	}
+	if data.VPSURL == "" {
+		return "", nil
+	}
+	if data.VPSURL == newURL {
+		return "", nil
+	}
+	return "install.env tiene VPS_URL='" + data.VPSURL +
+		"' pero pediste '" + newURL + "'. ¿Re-apuntar? (Y/n)", nil
 }

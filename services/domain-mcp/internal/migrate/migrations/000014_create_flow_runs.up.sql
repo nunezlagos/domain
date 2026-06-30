@@ -1,9 +1,9 @@
--- migration: create_flow_runs
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-09.3
--- description: flow_runs con state machine + cursor + checkpoint
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE flow_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

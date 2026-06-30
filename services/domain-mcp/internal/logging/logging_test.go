@@ -1,4 +1,4 @@
-// issue-17.3 structured-logging unit tests.
+
 
 package logging
 
@@ -149,11 +149,11 @@ func TestCurrentLevel(t *testing.T) {
 // Setup global no rompe slog.Default + agrega context fields.
 func TestSetup_AssignsDefaultAndEnriches(t *testing.T) {
 	buf := &bytes.Buffer{}
-	// usamos Setup pero redirigimos stdout no es trivial; testeamos directamente Default()
+
 	prev := slog.Default()
 	defer slog.SetDefault(prev)
 
-	// reasignar default a un handler que escribe a buf
+
 	dynamicLevel.Set(slog.LevelInfo)
 	h := &ctxEnrichHandler{inner: slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: dynamicLevel})}
 	slog.SetDefault(slog.New(h))

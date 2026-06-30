@@ -1,0 +1,80 @@
+{% comment %}
+Seccion "Repositorios git" del form de proyecto. Filas dinamicas (url + rama +
+folder) que viajan como arrays paralelos repo_url[]/repo_branch[]/repo_folder[].
+El primero es el principal (default). El boton git+ agrega filas, el tacho las
+quita (projects-repos.js, delegado para funcionar en el modal dinamico).
+
+Contexto: repo_rows = lista de {url, branch_default, root_path}.
+{% endcomment %}
+<div class="form-group">
+  <div class="d-flex align-center justify-between gap-2">
+    <label class="form-label m-0">Repositorios git</label>
+    <button type="button" class="btn btn-icon btn-ghost" data-repo-add title="Agregar repositorio">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="6" y1="3" x2="6" y2="15"/>
+        <circle cx="18" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <path d="M18 9a9 9 0 0 1-9 9"/>
+        <line x1="14.5" y1="14.5" x2="20.5" y2="14.5"/>
+        <line x1="17.5" y1="11.5" x2="17.5" y2="17.5"/>
+      </svg>
+    </button>
+  </div>
+  <div class="form-help">
+    URL del repo, rama por defecto y carpeta donde vive en el checkout
+    (ej. <code>/</code> o <code>/domain/services/</code>, opcional). El primero
+    es el repositorio principal.
+  </div>
+
+  <div data-repo-list class="mt-sm">
+    {% for r in repo_rows %}
+      <div class="repo-row">
+        <input type="text" name="repo_url" class="form-control" autocomplete="off"
+               placeholder="https://github.com/org/repo" value="{{ r.url }}">
+        <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+               placeholder="rama (main)" value="{{ r.branch_default }}">
+        <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+               placeholder="/ (opcional)" value="{{ r.root_path }}">
+        <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    {% empty %}
+      <div class="repo-row">
+        <input type="text" name="repo_url" class="form-control" autocomplete="off"
+               placeholder="https://github.com/org/repo">
+        <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+               placeholder="rama (main)">
+        <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+               placeholder="/ (opcional)">
+        <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% comment %} Plantilla inerte para clonar filas nuevas (no se envia). {% endcomment %}
+  <template data-repo-template>
+    <div class="repo-row">
+      <input type="text" name="repo_url" class="form-control" autocomplete="off"
+             placeholder="https://github.com/org/repo">
+      <input type="text" name="repo_branch" class="form-control" autocomplete="off"
+             placeholder="rama (main)">
+      <input type="text" name="repo_folder" class="form-control" autocomplete="off"
+             placeholder="/ (opcional)">
+      <button type="button" class="btn btn-icon btn-ghost" data-repo-remove title="Quitar repositorio">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+      </button>
+    </div>
+  </template>
+</div>

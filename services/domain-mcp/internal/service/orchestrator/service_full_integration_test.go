@@ -26,6 +26,7 @@ func buildFullRegistry() *phases.Registry {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
 	return reg
@@ -38,6 +39,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -46,27 +48,25 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature compleja con SDD completo",
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeFull, res.Mode)
-	require.Len(t, res.Plan.Steps, 10)
+	require.Len(t, res.Plan.Steps, 11)
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[9].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[10].Slug))
 
-	// Sólo el primer step tiene UserPrompt; el resto vacíos (lazy build).
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < 11; i++ {
 		require.Empty(t, res.Plan.Steps[i].UserPrompt,
 			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
 
-	// SnapshotPrompt = prompt del primer step
 	require.Equal(t, res.Plan.Steps[0].UserPrompt, res.SnapshotPrompt)
 
-	// Steps en BD: 10 pendings con system_prompt hidratado desde agent_templates
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status, inputs FROM flow_run_steps WHERE flow_run_id=$1 ORDER BY created_at`,
 		res.FlowRunID)
@@ -80,16 +80,16 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 		require.Equal(t, "pending", st)
 		var inp map[string]any
 		require.NoError(t, json.Unmarshal(inputsRaw, &inp))
-		// system_prompt debe estar hidratado desde BD por hydrateSystemPrompts
+
 		sysPrompt, _ := inp["system_prompt"].(string)
 		require.NotEmpty(t, sysPrompt, "step %s debe tener system_prompt hidratado desde agent_templates", k)
-		// raw_text replicado para lazy build
+
 		require.Equal(t, "implementar feature compleja con SDD completo", inp["raw_text"])
 		keys = append(keys, k)
 	}
 	require.Equal(t, []string{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
-		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard",
+		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard",
 	}, keys)
 }
 
@@ -100,6 +100,7 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -108,19 +109,19 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar logging estructurado",
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
 
-	// Cliente reporta sdd-explore con intent + scope
 	exploreStepID := res.Plan.Steps[0].ID
 	nextRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: exploreStepID,
 		Output: map[string]any{
-			"intent": "feature",
-			"scope":  "multi-file",
+			"intent":           "feature",
+			"scope":            "multi-file",
 			"modules_affected": []any{"internal/logging", "cmd/domain"},
 			"summary":          "agregar slog estructurado",
 		},
@@ -131,15 +132,12 @@ func TestService_Run_Full_LazyBuildsNextPromptOnPhaseResult(t *testing.T) {
 	require.NotNil(t, nextRes.NextStepID)
 	require.Equal(t, "sdd-spec", nextRes.NextStepKey)
 
-	// El NextStepPrompt debe haberse RE-CONSTRUIDO con los outputs del explore:
-	// el handler sdd-spec incluye intent + scope + modules en el prompt.
 	require.NotEmpty(t, nextRes.NextStepPrompt, "lazy build debe rellenar NextStepPrompt")
 	require.Contains(t, nextRes.NextStepPrompt, "feature", "prompt de spec debe incluir intent del explore")
 	require.Contains(t, nextRes.NextStepPrompt, "multi-file", "debe incluir scope")
 	require.Contains(t, nextRes.NextStepPrompt, "internal/logging", "debe incluir módulos afectados")
 	require.Contains(t, nextRes.NextStepPrompt, "implementar logging estructurado", "raw_text propagado")
 
-	// El user_prompt persistido en el step de sdd-spec debe coincidir
 	var inputsRaw []byte
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT inputs FROM flow_run_steps WHERE id=$1`, *nextRes.NextStepID,
@@ -156,6 +154,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -164,6 +163,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "doc only",
 		Mode:           orchestrator.ModeFull,
@@ -173,7 +173,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 8, "10 - 2 skipped = 8 steps")
+	require.Len(t, res.Plan.Steps, 9, "11 - 2 skipped = 9 steps")
 	for _, st := range res.Plan.Steps {
 		require.NotEqual(t, "sdd-archive", string(st.Slug))
 		require.NotEqual(t, "sdd-onboard", string(st.Slug))
@@ -187,6 +187,7 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -195,28 +196,30 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "resume desde apply",
 		Mode:           orchestrator.ModeFull,
 		StartingPhase:  orchestrator.PhaseSlug("sdd-apply"),
 	})
 	require.NoError(t, err)
-	// Apply (6) → Verify (7) → Judge (8) → Archive (9) → Onboard (10) = 5 steps
-	require.Len(t, res.Plan.Steps, 5)
+
+	require.Len(t, res.Plan.Steps, 6)
 	require.Equal(t, "sdd-apply", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[4].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[5].Slug))
 }
 
-// Happy path completo: ejecutar las 10 fases en orden con outputs encadenados.
+// Happy path completo: ejecutar las 11 fases en orden con outputs encadenados.
 // Verifica que cada fase recibe los outputs de la anterior vía PriorOutputs
 // (la firma de Full mode).
-func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
+func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -225,36 +228,41 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature foo",
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 10)
+	require.Len(t, res.Plan.Steps, 11)
 
-	// Output ad-hoc por fase con los campos mínimos que cada Validate exige
 	outputs := []map[string]any{
-		{"intent": "feature", "scope": "single-file", "summary": "x"}, // explore
-		{"issue_slug": "issue-99.1-foo", "issue_md": "# spec"},        // spec
-		{"proposal_md": "scope X", "status": "draft"},                  // propose
+		{"intent": "feature", "scope": "single-file", "summary": "x"},           // explore
+		{"issue_slug": "issue-99.1-foo", "issue_md": "# spec"},                  // spec
+		{"proposal_md": "scope X", "status": "draft"},                           // propose
 		{"design_md": "design X", "adrs": []any{map[string]any{"id": "ADR-1"}}}, // design
 		{"tasks": []any{map[string]any{"id": "T01", "description": "do x"}}},    // tasks
-		{"summary": "implemented", "files_changed": []any{"a.go"}},     // apply
-		{"scenarios_failed": []any{}, "tests_passed": 5},               // verify
-		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},  // judge
-		{"archived": true},                                              // archive
-		{"skipped": true},                                               // onboard
+		{"summary": "implemented", "files_changed": []any{"a.go"}},              // apply
+		{"scenarios_failed": []any{}, "tests_passed": 5},                        // verify
+		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},           // judge
+		{"verdict": "compliant", "policies_checked": 3},                         // review
+		{"archived": true}, // archive
+		{"skipped": true},  // onboard
 	}
-	// memory_refs requeridos por D5 en design/apply/judge
+
 	memrefs := []map[string][]phases.MemoryRef{
 		{}, // explore
 		{}, // spec
-		{}, // propose
-		{"saves": {{Type: "adr", ID: uuid.New()}}},             // design
-		{}, // tasks
-		{"saves": {{Type: "code_reference", ID: uuid.New()}}},  // apply
+		{"saves": {{Type: "knowledge_doc", ID: uuid.New()}}}, // propose (Feature B)
+		{"saves": { // design: adr (D5) + knowledge_doc (Feature B)
+			{Type: "adr", ID: uuid.New()},
+			{Type: "knowledge_doc", ID: uuid.New()},
+		}},
+		{"saves": {{Type: "knowledge_doc", ID: uuid.New()}}},  // tasks (Feature B)
+		{"saves": {{Type: "code_reference", ID: uuid.New()}}}, // apply
 		{}, // verify
 		{"saves": {{Type: "sabotage_record", ID: uuid.New()}}}, // judge
+		{}, // review
 		{}, // archive
 		{}, // onboard
 	}
@@ -271,7 +279,7 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		})
 		require.NoErrorf(t, err, "fase %d (%s) falló inesperado", i, step.Slug)
 		require.Equal(t, "completed", out.StepStatus)
-		if i < 9 {
+		if i < 10 {
 			require.Equal(t, "running", out.FlowRunStatus,
 				"flow sigue running tras fase %d", i)
 			require.NotNil(t, out.NextStepID)
@@ -284,7 +292,6 @@ func TestService_Run_Full_EndToEnd_10Phases(t *testing.T) {
 		}
 	}
 
-	// Verificar status final via GetFlowStatus
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
 	require.Equal(t, "completed", st.Status)

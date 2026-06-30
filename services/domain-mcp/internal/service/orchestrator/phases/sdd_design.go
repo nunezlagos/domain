@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-// sddDesignHandler — fase sdd-design (ADRs + plan TDD). system_prompt en BD.
-
 type sddDesignHandler struct{}
 
 func NewSDDDesignHandler() Handler { return &sddDesignHandler{} }
@@ -39,9 +37,13 @@ func (h *sddDesignHandler) Build(_ context.Context, in Input) (*Output, error) {
 		UserPrompt:        b.String(),
 		// RFC 0006 D5: ADRs son REQUIRED. La fase no avanza hasta que el
 		// cliente reporte al menos un memory_ref type='adr' en MemoryRefsSaved.
+		// Feature B: el design.md es además un DOCUMENTO de primera clase;
+		// Required=true sobre knowledge_doc garantiza su registro en BD.
 		SuggestedSaves: []SuggestedSave{
 			{Type: "adr", Required: true,
 				Hint: "guardar al menos 1 ADR con type='adr' por decisión arquitectónica"},
+			{Type: "knowledge_doc", Required: true,
+				Hint: "persistí el design como knowledge_doc para que quede registro del change en BD"},
 		},
 		SkillThreshold: 0,
 		RetryPolicy:    RetryReemit,
@@ -55,8 +57,7 @@ func (h *sddDesignHandler) Validate(_ context.Context, _ *Output, result ClientR
 	if md, _ := result.Output["design_md"].(string); md == "" {
 		return errors.New("sdd-design: campo 'design_md' requerido")
 	}
-	// Sanity: al menos 1 ADR declarado en el output. La validación dura
-	// (mem_save existente) la hace ValidateRequiredSaves en el service.
+
 	if adrs, _ := result.Output["adrs"].([]any); len(adrs) == 0 {
 		return errors.New("sdd-design: array 'adrs' requerido (al menos 1 entry)")
 	}

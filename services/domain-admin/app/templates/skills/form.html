@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if mode == "create" %}Nueva skill{% else %}Editar {{ skill_obj.display_name }}{% endif %}
+{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Nueva skill" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% if mode == 'edit' %}{% url 'skills:detail' skill_obj.pk %}{% else %}{% url 'skills:list' %}{% endif %}"
+       class="text-secondary mnt-text-sm">← Volver</a>
+    <h1 class="mt-1">
+      {% if mode == "create" %}Nueva skill{% else %}Editar skill{% endif %}
+    </h1>
+    <p class="subtitle">
+      {% if mode == "create" %}
+        Crear una nueva skill de la plataforma
+      {% else %}
+        Modifica los datos de <strong>{{ skill_obj.display_name }}</strong>
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="card mnt-form-card">
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        <span class="alert-icon">✕</span>
+        <div class="alert-content">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group form-group--grow">
+        <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+        {{ form.slug }}
+        {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+        {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group form-group--grow">
+        <label class="form-label" for="{{ form.skill_type.id_for_label }}">Tipo</label>
+        {{ form.skill_type }}
+        {% if form.skill_type.errors %}<div class="form-help text-danger">{{ form.skill_type.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
+      {{ form.description }}
+      {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="{{ form.content.id_for_label }}">Contenido</label>
+      {{ form.content }}
+      {% if form.content.help_text %}<div class="form-help">{{ form.content.help_text }}</div>{% endif %}
+      {% if form.content.errors %}<div class="form-help text-danger">{{ form.content.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group form-group--grow">
+        <label class="form-label" for="{{ form.timeout_seconds.id_for_label }}">Timeout (segundos)</label>
+        {{ form.timeout_seconds }}
+        {% if form.timeout_seconds.help_text %}<div class="form-help">{{ form.timeout_seconds.help_text }}</div>{% endif %}
+        {% if form.timeout_seconds.errors %}<div class="form-help text-danger">{{ form.timeout_seconds.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group form-group--grow">
+        <label class="form-label" for="{{ form.tags.id_for_label }}">Tags</label>
+        {{ form.tags }}
+        {% if form.tags.help_text %}<div class="form-help">{{ form.tags.help_text }}</div>{% endif %}
+        {% if form.tags.errors %}<div class="form-help text-danger">{{ form.tags.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="d-flex gap-3">
+      <div class="form-group form-group--grow">
+        <label class="form-label">{{ form.idempotent }} Idempotente</label>
+        {% if form.idempotent.errors %}<div class="form-help text-danger">{{ form.idempotent.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <div class="form-group form-group--grow">
+        <label class="form-label">{{ form.has_side_effects }} Tiene efectos secundarios</label>
+        {% if form.has_side_effects.errors %}<div class="form-help text-danger">{{ form.has_side_effects.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="d-flex gap-2 mnt-form-actions">
+      <a href="{% if mode == 'edit' %}{% url 'skills:detail' skill_obj.pk %}{% else %}{% url 'skills:list' %}{% endif %}"
+         class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "create" %}Crear skill{% else %}Guardar cambios{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -96,7 +96,7 @@ func (s *SagaStore) RegisterCompensation(ctx context.Context, runID uuid.UUID, c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Reemplazar si ya existe para este stepKey (idempotente)
+
 	existing := s.plans[runID]
 	found := false
 	for i, c := range existing {
@@ -170,12 +170,12 @@ func (s *SagaStore) runCompensateWithRetry(ctx context.Context, runID uuid.UUID,
 		}
 		lastErr = err
 
-		// Si requiere cleanup manual, no reintentar automáticamente
+
 		if comp.RetryPolicy == RetryRequireCleanup {
 			break
 		}
 
-		// ISSUE-28.8: NewTimer reusable en loop (time.After leak).
+
 		backoff := time.Duration(attempt+1) * 500 * time.Millisecond
 		t := time.NewTimer(backoff)
 		select {
@@ -192,7 +192,7 @@ func (s *SagaStore) runCompensateWithRetry(ctx context.Context, runID uuid.UUID,
 // Si el RunCompensate hook no está configurado, se delega al pool.
 func (s *SagaStore) execOneCompensation(ctx context.Context, runID uuid.UUID, comp SagaCompensation) error {
 	_ = runID
-	// La ejecución real está en el runner que provee RunCompensate
+
 	return fmt.Errorf("RunCompensate hook not configured for step %s", comp.StepKey)
 }
 
@@ -258,14 +258,14 @@ var _ = pgx.ErrNoRows // uso indirecto
 type SagaExecutor struct {
 	Pool   *pgxpool.Pool
 	Logger *slog.Logger
-	// Store es el almacén de compensaciones.
+
 	Store *SagaStore
-	// RunCompensate es la función que ejecuta el step compensatorio.
-	// Provista por el runner del flow (no podemos invocar tipos de runner
-	// aquí para evitar ciclo de imports).
+
+
+
 	RunCompensate func(ctx context.Context, runID uuid.UUID, stepKey string, input json.RawMessage) error
-	// CompensateInParallel habilita ejecución paralela de compensaciones.
-	// Si algún step tiene RetryPolicy=require-cleanup, se ignora esta flag.
+
+
 	CompensateInParallel bool
 }
 
@@ -281,7 +281,7 @@ func (s *SagaExecutor) ExecuteCompensations(ctx context.Context, runID uuid.UUID
 		planByStep[p.StepKey] = p
 	}
 
-	// Identificar qué compensaciones ejecutar (solo steps que tienen compensate_ran distinto de vacío)
+
 	var toExecute []SagaCompensation
 	for i := len(completedSteps) - 1; i >= 0; i-- {
 		stepKey := completedSteps[i]
@@ -301,7 +301,7 @@ func (s *SagaExecutor) ExecuteCompensations(ctx context.Context, runID uuid.UUID
 		return nil
 	}
 
-	// Si algún step requiere cleanup manual, ejecutar secuencial
+
 	parallel := s.CompensateInParallel
 	for _, comp := range toExecute {
 		if comp.RetryPolicy == RetryRequireCleanup {
@@ -333,7 +333,7 @@ func (s *SagaExecutor) executeCompensationsSequential(ctx context.Context, runID
 				slog.String("step", comp.StepKey),
 				slog.Any("err", err),
 			)
-			// Best effort: continuar con las otras compensaciones
+
 		}
 	}
 	return nil
@@ -405,12 +405,12 @@ func (s *SagaExecutor) runCompensateWithRetry(ctx context.Context, runID uuid.UU
 		}
 		lastErr = err
 
-		// Si requiere cleanup manual, no reintentar
+
 		if comp.RetryPolicy == RetryRequireCleanup {
 			break
 		}
 
-		// ISSUE-28.8: NewTimer reusable en loop (time.After leak).
+
 		backoff := time.Duration(attempt+1) * 500 * time.Millisecond
 		t := time.NewTimer(backoff)
 		select {

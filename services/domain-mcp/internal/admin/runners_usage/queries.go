@@ -69,7 +69,7 @@ func QueryFlowRuns(ctx context.Context, pool *pgxpool.Pool, days int) (RunnerUsa
 // Si la tabla no existe (deploy fresh), retorna cero sin error.
 func QuerySkillExecutions(ctx context.Context, pool *pgxpool.Pool, days int) (RunnerUsage, error) {
 	var u RunnerUsage
-	// Probar existencia primero — tablas pueden no estar en deploys viejos.
+
 	var exists bool
 	err := pool.QueryRow(ctx, `
 		SELECT EXISTS (
@@ -208,8 +208,8 @@ func QueryHighFailureAgents(ctx context.Context, pool *pgxpool.Pool, days, limit
 	return out, nil
 }
 
-// REQ-42.2: QueryCostByRunner se eliminó junto con cost_logs (dominio
-// billing/costos). El campo CostByRunner del Report queda como mapa vacío.
+
+
 
 // BuildReportFromData construye un Report a partir de las métricas pre-collectadas.
 // Útil para tests con fake data o para cuando se quiere generar el reporte

@@ -36,7 +36,7 @@ func TestRecoverMiddleware_Panic_Returns500(t *testing.T) {
 	req := httptest.NewRequest("GET", "/foo", nil)
 	rr := httptest.NewRecorder()
 
-	// No debe propagar el panic (si llega acá sin recover, falla el test).
+
 	require.NotPanics(t, func() {
 		h.ServeHTTP(rr, req)
 	})
@@ -46,10 +46,10 @@ func TestRecoverMiddleware_Panic_Returns500(t *testing.T) {
 }
 
 func TestRecoverMiddleware_PanicAfterPartialWrite_DoesNotCrash(t *testing.T) {
-	// Si el handler empieza a escribir y después panica, no podemos
-	// cambiar el status code. El middleware debe swallow el panic
-	// sin crashear el server. El cliente verá el response parcial
-	// (con status code 200 que ya fue escrito) + connection drop.
+
+
+
+
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("partial"))
@@ -64,7 +64,7 @@ func TestRecoverMiddleware_PanicAfterPartialWrite_DoesNotCrash(t *testing.T) {
 		h.ServeHTTP(rr, req)
 	})
 
-	// Status ya escrito por el handler antes del panic.
+
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "partial", rr.Body.String())
 }

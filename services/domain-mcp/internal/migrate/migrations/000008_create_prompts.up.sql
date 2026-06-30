@@ -1,9 +1,9 @@
--- migration: create_prompts
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-03.3
--- description: prompts versionados con variables tipadas
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE prompts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

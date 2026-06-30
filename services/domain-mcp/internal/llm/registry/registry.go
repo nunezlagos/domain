@@ -43,26 +43,30 @@ func buildCatalog() map[string]*Model {
 		embDim                             int
 	}
 	entries := []entry{
-		// Anthropic — Claude 4.x
+
 		{"anthropic", "claude-opus-4-7", "Claude Opus 4.7", "completion", 1_000_000, 15.0, 75.0, 0},
 		{"anthropic", "claude-sonnet-4-6", "Claude Sonnet 4.6", "completion", 200_000, 3.0, 15.0, 0},
 		{"anthropic", "claude-haiku-4-5-20251001", "Claude Haiku 4.5", "completion", 200_000, 0.8, 4.0, 0},
-		// OpenAI
+
 		{"openai", "gpt-4o", "GPT-4o", "completion", 128_000, 2.5, 10.0, 0},
 		{"openai", "gpt-4o-mini", "GPT-4o mini", "completion", 128_000, 0.15, 0.6, 0},
 		{"openai", "gpt-5", "GPT-5", "completion", 200_000, 10.0, 30.0, 0},
 		{"openai", "text-embedding-3-small", "Embedding 3 Small", "embedding", 8192, 0.02, 0, 1536},
 		{"openai", "text-embedding-3-large", "Embedding 3 Large", "embedding", 8192, 0.13, 0, 3072},
-		// Voyage
+
 		{"voyage", "voyage-3", "Voyage 3", "embedding", 32000, 0.06, 0, 1024},
 		{"voyage", "voyage-code-3", "Voyage Code 3", "embedding", 32000, 0.18, 0, 1024},
-		// Ollama (local, sin costo)
+
 		{"ollama", "llama3.3:70b", "Llama 3.3 70B (local)", "completion", 128_000, 0, 0, 0},
 		{"ollama", "llama3.2:3b", "Llama 3.2 3B (local)", "completion", 128_000, 0, 0, 0},
 		{"ollama", "nomic-embed-text", "Nomic Embed Text (local)", "embedding", 8192, 0, 0, 768},
-		// Google Gemini
+
 		{"google", "gemini-1.5-pro", "Gemini 1.5 Pro", "completion", 2_000_000, 1.25, 5.0, 0},
 		{"google", "gemini-1.5-flash", "Gemini 1.5 Flash", "completion", 1_000_000, 0.075, 0.3, 0},
+
+		// MiniMax-M3 vía endpoint anthropic-compatible. Tarifas pendientes de
+		// confirmar: 0/0 es seguro (no rompe el hot path, solo no contabiliza costo).
+		{"minimax", "MiniMax-M3", "MiniMax M3", "completion", 1_000_000, 0, 0, 0},
 	}
 	out := make(map[string]*Model, len(entries))
 	for _, e := range entries {

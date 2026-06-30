@@ -1,0 +1,65 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de prompt para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
+{% endcomment %}
+
+{% block detail_title %}{{ prompt_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+  <p class="text-secondary mb-3">
+    <code>{{ prompt_obj.slug }}</code> · v{{ prompt_obj.version }}
+    · Estado:
+    {% if prompt_obj.is_enabled %}<span class="badge badge-success">Activo</span>
+    {% else %}<span class="badge badge-warning">Inactivo</span>
+    {% endif %}
+  </p>
+
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
+    <tbody>
+      <tr><th class="mnt-th-label">Slug</th><td><code>{{ prompt_obj.slug }}</code></td></tr>
+      <tr><th>Version</th><td>v{{ prompt_obj.version }}</td></tr>
+      <tr><th>Descripcion</th><td>{{ prompt_obj.description|default:"—" }}</td></tr>
+      <tr><th>Tags</th><td>{% for tag in prompt_obj.tags %}<span class="badge badge-secondary">{{ tag }}</span> {% empty %}—{% endfor %}</td></tr>
+      <tr><th>Proyecto</th><td>{% if prompt_obj.project_id %}<code>{{ prompt_obj.project_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Version padre</th><td>{% if prompt_obj.parent_version_id %}<code>{{ prompt_obj.parent_version_id }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Creado por</th><td>{% if prompt_obj.created_by %}<code>{{ prompt_obj.created_by }}</code>{% else %}—{% endif %}</td></tr>
+      <tr><th>Creado</th><td>{{ prompt_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ prompt_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  <h4 class="mnt-detail-section">Cuerpo</h4>
+  <pre class="mnt-pre-alt">{{ prompt_obj.body }}</pre>
+
+  <h4 class="mnt-detail-section">Variables</h4>
+  {% if prompt_obj.variables %}
+    <pre class="mnt-pre-alt">{{ prompt_obj.variables }}</pre>
+  {% else %}
+    <p class="text-secondary mnt-text-sm">Sin variables definidas.</p>
+  {% endif %}
+{% endblock %}
+
+{% block detail_actions %}
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ prompt_obj.pk }}">
+    Editar
+  </button>
+  {% if prompt_obj.is_enabled %}
+    <button type="button" class="btn btn-warning"
+            data-action="toggle" data-id="{{ prompt_obj.pk }}">
+      Desactivar
+    </button>
+  {% else %}
+    <button type="button" class="btn btn-success"
+            data-action="toggle" data-id="{{ prompt_obj.pk }}">
+      Activar
+    </button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ prompt_obj.pk }}"
+          data-name="{{ prompt_obj.display_name }}">
+    Eliminar
+  </button>
+{% endblock %}

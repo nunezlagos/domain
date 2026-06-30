@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Feedback · Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Feedback" %}
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .fb-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-lg);
+    }
+    .fb-kpi {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md) var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+    .fb-kpi__val { font-size: var(--fs-2xl); font-weight: var(--fw-bold); line-height: 1; }
+    .fb-kpi__val.up   { color: var(--color-success); }
+    .fb-kpi__val.down { color: var(--color-danger, #e5484d); }
+    .fb-kpi__label {
+      font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+      color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .04em;
+    }
+
+    .fb-section { margin-bottom: var(--space-xl); }
+    .fb-section__title {
+      font-size: var(--fs-base); font-weight: var(--fw-semibold);
+      color: var(--color-text-primary); margin-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--color-border-light); padding-bottom: var(--space-xs);
+    }
+
+    .fb-filters { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap; }
+    .fb-filter {
+      padding: 4px 14px; border-radius: var(--radius-full); font-size: var(--fs-sm);
+      font-weight: var(--fw-semibold); border: 1px solid var(--color-border);
+      color: var(--color-text-secondary); text-decoration: none; background: var(--color-bg-surface);
+    }
+    .fb-filter.active { border-color: var(--color-text-link); color: var(--color-text-link); background: var(--color-bg-elevated); }
+
+    .fb-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .fb-table th {
+      text-align: left; padding: 8px 10px; font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold); color: var(--color-text-muted);
+      text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 1px solid var(--color-border); background: var(--color-bg-elevated);
+    }
+    .fb-table td {
+      padding: 8px 10px; border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-secondary); vertical-align: top;
+    }
+    .fb-table tr:last-child td { border-bottom: none; }
+    .fb-table tr:hover td { background: var(--color-bg-elevated); }
+    .fb-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .fb-rating { display: inline-block; padding: 2px 10px; border-radius: var(--radius-full); font-weight: var(--fw-semibold); border: 1px solid; }
+    .fb-rating.up   { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
+    .fb-rating.down { color: var(--color-danger, #e5484d); border-color: var(--color-danger, #e5484d); background: var(--color-danger-soft, rgba(229,72,77,.12)); }
+
+    .fb-comment { max-width: 420px; }
+    .empty-state { text-align: center; padding: var(--space-xl); color: var(--color-text-muted); font-size: var(--fs-sm); }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: var(--space-lg);">
+
+  <div style="margin-bottom:var(--space-lg);">
+    <h2 style="margin:0;font-size:var(--fs-xl);">Feedback de respuestas</h2>
+    <p style="margin:0;color:var(--color-text-muted);font-size:var(--fs-sm);">
+      Votos 👍/👎 que los usuarios dejan en cada respuesta del bot de soporte (HU-52.1).
+    </p>
+  </div>
+
+  {# ── Resumen por skill ─────────────────────────────────────────────── #}
+  <div class="fb-section">
+    <div class="fb-section__title">Resumen por skill</div>
+    {% if summary %}
+    <div class="table-wrapper">
+      <table class="fb-table">
+        <thead>
+          <tr>
+            <th>Skill</th>
+            <th class="num">👍</th>
+            <th class="num">👎</th>
+            <th class="num">% positivo</th>
+            <th class="num">Total</th>
+            <th>Último feedback</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary %}
+          <tr>
+            <td><code>{{ row.skill_slug }}</code></td>
+            <td class="num" style="color:var(--color-success);">{{ row.count_up }}</td>
+            <td class="num" style="color:var(--color-danger,#e5484d);">{{ row.count_down }}</td>
+            <td class="num">{{ row.pct_up }}%</td>
+            <td class="num">{{ row.total }}</td>
+            <td style="white-space:nowrap;font-size:var(--fs-xs);">{{ row.last_feedback_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state"><p>Aún no hay feedback registrado.</p></div>
+    {% endif %}
+  </div>
+
+  {# ── Lista detallada ───────────────────────────────────────────────── #}
+  <div class="fb-section">
+    <div class="fb-section__title">Detalle</div>
+
+    <div class="fb-filters">
+      <a href="?rating=all" class="fb-filter {% if rating_filter == 'all' %}active{% endif %}">Todos</a>
+      <a href="?rating=positive" class="fb-filter {% if rating_filter == 'positive' %}active{% endif %}">👍 Positivos</a>
+      <a href="?rating=negative" class="fb-filter {% if rating_filter == 'negative' %}active{% endif %}">👎 Negativos</a>
+    </div>
+
+    {% if items %}
+    <div class="table-wrapper">
+      <table class="fb-table">
+        <thead>
+          <tr>
+            <th style="width:160px;">Fecha</th>
+            <th>Rating</th>
+            <th>Skill</th>
+            <th class="num">Mensaje</th>
+            <th>Comentario</th>
+            <th>Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fb in items %}
+          <tr>
+            <td style="white-space:nowrap;font-size:var(--fs-xs);">{{ fb.created_at|date:"d/m/Y H:i:s" }}</td>
+            <td>
+              {% if fb.is_positive %}
+                <span class="fb-rating up">👍 +1</span>
+              {% else %}
+                <span class="fb-rating down">👎 −1</span>
+              {% endif %}
+            </td>
+            <td>{% if fb.skill_slug %}<code>{{ fb.skill_slug }}</code>{% else %}<span style="color:var(--color-text-muted);">(sin skill)</span>{% endif %}</td>
+            <td class="num">#{{ fb.message_id }}</td>
+            <td class="fb-comment">{{ fb.comment|default:"—" }}</td>
+            <td style="font-size:var(--fs-xs);">{{ fb.user_email|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state"><p>Sin feedback para este filtro.</p></div>
+    {% endif %}
+  </div>
+
+</div>{# /.card #}
+{% endblock %}

@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	// TokenPrefix marca el formato del token plaintext.
+
 	TokenPrefix = "et_"
-	// PrefixLen chars visibles para indexing en DB (et_ + 16 random).
+
 	PrefixLen = 19
-	// SecretBytes random del token (32 → 43 chars base64url).
+
 	SecretBytes = 32
-	// BcryptCost cost del hash. 12 = ~250ms en hardware moderno (mismo que auth_api_keys).
+
 	BcryptCost = 12
 )
 

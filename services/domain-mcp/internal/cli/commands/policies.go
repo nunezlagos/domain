@@ -44,7 +44,7 @@ func importPoliciesMD(c *clicli.Client, gf *globalFlags, args []string) int {
 		case "--dry-run":
 			dryRun = true
 		default:
-			// primer positional = dir
+
 			if dir == "." {
 				dir = args[i]
 			}
@@ -65,7 +65,7 @@ func importPoliciesMD(c *clicli.Client, gf *globalFlags, args []string) int {
 		slug := strings.TrimSuffix(e.Name(), ".md")
 		kind := "convention"
 
-		// Detectar kind del nombre: si tiene formato <kind>.<slug>
+
 		if parts := strings.SplitN(slug, ".", 2); len(parts) == 2 {
 			kind = parts[0]
 			slug = parts[1]
@@ -78,7 +78,7 @@ func importPoliciesMD(c *clicli.Client, gf *globalFlags, args []string) int {
 		}
 		body := string(data)
 
-		// Front matter opcional
+
 		if strings.HasPrefix(body, "---") {
 			if idx := strings.Index(body[3:], "\n---"); idx >= 0 {
 				fm := body[3 : idx+3]
@@ -149,7 +149,7 @@ func exportPoliciesMD(c *clicli.Client, gf *globalFlags, args []string) int {
 
 	list, ok := raw.([]any)
 	if !ok {
-		// Puede venir como map con key "data"
+
 		if m, ok := raw.(map[string]any); ok {
 			if d, ok := m["data"]; ok {
 				list, _ = d.([]any)

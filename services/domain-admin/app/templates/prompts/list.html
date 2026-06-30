@@ -1,0 +1,47 @@
+{% extends "maintainers/list_base.html" %}
+{% load static %}
+{% comment %}
+Listado de prompts. Extiende maintainers/list_base.html: este define la
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
+con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline
+ni estilos inline.
+{% endcomment %}
+
+{% block page_title %}Prompts{% endblock %}
+{% block header_title %}Prompts{% endblock %}
+{% block page_subtitle %}Prompts versionados que la organizacion usa en agentes y flujos{% endblock %}
+{% block create_label %}+ Nuevo prompt{% endblock %}
+{% block search_placeholder %}Slug, descripcion o contenido...{% endblock %}
+
+{% block filters %}
+  <div>
+    <label class="form-label" for="f-active">Activo</label>
+    <select data-filter name="active" id="f-active" class="form-control form-select mnt-filter-select">
+      <option value="" {% if selected_active == "" %}selected{% endif %}>Todos</option>
+      <option value="1" {% if selected_active == "1" %}selected{% endif %}>Si</option>
+      <option value="0" {% if selected_active == "0" %}selected{% endif %}>No</option>
+    </select>
+  </div>
+  <div class="mnt-filters-search">
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Slug, descripcion o contenido..." autocomplete="off" data-search-input>
+  </div>
+  <div>
+    <button type="button" class="btn btn-excel" data-export="/prompts/export/"
+            title="Exportar consolidado a Excel (CSV)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+      </svg>
+      Excel
+    </button>
+  </div>
+{% endblock %}
+
+{% block table_area_id %}prompts-table-area{% endblock %}
+{% block base_url %}/prompts/{% endblock %}
+{% block signal_url %}{% url 'prompts:signal' %}{% endblock %}
+
+{% block table %}{% include "prompts/_table_partial.html" %}{% endblock %}

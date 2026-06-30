@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- Scan tests ---
+
 
 func TestScan_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
@@ -89,7 +89,7 @@ func TestScan_IsReadOnly(t *testing.T) {
 	require.NoError(t, os.MkdirAll(proj, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(proj, "opencode.json"), []byte(`{}`), 0o644))
 
-	// Capture original mtime
+
 	origInfo, err := os.Stat(proj)
 	require.NoError(t, err)
 	origMtime := origInfo.ModTime()
@@ -97,13 +97,13 @@ func TestScan_IsReadOnly(t *testing.T) {
 	_, err = Scan(dir)
 	require.NoError(t, err)
 
-	// Verify nothing changed
+
 	newInfo, err := os.Stat(proj)
 	require.NoError(t, err)
 	require.True(t, newInfo.ModTime().Equal(origMtime), "scan should not modify anything")
 }
 
-// --- FormatTable tests ---
+
 
 func TestFormatTable_Empty(t *testing.T) {
 	out := FormatTable(nil)
@@ -127,7 +127,7 @@ func TestFormatTable_WithProjects(t *testing.T) {
 	require.Contains(t, out, "no")
 }
 
-// --- Propagate tests ---
+
 
 func TestPropagate_SelectNone(t *testing.T) {
 	infos := []ProjectInfo{
@@ -153,7 +153,7 @@ func TestPropagate_ContinuesOnFailure(t *testing.T) {
 	require.Len(t, errs, 2)
 }
 
-// --- LoadPropagatePaths tests ---
+
 
 func TestLoadPropagatePaths_Default(t *testing.T) {
 	dir := t.TempDir()

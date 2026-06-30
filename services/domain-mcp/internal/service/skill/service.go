@@ -25,10 +25,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pgvector/pgvector-go"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/service/skill/skilldb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -120,6 +123,13 @@ type Service struct {
 	Embedder llm.Embedder
 }
 
+func (s *Service) q(ctx context.Context) *skilldb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return skilldb.New(tx)
+	}
+	return skilldb.New(s.Pool)
+}
+
 // validateSchema usa santhosh-tekuri/jsonschema (cargado por mcp-go) para
 // confirmar que el shape es un JSON Schema válido.
 func validateSchema(schema map[string]any) error {
@@ -134,6 +144,86 @@ func validateSchema(schema map[string]any) error {
 		return fmt.Errorf("%w: %v", ErrInvalidSchema, err)
 	}
 	return nil
+}
+
+func toSkill(id uuid.UUID, slug string, name string, description string, skillType string, content string, inputSchema, outputSchema []byte, timeoutSeconds int32, idempotent, hasSideEffects bool, dependsOn, tags []string, seedManaged bool, seedVersion *int32, isUserModified bool, createdAt, updatedAt time.Time) Skill {
+	var inMap, outMap map[string]any
+	if len(inputSchema) > 0 {
+		_ = json.Unmarshal(inputSchema, &inMap)
+	}
+	if len(outputSchema) > 0 {
+		_ = json.Unmarshal(outputSchema, &outMap)
+	}
+	var sv *int
+	if seedVersion != nil {
+		v := int(*seedVersion)
+		sv = &v
+	}
+	return Skill{
+		ID: id, Slug: slug, Name: name, Description: description,
+		SkillType: skillType, Content: content,
+		InputSchema: inMap, OutputSchema: outMap,
+		TimeoutSeconds: int(timeoutSeconds),
+		Idempotent: idempotent, HasSideEffects: hasSideEffects,
+		DependsOn: dependsOn, Tags: tags,
+		SeedManaged: seedManaged, SeedVersion: sv,
+		IsUserModified: isUserModified,
+		CreatedAt: createdAt, UpdatedAt: updatedAt,
+	}
+}
+
+func toSkillFromCreateRow(r skilldb.SkillCreateRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSearchResultFromWithVector(r skilldb.SkillSearchHybridWithVectorRow) SearchResult {
+	return SearchResult{
+		Skill: toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+			r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+			r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt),
+		Score: r.Score, BM25Rank: int(r.Bm25Rank), VectorRank: int(r.VecRank),
+	}
+}
+
+func toSkillFromGetByIDRow(r skilldb.SkillGetByIDRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSkillFromGetBySlugRow(r skilldb.SkillGetBySlugRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSkillFromListRow(r skilldb.SkillListRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSkillFromUpdateRow(r skilldb.SkillUpdateRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSkillFromUpdateWithEmbeddingRow(r skilldb.SkillUpdateWithEmbeddingRow) Skill {
+	return toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+		r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+		r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt)
+}
+
+func toSearchResultFromBM25(r skilldb.SkillSearchHybridBM25OnlyRow) SearchResult {
+	return SearchResult{
+		Skill: toSkill(r.ID, r.Slug, r.Name, r.Description, r.SkillType, r.Content,
+			r.InputSchema, r.OutputSchema, r.TimeoutSeconds, r.Idempotent, r.HasSideEffects,
+			r.DependsOn, r.Tags, r.SeedManaged, r.SeedVersion, r.IsUserModified, r.CreatedAt, r.UpdatedAt),
+		Score: r.Score, BM25Rank: int(r.Bm25Rank), VectorRank: int(r.VecRank),
+	}
 }
 
 // Create persiste skill + auto-embed sobre (name + " " + description).
@@ -172,34 +262,31 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 		in.DependsOn = []string{}
 	}
 
-	// Embedding
+
 	embedText := in.Name + " " + in.Description
 	vec, err := s.Embedder.Embed(ctx, embedText)
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
 	}
-	embedLit := vectorLiteral(vec)
 	inJSON, _ := json.Marshal(in.InputSchema)
 	outJSON, _ := json.Marshal(in.OutputSchema)
 
-	var sk Skill
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO skills
-		   (slug, name, description, skill_type, content,
-		    input_schema, output_schema, timeout_seconds, idempotent,
-		    has_side_effects, depends_on, tags, embedding)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::vector)
-		 RETURNING id, slug, name, COALESCE(description,''),
-		           skill_type, COALESCE(content,''), input_schema, output_schema,
-		           timeout_seconds, idempotent, has_side_effects, depends_on, tags,
-		           seed_managed, seed_version, is_user_modified, created_at, updated_at`,
-		in.Slug, in.Name, nullStr(in.Description), in.SkillType, in.Content,
-		inJSON, outJSON, in.TimeoutSeconds, in.Idempotent,
-		in.HasSideEffects, in.DependsOn, in.Tags, embedLit,
-	).Scan(&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
-		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
-		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
-		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
+	emb := pgvector.NewVector(vec)
+	row, err := s.q(ctx).SkillCreate(ctx, skilldb.SkillCreateParams{
+		Slug:           in.Slug,
+		Name:           in.Name,
+		Description:    nullStr(in.Description),
+		SkillType:      in.SkillType,
+		Content:        nullStr(in.Content),
+		InputSchema:    inJSON,
+		OutputSchema:   outJSON,
+		TimeoutSeconds: int32(in.TimeoutSeconds),
+		Idempotent:     in.Idempotent,
+		HasSideEffects: in.HasSideEffects,
+		DependsOn:      in.DependsOn,
+		Tags:           in.Tags,
+		Embedding:      &emb,
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -212,6 +299,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 		}
 		return nil, fmt.Errorf("insert skill: %w", err)
 	}
+	sk := toSkillFromCreateRow(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -282,59 +370,68 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 	}
 	userMod := prev.IsUserModified || prev.SeedManaged
 
-	// Re-embed solo si name o description cambian
-	embedLit := ""
+
 	reembed := (in.Name != nil && *in.Name != prev.Name) ||
 		(in.Description != nil && *in.Description != prev.Description)
+	var embedVec *pgvector.Vector
 	if reembed {
 		vec, err := s.Embedder.Embed(ctx, name+" "+desc)
 		if err != nil {
 			return nil, fmt.Errorf("embed: %w", err)
 		}
-		embedLit = vectorLiteral(vec)
+		v := pgvector.NewVector(vec)
+		embedVec = &v
 	}
 
 	inJSON, _ := json.Marshal(inSchema)
 	outJSON, _ := json.Marshal(outSchema)
 
 	var sk Skill
-	var query string
-	args := []any{id, name, nullStr(desc), nullStr(content), inJSON, outJSON,
-		timeout, idempotent, hasSE, dependsOn, tags, userMod}
 	if reembed {
-		query = `UPDATE skills
-		         SET name = $2, description = $3, content = $4, input_schema = $5,
-		             output_schema = $6, timeout_seconds = $7, idempotent = $8,
-		             has_side_effects = $9, depends_on = $10, tags = $11,
-		             is_user_modified = $12, embedding = $13::vector
-		         WHERE id = $1 AND deleted_at IS NULL
-		         RETURNING id, slug, name, COALESCE(description,''),
-		                   skill_type, COALESCE(content,''), input_schema, output_schema,
-		                   timeout_seconds, idempotent, has_side_effects, depends_on, tags,
-		                   seed_managed, seed_version, is_user_modified, created_at, updated_at`
-		args = append(args, embedLit)
+		row, err := s.q(ctx).SkillUpdateWithEmbedding(ctx, skilldb.SkillUpdateWithEmbeddingParams{
+			Name:           name,
+			Description:    nullStr(desc),
+			Content:        nullStr(content),
+			InputSchema:    inJSON,
+			OutputSchema:   outJSON,
+			TimeoutSeconds: int32(timeout),
+			Idempotent:     idempotent,
+			HasSideEffects: hasSE,
+			DependsOn:      dependsOn,
+			Tags:           tags,
+			IsUserModified: userMod,
+			Embedding:      embedVec,
+			ID:             id,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("update skill: %w", err)
+		}
+		sk = toSkillFromUpdateWithEmbeddingRow(row)
 	} else {
-		query = `UPDATE skills
-		         SET name = $2, description = $3, content = $4, input_schema = $5,
-		             output_schema = $6, timeout_seconds = $7, idempotent = $8,
-		             has_side_effects = $9, depends_on = $10, tags = $11,
-		             is_user_modified = $12
-		         WHERE id = $1 AND deleted_at IS NULL
-		         RETURNING id, slug, name, COALESCE(description,''),
-		                   skill_type, COALESCE(content,''), input_schema, output_schema,
-		                   timeout_seconds, idempotent, has_side_effects, depends_on, tags,
-		                   seed_managed, seed_version, is_user_modified, created_at, updated_at`
-	}
-	err = s.Pool.QueryRow(ctx, query, args...).Scan(
-		&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
-		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
-		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
-		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("update skill: %w", err)
+		row, err := s.q(ctx).SkillUpdate(ctx, skilldb.SkillUpdateParams{
+			Name:           name,
+			Description:    nullStr(desc),
+			Content:        nullStr(content),
+			InputSchema:    inJSON,
+			OutputSchema:   outJSON,
+			TimeoutSeconds: int32(timeout),
+			Idempotent:     idempotent,
+			HasSideEffects: hasSE,
+			DependsOn:      dependsOn,
+			Tags:           tags,
+			IsUserModified: userMod,
+			ID:             id,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("update skill: %w", err)
+		}
+		sk = toSkillFromUpdateRow(row)
 	}
 
 	if s.Audit != nil {
@@ -350,12 +447,27 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Skill, error) {
-	return s.queryOne(ctx, `WHERE id = $1 AND deleted_at IS NULL`, id)
+	row, err := s.q(ctx).SkillGetByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	sk := toSkillFromGetByIDRow(row)
+	return &sk, nil
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Skill, error) {
-	return s.queryOne(ctx,
-		`WHERE slug = $1 AND deleted_at IS NULL AND proposed = false`, slug)
+	row, err := s.q(ctx).SkillGetBySlug(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	sk := toSkillFromGetBySlugRow(row)
+	return &sk, nil
 }
 
 type ListFilter struct {
@@ -368,40 +480,26 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, f ListFilter) ([]Sk
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50
 	}
-	q := `SELECT id, slug, name, COALESCE(description,''),
-	        skill_type, COALESCE(content,''), input_schema, output_schema,
-	        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
-	        seed_managed, seed_version, is_user_modified, created_at, updated_at
-	      FROM skills WHERE deleted_at IS NULL AND proposed = false`
-	args := []any{}
+	var skillType, tag *string
 	if f.SkillType != "" {
-		q += fmt.Sprintf(" AND skill_type = $%d", len(args)+1)
-		args = append(args, f.SkillType)
+		skillType = &f.SkillType
 	}
 	if f.Tag != "" {
-		q += fmt.Sprintf(" AND $%d = ANY(tags)", len(args)+1)
-		args = append(args, f.Tag)
+		tag = &f.Tag
 	}
-	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", len(args)+1)
-	args = append(args, f.Limit)
-
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).SkillList(ctx, skilldb.SkillListParams{
+		SkillType:   skillType,
+		Tag:         tag,
+		ResultLimit: int32(f.Limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
-	defer rows.Close()
-	var out []Skill
-	for rows.Next() {
-		var sk Skill
-		if err := rows.Scan(&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
-			&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
-			&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
-			&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, sk)
+	out := make([]Skill, len(rows))
+	for i, r := range rows {
+		out[i] = toSkillFromListRow(r)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // SearchHybrid sobre description_tsv + embedding con RRF fusion.
@@ -421,70 +519,57 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 	const rrfK = 60
 	const candidates = 100
 
-	var rows pgx.Rows
 	if useVector {
-		rows, err = s.Pool.Query(ctx, `
-WITH bm25 AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(description_tsv, q) DESC) AS r
-  FROM skills, plainto_tsquery('spanish', $1) AS q
-  WHERE deleted_at IS NULL AND proposed = false AND description_tsv @@ q
-  LIMIT $3
-),
-vec AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector ASC) AS r
-  FROM skills
-  WHERE deleted_at IS NULL AND proposed = false AND embedding IS NOT NULL
-  LIMIT $3
-),
-fused AS (
-  SELECT id,
-         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score,
-         COALESCE(bm25.r, 0) AS bm25_rank,
-         COALESCE(vec.r, 0) AS vec_rank
-  FROM bm25 FULL OUTER JOIN vec USING (id)
-)
-SELECT s.id, s.slug, s.name, COALESCE(s.description,''),
-       s.skill_type, COALESCE(s.content,''), s.input_schema, s.output_schema,
-       s.timeout_seconds, s.idempotent, s.has_side_effects, s.depends_on, s.tags,
-       s.seed_managed, s.seed_version, s.is_user_modified, s.created_at, s.updated_at,
-       f.score, f.bm25_rank, f.vec_rank
-FROM fused f
-JOIN skills s ON s.id = f.id
-ORDER BY f.score DESC
-LIMIT $5
-`, query, vectorLiteral(vec), candidates, rrfK, limit)
-	} else {
-		rows, err = s.Pool.Query(ctx, `
-SELECT s.id, s.slug, s.name, COALESCE(s.description,''),
-       s.skill_type, COALESCE(s.content,''), s.input_schema, s.output_schema,
-       s.timeout_seconds, s.idempotent, s.has_side_effects, s.depends_on, s.tags,
-       s.seed_managed, s.seed_version, s.is_user_modified, s.created_at, s.updated_at,
-       ts_rank(s.description_tsv, q)::float8 AS score, 0::bigint AS bm25_rank, 0::bigint AS vec_rank
-FROM skills s, plainto_tsquery('spanish', $1) AS q
-WHERE s.deleted_at IS NULL AND s.proposed = false AND s.description_tsv @@ q
-ORDER BY score DESC LIMIT $2
-`, query, limit)
+		qvec := pgvector.NewVector(vec)
+		rows, err := s.q(ctx).SkillSearchHybridWithVector(ctx, skilldb.SkillSearchHybridWithVectorParams{
+			ResultLimit: int32(limit),
+			QueryText:   query,
+			Candidates:  int32(candidates),
+			QueryVec:    &qvec,
+			RrfK:        int32(rrfK),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("search: %w", err)
+		}
+		out := make([]SearchResult, len(rows))
+		for i, r := range rows {
+			out[i] = toSearchResultFromWithVector(r)
+		}
+		return out, nil
 	}
+	rows, err := s.q(ctx).SkillSearchHybridBM25Only(ctx, skilldb.SkillSearchHybridBM25OnlyParams{
+		QueryText:   query,
+		ResultLimit: int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	defer rows.Close()
-	var out []SearchResult
-	for rows.Next() {
-		var r SearchResult
-		var bm25Rank, vecRank int64
-		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.Description,
-			&r.SkillType, &r.Content, &r.InputSchema, &r.OutputSchema,
-			&r.TimeoutSeconds, &r.Idempotent, &r.HasSideEffects, &r.DependsOn, &r.Tags,
-			&r.SeedManaged, &r.SeedVersion, &r.IsUserModified, &r.CreatedAt, &r.UpdatedAt,
-			&r.Score, &bm25Rank, &vecRank); err != nil {
-			return nil, err
-		}
-		r.BM25Rank = int(bm25Rank)
-		r.VectorRank = int(vecRank)
-		out = append(out, r)
+	out := make([]SearchResult, len(rows))
+	for i, r := range rows {
+		out[i] = toSearchResultFromBM25(r)
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+// ApplicableSkillIDs devuelve el set de skill IDs que APLICAN a un proyecto
+// (modelo hibrido: auto + excluibles). Las globales (project_id IS NULL) aplican
+// automaticamente a TODOS los proyectos; las del proyecto (project_id = P)
+// tambien. project_skills se usa SOLO para EXCLUIR (fila con is_enabled = FALSE).
+// El caller filtra los resultados de SearchHybrid contra este set. Si projectID
+// es Nil devuelve nil (sin scope → el caller no filtra).
+func (s *Service) ApplicableSkillIDs(ctx context.Context, projectID uuid.UUID) (map[uuid.UUID]bool, error) {
+	if projectID == uuid.Nil {
+		return nil, nil
+	}
+	rows, err := s.q(ctx).SkillApplicableIDs(ctx, &projectID)
+	if err != nil {
+		return nil, fmt.Errorf("applicable skills: %w", err)
+	}
+	out := make(map[uuid.UUID]bool, len(rows))
+	for _, id := range rows {
+		out[id] = true
+	}
+	return out, nil
 }
 
 // SoftDelete marca deleted_at si no hay dependencias activas.
@@ -496,13 +581,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return err
 	}
 
-	// Si otro skill nos referencia en depends_on → conflict
-	var depCount int
-	err = s.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM skills
-		 WHERE deleted_at IS NULL AND $1 = ANY(depends_on)`,
-		prev.Slug,
-	).Scan(&depCount)
+	depCount, err := s.q(ctx).SkillSoftDeleteCountDeps(ctx, prev.Slug)
 	if err != nil {
 		return fmt.Errorf("check deps: %w", err)
 	}
@@ -510,9 +589,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		return ErrHasDependencies
 	}
 
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE skills SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
-	if err != nil {
+	if err := s.q(ctx).SkillSoftDelete(ctx, id); err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}
 	if s.Audit != nil {
@@ -551,46 +628,9 @@ func (s *Service) ValidateInput(ctx context.Context, skillID uuid.UUID, input ma
 	return nil
 }
 
-func (s *Service) queryOne(ctx context.Context, where string, args ...any) (*Skill, error) {
-	var sk Skill
-	q := `SELECT id, slug, name, COALESCE(description,''),
-	        skill_type, COALESCE(content,''), input_schema, output_schema,
-	        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
-	        seed_managed, seed_version, is_user_modified, created_at, updated_at
-	      FROM skills ` + where
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(
-		&sk.ID, &sk.Slug, &sk.Name, &sk.Description,
-		&sk.SkillType, &sk.Content, &sk.InputSchema, &sk.OutputSchema,
-		&sk.TimeoutSeconds, &sk.Idempotent, &sk.HasSideEffects, &sk.DependsOn, &sk.Tags,
-		&sk.SeedManaged, &sk.SeedVersion, &sk.IsUserModified, &sk.CreatedAt, &sk.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query: %w", err)
-	}
-	return &sk, nil
-}
-
-func vectorLiteral(v []float32) string {
-	if len(v) == 0 {
-		return "[]"
-	}
-	var sb strings.Builder
-	sb.WriteByte('[')
-	for i, f := range v {
-		if i > 0 {
-			sb.WriteByte(',')
-		}
-		fmt.Fprintf(&sb, "%g", f)
-	}
-	sb.WriteByte(']')
-	return sb.String()
-}
-
-func nullStr(s string) any {
+func nullStr(s string) *string {
 	if s == "" {
 		return nil
 	}
-	return s
+	return &s
 }

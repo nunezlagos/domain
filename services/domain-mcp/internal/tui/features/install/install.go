@@ -1,21 +1,21 @@
-// Package install — TUI feature para `domain install` (HU-01.11 + 01.13,
-// rediseño 2026-06-11: config completa primero, instalación automática
-// verbosa después).
-//
-// Flow:
-//   1. welcome
-//   2. modePrompt:   (•) local / ( ) cloud / [-] hybrid  + Continuar
-//   3. depCheck:     resultados de go/git/[docker]; bloquea si falta algo
-//   4. portPrompt:   (local) puerto sugerido libre, editable
-//      dsnPrompt:    (cloud) DSN de Postgres
-//   5. initPrompt:   importar configs .md a la BD  + Continuar
-//   6. agentsPrompt: MULTI [X] opencode / [ ] claude-code + Continuar
-//   7. summary:      toda la config elegida → [ Instalar ]
-//   8. running:      sub-process con output en vivo (verboso)
-//   9. done
-//
-// Regla de navegación: enter/espacio ELIGE, nunca avanza. Se avanza con
-// el botón Continuar de cada vista (o enter en inputs de texto).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package install
 
@@ -83,7 +83,7 @@ type Model struct {
 	deps     []installer.CheckResult
 	depsMissing bool
 
-	// Config elegida
+
 	mode     modeSel
 	port     string
 	portErr  string
@@ -96,7 +96,7 @@ type Model struct {
 	err    error
 	stderr string
 
-	// Output en vivo del sub-process (running)
+
 	lines       []string
 	steps       []stepLine
 	runCh       chan tea.Msg
@@ -105,7 +105,7 @@ type Model struct {
 	activeNote  string    // última línea informativa del paso activo
 	summaryLine string    // "ok=N skipped=N ..." parseada del stream
 
-	// sub-models
+
 	modePrompt   selectable.Model
 	initPrompt   selectable.Model
 	agentsPrompt selectable.Model
@@ -173,7 +173,7 @@ func tickCmd() tea.Cmd {
 
 // Update implementa tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Sub-prompts: delegar primero.
+
 	switch m.state {
 	case stateModePrompt:
 		if sel, ok := msg.(selectable.SelectMsg); ok {
@@ -502,8 +502,8 @@ func (m *Model) viewDSNPrompt() string {
 func (m *Model) viewEmailPrompt() string {
 	s := "\n  " + styles.Title.Render("Tu email") + "\n\n"
 	s += styles.ItemDesc.Render("  Es la cuenta admin de tu instalación. En el primer install se") + "\n"
-	s += styles.ItemDesc.Render("  crea con este email; en re-installs el código OTP llega acá") + "\n"
-	s += styles.ItemDesc.Render("  (en local lo buscamos solos en mailpit, sin pasos manuales).") + "\n\n"
+	s += styles.ItemDesc.Render("  crea con este email; en re-installs el admin emite nueva API key") + "\n"
+	s += styles.ItemDesc.Render("  (vía `domain member-create` o dev-bootstrap, sin email).") + "\n\n"
 	s += "  Email: " + styles.Accent.Render(m.email) + styles.Prompt.Render("▌") + "\n"
 	if m.emailErr != "" {
 		s += "\n  " + styles.Fail.Render("✗ "+m.emailErr) + "\n"
@@ -587,8 +587,8 @@ func (m *Model) feedLine(raw string) {
 	case '✗':
 		word = "error"
 	default:
-		// Línea informativa del paso en curso (e.g. "(terminando server
-		// huérfano...)", "… esperando /health (8s)"): mostrarla al lado.
+
+
 		m.activeNote = t
 		return
 	}
@@ -630,8 +630,8 @@ func (m *Model) viewRunning() string {
 	}
 	s += m.renderSteps(spinnerFrames[m.frame%len(spinnerFrames)])
 
-	// Barra de progreso indeterminada + elapsed del paso activo, para
-	// que NUNCA se sienta colgado (e.g. esperando /health del server).
+
+
 	if last := m.steps[len(m.steps)-1]; last.status == "" {
 		elapsed := int(time.Since(m.stepStart).Seconds())
 		bar := indeterminateBar(m.frame, 14)
@@ -706,11 +706,11 @@ func (m *Model) viewDone() string {
 		}
 	} else {
 		s += styles.Ok.Render("  ✓ Instalación completa") + "\n\n"
-		// Recap: la misma lista compacta de pasos (resultado + path).
+
 		if len(m.steps) > 0 {
 			s += m.renderSteps("·")
 		}
-		// Información de la instalación
+
 		s += "\n"
 		if m.summaryLine != "" {
 			s += "  Resumen:  " + styles.Accent.Render(m.summaryLine) + "\n"
@@ -728,7 +728,7 @@ func (m *Model) viewDone() string {
 	return s
 }
 
-// --- Comandos async ---
+
 
 func (m *Model) checkDepsCmd() tea.Cmd {
 	deps := depsForMode(m.mode)
@@ -848,7 +848,7 @@ func redactDSN(dsn string) string {
 	return dsn
 }
 
-// --- helpers ---
+
 
 func backCmd() tea.Cmd {
 	return func() tea.Msg { return menu.BackMsg{} }

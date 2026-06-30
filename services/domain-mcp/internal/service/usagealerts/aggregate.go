@@ -1,4 +1,4 @@
-// issue-15.3 aggregate metric alert evaluator (cron-driven).
+
 
 package usagealerts
 
@@ -29,13 +29,13 @@ func (s *Service) EvaluateAggregates(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 
-	// Single-org: compute aggregates once for all alerts.
+
 	agg, err := s.computeAggregates(ctx, uuid.Nil)
 	if err != nil {
 		return 0, fmt.Errorf("compute aggregates: %w", err)
 	}
 
-	// Evaluate and fire
+
 	fired := 0
 	for _, a := range alerts {
 		var observed float64

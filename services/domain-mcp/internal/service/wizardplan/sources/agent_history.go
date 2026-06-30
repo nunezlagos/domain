@@ -2,11 +2,14 @@ package sources
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/service/wizardplan"
+	"nunezlagos/domain/internal/service/wizardplan/wizardplandb"
 )
 
 // AgentHistorySource busca agent_runs recientes del usuario con outputs
@@ -39,55 +42,44 @@ func (s *AgentHistorySource) Run(ctx context.Context, env *wizardplan.ContextEnv
 		return nil
 	}
 
-	// Query agent_runs recientes; usa ILIKE sobre nombre de agent + outputs
-	// JSONB. Sin embedding por ahora — heurística simple.
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
-	_ = s // unused-org scoping
-	q := `
-		SELECT ar.id, COALESCE(a.slug, ''), ar.started_at,
-		       LEFT(COALESCE(ar.outputs::text, ''), 200) AS summary
-		FROM agent_runs ar
-		LEFT JOIN agents a ON a.id = ar.agent_id
-		WHERE ar.started_at >= now() - $1::INTERVAL`
-	args := []any{days}
-	if s.UserID != nil {
-		q += ` AND ar.triggered_by = $2`
-		args = append(args, *s.UserID)
-	}
-	q += ` ORDER BY ar.started_at DESC LIMIT $`
-	if s.UserID != nil {
-		q += "3"
-	} else {
-		q += "2"
-	}
-	args = append(args, limit*3) // sobre-fetch para filtrar después
+	q := wizardplandb.New(s.Pool)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	interval := pgtype.Interval{
+		Days:  int32(days),
+		Valid: true,
+	}
+
+	rows, err := q.ListAgentRunsSince(ctx, wizardplandb.ListAgentRunsSinceParams{
+		IntervalDays: interval,
+		UserID:       s.UserID,
+		ResultLimit:  int32(limit * 3), // sobre-fetch para filtrar después
+	})
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
 	related := []wizardplan.RelatedRun{}
-	for rows.Next() {
-		var r wizardplan.RelatedRun
-		var summary string
-		if err := rows.Scan(&r.AgentRunID, &r.AgentSlug, &r.StartedAt, &summary); err != nil {
-			continue
-		}
-		// Filtrar por keyword match.
+	for _, row := range rows {
+		summary := row.Summary
 		summaryLower := lowerOnAscii(summary)
 		if !matchesAnyKeyword(summaryLower, keywords) {
 			continue
 		}
-		r.Summary = summary
-		related = append(related, r)
+
+		var startedAt time.Time
+		if row.StartedAt.Valid {
+			startedAt = row.StartedAt.Time
+		}
+
+		related = append(related, wizardplan.RelatedRun{
+			AgentRunID: row.ID,
+			AgentSlug:  row.AgentSlug,
+			StartedAt:  startedAt,
+			Summary:    summary,
+		})
 		if len(related) >= limit {
 			break
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
 	}
 
 	env.History = &wizardplan.AgentHistoryFinding{RelatedRuns: related}

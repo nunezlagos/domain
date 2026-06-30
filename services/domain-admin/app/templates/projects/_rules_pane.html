@@ -1,0 +1,64 @@
+{% comment %}
+Pane "Reglas" del proyecto: UNA tabla combinada (plataforma + proyecto) con filtro
+de scope (Todas/Plataforma/Proyecto) + paginacion. Las de plataforma aplican
+AUTOMATICAMENTE (read-only); las del proyecto son editables: toggle activo/inactivo
+inline (como las skills) + edicion completa en el mantenedor de reglas.
+
+Contenido INTERNO del pane [data-pane] (project-skills.js reemplaza este innerHTML
+al filtrar / paginar / togglear). Contexto: rules (dicts con scope/kind/name/id/
+is_active/override_platform/editable), rules_scope, counts, paginacion.
+{% endcomment %}
+<div data-pane-state data-scope="{{ rules_scope }}" data-page="{{ page }}"></div>
+
+<div class="pane-filter">
+  <label class="form-label" for="rl-scope">Ver</label>
+  <select class="form-control form-select" data-pane-filter name="scope" id="rl-scope">
+    <option value="all" {% if rules_scope == 'all' %}selected{% endif %}>Todas</option>
+    <option value="platform" {% if rules_scope == 'platform' %}selected{% endif %}>Plataforma ({{ rules_platform_count }})</option>
+    <option value="project" {% if rules_scope == 'project' %}selected{% endif %}>Del proyecto ({{ rules_project_count }})</option>
+  </select>
+  {% if not readonly %}
+    <a href="{% url 'projectpolicies:list' %}" class="text-secondary mnt-text-sm">+ Gestionar reglas →</a>
+  {% endif %}
+</div>
+
+<table class="table mnt-table-sm">
+  <thead>
+    <tr><th>Tipo</th><th>Nombre</th><th>Origen</th><th>Estado</th>{% if not readonly %}<th class="mnt-col-actions">Accion</th>{% endif %}</tr>
+  </thead>
+  <tbody>
+    {% for r in rules %}
+      <tr class="{% if not r.is_active %}skill-excluded{% endif %}">
+        <td class="mnt-col-narrow"><span class="badge">{{ r.kind|default:"—" }}</span></td>
+        <td class="skill-name">{{ r.name }}{% if r.override_platform %} <span class="badge badge-warning">Reemplaza</span>{% endif %}</td>
+        <td>{% if r.scope == 'platform' %}<span class="badge">Plataforma</span>{% else %}<span class="badge badge-primary">Proyecto</span>{% endif %}</td>
+        <td>
+          {% if r.scope == 'platform' %}<span class="badge badge-success">Auto</span>
+          {% elif r.is_active %}<span class="badge badge-success">Activa</span>
+          {% else %}<span class="badge badge-danger">Inactiva</span>{% endif %}
+        </td>
+        {% if not readonly %}
+          <td class="mnt-col-narrow">
+            {% if r.editable %}
+              {% if r.is_active %}
+                <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-pane-action
+                        data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
+                        data-params="policy_id={{ r.id }}">Desactivar</button>
+              {% else %}
+                <button type="button" class="btn btn-sm btn-ghost" data-pane-action
+                        data-url="{% url 'projects:toggle_rule' project_obj.pk %}"
+                        data-params="policy_id={{ r.id }}">Activar</button>
+              {% endif %}
+            {% else %}
+              <span class="text-muted mnt-text-sm">—</span>
+            {% endif %}
+          </td>
+        {% endif %}
+      </tr>
+    {% empty %}
+      <tr><td colspan="{% if readonly %}4{% else %}5{% endif %}" class="mnt-empty-cell">No hay reglas para este filtro.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% include "maintainers/_pane_pagination.html" %}

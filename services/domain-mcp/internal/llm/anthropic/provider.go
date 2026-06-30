@@ -43,6 +43,20 @@ func New(apiKey string) *Provider {
 	}
 }
 
+// NewWithBaseURL crea un Provider anthropic-compatible apuntando a un BaseURL
+// y modelo distintos (ej: endpoint anthropic-compatible de MiniMax). Reusa toda
+// la lógica HTTP/auth existente (x-api-key + anthropic-version). No modifica New.
+func NewWithBaseURL(apiKey, baseURL, model string) *Provider {
+	p := New(apiKey)
+	if baseURL != "" {
+		p.BaseURL = baseURL
+	}
+	if model != "" {
+		p.Model = model
+	}
+	return p
+}
+
 func (p *Provider) Name() string { return "anthropic" }
 
 // requestMessage formato del request body.
@@ -139,7 +153,7 @@ func (p *Provider) buildRequest(opts llm.CompletionOptions, stream bool) request
 func toAnthropicMessage(m llm.Message) requestMessage {
 	rm := requestMessage{Role: m.Role}
 	if m.Role == "tool" {
-		// Tool result se manda como user message con content type tool_result
+
 		rm.Role = "user"
 		rm.Content = []requestContentBlock{{
 			Type: "tool_result", ToolUseID: m.ToolCallID, Content: m.Content,
@@ -147,7 +161,7 @@ func toAnthropicMessage(m llm.Message) requestMessage {
 		return rm
 	}
 	if len(m.ToolCalls) > 0 {
-		// Assistant que devolvió tool_use blocks
+
 		for _, tc := range m.ToolCalls {
 			rm.Content = append(rm.Content, requestContentBlock{
 				Type: "tool_use", ID: tc.ID, Name: tc.Name, Input: tc.Arguments,
@@ -309,8 +323,8 @@ func normalizeStopReason(r string) string {
 	}
 }
 
-// --- Embeddings via Voyage AI (Anthropic recomienda voyage-3 para embeddings).
-// Si VoyageAPIKey vacío, retornar error en Embed.
+
+
 
 type EmbedderConfig struct {
 	APIKey  string
@@ -337,9 +351,9 @@ type VoyageEmbedder struct {
 }
 
 func (v *VoyageEmbedder) Dimensions() int {
-	// voyage-3 retorna 1024; padding/truncate al estándar Domain (1536) en service.
-	// Para mantener compat con observations.embedding vector(1536) hacemos
-	// padding right-zero (no ideal pero unblocking).
+
+
+
 	return 1536
 }
 

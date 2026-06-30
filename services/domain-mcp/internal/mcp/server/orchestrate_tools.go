@@ -1,17 +1,4 @@
-// MCP tools — orquestador SDD (issue-08.10 mcp-001 + mcp-002 + mcp-004).
-//
-// Tres tools que el cliente IDE (Claude Code, Cline, etc.) usa para
-// driver el pipeline SDD del servidor:
-//
-//   domain_orchestrate(raw_text, mode?, starting_phase?, skip_phases?)
-//     Inicia un flow_run + devuelve el plan con prompts pre-construidos.
-//
-//   domain_orchestrate_phase_result(flow_run_step_id, output, memory_refs_saved)
-//     Reporta el resultado de una fase. Valida D5 + handler.Validate.
-//     Devuelve status + next step prompt si hay más fases pending.
-//
-//   domain_flow_status(flow_run_id)
-//     Lee el estado completo de un flow_run gobernado por el orquestador.
+
 
 package mcpserver
 
@@ -23,37 +10,60 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
+
+type orchestratorService interface {
+	Run(ctx context.Context, in orchsvc.OrchestrateInput) (*orchsvc.OrchestrateResult, error)
+	RecordPhaseResult(ctx context.Context, in orchsvc.PhaseResultInput) (*orchsvc.PhaseResultResult, error)
+	ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, confirmed bool) (*orchsvc.PhaseResultResult, error)
+	GetFlowStatus(ctx context.Context, flowRunID uuid.UUID) (*orchsvc.FlowStatusResponse, error)
+}
+
+type orchestrateHandlers struct {
+	orchestrator orchestratorService
+	principal    *apikey.Principal
+}
 
 func toolOrchestrate() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate",
 		mcp.WithDescription("Inicia un flow del orquestador SDD a partir del prompt del usuario. Devuelve flow_run_id + plan con los steps (system_prompt + user_prompt + suggested_saves) que el cliente IDE debe ejecutar en orden. Reportar cada step terminada con domain_orchestrate_phase_result."),
 		mcp.WithString("raw_text",
-			mcp.Description("Prompt original del usuario (sin clasificación previa de PromptRouter)."),
+			mcp.Description("Prompt original del usuario (sin clasificacion previa de PromptRouter)."),
 			mcp.Required(),
 		),
 		mcp.WithString("mode",
-			mcp.Description("Modo del orquestador: express | full | solo | detect | async. Default: full. Express usa sólo sdd-apply + sdd-verify para cambios ≤10 líneas single-file."),
+			mcp.Description("Modo del orquestador: express | lite | full | solo | detect | async. Default: full. Express usa solo sdd-apply + sdd-verify para cambios ≤10 lineas single-file. Lite corre un subset (sdd-explore + sdd-apply + sdd-verify) para cambios triviales (fix de 1 linea, doc, refactor chico) salteando las fases pesadas."),
 		),
 		mcp.WithString("starting_phase",
-			mcp.Description("Phase slug para reanudar desde una fase específica (p.ej. sdd-design). Si vacío, arranca en sdd-explore."),
+			mcp.Description("Phase slug para reanudar desde una fase especifica (p.ej. sdd-design). Si vacio, arranca en sdd-explore."),
 		),
 		mcp.WithArray("skip_phases",
 			mcp.Description("Lista de phase slugs a omitir. El orquestador valida que el DAG resultante sea ejecutable."),
 		),
 		mcp.WithNumber("express_max_lines",
-			mcp.Description("Override del threshold de Express (default 10). Sólo aplica si mode=express."),
+			mcp.Description("Override del threshold de Express (default 10). Solo aplica si mode=express."),
+		),
+		mcp.WithString("project_id",
+			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). OBLIGATORIO: scopea el flow_run y la cadena SDD/TDD al proyecto (flow_runs.project_id es NOT NULL)."),
+			mcp.Required(),
+		),
+		mcp.WithString("exec_mode",
+			mcp.Description("Modo de ejecucion: auto (corre sin pausar), manual (pausa y pide aprobacion tras CADA fase via domain_orchestrate_confirm), hybrid (pausa solo en fases clave: spec/design/apply/judge). Default: auto. Consulte al usuario al inicio que modo quiere."),
+		),
+		mcp.WithBoolean("hardspec",
+			mcp.Description("Reiteracion humana del spec (OBLIGATORIA por defecto): al terminar sdd-spec el flujo pausa para que el desarrollador de el OK o solicite rehacer una parte especifica del spec. La confirmacion queda auditada. Use hardspec=false solo para desactivarla (default true)."),
 		),
 	)
 }
 
 func toolOrchestratePhaseResult() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate_phase_result",
-		mcp.WithDescription("Reporta el resultado de una fase del orquestador. Valida el contract D5 (suggested_saves required) + el shape específico del handler. Devuelve status del step + siguiente step pendiente (si hay) con su prompt."),
+		mcp.WithDescription("Reporta el resultado de una fase del orquestador. Valida el contract D5 (suggested_saves required) + el shape especifico del handler. Devuelve status del step + siguiente step pendiente (si hay) con su prompt."),
 		mcp.WithString("flow_run_step_id",
-			mcp.Description("UUID del step que terminó (lo recibiste en el plan inicial de domain_orchestrate)."),
+			mcp.Description("UUID del step que termino (lo recibiste en el plan inicial de domain_orchestrate)."),
 			mcp.Required(),
 		),
 		mcp.WithObject("output",
@@ -61,17 +71,17 @@ func toolOrchestratePhaseResult() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithArray("memory_refs_saved",
-			mcp.Description("Memory refs persistidas vía mem_save durante la fase. Cada item: {type, id}. Requerido para satisfacer suggested_saves con Required=true (D5)."),
+			mcp.Description("Memory refs persistidas via mem_save durante la fase. Cada item: {type, id}. Requerido para satisfacer suggested_saves con Required=true (D5)."),
 		),
 		mcp.WithNumber("duration_ms",
-			mcp.Description("Duración en milisegundos de la ejecución de la fase en el cliente (opcional, para métricas)."),
+			mcp.Description("Duracion en milisegundos de la ejecucion de la fase en el cliente (opcional, para metricas)."),
 		),
 	)
 }
 
 func toolOrchestrateConfirm() mcp.Tool {
 	return mcp.NewTool("domain_orchestrate_confirm",
-		mcp.WithDescription("Confirma o rechaza un paso bloqueado por el confirm condicional D1 (RFC 0006). Se invoca cuando domain_orchestrate_phase_result devolvió RequiresConfirm=true. Si confirmed=true, el step queda pending y el cliente puede continuar con su prompt original; si false, el flow_run pasa a failed con razón 'user_rejected_confirm'."),
+		mcp.WithDescription("Confirma o rechaza un paso bloqueado por el confirm condicional D1 (RFC 0006). Se invoca cuando domain_orchestrate_phase_result devolvio RequiresConfirm=true. Si confirmed=true, el step queda pending y el cliente puede continuar con su prompt original; si false, el flow_run pasa a failed con razon 'user_rejected_confirm'."),
 		mcp.WithString("flow_run_id",
 			mcp.Description("UUID del flow_run que tiene un step bloqueado."),
 			mcp.Required(),
@@ -85,7 +95,7 @@ func toolOrchestrateConfirm() mcp.Tool {
 
 func toolFlowStatus() mcp.Tool {
 	return mcp.NewTool("domain_flow_status",
-		mcp.WithDescription("Lee el estado de un flow_run del orquestador SDD: status del run + lista de steps con su status, outputs y previews de prompts. Útil para resumir, retomar tras reconexión, debugging."),
+		mcp.WithDescription("Lee el estado de un flow_run del orquestador SDD: status del run + lista de steps con su status, outputs y previews de prompts. Util para resumir, retomar tras reconexion, debugging."),
 		mcp.WithString("flow_run_id",
 			mcp.Description("UUID del flow_run a consultar (devuelto por domain_orchestrate)."),
 			mcp.Required(),
@@ -93,18 +103,18 @@ func toolFlowStatus() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	rawText, err := req.RequireString("raw_text")
 	if err != nil {
@@ -113,6 +123,15 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	modeStr := req.GetString("mode", "")
 	startingPhase := req.GetString("starting_phase", "")
 	expressMax := req.GetInt("express_max_lines", 0)
+
+	pidStr := req.GetString("project_id", "")
+	if pidStr == "" {
+		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
+	}
+	projectID, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return mcp.NewToolResultError("invalid project_id"), nil
+	}
 
 	args := req.GetArguments()
 	var skipPhases []orchsvc.PhaseSlug
@@ -124,16 +143,24 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 		}
 	}
 
+	hardspec := true
+	if v, ok := args["hardspec"].(bool); ok {
+		hardspec = v
+	}
+
 	in := orchsvc.OrchestrateInput{
 		OrganizationID:  orgID,
 		UserID:          userID,
+		ProjectID:       projectID,
+		ExecMode:        req.GetString("exec_mode", ""),
+		Hardspec:        hardspec,
 		RawText:         rawText,
 		Mode:            orchsvc.Mode(modeStr),
 		StartingPhase:   orchsvc.PhaseSlug(startingPhase),
 		SkipPhases:      skipPhases,
 		ExpressMaxLines: expressMax,
 	}
-	res, err := d.Orchestrator.Run(ctx, in)
+	res, err := h.orchestrator.Run(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError("orchestrate: " + err.Error()), nil
 	}
@@ -141,11 +168,11 @@ func (d *Deps) handleOrchestrate(ctx context.Context, req mcp.CallToolRequest) (
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	stepIDStr, err := req.RequireString("flow_run_step_id")
@@ -180,26 +207,24 @@ func (d *Deps) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToo
 		}
 	}
 
-	res, err := d.Orchestrator.RecordPhaseResult(ctx, orchsvc.PhaseResultInput{
+	res, err := h.orchestrator.RecordPhaseResult(ctx, orchsvc.PhaseResultInput{
 		FlowRunStepID:   stepID,
 		Output:          output,
 		MemoryRefsSaved: refs,
 		DurationMS:      durationMS,
 	})
 	if err != nil {
-		// Errores tipados se devuelven con código accionable para que el
-		// cliente decida si re-emitir, fallar o pedir input humano.
 		return mcp.NewToolResultError("phase_result: " + err.Error()), nil
 	}
 	body, _ := json.MarshalIndent(res, "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	idStr, err := req.RequireString("flow_run_id")
@@ -212,7 +237,7 @@ func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolReq
 	}
 	args := req.GetArguments()
 	confirmed, _ := args["confirmed"].(bool)
-	res, err := d.Orchestrator.ConfirmContinue(ctx, flowRunID, confirmed)
+	res, err := h.orchestrator.ConfirmContinue(ctx, flowRunID, confirmed)
 	if err != nil {
 		return mcp.NewToolResultError("confirm: " + err.Error()), nil
 	}
@@ -220,11 +245,11 @@ func (d *Deps) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolReq
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
-func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Orchestrator == nil {
+	if h.orchestrator == nil {
 		return mcp.NewToolResultError("orchestrator service not configured"), nil
 	}
 	idStr, err := req.RequireString("flow_run_id")
@@ -235,7 +260,7 @@ func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return mcp.NewToolResultError("invalid flow_run_id"), nil
 	}
-	status, err := d.Orchestrator.GetFlowStatus(ctx, flowRunID)
+	status, err := h.orchestrator.GetFlowStatus(ctx, flowRunID)
 	if err != nil {
 		return mcp.NewToolResultError("flow_status: " + err.Error()), nil
 	}
@@ -246,7 +271,7 @@ func (d *Deps) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// Mutators: tope conservador (60/min) como mem_save, agent_run, etc.
+	h := &orchestrateHandlers{orchestrator: deps.Orchestrator, principal: deps.Principal}
 	wrap.SetBudget("domain_orchestrate",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_phase_result",
@@ -254,9 +279,9 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 	wrap.SetBudget("domain_orchestrate_confirm",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	return []mcpgo.ServerTool{
-		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", deps.handleOrchestrate)},
-		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", deps.handleOrchestratePhaseResult)},
-		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", deps.handleOrchestrateConfirm)},
-		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", deps.handleFlowStatus)},
+		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", h.handleOrchestrate)},
+		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
+		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm)},
+		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", h.handleFlowStatus)},
 	}
 }

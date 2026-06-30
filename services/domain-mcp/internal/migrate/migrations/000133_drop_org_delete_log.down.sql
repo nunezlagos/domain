@@ -1,4 +1,4 @@
--- Recrea org_delete_log (verbatim de 000096) para soportar rollback.
+
 CREATE TABLE IF NOT EXISTS org_delete_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL,

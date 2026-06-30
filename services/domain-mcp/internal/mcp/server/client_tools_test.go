@@ -19,7 +19,7 @@ func TestToolClientCreate_TieneCamposRequeridos(t *testing.T) {
 		t.Fatalf("name=%s want domain_client_create", tool.Name)
 	}
 	if !strings.Contains(tool.Description, "cliente") && !strings.Contains(tool.Description, "mandante") {
-		t.Errorf("description debería mencionar cliente o mandante, got: %s", tool.Description)
+		t.Errorf("description deberia mencionar cliente o mandante, got: %s", tool.Description)
 	}
 }
 
@@ -38,15 +38,15 @@ func TestToolClientNames(t *testing.T) {
 			t.Errorf("tool name=%s want=%s", tool.Name, want)
 		}
 		if tool.Description == "" {
-			t.Errorf("tool %s: description vacío", want)
+			t.Errorf("tool %s: description vacio", want)
 		}
 	}
 }
 
 func TestHandleClientCreate_SinPrincipal_Error(t *testing.T) {
-	d := &Deps{}
+	h := &clientHandlers{}
 	req := mcp.CallToolRequest{}
-	res, err := d.handleClientCreate(context.Background(), req)
+	res, err := h.handleClientCreate(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -56,8 +56,8 @@ func TestHandleClientCreate_SinPrincipal_Error(t *testing.T) {
 }
 
 func TestHandleClientList_SinPrincipal_Error(t *testing.T) {
-	d := &Deps{}
-	res, err := d.handleClientList(context.Background(), mcp.CallToolRequest{})
+	h := &clientHandlers{}
+	res, err := h.handleClientList(context.Background(), mcp.CallToolRequest{})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -67,35 +67,35 @@ func TestHandleClientList_SinPrincipal_Error(t *testing.T) {
 }
 
 func TestHandleClientCreate_SinService_Error(t *testing.T) {
-	d := &Deps{Principal: &apikey.Principal{OrganizationID: "11111111-1111-1111-1111-111111111111"}}
-	res, _ := d.handleClientCreate(context.Background(), mcp.CallToolRequest{})
+	h := &clientHandlers{principal: &apikey.Principal{OrganizationID: "11111111-1111-1111-1111-111111111111"}}
+	res, _ := h.handleClientCreate(context.Background(), mcp.CallToolRequest{})
 	if !res.IsError {
-		t.Fatalf("expected error (Clients == nil)")
+		t.Fatalf("expected error (clients == nil)")
 	}
 }
 
 func TestHandleClientGet_SinService_Error(t *testing.T) {
-	d := &Deps{
-		Principal: &apikey.Principal{
+	h := &clientHandlers{
+		principal: &apikey.Principal{
 			OrganizationID: "11111111-1111-1111-1111-111111111111",
 			UserID:         "22222222-2222-2222-2222-222222222222",
 		},
 	}
-	res, _ := d.handleClientGet(context.Background(), mcp.CallToolRequest{})
+	res, _ := h.handleClientGet(context.Background(), mcp.CallToolRequest{})
 	if !res.IsError {
-		t.Fatalf("expected error con Clients == nil")
+		t.Fatalf("expected error con clients == nil")
 	}
 }
 
 func TestHandleClientDelete_SinService_Error(t *testing.T) {
-	d := &Deps{
-		Principal: &apikey.Principal{
+	h := &clientHandlers{
+		principal: &apikey.Principal{
 			OrganizationID: "11111111-1111-1111-1111-111111111111",
 		},
 	}
-	res, _ := d.handleClientDelete(context.Background(), mcp.CallToolRequest{})
+	res, _ := h.handleClientDelete(context.Background(), mcp.CallToolRequest{})
 	if !res.IsError {
-		t.Fatalf("expected error con Clients == nil")
+		t.Fatalf("expected error con clients == nil")
 	}
 }
 

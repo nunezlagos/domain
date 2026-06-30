@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{{ template_obj.display_name }} - Plantillas de Agentes{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de plantilla" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'agenttemplates:list' %}" class="text-secondary" style="font-size: var(--fs-sm);">← Volver a plantillas</a>
+    <h1 class="mt-1">{{ template_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ template_obj.slug }}</code>
+      · Rol: <span class="badge">{{ template_obj.get_role_display }}</span>
+      · Estado: <span class="badge">{{ template_obj.get_status_display }}</span>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'agenttemplates:edit' template_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ template_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info de la plantilla -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th style="width: 200px;">Nombre</th><td>{{ template_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ template_obj.slug }}</code></td></tr>
+      <tr><th>Modelo</th><td><code>{{ template_obj.model }}</code></td></tr>
+      <tr><th>Rol</th><td><span class="badge">{{ template_obj.get_role_display }}</span></td></tr>
+      <tr><th>Politica de handoff</th><td>{{ template_obj.get_handoff_policy_display }}</td></tr>
+      <tr><th>Temperatura</th><td>{{ template_obj.temperature }}</td></tr>
+      <tr><th>Max tokens</th><td>{{ template_obj.max_tokens }}</td></tr>
+      <tr><th>Personalidad</th><td>{{ template_obj.personality|default:"—" }}</td></tr>
+      <tr><th>System prompt</th><td><pre style="white-space: pre-wrap; margin: 0;">{{ template_obj.system_prompt|default:"—" }}</pre></td></tr>
+      <tr><th>Capacidades</th>
+        <td>{% for cap in template_obj.capabilities %}<span class="badge badge-primary">{{ cap }}</span>{% empty %}—{% endfor %}</td>
+      </tr>
+      <tr><th>Estado</th><td><span class="badge">{{ template_obj.get_status_display }}</span></td></tr>
+      <tr><th>Gestionada por seed</th><td>{{ template_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Modificada por usuario</th><td>{{ template_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
+      <tr><th>Version de seed</th><td>{{ template_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Creada</th><td>{{ template_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizada</th><td>{{ template_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ template_obj.pk }}">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar plantilla?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar la plantilla <strong>{{ template_obj.display_name }}</strong>.</p>
+      <p class="text-secondary" style="font-size: var(--fs-sm);">Esta accion borra el registro permanentemente (la tabla no tiene soft-delete).</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'agenttemplates:delete' template_obj.pk %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,9 +1,9 @@
--- migration: create_dead_letter_queue
--- author: nunezlagos
--- issue: issue-09.4
--- description: DLQ para steps con fallo permanente (retries agotados sin política de recuperación)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS dead_letter_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- domain-lint-ignore-next: require-concurrent-index-creation
--- reason: tabla nueva sin tráfico
+
+
 CREATE INDEX IF NOT EXISTS dead_letter_queue_org_pending_idx
   ON dead_letter_queue (organization_id, failed_at DESC)
   WHERE resolved_at IS NULL;

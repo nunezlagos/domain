@@ -29,8 +29,8 @@ func (s *Sender) Send(ctx context.Context, channelSlug string, msg Message) (uui
 	}
 	deliveryID := uuid.New()
 
-	// Insert pre-envío con status=pending. ISSUE-21.6: organization_id
-	// se omite (la columna se dropea en Fase C via 000142).
+
+
 	if _, err := s.Pool.Exec(ctx,
 		`INSERT INTO notification_deliveries
 			(id, channel_slug, recipient, template_slug, subject, body, status, attempt)

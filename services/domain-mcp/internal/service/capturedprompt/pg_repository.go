@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/service/capturedprompt/capturedpromptdb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -21,41 +23,41 @@ func NewPgRepository(pool *pgxpool.Pool) Repository {
 	return &pgRepository{pool: pool}
 }
 
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func (r *pgRepository) q(ctx context.Context) querier {
+func (r *pgRepository) q(ctx context.Context) *capturedpromptdb.Queries {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
-		return tx
+		return capturedpromptdb.New(tx)
 	}
-	return r.pool
+	return capturedpromptdb.New(r.pool)
 }
 
-// selectCols sin organization_id (Fase D clean — single-org, la columna
-// se dropea en Fase C). El campo OrganizationID en el struct Prompt
-// se conserva por compat con código que lo lee, pero queda siempre uuid.Nil.
-// REQ-42.3: columna session_id dropeada de captured_prompts (FK a sessions,
-// tabla eliminada). selectCols ya no la incluye.
-const selectCols = `id, user_id, project_id,
-		content,
-		COALESCE(client_kind,''), COALESCE(model,''),
-		char_count, response_chars, estimated_tokens_in, estimated_tokens_out,
-		captured_at, turn_completed_at`
-
-func scanPrompt(row pgx.Row) (*Prompt, error) {
-	var p Prompt
-	if err := row.Scan(
-		&p.ID, &p.UserID, &p.ProjectID,
-		&p.Content, &p.ClientKind, &p.Model, &p.CharCount,
-		&p.ResponseChars, &p.EstimatedTokensIn, &p.EstimatedTokensOut,
-		&p.CapturedAt, &p.TurnCompletedAt,
-	); err != nil {
-		return nil, err
+func toPrompt(id uuid.UUID, userID uuid.UUID, projectID *uuid.UUID, content, clientKind, model string, charCount, responseChars, estimatedTokensIn, estimatedTokensOut int32, capturedAt time.Time, turnCompletedAt pgtype.Timestamptz) Prompt {
+	var tc *time.Time
+	if turnCompletedAt.Valid {
+		tc = &turnCompletedAt.Time
 	}
-	return &p, nil
+	return Prompt{
+		ID: id, UserID: userID, ProjectID: projectID,
+		Content: content, ClientKind: clientKind, Model: model,
+		CharCount: int(charCount), ResponseChars: int(responseChars),
+		EstimatedTokensIn: int(estimatedTokensIn), EstimatedTokensOut: int(estimatedTokensOut),
+		CapturedAt: capturedAt, TurnCompletedAt: tc,
+	}
+}
+
+func toPromptFromInsert(r capturedpromptdb.InsertPromptRow) Prompt {
+	return toPrompt(r.ID, r.UserID, r.ProjectID, r.Content, r.ClientKind, r.Model, r.CharCount, r.ResponseChars, r.EstimatedTokensIn, r.EstimatedTokensOut, r.CapturedAt, r.TurnCompletedAt)
+}
+
+func toPromptFromComplete(r capturedpromptdb.CompleteTurnRow) Prompt {
+	return toPrompt(r.ID, r.UserID, r.ProjectID, r.Content, r.ClientKind, r.Model, r.CharCount, r.ResponseChars, r.EstimatedTokensIn, r.EstimatedTokensOut, r.CapturedAt, r.TurnCompletedAt)
+}
+
+func toPromptFromGet(r capturedpromptdb.GetPromptRow) Prompt {
+	return toPrompt(r.ID, r.UserID, r.ProjectID, r.Content, r.ClientKind, r.Model, r.CharCount, r.ResponseChars, r.EstimatedTokensIn, r.EstimatedTokensOut, r.CapturedAt, r.TurnCompletedAt)
+}
+
+func toPromptFromList(r capturedpromptdb.ListPromptsRow) Prompt {
+	return toPrompt(r.ID, r.UserID, r.ProjectID, r.Content, r.ClientKind, r.Model, r.CharCount, r.ResponseChars, r.EstimatedTokensIn, r.EstimatedTokensOut, r.CapturedAt, r.TurnCompletedAt)
 }
 
 // estimateTokens: ratio chars:tokens ≈ 4:1 (proxy estándar para
@@ -68,158 +70,101 @@ func estimateTokens(chars int) int {
 }
 
 func (r *pgRepository) Insert(ctx context.Context, in InsertParams) (*Prompt, error) {
-	estIn := estimateTokens(in.CharCount)
-	// ISSUE-21.6 Fase D clean: organization_id ya no se persiste en
-	// captured_prompts. La columna existe pero se omite del INSERT
-	// (queda NULL por default). Dropeada en Fase C (migration 000142).
-	row := r.q(ctx).QueryRow(ctx,
-		`INSERT INTO prompt_captured
-		   (user_id, project_id,
-		    content, client_kind, model, char_count, estimated_tokens_in)
-		 VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7)
-		 RETURNING `+selectCols,
-		in.UserID, in.ProjectID,
-		in.Content, in.ClientKind, in.Model, in.CharCount, estIn,
-	)
-	p, err := scanPrompt(row)
+	estIn := int32(estimateTokens(in.CharCount))
+
+	row, err := r.q(ctx).InsertPrompt(ctx, capturedpromptdb.InsertPromptParams{
+		UserID:            in.UserID,
+		ProjectID:         in.ProjectID,
+		Content:           in.Content,
+		ClientKind:        in.ClientKind,
+		Model:             in.Model,
+		CharCount:         int32(in.CharCount),
+		EstimatedTokensIn: estIn,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert captured_prompt: %w", err)
 	}
-	return p, nil
+	p := toPromptFromInsert(row)
+	return &p, nil
 }
 
 func (r *pgRepository) CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error) {
-	estOut := estimateTokens(in.ResponseChars)
-	// ISSUE-21.6 Fase D clean: WHERE clause sin organization_id.
-	// El param in.OrganizationID se ignora (single-org).
-	row := r.q(ctx).QueryRow(ctx,
-		`UPDATE prompt_captured
-		   SET response_chars       = $2,
-		       estimated_tokens_out = $3,
-		       model                = COALESCE(NULLIF($4,''), model),
-		       turn_completed_at    = NOW()
-		   WHERE id = $1
-		   RETURNING `+selectCols,
-		in.PromptID, in.ResponseChars, estOut, in.Model,
-	)
-	p, err := scanPrompt(row)
+	estOut := int32(estimateTokens(in.ResponseChars))
+
+	row, err := r.q(ctx).CompleteTurn(ctx, capturedpromptdb.CompleteTurnParams{
+		ID:                in.PromptID,
+		ResponseChars:     int32(in.ResponseChars),
+		EstimatedTokensOut: estOut,
+		Model:             in.Model,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("complete turn: %w", err)
 	}
-	return p, nil
+	p := toPromptFromComplete(row)
+	return &p, nil
 }
 
-func (r *pgRepository) summarize(ctx context.Context, where string, args ...any) (*SessionUsage, error) {
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*)::int,
-		        COALESCE(SUM(estimated_tokens_in),0)::bigint,
-		        COALESCE(SUM(estimated_tokens_out),0)::bigint,
-		        COALESCE(SUM(char_count + response_chars),0)::bigint
-		   FROM prompt_captured `+where, args...)
-	out := &SessionUsage{}
-	if err := row.Scan(&out.Turns, &out.EstimatedTokensIn, &out.EstimatedTokensOut, &out.TotalChars); err != nil {
-		return nil, fmt.Errorf("summarize: %w", err)
-	}
-	return out, nil
-}
-
-// ISSUE-21.6 Fase D clean: orgID se ignora. Las queries retornan TODOS
-// los rows (single-org, sin scope por org).
 func (r *pgRepository) SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*SessionUsage, error) {
 	_ = orgID // compat de firma
-	out, err := r.summarize(ctx, "WHERE project_id = $1", projectID)
+
+	row, err := r.q(ctx).SummarizeByProject(ctx, &projectID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("summarize by project: %w", err)
 	}
 	pid := projectID
-	out.ProjectID = &pid
+	out := &SessionUsage{
+		ProjectID:         &pid,
+		Turns:             int(row.Turns),
+		EstimatedTokensIn:  row.EstimatedTokensIn,
+		EstimatedTokensOut: row.EstimatedTokensOut,
+		TotalChars:         row.TotalChars,
+	}
 	return out, nil
 }
 
-func (r *pgRepository) Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (*Prompt, error) {
-	_ = orgID // compat de firma
-	row := r.q(ctx).QueryRow(ctx,
-		`SELECT `+selectCols+`
-		 FROM prompt_captured
-		 WHERE id = $1`,
-		id,
-	)
-	p, err := scanPrompt(row)
+func (r *pgRepository) Get(ctx context.Context, _ uuid.UUID, id uuid.UUID) (*Prompt, error) {
+	row, err := r.q(ctx).GetPrompt(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get captured_prompt: %w", err)
 	}
-	return p, nil
+	p := toPromptFromGet(row)
+	return &p, nil
 }
 
-func (r *pgRepository) List(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]*Prompt, int64, error) {
-	_ = orgID // compat de firma
-	idx := 1
-	var conds []string
-	var args []any
-	if filter.ProjectID != nil {
-		conds = append(conds, fmt.Sprintf("project_id = $%d", idx))
-		args = append(args, *filter.ProjectID)
-		idx++
-	}
-	if filter.UserID != nil {
-		conds = append(conds, fmt.Sprintf("user_id = $%d", idx))
-		args = append(args, *filter.UserID)
-		idx++
-	}
-	var where string
-	if len(conds) > 0 {
-		where = "WHERE " + joinAnd(conds)
-	}
-
-	var total int64
-	if err := r.q(ctx).QueryRow(ctx,
-		`SELECT COUNT(*) FROM prompt_captured `+where, args...,
-	).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count captured_prompts: %w", err)
-	}
-
-	limit := filter.Limit
+func (r *pgRepository) List(ctx context.Context, _ uuid.UUID, filter ListFilter) ([]*Prompt, int64, error) {
+	limit := int32(filter.Limit)
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	args = append(args, limit, filter.Offset)
-	rows, err := r.q(ctx).Query(ctx,
-		`SELECT `+selectCols+`
-		 FROM prompt_captured `+where+`
-		 ORDER BY captured_at DESC
-		 LIMIT $`+itoa(idx)+` OFFSET $`+itoa(idx+1),
-		args...,
-	)
+
+	total, err := r.q(ctx).CountPrompts(ctx, capturedpromptdb.CountPromptsParams{
+		ProjectID: filter.ProjectID,
+		UserID:    filter.UserID,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("count captured_prompts: %w", err)
+	}
+
+	rows, err := r.q(ctx).ListPrompts(ctx, capturedpromptdb.ListPromptsParams{
+		ProjectID:    filter.ProjectID,
+		UserID:       filter.UserID,
+		ResultLimit:  limit,
+		ResultOffset: int32(filter.Offset),
+	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("list captured_prompts: %w", err)
 	}
-	defer rows.Close()
+
 	out := make([]*Prompt, 0, limit)
-	for rows.Next() {
-		p, err := scanPrompt(rows)
-		if err != nil {
-			return nil, 0, fmt.Errorf("scan captured_prompt: %w", err)
-		}
-		out = append(out, p)
+	for _, r := range rows {
+		p := toPromptFromList(r)
+		out = append(out, &p)
 	}
-	return out, total, rows.Err()
+	return out, total, nil
 }
-
-func joinAnd(parts []string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += " AND "
-		}
-		out += p
-	}
-	return out
-}
-
-func itoa(n int) string { return fmt.Sprintf("%d", n) }

@@ -1,40 +1,52 @@
-"""HU-45.1: URL routing mínimo.
+"""HU-48.1: URL routing del admin dashboard."""
+from django.urls import include, path
 
-Una sola ruta `/` que devuelve un HTML placeholder.
-HU-45.4 sumará las vistas reales (dashboard, members, usage, audit, tickets).
-"""
-from django.http import HttpResponse
-from django.urls import path
-
-
-def index(request):
-    return HttpResponse(
-        """<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Domain Admin</title>
-  <style>
-    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 4rem 1rem; background: #0f172a; color: #e2e8f0; }
-    main { max-width: 640px; margin: 0 auto; text-align: center; }
-    h1 { font-size: 2rem; margin: 0 0 1rem; }
-    p { line-height: 1.5; opacity: 0.85; }
-    code { background: #1e293b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Domain Admin</h1>
-    <p>Django placeholder vivo (HU-45.1).</p>
-    <p>Service: <code>domain-admin</code> &middot; Backend: <code>domain-mcp</code> &middot; Routing: Caddy</p>
-    <p>Vistas reales entran en HU-45.2 y siguientes.</p>
-  </main>
-</body>
-</html>""",
-        content_type="text/html; charset=utf-8",
-    )
-
+from config import views
 
 urlpatterns = [
-    path("", index, name="index"),
+    path("", views.home_view, name="home"),
+    path("login/", views.login_view, name="login"),
+    path("login/google/", views.google_login, name="google_login"),
+    path("logout/", views.logout_view, name="logout"),
+    path("dashboard/", views.dashboard, name="dashboard"),
+    path("componentes/", views.components_demo, name="components"),
+
+
+    path("flujo-sdd/", views.sdd_flow, name="sdd_flow"),
+
+
+    path("usuarios/", include("maintainers.users.urls")),
+
+
+    path("proyectos/", include("maintainers.projects.urls")),
+    path("api-keys/", include("maintainers.apikeys.urls")),
+
+
+    path("agentes/", include("maintainers.agents.urls")),
+    path("skills/", include("maintainers.skills.urls")),
+    path("flows/", include("maintainers.flows.urls")),
+    path("crons/", include("maintainers.crons.urls")),
+    path("prompts/", include("maintainers.prompts.urls")),
+
+
+    path("plantillas-agentes/", include("maintainers.agenttemplates.urls")),
+
+
+    path("politicas-proyecto/", include("maintainers.projectpolicies.urls")),
+    path("politicas-plataforma/", include("maintainers.platformpolicies.urls")),
+
+    path("uso/", include("maintainers.usage.urls")),
+    path("uptime-mcp/", include("maintainers.mcpuptime.urls")),
+    path("feedback/", include("maintainers.feedback.urls")),
+    path("skill-suggestions/", include("maintainers.skillsuggestions.urls")),
+
+    path("chat/", include("chat.urls")),
 ]
+
+
+
+
+handler400 = "config.views.bad_request"
+handler403 = "config.views.permission_denied"
+handler404 = "config.views.page_not_found"
+handler500 = "config.views.server_error"

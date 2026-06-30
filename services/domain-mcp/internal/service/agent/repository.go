@@ -18,17 +18,17 @@ type Repository interface {
 	List(ctx context.Context, orgID uuid.UUID, limit int) ([]Agent, error)
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 
-	// CountValidSkills cuenta cuántos slugs existen en skills activos. Si
-	// retorna == len(slugs), todos son válidos.
+
+
 	CountValidSkills(ctx context.Context, orgID uuid.UUID, slugs []string) (int, error)
 
-	// SlugTaken indica si un slug ya está usado en agents activos.
+
 	SlugTaken(ctx context.Context, orgID uuid.UUID, slug string) (bool, error)
 
-	// ArchiveVersion guarda snapshot en agent_versions + purga sobrantes.
+
 	ArchiveVersion(ctx context.Context, in ArchiveVersionParams) error
 
-	// ListVersions historial.
+
 	ListVersions(ctx context.Context, agentID uuid.UUID, limit int) ([]AgentVersion, error)
 }
 

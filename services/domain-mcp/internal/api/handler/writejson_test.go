@@ -13,14 +13,14 @@ import (
 )
 
 func TestWriteJSON_LogsEncodeError(t *testing.T) {
-	// Capturar logs del logger default (writeJSON usa slog.Error sin context).
+
 	var buf bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	rec := httptest.NewRecorder()
-	// json no puede serializar channels → encode falla.
+
 	writeJSON(rec, 200, map[string]any{"bad": make(chan int)})
 
 	logs := buf.String()
@@ -44,7 +44,7 @@ func TestWriteJSON_NoLogOnSuccess(t *testing.T) {
 	if strings.Contains(buf.String(), "failed to encode response") {
 		t.Errorf("did not expect error log on successful encode, got: %q", buf.String())
 	}
-	// Silenciar warning del compilador sobre context (slog.Error variant que no
-	// usa context).
+
+
 	_ = context.Background()
 }

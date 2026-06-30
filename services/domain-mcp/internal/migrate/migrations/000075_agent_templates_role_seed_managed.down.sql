@@ -1,4 +1,4 @@
--- migration: agent_templates_role_seed_managed (DOWN)
+
 
 BEGIN;
 

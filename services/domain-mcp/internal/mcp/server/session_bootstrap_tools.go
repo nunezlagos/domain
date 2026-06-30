@@ -25,19 +25,65 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
+	policysvc "nunezlagos/domain/internal/service/policy"
+	projsvc "nunezlagos/domain/internal/service/project"
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
+type bootstrapPoliciesLister interface {
+	List(ctx context.Context, kind string) ([]policysvc.Policy, error)
+}
+
+type bootstrapProjectsService interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*projsvc.Project, error)
+}
+
+type bootstrapProjectRepos interface {
+	Add(ctx context.Context, in projectreposvc.AddInput) (*projectreposvc.Repo, error)
+}
+
+type sessionBootstrapHandlers struct {
+	policies     bootstrapPoliciesLister
+	projects     bootstrapProjectsService
+	projectRepos bootstrapProjectRepos
+	pool         *pgxpool.Pool
+	principal    *apikey.Principal
+}
+
+func (h *sessionBootstrapHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerSessionBootstrapTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &sessionBootstrapHandlers{
+		policies:     deps.Policies,
+		projects:     deps.Projects,
+		projectRepos: deps.ProjectRepos,
+		pool:         deps.Pool,
+		principal:    deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolSessionBootstrap(), Handler: wrap.Wrap("domain_session_bootstrap", rls(deps.handleSessionBootstrap))},
-		{Tool: toolSessionRegister(), Handler: wrap.Wrap("domain_session_register", rls(deps.handleSessionRegister))},
+		{Tool: toolSessionBootstrap(), Handler: wrap.Wrap("domain_session_bootstrap", rls(h.handleSessionBootstrap))},
+		{Tool: toolSessionRegister(), Handler: wrap.Wrap("domain_session_register", rls(h.handleSessionRegister))},
 	}
 }
 
@@ -84,12 +130,12 @@ func toolSessionRegister() mcp.Tool {
 //  1. project_repositories.url match exacto al git_remote.
 //  2. projects.slug match al basename(cwd).
 //  3. projects.repository_url match exacto al git_remote (compat).
-func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID, cwd, gitRemote string) (uuid.UUID, string, bool) {
+func (h *sessionBootstrapHandlers) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID, cwd, gitRemote string) (uuid.UUID, string, bool) {
 	// 1. project_repositories.url
 	if gitRemote != "" {
 		var pid uuid.UUID
 		var pslug string
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT p.id, p.slug
 			   FROM project_repositories pr
 			   JOIN projects p ON p.id = pr.project_id
@@ -106,7 +152,7 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 	base := filepath.Base(strings.TrimRight(cwd, "/"))
 	if base != "" && base != "." && base != "/" {
 		var pid uuid.UUID
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT id FROM projects
 			   WHERE slug = $1 AND deleted_at IS NULL`,
 			base,
@@ -119,7 +165,7 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 	if gitRemote != "" {
 		var pid uuid.UUID
 		var pslug string
-		err := d.q(ctx).QueryRow(ctx,
+		err := h.q(ctx).QueryRow(ctx,
 			`SELECT id, slug FROM projects
 			   WHERE repository_url = $1 AND deleted_at IS NULL
 			   LIMIT 1`,
@@ -132,14 +178,14 @@ func (d *Deps) matchProjectFromCwdOrRemote(ctx context.Context, orgID uuid.UUID,
 	return uuid.Nil, "", false
 }
 
-func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	cwd, _ := args["cwd"].(string)
 	gitRemote, _ := args["git_remote"].(string)
@@ -163,7 +209,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		}
 	}
 
-	projID, projSlug, matched := d.matchProjectFromCwdOrRemote(ctx, orgID, cwd, gitRemote)
+	projID, projSlug, matched := h.matchProjectFromCwdOrRemote(ctx, orgID, cwd, gitRemote)
 	if !matched {
 		suggestionSlug := strings.ToLower(filepath.Base(strings.TrimRight(cwd, "/")))
 		resp := map[string]any{
@@ -192,7 +238,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		name       string
 		desc       *string
 	)
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`SELECT name, description, last_known_head, last_seen_branch,
 		        last_seen_cwd, to_char(last_seen_at AT TIME ZONE 'UTC',
 		                               'YYYY-MM-DD"T"HH24:MI:SS"Z"')
@@ -210,7 +256,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 	}
 
 	// Bump last_seen_*
-	if _, err := d.q(ctx).Exec(ctx,
+	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE projects
 		   SET last_known_head  = COALESCE(NULLIF($2,''), last_known_head),
 		       last_seen_branch = COALESCE(NULLIF($3,''), last_seen_branch),
@@ -230,7 +276,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 	// posteriores en estado "conn busy" → fallan silenciosamente con
 	// nuestros `if err == nil` y los counts quedan en 0.
 	recentObs := []map[string]any{}
-	rows, qerr := d.q(ctx).Query(ctx,
+	rows, qerr := h.q(ctx).Query(ctx,
 		`SELECT id::text, observation_type,
 		        substring(content from 1 for 80),
 		        to_char(created_at AT TIME ZONE 'UTC',
@@ -260,7 +306,7 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		platformPoliciesCount int
 		projRepoCount         int64
 	)
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM project_policies
 		   WHERE project_id = $1
 		     AND is_active = TRUE AND deleted_at IS NULL`,
@@ -270,13 +316,13 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 	}
 
 	// platform_policies no tiene RLS — usa el service.
-	if d.Policies != nil {
-		if pols, perr := d.Policies.List(ctx, ""); perr == nil {
+	if h.policies != nil {
+		if pols, perr := h.policies.List(ctx, ""); perr == nil {
 			platformPoliciesCount = len(pols)
 		}
 	}
 
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM project_repositories
 		   WHERE project_id = $1 AND deleted_at IS NULL`,
 		projID,
@@ -284,9 +330,76 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		_ = err
 	}
 
+	var projectSkillCount int64
+	if err := h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM skills
+		   WHERE project_id = $1 AND deleted_at IS NULL`,
+		projID,
+	).Scan(&projectSkillCount); err != nil {
+		_ = err
+	}
+
+	// Resumen de trabajo pendiente: tickets/issues abiertos + flow_run en curso.
+	// Solo counts y un QueryRow del último flow_run activo — sin rows abiertos
+	// concurrentes (mismo cuidado que recent_observations en la misma tx).
+	var openTickets, openIssues int64
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM project_tickets
+		   WHERE project_id = $1 AND deleted_at IS NULL
+		     AND status NOT IN ('done','cancelled')`,
+		projID,
+	).Scan(&openTickets)
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM user_stories
+		   WHERE project_id = $1 AND deleted_at IS NULL
+		     AND status IN ('proposed','active')`,
+		projID,
+	).Scan(&openIssues)
+
+	// flow_run en curso (running o pausado esperando algo): lo más relevante
+	// para "retomar lo último". NULL si no hay tarea SDD a medias.
+	var (
+		activeRunID     *string
+		activeRunStatus *string
+		activeRunAt     *string
+	)
+	_ = h.q(ctx).QueryRow(ctx,
+		`SELECT id::text, status,
+		        to_char(COALESCE(started_at, created_at) AT TIME ZONE 'UTC',
+		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+		   FROM flow_runs
+		   WHERE project_id = $1
+		     AND status IN ('running','paused','paused_awaiting_signal','paused_awaiting_human')
+		   ORDER BY created_at DESC LIMIT 1`,
+		projID,
+	).Scan(&activeRunID, &activeRunStatus, &activeRunAt)
+
+	activeRun := map[string]any(nil)
+	if activeRunID != nil {
+		activeRun = map[string]any{
+			"id":         safeDeref(activeRunID),
+			"status":     safeDeref(activeRunStatus),
+			"started_at": safeDeref(activeRunAt),
+		}
+	}
+
+	// Estado del grafo de CÓDIGO: ¿existe? ¿está desactualizado respecto al
+	// HEAD actual? Esto NO dispara un build (sería caro y bloqueante en el
+	// primer turn: walk del filesystem + parse AST + writes masivos). Solo
+	// detecta staleness comparando el git_head con el que quedó registrado en
+	// code_index_files y devuelve una sugerencia accionable. El build sigue
+	// siendo explícito vía domain_code_build.
+	codeGraph := h.codeGraphStaleness(ctx, projID, gitHead)
+
 	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considerá leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llamá domain_policy_list o domain_project_policy_list según corresponda."
 	if headChanged {
 		nextStep = "HEAD cambió desde la última sesión. Ejecutá `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persistilos con domain_mem_save antes de seguir."
+	}
+	if activeRun != nil {
+		nextStep = "Hay un flow_run SDD en estado '" + safeDeref(activeRunStatus) + "' — quedó una tarea a medias. Llamá domain_orchestrate_status para ver en qué fase está y retomá; o si el usuario ordena suspenderla/archivarla, cambiá su estado en vez de reiniciar. " + nextStep
+	}
+	if cgSug, _ := codeGraph["suggestion"].(string); cgSug != "" {
+		nextStep = cgSug + " " + nextStep
 	}
 
 	return toolResultJSON(map[string]any{
@@ -308,13 +421,104 @@ func (d *Deps) handleSessionBootstrap(ctx context.Context, req mcp.CallToolReque
 		"recent_observations":  recentObs,
 		"existing_rules_files": rulesFiles,
 		"counts": map[string]any{
-			"project_policies":  projPoliciesCount,
-			"platform_policies": platformPoliciesCount,
-			"project_repos":     projRepoCount,
-			"existing_rules":    len(rulesFiles),
+			"project_policies":    projPoliciesCount,
+			"platform_policies":   platformPoliciesCount,
+			"project_repos":       projRepoCount,
+			"existing_rules":      len(rulesFiles),
+			"project_skill_count": projectSkillCount,
 		},
-		"next_step": nextStep,
+		// Mini-resumen de "dónde quedamos": pendientes + tarea SDD en curso.
+		// El LLM lo usa para abrir la sesión con contexto sin pedir nada más.
+		"work_summary": map[string]any{
+			"open_tickets":    openTickets,
+			"open_issues":     openIssues,
+			"active_flow_run": activeRun,
+		},
+		// Estado del grafo de código (existe / stale / git_head) + sugerencia.
+		// El client decide si correr domain_code_build; no se dispara acá.
+		"code_graph": codeGraph,
+		"next_step":  nextStep,
 	})
+}
+
+// codeGraphStaleness inspecciona el estado del grafo de CÓDIGO del project
+// (tablas code_index_files / mig 000178) y devuelve un mapa con:
+//   - built: ¿hay al menos un archivo indexado?
+//   - indexed_files: cuántos archivos hay en el índice.
+//   - indexed_head: el git_head con el que se construyó el grafo (el del último
+//     archivo indexado; en una corrida normal de domain_code_build todos los
+//     archivos comparten el mismo HEAD).
+//   - current_head: el git_head reportado por el client en este bootstrap.
+//   - stale: true si current_head != indexed_head (ambos no vacíos) → el grafo
+//     no refleja el árbol actual.
+//   - last_indexed_at: timestamp del último indexado.
+//   - suggestion: texto accionable (prefijo del next_step) o "" si está fresco.
+//
+// NO dispara un build: detectar staleness es barato (un solo QueryRow), pero un
+// rebuild incremental (walk del filesystem + parse AST + writes) sería caro y
+// bloqueante en el primer turn de la sesión. El build sigue siendo explícito
+// vía domain_code_build; acá solo sugerimos correrlo cuando hace falta.
+//
+// Single-tenant: filtra exclusivamente por project_id. Best-effort: si la query
+// falla (p.ej. el grafo nunca se usó), reporta built=false sin abortar el
+// bootstrap.
+func (h *sessionBootstrapHandlers) codeGraphStaleness(ctx context.Context, projID uuid.UUID, currentHead string) map[string]any {
+	out := map[string]any{
+		"built":        false,
+		"current_head": currentHead,
+	}
+
+	var (
+		fileCount   int64
+		indexedHead *string
+		lastIndexed *string
+	)
+	// MAX(indexed_at) + el git_head de la fila más reciente. Un único QueryRow:
+	// sin rows abiertos concurrentes en la tx (mismo cuidado que el resto del
+	// handler).
+	err := h.q(ctx).QueryRow(ctx,
+		`SELECT COUNT(*),
+		        (SELECT git_head FROM code_index_files
+		           WHERE project_id = $1
+		           ORDER BY indexed_at DESC LIMIT 1),
+		        to_char(MAX(indexed_at) AT TIME ZONE 'UTC',
+		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+		   FROM code_index_files
+		   WHERE project_id = $1`,
+		projID,
+	).Scan(&fileCount, &indexedHead, &lastIndexed)
+	if err != nil {
+		// Grafo inexistente o no consultable: sugerir construirlo una vez.
+		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
+		return out
+	}
+
+	out["indexed_files"] = fileCount
+	out["indexed_head"] = safeDeref(indexedHead)
+	out["last_indexed_at"] = safeDeref(lastIndexed)
+
+	if fileCount == 0 {
+		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
+		return out
+	}
+
+	out["built"] = true
+
+	stale := codeGraphIsStale(safeDeref(indexedHead), currentHead)
+	out["stale"] = stale
+	if stale {
+		out["suggestion"] = "El grafo de código está desactualizado (se construyó en " + safeDeref(indexedHead) + " y el HEAD actual es " + currentHead + "). Si vas a navegar el código, corré domain_code_build (root_path = cwd) para refrescarlo incrementalmente."
+	}
+	return out
+}
+
+// codeGraphIsStale decide si el grafo está desactualizado: lo está cuando el
+// HEAD con el que se construyó y el HEAD actual son ambos conocidos y distintos.
+// Si alguno es vacío (el client no mandó git_head, o el índice no guardó uno),
+// NO se marca stale: sin la info no se puede afirmar desactualización, y marcar
+// stale a ciegas generaría ruido (sugerir rebuild en cada bootstrap).
+func codeGraphIsStale(indexedHead, currentHead string) bool {
+	return indexedHead != "" && currentHead != "" && indexedHead != currentHead
 }
 
 func safeDeref(s *string) string {
@@ -324,14 +528,44 @@ func safeDeref(s *string) string {
 	return *s
 }
 
-func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+// sanitizeSlug deriva un slug válido (kebab-case, empieza con letra) desde un
+// texto libre (ej. basename del cwd). Matchea el patrón de projects.slug.
+func sanitizeSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevDash = false
+		case !prevDash && b.Len() > 0:
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		out = "proyecto"
+	}
+
+	if out[0] >= '0' && out[0] <= '9' {
+		out = "p-" + out
+	}
+	if len(out) > 100 {
+		out = strings.Trim(out[:100], "-")
+	}
+	return out
+}
+
+func (h *sessionBootstrapHandlers) handleSessionRegister(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	slug, _ := args["slug"].(string)
 	name, _ := args["name"].(string)
@@ -340,7 +574,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	}
 
 	// Idempotencia: si slug ya existe, devolver known=true en lugar de duplicar.
-	if existing, _ := d.Projects.GetBySlug(ctx, orgID, slug); existing != nil {
+	if existing, _ := h.projects.GetBySlug(ctx, orgID, slug); existing != nil {
 		return toolResultJSON(map[string]any{
 			"known":   true,
 			"project": existing,
@@ -357,7 +591,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	// Crear project con INSERT directo (Service.Create requiere muchos campos
 	// que no aplican acá — slug/name/description bastan para bootstrap).
 	var projID uuid.UUID
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO projects
 		   (slug, name, description,
 		    repository_url, last_known_head, last_seen_branch,
@@ -373,7 +607,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 
 	// Si hay remote_url, registrarlo en project_repositories.
 	var createdRepo *projectreposvc.Repo
-	if remoteURL != "" && d.ProjectRepos != nil {
+	if remoteURL != "" && h.projectRepos != nil {
 		remoteName, _ := args["remote_name"].(string)
 		if remoteName == "" {
 			remoteName = "origin"
@@ -394,7 +628,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 		if v, _ := args["workflow"].(string); v != "" {
 			repoIn.Workflow = v
 		}
-		if r, rerr := d.ProjectRepos.Add(ctx, repoIn); rerr == nil {
+		if r, rerr := h.projectRepos.Add(ctx, repoIn); rerr == nil {
 			createdRepo = r
 		}
 	}
@@ -402,7 +636,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	// Persistir observación inicial de registro (audit).
 	// observations schema: (project_id, observation_type,
 	// content). No tiene title — lo embebemos en content como first-line.
-	if _, oerr := d.q(ctx).Exec(ctx,
+	if _, oerr := h.q(ctx).Exec(ctx,
 		`INSERT INTO knowledge_observations
 		   (project_id, observation_type, content, tags)
 		 VALUES ($1, 'discovery', $2, ARRAY['bootstrap','project_registered'])`,
@@ -417,7 +651,7 @@ func (d *Deps) handleSessionRegister(ctx context.Context, req mcp.CallToolReques
 	}
 
 	// Refetch para devolver el project completo.
-	proj, _ := d.Projects.GetByID(ctx, projID)
+	proj, _ := h.projects.GetByID(ctx, projID)
 	return toolResultJSON(map[string]any{
 		"known":   false, // recién creado
 		"created": true,

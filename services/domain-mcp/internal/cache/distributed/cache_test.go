@@ -107,15 +107,15 @@ func TestSabotage_FailSafeInvalidatesAll(t *testing.T) {
 	c.Set("a", 1)
 	c.Set("b", 2)
 
-	// Simulamos lo que el listener hace ante payload corrupto
+
 	c.InvalidateAll()
 
 	require.Equal(t, 1, c.full)
 	_, ok := c.Get("a")
 	require.False(t, ok)
 
-	// Si no fuera fail-safe (solo InvalidateKey con id vacío) la cache
-	// quedaría stale — esto verifica el contrato.
+
+
 }
 
 // Ensure Cache interface compatibility (compile-time check).

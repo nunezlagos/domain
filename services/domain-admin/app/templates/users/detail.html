@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user_obj.display_name }} - Usuarios{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de usuario" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'users:list' %}" class="text-secondary mnt-text-sm">← Volver a usuarios</a>
+    <h1 class="mt-1">{{ user_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ user_obj.email }}</code>
+      · Rol principal: <span class="badge">{{ user_obj.role }}</span>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'users:edit' user_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ user_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del usuario -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th class="mnt-th-label">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
+      <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
+      <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
+      <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
+          {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
+          {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+      <tr><th>Contraseña</th>
+        <td>
+          {% if user_obj.password_set_at %}
+            Establecida el {{ user_obj.password_set_at|date:"d/m/Y H:i" }}
+          {% else %}
+            <span class="text-muted">No establecida</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Roles asignados -->
+<div class="card mb-4">
+  <div class="flex-between mb-3">
+    <h3 class="m-0">Roles asignados</h3>
+    <span class="text-muted mnt-text-sm">{{ user_roles|length }} activo(s)</span>
+  </div>
+
+  {% if user_roles %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Rol</th><th>Descripcion</th><th>Asignado</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for ur in user_roles %}
+            <tr>
+              <td><span class="badge badge-primary">{{ ur.role.slug }}</span></td>
+              <td class="text-secondary">{{ ur.role.name }}</td>
+              <td class="text-secondary">{{ ur.granted_at|date:"d/m/Y H:i" }}</td>
+              <td>
+                <form method="post" action="{% url 'users:role_revoke' user_obj.pk ur.role.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-sm">Quitar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">Este usuario no tiene roles asignados.</p>
+  {% endif %}
+
+  <!-- Asignar nuevo rol -->
+  {% if assign_form.fields.role.queryset.exists %}
+    <form method="post" action="{% url 'users:role_assign' user_obj.pk %}" class="mt-3">
+      {% csrf_token %}
+      <div class="d-flex gap-2 align-end">
+        <div class="flex-grow">
+          <label class="form-label" for="role">Asignar nuevo rol</label>
+          {{ assign_form.role }}
+        </div>
+        <button type="submit" class="btn btn-primary">Asignar rol</button>
+      </div>
+    </form>
+  {% else %}
+    <p class="text-muted mt-3">Este usuario ya tiene todos los roles disponibles asignados.</p>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ user_obj.pk }}">
+  <div class="modal modal-confirm">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar usuario?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar a <strong>{{ user_obj.display_name }}</strong>.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el usuario no podra autenticarse pero el registro se conserva para auditoria.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'users:delete' user_obj.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

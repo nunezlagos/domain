@@ -45,8 +45,8 @@ func (h *sddApplyHandler) Build(_ context.Context, in Input) (*Output, error) {
 	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito.")
 	return &Output{
 		AgentTemplateSlug: "sdd-apply",
-		// SystemPrompt vacío: el Service.Run lo rellena desde
-		// agent_templates.system_prompt en BD (source-of-truth).
+
+
 		SystemPrompt: "",
 		UserPrompt:   b.String(),
 		SuggestedSaves: []SuggestedSave{
@@ -56,12 +56,12 @@ func (h *sddApplyHandler) Build(_ context.Context, in Input) (*Output, error) {
 				Hint:     "guardar code_reference apuntando al archivo + identifier principal modificado",
 			},
 		},
-		// SkillThreshold lo override el service desde agent_templates.metadata
-		// (D3); el handler declara el zero value para que el lookup decida.
+
+
 		SkillThreshold: 0,
-		// RetryPolicy "require-cleanup": si el step queda colgado o muere
-		// con cambios parciales en disco, el saga handler debe disparar
-		// cleanup_required (heartbeat-watcher issue-08.11 lo emite).
+
+
+
 		RetryPolicy: RetryCleanup,
 	}, nil
 }
@@ -74,10 +74,10 @@ func (h *sddApplyHandler) Validate(_ context.Context, _ *Output, result ClientRe
 		return errors.New("sdd-apply: cliente devolvió Output nulo")
 	}
 	if multi, ok := result.Output["multi_concern"].(bool); ok && multi {
-		// Multi-concern no es failure: es una señal para que el orquestador
-		// haga split (D2). El handler lo devuelve como error tipado para
-		// que el modo Express (single-concern por definición) lo trate
-		// distinto que Full (que sí puede splittear).
+
+
+
+
 		return ErrMultiConcernDetected
 	}
 	if blocked, _ := result.Output["blocked"].(bool); blocked {

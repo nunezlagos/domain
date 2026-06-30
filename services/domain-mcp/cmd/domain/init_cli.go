@@ -1,19 +1,19 @@
-// Subcomandos `domain init` y `domain workflow` (issue-12.7 + issue-08.10).
-//
-//   domain init [--root <path>] [--dry-run] [--no-stub]
-//     Detecta archivos .md de instrucciones IA en el repo + los archiva
-//     en BD + los reemplaza por stubs que apuntan al MCP de Domain.
-//
-//   domain workflow list [--root <path>]
-//     Lista archivos importados de la BD con su status actual.
-//
-//   domain workflow restore <rel-path> [--root <path>]
-//     Reescribe el archivo .md original desde el backup en BD.
-//
-//   domain workflow resume <flow_run_id>   (issue-08.10 cli-001)
-//     Devuelve el snapshot del flow_run del orquestador SDD: status del
-//     run, lista de steps con su estado, y el prompt del próximo step
-//     pending (si existe). Útil para reanudar cross-session.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package main
 
@@ -307,9 +307,9 @@ func runWorkflowResume(args []string) {
 	}
 	defer pool.Close()
 
-	// Registry con todos los handlers para que GetFlowStatus pueda
-	// resolver previews. El CLI no ejecuta fases — sólo lee estado —
-	// pero el service requiere el registry para no panic en lookup.
+
+
+
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDExploreHandler())
 	reg.MustRegister(phases.NewSDDSpecHandler())
@@ -319,6 +319,7 @@ func runWorkflowResume(args []string) {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
 

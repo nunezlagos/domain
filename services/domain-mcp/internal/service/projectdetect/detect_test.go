@@ -1,4 +1,4 @@
-// F2: projectdetect — tests unitarios puros (sin DB, sin testcontainers).
+
 
 package projectdetect
 

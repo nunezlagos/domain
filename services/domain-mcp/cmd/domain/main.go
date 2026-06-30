@@ -14,25 +14,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
-	"syscall"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	"nunezlagos/domain/internal/activity"
-	"nunezlagos/domain/internal/api/backpressure"
-	"nunezlagos/domain/internal/api/handler"
-	"nunezlagos/domain/internal/api/middleware"
-	"nunezlagos/domain/internal/api/versioning"
 	"nunezlagos/domain/internal/audit"
-	"nunezlagos/domain/internal/auth/apikey"
-	bootstrapsvc "nunezlagos/domain/internal/auth/bootstrap"
-	"nunezlagos/domain/internal/auth/otp"
-	"nunezlagos/domain/internal/auth/ratelimit"
-	"nunezlagos/domain/internal/auth/rbac"
 	clicommands "nunezlagos/domain/internal/cli/commands"
 	"nunezlagos/domain/internal/cli/onboard"
 	setuppkg "nunezlagos/domain/internal/cli/setup"
@@ -41,84 +30,21 @@ import (
 	propagatepkg "nunezlagos/domain/internal/cli/setup/propagate"
 	"nunezlagos/domain/internal/config"
 	"nunezlagos/domain/internal/crypto"
-	"nunezlagos/domain/internal/db"
-	"nunezlagos/domain/internal/dbmon"
 	"nunezlagos/domain/internal/dbstats"
 	debugpkg "nunezlagos/domain/internal/debug"
-	"nunezlagos/domain/internal/dispatch"
-	"nunezlagos/domain/internal/httpserver"
-	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/circuitbreaker"
-	"nunezlagos/domain/internal/secrets"
-	"nunezlagos/domain/internal/seeds"
-	s3client "nunezlagos/domain/internal/storage/s3"
-	"nunezlagos/domain/internal/tracing"
-	"strings"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"nunezlagos/domain/internal/auth/session"
-	"nunezlagos/domain/internal/events"
-	"nunezlagos/domain/internal/llm/anthropic"
-	"nunezlagos/domain/internal/llm/google"
-	"nunezlagos/domain/internal/llm/ollama"
-	llmopenai "nunezlagos/domain/internal/llm/openai"
-	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
-	llmregistry "nunezlagos/domain/internal/llm/registry"
-	llmretry "nunezlagos/domain/internal/llm/retry"
 	"nunezlagos/domain/internal/logging"
-	smtpmail "nunezlagos/domain/internal/mail/smtp"
-	mcphttpserver "nunezlagos/domain/internal/mcp/httpserver"
-	mcptools "nunezlagos/domain/internal/mcp/server"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	agentrunner "nunezlagos/domain/internal/runner/agent"
-	flowrunner "nunezlagos/domain/internal/runner/flow"
-	skillrunner "nunezlagos/domain/internal/runner/skill"
-	cronsched "nunezlagos/domain/internal/scheduler/cron"
-	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
-	"nunezlagos/domain/internal/scheduler/leader"
-	agentsvc "nunezlagos/domain/internal/service/agent"
-	attSvc "nunezlagos/domain/internal/service/attachment"
-	"nunezlagos/domain/internal/service/billing"
-	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
-	clientsvc "nunezlagos/domain/internal/service/client"
-	"nunezlagos/domain/internal/service/cost"
-	cronsvc "nunezlagos/domain/internal/service/cron"
-	enrollsvc "nunezlagos/domain/internal/service/enrollment"
+	"nunezlagos/domain/internal/secrets"
+	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/flow"
-	intakesvc "nunezlagos/domain/internal/service/intake"
-	usvc "nunezlagos/domain/internal/service/issue"
-	"nunezlagos/domain/internal/service/issuebuilder"
-	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
-	"nunezlagos/domain/internal/service/mcpserver"
-	"nunezlagos/domain/internal/service/observation"
-	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
-	"nunezlagos/domain/internal/service/orchestrator/phases"
 	"nunezlagos/domain/internal/service/outboundwebhook"
-	"nunezlagos/domain/internal/service/policy"
-	projsvc "nunezlagos/domain/internal/service/project"
-	projectpolicysvc "nunezlagos/domain/internal/service/projectpolicy"
-	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
-	"nunezlagos/domain/internal/service/projecttemplate"
-	promptsvc "nunezlagos/domain/internal/service/prompt"
 	"nunezlagos/domain/internal/service/promptrouter"
-	reqsvc "nunezlagos/domain/internal/service/requirement"
-	searchsvc "nunezlagos/domain/internal/service/search"
-	skillsvc "nunezlagos/domain/internal/service/skill"
-	specsvc "nunezlagos/domain/internal/service/spec"
-	tsvc "nunezlagos/domain/internal/service/task"
-	ticketsvc "nunezlagos/domain/internal/service/ticket"
-	timelinesvc "nunezlagos/domain/internal/service/timeline"
-	tracesvc "nunezlagos/domain/internal/service/traceability"
-	usagesvc "nunezlagos/domain/internal/service/usage"
 	"nunezlagos/domain/internal/service/usagealerts"
-	webhooksvc "nunezlagos/domain/internal/service/webhook"
-	wp "nunezlagos/domain/internal/service/wizardplan"
-	wpsources "nunezlagos/domain/internal/service/wizardplan/sources"
 	"nunezlagos/domain/internal/service/workflowimport"
+	"nunezlagos/domain/internal/tracing"
 )
 
 // Variables sobrescritas por `-ldflags "-X main.Version=..."` (issue-19.2).
@@ -129,15 +55,11 @@ var (
 )
 
 func main() {
-	// Plug-and-play: cargar config en cascada ANTES de cualquier
-	// subcomando, sin pisar env vars ya exportadas. Así `domain server`
-	// o `domain projects ls` funcionan desde cualquier directorio sin
-	// `source .env` manual — igual que domain-mcp.
+
 	loadEnvCascade()
 
 	if len(os.Args) < 2 {
-		// Sin args: detectar proyecto + mostrar capabilities (issue F2).
-		// Override: si --tui → bubbletea.
+
 		if isTerminal(os.Stdin) {
 			os.Exit(runTUI(nil))
 		}
@@ -168,8 +90,6 @@ func main() {
 		runWorkflow(os.Args[2:])
 	case "install":
 		os.Exit(runInstall(os.Args[2:]))
-	case "seed-org":
-		runSeedOrg(os.Args[2:])
 	case "seed-demo":
 		runSeedDemo(os.Args[2:])
 	case "embed-backfill":
@@ -191,11 +111,10 @@ func main() {
 	case "detect":
 		os.Exit(runDomainDetect(context.Background()))
 	case "projects", "observations", "obs", "agents", "flows", "skills", "search", "context", "completion", "policies":
-		// Delegar a CLI commands (REQ-14)
+
 		os.Exit(clicommands.Dispatch(os.Args[1:]))
 	case "tui":
-		// Lanza TUI bubbletea con menu (install/update/backups/exit).
-		// Tambien accesible como 'domain' (sin args) → printUsage + tui.
+
 		os.Exit(runTUI(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "comando no implementado: %s\n", os.Args[1])
@@ -318,13 +237,14 @@ func runServer() {
 		fmt.Fprintln(os.Stderr, "o exportá DOMAIN_DATABASE_URL manualmente.")
 		os.Exit(1)
 	}
+
 	logger := logging.Setup(logging.Config{
 		Level:     cfg.LogLevel,
 		Format:    cfg.LogFormat,
 		Output:    cfg.LogOutput,
 		AddSource: cfg.LogAddSource,
 	})
-	// Métricas Prometheus (issue-17.1)
+
 	metricsReg := metrics.New()
 	if cfg.MetricsEnabled {
 		metricsAddr := fmt.Sprintf("%s:%d", cfg.MetricsBind, cfg.MetricsPort)
@@ -335,136 +255,24 @@ func runServer() {
 			}
 		}()
 	}
-
-	// Runtime tuning (issue-27.2)
 	debugpkg.TuneRuntime(logger)
 
-	// Pools (app_user para runtime, app_admin para auth/audit).
 	ctx := context.Background()
-	pools, err := db.OpenProductionWithReplica(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL, cfg.DatabaseReadOnlyURL)
+
+	pools, poolsClose, err := buildPools(ctx, cfg, logger, metricsReg)
 	if err != nil {
 		logger.Error("pools open failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer pools.Close()
-	metrics.RunPoolStatsReporter(ctx, metricsReg, pools.App, pools.Auth, pools.ReadOnly, logger)
-	if cfg.DatabaseAuthURL == "" && cfg.Env != "dev" {
-		logger.Warn("DOMAIN_DATABASE_AUTH_URL not set — auth pool reuses runtime user (NOT recommended outside dev)")
-	}
-	if pools.ReadOnly != nil {
-		pools.LagMonitor = &db.LagMonitor{
-			Pool: pools.ReadOnly, PollInterval: 30 * time.Second,
-			ThresholdSecs: 10.0, Logger: logger,
-			MetricsCB: func(lag float64) {
-				metricsReg.ReplicationLagSeconds.Set(lag)
-				if lag > 10.0 {
-					metricsReg.ReplicaFallbackTotal.Inc()
-				}
-			},
-		}
-		go pools.LagMonitor.Run(ctx)
-		logger.Info("read replica configured with lag monitor",
-			slog.Float64("threshold_secs", 10.0))
-	} else {
-		logger.Info("no read replica configured — all reads go to primary")
-	}
+	defer poolsClose()
 
-	// Services: dependency wiring explícito.
-	recorder := &audit.PGRecorder{Pool: pools.Auth}
-
-	// Debug pprof endpoints (issue-27.1) en puerto separado con basic auth
-	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
-		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
-		go func() {
-			err := debugpkg.Serve(debugpkg.Config{
-				Enabled:       true,
-				Bind:          os.Getenv("DOMAIN_DEBUG_BIND"),
-				Port:          port,
-				AuthUser:      os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
-				AuthPass:      os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
-				AuditRecorder: recorder,
-				Metrics:       metricsReg,
-			}, logger)
-			if err != nil && err != http.ErrServerClosed {
-				logger.Error("debug server failed", slog.Any("err", err))
-			}
-		}()
-	}
-	// HU-28.1: Service depende de Repository — usamos los constructores nuevos
-	// que internamente arman el pgRepository wrappeando pools.App.
-	clientService := clientsvc.NewService(pools.App, recorder, nil)
-	capturedPromptService := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
-	projectRepoService := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
-	projectPolicyService := projectpolicysvc.NewService(projectpolicysvc.NewPgRepository(pools.App))
-	ticketService := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
-	// REQ-72: session service (login web). Necesario ya antes del wireup
-	// de api.API porque se inyecta en AuthSessionService.
-	sessionSvc := session.New(pools.Auth)
-	// REQ-69: SSE event bus singleton. Ticket service publica vía hook.
-	eventBus := events.NewBus()
-	ticketService.SetEventSink(func(topic string, t *ticketsvc.Ticket, actor uuid.UUID, payload map[string]any) {
-		if t == nil {
-			return
-		}
-		var actorPtr *uuid.UUID
-		if actor != uuid.Nil {
-			a := actor
-			actorPtr = &a
-		}
-		tid := t.ID
-		eventBus.Publish(events.Event{
-			OrgID:    uuid.Nil,
-			Topic:    topic,
-			TicketID: &tid,
-			ActorID:  actorPtr,
-			Payload:  payload,
-		})
-	})
-	// REQ-28.2: projectService recibe referencia a ClientService para
-	// resolver client_slug → client_id en Create/Update/List.
-	projectService := projsvc.NewService(pools.App, recorder, nil, nil).
-		WithClientService(clientService)
-	// REQ-68: embedder elegido por env (DOMAIN_EMBEDDING_PROVIDER). Default noop.
-	embedder := chooseEmbedder(logger)
-	obsService := observation.NewService(pools.App, recorder, embedder, nil, nil)
-	// Mailer real si DOMAIN_SMTP_HOST configurado, sino Nop (solo OTP; auth_invitations
-	// se removió en issue-21.5 — onboarding single-org usa enrollment-tokens).
-	var otpMailer otp.Mailer
-	if cfg.SMTPHost != "" {
-		realMailer := smtpmail.New(smtpmail.Config{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
-			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
-			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
-		})
-		otpMailer = realMailer
-		logger.Info("SMTP mailer configured", slog.String("host", cfg.SMTPHost))
-	} else {
-		logger.Warn("SMTP not configured — OTP no enviará mails reales (DOMAIN_SMTP_HOST missing)")
-	}
-
-	// REQ-42.3: session.Service (memoria, tabla sessions dropeada) removido.
-	promptService := &promptsvc.Service{Pool: pools.App, Audit: recorder}
-	timelineService := &timelinesvc.Service{Pool: pools.App}
-	searchService := &searchsvc.Service{Pool: pools.App}
-	knowledgeService := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
-	lifecycleService := &lifecycle.Service{Pool: pools.App, Audit: recorder}
-	flowService := flow.NewService(pools.App, recorder, nil)
-	skillService := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: embedder}
-	agentService := agentsvc.NewService(pools.App, recorder, nil)
-	billingService := &billing.Service{Pool: pools.App}
-	costService := &cost.Service{Pool: pools.App}
-
-	// REQ-42.3: feature hot-reload (runtime_configs) eliminado. El OTEL sample
-	// ratio se configura por env (DOMAIN_OTEL_SAMPLE_RATIO, default 0.1).
 	otelSampleRatio := 0.1
 	if v := os.Getenv("DOMAIN_OTEL_SAMPLE_RATIO"); v != "" {
 		if f, perr := strconv.ParseFloat(v, 64); perr == nil {
 			otelSampleRatio = f
 		}
 	}
-
-	// OpenTelemetry tracing (issue-17.2).
-	otelShutdown, oTelErr := tracing.Setup(context.Background(), tracing.Config{
+	otelShutdown, oTelErr := tracing.Setup(ctx, tracing.Config{
 		Enabled:      os.Getenv("DOMAIN_OTEL_ENABLED") == "true",
 		OTLPEndpoint: envOr("DOMAIN_OTEL_ENDPOINT", "localhost:4317"),
 		ServiceName:  "domain",
@@ -477,17 +285,18 @@ func runServer() {
 		logger.Error("tracing setup failed", slog.Any("err", oTelErr))
 		os.Exit(1)
 	}
-	defer otelShutdown(context.Background())
+	defer otelShutdown(ctx)
 
-	// Seeders (issue-01.7) — catálogos del sistema: idempotente, solo líder ejecuta.
 	seedRegistry := seeds.NewRegistry()
-	// REQ-42.3: ModelRegistrySeeder removido (model_registry dropeada; pricing en código).
 	seedRegistry.Register(&seeds.PlatformPoliciesSeeder{})
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
-	// Nota: seeds.SkillCatalog y AgentTemplateCatalog son per-org —
-	// materializados desde org.Create() via seeds.SeedSkillsForOrg /
-	// seeds.SeedAgentTemplatesForOrg (issue-21.1 org-management hook).
+	seedRegistry.Register(&seeds.SkillsCatalogSeeder{})
+	seedRegistry.Register(&seeds.AgentTemplatesCatalogSeeder{})
+	seedRegistry.Register(&seeds.FlowsCatalogSeeder{})
+	seedRegistry.Register(&seeds.TriagePromptSeeder{})
+	seedRegistry.Register(&seeds.AnalysisPromptSeeder{})
+	seedRegistry.Register(&seeds.WizardFormulatorPromptSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
@@ -501,648 +310,44 @@ func runServer() {
 		)
 	}
 
-	// Cipher opcional para outbound webhook secrets at-rest (issue-02.3 + issue-10.4).
-	var masterCipher *crypto.Cipher
-	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
-		c, err := crypto.LoadFromBase64(mk)
-		if err != nil {
-			logger.Warn("DOMAIN_MASTER_KEY invalid; outbound webhook secrets will fail",
-				slog.String("error", err.Error()))
-		} else {
-			masterCipher = c
-		}
-	}
-	outboundWebhookService := &outboundwebhook.Service{Pool: pools.App, Cipher: masterCipher}
-	// Inbound webhooks requieren cipher para el secret at-rest; sin master key
-	// el service queda nil y los endpoints responden webhooks_disabled.
-	var inboundWebhookService *webhooksvc.Service
-	if masterCipher != nil {
-		inboundWebhookService = &webhooksvc.Service{Pool: pools.App, Audit: recorder, Crypto: masterCipher}
-	}
-	outboundDispatcher := &outboundwebhook.Dispatcher{
-		Pool: pools.App, Svc: outboundWebhookService,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
-		Logger:     logger,
-	}
-	outboundRequireTLS := os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
-
-	// LLM factory: registra providers basado en env vars DOMAIN_LLM_*.
-	// Stack de resiliencia por provider (issue-06.2 + issue-26.5):
-	// circuit breaker( ratelimit( retry( provider ) ) )
-	llmFactory := llm.NewFactory()
-	cbCfg := circuitbreaker.Config{
-		FailureThreshold: 5,
-		RecoveryTimeout:  30 * time.Second,
-	}
-	maxConc := 8
-	if v := os.Getenv("DOMAIN_LLM_MAX_CONCURRENT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxConc = n
-		}
-	}
-	wrapLLM := func(p llm.Provider) llm.Provider {
-		return circuitbreaker.New(
-			llmratelimit.New(llmretry.New(p, llmretry.Config{}), maxConc), cbCfg)
-	}
-	if k := os.Getenv("DOMAIN_ANTHROPIC_KEY"); k != "" {
-		llmFactory.Register("anthropic", wrapLLM(anthropic.New(k)))
-	}
-	if k := os.Getenv("DOMAIN_OPENAI_KEY"); k != "" {
-		llmFactory.Register("openai", wrapLLM(llmopenai.New(k)))
-	}
-	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
-		llmFactory.Register("google", wrapLLM(google.New(k)))
-	}
-	llmFactory.Register("ollama", wrapLLM(ollama.New()))
-	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
-		llmFactory.SetDefault(def, def)
+	svc, err := buildServices(ctx, cfg, pools, logger, metricsReg)
+	if err != nil {
+		logger.Error("buildServices failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 
-	skillRunnerInst := skillrunner.New()
-	// REQ-42.3: model_registry dropeada — pricing en código (sin Pool).
-	modelRegistry := llmregistry.New()
-	var alertEmailSender usagealerts.EmailSender
-	if cfg.SMTPHost != "" {
-		alertEmailSender = usagealerts.NewSMTPEmailSender(smtpmail.New(smtpmail.Config{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Auth: cfg.SMTPAuth,
-			User: cfg.SMTPUser, Password: cfg.SMTPPassword,
-			UseTLS: cfg.SMTPTLS, From: cfg.SMTPFrom,
-		}))
-	}
-	usageAlertsService := &usagealerts.Service{
-		Pool:        pools.App,
-		EmailSender: alertEmailSender,
-		Logger:      logger,
-	}
-	mcpServerService := &mcpserver.Service{Pool: pools.App, Cipher: masterCipher, Logger: logger}
-	projectTemplateService := &projecttemplate.Service{Pool: pools.App}
-	policyService := &policy.Service{Pool: pools.App}
-	// issue-04.7 wizard interactivo. Attachments se inyectan más abajo cuando
-	// se construye el S3 client (puede ser nil si DOMAIN_S3_BUCKET no está).
-	issuebuilderSvc := &issuebuilder.Service{
-		Pool: pools.App, Audit: recorder, DraftTTLHrs: 24,
-	}
-
-	// issue-04.8 intake pipeline service.
-	intakeSvc := &intakesvc.Service{Pool: pools.App, Audit: recorder}
-
-	// issue-12.7 prompt router + analyzer + classifier.
-	// LLM classifier si hay provider configurado; fallback heurístico siempre.
-	var promptClassifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
-	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
-		promptClassifier = &promptrouter.LLMClassifier{
-			Provider: anthropicProv,
-			Model:    "claude-haiku-4-5-20251001",
-			Fallback: promptrouter.HeuristicClassifier{},
-		}
-		logger.Info("prompt classifier: LLM anthropic con fallback heurístico")
-	} else {
-		logger.Info("prompt classifier: heurístico (no anthropic provider)")
-	}
-
-	wizardAnalyzer := &wp.Analyzer{
-		Classifier: &promptrouter.WizardplanAdapter{Inner: promptClassifier},
-		Sources: []wp.Source{
-			&wpsources.IssueDedupSource{Pool: pools.App, Limit: 5},
-			&wpsources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
-			&wpsources.MemorySource{Search: searchService, Limit: 5},
-		},
-		Timeout: 10 * time.Second,
-	}
-	wizardPlanner := &wp.Planner{}
-	// LLM formulator si hay provider.
-	if anthropicProv, _ := llmFactory.Get("anthropic"); anthropicProv != nil {
-		wizardPlanner.QuestionFormulator = &wp.LLMQuestionFormulator{
-			Provider: anthropicProv,
-			Model:    "claude-haiku-4-5-20251001",
-		}
-	}
-
-	issuebuilderAdaptive := &issuebuilder.AdaptiveService{
-		Service:  issuebuilderSvc,
-		Analyzer: wizardAnalyzer,
-		Planner:  wizardPlanner,
-	}
-
-	// REQ-57: orchestrator SDD wireup. Sin esto domain_orchestrate falla
-	// con "orchestrator service not configured". El registry rechaza
-	// duplicados via MustRegister → boot panic si se repite slug.
-	orchPhases := phases.NewRegistry()
-	orchPhases.MustRegister(phases.NewSDDExploreHandler())
-	orchPhases.MustRegister(phases.NewSDDSpecHandler())
-	orchPhases.MustRegister(phases.NewSDDProposeHandler())
-	orchPhases.MustRegister(phases.NewSDDDesignHandler())
-	orchPhases.MustRegister(phases.NewSDDTasksHandler())
-	orchPhases.MustRegister(phases.NewSDDApplyHandler())
-	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
-	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
-	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
-	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
-	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
-	orchestratorSvc.LLM = llmFactory
-	orchestratorSvc.Skills = skillService
-
-	// REQ-57: analysis service para intent IntentAnalysis (read-only).
-	analysisSvc := &analysissvc.Service{
-		Pool: pools.App, Audit: recorder, LLM: llmFactory,
-		Knowledge: knowledgeService, Observation: obsService,
-	}
-
-	promptRouterSvc := &promptrouter.Router{
-		IntakeService:       intakeSvc,
-		IssueBuilderService: issuebuilderSvc,
-		Classifier:          promptClassifier,
-		Orchestrator:        orchestratorSvc,
-		AnalysisService:     &analysisRunnerAdapter{inner: analysisSvc},
-	}
-
-	// issue-12.7 workflow import (override de .md de IA en repo cliente).
-	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
-
-	dbStatsService := &dbstats.Service{Pool: pools.App}
-
-	outboundEmitter := &outboundwebhook.RunnerEmitter{
-		Dispatcher:  outboundDispatcher,
-		Logger:      logger,
-		UsageAlerts: usageAlertsService.AsUsageAlerter(),
-	}
-	// issue-10.4 ow-002: hooks de entidad (observation.created)
-	obsService.Events = outboundEmitter
-	agentRunnerInst := &agentrunner.Runner{
-		Pool: pools.App, Audit: recorder, Factory: llmFactory,
-		Agents: agentService, Skills: skillService,
-		SkillRunner: skillRunnerInst, Models: modelRegistry,
-		Emitter: outboundEmitter, Metrics: metricsReg,
-	}
-	flowRunnerInst := &flowrunner.Runner{
-		Pool: pools.App, Audit: recorder, Flows: flowService,
-		Agents: agentService, Skills: skillService, Observations: obsService,
-		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
-		Emitter: outboundEmitter, Metrics: metricsReg,
-		Signals: &flow.SignalStore{Pool: pools.App},
-		// REQ-42.3: dead_letter_queue dropeada — sin DLQStore.
-	}
-
-	// issue-35.1: unified dispatcher. Se inyecta en cron, webhook
-	// handler y (vía cmd/domain-mcp) los tools MCP. Centraliza
-	// métricas y audit del dispatch.
-	dispatcherAdapters := &dispatch.Adapters{
-		FlowRunner:  flowRunnerInst,
-		AgentRunner: agentRunnerInst,
-		SkillRunner: skillRunnerInst,
-		Agents:      agentService,
-		Skills:      skillService,
-	}
-	dispatcher := &dispatch.Dispatcher{
-		RunFlow:  dispatcherAdapters.RunFlowForDispatcher(),
-		RunAgent: dispatcherAdapters.RunAgentForDispatcher(),
-		RunSkill: dispatcherAdapters.RunSkillForDispatcher(),
-		Metrics:  &dispatch.PromMetricsRecorder{Reg: metricsReg},
-		Logger:   logger,
-		SourceValidator: func(s string) bool {
-			return s == dispatch.SourceCron || s == dispatch.SourceWebhook ||
-				s == dispatch.SourceMCP || s == dispatch.SourceManual
-		},
-	}
-
-	// Cron scheduler (issue-10.1): solo corre en el pod leader (issue-26.2)
-	cronService := &cronsvc.Service{Pool: pools.App, Audit: recorder}
-	scheduler := &cronsched.Scheduler{
-		Crons: cronService,
-		Audit: recorder, Logger: logger, Dispatcher: dispatcher,
-	}
-	leaderElection := &leader.Election{
-		Pool: pools.App, LockKey: leader.LockKeyCronScheduler,
-		PollPeriod: 10 * time.Second, Logger: logger,
-	}
-	schedCtx, schedCancel := context.WithCancel(context.Background())
-	go leaderElection.RunAsLeader(schedCtx, func(leaderCtx context.Context) {
-		// El pod leader corre todos los workers single-instance:
-		// - cron scheduler (issue-10.1)
-		// - flow recovery (issue-09.6) marca stale flow_runs como failed
-		// - outbound webhook dispatcher (issue-10.4) procesa cola de deliveries
-		go flowRunnerInst.RunRecovery(leaderCtx, flowrunner.RecoveryConfig{
-			StaleAfter: 5 * time.Minute, PollInterval: 60 * time.Second,
-		})
-		go runOutboundDispatcher(leaderCtx, outboundDispatcher, logger)
-		go runDBStatsAnalyzer(leaderCtx, dbStatsService, metricsReg, logger)
-		go runDBMonitor(leaderCtx, pools.App, metricsReg, logger)
-		// REQ-42.3: runSessionAutoClose removido (tabla sessions dropeada).
-		go runSoftDeletePurge(leaderCtx, lifecycleService, logger)
-		go runAuditPruneScheduler(leaderCtx, recorder, logger)
-		go runUsageAlertEvaluator(leaderCtx, usageAlertsService, logger)
-		// issue-08.11 heartbeat-watcher (detecta flow_run_steps stuck)
-		if cfg.HeartbeatWatcherEnabled {
-			watcher := &systemcron.HeartbeatWatcher{
-				Pool:    pools.App,
-				Metrics: metricsReg,
-				Timeout: time.Duration(cfg.HeartbeatWatcherTimeoutMinutes) * time.Minute,
-				Tick:    time.Duration(cfg.HeartbeatWatcherTickSeconds) * time.Second,
-				Logger:  logger,
+	if os.Getenv("DOMAIN_DEBUG_ENABLED") == "true" {
+		port, _ := strconv.Atoi(os.Getenv("DOMAIN_DEBUG_PORT"))
+		go func() {
+			err := debugpkg.Serve(debugpkg.Config{
+				Enabled:       true,
+				Bind:          os.Getenv("DOMAIN_DEBUG_BIND"),
+				Port:          port,
+				AuthUser:      os.Getenv("DOMAIN_DEBUG_AUTH_USER"),
+				AuthPass:      os.Getenv("DOMAIN_DEBUG_AUTH_PASSWORD"),
+				AuditRecorder: svc.Recorder,
+				Metrics:       metricsReg,
+			}, logger)
+			if err != nil && err != http.ErrServerClosed {
+				logger.Error("debug server failed", slog.Any("err", err))
 			}
-			go watcher.Start(leaderCtx)
-		}
-		// issue-09.7 fv-009: archiva flow_versions deprecated >90d sin runs
-		go runFlowVersionArchiver(leaderCtx, pools.App, logger)
-		// issue-08.12 orphan-runs-audit (cuenta agent_runs bypass del enforcement)
-		if cfg.OrphanAuditEnabled {
-			auditor := &systemcron.OrphanAuditor{
-				Pool:    pools.App,
-				Metrics: metricsReg,
-				Tick:    24 * time.Hour,
-				Batch:   1000,
-				Logger:  logger,
-			}
-			go auditor.Start(leaderCtx)
-		}
-		scheduler.Run(leaderCtx)
-	})
-	defer schedCancel()
-	apiKeyStore := &apikey.PGStore{Pool: pools.Auth}
-	otpUserLookup := &otpUserLookupAdapter{pool: pools.Auth}
-	otpService := &otp.Service{
-		Pool:  pools.Auth,
-		Users: otpUserLookup,
-		Mail:  otpMailer,
+		}()
 	}
 
-	activityStore := &activity.PGStore{Pool: pools.App}
-	secretsStore := &secrets.PGStore{Pool: pools.App, Cipher: masterCipher}
+	wireServices(svc)
+	runners := buildRunners(ctx, cfg, pools, svc, metricsReg, logger)
+	defer runners.SchedCancel()
 
-	// Rate limiter (issue-02.5)
-	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
-	refillRate := float64(cfg.RateLimitRequests) / windowDur.Seconds()
-	rateLimiter := ratelimit.New(cfg.RateLimitRequests, refillRate)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			rateLimiter.Cleanup(10 * time.Minute)
-		}
-	}()
-	// Per-route OTP rate limiter (issue-02.5): 5 reqs/min por (identifier, IP)
-	otpRateLimiter := ratelimit.New(5, 5.0/60.0)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			otpRateLimiter.Cleanup(10 * time.Minute)
-		}
-	}()
-
-	rbacChecker := &rbac.Checker{}
-	requirementService := &reqsvc.Service{Pool: pools.App, Audit: recorder}
-	huService := &usvc.Service{Pool: pools.App, Audit: recorder}
-
-	specService := &specsvc.Service{Pool: pools.App, Audit: recorder}
-	taskService := &tsvc.Service{Pool: pools.App, Audit: recorder}
-	traceService := &tracesvc.Service{Pool: pools.App}
-
-	// S3 client (issue-04.6) — opcional; nil si no configurado
-	var attachmentService *attSvc.Service
-	if cfg.S3Bucket != "" {
-		s3Client, err := s3client.New(s3client.Config{
-			Endpoint: cfg.S3Endpoint,
-			Region:   cfg.S3Region,
-			Bucket:   cfg.S3Bucket,
-			Key:      cfg.S3AccessKey,
-			Secret:   cfg.S3SecretKey,
-		})
-		if err != nil {
-			logger.Warn("s3 client init failed; attachments disabled", slog.Any("err", err))
-		} else {
-			attachmentService = &attSvc.Service{Pool: pools.App, S3: s3Client, Audit: recorder}
-			logger.Info("s3 storage configured",
-				slog.String("bucket", cfg.S3Bucket),
-				slog.String("endpoint", cfg.S3Endpoint),
-			)
-		}
-	} else {
-		logger.Warn("DOMAIN_S3_BUCKET not set; file attachments disabled")
-	}
-
-	// issue-04.7 + 04.6: inyectar attachment service al issuebuilder Service ya
-	// creado para que AttachToDraft / PromoteAttachmentsToHU funcionen.
-	if attachmentService != nil {
-		issuebuilderSvc.Attachments = &issuebuilder.AttachmentServiceAdapter{Inner: attachmentService}
-	}
-
-	_ = rbacChecker // TODO: wire RequirePermission middleware on per-route basis
-
-	api := &handler.API{
-		ProjectService:        projectService,
-		ClientService:         clientService,
-		TicketService:         ticketService,
-		EventBus:              eventBus,
-		AuthSessionService:    sessionSvc,
-		CapturedPromptService: capturedPromptService,
-		ProjectRepoService:    projectRepoService,
-		ProjectPolicyService:  projectPolicyService,
-		Pool:                  pools.App,
-		ObsService:            obsService,
-		PromptService:         promptService,
-		TimelineService:       timelineService,
-		SearchService:         searchService,
-		KnowledgeService:      knowledgeService,
-		LifecycleService:      lifecycleService,
-		SkillService:          skillService,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: skillService,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   skillRunnerInst,
-		},
-		AgentService:              agentService,
-		AgentRunner:               agentRunnerInst,
-		FlowService:               flowService,
-		FlowRunner:                flowRunnerInst,
-		CronService:               cronService,
-		WebhookService:            inboundWebhookService,
-		Dispatcher:                dispatcher, // issue-35.1
-		CostService:               costService,
-		BillingService:            billingService,
-		OutboundWebhookService:    outboundWebhookService,
-		OutboundWebhookDispatcher: outboundDispatcher,
-		OutboundWebhookRequireTLS: outboundRequireTLS,
-		Backpressure:              &backpressure.Limiter{Pool: pools.App},
-		DBMonCollector:            &dbmon.Collector{Pool: pools.App},
-		UsageAlertsService:        usageAlertsService,
-		UsageSnapshot:             &usagesvc.Service{Pool: pools.App},
-		Enrollment:                &enrollsvc.Service{Pool: pools.App, Audit: recorder},
-		MCPServerService:          mcpServerService,
-		ProjectTemplateService:    projectTemplateService,
-		PolicyService:             policyService,
-		DBStatsService:            dbStatsService,
-		Hubuilder:                 issuebuilderSvc,
-		Audit:                     recorder,
-		ActivityRecorder:          activityStore,
-		ActivityQuerier:           activityStore,
-		OTPService:                otpService,
-		OTPRateLimiter:            otpRateLimiter,
-		APIKeys:                   apiKeyStore,
-		Bootstrap:                 bootstrapsvc.New(pools.App),
-		SecretsStore:              secretsStore,
-		ReqService:                requirementService,
-		HUService:                 huService,
-		SpecService:               specService,
-		TaskService:               taskService,
-		TraceService:              traceService,
-		AttachmentService:         attachmentService,
-		// issue-04.7 v2 (wizard adaptive) + issue-04.8 intake + issue-12.7 plug-and-play.
-		IssueBuilderAdaptive: issuebuilderAdaptive,
-		IntakeService:        intakeSvc,
-		PromptRouter:         promptRouterSvc,
-		WorkflowImport:       workflowImportSvc,
-	}
-
-	addr := fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)
-	mux := http.NewServeMux()
-	info := httpserver.VersionInfo{Version: Version, Commit: Commit, BuildTime: BuildTime}
-	healthH := &httpserver.HealthHandler{Info: info, StartedAt: time.Now()}
-	mux.Handle("/health", healthH)
-	// REQ-76 alias /healthz (k8s/Caddy convention).
-	mux.Handle("/healthz", healthH)
-	mux.Handle("/health/ready", &httpserver.ReadyHandler{Pool: pools.App})
-
-	// Versioning catalog (issue-13.8). Por ahora solo v1 active.
-	versionCatalog := versioning.NewCatalog("v1",
-		versioning.Version{Slug: "v1", State: versioning.StateActive})
-	mux.HandleFunc("/api/version", versionCatalog.VersionInfoHandler)
-
-	// API REST montada bajo /api/v1/*.
-	// Middleware order: CORS → versioning → request-log → auth → principal-ctx → rate-limit → audit → activity → idempotency → handler.
-	// principal-ctx (HU-28.3) extrae Principal del ctx y reinyecta OrgID/UserID
-	// como uuid.UUID via ctxkeys, eliminando el `p, _ := principal(r); uuid.Parse(...)`
-	// repetido en cada handler.
-	// CORS (issue-32.2): allowlist desde DOMAIN_CORS_ORIGINS.
-	corsMW := middleware.NewCORS(cfg.CORSOrigins, logger)
-	if !corsMW.Enabled() {
-		logger.Info("CORS not configured; set DOMAIN_CORS_ORIGINS to enable cross-origin requests")
-	} else {
-		logger.Info("CORS enabled", slog.Int("origins_count", len(cfg.CORSOrigins)))
-	}
-	requestLogMW := middleware.RequestLog(logger)
-	cachedResolver := apikey.NewCachedResolver(apiKeyStore, 5*time.Minute)
-	// REQ-72 session resolver (instancia ya creada antes).
-	sessionResolver := func(ctx context.Context, plain string) (*apikey.Principal, func(context.Context) context.Context, error) {
-		active, err := sessionSvc.Resolve(ctx, plain)
-		if err != nil {
-			return nil, nil, err
-		}
-		p := &apikey.Principal{
-			UserID:         active.UserID.String(),
-			OrganizationID: active.OrganizationID.String(),
-		}
-		attacher := func(c context.Context) context.Context { return session.ToContext(c, active) }
-		return p, attacher, nil
-	}
-	authMW := &apikey.Middleware{
-		Resolver:        cachedResolver,
-		Allowlist:       handler.AuthAllowlist(),
-		Pool:            pools.App,
-		SessionResolver: sessionResolver,
-	}
-	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: rateLimiter, KeyFunc: middleware.DefaultKeyFunc}
-	auditMW := middleware.AuditMiddleware
-	// REQ-42.3: idempotency middleware removido (idempotency_keys dropeada).
-	// issue-02.6: activity feed automático en mutaciones (post-auth)
-	activityMW := &activity.HTTPMiddleware{
-		Recorder: activityStore,
-		Logger:   logger,
-		Principal: func(r *http.Request) (uuid.UUID, *uuid.UUID, bool) {
-			p, ok := apikey.FromContext(r.Context())
-			if !ok || p == nil {
-				return uuid.Nil, nil, false
-			}
-			orgID, err := uuid.Parse(p.OrganizationID)
-			if err != nil {
-				return uuid.Nil, nil, false
-			}
-			var actor *uuid.UUID
-			if uid, err := uuid.Parse(p.UserID); err == nil {
-				actor = &uid
-			}
-			return orgID, actor, true
-		},
-	}
-	mux.Handle("/api/", corsMW.Wrap(
-		versionCatalog.Middleware(
-			requestLogMW(
-				authMW.Wrap(
-					middleware.PrincipalCtx(
-						rateLimitMW.Wrap(
-							auditMW(activityMW.Wrap(api.Router())))))))))
-
-	// REQ-31 (issue-31.1 mcp-http-vps-mode): expone las mismas tools MCP
-	// que `cmd/domain-mcp` (stdio) sobre HTTP Streamable transport. Clientes
-	// MCP remotos (claude-code, Cursor, Cline...) se conectan via
-	//   https://<vps>/mcp  con header  Authorization: Bearer <api_key>.
-	// El handler valida el token contra cachedResolver (mismo store que
-	// /api/) y construye un MCPServer por request con Principal resuelto.
 	queryCacheLRU := mcpQueryCache()
-	// REQ-70 reporter periódico (cache size, SSE subs, tickets locked).
-	go runReq70Reporter(ctx, metricsReg, queryCacheLRU, eventBus, pools.App, logger)
-
-	mcpBuilder := &mcphttpserver.Builder{
-		Base: mcptools.Deps{
-			Observations: obsService,
-			Projects:     projectService,
-			Prompts:      promptService,
-			Timeline:     timelineService,
-			Search:       searchService,
-			Knowledge:    knowledgeService,
-			Skills:       skillService,
-			SkillExecution: &skillsvc.ExecutionService{
-				Pool: pools.App, Skills: skillService,
-				Versions: &skillsvc.VersionStore{Pool: pools.App},
-				Runner:   skillRunnerInst,
-			},
-			Agents:          agentService,
-			AgentRunner:     agentRunnerInst,
-			Crons:           cronService,
-			Clients:         clientService,
-			CapturedPrompts: capturedPromptService,
-			ProjectRepos:    projectRepoService,
-			ProjectPolicies: projectPolicyService,
-			Tickets:         ticketService,
-			Policies:        policyService,
-			Flows:           flowService,
-			FlowRunner:      flowRunnerInst,
-			Hubuilder:       issuebuilderSvc,
-			Intake:          intakeSvc,
-			Orchestrator:    orchestratorSvc,
-			PromptRouter:    promptRouterSvc,
-			WorkflowImport:  workflowImportSvc,
-			Pool:            pools.App,
-			Dispatcher:      dispatcher,
-			ServerName:      "domain-mcp-http",
-			ServerVer:       Version,
-			// REQ-67 LRU compartido entre todos los requests. 4096 entries ≈
-			// pocos MB. TTL por tool en server.Tools(). Si DOMAIN_DISABLE_CACHE=1
-			// queda nil (cache off).
-			SharedCache: queryCacheLRU,
-			// REQ-70 hooks de métricas Prometheus.
-			MetricsOnToolCall: func(tool, status string, dur float64) {
-				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
-				if status != "cache_hit" {
-					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
-				}
-			},
-			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
-			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
-		},
-	}
-	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver)
-	mux.Handle("/mcp", mcpHTTPHandler)
-	mux.Handle("/mcp/", mcpHTTPHandler)
-	logger.Info("MCP HTTP transport mounted",
-		slog.String("path", "/mcp"),
-		slog.String("auth", "Bearer api_key"))
-
-	// Aplica middleware en orden OUTER→INNER:
-	//   recover (más externo) → metrics → tracing → mux
-	// recover va primero porque si el handler panics, queremos el
-	// stack trace en el log ANTES de que metrics lo cuente como
-	// request exitoso (issue-29.3 T5).
-	handler := httpserver.RecoverMiddleware(logger)(
-		metricsReg.HTTPMiddleware(
-			tracing.HTTPMiddleware("domain")(mux),
-		),
-	)
+	httpHandler := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),
-		slog.String("addr", addr),
+		slog.String("addr", fmt.Sprintf("%s:%d", cfg.HTTPBind, cfg.HTTPPort)),
 		slog.String("env", cfg.Env),
 		slog.Bool("metrics_enabled", cfg.MetricsEnabled),
 	)
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second,
-		WriteTimeout: time.Duration(cfg.HTTPWriteTimeoutSeconds) * time.Second,
-	}
-
-	// Graceful shutdown (issue-26.4): trap SIGINT/SIGTERM, drain sequenced
-	// con budget total ~28s (K8s terminationGracePeriodSeconds=30 default).
-	// REQ-42.3: SIGHUP hot-reload removido (runtime_configs dropeada).
-
-	shutdownCh := make(chan os.Signal, 1)
-	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-shutdownCh
-		shutdownStart := time.Now()
-		logger.Info("shutdown signal received", slog.String("signal", sig.String()))
-
-		// Paso 1: flip readiness → ELB deja de rutear nuevos requests.
-		// Grace configurable: DOMAIN_SHUTDOWN_GRACE_SECONDS (default 5).
-		grace := 5 * time.Second
-		if v := os.Getenv("DOMAIN_SHUTDOWN_GRACE_SECONDS"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 25 {
-				grace = time.Duration(n) * time.Second
-			}
-		}
-		httpserver.ShuttingDown.Store(true)
-		logger.Info("readiness flipped → unhealthy; waiting ELB drain",
-			slog.Duration("grace", grace))
-		time.Sleep(grace)
-
-		// Paso 2: HTTP server Shutdown (espera in-flight) — budget 20s
-		httpCtx, httpCancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer httpCancel()
-		forced := false
-		if err := srv.Shutdown(httpCtx); err != nil {
-			logger.Warn("http shutdown forced after timeout", slog.Any("err", err))
-			forced = true
-		}
-
-		// Paso 3: cancel leader workers (scheduler + recovery + dispatcher)
-		schedCancel()
-
-		// Paso 4: cerrar pools — defer pools.Close() lo hace al return de runServer
-		duration := time.Since(shutdownStart).Seconds()
-		logger.Info("graceful shutdown complete",
-			slog.Float64("duration_s", duration),
-			slog.Bool("forced", forced))
-	}()
-
-	// ListenAndServe en goroutine + canal. Si retorna error != nil
-	// (y != http.ErrServerClosed), log FATAL explícito + os.Exit(1).
-	// Esto evita el caso "proceso vivo pero listener no responde"
-	// (issue-29.3, bug detectado 2026-06-12).
-	//
-	// Helpers testeables: httpserver.ListenAndServeWithFatalLog y
-	// httpserver.RunPostBindWatchdog (en internal/httpserver/listen_wrap.go)
-	// encapsulan esta lógica. Aquí el patrón inline es equivalente.
-	listenErrCh := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			listenErrCh <- err
-		} else {
-			listenErrCh <- nil
-		}
-	}()
-
-	// Watchdog post-bind: después de 2s (deja al server armar
-	// el mux + DB pool), 3 intentos de GET /health. Si los 3
-	// fallan, el listener está zombie (proceso vivo pero
-	// respondiendo 000) — log FATAL + exit 1.
-	go func() {
-		time.Sleep(2 * time.Second)
-		for i := 0; i < 3; i++ {
-			if err := httpserver.ProbeHealth(cfg.HTTPPort); err == nil {
-				return
-			}
-			time.Sleep(1 * time.Second)
-		}
-		logger.Error("FATAL: health-check post-bind failed 3x — listener not responding",
-			slog.Int("port", cfg.HTTPPort))
-		os.Exit(1)
-	}()
-
-	if err := <-listenErrCh; err != nil {
-		logger.Error("FATAL: HTTP listener failed", slog.Any("err", err))
-		os.Exit(1)
-	}
+	startBackground(ctx, cfg, pools, svc, runners, metricsReg, httpHandler, queryCacheLRU, logger)
 }
 
 func runHealthcheckProbe() {
@@ -1217,7 +422,6 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 				reg.DBLongestQuerySeconds.Set(longestSeconds)
 			}
 
-			// Lock waits
 			lockRows, err := app.Query(ctx, `
 				SELECT pg_locks.mode, COALESCE(pg_class.relname, 'unknown')
 				FROM pg_locks
@@ -1239,7 +443,6 @@ func runDBMonitor(ctx context.Context, app *pgxpool.Pool, reg *metrics.Registry,
 				lockRows.Close()
 			}
 
-			// Dead tuples top 20
 			tupRows, err := app.Query(ctx, `
 				SELECT relname, n_dead_tup
 				FROM pg_stat_user_tables
@@ -1287,43 +490,6 @@ func runUsageAlertEvaluator(ctx context.Context, svc *usagealerts.Service, logge
 }
 
 // runSoftDeletePurge purga rows soft-deleted fuera de retention (issue-23.2).
-// otpUserLookupAdapter implementa otp.UserLookup contra la DB.
-type otpUserLookupAdapter struct {
-	pool *pgxpool.Pool
-}
-
-func (a *otpUserLookupAdapter) ByEmail(ctx context.Context, email string) (*otp.User, error) {
-	email = strings.TrimSpace(strings.ToLower(email))
-	var u otp.User
-	err := a.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(rut, '') FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
-		email,
-	).Scan(&u.ID, &u.Email, &u.RUT)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apikey.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (a *otpUserLookupAdapter) ByRUT(ctx context.Context, rut string) (*otp.User, error) {
-	rut = strings.TrimSpace(rut)
-	var u otp.User
-	err := a.pool.QueryRow(ctx,
-		`SELECT id, email, rut FROM users WHERE rut = $1 AND deleted_at IS NULL LIMIT 1`,
-		rut,
-	).Scan(&u.ID, &u.Email, &u.RUT)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apikey.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
 func runAuditPruneScheduler(ctx context.Context, recorder *audit.PGRecorder, logger *slog.Logger) {
 	retention := 90 * 24 * time.Hour
 	ticker := time.NewTicker(24 * time.Hour)
@@ -1389,8 +555,6 @@ func runSoftDeletePurge(ctx context.Context, svc *lifecycle.Service, logger *slo
 		}
 	}
 }
-
-// REQ-42.3: runSessionAutoClose removido (tabla sessions dropeada).
 
 // runDBStatsAnalyzer corre cada 5min: slow queries → métricas + snapshot weekly.
 // Solo en el pod leader (issue-26.2 + issue-25.2).
@@ -1483,7 +647,7 @@ func runAuditPrune(args []string) {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 
 	if dryRun {
-		// Count only
+
 		var count int64
 		err = pool.QueryRow(ctx,
 			`SELECT COUNT(*) FROM audit_log WHERE occurred_at < $1`, cutoff).Scan(&count)
@@ -1604,8 +768,7 @@ func runRotateDBPassword(args []string) {
 		fmt.Fprintf(os.Stderr, "rotate: %v\n", err)
 		os.Exit(1)
 	}
-	// El password va a stdout para pipe-friendly:
-	//   domain rotate-db-password --role app_user > /tmp/new_pwd
+
 	fmt.Println(newPass)
 	fmt.Fprintf(os.Stderr, "rotated role=%s — update Secret Manager + rolling deploy app pods.\n", role)
 }
@@ -1623,10 +786,7 @@ func runOnboard(args []string) int {
 	nonInteractive := false
 	noOpencode := false
 	email := ""
-	// keyName y orgName son parametros del wizard, no del CLI por ahora.
-	// El wizard usa defaults sensatos: key_name="default", org_name derivado
-	// del email domain. Si el user quiere custom, edita el codigo o
-	// usamos env vars DOMAIN_KEY_NAME / DOMAIN_ORG_NAME en el futuro.
+
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--base-url":
@@ -1662,7 +822,7 @@ func runOnboard(args []string) int {
 	w := onboard.New(baseURL)
 	w.NonInteractive = nonInteractive
 	w.NoOpencode = noOpencode
-	// Auto-detect domain bin path: assume domain junto a domain-mcp en el mismo dir.
+
 	if ex, err := os.Executable(); err == nil {
 		w.DomainBinPath = ex
 	}
@@ -1670,12 +830,8 @@ func runOnboard(args []string) int {
 		w.DomainMCPPath = mcp
 	}
 
-	// In non-interactive mode, pre-fill email via ask callback.
 	if nonInteractive && email != "" {
-		// We set the email on the wizard by wrapping SaveCredentials. The
-		// ask("Your email", email, true) will be called by Run; the
-		// default returns email. We need to pass email through somehow.
-		// Simpler: set a custom SaveCredentials that injects email.
+
 		original := w.SaveCredentials
 		w.SaveCredentials = func(c *onboard.Credentials) error {
 			if c.Email == "" {
@@ -1701,7 +857,7 @@ func findDomainMCPSibling(domainPath string) (string, error) {
 	dir := filepath.Dir(domainPath)
 	base := strings.TrimSuffix(filepath.Base(domainPath), "domain")
 	if base != "" && base != filepath.Base(domainPath) {
-		// Binary name had a prefix (e.g., "domain-cli"); not our case.
+
 		_ = base
 	}
 	candidate := filepath.Join(dir, "domain-mcp")
@@ -1734,17 +890,21 @@ func runAutoDetect(args []string) {
 	projectDir := "."
 	quiet := false
 	dryRun := false
+	sessionContext := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--quiet", "-q":
 			quiet = true
 		case "--dry-run":
 			dryRun = true
+		case "--session-context":
+			sessionContext = true
 		case "--help", "-h":
-			fmt.Println("Usage: domain setup auto-detect [path] [--quiet] [--dry-run]")
-			fmt.Println("  path          Project directory (default: .)")
-			fmt.Println("  --quiet, -q   Suppress non-error output")
-			fmt.Println("  --dry-run     Show what would be done without modifying files")
+			fmt.Println("Usage: domain setup auto-detect [path] [--quiet] [--dry-run] [--session-context]")
+			fmt.Println("  path               Project directory (default: .)")
+			fmt.Println("  --quiet, -q        Suppress non-error output")
+			fmt.Println("  --dry-run          Show what would be done without modifying files")
+			fmt.Println("  --session-context  Emit Claude Code SessionStart additionalContext JSON")
 			os.Exit(0)
 		default:
 			if !strings.HasPrefix(args[i], "-") {
@@ -1760,6 +920,17 @@ func runAutoDetect(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Modo hook de Claude Code: aplica las actions en silencio y emite el
+	// additionalContext (precedencia domain + reglas locales detectadas). Se
+	// emite SIEMPRE — el hook quiere el contexto en cada sesión, haya o no
+	// cambios de config. No comparte salida con el wrapper de OpenCode (que
+	// llama sin este flag).
+	if sessionContext {
+		_, _ = autodetect.Apply(absDir) // best-effort: no abortar el contexto si falla
+		emitSessionContext(absDir)
+		os.Exit(0)
 	}
 
 	if dryRun {
@@ -1815,6 +986,34 @@ func runAutoDetect(args []string) {
 				fmt.Printf("  generated %s (minimal opencode.json)\n", a.Path)
 			}
 		}
+	}
+}
+
+// emitSessionContext imprime el JSON que Claude Code consume como
+// additionalContext en el hook SessionStart. Recuerda el handshake domain y
+// declara la precedencia sobre las reglas locales detectadas en el repo.
+func emitSessionContext(absDir string) {
+	var b strings.Builder
+	b.WriteString("[domain] Protocolo domain ACTIVO en este repo. ")
+	b.WriteString("Primer llamado SIEMPRE: domain_session_bootstrap(cwd, git_remote, git_branch, git_head); ")
+	b.WriteString("luego domain_policy_get(slug=\"agent-protocol\") para el protocolo completo. ")
+	b.WriteString("domain tiene PRIORIDAD sobre las reglas locales del repo en: memoria persistente, skills, policies SDD y tools domain_*.")
+
+	if rules := autodetect.DetectRuleFiles(absDir); len(rules) > 0 {
+		b.WriteString(" Reglas de IA locales detectadas (SUBORDINADAS a domain en esos temas; sus reglas técnicas —estilo/stack— siguen valiendo y domain las importa a BD): ")
+		b.WriteString(strings.Join(rules, ", "))
+		b.WriteString(".")
+	}
+
+	out := map[string]any{
+		"hookSpecificOutput": map[string]any{
+			"hookEventName":     "SessionStart",
+			"additionalContext": b.String(),
+		},
+	}
+	// Si el encode falla (no debería), no imprimas nada roto: mejor vacío.
+	if data, err := json.Marshal(out); err == nil {
+		fmt.Println(string(data))
 	}
 }
 
@@ -2044,22 +1243,20 @@ func runSetup(args []string) {
 		}
 	}
 	if mcpBinary == "" {
-		// Default: asumir que domain-mcp está en el mismo dir que domain.
+
 		ex, err := os.Executable()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "no pude detectar el binario actual; pasá --mcp-binary")
 			os.Exit(1)
 		}
-		// issue-01.9: use os.Stat en vez de strings.Replace (que falla si
-		// el path tiene "/domain" adentro, e.g., /projects/domain/bin/domain).
+
 		if found, err := findDomainMCPSibling(ex); err == nil {
 			mcpBinary = found
 		} else if found, lpErr := exec.LookPath("domain-mcp"); lpErr == nil {
-			// Fallback: domain-mcp en PATH (install.sh lo deja en ~/go/bin).
+
 			mcpBinary = found
 		} else {
-			// NUNCA escribir un entry con command vacío (HU-01.14: eso
-			// deja al agente con "Connection closed" y requiere repair).
+
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			fmt.Fprintln(os.Stderr, "domain-mcp tampoco está en PATH. Compilalo primero:")
 			fmt.Fprintln(os.Stderr, "  go build -o ~/go/bin/domain-mcp ./cmd/domain-mcp")
@@ -2076,11 +1273,11 @@ func runSetup(args []string) {
 	switch agent {
 	case "claude-code":
 		if global {
-			// User-scope: ~/.claude.json (disponible en todos los proyectos).
+
 			path, err = setuppkg.SetupClaudeCodeGlobal(mcpBinary, apiKey, baseURL)
 			restartHint = "Claude Code carga ~/.claude.json al iniciar (todos los proyectos)."
 		} else {
-			// Project-scope: .mcp.json en el repo actual (commiteable).
+
 			path, err = setuppkg.SetupClaudeCode(cwd, mcpBinary, apiKey, baseURL)
 			restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprobá el server al primer uso)."
 		}
@@ -2131,9 +1328,7 @@ func runSetup(args []string) {
 	}
 
 	if errors.Is(err, setuppkg.ErrAlreadyConfigured) {
-		// return (no os.Exit): runSetup también se invoca in-process desde
-		// `domain install` (configureAgents) — un Exit acá mataba el
-		// install entero a mitad del paso de agentes en re-runs.
+
 		fmt.Printf("Domain MCP ya configurado en %s — nada que hacer.\n", path)
 		return
 	}
@@ -2149,9 +1344,6 @@ func runSetup(args []string) {
 	}
 	fmt.Println("\n" + restartHint)
 
-	// Hook auto-init: detectar archivos .md de IA en el cwd y ofrecer
-	// reemplazarlos. Esto cierra el flow plug-and-play: post-setup el
-	// agente IA tendrá su contexto desde el MCP en lugar de los .md.
 	if skipInit || cwd == "" {
 		return
 	}
@@ -2181,7 +1373,6 @@ func offerOrRunAutoInit(cwd string, autoInit bool) {
 		return
 	}
 
-	// Auto-init: invoca workflowimport.Service.Import.
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "auto-init: no pude cargar config: %v\n", err)
@@ -2228,55 +1419,4 @@ func (a *analysisRunnerAdapter) RunAnalysis(ctx context.Context, in promptrouter
 		Title:          result.Title,
 		Body:           result.Body,
 	}, nil
-}
-
-// runSeedOrg: aplica los catálogos per-org (skills, agent_templates,
-// flows) a una org ya existente. Útil para retro-seedear orgs creadas
-// antes del PostCreateHook (REQ-57). Uso: domain seed-org <uuid>
-func runSeedOrg(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Uso: domain seed-org <organization-uuid>")
-		os.Exit(2)
-	}
-	orgID, err := uuid.Parse(args[0])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "UUID inválido:", err)
-		os.Exit(2)
-	}
-	ctx := context.Background()
-	dsn := os.Getenv("DOMAIN_DATABASE_URL")
-	if dsn == "" {
-		dsn = os.Getenv("DATABASE_URL")
-	}
-	if dsn == "" {
-		fmt.Fprintln(os.Stderr, "DOMAIN_DATABASE_URL no seteado")
-		os.Exit(1)
-	}
-	pool, err := pgxpoolNew(ctx, dsn)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "open pool:", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
-
-	fmt.Printf("Seedeando catálogos per-org en %s...\n", orgID)
-	rs, err := seeds.SeedSkillsForOrg(ctx, pool, orgID, 3)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "skills:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ skills: created=%d updated=%d skipped=%d\n", rs.Created, rs.Updated, rs.Skipped)
-	ra, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "agent_templates:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ agent_templates: created=%d updated=%d skipped=%d\n", ra.Created, ra.Updated, ra.Skipped)
-	rf, err := seeds.SeedFlowsForOrg(ctx, pool, orgID)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "flows:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("  ✓ flows: created=%d updated=%d skipped=%d\n", rf.Created, rf.Updated, rf.Skipped)
-	fmt.Println("Listo.")
 }

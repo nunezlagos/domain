@@ -92,7 +92,7 @@ func TestAgent_Create_WithValidSkills(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	// Crear skill primero
+
 	_, err := f.skills.Create(ctx, skill.CreateInput{
 		OrganizationID: f.orgID, Slug: "review-code",
 		Name: "review", Description: "rev", SkillType: skill.TypePrompt,
@@ -272,13 +272,13 @@ func TestAgent_Versions_PurgeOver50(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Simular 55 versiones históricas vía SQL (más rápido que 55 updates)
+
 	_, err = f.svc.Pool.Exec(ctx,
 		`INSERT INTO agent_versions (agent_id, version, snapshot)
 		 SELECT $1, gs, '{}' FROM generate_series(1, 55) gs`, a.ID)
 	require.NoError(t, err)
 
-	// Un update real dispara el purge
+
 	name := "Y"
 	_, err = f.svc.Update(ctx, a.ID, agent.UpdateInput{Name: &name, ActorID: f.userID})
 	require.NoError(t, err)
@@ -299,14 +299,14 @@ func TestAgent_CreateWithoutModelRegistryGating(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	// modelo arbitrario con provider válido → se crea sin gating por tabla
+
 	_, err := f.svc.Create(ctx, agent.CreateInput{
 		OrganizationID: f.orgID, Slug: "ghost", Name: "X",
 		Provider: "anthropic", Model: "claude-no-existe-99", ActorID: f.userID,
 	})
 	require.NoError(t, err)
 
-	// ollama: modelos locales arbitrarios permitidos (igual que antes)
+
 	_, err = f.svc.Create(ctx, agent.CreateInput{
 		OrganizationID: f.orgID, Slug: "local", Name: "X",
 		Provider: "ollama", Model: "mi-modelo-local", ActorID: f.userID,

@@ -15,7 +15,7 @@ import (
 )
 
 // fakeProvider devuelve respuestas canned por slug para que el orquestador
-// Solo pueda iterar las 10 fases en orden sin necesitar un LLM real.
+// Solo pueda iterar las 11 fases en orden sin necesitar un LLM real.
 type fakeProvider struct {
 	byPhase map[string]string
 	calls   int
@@ -24,12 +24,12 @@ type fakeProvider struct {
 func (p *fakeProvider) Name() string { return "fake" }
 func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
 	p.calls++
-	// El SystemPrompt llega completo desde agent_templates; lo
-	// inspeccionamos para inferir qué fase es y devolver la respuesta
-	// canned correspondiente.
+
+
+
 	for slug, body := range p.byPhase {
-		// El system_prompt seedeado contiene el slug en su texto
-		// (e.g. "sdd-explore", "sdd-spec", etc.) por convención de v3.
+
+
 		if contains(opts.SystemPrompt, slug) {
 			return &llm.Response{
 				Content:      body,
@@ -39,7 +39,7 @@ func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (
 			}, nil
 		}
 	}
-	// Default: explore output (en caso que el system_prompt no matchee)
+
 	return &llm.Response{
 		Content:      `{"intent":"feature","scope":"single-file","summary":"x"}`,
 		Model:        opts.Model,
@@ -66,7 +66,7 @@ func indexOfSubstring(s, sub string) int {
 
 // cannedSoloResponses produce un mapeo phase_slug → JSON output válido
 // según el Validate de cada handler, suficiente para que el flow pase
-// las 10 fases sin error.
+// las 11 fases sin error.
 func cannedSoloResponses() map[string]string {
 	must := func(v any) string {
 		b, _ := json.Marshal(v)
@@ -100,26 +100,30 @@ func cannedSoloResponses() map[string]string {
 		"sdd-judge": must(map[string]any{
 			"sabotage_records": []any{map[string]any{"invariant": "x"}},
 		}),
+		"sdd-review": must(map[string]any{
+			"verdict": "compliant", "policies_checked": 2,
+		}),
 		"sdd-archive": must(map[string]any{"archived": true}),
 		"sdd-onboard": must(map[string]any{"skipped": true}),
 	}
 }
 
-func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
+func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// Factory con un solo provider 'anthropic' (los slugs sdd-* usan
-	// claude-* models seedeados, por lo que ProviderForModel resuelve
-	// 'anthropic').
+
+
+
 	factory := llm.NewFactory()
 	factory.Register("anthropic", &fakeProvider{byPhase: cannedSoloResponses()})
 
@@ -128,6 +132,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar feature CI/CD",
 		Mode:           orchestrator.ModeSolo,
@@ -135,7 +140,7 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeSolo, res.Mode)
 
-	// Verificar que todos los steps quedaron completed en BD
+
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)
@@ -149,9 +154,9 @@ func TestService_Run_Solo_Executes10PhasesEndToEnd(t *testing.T) {
 			"step %s debe estar completed tras Solo run", k)
 		count++
 	}
-	require.Equal(t, 10, count, "10 fases SDD ejecutadas en Solo")
+	require.Equal(t, 11, count, "11 fases SDD ejecutadas en Solo")
 
-	// flow_run terminal
+
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT status FROM flow_runs WHERE id=$1`, res.FlowRunID,
@@ -167,15 +172,17 @@ func TestService_Run_Solo_RequiresLLMFactory(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
-	// LLM intentionally not set
+
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeSolo,
@@ -191,12 +198,13 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-	// Provider devuelve texto sin JSON para sdd-explore
+
 	canned := cannedSoloResponses()
 	canned["sdd-explore"] = "no json here, just prose"
 
@@ -208,6 +216,7 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
+		ProjectID:      projectID,
 		RawText: "x", Mode: orchestrator.ModeSolo,
 	})
 	require.Error(t, err, "Solo debe abortar con JSON inválido")

@@ -89,7 +89,7 @@ func TestLeader_RunAsLeader_ExecutesWorkAndReleases(t *testing.T) {
 	<-done
 	require.True(t, executed.Load())
 
-	// Pod2 ahora puede tomar lock
+
 	e2 := &leader.Election{Pool: pool, LockKey: testLockKey + 1}
 	got, _ := e2.TryAcquire(ctx)
 	require.True(t, got, "tras RunAsLeader, lock liberado y otro puede tomar")

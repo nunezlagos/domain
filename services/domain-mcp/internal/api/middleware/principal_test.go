@@ -54,7 +54,7 @@ func TestPrincipalCtx_InyectaOrgIDyUserID(t *testing.T) {
 }
 
 func TestPrincipalCtx_SinPrincipal_PasaSinTocarCtx(t *testing.T) {
-	// Allowlist path o auth aún no corrió: PrincipalCtx no debe romper.
+
 	insp := &inspector{}
 	h := PrincipalCtx(insp)
 
@@ -73,8 +73,8 @@ func TestPrincipalCtx_SinPrincipal_PasaSinTocarCtx(t *testing.T) {
 }
 
 func TestPrincipalCtx_UUIDInvalido_DejaNilSinCrashear(t *testing.T) {
-	// Principal con UUIDs inválidos: el middleware no debe panic. OrgID
-	// queda uuid.Nil y los handlers downstream deben rechazar via helper.
+
+
 	insp := &inspector{}
 	h := PrincipalCtx(insp)
 

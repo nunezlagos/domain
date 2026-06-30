@@ -78,7 +78,7 @@ func TestFlow_Run_SpecificVersion_NotPublishedRejected(t *testing.T) {
 	ctx := context.Background()
 	flowID := createSkillAndFlow(t, f, "draft-flow")
 
-	// auto-pin crea v1 (draft por default)
+
 	_, err := f.runner.Run(ctx, flowrunner.RunInput{FlowID: flowID, TriggeredBy: &f.userID})
 	require.NoError(t, err)
 
@@ -97,16 +97,16 @@ func TestVersioning_ArchiveDeprecated(t *testing.T) {
 	flowID := createSkillAndFlow(t, f, "arch-flow")
 	vs := &flow.VersioningStore{Pool: f.runner.Pool}
 
-	// v1 referenciada por un run real
+
 	res, err := f.runner.Run(ctx, flowrunner.RunInput{FlowID: flowID, TriggeredBy: &f.userID})
 	require.NoError(t, err)
 	_ = res
 
-	// v2 sin runs
+
 	v2, err := vs.NewVersion(ctx, flowID, []byte(`{"version":1,"steps":[]}`), "hash-v2", "", nil)
 	require.NoError(t, err)
 
-	// Ambas deprecated hace 100 días
+
 	_, err = f.runner.Pool.Exec(ctx, `
 		UPDATE flow_versions SET status = 'deprecated',
 		  deprecated_at = NOW() - INTERVAL '100 days', is_default = false

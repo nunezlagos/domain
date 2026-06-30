@@ -42,9 +42,9 @@ func checkProjectRootGuard(srcFlag string) (string, bool) {
 		return projectRoot, false
 	}
 
-	// Si --src se pasó explícitamente, hacer chdir al path
-	// absoluto para que el resto del install (que usa paths
-	// relativos al cwd) trabaje contra el project root efectivo.
+
+
+
 	if srcFlag != "" {
 		absSrc, err := filepath.Abs(srcFlag)
 		if err != nil {

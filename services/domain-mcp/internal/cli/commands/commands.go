@@ -28,7 +28,7 @@ func Dispatch(args []string) int {
 		return agents(rest)
 	case "flows":
 		return flows(rest)
-	case "skills":
+	case "skills", "skill":
 		return skills(rest)
 	case "search":
 		return search(rest)
@@ -38,6 +38,8 @@ func Dispatch(args []string) int {
 		return completion(rest)
 	case "policies":
 		return policies(rest)
+	case "openspec":
+		return openspec(rest)
 	case "config":
 		return configCmd(rest)
 	case "man":
@@ -67,10 +69,11 @@ Recursos:
   observations  ls --project <slug> | save --project <slug> <content>
   agents        ls | get <id_or_slug> | run <id> <input>
   flows         ls | run <id>
-  skills        ls [--type X] [--tag Y]
+  skills        ls [--type X] [--tag Y] | metrics ... | suggest <run|list>
   search        <query> [--limit N] [--type csv]
   context       [--project <slug>]
   policies      import-md <dir> | export-md [dir]
+  openspec      export --project <slug> [--out dir] | status [dir] | apply [dir] [--force]
   audit         prune [--retention N] [--dry-run]
   completion    bash|zsh|fish|powershell
   config        view (API key solo prefix)
@@ -166,8 +169,6 @@ func handleErr(err error) int {
 	return 0
 }
 
-// === projects ===
-
 func projects(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "uso: domain projects <ls|get|create>")
@@ -219,8 +220,6 @@ func projects(args []string) int {
 	fmt.Fprintf(os.Stderr, "acción desconocida: %s\n", args[0])
 	return 2
 }
-
-// === observations ===
 
 func observations(args []string) int {
 	if len(args) == 0 {
@@ -275,8 +274,6 @@ func observations(args []string) int {
 	return 2
 }
 
-// === agents ===
-
 func agents(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "uso: domain agents <ls|get|run>")
@@ -329,8 +326,6 @@ func agents(args []string) int {
 	return 2
 }
 
-// === flows ===
-
 func flows(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "uso: domain flows <ls|run>")
@@ -367,8 +362,6 @@ func flows(args []string) int {
 	return 2
 }
 
-// === skills ===
-
 func skills(args []string) int {
 	gf, args := parseGlobalFlags(args)
 	c := newClient(gf)
@@ -394,10 +387,200 @@ func skills(args []string) int {
 		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 		return 0
 	}
+	if args[0] == "metrics" {
+		return skillMetrics(gf, c, args[1:])
+	}
+	if args[0] == "suggest" {
+		return skillSuggest(gf, c, args[1:])
+	}
+	if args[0] == "ab-test" {
+		return skillABTest(gf, c, args[1:])
+	}
 	return 2
 }
 
-// === search ===
+// skillABTest maneja `domain skill ab-test <start|results|stop>` (HU-52.4).
+//
+//   - start:   crea+arranca un experimento A/B (POST /skill-ab-tests).
+//   - results: muestra los agregados de ambas variantes (GET /skill-ab-tests/<id>/results).
+//   - stop:    cancela el experimento (POST /skill-ab-tests/<id>/stop).
+func skillABTest(gf *globalFlags, c *clicli.Client, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: domain skill ab-test <start|results|stop>")
+		return 2
+	}
+	render := func(data any) int {
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
+		return 0
+	}
+	switch args[0] {
+	case "start":
+		fs := flag.NewFlagSet("ab-test start", flag.ContinueOnError)
+		slug := fs.String("slug", "", "skill slug")
+		versionA := fs.Int("version-a", 0, "version A (skill_versions)")
+		versionB := fs.Int("version-b", 0, "version B (skill_versions)")
+		split := fs.Float64("traffic-split-a", 0.50, "fraccion de trafico a la variante A (0..1)")
+		minInv := fs.Int("min-invocations", 100, "minimo de invocaciones por variante")
+		autoApply := fs.Bool("auto-apply", false, "pinear la version ganadora automaticamente")
+		_ = fs.Parse(args[1:])
+		if *slug == "" || *versionA == 0 || *versionB == 0 {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test start --slug=X --version-a=N --version-b=M [--min-invocations=100]")
+			return 2
+		}
+		body := map[string]any{
+			"skill_slug":        *slug,
+			"version_a":         *versionA,
+			"version_b":         *versionB,
+			"traffic_split_a":   *split,
+			"min_invocations":   *minInv,
+			"auto_apply_winner": *autoApply,
+			"start_now":         true,
+		}
+		data, err := c.Do("POST", "/skill-ab-tests", body, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "results":
+		fs := flag.NewFlagSet("ab-test results", flag.ContinueOnError)
+		id := fs.String("id", "", "ab test id")
+		_ = fs.Parse(args[1:])
+		if *id == "" {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test results --id=...")
+			return 2
+		}
+		data, err := c.Do("GET", "/skill-ab-tests/"+*id+"/results", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "stop":
+		fs := flag.NewFlagSet("ab-test stop", flag.ContinueOnError)
+		id := fs.String("id", "", "ab test id")
+		_ = fs.Parse(args[1:])
+		if *id == "" {
+			fmt.Fprintln(os.Stderr, "uso: domain skill ab-test stop --id=...")
+			return 2
+		}
+		data, err := c.Do("POST", "/skill-ab-tests/"+*id+"/stop", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	}
+	fmt.Fprintf(os.Stderr, "accion desconocida: ab-test %s\n", args[0])
+	return 2
+}
+
+// skillSuggest maneja `domain skill suggest <run|list>` (HU-52.3).
+//
+//   - run:  corre el batch del judge manualmente (POST /skill-suggestions/run).
+//           SOLO persiste pending; jamas aplica (regla dura 6).
+//   - list: lista sugerencias (default status=pending). Filtros skill/kind/status.
+func skillSuggest(gf *globalFlags, c *clicli.Client, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: domain skill suggest <run|list>")
+		return 2
+	}
+	render := func(data any) int {
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
+		return 0
+	}
+	switch args[0] {
+	case "run":
+		data, err := c.Do("POST", "/skill-suggestions/run", nil, nil)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "list":
+		fs := flag.NewFlagSet("suggest list", flag.ContinueOnError)
+		status := fs.String("status", "pending", "estado (pending|approved|rejected|applied)")
+		kind := fs.String("kind", "", "tipo (split|merge|refine|archive)")
+		slug := fs.String("skill", "", "skill slug")
+		limit := fs.Int("limit", 50, "limite")
+		_ = fs.Parse(args[1:])
+		q := map[string]string{"limit": fmt.Sprint(*limit)}
+		if *status != "" {
+			q["status"] = *status
+		}
+		if *kind != "" {
+			q["kind"] = *kind
+		}
+		if *slug != "" {
+			q["skill_slug"] = *slug
+		}
+		data, err := c.Do("GET", "/skill-suggestions", nil, q)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	}
+	fmt.Fprintf(os.Stderr, "accion desconocida: suggest %s\n", args[0])
+	return 2
+}
+
+// skillMetrics maneja `domain skill metrics <show|top-failed|slowest>` (HU-52.2).
+func skillMetrics(gf *globalFlags, c *clicli.Client, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: domain skill metrics <show|top-failed|slowest>")
+		return 2
+	}
+	render := func(data any) int {
+		if gf.Quiet {
+			return 0
+		}
+		renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
+		return 0
+	}
+	switch args[0] {
+	case "show":
+		fs := flag.NewFlagSet("metrics show", flag.ContinueOnError)
+		slug := fs.String("slug", "", "skill slug")
+		days := fs.Int("days", 7, "ventana en dias")
+		_ = fs.Parse(args[1:])
+		if *slug == "" {
+			fmt.Fprintln(os.Stderr, "uso: domain skill metrics show --slug=X [--days=7]")
+			return 2
+		}
+		q := map[string]string{"days": fmt.Sprint(*days)}
+		data, err := c.Do("GET", "/skills/"+*slug+"/metrics", nil, q)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "top-failed":
+		fs := flag.NewFlagSet("metrics top-failed", flag.ContinueOnError)
+		days := fs.Int("days", 7, "ventana en dias")
+		limit := fs.Int("limit", 10, "top N")
+		_ = fs.Parse(args[1:])
+		q := map[string]string{"days": fmt.Sprint(*days), "limit": fmt.Sprint(*limit)}
+		data, err := c.Do("GET", "/skills/metrics/top-failed", nil, q)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	case "slowest":
+		fs := flag.NewFlagSet("metrics slowest", flag.ContinueOnError)
+		days := fs.Int("days", 7, "ventana en dias")
+		limit := fs.Int("limit", 10, "top N")
+		_ = fs.Parse(args[1:])
+		q := map[string]string{"days": fmt.Sprint(*days), "limit": fmt.Sprint(*limit)}
+		data, err := c.Do("GET", "/skills/metrics/slowest", nil, q)
+		if err != nil {
+			return handleErr(err)
+		}
+		return render(data)
+	}
+	fmt.Fprintf(os.Stderr, "accion desconocida: metrics %s\n", args[0])
+	return 2
+}
 
 func search(args []string) int {
 	gf, args := parseGlobalFlags(args)
@@ -424,8 +607,6 @@ func search(args []string) int {
 	renderOpts(data, output.RenderOpts{Format: output.Format(gf.Format), NoHeaders: gf.NoHeaders})
 	return 0
 }
-
-// === context ===
 
 func contextCmd(args []string) int {
 	gf, args := parseGlobalFlags(args)

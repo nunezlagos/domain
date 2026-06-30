@@ -5,9 +5,9 @@ Requires=domain-services.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/services
+WorkingDirectory=/opt/services/services
 EnvironmentFile=/opt/services/.env
-ExecStart=/opt/services/scripts/backup.sh
+ExecStart=/opt/services/services/scripts/backup.sh
 TimeoutStartSec=3600
 Nice=10
 IOSchedulingClass=best-effort

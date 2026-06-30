@@ -4,6 +4,8 @@
 // embedding dedup y external sync quedan como futuras extensiones del pipeline
 // (no incluidas en este commit inicial). El estado y los hooks de transición
 // están listos para que un worker async procese los pasos pendientes.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package intake
 
 import (
@@ -16,15 +18,20 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/intake/intakedb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
 	ErrNotFound      = errors.New("intake not found")
 	ErrInvalidStatus = errors.New("invalid status for operation")
 	ErrInvalidSource = errors.New("invalid source")
+
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 const (
@@ -85,6 +92,7 @@ type SubmitInput struct {
 	Source         string
 	SourceRef      string
 	OrganizationID *uuid.UUID
+	ProjectID      *uuid.UUID
 	SubmittedBy    string
 	RawText        string
 	RawPayload     map[string]any
@@ -100,15 +108,23 @@ var validSources = map[string]bool{
 	SourceSlack: true, SourceSheet: true, SourceManual: true,
 }
 
-// Submit acepta un payload crudo desde cualquier origen. Devuelve el intake
-// recién creado en status=received. El procesamiento posterior (classify,
-// dedupe, structure) lo hace un worker async leyendo de status="received".
+func (s *Service) q(ctx context.Context) *intakedb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return intakedb.New(tx)
+	}
+	return intakedb.New(s.Pool)
+}
+
 func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) {
 	if !validSources[in.Source] {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidSource, in.Source)
 	}
 	if strings.TrimSpace(in.RawText) == "" {
 		return nil, fmt.Errorf("raw_text required")
+	}
+
+	if in.ProjectID == nil || *in.ProjectID == uuid.Nil {
+		return nil, ErrProjectIDRequired
 	}
 	if in.RawPayload == nil {
 		in.RawPayload = map[string]any{}
@@ -124,25 +140,19 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 		subBy = &in.SubmittedBy
 	}
 
-	var p Payload
-	// ISSUE-21.6 Fase D clean Round 3: organization_id se omite del INSERT
-	// (single-org, nullable post-000145).
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO issue_intake_payloads (source, source_ref, submitted_by,
-		                             raw_text, raw_payload)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, source, source_ref, submitted_by, raw_text, raw_payload,
-		          status, classified_type, classified_severity, classified_confidence,
-		          classification_reasoning, needs_clarification, proposed_title,
-		          proposed_description, proposed_req_slug, proposed_hu_draft,
-		          dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		          rejection_reason, committed_req_id, committed_issue_id, failure_reason,
-		          created_at, updated_at`,
-		in.Source, srcRef, subBy, in.RawText, payloadJSON,
-	).Scan(scanPayloadCols(&p)...)
+	row, err := s.q(ctx).InsertIntake(ctx, intakedb.InsertIntakeParams{
+		Source:      in.Source,
+		SourceRef:   srcRef,
+		SubmittedBy: subBy,
+		RawText:     in.RawText,
+		RawPayload:  payloadJSON,
+		ProjectID:   *in.ProjectID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert intake: %w", err)
 	}
+
+	p := toPayload(intakedb.GetIntakeRow(row))
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -157,64 +167,53 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*Payload, error) 
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Payload, error) {
-	var p Payload
-	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
-		       status, classified_type, classified_severity, classified_confidence,
-		       classification_reasoning, needs_clarification, proposed_title,
-		       proposed_description, proposed_req_slug, proposed_hu_draft,
-		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
-		       created_at, updated_at
-		FROM issue_intake_payloads WHERE id = $1`, id,
-	).Scan(scanPayloadCols(&p)...)
+	row, err := s.q(ctx).GetIntake(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get intake: %w", err)
 	}
+	p := toPayload(row)
 	return &p, nil
 }
 
-// UpdateClassification persiste el resultado del paso classify.
 func (s *Service) UpdateClassification(ctx context.Context, id uuid.UUID, type_, severity string, confidence float64, reasoning string) (*Payload, error) {
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE issue_intake_payloads
-		SET classified_type = $1, classified_severity = $2, classified_confidence = $3,
-		    classification_reasoning = $4, needs_clarification = $5,
-		    status = $6, updated_at = now()
-		WHERE id = $7`,
-		type_, severity, confidence, reasoning, confidence < 0.6, StatusClassified, id,
-	)
+	err := s.q(ctx).UpdateClassification(ctx, intakedb.UpdateClassificationParams{
+		ClassifiedType:          &type_,
+		ClassifiedSeverity:      &severity,
+		ClassifiedConfidence:    float64ToNumeric(confidence),
+		ClassificationReasoning: &reasoning,
+		NeedsClarification:      confidence < 0.6,
+		Status:                  StatusClassified,
+		ID:                      id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("update classification: %w", err)
 	}
 	return s.Get(ctx, id)
 }
 
-// MarkPendingReview transiciona a pending_review (después de structuring).
 func (s *Service) MarkPendingReview(ctx context.Context, id uuid.UUID, title, description, reqSlug string, issueDraft map[string]any, dedup []any, mergeAction string) (*Payload, error) {
 	huJSON, _ := json.Marshal(issueDraft)
 	dedupJSON, _ := json.Marshal(dedup)
 
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE issue_intake_payloads
-		SET proposed_title = $1, proposed_description = $2, proposed_req_slug = $3,
-		    proposed_hu_draft = $4, dedup_candidates = $5, merge_action = $6,
-		    status = $7, updated_at = now()
-		WHERE id = $8`,
-		title, description, reqSlug, huJSON, dedupJSON, mergeAction,
-		StatusPendingReview, id,
-	)
+	err := s.q(ctx).MarkPendingReview(ctx, intakedb.MarkPendingReviewParams{
+		ProposedTitle:       &title,
+		ProposedDescription: &description,
+		ProposedReqSlug:     &reqSlug,
+		ProposedHuDraft:     huJSON,
+		DedupCandidates:     dedupJSON,
+		MergeAction:         &mergeAction,
+		Status:              StatusPendingReview,
+		ID:                  id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mark pending review: %w", err)
 	}
 	return s.Get(ctx, id)
 }
 
-// Approve marca como aprobado (precondición a commit).
 func (s *Service) Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUID) (*Payload, error) {
 	p, err := s.Get(ctx, id)
 	if err != nil {
@@ -223,12 +222,11 @@ func (s *Service) Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUI
 	if p.Status != StatusPendingReview {
 		return nil, fmt.Errorf("%w: status=%s", ErrInvalidStatus, p.Status)
 	}
-	_, err = s.Pool.Exec(ctx, `
-		UPDATE issue_intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
-		                            updated_at = now()
-		WHERE id = $3`,
-		StatusApproved, reviewerID, id,
-	)
+	err = s.q(ctx).ApproveIntake(ctx, intakedb.ApproveIntakeParams{
+		Status:     StatusApproved,
+		ReviewerID: &reviewerID,
+		ID:         id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("approve: %w", err)
 	}
@@ -244,7 +242,6 @@ func (s *Service) Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUI
 	return s.Get(ctx, id)
 }
 
-// Reject marca como rechazado con razón.
 func (s *Service) Reject(ctx context.Context, id, reviewerID uuid.UUID, reason string) (*Payload, error) {
 	p, err := s.Get(ctx, id)
 	if err != nil {
@@ -253,19 +250,18 @@ func (s *Service) Reject(ctx context.Context, id, reviewerID uuid.UUID, reason s
 	if p.Status == StatusCommitted {
 		return nil, fmt.Errorf("%w: cannot reject committed", ErrInvalidStatus)
 	}
-	_, err = s.Pool.Exec(ctx, `
-		UPDATE issue_intake_payloads SET status = $1, reviewer_id = $2, reviewed_at = now(),
-		                            rejection_reason = $3, updated_at = now()
-		WHERE id = $4`,
-		StatusRejected, reviewerID, reason, id,
-	)
+	err = s.q(ctx).RejectIntake(ctx, intakedb.RejectIntakeParams{
+		Status:          StatusRejected,
+		ReviewerID:      &reviewerID,
+		RejectionReason: &reason,
+		ID:              id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("reject: %w", err)
 	}
 	return s.Get(ctx, id)
 }
 
-// LinkCommitted asocia el intake con el REQ/HU creado.
 func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, issueID *uuid.UUID) (*Payload, error) {
 	p, err := s.Get(ctx, id)
 	if err != nil {
@@ -274,63 +270,88 @@ func (s *Service) LinkCommitted(ctx context.Context, id uuid.UUID, reqID, issueI
 	if p.Status != StatusApproved {
 		return nil, fmt.Errorf("%w: must be approved, got %s", ErrInvalidStatus, p.Status)
 	}
-	_, err = s.Pool.Exec(ctx, `
-		UPDATE issue_intake_payloads SET status = $1, committed_req_id = $2,
-		                            committed_issue_id = $3, updated_at = now()
-		WHERE id = $4`,
-		StatusCommitted, reqID, issueID, id,
-	)
+	err = s.q(ctx).LinkCommitted(ctx, intakedb.LinkCommittedParams{
+		Status:           StatusCommitted,
+		CommittedReqID:   reqID,
+		CommittedIssueID: issueID,
+		ID:               id,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("link committed: %w", err)
 	}
 	return s.Get(ctx, id)
 }
 
-// ListPending devuelve intakes en cualquier status no-terminal.
 func (s *Service) ListPending(ctx context.Context, limit int) ([]Payload, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	// ISSUE-21.6: organization_id omitido del SELECT (dropeado en Fase C).
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, source, source_ref, submitted_by, raw_text, raw_payload,
-		       status, classified_type, classified_severity, classified_confidence,
-		       classification_reasoning, needs_clarification, proposed_title,
-		       proposed_description, proposed_req_slug, proposed_hu_draft,
-		       dedup_candidates, merge_action, reviewer_id, reviewed_at,
-		       rejection_reason, committed_req_id, committed_issue_id, failure_reason,
-		       created_at, updated_at
-		FROM issue_intake_payloads
-		WHERE status NOT IN ('committed','rejected','failed')
-		ORDER BY created_at ASC LIMIT $1`, limit)
+
+	rows, err := s.q(ctx).ListPendingIntakes(ctx, int32(limit))
 	if err != nil {
 		return nil, fmt.Errorf("list pending: %w", err)
 	}
-	defer rows.Close()
 
-	var out []Payload
-	for rows.Next() {
-		var p Payload
-		if err := rows.Scan(scanPayloadCols(&p)...); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		out = append(out, p)
+	out := make([]Payload, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toPayload(intakedb.GetIntakeRow(r)))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func scanPayloadCols(p *Payload) []any {
-	// ISSUE-21.6 Fase D clean Round 3: OrganizationID removido del scan
-	// (la columna ya no se selecciona en INSERT/SELECT).
-	return []any{
-		&p.ID, &p.Source, &p.SourceRef, &p.SubmittedBy,
-		&p.RawText, &p.RawPayload, &p.Status,
-		&p.ClassifiedType, &p.ClassifiedSeverity, &p.ClassifiedConfidence,
-		&p.ClassificationReason, &p.NeedsClarification,
-		&p.ProposedTitle, &p.ProposedDescription, &p.ProposedReqSlug,
-		&p.ProposedHUDraft, &p.DedupCandidates, &p.MergeAction,
-		&p.ReviewerID, &p.ReviewedAt, &p.RejectionReason,
-		&p.CommittedREQ, &p.CommittedHU, &p.FailureReason,
-		&p.CreatedAt, &p.UpdatedAt,
+func toPayload(r intakedb.GetIntakeRow) Payload {
+	return Payload{
+		ID:                   r.ID,
+		Source:               r.Source,
+		SourceRef:            r.SourceRef,
+		SubmittedBy:          r.SubmittedBy,
+		RawText:              r.RawText,
+		RawPayload:           json.RawMessage(r.RawPayload),
+		Status:               r.Status,
+		ClassifiedType:       r.ClassifiedType,
+		ClassifiedSeverity:   r.ClassifiedSeverity,
+		ClassifiedConfidence: numericToFloat64Ptr(r.ClassifiedConfidence),
+		ClassificationReason: r.ClassificationReasoning,
+		NeedsClarification:   r.NeedsClarification,
+		ProposedTitle:        r.ProposedTitle,
+		ProposedDescription:  r.ProposedDescription,
+		ProposedReqSlug:      r.ProposedReqSlug,
+		ProposedHUDraft:      json.RawMessage(r.ProposedHuDraft),
+		DedupCandidates:      json.RawMessage(r.DedupCandidates),
+		MergeAction:          r.MergeAction,
+		ReviewerID:           r.ReviewerID,
+		ReviewedAt:           timestamptzToPtr(r.ReviewedAt),
+		RejectionReason:      r.RejectionReason,
+		CommittedREQ:         r.CommittedReqID,
+		CommittedHU:          r.CommittedIssueID,
+		FailureReason:        r.FailureReason,
+		CreatedAt:            r.CreatedAt,
+		UpdatedAt:            r.UpdatedAt,
 	}
+}
+
+func numericToFloat64Ptr(n pgtype.Numeric) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	f, err := n.Float64Value()
+	if err != nil {
+		return nil
+	}
+	return &f.Float64
+}
+
+func float64ToNumeric(f float64) pgtype.Numeric {
+	var n pgtype.Numeric
+	if err := n.Scan(f); err != nil {
+		return pgtype.Numeric{Valid: false}
+	}
+	return n
+}
+
+func timestamptzToPtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
 }

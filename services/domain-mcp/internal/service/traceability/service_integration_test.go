@@ -130,7 +130,7 @@ func TestSabotage_OrphanCodeReference(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Inserta con UUID inválido — ON DELETE CASCADE no aplica si se hace bypass
+
 	_, err := f.svc.Pool.Exec(ctx,
 		`INSERT INTO issue_code_references (issue_id, file_path, repo) VALUES ($1, 'internal/y.go', 'domain')`,
 		f.issueID,
@@ -138,7 +138,7 @@ func TestSabotage_OrphanCodeReference(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = f.svc.Pool.Exec(ctx, `DELETE FROM issues WHERE id = $1`, f.issueID)
-	// ON DELETE CASCADE en code_references → row se borra, no queda huérfana
+
 	require.NoError(t, err)
 
 	ct, err := f.svc.GetCodeTrace(ctx, "internal/y.go")

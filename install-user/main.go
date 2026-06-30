@@ -4,28 +4,51 @@
 // nativo). En Linux/macOS/WSL2 funciona igual y mejor (paths absolutos,
 // JSON parsing strict, sin dependencias externas como jq).
 //
-// Lo que hace (paridad con install-user.sh):
+// Lo que hace:
 //   - detecta clientes MCP instalados (claude-code, opencode, cursor, cline,
 //     continue, claude-desktop) por presencia de paths
+//   - si no hay ninguno Y --install-opencode: sugiere el comando para instalar
+//     opencode y aborta pidiendo confirmación humana
+//   - --target: filtra a un cliente específico (opencode|claude-code|...)
 //   - escribe el config MCP de domain-mcp en cada uno, preservando otros
-//     servers que el usuario haya configurado y migrando entry legacy
-//     "domain" si existía
+//     servers y migrando entry legacy "domain" REMOTA si existía
 //   - planta skill global (~/.claude/skills/domain/SKILL.md) y subagent
-//     (~/.claude/agents/domain-memory.md) — mismos contenidos para todos
-//     los clientes, embebidos en el binario
+//     (~/.claude/agents/domain-memory.md) — embebidos en el binario
 //   - opencode comparte vía symlink (Linux/macOS) o copia (Windows)
 //   - persiste VPS_URL + email en ~/.config/domain/install.env (modo 0600)
 //     para no re-preguntar en re-ejecuciones
+//   - si install.env ya tiene URL distinta, avisa antes de sobrescribir
 //   - --uninstall: borra solo lo que el installer creó, preserva el resto
 //     del archivo del usuario (operación determinista, no restore de backup)
+//
+// Convención de entry names (documentada y deliberada):
+//   - "domain"     → instalación LOCAL (instalador del SERVER: cmd/domain +
+//     internal/cli/setup). transport=local, command=binario
+//     domain-mcp. Vive en ~/.claude.json y opencode.json.
+//   - "domain-mcp" → instalación REMOTA (ESTE instalador de usuario).
+//     transport=http/remote, url=VPS/mcp + Bearer api-key.
+//
+// Dedup local↔remoto: si ya hay un "domain" LOCAL vivo, NO se agrega un
+// "domain-mcp" remoto contradictorio (la instalación local es la fuente de
+// verdad y se respeta). El uninstall del user nunca toca un "domain" local.
+//
+// Config MCP que lee cada cliente (verificado):
+//   - claude-code:    ~/.claude.json           top-level "mcpServers" (type:http)
+//   - opencode:       ~/.config/opencode/opencode.json  "mcp" (type:remote)
+//   - cursor:         ~/.cursor/mcp.json        "mcpServers"
+//   - cline:          .../saoudrizwan.claude-dev/settings/cline_mcp_settings.json  "mcpServers"
+//   - continue:       ~/.continue/config.json   experimental.modelContextProtocolServers
+//   - claude-desktop: NO soporta http remoto (solo stdio) → se omite con aviso
 package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -47,17 +70,27 @@ func info(s string)  { fmt.Printf("%s    ·%s %s\n", cDim, cReset, s) }
 
 func main() {
 	var (
-		vpsURL    string
-		email     string
-		apiKey    string
-		uninstall bool
-		dryRun    bool
+		vpsURL          string
+		email           string
+		apiKey          string
+		uninstall       bool
+		dryRun          bool
+		target          string
+		installOpencode bool
+		bootstrapGuided bool
+		yes             bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
-	flag.StringVar(&apiKey, "api-key", "", "API key domk_*")
+	flag.StringVar(&apiKey, "api-key", "", "API key domk_* (si ya la tenés)")
 	flag.BoolVar(&uninstall, "uninstall", false, "Desinstala domain-mcp de los clientes")
 	flag.BoolVar(&dryRun, "dry-run", false, "Solo detecta clientes, no toca configs")
+	flag.StringVar(&target, "target", "", "Cliente único (opencode|claude-code|cursor|...)")
+	flag.BoolVar(&installOpencode, "install-opencode", false,
+		"Si no hay clientes MCP, sugerir el comando para instalar opencode")
+	flag.BoolVar(&bootstrapGuided, "bootstrap", false,
+		"Modo guiado: el operador genera la API key con `domain bootstrap` y la pega")
+	flag.BoolVar(&yes, "yes", false, "Asumir 'sí' a prompts no destructivos")
 	flag.Usage = printHelp
 	flag.Parse()
 
@@ -69,19 +102,35 @@ func main() {
 		return
 	}
 
-	runInstall(platform, paths, vpsURL, email, apiKey, dryRun)
+	if bootstrapGuided {
+		runBootstrapGuided(&platform, paths)
+		return
+	}
+
+	runInstall(platform, paths, installOptions{
+		URL:            vpsURL,
+		Email:          email,
+		APIKey:         apiKey,
+		DryRun:         dryRun,
+		Target:         target,
+		AutoInstall:    installOpencode,
+		NonInteractive: yes,
+	})
 }
 
 func printHelp() {
 	fmt.Println(`domain-install — instalador cross-platform del cliente MCP domain.
 
 Uso:
-  domain-install                                    # interactive (pide URL/email/api-key)
+  domain-install                                          # interactive
   domain-install --url http://1.2.3.4 \
-                 --email u@x.cl \
-                 --api-key domk_live_xxx
-  domain-install --uninstall                        # deshacer: deja todo como estaba
-  domain-install --dry-run                          # solo detecta clientes
+                  --email u@x.cl \
+                  --api-key domk_live_xxx
+  domain-install --bootstrap                              # guiado: te ayuda a obtener la key
+  domain-install --target opencode                        # solo configura opencode
+  domain-install --install-opencode                       # si no hay clientes, sugiere instalar
+  domain-install --uninstall                              # deshacer
+  domain-install --dry-run                                # solo detectar
 
 Plataformas: Linux (Ubuntu/Debian/Arch), macOS (Intel + Apple Silicon),
 Windows (nativo), WSL2.
@@ -89,88 +138,134 @@ Windows (nativo), WSL2.
 Re-ejecutable. VPS_URL y email se persisten en ~/.config/domain/install.env
 (o %APPDATA%\domain\install.env en Windows) para no re-preguntar.
 
-API_KEY NUNCA se persiste — solo vive en los configs MCP de cada cliente.`)
+API_KEY NUNCA se persiste — solo vive en los configs MCP de cada cliente.
+
+Para usar por primera vez:
+  1. Operador: ssh vps-domain "cd /path/to/services && domain bootstrap --email u@x.cl"
+     (devuelve API key en stdout)
+  2. Vos: domain-install --url http://vps --email u@x.cl --api-key domk_live_xxx
+  3. Reiniciá tus clientes MCP`)
 }
 
-func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, dryRun bool) {
+type installOptions struct {
+	URL            string
+	Email          string
+	APIKey         string
+	DryRun         bool
+	Target         string
+	AutoInstall    bool
+	NonInteractive bool
+}
+
+func runInstall(p Platform, paths Paths, opts installOptions) {
 	step("domain-install — install user")
 
 	if p.IsWSL() {
 		info("detectado WSL2 — instalando para clientes IDE corriendo en WSL")
 	}
 
-	// 1. Cargar valores persistidos
 	env, _ := loadEnv(paths.GlobalEnv)
-	if urlFlag == "" {
-		urlFlag = env.VPSURL
+	if opts.URL == "" {
+		opts.URL = env.VPSURL
 	}
-	if emailFlag == "" {
-		emailFlag = env.Email
+	if opts.Email == "" {
+		opts.Email = env.Email
 	}
-	if urlFlag != "" {
-		ok("URL del VPS (desde " + paths.GlobalEnv + "): " + urlFlag)
+	if opts.URL != "" {
+		ok("URL del VPS (desde " + paths.GlobalEnv + "): " + opts.URL)
 	}
-	if emailFlag != "" {
-		ok("Email (desde " + paths.GlobalEnv + "): " + emailFlag)
+	if opts.Email != "" {
+		ok("Email (desde " + paths.GlobalEnv + "): " + opts.Email)
 	}
 
-	// 2. Prompts faltantes
 	in := bufio.NewReader(os.Stdin)
-	if urlFlag == "" {
-		urlFlag = strings.TrimSpace(prompt(in, "  URL del VPS (ej. http://1.2.3.4): "))
+
+	if opts.URL == "" {
+		opts.URL = strings.TrimSpace(prompt(in, "  URL del VPS (ej. http://1.2.3.4): "))
 	}
-	if emailFlag == "" {
-		emailFlag = strings.TrimSpace(prompt(in, "  Email: "))
+	if opts.Email == "" {
+		opts.Email = strings.TrimSpace(prompt(in, "  Email: "))
 	}
-	if apiKeyFlag == "" {
-		apiKeyFlag = strings.TrimSpace(promptHidden(in, "  API key: "))
+	if !opts.DryRun && opts.APIKey == "" {
+		opts.APIKey = strings.TrimSpace(promptHidden(in, "  API key (domk_live_xxx): "))
 	}
 
-	if urlFlag == "" {
+	if opts.URL == "" {
 		failL("URL del VPS requerida")
 		os.Exit(1)
 	}
-	if emailFlag == "" {
+	if opts.Email == "" {
 		failL("Email requerido")
 		os.Exit(1)
 	}
-	if apiKeyFlag == "" {
-		failL("API key requerida")
+	if !opts.DryRun && opts.APIKey == "" {
+		failL("API key requerida. Usá --bootstrap para modo guiado o corré 'domain bootstrap --email ...' en el VPS primero.")
 		os.Exit(1)
 	}
-	urlFlag = strings.TrimRight(urlFlag, "/")
+	opts.URL = strings.TrimRight(opts.URL, "/")
 
-	if err := saveEnv(paths.GlobalEnv, EnvData{VPSURL: urlFlag, Email: emailFlag}); err != nil {
-		warnL("no se pudo guardar " + paths.GlobalEnv + ": " + err.Error())
-	} else {
-		ok("guardado en " + paths.GlobalEnv + " (modo 0600)")
+	if warning, _ := detectURLMismatch(paths.GlobalEnv, opts.URL); warning != "" {
+		if !opts.DryRun && !opts.NonInteractive && !confirm(in, "  "+warning+" ") {
+			failL("abortado por el usuario")
+			os.Exit(1)
+		}
+		warnL("re-apuntando install.env a " + opts.URL)
 	}
 
-	// 3. Verificar conexión al VPS
+	if !opts.DryRun {
+		if err := saveEnv(paths.GlobalEnv, EnvData{VPSURL: opts.URL, Email: opts.Email}); err != nil {
+			warnL("no se pudo guardar " + paths.GlobalEnv + ": " + err.Error())
+		} else {
+			ok("guardado en " + paths.GlobalEnv + " (modo 0600)")
+		}
+	} else {
+		info("DRY-RUN: no modifico " + paths.GlobalEnv)
+	}
+
 	step("Verificando conexión al VPS")
-	if pingVPS(urlFlag) {
-		ok("VPS responde en " + urlFlag)
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 6*time.Second)
+	if err := pingVPS(pingCtx, opts.URL); err != nil {
+		warnL("VPS no responde en " + opts.URL + "/healthz: " + err.Error() + " (continuando igual)")
 	} else {
-		warnL("VPS no responde en " + urlFlag + "/healthz (continuando igual)")
+		ok("VPS responde en " + opts.URL)
+	}
+	pingCancel()
+
+	step("Detectando clientes MCP")
+	plan, err := BuildInstallPlan(InstallOptions{
+		Target:              opts.Target,
+		AutoInstallOpencode: opts.AutoInstall,
+		NonInteractive:      opts.NonInteractive,
+	})
+	if err != nil {
+		failL(err.Error())
+		os.Exit(1)
 	}
 
-	// 4. Detectar clientes
-	step("Detectando clientes MCP")
-	clients := p.DetectedClients()
-	if len(clients) == 0 {
+	if plan.NeedsOpencode {
 		failL("Ningún cliente MCP detectado.")
 		failL("Soportados: claude-code, opencode, cursor, cline, continue, claude-desktop")
+		if cmd := plan.OpencodeCmd.Primary; len(cmd) > 0 {
+			info("para instalar opencode en este OS:")
+			info("  " + joinCmd(cmd))
+		} else {
+			info("para instalar opencode via npm:")
+			info("  " + joinCmd(plan.OpencodeCmd.Fallback))
+		}
+		failL("volvé a correr con --install-opencode y el operador corre el comando sugerido,")
+		failL("o instalá manualmente desde https://opencode.ai")
 		os.Exit(1)
 	}
-	for _, c := range clients {
+
+	for _, c := range plan.Targets {
 		ok(c.Name)
 	}
-	if dryRun {
+
+	if opts.DryRun {
 		warnL("DRY-RUN: terminando sin tocar configs")
 		return
 	}
 
-	// 5. Skill + subagent globales
 	step("Plantando skill + subagent globales")
 	if err := installGlobalAssets(paths); err != nil {
 		failL("install global assets: " + err.Error())
@@ -179,15 +274,30 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
 	ok("skill: " + paths.GlobalSkillPath)
 	ok("agent: " + paths.GlobalAgentPath)
 
-	// 6. Configurar cada cliente
+	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
+	step("Escribiendo precedencia global de domain")
+	if err := installGlobalInstructions(paths, p.Home(), Timestamp()); err != nil {
+		warnL("precedencia global: " + err.Error())
+	} else {
+		ok("CLAUDE.md global: " + claudeGlobalPath(p.Home()))
+	}
+
 	step("Configurando clientes (MCP transport)")
-	timestamp := Timestamp()
-	for _, c := range clients {
-		if err := configureClient(c, urlFlag, apiKeyFlag, timestamp); err != nil {
-			failL(c.Name + ": " + err.Error())
-			continue
+	results, err := Apply(plan, opts.URL, opts.APIKey)
+	if err != nil {
+		failL(err.Error())
+		os.Exit(1)
+	}
+	skipByClient := map[string]ApplyResult{}
+	for _, r := range results {
+		skipByClient[r.Client] = r
+	}
+	for _, c := range plan.Targets {
+		if r, found := skipByClient[c.Name]; found && r.Skipped {
+			warnL(c.Name + ": omitido — " + r.Reason)
+		} else {
+			ok(c.Name + ": " + c.MCPPath)
 		}
-		ok(c.Name + ": " + c.MCPPath)
 		if c.Name == "opencode" {
 			if err := linkOpencodeToGlobal(paths, p.OS); err != nil {
 				warnL("opencode symlinks: " + err.Error())
@@ -221,8 +331,62 @@ func runInstall(p Platform, paths Paths, urlFlag, emailFlag, apiKeyFlag string, 
   Para desinstalar:  domain-install --uninstall
 
 `,
-		cGreen, cBold, cReset, urlFlag, emailFlag,
+		cGreen, cBold, cReset, opts.URL, opts.Email,
 		paths.GlobalSkillPath, paths.GlobalAgentPath)
+}
+
+// runBootstrapGuided: el operador ya generó la key con `domain bootstrap`
+// en el VPS, ahora solo necesita pegarla. La URL la pedimos, la key la pide.
+func runBootstrapGuided(p *Platform, paths Paths) {
+	step("domain-install — modo bootstrap guiado")
+
+	in := bufio.NewReader(os.Stdin)
+
+	env, _ := loadEnv(paths.GlobalEnv)
+	url := env.VPSURL
+	if url == "" {
+		url = strings.TrimSpace(prompt(in, "  URL del VPS (ej. http://1.2.3.4): "))
+	} else {
+		ok("URL del VPS (desde " + paths.GlobalEnv + "): " + url)
+	}
+	if url == "" {
+		failL("URL requerida")
+		os.Exit(1)
+	}
+	url = strings.TrimRight(url, "/")
+
+	fmt.Printf(`
+  Pasos para obtener la API key:
+
+    1. Conectate al VPS:
+         ssh vps-domain
+    2. Corré en el VPS:
+         cd /path/to/services && domain bootstrap --email tu@email.cl
+       (la key aparece en stdout)
+    3. Pegala abajo:
+
+`)
+	key := strings.TrimSpace(promptHidden(in, "  API key: "))
+	if key == "" {
+		failL("API key requerida")
+		os.Exit(1)
+	}
+	email := env.Email
+	if email == "" {
+		email = strings.TrimSpace(prompt(in, "  Email: "))
+	}
+
+	if err := saveEnv(paths.GlobalEnv, EnvData{VPSURL: url, Email: email}); err != nil {
+		warnL("no se pudo guardar install.env: " + err.Error())
+	} else {
+		ok("install.env actualizado")
+	}
+
+	runInstall(*p, paths, installOptions{
+		URL:    url,
+		Email:  email,
+		APIKey: key,
+	})
 }
 
 func runUninstall(p Platform, paths Paths) {
@@ -259,12 +423,31 @@ func prompt(r *bufio.Reader, q string) string {
 	return s
 }
 
-// promptHidden: en stdin sin tty fallback a ReadString. Para TTY usaríamos
-// golang.org/x/term, pero queremos stdlib-only.
+// promptHidden pide un secreto sin eco en terminal cuando es posible
+// (Unix: stty -echo; best-effort). Si no hay TTY o falla, cae al modo visible
+// para no romper pipes/CI. Stdlib puro + 'stty' (presente en Unix).
 func promptHidden(r *bufio.Reader, q string) string {
 	fmt.Print(q)
+	restore := disableEcho()
 	s, _ := r.ReadString('\n')
+	if restore != nil {
+		restore()
+		fmt.Println() // newline que el eco habría producido al presionar Enter
+	}
 	return s
+}
+
+// confirm devuelve true para 'y'/'yes' y, dado que los prompts usan "(Y/n)"
+// (default afirmativo), también para input vacío (Enter). Solo 'n'/'no' o
+// cualquier otra respuesta explícita niega.
+func confirm(r *bufio.Reader, q string) bool {
+	fmt.Print(q)
+	s, _ := r.ReadString('\n')
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return true // default-yes, consistente con "(Y/n)"
+	}
+	return s == "y" || s == "yes"
 }
 
 func linkVerb(osName string) string {
@@ -274,12 +457,48 @@ func linkVerb(osName string) string {
 	return "symlinks"
 }
 
-func pingVPS(url string) bool {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url + "/healthz")
+// disableEcho apaga el eco de la terminal (Unix) para leer secretos sin
+// mostrarlos. Devuelve una función para restaurar el estado, o nil si no se
+// pudo (sin TTY, no-Unix, falta 'stty'): en ese caso el caller lee en claro,
+// que es preferible a romper el flujo en CI/pipes.
+func disableEcho() func() {
+	if runtime.GOOS == "windows" {
+		return nil // Windows: sin soporte stdlib-only; lectura visible
+	}
+	if !isTTY() {
+		return nil // pipe/redirección: no hay terminal que silenciar
+	}
+	// Guardar estado actual y apagar eco.
+	saved, err := sttyState()
+	if err != nil {
+		return nil
+	}
+	if err := sttyApply("-echo"); err != nil {
+		return nil
+	}
+	return func() { _ = sttyApply(saved) }
+}
+
+func isTTY() bool {
+	fi, err := os.Stdin.Stat()
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode < 500
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+func sttyState() (string, error) {
+	cmd := exec.Command("stty", "-g")
+	cmd.Stdin = os.Stdin
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func sttyApply(arg string) error {
+	cmd := exec.Command("stty", arg)
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }

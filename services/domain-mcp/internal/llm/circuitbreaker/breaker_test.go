@@ -47,7 +47,7 @@ func TestBreaker_OpensAfterThreshold(t *testing.T) {
 	}
 	require.Equal(t, StateOpen, b.State(), "después de 3 fails → Open")
 
-	// 4to call NO debe llegar al provider
+
 	prevCalls := atomic.LoadInt32(&fp.calls)
 	_, err := b.Complete(context.Background(), llm.CompletionOptions{})
 	require.ErrorIs(t, err, ErrCircuitOpen)
@@ -64,7 +64,7 @@ func TestBreaker_RecoversThroughHalfOpen(t *testing.T) {
 
 	time.Sleep(60 * time.Millisecond) // espera recovery timeout
 
-	// HalfOpen probe: el flakyProvider ya no falla (failTimes = 0)
+
 	_, err := b.Complete(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)
 	require.Equal(t, StateClosed, b.State(), "success en HalfOpen → Closed")
@@ -79,7 +79,7 @@ func TestBreaker_HalfOpenFailureReopens(t *testing.T) {
 	require.Equal(t, StateOpen, b.State())
 	time.Sleep(40 * time.Millisecond)
 
-	// HalfOpen probe: provider sigue fallando
+
 	_, err := b.Complete(context.Background(), llm.CompletionOptions{})
 	require.Error(t, err)
 	require.Equal(t, StateOpen, b.State(), "fail en HalfOpen → reabre")
@@ -88,7 +88,7 @@ func TestBreaker_HalfOpenFailureReopens(t *testing.T) {
 // Sabotaje: success aislado en medio del threshold NO debe cerrar el breaker
 // (este patrón evita falsos positivos)
 func TestSabotage_Breaker_NeedsConsecutiveFails(t *testing.T) {
-	// 2 fails → 1 ok → 2 fails: cada success resetea el counter
+
 	type step struct{ ok bool }
 	provider := &scriptedProvider{}
 	provider.script = []bool{false, false, true, false, false, true}

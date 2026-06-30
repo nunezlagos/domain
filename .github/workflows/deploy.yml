@@ -1,0 +1,70 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - 'services/Makefile'
+      - 'services/**/docker-compose*.yml'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, deploy-vps]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Capture prev SHA
+        id: prev
+        run: |
+          if [[ -f .git/DEPLOY_PREV_SHA ]]; then
+            PREV_SHA=$(cat .git/DEPLOY_PREV_SHA)
+            echo "prev_sha=$PREV_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "prev_sha=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy
+        id: deploy
+        env:
+          DEPLOY_PREV_SHA: ${{ steps.prev.outputs.prev_sha }}
+        run: ./scripts/deploy.sh 2>&1 | tee -a "$DEPLOY_LOG_DIR/deploy-${GITHUB_RUN_ID}.log"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy summary"
+            echo
+            echo "- SHA: \`${{ github.sha }}\`"
+            echo "- Prev: \`${{ steps.prev.outputs.prev_sha }}\`"
+            echo "- Result: **${{ steps.deploy.outcome }}**"
+            echo
+            echo "### Files changed"
+            git diff --name-only "${{ steps.prev.outputs.prev_sha }}..${{ github.sha }}" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  audit:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify on failure
+        if: needs.deploy.result != 'success'
+        run: |
+          echo "deploy job result: ${{ needs.deploy.result }}"
+          echo "Revisa los logs del run para diagnosticar."

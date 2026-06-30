@@ -42,6 +42,9 @@ func (c *CachedResolver) Resolve(ctx context.Context, plaintext string) (*Princi
 		return entry.principal, nil
 	}
 	p, err := c.inner.Resolve(ctx, plaintext)
+	if err != nil {
+		return nil, err
+	}
 	c.mu.Lock()
 	c.cache[plaintext] = &cacheEntry{
 		principal: p,
@@ -51,9 +54,6 @@ func (c *CachedResolver) Resolve(ctx context.Context, plaintext string) (*Princi
 		go c.evict()
 	}
 	c.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
 	return p, nil
 }
 

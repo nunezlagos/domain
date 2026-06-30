@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/audit"
@@ -43,10 +44,12 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	"nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/intake"
+	issuesvc "nunezlagos/domain/internal/service/issue"
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/observation"
@@ -59,8 +62,11 @@ import (
 	projectreposvc "nunezlagos/domain/internal/service/projectrepo"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
 	"nunezlagos/domain/internal/service/promptrouter"
+	requirementsvc "nunezlagos/domain/internal/service/requirement"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tasksvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -83,10 +89,10 @@ func main() {
 		}
 	}
 
-	// Fallback de config (fix "MCP error -32000: Connection closed"):
-	// los agentes lanzan domain-mcp desde cualquier cwd y muchas veces
-	// sin env vars. Si faltan, las tomamos de ~/.config/domain/env
-	// (escrito por `domain install`) y de credentials.json.
+
+
+
+
 	loadGlobalEnvFallback()
 
 	cfg, err := config.Load()
@@ -102,10 +108,10 @@ func main() {
 		apiKey = apiKeyFromCredentials()
 	}
 	if apiKey == "" {
-		// issue-01.9: enforcement. Si el agente invoca el MCP server
-		// sin API key (porque no se logueo via /domain-login), el
-		// binario exit 1 con mensaje claro al user. NO arranca el
-		// server, asi que el agente no puede llamar ninguna tool.
+
+
+
+
 		fmt.Fprintln(os.Stderr, "domain-mcp: DOMAIN_API_KEY is not set.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "To authenticate, run in your terminal:")
@@ -127,10 +133,10 @@ func main() {
 	}
 	defer pools.Close()
 
-	keys := &apikey.PGStore{Pool: pools.Auth}
+	keys := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
 	principal, err := keys.Resolve(ctx, apiKey)
 	if err != nil {
-		// issue-01.9: enforcement. Key invalida o revocada.
+
 		fmt.Fprintln(os.Stderr, "domain-mcp: API key is invalid or has been revoked.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "To re-authenticate, run in your terminal:")
@@ -142,9 +148,9 @@ func main() {
 	}
 
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
-	// HU-28.1: wireup via constructores nuevos para los 5 services migrados.
-	// REQ-28.2: clients service además del project, ya que el project ahora
-	// resuelve client_slug → client_id en Create/Update/List.
+
+
+
 	clients := clientsvc.NewService(pools.App, recorder, nil)
 	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
 	projectRepos := projectreposvc.NewService(projectreposvc.NewPgRepository(pools.App))
@@ -153,7 +159,9 @@ func main() {
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
 	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
-	// REQ-42.3: session.Service removido (tabla sessions dropeada).
+	observationEdges := observation.NewEdgeService(pools.App, llm.NopEmbedder{}, recorder)
+	codeGraph := codegraphsvc.NewCodegraphService(pools.App)
+
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
 	search := &searchsvc.Service{Pool: pools.App}
@@ -161,8 +169,8 @@ func main() {
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agents := agentsvc.NewService(pools.App, recorder, nil)
 
-	// LLM factory: providers según env vars DOMAIN_*_KEY, con retry +
-	// rate limit (issue-06.2).
+
+
 	factory := llm.NewFactory()
 	wrapLLM := func(p llm.Provider) llm.Provider {
 		return llmratelimit.New(llmretry.New(p, llmretry.Config{}), 8)
@@ -176,21 +184,26 @@ func main() {
 	if k := os.Getenv("DOMAIN_GOOGLE_KEY"); k != "" {
 		factory.Register("google", wrapLLM(google.New(k)))
 	}
+	anthropic.RegisterMiniMax(factory, wrapLLM)
 	factory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)
 	}
 
+	// Inyectar el Factory en observations para el RERANK opcional de mem_search
+	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
+	observations.LLM = factory
+
 	skillRunnerInst := skillrunner.New()
-	// REQ-42.3: model_registry dropeada — pricing en código (sin Pool).
+
 	modelRegistry := llmregistry.New()
 	agentRunnerInst := &agentrunner.Runner{
 		Pool: pools.App, Audit: recorder, Factory: factory,
 		Agents: agents, Skills: skills,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
-		// issue-08.10 enforcement híbrido: checkOrphanPolicy sólo bloquea
-		// cuando Env="prod"; dev/staging permiten runs sin flow_run_id
-		// para iteración libre.
+
+
+
 		Env: cfg.Env,
 	}
 
@@ -200,14 +213,14 @@ func main() {
 		Agents: agents, Skills: skills, Observations: observations,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 		Signals: &flowsvc.SignalStore{Pool: pools.App},
-		// REQ-42.3: dead_letter_queue dropeada — sin DLQStore.
+
 	}
 
-	// issue-08.10 sdd-pipeline-orchestrator. Registry con los 10 handlers
-	// de fase SDD. El registry rechaza duplicados via MustRegister →
-	// boot panic si alguien accidentalmente registra dos veces el mismo
-	// slug. Los system_prompts NO viven acá: se obtienen vía
-	// Repository.GetAgentTemplateSystemPrompt desde agent_templates en BD.
+
+
+
+
+
 	orchPhases := phases.NewRegistry()
 	orchPhases.MustRegister(phases.NewSDDExploreHandler())
 	orchPhases.MustRegister(phases.NewSDDSpecHandler())
@@ -217,57 +230,92 @@ func main() {
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
 	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDDReviewHandler())
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())
 	orchestratorSvc := orchestrator.New(pools.App, recorder, orchPhases, cfg.Env)
-	// issue-08.10 svc-005: LLM factory inyectado para Mode=Solo.
+
 	orchestratorSvc.LLM = factory
-	// issue-08.10 skill-001: Skills service para auto-recomendación D3.
+
 	orchestratorSvc.Skills = skills
 
-	// issue-08.10 ana-002: analysis service para intent de análisis read-only.
-	// Crea knowledge_doc + observation con contenido generado por LLM.
+
+
 	analysisSvc := &analysissvc.Service{
 		Pool:        pools.App,
 		Audit:       recorder,
 		LLM:         factory,
 		Knowledge:   knowledgeSvc,
 		Observation: observations,
+
+
+		PromptLoader: func(ctx context.Context) (string, error) {
+			p, err := prompts.GetActive(ctx, uuid.Nil, nil, "analysis")
+			if err != nil {
+				return "", err
+			}
+			return p.Body, nil
+		},
 	}
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
+
+
+	issuebuilderSvc.ReqSvc = &issuebuilder.RequirementServiceAdapter{
+		Inner: &requirementsvc.Service{Pool: pools.App, Audit: recorder},
+	}
+	issuebuilderSvc.IssueSvc = &issuebuilder.IssueServiceAdapter{
+		Inner: &issuesvc.Service{Pool: pools.App, Audit: recorder},
+	}
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
 	extsyncSvc := &extsync.Service{Pool: pools.App}
 
-	// issue-12.7 prompt router + workflow override.
+
 	var classifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
 	if anthrop, _ := factory.Get("anthropic"); anthrop != nil {
 		classifier = &promptrouter.LLMClassifier{
 			Provider: anthrop, Model: "claude-haiku-4-5-20251001",
 			Fallback: promptrouter.HeuristicClassifier{},
+
+
+			PromptLoader: func(ctx context.Context) (string, error) {
+				p, err := prompts.GetActive(ctx, uuid.Nil, nil, "triage")
+				if err != nil {
+					return "", err
+				}
+				return p.Body, nil
+			},
 		}
 	}
 	promptRouterSvc := &promptrouter.Router{
 		IntakeService:       intakeSvc,
 		IssueBuilderService: issuebuilderSvc,
 		Classifier:          classifier,
-		// issue-08.10 mcp-006: con Orchestrator inyectado, los intents
-		// feat/fix/refactor/hotfix/rfc/doc disparan el pipeline SDD
-		// plug-and-play del orquestador en lugar del wizard legacy.
+
+
+
 		Orchestrator:    orchestratorSvc,
 		AnalysisService: &analysisAdapter{inner: analysisSvc},
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
 
-	// issue-35.1: unified dispatcher para los tools handleFlowRun /
-	// handleAgentRun / handleSkillExecute. Centraliza métricas + audit
-	// (los que se hacían inline antes, ahora viven en 1 lugar).
+
+
+
+	// ExecutionService compartido: lo usan tanto el dispatcher (para persistir
+	// skill_executions con created_by, HU-52.2) como el tool MCP domain_skill_execute.
+	skillExecSvc := &skillsvc.ExecutionService{
+		Pool: pools.App, Skills: skills,
+		Versions: &skillsvc.VersionStore{Pool: pools.App},
+		Runner:   skillRunnerInst,
+	}
 	mcpDispatcherAdapters := &dispatch.Adapters{
 		FlowRunner:  flowRunnerInst,
 		AgentRunner: agentRunnerInst,
 		SkillRunner: skillRunnerInst,
 		Agents:      agents,
 		Skills:      skills,
+		SkillExec:   skillExecSvc,
 	}
 	mcpDispatcher := &dispatch.Dispatcher{
 		RunFlow:  mcpDispatcherAdapters.RunFlowForDispatcher(),
@@ -280,18 +328,16 @@ func main() {
 	}
 
 	srv := mcpserver.New(mcpserver.Deps{
-		Observations: observations,
-		Projects:     projects,
+		Observations:     observations,
+		ObservationEdges: observationEdges,
+		CodeGraph:        codeGraph,
+		Projects:         projects,
 		Prompts:      prompts,
 		Timeline:     timeline,
 		Search:       search,
 		Knowledge:    knowledgeSvc,
-		Skills:       skills,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: skills,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   skillRunnerInst,
-		},
+		Skills:         skills,
+		SkillExecution: skillExecSvc,
 		Crons:           &cronsvc.Service{Pool: pools.App, Audit: recorder},
 		Clients:         clients,
 		CapturedPrompts: capturedPrompts,
@@ -305,6 +351,9 @@ func main() {
 		FlowRunner:      flowRunnerInst,
 		Orchestrator:    orchestratorSvc,
 		Hubuilder:       issuebuilderSvc,
+		IssueSvc:        &issuesvc.Service{Pool: pools.App, Audit: recorder},
+		Spec:            &specsvc.Service{Pool: pools.App, Audit: recorder},
+		Tasks:           &tasksvc.Service{Pool: pools.App, Audit: recorder},
 		Intake:          intakeSvc,
 		ExtSync:         extsyncSvc,
 		PromptRouter:    promptRouterSvc,

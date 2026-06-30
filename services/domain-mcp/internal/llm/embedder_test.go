@@ -125,6 +125,6 @@ func TestSabotage_VectorLiteral_Empty(t *testing.T) {
 
 // Sabotaje: api key inválida debe fallar graceful
 func TestSabotage_Embed_NoAPIKey(t *testing.T) {
-	// OpenAI Embedder sin key
+
 	t.Skip("Requiere mock HTTP; probado en openai/provider_test.go")
 }

@@ -13,7 +13,7 @@ import (
 type ProjectTemplatesSeeder struct{}
 
 func (s *ProjectTemplatesSeeder) Name() string    { return "project_templates" }
-func (s *ProjectTemplatesSeeder) Version() int    { return 1 }
+func (s *ProjectTemplatesSeeder) Version() int    { return 4 }
 func (s *ProjectTemplatesSeeder) Order() int      { return 35 }
 func (s *ProjectTemplatesSeeder) IsDevOnly() bool { return false }
 
@@ -31,34 +31,13 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 
 	templates := []templateEntry{
 		{
+			// Único template built-in. NO gestiona skills: la config de stack
+			// se genera on-demand como skills project-scoped (ver agent template
+			// 'project-stack-init' + policy 'agent-protocol'). El template solo
+			// aporta settings base mergeables al crear un project con template_id.
 			Slug: "default", Name: "Default", IsDefault: true,
-			Description: "Proyecto general sin preconfiguración específica",
+			Description: "Proyecto general. El stack se detecta y configura como skills project-scoped, no por template.",
 			Settings:    map[string]any{"language": "any"},
-		},
-		{
-			Slug: "go-backend", Name: "Go Backend",
-			Description: "Backend Go: clean architecture, pgx, testcontainers",
-			Settings: map[string]any{
-				"language": "go", "test_framework": "testing+testify",
-				"conventions": []string{"clean-architecture-by-feature", "migration-safety"},
-			},
-			DefaultSkills: []string{"summarize", "code-review"},
-		},
-		{
-			Slug: "python-data", Name: "Python Data",
-			Description: "Data pipelines y análisis en Python",
-			Settings: map[string]any{
-				"language": "python", "test_framework": "pytest",
-			},
-			DefaultSkills: []string{"summarize"},
-		},
-		{
-			Slug: "frontend-web", Name: "Frontend Web",
-			Description: "Aplicaciones web frontend (TS/React u otros)",
-			Settings: map[string]any{
-				"language": "typescript", "test_framework": "vitest",
-			},
-			DefaultSkills: []string{"summarize", "code-review"},
 		},
 	}
 
@@ -74,8 +53,6 @@ func (s *ProjectTemplatesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 			t.DefaultFlows = []string{}
 		}
 
-		// UNIQUE(organization_id, slug) no aplica con org NULL (NULLs distintos)
-		// → upsert manual: UPDATE respetando is_user_modified, INSERT si no existe.
 		tag, err := tx.Exec(ctx, `
 			UPDATE project_templates
 			SET name = $2, description = $3, is_default = $4, settings = $5,

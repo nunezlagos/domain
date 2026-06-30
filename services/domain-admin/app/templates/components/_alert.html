@@ -1,0 +1,17 @@
+{% comment %}
+Alert partial. Variable esperada: message (django.contrib.messages.Message instance).
+Mapea message.tags a variant class (success/info/warning/error).
+{% endcomment %}
+<div class="alert alert-{{ message.tags|default:'info' }}" {% if message.tags != 'error' %}data-auto-dismiss{% endif %}>
+  <span class="alert-icon">
+    {% if 'success' in message.tags %}✓
+    {% elif 'error' in message.tags %}✕
+    {% elif 'warning' in message.tags %}⚠
+    {% else %}ⓘ
+    {% endif %}
+  </span>
+  <div class="alert-content">
+    <div class="alert-message">{{ message }}</div>
+  </div>
+  <button class="alert-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+</div>

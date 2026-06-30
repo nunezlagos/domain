@@ -16,6 +16,27 @@ services:
       # HU-45.1 sin DB todavía. HU-45.2 sumará DATABASES + read replica config.
       DJANGO_SETTINGS_MODULE: config.settings
       PYTHONUNBUFFERED: "1"
+      # HU-47.1: credenciales master del admin. Defaults para dev/demo.
+      # Override via /opt/services/.env en producción.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@admin.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      # HU-48.1: conexión a Postgres compartido (mismas vars que domain-mcp).
+      POSTGRES_DB: ${POSTGRES_DB:-domain}
+      DB_APP_USER: ${POSTGRES_DB_USER:-app_user}
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      # Passphrase de cifrado at-rest de API keys (pgcrypto). DEBE ser identica a
+      # la de domain-mcp; el admin descifra key_ciphertext para mostrar la key.
+      DOMAIN_FIELD_ENC_KEY: ${DOMAIN_FIELD_ENC_KEY}
+      # HU-49.1: provider LLM del chat IA (default: minimax).
+      LLM_PROVIDER: ${LLM_PROVIDER:-minimax}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
+      MINIMAX_REGION: ${MINIMAX_REGION:-international}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
     networks:
       - domain_internal
     expose:

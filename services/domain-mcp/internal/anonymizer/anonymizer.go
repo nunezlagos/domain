@@ -122,7 +122,7 @@ func (a *Anonymizer) applyRule(rule Rule, v any, idx int) any {
 	case RuleJSONRedact:
 		raw, ok := v.([]byte)
 		if !ok {
-			// pgx puede devolver el JSONB como string también.
+
 			if s, ok := v.(string); ok {
 				raw = []byte(s)
 			} else {

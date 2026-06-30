@@ -1,7 +1,7 @@
 //go:build integration
 
-// F1: mcpinstaller service — list / install / uninstall MCP providers
-// en configs de clientes IA (opencode, claude-code, claude-desktop).
+
+
 
 package mcpinstaller_test
 

@@ -1,11 +1,11 @@
-// Package llm — issue-06.1 Provider interface + factory thread-safe.
-//
-// Provider abstrae completion + streaming + embeddings sobre cualquier LLM
-// (OpenAI, Anthropic, Google, Ollama, ...). El factory permite swap por env
-// var DOMAIN_LLM_PROVIDER y registro de providers custom.
-//
-// Embedder ya estaba definido (Nop/Fake); aquí extendemos con Provider
-// completo. Cada Provider debe satisfacer Provider Y Embedder.
+
+
+
+
+
+
+
+
 
 package llm
 
@@ -31,9 +31,9 @@ type CompletionOptions struct {
 type Message struct {
 	Role    string `json:"role"`    // "user" | "assistant" | "system" | "tool"
 	Content string `json:"content"`
-	// ToolCalls cuando el assistant pidió ejecutar tools en la respuesta previa.
+
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-	// ToolCallID cuando este mensaje ES la respuesta de un tool.
+
 	ToolCallID string `json:"tool_call_id,omitempty"`
 }
 
@@ -72,12 +72,12 @@ type Response struct {
 type StreamChunk struct {
 	Delta string `json:"delta"`
 	Done  bool   `json:"done"`
-	// Error se setea cuando el provider aborta mid-stream (ej: timeout
-	// parcial, conexión cerrada). El chunk con Error=true debe tener
-	// Done=true también (es el último chunk). ISSUE-28.6: el circuit
-	// breaker usa este flag para detectar errores mid-stream y abrir.
+
+
+
+
 	Error string `json:"error,omitempty"`
-	// Usage solo en el último chunk (Done=true).
+
 	Usage *Usage `json:"usage,omitempty"`
 }
 

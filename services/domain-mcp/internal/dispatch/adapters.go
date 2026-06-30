@@ -28,8 +28,9 @@ type Adapters struct {
 	FlowRunner   *flowrunner.Runner
 	AgentRunner  *agentrunner.Runner
 	SkillRunner  *skillrunner.Runner
-	Agents       *agentsvc.Service  // para resolver skill por ID (skill dispatch)
-	Skills       *skillsvc.Service  // para resolver skill por ID
+	Agents       *agentsvc.Service           // para resolver skill por ID (skill dispatch)
+	Skills       *skillsvc.Service           // para resolver skill por ID
+	SkillExec    *skillsvc.ExecutionService  // persiste skill_executions (HU-52.2: created_by)
 }
 
 // RunFlowForDispatcher devuelve un RunFunc que envuelve flowRunner.Run.
@@ -74,27 +75,40 @@ func (a *Adapters) RunAgentForDispatcher() RunFunc {
 	}
 }
 
-// RunSkillForDispatcher devuelve un RunFunc que envuelve skillRunner.Execute.
-// Nota: el caller (cron) carga el skill por ID. En el dispatcher
-// también: el TargetID es el skill_id y se carga vía Skills.GetByID.
+// RunSkillForDispatcher devuelve un RunFunc que ejecuta el skill PERSISTIENDO
+// la ejecución en skill_executions vía ExecutionService.Execute.
+//
+// HU-52.2: antes este adapter llamaba SkillRunner.Execute directo y fabricaba
+// un uuid.New() como RunID, SIN insertar fila en skill_executions. Resultado:
+// las ejecuciones de skills por el path real (cron/webhook/MCP) nunca quedaban
+// registradas, created_by nunca se poblaba y unique_callers_count del aggregator
+// quedaba clavado en 0 (el TODO de HU-52.2). Ahora se delega a
+// ExecutionService.Execute, que valida, resuelve versión, inserta la fila con
+// created_by = req.TriggeredBy (caller del Principal; nil en triggers de
+// sistema → NULL), corre el runner y persiste el resultado.
+//
+// El TargetID es el skill_id; ExecutionService lo resuelve internamente.
 func (a *Adapters) RunSkillForDispatcher() RunFunc {
 	return func(ctx context.Context, req Request) (Result, error) {
-		if a.SkillRunner == nil || a.Skills == nil {
+		if a.SkillExec == nil {
 			return Result{}, ErrRunnerNotConfigured
 		}
-		sk, err := a.Skills.GetByID(ctx, req.TargetID)
-		if err != nil {
-			return Result{}, err
-		}
 		inputs := mapFromJSONFlexible(req.Inputs)
-		out, err := a.SkillRunner.Execute(ctx, sk, inputs)
+		exec, err := a.SkillExec.Execute(ctx, skillsvc.ExecuteInput{
+			OrganizationID: req.OrgID,
+			SkillID:        req.TargetID,
+			Parameters:     inputs,
+			Mode:           "sync",
+			CreatedBy:      req.TriggeredBy,
+		})
 		if err != nil {
 			return Result{}, err
 		}
-		// skillRunner.Execute no retorna un ID; generamos uno para
-		// mantener la shape uniforme de Result.
-		execID := uuid.New()
-		return Result{RunID: execID, Status: "completed", Output: json.RawMessage(out)}, nil
+		var out json.RawMessage
+		if exec.Output != nil {
+			out = json.RawMessage(*exec.Output)
+		}
+		return Result{RunID: exec.ID, Status: exec.Status, Output: out}, nil
 	}
 }
 

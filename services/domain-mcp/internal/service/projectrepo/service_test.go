@@ -59,7 +59,7 @@ func (m *mockRepo) SetDefault(_ context.Context, _, id uuid.UUID) (*Repo, error)
 	if !ok {
 		return nil, ErrNotFound
 	}
-	// Limpiar default previo en el mismo proyecto
+
 	for _, r := range m.byProject[target.ProjectID] {
 		if r.ID != id {
 			r.IsDefault = false
@@ -76,7 +76,7 @@ func (m *mockRepo) SoftDelete(_ context.Context, _, id uuid.UUID) error {
 	return nil
 }
 
-// ---------- tests ----------
+
 
 func TestAdd_FirstRepoBecomesDefault(t *testing.T) {
 	svc := NewService(newMockRepo())
@@ -149,7 +149,7 @@ func TestSetDefault_SwitchesAtomically(t *testing.T) {
 	if !r1.IsDefault || r2.IsDefault {
 		t.Fatalf("estado inicial mal: r1.default=%v r2.default=%v", r1.IsDefault, r2.IsDefault)
 	}
-	// Switch default a r2
+
 	_, err := svc.SetDefault(context.Background(), orgID, r2.ID)
 	if err != nil {
 		t.Fatalf("SetDefault: %v", err)

@@ -12,12 +12,12 @@ func TestPromMetricsRecorder_ObserveDispatch(t *testing.T) {
 	reg := metrics.New()
 	p := &PromMetricsRecorder{Reg: reg}
 
-	// No debe crashear.
+
 	p.ObserveDispatch("cron", "flow", "success", 0.5)
 	p.ObserveDispatch("mcp", "agent", "failed", 0.1)
 	p.ObserveDispatch("webhook", "skill", "success", 1.2)
 
-	// Gather + asssert: 3 counter series.
+
 	families, err := reg.Prometheus().Gather()
 	require.NoError(t, err)
 	found := false
@@ -31,7 +31,7 @@ func TestPromMetricsRecorder_ObserveDispatch(t *testing.T) {
 }
 
 func TestPromMetricsRecorder_NilSafe(t *testing.T) {
-	// Receiver nil o Reg nil → no crashea.
+
 	var p *PromMetricsRecorder
 	p.ObserveDispatch("cron", "flow", "success", 0.5) // safe nil receiver
 

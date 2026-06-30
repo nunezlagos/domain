@@ -1,9 +1,9 @@
--- migration: create_external_sync_state
--- author: nunezlagos
--- issue: HU-04.9
--- description: mirror state de REQs/HUs en providers externos (Jira MVP)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE external_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

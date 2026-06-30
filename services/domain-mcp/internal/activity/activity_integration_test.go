@@ -1,6 +1,6 @@
 //go:build integration
 
-// issue-02.6 activity-log integration tests con testcontainers.
+
 
 package activity_test
 
@@ -158,7 +158,7 @@ func TestPGStore_List_OrderedDescByCreatedAt(t *testing.T) {
 	entries, err := store.List(context.Background(), activity.Filter{OrganizationID: orgID})
 	require.NoError(t, err)
 	require.Len(t, entries, 5)
-	// más reciente primero
+
 	for i := 1; i < len(entries); i++ {
 		require.True(t, entries[i-1].CreatedAt.After(entries[i].CreatedAt) ||
 			entries[i-1].CreatedAt.Equal(entries[i].CreatedAt),
@@ -238,7 +238,7 @@ func TestSabotage_Metadata_AcceptsAnyJSON(t *testing.T) {
 	orgID := seedOrg(t, pool)
 	store := &activity.PGStore{Pool: pool}
 
-	// Esta inserción NO valida PII; debe persistir lo que le pasen.
+
 	_, err := store.Record(context.Background(), activity.Event{
 		OrganizationID: orgID, Action: "test", EntityType: "x", Summary: "s",
 		Metadata: map[string]any{"safe_key": "value"}, // sin PII keys

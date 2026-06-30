@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cron_obj.display_name }} - Crons{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de cron" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'crons:list' %}" class="text-secondary mnt-text-sm">← Volver a crons</a>
+    <h1 class="mt-1">{{ cron_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ cron_obj.slug }}</code>
+      · Estado:
+      {% if cron_obj.is_active %}<span class="badge badge-success">Habilitado</span>
+      {% else %}<span class="badge badge-warning">Deshabilitado</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'crons:edit' cron_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ cron_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del cron -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ cron_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ cron_obj.slug }}</code></td></tr>
+      <tr><th>Descripcion</th><td>{{ cron_obj.description|default:"—" }}</td></tr>
+      <tr><th>Expresion cron</th><td><code>{{ cron_obj.cron_expression }}</code></td></tr>
+      <tr><th>Timezone</th><td>{{ cron_obj.timezone }}</td></tr>
+      <tr><th>Tipo de target</th><td>{{ cron_obj.get_target_type_display }}</td></tr>
+      <tr><th>Target</th><td><code>{{ cron_obj.target_id }}</code></td></tr>
+      <tr><th>Inputs</th><td><code>{{ cron_obj.inputs }}</code></td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if cron_obj.is_active %}<span class="badge badge-success">Habilitado</span>
+          {% else %}<span class="badge badge-warning">Deshabilitado</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Ultima ejecucion</th><td>{{ cron_obj.last_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+      <tr><th>Proxima ejecucion</th><td>{{ cron_obj.next_run_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+      <tr><th>Creado</th><td>{{ cron_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ cron_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ cron_obj.pk }}">
+  <div class="modal modal-confirm">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar cron?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar el cron <strong>{{ cron_obj.display_name }}</strong>.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el cron queda deshabilitado y fuera del listado, pero el registro se conserva para auditoria.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'crons:delete' cron_obj.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

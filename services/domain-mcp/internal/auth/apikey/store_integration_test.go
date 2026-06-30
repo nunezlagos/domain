@@ -1,10 +1,10 @@
 //go:build integration
 
-// issue-21.6 paso 1: integration tests del PGStore de api keys.
-//
-// Cubre la ruta de AUTH (Issue → Resolve) que antes no tenía cobertura de DB, y
-// valida que el org del Principal se deriva de users.organization_id (no de
-// auth_api_keys.organization_id, que se dejó de escribir/leer).
+
+
+
+
+
 
 package apikey
 
@@ -49,7 +49,9 @@ func setupKeyStore(t *testing.T) (*PGStore, uuid.UUID, uuid.UUID, func()) {
 		`INSERT INTO users (organization_id, email, name, role)
 		 VALUES ($1, 'owner@acme.com', 'Owner', 'owner') RETURNING id`, orgID).Scan(&userID))
 
-	return &PGStore{Pool: pool}, orgID, userID, func() {
+
+
+	return &PGStore{Pool: pool, FieldEncKey: "test-field-enc-key"}, orgID, userID, func() {
 		pool.Close()
 		_ = pgC.Terminate(ctx)
 	}
@@ -131,7 +133,7 @@ func TestStore_Rotate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, oldID, newID)
 
-	// la vieja ya no resuelve, la nueva sí (con el org del user)
+
 	_, err = s.Resolve(ctx, oldPlain)
 	require.ErrorIs(t, err, ErrNotFound)
 

@@ -1,4 +1,4 @@
-// issue-01.7 seeders unit tests.
+
 
 package seeds
 
@@ -68,7 +68,7 @@ func TestSabotage_SeederError_Propagates(t *testing.T) {
 			return Report{}, errors.New("explosion")
 		},
 	}
-	// no llamamos RunAll porque no hay DB en unit test; testeamos directo
+
 	rep, err := s.Run(context.Background(), nil, EnvDev)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "explosion")

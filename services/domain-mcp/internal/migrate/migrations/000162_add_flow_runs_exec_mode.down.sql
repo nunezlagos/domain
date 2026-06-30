@@ -1,0 +1,1 @@
+ALTER TABLE flow_runs DROP COLUMN IF EXISTS exec_mode;

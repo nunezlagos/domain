@@ -9,11 +9,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	"nunezlagos/domain/internal/mail/resend"
 
 	"github.com/stretchr/testify/require"
+
+	"nunezlagos/domain/internal/mail/resend"
 )
 
 func TestResend_SendOK(t *testing.T) {
@@ -115,25 +114,6 @@ func TestResend_NoLeakAPIKey(t *testing.T) {
 
 	logOutput := logBuf.String()
 	require.NotContains(t, logOutput, "re_secret_key_123")
-}
-
-func TestResend_SendOTP(t *testing.T) {
-	var capturedBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		json.Unmarshal(b, &capturedBody)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"m"}`))
-	}))
-	defer srv.Close()
-
-	s := resend.New("re_xxx", "noreply@test.com", slog.Default())
-	s.HTTPClient = srv.Client()
-	s.BaseURL = srv.URL
-
-	err := s.SendOTP(context.Background(), "user@test.com", "123456", 10*time.Minute)
-	require.NoError(t, err)
-	require.Contains(t, capturedBody["subject"].(string), "código")
 }
 
 func TestResend_CheckURL(t *testing.T) {

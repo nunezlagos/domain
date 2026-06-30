@@ -1,4 +1,4 @@
-// issue-25.13 unit tests del linter de convenciones SQL.
+
 
 package dbconvlint
 
@@ -168,7 +168,7 @@ func TestSabotage_OverrideRemoved_RuleFiresAgain(t *testing.T) {
 		"sin override, prefer-jsonb DEBE saltar")
 }
 
-// --- Fix mode tests ---
+
 
 func TestFix_JSONtoJSONB(t *testing.T) {
 	src := `CREATE TABLE foos (data JSON);`
@@ -239,7 +239,7 @@ CREATE TABLE foos (
 	require.NotContains(t, issueRules(Lint("000099_foo.up.sql", src)), "prefer-jsonb")
 }
 
-// issue-42.11 require-table-prefix --------------------------------------------
+
 
 // CREATE TABLE sin prefijo válido falla.
 func TestLint_RequireTablePrefix_FailsUnprefixed(t *testing.T) {
@@ -294,7 +294,7 @@ CREATE TABLE budgets (
 	require.NotContains(t, issueRules(Lint("000147_b.up.sql", src)), "require-table-prefix")
 }
 
-// issue-25.3 Migration Safety rules ----------------------------------------
+
 
 func TestSafety_CreateIndexConcurrent(t *testing.T) {
 	src := validHeader + `CREATE INDEX foos_name_idx ON foos(name);`

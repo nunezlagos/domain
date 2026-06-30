@@ -97,8 +97,8 @@ type UpdateInput struct {
 }
 
 type Service struct {
-	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
-	// &Service{Pool: ...} siguen funcionando vía repository() lazy init.
+
+
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
 
@@ -206,7 +206,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Agent, error) {
 	if !validProviders[in.Provider] {
 		return nil, ErrProviderInvalid
 	}
-	// REQ-42.3: model_registry dropeada — sin gating de modelo por tabla.
+
 	if err := validateTemperature(in.Temperature); err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Ag
 	if in.Model != nil {
 		model = *in.Model
 	}
-	// REQ-42.3: model_registry dropeada — sin gating de modelo por tabla.
+
 	if err := validateTemperature(in.Temperature); err != nil {
 		return nil, err
 	}
@@ -413,11 +413,4 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

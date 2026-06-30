@@ -1,4 +1,4 @@
--- rollback: flow_versioning_signals_heartbeat
+
 
 ALTER TABLE flow_versions
   DROP COLUMN IF EXISTS deprecated_at,

@@ -8,7 +8,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/agent/agentdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // TemplateStore — issue-08.5 CRUD de agent_templates.
@@ -17,6 +21,50 @@ type TemplateStore struct {
 }
 
 var ErrTemplateNotFound = errors.New("agent template not found")
+
+func (s *TemplateStore) q(ctx context.Context) *agentdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return agentdb.New(tx)
+	}
+	return agentdb.New(s.Pool)
+}
+
+func numericFromFloat32(f float32) pgtype.Numeric {
+	var n pgtype.Numeric
+	_ = n.Scan(float64(f))
+	return n
+}
+
+func numericToFloat32(n pgtype.Numeric) float32 {
+	if !n.Valid {
+		return 0
+	}
+	f, _ := n.Float64Value()
+	if !f.Valid {
+		return 0
+	}
+	return float32(f.Float64)
+}
+
+func rowToTemplate(
+	id uuid.UUID, slug, name, systemPrompt, personality string,
+	capabilities []string, model string, temperature pgtype.Numeric,
+	maxTokens int32, handoffPolicy string, metadata []byte,
+) AgentTemplate {
+	return AgentTemplate{
+		ID:            id,
+		Slug:          slug,
+		Name:          name,
+		SystemPrompt:  systemPrompt,
+		Personality:   personality,
+		Capabilities:  capabilities,
+		Model:         model,
+		Temperature:   numericToFloat32(temperature),
+		MaxTokens:     int(maxTokens),
+		HandoffPolicy: handoffPolicy,
+		Metadata:      json.RawMessage(metadata),
+	}
+}
 
 // Upsert crea o actualiza por (org, slug). Devuelve la versión persistida.
 func (s *TemplateStore) Upsert(ctx context.Context, orgID uuid.UUID, t AgentTemplate) (*AgentTemplate, error) {
@@ -27,55 +75,38 @@ func (s *TemplateStore) Upsert(ctx context.Context, orgID uuid.UUID, t AgentTemp
 	if len(meta) == 0 {
 		meta = json.RawMessage("{}")
 	}
-	var out AgentTemplate
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO agent_templates
-		  (slug, name, system_prompt, personality, capabilities,
-		   model, temperature, max_tokens, handoff_policy, metadata)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (slug)
-		DO UPDATE SET
-		  name = EXCLUDED.name,
-		  system_prompt = EXCLUDED.system_prompt,
-		  personality = EXCLUDED.personality,
-		  capabilities = EXCLUDED.capabilities,
-		  model = EXCLUDED.model,
-		  temperature = EXCLUDED.temperature,
-		  max_tokens = EXCLUDED.max_tokens,
-		  handoff_policy = EXCLUDED.handoff_policy,
-		  metadata = EXCLUDED.metadata,
-		  updated_at = now()
-		RETURNING id, slug, name, system_prompt, COALESCE(personality, ''),
-		          capabilities, model, temperature, max_tokens, handoff_policy, metadata`,
-		t.Slug, t.Name, t.SystemPrompt, t.Personality, t.Capabilities,
-		t.Model, t.Temperature, t.MaxTokens, t.HandoffPolicy, meta,
-	).Scan(&out.ID, &out.Slug, &out.Name, &out.SystemPrompt, &out.Personality,
-		&out.Capabilities, &out.Model, &out.Temperature, &out.MaxTokens,
-		&out.HandoffPolicy, &out.Metadata)
+	row, err := s.q(ctx).UpsertAgentTemplate(ctx, agentdb.UpsertAgentTemplateParams{
+		Slug:          t.Slug,
+		Name:          t.Name,
+		SystemPrompt:  t.SystemPrompt,
+		Personality:   t.Personality,
+		Capabilities:  t.Capabilities,
+		Model:         t.Model,
+		Temperature:   numericFromFloat32(t.Temperature),
+		MaxTokens:     int32(t.MaxTokens),
+		HandoffPolicy: t.HandoffPolicy,
+		Metadata:      []byte(meta),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("upsert template: %w", err)
 	}
+	out := rowToTemplate(row.ID, row.Slug, row.Name, row.SystemPrompt, row.Personality,
+		row.Capabilities, row.Model, row.Temperature, row.MaxTokens, row.HandoffPolicy, row.Metadata)
 	return &out, nil
 }
 
 // GetBySlug devuelve un template específico.
 func (s *TemplateStore) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error) {
-	var t AgentTemplate
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, slug, name, system_prompt, COALESCE(personality, ''),
-		       capabilities, model, temperature, max_tokens, handoff_policy, metadata
-		FROM agent_templates WHERE slug = $1`,
-		slug,
-	).Scan(&t.ID, &t.Slug, &t.Name, &t.SystemPrompt, &t.Personality,
-		&t.Capabilities, &t.Model, &t.Temperature, &t.MaxTokens,
-		&t.HandoffPolicy, &t.Metadata)
+	row, err := s.q(ctx).GetAgentTemplateBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTemplateNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get template: %w", err)
 	}
-	return &t, nil
+	out := rowToTemplate(row.ID, row.Slug, row.Name, row.SystemPrompt, row.Personality,
+		row.Capabilities, row.Model, row.Temperature, row.MaxTokens, row.HandoffPolicy, row.Metadata)
+	return &out, nil
 }
 
 // List devuelve templates de la org.
@@ -83,40 +114,25 @@ func (s *TemplateStore) List(ctx context.Context, orgID uuid.UUID, limit int) ([
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, slug, name, system_prompt, COALESCE(personality, ''),
-		       capabilities, model, temperature, max_tokens, handoff_policy, metadata
-		FROM agent_templates
-		ORDER BY slug ASC LIMIT $1`,
-		limit,
-	)
+	rows, err := s.q(ctx).ListAgentTemplates(ctx, int32(limit))
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
 	}
-	defer rows.Close()
-	var out []AgentTemplate
-	for rows.Next() {
-		var t AgentTemplate
-		if err := rows.Scan(&t.ID, &t.Slug, &t.Name, &t.SystemPrompt, &t.Personality,
-			&t.Capabilities, &t.Model, &t.Temperature, &t.MaxTokens,
-			&t.HandoffPolicy, &t.Metadata); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		out = append(out, t)
+	out := make([]AgentTemplate, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, rowToTemplate(row.ID, row.Slug, row.Name, row.SystemPrompt, row.Personality,
+			row.Capabilities, row.Model, row.Temperature, row.MaxTokens, row.HandoffPolicy, row.Metadata))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Delete remove template; usado por admin tools.
 func (s *TemplateStore) Delete(ctx context.Context, orgID uuid.UUID, slug string) error {
-	tag, err := s.Pool.Exec(ctx,
-		`DELETE FROM agent_templates WHERE slug = $1`,
-		slug,
-	)
+	affected, err := s.q(ctx).DeleteAgentTemplate(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if affected == 0 {
 		return ErrTemplateNotFound
 	}
 	return nil

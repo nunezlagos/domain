@@ -14,7 +14,6 @@ import (
 
 // Config concentra toda la configuración runtime de Domain.
 type Config struct {
-	// Env / Server
 	Env      string // dev | staging | prod
 	HTTPBind string
 	HTTPPort int
@@ -22,13 +21,10 @@ type Config struct {
 	HTTPReadTimeoutSeconds  int
 	HTTPWriteTimeoutSeconds int
 
-	// Database
-	DatabaseURL     string // app_user pool — runtime queries (RLS enforced)
+	DatabaseURL         string // app_user pool — runtime queries (RLS enforced)
 	DatabaseAuthURL     string // app_admin pool — auth/audit lookups (BYPASSRLS).
 	DatabaseReadOnlyURL string // issue-25.9 read replica DSN (opcional, default vacío)
-	// Si DatabaseAuthURL vacío, dev-fallback al pool de DatabaseURL con warning.
 
-	// S3 (storage issue-04.6, GDPR export issue-23.3)
 	S3Endpoint     string
 	S3Region       string
 	S3Bucket       string
@@ -36,7 +32,6 @@ type Config struct {
 	S3SecretKey    string
 	S3UsePathStyle bool
 
-	// SMTP (issue-20.2, issue-02.7 OTP, issue-21.2 invitations)
 	SMTPHost     string
 	SMTPPort     int
 	SMTPAuth     string // none | plain | login | cram-md5
@@ -45,42 +40,76 @@ type Config struct {
 	SMTPTLS      bool
 	SMTPFrom     string
 
-	// Logging (issue-17.3)
 	LogLevel     string
 	LogFormat    string // text | json
 	LogOutput    string // stdout | stderr
 	LogAddSource bool
 
-	// Metrics (issue-17.1)
 	MetricsEnabled bool
 	MetricsBind    string
 	MetricsPort    int
 
-	// Tracing (issue-17.2)
 	OTelEnabled         bool
 	OTelExporterOTLPURL string
 	OTelExporterProto   string // grpc | http/protobuf
 	OTelSampleRatio     float64
 	OTelServiceName     string
 
-	// Seeders (issue-01.7)
+	FieldEncKey string
+
 	SeedOnBoot bool
 
-	// Rate limiting (issue-02.5)
-	RateLimitRequests  int
-	RateLimitWindow    string // e.g. "60s"
+	RateLimitRequests int
+	RateLimitWindow   string // e.g. "60s"
 
-	// CORS (issue-32.2). CSV de origins permitidos para /api/v1/*.
-	// Vacío = default deny (sin headers CORS).
-	// "*" único = wildcard dev (sin credentials).
 	CORSOrigins []string
 
-	// System crons (issue-08.11 heartbeat-watcher, issue-08.12 orphan-runs-audit)
 	HeartbeatWatcherEnabled        bool
-	HeartbeatWatcherTimeoutMinutes int    // default 5
-	HeartbeatWatcherTickSeconds    int    // default 60
+	HeartbeatWatcherTimeoutMinutes int // default 5
+	HeartbeatWatcherTickSeconds    int // default 60
 	OrphanAuditEnabled             bool
 	OrphanAuditSchedule            string // formato cron; default "0 4 * * *"
+
+	// HealthPoller — system cron de auto-monitoreo del MCP. Escribe heartbeats
+	// en mcp_health_checks cada 60s. Default enabled (bajo consumo).
+	HealthPollerEnabled bool
+
+	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
+	// Default disabled: requiere LLM_API_KEY (alias: MINIMAX_API_KEY) y consume tokens; opt-in explícito.
+	EdgeInferenceEnabled      bool
+	EdgeInferenceTickHours    int // default 6
+	EdgeInferenceMaxPairs     int // pares candidatos por proyecto por pasada; default 30
+	EdgeInferenceProjectBatch int // proyectos por pasada; default 50
+
+	// FeedbackAggregator — system cron (HU-52.1) que consolida skill_feedback
+	// en skill_feedback_daily cada N horas. Default disabled: opt-in explicito.
+	FeedbackAggregatorEnabled   bool
+	FeedbackAggregatorTickHours int // default 6
+	FeedbackAggregatorDays      int // ventana a consolidar por pasada; default 7
+
+	// SkillMetrics — system crons (HU-52.2): agregan skill_executions en
+	// skill_metrics_daily/weekly. Default disabled: opt-in explicito.
+	SkillMetricsEnabled         bool
+	SkillMetricsTickHours       int // aggregator hourly; default 1
+	SkillMetricsRollupTickHours int // rollup+cleanup; default 24
+	SkillMetricsDailyRetention  int // dias; default 90
+	SkillMetricsWeeklyRetention int // dias; default 365
+
+	// SkillJudge — system cron (HU-52.3): LLM-as-judge semanal que genera
+	// sugerencias 'pending' (split/merge/refine/archive). Human-in-the-loop:
+	// NADA se auto-aplica. Default disabled: opt-in explicito. Degrada sin LLM.
+	SkillJudgeEnabled   bool
+	SkillJudgeWeekday   int // 0=domingo .. 1=lunes (default); ventana semanal
+	SkillJudgeHour      int // hora local de la corrida; default 3 (03:00)
+	SkillJudgeMaxSkills int // skills escaneados por corrida; default 200
+
+	// ABTest — system cron (HU-52.4): Analyzer (z-test de proporciones) sobre los
+	// skill_ab_tests 'running' cada N horas. Default disabled: opt-in explicito.
+	// AutoApply (global) por default FALSE: solo declara el ganador, no pinea.
+	ABTestEnabled   bool
+	ABTestTickHours int     // analyzer cada N horas; default 6
+	ABTestAlpha     float64 // nivel de significancia del z-test; default 0.05
+	ABTestAutoApply bool    // pin global del ganador; default false
 }
 
 // Load lee config desde env vars, aplica defaults y valida.
@@ -92,7 +121,7 @@ func Load() (*Config, error) {
 		HTTPReadTimeoutSeconds:  getEnvInt("DOMAIN_HTTP_READ_TIMEOUT_SECONDS", 30),
 		HTTPWriteTimeoutSeconds: getEnvInt("DOMAIN_HTTP_WRITE_TIMEOUT_SECONDS", 30),
 
-		DatabaseURL:     getEnv("DOMAIN_DATABASE_URL", ""),
+		DatabaseURL:         getEnv("DOMAIN_DATABASE_URL", ""),
 		DatabaseAuthURL:     getEnv("DOMAIN_DATABASE_AUTH_URL", ""),
 		DatabaseReadOnlyURL: getEnv("DOMAIN_DATABASE_READONLY_URL", ""),
 
@@ -126,6 +155,8 @@ func Load() (*Config, error) {
 		OTelSampleRatio:     getEnvFloat("DOMAIN_OTEL_SAMPLE_RATIO", 1.0),
 		OTelServiceName:     getEnv("DOMAIN_OTEL_SERVICE_NAME", "domain-mcp"),
 
+		FieldEncKey: getEnv("DOMAIN_FIELD_ENC_KEY", ""),
+
 		SeedOnBoot: getEnvBool("DOMAIN_SEED_ON_BOOT", true),
 
 		RateLimitRequests: getEnvInt("DOMAIN_RATE_LIMIT_REQUESTS", 100),
@@ -138,6 +169,33 @@ func Load() (*Config, error) {
 		HeartbeatWatcherTickSeconds:    getEnvInt("DOMAIN_HEARTBEAT_WATCHER_TICK_SECONDS", 60),
 		OrphanAuditEnabled:             getEnvBool("DOMAIN_ORPHAN_AUDIT_ENABLED", true),
 		OrphanAuditSchedule:            getEnv("DOMAIN_ORPHAN_AUDIT_SCHEDULE", "0 4 * * *"),
+
+		HealthPollerEnabled: getEnvBool("DOMAIN_HEALTH_POLLER_ENABLED", true),
+
+		EdgeInferenceEnabled:      getEnvBool("DOMAIN_EDGE_INFERENCE_ENABLED", false),
+		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),
+		EdgeInferenceMaxPairs:     getEnvInt("DOMAIN_EDGE_INFERENCE_MAX_PAIRS", 30),
+		EdgeInferenceProjectBatch: getEnvInt("DOMAIN_EDGE_INFERENCE_PROJECT_BATCH", 50),
+
+		FeedbackAggregatorEnabled:   getEnvBool("DOMAIN_FEEDBACK_AGGREGATOR_ENABLED", false),
+		FeedbackAggregatorTickHours: getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_TICK_HOURS", 6),
+		FeedbackAggregatorDays:      getEnvInt("DOMAIN_FEEDBACK_AGGREGATOR_DAYS", 7),
+
+		SkillMetricsEnabled:         getEnvBool("DOMAIN_SKILL_METRICS_ENABLED", false),
+		SkillMetricsTickHours:       getEnvInt("DOMAIN_SKILL_METRICS_TICK_HOURS", 1),
+		SkillMetricsRollupTickHours: getEnvInt("DOMAIN_SKILL_METRICS_ROLLUP_TICK_HOURS", 24),
+		SkillMetricsDailyRetention:  getEnvInt("DOMAIN_SKILL_METRICS_DAILY_RETENTION_DAYS", 90),
+		SkillMetricsWeeklyRetention: getEnvInt("DOMAIN_SKILL_METRICS_WEEKLY_RETENTION_DAYS", 365),
+
+		SkillJudgeEnabled:   getEnvBool("DOMAIN_SKILL_JUDGE_ENABLED", false),
+		SkillJudgeWeekday:   getEnvInt("DOMAIN_SKILL_JUDGE_WEEKDAY", 1),
+		SkillJudgeHour:      getEnvInt("DOMAIN_SKILL_JUDGE_HOUR", 3),
+		SkillJudgeMaxSkills: getEnvInt("DOMAIN_SKILL_JUDGE_MAX_SKILLS", 200),
+
+		ABTestEnabled:   getEnvBool("DOMAIN_AB_TEST_ENABLED", false),
+		ABTestTickHours: getEnvInt("DOMAIN_AB_TEST_TICK_HOURS", 6),
+		ABTestAlpha:     getEnvFloat("DOMAIN_AB_TEST_ALPHA", 0.05),
+		ABTestAutoApply: getEnvBool("DOMAIN_AB_TEST_AUTO_APPLY", false),
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err

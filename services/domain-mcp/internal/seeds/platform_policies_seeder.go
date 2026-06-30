@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 3 }
+func (s *PlatformPoliciesSeeder) Version() int    { return 13 }
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -35,10 +35,10 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 		},
 		{
 			Slug:       "sdd-tdd-strict",
-			Name:       "TDD estricto para toda HU",
+			Name:       "TDD estricto para toda issue",
 			Kind:       "sdd_workflow",
 			SourceFile: ".claude/rules/sdd.md",
-			BodyMD: `Cada HU sigue el ciclo TDD obligatorio:
+			BodyMD: `Cada issue sigue el ciclo TDD obligatorio:
 1. Red: escribir test que falle por la razón correcta.
 2. Green: mínima implementación para pasar el test.
 3. Refactor: limpiar duplicación + naming + aplicar conventions.
@@ -71,11 +71,13 @@ content_length. PII redaction regex en issue-02.5.`,
 			Name:       "RLS obligatorio en tablas sensibles",
 			Kind:       "security_rule",
 			SourceFile: ".claude/rules/db.md",
-			BodyMD: `Tablas en migration 000028 (auth_secrets, audit_log, auth_otp_codes,
+			BodyMD: `Tablas en migration 000028 (auth_secrets, audit_log,
 activity_log, auth_api_keys) tienen RLS FORCE. Queries DEBEN envolver en
-db.WithOrgTx para set_config('app.current_org_id'). Sabotaje: query sin
+db.WithOrgTx para SET LOCAL app.current_org_id. Sabotaje: query sin
 SET LOCAL → 0 rows. app_user es NOBYPASSRLS; app_admin BYPASSRLS solo
-para auth path.`,
+para auth path.
+API canónica: Pool.BeginTx(ctx) + tx.Exec("SET LOCAL app.current_org_id = $1", orgID).
+NO usar set_config() de PostgreSQL directamente — siempre a través de WithOrgTx.`,
 		},
 		{
 			Slug:       "migration-safety",
@@ -137,12 +139,215 @@ preparados pero no se ejecutarán hasta que exista remote.`,
 Ej: TestUserService_CreateUser_DuplicateEmail_Returns409.
 require.NoError(t, err) — no assert.Nil(t, err).
 testcontainers para integration; build tag //go:build integration.
-Sabotaje test obligatorio por HU.`,
+Sabotaje test obligatorio por issue.`,
+		},
+		// ── Políticas v4: extraídas del análisis cross-project (9 proyectos Saargo) ──
+		{
+			Slug:       "openspec-spec-format",
+			Name:       "OpenSpec: formato estándar de specs (RFC 2119)",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `OpenSpec specs siguen el estándar RFC 2119:
+- MUST/SHALL: requisito absoluto — fallar = incumplimiento
+- SHOULD: recomendado; excepciones permitidas si se documentan
+- MAY: opcional, sin penalidad
+
+LÍMITE: máximo 7 requisitos MUST por spec. Si hay más → dividir por área.
+
+Cada requisito MUST tiene al menos 1 escenario con 4 hashtags:
+#### Scenario: Descripción clara
+Given [precondición]
+When [acción usuario/sistema]
+Then [resultado verificable]
+
+Delta specs (modificaciones) incluyen el texto anterior completo:
+## MODIFIED Requirements
+REQ-XXX (anterior): [texto completo original]
+REQ-XXX (nuevo): [texto completo modificado]
+
+Sin ambigüedades: "rápido" no es válido, "< 200ms p95" sí.
+Sin lenguaje de implementación: spec dice QUÉ, no CÓMO.`,
+		},
+		{
+			Slug:       "openspec-naming-convention",
+			Name:       "OpenSpec: naming verbal kebab-case para changes",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `Changes OpenSpec se nombran con prefijo verbal en kebab-case:
+- add-: feature nueva (ej: add-exportar-csv)
+- update-: modificar existente (ej: update-filtro-proyectos)
+- remove-: eliminar funcionalidad (ej: remove-legacy-pdf-merger)
+- refactor-: reestructurar sin cambiar comportamiento (ej: refactor-auth-service)
+- fix-: corregir bug (ej: fix-token-expiration)
+
+Formato: <prefijo>-<slug-kebab-case>
+Un change = una intención. Si toca áreas no relacionadas → dividir.
+No usar "implementar", "hacer", "tarea" como prefijos — son verbos de acción, no cambios.`,
+		},
+		{
+			Slug:       "file-size-limit",
+			Name:       "Límite de tamaño: archivos < 150 líneas, funciones < 30",
+			Kind:       "convention",
+			SourceFile: ".claude/rules/structure.md",
+			BodyMD: `Límites de tamaño — aplicados a código nuevo:
+- Archivos: < 150 líneas de código (excluye imports y comentarios de bloque)
+- Funciones/métodos: < 30 líneas
+- Controllers: sin lógica de negocio > 20 líneas (extraer a Service)
+- Cada clase/módulo: una sola responsabilidad clara (SRP)
+
+Si se excede el límite:
+- Extraer funciones auxiliares a helpers/ o utils/
+- Dividir en módulos más pequeños con responsabilidad única
+
+Archivos existentes que excedan el límite son deuda técnica:
+- No agregar código a ellos sin refactorizar primero
+- Documentar como "deuda existente" en el design del change
+
+Excepción única: archivos de migración de datos (seed/migration) que
+son inherentemente largos por su naturaleza declarativa.`,
+		},
+		{
+			Slug:       "yagni-simplicity",
+			Name:       "YAGNI: < 100 líneas nuevas por change, no abstracciones prematuras",
+			Kind:       "convention",
+			SourceFile: ".claude/rules/architecture.md",
+			BodyMD: `YAGNI (You Aren't Gonna Need It) es obligatorio en todo change:
+
+REGLAS
+- < 100 líneas de código nuevo por change como default
+- Implementaciones single-file hasta que sea insuficiente (con evidencia)
+- Complejidad adicional requiere justificación empírica: métricas concretas,
+  > 1000 usuarios activos, o requisitos medibles explícitos
+- 3 líneas similares > abstracción prematura
+- NO error handling ni fallbacks para escenarios que no pueden ocurrir
+- NO feature flags ni backward-compat shims cuando el código puede cambiarse directamente
+- NO over-engineering: la implementación mínima que pasa los tests es la correcta
+
+SEÑALES DE ABSTRACCIÓN PREMATURA
+- "En el futuro podría..."
+- "Para soportar N tipos diferentes..."
+- "Separémoslo por si acaso..."
+Si la justificación empieza así → no lo hagas.
+
+EXCEPCIÓN: si hay métricas de producción que justifican la complejidad,
+documentarlo en el design del change con los números concretos.`,
+		},
+		{
+			Slug:       "audit-tasks-checklist",
+			Name:       "Checklist de auditoría como última task de cada change",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `Toda lista de tasks DEBE incluir una task final de auditoría (sección "verify").
+Esta task valida que el change completo cumple:
+
+1. Ningún archivo nuevo supera 150 líneas de código
+2. Todos los inputs del usuario están validados en el boundary del sistema
+   (FormRequest, express-validator, Pydantic, etc.)
+3. Sin secretos hardcodeados (API keys, passwords, tokens, rutas absolutas de prod)
+4. Sin N+1 queries — eager loading aplicado en todas las relaciones iteradas
+5. Código sigue convenciones del proyecto (naming, idioma, patrones establecidos)
+6. Tests pasan localmente: php artisan test / npm test / go test / pytest
+7. Sin código muerto (dd(), console.log, var_dump, print statements de debug)
+
+Esta task no se puede marcar done si cualquiera de los criterios falla.
+Es la última task de la lista — siempre, sin excepción.`,
+		},
+		{
+			Slug:       "no-n-plus-one",
+			Name:       "Sin queries N+1: eager loading obligatorio",
+			Kind:       "convention",
+			SourceFile: ".claude/rules/db.md",
+			BodyMD: `N+1 queries son una violación crítica de performance:
+
+PROHIBIDO
+- Queries dentro de loops (foreach, map, for, while)
+- Acceder a relaciones ORM sin eager loading cuando se itera una colección
+- SELECT dentro de loops aunque sea "solo una tabla pequeña"
+
+REQUERIDO por ORM/framework:
+- Laravel Eloquent: with('relation') o load() antes de iterar colecciones
+- Lucid ORM (AdonisJS): preload() en queries de listado
+- SQLAlchemy: joinedload() o selectinload() en queries de colecciones
+- Sequelize: include: [Model] en queries de listado
+- Django: select_related() para FK, prefetch_related() para M2M
+
+DETECCIÓN
+- Habilitar query logger en dev y verificar que el count NO escala con N
+- Si el número de queries crece linealmente con el tamaño del resultado → N+1
+- EXPLAIN ANALYZE para confirmar: Seq Scan en tablas grandes es señal de alerta
+
+ÍNDICES RELACIONADOS
+Columnas usadas en JOIN y WHERE frecuentes deben tener índice.
+CREATE INDEX CONCURRENTLY para no bloquear en tablas con datos.`,
+		},
+		{
+			Slug:       "sdd-minimo-directo",
+			Name:       "SDD mínimo incluso para cambios directos sin issue",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `TODO cambio en el código, incluso sin issue asociada (fixes directos,
+experimentos one-shot, refactors sin issue), DEBE incluir documentación
+SDD mínima en el PR description o commit body:
+
+1. QUÉ cambia (archivos y responsabilidad)
+2. POR QUÉ (problema, no solución)
+3. RIESGOS (tradeoffs, efectos secundarios, datos sensibles)
+4. CÓMO se verificó (test, screenshots, curl, etc.)
+
+Sin excepción. Un commit sin esto es un commit incompleto.
+La documentación se escribe para el humano que lee el diff, no para la máquina.`,
+		},
+		{
+			Slug:       "agent-voice",
+			Name:       "Voz del agente — español neutral (siempre activo)",
+			Kind:       "convention",
+			SourceFile: "openspec/config.yaml",
+			BodyMD: `# Voz del agente — español neutral (SIEMPRE ACTIVO)
+
+## Idioma
+
+Todas las respuestas en español. Sin excepciones.
+
+## Registro
+
+- Neutro académico/plano, sin marcadores regionales fuertes.
+- Evitar "vos" (rioplatense), "tú" en posición dominante, "vosotros" (España).
+- Usar "ustedes" para plural y neutro impersonal o "tú" moderado.
+- Evitar regionalismos: "che", "boludo", "pibe", "guacho", "vale", "caché", "ordenador", "chido", "güey", "bárbaro", "joya".
+
+## Tono
+
+- Profesional directo. Sin ceremonias.
+- Puede ser cálido en explicaciones largas, pero el primer response debe ser conciso y al grano.
+- Sin emojis salvo que el usuario los pida.
+- Sin entusiasmo falso ("¡Genial!", "¡Excelente trabajo!").
+- Cuando corrija errores: explicación técnica de POR QUÉ primero, luego el cómo. Nunca "estás equivocado" sin evidencia.
+
+## Lenguaje técnico
+
+- En inglés solo cuando el término técnico es inglés-canónico: "deploy", "rollback", "commit", "merge", "endpoint", "stack trace", etc. Sin traducir "deploy" por "desplegar" cuando el contexto es CI/CD.
+- Mensajes de error, logs, identificadores: en inglés técnico (tal cual vienen del sistema).
+- Comandos bash, nombres de archivo, símbolos: sin traducir.
+
+## Estructura
+
+- Primera línea de cada respuesta: lo más importante.
+- Después: contexto, evidencia, acción propuesta.
+- Listas enumeradas cuando hay pasos; bullets cuando hay contraste.
+- Tablas cuando hay comparación.
+- Code blocks para código, paths, comandos. Nunca inline JSON largo.
+
+## Personalidad base
+
+- Senior architect con 15+ años. Directo, cálido, con cariño pedagógico.
+- Corrige sin piedad pero explica POR QUÉ técnicamente.
+- Celebra el razonamiento, no el resultado.
+- Senior que se frustra cuando alguien puede dar más — no por enojo, sino porque le importa que crezcan.`,
 		},
 	}
 
 	for _, p := range policies {
-		// is_user_modified=TRUE → el seeder no pisa la edición manual (mismo patrón que agent_templates).
+
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO platform_policies (slug, name, kind, body_md, source_file, is_active)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), TRUE)

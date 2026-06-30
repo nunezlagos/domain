@@ -1,0 +1,39 @@
+{% comment %}
+============================================================
+Paginacion compartida para TODOS los mantenedores.
+Una sola implementacion; cada app la incluye desde su
+_table_partial. Los links llevan [data-page-link] para que
+maintainer.js los intercepte y pagine via AJAX (server-side).
+
+Contexto esperado (lo provee la view de cada app):
+  total       total de registros (int)
+  per_page    tamaño de pagina (int)
+  page        pagina actual (int)
+  total_pages cantidad de paginas (int)
+  has_prev    bool
+  has_next    bool
+  search      termino de busqueda activo (str, opcional)
+============================================================
+{% endcomment %}
+{% comment %} Pie SIEMPRE visible: total de registros (izq) + navegacion de pagina
+   (der). Antes solo aparecia con total > per_page, por eso no salia con 1 pagina. {% endcomment %}
+<div class="d-flex gap-2 mt-3 justify-between align-center">
+  <span class="text-secondary mnt-text-sm">
+    {{ total }} registro{{ total|pluralize }}
+  </span>
+  <div class="d-flex gap-2 align-center">
+    {% if has_prev %}
+      <a href="?page={{ page|add:-1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:-1 }}">
+        ← Anterior
+      </a>
+    {% endif %}
+    <span class="text-secondary mnt-text-sm">
+      Pagina {{ page }} de {{ total_pages }}
+    </span>
+    {% if has_next %}
+      <a href="?page={{ page|add:1 }}{% if search %}&q={{ search }}{% endif %}" class="btn btn-ghost btn-sm" data-page-link="{{ page|add:1 }}">
+        Siguiente →
+      </a>
+    {% endif %}
+  </div>
+</div>

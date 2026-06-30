@@ -1,9 +1,9 @@
--- migration: create_selfhosted_runners
--- author: nunezlagos
--- issue: HU-11.2
--- description: registry de runners selfhosted + queue de tasks
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE selfhosted_runners (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

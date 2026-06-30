@@ -66,7 +66,7 @@ func TestRegisterProvider_Upsert(t *testing.T) {
 	f, cleanup := setupExtSync(t)
 	defer cleanup()
 
-	// Re-registrar mismo provider con base_url distinto debe hacer upsert.
+
 	updated, err := f.svc.RegisterProvider(context.Background(), f.orgID,
 		extsync.ProviderJira, "Acme Jira Updated",
 		"https://acme.atlassian.net/v2", "DIDE",

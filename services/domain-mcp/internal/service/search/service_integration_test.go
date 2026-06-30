@@ -75,8 +75,8 @@ func TestSearch_AllEntities(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// REQ-42.3: sessions dropeada — el search ya no cubre sesiones.
-	// Crear observation y prompt — ambos mencionan "pgvector".
+
+
 	_, _ = f.obs.Save(ctx, observation.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Content: "Decidimos usar pgvector para embeddings",
@@ -90,7 +90,7 @@ func TestSearch_AllEntities(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 
-	// Debe haber al menos una entrada de obs y prompt (no sessions).
+
 	seen := map[searchsvc.EntityType]bool{}
 	for _, r := range results {
 		seen[r.EntityType] = true

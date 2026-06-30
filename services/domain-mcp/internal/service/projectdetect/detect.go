@@ -1,12 +1,12 @@
-// Package projectdetect — issue F2 auto-detect.
-// Lee el CWD (o path dado) y extrae metadata del proyecto:
-//   - git remote + branch actual
-//   - stack (go, php, node, python, ruby)
-//   - .domain/manifest.yaml si existe (source-of-truth)
-//   - project_slug derivado del repo o del path
-//
-// Diseñado como función pura: Detect(path string) → *Metadata.
-// Sin I/O de red, sin DB. La integración con DB vive en otra capa.
+
+
+
+
+
+
+
+
+
 
 package projectdetect
 

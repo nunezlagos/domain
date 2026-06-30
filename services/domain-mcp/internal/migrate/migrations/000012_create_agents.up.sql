@@ -1,9 +1,9 @@
--- migration: create_agents
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-08.1
--- description: agents con modelo, system prompt, skills asignados
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

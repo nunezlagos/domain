@@ -41,28 +41,31 @@ type Repository interface {
 	ListFlowRunSteps(ctx context.Context, flowRunID uuid.UUID) ([]FlowRunStepRow, error)
 	MarkStepCompleted(ctx context.Context, stepID uuid.UUID, outputs map[string]any) error
 	MarkStepFailed(ctx context.Context, stepID uuid.UUID, errorMsg string) error
+
+
+	SetFlowRunError(ctx context.Context, flowRunID uuid.UUID, errorMsg string) error
 	UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.UUID, status string) error
-	// UpdateStepInputs reemplaza el JSONB step.inputs (usado para lazy
-	// build de user_prompt en modo Full cuando una fase completa y
-	// debemos actualizar el prompt del próximo step usando los outputs
-	// acumulados).
+
+
+
+
 	UpdateStepInputs(ctx context.Context, stepID uuid.UUID, inputs map[string]any) error
-	// MarkStepBlocked / MarkStepPending soportan el confirm condicional D1
-	// (RFC 0006): cuando Express detecta un cambio que supera ExpressMaxLines
-	// tras sdd-apply, marca verify como 'blocked' hasta que el cliente
-	// invoque domain_orchestrate_confirm.
+
+
+
+
 	MarkStepBlocked(ctx context.Context, stepID uuid.UUID, reason string) error
 	MarkStepPending(ctx context.Context, stepID uuid.UUID) error
 	MarkStepCancelled(ctx context.Context, stepID uuid.UUID) error
-	// GetAgentTemplateSystemPrompt obtiene el system_prompt del agent_template
-	// seedeado per-org. La fuente de verdad de los prompts de cada fase es
-	// BD (.claude/rules/ai-generation.md). El orquestador NO hardcodea
-	// prompts en Go — los maneja desde el catálogo persistido.
+
+
+
+
 	GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error)
-	// GetAgentTemplate obtiene la config completa del agent_template
-	// (model + temperature + max_tokens + system_prompt + provider). Lo
-	// usa Solo mode para invocar el LLM directamente con los parámetros
-	// declarativos del catálogo.
+
+
+
+
 	GetAgentTemplate(ctx context.Context, orgID uuid.UUID, slug string) (*AgentTemplate, error)
 }
 
@@ -76,8 +79,8 @@ type AgentTemplate struct {
 	Temperature  float32
 	MaxTokens    int
 	SystemPrompt string
-	// Metadata JSONB desde agent_templates.metadata. Incluye
-	// skill_threshold, required_saves, etc. issue-08.10 skill-002.
+
+
 	Metadata map[string]any
 }
 
@@ -104,8 +107,11 @@ func (t *AgentTemplate) SkillThreshold() float64 {
 type FlowRunRow struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 	FlowID         uuid.UUID
 	Status         string
+	ExecMode       string
+	Hardspec       bool
 	Cursor         map[string]any
 	StartedAt      *time.Time
 	FinishedAt     *time.Time
@@ -132,9 +138,12 @@ type FlowRunStepRow struct {
 type FlowRunInsert struct {
 	ID              uuid.UUID
 	OrganizationID  uuid.UUID
+	ProjectID       uuid.UUID
 	FlowID          uuid.UUID
 	TriggeredBy     uuid.UUID
 	Status          string
+	ExecMode        string
+	Hardspec        bool
 	Inputs          map[string]any
 	Metadata        map[string]any
 	StartedAt       time.Time
@@ -167,7 +176,7 @@ func NewPGRepository(pool *pgxpool.Pool) Repository {
 var ErrAgentTemplateNotFound = errors.New("orchestrator: agent_template not seeded for org")
 
 func (r *pgRepository) GetAgentTemplateSystemPrompt(ctx context.Context, orgID uuid.UUID, slug string) (string, error) {
-	// ISSUE-21.6 Fase D clean: single-org. WHERE sin organization_id.
+
 	_ = orgID
 	var prompt string
 	err := r.pool.QueryRow(ctx, `
@@ -233,14 +242,19 @@ func (r *pgRepository) CreateFlowRun(ctx context.Context, in FlowRunInsert) erro
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
+	execMode := in.ExecMode
+	if execMode == "" {
+		execMode = "auto"
+	}
+
+
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO flow_runs
-		  (id, flow_id, triggered_by, trigger_type, status,
-		   inputs, cursor, started_at)
-		VALUES ($1,$2,$3,'manual',$4,$5,$6,$7)`,
-		in.ID, in.FlowID, nullUUID(in.TriggeredBy),
-		in.Status, inputsJSON, metadataJSON, in.StartedAt)
+		  (id, flow_id, project_id, triggered_by, trigger_type, status,
+		   exec_mode, hardspec, inputs, cursor, started_at)
+		VALUES ($1,$2,$3,$4,'manual',$5,$6,$7,$8,$9,$10)`,
+		in.ID, in.FlowID, nullUUID(in.ProjectID), nullUUID(in.TriggeredBy),
+		in.Status, execMode, in.Hardspec, inputsJSON, metadataJSON, in.StartedAt)
 	if err != nil {
 		return fmt.Errorf("insert flow_run: %w", err)
 	}
@@ -253,18 +267,23 @@ func (r *pgRepository) GetFlowRun(ctx context.Context, id uuid.UUID) (*FlowRunRo
 		cursorRaw  []byte
 		startedAt  *time.Time
 		finishedAt *time.Time
+		projectID  *uuid.UUID
 	)
-	// ISSUE-21.6: organization_id omitido del SELECT.
+
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, flow_id, status, cursor, started_at, finished_at
+		SELECT id, flow_id, project_id, status, COALESCE(exec_mode,'auto'),
+		       COALESCE(hardspec,false), cursor, started_at, finished_at
 		FROM flow_runs WHERE id = $1`, id,
-	).Scan(&row.ID, &row.FlowID, &row.Status,
-		&cursorRaw, &startedAt, &finishedAt)
+	).Scan(&row.ID, &row.FlowID, &projectID, &row.Status, &row.ExecMode,
+		&row.Hardspec, &cursorRaw, &startedAt, &finishedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrFlowRunNotFound
 		}
 		return nil, fmt.Errorf("get flow_run: %w", err)
+	}
+	if projectID != nil {
+		row.ProjectID = *projectID
 	}
 	row.StartedAt = startedAt
 	row.FinishedAt = finishedAt
@@ -407,8 +426,8 @@ func (r *pgRepository) MarkStepBlocked(ctx context.Context, stepID uuid.UUID, re
 }
 
 func (r *pgRepository) MarkStepPending(ctx context.Context, stepID uuid.UUID) error {
-	// Sólo permite reactivar desde blocked — nunca desde completed o failed
-	// (eso sería re-correr lógica idempotente que rompe trazabilidad).
+
+
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE flow_run_steps SET status = 'pending', error = NULL
 		WHERE id = $1 AND status = 'blocked'`,
@@ -469,6 +488,16 @@ func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.U
 	return nil
 }
 
+// SetFlowRunError persiste el motivo del fallo en flow_runs.error.
+func (r *pgRepository) SetFlowRunError(ctx context.Context, flowRunID uuid.UUID, errorMsg string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE flow_runs SET error = $2 WHERE id = $1`, flowRunID, errorMsg)
+	if err != nil {
+		return fmt.Errorf("set flow_run error: %w", err)
+	}
+	return nil
+}
+
 func (r *pgRepository) CreateFlowRunStep(ctx context.Context, in FlowRunStepInsert) error {
 	inputsJSON, err := json.Marshal(in.Inputs)
 	if err != nil {
@@ -510,9 +539,12 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 	if err := s.Repo.CreateFlowRun(ctx, FlowRunInsert{
 		ID:             flowRunID,
 		OrganizationID: in.OrganizationID,
+		ProjectID:      in.ProjectID,
 		FlowID:         flowID,
 		TriggeredBy:    in.UserID,
 		Status:         "pending",
+		ExecMode:       in.ExecMode,
+		Hardspec:       in.Hardspec,
 		Inputs:         map[string]any{"raw_text": in.RawText},
 		Metadata: map[string]any{
 			"orchestrator_run_id": orchestratorRunID.String(),
@@ -541,13 +573,13 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 				"suggested_saves":     toAnySuggestedSaves(step.SuggestedSaves),
 				"retry_policy":        string(step.RetryPolicy),
 				"skill_threshold":     step.SkillThreshold,
-				// raw_text replicado en cada step.inputs para que el
-				// lazy build de Full mode (Service.rebuildNextStepPrompt)
-				// pueda reconstruir el prompt sin join contra flow_runs.cursor.
+
+
+
 				"raw_text": in.RawText,
-				// mode + express_max_lines replicados para que el
-				// RecordPhaseResult evalúe el D1 confirm condicional
-				// sin lookup adicional contra flow_runs.
+
+
+
 				"mode":              string(mode),
 				"express_max_lines": expressMax,
 			},

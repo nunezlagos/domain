@@ -30,7 +30,7 @@ type LRU struct {
 	items   map[string]*list.Element
 	now     func() time.Time
 
-	// stats
+
 	hits, misses, evictions, expirations uint64
 }
 
@@ -66,8 +66,8 @@ func (c *LRU) Get(key string) ([]byte, bool) {
 	}
 	c.ll.MoveToFront(el)
 	c.hits++
-	// Devolvemos copia para que el caller no pueda mutar el slice
-	// interno (handlers escriben sobre buffers reciclados a veces).
+
+
 	cp := make([]byte, len(e.value))
 	copy(cp, e.value)
 	return cp, true

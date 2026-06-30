@@ -1,4 +1,6 @@
 // Package task — issue-04.4 tasks with status tracking, verification and sabotage.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package task
 
 import (
@@ -9,9 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/task/taskdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 const (
@@ -95,6 +100,13 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
+func (s *Service) q(ctx context.Context) *taskdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return taskdb.New(tx)
+	}
+	return taskdb.New(s.Pool)
+}
+
 // CreateTasks batch-creates tasks with auto-assigned position per section.
 func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []CreateTaskInput) ([]Task, error) {
 	if err := s.requireHU(ctx, issueID); err != nil {
@@ -108,21 +120,25 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := taskdb.New(tx)
 
-	// Compute next position per section
+	projectID, err := q.GetIssueProjectID(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("get issue project_id: %w", err)
+	}
+
 	posMap := map[string]int{}
 	for _, in := range inputs {
 		posMap[in.Section]++
 	}
-	// Reset to actual next position from DB
+
 	for section := range posMap {
-		var maxPos int
-		_ = tx.QueryRow(ctx,
-			`SELECT COALESCE(MAX(position), 0) FROM issue_tasks WHERE issue_id = $1 AND section = $2`,
-			issueID, section,
-		).Scan(&maxPos)
-		posMap[section] = maxPos + 1
+		maxPos, err := q.MaxTaskPosition(ctx, taskdb.MaxTaskPositionParams{IssueID: issueID, Section: section})
+		if err != nil {
+			return nil, fmt.Errorf("max position: %w", err)
+		}
+		posMap[section] = int(maxPos) + 1
 	}
 
 	var out []Task
@@ -130,17 +146,17 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 		pos := posMap[in.Section]
 		posMap[in.Section]++
 
-		var t Task
-		err := tx.QueryRow(ctx,
-			`INSERT INTO issue_tasks (issue_id, section, description, position, status)
-			 VALUES ($1, $2, $3, $4, 'pending')
-			 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
-			issueID, in.Section, in.Description, pos,
-		).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
+		row, err := q.InsertTask(ctx, taskdb.InsertTaskParams{
+			IssueID:     issueID,
+			ProjectID:   projectID,
+			Section:     in.Section,
+			Description: in.Description,
+			Position:    int32(pos),
+		})
 		if err != nil {
 			return nil, fmt.Errorf("insert task: %w", err)
 		}
-		out = append(out, t)
+		out = append(out, toTask(row))
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -151,38 +167,34 @@ func (s *Service) CreateTasks(ctx context.Context, issueID uuid.UUID, inputs []C
 
 // ListTasks returns tasks for a HU ordered by section, position.
 func (s *Service) ListTasks(ctx context.Context, issueID uuid.UUID) ([]Task, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM issue_tasks WHERE issue_id = $1 ORDER BY section, position`, issueID)
+	rows, err := s.q(ctx).ListTasksByIssue(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
-	defer rows.Close()
-	return scanTasks(rows)
+	out := make([]Task, len(rows))
+	for i, r := range rows {
+		out[i] = toTask(r)
+	}
+	return out, nil
 }
 
 // GetTask returns a single task with its verification and sabotages.
 func (s *Service) GetTask(ctx context.Context, taskID uuid.UUID) (*Task, error) {
-	var t Task
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM issue_tasks WHERE id = $1`, taskID,
-	).Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt)
+	row, err := s.q(ctx).GetTaskByID(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get task: %w", err)
 	}
+	t := toTask(row)
 
-	// Load verification
 	v, err := s.getVerification(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
 	t.Verification = v
 
-	// Load sabotages
 	sabs, err := s.ListSabotages(ctx, taskID)
 	if err != nil {
 		return nil, err
@@ -198,17 +210,14 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 		return nil, ErrInvalidStatus
 	}
 
-	var current Task
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at
-		 FROM issue_tasks WHERE id = $1`, taskID,
-	).Scan(&current.ID, &current.HuID, &current.Section, &current.Description, &current.Status, &current.Position, &current.StartedAt, &current.CompletedAt, &current.CompletedBy, &current.CreatedAt, &current.UpdatedAt)
+	row, err := s.q(ctx).GetTaskByID(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get task: %w", err)
 	}
+	current := toTask(row)
 
 	allowed, ok := allowedTransitions[current.Status]
 	if !ok {
@@ -226,29 +235,29 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 	}
 
 	now := time.Now()
-	var startedAt, completedAt *time.Time
+	var startedAt, completedAt pgtype.Timestamptz
 	var cb *string
 	if newStatus == StatusInProgress {
-		startedAt = &now
+		startedAt = pgtype.Timestamptz{Time: now, Valid: true}
 	}
 	if newStatus == StatusCompleted {
-		completedAt = &now
+		completedAt = pgtype.Timestamptz{Time: now, Valid: true}
 		if completedBy != "" {
 			cb = &completedBy
 		}
 	}
 
-	var updated Task
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE issue_tasks
-		 SET status = $2, started_at = COALESCE($3, started_at), completed_at = $4, completed_by = COALESCE($5, completed_by), updated_at = NOW()
-		 WHERE id = $1
-		 RETURNING id, issue_id, section, description, status, position, started_at, completed_at, completed_by, created_at, updated_at`,
-		taskID, newStatus, startedAt, completedAt, cb,
-	).Scan(&updated.ID, &updated.HuID, &updated.Section, &updated.Description, &updated.Status, &updated.Position, &updated.StartedAt, &updated.CompletedAt, &updated.CompletedBy, &updated.CreatedAt, &updated.UpdatedAt)
+	updatedRow, err := s.q(ctx).UpdateTaskStatus(ctx, taskdb.UpdateTaskStatusParams{
+		ID:          taskID,
+		Status:      newStatus,
+		StartedAt:   startedAt,
+		CompletedAt: completedAt,
+		CompletedBy: cb,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("update status: %w", err)
 	}
+	updated := toTask(updatedRow)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -265,18 +274,16 @@ func (s *Service) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, newSta
 
 // GetProgress returns aggregate progress for a HU.
 func (s *Service) GetProgress(ctx context.Context, issueID uuid.UUID) (*ProgressReport, error) {
-	var r ProgressReport
-	err := s.Pool.QueryRow(ctx,
-		`SELECT $1::uuid AS issue_id,
-		        COUNT(*) AS total,
-		        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-		        ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / GREATEST(COUNT(*), 1), 1) AS pct
-		 FROM issue_tasks WHERE issue_id = $1`, issueID,
-	).Scan(&r.HuID, &r.Total, &r.Completed, &r.ProgressPct)
+	row, err := s.q(ctx).GetProgress(ctx, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("get progress: %w", err)
 	}
-	return &r, nil
+	return &ProgressReport{
+		HuID:        row.IssueID,
+		Total:       int(row.Total),
+		Completed:   int(row.Completed),
+		ProgressPct: row.Pct,
+	}, nil
 }
 
 // CreateVerification records a verification result for a completed task.
@@ -285,9 +292,7 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 		return nil, fmt.Errorf("invalid verification result: %s", result)
 	}
 
-	// Verify task is completed
-	var taskStatus string
-	err := s.Pool.QueryRow(ctx, `SELECT status FROM issue_tasks WHERE id = $1`, taskID).Scan(&taskStatus)
+	taskStatus, err := s.q(ctx).GetTaskStatus(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -298,23 +303,23 @@ func (s *Service) CreateVerification(ctx context.Context, taskID uuid.UUID, resu
 		return nil, ErrNotCompleted
 	}
 
-	var v VerificationResult
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO tdd_verification_results (task_id, result, evidence, notes, verified_by)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, task_id, result, evidence, notes, verified_at, verified_by`,
-		taskID, result, nullStr(evidence), nullStr(notes), nullStr(verifiedBy),
-	).Scan(&v.ID, &v.TaskID, &v.Result, &v.Evidence, &v.Notes, &v.VerifiedAt, &v.VerifiedBy)
+	row, err := s.q(ctx).InsertVerification(ctx, taskdb.InsertVerificationParams{
+		TaskID:     taskID,
+		Result:     result,
+		Evidence:   nullStr(evidence),
+		Notes:      nullStr(notes),
+		VerifiedBy: nullStr(verifiedBy),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert verification: %w", err)
 	}
+	v := toVerification(row)
 	return &v, nil
 }
 
 // CreateSabotage records a sabotage action.
 func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, expectedFailure, actualResult string, restored bool) (*SabotageRecord, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM issue_tasks WHERE id = $1)`, taskID).Scan(&exists)
+	exists, err := s.q(ctx).TaskExists(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("check task: %w", err)
 	}
@@ -322,36 +327,35 @@ func (s *Service) CreateSabotage(ctx context.Context, taskID uuid.UUID, action, 
 		return nil, ErrNotFound
 	}
 
-	var rec SabotageRecord
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO tdd_sabotage_records (task_id, action, expected_failure, actual_result, restored)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, task_id, action, expected_failure, actual_result, restored, performed_at`,
-		taskID, action, nullStr(expectedFailure), nullStr(actualResult), restored,
-	).Scan(&rec.ID, &rec.TaskID, &rec.Action, &rec.ExpectedFailure, &rec.ActualResult, &rec.Restored, &rec.PerformedAt)
+	row, err := s.q(ctx).InsertSabotage(ctx, taskdb.InsertSabotageParams{
+		TaskID:          taskID,
+		Action:          action,
+		ExpectedFailure: nullStr(expectedFailure),
+		ActualResult:    nullStr(actualResult),
+		Restored:        restored,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert sabotage: %w", err)
 	}
+	rec := toSabotage(row)
 	return &rec, nil
 }
 
 // ListSabotages returns all sabotage records for a task.
 func (s *Service) ListSabotages(ctx context.Context, taskID uuid.UUID) ([]SabotageRecord, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, task_id, action, expected_failure, actual_result, restored, performed_at
-		 FROM tdd_sabotage_records WHERE task_id = $1 ORDER BY performed_at`, taskID)
+	rows, err := s.q(ctx).ListSabotagesByTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("list sabotages: %w", err)
 	}
-	defer rows.Close()
-	return scanSabotages(rows)
+	out := make([]SabotageRecord, len(rows))
+	for i, r := range rows {
+		out[i] = toSabotage(r)
+	}
+	return out, nil
 }
 
-// --- internal ---
-
 func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
-	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM issues WHERE id = $1)`, issueID).Scan(&exists)
+	exists, err := s.q(ctx).IssueExists(ctx, issueID)
 	if err != nil {
 		return fmt.Errorf("check hu: %w", err)
 	}
@@ -362,18 +366,63 @@ func (s *Service) requireHU(ctx context.Context, issueID uuid.UUID) error {
 }
 
 func (s *Service) getVerification(ctx context.Context, taskID uuid.UUID) (*VerificationResult, error) {
-	var v VerificationResult
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, task_id, result, evidence, notes, verified_at, verified_by
-		 FROM tdd_verification_results WHERE task_id = $1 ORDER BY verified_at DESC LIMIT 1`, taskID,
-	).Scan(&v.ID, &v.TaskID, &v.Result, &v.Evidence, &v.Notes, &v.VerifiedAt, &v.VerifiedBy)
+	row, err := s.q(ctx).GetLatestVerification(ctx, taskID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get verification: %w", err)
 	}
+	v := toVerification(row)
 	return &v, nil
+}
+
+func toTask(r taskdb.IssueTask) Task {
+	return Task{
+		ID:          r.ID,
+		HuID:        r.IssueID,
+		Section:     r.Section,
+		Description: r.Description,
+		Status:      r.Status,
+		Position:    int(r.Position),
+		StartedAt:   tsPtr(r.StartedAt),
+		CompletedAt: tsPtr(r.CompletedAt),
+		CompletedBy: r.CompletedBy,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+func toVerification(r taskdb.TddVerificationResult) VerificationResult {
+	return VerificationResult{
+		ID:         r.ID,
+		TaskID:     r.TaskID,
+		Result:     r.Result,
+		Evidence:   r.Evidence,
+		Notes:      r.Notes,
+		VerifiedAt: r.VerifiedAt,
+		VerifiedBy: r.VerifiedBy,
+	}
+}
+
+func toSabotage(r taskdb.TddSabotageRecord) SabotageRecord {
+	return SabotageRecord{
+		ID:              r.ID,
+		TaskID:          r.TaskID,
+		Action:          r.Action,
+		ExpectedFailure: r.ExpectedFailure,
+		ActualResult:    r.ActualResult,
+		Restored:        r.Restored,
+		PerformedAt:     r.PerformedAt,
+	}
+}
+
+func tsPtr(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time
+	return &t
 }
 
 func nullStr(s string) *string {
@@ -381,30 +430,4 @@ func nullStr(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-func scanTasks(rows pgx.Rows) ([]Task, error) {
-	defer rows.Close()
-	var out []Task
-	for rows.Next() {
-		var t Task
-		if err := rows.Scan(&t.ID, &t.HuID, &t.Section, &t.Description, &t.Status, &t.Position, &t.StartedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan task: %w", err)
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
-}
-
-func scanSabotages(rows pgx.Rows) ([]SabotageRecord, error) {
-	defer rows.Close()
-	var out []SabotageRecord
-	for rows.Next() {
-		var s SabotageRecord
-		if err := rows.Scan(&s.ID, &s.TaskID, &s.Action, &s.ExpectedFailure, &s.ActualResult, &s.Restored, &s.PerformedAt); err != nil {
-			return nil, fmt.Errorf("scan sabotage: %w", err)
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
 }

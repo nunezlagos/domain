@@ -90,11 +90,11 @@ type Step struct {
 	ReplaySafe  *bool          `json:"replay_safe,omitempty" yaml:"replay_safe,omitempty"` // issue-09.6: nil=true (safe to re-run on resume)
 	Compensate  string         `json:"compensate,omitempty" yaml:"compensate,omitempty"`  // issue-09.9: referencia a skill/step de compensación
 
-	// issue-09.4: retry policy rica (tiene precedencia sobre Retries legacy)
+
 	Retry *StepRetryPolicy `json:"retry,omitempty" yaml:"retry,omitempty"`
-	// DefaultOnError reemplaza el resultado cuando on_error=ignore_and_continue.
+
 	DefaultOnError map[string]any `json:"default_on_error,omitempty" yaml:"default_on_error,omitempty"`
-	// FallbackStep se ejecuta en lugar del step cuando on_error=fallback_step.
+
 	FallbackStep *Step `json:"fallback_step,omitempty" yaml:"fallback_step,omitempty"`
 }
 
@@ -102,8 +102,8 @@ type Step struct {
 type Spec struct {
 	Version int    `json:"version" yaml:"version"`
 	Steps   []Step `json:"steps" yaml:"steps"`
-	// DefaultStepErrorPolicy aplica cuando un step no declara on_error
-	// (issue-09.4 escenario 8). La política del step tiene prioridad.
+
+
 	DefaultStepErrorPolicy string `json:"default_step_error_policy,omitempty" yaml:"default_step_error_policy,omitempty"`
 }
 
@@ -129,7 +129,7 @@ func (s Spec) Validate() error {
 			return fmt.Errorf("%w: step '%s' type '%s' not valid", ErrSpecInvalid, step.ID, step.Type)
 		}
 	}
-	// Verificar on_error referencias + reglas issue-09.4
+
 	for _, step := range s.Steps {
 		if err := validateErrorHandling(step, ids, 0); err != nil {
 			return err
@@ -139,7 +139,7 @@ func (s Spec) Validate() error {
 		return fmt.Errorf("%w: default_step_error_policy '%s' not valid",
 			ErrSpecInvalid, s.DefaultStepErrorPolicy)
 	}
-	// Validar DAG: depends_on referencias + detección de ciclos
+
 	if err := ValidateDAG(s.Steps); err != nil {
 		return err
 	}
@@ -237,8 +237,8 @@ type UpdateInput struct {
 	Spec        *Spec
 	IsActive    *bool
 	ActorID     uuid.UUID
-	// ExpectedUpdatedAt habilita optimistic locking (issue-09.1): si no
-	// coincide con flows.updated_at actual, Update retorna ErrUpdateConflict.
+
+
 	ExpectedUpdatedAt *time.Time
 }
 
@@ -246,10 +246,10 @@ type UpdateInput struct {
 var ErrUpdateConflict = errors.New("flow modified concurrently")
 
 type Service struct {
-	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
-	// &Service{Pool: ...} siguen funcionando; otros archivos del package
-	// (saga.go, signals.go, snapshots.go, etc.) aún usan Pool directo y se
-	// migrarán en HUs futuras.
+
+
+
+
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
 
@@ -345,8 +345,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Fl
 	userMod := prev.IsUserModified || prev.SeedManaged
 	specJSON, _ := json.Marshal(spec)
 
-	// issue-09.1 optimistic locking: la condición updated_at en repo garantiza
-	// que no pisamos una modificación concurrente.
+
+
 	f, err := s.repository().UpdateFlow(ctx, UpdateFlowParams{
 		ID:                id,
 		Name:              name,

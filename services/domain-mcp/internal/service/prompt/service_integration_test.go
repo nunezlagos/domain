@@ -93,7 +93,7 @@ func TestPrompt_Create_SecondVersionIncrements(t *testing.T) {
 	require.Equal(t, 2, p2.Version)
 	require.True(t, p2.IsActive)
 
-	// v1 quedó inactive
+
 	versions, err := f.svc.ListVersions(ctx, f.orgID, &f.projectID, "g")
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
@@ -148,7 +148,7 @@ func TestPrompt_SetActive_PromotesPreviousVersion(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: &f.projectID,
 		Slug: "a", Body: "v2", SetActive: true,
 	})
-	// Volver a activar v1
+
 	_, err := f.svc.SetActive(ctx, v1.ID, f.userID)
 	require.NoError(t, err)
 	active, err := f.svc.GetActive(ctx, f.orgID, &f.projectID, "a")

@@ -1,9 +1,9 @@
--- migration: create_agent_run_logs
--- author: mnunez@saargo.com
--- issue: HU-08.3
--- description: agent_run_logs append-only por iteración (auditoría completa)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE agent_run_logs (
   id BIGSERIAL PRIMARY KEY,
@@ -11,9 +11,9 @@ CREATE TABLE agent_run_logs (
   iteration INT NOT NULL,
   event_type VARCHAR(30) NOT NULL
     CHECK (event_type IN ('llm_call','tool_call','tool_result','error','final')),
-  -- LLM call: input messages snapshot, output content, tokens, latency
-  -- Tool call: skill_slug, args, result
-  -- Error: error message + stage
+
+
+
   payload JSONB NOT NULL DEFAULT '{}',
   tokens_input INT NOT NULL DEFAULT 0,
   tokens_output INT NOT NULL DEFAULT 0,

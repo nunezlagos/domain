@@ -1,9 +1,9 @@
--- migration: create_usage_alerts
--- author: nunezlagos
--- issue: HU-15.3
--- description: alerts configurables sobre métricas de cost/tokens + delivery + log
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS usage_alerts (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,7 +33,7 @@ CREATE TRIGGER set_updated_at_usage_alerts
   BEFORE UPDATE ON usage_alerts
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Log de disparos para audit + debug.
+
 CREATE TABLE IF NOT EXISTS usage_alert_fires (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   alert_id         UUID NOT NULL REFERENCES usage_alerts(id) ON DELETE CASCADE,

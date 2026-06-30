@@ -47,11 +47,11 @@ func TestOrgRateLimiter_PerOrgIsolation(t *testing.T) {
 		DefaultRatePerMinute: 100,
 		DefaultBurst:         100,
 	})
-	// Exhaust org-a
+
 	for i := 0; i < 200; i++ {
 		rl.Allow("org-a")
 	}
-	// org-b should still get tokens
+
 	ok, _, _ := rl.Allow("org-b")
 	require.True(t, ok, "org-b should not be affected by org-a's overuse")
 }
@@ -76,7 +76,7 @@ func TestOrgRateLimiter_RetryAfter(t *testing.T) {
 		DefaultRatePerMinute: 60,  // 1/sec
 		DefaultBurst:         60,
 	})
-	// Exhaust all tokens
+
 	for i := 0; i < 100; i++ {
 		rl.Allow("org-a")
 	}
@@ -109,7 +109,7 @@ func TestOrgRateLimiter_LRUEviction(t *testing.T) {
 	})
 	defer rl.Stop()
 
-	// Create a bucket with clock in the past
+
 	rl.mu.Lock()
 	rl.buckets["old-org"] = &orgBucket{
 		limiter:  rate.NewLimiter(100, 100),
@@ -127,7 +127,7 @@ func TestOrgRateLimiter_BurstExceedsRate(t *testing.T) {
 		DefaultRatePerMinute: 60,
 		DefaultBurst:         120,
 	})
-	// Burst of 120 should all pass
+
 	allowed := 0
 	for i := 0; i < 120; i++ {
 		ok, _, _ := rl.Allow("org-a")
@@ -137,7 +137,7 @@ func TestOrgRateLimiter_BurstExceedsRate(t *testing.T) {
 	}
 	require.Equal(t, 120, allowed)
 
-	// Next should be denied
+
 	ok, _, _ := rl.Allow("org-a")
 	require.False(t, ok)
 }

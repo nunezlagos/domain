@@ -1,7 +1,3 @@
-// Package cron — issue-10.1 cron schedules service (CRUD).
-//
-// Tabla crons: cron_expression interpretado con robfig/cron v3 (standard
-// 5-field syntax + extensión @every / @daily). target_type → flow/agent/skill.
 package cron
 
 import (
@@ -21,6 +17,8 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/cron/cronsdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -40,7 +38,6 @@ var (
 
 type Cron struct {
 	ID             uuid.UUID
-	OrganizationID uuid.UUID
 	CreatedBy      *uuid.UUID
 	Slug           string
 	Name           string
@@ -77,7 +74,13 @@ type Service struct {
 	Audit audit.Recorder
 }
 
-// NextRun calcula el próximo trigger time según expression + tz.
+func (s *Service) q(ctx context.Context) *cronsdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return cronsdb.New(tx)
+	}
+	return cronsdb.New(s.Pool)
+}
+
 func NextRun(expression, timezone string, from time.Time) (time.Time, error) {
 	sched, err := cronParser.Parse(expression)
 	if err != nil {
@@ -88,6 +91,46 @@ func NextRun(expression, timezone string, from time.Time) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("%w: %v", ErrInvalidTimezone, err)
 	}
 	return sched.Next(from.In(loc)), nil
+}
+
+func toCron(id uuid.UUID, createdBy *uuid.UUID, slug, name, description string, cronExpression, timezone, targetType string, targetID uuid.UUID, inputs []byte, enabled bool, lastRunAt, nextRunAt *time.Time, createdAt, updatedAt time.Time) Cron {
+	var in map[string]any
+	if inputs != nil {
+		_ = json.Unmarshal(inputs, &in)
+	}
+	return Cron{
+		ID:             id,
+		CreatedBy:      createdBy,
+		Slug:           slug,
+		Name:           name,
+		Description:    description,
+		CronExpression: cronExpression,
+		Timezone:       timezone,
+		TargetType:     targetType,
+		TargetID:       targetID,
+		Inputs:         in,
+		Enabled:        enabled,
+		LastRunAt:      lastRunAt,
+		NextRunAt:      nextRunAt,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
+	}
+}
+
+func toCronFromInsert(r cronsdb.InsertCronRow) Cron {
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toCronFromGet(r cronsdb.GetCronByIDRow) Cron {
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toCronFromList(r cronsdb.ListCronsRow) Cron {
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toCronFromPick(r cronsdb.PickDueCronsRow) Cron {
+	return toCron(r.ID, r.CreatedBy, r.Slug, r.Name, r.Description, r.CronExpression, r.Timezone, r.TargetType, r.TargetID, r.Inputs, r.Enabled, r.LastRunAt, r.NextRunAt, r.CreatedAt, r.UpdatedAt)
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
@@ -104,7 +147,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		in.Timezone = "UTC"
 	}
 
-	// Validar expression + calc próximo
 	next, err := NextRun(in.CronExpression, in.Timezone, time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -115,24 +157,25 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 	}
 	inputsJSON, _ := json.Marshal(in.Inputs)
 
-	// ISSUE-21.6: INSERT sin organization_id (la columna se dropea en
-	// Fase C via 000142). Hasta entonces, crons.organization_id queda NULL
-	// (la tabla acepta NULL post-000145).
-	var c Cron
-	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO crons
-		   (created_by, slug, name, description, cron_expression,
-		    timezone, target_type, target_id, inputs, enabled, next_run_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		 RETURNING id, created_by, slug, name, COALESCE(description,''),
-		           cron_expression, timezone, target_type, target_id, inputs, enabled,
-		           last_run_at, next_run_at, created_at, updated_at`,
-		in.CreatedBy, in.Slug, in.Name, nullStr(in.Description),
-		in.CronExpression, in.Timezone, in.TargetType, in.TargetID,
-		inputsJSON, in.Enabled, next,
-	).Scan(&c.ID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
-		&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
-		&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt)
+	var desc *string
+	if in.Description != "" {
+		desc = &in.Description
+	}
+
+	q := s.q(ctx)
+	cRow, err := q.InsertCron(ctx, cronsdb.InsertCronParams{
+		CreatedBy:      in.CreatedBy,
+		Slug:           in.Slug,
+		Name:           in.Name,
+		Description:    desc,
+		CronExpression: in.CronExpression,
+		Timezone:       in.Timezone,
+		TargetType:     in.TargetType,
+		TargetID:       in.TargetID,
+		Inputs:         inputsJSON,
+		Enabled:        in.Enabled,
+		NextRunAt:      &next,
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -140,6 +183,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 		}
 		return nil, fmt.Errorf("insert cron: %w", err)
 	}
+
+	c := toCronFromInsert(cRow)
+
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
 			OrganizationID: &in.OrganizationID,
@@ -158,57 +204,29 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Cron, error) {
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Cron, error) {
-	// ISSUE-21.6 Fase D clean: single-org, WHERE sin organization_id.
-	// El param orgID se ignora (_ = orgID) por compat de firma.
-	_ = orgID
-	rows, err := s.Pool.Query(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
-		`SELECT id, created_by, slug, name, COALESCE(description,''),
-		        cron_expression, timezone, target_type, target_id, inputs, enabled,
-		        last_run_at, next_run_at, created_at, updated_at
-		 FROM crons WHERE deleted_at IS NULL
-		 ORDER BY created_at DESC LIMIT 200`)
+	rows, err := s.q(ctx).ListCrons(ctx, 200)
 	if err != nil {
 		return nil, fmt.Errorf("list crons: %w", err)
 	}
-	defer rows.Close()
-	var out []Cron
-	for rows.Next() {
-		var c Cron
-		if err := rows.Scan(&c.ID, &c.OrganizationID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
-			&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
-			&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
+	out := make([]Cron, len(rows))
+	for i, r := range rows {
+		out[i] = toCronFromList(r)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Cron, error) {
-	var c Cron
-	err := s.Pool.QueryRow(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
-		`SELECT id, created_by, slug, name, COALESCE(description,''),
-		        cron_expression, timezone, target_type, target_id, inputs, enabled,
-		        last_run_at, next_run_at, created_at, updated_at
-		 FROM crons WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&c.ID, &c.OrganizationID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
-		&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
-		&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt)
+	cRow, err := s.q(ctx).GetCronByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get cron: %w", err)
 	}
+	c := toCronFromGet(cRow)
 	return &c, nil
 }
 
-// PickDue marca y devuelve los crons due (next_run_at <= NOW) usando
-// SELECT ... FOR UPDATE SKIP LOCKED para safety multi-worker. Devuelve los
-// IDs claimed por este worker; caller debe ejecutar el target y llamar
-// MarkRan() al terminar.
 func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	if limit <= 0 {
 		limit = 50
@@ -219,44 +237,29 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	rows, err := tx.Query(ctx,
-		// ISSUE-21.6: organization_id omitido del SELECT.
-		`SELECT id, created_by, slug, name, COALESCE(description,''),
-		        cron_expression, timezone, target_type, target_id, inputs, enabled,
-		        last_run_at, next_run_at, created_at, updated_at
-		 FROM crons
-		 WHERE enabled = true AND deleted_at IS NULL
-		   AND next_run_at IS NOT NULL AND next_run_at <= NOW()
-		 ORDER BY next_run_at ASC LIMIT $1
-		 FOR UPDATE SKIP LOCKED`, limit)
+	q := cronsdb.New(tx)
+
+	rows, err := q.PickDueCrons(ctx, int32(limit))
 	if err != nil {
 		return nil, fmt.Errorf("pick due: %w", err)
 	}
-	var out []Cron
-	for rows.Next() {
-		var c Cron
-		if err := rows.Scan(&c.ID, &c.OrganizationID, &c.CreatedBy, &c.Slug, &c.Name, &c.Description,
-			&c.CronExpression, &c.Timezone, &c.TargetType, &c.TargetID, &c.Inputs, &c.Enabled,
-			&c.LastRunAt, &c.NextRunAt, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+	out := make([]Cron, len(rows))
+	for i, r := range rows {
+		out[i] = toCronFromPick(r)
 	}
 
-	// Avanzar next_run_at para todos los claimed para que otro worker no los
-	// reescoja inmediatamente. La ejecución real ocurre fuera de esta tx;
-	// si falla el caller llama MarkRan(success=false) y schedule sigue normal.
 	now := time.Now().UTC()
 	for i := range out {
 		next, _ := NextRun(out[i].CronExpression, out[i].Timezone, now)
-		_, _ = tx.Exec(ctx,
-			`UPDATE crons SET last_run_at = $1, next_run_at = $2 WHERE id = $3`,
-			now, next, out[i].ID)
+		err := q.UpdateCronRun(ctx, cronsdb.UpdateCronRunParams{
+			LastRunAt: &now,
+			NextRunAt: &next,
+			ID:        out[i].ID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("update cron run %s: %w", out[i].ID, err)
+		}
 		nowCopy, nextCopy := now, next
 		out[i].LastRunAt = &nowCopy
 		out[i].NextRunAt = &nextCopy
@@ -268,28 +271,26 @@ func (s *Service) PickDue(ctx context.Context, limit int) ([]Cron, error) {
 	return out, nil
 }
 
-// SetEnabled toggle.
 func (s *Service) SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE crons SET enabled = $1 WHERE id = $2 AND deleted_at IS NULL`,
-		enabled, id)
+	n, err := s.q(ctx).SetCronEnabled(ctx, cronsdb.SetCronEnabledParams{
+		Enabled: enabled,
+		ID:      id,
+	})
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
 func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE crons SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
-		id)
+	n, err := s.q(ctx).SoftDeleteCron(ctx, id)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	if s.Audit != nil {
@@ -299,11 +300,4 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
-}
-
-func nullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

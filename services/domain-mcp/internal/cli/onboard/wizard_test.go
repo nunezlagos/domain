@@ -10,16 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Tests de comportamiento del TUI wizard con stdin/stdout mockeados.
-// No requiere DB ni network — solo validamos input parsing, defaults,
-// y/N handling, y save de credenciales (con fs mockeado via SaveCredentials).
 
-// runWizaardInSandbox ejecuta el wizard completo con In/Out/Err buffer
-// y HTTP client que retorna 200 a todo (mockeado via server interno).
-// No usar — aqui solo testeamos unidades puras (ask, askYesNo, slug).
-// El flujo E2E se cubre en integration_test.go.
 
-// === ask ===
+
+
+
+
+
+
+
+
 
 func TestAsk_RequiredValue(t *testing.T) {
 	w := &Wizard{In: strings.NewReader("admin@saargo.com\n"), Err: io.Discard}
@@ -29,7 +29,7 @@ func TestAsk_RequiredValue(t *testing.T) {
 }
 
 func TestAsk_DefaultValue_EmptyReturnsDefault(t *testing.T) {
-	// Empty input + default val → returns default
+
 	w := &Wizard{In: strings.NewReader("\n"), Err: io.Discard}
 	got, err := w.ask("Server URL", "http://localhost:8000", false)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestAsk_StdinClosed_Error(t *testing.T) {
 		strings.Contains(err.Error(), "stdin cerrado"))
 }
 
-// === askYesNo ===
+
 
 func TestAskYesNo_YesExplicit(t *testing.T) {
 	w := &Wizard{In: strings.NewReader("y\n"), Err: io.Discard}
@@ -128,20 +128,20 @@ func TestAskYesNo_DefaultNo_EmptyInput(t *testing.T) {
 
 func TestAskYesNo_NonInteractive(t *testing.T) {
 	w := &Wizard{In: strings.NewReader(""), Err: io.Discard, NonInteractive: true}
-	// defaultYes=true
+
 	got, err := w.askYesNo("?", true)
 	require.NoError(t, err)
 	require.True(t, got)
-	// defaultYes=false
+
 	got, err = w.askYesNo("?", false)
 	require.NoError(t, err)
 	require.False(t, got)
 }
 
-// === Credentials struct ===
+
 
 func TestCredentials_JSONShape(t *testing.T) {
-	// Validar que el struct serializa con todos los campos
+
 	c := &Credentials{
 		APIKey:   "domk_live_test",
 		APIKeyID: mustUUID("11111111-1111-1111-1111-111111111111"),
@@ -154,7 +154,7 @@ func TestCredentials_JSONShape(t *testing.T) {
 	require.NotEmpty(t, c.Email)
 }
 
-// === boolLabel ===
+
 
 func TestBoolLabel(t *testing.T) {
 	require.Equal(t, "yes", boolLabel(true, "yes", "no"))

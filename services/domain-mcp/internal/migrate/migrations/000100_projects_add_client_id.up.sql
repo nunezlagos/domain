@@ -1,14 +1,14 @@
--- migration: projects_add_client_id
--- author: mnunez@saargo.com
--- issue: REQ-39
--- description: vincula projects a clients (opcional, FK SET NULL) + CHECK same-org
--- breaking: false
--- estimated_duration: <1s
---
--- Un proyecto puede pertenecer a un cliente (opcional). Si el cliente se elimina,
--- el proyecto sobrevive con client_id=NULL (SET NULL). Cross-org safety: trigger
--- valida que projects.organization_id = clients.organization_id en INSERT/UPDATE.
--- Postgres no permite subqueries en CHECK constraints, así que usamos trigger.
+
+
+
+
+
+
+
+
+
+
+
 
 ALTER TABLE projects
   ADD COLUMN client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
@@ -16,7 +16,7 @@ ALTER TABLE projects
 CREATE INDEX projects_client_id_idx ON projects (client_id)
   WHERE deleted_at IS NULL AND client_id IS NOT NULL;
 
--- Trigger cross-org: garantiza que el client pertenece a la misma org que el project.
+
 CREATE OR REPLACE FUNCTION projects_check_client_same_org() RETURNS TRIGGER AS $$
 DECLARE
   client_org UUID;

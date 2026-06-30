@@ -105,9 +105,9 @@ func (p *provider) Complete(ctx context.Context, opts llm.CompletionOptions) (*l
 		if !IsTransient(err) || attempt == p.cfg.MaxRetries {
 			return nil, err
 		}
-		// ISSUE-28.8: usar NewTimer reusable en lugar de time.After
-		// (time.After crea un timer nuevo cada iteración que el GC no
-		// recolecta hasta expirar — leak en loops largos).
+
+
+
 		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
@@ -137,7 +137,7 @@ func (p *provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 		if !IsTransient(err) || attempt == p.cfg.MaxRetries {
 			return nil, err
 		}
-		// ISSUE-28.8: NewTimer reusable (ver Complete arriba).
+
 		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

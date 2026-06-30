@@ -45,13 +45,13 @@ var validStatus = map[string]struct{}{
 
 // Service expone las operaciones de negocio sobre clients.
 type Service struct {
-	// Pool — DEPRECATED: se mantiene para Strangler Fig de callers que aún
-	// construyen &Service{Pool: ...}. Nuevo código debe usar NewService.
+
+
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
 
-	// repo encapsula el acceso a la DB. Si nil, repository() construye uno
-	// on-demand desde Pool (legacy path).
+
+
 	repo Repository
 }
 
@@ -319,9 +319,9 @@ func normalizeTaxID(raw string) (string, error) {
 	if normalized, err := rut.Validate(raw); err == nil {
 		return normalized, nil
 	}
-	// Fallback: no es RUT válido, pero puede ser un tax_id de otro país.
-	// Aceptamos algo que parezca un identificador alfanumérico con
-	// separadores. Rechazamos basura tipo "  " o caracteres raros.
+
+
+
 	if !reTaxIDFallback.MatchString(raw) {
 		return "", ErrInvalidTaxID
 	}

@@ -1,9 +1,9 @@
--- migration: create_entity_state_transitions
--- author: nunezlagos
--- issue: HU-04.10
--- description: audit immutable de transiciones de estado cross-entity
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE entity_state_transitions (
   id BIGSERIAL PRIMARY KEY,
@@ -29,7 +29,7 @@ CREATE INDEX entity_state_transitions_to_state_idx
 CREATE INDEX entity_state_transitions_actor_idx
   ON entity_state_transitions (actor_id) WHERE actor_id IS NOT NULL;
 
--- Trigger anti-UPDATE/DELETE: append-only.
+
 CREATE OR REPLACE FUNCTION entity_state_transitions_immutable() RETURNS TRIGGER AS $$
 BEGIN
   RAISE EXCEPTION 'entity_state_transitions is append-only (op=%)', TG_OP;
@@ -40,7 +40,7 @@ CREATE TRIGGER entity_state_transitions_no_update
   BEFORE UPDATE OR DELETE ON entity_state_transitions
   FOR EACH ROW EXECUTE FUNCTION entity_state_transitions_immutable();
 
--- Stuck detector materializa entidades sin transición reciente.
+
 CREATE OR REPLACE VIEW v_stuck_entities AS
 SELECT
   entity_kind,

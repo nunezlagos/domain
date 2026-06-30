@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Uptime MCP · Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Uptime MCP" %}
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .uptime-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-lg);
+    }
+    .uptime-kpi {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md) var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+    .uptime-kpi__val {
+      font-size: var(--fs-2xl);
+      font-weight: var(--fw-bold);
+      color: var(--color-text-link);
+      line-height: 1;
+    }
+    .uptime-kpi__val.ok   { color: var(--color-success); }
+    .uptime-kpi__val.warn { color: var(--color-warning); }
+    .uptime-kpi__val.bad  { color: var(--color-danger, #e5484d); }
+    .uptime-kpi__label {
+      font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .uptime-kpi__sub {
+      font-size: var(--fs-xs);
+      color: var(--color-text-muted);
+      margin-top: 2px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 12px;
+      border-radius: var(--radius-full);
+      font-size: var(--fs-sm);
+      font-weight: var(--fw-semibold);
+      border: 1px solid;
+    }
+    .sb-up       { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-soft); }
+    .sb-degraded { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-soft); }
+    .sb-down     { color: var(--color-danger, #e5484d); border-color: var(--color-danger, #e5484d); background: var(--color-danger-soft, rgba(229,72,77,.12)); }
+
+    .uptime-section { margin-bottom: var(--space-xl); }
+    .uptime-section__title {
+      font-size: var(--fs-base);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--color-border-light);
+      padding-bottom: var(--space-xs);
+    }
+
+    .uptime-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .uptime-table th {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg-elevated);
+    }
+    .uptime-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-secondary);
+      vertical-align: top;
+    }
+    .uptime-table tr:last-child td { border-bottom: none; }
+    .uptime-table tr:hover td { background: var(--color-bg-elevated); }
+    .uptime-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .uptime-table .err { font-family: monospace; font-size: var(--fs-xs); color: var(--color-text-muted); max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-xl);
+      color: var(--color-text-muted);
+      font-size: var(--fs-sm);
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: var(--space-lg);">
+
+  <div style="margin-bottom:var(--space-lg);">
+    <h2 style="margin:0;font-size:var(--fs-xl);">Uptime del MCP</h2>
+    <p style="margin:0;color:var(--color-text-muted);font-size:var(--fs-sm);">
+      Monitoreo del endpoint <code>/health</code> del server domain-mcp ·
+      registrado por <code>poll_mcp_health</code>
+    </p>
+  </div>
+
+  {# ── Estado actual ─────────────────────────────────────────────────── #}
+  <div class="uptime-section">
+    <div class="uptime-section__title">Estado actual</div>
+    {% if current %}
+      <div style="display:flex;align-items:center;gap:var(--space-md);flex-wrap:wrap;">
+        {% if current.status == "up" %}
+          <span class="status-badge sb-up">● UP</span>
+        {% elif current.status == "degraded" %}
+          <span class="status-badge sb-degraded">● DEGRADED</span>
+        {% else %}
+          <span class="status-badge sb-down">● DOWN</span>
+        {% endif %}
+        <span style="font-size:var(--fs-sm);color:var(--color-text-muted);">
+          último chequeo: {{ current.checked_at|date:"d/m/Y H:i:s" }}
+        </span>
+        {% if current.latency_ms is not None %}
+          <span style="font-size:var(--fs-sm);color:var(--color-text-muted);">
+            latencia: {{ current.latency_ms }} ms
+          </span>
+        {% endif %}
+        {% if current.http_status %}
+          <span style="font-size:var(--fs-sm);color:var(--color-text-muted);">
+            HTTP {{ current.http_status }}
+          </span>
+        {% endif %}
+      </div>
+      {% if current.error %}
+        <p style="margin-top:var(--space-sm);font-family:monospace;font-size:var(--fs-xs);color:var(--color-danger,#e5484d);">{{ current.error }}</p>
+      {% endif %}
+    {% else %}
+      <div class="empty-state">
+        <p>Aún no hay chequeos registrados.</p>
+        <p style="font-size:var(--fs-xs);margin-top:var(--space-xs);">
+          Programá <code>python manage.py poll_mcp_health</code> por cron para empezar a medir.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── KPIs de uptime ────────────────────────────────────────────────── #}
+  <div class="uptime-kpi-grid">
+    <div class="uptime-kpi">
+      <span class="uptime-kpi__val {% if uptime_24h.uptime_pct == None %}{% elif uptime_24h.uptime_pct >= 99 %}ok{% elif uptime_24h.uptime_pct >= 90 %}warn{% else %}bad{% endif %}">
+        {% if uptime_24h.uptime_pct == None %}—{% else %}{{ uptime_24h.uptime_pct }}%{% endif %}
+      </span>
+      <span class="uptime-kpi__label">Uptime 24h</span>
+      <span class="uptime-kpi__sub">{{ uptime_24h.up }}/{{ uptime_24h.total }} chequeos up</span>
+    </div>
+    <div class="uptime-kpi">
+      <span class="uptime-kpi__val {% if uptime_7d.uptime_pct == None %}{% elif uptime_7d.uptime_pct >= 99 %}ok{% elif uptime_7d.uptime_pct >= 90 %}warn{% else %}bad{% endif %}">
+        {% if uptime_7d.uptime_pct == None %}—{% else %}{{ uptime_7d.uptime_pct }}%{% endif %}
+      </span>
+      <span class="uptime-kpi__label">Uptime 7d</span>
+      <span class="uptime-kpi__sub">{{ uptime_7d.up }}/{{ uptime_7d.total }} chequeos up</span>
+    </div>
+    <div class="uptime-kpi">
+      <span class="uptime-kpi__val">{{ uptime_24h.avg_latency_ms|floatformat:"0" }} ms</span>
+      <span class="uptime-kpi__label">Latencia prom. 24h</span>
+      <span class="uptime-kpi__sub">solo chequeos up</span>
+    </div>
+    <div class="uptime-kpi">
+      <span class="uptime-kpi__val {% if uptime_7d.down or uptime_7d.degraded %}warn{% endif %}">{{ uptime_7d.down }} / {{ uptime_7d.degraded }}</span>
+      <span class="uptime-kpi__label">Down / Degraded 7d</span>
+      <span class="uptime-kpi__sub">sobre {{ uptime_7d.total }} chequeos</span>
+    </div>
+  </div>
+
+  {# ── Historial de caídas ───────────────────────────────────────────── #}
+  <div class="uptime-section">
+    <div class="uptime-section__title">Historial de caídas (últimos 7 días)</div>
+    {% if outages %}
+    <div class="table-wrapper">
+      <table class="uptime-table">
+        <thead>
+          <tr>
+            <th style="width:160px;">Fecha</th>
+            <th>Estado</th>
+            <th class="num">HTTP</th>
+            <th class="num">Latencia</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in outages %}
+          <tr>
+            <td style="white-space:nowrap;font-size:var(--fs-xs);">{{ row.checked_at|date:"d/m/Y H:i:s" }}</td>
+            <td>
+              {% if row.status == "degraded" %}
+                <span class="status-badge sb-degraded">degraded</span>
+              {% else %}
+                <span class="status-badge sb-down">down</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ row.http_status|default:"—" }}</td>
+            <td class="num">{% if row.latency_ms is not None %}{{ row.latency_ms }} ms{% else %}—{% endif %}</td>
+            <td class="err" title="{{ row.error|default:"" }}">{{ row.error|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state">
+        <p>Sin caídas registradas en los últimos 7 días. 🎉</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>{# /.card #}
+{% endblock %}

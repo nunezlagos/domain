@@ -1,0 +1,109 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de agente para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
+Incluye dos tablas READ-ONLY: historial de versiones (agent_versions) y catalogo
+de templates de agente (agent_templates).
+{% endcomment %}
+
+{% block detail_title %}{{ agent_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+  <p class="text-secondary mb-3">
+    <code>{{ agent_obj.slug }}</code>
+    · Proveedor: <span class="badge">{{ agent_obj.provider }}</span>
+    · Modelo: <code>{{ agent_obj.model }}</code>
+  </p>
+
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ agent_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ agent_obj.slug }}</code></td></tr>
+      <tr><th>Proveedor</th><td>{{ agent_obj.provider }}</td></tr>
+      <tr><th>Modelo</th><td><code>{{ agent_obj.model }}</code></td></tr>
+      <tr><th>Descripcion</th><td>{{ agent_obj.description|default:"—" }}</td></tr>
+      <tr><th>Max. iteraciones</th><td>{{ agent_obj.max_iterations }}</td></tr>
+      <tr><th>Presupuesto de tokens</th><td>{{ agent_obj.token_budget|default:"Sin limite" }}</td></tr>
+      <tr><th>Temperatura</th><td>{{ agent_obj.temperature|default:"—" }}</td></tr>
+      <tr><th>Skills</th>
+        <td>
+          {% if agent_obj.skills_slugs %}
+            {% for s in agent_obj.skills_slugs %}<code>{{ s }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      <tr><th>Gestionado por seed</th><td>{{ agent_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ agent_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
+      <tr><th>Estado</th><td>{{ agent_obj.get_status_display }}</td></tr>
+      <tr><th>Creado</th><td>{{ agent_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ agent_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if agent_obj.system_prompt %}
+    <h4 class="mnt-detail-section">System prompt</h4>
+    <pre class="mnt-pre">{{ agent_obj.system_prompt }}</pre>
+  {% endif %}
+
+  <!-- Historial de versiones (READ-ONLY: agent_versions). Sin acciones. -->
+  <h4 class="mnt-detail-section">Historial de versiones</h4>
+  {% if agent_versions %}
+    <table class="table mnt-table-sm">
+      <thead>
+        <tr><th class="mnt-col-narrow">Version</th><th>Modificado por</th><th>Fecha</th></tr>
+      </thead>
+      <tbody>
+        {% for v in agent_versions %}
+          <tr>
+            <td><span class="badge badge-primary">v{{ v.version }}</span></td>
+            <td>{% if v.changed_by %}<code>{{ v.changed_by }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-secondary mt-2 mnt-text-sm">
+      {{ agent_versions|length }} version(es). Solo lectura: el historial lo genera domain-mcp en cada cambio.
+    </p>
+  {% else %}
+    <p class="text-muted">Este agente no tiene versiones registradas.</p>
+  {% endif %}
+
+  <!-- Templates de agente disponibles (READ-ONLY: agent_templates). Sin acciones. -->
+  <h4 class="mnt-detail-section">Templates de agente disponibles</h4>
+  {% if agent_templates %}
+    <table class="table mnt-table-sm">
+      <thead>
+        <tr><th>Nombre</th><th>Slug</th><th>Rol</th><th>Handoff</th></tr>
+      </thead>
+      <tbody>
+        {% for t in agent_templates %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td><code>{{ t.slug }}</code></td>
+            <td><span class="badge">{{ t.get_role_display }}</span></td>
+            <td>{{ t.get_handoff_policy_display }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-secondary mt-2 mnt-text-sm">
+      {{ agent_templates|length }} template(s). Solo lectura.
+    </p>
+  {% else %}
+    <p class="text-muted">No hay templates de agente disponibles.</p>
+  {% endif %}
+{% endblock %}
+
+{% block detail_actions %}
+  <button type="button" class="btn btn-primary"
+          data-action="edit" data-id="{{ agent_obj.pk }}">
+    Editar
+  </button>
+  <button type="button" class="btn btn-danger"
+          data-action="delete" data-id="{{ agent_obj.pk }}"
+          data-name="{{ agent_obj.display_name }}">
+    Eliminar
+  </button>
+{% endblock %}

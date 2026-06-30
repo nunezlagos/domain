@@ -35,7 +35,7 @@ func ResolveTemplate(s string, inputs, outputs map[string]any) string {
 		path := strings.TrimSpace(s[i+start+2 : i+start+end])
 		resolved := resolvePath(path, inputs, outputs)
 		if resolved == "" {
-			// Keep original placeholder if can't resolve
+
 			buf.WriteString(s[i+start : i+start+end+2])
 		} else {
 			buf.WriteString(resolved)
@@ -63,7 +63,7 @@ func resolvePath(path string, inputs, outputs map[string]any) string {
 		if len(parts) < 2 {
 			return ""
 		}
-		// steps.step_id.field or steps.step_id
+
 		subParts := strings.SplitN(parts[1], ".", 2)
 		if len(subParts) == 0 {
 			return ""
@@ -82,7 +82,7 @@ func resolvePath(path string, inputs, outputs map[string]any) string {
 		}
 		return resolveNested(subParts[1], stepMap)
 	default:
-		// Fallback: buscar directamente en inputs y outputs
+
 		if v, ok := inputs[path]; ok {
 			return fmt.Sprint(v)
 		}
@@ -97,7 +97,7 @@ func resolvePath(path string, inputs, outputs map[string]any) string {
 func resolvePlaceholder(path string, inputs, outputs map[string]any) string {
 	v := resolvePath(path, inputs, outputs)
 	if v == "" {
-		// Check if path actually exists but is empty string
+
 		parts := strings.SplitN(path, ".", 2)
 		if len(parts) == 0 {
 			return ""
@@ -140,7 +140,7 @@ func ResolveBarePaths(s string, inputs, outputs map[string]any) string {
 	var buf strings.Builder
 	i := 0
 	for i < len(s) {
-		// Look for "step." or "steps." or "input." or "inputs."
+
 		bestIdx := len(s)
 		bestPrefix := ""
 		for _, prefix := range []string{"steps.", "step.", "inputs.", "input."} {
@@ -156,7 +156,7 @@ func ResolveBarePaths(s string, inputs, outputs map[string]any) string {
 		}
 		buf.WriteString(s[i:bestIdx])
 
-		// Extract the full path until we hit a non-path character
+
 		pathStart := bestIdx
 		pathStr := bestPrefix
 		j := bestIdx + len(bestPrefix)
@@ -164,14 +164,14 @@ func ResolveBarePaths(s string, inputs, outputs map[string]any) string {
 			pathStr += string(s[j])
 			j++
 		}
-		// Trim trailing dot if present (e.g. "steps.s1." → bad)
+
 		pathStr = strings.TrimRight(pathStr, ".")
 
 		resolved := resolvePath(pathStr, inputs, outputs)
 		if resolved != "" {
 			buf.WriteString(resolved)
 		} else {
-			// Keep original text if can't resolve
+
 			buf.WriteString(s[pathStart:j])
 		}
 		i = j

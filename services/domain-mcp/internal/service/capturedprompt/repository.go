@@ -20,7 +20,7 @@ type Prompt struct {
 	ID             uuid.UUID `json:"id"`
 	OrganizationID uuid.UUID `json:"organization_id"`
 	UserID         uuid.UUID `json:"user_id"`
-	// REQ-42.3: SessionID removido (columna session_id dropeada de captured_prompts).
+
 	ProjectID          *uuid.UUID `json:"project_id,omitempty"`
 	Content            string     `json:"content"`
 	ClientKind         string     `json:"client_kind,omitempty"`

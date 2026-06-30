@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}Componentes - Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Componentes" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <h1>Sistema de diseño</h1>
+    <p class="subtitle">Catalogo de componentes disponibles en el panel</p>
+  </div>
+</div>
+
+<!-- Botones -->
+<section class="card mb-4">
+  <h3>Botones</h3>
+  <p class="text-secondary mt-2 mb-3">Variantes y tamaños.</p>
+
+  <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap;">
+    <button class="btn btn-primary">Primario</button>
+    <button class="btn btn-secondary">Secundario</button>
+    <button class="btn btn-success">Exito</button>
+    <button class="btn btn-warning">Advertencia</button>
+    <button class="btn btn-danger">Peligro</button>
+    <button class="btn btn-info">Info</button>
+    <button class="btn btn-ghost">Fantasma</button>
+  </div>
+
+  <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap; align-items: center;">
+    <button class="btn btn-primary btn-sm">Pequeño</button>
+    <button class="btn btn-primary">Normal</button>
+    <button class="btn btn-primary btn-lg">Grande</button>
+    <button class="btn btn-primary" disabled>Deshabilitado</button>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" data-modal-open="modal-demo">Abrir modal</button>
+    <button class="btn btn-ghost" data-modal-open="modal-confirm">Confirmar accion</button>
+  </div>
+</section>
+
+<!-- Alertas -->
+<section class="card mb-4">
+  <h3>Alertas</h3>
+  <p class="text-secondary mt-2 mb-3">Mensajes contextuales con tipos semanticos.</p>
+
+  <div class="alert alert-success" data-auto-dismiss>
+    <span class="alert-icon">✓</span>
+    <div class="alert-content">
+      <div class="alert-title">Operacion exitosa</div>
+      <div class="alert-message">El usuario fue creado correctamente.</div>
+    </div>
+    <button class="alert-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+
+  <div class="alert alert-warning" data-auto-dismiss>
+    <span class="alert-icon">⚠</span>
+    <div class="alert-content">
+      <div class="alert-title">Atencion</div>
+      <div class="alert-message">El presupuesto del mes esta al 80%. Considera revisar el uso.</div>
+    </div>
+    <button class="alert-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+
+  <div class="alert alert-danger">
+    <span class="alert-icon">✕</span>
+    <div class="alert-content">
+      <div class="alert-title">Error critico</div>
+      <div class="alert-message">No se pudo conectar a la base de datos. Reintentando en 30s...</div>
+    </div>
+    <button class="alert-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">ⓘ</span>
+    <div class="alert-content">
+      <div class="alert-title">Informacion</div>
+      <div class="alert-message">Nueva version del backend disponible. <a href="#">Ver release notes</a></div>
+    </div>
+    <button class="alert-close" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+</section>
+
+<!-- Insignias -->
+<section class="card mb-4">
+  <h3>Insignias</h3>
+  <p class="text-secondary mt-2 mb-3">Etiquetas compactas para estado.</p>
+  <div class="d-flex gap-2" style="flex-wrap: wrap;">
+    <span class="badge">predeterminado</span>
+    <span class="badge badge-primary">primario</span>
+    <span class="badge badge-success">exito</span>
+    <span class="badge badge-warning">advertencia</span>
+    <span class="badge badge-danger">peligro</span>
+  </div>
+</section>
+
+<!-- Formularios -->
+<section class="card mb-4">
+  <h3>Formularios</h3>
+  <p class="text-secondary mt-2 mb-3">Inputs, selects, textareas, checks.</p>
+
+  <div style="max-width: 480px;">
+    <div class="form-group">
+      <label class="form-label" for="demo-input">Email</label>
+      <input type="email" id="demo-input" class="form-control" placeholder="usuario@ejemplo.com" value="admin@admin.com">
+      <div class="form-help">Nunca compartas tu email principal.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="demo-select">Rol</label>
+      <select id="demo-select" class="form-control form-select">
+        <option>Propietario</option>
+        <option>Administrador</option>
+        <option>Desarrollador</option>
+        <option selected>Visualizador</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="demo-textarea">Descripcion</label>
+      <textarea id="demo-textarea" class="form-control" placeholder="Detalles..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-check">
+        <input type="checkbox" id="demo-check" checked>
+        <span>Recibir notificaciones por email</span>
+      </label>
+      <label class="form-check">
+        <input type="radio" name="radio-demo" id="demo-radio-1" checked>
+        <span>Opcion A</span>
+      </label>
+      <label class="form-check">
+        <input type="radio" name="radio-demo" id="demo-radio-2">
+        <span>Opcion B</span>
+      </label>
+    </div>
+
+    <button class="btn btn-primary">Guardar</button>
+    <button class="btn btn-ghost">Cancelar</button>
+  </div>
+</section>
+
+<!-- Tabla -->
+<section class="card mb-4">
+  <h3>Tablas</h3>
+  <p class="text-secondary mt-2 mb-3">Ejemplo de tabla con datos de muestra.</p>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Uso (mes)</th>
+          <th>Ultimo acceso</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>propietario@acme.com</code></td>
+          <td><span class="badge badge-primary">Propietario</span></td>
+          <td><span class="badge badge-success">activo</span></td>
+          <td>4.231 prompts</td>
+          <td>hace 2h</td>
+          <td><button class="btn btn-ghost btn-sm">Editar</button></td>
+        </tr>
+        <tr>
+          <td><code>dev1@acme.com</code></td>
+          <td><span class="badge">Desarrollador</span></td>
+          <td><span class="badge badge-success">activo</span></td>
+          <td>1.890 prompts</td>
+          <td>hace 1d</td>
+          <td><button class="btn btn-ghost btn-sm">Editar</button></td>
+        </tr>
+        <tr>
+          <td><code>viewer@externo.com</code></td>
+          <td><span class="badge">Visualizador</span></td>
+          <td><span class="badge badge-warning">pendiente</span></td>
+          <td>0 prompts</td>
+          <td>nunca</td>
+          <td><button class="btn btn-ghost btn-sm">Editar</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Tarjetas de estadisticas -->
+<section class="mb-4">
+  <h3 class="mb-3">Tarjetas de estadisticas</h3>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="number">42</div>
+      <div class="label">Usuarios activos</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">$1.284</div>
+      <div class="label">Costo (mes)</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">99,9%</div>
+      <div class="label">Disponibilidad</div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block modals %}
+<!-- Modal: demo -->
+<div class="modal-backdrop" id="modal-demo">
+  <div class="modal" role="dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Crear nuevo miembro</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-control" placeholder="usuario@acme.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rol</label>
+        <select class="form-control form-select">
+          <option>Visualizador</option>
+          <option>Desarrollador</option>
+          <option>Administrador</option>
+          <option>Propietario</option>
+        </select>
+      </div>
+      <p class="form-help">El usuario recibira un email de invitacion con un enlace de aceptacion.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" data-modal-close>Crear</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmar -->
+<div class="modal-backdrop" id="modal-confirm">
+  <div class="modal" role="dialog" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Confirmar?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Esta accion no se puede deshacer. ¿Estas seguro?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <button class="btn btn-danger" data-modal-close>Si, eliminar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

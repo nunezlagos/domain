@@ -124,7 +124,7 @@ func TestFlow_OnErrorContinue(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Skill que va a fallar (var missing)
+
 	_, _ = f.skills.Create(ctx, skillsvc.CreateInput{
 		OrganizationID: f.orgID, Slug: "fail-skill", Name: "Fail",
 		SkillType: skillsvc.TypePrompt, Content: "Hola {{missing}}",
@@ -181,7 +181,7 @@ func TestFlow_OnErrorFailAborts(t *testing.T) {
 			Version: 1, Steps: []flow.Step{
 				{ID: "x", Type: flow.StepTypeSkillRun,
 					Config: map[string]any{"skill_slug": "fail", "args": map[string]any{}},
-					// OnError default = fail
+
 				},
 			},
 		},
@@ -263,18 +263,18 @@ func TestFlow_InactiveFails(t *testing.T) {
 }
 
 func TestFlowSpec_Validate(t *testing.T) {
-	// version 0 inválido
+
 	s := flow.Spec{Version: 0, Steps: []flow.Step{{ID: "x", Type: "agent_run"}}}
 	require.Error(t, s.Validate())
-	// duplicate ids
+
 	s = flow.Spec{Version: 1, Steps: []flow.Step{
 		{ID: "x", Type: "agent_run"}, {ID: "x", Type: "skill_run"},
 	}}
 	require.Error(t, s.Validate())
-	// unknown type
+
 	s = flow.Spec{Version: 1, Steps: []flow.Step{{ID: "x", Type: "unknown"}}}
 	require.Error(t, s.Validate())
-	// happy
+
 	s = flow.Spec{Version: 1, Steps: []flow.Step{{ID: "x", Type: "agent_run"}}}
 	require.NoError(t, s.Validate())
 }

@@ -117,7 +117,7 @@ func TestRunner_BasicCompletion(t *testing.T) {
 	require.Equal(t, 15, res.TokensInput+res.TokensOutput)
 	require.Equal(t, 1, res.Iterations)
 
-	// Verificar persistencia en agent_runs
+
 	var status string
 	var iters int
 	require.NoError(t, f.runner.Pool.QueryRow(ctx,
@@ -128,8 +128,8 @@ func TestRunner_BasicCompletion(t *testing.T) {
 }
 
 func TestRunner_ToolCallLoop(t *testing.T) {
-	// Response 1: el agente pide ejecutar el skill "search"
-	// Response 2 (después del tool result): el agente termina con respuesta final
+
+
 	f, cleanup := setup(t, []*llm.Response{
 		{Content: "voy a buscar", FinishReason: "tool_use",
 			ToolCalls: []llm.ToolCall{
@@ -142,7 +142,7 @@ func TestRunner_ToolCallLoop(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear skill "search-greet" tipo prompt
+
 	_, err := f.skills.Create(ctx, skill.CreateInput{
 		OrganizationID: f.orgID, Slug: "search-greet", Name: "Saludador",
 		Description: "saluda al nombre dado",
@@ -198,7 +198,7 @@ func TestRunner_FailsIfProviderNotRegistered(t *testing.T) {
 }
 
 func TestRunner_MaxIterationsBreak(t *testing.T) {
-	// Cada respuesta pide tool_use, nunca termina con stop → debe alcanzar max
+
 	infiniteTool := &llm.Response{
 		Content:      "más",
 		FinishReason: "tool_use",

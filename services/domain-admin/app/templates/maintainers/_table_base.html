@@ -1,0 +1,53 @@
+{% comment %}
+============================================================
+Tabla base de mantenedor. Estructura compartida (wrapper +
+thead/tbody + paginacion). Cada app la EXTIENDE y define
+solo sus columnas y filas:
+
+  {% extends "maintainers/_table_base.html" %}
+  {% block columns %}
+    <th>Email</th><th>Nombre</th> ... <th>Acciones</th>
+  {% endblock %}
+  {% block row %}
+    <td>...</td> ...
+  {% endblock %}
+  {% block empty %}No hay registros.{% endblock %}   (opcional)
+
+La view itera la lista bajo la variable `object_list` por
+defecto; cada app puede sobreescribir {% block rows %} entero
+si necesita otra variable (ej. `users`, `projects`).
+
+Bloques:
+  columns   — celdas <th> del encabezado
+  rows      — cuerpo completo del <tbody> (default: itera object_list)
+  row       — celdas <td> de UNA fila (usado por el loop default)
+  colspan   — nº de columnas para la fila vacia (default: 1)
+  empty     — texto cuando no hay registros
+============================================================
+{% endcomment %}
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        {% block columns %}{% endblock %}
+      </tr>
+    </thead>
+    <tbody>
+      {% block rows %}
+        {% for object in object_list %}
+          <tr>
+            {% block row %}{% endblock %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% block colspan %}1{% endblock %}" class="mnt-empty-cell">
+              {% block empty %}No hay registros{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
+            </td>
+          </tr>
+        {% endfor %}
+      {% endblock %}
+    </tbody>
+  </table>
+</div>
+
+{% include "maintainers/_pagination.html" %}

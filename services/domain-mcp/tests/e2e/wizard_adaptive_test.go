@@ -45,8 +45,8 @@ func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, func
 		Sources: []wp.Source{
 			&sources.IssueDedupSource{Pool: pools.App, Limit: 5},
 			&sources.CodebaseSource{ProjectRoot: ".", MaxHits: 10},
-			// MemorySource + AgentHistorySource requieren más setup; los omitimos
-			// en este test base. Cubiertos en sus propios tests unit.
+
+
 		},
 	}
 
@@ -68,19 +68,19 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Prompt típico de bug — el analyzer infiere bastante.
+
 	prompt := "URGENTE: producción caída, el endpoint /api/v1/observations falla con 500 al hacer POST"
 
-	d, q, err := svc.StartAdaptive(ctx, prompt, nil)
+	d, q, err := svc.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, d)
 	require.Equal(t, issuebuilder.ModeBugFix, d.Mode)
 
-	// Como es hotfix, el classifier infiere severity=critical implícitamente,
-	// pero el wizard pregunta de todos modos hasta que conf >= threshold.
+
+
 	require.NotNil(t, q, "debe haber al menos 1 pregunta inicial")
 
-	// Cuenta preguntas hasta llegar al "no more questions".
+
 	questions := []*wp.Question{q}
 	answers := map[string]any{
 		wp.SlotSeverity:  "critical",
@@ -108,9 +108,9 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 
 	require.Equal(t, issuebuilder.StatusFinished, d.Status)
 
-	// El adaptive NO debe preguntar 8 cosas. Solo lo pendiente.
-	// El intent ya está inferido (no se pregunta). req_parent puede venir
-	// de hu_dedup. Esperamos ≤7 preguntas (vs 8 fijas del v1).
+
+
+
 	t.Logf("preguntas realizadas en flow adaptive: %d", len(questions))
 	require.LessOrEqual(t, len(questions), 7,
 		"el wizard adaptive debe preguntar MENOS que los 8 fijos del v1")
@@ -121,7 +121,7 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Sembrar HU existente con título en español que el FTS spanish detecte.
+
 	var reqID, issueID uuid.UUID
 	err := pools.App.QueryRow(ctx,
 		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
@@ -137,15 +137,15 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 	require.NoError(t, err)
 
 	prompt := "Bug: al crear una observación nueva el endpoint falla con error 500"
-	d, _, err := svc.StartAdaptive(ctx, prompt, nil)
+	d, _, err := svc.StartAdaptive(ctx, prompt, nil, nil)
 	require.NoError(t, err)
 
 	env, err := svc.LoadEnvelope(ctx, d.ID)
 	require.NoError(t, err)
 	require.NotNil(t, env.HUMatches, "hu_dedup debió correr (puede no haber matches por FTS stemming)")
 
-	// Si hubo match (FTS stemming acepta términos), verifica que el req_parent
-	// haya sido inferido. Si no hubo match, el test pasa pero loggeamos info.
+
+
 	if len(env.HUMatches.Candidates) > 0 {
 		t.Logf("hu_dedup matches: %d", len(env.HUMatches.Candidates))
 		slot, ok := env.Slots[wp.SlotREQParent]
@@ -163,7 +163,7 @@ func TestE2E_WizardAdaptive_ChatIntentSkipsWizard(t *testing.T) {
 	defer cleanup()
 
 	_, _, err := svc.StartAdaptive(context.Background(),
-		"¿Cómo se configuran las migrations?", nil)
+		"¿Cómo se configuran las migrations?", nil, nil)
 	require.Error(t, err, "intent=chat NO debe arrancar wizard")
 	require.Contains(t, err.Error(), "no requiere wizard")
 }

@@ -78,16 +78,20 @@ type EventEmitter interface {
 }
 
 type Service struct {
-	// Pool — DEPRECATED (HU-28.1): se mantiene para Strangler Fig de callers
-	// que aún construyen &Service{Pool: ...}. Nuevo código debe usar
-	// NewService(pool, audit, embedder, events, repo).
+
+
+
 	Pool     *pgxpool.Pool
 	Audit    audit.Recorder
 	Embedder llm.Embedder
 	Events   EventEmitter // nil = sin webhooks
 
-	// repo encapsula el acceso a la DB. Si nil, repository() construye uno
-	// on-demand desde Pool (legacy path).
+	// LLM es el Factory de providers para el paso opcional de RERANK
+	// (SearchHybridReranked). Opcional: si es nil, el rerank degrada al orden
+	// BM25/RRF original sin error. Se inyecta post-construcción porque el
+	// Factory se arma después del Service en el wiring (ver cmd/*).
+	LLM *llm.Factory
+
 	repo Repository
 }
 
@@ -133,7 +137,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 		in.Metadata = map[string]any{}
 	}
 
-	// issue-03.6 privacy: stripping de bloques <private>...</private>
+
 	cleanContent, redactedCount := privacy.Strip(in.Content)
 	if redactedCount > 0 {
 		in.Metadata["privacy_redacted_blocks"] = redactedCount
@@ -144,7 +148,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 
 	metaJSON, _ := json.Marshal(in.Metadata)
 
-	// issue-03.6 dedup: hash normalizado del fingerprint
+
 	hash := dedup.Hash(dedup.FingerprintInput{
 		ProjectID:       in.ProjectID,
 		ObservationType: in.ObservationType,
@@ -152,7 +156,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 		Content:         cleanContent,
 	})
 
-	// Generar embedding sobre contenido limpio
+
 	vec, err := s.Embedder.Embed(ctx, cleanContent)
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
@@ -194,7 +198,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 			NewValues:      map[string]any{"redacted": redactedCount},
 		})
 	}
-	// issue-10.4 ow-002: webhook outbound (solo metadata, nunca el content)
+
 	if s.Events != nil {
 		s.Events.EmitEntityEvent(ctx, in.OrganizationID, "observation.created", map[string]any{
 			"observation_id": o.ID,

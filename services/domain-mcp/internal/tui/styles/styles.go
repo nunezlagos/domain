@@ -1,6 +1,6 @@
-// Package styles — lipgloss styles compartidos por el TUI de domain
-// (HU-01.11). Paleta alineada con ptools (personal-tools). Mantener
-// este archivo chico: solo constantes y estilos globales.
+
+
+
 
 package styles
 

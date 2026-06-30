@@ -22,10 +22,10 @@ func TestStdioClient_HandshakeAndListTools(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip stdio integration in short mode")
 	}
-	// Mock server: lee líneas y responde con JSON-RPC válido para initialize
-	// y tools/list. Usa cat-like loop con jq-replace primitivo en bash.
-	// Para simplicidad y portabilidad, hacemos un mock con `python3 -c` o similar.
-	// Si no disponible, skip.
+
+
+
+
 	t.Skip("requires external mock server; covered by integration suite")
 }
 
@@ -60,8 +60,8 @@ func TestTool_DecodeJSON(t *testing.T) {
 
 // TestClient_CloseTwice idempotente.
 func TestClient_CloseTwice(t *testing.T) {
-	// No podemos crear un cliente real sin proceso, pero verificamos que el
-	// flag closed.Load() previene doble-close. Construimos manualmente:
+
+
 	c := &StdioClient{}
 	c.closed.Store(true)
 	if err := c.Close(); err != nil {
@@ -84,6 +84,6 @@ func TestCall_AfterClose(t *testing.T) {
 
 // TestCall_RespectsTimeout verifica que un call con context cancelado retorna.
 func TestCall_RespectsTimeout(t *testing.T) {
-	// Skip — call requiere stdin pipe real. Cubierto por integration.
+
 	_ = time.Millisecond
 }

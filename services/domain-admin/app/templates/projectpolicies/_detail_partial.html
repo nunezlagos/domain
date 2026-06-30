@@ -1,0 +1,52 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}Detalle de regla de proyecto para el modal dinamico.{% endcomment %}
+
+{% block detail_title %}{{ policy_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+  <p class="text-secondary mb-3">
+    <code>{{ policy_obj.slug }}</code> · {{ policy_obj.get_kind_display }}
+    · Estado:
+    {% if policy_obj.proposed %}<span class="badge badge-warning">Propuesta (pendiente de aprobación)</span>
+    {% elif policy_obj.is_enabled %}<span class="badge badge-success">Activa</span>
+    {% else %}<span class="badge badge-warning">Inactiva</span>{% endif %}
+  </p>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Informacion</h4>
+  <table class="table" style="font-size: var(--fs-sm);">
+    <tbody>
+      <tr><th style="width: 160px;">Nombre</th><td>{{ policy_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ policy_obj.slug }}</code></td></tr>
+      <tr><th>Tipo</th><td>{{ policy_obj.get_kind_display }}</td></tr>
+      <tr><th>Proyecto</th><td><code>{{ policy_obj.project_id }}</code></td></tr>
+      <tr><th>Override plataforma</th><td>{% if policy_obj.override_platform %}Si (reemplaza){% else %}No (amplia){% endif %}</td></tr>
+      <tr><th>Origen</th><td>{{ policy_obj.get_source_display }}</td></tr>
+      <tr><th>Version</th><td>v{{ policy_obj.version }}</td></tr>
+      <tr><th>Creada</th><td>{{ policy_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizada</th><td>{{ policy_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="font-size: var(--fs-base); margin-top: var(--space-md);">Cuerpo</h4>
+  <pre style="white-space: pre-wrap; background: var(--color-surface-alt); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm);">{{ policy_obj.body_md }}</pre>
+{% endblock %}
+
+{% block detail_actions %}
+  {% if policy_obj.proposed %}
+    <form method="post" action="{% url 'projectpolicies:approve' policy_obj.pk %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Aprobar propuesta</button>
+    </form>
+    <form method="post" action="{% url 'projectpolicies:reject' policy_obj.pk %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-warning">Rechazar</button>
+    </form>
+  {% endif %}
+  <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ policy_obj.pk }}">Editar</button>
+  {% if policy_obj.is_enabled %}
+    <button type="button" class="btn btn-warning" data-action="toggle" data-id="{{ policy_obj.pk }}">Desactivar</button>
+  {% else %}
+    <button type="button" class="btn btn-success" data-action="toggle" data-id="{{ policy_obj.pk }}">Activar</button>
+  {% endif %}
+  <button type="button" class="btn btn-danger" data-action="delete" data-id="{{ policy_obj.pk }}" data-name="{{ policy_obj.display_name }}">Eliminar</button>
+{% endblock %}

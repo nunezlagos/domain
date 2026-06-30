@@ -1,12 +1,12 @@
--- migration: create_mcp_servers
--- author: nunezlagos
--- issue: HU-12.4
--- description: registro de MCP servers externos consumidos por Domain + cache de sus tools
--- breaking: false
--- estimated_duration: <1s
 
--- Servers MCP externos registrados por una org. Domain spawnea/conecta y
--- mantiene sus tools como skills derivados.
+
+
+
+
+
+
+
+
 CREATE TABLE IF NOT EXISTS mcp_servers (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -41,8 +41,8 @@ CREATE TRIGGER set_updated_at_mcp_servers
   BEFORE UPDATE ON mcp_servers
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Cache de tools descubiertos por servidor (resultado de tools/list).
--- Cada tool se materializa como skill ejecutable.
+
+
 CREATE TABLE IF NOT EXISTS mcp_server_tools (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   mcp_server_id   UUID NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,

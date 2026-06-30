@@ -11,7 +11,7 @@ import (
 
 func scriptPath(t *testing.T, name string) string {
 	t.Helper()
-	// Walk up from wd to find repo root
+
 	wd, _ := os.Getwd()
 	for {
 		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {

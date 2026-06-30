@@ -12,11 +12,16 @@ func execLookPath(name string) (string, error) { return exec.LookPath(name) }
 
 // Platform abstrae diferencias OS (paths de configs por cliente).
 type Platform struct {
-	OS string // "linux" | "darwin" | "windows"
+	OS     string // "linux" | "darwin" | "windows"
+	Distro string // linux only: "arch" | "debian" | "ubuntu" | ""
 }
 
 func DetectPlatform() Platform {
-	return Platform{OS: runtime.GOOS}
+	p := Platform{OS: runtime.GOOS}
+	if p.OS == "linux" {
+		p.Distro = detectDistro()
+	}
+	return p
 }
 
 // Home devuelve $HOME (Unix) o %USERPROFILE% (Windows). Falla si no se puede
@@ -25,7 +30,7 @@ func (p Platform) Home() string {
 	if h, err := os.UserHomeDir(); err == nil {
 		return h
 	}
-	// fallback (no debería pasar)
+
 	if h := os.Getenv("HOME"); h != "" {
 		return h
 	}
@@ -63,7 +68,7 @@ type Paths struct {
 	GlobalEnv        string // ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env (Windows)
 	GlobalSkillPath  string // ~/.claude/skills/domain/SKILL.md (todos los OS)
 	GlobalAgentPath  string // ~/.claude/agents/domain-memory.md
-	ClaudeCodeMCP    string // ~/.claude/mcp_servers.json (todos los OS)
+	ClaudeCodeMCP    string // ~/.claude.json (config global real que lee Claude Code; top-level "mcpServers")
 	OpencodeMCP      string // ~/.config/opencode/opencode.json
 	CursorMCP        string // ~/.cursor/mcp.json
 	ClineMCP         string // path largo bajo VS Code data dir
@@ -85,7 +90,7 @@ func (p Platform) Paths() Paths {
 		GlobalEnv:       filepath.Join(configDir, "domain", "install.env"),
 		GlobalSkillPath: filepath.Join(home, ".claude", "skills", "domain", "SKILL.md"),
 		GlobalAgentPath: filepath.Join(home, ".claude", "agents", "domain-memory.md"),
-		ClaudeCodeMCP:   filepath.Join(home, ".claude", "mcp_servers.json"),
+		ClaudeCodeMCP:   filepath.Join(home, ".claude.json"),
 		OpencodeDir:     filepath.Join(configDir, "opencode"),
 		OpencodeMCP:     filepath.Join(configDir, "opencode", "opencode.json"),
 		CursorMCP:       filepath.Join(home, ".cursor", "mcp.json"),
@@ -134,7 +139,10 @@ func (p Platform) IsWSL() bool {
 func (p Platform) DetectedClients() []Client {
 	paths := p.Paths()
 	candidates := []Client{
-		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath))},
+		// claude-code: el config global vive en ~/.claude.json (file), pero el
+		// dir ~/.claude (skills/agents/sessions) es el signal de instalación.
+		// FileHint cubre el caso de un install fresco con .claude.json y sin dir.
+		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath)), FileHint: paths.ClaudeCodeMCP},
 		{Name: "cursor", MCPPath: paths.CursorMCP, RootHint: filepath.Dir(paths.CursorMCP)},
 		{Name: "cline", MCPPath: paths.ClineMCP, RootHint: filepath.Dir(paths.ClineMCP)},
 		{Name: "continue", MCPPath: paths.ContinueMCP, RootHint: filepath.Dir(paths.ContinueMCP)},
@@ -143,14 +151,11 @@ func (p Platform) DetectedClients() []Client {
 	}
 	out := []Client{}
 	for _, c := range candidates {
-		// claude-code se considera presente si ~/.claude existe (puede no haber
-		// mcp_servers.json todavía — el installer lo crea).
-		if dirExists(c.RootHint) {
+		if dirExists(c.RootHint) || (c.FileHint != "" && fileExists(c.FileHint)) {
 			out = append(out, c)
 		}
 	}
-	// opencode también disponible si el binario opencode está en PATH (incluso
-	// sin ~/.config/opencode aún).
+
 	hasOpencode := false
 	for _, c := range out {
 		if c.Name == "opencode" {
@@ -167,7 +172,8 @@ func (p Platform) DetectedClients() []Client {
 type Client struct {
 	Name     string
 	MCPPath  string
-	RootHint string
+	RootHint string // dir cuya existencia indica que el cliente está instalado
+	FileHint string // archivo alternativo que también indica instalación (opcional)
 }
 
 func dirExists(p string) bool {
@@ -178,4 +184,148 @@ func dirExists(p string) bool {
 func commandExists(name string) bool {
 	_, err := execLookPath(name)
 	return err == nil
+}
+
+// detectDistro lee /etc/os-release y devuelve el ID (lowercased).
+// Vacío si no se puede parsear.
+func detectDistro() string {
+	return detectDistroFromFile("/etc/os-release")
+}
+
+// detectDistroFromFile lee un archivo os-release-formatted y devuelve
+// el campo ID. testeable con t.TempDir.
+func detectDistroFromFile(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ID=") {
+			id := strings.TrimPrefix(line, "ID=")
+			id = strings.Trim(id, `"`)
+			return strings.ToLower(id)
+		}
+	}
+	return ""
+}
+
+// FindOpencode localiza el binario opencode. Orden:
+//  1. PATH (exec.LookPath)
+//  2. Paths comunes por OS (npm-global, homebrew, etc.)
+//
+// Retorna path absoluto o error "opencode not found ...".
+func FindOpencode() (string, error) {
+	if p, err := execLookPath("opencode"); err == nil {
+		return p, nil
+	}
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = os.Getenv("HOME")
+	}
+	candidates := candidateOpencodePaths(home)
+	for _, c := range candidates {
+		if fileExists(c) {
+			return c, nil
+		}
+	}
+	return "", &notFoundError{}
+}
+
+// candidateOpencodePaths devuelve paths comunes donde opencode podría
+// estar instalado fuera de PATH. Orden = prioridad.
+func candidateOpencodePaths(home string) []string {
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{
+			"/opt/homebrew/bin/opencode" + suffix,
+			"/usr/local/bin/opencode" + suffix,
+			filepath.Join(home, ".npm-global", "bin", "opencode"+suffix),
+			filepath.Join(home, ".local", "bin", "opencode"+suffix),
+		}
+	case "windows":
+		local := os.Getenv("LOCALAPPDATA")
+		if local == "" && home != "" {
+			local = filepath.Join(home, "AppData", "Local")
+		}
+		return []string{
+			filepath.Join(local, "Programs", "opencode", "opencode"+suffix),
+			filepath.Join(local, "Microsoft", "WindowsApps", "opencode"+suffix),
+			filepath.Join(home, ".npm-global", "bin", "opencode"+suffix),
+		}
+	default:
+		return []string{
+			filepath.Join(home, ".npm-global", "bin", "opencode"+suffix),
+			filepath.Join(home, ".local", "bin", "opencode"+suffix),
+			"/usr/local/bin/opencode" + suffix,
+			"/usr/bin/opencode" + suffix,
+		}
+	}
+}
+
+func fileExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
+}
+
+type notFoundError struct{}
+
+func (e *notFoundError) Error() string {
+	return "opencode not found in PATH ni en paths comunes. " +
+		"Instalá opencode (https://opencode.ai) o usá --install-opencode"
+}
+
+// InstallCmd es un comando de instalación con fallback opcional.
+type InstallCmd struct {
+	Primary  []string // argv nativo del OS (pacman/brew/winget)
+	Fallback []string // argv a usar si Primary falla (npm install -g)
+}
+
+// String devuelve la representación "Primary|Fallback" para logs.
+func (c InstallCmd) String() string {
+	return joinCmd(c.Primary) + "|" + joinCmd(c.Fallback)
+}
+
+func joinCmd(argv []string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	out := argv[0]
+	for _, a := range argv[1:] {
+		out += " " + a
+	}
+	return out
+}
+
+// InstallOpencodeCmd devuelve Primary + Fallback según OS/Distro.
+// Primary solo se setea cuando el package manager nativo es seguro de asumir
+// (pacman en Arch, brew en macOS, winget en Windows). En Linux no-Arch
+// (Debian/Ubuntu/Fedora/etc) salta directo al fallback npm porque no
+// podemos saber si el binario opencode-ai está en los repos oficiales.
+func InstallOpencodeCmd(p Platform) InstallCmd {
+	fallback := []string{"npm", "install", "-g", "opencode-ai@latest"}
+	switch p.OS {
+	case "linux":
+		if p.Distro == "arch" {
+			return InstallCmd{
+				Primary:  []string{"pacman", "-S", "--needed", "--noconfirm", "opencode-ai"},
+				Fallback: fallback,
+			}
+		}
+	case "darwin":
+		return InstallCmd{
+			Primary:  []string{"brew", "install", "opencode-ai"},
+			Fallback: fallback,
+		}
+	case "windows":
+		return InstallCmd{
+			Primary:  []string{"winget", "install", "--id=opencode.opencode", "-e"},
+			Fallback: fallback,
+		}
+	}
+	return InstallCmd{Fallback: fallback}
 }

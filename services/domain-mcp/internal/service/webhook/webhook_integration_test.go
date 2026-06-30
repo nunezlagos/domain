@@ -89,7 +89,7 @@ func TestWebhook_CreateResolve_HMACRoundTrip(t *testing.T) {
 	require.Equal(t, "super-secret-token", string(secret),
 		"secret descifrado debe coincidir con el plaintext original")
 
-	// Firma válida pasa, firma inválida no
+
 	body := []byte(`{"event":"push"}`)
 	mac := hmac.New(sha256.New, secret)
 	mac.Write(body)
@@ -114,9 +114,9 @@ func TestWebhook_Management_NoSecretLeak(t *testing.T) {
 	got, err := f.svc.GetByID(ctx, created.ID)
 	require.NoError(t, err)
 	require.Equal(t, "managed", got.Slug)
-	// El struct Webhook no tiene campo Secret: imposible leakear por GET/List.
 
-	// Disable → receive deja de resolver (anti-enumeration)
+
+
 	require.NoError(t, f.svc.SetEnabled(ctx, created.ID, false))
 	_, _, err = f.svc.ResolveBySlug(ctx, "managed")
 	require.ErrorIs(t, err, webhook.ErrNotFound)
@@ -152,7 +152,7 @@ func TestWebhook_Deliveries_LogAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ds[0].ID, one.ID)
 
-	// last_delivery_at actualizado
+
 	got, err := f.svc.GetByID(ctx, hook.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got.LastDeliveryAt)

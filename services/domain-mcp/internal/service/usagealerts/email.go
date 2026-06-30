@@ -25,7 +25,7 @@ func (s *smtpSender) SendAlertEmail(ctx context.Context, to []string, subject, b
 	if len(to) == 0 {
 		return nil
 	}
-	// SMTP envelope To: es el primero; CC via To múltiple en header.
+
 	first := to[0]
 	cc := ""
 	if len(to) > 1 {

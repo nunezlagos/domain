@@ -30,7 +30,7 @@ func Record(path string, action Action) (Entry, error) {
 		Timestamp:       now,
 	}
 
-	// Find or create current install
+
 	var currentInstall *Install
 	if len(m.Installs) > 0 {
 		last := &m.Installs[len(m.Installs)-1]

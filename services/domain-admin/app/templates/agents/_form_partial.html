@@ -1,0 +1,81 @@
+{% extends "maintainers/_form_base.html" %}
+{% comment %}
+Form de agente para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo,
+los campos y el label del submit.
+{% endcomment %}
+
+{% block form_title %}{% if mode == "create" %}Nuevo agente{% else %}Editar agente{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear agente{% else %}Guardar cambios{% endif %}{% endblock %}
+
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.name.id_for_label }}">Nombre *</label>
+    {{ form.name }}
+    {% if form.name.errors %}<div class="form-help text-danger">{{ form.name.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.slug.id_for_label }}">Slug *</label>
+    {{ form.slug }}
+    {% if form.slug.help_text %}<div class="form-help">{{ form.slug.help_text }}</div>{% endif %}
+    {% if form.slug.errors %}<div class="form-help text-danger">{{ form.slug.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.provider.id_for_label }}">Proveedor *</label>
+      {{ form.provider }}
+      {% if form.provider.help_text %}<div class="form-help">{{ form.provider.help_text }}</div>{% endif %}
+      {% if form.provider.errors %}<div class="form-help text-danger">{{ form.provider.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.model.id_for_label }}">Modelo *</label>
+      {{ form.model }}
+      {% if form.model.help_text %}<div class="form-help">{{ form.model.help_text }}</div>{% endif %}
+      {% if form.model.errors %}<div class="form-help text-danger">{{ form.model.errors|join:", " }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.description.id_for_label }}">Descripcion</label>
+    {{ form.description }}
+    {% if form.description.errors %}<div class="form-help text-danger">{{ form.description.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.system_prompt.id_for_label }}">System prompt</label>
+    {{ form.system_prompt }}
+    {% if form.system_prompt.errors %}<div class="form-help text-danger">{{ form.system_prompt.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.skills_slugs.id_for_label }}">Skills (slugs)</label>
+    {{ form.skills_slugs }}
+    {% if form.skills_slugs.help_text %}<div class="form-help">{{ form.skills_slugs.help_text }}</div>{% endif %}
+    {% if form.skills_slugs.errors %}<div class="form-help text-danger">{{ form.skills_slugs.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.max_iterations.id_for_label }}">Max. iteraciones *</label>
+      {{ form.max_iterations }}
+      {% if form.max_iterations.errors %}<div class="form-help text-danger">{{ form.max_iterations.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.token_budget.id_for_label }}">Presupuesto de tokens</label>
+      {{ form.token_budget }}
+      {% if form.token_budget.help_text %}<div class="form-help">{{ form.token_budget.help_text }}</div>{% endif %}
+      {% if form.token_budget.errors %}<div class="form-help text-danger">{{ form.token_budget.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.temperature.id_for_label }}">Temperatura</label>
+      {{ form.temperature }}
+      {% if form.temperature.help_text %}<div class="form-help">{{ form.temperature.help_text }}</div>{% endif %}
+      {% if form.temperature.errors %}<div class="form-help text-danger">{{ form.temperature.errors|join:", " }}</div>{% endif %}
+    </div>
+  </div>
+{% endblock %}

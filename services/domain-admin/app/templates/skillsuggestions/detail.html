@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ suggestion.kind }} · {{ suggestion.skill_slug }} · Domain Admin{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Skill suggestion" %}
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .ss-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: var(--space-md); margin-bottom: var(--space-lg); }
+    .ss-meta__item { display:flex; flex-direction:column; gap:2px; }
+    .ss-meta__label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing:.04em; color: var(--color-text-muted); font-weight: var(--fw-semibold); }
+    .ss-meta__val { font-size: var(--fs-sm); color: var(--color-text-primary); }
+
+    .ss-pill { display:inline-block; padding:2px 10px; border-radius: var(--radius-full); font-weight: var(--fw-semibold); font-size: var(--fs-xs); border:1px solid; text-transform: uppercase; letter-spacing:.03em; width: fit-content; }
+    .ss-kind.split{color:#6e56cf;border-color:#6e56cf;} .ss-kind.merge{color:#0091ff;border-color:#0091ff;}
+    .ss-kind.refine{color:#f76808;border-color:#f76808;} .ss-kind.archive{color:var(--color-text-muted);border-color:var(--color-border);}
+    .ss-status.pending{color:#f5a623;border-color:#f5a623;} .ss-status.approved{color:var(--color-success);border-color:var(--color-success);}
+    .ss-status.rejected{color:var(--color-danger,#e5484d);border-color:var(--color-danger,#e5484d);} .ss-status.applied{color:#0091ff;border-color:#0091ff;}
+
+    .ss-section { margin-bottom: var(--space-xl); }
+    .ss-section__title { font-size: var(--fs-base); font-weight: var(--fw-semibold); color: var(--color-text-primary); margin-bottom: var(--space-sm); border-bottom: 1px solid var(--color-border-light); padding-bottom: var(--space-xs); }
+
+    .ss-rationale { background: var(--color-bg-elevated); border-left: 3px solid var(--color-border); padding: var(--space-md); border-radius: var(--radius-md); white-space: pre-wrap; font-size: var(--fs-sm); color: var(--color-text-secondary); }
+
+    .ss-diff { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+    @media (max-width: 760px) { .ss-diff { grid-template-columns: 1fr; } }
+    .ss-diff__col h4 { margin:0 0 var(--space-xs); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing:.04em; color: var(--color-text-muted); }
+    .ss-code { background: var(--color-bg-elevated); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-md); font-family: var(--font-mono, monospace); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; max-height: 480px; overflow: auto; }
+    .ss-code.before { border-left: 3px solid var(--color-danger,#e5484d); }
+    .ss-code.after  { border-left: 3px solid var(--color-success); }
+
+    .ss-child { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm); }
+    .ss-child h5 { margin: 0 0 var(--space-xs); font-size: var(--fs-sm); }
+
+    .ss-actions { display:flex; gap: var(--space-sm); flex-wrap: wrap; align-items: flex-start; }
+    .ss-comment { width: 100%; max-width: 560px; min-height: 64px; padding: var(--space-sm); border:1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--fs-sm); background: var(--color-bg-surface); color: var(--color-text-primary); margin-bottom: var(--space-sm); }
+    .btn-reject { background: transparent; color: var(--color-danger,#e5484d); border:1px solid var(--color-danger,#e5484d); }
+    .ss-note { font-size: var(--fs-xs); color: var(--color-text-muted); margin-top: var(--space-xs); }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: var(--space-lg);">
+
+  <div style="margin-bottom:var(--space-md);">
+    <a href="{% url 'skillsuggestions:list' %}" style="font-size:var(--fs-sm);color:var(--color-text-link);">&larr; Volver a la lista</a>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-lg);flex-wrap:wrap;">
+    <h2 style="margin:0;font-size:var(--fs-xl);"><code>{{ suggestion.skill_slug }}</code></h2>
+    <span class="ss-pill ss-kind {{ suggestion.kind }}">{{ suggestion.kind }}</span>
+    <span class="ss-pill ss-status {{ suggestion.status }}">{{ suggestion.get_status_display }}</span>
+  </div>
+
+  {# ── Metadata ───────────────────────────────────────────────────────── #}
+  <div class="ss-meta">
+    <div class="ss-meta__item"><span class="ss-meta__label">Modelo LLM</span><span class="ss-meta__val">{{ suggestion.llm_model|default:"—" }}</span></div>
+    <div class="ss-meta__item"><span class="ss-meta__label">Confianza</span><span class="ss-meta__val">{% if suggestion.confidence_pct is not None %}{{ suggestion.confidence_pct }}%{% else %}—{% endif %}</span></div>
+    <div class="ss-meta__item"><span class="ss-meta__label">Creada</span><span class="ss-meta__val">{{ suggestion.created_at|date:"d/m/Y H:i" }}</span></div>
+    <div class="ss-meta__item"><span class="ss-meta__label">Revisada</span><span class="ss-meta__val">{{ suggestion.reviewed_at|date:"d/m/Y H:i"|default:"—" }}</span></div>
+    {% if suggestion.applied_at %}<div class="ss-meta__item"><span class="ss-meta__label">Aplicada</span><span class="ss-meta__val">{{ suggestion.applied_at|date:"d/m/Y H:i" }}</span></div>{% endif %}
+  </div>
+
+  {# ── Acciones (human-in-the-loop) ───────────────────────────────────── #}
+  <div class="ss-section">
+    <div class="ss-section__title">Revision</div>
+    {% if suggestion.is_pending %}
+      <p class="ss-note">Aprobar NO aplica el cambio: marca la sugerencia como aprobada. El Apply es un segundo paso explicito.</p>
+      <form method="post" action="{% url 'skillsuggestions:approve' suggestion_id=suggestion.id %}">
+        {% csrf_token %}
+        <textarea class="ss-comment" name="comment" placeholder="Comentario del revisor (opcional)"></textarea>
+        <div class="ss-actions">
+          <button type="submit" class="btn btn-primary">Aprobar</button>
+          <button type="submit" class="btn btn-reject" formaction="{% url 'skillsuggestions:reject' suggestion_id=suggestion.id %}">Rechazar</button>
+        </div>
+      </form>
+    {% elif suggestion.can_apply %}
+      <p class="ss-note">Aprobada. Aplicar muta los skills en el domain-mcp (split/merge/refine/archive). Accion irreversible salvo rollback manual.</p>
+      <form method="post" action="{% url 'skillsuggestions:apply' suggestion_id=suggestion.id %}">
+        {% csrf_token %}
+        <div class="ss-actions">
+          <button type="submit" class="btn btn-primary">Aplicar cambio</button>
+        </div>
+      </form>
+    {% elif suggestion.is_applied %}
+      <p class="ss-note">Sugerencia ya aplicada el {{ suggestion.applied_at|date:"d/m/Y H:i" }}.</p>
+    {% elif suggestion.is_rejected %}
+      <p class="ss-note">Sugerencia rechazada.</p>
+    {% else %}
+      <p class="ss-note">Sin acciones disponibles para este estado.</p>
+    {% endif %}
+  </div>
+
+  {# ── Rationale ──────────────────────────────────────────────────────── #}
+  {% if suggestion.rationale %}
+  <div class="ss-section">
+    <div class="ss-section__title">Justificacion del judge</div>
+    <div class="ss-rationale">{{ suggestion.rationale }}</div>
+  </div>
+  {% endif %}
+
+  {# ── Propuesta (diff segun kind) ────────────────────────────────────── #}
+  <div class="ss-section">
+    <div class="ss-section__title">Propuesta &mdash; {{ diff.summary }}</div>
+
+    {% if diff.kind == 'refine' %}
+      <div class="ss-diff">
+        <div class="ss-diff__col"><h4>Contenido actual</h4><div class="ss-code before">{{ diff.before|default:"(no provisto)" }}</div></div>
+        <div class="ss-diff__col"><h4>Contenido propuesto</h4><div class="ss-code after">{{ diff.after|default:"(no provisto)" }}</div></div>
+      </div>
+    {% elif diff.kind == 'split' %}
+      {% if diff.children %}
+        {% for child in diff.children %}
+          <div class="ss-child">
+            <h5><code>{{ child.slug|default:child.name|default:"(hijo)" }}</code></h5>
+            {% if child.description %}<p class="ss-note">{{ child.description }}</p>{% endif %}
+            {% if child.content %}<div class="ss-code after">{{ child.content }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="ss-note">El payload no detalla los hijos; ver el payload crudo abajo.</p>
+      {% endif %}
+    {% elif diff.kind == 'merge' %}
+      <div class="ss-meta__item" style="margin-bottom:var(--space-sm);">
+        <span class="ss-meta__label">Consolidar con</span>
+        <span class="ss-meta__val">
+          {% for t in diff.merge.targets %}<code>{{ t }}</code>{% if not forloop.last %}, {% endif %}{% empty %}(no especificado){% endfor %}
+        </span>
+      </div>
+      {% if diff.merge.merged_content %}<div class="ss-code after">{{ diff.merge.merged_content }}</div>{% endif %}
+    {% elif diff.kind == 'archive' %}
+      <p class="ss-note">Motivo: {{ diff.reason|default:"(no provisto)" }}</p>
+    {% endif %}
+  </div>
+
+  {# ── Payload crudo (fallback / auditoria visual) ────────────────────── #}
+  <div class="ss-section">
+    <div class="ss-section__title">Payload (crudo)</div>
+    <div class="ss-code">{{ diff.raw }}</div>
+  </div>
+
+  {# ── Cambios aplicados ──────────────────────────────────────────────── #}
+  {% if suggestion.applied_changes %}
+  <div class="ss-section">
+    <div class="ss-section__title">Cambios aplicados</div>
+    <div class="ss-code">{{ suggestion.applied_changes }}</div>
+  </div>
+  {% endif %}
+
+</div>{# /.card #}
+{% endblock %}

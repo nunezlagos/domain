@@ -9,8 +9,8 @@
 #   1. ~/.claude/skills/domain/SKILL.md   ← bootstrap on-demand
 #   2. ~/.claude/agents/domain-memory.md   ← subagent read-only
 #
-# Más el config del MCP server por cliente (mcp_servers.json o equivalente)
-# — eso es transport config, indispensable, no es "memoria".
+# Más el config del MCP server por cliente (~/.claude.json, opencode.json,
+# etc.) — eso es transport config, indispensable, no es "memoria".
 #
 # Para opencode, los skill/agent globales se exponen vía symlink (1 sola
 # copia en disco). Cursor/Cline/Continue/Claude Desktop reciben SOLO el
@@ -132,7 +132,8 @@ TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 # ----------------------------------------------------------------------------
 detect_clients() {
   DETECTED=()
-  [[ -d "$CLAUDE_CODE_DIR" ]]    && DETECTED+=("claude-code")
+  # claude-code: dir ~/.claude o el config global ~/.claude.json.
+  { [[ -d "$CLAUDE_CODE_DIR" ]] || [[ -f "$HOME/.claude.json" ]]; } && DETECTED+=("claude-code")
   [[ -d "$CURSOR_DIR" ]]         && DETECTED+=("cursor")
   [[ -d "$CLINE_VSCODE" ]]       && DETECTED+=("cline")
   [[ -d "$CONTINUE_DIR" ]]       && DETECTED+=("continue")
@@ -174,22 +175,32 @@ link_to_global() {
 # ----------------------------------------------------------------------------
 
 config_claude_code() {
-  local target="$CLAUDE_CODE_DIR/mcp_servers.json"
+  # Claude Code lee el config global de MCP desde ~/.claude.json (top-level
+  # "mcpServers"), NO desde ~/.claude/mcp_servers.json. El transporte remoto
+  # http requiere "type": "http".
+  local target="$HOME/.claude.json"
   mkdir -p "$(dirname "$target")"
-  [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
 
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    # Migración: borrar entry legacy "domain" antes de plantar "domain-mcp"
-    # (evita duplicación si el usuario instaló con versión anterior).
+    # Dedup local↔remoto: si ya hay un 'domain' LOCAL (entry con .command, del
+    # instalador del server), no lo pisamos ni agregamos un remoto duplicado.
+    if jq -e '(.mcpServers.domain.command != null)' "$target" >/dev/null 2>&1; then
+      ok "claude-code: ya existe 'domain' local (instalador del server) — no agrego remoto duplicado"
+      return
+    fi
+    cp "$target" "$target.backup-$TIMESTAMP"
+    # Migración: borrar entry legacy "domain" remota antes de plantar "domain-mcp".
     jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
       (.mcpServers // {}) |= del(.["domain"])
-      | .mcpServers["domain-mcp"] = {url: $url, headers: {Authorization: ("Bearer " + $key)}}
+      | .mcpServers["domain-mcp"] = {type: "http", url: $url, headers: {Authorization: ("Bearer " + $key)}}
     ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
+    [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
     cat > "$target" <<JSON
 {
   "mcpServers": {
     "domain-mcp": {
+      "type": "http",
       "url": "$VPS_URL/mcp",
       "headers": {
         "Authorization": "Bearer $API_KEY"
@@ -206,14 +217,20 @@ JSON
 config_opencode() {
   local target="$OPENCODE_DIR/opencode.json"
   mkdir -p "$OPENCODE_DIR"
-  [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
 
   if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
+    # Dedup local↔remoto: 'domain' local (type:local o con .command) → no tocar.
+    if jq -e '(.mcp.domain.type == "local") or (.mcp.domain.command != null)' "$target" >/dev/null 2>&1; then
+      ok "opencode: ya existe 'domain' local (instalador del server) — no agrego remoto duplicado"
+      return
+    fi
+    cp "$target" "$target.backup-$TIMESTAMP"
     jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
       (.mcp // {}) |= del(.["domain"])
       | .mcp["domain-mcp"] = {type: "remote", url: $url, headers: {Authorization: ("Bearer " + $key)}, enabled: true}
     ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
+    [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
     cat > "$target" <<JSON
 {
   "mcp": {
@@ -299,29 +316,12 @@ config_continue() {
 }
 
 config_claude_desktop() {
-  local target="$CLAUDE_DESKTOP_DIR/claude_desktop_config.json"
-  mkdir -p "$CLAUDE_DESKTOP_DIR"
-  [[ -f "$target" ]] && cp "$target" "$target.backup-$TIMESTAMP"
-  if [[ $HAS_JQ -eq 1 && -f "$target" ]]; then
-    jq --arg url "$VPS_URL/mcp" --arg key "$API_KEY" '
-      (.mcpServers // {}) |= del(.["domain"])
-      | .mcpServers["domain-mcp"] = {url: $url, headers: {Authorization: ("Bearer " + $key)}}
-    ' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
-  else
-    cat > "$target" <<JSON
-{
-  "mcpServers": {
-    "domain-mcp": {
-      "url": "$VPS_URL/mcp",
-      "headers": {
-        "Authorization": "Bearer $API_KEY"
-      }
-    }
-  }
-}
-JSON
-  fi
-  ok "claude-desktop: $target"
+  # Claude Desktop NO soporta transporte http remoto en
+  # claude_desktop_config.json (solo stdio/command). Una entry {url, headers}
+  # sería descartada por la app. Para conectar el server remoto haría falta un
+  # puente stdio (npx mcp-remote <url>), que no asumimos instalado. Lo omitimos
+  # con aviso en vez de escribir config inútil.
+  warn "claude-desktop: no soporta MCP remoto http; usá Claude Code/Cursor/OpenCode, o un puente stdio (mcp-remote). Omitido."
 }
 
 # ----------------------------------------------------------------------------
@@ -337,16 +337,16 @@ uninstall_client_cfg() {
   # Estrategia determinista: SIEMPRE eliminar solo la entry domain con jq.
   # Restaurar el backup completo perdería ediciones que el usuario haya hecho
   # entre install y uninstall — eso era peor.
-  # Borramos tanto "domain-mcp" (nombre actual) como "domain" (legacy de
-  # instalaciones previas) para que el unisntall sea idempotente y robusto.
+  # Borramos "domain-mcp" (nombre remoto actual) siempre, y "domain" (legacy)
+  # SOLO si es remota (.command == null). Un 'domain' LOCAL es del instalador
+  # del server: no lo tocamos para no romper una instalación ajena.
   if [[ $HAS_JQ -eq 1 ]]; then
-    # del() de un path inexistente es no-op (no crea la key intermedia),
-    # así que es seguro encadenar las 4 sin chequear shape del JSON.
+    # del() de un path inexistente es no-op (no crea la key intermedia).
     if jq '
       del(.mcpServers["domain-mcp"])
-      | del(.mcpServers["domain"])
       | del(.mcp["domain-mcp"])
-      | del(.mcp["domain"])
+      | (if (.mcpServers.domain.command == null) then del(.mcpServers["domain"]) else . end)
+      | (if (.mcp.domain.command == null and .mcp.domain.type != "local") then del(.mcp["domain"]) else . end)
     ' "$config_path" > "$config_path.tmp" 2>/dev/null; then
       mv "$config_path.tmp" "$config_path"
       ok "$client_name: entries domain/domain-mcp removidas (resto del archivo intacto)"
@@ -371,7 +371,7 @@ uninstall_all() {
   detect_clients
   for client in "${DETECTED[@]}"; do
     case "$client" in
-      claude-code)    uninstall_client_cfg "$CLAUDE_CODE_DIR/mcp_servers.json" "claude-code" ;;
+      claude-code)    uninstall_client_cfg "$HOME/.claude.json" "claude-code" ;;
       opencode)       uninstall_client_cfg "$OPENCODE_DIR/opencode.json" "opencode"
                       rm -f "$OPENCODE_DIR/skills/domain/SKILL.md" 2>/dev/null
                       rm -f "$OPENCODE_DIR/agents/domain-memory.md" 2>/dev/null

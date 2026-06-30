@@ -1,9 +1,9 @@
--- migration: create_flow_step_snapshots
--- author: nunezlagos
--- issue: HU-09.11
--- description: snapshots de I/O por step para replay determinístico
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE flow_run_step_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

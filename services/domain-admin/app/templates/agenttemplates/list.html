@@ -1,0 +1,19 @@
+{% extends "maintainers/list_base.html" %}
+{% comment %}
+Listado de plantillas de agentes. Extiende maintainers/list_base.html: este
+define la estructura comun (header + search debounced + contenedor
+[data-maintainer-table] con data-base-url/-signal-url/-signal) y carga
+maintainer.js. NO hay JS inline.
+{% endcomment %}
+
+{% block page_title %}Plantillas de Agentes{% endblock %}
+{% block header_title %}Plantillas de Agentes{% endblock %}
+{% block page_subtitle %}Plantillas reutilizables de agentes{% endblock %}
+{% block create_label %}+ Nueva plantilla{% endblock %}
+{% block search_placeholder %}Nombre, slug o rol...{% endblock %}
+
+{% block table_area_id %}agenttemplates-table-area{% endblock %}
+{% block base_url %}/plantillas-agentes/{% endblock %}
+{% block signal_url %}{% url 'agenttemplates:signal' %}{% endblock %}
+
+{% block table %}{% include "agenttemplates/_table_partial.html" %}{% endblock %}

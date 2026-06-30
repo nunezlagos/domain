@@ -29,8 +29,8 @@ func Detect(agent, configPath string) ([]DetectedProvider, error) {
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(body, &doc); err != nil {
-		// JSON malformado: warning + lista vacía. No fallamos —
-		// el operador puede arreglar el JSON y reintentar.
+
+
 		return nil, nil
 	}
 
@@ -100,7 +100,7 @@ func IsAlreadyDisabled(agent, configPath, providerName string) (bool, error) {
 	if entry == nil {
 		return false, nil
 	}
-	// Convención: command=false (opencode) o command=[].
+
 	if cmd, ok := entry["command"]; ok {
 		if b, ok := cmd.(bool); ok && !b {
 			return true, nil
@@ -109,7 +109,7 @@ func IsAlreadyDisabled(agent, configPath, providerName string) (bool, error) {
 			return true, nil
 		}
 	}
-	// Convención alternativa: enabled=false.
+
 	if enabled, ok := entry["enabled"].(bool); ok && !enabled {
 		return true, nil
 	}

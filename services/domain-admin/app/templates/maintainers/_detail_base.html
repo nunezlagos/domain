@@ -1,0 +1,40 @@
+{% comment %}
+============================================================
+Envoltorio BASE de detalle para el modal dinamico.
+Provee header + body + footer del modal y deja que cada app
+defina el contenido y las acciones especificas.
+
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta
+modals.js via fetch al endpoint ?partial=1). NO extiende
+base.html: es un fragmento. Cada app lo EXTIENDE:
+
+  {% extends "maintainers/_detail_base.html" %}
+  {% block detail_title %}{{ user_obj.display_name }}{% endblock %}
+  {% block detail_body %}...info...{% endblock %}
+  {% block detail_actions %}
+    <button class="btn btn-primary" data-action="edit" data-id="{{ obj.pk }}">Editar</button>
+    ...
+  {% endblock %}
+
+Bloques:
+  detail_title    titulo del modal (REQUERIDO)
+  detail_body     contenido del cuerpo (REQUERIDO)
+  detail_actions  botones del footer (default: solo Cerrar)
+============================================================
+{% endcomment %}
+<div class="modal-header">
+  <h3 class="modal-title">{% block detail_title %}Detalle{% endblock %}</h3>
+  <button type="button" class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+</div>
+
+<div class="modal-body">
+  {% block detail_body %}{% endblock %}
+</div>
+
+<div class="modal-footer">
+  {% comment %} Cerrar por defecto (btn-ghost). Un detalle que ya provea su propio
+     boton de cierre (p.ej. el de usuario, "Cerrar" rojo) puede anular este bloque
+     dejandolo vacio para no mostrar dos "Cerrar". {% endcomment %}
+  {% block detail_close %}<button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>{% endblock %}
+  {% block detail_actions %}{% endblock %}
+</div>

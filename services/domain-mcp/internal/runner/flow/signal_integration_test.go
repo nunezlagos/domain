@@ -77,7 +77,7 @@ func TestFlow_WaitSignal_DeliveredResumes(t *testing.T) {
 	runID := findRunID(t, f, fl.ID)
 	waitRunStatus(t, f, runID, "paused_awaiting_signal", 5*time.Second)
 
-	// Expectativa registrada (escenario 1)
+
 	pending, err := signals.HasPendingExpectation(ctx, runID, "approval_received")
 	require.NoError(t, err)
 	require.True(t, pending)
@@ -187,7 +187,7 @@ func TestSignal_EarlySignal_DeliveredOnWait(t *testing.T) {
 	ctx := context.Background()
 	signals := &flow.SignalStore{Pool: f.runner.Pool}
 
-	// flow_run sintético directo (no necesita engine para este caso)
+
 	fl, err := f.flows.Create(ctx, flow.CreateInput{
 		OrganizationID: f.orgID, Slug: "early-sig", Name: "Early",
 		Spec: flow.Spec{Version: 1, Steps: []flow.Step{

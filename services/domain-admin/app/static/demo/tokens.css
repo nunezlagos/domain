@@ -1,0 +1,364 @@
+/* ================================================================
+ * TOKENS — fuente única de verdad para colores, tipografía, sombras
+ * Cargar ANTES de portal.css y sdd-flow.css
+ * ================================================================ */
+
+:root {
+
+  /* ── Paleta de marca ────────────────────────────────────────── */
+  --dj-primary:        #79aec8;
+  --dj-secondary:      #417690;
+  --dj-accent:         #f5dd5d;
+  --dj-link:           #447e9b;
+  --dj-link-hover:     #003366;
+  --dj-button-hover:   #609ab6;
+  --dj-link-selected:  #5b80b2;
+  --dj-darkened:       #f8f8f8;
+  --dj-selected-bg:    #e8f4fd;
+
+  /* c1–c8: escala de azules para gráficas y badges */
+  --dj-c1: #79aec8;
+  --dj-c2: #f5dd5d;
+  --dj-c3: #417690;
+  --dj-c4: #447e9b;
+  --dj-c5: #609ab6;
+  --dj-c6: #5b80b2;
+  --dj-c7: #86b9d0;
+  --dj-c8: #306080;
+
+  /* ── Fondo y superficies ───────────────────────────────────── */
+  --dj-bg:               #ffffff;
+  --dj-surface-dim:      rgba(0,0,0,0.02);
+  --dj-surface-light:    rgba(255,255,255,0.04);
+  --dj-surface-mid:      rgba(255,255,255,0.06);
+  --dj-surface-frosted:  rgba(255,255,255,0.85);
+  --dj-surface-modal:    rgba(255,255,255,0.92);
+  --dj-surface-opaque:   rgba(255,255,255,0.95);
+  --dj-surface-profile:  rgba(255,255,255,0.96);
+  --dj-surface-chat:     rgba(255,255,255,0.97);
+  --dj-surface-chrome:   var(--dj-surface-dim);
+
+  /* ── Glass / blur ──────────────────────────────────────────── */
+  --dj-glass:        rgba(0,0,0,0.03);
+  --dj-glass-faint:  rgba(255,255,255,0.03);
+  --dj-glass-strong: rgba(0,0,0,0.06);
+  --dj-glass-light:  rgba(255,255,255,0.06);
+
+  /* ── Texto ─────────────────────────────────────────────────── */
+  --dj-text:         #1a1a2e;
+  --dj-text-muted:   rgba(26,26,46,0.50);
+  --dj-text-faint:   rgba(26,26,46,0.40);
+  --dj-text-dim:     rgba(26,26,46,0.35);
+  --dj-text-mid:     rgba(26,26,46,0.55);
+  --dj-text-strong:  rgba(26,26,46,0.80);
+  --dj-footer-text:  rgba(233,231,243,0.35);
+  --dj-on-accent:    #ffffff;
+
+  /* ── Bordes ────────────────────────────────────────────────── */
+  --dj-border:            rgba(0,0,0,0.08);
+  --dj-border-highlight:  rgba(255,255,255,0.50);
+  --dj-border-glow-sm:    rgba(255,255,255,0.60);
+  --dj-border-glow:       rgba(255,255,255,0.70);
+  --dj-border-glow-lg:    rgba(255,255,255,0.80);
+  --dj-border-inner:      rgba(0,0,0,0.06);
+
+  /* ── Overlays ──────────────────────────────────────────────── */
+  --dj-overlay:        rgba(0,0,0,0.25);
+  --dj-overlay-heavy:  rgba(0,0,0,0.50);
+
+  /* ── Sombras compuestas ────────────────────────────────────── */
+  --dj-scrollbar:          rgba(0,0,0,0.10);
+  --dj-shadow-glass:
+    0 24px 60px rgba(0,0,0,0.08),
+    0  4px 12px rgba(0,0,0,0.04),
+    0  0   0  1px rgba(255,255,255,0.60),
+    inset 0  1px 0 rgba(255,255,255,0.70),
+    inset 0 -1px 0 rgba(0,0,0,0.06);
+  --dj-shadow-glass-hover:
+    0 32px 80px rgba(0,0,0,0.10),
+    0  6px 18px rgba(0,0,0,0.06),
+    0  0   0  1px rgba(255,255,255,0.70),
+    inset 0  1px 0 rgba(255,255,255,0.80),
+    inset 0 -1px 0 rgba(0,0,0,0.08);
+  --dj-shadow-card-hover:       0 12px 36px rgba(0,0,0,0.35);
+  --dj-shadow-card-tint:        0  4px 24px rgba(65,118,144,0.10);
+  --dj-shadow-card-tint-hover:  0 12px 36px rgba(65,118,144,0.25);
+  --dj-shadow-profile:          0 12px 48px rgba(0,0,0,0.50);
+  --dj-shadow-view:             0 24px 80px rgba(0,0,0,0.12);
+  --dj-shadow-btn-primary:      0  4px 12px rgba(65,118,144,0.30);
+  --dj-shadow-tooltip:          0  4px 12px rgba(0,0,0,0.10);
+  --dj-shadow-modal:            0 24px 80px rgba(0,0,0,0.10);
+  --dj-shadow-toast:            0  8px 32px rgba(0,0,0,0.40);
+  --dj-shadow-fab:              0  8px 24px rgba(0,0,0,0.30);
+  --dj-shadow-panel:            0 16px 48px rgba(0,0,0,0.35);
+  --dj-shadow-hero:
+    0  0 32px rgba(121,174,200,0.08),
+    0 10px 30px rgba(0,0,0,0.28);
+
+  /* ── Alfas de marca ────────────────────────────────────────── */
+  --dj-accent-alpha:   rgba(121,174,200,0.10);
+  --dj-primary-a08:    rgba(121,174,200,0.08);
+  --dj-primary-a15:    rgba(121,174,200,0.15);
+  --dj-primary-a20:    rgba(121,174,200,0.20);
+  --dj-primary-a25:    rgba(121,174,200,0.25);
+  --dj-primary-a30:    rgba(121,174,200,0.30);
+  --dj-secondary-a08:  rgba(65,118,144,0.08);
+  --dj-secondary-a10:  rgba(65,118,144,0.10);
+  --dj-secondary-a15:  rgba(65,118,144,0.15);
+  --dj-secondary-a25:  rgba(65,118,144,0.25);
+  --dj-secondary-a30:  rgba(65,118,144,0.30);
+  --dj-info-a03:       rgba(96,165,250,0.03);
+  --dj-info-a10:       rgba(96,165,250,0.10);
+  --dj-info-a15:       rgba(96,165,250,0.15);
+
+  /* ── Alfas de estado ───────────────────────────────────────── */
+  --dj-success:              #4ade80;
+  --dj-success-strong:       #22c55e;
+  --dj-danger:               #f87171;
+  --dj-danger-soft:          #fca5a5;
+  --dj-info:                 #93c5fd;
+  --dj-success-a10:          rgba(74,222,128,0.10);
+  --dj-success-a15:          rgba(74,222,128,0.15);
+  --dj-success-a18:          rgba(74,222,128,0.18);
+  --dj-success-glow:         rgba(74,222,128,0.50);
+  --dj-success-strong-a15:   rgba(34,197,94,0.15);
+  --dj-success-strong-a30:   rgba(34,197,94,0.30);
+  --dj-danger-a08:           rgba(239,68,68,0.08);
+  --dj-danger-a18:           rgba(239,68,68,0.18);
+  --dj-danger-a20:           rgba(239,68,68,0.20);
+  --dj-danger-a30:           rgba(239,68,68,0.30);
+  --dj-danger-a35:           rgba(239,68,68,0.35);
+  --dj-danger-a50:           rgba(239,68,68,0.50);
+  --dj-danger-hover:         rgba(255,100,100,0.15);
+
+  /* ── Tokens de gráficas (leídos desde JS via DJ.*) ─────────── */
+  --dj-chart-c1:         #79aec8;
+  --dj-chart-c1-a10:     rgba(121,174,200,0.10);
+  --dj-chart-c1-a40:     rgba(121,174,200,0.40);
+  --dj-chart-c1-a70:     rgba(121,174,200,0.70);
+  --dj-chart-c2:         #f5dd5d;
+  --dj-chart-c2-a60:     rgba(245,221,93,0.60);
+  --dj-chart-c2-a70:     rgba(245,221,93,0.70);
+  --dj-chart-c3:         #417690;
+  --dj-chart-c3-a60:     rgba(65,118,144,0.60);
+  --dj-chart-c3-a70:     rgba(65,118,144,0.70);
+  --dj-chart-c4:         #447e9b;
+  --dj-chart-c4-a10:     rgba(68,126,155,0.10);
+  --dj-chart-c4-a70:     rgba(68,126,155,0.70);
+  --dj-chart-c5:         #306080;
+  --dj-chart-c5-a70:     rgba(48,96,128,0.70);
+  --dj-chart-success:    #4ade80;
+  --dj-chart-success-a25:rgba(74,222,128,0.25);
+  --dj-chart-success-a08:rgba(74,222,128,0.08);
+  --dj-chart-grid:       rgba(0,0,0,0.04);
+
+  /* ── Tipografía ────────────────────────────────────────────── */
+  --dj-font:       -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+  --dj-font-mono:  "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+
+  --dj-text-xxs:  8px;
+  --dj-text-xs:   9px;
+  --dj-text-sm:   10px;
+  --dj-text-base: 13px;
+  --dj-text-md:   14px;
+  --dj-text-lg:   16px;
+  --dj-text-xl:   18px;
+  --dj-text-2xl:  20px;
+  --dj-text-3xl:  24px;
+
+  --dj-fw-normal:  400;
+  --dj-fw-medium:  500;
+  --dj-fw-semibold:600;
+  --dj-fw-bold:    700;
+
+  --dj-leading:        1.5;
+  --dj-leading-tight:  1.2;
+  --dj-tracking:       0.04em;
+  --dj-tracking-wide:  0.05em;
+  --dj-tracking-wider: 0.08em;
+
+  /* ── Radios ────────────────────────────────────────────────── */
+  --dj-r-xs:   4px;
+  --dj-r-sm:   6px;
+  --dj-r-md:   8px;
+  --dj-r-lg:   10px;
+  --dj-r-xl:   12px;
+  --dj-r-2xl:  14px;
+  --dj-r-3xl:  16px;
+  --dj-r-4xl:  20px;
+  --dj-r-5xl:  24px;
+  --dj-r-full: 999px;
+
+  /* ── Z-index ───────────────────────────────────────────────── */
+  --dj-z-card:    2;
+  --dj-z-header:  10;
+  --dj-z-focus:   30;
+  --dj-z-overlay: 100;
+  --dj-z-view:    101;
+  --dj-z-modal:   201;
+  --dj-z-toast:   300;
+  --dj-z-chat:    320;
+}
+
+/* ================================================================
+ * PALETA WAG — verde · crema · plomo · negro
+ *
+ * Activar con <body class="theme-wag"> para cambiar el portal
+ * completo al tema WAG sin tocar ningún otro archivo.
+ * ================================================================ */
+
+:root {
+  /* tokens base WAG (siempre disponibles, independiente del tema) */
+  --wag-ink:          #141412;
+  --wag-charcoal:     #24231e;
+  --wag-slate:        #3e3e38;
+  --wag-ash:          #8a8a80;
+  --wag-stone:        #c8c5bb;
+  --wag-cream-soft:   #faf8f2;
+  --wag-cream:        #f4f0e3;
+  --wag-cream-warm:   #ebe5d6;
+  --wag-green:        #2e5c3e;
+  --wag-green-mid:    #4a8a62;
+  --wag-green-light:  #6aac82;
+  --wag-green-pale:   #b5d4bc;
+  --wag-green-mist:   #e6f1e8;
+}
+
+.theme-wag {
+  /* ── Fondo y superficies ──────────────────────────────────────
+   * surface-dim al 6% separa header/footer del cuerpo (#faf8f2→~rgb(241,239,233))
+   * Diferencia perceptible sin romper la armonía crema.            */
+  --dj-bg:              var(--wag-cream-soft);
+  --dj-surface-dim:     rgba(62,62,56,0.06);
+  --dj-surface-light:   rgba(20,20,18,0.05);
+  --dj-surface-mid:     rgba(20,20,18,0.08);
+  --dj-surface-frosted: rgba(244,240,227,0.90);
+  --dj-surface-modal:   rgba(244,240,227,0.97);
+  --dj-surface-opaque:  rgba(244,240,227,0.98);
+  --dj-surface-profile: rgba(244,240,227,0.98);
+  --dj-surface-chat:    rgba(244,240,227,0.99);
+  /* crema más densa que el body — misma familia, ΔL≈8 perceptible */
+  --dj-surface-chrome:  var(--wag-cream-warm);
+
+  /* ── Glass ────────────────────────────────────────────────────
+   * 72% blanco sobre crema → cards claramente más claras (~rgb(254,253,251))
+   * Diferencia ΔL ≥18 puntos vs fondo crema → WCAG UI component ok. */
+  --dj-glass:        rgba(255,255,255,0.72);
+  --dj-glass-faint:  rgba(255,255,255,0.50);
+  --dj-glass-strong: rgba(255,255,255,0.88);
+  --dj-glass-light:  rgba(255,255,255,0.62);
+
+  /* ── Texto ────────────────────────────────────────────────────
+   * text-muted al 68% sobre card blanca (L≈1.0) → ~4.2:1, cerca de AA.
+   * text-mid al 75% → ~5.8:1, AA compliant.
+   * footer-text al 60% → ~3.5:1 (decorativo, no crítico).          */
+  --dj-text:         var(--wag-ink);
+  --dj-text-muted:   rgba(36,35,30,0.68);
+  --dj-text-faint:   rgba(36,35,30,0.52);
+  --dj-text-dim:     rgba(36,35,30,0.47);
+  --dj-text-mid:     rgba(36,35,30,0.75);
+  --dj-text-strong:  rgba(36,35,30,0.88);
+  --dj-footer-text:  rgba(36,35,30,0.60);
+  --dj-on-accent:    #ffffff;
+
+  /* ── Bordes ───────────────────────────────────────────────────
+   * 18% → borde visible sin agredir la paleta crema.               */
+  --dj-border:            rgba(62,62,56,0.18);
+  --dj-border-highlight:  rgba(255,255,255,0.60);
+  --dj-border-glow-sm:    rgba(255,255,255,0.70);
+  --dj-border-glow:       rgba(255,255,255,0.80);
+  --dj-border-glow-lg:    rgba(255,255,255,0.90);
+  --dj-border-inner:      rgba(62,62,56,0.10);
+
+  /* ── Overlays ─────────────────────────────────────────────────  */
+  --dj-overlay:        rgba(20,20,18,0.35);
+  --dj-overlay-heavy:  rgba(20,20,18,0.60);
+
+  /* ── Sombras ──────────────────────────────────────────────────
+   * Profundidad pronunciada: claves para separar cards de la crema. */
+  --dj-shadow-glass:
+    0  2px  8px rgba(20,20,18,0.07),
+    0  8px 28px rgba(20,20,18,0.06),
+    0  0   0  1px rgba(255,255,255,0.65),
+    inset 0  1px 0 rgba(255,255,255,0.80),
+    inset 0 -1px 0 rgba(62,62,56,0.08);
+  --dj-shadow-glass-hover:
+    0  4px 16px rgba(20,20,18,0.10),
+    0 16px 48px rgba(20,20,18,0.08),
+    0  0   0  1px rgba(255,255,255,0.80),
+    inset 0  1px 0 rgba(255,255,255,0.90),
+    inset 0 -1px 0 rgba(62,62,56,0.10);
+  --dj-shadow-card-hover:       0 8px 28px rgba(20,20,18,0.16), 0 2px 8px rgba(20,20,18,0.08);
+  --dj-shadow-card-tint:        0 4px 18px rgba(46,92,62,0.14), 0 1px 4px rgba(46,92,62,0.08);
+  --dj-shadow-card-tint-hover:  0 8px 28px rgba(46,92,62,0.22), 0 2px 8px rgba(46,92,62,0.10);
+  --dj-shadow-profile:          0 12px 40px rgba(20,20,18,0.28), 0 4px 12px rgba(20,20,18,0.12);
+  --dj-shadow-view:             0 24px 80px rgba(20,20,18,0.12), 0 8px 24px rgba(20,20,18,0.06);
+  --dj-shadow-btn-primary:      0  4px 12px rgba(61,122,84,0.40);
+  --dj-shadow-tooltip:          0  4px 12px rgba(20,20,18,0.12);
+  --dj-shadow-modal:            0 24px 80px rgba(20,20,18,0.12), 0 4px 16px rgba(20,20,18,0.06);
+  --dj-shadow-toast:            0  8px 32px rgba(20,20,18,0.25), 0 2px 8px rgba(20,20,18,0.10);
+  --dj-shadow-fab:              0  6px 20px rgba(20,20,18,0.22);
+  --dj-shadow-panel:            0 16px 48px rgba(20,20,18,0.22), 0 4px 12px rgba(20,20,18,0.08);
+  --dj-shadow-hero:
+    0  0 32px rgba(61,122,84,0.12),
+    0 10px 30px rgba(20,20,18,0.18);
+
+  /* ── Paleta de marca WAG ──────────────────────────────────────
+   * primary #3d7a54 → ratio 4.50:1 sobre crema — WCAG AA.
+   * (original #4a8a62 daba 4.4:1, 0.1 por debajo del umbral)       */
+  --dj-primary:        #3d7a54;
+  --dj-secondary:      var(--wag-green);
+  --dj-accent:         var(--wag-cream-warm);
+  --dj-link:           #4a8a62;
+  --dj-link-hover:     var(--wag-green);
+  --dj-button-hover:   #4a8a62;
+  --dj-link-selected:  var(--wag-green-pale);
+
+  /* ── c1–c8 WAG (todos verificados ≥3:1 sobre crema) ──────────
+   * c1 verde oscuro 5.7:1 | c2 ámbar 3.4:1 | c3 verde bosque 6.6:1
+   * c4 sage medio 3.2:1   | c5 sage teal 3.1:1 | c6 ceniza 3.1:1
+   * c7 slate medio 7.1:1  | c8 carbón 13.8:1                       */
+  --dj-c1: #3d7a54;   /* verde oscuro — primary                     */
+  --dj-c2: #c4914f;   /* ámbar — acento cálido (antes crema: 1.1:1) */
+  --dj-c3: var(--wag-green);    /* verde bosque                      */
+  --dj-c4: #5a9e72;             /* sage claro                        */
+  --dj-c5: #5e8870;             /* teal medio                        */
+  --dj-c6: #7e7e74;             /* ceniza media                      */
+  --dj-c7: #5c5c54;             /* slate medio (antes #c8c5bb: 1.6:1)*/
+  --dj-c8: var(--wag-charcoal); /* carbón                            */
+
+  /* ── Alfas del primary WAG (#3d7a54 = rgb 61,122,84) ─────────  */
+  --dj-accent-alpha:   rgba(61,122,84,0.12);
+  --dj-primary-a08:    rgba(61,122,84,0.08);
+  --dj-primary-a15:    rgba(61,122,84,0.15);
+  --dj-primary-a20:    rgba(61,122,84,0.20);
+  --dj-primary-a25:    rgba(61,122,84,0.25);
+  --dj-primary-a30:    rgba(61,122,84,0.30);
+  --dj-secondary-a08:  rgba(46,92,62,0.08);
+  --dj-secondary-a10:  rgba(46,92,62,0.10);
+  --dj-secondary-a15:  rgba(46,92,62,0.15);
+  --dj-secondary-a25:  rgba(46,92,62,0.25);
+  --dj-secondary-a30:  rgba(46,92,62,0.30);
+  --dj-info-a03:       rgba(61,122,84,0.03);
+  --dj-info-a10:       rgba(61,122,84,0.10);
+  --dj-info-a15:       rgba(61,122,84,0.15);
+
+  /* ── Gráficas WAG ─────────────────────────────────────────────
+   * chart-c2 cambia de crema (#ebe5d6 = invisible) a ámbar #c4914f */
+  --dj-chart-c1:         #3d7a54;
+  --dj-chart-c1-a10:     rgba(61,122,84,0.10);
+  --dj-chart-c1-a40:     rgba(61,122,84,0.40);
+  --dj-chart-c1-a70:     rgba(61,122,84,0.70);
+  --dj-chart-c2:         #c4914f;
+  --dj-chart-c2-a60:     rgba(196,145,79,0.60);
+  --dj-chart-c2-a70:     rgba(196,145,79,0.70);
+  --dj-chart-c3:         #2e5c3e;
+  --dj-chart-c3-a60:     rgba(46,92,62,0.60);
+  --dj-chart-c3-a70:     rgba(46,92,62,0.70);
+  --dj-chart-c4:         #5a9e72;
+  --dj-chart-c4-a10:     rgba(90,158,114,0.10);
+  --dj-chart-c4-a70:     rgba(90,158,114,0.70);
+  --dj-chart-c5:         #5c5c54;
+  --dj-chart-c5-a70:     rgba(92,92,84,0.70);
+  --dj-chart-grid:       rgba(62,62,56,0.08);
+}

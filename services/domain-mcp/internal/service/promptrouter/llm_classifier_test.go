@@ -59,7 +59,7 @@ func TestLLMClassifier_InvalidIntent_FallsBackToHeuristic(t *testing.T) {
 	}
 	intent, _, reason, err := c.Classify(context.Background(), "El botón no funciona ya pasé screenshot")
 	require.NoError(t, err)
-	// Heurística clasificaría como fix.
+
 	require.Equal(t, promptrouter.IntentFix, intent)
 	require.Contains(t, reason, "fallback")
 }

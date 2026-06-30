@@ -1,31 +1,31 @@
--- migration: drop_billing_costos (down)
--- author: mnunez@saargo.com
--- issue: REQ-42.2 (schema-naming-taxonomy — DROP dominio billing/costos)
--- description: reverse de 000148. Recrea el ESQUELETO mínimo (estructura sin
---   datos) de las 5 tablas billing/costos (plans, budgets, cost_logs,
---   org_cost_alert_thresholds, cost_alerts_sent) reflejando el shape ACTUAL
---   (post 000141-143/000135-136): SIN organization_id, PK surrogate, columnas
---   de dominio mínimas. Solo para el roundtrip up→down→up de golang-migrate;
---   NO restaura datos, seeds, triggers, GRANTs ni todos los índices.
--- breaking: false (down de roundtrip; sin restauración real de datos)
--- estimated_duration: <1s
---
--- IMPORTANTE: este down NO restaura datos. Las 5 tablas billing/costos se
--- dropearon con sus datos en el up; los datos NO se recuperan acá (en este
--- producto estaban vacías de todos modos). El único objetivo de este reverse
--- es dejar la DB en un estado consistente para el roundtrip up→down→up de
--- golang-migrate en una DB fresca.
---
--- El esqueleto recreado refleja el estado ACTUAL del schema (post 000141-143,
--- 000135-136): SIN organization_id (esa columna y su FK ya no existen en el
--- producto single-org), con PK surrogate y las columnas de dominio mínimas.
--- NO se recrean seeds (los planes free/pro/enterprise de 000032 NO vuelven),
--- triggers de updated_at, GRANTs ni todos los índices secundarios: es un
--- esqueleto, no una restauración fiel.
---
--- Para un restore real de datos billing: pgBackRest (ver docs/runbooks/restore.md).
--- En la práctica este dominio NO debería volver: se eliminó por decisión
--- arquitectónica (single-org sin facturación).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

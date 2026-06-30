@@ -35,10 +35,10 @@ type Ticket struct {
 	ProjectID        uuid.UUID  `json:"project_id"`
 	ClientID         *uuid.UUID `json:"client_id,omitempty"`
 	Key              string     `json:"key"`
-	// DisplayKey: external_id si existe (ej: MPS-12), sino key interno
-	// (ej: ACMEWEB-1). Calculado en runtime, no persistido. Permite que
-	// el dashboard muestre "el id que el usuario reconoce" sin lógica
-	// extra (REQ-58 preparación pre-Jira).
+
+
+
+
 	DisplayKey       string     `json:"display_key"`
 	Number           int        `json:"number"`
 	Title            string     `json:"title"`
@@ -55,7 +55,7 @@ type Ticket struct {
 	ExternalSyncedAt *time.Time `json:"external_synced_at,omitempty"`
 	ParentID         *uuid.UUID `json:"parent_id,omitempty"`
 	LinkedIssueID    *uuid.UUID `json:"linked_issue_id,omitempty"`
-	// REQ-63 locking
+
 	LockedBy         *uuid.UUID `json:"locked_by,omitempty"`
 	LockedUntil      *time.Time `json:"locked_until,omitempty"`
 	Version          int        `json:"version"`
@@ -105,9 +105,9 @@ type CreateInput struct {
 	ParentID       *uuid.UUID
 	EstimatedHours *float64
 	DueDate        *time.Time
-	// External (REQ-58): si se conocen al crear, el ticket queda
-	// linkeado en el mismo INSERT (evita 2 calls). Útil para sync
-	// inicial de Jira o creación reactiva desde webhook.
+
+
+
 	ExternalProvider string
 	ExternalID       string
 	ExternalURL      string

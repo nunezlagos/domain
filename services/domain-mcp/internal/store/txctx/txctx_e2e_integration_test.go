@@ -1,10 +1,10 @@
 //go:build integration
 
-// issue-25.14 E2E test: apikey.Middleware con Pool inyecta tx con SET LOCAL
-// en el ctx; handlers downstream la extraen con txctx.TxFromContext.
-//
-// Cubre: wireup HTTP post-auth + observacion.RLS via tx del ctx + sabotaje
-// (handler que ignora tx usa pool directo → RLS bloquea).
+
+
+
+
+
 
 package txctx_test
 
@@ -55,7 +55,7 @@ func setupE2E(t *testing.T) (*pgxpool.Pool, func()) {
 	dsn, _ := pgC.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, dmigrate.Up(dsn))
 
-	// GRANT app_user TO test (test es DB owner y bypassea RLS sin esto)
+
 	bootstrap, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 	_, err = bootstrap.Exec(ctx, `GRANT app_user TO test`)
@@ -86,17 +86,17 @@ func seedE2ECrossOrg(t *testing.T, pool *pgxpool.Pool) (uuid.UUID, uuid.UUID, uu
 	var projectA, projectB uuid.UUID
 	var obsA, obsB uuid.UUID
 
-	// BYPASSRLS para seed: usar pool directo (test user es owner).
-	// Necesitamos correr como superuser para bypassear RLS y sembrar.
-	// Workaround: SET LOCAL app.current_org_id no funciona porque test es
-	// owner; usamos una conexion fresca con SET ROLE app_admin.
+
+
+
+
 	adminPool, err := pgxpool.New(ctx, pool.Config().ConnString())
 	require.NoError(t, err)
 	defer adminPool.Close()
 	_, err = adminPool.Exec(ctx, `SET ROLE app_admin`)
 	require.NoError(t, err)
 
-	// user needs organization_id FK; for now seed with explicit org + user.
+
 	require.NoError(t, adminPool.QueryRow(ctx,
 		`INSERT INTO organizations (id, name, slug) VALUES (gen_random_uuid(), 'A', 'org-a') RETURNING id`).Scan(&orgA))
 	require.NoError(t, adminPool.QueryRow(ctx,
@@ -129,8 +129,8 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 	_ = userA
 	_ = userB
 
-	// Handler dummy que delibera leer observations con la tx del ctx.
-	// Si no hay tx, usa pool (que se cae por RLS).
+
+
 	listHandler := func(w http.ResponseWriter, r *http.Request) {
 		tx := txctx.TxFromContext(r.Context())
 		if tx == nil {
@@ -175,7 +175,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 		}
 	}
 
-	// Montar router
+
 	resolverA := &mockResolver{p: &apikey.Principal{UserID: userA.String(), OrganizationID: orgA.String(), APIKeyID: uuid.New().String()}}
 	resolverB := &mockResolver{p: &apikey.Principal{UserID: userB.String(), OrganizationID: orgB.String(), APIKeyID: uuid.New().String()}}
 
@@ -191,7 +191,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 	srvB := httptest.NewServer(&apikey.Middleware{Resolver: resolverB, Allowlist: []string{}, Pool: pool}.Wrap(muxB))
 	defer srvB.Close()
 
-	// 1. GET con key de A → solo obs de A
+
 	req, _ := http.NewRequest("GET", srvA.URL+"/observations", nil)
 	req.Header.Set("Authorization", "Bearer domk_test_key")
 	resp, err := http.DefaultClient.Do(req)
@@ -206,7 +206,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 	require.Equal(t, "A obs", listA.Data[0]["content"])
 	require.NotEqual(t, obsB.String(), listA.Data[0]["id"], "NO debe aparecer obs de B")
 
-	// 2. GET con key de B → solo obs de B
+
 	req, _ = http.NewRequest("GET", srvB.URL+"/observations", nil)
 	req.Header.Set("Authorization", "Bearer domk_test_key")
 	resp, err = http.DefaultClient.Do(req)
@@ -220,7 +220,7 @@ func TestE2E_Wireup_HTTP_GET_Observations_CrossOrgIsolation(t *testing.T) {
 	require.Len(t, listB.Data, 1)
 	require.Equal(t, "B obs", listB.Data[0]["content"])
 
-	// 3. Sabotaje: GET con key de A el id de obs de B → 404 (RLS bloquea)
+
 	req, _ = http.NewRequest("GET", fmt.Sprintf("%s/observations/%s", srvA.URL, obsB), nil)
 	req.Header.Set("Authorization", "Bearer domk_test_key")
 	resp, err = http.DefaultClient.Do(req)
@@ -240,14 +240,14 @@ func TestE2E_Sabotage_HandlerIgnoresTx(t *testing.T) {
 	_ = userA
 	_ = userB
 
-	// Handler ROTO: deliberadamente NO usa la tx del ctx, usa pool directo.
-	// Es un bug RBAC simulado. La RLS debe defender.
+
+
 	buggyHandler := func(w http.ResponseWriter, r *http.Request) {
-		// BUG: ignora txctx.TxFromContext y va directo al pool.
-		// ISSUE-21.6 single-org: el filtro cross-org ya no aplica (la tabla
-		// organizations se dropea, no hay RLS por org). Mantenemos el handler
-		// pero removemos el WHERE organization_id = $2 (siempre retorna
-		// el row, lo cual es el comportamiento single-org esperado).
+
+
+
+
+
 		var got int
 		err := pool.QueryRow(r.Context(),
 			`SELECT COUNT(*) FROM knowledge_observations WHERE id = $1`,

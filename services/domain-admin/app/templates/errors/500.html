@@ -1,0 +1,47 @@
+{% comment %}
+500.html es STANDALONE a proposito: handler500 de Django renderiza
+con contexto vacio (no corren context processors), asi que NO se puede
+depender de {% url %}, {% static %} ni de las hojas de estilo externas.
+Los colores replican los tokens de variables.css como literales.
+{% endcomment %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>500 - Error interno - Domain Admin</title>
+  <style>
+    :root {
+      --bg: #f8f8fb; --link: #556ee6; --danger: #f46a6a;
+      --text: #495057; --secondary: #74788d; --accent: #556ee6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); padding: 2rem;
+    }
+    .error-page { max-width: 480px; text-align: center; }
+    .error-code {
+      font-size: clamp(3rem, 12vw, 6rem); font-weight: 700;
+      line-height: 1; color: var(--danger);
+    }
+    .error-title { font-size: 1.5rem; margin: 1rem 0 0.5rem; font-weight: 600; }
+    .error-message { color: var(--secondary); font-size: 1rem; margin: 0 0 1.5rem; }
+    .btn {
+      display: inline-block; padding: 0.5rem 1rem; border-radius: 6px;
+      background: var(--accent); color: #fff; text-decoration: none;
+      font-size: 0.875rem; font-weight: 500;
+    }
+    .btn:hover { background: #485ec4; }
+  </style>
+</head>
+<body>
+  <div class="error-page">
+    <div class="error-code">500</div>
+    <h1 class="error-title">Error interno del servidor</h1>
+    <p class="error-message">Algo salio mal de nuestro lado. Ya estamos al tanto; intenta de nuevo en unos minutos.</p>
+    <a href="/" class="btn">Volver al inicio</a>
+  </div>
+</body>
+</html>

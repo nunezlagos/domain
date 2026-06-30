@@ -65,7 +65,7 @@ func (r *Runner) Execute(ctx context.Context, sk *skillsvc.Skill, args map[strin
 	}
 }
 
-// --- prompt ---
+
 
 func (r *Runner) executePrompt(sk *skillsvc.Skill, args map[string]any) (string, error) {
 	out := sk.Content
@@ -73,7 +73,7 @@ func (r *Runner) executePrompt(sk *skillsvc.Skill, args map[string]any) (string,
 		placeholder := "{{" + k + "}}"
 		out = strings.ReplaceAll(out, placeholder, fmt.Sprint(v))
 	}
-	// Detectar placeholders no sustituidos
+
 	if idx := strings.Index(out, "{{"); idx >= 0 {
 		if end := strings.Index(out[idx:], "}}"); end >= 0 {
 			missing := out[idx+2 : idx+end]
@@ -83,7 +83,7 @@ func (r *Runner) executePrompt(sk *skillsvc.Skill, args map[string]any) (string,
 	return out, nil
 }
 
-// --- api ---
+
 
 // apiConfig formato del content para skills tipo api.
 //
@@ -102,7 +102,7 @@ type apiConfig struct {
 }
 
 func (r *Runner) executeAPI(ctx context.Context, sk *skillsvc.Skill, args map[string]any) (string, error) {
-	// Renderizar el content con variables primero (los {{vars}} pueden estar en URL/headers/body)
+
 	rendered, err := r.executePrompt(sk, args)
 	if err != nil {
 		return "", fmt.Errorf("render api template: %w", err)
@@ -124,7 +124,7 @@ func (r *Runner) executeAPI(ctx context.Context, sk *skillsvc.Skill, args map[st
 	if r.AllowedHosts != nil && !r.AllowedHosts[parsed.Host] {
 		return "", fmt.Errorf("%w: %s", ErrURLNotAllowed, parsed.Host)
 	}
-	// Rechazar schemes no http/https
+
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return "", fmt.Errorf("only http/https schemes allowed (got %s)", parsed.Scheme)
 	}

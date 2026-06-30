@@ -7,19 +7,15 @@
 //
 // Principal:
 //
-//	El proceso domain-mcp resuelve UN principal al boot vía API key
-//	(env var DOMAIN_API_KEY) y todas las tool calls de la sesión operan en
+//	El proceso domain-mcp resuelve UN principal al boot via API key
+//	(env var DOMAIN_API_KEY) y todas las tool calls de la sesion operan en
 //	nombre de ese principal. Esto coincide con el modelo MCP stdio: un
-//	proceso por sesión de cliente.
+//	proceso por sesion de cliente.
 package mcpserver
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
@@ -33,10 +29,12 @@ import (
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	intakesvc "nunezlagos/domain/internal/service/intake"
+	issuesvc "nunezlagos/domain/internal/service/issue"
 	husvc "nunezlagos/domain/internal/service/issuebuilder"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
@@ -49,6 +47,8 @@ import (
 	prouter "nunezlagos/domain/internal/service/promptrouter"
 	searchsvc "nunezlagos/domain/internal/service/search"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tasksvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
 	"nunezlagos/domain/internal/service/workflowimport"
@@ -56,8 +56,10 @@ import (
 
 // Deps colecciona las dependencias del servidor MCP.
 type Deps struct {
-	Observations    *obssvc.Service
-	Projects        *projsvc.Service
+	Observations     *obssvc.Service
+	ObservationEdges *obssvc.EdgeService            // fase 1 memory graph — aristas tipadas
+	CodeGraph        *codegraphsvc.CodegraphService // fase 2 code graph — nodos/aristas de código
+	Projects         *projsvc.Service
 	Prompts         *promptsvc.Service
 	Timeline        *timelinesvc.Service
 	Search          *searchsvc.Service
@@ -77,29 +79,61 @@ type Deps struct {
 	FlowRunner      *flowrunner.Runner
 	Orchestrator    *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
 	Hubuilder       *husvc.Service          // issue-04.7 interactive HU wizard
+	IssueSvc        *issuesvc.Service       // domain_issue_set_status — cierre SDD
+	Spec            *specsvc.Service        // domain_openspec_* — round-trip specs DB↔repo
+	Tasks           *tasksvc.Service        // domain_openspec_* — sync de tasks por checkbox
 	Intake          *intakesvc.Service      // issue-04.8 intake pipeline
 	ExtSync         *syncsvc.Service        // issue-04.9 external provider sync
 	PromptRouter    *prouter.Router         // issue-12.7 single-shot prompt router
 	WorkflowImport  *workflowimport.Service // issue-12.7 override de .md
 	Pool            *pgxpool.Pool           // para queries de agent_run_logs
 	Principal       *apikey.Principal       // resuelto al boot
-	// Dispatcher (issue-35.1 phase 5): único path para ejecutar
-	// flow/agent/skill desde MCP. REQUERIDO en producción; los handlers
-	// retornan error si Dispatcher == nil.
+
+
+
 	Dispatcher *dispatch.Dispatcher
 	ServerName string
 	ServerVer  string
-	// SharedCache REQ-67: cache LRU compartido entre todos los requests
-	// (NO se clona por request). Si nil, cache desactivado.
+
+
 	SharedCache CacheStore
-	// REQ-70 métricas. Si nil, los hooks no se setean.
+
 	MetricsOnToolCall  func(tool, status string, dur float64)
 	MetricsOnCacheHit  func()
 	MetricsOnCacheMiss func()
 }
 
+// toolRegistrar registra un grupo de tools MCP. Agregar un grupo nuevo
+// requiere solo agregar una entrada en toolGroups — cero cambios en Tools().
+type toolRegistrar func(*ResilientWrapper, Deps) []mcpgo.ServerTool
+
+var toolGroups = []toolRegistrar{
+	registerMemoryTools,
+	registerMemoryGraphTools,
+	registerCodeGraphTools,
+	registerCatalogTools,
+	registerPolicyTools,
+	registerProjectTools,
+	registerHUTools,
+	registerIntakeTools,
+	registerSyncTools,
+	registerPromptTools,
+	registerOrchestrateTools,
+	registerCapturedPromptTools,
+	registerProjectRepoTools,
+	registerProjectSkillTools,
+	registerSessionBootstrapTools,
+	registerCronCRUDTools,
+	registerProposalsTools,
+	registerVerificationsTools,
+	registerTicketTools,
+	registerHealthTools,
+	registerProjectIndexTools,
+	registerOpenspecTools,
+}
+
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).
-// Sobreescribe per-tool en producción según necesidad.
+// Sobreescribe per-tool en produccion segun necesidad.
 var defaultBudget = ToolBudget{
 	CallsPerMinute: 120,
 	MaxRetries:     1,
@@ -109,32 +143,32 @@ var defaultBudget = ToolBudget{
 }
 
 // Tools construye la lista de mcpgo.ServerTool del proyecto (todos prefijo
-// domain_*). Útil para tests in-process que reciben []ServerTool en
-// mcptest.NewServer. Producción usa New() que internamente reusa Tools().
+// domain_*). Util para tests in-process que reciben []ServerTool en
+// mcptest.NewServer. Produccion usa New() que internamente reusa Tools().
 // Cada handler queda wrapped con ResilientWrapper (rate limit + retry).
 func Tools(deps Deps) []mcpgo.ServerTool {
 	wrap := NewResilientWrapper(defaultBudget)
-	// REQ-70 métricas — aplica con o sin cache.
+
 	if deps.MetricsOnToolCall != nil || deps.MetricsOnCacheHit != nil || deps.MetricsOnCacheMiss != nil {
 		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
 	}
 
-	// REQ-67 query cache. Si Deps.SharedCache está configurado (lo
-	// hace el wireup principal en cmd/domain), activamos lookup +
-	// invalidación. Si no, el wrap se comporta como antes.
+
+
+
 	if deps.SharedCache != nil {
 		wrap.SetCache(deps.SharedCache)
-		// Accessor del orgID del Principal vigente. Como deps se clona
-		// por request en httpserver/handler.go, este closure ve el
-		// Principal correcto para cada request.
+
+
+
 		wrap.SetOrgIDAccessor(func() string {
 			if deps.Principal == nil {
 				return ""
 			}
 			return deps.Principal.OrganizationID
 		})
-		// READs cacheables — TTL conservador para tolerar lag percibido
-		// tras una escritura (la invalidación es síncrona, no eventual).
+
+
 		readTTLs := map[string]time.Duration{
 			"domain_ticket_list":           5 * time.Second,
 			"domain_ticket_get":            5 * time.Second,
@@ -152,8 +186,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		for tool, ttl := range readTTLs {
 			wrap.SetCacheable(tool, ttl)
 		}
-		// WRITES que invalidan el cache completo del org (granularidad
-		// gruesa pero segura — el cache es chico y el TTL corto).
+
+
 		for _, w := range []string{
 			"domain_ticket_create", "domain_ticket_update", "domain_ticket_delete",
 			"domain_ticket_change_status", "domain_ticket_claim", "domain_ticket_release",
@@ -169,7 +203,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			wrap.SetInvalidating(w)
 		}
 	}
-	// Tools que escriben (mutation): tope más bajo (60/min)
+
 	for _, mutTool := range []string{
 		"domain_mem_save", "domain_knowledge_save",
 		"domain_agent_run",
@@ -186,8 +220,8 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			CBThreshold: 5, CBCooldown: 30 * time.Second,
 		})
 	}
-	// rls envuelve los handlers de tools que tocan tablas con RLS FORCE
-	// (observations, migration 000085): tx + SET LOCAL + commit.
+
+
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
@@ -196,7 +230,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", rls(deps.handleMemSearch))},
 		{Tool: toolMemContext(), Handler: wrap.Wrap("domain_mem_context", rls(deps.handleMemContext))},
 		{Tool: toolMemGetObservation(), Handler: wrap.Wrap("domain_mem_get_observation", rls(deps.handleMemGetObservation))},
-		// REQ-42.3: domain_session_start/end/active removidos (tabla sessions dropeada).
+
 		{Tool: toolPromptGet(), Handler: wrap.Wrap("domain_prompt_get", deps.handlePromptGet)},
 		{Tool: toolPromptSearch(), Handler: wrap.Wrap("domain_prompt_search", deps.handlePromptSearch)},
 		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", rls(deps.handleContext))},
@@ -216,32 +250,16 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.runFlowDispatch)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},
 	}
-	tools = append(tools, registerMemoryTools(wrap, deps)...)
-	tools = append(tools, registerCatalogTools(wrap, deps)...)
-	tools = append(tools, registerPolicyTools(wrap, deps)...)
-	tools = append(tools, registerProjectTools(wrap, deps)...)
-	tools = append(tools, registerHUTools(wrap, deps)...)
-	tools = append(tools, registerIntakeTools(wrap, deps)...)
-	tools = append(tools, registerSyncTools(wrap, deps)...)
-	tools = append(tools, registerPromptTools(wrap, deps)...)
-	tools = append(tools, registerOrchestrateTools(wrap, deps)...)
-	tools = append(tools, registerCapturedPromptTools(wrap, deps)...)
-	tools = append(tools, registerProjectRepoTools(wrap, deps)...)
-	tools = append(tools, registerProjectSkillTools(wrap, deps)...)
-	tools = append(tools, registerSessionBootstrapTools(wrap, deps)...)
-	tools = append(tools, registerCronCRUDTools(wrap, deps)...)
-	tools = append(tools, registerProposalsTools(wrap, deps)...)
-	tools = append(tools, registerVerificationsTools(wrap, deps)...)
-	tools = append(tools, registerTicketTools(wrap, deps)...)
-	tools = append(tools, registerHealthTools(wrap, deps)...)
-	tools = append(tools, registerProjectIndexTools(wrap, deps)...)
+	for _, reg := range toolGroups {
+		tools = append(tools, reg(wrap, deps)...)
+	}
 	return tools
 }
 
 // ServerInstructions es el protocolo que el agente recibe en el
-// initialize del MCP. Única fuente: internal/agentprotocol (el mismo
-// contenido se seedea en BD como policy 'agent-protocol' — la versión
-// viva que el agente debe preferir vía domain_policy_get).
+// initialize del MCP. Unica fuente: internal/agentprotocol (el mismo
+// contenido se seedea en BD como policy 'agent-protocol' — la version
+// viva que el agente debe preferir via domain_policy_get).
 const ServerInstructions = agentprotocol.Full
 
 // New monta el servidor MCP con los tools del prefijo `domain_*`.
@@ -256,17 +274,17 @@ func New(deps Deps) *mcpgo.MCPServer {
 	return srv
 }
 
-// --- tool builders (separados para reuso entre New y Tools list) ---
+
 
 func toolMemSave() mcp.Tool {
 	return mcp.NewTool("domain_mem_save",
-		mcp.WithDescription("Guarda una observación de memoria en el project indicado. Genera embedding automáticamente para búsqueda híbrida."),
+		mcp.WithDescription("Guarda una observacion de memoria en el project indicado. Genera embedding automaticamente para busqueda hibrida."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project donde guardar"),
 			mcp.Required(),
 		),
 		mcp.WithString("content",
-			mcp.Description("Contenido de la observación (texto libre)"),
+			mcp.Description("Contenido de la observacion (texto libre)"),
 			mcp.Required(),
 		),
 		mcp.WithString("observation_type",
@@ -284,41 +302,47 @@ func toolMemSave() mcp.Tool {
 
 func toolMemSearch() mcp.Tool {
 	return mcp.NewTool("domain_mem_search",
-		mcp.WithDescription("Busca observations relevantes a una query usando búsqueda híbrida BM25 + cosine + RRF fusion."),
+		mcp.WithDescription("Busca observations relevantes a una query usando busqueda hibrida BM25 + cosine + RRF fusion. Opcionalmente reordena con un LLM (rerank=true) para mejorar la relevancia del top; si el LLM no esta disponible degrada al orden BM25/RRF sin error."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 100)"),
+			mcp.Description("Maximo resultados (default 20, max 100)"),
+		),
+		mcp.WithBoolean("rerank",
+			mcp.Description("Si true, reordena los candidatos con un LLM (MiniMax-M3) para mejorar relevancia. Default false (no gasta tokens). Best-effort: si el LLM no esta configurado o falla, devuelve el orden BM25/RRF original."),
+		),
+		mcp.WithNumber("rerank_top_n",
+			mcp.Description("Cuantos candidatos del BM25/RRF se mandan al LLM para reordenar cuando rerank=true (default 30, max 50). Solo aplica si rerank=true."),
 		),
 	)
 }
 
 func toolMemContext() mcp.Tool {
 	return mcp.NewTool("domain_mem_context",
-		mcp.WithDescription("Recupera las últimas N observations de un project, ordenadas por fecha desc. Útil para contexto de sesión."),
+		mcp.WithDescription("Recupera las ultimas N observations de un project, ordenadas por fecha desc. Util para contexto de sesion."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 200)"),
+			mcp.Description("Maximo resultados (default 20, max 200)"),
 		),
 	)
 }
 
-// REQ-42.3: toolSessionStart/End/Active removidos (tabla sessions dropeada).
+
 
 func toolPromptGet() mcp.Tool {
 	return mcp.NewTool("domain_prompt_get",
-		mcp.WithDescription("Obtiene la versión ACTIVA de un prompt template por slug. Útil para inyectar prompts en runs."),
+		mcp.WithDescription("Obtiene la version ACTIVA de un prompt template por slug. Util para inyectar prompts en runs."),
 		mcp.WithString("slug",
 			mcp.Description("Slug del prompt template"),
 			mcp.Required(),
 		),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del project (opcional; si vacío usa prompts globales de la org)"),
+			mcp.Description("Slug del project (opcional; si vacio usa prompts globales de la org)"),
 		),
 	)
 }
@@ -331,7 +355,7 @@ func toolPromptSearch() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -340,14 +364,14 @@ func toolContext() mcp.Tool {
 	return mcp.NewTool("domain_context_snapshot",
 		mcp.WithDescription("Devuelve snapshot del contexto: observations + prompts recientes para un project."),
 		mcp.WithString("project_slug",
-			mcp.Description("Slug del project (opcional; vacío = scope org-wide)"),
+			mcp.Description("Slug del project (opcional; vacio = scope org-wide)"),
 		),
 	)
 }
 
 func toolTimeline() mcp.Tool {
 	return mcp.NewTool("domain_timeline",
-		mcp.WithDescription("Vecindario cronológico de una observation: N entradas antes y después incluyendo observations + prompts del mismo project."),
+		mcp.WithDescription("Vecindario cronologico de una observation: N entradas antes y despues incluyendo observations + prompts del mismo project."),
 		mcp.WithString("observation_id",
 			mcp.Description("UUID de la observation ancla"),
 			mcp.Required(),
@@ -363,16 +387,16 @@ func toolTimeline() mcp.Tool {
 
 func toolGlobalSearch() mcp.Tool {
 	return mcp.NewTool("domain_search_global",
-		mcp.WithDescription("Búsqueda global cross-entity (observations + prompts) scoped por org del principal. Filtros opcionales."),
+		mcp.WithDescription("Busqueda global cross-entity (observations + prompts) scoped por org del principal. Filtros opcionales."),
 		mcp.WithString("query",
 			mcp.Description("Texto a buscar"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20, max 200)"),
+			mcp.Description("Maximo resultados (default 20, max 200)"),
 		),
 		mcp.WithArray("entity_types",
-			mcp.Description("Filtrar a tipos específicos: observation, prompt"),
+			mcp.Description("Filtrar a tipos especificos: observation, prompt"),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
 		mcp.WithArray("tags",
@@ -395,7 +419,7 @@ func toolAgentRunLogs() mcp.Tool {
 func toolFlowList() mcp.Tool {
 	return mcp.NewTool("domain_flow_list",
 		mcp.WithDescription("Lista los flows definidos en la org."),
-		mcp.WithNumber("limit", mcp.Description("Máximo 200 (default 50)")),
+		mcp.WithNumber("limit", mcp.Description("Maximo 200 (default 50)")),
 	)
 }
 
@@ -442,6 +466,12 @@ func toolAgentRun() mcp.Tool {
 		mcp.WithObject("variables",
 			mcp.Description("Variables opcionales contextuales"),
 		),
+		mcp.WithString("flow_run_id",
+			mcp.Description("UUID del flow_run si este agent es parte de un pipeline SDD. Inyecta FlowRunContext al dispatcher para que el agent reciba contexto de fase sin heredar el historial completo del orquestador."),
+		),
+		mcp.WithString("phase_slug",
+			mcp.Description("Slug de la fase SDD actual (sdd-apply, sdd-verify, etc.) cuando flow_run_id está presente."),
+		),
 	)
 }
 
@@ -449,7 +479,7 @@ func toolAgentList() mcp.Tool {
 	return mcp.NewTool("domain_agent_list",
 		mcp.WithDescription("Lista los agents disponibles en la org."),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50)"),
+			mcp.Description("Maximo resultados (default 50)"),
 		),
 	)
 }
@@ -473,23 +503,23 @@ func toolSkillList() mcp.Tool {
 			mcp.Description("Filtrar por tipo: prompt | code | api | mcp_tool"),
 		),
 		mcp.WithString("tag",
-			mcp.Description("Filtrar por tag específico"),
+			mcp.Description("Filtrar por tag especifico"),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50)"),
+			mcp.Description("Maximo resultados (default 50)"),
 		),
 	)
 }
 
 func toolSkillSearch() mcp.Tool {
 	return mcp.NewTool("domain_skill_search",
-		mcp.WithDescription("Busca skills por similitud semántica + BM25 sobre name+description."),
+		mcp.WithDescription("Busca skills por similitud semantica + BM25 sobre name+description."),
 		mcp.WithString("query",
 			mcp.Description("Texto descriptivo del capability buscado"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -508,13 +538,13 @@ func toolSkillGet() mcp.Tool {
 
 func toolKnowledgeSave() mcp.Tool {
 	return mcp.NewTool("domain_knowledge_save",
-		mcp.WithDescription("Guarda un documento de conocimiento. Se chunkea automáticamente y genera embeddings por chunk para RAG."),
+		mcp.WithDescription("Guarda un documento de conocimiento. Se chunkea automaticamente y genera embeddings por chunk para RAG."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project donde guardar"),
 			mcp.Required(),
 		),
 		mcp.WithString("title",
-			mcp.Description("Título del documento"),
+			mcp.Description("Titulo del documento"),
 			mcp.Required(),
 		),
 		mcp.WithString("body",
@@ -536,13 +566,13 @@ func toolKnowledgeSave() mcp.Tool {
 
 func toolKnowledgeSearch() mcp.Tool {
 	return mcp.NewTool("domain_knowledge_search",
-		mcp.WithDescription("Búsqueda híbrida (vector + BM25 + RRF) sobre chunks de knowledge documents."),
+		mcp.WithDescription("Busqueda hibrida (vector + BM25 + RRF) sobre chunks de knowledge documents."),
 		mcp.WithString("query",
-			mcp.Description("Texto de búsqueda"),
+			mcp.Description("Texto de busqueda"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 20)"),
+			mcp.Description("Maximo resultados (default 20)"),
 		),
 	)
 }
@@ -559,746 +589,10 @@ func toolKnowledgeGet() mcp.Tool {
 
 func toolMemGetObservation() mcp.Tool {
 	return mcp.NewTool("domain_mem_get_observation",
-		mcp.WithDescription("Recupera una observation específica por ID (UUID)."),
+		mcp.WithDescription("Recupera una observation especifica por ID (UUID)."),
 		mcp.WithString("id",
 			mcp.Description("UUID de la observation"),
 			mcp.Required(),
 		),
 	)
-}
-
-// --- handlers ---
-
-func (d *Deps) handleMemSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
-		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
-	}
-	args := req.GetArguments()
-
-	projectSlug, _ := args["project_slug"].(string)
-	content, _ := args["content"].(string)
-	obsType, _ := args["observation_type"].(string)
-
-	if projectSlug == "" || content == "" {
-		return mcp.NewToolResultError("project_slug y content son requeridos"), nil
-	}
-
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
-	if err != nil {
-		return mcp.NewToolResultError("invalid principal org_id"), nil
-	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-
-	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
-	if err != nil {
-		// Auto-crear el project (plug-and-play): en un install fresco no
-		// existe ninguno y sin esto el agente no puede guardar memorias.
-		proj, err = d.Projects.Create(ctx, projsvc.CreateInput{
-			OrganizationID: orgID,
-			Name:           projectSlug,
-			Slug:           projectSlug,
-			ActorID:        userID,
-		})
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found and auto-create failed: %v", projectSlug, err)), nil
-		}
-	}
-
-	var tags []string
-	if v, ok := args["tags"].([]any); ok {
-		for _, t := range v {
-			if s, ok := t.(string); ok {
-				tags = append(tags, s)
-			}
-		}
-	}
-	var metadata map[string]any
-	if v, ok := args["metadata"].(map[string]any); ok {
-		metadata = v
-	}
-
-	obs, err := d.Observations.Save(ctx, obssvc.SaveInput{
-		OrganizationID:  orgID,
-		ProjectID:       proj.ID,
-		CreatedBy:       &userID,
-		Content:         content,
-		ObservationType: obsType,
-		Tags:            tags,
-		Metadata:        metadata,
-	})
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("save failed: %v", err)), nil
-	}
-
-	return toolResultJSON(map[string]any{
-		"id":         obs.ID.String(),
-		"project_id": obs.ProjectID.String(),
-		"created_at": obs.CreatedAt,
-		"message":    "observation saved",
-	})
-}
-
-func (d *Deps) handleMemSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
-		return mcp.NewToolResultError("no authenticated principal"), nil
-	}
-	args := req.GetArguments()
-	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Observations.SearchHybrid(ctx, orgID, query, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
-	}
-	out := make([]map[string]any, 0, len(results))
-	for _, r := range results {
-		out = append(out, map[string]any{
-			"id":               r.ID.String(),
-			"content":          r.Content,
-			"observation_type": r.ObservationType,
-			"tags":             r.Tags,
-			"score":            r.Score,
-			"bm25_rank":        r.BM25Rank,
-			"vector_rank":      r.VectorRank,
-			"created_at":       r.CreatedAt,
-		})
-	}
-	return toolResultJSON(map[string]any{
-		"results": out,
-		"count":   len(out),
-	})
-}
-
-func (d *Deps) handleMemContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
-		return mcp.NewToolResultError("no authenticated principal"), nil
-	}
-	args := req.GetArguments()
-	projectSlug, _ := args["project_slug"].(string)
-	if projectSlug == "" {
-		return mcp.NewToolResultError("project_slug requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("project not found: %v", err)), nil
-	}
-	obs, err := d.Observations.List(ctx, proj.ID, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
-	}
-	out := make([]map[string]any, 0, len(obs))
-	for _, o := range obs {
-		out = append(out, map[string]any{
-			"id":               o.ID.String(),
-			"content":          o.Content,
-			"observation_type": o.ObservationType,
-			"tags":             o.Tags,
-			"created_at":       o.CreatedAt,
-		})
-	}
-	return toolResultJSON(map[string]any{
-		"project_slug": projectSlug,
-		"results":      out,
-		"count":        len(out),
-	})
-}
-
-// REQ-42.3: handleSessionStart/End/Active removidos (tabla sessions dropeada).
-
-func (d *Deps) handlePromptGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Prompts == nil {
-		return mcp.NewToolResultError("prompt service no configurado"), nil
-	}
-	args := req.GetArguments()
-	slug, _ := args["slug"].(string)
-	if slug == "" {
-		return mcp.NewToolResultError("slug requerido"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	var projectID *uuid.UUID
-	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
-		}
-		projectID = &proj.ID
-	}
-	p, err := d.Prompts.GetActive(ctx, orgID, projectID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get_active: %v", err)), nil
-	}
-	return toolResultJSON(p)
-}
-
-func (d *Deps) handlePromptSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Prompts == nil {
-		return mcp.NewToolResultError("prompt service no configurado"), nil
-	}
-	args := req.GetArguments()
-	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Prompts.Search(ctx, orgID, query, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"results": results,
-		"count":   len(results),
-	})
-}
-
-func (d *Deps) handleContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Timeline == nil {
-		return mcp.NewToolResultError("timeline service no configurado"), nil
-	}
-	args := req.GetArguments()
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	var projectID uuid.UUID
-	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
-		}
-		projectID = proj.ID
-	}
-	snap, err := d.Timeline.Context(ctx, orgID, userID, projectID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("context: %v", err)), nil
-	}
-	return toolResultJSON(snap)
-}
-
-func (d *Deps) handleTimeline(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Timeline == nil {
-		return mcp.NewToolResultError("timeline service no configurado"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["observation_id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("observation_id inválido"), nil
-	}
-	before := 3
-	after := 3
-	if v, ok := args["before"].(float64); ok {
-		before = int(v)
-	}
-	if v, ok := args["after"].(float64); ok {
-		after = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	entries, err := d.Timeline.Timeline(ctx, orgID, id, before, after)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("timeline: %v", err)), nil
-	}
-	return toolResultJSON(entries)
-}
-
-func (d *Deps) handleGlobalSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Search == nil {
-		return mcp.NewToolResultError("search service no configurado"), nil
-	}
-	args := req.GetArguments()
-	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	filter := searchsvc.Filter{}
-	if et, ok := args["entity_types"].([]any); ok {
-		for _, t := range et {
-			if s, ok := t.(string); ok {
-				filter.EntityTypes = append(filter.EntityTypes, searchsvc.EntityType(s))
-			}
-		}
-	}
-	if tg, ok := args["tags"].([]any); ok {
-		for _, t := range tg {
-			if s, ok := t.(string); ok {
-				filter.Tags = append(filter.Tags, s)
-			}
-		}
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Search.Search(ctx, orgID, query, limit, filter)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"results": results,
-		"count":   len(results),
-	})
-}
-
-// runAgentDispatch (issue-35.1 phase 5): la ejecución de agents desde
-// MCP se delega EXCLUSIVAMENTE al dispatcher unificado. El path legacy
-// (AgentRunner.Run directo) fue eliminado: 1 sola implementación
-// compartida por cron, webhook y MCP.
-func (d *Deps) runAgentDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Agents == nil {
-		return mcp.NewToolResultError("agent service no configurado"), nil
-	}
-	if d.Dispatcher == nil {
-		return mcp.NewToolResultError("dispatcher no configurado"), nil
-	}
-	args := req.GetArguments()
-	slug, _ := args["agent_slug"].(string)
-	input, _ := args["input"].(string)
-	if slug == "" || input == "" {
-		return mcp.NewToolResultError("agent_slug e input son requeridos"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	ag, err := d.Agents.GetBySlug(ctx, orgID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("agent '%s' not found", slug)), nil
-	}
-	var vars map[string]any
-	if v, ok := args["variables"].(map[string]any); ok {
-		vars = v
-	}
-	if vars == nil {
-		vars = map[string]any{}
-	}
-	vars["input"] = input
-
-	inputsRaw, _ := json.Marshal(vars)
-	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
-		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetAgent,
-		TargetID: ag.ID, Inputs: inputsRaw, TriggeredBy: &userID,
-	})
-	if dispatchErr != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"run_id": res.RunID.String(),
-		"status": res.Status,
-		"output": string(res.Output),
-	})
-}
-
-func (d *Deps) handleAgentRunLogs(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Pool == nil {
-		return mcp.NewToolResultError("pool no configurado"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["run_id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("run_id inválido"), nil
-	}
-	// Existence guard
-	var exists bool
-	err = d.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM agent_runs WHERE id = $1)`, id).Scan(&exists)
-	if err != nil || !exists {
-		return mcp.NewToolResultError("not found"), nil
-	}
-
-	rows, err := d.Pool.Query(ctx,
-		`SELECT id, iteration, event_type, payload, tokens_input, tokens_output,
-		        latency_ms, occurred_at
-		 FROM agent_run_logs WHERE agent_run_id = $1
-		 ORDER BY iteration ASC, occurred_at ASC LIMIT 500`, id)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("query: %v", err)), nil
-	}
-	defer rows.Close()
-	var out []map[string]any
-	for rows.Next() {
-		var (
-			logID      int64
-			iteration  int
-			eventType  string
-			payloadRaw []byte
-			tokensIn   int
-			tokensOut  int
-			latencyMS  int
-			occurredAt any
-		)
-		if err := rows.Scan(&logID, &iteration, &eventType, &payloadRaw,
-			&tokensIn, &tokensOut, &latencyMS, &occurredAt); err != nil {
-			continue
-		}
-		var payload any
-		if len(payloadRaw) > 0 {
-			_ = json.Unmarshal(payloadRaw, &payload)
-		}
-		out = append(out, map[string]any{
-			"id":            logID,
-			"iteration":     iteration,
-			"event_type":    eventType,
-			"payload":       payload,
-			"tokens_input":  tokensIn,
-			"tokens_output": tokensOut,
-			"latency_ms":    latencyMS,
-			"occurred_at":   occurredAt,
-		})
-	}
-	return toolResultJSON(map[string]any{"logs": out, "count": len(out)})
-}
-
-func (d *Deps) handleFlowList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Flows == nil {
-		return mcp.NewToolResultError("flow service no configurado"), nil
-	}
-	args := req.GetArguments()
-	limit := 50
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	out, err := d.Flows.List(ctx, orgID, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
-}
-
-// runFlowDispatch (issue-35.1 phase 5): la ejecución de flows desde
-// MCP se delega EXCLUSIVAMENTE al dispatcher unificado.
-func (d *Deps) runFlowDispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
-		return mcp.NewToolResultError("no authenticated principal"), nil
-	}
-	if d.Dispatcher == nil {
-		return mcp.NewToolResultError("dispatcher no configurado"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["flow_id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("flow_id inválido"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	var inputs map[string]any
-	if v, ok := args["inputs"].(map[string]any); ok {
-		inputs = v
-	}
-	inputsRaw, _ := json.Marshal(inputs)
-	res, dispatchErr := d.Dispatcher.Dispatch(ctx, dispatch.Request{
-		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetFlow,
-		TargetID: id, Inputs: inputsRaw, TriggeredBy: &userID,
-	})
-	if dispatchErr != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("dispatch failed: %v", dispatchErr)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"run_id":  res.RunID.String(),
-		"status":  res.Status,
-		"error":   "",
-		"outputs": map[string]any{"raw": string(res.Output)},
-	})
-}
-
-func (d *Deps) handlePromptRender(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Prompts == nil {
-		return mcp.NewToolResultError("prompt service no configurado"), nil
-	}
-	args := req.GetArguments()
-	slug, _ := args["slug"].(string)
-	if slug == "" {
-		return mcp.NewToolResultError("slug requerido"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	var projectID *uuid.UUID
-	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
-		}
-		projectID = &proj.ID
-	}
-	p, err := d.Prompts.GetActive(ctx, orgID, projectID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get_active: %v", err)), nil
-	}
-	body := p.Body
-	vars, _ := args["variables"].(map[string]any)
-	for k, v := range vars {
-		body = stringsReplaceAll(body, "{{"+k+"}}", fmt.Sprint(v))
-	}
-	return toolResultJSON(map[string]any{
-		"slug":    p.Slug,
-		"version": p.Version,
-		"body":    body,
-	})
-}
-
-// stringsReplaceAll wrapper para evitar import al package strings desde server.go
-// (ya existe en otros files, dejo wrapper local).
-func stringsReplaceAll(s, old, new string) string {
-	out := ""
-	for {
-		i := indexOf(s, old)
-		if i < 0 {
-			return out + s
-		}
-		out += s[:i] + new
-		s = s[i+len(old):]
-	}
-}
-
-func indexOf(s, sub string) int {
-	if len(sub) == 0 {
-		return 0
-	}
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-func (d *Deps) handleAgentList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Agents == nil {
-		return mcp.NewToolResultError("agent service no configurado"), nil
-	}
-	args := req.GetArguments()
-	limit := 50
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	out, err := d.Agents.List(ctx, orgID, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
-}
-
-func (d *Deps) handleAgentGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Agents == nil {
-		return mcp.NewToolResultError("agent service no configurado"), nil
-	}
-	args := req.GetArguments()
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	if idStr, _ := args["id"].(string); idStr != "" {
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			return mcp.NewToolResultError("id inválido"), nil
-		}
-		ag, err := d.Agents.GetByID(ctx, id)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-		}
-		return toolResultJSON(ag)
-	}
-	slug, _ := args["slug"].(string)
-	if slug == "" {
-		return mcp.NewToolResultError("id o slug requerido"), nil
-	}
-	ag, err := d.Agents.GetBySlug(ctx, orgID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-	}
-	return toolResultJSON(ag)
-}
-
-func (d *Deps) handleSkillList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Skills == nil {
-		return mcp.NewToolResultError("skill service no configurado"), nil
-	}
-	args := req.GetArguments()
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	f := skillsvc.ListFilter{}
-	if v, _ := args["type"].(string); v != "" {
-		f.SkillType = v
-	}
-	if v, _ := args["tag"].(string); v != "" {
-		f.Tag = v
-	}
-	if v, ok := args["limit"].(float64); ok {
-		f.Limit = int(v)
-	}
-	out, err := d.Skills.List(ctx, orgID, f)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
-}
-
-func (d *Deps) handleSkillSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Skills == nil {
-		return mcp.NewToolResultError("skill service no configurado"), nil
-	}
-	args := req.GetArguments()
-	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Skills.SearchHybrid(ctx, orgID, query, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{"results": results, "count": len(results)})
-}
-
-func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Skills == nil {
-		return mcp.NewToolResultError("skill service no configurado"), nil
-	}
-	args := req.GetArguments()
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	if idStr, _ := args["id"].(string); idStr != "" {
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			return mcp.NewToolResultError("id inválido"), nil
-		}
-		sk, err := d.Skills.GetByID(ctx, id)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-		}
-		return toolResultJSON(sk)
-	}
-	slug, _ := args["slug"].(string)
-	if slug == "" {
-		return mcp.NewToolResultError("id o slug requerido"), nil
-	}
-	sk, err := d.Skills.GetBySlug(ctx, orgID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-	}
-	return toolResultJSON(sk)
-}
-
-func (d *Deps) handleKnowledgeSave(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Knowledge == nil {
-		return mcp.NewToolResultError("knowledge service no configurado"), nil
-	}
-	args := req.GetArguments()
-	slug, _ := args["project_slug"].(string)
-	title, _ := args["title"].(string)
-	body, _ := args["body"].(string)
-	if slug == "" || title == "" || body == "" {
-		return mcp.NewToolResultError("project_slug, title y body son requeridos"), nil
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
-	}
-	var tags []string
-	if v, ok := args["tags"].([]any); ok {
-		for _, t := range v {
-			if s, ok := t.(string); ok {
-				tags = append(tags, s)
-			}
-		}
-	}
-	source, _ := args["source"].(string)
-	sourceURL, _ := args["source_url"].(string)
-	doc, chunks, err := d.Knowledge.Save(ctx, knowsvc.SaveInput{
-		OrganizationID: orgID, ProjectID: proj.ID, CreatedBy: &userID,
-		Title: title, Body: body, Source: source, SourceURL: sourceURL, Tags: tags,
-	})
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("save: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"id":           doc.ID.String(),
-		"chunks_count": len(chunks),
-		"created_at":   doc.CreatedAt,
-	})
-}
-
-func (d *Deps) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Knowledge == nil {
-		return mcp.NewToolResultError("knowledge service no configurado"), nil
-	}
-	args := req.GetArguments()
-	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
-	}
-	limit := 20
-	if v, ok := args["limit"].(float64); ok {
-		limit = int(v)
-	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Knowledge.SearchHybrid(ctx, orgID, query, limit)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"results": results,
-		"count":   len(results),
-	})
-}
-
-func (d *Deps) handleKnowledgeGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Knowledge == nil {
-		return mcp.NewToolResultError("knowledge service no configurado"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID)"), nil
-	}
-	doc, chunks, err := d.Knowledge.Get(ctx, id)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
-	}
-	return toolResultJSON(map[string]any{
-		"document": doc,
-		"chunks":   chunks,
-	})
-}
-
-func (d *Deps) handleMemGetObservation(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
-		return mcp.NewToolResultError("no authenticated principal"), nil
-	}
-	args := req.GetArguments()
-	idStr, _ := args["id"].(string)
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return mcp.NewToolResultError("invalid id (UUID expected)"), nil
-	}
-	obs, err := d.Observations.Get(ctx, id)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("get failed: %v", err)), nil
-	}
-	return toolResultJSON(obs)
-}
-
-func toolResultJSON(v any) (*mcp.CallToolResult, error) {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("marshal: %v", err)), nil
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{mcp.TextContent{Type: "text", Text: string(b)}},
-	}, nil
 }

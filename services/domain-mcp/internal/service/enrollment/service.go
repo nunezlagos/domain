@@ -15,9 +15,10 @@ import (
 
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/service/enrollment/enrollmentdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
-// Errores tipados expuestos por el service.
 var (
 	ErrInvalidToken = errors.New("enrollment token invalid or revoked")
 	ErrInvalidEmail = errors.New("email format invalid")
@@ -27,10 +28,8 @@ var (
 	ErrNoActive     = errors.New("no active enrollment token for this organization")
 )
 
-// emailRegex simple — sin DNS check.
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-// allowedRoles cierra el conjunto de valores aceptados para role_on_enroll.
 var allowedRoles = map[string]bool{
 	"owner":      true,
 	"admin":      true,
@@ -39,7 +38,6 @@ var allowedRoles = map[string]bool{
 	"viewer":     true,
 }
 
-// RotateResult información que devolvemos al admin al rotar (plaintext UNA vez).
 type RotateResult struct {
 	Plaintext    string
 	Prefix       string
@@ -47,7 +45,6 @@ type RotateResult struct {
 	CreatedAt    time.Time
 }
 
-// Metadata estado del token activo de una org (sin plaintext).
 type Metadata struct {
 	Exists       bool
 	Prefix       string
@@ -55,28 +52,28 @@ type Metadata struct {
 	CreatedAt    time.Time
 }
 
-// EnrollResult lo que recibe quien se auto-enrola: user + api key personal.
 type EnrollResult struct {
 	UserID    uuid.UUID
 	Email     string
 	Name      string
 	Role      string
-	APIKey    string // plaintext UNA vez
+	APIKey    string
 	APIKeyID  uuid.UUID
 	KeyPrefix string
 }
 
-// Service expone los flows de rotación/revoke/enrollment.
 type Service struct {
 	Pool  *pgxpool.Pool
 	Audit audit.Recorder
 }
 
-// Rotate revoca el token activo global (si lo hay) y crea uno nuevo. Atomic
-// en una tx. El plaintext del nuevo token se devuelve UNA sola vez.
-//
-// Single-org (issue-37 global): un único token de enrollment activo, sin
-// organization_id. `role` puede ser "" → default "member". Solo whitelisted.
+func (s *Service) q(ctx context.Context) *enrollmentdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return enrollmentdb.New(tx)
+	}
+	return enrollmentdb.New(s.Pool)
+}
+
 func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*RotateResult, error) {
 	if role == "" {
 		role = "member"
@@ -96,28 +93,22 @@ func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx,
-		`UPDATE enrollment_tokens
-		 SET revoked_at = NOW()
-		 WHERE revoked_at IS NULL`,
-	); err != nil {
+	q := enrollmentdb.New(tx)
+
+	if _, err := q.RevokeAllActive(ctx); err != nil {
 		return nil, fmt.Errorf("revoke previous: %w", err)
 	}
 
-	var createdAt time.Time
-	var actorParam any
-	if actorID == uuid.Nil {
-		actorParam = nil
-	} else {
-		actorParam = actorID
+	var actorParam *uuid.UUID
+	if actorID != uuid.Nil {
+		actorParam = &actorID
 	}
-	err = tx.QueryRow(ctx,
-		`INSERT INTO enrollment_tokens
-		   (token_hash, token_prefix, role_on_enroll, created_by_user_id)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING created_at`,
-		hash, prefix, role, actorParam,
-	).Scan(&createdAt)
+	createdAt, err := q.InsertToken(ctx, enrollmentdb.InsertTokenParams{
+		TokenHash:       hash,
+		TokenPrefix:     prefix,
+		RoleOnEnroll:    role,
+		CreatedByUserID: actorParam,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert token: %w", err)
 	}
@@ -151,37 +142,28 @@ func (s *Service) Rotate(ctx context.Context, actorID uuid.UUID, role string) (*
 	}, nil
 }
 
-// GetMetadata devuelve el estado del token activo global (si existe), SIN el
-// plaintext.
 func (s *Service) GetMetadata(ctx context.Context) (*Metadata, error) {
-	var m Metadata
-	err := s.Pool.QueryRow(ctx,
-		`SELECT token_prefix, role_on_enroll, created_at
-		 FROM enrollment_tokens
-		 WHERE revoked_at IS NULL`,
-	).Scan(&m.Prefix, &m.RoleOnEnroll, &m.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return &Metadata{Exists: false}, nil
-	}
+	m, err := s.q(ctx).GetActiveMetadata(ctx)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &Metadata{Exists: false}, nil
+		}
 		return nil, fmt.Errorf("query metadata: %w", err)
 	}
-	m.Exists = true
-	return &m, nil
+	return &Metadata{
+		Exists:       true,
+		Prefix:       m.TokenPrefix,
+		RoleOnEnroll: m.RoleOnEnroll,
+		CreatedAt:    m.CreatedAt,
+	}, nil
 }
 
-// Revoke marca el token activo global como revoked_at=NOW sin crear uno nuevo.
-// Si no hay token activo, devuelve ErrNoActive.
 func (s *Service) Revoke(ctx context.Context, actorID uuid.UUID) error {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE enrollment_tokens
-		 SET revoked_at = NOW()
-		 WHERE revoked_at IS NULL`,
-	)
+	n, err := s.q(ctx).RevokeAllActive(ctx)
 	if err != nil {
 		return fmt.Errorf("revoke: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrNoActive
 	}
 	if s.Audit != nil {
@@ -199,16 +181,9 @@ func (s *Service) Revoke(ctx context.Context, actorID uuid.UUID) error {
 	return nil
 }
 
-// Enroll valida el plaintext del token, crea user + api_key en la org del
-// token, devuelve la api_key personal UNA sola vez al enrollee.
-//
-// Anti-enumeration: si el token no existe o está revocado, devuelve
-// ErrInvalidToken con timing comparable al match exitoso (bcrypt dummy).
 func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*EnrollResult, error) {
 	prefix, perr := ParsePrefix(plaintext)
 	if perr != nil {
-		// Aún corremos bcrypt dummy para que el timing del response no
-		// revele si el formato era válido.
 		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(plaintext))
 		return nil, ErrInvalidToken
 	}
@@ -218,39 +193,17 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 		return nil, ErrInvalidEmail
 	}
 
-	// Buscar candidatos (típicamente 0 o 1 por UNIQUE constraint)
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, token_hash, role_on_enroll
-		 FROM enrollment_tokens
-		 WHERE token_prefix = $1 AND revoked_at IS NULL`,
-		prefix,
-	)
+	candidates, err := s.q(ctx).FindTokensByPrefix(ctx, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("query candidates: %w", err)
 	}
-	type candidate struct {
-		tokenID uuid.UUID
-		hash    []byte
-		role    string
-	}
-	var candidates []candidate
-	for rows.Next() {
-		var c candidate
-		if err := rows.Scan(&c.tokenID, &c.hash, &c.role); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scan candidate: %w", err)
-		}
-		candidates = append(candidates, c)
-	}
-	rows.Close()
 
-	var matched *candidate
+	var matched *enrollmentdb.FindTokensByPrefixRow
 	if len(candidates) == 0 {
-		// Constant-time dummy
 		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(plaintext))
 	} else {
 		for i := range candidates {
-			if err := VerifyHash(plaintext, candidates[i].hash); err == nil {
+			if err := VerifyHash(plaintext, candidates[i].TokenHash); err == nil {
 				matched = &candidates[i]
 				break
 			}
@@ -260,7 +213,6 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 		return nil, ErrInvalidToken
 	}
 
-	// Generar api key del nuevo user
 	apiPlain, apiPrefix, apiHash, err := apikey.Generate("live")
 	if err != nil {
 		return nil, fmt.Errorf("generate api key: %w", err)
@@ -272,14 +224,13 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var userID uuid.UUID
-	var createdAt time.Time
-	err = tx.QueryRow(ctx,
-		`INSERT INTO users (email, name, role)
-		 VALUES ($1, NULLIF($2, ''), $3)
-		 RETURNING id, created_at`,
-		email, name, matched.role,
-	).Scan(&userID, &createdAt)
+	q := enrollmentdb.New(tx)
+
+	user, err := q.InsertUser(ctx, enrollmentdb.InsertUserParams{
+		Email: email,
+		Name:  name,
+		Role:  matched.RoleOnEnroll,
+	})
 	if err != nil {
 		if isEmailUniqueViolation(err) {
 			return nil, ErrEmailTaken
@@ -288,12 +239,12 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 	}
 
 	keyID := uuid.New()
-	_, err = tx.Exec(ctx,
-		`INSERT INTO auth_api_keys (id, user_id, key_hash, key_prefix,
-		                        name, environment, expires_at)
-		 VALUES ($1, $2, $3, $4, 'default', 'live', NULL)`,
-		keyID, userID, apiHash, apiPrefix,
-	)
+	err = q.InsertAPIKey(ctx, enrollmentdb.InsertAPIKeyParams{
+		ID:        keyID,
+		UserID:    user.ID,
+		KeyHash:   apiHash,
+		KeyPrefix: apiPrefix,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("insert api_key: %w", err)
 	}
@@ -304,33 +255,31 @@ func (s *Service) Enroll(ctx context.Context, plaintext, email, name string) (*E
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorID:    &userID,
+			ActorID:    &user.ID,
 			ActorType:  audit.ActorUser,
 			Action:     "user.self_enrolled",
 			EntityType: "user",
-			EntityID:   &userID,
+			EntityID:   &user.ID,
 			NewValues: map[string]any{
 				"email":           email,
-				"role":            matched.role,
-				"enroll_token_id": matched.tokenID,
+				"role":            matched.RoleOnEnroll,
+				"enroll_token_id": matched.ID,
 				"api_key_prefix":  apiPrefix,
 			},
 		})
 	}
 
 	return &EnrollResult{
-		UserID:    userID,
+		UserID:    user.ID,
 		Email:     email,
 		Name:      name,
-		Role:      matched.role,
+		Role:      matched.RoleOnEnroll,
 		APIKey:    apiPlain,
 		APIKeyID:  keyID,
 		KeyPrefix: apiPrefix,
 	}, nil
 }
 
-// isEmailUniqueViolation reusa la heurística de orgsvc: matchea por substring
-// porque pgx no expone PgError directo en todos los paths.
 func isEmailUniqueViolation(err error) bool {
 	if err == nil {
 		return false

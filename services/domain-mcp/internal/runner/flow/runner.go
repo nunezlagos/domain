@@ -95,8 +95,8 @@ type RunInput struct {
 	TriggeredBy *uuid.UUID
 	TriggerType string // "manual" | "cron" | "webhook" | ...
 	Inputs      map[string]any
-	// FlowVersion invoca una versión específica (issue-09.7). 0 = current.
-	// La versión debe estar published; draft/deprecated son rechazadas.
+
+
 	FlowVersion int
 }
 
@@ -149,8 +149,8 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		return nil, ErrFlowInactive
 	}
 
-	// org se resuelve del context del request (issue-02.8: flows ya no
-	// portan organization_id; el tenant viaja en el ctx vía middleware).
+
+
 	orgID := ctxkeys.OrgID(ctx)
 
 	trigger := in.TriggerType
@@ -162,7 +162,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	}
 	inputsJSON, _ := json.Marshal(in.Inputs)
 
-	// issue-09.7 fv-008: el run conserva la versión con la que arranca.
+
 	var versionID *uuid.UUID
 	if in.FlowVersion > 0 {
 		v, spec, verr := r.resolveVersionSpec(ctx, f.ID, in.FlowVersion)
@@ -175,7 +175,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		versionID = &pinned.ID
 	}
 
-	// issue-09.5: lineage de sub-flows (parent_run_id, ancestor_slugs, depth)
+
 	var parentRunID *uuid.UUID
 	ancestorSlugs := []string{}
 	depth := 0
@@ -200,9 +200,9 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 		return nil, fmt.Errorf("create flow_run: %w", err)
 	}
 
-	// Crear context cancelable para pause/cancel externo
+
 	runCtx, runCancel := context.WithCancel(ctx)
-	// Lineage para hijos lanzados desde este run (issue-09.5)
+
 	runCtx = context.WithValue(runCtx, runLineageKey{},
 		&runLineage{RunID: runID, Slugs: append(append([]string{}, ancestorSlugs...), f.Slug), Depth: depth})
 	r.trackRun(runID, runCancel)
@@ -213,7 +213,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 	cursor := map[string]any{}
 	finalErr := ""
 
-	// issue-09.6 heartbeat goroutine
+
 	heartbeatCancel := StartHeartbeat(ctx, HeartbeatConfig{
 		Interval: 30 * time.Second,
 		Pool:     r.Pool,
@@ -229,7 +229,7 @@ func (r *Runner) Run(ctx context.Context, in RunInput) (*RunResult, error) {
 
 	completedIDs := []string{}
 
-	// Ejecución secuencial. Loop con jump support.
+
 	idx := 0
 LOOP:
 	for idx < len(f.Spec.Steps) {
@@ -238,7 +238,7 @@ LOOP:
 		cursor["completed"] = completedIDs
 		_ = r.persistCursor(ctx, runID, cursor)
 
-		// Check for pause/cancel before executing step
+
 		if err := runCtx.Err(); err != nil {
 			finalErr = fmt.Sprintf("flow run cancelled: %v", err)
 			break LOOP
@@ -251,7 +251,7 @@ LOOP:
 			defer cancel()
 		}
 
-		// issue-09.10: fila running visible para watchdog + heartbeater con throttle
+
 		stepRowID := r.beginStepRow(ctx, runID, step.ID)
 		ctxStep = WithHeartbeater(ctxStep, &StepHeartbeater{
 			Store:     &flow.HeartbeatStore{Pool: r.Pool},
@@ -260,22 +260,22 @@ LOOP:
 			StepKey:   step.ID,
 		})
 
-		// issue-09.4: retry policy por step (rica o legacy) con backoff.
+
 		out, stepErr, attemptErrs, retryCount := r.runStepWithRetry(
 			ctxStep, runID, &step, in.Inputs, stepOutputs, orgID, in.TriggeredBy, f.Slug)
-		// issue-09.10: cerrar fila del step con resultado final (éxito o fallo)
+
 		if err := r.completeStepRow(ctx, stepRowID, out, stepErr); err != nil {
 			slog.Default().Warn("complete step row", slog.String("step", step.ID), slog.Any("err", err))
 		}
 		if stepErr != nil {
-			// issue-09.4 escenario 8: política del step > default del flow > fail
+
 			policy := step.OnError
 			if policy == "" {
 				policy = f.Spec.DefaultStepErrorPolicy
 			}
 			switch policy {
 			case "continue", "ignore_and_continue":
-				// Escenario 4: el resultado se reemplaza con default_on_error
+
 				if step.DefaultOnError != nil {
 					stepOutputs[step.ID] = step.DefaultOnError
 				} else {
@@ -284,7 +284,7 @@ LOOP:
 				idx++
 				continue LOOP
 			case "fallback_step":
-				// Escenario 6: ejecutar el step alternativo
+
 				fbOut, fbErr := r.execFallback(ctxStep, runID, &step,
 					in.Inputs, stepOutputs, orgID, in.TriggeredBy, f.Slug, 1)
 				if fbErr != nil {
@@ -295,12 +295,12 @@ LOOP:
 					"retry_count": retryCount, "errors": attemptErrs}
 				stepErr = nil
 			case "", "fail", "abort_flow":
-				// Escenario 7: fallo permanente.
-				// REQ-42.3: dead_letter_queue dropeada — sin push al DLQ.
+
+
 				finalErr = fmt.Sprintf("step '%s' (retry_count=%d): %v", step.ID, retryCount, stepErr)
 				break LOOP
 			default:
-				// Jump al step_id especificado
+
 				next, ok := stepByID[policy]
 				if !ok {
 					finalErr = fmt.Sprintf("step '%s' on_error '%s': %s",
@@ -308,7 +308,7 @@ LOOP:
 					break LOOP
 				}
 				stepOutputs[step.ID] = map[string]any{"error": stepErr.Error(), "jumped_to": next.ID}
-				// Encontrar índice del step destino
+
 				for i, s := range f.Spec.Steps {
 					if s.ID == next.ID {
 						idx = i
@@ -321,7 +321,7 @@ LOOP:
 		completedIDs = append(completedIDs, step.ID)
 		cursor["completed"] = completedIDs
 		_ = r.persistCursor(ctx, runID, cursor)
-		// issue-09.9: registrar compensación si el step declara compensate
+
 		if step.Compensate != "" && r.SagaExecutor != nil {
 			comp := flow.SagaCompensation{
 				StepKey:       step.ID,
@@ -331,7 +331,7 @@ LOOP:
 				_ = r.SagaExecutor.Store.RegisterCompensation(ctx, runID, comp)
 			}
 		}
-		// issue-09.11: guardar snapshot del step completado
+
 		if r.Snapshots != nil {
 			snapID := uuid.New()
 			inputsJSON, _ := json.Marshal(in.Inputs)
@@ -357,14 +357,14 @@ LOOP:
 	compensationStatus := ""
 	if finalErr != "" {
 		status = StatusFailed
-		// issue-09.9: ejecutar compensaciones Saga en orden inverso
+
 		if r.SagaExecutor != nil {
 			var plan []flow.SagaCompensation
 			if r.SagaExecutor.Store != nil {
 				plan = r.SagaExecutor.Store.RegisteredCompensations(runID)
 			}
 			if len(plan) == 0 {
-				// Fallback: derivar plan del spec del flow
+
 				for _, s := range f.Spec.Steps {
 					if s.Compensate != "" {
 						plan = append(plan, flow.SagaCompensation{
@@ -560,7 +560,7 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 		inputs = map[string]any{}
 	}
 
-	// Detección circular vía ctx chain.
+
 	chain, _ := ctx.Value(subflowCtxKey{}).([]string)
 	for _, s := range chain {
 		if s == flowSlug {
@@ -573,7 +573,7 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 	}
 	childCtx := context.WithValue(ctx, subflowCtxKey{}, append(chain, flowSlug))
 
-	// Lookup del flow hijo por slug.
+
 	childFlow, err := r.Flows.GetBySlug(ctx, orgID, flowSlug)
 	if err != nil {
 		return nil, fmt.Errorf("sub-flow %q not found", flowSlug)
@@ -595,7 +595,7 @@ func (r *Runner) execSubFlow(ctx context.Context, step *flow.Step, orgID uuid.UU
 			"error":       res.Error,
 		}, fmt.Errorf("sub-flow %q ended with status %s: %s", flowSlug, res.Status, res.Error)
 	}
-	// issue-09.5: cap del output devuelto al padre (1MB)
+
 	if raw, err := json.Marshal(res.Outputs); err == nil && len(raw) > maxSubflowOutputBytes {
 		return nil, fmt.Errorf("sub-flow %q output exceeds %d bytes (validation)", flowSlug, maxSubflowOutputBytes)
 	}
@@ -765,9 +765,9 @@ func (r *Runner) execMemSave(ctx context.Context, step *flow.Step, orgID uuid.UU
 	if r.Observations == nil {
 		return nil, errors.New("mem_save: Observations service not configured")
 	}
-	// observations tiene RLS FORCE (migration 000085): el runner corre
-	// server-side sin middleware HTTP, así que envolvemos el Save con la
-	// tx de org (el service la toma del ctx vía TxFromContext).
+
+
+
 	var obs *observation.Observation
 	err = txctx.WithOrgTx(ctx, r.Pool, orgID, func(tx pgx.Tx) error {
 		txCtx := txctx.WithTxContext(ctx, tx)
@@ -800,7 +800,7 @@ func (r *Runner) execCondition(step *flow.Step, inputs, outputs map[string]any) 
 	if op == "" {
 		op = "=="
 	}
-	// Resolver {{inputs.field}} → valor
+
 	leftResolved := resolveTemplate(left, inputs, outputs)
 	rightResolved := resolveTemplate(right, inputs, outputs)
 	var branch string
@@ -825,8 +825,8 @@ func (r *Runner) execCondition(step *flow.Step, inputs, outputs map[string]any) 
 
 // resolveTemplate substituye {{inputs.x}} y {{outputs.step_id.field}}.
 func resolveTemplate(s string, inputs, outputs map[string]any) string {
-	// MVP simple: solo placeholders top-level
-	// {{inputs.foo}} → inputs["foo"]
+
+
 	if val, ok := tryResolve(s, "{{inputs.", inputs); ok {
 		return val
 	}

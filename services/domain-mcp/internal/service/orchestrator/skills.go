@@ -28,7 +28,7 @@ type SkillRecommendation struct {
 // SearchHybrid encuentre skills con descripción similar. Opcionalmente
 // se podría enriquecer con el output de la fase actual, pero como D3 es
 // informativo (no bloqueante), un query simple alcanza.
-func (s *Service) fetchRecommendedSkills(ctx context.Context, orgID uuid.UUID, agentTemplateSlug string, threshold float64) (*SkillsRecommended, error) {
+func (s *Service) fetchRecommendedSkills(ctx context.Context, orgID, projectID uuid.UUID, agentTemplateSlug string, threshold float64) (*SkillsRecommended, error) {
 	if s.Skills == nil || threshold <= 0 {
 		return nil, nil
 	}
@@ -37,15 +37,26 @@ func (s *Service) fetchRecommendedSkills(ctx context.Context, orgID uuid.UUID, a
 	if err != nil {
 		return nil, fmt.Errorf("search skills: %w", err)
 	}
+
+
+
+	applicable, err := s.Skills.ApplicableSkillIDs(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("applicable skills: %w", err)
+	}
 	recs := &SkillsRecommended{Threshold: threshold}
 	for _, r := range results {
-		if r.Score >= threshold {
-			recs.Skills = append(recs.Skills, SkillRecommendation{
-				Slug:  r.Slug,
-				Name:  r.Name,
-				Score: r.Score,
-			})
+		if r.Score < threshold {
+			continue
 		}
+		if applicable != nil && !applicable[r.ID] {
+			continue // skill no aplica a este proyecto (otro proyecto o excluida)
+		}
+		recs.Skills = append(recs.Skills, SkillRecommendation{
+			Slug:  r.Slug,
+			Name:  r.Name,
+			Score: r.Score,
+		})
 	}
 	return recs, nil
 }

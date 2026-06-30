@@ -27,8 +27,8 @@ func (m *RateLimitMiddleware) Wrap(next http.Handler) http.Handler {
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusTooManyRequests)
-			// HU-28.5: status ya escrito → best effort sobre el body. Loggeamos
-			// errores de escritura en vez de tragarlos.
+
+
 			if _, err := w.Write([]byte(`{"error":{"code":"rate_limited","message":"too many requests"}}`)); err != nil {
 				slog.Warn("ratelimit response write failed", "error", err, "key", key)
 			}

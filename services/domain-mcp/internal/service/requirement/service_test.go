@@ -53,16 +53,16 @@ func TestValidPriorities(t *testing.T) {
 func TestCreateValidation(t *testing.T) {
 	s := &Service{}
 
-	_, err := s.Create(nil, "", "title", "", "", "", "")
+	_, err := s.Create(nil, "", "title", "", "", "", "", nil)
 	require.ErrorIs(t, err, ErrSlugInvalid)
 
-	_, err = s.Create(nil, "REQ-01", "", "", "", "", "")
+	_, err = s.Create(nil, "REQ-01", "", "", "", "", "", nil)
 	require.Error(t, err)
 
-	_, err = s.Create(nil, "REQ-01", "title", "", "invalid", "", "")
+	_, err = s.Create(nil, "REQ-01", "title", "", "invalid", "", "", nil)
 	require.ErrorIs(t, err, ErrInvalidStatus)
 
-	_, err = s.Create(nil, "REQ-01", "title", "", "", "urgent", "")
+	_, err = s.Create(nil, "REQ-01", "title", "", "", "urgent", "", nil)
 	require.ErrorIs(t, err, ErrInvalidPriority)
 }
 
@@ -71,12 +71,12 @@ func TestCreateValidation(t *testing.T) {
 func TestSabotage_UniqueViolationCheck(t *testing.T) {
 	require.False(t, isUniqueViolation(nil))
 	require.False(t, isUniqueViolation(ErrNotFound))
-	// PgError envuelto con código UniqueViolation
+
 	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "requirements_slug_idx"}
 	require.True(t, isUniqueViolation(pgErr))
 	require.True(t, isUniqueViolation(fmt.Errorf("wrapped: %w", pgErr)))
-	// Errores no-pg no califican
+
 	require.False(t, isUniqueViolation(fmt.Errorf("generic error mentioning 23505 in text")))
-	// Otro código pg (ej FK) no califica
+
 	require.False(t, isUniqueViolation(&pgconn.PgError{Code: pgerrcode.ForeignKeyViolation}))
 }

@@ -205,7 +205,7 @@ func (m *multiConcernRepo) GetFlowRunStep(_ context.Context, _ uuid.UUID) (*Flow
 	return m.step, nil
 }
 func (m *multiConcernRepo) ListFlowRunSteps(_ context.Context, _ uuid.UUID) ([]FlowRunStepRow, error) {
-	// Devolver una copia con status actualizados
+
 	out := make([]FlowRunStepRow, len(m.allSteps))
 	copy(out, m.allSteps)
 	for i := range out {
@@ -225,6 +225,10 @@ func (m *multiConcernRepo) MarkStepCompleted(_ context.Context, stepID uuid.UUID
 	return nil
 }
 func (m *multiConcernRepo) MarkStepFailed(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
+func (m *multiConcernRepo) SetFlowRunError(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
 func (m *multiConcernRepo) UpdateFlowRunStatus(_ context.Context, _ uuid.UUID, status string) error {
@@ -304,11 +308,11 @@ func TestRecordPhaseResult_MultiConcern_CancelsRemainingSteps(t *testing.T) {
 	require.Equal(t, "Implementar login JWT", res.MultiConcern.Concerns[0].Description)
 	require.Equal(t, "cache", res.MultiConcern.Concerns[1].Name)
 
-	// Verificar que el step apply fue cancelado
+
 	require.Len(t, repo.cancelledSteps, 1)
 	require.Equal(t, applyStepID, repo.cancelledSteps[0])
 
-	// Flow status debería ser "completed" (explore completed + apply cancelled)
+
 	require.Equal(t, "completed", res.FlowRunStatus)
 }
 
@@ -349,12 +353,12 @@ func TestRecordPhaseResult_MultiConcern_NoConcerns_NoCrash(t *testing.T) {
 		Output: map[string]any{
 			"intent":        "feature",
 			"multi_concern": true,
-			// sin concerns
+
 		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "completed", res.StepStatus)
-	// Sin concerns válidos → MultiConcern nil
+
 	require.Nil(t, res.MultiConcern)
 }
 
@@ -392,8 +396,8 @@ func TestRecordPhaseResult_MultiConcern_NotForNonExplore(t *testing.T) {
 		Env:    "dev",
 	}
 
-	// Verify necesita scenarios_failed, tests_passed, etc. Output válido
-	// pero sin multi_concern real.
+
+
 	res, err := s.RecordPhaseResult(context.Background(), PhaseResultInput{
 		FlowRunStepID: stepID,
 		Output: map[string]any{
@@ -404,11 +408,11 @@ func TestRecordPhaseResult_MultiConcern_NotForNonExplore(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	// Verify returns "completed" for valid output
+
 	require.Equal(t, "completed", res.StepStatus)
-	// Pero MultiConcern es nil porque el handler no es sdd-explore
+
 	require.Nil(t, res.MultiConcern)
-	// No se cancelaron steps
+
 	require.Len(t, repo.cancelledSteps, 0)
 }
 

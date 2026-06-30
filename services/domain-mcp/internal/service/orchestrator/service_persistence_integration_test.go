@@ -66,6 +66,21 @@ func newUserID(t *testing.T, pools *db.Pools, orgID uuid.UUID) uuid.UUID {
 	return userID
 }
 
+// newProjectID crea un proyecto fixture para la org dada. Fase 2: el orquestador
+// exige ProjectID (flow_runs.project_id es NOT NULL), asi que los tests que
+// llaman Run necesitan un proyecto real al cual scopear la corrida.
+func newProjectID(t *testing.T, pools *db.Pools, orgID uuid.UUID) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	var projectID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (organization_id, name, slug)
+		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`,
+		orgID,
+	).Scan(&projectID))
+	return projectID
+}
+
 func buildRegistry() *phases.Registry {
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDApplyHandler())
@@ -80,11 +95,13 @@ func TestService_Run_Express_WithoutSeededFlow_ReturnsErrFlowNotSeeded(t *testin
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 
-	// Sin seedar el flow → debe fallar con error tipado
+
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	_, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "fix typo",
 		Mode:           orchestrator.ModeExpress,
@@ -99,9 +116,10 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
-	// El orquestador depende de DOS catálogos seedeados:
-	// 1. flows (para lookup sdd-pipeline-v1)
-	// 2. agent_templates (para lookup system_prompt por slug, BD source-of-truth)
+	projectID := newProjectID(t, pools, orgID)
+
+
+
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -110,6 +128,7 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "implementar typo fix",
 		Mode:           orchestrator.ModeExpress,
@@ -120,7 +139,7 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	require.NotNil(t, res.Plan)
 	require.Len(t, res.Plan.Steps, 2)
 
-	// Verifica flow_run persistido
+
 	var (
 		status      string
 		flowID      uuid.UUID
@@ -133,21 +152,21 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	).Scan(&status, &flowID, &triggeredBy, &metaRaw))
 	require.Equal(t, "pending", status)
 	require.Equal(t, userID, triggeredBy)
-	// flow_id debe matchear el seedeado
+
 	var seededID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT id FROM flows WHERE slug=$1`,
 		seeds.SDDPipelineFlowSlug).Scan(&seededID))
 	require.Equal(t, seededID, flowID)
 
-	// Verifica metadata JSONB
+
 	var meta map[string]any
 	require.NoError(t, json.Unmarshal(metaRaw, &meta))
 	require.Equal(t, res.OrchestratorRunID.String(), meta["orchestrator_run_id"])
 	require.Equal(t, "express", meta["mode"])
 	require.Equal(t, "implementar typo fix", meta["raw_text"])
 
-	// Verifica steps en orden + status pending + step_keys correctos
+
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)
@@ -170,6 +189,7 @@ func TestService_Run_Express_StepInputsIncludeSuggestedSaves(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -178,6 +198,7 @@ func TestService_Run_Express_StepInputsIncludeSuggestedSaves(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeExpress,

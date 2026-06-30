@@ -44,14 +44,14 @@ func TestLoadKeyring_MultiVersionRoundTrip(t *testing.T) {
 	_, _ = rand.Read(k1)
 	_, _ = rand.Read(k2)
 
-	// Cifrar con keyring solo-v1
+
 	c1, err := LoadKeyring("1:" + base64.StdEncoding.EncodeToString(k1))
 	require.NoError(t, err)
 	require.Equal(t, byte(1), c1.CurrentVersion())
 	blobV1, err := c1.Encrypt([]byte("dato viejo"))
 	require.NoError(t, err)
 
-	// Keyring rotado v1+v2: cifra con v2, descifra blobs v1
+
 	c2, err := LoadKeyring("1:" + base64.StdEncoding.EncodeToString(k1) +
 		",2:" + base64.StdEncoding.EncodeToString(k2))
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestLoadKeyring_MultiVersionRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, byte(2), blobV2[0], "nuevos blobs llevan version 2")
 
-	// Cipher solo-v2 NO puede descifrar blobs v1 (version desconocida)
+
 	c3, err := LoadKeyring("2:" + base64.StdEncoding.EncodeToString(k2))
 	require.NoError(t, err)
 	_, err = c3.Decrypt(blobV1)

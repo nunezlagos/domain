@@ -40,35 +40,35 @@ type Input struct {
 	FlowRunID       uuid.UUID
 	FlowRunStepID   uuid.UUID
 	PhaseSlug       PhaseSlug
-	// PriorOutputs son los outputs JSONB de las fases ya ejecutadas en este
-	// flow_run, indexados por slug. El handler los usa para construir el
-	// prompt (p.ej. sdd-design consulta el output de sdd-spec).
+
+
+
 	PriorOutputs map[PhaseSlug]map[string]any
-	// RawText es el prompt original del usuario, propagado a todas las
-	// fases por si quieren referenciarlo (ej: sdd-onboard cita la pregunta).
+
+
 	RawText string
 }
 
 // Output es lo que produce el handler para que el service lo persista en
 // flow_run_steps.outputs JSONB.
 type Output struct {
-	// AgentTemplateSlug es el sdd-* template que debería invocar el
-	// cliente IDE para esta fase. El service lo resuelve al agent_id real
-	// vía agent_templates lookup antes de dispatch.
+
+
+
 	AgentTemplateSlug string
-	// SystemPrompt + UserPrompt es lo que el cliente IDE pasa al agente.
-	// El orquestador construye, el cliente ejecuta.
+
+
 	SystemPrompt string
 	UserPrompt   string
-	// SuggestedSaves es el contract D5: lista de memorias que el cliente
-	// SHOULD persistir antes de reportar phase_result. Los marcados con
-	// Required=true son hard requirement.
+
+
+
 	SuggestedSaves []SuggestedSave
-	// SkillThreshold (D3) lookup desde agent_templates.metadata. El service
-	// usa este threshold para llamar /api/skills/recommend.
+
+
 	SkillThreshold float64
-	// RetryPolicy es lo que aplica el heartbeat-watcher (issue-08.11) si
-	// la fase queda colgada o falla.
+
+
 	RetryPolicy RetryPolicy
 }
 
@@ -81,7 +81,7 @@ type Output struct {
 type SuggestedSave struct {
 	Type     string // adr | code_reference | sabotage_record | knowledge_doc | …
 	Required bool
-	// Hint es texto descriptivo de qué guardar (no template, sólo guía).
+
 	Hint string
 }
 
@@ -103,9 +103,9 @@ const (
 type Handler interface {
 	Slug() PhaseSlug
 	Build(ctx context.Context, in Input) (*Output, error)
-	// Validate corre cuando el cliente reporta phase_result. Si devuelve
-	// error, el step no avanza; el service propaga al caller (D5
-	// enforcement de required saves).
+
+
+
 	Validate(ctx context.Context, out *Output, clientResult ClientResult) error
 }
 

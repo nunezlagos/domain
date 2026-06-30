@@ -15,7 +15,10 @@ import (
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	usvc "nunezlagos/domain/internal/service/issue"
 	skillsvc "nunezlagos/domain/internal/service/skill"
+	specsvc "nunezlagos/domain/internal/service/spec"
+	tsvc "nunezlagos/domain/internal/service/task"
 	"nunezlagos/domain/internal/tracing"
 
 	"go.opentelemetry.io/otel/trace"
@@ -45,31 +48,34 @@ type Service struct {
 	Pool    *pgxpool.Pool
 	Audit   audit.Recorder
 	Phases  *phases.Registry
-	// Repo encapsula la persistencia (flow lookup + flow_runs + steps).
-	// Si nil, Service.Run en modo Express NO persistirá y devolverá
-	// IDs in-memory — útil para tests unit sin DB. En boot real,
-	// pasarlo explícitamente via NewPGRepository(pool).
+
+	Spec     *specsvc.Service
+	Tasks    *tsvc.Service
+	IssueSvc *usvc.Service
+
+
+
 	Repo Repository
-	// Env replica config.Env. Empty o "dev" deshabilita enforcements
-	// estrictos para iteración local; "prod" los habilita.
+
+
 	Env string
-	// Clock inyectable (default time.Now UTC). Tests sustituyen para
-	// hacer determinista StartedAt.
+
+
 	Clock Clock
-	// Metrics opcional (issue-08.10 obs-001). Si nil, las métricas no
-	// se incrementan; usado en tests que no levantan Prometheus.
+
+
 	Metrics *metrics.Registry
-	// LLM Factory para Mode=Solo (issue-08.10 svc-005). Si nil, RunSolo
-	// devuelve ErrLLMFactoryRequired. Tests inyectan un factory con
-	// providers fake; cmd/domain-mcp usa el global con providers reales.
+
+
+
 	LLM *llm.Factory
-	// SignalStore opcional para ModeAsync. Si nil, async mode funciona
-	// sin emitir flow_signals (modo degraded). Cuando está configurado,
-	// ProcessAsyncFlowRun emite señales por step completado/fallido y
-	// al finalizar el flow.
+
+
+
+
 	SignalStore *flow.SignalStore
-	// Skills opcional para auto-recomendación D3 (skill-001). Si nil,
-	// fetchRecommendedSkills devuelve nil sin error.
+
+
 	Skills *skillsvc.Service
 }
 
@@ -97,8 +103,8 @@ func New(pool *pgxpool.Pool, audit audit.Recorder, reg *phases.Registry, env str
 //     sin Plan. Los modos restantes vienen en próximos chunks junto con
 //     la persistencia flow_runs + dispatch loop MCP.
 func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateResult, error) {
-	// OTel span: orchestrator.run. SafeAttrs whitelist evita PII; raw_text
-	// NO se incluye porque puede contener datos sensibles del usuario.
+
+
 	ctx, span := tracing.Tracer("orchestrator").Start(ctx, "orchestrator.run",
 		trace.WithAttributes(
 			tracing.SafeAttr("orchestrator.mode", string(in.Mode)),
@@ -114,7 +120,8 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 	}
 	mode := in.Mode
 	if mode == "" {
-		mode = ModeFull
+		sig := analyzeComplexity(in.RawText)
+		mode = decideMode(sig, in, s.LLM != nil)
 	}
 	now := s.now()
 	res := &OrchestrateResult{
@@ -124,9 +131,9 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		StartedAt:         now,
 	}
 	if mode == ModeSolo {
-		// Solo NO admite Repo nil (necesita BD para agent_templates y flow_runs)
-		// ni LLM nil. Express/Full/Detect tienen un fallback in-memory útil
-		// para tests; Solo es server-side puro y no tiene sentido sin BD.
+
+
+
 		if s.Repo == nil {
 			return nil, errors.New("orchestrator: Repo required for Solo mode")
 		}
@@ -144,7 +151,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 			return nil, err
 		}
 		if err := s.persistPlan(ctx, in, mode,
@@ -182,7 +189,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+		if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 			return nil, err
 		}
 		if err := s.persistPlan(ctx, in, mode,
@@ -200,12 +207,12 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		)
 		return result, nil
 	}
-	if mode == ModeExpress || mode == ModeFull || mode == ModeDetect {
-		// Si hay Repo configurado, resolver el flow_id ANTES de armar
-		// el plan: queremos fallar rápido (ErrFlowNotSeeded) sin haber
-		// hecho trabajo de prompts si la org no está inicializada.
-		// Detect requiere el flow seedeado igual (queremos validar que
-		// la org está lista para Full antes de devolver preview).
+	if mode == ModeExpress || mode == ModeLite || mode == ModeFull || mode == ModeDetect {
+
+
+
+
+
 		var flowID uuid.UUID
 		if s.Repo != nil {
 			var err error
@@ -227,9 +234,15 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		switch mode {
 		case ModeExpress:
 			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
+		case ModeLite:
+
+
+
+
+			plan, err = modes.BuildLitePlan(ctx, s.Phases, phaseInput, now)
 		case ModeFull, ModeDetect:
-			// Detect usa el mismo planner que Full — la diferencia es
-			// que NO persistimos abajo (dry-run).
+
+
 			plan, err = modes.BuildFullPlan(ctx, s.Phases, phaseInput,
 				phases.PhaseSlug(in.StartingPhase),
 				convertSkipPhases(in.SkipPhases), now)
@@ -237,21 +250,21 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err != nil {
 			return nil, err
 		}
-		// Hydrate los system_prompts desde agent_templates (BD source-of-truth).
-		// Los handlers devuelven SystemPrompt="" intencionalmente; el Service
-		// hace lookup acá por cada step usando AgentTemplateSlug. Esto
-		// permite que operadores customicen prompts vía UI/MCP sin
-		// recompilar binario. Detect TAMBIÉN hidrata: el preview es útil
-		// sólo si refleja los prompts reales que correrá Full.
+
+
+
+
+
+
 		if s.Repo != nil {
-			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, plan); err != nil {
+			if err := s.hydrateSystemPrompts(ctx, in.OrganizationID, in.ProjectID, plan); err != nil {
 				return nil, err
 			}
 		}
-		// Persistir SÓLO en modos no-dry-run. Detect devuelve plan
-		// in-memory para inspección sin ensuciar BD; si el caller
-		// quiere ejecutar de verdad, invoca el orquestador de nuevo
-		// con Mode=ModeFull.
+
+
+
+
 		if s.Repo != nil && mode != ModeDetect {
 			if err := s.persistPlan(ctx, in, mode,
 				res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
@@ -262,10 +275,10 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if len(res.Plan.Steps) > 0 {
 			res.SnapshotPrompt = res.Plan.Steps[0].UserPrompt
 		}
-		// Métricas: orchestrator_runs_total{mode, status="started"}.
-		// El status terminal (completed/failed) se incrementa cuando el
-		// flow_run cambia de estado vía propagateFlowStatusAfterFailure
-		// o cuando la última fase termina vía RecordPhaseResult.
+
+
+
+
 		if s.Metrics != nil {
 			s.Metrics.OrchestratorRunsTotal.WithLabelValues(string(mode), "started").Inc()
 		}
@@ -323,10 +336,13 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 // el seed (no hay default sano para un prompt en blanco).
 //
 // También extrae SkillThreshold desde agent_templates.metadata (D3).
-func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, plan *modes.PhasePlan) error {
+func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uuid.UUID, plan *modes.PhasePlan) error {
 	if plan == nil {
 		return nil
 	}
+
+
+	rulesBlock := s.buildRulesBlock(ctx, projectID)
 	type cached struct {
 		systemPrompt string
 		threshold    float64
@@ -346,12 +362,87 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID uuid.UUID, pla
 		if err != nil {
 			return err
 		}
-		c := cached{systemPrompt: t.SystemPrompt, threshold: t.SkillThreshold()}
+		sysPrompt := t.SystemPrompt + rulesBlock
+		c := cached{systemPrompt: sysPrompt, threshold: t.SkillThreshold()}
 		cache[slug] = c
 		plan.Steps[i].SystemPrompt = c.systemPrompt
 		plan.Steps[i].SkillThreshold = c.threshold
 	}
 	return nil
+}
+
+// buildRulesBlock arma un bloque markdown con las reglas vigentes: las de
+// plataforma (platform_policies) + las del proyecto (project_policies),
+// respetando override_platform (si una policy de proyecto de un `kind`
+// marca override, se omiten las de plataforma de ese mismo kind). Best-effort:
+// si falla la lectura, devuelve "" (las reglas son aditivas, no bloqueantes).
+func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) string {
+	if s.Pool == nil {
+		return ""
+	}
+	type pol struct {
+		name, body, kind string
+		override         bool
+	}
+	var platform, project []pol
+
+	if rows, err := s.Pool.Query(ctx,
+		`SELECT name, COALESCE(body_md,''), COALESCE(kind,'')
+		   FROM platform_policies WHERE is_active = TRUE
+		   ORDER BY kind, slug`); err == nil {
+		for rows.Next() {
+			var p pol
+			if rows.Scan(&p.name, &p.body, &p.kind) == nil && p.body != "" {
+				platform = append(platform, p)
+			}
+		}
+		rows.Close()
+	}
+
+	if projectID != uuid.Nil {
+		if rows, err := s.Pool.Query(ctx,
+			`SELECT name, COALESCE(body_md,''), COALESCE(kind,''), override_platform
+			   FROM project_policies
+			   WHERE project_id = $1 AND is_active = TRUE
+			     AND deleted_at IS NULL AND proposed = FALSE
+			   ORDER BY kind, slug`, projectID); err == nil {
+			for rows.Next() {
+				var p pol
+				if rows.Scan(&p.name, &p.body, &p.kind, &p.override) == nil && p.body != "" {
+					project = append(project, p)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	overridden := make(map[string]bool)
+	for _, p := range project {
+		if p.override && p.kind != "" {
+			overridden[p.kind] = true
+		}
+	}
+
+	var b strings.Builder
+	write := func(p pol) {
+		b.WriteString("\n### ")
+		b.WriteString(p.name)
+		b.WriteString("\n")
+		b.WriteString(p.body)
+		b.WriteString("\n")
+	}
+	for _, p := range platform {
+		if !overridden[p.kind] {
+			write(p)
+		}
+	}
+	for _, p := range project {
+		write(p)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\n\n## Reglas vigentes (plataforma + proyecto)\n" + b.String()
 }
 
 // now devuelve la hora vía Clock o cae a UTC system si Clock fue nil
@@ -376,12 +467,22 @@ func (s *Service) validate(in OrchestrateInput) error {
 	if strings.TrimSpace(in.RawText) == "" {
 		return ErrEmptyRawText
 	}
+
+
+	if in.ProjectID == uuid.Nil {
+		return ErrProjectIDRequired
+	}
 	if in.Mode != "" && !in.Mode.IsValid() {
 		return ErrInvalidMode
 	}
+	switch in.ExecMode {
+	case "", "auto", "manual", "hybrid":
+	default:
+		return ErrInvalidExecMode
+	}
 	if in.Mode == ModeAsync && in.ExpressMaxLines > 0 {
-		// ExpressMaxLines>0 sólo tiene sentido para Express. Si el caller
-		// pidió async con ExpressMaxLines, es la combinación D6.
+
+
 		return ErrAsyncModeUnsupported
 	}
 	if s.Phases != nil {

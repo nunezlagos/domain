@@ -1,4 +1,4 @@
-// MCP tools para intake pipeline — issue-04.8
+
 
 package mcpserver
 
@@ -10,8 +10,22 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	intakesvc "nunezlagos/domain/internal/service/intake"
 )
+
+type intakeService interface {
+	Submit(ctx context.Context, in intakesvc.SubmitInput) (*intakesvc.Payload, error)
+	Get(ctx context.Context, id uuid.UUID) (*intakesvc.Payload, error)
+	ListPending(ctx context.Context, limit int) ([]intakesvc.Payload, error)
+	Approve(ctx context.Context, id uuid.UUID, reviewerID uuid.UUID) (*intakesvc.Payload, error)
+	Reject(ctx context.Context, id, reviewerID uuid.UUID, reason string) (*intakesvc.Payload, error)
+}
+
+type intakeHandlers struct {
+	intake    intakeService
+	principal *apikey.Principal
+}
 
 // toolIntakeSubmit — domain_intake_submit
 func toolIntakeSubmit() mcp.Tool {
@@ -34,6 +48,10 @@ func toolIntakeSubmit() mcp.Tool {
 		mcp.WithObject("raw_payload",
 			mcp.Description("Payload opcional adicional (JSONB)"),
 		),
+		mcp.WithString("project_id",
+			mcp.Description("UUID del proyecto (de domain_session_bootstrap). OBLIGATORIO: scopea el intake al proyecto (issue_intake_payloads.project_id es NOT NULL)."),
+			mcp.Required(),
+		),
 	)
 }
 
@@ -49,16 +67,16 @@ func toolIntakeGet() mcp.Tool {
 
 func toolIntakeListPending() mcp.Tool {
 	return mcp.NewTool("domain_intake_list_pending",
-		mcp.WithDescription("Lista intakes pendientes de revisión (no terminales)."),
+		mcp.WithDescription("Lista intakes pendientes de revision (no terminales)."),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50, max 200)"),
+			mcp.Description("Maximo resultados (default 50, max 200)"),
 		),
 	)
 }
 
 func toolIntakeApprove() mcp.Tool {
 	return mcp.NewTool("domain_intake_approve",
-		mcp.WithDescription("Aprueba un intake en pending_review. Precondición para commit."),
+		mcp.WithDescription("Aprueba un intake en pending_review. Precondicion para commit."),
 		mcp.WithString("id",
 			mcp.Description("UUID del intake"),
 			mcp.Required(),
@@ -68,7 +86,7 @@ func toolIntakeApprove() mcp.Tool {
 
 func toolIntakeReject() mcp.Tool {
 	return mcp.NewTool("domain_intake_reject",
-		mcp.WithDescription("Rechaza un intake con razón."),
+		mcp.WithDescription("Rechaza un intake con razon."),
 		mcp.WithString("id",
 			mcp.Description("UUID del intake"),
 			mcp.Required(),
@@ -80,10 +98,8 @@ func toolIntakeReject() mcp.Tool {
 	)
 }
 
-// --- handlers ---
-
-func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Intake == nil {
+func (h *intakeHandlers) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.intake == nil {
 		return mcp.NewToolResultError("intake service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -98,11 +114,22 @@ func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) 
 	if v, ok := args["raw_payload"].(map[string]any); ok {
 		rawPayload = v
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	p, err := d.Intake.Submit(ctx, intakesvc.SubmitInput{
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+
+	pidStr := req.GetString("project_id", "")
+	if pidStr == "" {
+		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
+	}
+	pp, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return mcp.NewToolResultError("invalid project_id"), nil
+	}
+	projectID := &pp
+	p, err := h.intake.Submit(ctx, intakesvc.SubmitInput{
 		Source:         source,
 		SourceRef:      sourceRef,
 		OrganizationID: &orgID,
+		ProjectID:      projectID,
 		SubmittedBy:    submittedBy,
 		RawText:        rawText,
 		RawPayload:     rawPayload,
@@ -118,25 +145,25 @@ func (d *Deps) handleIntakeSubmit(ctx context.Context, req mcp.CallToolRequest) 
 	})
 }
 
-func (d *Deps) handleIntakeGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Intake == nil {
+func (h *intakeHandlers) handleIntakeGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.intake == nil {
 		return mcp.NewToolResultError("intake service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
-	p, err := d.Intake.Get(ctx, id)
+	p, err := h.intake.Get(ctx, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 	}
 	return toolResultJSON(p)
 }
 
-func (d *Deps) handleIntakeListPending(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Intake == nil {
+func (h *intakeHandlers) handleIntakeListPending(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.intake == nil {
 		return mcp.NewToolResultError("intake service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -144,25 +171,25 @@ func (d *Deps) handleIntakeListPending(ctx context.Context, req mcp.CallToolRequ
 	if v, ok := args["limit"].(float64); ok {
 		limit = int(v)
 	}
-	results, err := d.Intake.ListPending(ctx, limit)
+	results, err := h.intake.ListPending(ctx, limit)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"results": results, "count": len(results)})
 }
 
-func (d *Deps) handleIntakeApprove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Intake == nil {
+func (h *intakeHandlers) handleIntakeApprove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.intake == nil {
 		return mcp.NewToolResultError("intake service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
-	reviewerID, _ := uuid.Parse(d.Principal.UserID)
-	p, err := d.Intake.Approve(ctx, id, reviewerID)
+	reviewerID, _ := uuid.Parse(h.principal.UserID)
+	p, err := h.intake.Approve(ctx, id, reviewerID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("approve: %v", err)), nil
 	}
@@ -172,8 +199,8 @@ func (d *Deps) handleIntakeApprove(ctx context.Context, req mcp.CallToolRequest)
 	})
 }
 
-func (d *Deps) handleIntakeReject(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Intake == nil {
+func (h *intakeHandlers) handleIntakeReject(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.intake == nil {
 		return mcp.NewToolResultError("intake service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -184,10 +211,10 @@ func (d *Deps) handleIntakeReject(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
-	reviewerID, _ := uuid.Parse(d.Principal.UserID)
-	p, err := d.Intake.Reject(ctx, id, reviewerID, reason)
+	reviewerID, _ := uuid.Parse(h.principal.UserID)
+	p, err := h.intake.Reject(ctx, id, reviewerID, reason)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("reject: %v", err)), nil
 	}
@@ -199,11 +226,12 @@ func (d *Deps) handleIntakeReject(ctx context.Context, req mcp.CallToolRequest) 
 
 // registerIntakeTools agrega tools de intake al listado.
 func registerIntakeTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &intakeHandlers{intake: deps.Intake, principal: deps.Principal}
 	return []mcpgo.ServerTool{
-		{Tool: toolIntakeSubmit(), Handler: wrap.Wrap("domain_intake_submit", deps.handleIntakeSubmit)},
-		{Tool: toolIntakeGet(), Handler: wrap.Wrap("domain_intake_get", deps.handleIntakeGet)},
-		{Tool: toolIntakeListPending(), Handler: wrap.Wrap("domain_intake_list_pending", deps.handleIntakeListPending)},
-		{Tool: toolIntakeApprove(), Handler: wrap.Wrap("domain_intake_approve", deps.handleIntakeApprove)},
-		{Tool: toolIntakeReject(), Handler: wrap.Wrap("domain_intake_reject", deps.handleIntakeReject)},
+		{Tool: toolIntakeSubmit(), Handler: wrap.Wrap("domain_intake_submit", h.handleIntakeSubmit)},
+		{Tool: toolIntakeGet(), Handler: wrap.Wrap("domain_intake_get", h.handleIntakeGet)},
+		{Tool: toolIntakeListPending(), Handler: wrap.Wrap("domain_intake_list_pending", h.handleIntakeListPending)},
+		{Tool: toolIntakeApprove(), Handler: wrap.Wrap("domain_intake_approve", h.handleIntakeApprove)},
+		{Tool: toolIntakeReject(), Handler: wrap.Wrap("domain_intake_reject", h.handleIntakeReject)},
 	}
 }

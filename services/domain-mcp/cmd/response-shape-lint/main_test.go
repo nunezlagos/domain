@@ -77,8 +77,8 @@ func TestLint_BAD_JSONEncoder(t *testing.T) {
 	if scanned != 1 {
 		t.Fatalf("expected 1 handler scanned, got %d", scanned)
 	}
-	// Esperamos al menos una violation por NewEncoder y otra por WriteHeader
-	// con status no-allowed (StatusAccepted).
+
+
 	if len(violations) < 1 {
 		t.Fatalf("expected >=1 violations, got %d: %v", len(violations), violations)
 	}

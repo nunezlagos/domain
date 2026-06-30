@@ -27,7 +27,7 @@ type Client struct {
 	APIKey  string
 	BaseURL string
 	HTTP    *http.Client
-	// Verbose imprime method+URL de cada request a stderr (--verbose).
+
 	Verbose bool
 }
 

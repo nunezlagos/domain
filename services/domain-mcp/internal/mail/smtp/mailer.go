@@ -51,19 +51,11 @@ func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
 	msg := buildMessage(m.cfg.From, to, subject, body)
 
-	// Si UseTLS, conectar STARTTLS-style
+
 	if m.cfg.UseTLS {
 		return m.sendTLS(ctx, addr, to, msg)
 	}
 	return m.sendPlain(ctx, addr, to, msg)
-}
-
-// SendOTP — adapter para otp.Mailer interface.
-func (m *Mailer) SendOTP(ctx context.Context, to, code string, expiresIn time.Duration) error {
-	subject := "Tu código de acceso a Domain"
-	body := fmt.Sprintf("Tu código: %s\nVence en: %s\n\nSi no lo solicitaste, ignorá este correo.",
-		code, expiresIn.String())
-	return m.Send(ctx, to, subject, body)
 }
 
 func (m *Mailer) sendPlain(ctx context.Context, addr, to, msg string) error {

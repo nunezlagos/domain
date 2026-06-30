@@ -1,0 +1,58 @@
+{% extends "maintainers/list_base.html" %}
+{% load static %}
+{% comment %}
+Listado de proyectos. Extiende maintainers/list_base.html: este define la
+estructura comun (header + search debounced + contenedor [data-maintainer-table]
+con data-base-url/-signal-url/-signal) y carga maintainer.js. NO hay JS inline.
+{% endcomment %}
+
+{% block page_title %}Proyectos{% endblock %}
+{% block header_title %}Proyectos{% endblock %}
+{% block page_subtitle %}Gestion de los proyectos de la organizacion{% endblock %}
+{% block create_label %}+ Nuevo proyecto{% endblock %}
+{% block search_placeholder %}Nombre, slug, descripcion o repo...{% endblock %}
+
+{% comment %} Accion primaria resaltada (btn-primary), igual criterio que usuarios. {% endcomment %}
+{% block header_actions %}
+  <button class="btn btn-primary" data-action="create">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Nuevo proyecto
+  </button>
+{% endblock %}
+
+{% block filters %}
+  <div>
+    <label class="form-label" for="f-status">Estado</label>
+    <select data-filter name="status" id="f-status" class="form-control form-select mnt-filter-select">
+      <option value="">Todos</option>
+      {% for val, lbl in status_options %}
+        <option value="{{ val }}" {% if val == selected_status %}selected{% endif %}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mnt-filters-search">
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Nombre, slug, descripcion o repo..." autocomplete="off" data-search-input>
+  </div>
+  <div>
+    <button type="button" class="btn btn-excel" data-export="/proyectos/export/"
+            title="Exportar consolidado a Excel (CSV)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+      </svg>
+      Excel
+    </button>
+  </div>
+{% endblock %}
+
+{% block table_area_id %}projects-table-area{% endblock %}
+{% block base_url %}/proyectos/{% endblock %}
+{% block signal_url %}{% url 'projects:signal' %}{% endblock %}
+
+{% block table %}{% include "projects/_table_partial.html" %}{% endblock %}

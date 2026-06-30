@@ -1,9 +1,9 @@
--- migration: create_flow_versions
--- author: nunezlagos
--- issue: HU-09.7
--- description: snapshots immutables de flow definitions por versión
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE flow_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

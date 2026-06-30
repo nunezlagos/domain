@@ -53,10 +53,10 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 	if err != nil {
 		return nil, fmt.Errorf("flow not found: %w", err)
 	}
-	// org desde el context del request (issue-02.8: flows ya no portan org).
+
 	orgID := ctxkeys.OrgID(ctx)
-	// issue-09.7 fv-008: el engine lee la versión pinneada del run, no la
-	// definition actual del flow (que pudo cambiar mientras el run corría).
+
+
 	if versionID != nil {
 		if spec, ok := r.loadRunVersionSpec(ctx, *versionID); ok {
 			f.Spec = *spec
@@ -79,7 +79,7 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 	completedSet := extractCompletedIDs(cursor)
 	currentStepID, _ := cursor["current_step"].(string)
 
-	// Re-marcar como running con worker
+
 	_, _ = r.Pool.Exec(ctx,
 		`UPDATE flow_runs SET status = 'running', worker_id = $1,
 		 last_heartbeat_at = NOW(), recovery_count = recovery_count + 1
@@ -97,7 +97,7 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 		})
 	}
 
-	// Revisar si el step actual es replay_unsafe
+
 	if currentStepID != "" {
 		for _, s := range f.Spec.Steps {
 			if s.ID == currentStepID && !IsReplaySafe(s.ReplaySafe) {
@@ -113,7 +113,7 @@ func (r *Runner) ResumeRun(ctx context.Context, in ResumeInput) (*RunResult, err
 		}
 	}
 
-	// Ejecutar desde el primer step no completado
+
 	finalErr := ""
 	stepByID := map[string]*flow.Step{}
 	for i := range f.Spec.Steps {
@@ -161,7 +161,7 @@ LOOP:
 				if r.Metrics != nil {
 					r.Metrics.FlowStepRetriesTotal.WithLabelValues(f.Slug, step.ID).Inc()
 				}
-				// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+
 				bt := time.NewTimer(backoff)
 				select {
 				case <-ctxStep.Done():
@@ -204,7 +204,7 @@ LOOP:
 		}
 		stepOutputs[step.ID] = out
 
-		// Marcar step como completado en cursor
+
 		completedList, _ := cursor["completed"].([]any)
 		completedList = append(completedList, step.ID)
 		cursor["completed"] = completedList

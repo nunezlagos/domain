@@ -5,13 +5,42 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SkillCatalog define skills built-in que toda org nueva recibe.
-// Pattern: skill_catalog NO es global (skills tienen org_id NOT NULL),
-// se materializa per-org via SeedSkillsForOrg invocado al crear org
-// (issue-21.1 org-management) o vía CLI `domain seed --org <id>`.
+// execer es la interfaz mínima compartida por *pgxpool.Pool y pgx.Tx.
+// Permite que el cuerpo de los seeders de catálogo (UPSERT) corra tanto
+// con un pool (wrappers SeedXForOrg, helpers de tests) como con una tx
+// dentro del Registry (Seeder.Run, usado por `domain seed all`).
+// Incluye QueryRow además de Exec porque los seeders de agent_templates y
+// flows usan RETURNING (xmax=0) para distinguir Created de Updated.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// skillsSeedVersion es la versión actual del catálogo de skills. Se usa
+// tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
+// pool-based SeedSkillsForOrg.
+const skillsSeedVersion = 6
+
+// SkillsCatalogSeeder implementa el interface Seeder para el catálogo
+// global de skills. Order > platform_policies/project_templates/mcp_providers.
+type SkillsCatalogSeeder struct{}
+
+func (s *SkillsCatalogSeeder) Name() string    { return "skills" }
+func (s *SkillsCatalogSeeder) Version() int    { return skillsSeedVersion }
+func (s *SkillsCatalogSeeder) Order() int      { return 50 }
+func (s *SkillsCatalogSeeder) IsDevOnly() bool { return false }
+
+func (s *SkillsCatalogSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Report, error) {
+	return seedSkills(ctx, tx, skillsSeedVersion)
+}
+
+// SkillCatalog define las skills built-in globales del catálogo.
+// Se materializan via SkillsCatalogSeeder dentro de `domain seed all`.
 //
 // Cada skill se marca seed_managed=true; updates futuros del catalog
 // solo afectan filas con is_user_modified=false (no sobrescribe customs).
@@ -153,33 +182,11 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"intake", "structure", "platform"},
 		},
-		{
-			Slug:        "code-search",
-			Name:        "Code Search",
-			Description: "Búsqueda semántica + fts sobre repo del proyecto. Retorna files + line ranges.",
-			SkillType:   "code",
-			TimeoutSeconds: 15,
-			Idempotent:     true,
-			Tags:           []string{"code", "search", "platform"},
-		},
-		{
-			Slug:        "file-read",
-			Name:        "File Read",
-			Description: "Lee contenido de un archivo del repo (sandboxed; readonly).",
-			SkillType:   "code",
-			TimeoutSeconds: 10,
-			Idempotent:     true,
-			Tags:           []string{"code", "file", "platform"},
-		},
-		{
-			Slug:        "web-fetch",
-			Name:        "Web Fetch",
-			Description: "Descarga URL → markdown text. SSRF guarded.",
-			SkillType:   "api",
-			TimeoutSeconds: 30,
-			Idempotent:     true,
-			Tags:           []string{"web", "fetch", "platform"},
-		},
+		// code-search / file-read / web-fetch eliminadas (v6): eran stubs no
+		// ejecutables (code/api sin implementación, issue-11.1/12.4). En la
+		// arquitectura client-side el cliente (Claude Code/OpenCode) ya provee
+		// esas capacidades nativas (Read, Grep/Glob, WebFetch). domain no las
+		// reimplementa.
 		{
 			Slug:        "summarize",
 			Name:        "Summarize",
@@ -279,7 +286,7 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"nlp", "ner", "platform"},
 		},
-		// ─────────── REQ-61: skills nuevas reduce-token ───────────
+
 		{
 			Slug:        "diff-summarize",
 			Name:        "Diff Summarize",
@@ -424,7 +431,7 @@ JSON estricto:
   "file_line": "path/to/file.go:42",
   "function": "Package.Function",
   "root_cause_hint": "1 oración con la pista más probable",
-  "suggested_skill": "code-search | file-read | sql-explain-impact | null",
+  "suggested_skill": "sql-explain-impact | null",
   "confidence": 0.0
 }
 </output_format>
@@ -432,7 +439,9 @@ JSON estricto:
 <reglas>
 - file_line: extraer el frame MÁS PROFUNDO del código del usuario (no del runtime).
 - root_cause_hint: 1 oración. No inventes — si dudás, pista genérica + confidence<0.5.
-- suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno aplica.
+- suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno
+  aplica (para leer archivos o buscar en el código, usá tus tools nativos del
+  cliente —Read, Grep— no una skill de domain).
 - critical solo si: data loss, exposed secrets, prod down, security breach.
 </reglas>
 
@@ -445,7 +454,7 @@ Output:
   "file_line": "/app/internal/foo/svc.go:42",
   "function": "",
   "root_cause_hint": "Nil pointer dereference en internal/foo/svc.go:42. Probablemente falta nil-check antes de acceder a un puntero.",
-  "suggested_skill": "file-read",
+  "suggested_skill": null,
   "confidence": 0.85
 }
 </example>`,
@@ -661,12 +670,165 @@ Output:
 			Idempotent:     true,
 			Tags:           []string{"security", "privacy", "redaction", "platform"},
 		},
+		// ── Skills v5: tech-específicas → project-scoped via domain_project_skill_register ──
+		{
+			Slug:        "wcag-audit",
+			Name:        "WCAG 2.2 Accessibility Audit",
+			Description: "Auditoría de accesibilidad WCAG 2.2: principios POUR, niveles A/AA/AAA, 400+ criterios, patrones de remediación. Para proyectos con frontend web (Equable, dashboards, formularios).",
+			SkillType:   "prompt",
+			Content: `<role>
+Sos un especialista en accesibilidad web WCAG 2.2. Realizás auditorías
+completas y proponés remediaciones concretas. Sabés qué se puede
+detectar automáticamente (30-50%) y qué requiere revisión manual.
+</role>
+
+<principios_pour>
+PERCEIVABLE: ¿pueden los usuarios percibir el contenido?
+OPERABLE:    ¿pueden operar la interfaz con cualquier dispositivo?
+UNDERSTANDABLE: ¿comprenden el contenido y cómo funciona?
+ROBUST:      ¿funciona con tecnologías asistivas (lectores, switches)?
+</principios_pour>
+
+<niveles>
+A   → baseline legal mínimo
+AA  → estándar requerido por la mayoría de regulaciones
+AAA → mejorado para necesidades especiales
+</niveles>
+
+<violaciones_por_severidad>
+CRITICAL (bloquean acceso):
+- Imágenes funcionales sin alt text
+- Elementos interactivos sin acceso por teclado
+- Formularios sin labels asociados
+- Media auto-reproducible sin controles
+
+SERIOUS (degradan experiencia):
+- Contraste insuficiente: texto normal < 4.5:1, texto grande < 3:1
+- Componentes UI < 3:1 contra fondo
+- Sin skip links para navegación por teclado
+- Custom widgets sin roles ARIA correctos
+- Títulos de página ausentes o no descriptivos
+
+MODERATE (afectan comprensión):
+- Sin atributo lang en html
+- Links "click aquí" sin contexto
+- Sin landmarks (header/main/nav/footer)
+- Jerarquía de headings rota (h1→h3 saltando h2)
+
+REGLAS_FOCUS:
+- Nunca remover outline de focus
+- Focus visible: mínimo 3px sólido con 2px offset (offset blanco + ring azul)
+- Sticky headers no deben ocultar el elemento con focus (WCAG 2.2)
+- Hit targets: mínimo 44×44px
+- Motion: respetar prefers-reduced-motion
+- Color: nunca único indicador (combinar con icono + texto)
+</violaciones_por_severidad>
+
+<input>
+{{ .request }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "violations": [
+    {
+      "criterion": "1.4.3",
+      "level": "AA",
+      "severity": "critical | serious | moderate",
+      "element": "selector CSS o descripción",
+      "issue": "descripción del problema",
+      "remediation": "código o pasos concretos",
+      "automated_detectable": boolean
+    }
+  ],
+  "summary": {
+    "critical": N, "serious": N, "moderate": N,
+    "auto_detectable_pct": 0.0
+  },
+  "manual_checks_needed": ["check 1", "check 2"]
+}
+</output_format>`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"wcag", "accessibility", "a11y", "frontend", "platform"},
+		},
+		{
+			Slug:        "requesting-code-review",
+			Name:        "Code Review Request Protocol",
+			Description: "Protocolo para solicitar y estructurar un code review: contexto del cambio, áreas de riesgo, criterios de calidad. Para cualquier proyecto del ecosistema Saargo.",
+			SkillType:   "prompt",
+			Content: `<role>
+Ayudás a estructurar solicitudes de code review efectivas. Un buen
+review request ahorra tiempo al reviewer y produce feedback más útil.
+</role>
+
+<self_review_primero>
+Antes de pedir review, hacer self-review verificando:
+- [ ] Tests verdes localmente
+- [ ] Sin secrets hardcodeados
+- [ ] Sin N+1 queries nuevas
+- [ ] Archivos nuevos < 150 líneas
+- [ ] Funciones < 30 líneas
+- [ ] Inputs del usuario validados
+- [ ] Commits convencionales en español sin Co-Authored-By
+</self_review_primero>
+
+<estructura_review_request>
+Secciones obligatorias:
+1. CONTEXTO: qué se quiere lograr y por qué (1-2 oraciones)
+2. CAMBIOS: lista concreta de qué se modificó (por archivo/módulo)
+3. ÁREAS DE RIESGO: qué podría salir mal (performance, seguridad, breaking)
+4. CRITERIOS: qué hace que este cambio sea "correcto" para este proyecto
+5. OUT OF SCOPE: qué no se revisa en este PR (evita scope creep)
+</estructura_review_request>
+
+<anti_patrones>
+- "Solo echale un vistazo" — sin contexto ni criterios
+- PR de 2000 líneas sin dividir por concern
+- Submit sin self-review previo
+- Mezclar refactor + feature en el mismo PR
+- No mencionar las áreas de mayor riesgo
+</anti_patrones>
+
+<input>
+diff o descripción del cambio: {{ .change_description }}
+repositorio: {{ .repo_context }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "review_request": {
+    "context": "...",
+    "changes": [{"area": "...", "what": "...", "why": "..."}],
+    "risk_areas": [{"area": "...", "risk": "...", "what_to_check": "..."}],
+    "criteria": ["criterio 1", "criterio 2"],
+    "out_of_scope": ["item 1"]
+  },
+  "self_review_passed": boolean,
+  "self_review_gaps": ["gap si aplica"]
+}
+</output_format>`,
+			TimeoutSeconds: 30,
+			Idempotent:     true,
+			Tags:           []string{"review", "quality", "workflow", "platform"},
+		},
 	}
 }
 
-// SeedSkillsForOrg materializa el catálogo en una org específica.
-// Idempotente: ON CONFLICT (org, slug) UPDATE solo si is_user_modified=false.
-func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, version int) (Report, error) {
+// SeedSkillsForOrg aplica el catálogo global de skills usando un pool.
+// El parámetro orgID quedó vestigial (las skills de catálogo son globales:
+// project_id IS NULL); se conserva como helper pool-based para tests.
+// Idempotente: ON CONFLICT (slug) UPDATE solo si is_user_modified=false.
+func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, _ uuid.UUID, version int) (Report, error) {
+	return seedSkills(ctx, pool, version)
+}
+
+// seedSkills aplica el UPSERT idempotente del catálogo de skills usando
+// cualquier execer (pool o tx). Compartido entre SeedSkillsForOrg (pool) y
+// SkillsCatalogSeeder.Run (tx) para no duplicar el SQL.
+func seedSkills(ctx context.Context, db execer, version int) (Report, error) {
 	var rep Report
 	for _, e := range SkillCatalog() {
 		input, _ := json.Marshal(e.InputSchema)
@@ -680,7 +842,7 @@ func SeedSkillsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, 
 			contentPtr = &e.Content
 		}
 
-		tag, err := pool.Exec(ctx, `
+		tag, err := db.Exec(ctx, `
 			INSERT INTO skills (slug, name, description, skill_type,
 			                    content, input_schema, output_schema, timeout_seconds,
 			                    idempotent, has_side_effects, tags,

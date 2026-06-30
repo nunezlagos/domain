@@ -27,8 +27,8 @@ type Execution struct {
 // el mismo cron (overlap), no inserta running: registra skipped_overlap y
 // devuelve skipped=true para que el scheduler no dispare el target.
 func (s *Service) StartExecution(ctx context.Context, cronID uuid.UUID, targetType string) (id int64, skipped bool, err error) {
-	// INSERT condicional: solo si NO existe otra running. La subquery dentro
-	// del INSERT evita la race entre check y registro (statement único).
+
+
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO cron_executions (cron_id, status, target_type)
 		 SELECT $1, 'running', $2
@@ -42,7 +42,7 @@ func (s *Service) StartExecution(ctx context.Context, cronID uuid.UUID, targetTy
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, fmt.Errorf("start execution: %w", err)
 	}
-	// Overlap: dejar rastro en el historial
+
 	err = s.Pool.QueryRow(ctx,
 		`INSERT INTO cron_executions (cron_id, status, target_type, finished_at, duration_ms)
 		 VALUES ($1, 'skipped_overlap', $2, NOW(), 0)

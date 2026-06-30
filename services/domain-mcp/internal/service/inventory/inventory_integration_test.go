@@ -1,7 +1,5 @@
 //go:build integration
 
-// F3: inventory service — tests integration con testcontainers + seeders.
-
 package inventory_test
 
 import (
@@ -134,7 +132,9 @@ func TestInventory_Load_TemplatesBuiltins(t *testing.T) {
 	for _, t := range inv.Templates {
 		gotSlugs[t.Slug] = true
 	}
-	for _, expected := range []string{"default", "go-backend", "python-data", "frontend-web"} {
+	// Tras el refactor a meta-template, solo existe el built-in "default";
+	// el stack se modela como skills project-scoped, no por templates.
+	for _, expected := range []string{"default"} {
 		require.Truef(t, gotSlugs[expected], "template built-in %s no presente", expected)
 	}
 }

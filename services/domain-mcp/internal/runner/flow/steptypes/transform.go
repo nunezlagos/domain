@@ -52,8 +52,8 @@ func buildTransformCtx(inputs, outputs map[string]any) map[string]any {
 	for k, v := range outputs {
 		ctx[k] = v
 	}
-	// Expose outputs también bajo "steps" para paths estilo $.steps.s1.result
-	// (misma convención que el template resolver).
+
+
 	stepsCtx := make(map[string]any, len(outputs))
 	for k, v := range outputs {
 		stepsCtx[k] = v
@@ -62,7 +62,7 @@ func buildTransformCtx(inputs, outputs map[string]any) map[string]any {
 	return ctx
 }
 
-// --- JSONPath engine ---
+
 
 // evalJSONPath evaluates a simplified JSONPath expression.
 // Supported: $.field, $.a.b, $.arr[n], $.arr[*], $.arr[?(@.f==v)].
@@ -91,7 +91,7 @@ func evalJSONPath(doc map[string]any, expr string) (any, error) {
 
 func resolveJSONPath(current any, path string) (any, error) {
 	for path != "" {
-		// Strip leading dots
+
 		for len(path) > 0 && path[0] == '.' {
 			path = path[1:]
 		}
@@ -99,7 +99,7 @@ func resolveJSONPath(current any, path string) (any, error) {
 			return current, nil
 		}
 
-		// Filter: [?(@.field==val)]
+
 		if strings.HasPrefix(path, "[?(") {
 			end := strings.Index(path, ")]")
 			if end < 0 {
@@ -127,7 +127,7 @@ func resolveJSONPath(current any, path string) (any, error) {
 			continue
 		}
 
-		// Array index: [n] or [*]
+
 		if path[0] == '[' {
 			end := strings.Index(path, "]")
 			if end < 0 {
@@ -144,7 +144,7 @@ func resolveJSONPath(current any, path string) (any, error) {
 				if path == "" {
 					return arr, nil
 				}
-				// Strip leading dot for remaining path
+
 				rest := strings.TrimPrefix(path, ".")
 				result := make([]any, 0, len(arr))
 				for _, item := range arr {
@@ -171,7 +171,7 @@ func resolveJSONPath(current any, path string) (any, error) {
 			continue
 		}
 
-		// Field access: find next dot or bracket
+
 		end := len(path)
 		for i := 0; i < len(path); i++ {
 			if path[i] == '.' || path[i] == '[' {
@@ -205,7 +205,7 @@ func parseFilter(filter string) (field, val, op string) {
 			return left, strings.Trim(right, "'\""), op
 		}
 	}
-	// No operator — truthy check
+
 	return strings.TrimPrefix(filter, "@."), "true", "=="
 }
 
@@ -275,7 +275,7 @@ func resolveSimplePath(doc map[string]any, path string) (any, error) {
 	return current, nil
 }
 
-// --- jq engine ---
+
 
 func evalJQ(doc map[string]any, expr string) (any, error) {
 	expr = strings.TrimSpace(expr)
@@ -283,7 +283,7 @@ func evalJQ(doc map[string]any, expr string) (any, error) {
 		return doc, nil
 	}
 
-	// Handle pipes
+
 	if strings.Contains(expr, " | ") {
 		parts := strings.Split(expr, " | ")
 		current := any(doc)
@@ -304,7 +304,7 @@ func evalJQ(doc map[string]any, expr string) (any, error) {
 func evalJQStep(current any, step string) (any, error) {
 	step = strings.TrimSpace(step)
 
-	// map(expr) — applies expr to each array element
+
 	if strings.HasPrefix(step, "map(") && strings.HasSuffix(step, ")") {
 		inner := step[4 : len(step)-1]
 		arr, ok := current.([]any)
@@ -324,13 +324,13 @@ func evalJQStep(current any, step string) (any, error) {
 		return result, nil
 	}
 
-	// select(condition) — filters array or checks single element
+
 	if strings.HasPrefix(step, "select(") && strings.HasSuffix(step, ")") {
 		inner := step[7 : len(step)-1]
 		return evalJQSelect(current, inner)
 	}
 
-	// .arr[] — array iterator
+
 	step = strings.TrimPrefix(step, ".")
 	if strings.HasSuffix(step, "[]") {
 		field := strings.TrimSuffix(step, "[]")
@@ -348,7 +348,7 @@ func evalJQStep(current any, step string) (any, error) {
 		return m[field], nil
 	}
 
-	// Simple dotted path
+
 	if step == "" {
 		return current, nil
 	}
@@ -378,7 +378,7 @@ func evalJQSelect(current any, inner string) (any, error) {
 		}
 	}
 	if opIdx < 0 {
-		// Truthy check
+
 		field := strings.TrimPrefix(inner, ".")
 		return filterSingle(current, field, "true", "==")
 	}

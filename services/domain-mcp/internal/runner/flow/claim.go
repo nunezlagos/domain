@@ -54,10 +54,10 @@ func (c *ClaimRunClaims) ClaimRun(ctx context.Context) (*ClaimedRun, error) {
 		inputsRaw     []byte
 		recoveryCount int
 	)
-	// El RETURNING de un UPDATE devuelve los valores NUEVOS — para saber
-	// si esto es recovery necesitamos el status PREVIO, capturado en la
-	// subquery (sel.prev_status). Con RETURNING fr.status, IsRecovery era
-	// SIEMPRE true (status recién seteado a 'running').
+
+
+
+
 	err := c.Pool.QueryRow(ctx, `
 		UPDATE flow_runs fr
 		SET status = 'running',

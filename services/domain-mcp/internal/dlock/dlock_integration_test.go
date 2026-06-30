@@ -73,7 +73,7 @@ func TestTryAcquire_Concurrent_OnlyOneWins(t *testing.T) {
 		}
 	}
 
-	// Liberado → otro acquire gana
+
 	lk, ok, err := m.TryAcquire(ctx, "contended-key")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -87,7 +87,7 @@ func TestConnDie_AutoReleases(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Pool secundario que toma el lock y "muere"
+
 	dying, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 	mDying := &Manager{Pool: dying}
@@ -95,20 +95,20 @@ func TestConnDie_AutoReleases(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	// Mientras vive, el lock está ocupado
+
 	m := &Manager{Pool: pool}
 	_, ok, err = m.TryAcquire(ctx, "auto-release-key")
 	require.NoError(t, err)
 	require.False(t, ok, "lock debe estar ocupado mientras la otra session vive")
 
-	// Crash simulado: terminar el backend que sostiene el advisory lock
+
 	var pid int
 	require.NoError(t, pool.QueryRow(ctx,
 		`SELECT pid FROM pg_locks WHERE locktype = 'advisory' LIMIT 1`).Scan(&pid))
 	_, err = pool.Exec(ctx, `SELECT pg_terminate_backend($1)`, pid)
 	require.NoError(t, err)
 
-	// Postgres libera advisory locks al morir la session
+
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		lk, ok, err := m.TryAcquire(ctx, "auto-release-key")
@@ -120,9 +120,9 @@ func TestConnDie_AutoReleases(t *testing.T) {
 		require.True(t, time.Now().Before(deadline), "lock nunca se liberó tras morir la conn")
 		time.Sleep(100 * time.Millisecond)
 	}
-	// Nota: no cerramos `dying` — su conn fue terminada server-side y Close()
-	// bloquearía esperando un Release que nunca llega (comportamiento esperado
-	// de pgxpool con conns acquired).
+
+
+
 }
 
 // test-003: Acquire con maxWait corto sobre key ocupada → ErrTimeout.

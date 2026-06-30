@@ -181,7 +181,7 @@ func (r *PGRecorder) Record(ctx context.Context, e Event) error {
 		newJSON = b
 	}
 
-	// ISSUE-21.6: INSERT sin organization_id (columna dropeada en Fase C).
+
 	_, err := r.Pool.Exec(ctx, `
 		INSERT INTO audit_log (
 			actor_id, actor_type, action, entity_type, entity_id,
@@ -212,7 +212,7 @@ func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntr
 		return fmt.Sprintf("$%d", argN)
 	}
 
-	// ISSUE-21.6 Fase D clean: filter.OrganizationID se ignora (single-org).
+
 	if filter.ActorID != nil {
 		where += " AND actor_id = " + addArg(*filter.ActorID)
 	}
@@ -234,7 +234,7 @@ func (r *PGRecorder) Query(ctx context.Context, filter AuditFilter) ([]AuditEntr
 		limit = filter.Limit
 	}
 
-	// ISSUE-21.6: organization_id omitido del SELECT.
+
 	rows, err := r.Pool.Query(ctx, fmt.Sprintf(`
 		SELECT id, actor_id, actor_type, action,
 		       entity_type, entity_id, old_values, new_values,

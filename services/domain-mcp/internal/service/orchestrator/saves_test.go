@@ -43,7 +43,7 @@ func TestValidateRequiredSaves_MissingRequired_ReturnsError(t *testing.T) {
 		{Type: "adr", Required: true, Hint: "guardar ADR"},
 		{Type: "code_reference", Required: true, Hint: "guardar code ref"},
 	}}
-	// Cliente sólo guardó uno de los dos requireds
+
 	result := phases.ClientResult{
 		MemoryRefsSaved: []phases.MemoryRef{
 			{Type: "adr", ID: uuid.New()},
@@ -70,7 +70,7 @@ func TestValidateRequiredSaves_Sabotage_RemoveRequiredFlag(t *testing.T) {
 		{Type: "sabotage_record", Required: false}, // SABOTAJE: flippeado
 	}}
 	result := phases.ClientResult{} // sin saves
-	// Con Required=false debería pasar → si fallara, el código estaría
-	// ignorando el flag y eso sería un bug peor
+
+
 	require.NoError(t, ValidateRequiredSaves("sdd-judge", out, result))
 }

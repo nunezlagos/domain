@@ -100,8 +100,8 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Detección con FOR UPDATE SKIP LOCKED para race-safety con clientes
-	// que están actualizando last_heartbeat_at concurrentemente.
+
+
 	query := `
 		SELECT
 			s.id, s.flow_run_id, s.step_key,
@@ -141,7 +141,7 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 		return nil, nil
 	}
 
-	// Marcar failed + saga event por cada stuck step
+
 	for _, s := range stuck {
 		if err := w.markFailed(ctx, tx, s); err != nil {
 			return nil, fmt.Errorf("mark failed step %s: %w", s.StepID, err)
@@ -149,8 +149,8 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 		w.observeStuck(s)
 	}
 
-	// Cerrar flow_runs si todos sus steps están terminales.
-	// Usamos un set de IDs únicos en lugar de array typing (más portable).
+
+
 	seen := make(map[string]struct{}, len(stuck))
 	for _, s := range stuck {
 		if _, ok := seen[s.FlowRunID]; ok {
@@ -178,7 +178,7 @@ func (w *HeartbeatWatcher) DetectAndMark(ctx context.Context) ([]StuckStep, erro
 }
 
 func (w *HeartbeatWatcher) markFailed(ctx context.Context, tx pgx.Tx, s StuckStep) error {
-	// Marca step como failed con error reason
+
 	_, err := tx.Exec(ctx, `
 		UPDATE flow_run_steps
 		SET status = 'failed',
@@ -191,8 +191,8 @@ func (w *HeartbeatWatcher) markFailed(ctx context.Context, tx pgx.Tx, s StuckSte
 		return fmt.Errorf("update step: %w", err)
 	}
 
-	// REQ-42.3: saga_compensation_log dropeada. El step se marca failed; la
-	// clasificación de retry policy se loggea para observabilidad (sin persistir).
+
+
 	w.logSagaEvent(ctx, s)
 	return nil
 }

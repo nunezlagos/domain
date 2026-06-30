@@ -1,15 +1,15 @@
-// Subcomandos `domain mcp {list,install,uninstall}` — issue F1 catálogo.
-//
-//   domain mcp list
-//     Lista los mcp_providers disponibles (built-ins sembrados).
-//
-//   domain mcp install <provider> [--agent=opencode|claude-code|claude-desktop]
-//                                [--config=<path>]
-//     Instala el provider en el config del cliente especificado.
-//     Idempotente. Backup del config previo con timestamp.
-//
-//   domain mcp uninstall <provider> [--agent=...] [--config=<path>]
-//     Quita el provider del config.
+
+
+
+
+
+
+
+
+
+
+
+
 
 package main
 

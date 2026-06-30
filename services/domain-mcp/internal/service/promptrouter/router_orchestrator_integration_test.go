@@ -88,7 +88,9 @@ func TestRouter_WithOrchestrator_FeaturePromptStartsFullOrchestrator(t *testing.
 	}
 
 	userID := owner.UserID
-	res, err := router.Route(ctx, "agregar nueva feature de export CSV", &userID, &org.ID)
+
+	projectID := seedProject(t, ctx, pools.App, org.ID)
+	res, err := router.RouteWithIntent(ctx, "agregar nueva feature de export CSV", &userID, &org.ID, &projectID, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeOrchestratorStarted, res.Outcome)
 	require.Equal(t, promptrouter.IntentFeature, res.Intent)
@@ -124,7 +126,9 @@ func TestRouter_WithOrchestrator_FixPromptStartsExpress(t *testing.T) {
 	}
 
 	userID := owner.UserID
-	res, err := router.Route(ctx, "bug: el botón export no funciona", &userID, &org.ID)
+
+	projectID := seedProject(t, ctx, pools.App, org.ID)
+	res, err := router.RouteWithIntent(ctx, "bug: el botón export no funciona", &userID, &org.ID, &projectID, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeOrchestratorStarted, res.Outcome)
 	require.Equal(t, promptrouter.IntentFix, res.Intent)

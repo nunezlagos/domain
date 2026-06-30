@@ -24,7 +24,7 @@ func TestWebhookDispatcher_EnqueueAccepts(t *testing.T) {
 	ok := d.Enqueue(context.Background(), webhookJob{hookID: "h1"})
 	require.True(t, ok)
 
-	// Esperar a que el worker procese el job.
+
 	require.Eventually(t, func() bool {
 		return atomic.LoadInt32(&ran) == 1
 	}, 500*time.Millisecond, 10*time.Millisecond)
@@ -43,13 +43,13 @@ func TestWebhookDispatcher_Backpressure(t *testing.T) {
 	})
 	defer d.Shutdown(context.Background())
 
-	// Llenar la cola + 1 worker ocupado.
+
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "1"}))
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "2"}))
-	// worker toma 1 → quedan 1 slot libre. Enqueue #3 OK (no lleno aún).
+
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "3"}))
-	// Pero el worker está bloqueado, no consume más. Enqueue #4 debe
-	// fallar (default branch → false).
+
+
 	require.False(t, d.Enqueue(context.Background(), webhookJob{hookID: "4"}),
 		"cola llena → backpressure")
 }
@@ -107,12 +107,12 @@ func TestWebhookDispatcher_ShutdownWaitsJobs(t *testing.T) {
 		},
 	})
 
-	// Encolar 3 jobs.
+
 	require.True(t, d.Enqueue(context.Background(), webhookJob{}))
 	require.True(t, d.Enqueue(context.Background(), webhookJob{}))
 	require.True(t, d.Enqueue(context.Background(), webhookJob{}))
 
-	// Shutdown con budget generoso: espera a que los 3 terminen.
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	require.NoError(t, d.Shutdown(ctx))

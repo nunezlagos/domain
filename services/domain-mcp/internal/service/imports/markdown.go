@@ -89,14 +89,14 @@ func ParseMarkdownFile(path, content string) Document {
 		},
 	}
 
-	// 1. Front matter (YAML between --- lines).
+
 	if m := frontMatterRe.FindStringSubmatch(content); len(m) == 3 {
 		fm := m[1]
 		content = m[2]
 		parseFrontMatter(fm, &doc)
 	}
 
-	// 2. Title: front matter > H1 > filename.
+
 	if doc.Title == "" {
 		doc.Title = extractH1(content)
 	}
@@ -104,7 +104,7 @@ func ParseMarkdownFile(path, content string) Document {
 		doc.Title = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 
-	// 3. Wikilinks.
+
 	matches := wikilinkRe.FindAllStringSubmatch(content, -1)
 	seen := map[string]bool{}
 	for _, m := range matches {
@@ -133,7 +133,7 @@ func parseFrontMatter(fm string, doc *Document) {
 		case "title":
 			doc.Title = val
 		case "tags":
-			// Soporta lista inline [a, b, c] o single string
+
 			val = strings.Trim(val, "[]")
 			for _, t := range strings.Split(val, ",") {
 				t = strings.TrimSpace(strings.Trim(t, `"'`))

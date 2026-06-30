@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// sddVerifyHandler — fase sdd-verify. El system_prompt es source-of-truth
-// en BD (agent_templates.system_prompt). Service.Run lo rellena via
-// Repository.GetAgentTemplateSystemPrompt antes de despachar al cliente.
+
+
+
 
 type sddVerifyHandler struct{}
 
@@ -23,12 +23,12 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Tarea original del usuario:\n%s\n\n", in.RawText)
-	// El output de sdd-apply puede no estar disponible al momento de Build
-	// si el dispatcher es Express (pre-arma todo el plan up-front). En ese
-	// caso, el cliente IDE tiene el resultado del apply en su contexto
-	// inmediato — sólo necesita la consigna. Cuando sí hay output disponible
-	// (modo Full, donde verify se construye recién después de que apply
-	// termina), lo incluimos para que el prompt sea más concreto.
+
+
+
+
+
+
 	if apply, ok := in.PriorOutputs[PhaseSlug("sdd-apply")]; ok {
 		if summary, ok := apply["summary"].(string); ok && summary != "" {
 			fmt.Fprintf(&b, "Resumen de lo que reportó sdd-apply:\n%s\n\n", summary)
@@ -58,8 +58,8 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 			},
 		},
 		SkillThreshold: 0,
-		// "re-emit": si el verify queda colgado, el saga puede reanudarlo
-		// porque no toca disco — es read-only sobre el output de apply.
+
+
 		RetryPolicy: RetryReemit,
 	}, nil
 }
@@ -68,18 +68,18 @@ func (h *sddVerifyHandler) Validate(_ context.Context, _ *Output, result ClientR
 	if result.Output == nil {
 		return errors.New("sdd-verify: cliente devolvió Output nulo")
 	}
-	// Shape básico — el orquestador usa esto para decidir si encadena
-	// a sdd-judge (scenarios_failed vacío) o vuelve a sdd-apply (algún
-	// escenario rojo).
+
+
+
 	failed, _ := result.Output["scenarios_failed"].([]any)
 	if blockers, ok := result.Output["blockers"].([]any); ok && len(blockers) > 0 {
-		// Un blocker convierte la fase en "necesita humano" sin importar
-		// los scenarios.
+
+
 		return ErrPhaseBlockedByClient
 	}
 	if len(failed) > 0 {
-		// No es error duro: el service routear de vuelta a sdd-apply.
-		// Devolvemos un error tipado para que el dispatcher distinga.
+
+
 		return ErrVerificationFailed
 	}
 	return nil

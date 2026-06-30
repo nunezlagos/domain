@@ -1,4 +1,4 @@
-// Tests para internal/tui/features/update (HU-01.11 commit 4/5).
+
 
 package update
 

@@ -42,14 +42,14 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	if !*e2eFlag {
 		t.Skip("pasar -args -e2e para correr el E2E real")
 	}
-	// runInstall asume cwd = root del repo (busca .env.example y
-	// docker-compose.yml). go test corre con cwd = cmd/domain.
+
+
 	chdirRepoRoot(t)
 
-	// El setup de agentes resuelve domain-mcp por PATH (bajo go test no
-	// hay sibling). Compilar a ~/go/bin — la ubicación real de install.sh —
-	// para que el command escrito en opencode.json apunte a un binario
-	// estable, igual que en producción.
+
+
+
+
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 	binDir := filepath.Join(home, "go", "bin")
@@ -73,7 +73,7 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	})
 	require.Equal(t, 0, code, "install debe terminar exit 0")
 
-	// credentials.json creado con API key
+
 	credPath := filepath.Join(home, ".config", "domain", "credentials.json")
 	data, err := os.ReadFile(credPath)
 	require.NoError(t, err, "credentials.json debe existir post-install")
@@ -83,14 +83,14 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &creds))
 	require.NotEmpty(t, creds.APIKey, "API key generada automáticamente")
 
-	// env global para domain-mcp
+
 	envPath := filepath.Join(home, ".config", "domain", "env")
 	envData, err := os.ReadFile(envPath)
 	require.NoError(t, err, "~/.config/domain/env debe existir")
 	require.Contains(t, string(envData), "DOMAIN_DATABASE_URL=")
 	require.Contains(t, string(envData), "DOMAIN_BASE_URL=")
 
-	// opencode global config con el entry domain y command no vacío
+
 	ocPath := filepath.Join(home, ".config", "opencode", "opencode.json")
 	ocData, err := os.ReadFile(ocPath)
 	require.NoError(t, err, "opencode.json global debe existir")
@@ -105,8 +105,8 @@ func TestE2EInstall_LocalReal(t *testing.T) {
 	require.NotEmpty(t, first, "command[0] apunta al binario domain-mcp")
 	t.Logf("opencode command: %v", cmd)
 
-	// Si hay systemd user manager, el install debe dejar el server
-	// corriendo como service (plug-and-play).
+
+
 	if systemdUserAvailable() {
 		out, _ := exec.Command("systemctl", "--user", "is-active", serviceName).CombinedOutput()
 		require.Equal(t, "active", strings.TrimSpace(string(out)),
@@ -144,7 +144,7 @@ func TestE2EInstall_ServerBootsWithoutEnv(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() { _ = cmd.Process.Kill() }()
 
-	// Poll /health hasta 15s
+
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := httpGet("http://localhost:8000/health")
@@ -260,7 +260,7 @@ func TestE2EInstall_MCPBootsWithoutEnv(t *testing.T) {
 	require.NoError(t, err, "build domain-mcp: %s", out)
 
 	cmd := exec.Command(bin)
-	// Entorno mínimo: sin DOMAIN_* (simula cómo lo lanza opencode).
+
 	home, _ := os.UserHomeDir()
 	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
 	stdin, err := cmd.StdinPipe()

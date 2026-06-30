@@ -124,7 +124,7 @@ func (c *StdioClient) readLoop() {
 		}
 		var resp jsonrpcResponse
 		if err := json.Unmarshal(line, &resp); err != nil {
-			// Notification o malformed — ignorar (versión simple).
+
 			continue
 		}
 		if resp.ID == 0 {
@@ -206,7 +206,7 @@ func (c *StdioClient) Initialize(ctx context.Context) error {
 	if _, err := c.call(ctx, "initialize", params); err != nil {
 		return fmt.Errorf("initialize: %w", err)
 	}
-	// Notification "initialized" (sin id, sin response esperada).
+
 	notif := map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}
 	body, _ := json.Marshal(notif)
 	body = append(body, '\n')
@@ -252,7 +252,7 @@ func (c *StdioClient) Close() error {
 	}
 	_ = c.stdin.Close()
 	if c.cmd.Process != nil {
-		// Grace: esperamos 2s, después kill.
+
 		done := make(chan error, 1)
 		go func() { done <- c.cmd.Wait() }()
 		select {

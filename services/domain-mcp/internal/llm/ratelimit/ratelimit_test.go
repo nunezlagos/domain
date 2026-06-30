@@ -88,7 +88,7 @@ func TestCompleteStream_HoldsSlotUntilDone(t *testing.T) {
 	ch, err := p.CompleteStream(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)
 
-	// Mientras el stream está abierto, otro Complete espera
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	_, err = p.Complete(ctx, llm.CompletionOptions{})

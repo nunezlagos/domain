@@ -36,7 +36,7 @@ type DetectedFile struct {
 }
 
 var (
-	// ErrRootNotFound se devuelve si ProjectRoot no existe.
+
 	ErrRootNotFound = errors.New("project root not found")
 )
 
@@ -83,13 +83,13 @@ func (s *Scanner) Detect(snapshotContent bool) ([]DetectedFile, error) {
 		if walkErr != nil {
 			return nil
 		}
-		// Skip dirs irrelevantes
+
 		if d.IsDir() {
 			base := filepath.Base(path)
 			if base == "node_modules" || base == "vendor" || base == ".git" {
 				return filepath.SkipDir
 			}
-			// Permitir .claude / .opencode / .cursor / .windsurf
+
 			if strings.HasPrefix(base, ".") && !isAllowedHiddenDir(base) && path != s.ProjectRoot {
 				return filepath.SkipDir
 			}
@@ -117,7 +117,7 @@ func (s *Scanner) Detect(snapshotContent bool) ([]DetectedFile, error) {
 						df.ContentHash = hex.EncodeToString(sum[:])
 					}
 				} else {
-					// Solo hash sin guardar contenido en struct.
+
 					data, err := os.ReadFile(path)
 					if err == nil {
 						sum := sha256.Sum256(data)

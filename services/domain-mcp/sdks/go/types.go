@@ -2,9 +2,9 @@ package domain
 
 import "time"
 
-// Tipos del API Domain. JSON tags reflejan snake_case del wire format.
-// UUIDs van como string para que el módulo no requiera dependencias externas.
-// issue-21.6: Organization + organization_id removidos (single-org).
+
+
+
 
 type Member struct {
 	UserID    string    `json:"user_id"`

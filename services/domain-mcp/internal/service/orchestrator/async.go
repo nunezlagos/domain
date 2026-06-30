@@ -89,7 +89,7 @@ func (s *Service) ProcessAsyncFlowRun(ctx context.Context, flowRunID uuid.UUID) 
 	}
 
 	priors := map[phases.PhaseSlug]map[string]any{}
-	// Reconstruir priors desde steps ya completados (por si es reanudación)
+
 	for _, st := range steps {
 		if st.Status == "completed" && len(st.Outputs) > 0 {
 			priors[phases.PhaseSlug(st.StepKey)] = st.Outputs

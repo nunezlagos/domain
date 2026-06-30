@@ -78,7 +78,7 @@ func buildRetryPlan(step *flow.Step) retryPlan {
 		return plan
 	}
 
-	// Legacy: Retries + backoff exponencial 200ms con cap MaxBackoffS
+
 	maxBackoff := 30 * time.Second
 	if step.MaxBackoffS > 0 {
 		maxBackoff = time.Duration(step.MaxBackoffS) * time.Second
@@ -133,7 +133,7 @@ func (r *Runner) runStepWithRetry(ctx context.Context, runID uuid.UUID, step *fl
 		if r.Metrics != nil {
 			r.Metrics.FlowStepRetriesTotal.WithLabelValues(flowSlug, step.ID).Inc()
 		}
-		// ISSUE-28.8: NewTimer reusable en retry loop (time.After leak).
+
 		delay := plan.delay(attempt)
 		dt := time.NewTimer(delay)
 		select {
@@ -164,7 +164,7 @@ func (r *Runner) execFallback(ctx context.Context, runID uuid.UUID, failed *flow
 	if err == nil {
 		return out, nil
 	}
-	// El fallback falló: aplicar SU política (recursivo); default abort.
+
 	switch fb.OnError {
 	case "continue", "ignore_and_continue":
 		if fb.DefaultOnError != nil {

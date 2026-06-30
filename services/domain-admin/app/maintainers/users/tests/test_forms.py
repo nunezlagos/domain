@@ -1,0 +1,134 @@
+"""Tests de UserForm (validaciones del mantenedor).
+
+Verifican reglas reales: password requerido en alta, confirmacion, longitud
+minima, email unico y normalizacion a minusculas (esta ultima delegada al
+core.forms.EmailNormalizationMixin).
+"""
+from __future__ import annotations
+
+from core.tests.base import MaintainerTestCase
+
+from maintainers.users.forms import UserForm
+
+from .factories import make_role, make_user
+
+
+class UserFormCreateTests(MaintainerTestCase):
+    def setUp(self):
+        make_role("viewer")
+
+    def _data(self, **over):
+        base = {
+            "email": "form@example.com",
+            "first_name": "Form",
+            "paternal_surname": "",
+            "maternal_surname": "",
+            "role": "viewer",
+            "status": "active",
+            "password": "supersecret",
+            "password_confirm": "supersecret",
+        }
+        base.update(over)
+        return base
+
+    def test_alta_valida(self):
+        form = UserForm(data=self._data())
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_password_requerido_en_alta(self):
+        form = UserForm(data=self._data(password="", password_confirm=""))
+        self.assertFalse(form.is_valid())
+        self.assertIn("password", form.errors)
+
+    def test_passwords_no_coinciden(self):
+        form = UserForm(data=self._data(password_confirm="otracosa"))
+        self.assertFalse(form.is_valid())
+
+    def test_password_corta(self):
+        form = UserForm(data=self._data(password="abc", password_confirm="abc"))
+        self.assertFalse(form.is_valid())
+
+    def test_email_se_normaliza_minuscula(self):
+        form = UserForm(data=self._data(email="MAYUS@Example.COM"))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["email"], "mayus@example.com")
+
+    def test_email_duplicado(self):
+        make_user("ocupado@example.com")
+        form = UserForm(data=self._data(email="ocupado@example.com"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+
+class UserFormEditTests(MaintainerTestCase):
+    def setUp(self):
+        make_role("viewer")
+
+    def test_edit_password_vacio_es_valido(self):
+        u = make_user("edit@example.com")
+        form = UserForm(
+            data={
+                "email": "edit@example.com",
+                "name": "Editado",
+                "role": "viewer",
+                "status": "active",
+                "password": "",
+                "password_confirm": "",
+            },
+            instance=u,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_edit_no_choca_con_su_propio_email(self):
+        u = make_user("mismo@example.com")
+        form = UserForm(
+            data={
+                "email": "mismo@example.com",
+                "first_name": "X",
+                "paternal_surname": "",
+                "maternal_surname": "",
+                "role": "viewer",
+                "status": "active",
+                "password": "",
+                "password_confirm": "",
+            },
+            instance=u,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class UserFormNameCompositionTests(MaintainerTestCase):
+    def setUp(self):
+        make_role("viewer")
+
+    def _data(self, **over):
+        base = {
+            "email": "comp@example.com",
+            "first_name": "Juan Pablo",
+            "paternal_surname": "Nuñez",
+            "maternal_surname": "Lagos",
+            "role": "viewer",
+            "status": "active",
+            "password": "supersecret",
+            "password_confirm": "supersecret",
+        }
+        base.update(over)
+        return base
+
+    def test_composed_name_une_los_tres(self):
+        form = UserForm(data=self._data())
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.composed_name(), "Juan Pablo Nuñez Lagos")
+
+    def test_composed_name_omite_vacios(self):
+        form = UserForm(data=self._data(paternal_surname="", maternal_surname=""))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.composed_name(), "Juan Pablo")
+
+    def test_split_name_parsea_en_edicion(self):
+        u = make_user("split@example.com")
+        u.name = "Ana Maria Perez Soto"
+        form = UserForm(instance=u)
+        self.assertEqual(form.fields["first_name"].initial, "Ana")
+        self.assertEqual(form.fields["paternal_surname"].initial, "Maria Perez")
+        self.assertEqual(form.fields["maternal_surname"].initial, "Soto")

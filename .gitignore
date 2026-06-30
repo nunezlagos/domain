@@ -25,6 +25,11 @@ logs/
 # Volumenes mounts si alguien usa bind por path
 data/
 
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -44,5 +49,12 @@ opencode.json.backup-*
 .ai/
 .claude/
 
+# Artefactos temporales de playwright-mcp (screenshots, scripts de render)
+.playwright-mcp/
+
 # SDD specs (NO en repo, solo local)
 openspec/
+# excepción: el paquete Go internal/service/openspec SÍ va al repo
+# (la regla openspec/ era para los árboles SDD exportados, no para el código).
+!services/domain-mcp/internal/service/openspec/
+!services/domain-mcp/internal/service/openspec/**

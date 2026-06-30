@@ -72,7 +72,7 @@ func (b *EventBus) Publish(ctx context.Context, ev Event) error {
 		ev.CreatedAt = time.Now()
 	}
 
-	// Persistir antes del fan-out (durability primero)
+
 	if err := b.persist(ctx, ev); err != nil {
 		b.Logger.Warn("event persist failed", slog.String("type", ev.Type), slog.Any("err", err))
 	}
@@ -80,7 +80,7 @@ func (b *EventBus) Publish(ctx context.Context, ev Event) error {
 	b.mu.RLock()
 	handlers := append([]Handler{}, b.handlers[ev.Type]...)
 	handlers = append(handlers, b.handlers["*"]...)
-	// soporta prefijo: "observation.*" matchea observation.created/updated
+
 	for key, hs := range b.handlers {
 		if strings.HasSuffix(key, ".*") {
 			prefix := strings.TrimSuffix(key, ".*") + "."
@@ -114,9 +114,9 @@ func (b *EventBus) runHandler(ctx context.Context, ev Event, h Handler) {
 }
 
 func (b *EventBus) persist(ctx context.Context, ev Event) error {
-	// ISSUE-21.6 Fase D clean Round 3: la columna organization_id se
-	// dropea en Fase C. single-org → NULL por default (compatible con
-	// el schema nullable post-Fase B).
+
+
+
 	_, err := b.Pool.Exec(ctx, `
 		INSERT INTO event_log (id, type, project_id, payload, created_at)
 		VALUES ($1, $2, $3, $4, $5)`,
@@ -130,8 +130,8 @@ func (b *EventBus) Replay(ctx context.Context, typeFilter string, since time.Tim
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	// ISSUE-21.6 Fase D clean Round 3: organization_id removido del SELECT
-	// (la columna se dropea en Fase C).
+
+
 	q := `SELECT id, type, project_id, payload, created_at
 	      FROM event_log WHERE created_at >= $1`
 	args := []any{since}

@@ -18,28 +18,28 @@ import (
 )
 
 const (
-	// MasterKeySize bytes esperados para AES-256.
+
 	MasterKeySize = 32
-	// NonceSize bytes para GCM.
+
 	NonceSize = 12
-	// headerSize: 1 byte version + 12 bytes nonce.
+
 	headerSize = 1 + NonceSize
 )
 
 var (
-	// ErrInvalidKeySize cuando master key no es 32 bytes.
+
 	ErrInvalidKeySize = errors.New("master key must be exactly 32 bytes")
-	// ErrCiphertextTooShort cuando el blob es más corto que header.
+
 	ErrCiphertextTooShort = errors.New("ciphertext too short")
-	// ErrUnknownKeyVersion cuando version byte no está en el keyring.
+
 	ErrUnknownKeyVersion = errors.New("unknown key version")
 )
 
 // Cipher AES-256-GCM con keyring multi-version para rotation.
 type Cipher struct {
-	// keyring: version byte → aead instance
+
 	keyring map[byte]cipher.AEAD
-	// current version usada para Encrypt nuevos (siempre la mayor).
+
 	current byte
 }
 

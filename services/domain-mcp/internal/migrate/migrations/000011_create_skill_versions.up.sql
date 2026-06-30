@@ -1,9 +1,9 @@
--- migration: create_skill_versions
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-05.3
--- description: snapshots immutables de skills por versión
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE skill_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

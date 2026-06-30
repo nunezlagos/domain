@@ -1,0 +1,1435 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain MCP — Conectá todos tus LLMs</title>
+  <meta name="description" content="Un servidor MCP que gobierna skills, flujos y políticas de IA desde un panel unificado. Instalá en tu VPS. Conectá tus herramientas en minutos.">
+  <meta name="theme-color" content="#faf8f2">
+  <link rel="icon" type="image/svg+xml" href="{% static 'demo/brand/favicon.svg' %}">
+  <link rel="icon" href="{% static 'demo/brand/favicon.ico' %}" sizes="any">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+  <style>
+/* ── Tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg:          #faf8f2;
+  --bg-warm:     #f4f0e3;
+  --chrome:      #ebe5d6;
+  --ink:         #141412;
+  --charcoal:    #24231e;
+  --slate:       #3e3e38;
+  --ash:         #8a8a80;
+  --stone:       #c8c5bb;
+  --divider:     rgba(62,62,56,.14);
+  --glass:       rgba(255,255,255,.72);
+  --glass-b:     rgba(62,62,56,.14);
+  --green-dark:  #1a3328;
+  --green:       #2e5c3e;
+  --green-mid:   #3d7a54;
+  --green-light: #6aac82;
+  --green-pale:  #b5d4bc;
+  --green-mist:  #e6f1e8;
+  --amber:       #c4914f;
+  --shadow:      0 2px 24px rgba(36,35,30,.09);
+  --shadow-lg:   0 8px 48px rgba(36,35,30,.13);
+  --r:           12px;
+  --font: system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono: 'JetBrains Mono','Fira Code','Cascadia Code',ui-monospace,monospace;
+}
+
+html.dark {
+  --bg:          #141412;
+  --bg-warm:     #1a1a16;
+  --chrome:      #242420;
+  --ink:         #f4f0e3;
+  --charcoal:    #ebe5d6;
+  --slate:       #c8c5bb;
+  --ash:         #8a8a80;
+  --stone:       #3e3e38;
+  --divider:     rgba(255,255,255,.10);
+  --glass:       rgba(255,255,255,.06);
+  --glass-b:     rgba(255,255,255,.10);
+  --green:       #4a9464;
+  --green-mid:   #5aac74;
+  --green-light: #8ac89a;
+  --green-pale:  #2a4e38;
+  --green-mist:  #162218;
+  --shadow:      0 2px 24px rgba(0,0,0,.30);
+  --shadow-lg:   0 8px 48px rgba(0,0,0,.40);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+  transition: background .25s, color .25s;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: var(--font); }
+
+/* ── Tipografía ─────────────────────────────────────────────────────── */
+.t-display {
+  font-size: clamp(38px,6vw,80px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.t-headline {
+  font-size: clamp(22px,3vw,36px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.t-lead {
+  font-size: clamp(15px,1.8vw,20px);
+  color: var(--ash);
+  line-height: 1.65;
+}
+.t-green { color: var(--green-mid); }
+.t-gradient {
+  background: linear-gradient(120deg, var(--green-mid) 0%, var(--green-light) 60%, var(--amber) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+section { padding: 96px 0; }
+section + section { border-top: 1px solid var(--divider); }
+
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green-mid);
+  margin-bottom: 12px;
+}
+.section-hd { margin-bottom: 56px; }
+.section-hd .t-lead { max-width: 56ch; margin-top: 12px; }
+
+/* ── Navbar ─────────────────────────────────────────────────────────── */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: 60px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--divider);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background .25s, border-color .25s;
+}
+.nav-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--charcoal);
+}
+.nav-logo img { width: 28px; height: 28px; }
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  flex: 1;
+}
+.nav-link {
+  font-size: 13.5px;
+  color: var(--ash);
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color .18s, background .18s;
+}
+.nav-link:hover { color: var(--ink); background: var(--chrome); }
+.nav-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Botón modo oscuro */
+.btn-mode {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  background: transparent;
+  color: var(--ash);
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  transition: background .18s, color .18s;
+}
+.btn-mode:hover { background: var(--chrome); color: var(--ink); }
+.icon-sun { display: none; }
+html.dark .icon-moon { display: none; }
+html.dark .icon-sun  { display: block; }
+
+/* Botón CTA nav */
+.btn-cta-sm {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--green-mid);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background .18s;
+}
+.btn-cta-sm:hover { background: var(--green); }
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding-top: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* fondo decorativo */
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hero-orb--1 {
+  width: 700px;
+  height: 700px;
+  top: -200px;
+  right: -200px;
+  background: radial-gradient(circle at 40% 40%, rgba(61,122,84,.12) 0%, transparent 65%);
+}
+.hero-orb--2 {
+  width: 500px;
+  height: 500px;
+  bottom: -150px;
+  left: -150px;
+  background: radial-gradient(circle, rgba(196,145,79,.07) 0%, transparent 65%);
+}
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--divider) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.5;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--green-mist);
+  color: var(--green-mid);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 24px;
+  border: 1px solid rgba(61,122,84,.22);
+}
+html.dark .hero-badge {
+  background: rgba(61,122,84,.15);
+  border-color: rgba(106,172,130,.20);
+}
+.hero-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green-mid);
+  animation: pulse 2.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 36px;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 28px;
+  background: var(--green-mid);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background .18s, transform .12s;
+}
+.btn-primary:hover { background: var(--green); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 24px;
+  background: transparent;
+  color: var(--slate);
+  border: 1.5px solid var(--divider);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color .18s, color .18s, background .18s;
+}
+.btn-secondary:hover {
+  border-color: var(--stone);
+  color: var(--ink);
+  background: var(--chrome);
+}
+
+.hero-meta {
+  display: flex;
+  gap: 28px;
+  margin-top: 40px;
+  flex-wrap: wrap;
+}
+.hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.hero-stat-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.hero-stat-lbl {
+  font-size: 12px;
+  color: var(--ash);
+}
+
+/* Panel visual derecho */
+.hero-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+.hero-logo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-logo {
+  width: 200px;
+  height: 200px;
+  animation: float 4s ease-in-out infinite;
+  filter: drop-shadow(0 12px 48px rgba(61,122,84,.22));
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* tarjetas flotantes alrededor del logo */
+.hero-card {
+  position: absolute;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  animation: float-card 5s ease-in-out infinite;
+}
+.hero-card i { color: var(--green-mid); font-size: 13px; }
+.hero-card--top-right {
+  top: -20px; right: -30px;
+  animation-delay: -1s;
+}
+.hero-card--bot-left {
+  bottom: 20px; left: -40px;
+  animation-delay: -2.5s;
+}
+.hero-card--mid-right {
+  top: 50%; right: -50px;
+  transform: translateY(-50%);
+  animation-delay: -3.7s;
+}
+@keyframes float-card {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.hero-card--mid-right {
+  animation: float-card-mid 5.5s ease-in-out infinite;
+  animation-delay: -3.7s;
+}
+@keyframes float-card-mid {
+  0%, 100% { transform: translateY(-50%); }
+  50% { transform: translateY(calc(-50% - 7px)); }
+}
+
+/* ── Pain points ────────────────────────────────────────────────────── */
+.pain-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.pain-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: var(--r);
+  padding: 28px;
+  backdrop-filter: blur(12px);
+  transition: box-shadow .22s, transform .22s;
+}
+.pain-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-3px);
+}
+.pain-emoji {
+  font-size: 28px;
+  margin-bottom: 14px;
+}
+.pain-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--charcoal);
+}
+.pain-card p {
+  font-size: 13.5px;
+  color: var(--ash);
+  line-height: 1.6;
+}
+
+/* ── Features ───────────────────────────────────────────────────────── */
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.feat-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: var(--r);
+  padding: 28px;
+  backdrop-filter: blur(12px);
+  transition: box-shadow .22s, transform .22s;
+}
+.feat-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-3px);
+}
+.feat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--green-mist);
+  border: 1px solid rgba(61,122,84,.18);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: var(--green-mid);
+  margin-bottom: 16px;
+}
+html.dark .feat-icon {
+  background: rgba(61,122,84,.15);
+  border-color: rgba(106,172,130,.18);
+}
+.feat-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--charcoal);
+}
+.feat-card p {
+  font-size: 13.5px;
+  color: var(--ash);
+  line-height: 1.6;
+}
+
+/* Feature hero (card grande a la izq) */
+.feat-hero {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  background: linear-gradient(130deg, var(--green-dark) 0%, var(--green) 45%, var(--green-mid) 80%, rgba(61,122,84,.5) 100%);
+  color: #faf8f2;
+  border-color: rgba(255,255,255,.08);
+}
+.feat-hero h3, .feat-hero p { color: inherit; }
+.feat-hero h3 { font-size: clamp(18px,2.5vw,26px); color: rgba(250,248,242,0.96); }
+.feat-hero p { color: rgba(250,248,242,0.70); }
+.feat-hero .feat-icon {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.16);
+  color: #faf8f2;
+}
+.feat-hero-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feat-mini-card {
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fmc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.fmc-dot--ok  { background: #6aac82; }
+.fmc-dot--mid { background: var(--amber); }
+.fmc-dot--off { background: var(--stone); }
+.fmc-name { font-size: 13px; font-weight: 600; color: rgba(250,248,242,.92); flex: 1; }
+.fmc-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(106,172,130,.25);
+  color: var(--green-pale);
+}
+.fmc-badge--mid {
+  background: rgba(196,145,79,.25);
+  color: #d4a870;
+}
+
+/* ── Clientes ───────────────────────────────────────────────────────── */
+.clients-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+.client-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  backdrop-filter: blur(8px);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--charcoal);
+  transition: box-shadow .2s, transform .2s;
+}
+.client-chip:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.client-chip i { font-size: 16px; color: var(--green-mid); }
+.client-chip .client-note {
+  font-size: 11px;
+  color: var(--ash);
+  font-weight: 400;
+}
+.clients-note {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--ash);
+}
+
+/* ── Instalación ────────────────────────────────────────────────────── */
+.install-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+  background: var(--chrome);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+}
+html.dark .install-tabs { background: var(--chrome); }
+.install-tab {
+  padding: 8px 20px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ash);
+  transition: background .18s, color .18s;
+}
+.install-tab.active {
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+html.dark .install-tab.active { background: var(--bg-warm); }
+
+.install-panel { display: none; }
+.install-panel.active { display: block; }
+
+.install-step {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 32px;
+  align-items: flex-start;
+}
+.install-step-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--green-mist);
+  border: 1px solid rgba(61,122,84,.20);
+  color: var(--green-mid);
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+html.dark .install-step-num { background: rgba(61,122,84,.15); }
+.install-step-body { flex: 1; }
+.install-step-body h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--charcoal);
+}
+.install-step-body p {
+  font-size: 13px;
+  color: var(--ash);
+  margin-bottom: 12px;
+  line-height: 1.55;
+}
+
+/* Code block */
+.code-block {
+  position: relative;
+  background: var(--charcoal);
+  border-radius: 10px;
+  overflow: hidden;
+}
+html.dark .code-block { background: #0e0e0b; border: 1px solid rgba(255,255,255,.08); }
+.code-block-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(255,255,255,.04);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.code-lang {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(250,248,242,.40);
+}
+.btn-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: transparent;
+  color: rgba(250,248,242,.50);
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: background .18s, color .18s;
+}
+.btn-copy:hover { background: rgba(255,255,255,.10); color: rgba(250,248,242,.90); }
+.btn-copy.copied { color: var(--green-light); border-color: rgba(106,172,130,.30); }
+.code-block pre {
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: rgba(250,248,242,.88);
+}
+.code-block code { font-family: inherit; }
+/* syntax */
+.tok-comment { color: rgba(250,248,242,.35); font-style: italic; }
+.tok-cmd     { color: #8ac89a; }
+.tok-flag    { color: #d4a870; }
+.tok-string  { color: #b5d4bc; }
+
+.install-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--green-mist);
+  border: 1px solid rgba(61,122,84,.18);
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--slate);
+  line-height: 1.55;
+}
+html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61,122,84,.20); color: var(--stone); }
+.install-note i { color: var(--green-mid); flex-shrink: 0; margin-top: 1px; }
+
+/* ── Arquitectura (diagrama simple) ─────────────────────────────────── */
+.arch-diagram {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.arch-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.arch-node {
+  background: var(--glass);
+  border: 1px solid var(--glass-b);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  transition: box-shadow .2s;
+}
+.arch-node:hover { box-shadow: var(--shadow); }
+.arch-node i { color: var(--green-mid); font-size: 15px; flex-shrink: 0; }
+.arch-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.arch-mcp-badge {
+  background: var(--green-mid);
+  color: #fff;
+  padding: 20px 28px;
+  border-radius: 14px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 32px rgba(61,122,84,.30);
+  position: relative;
+}
+.arch-mcp-badge::before {
+  content: 'MCP';
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+.arch-arrow {
+  width: 40px;
+  height: 2px;
+  background: var(--divider);
+  position: relative;
+}
+.arch-arrow::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border: 5px solid transparent;
+  border-left: 7px solid var(--divider);
+}
+.arch-arrows { display: flex; align-items: center; gap: 0; }
+
+/* ── CTA final ──────────────────────────────────────────────────────── */
+.cta-section {
+  background: linear-gradient(130deg, var(--green-dark) 0%, var(--green) 45%, var(--green-mid) 100%);
+  border-top: none !important;
+}
+.cta-inner {
+  text-align: center;
+  color: rgba(250,248,242,0.96);
+}
+.cta-inner .t-display { color: #faf8f2; }
+.cta-inner .t-lead { color: rgba(250,248,242,0.65); }
+.cta-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 36px;
+  flex-wrap: wrap;
+}
+.btn-cta-white {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 32px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(250,248,242,0.96);
+  color: var(--green);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: transform .12s, background .18s;
+}
+.btn-cta-white:hover { transform: translateY(-2px); background: #fff; }
+.btn-cta-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 28px;
+  border-radius: 10px;
+  border: 2px solid rgba(250,248,242,.35);
+  background: transparent;
+  color: rgba(250,248,242,.88);
+  font-size: 15px;
+  font-weight: 600;
+  transition: border-color .18s, color .18s;
+}
+.btn-cta-outline:hover {
+  border-color: rgba(250,248,242,.65);
+  color: #fff;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+.footer {
+  background: var(--chrome);
+  border-top: 1px solid var(--divider);
+  padding: 40px 0;
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--charcoal);
+}
+.footer-logo img { width: 24px; height: 24px; }
+.footer-links {
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--ash);
+}
+.footer-links a:hover { color: var(--ink); }
+.footer-copy {
+  font-size: 12px;
+  color: var(--stone);
+  text-align: right;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .hero-inner { grid-template-columns: 1fr; gap: 48px; }
+  .hero-visual { order: -1; }
+  .hero-logo { width: 140px; height: 140px; }
+  .hero-card--top-right { top: -10px; right: 10px; }
+  .hero-card--bot-left  { bottom: -10px; left: 10px; }
+  .hero-card--mid-right { display: none; }
+
+  .pain-grid,
+  .feat-grid { grid-template-columns: 1fr; }
+  .feat-hero { grid-template-columns: 1fr; }
+  .feat-hero-visual { display: none; }
+
+  .arch-diagram { grid-template-columns: 1fr; }
+  .arch-center { flex-direction: row; }
+  .arch-arrow { transform: rotate(90deg); }
+
+  .nav-links { display: none; }
+}
+@media (max-width: 600px) {
+  section { padding: 64px 0; }
+  .hero { padding-bottom: 48px; }
+  .cta-actions { flex-direction: column; align-items: center; }
+  .footer-inner { flex-direction: column; align-items: flex-start; }
+  .footer-copy { text-align: left; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="container nav-inner">
+    <a href="#" class="nav-logo">
+      <img src="{% static 'demo/brand/logo-animated.svg' %}" alt="Domain">
+      Domain
+    </a>
+    <div class="nav-links">
+      <a href="#por-que" class="nav-link">Por qué Domain</a>
+      <a href="#caracteristicas" class="nav-link">Características</a>
+      <a href="#clientes" class="nav-link">Compatibilidad</a>
+      <a href="#instalar" class="nav-link">Instalación</a>
+    </div>
+    <div class="nav-actions">
+      <button class="btn-mode" id="modeToggle" aria-label="Cambiar modo">
+        <i class="fas fa-moon icon-moon"></i>
+        <i class="fas fa-sun icon-sun"></i>
+      </button>
+      <a href="/login/" class="btn-cta-sm">Acceder →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-bg">
+    <div class="hero-grid"></div>
+    <div class="hero-orb hero-orb--1"></div>
+    <div class="hero-orb hero-orb--2"></div>
+  </div>
+  <div class="container">
+    <div class="hero-inner">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Protocolo MCP estándar
+        </div>
+        <h1 class="t-display">
+          Todas tus<br>
+          herramientas.<br>
+          <span class="t-gradient">Un solo MCP.</span>
+        </h1>
+        <p class="t-lead" style="margin-top:20px;max-width:48ch">
+          Un servidor que centraliza skills, agentes, flujos y políticas de IA.
+          Instalás en tu VPS, conectás tus clientes, y listo — sin fricciones,
+          sin configuraciones dispersas.
+        </p>
+        <div class="hero-actions">
+          <a href="#instalar" class="btn-primary">
+            <i class="fas fa-terminal"></i> Instalar ahora
+          </a>
+          <a href="/dashboard/" class="btn-secondary">
+            <i class="fas fa-table-columns"></i> Ver panel
+          </a>
+        </div>
+        <div class="hero-meta">
+          <div class="hero-stat">
+            <span class="hero-stat-num">8+</span>
+            <span class="hero-stat-lbl">tipos de recursos</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-num">6</span>
+            <span class="hero-stat-lbl">clientes MCP</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-num">1</span>
+            <span class="hero-stat-lbl">comando para instalar</span>
+          </div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-logo-wrap">
+          <img class="hero-logo"
+               src="{% static 'demo/brand/logo-animated.svg' %}"
+               alt="Domain MCP">
+          <div class="hero-card hero-card--top-right">
+            <i class="fas fa-bolt"></i>
+            <span>247 skills activas</span>
+          </div>
+          <div class="hero-card hero-card--bot-left">
+            <i class="fas fa-shield-halved"></i>
+            <span>Políticas aplicadas</span>
+          </div>
+          <div class="hero-card hero-card--mid-right">
+            <i class="fas fa-circle" style="color:#6aac82;font-size:8px"></i>
+            <span>MCP conectado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Por qué Domain ─────────────────────────────────────────────────── -->
+<section id="por-que">
+  <div class="container">
+    <div class="section-hd">
+      <div class="section-label">El problema</div>
+      <h2 class="t-headline">¿Te suena familiar?</h2>
+      <p class="t-lead">
+        Cada herramienta tiene su propio archivo de reglas, sus propios prompts, sus propias
+        instrucciones. Cuanto más crecés, más caos.
+      </p>
+    </div>
+    <div class="pain-grid">
+      <div class="pain-card">
+        <div class="pain-emoji">📄</div>
+        <h3>Reglas dispersas en todos lados</h3>
+        <p>
+          <code>.cursorrules</code>, <code>CLAUDE.md</code>, system prompts, archivos
+          <code>AGENTS.md</code>. Cada cliente, cada proyecto, cada repo tiene su propia
+          versión de "las reglas". Nada está centralizado.
+        </p>
+      </div>
+      <div class="pain-card">
+        <div class="pain-emoji">🔁</div>
+        <h3>Skills duplicadas sin versionar</h3>
+        <p>
+          ¿Cuántas veces reescribiste la misma skill de "send email" o "query database"?
+          Sin un registro central, cada equipo la reimplementa y no hay
+          forma de saber cuál versión funciona mejor.
+        </p>
+      </div>
+      <div class="pain-card">
+        <div class="pain-emoji">🔍</div>
+        <h3>Sin trazabilidad en producción</h3>
+        <p>
+          Tus agentes hacen cosas. ¿Cuántas llamadas? ¿Con qué tasa de éxito?
+          ¿Cuándo falló esa skill la semana pasada? Sin observabilidad,
+          estás operando a ciegas.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Características ───────────────────────────────────────────────── -->
+<section id="caracteristicas">
+  <div class="container">
+    <div class="section-hd">
+      <div class="section-label">Solución</div>
+      <h2 class="t-headline">Todo lo que necesitás,<br>en un solo servidor</h2>
+      <p class="t-lead">
+        Domain MCP es el sistema nervioso de tu infraestructura de agentes.
+        Gobernás, observás y evolucionás desde un panel unificado.
+      </p>
+    </div>
+    <div class="feat-grid">
+
+      <!-- Card grande: governance central -->
+      <div class="feat-card feat-hero">
+        <div>
+          <div class="feat-icon">
+            <i class="fas fa-diagram-project"></i>
+          </div>
+          <h3>Un servidor MCP para gobernarlos a todos</h3>
+          <p style="margin-top:12px">
+            Registrás Domain MCP una sola vez en cada cliente (Claude Code, Cursor,
+            OpenCode…) y automáticamente tenés acceso a todas tus skills, políticas y
+            flujos. Sin duplicar configuraciones, sin archivos sueltos por el repo.
+          </p>
+          <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap">
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(250,248,242,.80)">
+              <i class="fas fa-check" style="font-size:10px;color:#6aac82"></i> Skills centralizadas
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(250,248,242,.80)">
+              <i class="fas fa-check" style="font-size:10px;color:#6aac82"></i> Políticas unificadas
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(250,248,242,.80)">
+              <i class="fas fa-check" style="font-size:10px;color:#6aac82"></i> Plug & play
+            </span>
+          </div>
+        </div>
+        <div class="feat-hero-visual">
+          <div class="feat-mini-card">
+            <span class="fmc-dot fmc-dot--ok"></span>
+            <span class="fmc-name">send-email</span>
+            <span class="fmc-badge">1.247 calls</span>
+          </div>
+          <div class="feat-mini-card">
+            <span class="fmc-dot fmc-dot--ok"></span>
+            <span class="fmc-name">query-database</span>
+            <span class="fmc-badge">892 calls</span>
+          </div>
+          <div class="feat-mini-card">
+            <span class="fmc-dot fmc-dot--mid"></span>
+            <span class="fmc-name">web-search</span>
+            <span class="fmc-badge fmc-badge--mid">68% success</span>
+          </div>
+          <div class="feat-mini-card">
+            <span class="fmc-dot fmc-dot--off"></span>
+            <span class="fmc-name">text-redact-secrets</span>
+            <span class="fmc-badge">activa</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon"><i class="fas fa-shield-halved"></i></div>
+        <h3>Políticas de gobernanza</h3>
+        <p>Definí reglas a nivel plataforma o por proyecto: no PII en logs,
+        restricciones de seguridad, compliance. El MCP las inyecta en el contexto
+        de cada agente automáticamente.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><i class="fas fa-repeat"></i></div>
+        <h3>Flujos multi-fase</h3>
+        <p>Pipelines SDD, issue intake, deploy workflows. Definís las fases,
+        las herramientas MCP disponibles en cada una, y el agente las ejecuta
+        de forma estructurada y trazable.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><i class="fas fa-chart-line"></i></div>
+        <h3>Observabilidad real</h3>
+        <p>Métricas por skill (calls, success rate, latencia), feedback de usuarios,
+        A/B testing automático entre versiones. Sabés exactamente qué funciona
+        y qué no.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><i class="fas fa-clock"></i></div>
+        <h3>Crons inteligentes</h3>
+        <p>Trabajos programados que ejecutan skills o flujos. Aggregación de feedback,
+        inferencia de relaciones, evaluación de calidad con LLM-as-judge.
+        Todo configurable y observable.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><i class="fas fa-server"></i></div>
+        <h3>100% self-hosted</h3>
+        <p>Tus datos en tu VPS. Postgres, MinIO, todo bajo tu control.
+        Sin vendor lock-in, sin métricas enviadas a terceros. Instalás
+        en un Ubuntu y es tuyo para siempre.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Compatibilidad ────────────────────────────────────────────────── -->
+<section id="clientes">
+  <div class="container">
+    <div class="section-hd" style="text-align:center">
+      <div class="section-label">Compatibilidad</div>
+      <h2 class="t-headline">Funciona con tu cliente MCP favorito</h2>
+      <p class="t-lead" style="margin:12px auto 0">
+        Un registro, todos los clientes. Domain MCP habla el protocolo estándar —
+        si soporta MCP, se conecta.
+      </p>
+    </div>
+    <div class="clients-grid">
+      <div class="client-chip">
+        <i class="fas fa-terminal"></i>
+        <div>
+          <div>Claude Code</div>
+          <div class="client-note">CLI oficial Anthropic</div>
+        </div>
+      </div>
+      <div class="client-chip">
+        <i class="fas fa-code"></i>
+        <div>
+          <div>Cursor</div>
+          <div class="client-note">Editor AI-first</div>
+        </div>
+      </div>
+      <div class="client-chip">
+        <i class="fas fa-desktop"></i>
+        <div>
+          <div>Claude Desktop</div>
+          <div class="client-note">App de escritorio</div>
+        </div>
+      </div>
+      <div class="client-chip">
+        <i class="fas fa-bolt"></i>
+        <div>
+          <div>OpenCode</div>
+          <div class="client-note">Terminal AI</div>
+        </div>
+      </div>
+      <div class="client-chip">
+        <i class="fas fa-puzzle-piece"></i>
+        <div>
+          <div>Cline / Continue</div>
+          <div class="client-note">Extensiones VSCode</div>
+        </div>
+      </div>
+      <div class="client-chip">
+        <i class="fas fa-circle-nodes"></i>
+        <div>
+          <div>Cualquier cliente MCP</div>
+          <div class="client-note">Protocolo estándar</div>
+        </div>
+      </div>
+    </div>
+    <p class="clients-note">
+      <i class="fas fa-info-circle" style="color:var(--green-mid)"></i>
+      El instalador detecta los clientes presentes y los registra automáticamente.
+    </p>
+  </div>
+</section>
+
+<!-- ── Instalación ───────────────────────────────────────────────────── -->
+<section id="instalar">
+  <div class="container">
+    <div class="section-hd">
+      <div class="section-label">Instalación</div>
+      <h2 class="t-headline">Dos comandos.<br>Stack completo.</h2>
+      <p class="t-lead">
+        Primero levantás el servidor en tu VPS. Después configurás tu laptop
+        para que los clientes MCP apunten a él.
+      </p>
+    </div>
+
+    <div class="install-tabs">
+      <button class="install-tab active" data-tab="vps">
+        <i class="fas fa-server"></i> VPS (servidor)
+      </button>
+      <button class="install-tab" data-tab="cliente">
+        <i class="fas fa-laptop"></i> Cliente (laptop)
+      </button>
+    </div>
+
+    <!-- Panel VPS -->
+    <div class="install-panel active" id="tab-vps">
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-body">
+          <h4>Instalá el stack completo en tu VPS</h4>
+          <p>
+            Un solo comando instala Postgres, MinIO, el servidor MCP y el panel de
+            administración. Genera credenciales automáticamente y levanta todos los
+            servicios con systemd.
+          </p>
+          <div class="code-block">
+            <div class="code-block-bar">
+              <span class="code-lang">bash</span>
+              <button class="btn-copy" data-copy="sudo bash <(curl -fsSL https://raw.githubusercontent.com/nunezlagos/domain/services/services/install.sh)">
+                <i class="fas fa-copy"></i> Copiar
+              </button>
+            </div>
+            <pre><code><span class="tok-comment"># Ejecutá en tu VPS con Ubuntu 22.04+</span>
+<span class="tok-cmd">sudo bash</span> <span class="tok-flag">&lt;(curl -fsSL</span> <span class="tok-string">https://raw.githubusercontent.com/nunezlagos/domain/services/services/install.sh</span><span class="tok-flag">)</span></code></pre>
+          </div>
+          <div class="install-note">
+            <i class="fas fa-circle-info"></i>
+            <span>
+              Idempotente: podés re-ejecutar para actualizar sin perder datos. Las credenciales
+              generadas en la primera ejecución se preservan en <code>/opt/services/.env</code>.
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-body">
+          <h4>Anotá tu IP y las credenciales</h4>
+          <p>
+            Al terminar, el instalador imprime la IP del servidor, el URL del panel
+            y las credenciales generadas. Guardálas en tu password manager.
+          </p>
+          <div class="code-block">
+            <div class="code-block-bar">
+              <span class="code-lang">output</span>
+              <button class="btn-copy" data-copy="http://TU_IP/">
+                <i class="fas fa-copy"></i> Copiar URL
+              </button>
+            </div>
+            <pre><code><span class="tok-comment"># Al terminar verás algo así:</span>
+  Dashboard:  <span class="tok-string">http://TU_IP/</span>
+  MCP HTTP:   <span class="tok-string">http://TU_IP/mcp</span>
+  API:        <span class="tok-string">http://TU_IP/api/v1/</span></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel Cliente -->
+    <div class="install-panel" id="tab-cliente">
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-body">
+          <h4>Cloná el repo</h4>
+          <p>El instalador de cliente vive en el mismo repo. Lo clonás una vez.</p>
+          <div class="code-block">
+            <div class="code-block-bar">
+              <span class="code-lang">bash</span>
+              <button class="btn-copy" data-copy="git clone https://github.com/nunezlagos/domain -b services
+cd domain">
+                <i class="fas fa-copy"></i> Copiar
+              </button>
+            </div>
+            <pre><code><span class="tok-cmd">git clone</span> <span class="tok-string">https://github.com/nunezlagos/domain</span> <span class="tok-flag">-b services</span>
+<span class="tok-cmd">cd</span> domain</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-body">
+          <h4>Ejecutá el bootstrap con la URL de tu VPS</h4>
+          <p>
+            Detecta Go (o lo instala localmente sin sudo), compila el binario,
+            y registra el MCP en todos los clientes que encuentre instalados.
+          </p>
+          <div class="code-block">
+            <div class="code-block-bar">
+              <span class="code-lang">bash</span>
+              <button class="btn-copy" data-copy="./install-user/bootstrap.sh --url http://TU_IP --email tu@email.com">
+                <i class="fas fa-copy"></i> Copiar
+              </button>
+            </div>
+            <pre><code><span class="tok-cmd">./install-user/bootstrap.sh</span> <span class="tok-flag">\
+  --url</span> <span class="tok-string">http://TU_IP</span> <span class="tok-flag">\
+  --email</span> <span class="tok-string">tu@email.com</span></code></pre>
+          </div>
+          <div class="install-note">
+            <i class="fas fa-circle-info"></i>
+            <span>
+              Registra automáticamente <strong>Claude Code</strong>, <strong>OpenCode</strong>,
+              <strong>Cursor</strong>, <strong>Claude Desktop</strong> y más si están instalados.
+              Idempotente: re-ejecutar actualiza sin duplicar.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA final ─────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-inner">
+      <h2 class="t-display">Listo para unificar<br>tu stack de IA?</h2>
+      <p class="t-lead" style="margin-top:16px">
+        Un VPS, un comando, todas tus herramientas conectadas.
+      </p>
+      <div class="cta-actions">
+        <a href="#instalar" class="btn-cta-white">
+          <i class="fas fa-rocket"></i> Empezar ahora
+        </a>
+        <a href="https://github.com/nunezlagos/domain" target="_blank" rel="noopener"
+           class="btn-cta-outline">
+          <i class="fab fa-github"></i> Ver en GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-logo">
+      <img src="{% static 'demo/brand/logo-animated.svg' %}" alt="Domain">
+      Domain MCP
+    </div>
+    <div class="footer-links">
+      <a href="#por-que">Por qué</a>
+      <a href="#caracteristicas">Features</a>
+      <a href="#instalar">Instalación</a>
+      <a href="https://github.com/nunezlagos/domain" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <div class="footer-copy">
+      Protocolo MCP · Self-hosted · Open Source
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ── Modo oscuro ── */
+const html = document.documentElement;
+const key  = 'domain-theme';
+
+/* Light es el default — no leemos prefers-color-scheme */
+const saved = localStorage.getItem(key);
+if (saved === 'dark') html.classList.add('dark');
+
+document.getElementById('modeToggle').addEventListener('click', () => {
+  html.classList.toggle('dark');
+  localStorage.setItem(key, html.classList.contains('dark') ? 'dark' : 'light');
+});
+
+/* ── Tabs instalación ── */
+document.querySelectorAll('.install-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ── Copy to clipboard ── */
+document.querySelectorAll('.btn-copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const text = btn.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.opacity  = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+  });
+});
+
+/* ── Navbar scroll ── */
+const nav = document.querySelector('.nav');
+window.addEventListener('scroll', () => {
+  nav.style.background = scrollY > 10
+    ? (html.classList.contains('dark') ? 'rgba(20,20,18,.92)' : 'rgba(250,248,242,.92)')
+    : '';
+}, { passive: true });
+</script>
+
+</body>
+</html>

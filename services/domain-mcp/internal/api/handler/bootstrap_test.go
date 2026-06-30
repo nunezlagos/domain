@@ -13,13 +13,13 @@ import (
 	"nunezlagos/domain/internal/auth/bootstrap"
 )
 
-// issue-01.9 — tests de comportamiento del endpoint HTTP /auth/bootstrap.
-// Mockeamos el bootstrap service via una interfaz testeable (la struct
-// API ya acepta el service como interfaz en el campo Bootstrap).
-//
-// Estos tests verifican el comportamiento HTTP puro: status codes,
-// JSON shape, error handling. NO testean la logica interna del
-// bootstrap service (eso esta en service_test.go).
+
+
+
+
+
+
+
 
 // fakeBootstrap es un mock del bootstrap.Service. Implementa solo
 // los metodos que el handler usa.
@@ -45,12 +45,12 @@ func newAPITestHarness(fake *fakeBootstrap) *API {
 	return &API{Bootstrap: nil} // Bootstrap es el field que usariamos
 }
 
-// Como el campo Bootstrap es concreto (*bootstrap.Service), no interfaz,
-// no podemos inyectar el fake directamente. Lo que SI podemos testear
-// es el path "Bootstrap is nil" (retorna 503) y el path "happy path"
-// via un integration test separado (con DB real).
 
-// === Tests de comportamiento del handler con Bootstrap nil ===
+
+
+
+
+
 
 // Comportamiento: si el Bootstrap service no esta configurado, el
 // endpoint retorna 503 bootstrap_disabled en vez de 500 internal.
@@ -81,40 +81,40 @@ func TestBehavior_AuthFirstRun_ServiceNil_503(t *testing.T) {
 
 // Comportamiento: si el body es JSON invalido, retorna 400 invalid_body.
 func TestBehavior_AuthBootstrap_InvalidBody_400(t *testing.T) {
-	// Necesitamos un Service real para que el handler no retorne 503
-	// en el primer check. Mockeamos via variable de campo.
-	// Sin un pool real, esto va a fallar, asi que el test verifica
-	// solo el path de validacion de JSON.
-	//
-	// Workaround: usamos el service nil y verificamos que el handler
-	// retorna 503 ANTES de tocar el service. El handler actual hace
-	// el check del service al inicio, asi que el path de validacion
-	// de JSON nunca se ejecuta.
+
+
+
+
+
+
+
+
+
 	a := &API{Bootstrap: nil}
 	req := httptest.NewRequest("POST", "/api/v1/auth/bootstrap",
 		bytes.NewBufferString(`{invalid json`))
 	rec := httptest.NewRecorder()
 	a.authBootstrap(rec, req)
-	// Como el service check es primero, retorna 503 (no 400).
+
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }
 
-// === Tests de request parsing (sin tocar el service) ===
 
-// El handler actual requiere Bootstrap != nil para validar el body.
-// Para testear el body parsing, necesitamos un Service real (con
-// pool nil) o refactorizar el handler a una interfaz testeable.
-// Por ahora, el test del body parsing se cubre indirectamente via
-// integration tests con DB real (futuro).
 
-// === Helper: verificar shape del response 200 ===
+
+
+
+
+
+
+
 
 // TestBehavior_AuthBootstrap_SuccessResponseShape verifica el shape
 // esperado del response 200. Es un test estructural: dado un
 // BootstrapResult valido, el JSON del response tiene exactamente
 // los campos esperados.
 func TestBehavior_AuthBootstrap_SuccessResponseShape(t *testing.T) {
-	// Simulamos el JSON que el handler emite en el path feliz.
+
 	body := map[string]any{
 		"user_id":         "00000000-0000-0000-0000-000000000010",
 		"organization_id": "00000000-0000-0000-0000-000000000001",
@@ -123,7 +123,7 @@ func TestBehavior_AuthBootstrap_SuccessResponseShape(t *testing.T) {
 		"email":           "admin@saargo.com",
 		"org_name":        "Saargo",
 		"method":          "bootstrap",
-		"note":            "guardá la API key — solo se muestra UNA vez. No expira automáticamente; rotala manualmente con /domain-login.",
+		"note":            "guarda la API key — solo se muestra UNA vez. No expira automaticamente; rotala manualmente con /domain-login.",
 	}
 	data, err := json.Marshal(body)
 	require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestBehavior_AuthBootstrap_SuccessResponseShape(t *testing.T) {
 	require.Contains(t, got["note"].(string), "No expira")
 }
 
-// === Test del request body schema ===
+
 
 // El handler decodifica el body como bootstrapRequest. Verificamos
 // que el JSON shape esperado matchea la documentacion de la HU.

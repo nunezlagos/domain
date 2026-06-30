@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/lifecycle/lifecycledb"
 	"nunezlagos/domain/internal/store/txctx"
 )
 
@@ -52,19 +53,28 @@ type Service struct {
 	RetentionDays int // default 30; restore falla si deleted_at < now()-RetentionDays
 }
 
-// q retorna la tx con SET LOCAL si el middleware HTTP la inyecto
-// (issue-25.14), o el pool como fallback.
+// querier permite queries dinámicas con nombres de tabla variables
+// (Restore, PurgeExpiredSoftDeleted).
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func (s *Service) q(ctx context.Context) querier {
+// rawQ retorna el querier crudo para queries con tabla dinámica.
+func (s *Service) rawQ(ctx context.Context) querier {
 	if tx := txctx.TxFromContext(ctx); tx != nil {
 		return tx
 	}
 	return s.Pool
+}
+
+// q retorna el querier tipado sqlc.
+func (s *Service) q(ctx context.Context) *lifecycledb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return lifecycledb.New(tx)
+	}
+	return lifecycledb.New(s.Pool)
 }
 
 func (s *Service) retentionDays() int {
@@ -83,13 +93,13 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	if !ok {
 		return ErrEntityNotSupported
 	}
-	// Validar dentro de la retention window
+
 	var deletedAt *time.Time
 	var entityOrg *uuid.UUID
 	var query string
 	args := []any{id}
 	query = fmt.Sprintf(`SELECT deleted_at, NULL::uuid FROM %s WHERE id = $1`, table)
-	err := s.q(ctx).QueryRow(ctx, query, args...).Scan(&deletedAt, &entityOrg)
+	err := s.rawQ(ctx).QueryRow(ctx, query, args...).Scan(&deletedAt, &entityOrg)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -99,16 +109,16 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	if deletedAt == nil {
 		return ErrNotFound
 	}
-	// Cross-org guard
+
 	if orgID != nil && entityOrg != nil && *entityOrg != *orgID {
 		return ErrNotFound
 	}
-	// Retention
+
 	if time.Since(*deletedAt) > time.Duration(s.retentionDays())*24*time.Hour {
 		return ErrRetentionExpired
 	}
 
-	_, err = s.q(ctx).Exec(ctx,
+	_, err = s.rawQ(ctx).Exec(ctx,
 		fmt.Sprintf(`UPDATE %s SET deleted_at = NULL WHERE id = $1`, table), id)
 	if err != nil {
 		return fmt.Errorf("restore: %w", err)
@@ -126,7 +136,7 @@ func (s *Service) Restore(ctx context.Context, entityType string, id, actorID uu
 	return nil
 }
 
-// --- GDPR Export ---
+
 
 // UserExport bundle con todos los datos del user en formato portable.
 type UserExport struct {
@@ -154,23 +164,28 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		UserID:     userID,
 	}
 
-	// 1. user record
-	usr, err := scanRow(ctx, s.q(ctx),
-		`SELECT id, email, name, role, created_at, updated_at, deleted_at
-		 FROM users WHERE id = $1`,
-		userID)
+
+	userRow, err := s.q(ctx).GetUserForExport(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("user: %w", err)
 	}
-	if usr == nil {
-		return nil, ErrNotFound
+	out.User = map[string]any{
+		"id":         userRow.ID.String(),
+		"email":      userRow.Email,
+		"name":       userRow.Name,
+		"role":       userRow.Role,
+		"created_at": userRow.CreatedAt,
+		"updated_at": userRow.UpdatedAt,
+		"deleted_at": userRow.DeletedAt,
 	}
-	out.User = usr
 
-	// 2. organization (one, the user's).
-	// ISSUE-21.6 Fase D clean Round 3: tabla organizations se dropea en
-	// Fase C. En single-org mode, el user siempre pertenece a la org
-	// canónica. Devolvemos un placeholder con id/name/slug default.
+
+
+
+
 	out.Organizations = []map[string]any{
 		{
 			"id":         "00000000-0000-0000-0000-000000000001",
@@ -182,33 +197,99 @@ func (s *Service) ExportUserData(ctx context.Context, userID, orgID uuid.UUID) (
 		},
 	}
 
-	// 3-N. Tablas con created_by = userID
-	out.Projects, _ = scanRows(ctx, s.Pool,
-		`SELECT id, name, slug, description, created_at FROM projects
-		 ORDER BY created_at DESC`)
-	out.Observations, _ = scanRows(ctx, s.Pool,
-		`SELECT id, project_id, content, observation_type, tags, metadata, created_at
-		 FROM knowledge_observations WHERE created_by = $1 AND deleted_at IS NULL`, userID)
-	// REQ-42.3: sessions dropeada — sin export de sesiones (campo queda vacío
-	// por compatibilidad de shape del export GDPR).
-	out.Prompts, _ = scanRows(ctx, s.Pool,
-		`SELECT id, project_id, slug, version, body, is_active, created_at
-		 FROM prompts WHERE created_by = $1 AND deleted_at IS NULL`, userID)
-	out.KnowledgeDocs, _ = scanRows(ctx, s.Pool,
-		`SELECT id, project_id, title, source, source_url, tags, created_at
-		 FROM knowledge_docs WHERE created_by = $1 AND deleted_at IS NULL`, userID)
-	out.AgentRuns, _ = scanRows(ctx, s.Pool,
-		`SELECT id, agent_id, status, inputs, outputs, tokens_input, tokens_output,
-		        cost_usd, iterations, started_at, finished_at
-		 FROM agent_runs WHERE user_id = $1`, userID)
-	// auth_api_keys: solo metadata (key_prefix), NUNCA key_hash ni secrets
-	out.APIKeys, _ = scanRows(ctx, s.Pool,
-		`SELECT id, name, key_prefix, last_used_at, expires_at, revoked_at, created_at
-		 FROM auth_api_keys WHERE user_id = $1`, userID)
-	// audit_log: entradas con actor=this user
-	out.AuditEntries, _ = scanRows(ctx, s.Pool,
-		`SELECT id, action, entity_type, entity_id, new_values, occurred_at
-		 FROM audit_log WHERE actor_id = $1 ORDER BY occurred_at DESC LIMIT 5000`, userID)
+
+	if projects, err := s.q(ctx).ListProjectsForExport(ctx); err == nil {
+		for _, p := range projects {
+			out.Projects = append(out.Projects, map[string]any{
+				"id":          p.ID.String(),
+				"name":        p.Name,
+				"slug":        p.Slug,
+				"description": p.Description,
+				"created_at":  p.CreatedAt,
+			})
+		}
+	}
+	if obs, err := s.q(ctx).ListObservationsByCreator(ctx, &userID); err == nil {
+		for _, o := range obs {
+			out.Observations = append(out.Observations, map[string]any{
+				"id":               o.ID.String(),
+				"project_id":       o.ProjectID.String(),
+				"content":          o.Content,
+				"observation_type": o.ObservationType,
+				"tags":             o.Tags,
+				"metadata":         normalizeValue(o.Metadata),
+				"created_at":       o.CreatedAt,
+			})
+		}
+	}
+	if prompts, err := s.q(ctx).ListPromptsByCreator(ctx, &userID); err == nil {
+		for _, p := range prompts {
+			out.Prompts = append(out.Prompts, map[string]any{
+				"id":         p.ID.String(),
+				"project_id": p.ProjectID,
+				"slug":       p.Slug,
+				"version":    p.Version,
+				"body":       p.Body,
+				"is_active":  p.IsActive,
+				"created_at": p.CreatedAt,
+			})
+		}
+	}
+	if docs, err := s.q(ctx).ListKnowledgeDocsByCreator(ctx, &userID); err == nil {
+		for _, d := range docs {
+			out.KnowledgeDocs = append(out.KnowledgeDocs, map[string]any{
+				"id":         d.ID.String(),
+				"project_id": d.ProjectID.String(),
+				"title":      d.Title,
+				"source":     d.Source,
+				"source_url": d.SourceUrl,
+				"tags":       d.Tags,
+				"created_at": d.CreatedAt,
+			})
+		}
+	}
+	if runs, err := s.q(ctx).ListAgentRunsByUser(ctx, &userID); err == nil {
+		for _, r := range runs {
+			out.AgentRuns = append(out.AgentRuns, map[string]any{
+				"id":            r.ID.String(),
+				"agent_id":      r.AgentID.String(),
+				"status":        r.Status,
+				"inputs":        normalizeValue(r.Inputs),
+				"outputs":       normalizeValue(r.Outputs),
+				"tokens_input":  r.TokensInput,
+				"tokens_output": r.TokensOutput,
+				"cost_usd":      r.CostUsd,
+				"iterations":    r.Iterations,
+				"started_at":    r.StartedAt,
+				"finished_at":   r.FinishedAt,
+			})
+		}
+	}
+	if keys, err := s.q(ctx).ListAPIKeysByUser(ctx, userID); err == nil {
+		for _, k := range keys {
+			out.APIKeys = append(out.APIKeys, map[string]any{
+				"id":           k.ID.String(),
+				"name":         k.Name,
+				"key_prefix":   k.KeyPrefix,
+				"last_used_at": k.LastUsedAt,
+				"expires_at":   k.ExpiresAt,
+				"revoked_at":   k.RevokedAt,
+				"created_at":   k.CreatedAt,
+			})
+		}
+	}
+	if entries, err := s.q(ctx).ListAuditEntriesByActor(ctx, &userID); err == nil {
+		for _, e := range entries {
+			out.AuditEntries = append(out.AuditEntries, map[string]any{
+				"id":          e.ID,
+				"action":      e.Action,
+				"entity_type": e.EntityType,
+				"entity_id":   e.EntityID,
+				"new_values":  normalizeValue(e.NewValues),
+				"occurred_at": e.OccurredAt,
+			})
+		}
+	}
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -297,7 +378,7 @@ func normalizeValue(v any) any {
 		}
 		return string(x)
 	case [16]byte:
-		// UUID raw bytes — convertir a string
+
 		u := uuid.UUID(x)
 		return u.String()
 	default:
@@ -311,7 +392,7 @@ func (s *Service) PurgeExpiredSoftDeleted(ctx context.Context) (int64, error) {
 	cutoff := time.Now().Add(-time.Duration(s.retentionDays()) * 24 * time.Hour)
 	var total int64
 	for entityType, table := range restorableEntities {
-		tag, err := s.q(ctx).Exec(ctx,
+		tag, err := s.rawQ(ctx).Exec(ctx,
 			fmt.Sprintf(`DELETE FROM %s WHERE deleted_at IS NOT NULL AND deleted_at < $1`, table), cutoff)
 		if err != nil {
 			return total, fmt.Errorf("purge %s: %w", entityType, err)

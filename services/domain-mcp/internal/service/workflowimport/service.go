@@ -1,3 +1,4 @@
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package workflowimport
 
 import (
@@ -11,7 +12,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/workflowimport/workflowimportdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // ImportedFile refleja una fila de imported_workflow_files.
@@ -66,6 +71,20 @@ type ImportReport struct {
 	Errors   []string       `json:"errors,omitempty"`
 }
 
+func (s *Service) q(ctx context.Context) *workflowimportdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return workflowimportdb.New(tx)
+	}
+	return workflowimportdb.New(s.Pool)
+}
+
+func timestamptzToPtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
+}
+
 // Import escanea el proyecto y guarda los .md detectados en BD (status=
 // backed_up). Si in.WriteStub=true, sobrescribe el .md con StubTemplate.
 func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, error) {
@@ -78,20 +97,15 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 	rep := &ImportReport{Detected: files}
 
 	for _, df := range files {
-		// Check si ya está importado con mismo hash → skip.
-		var existingHash string
-		var existingStatus string
-		err := s.Pool.QueryRow(ctx,
-			`SELECT content_hash, status FROM project_imported_workflow_files
-			 WHERE project_id = $1 AND rel_path = $2`,
-			in.ProjectID, df.RelPath,
-		).Scan(&existingHash, &existingStatus)
-		if err == nil && existingHash == df.ContentHash {
+		existing, err := s.q(ctx).GetFileByProjectAndPath(ctx, workflowimportdb.GetFileByProjectAndPathParams{
+			ProjectID: in.ProjectID,
+			RelPath:   df.RelPath,
+		})
+		if err == nil && existing.ContentHash == df.ContentHash {
 			rep.Skipped++
 			continue
 		}
 
-		// UPSERT como backed_up (o replaced si WriteStub).
 		newStatus := StatusBackedUp
 		var stub *string
 		if in.WriteStub && in.StubTemplate != "" {
@@ -100,22 +114,16 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 			newStatus = StatusReplaced
 		}
 
-		_, err = s.Pool.Exec(ctx, `
-			INSERT INTO project_imported_workflow_files
-			  (project_id, source_tool, rel_path, original_content,
-			   content_hash, size_bytes, status, replaced_with, replaced_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7::varchar,$8::text, CASE WHEN $7::varchar = 'replaced' THEN now() ELSE NULL END)
-			ON CONFLICT (project_id, rel_path) DO UPDATE
-			SET original_content = EXCLUDED.original_content,
-			    content_hash     = EXCLUDED.content_hash,
-			    size_bytes       = EXCLUDED.size_bytes,
-			    status           = EXCLUDED.status,
-			    replaced_with    = EXCLUDED.replaced_with,
-			    replaced_at      = EXCLUDED.replaced_at,
-			    updated_at       = now()`,
-			in.ProjectID, df.SourceTool, df.RelPath, df.Content,
-			df.ContentHash, df.SizeBytes, newStatus, stub,
-		)
+		_, err = s.q(ctx).UpsertFile(ctx, workflowimportdb.UpsertFileParams{
+			ProjectID:       in.ProjectID,
+			SourceTool:      df.SourceTool,
+			RelPath:         df.RelPath,
+			OriginalContent: df.Content,
+			ContentHash:     df.ContentHash,
+			SizeBytes:       df.SizeBytes,
+			Status:          newStatus,
+			ReplacedWith:    stub,
+		})
 		if err != nil {
 			rep.Errors = append(rep.Errors, fmt.Sprintf("upsert %s: %v", df.RelPath, err))
 			continue
@@ -137,14 +145,10 @@ func (s *Service) Import(ctx context.Context, in ImportInput) (*ImportReport, er
 // Restore reescribe en disco el original guardado para un archivo y marca
 // status=restored. Idempotente: si ya está restored, no-op.
 func (s *Service) Restore(ctx context.Context, projectID *uuid.UUID, relPath, projectRoot string) error {
-	var f ImportedFile
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, source_tool, rel_path, original_content, status, replaced_at
-		FROM project_imported_workflow_files
-		WHERE ($1::uuid IS NULL AND project_id IS NULL OR project_id = $1)
-		  AND rel_path = $2`,
-		projectID, relPath,
-	).Scan(&f.ID, &f.SourceTool, &f.RelPath, &f.OriginalContent, &f.Status, &f.ReplacedAt)
+	row, err := s.q(ctx).GetFileByRelPath(ctx, workflowimportdb.GetFileByRelPathParams{
+		ProjectID: projectID,
+		RelPath:   relPath,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrFileNotFound
 	}
@@ -152,50 +156,47 @@ func (s *Service) Restore(ctx context.Context, projectID *uuid.UUID, relPath, pr
 		return fmt.Errorf("lookup: %w", err)
 	}
 
-	if f.Status == StatusRestored {
+	if row.Status == StatusRestored {
 		return nil
 	}
 
 	abs := filepath.Join(projectRoot, relPath)
-	if err := os.WriteFile(abs, []byte(f.OriginalContent), 0o644); err != nil {
+	if err := os.WriteFile(abs, []byte(row.OriginalContent), 0o644); err != nil {
 		return fmt.Errorf("write original: %w", err)
 	}
 
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE project_imported_workflow_files
-		 SET status = $1, restored_at = now(), updated_at = now()
-		 WHERE id = $2`,
-		StatusRestored, f.ID,
-	)
-	return err
+	return s.q(ctx).SetFileRestored(ctx, workflowimportdb.SetFileRestoredParams{
+		ID:     row.ID,
+		Status: StatusRestored,
+	})
 }
 
 // List devuelve los archivos importados de un proyecto.
 func (s *Service) List(ctx context.Context, projectID *uuid.UUID) ([]ImportedFile, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT id, project_id, source_tool, rel_path,
-		       original_content, content_hash, size_bytes, status,
-		       replaced_with, replaced_at, restored_at, created_at, updated_at
-		FROM project_imported_workflow_files
-		WHERE ($1::uuid IS NULL AND project_id IS NULL OR project_id = $1)
-		ORDER BY rel_path ASC`,
-		projectID,
-	)
+	rows, err := s.q(ctx).ListProjectFiles(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list: %w", err)
 	}
-	defer rows.Close()
-	var out []ImportedFile
-	for rows.Next() {
-		var f ImportedFile
-		if err := rows.Scan(&f.ID, &f.ProjectID, &f.SourceTool,
-			&f.RelPath, &f.OriginalContent, &f.ContentHash, &f.SizeBytes, &f.Status,
-			&f.ReplacedWith, &f.ReplacedAt, &f.RestoredAt, &f.CreatedAt, &f.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		out = append(out, f)
+
+	out := make([]ImportedFile, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, ImportedFile{
+			ID:              r.ID,
+			ProjectID:       r.ProjectID,
+			SourceTool:      r.SourceTool,
+			RelPath:         r.RelPath,
+			OriginalContent: r.OriginalContent,
+			ContentHash:     r.ContentHash,
+			SizeBytes:       r.SizeBytes,
+			Status:          r.Status,
+			ReplacedWith:    r.ReplacedWith,
+			ReplacedAt:      timestamptzToPtr(r.ReplacedAt),
+			RestoredAt:      timestamptzToPtr(r.RestoredAt),
+			CreatedAt:       r.CreatedAt,
+			UpdatedAt:       r.UpdatedAt,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // DefaultStub es el template estándar que se escribe en lugar de los

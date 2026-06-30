@@ -49,18 +49,3 @@ func TestSES_SendFails(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mock error")
 }
-
-func TestSES_SendOTP(t *testing.T) {
-	var capturedTo string
-	client := &mockSESClient{
-		sendEmailFn: func(ctx context.Context, params *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error) {
-			capturedTo = params.Destination.ToAddresses[0]
-			return &sesv2.SendEmailOutput{}, nil
-		},
-	}
-
-	s := ses.NewWithClient(client, "noreply@test.com", slog.Default())
-	err := s.SendOTP(context.Background(), "user@test.com", "654321", 0)
-	require.NoError(t, err)
-	require.Equal(t, "user@test.com", capturedTo)
-}

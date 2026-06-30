@@ -55,7 +55,7 @@ func main() {
 		fail(fmt.Sprintf("dump primary: %v", err), *out)
 	}
 
-	// Crea DB temporal en el mismo cluster
+
 	tmpName := fmt.Sprintf("domain_drift_check_%d", time.Now().Unix())
 	if err := createTempDB(ctx, dsn, tmpName); err != nil {
 		fail(fmt.Sprintf("create temp db: %v", err), *out)
@@ -107,8 +107,8 @@ func dumpSchema(ctx context.Context, dsn string) (string, error) {
 	}
 	defer conn.Close(ctx)
 
-	// pg_dump no está disponible siempre — usamos query a pg_catalog para
-	// dump simplificado de tablas + columnas + índices.
+
+
 	rows, err := conn.Query(ctx, `
 		SELECT
 			n.nspname AS schema,
@@ -156,9 +156,9 @@ func dumpSchema(ctx context.Context, dsn string) (string, error) {
 }
 
 func normalize(s string) string {
-	// Normaliza espacios, ordena lineas para tolerar diferencias de orden
+
 	lines := strings.Split(strings.TrimSpace(s), "\n")
-	// Ya viene ORDER BY pero garantizamos
+
 	return strings.Join(lines, "\n")
 }
 
@@ -210,7 +210,7 @@ func dropTempDB(ctx context.Context, dsn, name string) {
 }
 
 func replaceDBName(dsn, newDB string) string {
-	// Naive replace: postgres://user:pass@host:port/<db>?args → postgres://user:pass@host:port/<newDB>?args
+
 	idx := strings.LastIndex(dsn, "/")
 	if idx < 0 {
 		return dsn
@@ -236,7 +236,7 @@ func obfuscate(dsn string) string {
 }
 
 func applyMigrations(dsn string) error {
-	// Usa el subcomando del propio binario domain para evitar duplicar lógica.
+
 	cmd := exec.Command("domain", "migrate", "up")
 	cmd.Env = append(os.Environ(), "DOMAIN_DATABASE_URL="+dsn)
 	out, err := cmd.CombinedOutput()

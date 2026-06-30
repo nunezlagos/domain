@@ -10,54 +10,99 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	obssvc "nunezlagos/domain/internal/service/observation"
+	projsvc "nunezlagos/domain/internal/service/project"
 	promptsvc "nunezlagos/domain/internal/service/prompt"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
+type memoryObservationService interface {
+	Get(ctx context.Context, id uuid.UUID) (*obssvc.Observation, error)
+	SoftDelete(ctx context.Context, id, actorID uuid.UUID) error
+	Save(ctx context.Context, in obssvc.SaveInput) (*obssvc.Observation, error)
+}
+
+type memoryProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type memoryPromptService interface {
+	Create(ctx context.Context, in promptsvc.CreateInput) (*promptsvc.Prompt, error)
+}
+
+type memoryHandlers struct {
+	observations memoryObservationService
+	projects     memoryProjectGetter
+	prompts      memoryPromptService
+	principal    *apikey.Principal
+	pool         *pgxpool.Pool
+}
+
+func (h *memoryHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls: tx + SET LOCAL para tablas con RLS FORCE (observations/sessions).
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &memoryHandlers{
+		observations: deps.Observations,
+		projects:     deps.Projects,
+		prompts:      deps.Prompts,
+		principal:    deps.Principal,
+		pool:         deps.Pool,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(deps.handleMemDelete))},
-		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", deps.handleMemSavePrompt)},
-		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(deps.handleMemCapturePassive))},
-		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", deps.handleMemSuggestTopicKey)},
-		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(deps.handleMemStats))},
+		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(h.handleMemDelete))},
+		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", h.handleMemSavePrompt)},
+		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(h.handleMemCapturePassive))},
+		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", h.handleMemSuggestTopicKey)},
+		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(h.handleMemStats))},
 	}
 }
 
 func toolMemDelete() mcp.Tool {
 	return mcp.NewTool("domain_mem_delete",
-		mcp.WithDescription("Elimina (soft-delete) una observación de memoria por id."),
+		mcp.WithDescription("Elimina (soft-delete) una observacion de memoria por id."),
 		mcp.WithString("observation_id",
-			mcp.Description("UUID de la observación a eliminar"),
+			mcp.Description("UUID de la observacion a eliminar"),
 			mcp.Required(),
 		),
 	)
 }
 
-func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
+
 	args := req.GetArguments()
 	idRaw, _ := args["observation_id"].(string)
 	id, err := uuid.Parse(idRaw)
 	if err != nil {
-		return mcp.NewToolResultError("observation_id inválido"), nil
+		return mcp.NewToolResultError("observation_id invalido"), nil
 	}
-	// Guard anti-enumeration: misma respuesta para no-existe.
-	if _, err := d.Observations.Get(ctx, id); err != nil {
+
+	if _, err := h.observations.Get(ctx, id); err != nil {
 		return mcp.NewToolResultError("observation not found"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	if err := d.Observations.SoftDelete(ctx, id, userID); err != nil {
+	userID, _ := uuid.Parse(h.principal.UserID)
+	if err := h.observations.SoftDelete(ctx, id, userID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"deleted": true, "observation_id": id})
@@ -65,7 +110,7 @@ func (d *Deps) handleMemDelete(ctx context.Context, req mcp.CallToolRequest) (*m
 
 func toolMemSavePrompt() mcp.Tool {
 	return mcp.NewTool("domain_mem_save_prompt",
-		mcp.WithDescription("Guarda un prompt reutilizable versionado (por slug). Cada save del mismo slug crea una versión nueva."),
+		mcp.WithDescription("Guarda un prompt reutilizable versionado (por slug). Cada save del mismo slug crea una version nueva."),
 		mcp.WithString("slug",
 			mcp.Description("Slug estable del prompt (kebab-case)"),
 			mcp.Required(),
@@ -78,16 +123,16 @@ func toolMemSavePrompt() mcp.Tool {
 			mcp.Description("Project al que scoping el prompt (opcional: global de la org si se omite)"),
 		),
 		mcp.WithString("description",
-			mcp.Description("Descripción corta"),
+			mcp.Description("Descripcion corta"),
 		),
 		mcp.WithBoolean("set_active",
-			mcp.Description("Marcar esta versión como activa (default true)"),
+			mcp.Description("Marcar esta version como activa (default true)"),
 		),
 	)
 }
 
-func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
 	args := req.GetArguments()
@@ -96,15 +141,15 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 	if slug == "" || body == "" {
 		return mcp.NewToolResultError("slug y body son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	var projectID *uuid.UUID
 	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		proj, err := h.projects.GetBySlug(ctx, orgID, ps)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
 		}
@@ -116,7 +161,7 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 		setActive = v
 	}
 
-	p, err := d.Prompts.Create(ctx, promptsvc.CreateInput{
+	p, err := h.prompts.Create(ctx, promptsvc.CreateInput{
 		OrganizationID: orgID, ProjectID: projectID, CreatedBy: &userID,
 		Slug: slug, Body: body, Description: desc, SetActive: setActive,
 	})
@@ -130,7 +175,7 @@ func (d *Deps) handleMemSavePrompt(ctx context.Context, req mcp.CallToolRequest)
 
 func toolMemCapturePassive() mcp.Tool {
 	return mcp.NewTool("domain_mem_capture_passive",
-		mcp.WithDescription("Captura pasiva de contexto (baja prioridad): guarda una observación tipo 'passive' con dedup automático por hash de contenido."),
+		mcp.WithDescription("Captura pasiva de contexto (baja prioridad): guarda una observacion tipo 'passive' con dedup automatico por hash de contenido."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project"),
 			mcp.Required(),
@@ -145,23 +190,23 @@ func toolMemCapturePassive() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	// RLS wireup: lo provee withOrgTxHandler en el registro del tool.
+
 	args := req.GetArguments()
 	projectSlug, _ := args["project_slug"].(string)
 	content, _ := args["content"].(string)
 	if projectSlug == "" || content == "" {
 		return mcp.NewToolResultError("project_slug y content son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	proj, err := d.Projects.GetBySlug(ctx, orgID, projectSlug)
+	userID, _ := uuid.Parse(h.principal.UserID)
+	proj, err := h.projects.GetBySlug(ctx, orgID, projectSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projectSlug)), nil
 	}
@@ -170,7 +215,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		source = "passive"
 	}
 
-	obs, err := d.Observations.Save(ctx, obssvc.SaveInput{
+	obs, err := h.observations.Save(ctx, obssvc.SaveInput{
 		OrganizationID:  orgID,
 		ProjectID:       proj.ID,
 		CreatedBy:       &userID,
@@ -179,7 +224,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 		Metadata:        map[string]any{"source": source, "passive": true},
 	})
 	if err != nil {
-		// Dedup hash: contenido idéntico ya capturado no es error para el caller.
+
 		if strings.Contains(err.Error(), "duplicate") {
 			return toolResultJSON(map[string]any{"captured": false, "reason": "duplicate"})
 		}
@@ -190,7 +235,7 @@ func (d *Deps) handleMemCapturePassive(ctx context.Context, req mcp.CallToolRequ
 
 func toolMemSuggestTopicKey() mcp.Tool {
 	return mcp.NewTool("domain_mem_suggest_topic_key",
-		mcp.WithDescription("Sugiere un topic_key kebab-case estable a partir de un contenido (heurística de keywords, sin LLM)."),
+		mcp.WithDescription("Sugiere un topic_key kebab-case estable a partir de un contenido (heuristica de keywords, sin LLM)."),
 		mcp.WithString("content",
 			mcp.Description("Contenido del cual derivar el topic key"),
 			mcp.Required(),
@@ -199,8 +244,8 @@ func toolMemSuggestTopicKey() mcp.Tool {
 }
 
 var (
-	reWord = regexp.MustCompile(`[a-záéíóúñü0-9]+`)
-	// stopwords ES+EN mínimas para keywords.
+	reWord = regexp.MustCompile(`[a-zaeiouñu0-9]+`)
+
 	topicStopwords = map[string]bool{
 		"el": true, "la": true, "los": true, "las": true, "de": true, "del": true,
 		"en": true, "un": true, "una": true, "que": true, "con": true, "por": true,
@@ -211,7 +256,7 @@ var (
 	}
 )
 
-// SuggestTopicKey deriva un slug kebab-case con las keywords más frecuentes.
+// SuggestTopicKey deriva un slug kebab-case con las keywords mas frecuentes.
 func SuggestTopicKey(content string) string {
 	words := reWord.FindAllString(strings.ToLower(content), -1)
 	freq := map[string]int{}
@@ -228,7 +273,7 @@ func SuggestTopicKey(content string) string {
 	if len(order) == 0 {
 		return "general"
 	}
-	// Orden estable: frecuencia desc, luego orden de aparición.
+
 	pos := map[string]int{}
 	for i, w := range order {
 		pos[w] = i
@@ -246,7 +291,7 @@ func SuggestTopicKey(content string) string {
 	return strings.Join(order[:n], "-")
 }
 
-func (d *Deps) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (h *memoryHandlers) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args := req.GetArguments()
 	content, _ := args["content"].(string)
 	if content == "" {
@@ -257,18 +302,18 @@ func (d *Deps) handleMemSuggestTopicKey(_ context.Context, req mcp.CallToolReque
 
 func toolMemStats() mcp.Tool {
 	return mcp.NewTool("domain_mem_stats",
-		mcp.WithDescription("Estadísticas de memoria de la org: observations totales, por tipo, sessions y prompts."),
+		mcp.WithDescription("Estadisticas de memoria de la org: observations totales, por tipo, sessions y prompts."),
 		mcp.WithString("project_slug",
 			mcp.Description("Limitar stats a un project (opcional)"),
 		),
 	)
 }
 
-func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *memoryHandlers) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
@@ -277,7 +322,7 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	projFilter := ""
 	qArgs := []any{}
 	if ps, _ := args["project_slug"].(string); ps != "" {
-		proj, err := d.Projects.GetBySlug(ctx, orgID, ps)
+		proj, err := h.projects.GetBySlug(ctx, orgID, ps)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", ps)), nil
 		}
@@ -286,8 +331,8 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	byType := map[string]int64{}
-	// d.q(ctx): usa la tx con SET LOCAL (RLS) que inyectó withOrgTxHandler.
-	rows, err := d.q(ctx).Query(ctx, `
+
+	rows, err := h.q(ctx).Query(ctx, `
 		SELECT observation_type, COUNT(*) FROM knowledge_observations
 		WHERE deleted_at IS NULL`+projFilter+`
 		GROUP BY observation_type`, qArgs...)
@@ -310,9 +355,9 @@ func (d *Deps) handleMemStats(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// REQ-42.3: sessions dropeada — sin conteo de sesiones.
+
 	var prompts int64
-	_ = d.q(ctx).QueryRow(ctx,
+	_ = h.q(ctx).QueryRow(ctx,
 		`SELECT COUNT(*) FROM prompts WHERE deleted_at IS NULL`).Scan(&prompts)
 
 	return toolResultJSON(map[string]any{

@@ -8,7 +8,11 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 
+	"nunezlagos/domain/internal/audit"
+	usvc "nunezlagos/domain/internal/service/issue"
+	"nunezlagos/domain/internal/service/openspec"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	tsvc "nunezlagos/domain/internal/service/task"
 	"nunezlagos/domain/internal/tracing"
 )
 
@@ -32,26 +36,26 @@ type PhaseResultResult struct {
 	NextStepID     *uuid.UUID
 	NextStepKey    string
 	NextStepPrompt string
-	// RequiresConfirm D1 (RFC 0006): true cuando Express detecta que
-	// el output de sdd-apply supera el threshold ExpressMaxLines o
-	// toca múltiples archivos. El próximo step (NextStepID) queda
-	// marcado 'blocked' hasta que el cliente invoque ConfirmContinue
-	// (vía domain_orchestrate_confirm).
+
+
+
+
+
 	RequiresConfirm bool
 	ConfirmMessage  string
-	// SkillsRecommended opcional (D3). Poblado cuando el next step tiene
-	// skill_threshold > 0 y el Service tiene Skills configurado. El
-	// cliente IDE puede usar esta info para sugerir skills al agente.
+
+
+
 	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
-	// MultiConcern opcional (D2). Poblado cuando sdd-explore detectó
-	// multi_concern=true en el output. Contiene la lista de concerns
-	// separables. El cliente IDE puede usar esta info para crear
-	// sub-flows por concern.
+
+
+
+
 	MultiConcern *MultiConcernInfo `json:"multi_concern,omitempty"`
-	// Summary es el resumen texto plano de 1 línea que el cliente IDE
-	// devuelve en su output (Dual Output RFC 0006 §4). El MCP tool
-	// response al IDE contiene sólo el summary; el payload completo
-	// queda en flow_run_steps.outputs JSONB para debug/audit.
+
+
+
+
 	Summary string `json:"summary,omitempty"`
 }
 
@@ -111,23 +115,23 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		return nil, err
 	}
 
-	// Reconstruir el Output del handler para validación: se persistió
-	// en step.inputs.suggested_saves al crear el step. Esto evita que
-	// el handler necesite rebuild el prompt completo cada vez.
+
+
+
 	rebuilt := rebuildOutputFromStepInputs(step)
 	phaseSlug := phases.PhaseSlug(step.StepKey)
 
-	// Validación D5 (centralizada)
+
 	if err := ValidateRequiredSaves(phaseSlug, rebuilt,
 		phases.ClientResult{Output: in.Output, MemoryRefsSaved: in.MemoryRefsSaved}); err != nil {
-		// Marcar step como failed; propagar agregado al flow_run para
-		// que GetFlowStatus refleje el estado terminal. El cliente
-		// puede re-emitir con los saves correctos pero el flow ya
-		// quedó marcado failed (D5 es bloqueante por diseño).
+
+
+
+
 		_ = s.Repo.MarkStepFailed(ctx, step.ID, err.Error())
 		_ = s.propagateFlowStatusAfterFailure(ctx, flowRun.ID)
-		// Métricas D5: rastrear qué fases más se quedan sin guardar
-		// requireds (señal de UX problem en el cliente IDE).
+
+
 		if s.Metrics != nil {
 			var rse *RequiredSaveError
 			if errors.As(err, &rse) {
@@ -143,7 +147,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		return nil, err
 	}
 
-	// Validación shape-specific del handler concreto
+
 	if s.Phases != nil {
 		if h, lookupErr := s.Phases.Lookup(phases.PhaseSlug(step.StepKey)); lookupErr == nil {
 			result := phases.ClientResult{
@@ -158,12 +162,14 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		}
 	}
 
-	// Persistir resultado
+
 	if err := s.Repo.MarkStepCompleted(ctx, step.ID, in.Output); err != nil {
 		return nil, fmt.Errorf("mark completed: %w", err)
 	}
 	span.SetAttributes(tracing.SafeAttr("phase.result", "completed"))
-	// Métricas: phase completada + duración reportada por cliente.
+
+	s.persistOpenspec(ctx, step, flowRun, in, span)
+
 	if s.Metrics != nil {
 		modeStr, _ := step.Inputs["mode"].(string)
 		s.Metrics.OrchestratorPhaseResultsTotal.
@@ -175,7 +181,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		}
 	}
 
-	// Calcular status agregado del flow_run + next step si hay
+
 	steps, err := s.Repo.ListFlowRunSteps(ctx, flowRun.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list steps for status: %w", err)
@@ -185,7 +191,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		StepStatus:    "completed",
 		FlowRunStatus: flowRun.Status,
 	}
-	// Dual output (RFC 0006 §4): extraer summary del cliente si lo envió
+
 	if summary, ok := in.Output["summary"].(string); ok {
 		out.Summary = summary
 	}
@@ -194,23 +200,23 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		if err := s.Repo.UpdateFlowRunStatus(ctx, flowRun.ID, out.FlowRunStatus); err != nil {
 			return nil, fmt.Errorf("update flow_run status: %w", err)
 		}
-		// Si el flow alcanzó estado terminal (completed/failed) incrementamos
-		// runs_total con ese status para distinguir del started inicial.
+
+
 		if s.Metrics != nil && (out.FlowRunStatus == "completed" || out.FlowRunStatus == "failed") {
 			modeStr, _ := step.Inputs["mode"].(string)
 			s.Metrics.OrchestratorRunsTotal.WithLabelValues(modeStr, out.FlowRunStatus).Inc()
 		}
 	}
-	// D2 multi-concern auto-split (RFC 0006): si sdd-explore reportó
-	// multi_concern=true, completamos la exploración pero cancelamos los
-	// steps restantes. El cliente recibe la lista de concerns y decide
-	// si crear sub-flows independientes.
+
+
+
+
 	if phaseSlug == "sdd-explore" {
 		if isMulti, _ := in.Output["multi_concern"].(bool); isMulti {
 			concerns := extractConcerns(in.Output)
 			if len(concerns) > 0 {
-				// Cancelar todos los steps restantes (pending/running)
-				// y actualizar el slice in-memory para el recálculo
+
+
 				for i := range steps {
 					if (steps[i].Status == "pending" || steps[i].Status == "running") && steps[i].ID != step.ID {
 						_ = s.Repo.MarkStepCancelled(ctx, steps[i].ID)
@@ -218,7 +224,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 					}
 				}
 				out.MultiConcern = &MultiConcernInfo{Concerns: concerns}
-				// Recalcular status: explore completed + resto cancelled → completed
+
 				out.FlowRunStatus, out.NextStepID, out.NextStepKey = aggregateFlowStatus(steps)
 				if out.FlowRunStatus != flowRun.Status {
 					_ = s.Repo.UpdateFlowRunStatus(ctx, flowRun.ID, out.FlowRunStatus)
@@ -228,11 +234,11 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		}
 	}
 
-	// Next step prompt: para Full mode (lazy build) reconstruimos el
-	// user_prompt usando los outputs acumulados de las fases completadas.
-	// Para Express ya estaba pre-armado en step.inputs.user_prompt al
-	// crear el plan. La detección: si step.inputs.user_prompt está vacío,
-	// asumimos lazy y rebuildemos.
+
+
+
+
+
 	if out.NextStepID != nil {
 		nextStep := findStepByID(steps, *out.NextStepID)
 		if nextStep != nil {
@@ -240,7 +246,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 			if cached != "" {
 				out.NextStepPrompt = cached
 			} else {
-				// Lazy build path (Full mode)
+
 				built, err := s.rebuildNextStepPrompt(ctx, nextStep, steps)
 				if err != nil {
 					return nil, fmt.Errorf("rebuild next step prompt: %w", err)
@@ -248,8 +254,8 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				out.NextStepPrompt = built
 			}
 
-			// D1 confirm condicional (RFC 0006): si Express + step actual
-			// fue sdd-apply + threshold superado → bloquear el verify.
+
+
 			if shouldRequireConfirm(step, in.Output) {
 				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
 					"D1 confirm required: change exceeds express threshold"); err != nil {
@@ -260,14 +266,48 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
 			}
 
-			// D3 auto-skill: recomendar skills para el próximo step
-			// si tiene skill_threshold configurado.
+
+
+			if !out.RequiresConfirm && requiresPhaseGate(flowRun.ExecMode, nextStep.StepKey) {
+				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
+					"phase gate ("+flowRun.ExecMode+"): aprobación requerida para "+nextStep.StepKey); err != nil {
+					return nil, fmt.Errorf("mark next blocked (gate): %w", err)
+				}
+				out.RequiresConfirm = true
+				out.ConfirmMessage = "La fase '" + nextStep.StepKey + "' requiere aprobacion (modo " + flowRun.ExecMode + "). Revise el resultado y llame domain_orchestrate_confirm(confirmed=true) para continuar, o false para abortar."
+				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
+			}
+
+
+
+
+			if !out.RequiresConfirm && flowRun.Hardspec && step.StepKey == "sdd-spec" {
+				if err := s.Repo.MarkStepBlocked(ctx, nextStep.ID,
+					"hardspec: reiteración humana del spec requerida"); err != nil {
+					return nil, fmt.Errorf("mark next blocked (hardspec): %w", err)
+				}
+				out.RequiresConfirm = true
+				out.ConfirmMessage = "hardspec: revise y enriquezca el spec; si hace falta re-redactelo (re-ejecute sdd-spec). Confirme con domain_orchestrate_confirm(confirmed=true) para continuar. La confirmacion queda auditada."
+				if s.Audit != nil {
+					audit.RecordOrLog(ctx, s.Audit, audit.Event{
+						ActorType:  audit.ActorSystem,
+						Action:     "hardspec.review_required",
+						EntityType: "flow_run",
+						EntityID:   &flowRun.ID,
+						NewValues:  map[string]any{"phase": "sdd-spec"},
+					})
+				}
+				span.SetAttributes(tracing.SafeAttr("phase.requires_confirm", true))
+			}
+
+
+
 			threshold := readFloat(nextStep.Inputs["skill_threshold"], 0)
 			if threshold > 0 {
 				agentSlug, _ := nextStep.Inputs["agent_template_slug"].(string)
-				recs, err := s.fetchRecommendedSkills(ctx, flowRun.OrganizationID, agentSlug, threshold)
+				recs, err := s.fetchRecommendedSkills(ctx, flowRun.OrganizationID, flowRun.ProjectID, agentSlug, threshold)
 				if err != nil {
-					// D3 es informativo — no bloqueamos el flow si falla
+
 					span.RecordError(err)
 				} else {
 					out.SkillsRecommended = recs
@@ -284,6 +324,25 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 //
 // El cliente IDE puede pasar lines_changed (count) en el output si lo
 // tiene; si no, sólo evaluamos files_changed > 1 (multi-file).
+// hybridGatePhases son las fases donde una decisión humana cambia el rumbo;
+// en modo "hybrid" el flujo pausa solo en estas.
+var hybridGatePhases = map[string]bool{
+	"sdd-spec": true, "sdd-design": true, "sdd-apply": true, "sdd-judge": true,
+}
+
+// requiresPhaseGate decide si la próxima fase debe pausar para aprobación
+// humana según el modo de ejecución de la corrida.
+func requiresPhaseGate(execMode, nextPhaseSlug string) bool {
+	switch execMode {
+	case "manual":
+		return true
+	case "hybrid":
+		return hybridGatePhases[nextPhaseSlug]
+	default: // "auto" o vacío
+		return false
+	}
+}
+
 func shouldRequireConfirm(step *FlowRunStepRow, output map[string]any) bool {
 	if step.StepKey != "sdd-apply" {
 		return false
@@ -350,7 +409,7 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 		return nil, errors.New("orchestrator: no blocked step found for this flow_run")
 	}
 	if !confirmed {
-		// Usuario rechazó: marcamos el step como failed + propagamos a flow.
+
 		if err := s.Repo.MarkStepFailed(ctx, blocked.ID, "user_rejected_confirm"); err != nil {
 			return nil, fmt.Errorf("mark step failed: %w", err)
 		}
@@ -364,7 +423,7 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 			FlowRunStatus: "failed",
 		}, nil
 	}
-	// Confirmado: desbloquear y devolver el prompt cacheado.
+
 	if err := s.Repo.MarkStepPending(ctx, blocked.ID); err != nil {
 		return nil, err
 	}
@@ -405,9 +464,9 @@ func (s *Service) rebuildNextStepPrompt(ctx context.Context, next *FlowRunStepRo
 	}
 	handler, err := s.Phases.Lookup(phases.PhaseSlug(next.StepKey))
 	if err != nil {
-		// Sin handler no podemos rebuildear. Devolvemos vacío sin fallar
-		// el run; el cliente verá NextStepPrompt vacío y podrá pedir
-		// status para inspeccionar.
+
+
+
 		return "", nil
 	}
 	priorOutputs := collectPriorOutputs(allSteps, next.StepKey)
@@ -423,8 +482,8 @@ func (s *Service) rebuildNextStepPrompt(ctx context.Context, next *FlowRunStepRo
 	if err != nil {
 		return "", fmt.Errorf("handler.Build %s: %w", next.StepKey, err)
 	}
-	// Persistir el inputs actualizado con el user_prompt nuevo.
-	// Preservamos los demás campos (suggested_saves, retry_policy, etc.)
+
+
 	updatedInputs := mapClone(next.Inputs)
 	updatedInputs["user_prompt"] = out.UserPrompt
 	if err := s.Repo.UpdateStepInputs(ctx, next.ID, updatedInputs); err != nil {
@@ -494,7 +553,21 @@ func (s *Service) propagateFlowStatusAfterFailure(ctx context.Context, flowRunID
 		return err
 	}
 	newStatus, _, _ := aggregateFlowStatus(steps)
-	return s.Repo.UpdateFlowRunStatus(ctx, flowRunID, newStatus)
+	if err := s.Repo.UpdateFlowRunStatus(ctx, flowRunID, newStatus); err != nil {
+		return err
+	}
+
+
+
+	if newStatus == "failed" {
+		for _, st := range steps {
+			if st.Status == "failed" && st.Error != "" {
+				_ = s.Repo.SetFlowRunError(ctx, flowRunID, st.StepKey+": "+st.Error)
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // aggregateFlowStatus deriva el status del flow_run a partir de los
@@ -514,7 +587,7 @@ func aggregateFlowStatus(steps []FlowRunStepRow) (string, *uuid.UUID, string) {
 		case "failed":
 			anyFailed = true
 		case "completed", "skipped", "cancelled":
-			// terminal
+
 		default:
 			allTerminal = false
 			if nextID == nil {
@@ -556,6 +629,129 @@ func extractConcerns(output map[string]any) []ConcernInfo {
 		concerns = append(concerns, ConcernInfo{Name: name, Description: desc})
 	}
 	return concerns
+}
+
+// persistOpenspec materializa el output de la fase en las tablas openspec
+// (sdd_proposals, sdd_designs, issue_tasks). Best-effort: si falla registra
+// error en span pero nunca interrumpe el flujo del orchestrator.
+func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flowRun *FlowRunRow, in PhaseResultInput, span trace.Span) {
+	if s.IssueSvc == nil || (s.Spec == nil && s.Tasks == nil) {
+		return
+	}
+
+	issueSlug, _ := in.Output["issue_slug"].(string)
+	if issueSlug == "" {
+		steps, err := s.Repo.ListFlowRunSteps(ctx, flowRun.ID)
+		if err != nil {
+			span.RecordError(err)
+			return
+		}
+		issueSlug = findIssueSlug(steps)
+	}
+
+	if issueSlug == "" {
+		return
+	}
+
+	issue, err := s.IssueSvc.GetBySlug(ctx, issueSlug)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: get issue %s: %w", issueSlug, err))
+		return
+	}
+
+	switch step.StepKey {
+	case "sdd-propose":
+		s.persistProposalOpenspec(ctx, issue, in, span)
+	case "sdd-design":
+		s.persistDesignOpenspec(ctx, issue, in, span)
+	case "sdd-tasks":
+		s.persistTasksOpenspec(ctx, issue, in, span)
+	}
+}
+
+func findIssueSlug(steps []FlowRunStepRow) string {
+	for _, st := range steps {
+		if st.Status != "completed" {
+			continue
+		}
+		if slug, ok := st.Outputs["issue_slug"].(string); ok && slug != "" {
+			return slug
+		}
+	}
+	return ""
+}
+
+func (s *Service) persistProposalOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Spec == nil {
+		return
+	}
+	proposalMD, ok := in.Output["proposal_md"].(string)
+	if !ok || proposalMD == "" {
+		return
+	}
+	doc := openspec.ParseProposal(proposalMD)
+	_, err := s.Spec.CreateProposal(ctx, issue.ID, doc.Intention, doc.Scope, doc.Approach, doc.Risks, doc.TestingNotes)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create proposal for %s: %w", issue.Slug, err))
+	}
+}
+
+func (s *Service) persistDesignOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Spec == nil {
+		return
+	}
+	designMD, ok := in.Output["design_md"].(string)
+	if !ok || designMD == "" {
+		return
+	}
+	doc := openspec.ParseDesign(designMD)
+
+	var proposalID *uuid.UUID
+	prop, err := s.Spec.GetLatestProposal(ctx, issue.ID)
+	if err == nil {
+		proposalID = &prop.ID
+	}
+
+	_, err = s.Spec.CreateDesign(ctx, issue.ID, proposalID, doc.ArchDecisions, doc.Alternatives, doc.DataFlow, doc.TDDPlan, doc.RisksMitigation)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create design for %s: %w", issue.Slug, err))
+	}
+}
+
+func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+	if s.Tasks == nil {
+		return
+	}
+	tasksRaw, ok := in.Output["tasks"].([]any)
+	if !ok || len(tasksRaw) == 0 {
+		return
+	}
+
+	inputs := make([]tsvc.CreateTaskInput, 0, len(tasksRaw))
+	for _, raw := range tasksRaw {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		desc, _ := m["description"].(string)
+		if desc == "" {
+			continue
+		}
+		section, _ := m["section"].(string)
+		if section == "" {
+			section = "general"
+		}
+		inputs = append(inputs, tsvc.CreateTaskInput{Section: section, Description: desc})
+	}
+
+	if len(inputs) == 0 {
+		return
+	}
+
+	_, err := s.Tasks.CreateTasks(ctx, issue.ID, inputs)
+	if err != nil {
+		span.RecordError(fmt.Errorf("persistOpenspec: create tasks for %s: %w", issue.Slug, err))
+	}
 }
 
 // rebuildOutputFromStepInputs reconstruye un phases.Output desde el

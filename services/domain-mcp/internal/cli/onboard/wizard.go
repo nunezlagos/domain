@@ -1,14 +1,13 @@
 // Package onboard — issue-01.9 TUI wizard minimalista para first-run setup.
 //
-// Filosofia: el flow es de 4 inputs (server URL, email, codigo OTP opcional,
-// y/N opencode). No justifica una TUI pesada (charmbracelet = 20MB binario).
+// Filosofia: el flow es de 3 inputs (server URL, email, y/N opencode).
+// No justifica una TUI pesada (charmbracelet = 20MB binario).
 // Usamos bufio.Scanner + fmt.Scanln para prompts en stderr, resultados en stdout.
 //
 // El flow:
 //   1. Detectar first-run via GET /auth/first-run
 //   2. Si first-run: POST /auth/bootstrap, save creds, exit
-//   3. Si no: pedir email, POST /auth/request-otp, pedir codigo,
-//      POST /auth/verify-otp, save creds
+//   3. Si no: pedir creds preexistentes o re-bootstrap con admin token
 //   4. Preguntar si configurar opencode, si Y: invocar domain setup opencode
 //   5. Exit 0
 package onboard
@@ -50,12 +49,12 @@ type Wizard struct {
 	HTTPClient  *http.Client
 	NonInteractive bool
 	NoOpencode  bool
-	// Path al binario domain (para invocar `domain setup opencode`).
+
 	DomainBinPath string
-	// Path al binario domain-mcp (para configurar el agente).
+
 	DomainMCPPath string
-	// SaveCredentials es la funcion que persiste las credenciales.
-	// Inyectable para tests. Default: SaveCredentialsDefault.
+
+
 	SaveCredentials func(*Credentials) error
 }
 
@@ -76,7 +75,7 @@ func (w *Wizard) Run(ctx context.Context) error {
 	fmt.Fprintln(w.Err, "Domain Onboard Wizard")
 	fmt.Fprintln(w.Err, "")
 
-	// 1. Detectar first-run
+
 	fmt.Fprintln(w.Err, "Detecting first-run...")
 	isFirstRun, userCount, err := w.detectFirstRun(ctx)
 	if err != nil {
@@ -85,21 +84,21 @@ func (w *Wizard) Run(ctx context.Context) error {
 	fmt.Fprintf(w.Err, "  %s (DB has %d users)\n", boolLabel(isFirstRun, "yes", "no"), userCount)
 	fmt.Fprintln(w.Err, "")
 
-	// 2. Server URL (permite cambiarlo)
+
 	baseURL, err := w.ask("Server URL", w.BaseURL, w.NonInteractive)
 	if err != nil {
 		return err
 	}
 	w.BaseURL = strings.TrimRight(baseURL, "/")
 
-	// 3. Email
+
 	email, err := w.ask("Your email", "", w.NonInteractive)
 	if err != nil {
 		return err
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 
-	// 4. Bootstrap u OTP segun first-run
+
 	creds, err := w.auth(ctx, isFirstRun, email)
 	if err != nil {
 		return err
@@ -107,14 +106,14 @@ func (w *Wizard) Run(ctx context.Context) error {
 	creds.BaseURL = w.BaseURL
 	creds.IssuedAt = time.Now()
 
-	// 5. Save credenciales
+
 	if err := w.SaveCredentials(creds); err != nil {
 		return fmt.Errorf("save credentials: %w", err)
 	}
 	fmt.Fprintf(w.Err, "✓ API key saved to %s (mode 0600)\n", CredentialsPath())
 	fmt.Fprintln(w.Err, "")
 
-	// 6. Configurar opencode (opcional)
+
 	if w.NoOpencode {
 		fmt.Fprintln(w.Out, "✓ Onboard complete (skipping opencode config).")
 		return nil
@@ -132,7 +131,7 @@ func (w *Wizard) Run(ctx context.Context) error {
 	}
 
 	if err := w.setupOpencode(ctx, creds.APIKey); err != nil {
-		// No es fatal: el user puede correr `domain setup opencode` despues.
+
 		fmt.Fprintf(w.Err, "⚠ opencode setup failed: %v\n", err)
 		fmt.Fprintln(w.Err, "  You can run it later with: domain setup opencode")
 	} else {
@@ -149,16 +148,8 @@ func (w *Wizard) auth(ctx context.Context, isFirstRun bool, email string) (*Cred
 		fmt.Fprintf(w.Err, "→ Bootstrapping organization + user %s...\n", email)
 		return w.bootstrap(ctx, email)
 	}
-	fmt.Fprintf(w.Err, "→ Sending OTP to %s...\n", email)
-	if err := w.requestOTP(ctx, email); err != nil {
-		return nil, err
-	}
-	code, err := w.ask("Enter 6-digit code from your email", "", w.NonInteractive)
-	if err != nil {
-		return nil, err
-	}
-	code = strings.TrimSpace(code)
-	return w.verifyOTP(ctx, email, code)
+	return nil, fmt.Errorf("server ya tiene usuarios; no hay flujo OTP. " +
+		"Pedile al admin que cree un miembro con /auth/member-create y pasame la API key via --api-key")
 }
 
 func (w *Wizard) detectFirstRun(ctx context.Context) (bool, int, error) {
@@ -188,7 +179,7 @@ func (w *Wizard) bootstrap(ctx context.Context, email string) (*Credentials, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
-		// DB ya no es first-run (race o segundo onboard simultaneo)
+
 		return nil, fmt.Errorf("bootstrap rejected: another user was created concurrently; re-run onboard")
 	}
 	if resp.StatusCode == 422 {
@@ -208,51 +199,6 @@ func (w *Wizard) bootstrap(ctx context.Context, email string) (*Credentials, err
 		return nil, err
 	}
 	fmt.Fprintf(w.Err, "✓ Organization + user created\n")
-	return &Credentials{
-		APIKey:   out.APIKey,
-		APIKeyID: out.KeyID,
-		UserID:   out.UserID,
-		OrgID:    out.OrgID,
-		Email:    out.Email,
-	}, nil
-}
-
-func (w *Wizard) requestOTP(ctx context.Context, email string) error {
-	body, _ := json.Marshal(map[string]string{"identifier": email})
-	resp, err := w.doPOST(ctx, "/api/v1/auth/request-otp", body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("request-otp status %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func (w *Wizard) verifyOTP(ctx context.Context, email, code string) (*Credentials, error) {
-	body, _ := json.Marshal(map[string]string{"identifier": email, "code": code})
-	resp, err := w.doPOST(ctx, "/api/v1/auth/verify-otp", body)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 401 {
-		return nil, fmt.Errorf("invalid code (or expired)")
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("verify-otp status %d", resp.StatusCode)
-	}
-	var out struct {
-		UserID uuid.UUID `json:"user_id"`
-		OrgID  uuid.UUID `json:"organization_id"`
-		APIKey string    `json:"api_key"`
-		KeyID  uuid.UUID `json:"api_key_id"`
-		Email  string    `json:"email"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
-	}
 	return &Credentials{
 		APIKey:   out.APIKey,
 		APIKeyID: out.KeyID,
@@ -381,7 +327,7 @@ func SaveCredentialsDefault(c *Credentials) error {
 		return err
 	}
 	if _, err := os.Stat(path); err == nil {
-		// Backup
+
 		_ = os.Rename(path, path+".bak")
 	}
 	data, err := json.MarshalIndent(c, "", "  ")

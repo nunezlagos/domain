@@ -71,19 +71,19 @@ func (e *AutoEngine) Materialize(ctx context.Context, t DiscoveredTool) (*Materi
 
 	var existing uuid.UUID
 	err = tx.QueryRow(ctx,
-		`SELECT id FROM skills WHERE slug = $1`,
+		`SELECT id FROM skills WHERE slug = $1 AND project_id IS NULL AND deleted_at IS NULL`,
 		slug,
 	).Scan(&existing)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		// create
+
 		var newID uuid.UUID
 		err = tx.QueryRow(ctx, `
-			INSERT INTO skills (slug, name, description, input_schema, output_schema, source, source_ref)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO skills (slug, name, description, skill_type, input_schema, output_schema)
+			VALUES ($1, $2, $3, 'mcp_tool', COALESCE($4, '{}'), COALESCE($5, '{}'))
 			RETURNING id`,
 			slug, t.ToolName, t.Description,
-			t.InputSchema, t.OutputSchema, t.Source, t.SourceRef,
+			t.InputSchema, t.OutputSchema,
 		).Scan(&newID)
 		if err != nil {
 			return nil, fmt.Errorf("insert: %w", err)
@@ -97,7 +97,7 @@ func (e *AutoEngine) Materialize(ctx context.Context, t DiscoveredTool) (*Materi
 		return nil, fmt.Errorf("lookup: %w", err)
 	}
 
-	// update — solo si schema cambió
+
 	_, err = tx.Exec(ctx, `
 		UPDATE skills
 		SET description = COALESCE(NULLIF($1, ''), description),

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project_obj.display_name }} - Proyectos{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de proyecto" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'projects:list' %}" class="text-secondary mnt-text-sm">← Volver a proyectos</a>
+    <h1 class="mt-1">{{ project_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ project_obj.slug }}</code>
+      · Estado:
+      {% if project_obj.is_active %}<span class="badge badge-success">{{ project_obj.get_status_display }}</span>
+      {% else %}<span class="badge badge-danger">{{ project_obj.get_status_display }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'projects:edit' project_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ project_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del proyecto -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ project_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ project_obj.slug }}</code></td></tr>
+      <tr><th>Descripcion</th><td>{{ project_obj.description|default:"—" }}</td></tr>
+      <tr><th>Repositorio</th>
+        <td>{% if project_obj.repository_url %}<code>{{ project_obj.repository_url }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+      </tr>
+      <tr><th>Rama actual</th><td>{{ project_obj.current_branch|default:"—" }}</td></tr>
+      <tr><th>Creado</th><td>{{ project_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ project_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Remotos git -->
+<div class="card mb-4">
+  <div class="flex-between mb-3">
+    <h3 class="m-0">Remotos git</h3>
+    <span class="text-muted mnt-text-sm">{{ repositories|length }} activo(s)</span>
+  </div>
+
+  {% if repositories %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Alias</th><th>URL</th><th>Rama default</th><th>Folder</th><th>Tipo</th><th>Workflow</th><th>Default</th></tr>
+        </thead>
+        <tbody>
+          {% for r in repositories %}
+            <tr>
+              <td><code>{{ r.name }}</code></td>
+              <td><code>{{ r.url }}</code></td>
+              <td class="text-secondary">{{ r.branch_default|default:"—" }}</td>
+              <td class="text-secondary">{% if r.root_path %}<code>{{ r.root_path }}</code>{% else %}—{% endif %}</td>
+              <td class="text-secondary">{{ r.get_kind_display|default:"—" }}</td>
+              <td class="text-secondary">{{ r.get_workflow_display|default:"—" }}</td>
+              <td>{% if r.is_default %}<span class="badge badge-primary">default</span>{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">Este proyecto no tiene remotos git registrados.</p>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ project_obj.pk }}">
+  <div class="modal modal-confirm">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar proyecto?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar <strong>{{ project_obj.display_name }}</strong>.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el proyecto se archiva (deleted_at) pero el registro se conserva para auditoria.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'projects:delete' project_obj.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

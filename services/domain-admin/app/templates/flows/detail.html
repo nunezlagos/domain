@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ flow_obj.display_name }} - Flows{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Detalle de flow" %}
+{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <div>
+    <a href="{% url 'flows:list' %}" class="text-secondary mnt-text-sm">← Volver a flows</a>
+    <h1 class="mt-1">{{ flow_obj.display_name }}</h1>
+    <p class="subtitle">
+      <code>{{ flow_obj.slug }}</code>
+      · Estado:
+      {% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>
+      {% else %}<span class="badge badge-warning">{{ flow_obj.status_label }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'flows:edit' flow_obj.pk %}" class="btn btn-secondary">Editar</a>
+    <button class="btn btn-danger"
+            data-modal-open="modal-delete-{{ flow_obj.pk }}">Eliminar</button>
+  </div>
+</div>
+
+<!-- Info del flow -->
+<div class="card mb-4">
+  <h3>Informacion</h3>
+  <table class="table mt-2">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ flow_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ flow_obj.slug }}</code></td></tr>
+      <tr><th>Descripcion</th><td>{{ flow_obj.description|default:"—" }}</td></tr>
+      <tr><th>Replay determinista</th><td>{{ flow_obj.deterministic_replay|yesno:"Si,No" }}</td></tr>
+      <tr><th>Seed gestionado</th><td>{{ flow_obj.seed_managed|yesno:"Si,No" }}</td></tr>
+      <tr><th>Version de seed</th><td>{{ flow_obj.seed_version|default:"—" }}</td></tr>
+      <tr><th>Modificado por usuario</th><td>{{ flow_obj.is_user_modified|yesno:"Si,No" }}</td></tr>
+      <tr><th>Estado</th>
+        <td>
+          {% if flow_obj.is_active %}<span class="badge badge-success">{{ flow_obj.status_label }}</span>
+          {% else %}<span class="badge badge-warning">{{ flow_obj.status_label }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Creado</th><td>{{ flow_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizado</th><td>{{ flow_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Versiones (READ-ONLY) -->
+<div class="card mb-4">
+  <h3>Versiones</h3>
+  {% if flow_versions %}
+    <table class="table mt-2">
+      <thead>
+        <tr>
+          <th class="mnt-col-narrow">Version</th>
+          <th>Hash</th>
+          <th>Nota</th>
+          <th>Creada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in flow_versions %}
+          <tr>
+            <td><span class="badge badge-primary">v{{ v.version }}</span></td>
+            <td><code>{{ v.short_hash }}</code></td>
+            <td>{{ v.note|default:"—" }}</td>
+            <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-secondary mt-2 mnt-text-sm">
+      {{ flow_versions|length }} version(es). Snapshots inmutables (read-only).
+    </p>
+  {% else %}
+    <p class="text-muted mt-2">Este flow todavia no tiene versiones publicadas.</p>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmacion de eliminacion -->
+<div class="modal-backdrop" id="modal-delete-{{ flow_obj.pk }}">
+  <div class="modal modal-confirm">
+    <div class="modal-header">
+      <h3 class="modal-title">¿Eliminar flow?</h3>
+      <button class="btn btn-icon btn-ghost modal-close" data-modal-close><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p>Vas a eliminar el flow <strong>{{ flow_obj.display_name }}</strong>.</p>
+      <p class="text-secondary mnt-text-sm">Esto es un soft delete: el flow queda deshabilitado pero el registro se conserva para auditoria.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-close>Cancelar</button>
+      <form method="post" action="{% url 'flows:delete' flow_obj.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Si, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

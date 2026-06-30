@@ -1,9 +1,9 @@
-// Package update — TUI feature para `domain update` (HU-01.11).
-//
-// Flow:
-//   1. Pantalla de confirmacion (enter para correr, esc para volver)
-//   2. Corre `domain update` como sub-process con output streaming
-//   3. Done: cualquier key vuelve al menu
+
+
+
+
+
+
 
 package update
 
@@ -37,7 +37,7 @@ type Model struct {
 	state   state
 	confirm bool // user ya confirmo
 	err     error
-	// runnerMock: tests lo setean para no ejecutar update real.
+
 	runner func(ctx context.Context, args []string) error
 }
 
@@ -65,9 +65,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, backCmd()
 			}
 		case stateRunning:
-			// Ignorar keys mientras corre.
+
 		case stateDone:
-			// Cualquier key vuelve al menu.
+
 			return m, backCmd()
 		}
 	}

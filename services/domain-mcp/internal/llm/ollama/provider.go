@@ -20,7 +20,7 @@ import (
 const (
 	defaultBaseURL = "http://localhost:11434"
 	defaultModel   = "llama3.1"
-	// defaultTimeout para generación local (issue-06.3).
+
 	defaultTimeout = 120 * time.Second
 )
 
@@ -28,8 +28,8 @@ type Provider struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	Model      string
-	// AutoPull descarga el modelo vía /api/pull si el chat responde 404
-	// "model not found" (opt-in: DOMAIN_OLLAMA_AUTO_PULL=true).
+
+
 	AutoPull bool
 }
 
@@ -144,7 +144,7 @@ func (p *Provider) complete(ctx context.Context, opts llm.CompletionOptions, all
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(resp.Body)
-		// issue-06.3: pull automático opt-in si el modelo no está descargado
+
 		if p.AutoPull && allowPull && isModelMissing(resp.StatusCode, string(msg)) {
 			if perr := p.pullModel(ctx, body.Model); perr != nil {
 				return nil, fmt.Errorf("ollama auto-pull %q: %w", body.Model, perr)
@@ -220,7 +220,7 @@ func (p *Provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 	return out, nil
 }
 
-// --- Embeddings ---
+
 
 type Embedder struct {
 	BaseURL    string
@@ -240,9 +240,9 @@ func NewEmbedder(model string) *Embedder {
 }
 
 func (e *Embedder) Dimensions() int {
-	// nomic-embed-text = 768 (truncate/pad a 1536 igual que voyage)
-	// mxbai-embed-large = 1024
-	// Asumimos 1536 final (padding zeros) para compat con observations schema.
+
+
+
 	return 1536
 }
 

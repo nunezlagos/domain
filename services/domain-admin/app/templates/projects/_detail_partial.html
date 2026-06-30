@@ -1,0 +1,79 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de proyecto (modal). Minimalista con tabs VERTICALES (.vtabs): Datos,
+Repositorios, Skills (modelo hibrido: globales auto + excluibles, internas) y
+Reglas (plataforma auto + del proyecto). Misma estructura que el editar.
+{% endcomment %}
+
+{% block detail_title %}{{ project_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+<div class="vtabs" data-modal-lg>
+  <input type="radio" name="ptab" id="pt-datos" checked>
+  <input type="radio" name="ptab" id="pt-repos">
+  <input type="radio" name="ptab" id="pt-skills">
+  <input type="radio" name="ptab" id="pt-reglas">
+  <nav class="vtabs-nav">
+    <label for="pt-datos">Datos</label>
+    <label for="pt-repos">Repositorios <span class="vtab-count">{{ repositories|length }}</span></label>
+    <label for="pt-skills">Skills <span class="vtab-count">{{ skills_applied_count }}</span></label>
+    <label for="pt-reglas">Reglas</label>
+  </nav>
+  <div class="vtabs-body">
+    <div class="vpane vpane-datos">
+      <table class="table mnt-table-sm">
+        <tbody>
+          <tr><th class="mnt-th-label">Nombre</th><td>{{ project_obj.name }}</td></tr>
+          <tr><th>Slug</th><td><code>{{ project_obj.slug }}</code></td></tr>
+          <tr><th>Estado</th>
+            <td>{% if project_obj.is_active %}<span class="badge badge-success">{{ project_obj.get_status_display }}</span>{% else %}<span class="badge badge-danger">{{ project_obj.get_status_display }}</span>{% endif %}</td>
+          </tr>
+          <tr><th>Descripcion</th><td>{{ project_obj.description|default:"—" }}</td></tr>
+          <tr><th>Rama actual</th><td>{{ project_obj.current_branch|default:"—" }}</td></tr>
+          <tr><th>Creado</th><td>{{ project_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+          <tr><th>Actualizado</th><td>{{ project_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="vpane vpane-repos">
+      {% if repositories %}
+        <table class="table mnt-table-sm">
+          <thead>
+            <tr><th>Alias</th><th>URL</th><th>Rama</th><th>Folder</th><th>Default</th></tr>
+          </thead>
+          <tbody>
+            {% for r in repositories %}
+              <tr>
+                <td><code>{{ r.name }}</code></td>
+                <td><code>{{ r.url }}</code></td>
+                <td>{{ r.branch_default|default:"—" }}</td>
+                <td>{% if r.root_path %}<code>{{ r.root_path }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                <td>{% if r.is_default %}<span class="badge badge-primary">default</span>{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">Este proyecto no tiene remotos git registrados.</p>
+      {% endif %}
+    </div>
+
+    <div class="vpane vpane-skills">
+      <div id="project-skills-pane" data-pane data-pane-readonly="1" data-pane-url="{% url 'projects:skills_pane' project_obj.pk %}">{% include "projects/_skills_pane.html" %}</div>
+    </div>
+
+    <div class="vpane vpane-reglas">
+      <div id="project-rules-pane" data-pane data-pane-readonly="1" data-pane-url="{% url 'projects:rules_pane' project_obj.pk %}">{% include "projects/_rules_pane.html" %}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% comment %} Footer: solo Cerrar (rojo) + Editar (primary), a pedido. Archivar/
+   Eliminar quedan en las acciones de la fila del listado. {% endcomment %}
+{% block detail_close %}{% endblock %}
+{% block detail_actions %}
+  <button type="button" class="btn btn-outline-danger" data-modal-close>Cerrar</button>
+  <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ project_obj.pk }}">Editar</button>
+{% endblock %}

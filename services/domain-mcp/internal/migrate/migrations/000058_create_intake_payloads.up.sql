@@ -1,9 +1,9 @@
--- migration: create_intake_payloads
--- author: nunezlagos
--- issue: HU-04.8
--- description: pipeline de ingesta unificada para requerimientos heterogéneos
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE intake_payloads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

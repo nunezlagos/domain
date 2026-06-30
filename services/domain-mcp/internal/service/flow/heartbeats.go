@@ -31,8 +31,8 @@ func ValidateProgress(progress float64) error {
 // HeartbeatStore tracks heartbeats de flow_run_steps en ejecución.
 type HeartbeatStore struct {
 	Pool *pgxpool.Pool
-	// HeartbeatTimeout es el threshold post-cual un step se marca stuck.
-	// Default 5 minutos si <=0.
+
+
 	HeartbeatTimeout time.Duration
 }
 

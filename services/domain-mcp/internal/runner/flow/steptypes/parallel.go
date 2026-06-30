@@ -30,7 +30,7 @@ func (r *ParallelRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		return nil, fmt.Errorf("parallel: max %d branches, got %d", maxBranches, len(branches))
 	}
 
-	// Expand branches into runnable steps
+
 	type branchStep struct {
 		idx    int
 		typ    string
@@ -46,7 +46,7 @@ func (r *ParallelRunner) Run(ctx context.Context, input RunInput) (any, error) {
 		typ, _ := bMap["type"].(string)
 		params, _ := bMap["params"].(map[string]any)
 		if params == nil {
-			// Some branch configs use "config" instead of "params"
+
 			params, _ = bMap["config"].(map[string]any)
 		}
 		steps = append(steps, branchStep{idx: i, typ: typ, params: params})
@@ -106,8 +106,8 @@ func (r *ParallelRunner) getRunner(typ string) StepRunner {
 	if typ == "" {
 		return nil
 	}
-	// We use a minimal set of known types that branches support.
-	// In production, the flow runner resolves these via the registry.
+
+
 	switch typ {
 	case "skill_call":
 		return &SkillCallRunner{}

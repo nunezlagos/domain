@@ -1,13 +1,13 @@
--- migration: rls_projects
--- author: mnunez@saargo.com
--- issue: REQ-40
--- description: RLS + FORCE en projects (defense-in-depth multi-tenant)
--- breaking: false
--- estimated_duration: <1s
---
--- Extiende el patrón de 000028/000085 a projects. App debe ejecutar
--- `SET LOCAL app.current_org_id = '<uuid>'` al inicio de cada tx vía db.WithOrgTx.
--- Sin SET LOCAL, las queries devuelven 0 rows.
+
+
+
+
+
+
+
+
+
+
 
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects FORCE ROW LEVEL SECURITY;

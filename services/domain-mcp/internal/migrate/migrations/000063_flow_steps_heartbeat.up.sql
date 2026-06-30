@@ -1,9 +1,9 @@
--- migration: create_flow_run_steps + heartbeat
--- author: nunezlagos
--- issue: HU-09.10 (heartbeat) + HU-09.3 (step state machine)
--- description: crea tabla flow_run_steps si no existe + last_heartbeat_at
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE IF NOT EXISTS flow_run_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

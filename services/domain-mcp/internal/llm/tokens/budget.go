@@ -25,7 +25,7 @@ type TokenBudgetManager struct {
 	soft int
 	hard int
 	mode BudgetMode
-	// OnSoftLimit se dispara UNA vez al cruzar el soft limit.
+
 	OnSoftLimit func(used, soft int)
 
 	mu        sync.Mutex

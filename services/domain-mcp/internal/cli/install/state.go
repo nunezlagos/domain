@@ -52,26 +52,26 @@ type InstallState struct {
 func DetectState(baseURL string) (*InstallState, error) {
 	st := &InstallState{BaseURL: baseURL}
 
-	// Credenciales
+
 	if _, err := os.Stat(CredentialsPath()); err == nil {
 		st.CredentialsExist = true
 	}
 
-	// .env
+
 	if _, err := os.Stat(".env"); err == nil {
 		st.EnvExist = true
 	}
 
-	// Docker
+
 	if path, err := exec.LookPath("docker"); err == nil && path != "" {
 		st.DockerAvailable = true
 		st.DockerRunning = checkDockerRunning()
 	}
 
-	// Server health (best-effort, no fatal)
+
 	st.ServerReachable = pingHealth(baseURL)
 
-	// First-run via /auth/first-run
+
 	if st.ServerReachable {
 		firstRun, count, err := getFirstRun(baseURL)
 		if err == nil {
@@ -111,7 +111,7 @@ func (s *InstallState) Summary() string {
 	)
 }
 
-// === Deployment mode helpers ===
+
 
 // ServiceSelector selecciona local / cloud / none por servicio en hybrid mode.
 type ServiceSelector string
@@ -166,7 +166,7 @@ func StartDockerServices(ctx context.Context, services []string) error {
 	if err != nil {
 		return fmt.Errorf("docker compose up failed: %w\n%s", err, string(out))
 	}
-	// Esperar healthy
+
 	return WaitHealthy(ctx, services, 90*time.Second)
 }
 
@@ -190,7 +190,7 @@ func WaitHealthy(ctx context.Context, services []string, timeout time.Duration) 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(3 * time.Second):
-			// reintentar
+
 		}
 	}
 	return fmt.Errorf("services %v no llegaron a healthy en %v", services, timeout)
@@ -223,7 +223,7 @@ func checkDockerRunning() bool {
 	return len(strings.TrimSpace(string(out))) > 0
 }
 
-// === DSN validation ===
+
 
 // ErrInvalidDSN returned por ValidateDSN cuando la URL no es válida.
 var ErrInvalidDSN = errors.New("invalid database URL")
@@ -271,13 +271,13 @@ func ValidateDSN(dsn string) error {
 	if u.Host == "" {
 		return errors.Join(ErrInvalidDSN, errors.New("missing host"))
 	}
-	// Si el host es de un cloud provider conocido, sslmode != disable
+
 	host := u.Hostname()
 	for _, cp := range cloudProviders {
 		if strings.Contains(host, cp) {
 			sslMode := u.Query().Get("sslmode")
 			if sslMode == "" || sslMode == "disable" || sslMode == "allow" || sslMode == "prefer" {
-				// errors.Join preserva ambos: el sentinel y el mensaje custom.
+
 				return errors.Join(ErrPlaintextDSNInCloud,
 					fmt.Errorf("host %s is cloud provider, use sslmode=require or verify-full", host))
 			}
@@ -286,11 +286,11 @@ func ValidateDSN(dsn string) error {
 	return nil
 }
 
-// === State detection helpers ===
+
 
 func pingHealth(baseURL string) bool {
-	// Best-effort: usa net/http con timeout corto.
-	// Implementado en otro file (helpers.go) para mantener este chico.
+
+
 	return pingHealthHTTP(baseURL)
 }
 

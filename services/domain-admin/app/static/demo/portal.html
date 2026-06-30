@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain Admin — Portal</title>
+  <meta name="description" content="Domain Admin — grafo de conocimiento y codigo">
+  <meta name="theme-color" content="#ffffff">
+  <!-- favicons / iconos -->
+  <link rel="icon" href="brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="brand/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon.png">
+  <link rel="manifest" href="brand/site.webmanifest">
+  <!-- open graph / twitter -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Domain Admin">
+  <meta property="og:description" content="Grafo de conocimiento y codigo">
+  <meta property="og:image" content="brand/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Domain Admin">
+  <meta name="twitter:description" content="Grafo de conocimiento y codigo">
+  <meta name="twitter:image" content="brand/og-image.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="portal.css">
+  <link rel="stylesheet" href="sdd-flow.css">
+</head>
+<body class="theme-wag">
+
+  <div class="bg" id="bg"></div>
+
+  <div class="portal" id="portal">
+    <header class="portal-header">
+      <div class="header-logo">
+        <img class="header-logo-img" src="brand/logo-animated.svg" alt="Domain Admin" width="36" height="36">
+      </div>
+      <nav class="header-nav" id="headerNav" aria-label="Secciones">
+      </nav>
+      <button class="header-user-btn" id="userBtn" title="Usuario" aria-label="Usuario">
+        <i class="fas fa-user"></i>
+      </button>
+      <div class="profile-card" id="profileCard">
+        <div class="profile-avatar">AD</div>
+        <div class="profile-name">Admin</div>
+        <div class="profile-email">admin@domain.app</div>
+        <div class="profile-role">Administrator</div>
+        <div class="profile-meta">
+          <span><i class="fas fa-clock"></i> Hoy 09:42</span>
+          <span><i class="fas fa-globe"></i> 13.140.183.236</span>
+        </div>
+        <button class="profile-logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesion</button>
+      </div>
+    </header>
+
+    <div class="dashboard" id="dashboard">
+      <div class="dash-filters" id="dashFilters" role="toolbar" aria-label="Filtrar">
+        <button class="dash-filter active">All</button>
+        <button class="dash-filter">Active</button>
+        <button class="dash-filter">Inactive</button>
+      </div>
+
+      <div class="dash-mosaic" aria-label="Metricas del dashboard">
+        <div class="mosaic-item glass" data-id="sdd-flow">
+          <div class="mi-title"><i class="fas fa-diagram-project"></i> Workflow</div>
+          <div data-sdd-flow></div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-chart-pie"></i> Requests</div>
+          <div class="mi-canvas-wrap"><canvas id="chartRequests"></canvas></div>
+        </div>
+        <div class="mosaic-item">
+          <div class="phone-widget" id="phoneWidget">
+            <div class="pw-row">
+              <div class="pw-icon pw-icon--agents"><i class="fas fa-robot"></i></div>
+              <div class="pw-info"><div class="pw-label">Agentes</div><div class="pw-value">3</div></div>
+              <div class="pw-trend pw-trend--up">+12%</div>
+            </div>
+            <div class="pw-row">
+              <div class="pw-icon pw-icon--skills"><i class="fas fa-bolt"></i></div>
+              <div class="pw-info"><div class="pw-label">Skills</div><div class="pw-value">2.7k</div></div>
+              <div class="pw-trend pw-trend--up">98%</div>
+            </div>
+            <div class="pw-row">
+              <div class="pw-icon pw-icon--requests"><i class="fas fa-database"></i></div>
+              <div class="pw-info"><div class="pw-label">Total Requests</div><div class="pw-value">5.4k</div></div>
+              <div class="pw-trend pw-trend--neutral">+8%</div>
+            </div>
+          </div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-sync-alt"></i> Workflows</div>
+          <div class="wf-list">
+            <div class="wf-row">
+              <span class="wf-dot wf-dot--ok"></span>
+              <div class="wf-info">
+                <div class="wf-name">SDD Pipeline</div>
+                <div class="wf-meta"><span>10 phases</span><span>2h</span></div>
+              </div>
+              <span class="wf-rate wf-rate--c1">98%</span>
+            </div>
+            <div class="wf-row">
+              <span class="wf-dot wf-dot--neutral"></span>
+              <div class="wf-info">
+                <div class="wf-name">Issue Intake</div>
+                <div class="wf-meta"><span>5 phases</span><span>1m</span></div>
+              </div>
+              <span class="wf-rate wf-rate--ok">100%</span>
+            </div>
+            <div class="wf-row">
+              <span class="wf-dot wf-dot--alt"></span>
+              <div class="wf-info">
+                <div class="wf-name">Deploy Pipeline</div>
+                <div class="wf-meta"><span>8 phases</span><span>45m</span></div>
+              </div>
+              <span class="wf-rate wf-rate--c2">92%</span>
+            </div>
+            <div class="wf-footer">3 active · 59 runs</div>
+          </div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-chart-bar"></i> Frecuencia 24h</div>
+          <div class="mi-canvas-wrap"><canvas id="chartFrequency"></canvas></div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-code-branch"></i> Flows Pipeline</div>
+          <div class="mi-canvas-wrap"><canvas id="chartFlows"></canvas></div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-check-circle"></i> Success Rate (7d)</div>
+          <div class="mi-canvas-wrap"><canvas id="chartSuccess"></canvas></div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-thumbs-up"></i> Feedback</div>
+          <div class="fb-list">
+            <div class="fb-row fb-row--positive">
+              <i class="fas fa-thumbs-up fb-icon fb-icon--positive"></i>
+              <div class="fb-info">
+                <div class="fb-label">Positivos 7d</div>
+                <div class="fb-value">847</div>
+              </div>
+              <span class="fb-delta fb-delta--positive">+12</span>
+            </div>
+            <div class="fb-row fb-row--negative">
+              <i class="fas fa-thumbs-down fb-icon fb-icon--negative"></i>
+              <div class="fb-info">
+                <div class="fb-label">Negativos 7d</div>
+                <div class="fb-value">23</div>
+              </div>
+              <span class="fb-delta fb-delta--negative">−3</span>
+            </div>
+            <div class="fb-bar-row">
+              <div class="fb-bar-track">
+                <div class="fb-bar-fill"></div>
+              </div>
+              <span class="fb-bar-pct">97.3%</span>
+            </div>
+          </div>
+        </div>
+        <div class="mosaic-item glass">
+          <div class="mi-title"><i class="fas fa-project-diagram"></i> Relaciones</div>
+          <div class="mi-canvas-wrap"><canvas id="chartHealth"></canvas></div>
+        </div>
+      </div>
+
+      <button class="focus-close-fab" id="focusCloseFab" aria-label="Salir del modo focus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <footer class="portal-footer">
+      <span><span class="status-dot"></span>All systems healthy</span>
+      <span>Domain Admin v1.3 · MiniMax-M3 · MCP</span>
+    </footer>
+  </div>
+
+  <div class="view-backdrop" id="viewBackdrop"></div>
+  <div class="view" id="view" role="dialog" aria-modal="true" aria-hidden="true">
+    <header class="view-header">
+      <button class="view-back" id="viewBack" aria-label="Volver">
+        <svg class="view-back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="view-header-icon" id="viewHeaderIcon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#brandGrad)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <defs>
+            <linearGradient id="brandGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+              <stop offset="0"   stop-color="var(--dj-c1)"/>
+              <stop offset="0.5" stop-color="var(--dj-c4)"/>
+              <stop offset="1"   stop-color="var(--dj-c3)"/>
+            </linearGradient>
+          </defs>
+          <line x1="14.25" y1="7.90" x2="16.68" y2="12.10" />
+          <line x1="16.68" y1="11.90" x2="14.25" y2="16.10" />
+          <line x1="14.43" y1="16.00" x2="9.57" y2="16.00" />
+          <line x1="9.75" y1="16.10" x2="7.32" y2="11.90" />
+          <line x1="7.32" y1="12.10" x2="9.75" y2="7.90" />
+          <line x1="9.57" y1="8.00" x2="14.43" y2="8.00" />
+          <circle cx="12.00" cy="4.00" r="4.5" />
+          <circle cx="18.93" cy="8.00" r="4.5" />
+          <circle cx="18.93" cy="16.00" r="4.5" />
+          <circle cx="12.00" cy="20.00" r="4.5" />
+          <circle cx="5.07" cy="16.00" r="4.5" />
+          <circle cx="5.07" cy="8.00" r="4.5" />
+          <circle cx="12" cy="12" r="3.5" />
+        </svg>
+      </div>
+      <div class="view-header-text">
+        <div class="view-title" id="viewTitle">Skills</div>
+        <div class="view-subtitle" id="viewSubtitle">Mantenedor</div>
+      </div>
+      <div class="view-header-actions">
+        <button class="view-close" id="viewClose" aria-label="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="view-body" id="viewBody"></div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <header class="modal-header">
+      <h2 id="modalTitle">Nuevo</h2>
+      <button class="modal-close" id="modalClose" aria-label="Cerrar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <form class="modal-form" id="modalForm">
+      <div class="form-row">
+        <label>Nombre <span class="required">*</span></label>
+        <input type="text" name="name" required placeholder="ej: Mi agente" />
+        <div class="error-msg">El nombre es obligatorio</div>
+      </div>
+      <div class="form-row">
+        <label>Slug <span class="required">*</span></label>
+        <input type="text" name="slug" required placeholder="ej: mi-agente" pattern="[a-z0-9-]+" />
+        <div class="error-msg">Solo minusculas, numeros y guiones</div>
+      </div>
+      <div class="form-row">
+        <label>Descripcion</label>
+        <textarea name="description" rows="3" placeholder="Opcional"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Estado</label>
+        <select name="status">
+          <option value="active">Activo</option>
+          <option value="inactive">Inactivo</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="view-btn" id="modalCancel">Cancelar</button>
+        <button type="submit" class="view-btn primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span id="toastIcon">✓</span>
+    <span id="toastMessage">Mensaje</span>
+  </div>
+
+  <button class="chat-fab" id="chatFab" aria-label="Abrir chat"><i class="fas fa-comment-dots"></i></button>
+  <div class="chat-panel" id="chatPanel" aria-hidden="true" aria-label="Asistente">
+    <div class="chat-header">
+      <span class="chat-title"><i class="fas fa-robot"></i> Asistente</span>
+      <button class="chat-close" id="chatClose" aria-label="Cerrar chat">✕</button>
+    </div>
+    <div class="chat-body" id="chatBody"></div>
+    <form class="chat-input-row" id="chatForm" autocomplete="off">
+      <input id="chatInput" class="chat-input" type="text" placeholder="Escribí un mensaje…">
+      <button type="submit" class="chat-send" aria-label="Enviar"><i class="fas fa-paper-plane"></i></button>
+    </form>
+  </div>
+
+  <script src="js/tokens.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/focus.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/sdd-flow.js"></script>
+  <script src="js/portal.js"></script>
+</body>
+</html>

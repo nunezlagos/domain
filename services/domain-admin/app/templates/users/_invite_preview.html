@@ -1,0 +1,41 @@
+{% comment %}
+Modal "Invitar por email" (PREVIEW-ONLY).
+
+Se renderiza DENTRO de #modal-dynamic-content (lo inyecta modals.js via fetch a
+/usuarios/<id>/invitar/ con data-action="modal"). Muestra el PREVIEW del email
+HTML de invitacion (templates/emails/invitation.html) + nota de envio pendiente
++ boton "Copiar link" (delegado por modals.js via data-copy).
+
+NO persiste en auth_invitations ni envia nada: el registro y el envio SMTP son
+trabajo futuro (ver maintainers/users/views.py:invite_preview).
+{% endcomment %}
+<div class="modal-header">
+  <h3 class="modal-title">Invitar a {{ user_email }}</h3>
+  <button type="button" class="btn btn-icon btn-ghost modal-close" data-modal-close aria-label="Cerrar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+</div>
+
+<div class="modal-body">
+  <div class="d-flex gap-1 mb-3 align-stretch">
+    <input type="text" class="form-control mnt-text-sm" readonly
+           id="invite-link" value="{{ enrollment_url }}">
+    <button type="button" class="btn btn-outline-primary btn-sm nowrap"
+            data-copy="#invite-link">
+      Copiar link
+    </button>
+  </div>
+  <p class="text-secondary mnt-note">
+    El link de enrollment expira en {{ expires_days }} dias
+    ({{ expires_at|date:"d/m/Y H:i" }}).
+  </p>
+
+  <h4 class="mnt-section-label">
+    Preview del email
+  </h4>
+  <div class="mnt-embed-box">
+    {% include "emails/invitation.html" %}
+  </div>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-ghost" data-modal-close>Cerrar</button>
+</div>

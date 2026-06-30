@@ -1,9 +1,9 @@
--- migration: create_projects
--- author: mnunez@saargo.com
--- issue: HU-01.1
--- description: projects con FK a organization + template + repository_url
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

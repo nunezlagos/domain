@@ -1,9 +1,9 @@
--- migration: create_flow_signals
--- author: nunezlagos
--- issue: HU-09.8
--- description: signals externos para flows en ejecución
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE flow_signals (
   id BIGSERIAL PRIMARY KEY,

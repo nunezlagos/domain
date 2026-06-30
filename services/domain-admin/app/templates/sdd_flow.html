@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Workflow SDD - Domain Admin{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/sdd_flow.css' %}">
+{% endblock %}
+
+{% block navbar %}
+  {% include "components/_navbar.html" with title="Workflow SDD" %}
+{% endblock %}
+
+{% block content %}
+<div class="sdd-flow-page">
+  <div class="card sdd-card">
+    <header class="sdd-hd">
+      <h1 class="sdd-hd-title">Workflow SDD</h1>
+    </header>
+
+    <div data-sdd-flow>
+      <div class="sdf-tabs">
+        <span class="sdf-tabs-label">Workflow:</span>
+        {% for wf in workflows %}
+        <button class="sdf-tab {% if forloop.first %}on{% endif %}" data-wf="{{ wf.slug }}" data-phases="{{ wf.phases_json }}">
+          <span class="sdf-tab-dot"></span> {{ wf.name }}
+        </button>
+        {% endfor %}
+      </div>
+
+      <div class="sdf-status" id="sdfStatus">
+        <span class="sdf-status-flow"><i class="fas fa-diagram-project"></i> SDD Pipeline</span>
+        <span class="sdf-status-phase" id="sdfPhase"><i class="fas fa-circle-notch fa-spin"></i> —</span>
+        <span class="sdf-status-bar"><i id="sdfBar" style="width:0%"></i></span>
+        <span class="sdf-status-meta" id="sdfMeta">0/10 fases</span>
+      </div>
+
+      <div class="sdf-graph" id="sdfGraph">
+        <svg class="sdf-edges" id="sdfEdges"></svg>
+        {% for phase in phases %}
+        <div class="sdf-node is-pending"
+             data-id="{{ phase.slug }}"
+             tabindex="0" role="button"
+             data-desc="{{ phase.desc }}"
+             data-output="{{ phase.output }}"
+             data-tools='{{ phase.tools_mcp_json|safe }}'
+             data-ops='{{ phase.db_ops_json|safe }}'
+             data-modes="{{ phase.modes }}">
+          <span class="sdf-node-ic"><i class="fas fa-{{ phase.icon }}"></i></span>
+          <span class="sdf-node-txt">
+            <b>{{ phase.name }}</b>
+            <em>{{ phase.agent_slug }}</em>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+'use strict';
+
+var graph = document.getElementById('sdfGraph');
+var edges = document.getElementById('sdfEdges');
+var statusEl = document.getElementById('sdfStatus');
+var phaseEl = document.getElementById('sdfPhase');
+var barEl = document.getElementById('sdfBar');
+var metaEl = document.getElementById('sdfMeta');
+var allPhases = JSON.parse('{{ phases_json|safe }}');
+
+// Build popover
+function popoverHTML(step, state) {
+  var tools = step.tools || [];
+  var ops = step.ops || [];
+  var toolsHtml = tools.length
+    ? '<dd>' + tools.map(function(t){ return '<code>'+esc(t)+'</code>' }).join('') + '</dd>'
+    : '<dd>—</dd>';
+  var opsHtml = ops.length
+    ? '<dd>' + ops.map(function(o){ return '<span class="db-op-pill db-'+esc(o.type)+'">'+esc(o.label)+'</span>' }).join(' ') + '</dd>'
+    : '<dd>—</dd>';
+  return (
+    '<div class="sdf-pop-head">' +
+      '<span class="sdf-pop-ic is-'+state+'"><i class="fas fa-'+esc(step.icon)+'"></i></span>' +
+      '<div><b>'+esc(step.name)+'</b><span class="sdf-pop-state is-'+state+'">'+state+'</span></div>' +
+      '<button class="sdf-pop-x" aria-label="Cerrar"><i class="fas fa-xmark"></i></button>' +
+    '</div>' +
+    '<p class="sdf-pop-desc">'+esc(step.desc)+'</p>' +
+    '<dl class="sdf-pop-detail">' +
+      '<div><dt><i class="fas fa-wrench"></i> MCP Tools</dt>'+toolsHtml+'</div>' +
+      '<div><dt><i class="fas fa-database"></i> DB Ops</dt>'+opsHtml+'</div>' +
+      '<div><dt><i class="fas fa-arrow-right-from-bracket"></i> Output</dt><dd>'+esc(step.output)+'</dd></div>' +
+    '</dl>'
+  );
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Draw SVG edges between consecutive nodes
+function drawEdges() {
+  var nodes = graph.querySelectorAll('.sdf-node');
+  if (nodes.length < 2) return;
+  var pos = [];
+  nodes.forEach(function(n) {
+    var x = n.offsetLeft, y = n.offsetTop;
+    var w = n.offsetWidth, h = n.offsetHeight;
+    pos.push({ x: x, y: y, w: w, h: h });
+  });
+  var w = graph.scrollWidth, h = graph.scrollHeight;
+  edges.innerHTML = '';
+  edges.setAttribute('viewBox', '0 0 '+w+' '+h);
+  edges.setAttribute('width', w);
+  edges.setAttribute('height', h);
+  for (var i = 0; i < pos.length - 1; i++) {
+    var a = pos[i], b = pos[i+1];
+    var sameRow = Math.abs(a.y - b.y) < 10;
+    var x1, y1, x2, y2;
+    if (sameRow) {
+      x1 = a.x + a.w; y1 = a.y + a.h/2;
+      x2 = b.x; y2 = b.y + b.h/2;
+    } else {
+      x1 = a.x + a.w/2; y1 = a.y + a.h;
+      x2 = b.x + b.w/2; y2 = b.y;
+    }
+    var dx = (x2 - x1) * 0.4, dy = (y2 - y1) * 0.5;
+    var d = 'M'+x1+','+y1+' C'+(x1+dx)+','+(y1+dy)+' '+(x2-dx)+','+(y2-dy)+' '+x2+','+y2;
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'sdf-edge');
+    path.setAttribute('d', d);
+    edges.appendChild(path);
+    var flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    flow.setAttribute('class', 'sdf-edge-flow');
+    flow.setAttribute('d', d);
+    edges.appendChild(flow);
+  }
+}
+
+// Popover management
+var popover = null;
+function closePop() { if (popover) { popover.classList.remove('open'); popover = null; } }
+
+function openPop(node, step, state) {
+  closePop();
+  var pop = document.createElement('div');
+  pop.className = 'sdf-pop';
+  pop.innerHTML = popoverHTML(step, state);
+  graph.appendChild(pop);
+  pop.querySelector('.sdf-pop-x').addEventListener('click', closePop);
+  // position
+  var gr = graph.getBoundingClientRect();
+  var nr = node.getBoundingClientRect();
+  pop.classList.add('open');
+  var pw = pop.offsetWidth, ph = pop.offsetHeight;
+  var left = nr.left - gr.left + graph.scrollLeft + nr.width/2 - pw/2;
+  var top = nr.bottom - gr.top + graph.scrollTop + 8;
+  left = Math.max(6, Math.min(left, graph.scrollWidth - pw - 6));
+  if (top + ph > graph.scrollTop + graph.clientHeight && nr.top - gr.top - ph - 8 > 0) {
+    top = nr.top - gr.top + graph.scrollTop - ph - 8;
+  }
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  popover = pop;
+}
+
+// Build step lookup from allPhases
+var stepMap = {};
+allPhases.forEach(function(p){ stepMap[p.id] = p; });
+
+// Node click
+graph.addEventListener('click', function(e) {
+  var node = e.target.closest('.sdf-node');
+  if (!node) { closePop(); return; }
+  var id = node.dataset.id;
+  var step = stepMap[id];
+  if (!step) return;
+  var state = 'pending';
+  if (node.classList.contains('is-done')) state = 'done';
+  else if (node.classList.contains('is-active')) state = 'active';
+  if (popover && popover.parentNode && popover.style.opacity === '1') {
+    closePop();
+    if (popover._node === node) return;
+  }
+  openPop(node, step, state);
+  popover._node = node;
+});
+
+// Tab switching — filter nodes by workflow mode
+var tabs = document.querySelectorAll('.sdf-tab');
+tabs.forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    tabs.forEach(function(t){ t.classList.remove('on'); });
+    tab.classList.add('on');
+    closePop();
+    var activeIds = (tab.dataset.phases || '').split(',');
+    graph.querySelectorAll('.sdf-node').forEach(function(n) {
+      var modes = (n.dataset.modes || '').split(',');
+      var match = activeIds.indexOf(n.dataset.id) >= 0;
+      n.classList.remove('is-pending', 'is-done', 'is-active', 'is-skipped');
+      n.classList.add(match ? 'is-pending' : 'is-skipped');
+    });
+    setTimeout(drawEdges, 50);
+  });
+});
+
+// Simulate live ticker (demo mode — cycles phases)
+var tick = 0;
+setInterval(function() {
+  var activeNodes = graph.querySelectorAll('.sdf-node:not(.is-skipped)');
+  var activeCount = activeNodes.length;
+  if (activeCount === 0) return;
+  tick = (tick + 1) % (activeCount + 1);
+  activeNodes.forEach(function(n, i) {
+    n.classList.remove('is-done', 'is-active', 'is-pending', 'is-skipped');
+    if (i < tick) n.classList.add('is-done');
+    else if (i === tick) n.classList.add('is-active');
+    else n.classList.add('is-pending');
+  });
+  // Update status bar
+  var pct = activeCount > 0 ? Math.round(tick / activeCount * 100) : 0;
+  barEl.style.width = pct + '%';
+  var curName = tick < activeCount ? (activeNodes[tick].querySelector('b') || {}).textContent : 'Completado';
+  phaseEl.innerHTML = '<i class="fas fa-'+(tick >= activeCount ? 'circle-check' : 'circle-notch fa-spin')+'"></i> '+curName;
+  metaEl.textContent = Math.min(tick, activeCount)+'/'+activeCount+' fases';
+  // Flow edges
+  edges.querySelectorAll('.sdf-edge-flow').forEach(function(e, i) {
+    e.classList.toggle('on', i < tick);
+  });
+}, 3000);
+
+// Layout after render
+setTimeout(function() {
+  drawEdges();
+  // Trigger first tick
+  var ev = new Event('click');
+  document.querySelector('.sdf-tab.on') && document.querySelector('.sdf-tab.on').dispatchEvent(ev);
+}, 100);
+
+})();
+</script>
+{% endblock %}

@@ -1,10 +1,10 @@
--- migration: create_imported_workflow_files
--- author: nunezlagos
--- issue: HU-12.7 (workflow-override) — Domain MCP reemplaza .md de Claude
---                Code / OpenCode / Cursor / etc., guardando backup en BD.
--- description: registry de archivos .md de instrucciones IA importados
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
 
 CREATE TABLE imported_workflow_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -12,12 +12,12 @@ CREATE TABLE imported_workflow_files (
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   source_tool VARCHAR(40) NOT NULL
     CHECK (source_tool IN ('claude-code','opencode','cursor','windsurf','aider','generic')),
-  -- Path relativo desde el root del proyecto donde se encontró.
+
   rel_path TEXT NOT NULL,
   original_content TEXT NOT NULL,       -- backup completo para restore
   content_hash VARCHAR(64) NOT NULL,    -- SHA-256 hex del original
   size_bytes BIGINT NOT NULL,
-  -- Estado: detected → backed_up → replaced (con stub) → restored (rollback)
+
   status VARCHAR(20) NOT NULL DEFAULT 'detected'
     CHECK (status IN ('detected','backed_up','replaced','restored')),
   replaced_with TEXT,                    -- content del stub que escribimos

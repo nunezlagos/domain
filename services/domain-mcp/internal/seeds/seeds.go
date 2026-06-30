@@ -40,15 +40,15 @@ type Report struct {
 
 // Seeder interface a implementar por cada catálogo.
 type Seeder interface {
-	// Name único, snake_case (e.g. "agent_templates", "skills").
+
 	Name() string
-	// Version se bumpea cuando el catalog cambia para forzar reseed.
+
 	Version() int
-	// Order para topological sort (catálogos base antes que dependientes). Lower first.
+
 	Order() int
-	// IsDevOnly true si solo corre en EnvDev (e.g. demo data).
+
 	IsDevOnly() bool
-	// Run aplica el seed idempotente con UPSERT pattern.
+
 	Run(ctx context.Context, tx pgx.Tx, env Env) (Report, error)
 }
 
@@ -99,7 +99,7 @@ func (r *Registry) Find(name string) Seeder {
 }
 
 const (
-	// seedLockID arbitrary BIGINT para advisory lock global de seed.
+
 	seedLockID = int64(0x73656564) // "seed"
 )
 
@@ -112,7 +112,7 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 	}
 	defer conn.Release()
 
-	// Try advisory lock; si no lo obtiene, skip silencioso.
+
 	var locked bool
 	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", seedLockID).Scan(&locked); err != nil {
 		return nil, fmt.Errorf("advisory lock: %w", err)
@@ -130,7 +130,7 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 			results[s.Name()] = Report{Skipped: 1}
 			continue
 		}
-		// Check if already at this version (idempotency fast-path)
+
 		var appliedVersion int
 		err := conn.QueryRow(ctx,
 			`SELECT applied_version FROM seed_versions WHERE seeder_name = $1`,
@@ -142,7 +142,7 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 			continue
 		}
 
-		// tx
+
 		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return results, fmt.Errorf("begin tx for %s: %w", s.Name(), err)
@@ -155,7 +155,7 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 			return results, fmt.Errorf("seeder %s failed: %w", s.Name(), runErr)
 		}
 
-		// upsert seed_versions
+
 		repJSON, _ := json.Marshal(rep)
 		_, err = tx.Exec(ctx, `
 			INSERT INTO seed_versions (seeder_name, applied_version, last_applied_at, last_report)

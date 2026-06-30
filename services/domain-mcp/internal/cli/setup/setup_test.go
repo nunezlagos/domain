@@ -59,7 +59,7 @@ func TestSetupClaudeDesktop_AlreadyConfiguredError(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
-	// Crear config con server "domain" pre-existente.
+
 	cfgPath, err := ClaudeDesktopConfigPath()
 	if err != nil {
 		t.Fatal(err)
@@ -114,11 +114,11 @@ func TestCreateAIDirectives_NoSobreescribe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Modificar
+
 	if err := os.WriteFile(path, []byte("manual content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 2nda call: no debe sobrescribir.
+
 	if _, err := CreateAIDirectives(tmp); err != nil {
 		t.Fatal(err)
 	}

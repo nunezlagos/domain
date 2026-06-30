@@ -30,9 +30,9 @@ type Option struct {
 
 // Planner decide qué slot pendiente preguntar próximo y formula la pregunta.
 type Planner struct {
-	// QuestionFormulator opcional: si nil, usa el template fallback.
+
 	QuestionFormulator QuestionFormulator
-	// SlotThreshold para "ya inferido suficiente" (default 0.75).
+
 	SlotThreshold float64
 }
 
@@ -91,7 +91,7 @@ func (p *Planner) RecordAnswer(env *ContextEnvelope, slot string, value any) {
 // prioritizeSlot ordena los slots pendientes por importancia para el flow.
 // Intent siempre primero; después depende del intent.
 func prioritizeSlot(pending []string, env *ContextEnvelope) string {
-	// Mapa de prioridad: menor número = más prioritario.
+
 	prio := map[string]int{
 		SlotIntent:    0,
 		SlotSeverity:  1, // crítico para bug-fix
@@ -124,7 +124,7 @@ func suggestionsForSlot(slot string, env *ContextEnvelope) []Option {
 		if env.HUMatches != nil {
 			seen := map[string]bool{}
 			for _, c := range env.HUMatches.Candidates {
-				// Saltear duplicados de req (varios HUs comparten req)
+
 				if seen[c.Slug] {
 					continue
 				}
@@ -253,9 +253,22 @@ type FormulateInput struct {
 type LLMQuestionFormulator struct {
 	Provider llm.Provider
 	Model    string
+
+
+
+
+
+
+	PromptLoader func(ctx context.Context) (string, error)
 }
 
-const formulatorSystemPrompt = `Sos un wizard interactivo que ayuda a un usuario a especificar una HU técnica.
+// DefaultFormulatorSystemPrompt es el system prompt del wizard formulator por
+// defecto. Se seedea en la tabla prompts con slug='wizard-formulator' para
+// que sea editable desde el dashboard. El formulator lo usa como fallback si
+// la DB no tiene el prompt o el loader no está cableado. Es solo el skeleton:
+// el envelope runtime que se concatena/interpola se arma aparte y sigue
+// siendo dinámico.
+const DefaultFormulatorSystemPrompt = `Sos un wizard interactivo que ayuda a un usuario a especificar una HU técnica.
 
 Recibís: (a) el slot que necesitás clarificar, (b) un envelope con análisis automático del prompt original (intent, HUs similares, hits en código, memorias, agent runs previos), (c) opciones sugeridas.
 
@@ -288,11 +301,18 @@ func (f *LLMQuestionFormulator) FormulateQuestion(ctx context.Context, in Formul
 		"context_note": in.ContextNote,
 	})
 
+	systemPrompt := DefaultFormulatorSystemPrompt
+	if f.PromptLoader != nil {
+		if loaded, lerr := f.PromptLoader(ctx); lerr == nil && strings.TrimSpace(loaded) != "" {
+			systemPrompt = loaded
+		}
+	}
+
 	resp, err := f.Provider.Complete(ctx, llm.CompletionOptions{
 		Model:        model,
 		Temperature:  0.4,
 		MaxTokens:    256,
-		SystemPrompt: formulatorSystemPrompt,
+		SystemPrompt: systemPrompt,
 		Messages: []llm.Message{
 			{Role: "user", Content: "Slot a clarificar + envelope:\n" + string(envSummary)},
 		},

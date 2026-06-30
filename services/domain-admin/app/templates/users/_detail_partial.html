@@ -1,0 +1,115 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}
+Detalle de usuario para el modal dinamico. Extiende maintainers/_detail_base.html
+(header + body + footer del modal). Define titulo, cuerpo y acciones propias.
+{% endcomment %}
+
+{% block detail_title %}Datos de usuario{% endblock %}
+
+{% block detail_body %}
+  {% comment %} Minimalista: 3 tabs horizontales; los datos (incl. estado) van en Informacion. {% endcomment %}
+  <div class="htabs">
+    <input type="radio" name="utab" id="ut-info" checked>
+    <input type="radio" name="utab" id="ut-roles">
+    <input type="radio" name="utab" id="ut-keys">
+    <nav class="htabs-nav">
+      <label for="ut-info">Informacion</label>
+      <label for="ut-roles">Roles {% if user_roles %}<span class="vtab-count">{{ user_roles|length }}</span>{% endif %}</label>
+      <label for="ut-keys">API Keys {% if api_keys %}<span class="vtab-count">{{ api_keys|length }}</span>{% endif %}</label>
+    </nav>
+    <div class="htabs-body">
+
+      {% comment %} ===== Pane: Informacion ===== {% endcomment %}
+      <div class="vpane vpane-info">
+        <table class="table mnt-table-sm">
+          <tbody>
+            <tr><th class="mnt-th-label">Email</th><td><code>{{ user_obj.email }}</code></td></tr>
+            <tr><th>Nombre</th><td>{{ user_obj.name|default:"—" }}</td></tr>
+            <tr><th>RUT</th><td>{{ user_obj.rut|default:"—" }}</td></tr>
+            <tr><th>Rol principal</th><td><span class="badge">{{ user_obj.role }}</span></td></tr>
+            <tr><th>Estado</th>
+              <td>
+                {% if user_obj.status == 'active' %}<span class="badge badge-success">{{ user_obj.get_status_display }}</span>
+                {% elif user_obj.status == 'pending' %}<span class="badge badge-warning">{{ user_obj.get_status_display }}</span>
+                {% else %}<span class="badge badge-danger">{{ user_obj.get_status_display }}</span>{% endif %}
+              </td>
+            </tr>
+            <tr><th>Creado</th><td>{{ user_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+            <tr><th>Ultimo acceso</th><td>{{ user_obj.last_login_at|date:"d/m/Y H:i"|default:"Nunca" }}</td></tr>
+            <tr><th>Contraseña</th>
+              <td>{% if user_obj.password_set_at %}{{ user_obj.password_set_at|date:"d/m/Y H:i" }}{% else %}<span class="text-muted">No establecida</span>{% endif %}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {% comment %} ===== Pane: Roles ===== {% endcomment %}
+      <div class="vpane vpane-roles">
+        {% if user_roles %}
+          <div class="d-flex gap-2 flex-wrap">
+            {% for ur in user_roles %}<span class="badge badge-primary">{{ ur.role.slug }}</span>{% endfor %}
+          </div>
+          <p class="text-secondary mt-2 mnt-text-sm">
+            {{ user_roles|length }} activo(s). Para asignar/quitar roles usa el panel de edicion.
+          </p>
+        {% else %}
+          <p class="text-muted">Este usuario no tiene roles asignados.</p>
+        {% endif %}
+      </div>
+
+      {% comment %} ===== Pane: API Keys ===== Solo VISTA + copiar; la gestion
+        (crear/editar/eliminar/filtrar) vive en el modal "Gestionar API Keys". {% endcomment %}
+      <div class="vpane vpane-keys">
+        <div class="d-flex justify-between align-center mb-2">
+          <span class="text-secondary mnt-text-sm">
+            {{ api_keys|length }} API key{{ api_keys|length|pluralize:",s" }} de este usuario
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-action="modal" data-url="/usuarios/api-keys/">
+            Gestionar API Keys
+          </button>
+        </div>
+        {% if api_keys %}
+          <table class="table mnt-table-sm">
+            <tbody>
+              {% for k in api_keys %}
+                <tr>
+                  <td><code>{{ k.key_prefix }}…</code></td>
+                  <td>{{ k.name }}</td>
+                  <td>
+                    {% if k.status == 'active' %}<span class="badge badge-success">{{ k.get_status_display }}</span>
+                    {% elif k.status == 'expired' %}<span class="badge badge-warning">{{ k.get_status_display }}</span>
+                    {% else %}<span class="badge badge-danger">{{ k.get_status_display }}</span>{% endif %}
+                  </td>
+                  <td class="mnt-col-narrow text-right">
+                    {% if k.key_plaintext %}
+                      <input type="text" id="user-apikey-{{ k.pk }}" value="{{ k.key_plaintext }}" readonly
+                             class="offscreen" tabindex="-1" aria-hidden="true">
+                      <button type="button" class="btn btn-icon btn-ghost"
+                              data-copy="#user-apikey-{{ k.pk }}" title="Copiar la API key">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                      </button>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted">Este usuario no tiene API keys.</p>
+        {% endif %}
+      </div>{# /vpane-keys #}
+    </div>{# /htabs-body #}
+  </div>{# /htabs #}
+{% endblock %}
+
+{% comment %} Anulamos el "Cerrar" por defecto del footer: este detalle usa solo
+   el "Cerrar" rojo (outline) de abajo, para no mostrar dos botones de cierre. {% endcomment %}
+{% block detail_close %}{% endblock %}
+{% block detail_actions %}
+  <button type="button" class="btn btn-outline-danger" data-modal-close>
+    Cerrar
+  </button>
+{% endblock %}

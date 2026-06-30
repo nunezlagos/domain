@@ -112,14 +112,14 @@ func TestInstrumentPPROF_CallsNextHandler(t *testing.T) {
 
 func TestReadCgroupMemoryLimit_ReturnsZeroWhenNoCgroup(t *testing.T) {
 	limit := readCgroupMemoryLimit()
-	// En CI/dev local no hay cgroup, debe retornar 0.
+
 	if limit < 0 {
 		t.Fatalf("expected non-negative, got %d", limit)
 	}
 }
 
 func TestTuneRuntime_DoesNotPanic(t *testing.T) {
-	// Simplemente verifica que no paniquea.
+
 	TuneRuntime(slog.Default())
 }
 

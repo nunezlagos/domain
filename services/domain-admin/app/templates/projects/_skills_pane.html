@@ -1,0 +1,56 @@
+{% comment %}
+Pane "Skills" del proyecto: UNA tabla combinada (globales + internas) con filtro
+de scope (Todas/Globales/Internas) + paginacion (10) + accion excluir/incluir.
+Modelo hibrido: globales aplican auto, project_skills guarda solo exclusiones.
+
+Es el contenido INTERNO del pane [data-pane] (project-skills.js reemplaza este
+innerHTML al filtrar / paginar / excluir). Contexto: skills (con .scope/.excluded),
+skills_scope, counts, paginacion.
+{% endcomment %}
+<div data-pane-state data-scope="{{ skills_scope }}" data-page="{{ page }}"></div>
+
+<div class="pane-filter">
+  <label class="form-label" for="sk-scope">Ver</label>
+  <select class="form-control form-select" data-pane-filter name="scope" id="sk-scope">
+    <option value="all" {% if skills_scope == 'all' %}selected{% endif %}>Todas</option>
+    <option value="global" {% if skills_scope == 'global' %}selected{% endif %}>Globales ({{ skills_global_count }})</option>
+    <option value="internal" {% if skills_scope == 'internal' %}selected{% endif %}>Internas ({{ skills_internal_count }})</option>
+  </select>
+  <span class="text-secondary mnt-text-sm">{{ skills_applied_count }} aplican{% if skills_excluded_count %} · {{ skills_excluded_count }} excluidas{% endif %}</span>
+</div>
+
+<table class="table mnt-table-sm">
+  <thead>
+    <tr><th>Slug</th><th>Nombre</th><th>Scope</th><th>Estado</th>{% if not readonly %}<th class="mnt-col-actions">Accion</th>{% endif %}</tr>
+  </thead>
+  <tbody>
+    {% for s in skills %}
+      <tr class="{% if s.excluded %}skill-excluded{% endif %}">
+        <td class="mnt-col-narrow"><code>{{ s.slug }}</code></td>
+        <td class="skill-name">{{ s.name }}</td>
+        <td><span class="badge">{% if s.scope == 'global' %}Global{% else %}Interna{% endif %}</span></td>
+        <td>
+          {% if s.excluded %}<span class="badge badge-danger">Excluida</span>
+          {% else %}<span class="badge badge-success">Aplica</span>{% endif %}
+        </td>
+        {% if not readonly %}
+          <td class="mnt-col-narrow">
+            {% if s.excluded %}
+              <button type="button" class="btn btn-sm btn-ghost" data-pane-action
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-params="skill_id={{ s.id }}&op=include">Incluir</button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-ghost mnt-action-danger" data-pane-action
+                      data-url="{% url 'projects:toggle_skill' project_obj.pk %}"
+                      data-params="skill_id={{ s.id }}&op=exclude">Excluir</button>
+            {% endif %}
+          </td>
+        {% endif %}
+      </tr>
+    {% empty %}
+      <tr><td colspan="{% if readonly %}4{% else %}5{% endif %}" class="mnt-empty-cell">No hay skills para este filtro.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% include "maintainers/_pane_pagination.html" %}

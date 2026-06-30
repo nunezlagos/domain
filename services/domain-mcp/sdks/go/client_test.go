@@ -64,8 +64,8 @@ func TestAuthHeaderAndContentType(t *testing.T) {
 	})
 
 	c := newTestClient(t, h)
-	// issue-21.6: Organization resource eliminado. Verificamos la construcción
-	// del request (headers/UA/método/path/body) vía Projects.Create (POST).
+
+
 	proj, err := c.Projects.Create(context.Background(), ProjectCreateInput{Name: "Demo", Slug: "demo"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -126,7 +126,7 @@ func TestCursorPaginationRoundtrip(t *testing.T) {
 
 	c := newTestClient(t, h)
 
-	// 1) Page-by-page para verificar que el cliente expone next_cursor.
+
 	items, pg, err := c.Observations.List(context.Background(), ListObservationsParams{Limit: 2})
 	if err != nil {
 		t.Fatalf("List page 1: %v", err)
@@ -149,7 +149,7 @@ func TestCursorPaginationRoundtrip(t *testing.T) {
 		t.Fatalf("page 2 should be terminal, got %+v", pg2)
 	}
 
-	// 2) Iter recorre todo transparentemente.
+
 	calls = 0
 	it := c.Observations.Iter(context.Background(), ListObservationsParams{Limit: 2})
 	var collected []string
@@ -266,7 +266,7 @@ func TestAPIError_Conflict(t *testing.T) {
 }
 
 func TestContextCancel(t *testing.T) {
-	// Handler bloquea hasta que el server cierre — el ctx cancelado debe abortar.
+
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 	})

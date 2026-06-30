@@ -1,8 +1,3 @@
-// Package issuebuilder — issue-04.7 interactive HU spec wizard.
-//
-// Implementación inicial mínima: solo mode=feature con state machine de 8 pasos.
-// Otros modes (bug-fix, refactor, doc, rfc) marcados unsupported — futuras
-// extensiones agregan flows en flow_*.go.
 package issuebuilder
 
 import (
@@ -10,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,9 +14,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/issuebuilder/issuebuilderdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
-// Errores estables del wizard.
 var (
 	ErrNotFound          = errors.New("draft not found")
 	ErrInvalidMode       = errors.New("invalid mode")
@@ -28,9 +25,9 @@ var (
 	ErrInvalidAnswer     = errors.New("answer invalid for current step")
 	ErrExpired           = errors.New("draft expired")
 	ErrUnsupportedMode   = errors.New("mode not yet supported")
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
-// Mode permitidos. Implementados: feature. Resto reservado.
 const (
 	ModeFeature  = "feature"
 	ModeBugFix   = "bug-fix"
@@ -47,7 +44,6 @@ const (
 	StatusAbandoned  = "abandoned"
 )
 
-// Draft refleja una fila de issue_drafts.
 type Draft struct {
 	ID                    uuid.UUID       `json:"id"`
 	OrganizationID        *uuid.UUID      `json:"organization_id,omitempty"`
@@ -65,9 +61,10 @@ type Draft struct {
 	ExpiresAt             time.Time       `json:"expires_at"`
 	CreatedAt             time.Time       `json:"created_at"`
 	UpdatedAt             time.Time       `json:"updated_at"`
+	IssueID               *uuid.UUID      `json:"issue_id,omitempty"`
+	IssueSlug             string          `json:"issue_slug,omitempty"`
 }
 
-// Option representa una opción válida para una pregunta del wizard.
 type Option struct {
 	Value       string `json:"value"`
 	Label       string `json:"label"`
@@ -75,7 +72,6 @@ type Option struct {
 	Recommended bool   `json:"recommended,omitempty"`
 }
 
-// Question es la próxima pregunta a contestar.
 type Question struct {
 	Key      string   `json:"key"`
 	Prompt   string   `json:"prompt"`
@@ -83,39 +79,58 @@ type Question struct {
 	Progress string   `json:"progress"`
 }
 
-// Preview es el snapshot renderizado pre-commit.
 type Preview struct {
 	Files         map[string]string `json:"files"`
 	TargetPath    string            `json:"target_path"`
 	SuggestedSlug string            `json:"suggested_slug"`
 }
 
-// AttachmentService es el subset de internal/service/attachment.Service que
-// el wizard necesita para colgar imágenes a un draft. Inyectable para tests.
 type AttachmentService interface {
 	InitUpload(ctx context.Context, entityType, entityIDStr, filename, mimeType, createdBy string, size int64) (*AttachmentInitResult, error)
 	PromoteEntity(ctx context.Context, fromKind, toKind string, fromID, toID uuid.UUID) (int, error)
 }
 
-// AttachmentInitResult — espejo lite del tipo del attachment service.
-// Evita import cycle: internal/service/attachment.InitUploadResult tiene
-// shape compatible y satisface esto.
 type AttachmentInitResult struct {
 	AttachmentID uuid.UUID `json:"attachment_id"`
 	UploadURL    string    `json:"upload_url"`
 	Filename     string    `json:"filename"`
 }
 
-// Service orquesta el wizard. Stateless; depende de pgxpool y registry steps.
+type RequirementService interface {
+	Create(ctx context.Context, slug, title, description, status, priority, parentSlug string, projectID *uuid.UUID) (*MaterializedRequirement, error)
+}
+
+type IssueService interface {
+	Create(ctx context.Context, slug, title, description, status, priority, reqSlug string) (*MaterializedIssue, error)
+}
+
+type MaterializedRequirement struct {
+	ID   uuid.UUID `json:"id"`
+	Slug string    `json:"slug"`
+}
+
+type MaterializedIssue struct {
+	ID   uuid.UUID `json:"id"`
+	Slug string    `json:"slug"`
+}
+
 type Service struct {
 	Pool        *pgxpool.Pool
 	Audit       *audit.PGRecorder
-	Attachments AttachmentService // opcional; si nil → AttachToDraft falla con ErrAttachmentsNotConfigured
-	DraftTTLHrs int               // Default 24
+	Attachments AttachmentService
+	DraftTTLHrs int
+
+	ReqSvc   RequirementService
+	IssueSvc IssueService
 }
 
-// ErrAttachmentsNotConfigured se devuelve si AttachToDraft se llama sin
-// AttachmentService inyectado.
+func (s *Service) q(ctx context.Context) *issuebuilderdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return issuebuilderdb.New(tx)
+	}
+	return issuebuilderdb.New(s.Pool)
+}
+
 var ErrAttachmentsNotConfigured = errors.New("attachment service not configured")
 
 const defaultDraftTTLHrs = 24
@@ -127,8 +142,47 @@ func (s *Service) ttl() time.Duration {
 	return defaultDraftTTLHrs * time.Hour
 }
 
-// Start inicia un nuevo wizard. Crea draft y devuelve primera pregunta.
-func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy *uuid.UUID) (*Draft, *Question, error) {
+func toDraft(id uuid.UUID, createdBy *uuid.UUID, mode, initialIdea string, answers []byte, currentStep, totalSteps int32, status string, pendingClarifications []byte, preview []byte, targetPath *string, committedAt *time.Time, expiresAt time.Time, createdAt time.Time, updatedAt time.Time) Draft {
+	return Draft{
+		ID:                    id,
+		CreatedBy:             createdBy,
+		Mode:                  mode,
+		InitialIdea:           initialIdea,
+		Answers:               json.RawMessage(answers),
+		CurrentStep:           int(currentStep),
+		TotalSteps:            int(totalSteps),
+		Status:                status,
+		PendingClarifications: json.RawMessage(pendingClarifications),
+		Preview:               json.RawMessage(preview),
+		TargetPath:            targetPath,
+		CommittedAt:           committedAt,
+		ExpiresAt:             expiresAt,
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
+	}
+}
+
+func toDraftFromGet(r issuebuilderdb.GetDraftRow) Draft {
+	return toDraft(r.ID, r.CreatedBy, r.Mode, r.InitialIdea, r.Answers, r.CurrentStep, r.TotalSteps, r.Status, r.PendingClarifications, r.Preview, r.TargetPath, r.CommittedAt, r.ExpiresAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toDraftFromList(r issuebuilderdb.ListDraftsRow) Draft {
+	return toDraft(r.ID, r.CreatedBy, r.Mode, r.InitialIdea, r.Answers, r.CurrentStep, r.TotalSteps, r.Status, r.PendingClarifications, r.Preview, r.TargetPath, r.CommittedAt, r.ExpiresAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toDraftFromInsert(r issuebuilderdb.InsertDraftRow) Draft {
+	return toDraft(r.ID, r.CreatedBy, r.Mode, r.InitialIdea, r.Answers, r.CurrentStep, r.TotalSteps, r.Status, r.PendingClarifications, r.Preview, r.TargetPath, r.CommittedAt, r.ExpiresAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toDraftFromUpdate(r issuebuilderdb.UpdateDraftAfterAnswerRow) Draft {
+	return toDraft(r.ID, r.CreatedBy, r.Mode, r.InitialIdea, r.Answers, r.CurrentStep, r.TotalSteps, r.Status, r.PendingClarifications, r.Preview, r.TargetPath, r.CommittedAt, r.ExpiresAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func toDraftFromCommit(r issuebuilderdb.CommitDraftRow) Draft {
+	return toDraft(r.ID, r.CreatedBy, r.Mode, r.InitialIdea, r.Answers, r.CurrentStep, r.TotalSteps, r.Status, r.PendingClarifications, r.Preview, r.TargetPath, r.CommittedAt, r.ExpiresAt, r.CreatedAt, r.UpdatedAt)
+}
+
+func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy *uuid.UUID, projectID *uuid.UUID) (*Draft, *Question, error) {
 	flow, ok := flowsByMode[mode]
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %s", ErrInvalidMode, mode)
@@ -140,25 +194,27 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 		return nil, nil, fmt.Errorf("initial_idea required")
 	}
 
+	if projectID == nil || *projectID == uuid.Nil {
+		return nil, nil, ErrProjectIDRequired
+	}
+
 	expires := time.Now().Add(s.ttl())
 
-	var d Draft
-	// ISSUE-21.6: RETURNING sin organization_id.
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO issue_drafts (created_by, mode, initial_idea, total_steps, expires_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_by, mode, initial_idea, answers,
-		          current_step, total_steps, status, pending_clarifications,
-		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
-		createdBy, mode, initialIdea, len(flow), expires,
-	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
-		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
-		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
+	q := s.q(ctx)
+	dRow, err := q.InsertDraft(ctx, issuebuilderdb.InsertDraftParams{
+		CreatedBy:   createdBy,
+		ProjectID:   *projectID,
+		Mode:        mode,
+		InitialIdea: initialIdea,
+		TotalSteps:  int32(len(flow)),
+		ExpiresAt:   expires,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("insert draft: %w", err)
 	}
 
-	q, err := s.questionFor(ctx, &d, flow[0])
+	d := toDraftFromInsert(dRow)
+	q2, err := s.questionFor(ctx, &d, flow[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -171,10 +227,9 @@ func (s *Service) Start(ctx context.Context, mode, initialIdea string, createdBy
 			NewValues:  map[string]any{"mode": mode},
 		})
 	}
-	return &d, q, nil
+	return &d, q2, nil
 }
 
-// Answer recibe una respuesta para el step actual y avanza.
 func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) (*Draft, *Question, error) {
 	d, err := s.Get(ctx, draftID)
 	if err != nil {
@@ -205,69 +260,56 @@ func (s *Service) Answer(ctx context.Context, draftID uuid.UUID, rawAnswer any) 
 	newAnswers, _ := json.Marshal(answers)
 	nextStep := d.CurrentStep + 1
 
-	// Log step
 	optsJSON, _ := json.Marshal(step.options)
 	answerJSON, _ := json.Marshal(rawAnswer)
-	_, _ = s.Pool.Exec(ctx,
-		`INSERT INTO issue_draft_steps_log (draft_id, step_key, question, options, answer)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		draftID, step.Key, step.Prompt, optsJSON, answerJSON,
-	)
+	q := s.q(ctx)
+	_ = q.InsertStepLog(ctx, issuebuilderdb.InsertStepLogParams{
+		IssueDraftID: draftID,
+		StepKey:      step.Key,
+		Question:     step.Prompt,
+		Options:      optsJSON,
+		Answer:       answerJSON,
+	})
 
-	// Determine new status
 	newStatus := StatusInProgress
 	if nextStep >= len(flow) {
 		newStatus = StatusFinished
 	}
 
-	err = s.Pool.QueryRow(ctx, `
-		UPDATE issue_drafts
-		SET answers = $1, current_step = $2, status = $3, updated_at = now()
-		WHERE id = $4
-		RETURNING id, created_by, mode, initial_idea, answers,
-		          current_step, total_steps, status, pending_clarifications,
-		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
-		newAnswers, nextStep, newStatus, draftID,
-	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
-		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
-		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
+	dRow, err := q.UpdateDraftAfterAnswer(ctx, issuebuilderdb.UpdateDraftAfterAnswerParams{
+		Answers:     newAnswers,
+		CurrentStep: int32(nextStep),
+		Status:      newStatus,
+		ID:          draftID,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("update draft: %w", err)
 	}
 
+	updated := toDraftFromUpdate(dRow)
+
 	if newStatus == StatusFinished {
-		return d, nil, nil
+		return &updated, nil, nil
 	}
-	q, err := s.questionFor(ctx, d, flow[nextStep])
+	q3, err := s.questionFor(ctx, &updated, flow[nextStep])
 	if err != nil {
 		return nil, nil, err
 	}
-	return d, q, nil
+	return &updated, q3, nil
 }
 
-// Get retrieve un draft por ID.
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Draft, error) {
-	var d Draft
-	// ISSUE-21.6: SELECT sin organization_id.
-	err := s.Pool.QueryRow(ctx, `
-		SELECT id, created_by, mode, initial_idea, answers,
-		       current_step, total_steps, status, pending_clarifications,
-		       preview, target_path, committed_at, expires_at, created_at, updated_at
-		FROM issue_drafts WHERE id = $1`, id,
-	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
-		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
-		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
+	dRow, err := s.q(ctx).GetDraft(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get draft: %w", err)
 	}
+	d := toDraftFromGet(dRow)
 	return &d, nil
 }
 
-// BuildPreview renderiza preview de los archivos SDD desde answers.
-// Requiere status=finished.
 func (s *Service) BuildPreview(ctx context.Context, draftID uuid.UUID) (*Preview, error) {
 	d, err := s.Get(ctx, draftID)
 	if err != nil {
@@ -286,22 +328,17 @@ func (s *Service) BuildPreview(ctx context.Context, draftID uuid.UUID) (*Preview
 	}
 
 	previewJSON, _ := json.Marshal(preview)
-	_, _ = s.Pool.Exec(ctx,
-		`UPDATE issue_drafts SET preview = $1, target_path = $2, updated_at = now()
-		 WHERE id = $3`,
-		previewJSON, preview.TargetPath, draftID,
-	)
+	err = s.q(ctx).UpdateDraftPreview(ctx, issuebuilderdb.UpdateDraftPreviewParams{
+		Preview:    previewJSON,
+		TargetPath: &preview.TargetPath,
+		ID:         draftID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("update preview: %w", err)
+	}
 	return preview, nil
 }
 
-// AttachToDraft sube una imagen/archivo asociada al draft en curso. Genera
-// presigned PUT URL via attachment.Service y registra el attachment_id en
-// issue_drafts.answers["attachments"] como []{id, filename, mime_type}.
-//
-// El cliente (Claude Code / agente IA) sube el archivo a UploadURL y luego
-// invoca de nuevo `Answer` con el step "attachments_confirmed" si el flow
-// lo requiere. Al commit del draft, PromoteAttachments mueve los
-// attachments del entity_type=hu_draft → user_story (HU final).
 func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename, mimeType string, size int64) (*AttachmentInitResult, error) {
 	if s.Attachments == nil {
 		return nil, ErrAttachmentsNotConfigured
@@ -325,7 +362,6 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 		return nil, fmt.Errorf("init upload: %w", err)
 	}
 
-	// Persist attachment_id + filename en answers["attachments"].
 	answers := map[string]any{}
 	_ = json.Unmarshal(d.Answers, &answers)
 	existing, _ := answers["attachments"].([]any)
@@ -337,10 +373,12 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 	})
 	answers["attachments"] = existing
 	newAnswers, _ := json.Marshal(answers)
-	if _, err := s.Pool.Exec(ctx,
-		`UPDATE issue_drafts SET answers = $1, updated_at = now() WHERE id = $2`,
-		newAnswers, draftID,
-	); err != nil {
+
+	err = s.q(ctx).UpdateDraftAnswers(ctx, issuebuilderdb.UpdateDraftAnswersParams{
+		Answers: newAnswers,
+		ID:      draftID,
+	})
+	if err != nil {
 		return nil, fmt.Errorf("persist attachment ref: %w", err)
 	}
 
@@ -359,12 +397,6 @@ func (s *Service) AttachToDraft(ctx context.Context, draftID uuid.UUID, filename
 	return res, nil
 }
 
-// Commit marca el draft como committed. NO escribe archivos; eso es trabajo
-// del agente que consume el preview (Edit/Write). El Commit registra audit
-// y bloquea Answer posterior.
-//
-// Si el draft tiene attachments + un issueID válido provisto, los promueve de
-// entity_type=hu_draft → user_story para que queden asociados a la HU real.
 func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error) {
 	d, err := s.Get(ctx, draftID)
 	if err != nil {
@@ -374,19 +406,27 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 		return nil, fmt.Errorf("%w: status=%s", ErrInvalidStatus, d.Status)
 	}
 
-	err = s.Pool.QueryRow(ctx, `
-		UPDATE issue_drafts SET status = $1, committed_at = now(), updated_at = now()
-		WHERE id = $2
-		RETURNING id, created_by, mode, initial_idea, answers,
-		          current_step, total_steps, status, pending_clarifications,
-		          preview, target_path, committed_at, expires_at, created_at, updated_at`,
-		StatusCommitted, draftID,
-	).Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
-		&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
-		&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
+	var issueID *uuid.UUID
+	var issueSlug string
+	if s.ReqSvc != nil && s.IssueSvc != nil {
+		issueID, issueSlug, err = s.materialize(ctx, d)
+		if err != nil {
+			return nil, fmt.Errorf("materialize draft: %w", err)
+		}
+	}
+
+	dRow, err := s.q(ctx).CommitDraft(ctx, issuebuilderdb.CommitDraftParams{
+		Status:  StatusCommitted,
+		ID:      draftID,
+		IssueID: issueID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("commit draft: %w", err)
 	}
+
+	committed := toDraftFromCommit(dRow)
+	committed.IssueID = issueID
+	committed.IssueSlug = issueSlug
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -396,14 +436,153 @@ func (s *Service) Commit(ctx context.Context, draftID uuid.UUID) (*Draft, error)
 			EntityID:   &d.ID,
 			NewValues:  map[string]any{"target_path": d.TargetPath},
 		})
+		if issueID != nil {
+			audit.RecordOrLog(ctx, s.Audit, audit.Event{
+				ActorType:  audit.ActorSystem,
+				Action:     "hu_draft.materialized",
+				EntityType: "user_story",
+				EntityID:   issueID,
+				NewValues: map[string]any{
+					"draft_id":   d.ID.String(),
+					"issue_slug": issueSlug,
+				},
+			})
+		}
 	}
-	return d, nil
+	return &committed, nil
 }
 
-// PromoteAttachmentsToHU mueve los attachments vinculados al draft hacia
-// la HU final creada por el agente IA tras consumir el preview. Llamado
-// por el agente al hacer el write filesystem + INSERT user_story.
-// Retorna el count de attachments movidos.
+func (s *Service) materialize(ctx context.Context, d *Draft) (*uuid.UUID, string, error) {
+	answers := map[string]any{}
+	_ = json.Unmarshal(d.Answers, &answers)
+
+	reqParent, _ := answers["req_parent"].(string)
+	slug, _ := answers["slug"].(string)
+	goal, _ := answers["goal"].(string)
+	summary, _ := answers["summary"].(string)
+	priority, _ := answers["priority"].(string)
+	if reqParent == "" || slug == "" {
+		return nil, "", fmt.Errorf("answers incompletos: req_parent=%q slug=%q", reqParent, slug)
+	}
+
+	reqNum := reqNumberFromSlug(reqParent)
+	if reqNum == "" {
+		return nil, "", fmt.Errorf("req_parent %q invalido: se espera formato REQ-NN", reqParent)
+	}
+
+	reqID, err := s.resolveOrCreateReq(ctx, d, reqParent)
+	if err != nil {
+		return nil, "", err
+	}
+
+	next, err := s.nextIssueOrdinal(ctx, reqID)
+	if err != nil {
+		return nil, "", err
+	}
+	issueSlug := cappedIssueSlug(reqNum, next, slug)
+
+	issuePriority := mapPriority(priority)
+
+	title := goal
+	if title == "" {
+		title = slug
+	}
+	description := s.issueMarkdownFromPreview(d, answers, summary)
+
+	created, err := s.IssueSvc.Create(ctx, issueSlug, title, description,
+		"proposed", issuePriority, reqParent)
+	if err != nil {
+		return nil, "", fmt.Errorf("crear issue: %w", err)
+	}
+	return &created.ID, created.Slug, nil
+}
+
+func (s *Service) resolveOrCreateReq(ctx context.Context, d *Draft, reqSlug string) (uuid.UUID, error) {
+	reqID, err := s.q(ctx).FindRequirementBySlug(ctx, reqSlug)
+	if err == nil {
+		return reqID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("buscar REQ padre: %w", err)
+	}
+
+	projectID := s.draftProjectID(ctx, d.ID)
+	created, cerr := s.ReqSvc.Create(ctx, reqSlug, reqSlug, "", "active", "medium", "", projectID)
+	if cerr != nil {
+		return uuid.Nil, fmt.Errorf("auto-crear REQ padre %q: %w", reqSlug, cerr)
+	}
+	return created.ID, nil
+}
+
+func (s *Service) draftProjectID(ctx context.Context, draftID uuid.UUID) *uuid.UUID {
+	pid, err := s.q(ctx).GetDraftProjectID(ctx, draftID)
+	if err != nil {
+		return nil
+	}
+	return &pid
+}
+
+func (s *Service) nextIssueOrdinal(ctx context.Context, reqID uuid.UUID) (int, error) {
+	count, err := s.q(ctx).CountIssuesByReqID(ctx, reqID)
+	if err != nil {
+		return 0, fmt.Errorf("contar issues del REQ: %w", err)
+	}
+	return int(count) + 1, nil
+}
+
+func (s *Service) issueMarkdownFromPreview(d *Draft, answers map[string]any, summary string) string {
+	if len(d.Preview) > 0 {
+		var pv Preview
+		if err := json.Unmarshal(d.Preview, &pv); err == nil {
+			if md, ok := pv.Files["issue.md"]; ok && md != "" {
+				return md
+			}
+		}
+	}
+	if pv, err := renderFeaturePreview(d, answers); err == nil {
+		if md, ok := pv.Files["issue.md"]; ok {
+			return md
+		}
+	}
+	return summary
+}
+
+func cappedIssueSlug(reqNum string, ordinal int, slug string) string {
+	const maxLen = 50
+	prefix := fmt.Sprintf("issue-%s.%d-", reqNum, ordinal)
+	avail := maxLen - len(prefix)
+	if avail <= 0 {
+		return strings.TrimRight(fmt.Sprintf("issue-%s.%d", reqNum, ordinal), "-")
+	}
+	if len(slug) > avail {
+		slug = strings.TrimRight(slug[:avail], "-")
+	}
+	return prefix + slug
+}
+
+var reReqNumber = regexp.MustCompile(`^REQ-(\d+)`)
+
+func reqNumberFromSlug(slug string) string {
+	m := reReqNumber.FindStringSubmatch(slug)
+	if len(m) < 2 {
+		return ""
+	}
+	return m[1]
+}
+
+func mapPriority(p string) string {
+	switch p {
+	case "alta":
+		return "high"
+	case "media":
+		return "medium"
+	case "baja":
+		return "low"
+	default:
+		return "medium"
+	}
+}
+
 func (s *Service) PromoteAttachmentsToHU(ctx context.Context, draftID, issueID uuid.UUID) (int, error) {
 	if s.Attachments == nil {
 		return 0, nil
@@ -427,15 +606,14 @@ func (s *Service) PromoteAttachmentsToHU(ctx context.Context, draftID, issueID u
 			EntityType: "user_story",
 			EntityID:   &issueID,
 			NewValues: map[string]any{
-				"draft_id":     draftID.String(),
-				"moved_count":  moved,
+				"draft_id":    draftID.String(),
+				"moved_count": moved,
 			},
 		})
 	}
 	return moved, nil
 }
 
-// Abandon marca el draft como abandonado.
 func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string) error {
 	d, err := s.Get(ctx, draftID)
 	if err != nil {
@@ -444,10 +622,10 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 	if d.Status == StatusCommitted {
 		return fmt.Errorf("%w: cannot abandon committed", ErrInvalidStatus)
 	}
-	_, err = s.Pool.Exec(ctx,
-		`UPDATE issue_drafts SET status = $1, updated_at = now() WHERE id = $2`,
-		StatusAbandoned, draftID,
-	)
+	err = s.q(ctx).AbandonDraft(ctx, issuebuilderdb.AbandonDraftParams{
+		Status: StatusAbandoned,
+		ID:     draftID,
+	})
 	if err != nil {
 		return fmt.Errorf("abandon draft: %w", err)
 	}
@@ -463,44 +641,27 @@ func (s *Service) Abandon(ctx context.Context, draftID uuid.UUID, reason string)
 	return nil
 }
 
-// List devuelve drafts filtrados por status (vacío = todos los activos).
 func (s *Service) List(ctx context.Context, status string) ([]Draft, error) {
-	// ISSUE-21.6: SELECT sin organization_id.
-	q := `SELECT id, created_by, mode, initial_idea, answers,
-	             current_step, total_steps, status, pending_clarifications,
-	             preview, target_path, committed_at, expires_at, created_at, updated_at
-	      FROM issue_drafts`
-	args := []any{}
+	var statusFilter *string
 	if status != "" {
-		q += ` WHERE status = $1`
-		args = append(args, status)
+		statusFilter = &status
 	}
-	q += ` ORDER BY created_at DESC LIMIT 100`
-
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).ListDrafts(ctx, statusFilter)
 	if err != nil {
 		return nil, fmt.Errorf("list drafts: %w", err)
 	}
-	defer rows.Close()
-
-	var out []Draft
-	for rows.Next() {
-		var d Draft
-		if err := rows.Scan(&d.ID, &d.CreatedBy, &d.Mode, &d.InitialIdea, &d.Answers,
-			&d.CurrentStep, &d.TotalSteps, &d.Status, &d.PendingClarifications,
-			&d.Preview, &d.TargetPath, &d.CommittedAt, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan draft: %w", err)
-		}
-		out = append(out, d)
+	out := make([]Draft, len(rows))
+	for i, r := range rows {
+		out[i] = toDraftFromList(r)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) markStatus(ctx context.Context, id uuid.UUID, status string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE issue_drafts SET status = $1, updated_at = now() WHERE id = $2`, status, id,
-	)
-	return err
+	return s.q(ctx).MarkDraftStatus(ctx, issuebuilderdb.MarkDraftStatusParams{
+		Status: status,
+		ID:     id,
+	})
 }
 
 func (s *Service) questionFor(ctx context.Context, d *Draft, st step) (*Question, error) {

@@ -24,7 +24,7 @@ type AdaptiveService struct {
 
 // StartAdaptive corre el análisis pipeline sobre el prompt + crea draft
 // + devuelve la primera pregunta (o nil si todo se infirió).
-func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, createdBy *uuid.UUID) (*Draft, *wp.Question, error) {
+func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, createdBy *uuid.UUID, projectID *uuid.UUID) (*Draft, *wp.Question, error) {
 	env, err := a.Analyzer.Analyze(ctx, rawPrompt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("analyze: %w", err)
@@ -36,12 +36,12 @@ func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, c
 	}
 	mode := modeFromIntent(intent)
 	if mode == "" {
-		// chat/idea: NO entra wizard.
+
 		return nil, nil, fmt.Errorf("intent=%s no requiere wizard", intent)
 	}
 
-	// Crear draft estándar + persistir envelope.
-	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy)
+
+	d, _, err := a.Service.Start(ctx, mode, rawPrompt, createdBy, projectID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -52,7 +52,7 @@ func (a *AdaptiveService) StartAdaptive(ctx context.Context, rawPrompt string, c
 
 	q, qErr := a.Planner.NextQuestion(ctx, env)
 	if errors.Is(qErr, wp.NoMoreQuestionsErr) {
-		// Envelope completo; marcar draft finished + return nil question.
+
 		_, _ = a.Pool.Exec(ctx,
 			`UPDATE issue_drafts SET status = $1, current_step = total_steps, updated_at = now() WHERE id = $2`,
 			StatusFinished, d.ID,
@@ -121,8 +121,8 @@ func (a *AdaptiveService) persistEnvelope(ctx context.Context, draftID uuid.UUID
 
 	answers["__envelope__"] = env
 
-	// También expone slots provided en top-level por compatibilidad con
-	// el renderer existente.
+
+
 	for k, slot := range env.Slots {
 		if slot.Status == wp.SlotProvided || slot.Status == wp.SlotConfirmed {
 			answers[k] = slot.Value

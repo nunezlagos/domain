@@ -2,6 +2,8 @@
 //
 // Un requirement (REQ) es la unidad de especificación SDD. Puede tener hijos
 // (sub-requisitos) formando un árbol. Soft-delete via status = "archived".
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package requirement
 
 import (
@@ -9,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/requirement/requirementdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 // Status y Priority valores permitidos.
@@ -39,6 +42,8 @@ var (
 	ErrParentNotFound  = errors.New("parent requirement not found")
 	ErrInvalidStatus   = errors.New("invalid status")
 	ErrInvalidPriority = errors.New("invalid priority")
+
+	ErrProjectIDRequired = errors.New("project_id required")
 )
 
 var reReqSlug = regexp.MustCompile(`^REQ-\d+(-[a-z0-9-]+)?$`)
@@ -55,6 +60,7 @@ type Requirement struct {
 	Status      string     `json:"status"`
 	Priority    string     `json:"priority"`
 	ParentID    *uuid.UUID `json:"parent_id,omitempty"`
+	ProjectID   *uuid.UUID `json:"project_id,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
@@ -80,8 +86,15 @@ type Service struct {
 	Audit *audit.PGRecorder
 }
 
+func (s *Service) q(ctx context.Context) *requirementdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return requirementdb.New(tx)
+	}
+	return requirementdb.New(s.Pool)
+}
+
 // Create inserta un requirement. Si parentSlug no es vacío, busca el padre.
-func (s *Service) Create(ctx context.Context, slug, title, description, status, priority string, parentSlug string) (*Requirement, error) {
+func (s *Service) Create(ctx context.Context, slug, title, description, status, priority string, parentSlug string, projectID *uuid.UUID) (*Requirement, error) {
 	if !reReqSlug.MatchString(slug) {
 		return nil, ErrSlugInvalid
 	}
@@ -101,6 +114,10 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 		return nil, ErrInvalidPriority
 	}
 
+	if projectID == nil || *projectID == uuid.Nil {
+		return nil, ErrProjectIDRequired
+	}
+
 	var parentID *uuid.UUID
 	if parentSlug != "" {
 		p, err := s.GetBySlug(ctx, parentSlug)
@@ -115,19 +132,22 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 		desc = &description
 	}
 
-	var r Requirement
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title, description, status, priority, parent_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, slug, title, description, status, priority, parent_id, created_at, updated_at`,
-		slug, title, desc, status, priority, parentID,
-	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
+	row, err := s.q(ctx).InsertRequirement(ctx, requirementdb.InsertRequirementParams{
+		Slug:        slug,
+		Title:       title,
+		Description: desc,
+		Status:      status,
+		Priority:    priority,
+		ParentID:    parentID,
+		ProjectID:   *projectID,
+	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrSlugTaken
 		}
 		return nil, fmt.Errorf("insert requirement: %w", err)
 	}
+	r := toRequirement(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -143,82 +163,52 @@ func (s *Service) Create(ctx context.Context, slug, title, description, status, 
 
 // GetBySlug retorna un requirement por slug.
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*Requirement, error) {
-	var r Requirement
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM sdd_requirements WHERE slug = $1`, slug,
-	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
+	row, err := s.q(ctx).GetRequirementBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get requirement: %w", err)
 	}
+	r := toRequirement(row)
 	return &r, nil
 }
 
 // GetByID retorna un requirement por ID.
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Requirement, error) {
-	var r Requirement
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM sdd_requirements WHERE id = $1`, id,
-	).Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt)
+	row, err := s.q(ctx).GetRequirementByID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get requirement: %w", err)
 	}
+	r := toRequirement(row)
 	return &r, nil
 }
 
 // List retorna requirements según filter.
 func (s *Service) List(ctx context.Context, filter RequirementFilter) ([]Requirement, error) {
-	where := []string{"1=1"}
-	args := []any{}
-	idx := 1
-
-	if filter.Status != "" {
-		where = append(where, fmt.Sprintf("status = $%d", idx))
-		args = append(args, filter.Status)
-		idx++
-	}
-	if filter.Priority != "" {
-		where = append(where, fmt.Sprintf("priority = $%d", idx))
-		args = append(args, filter.Priority)
-		idx++
-	}
-	if filter.ParentID != nil {
-		where = append(where, fmt.Sprintf("parent_id = $%d", idx))
-		args = append(args, *filter.ParentID)
-		idx++
-	}
-
 	if filter.Limit <= 0 || filter.Limit > 200 {
 		filter.Limit = 50
 	}
 
-	q := fmt.Sprintf(`SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at
-		 FROM sdd_requirements WHERE %s ORDER BY slug LIMIT $%d OFFSET $%d`,
-		strings.Join(where, " AND "), idx, idx+1)
-	args = append(args, filter.Limit, filter.Offset)
-
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.q(ctx).ListRequirements(ctx, requirementdb.ListRequirementsParams{
+		Limit:    int32(filter.Limit),
+		Offset:   int32(filter.Offset),
+		Status:   optStr(filter.Status),
+		Priority: optStr(filter.Priority),
+		ParentID: filter.ParentID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list requirements: %w", err)
 	}
-	defer rows.Close()
 
 	var out []Requirement
-	for rows.Next() {
-		var r Requirement
-		if err := rows.Scan(&r.ID, &r.Slug, &r.Title, &r.Description, &r.Status, &r.Priority, &r.ParentID, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan requirement: %w", err)
-		}
-		out = append(out, r)
+	for _, row := range rows {
+		out = append(out, toRequirement(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Update actualiza title, description, status, priority. Campos nil no se modifican.
@@ -255,19 +245,20 @@ func (s *Service) Update(ctx context.Context, slug string, title *string, descri
 		newPriority = *priority
 	}
 
-	var updated Requirement
-	err = s.Pool.QueryRow(ctx,
-		`UPDATE sdd_requirements SET title = $2, description = $3, status = $4, priority = $5, updated_at = NOW()
-		 WHERE slug = $1
-		 RETURNING id, slug, title, description, status, priority, parent_id, created_at, updated_at`,
-		slug, newTitle, newDesc, newStatus, newPriority,
-	).Scan(&updated.ID, &updated.Slug, &updated.Title, &updated.Description, &updated.Status, &updated.Priority, &updated.ParentID, &updated.CreatedAt, &updated.UpdatedAt)
+	row, err := s.q(ctx).UpdateRequirement(ctx, requirementdb.UpdateRequirementParams{
+		Slug:        slug,
+		Title:       newTitle,
+		Description: newDesc,
+		Status:      newStatus,
+		Priority:    newPriority,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update requirement: %w", err)
 	}
+	updated := toRequirement(row)
 
 	if s.Audit != nil {
 		audit.RecordOrLog(ctx, s.Audit, audit.Event{
@@ -294,13 +285,9 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 	}
 
 	if recursive {
-		_, err = s.Pool.Exec(ctx,
-			`UPDATE sdd_requirements SET status = 'archived', updated_at = NOW()
-			 WHERE id = $1 OR parent_id = $1`, r.ID)
+		err = s.q(ctx).ArchiveRequirementRecursive(ctx, r.ID)
 	} else {
-		_, err = s.Pool.Exec(ctx,
-			`UPDATE sdd_requirements SET status = 'archived', updated_at = NOW()
-			 WHERE id = $1`, r.ID)
+		err = s.q(ctx).ArchiveRequirement(ctx, r.ID)
 	}
 	if err != nil {
 		return fmt.Errorf("archive requirement: %w", err)
@@ -321,55 +308,27 @@ func (s *Service) Archive(ctx context.Context, slug string, recursive bool) erro
 
 // GetTree retorna el árbol jerárquico desde un slug raíz. Máximo 10 niveles.
 func (s *Service) GetTree(ctx context.Context, slug string) (*RequirementTree, error) {
-	q := `
-WITH RECURSIVE req_tree AS (
-    SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at, 0 AS depth
-    FROM sdd_requirements WHERE slug = $1
-    UNION ALL
-    SELECT r.id, r.slug, r.title, r.description, r.status, r.priority, r.parent_id, r.created_at, r.updated_at, rt.depth + 1
-    FROM sdd_requirements r
-    INNER JOIN req_tree rt ON r.parent_id = rt.id
-    WHERE rt.depth < 10
-)
-SELECT id, slug, title, description, status, priority, parent_id, created_at, updated_at, depth
-FROM req_tree ORDER BY depth, slug
-`
-	rows, err := s.Pool.Query(ctx, q, slug)
+	rows, err := s.q(ctx).GetRequirementTree(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("get tree: %w", err)
 	}
-	defer rows.Close()
-
-	var nodes []struct {
-		Requirement
-		depth int
-	}
-	for rows.Next() {
-		var n struct {
-			Requirement
-			depth int
-		}
-		if err := rows.Scan(&n.ID, &n.Slug, &n.Title, &n.Description, &n.Status, &n.Priority, &n.ParentID, &n.CreatedAt, &n.UpdatedAt, &n.depth); err != nil {
-			return nil, fmt.Errorf("scan tree node: %w", err)
-		}
-		nodes = append(nodes, n)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(nodes) == 0 {
+	if len(rows) == 0 {
 		return nil, ErrNotFound
 	}
 
-	root := &RequirementTree{Requirement: nodes[0].Requirement}
+	nodes := make([]Requirement, len(rows))
+	for i, row := range rows {
+		nodes[i] = toRequirementTreeRow(row)
+	}
+
+	root := &RequirementTree{Requirement: nodes[0]}
 	if len(nodes) == 1 {
 		return root, nil
 	}
 
-	// Build tree: map id -> node
 	nodeMap := map[uuid.UUID]*RequirementTree{}
 	for _, n := range nodes {
-		nodeMap[n.ID] = &RequirementTree{Requirement: n.Requirement}
+		nodeMap[n.ID] = &RequirementTree{Requirement: n}
 	}
 	for _, n := range nodes {
 		if n.ParentID != nil {
@@ -379,6 +338,45 @@ FROM req_tree ORDER BY depth, slug
 		}
 	}
 	return root, nil
+}
+
+func toRequirement(r requirementdb.SddRequirement) Requirement {
+	pid := r.ProjectID
+	return Requirement{
+		ID:          r.ID,
+		Slug:        r.Slug,
+		Title:       r.Title,
+		Description: r.Description,
+		Status:      r.Status,
+		Priority:    r.Priority,
+		ParentID:    r.ParentID,
+		ProjectID:   &pid,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+func toRequirementTreeRow(r requirementdb.GetRequirementTreeRow) Requirement {
+	pid := r.ProjectID
+	return Requirement{
+		ID:          r.ID,
+		Slug:        r.Slug,
+		Title:       r.Title,
+		Description: r.Description,
+		Status:      r.Status,
+		Priority:    r.Priority,
+		ParentID:    r.ParentID,
+		ProjectID:   &pid,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func isUniqueViolation(err error) bool {

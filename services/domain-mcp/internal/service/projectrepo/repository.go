@@ -28,6 +28,7 @@ type Repo struct {
 	IsDefault      bool       `json:"is_default"`
 	Workflow       string     `json:"workflow,omitempty"`
 	Notes          string     `json:"notes,omitempty"`
+	RootPath       string     `json:"root_path,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
@@ -42,6 +43,7 @@ type InsertParams struct {
 	IsDefault      bool
 	Workflow       string
 	Notes          string
+	RootPath       string
 }
 
 type UpdateParams struct {
@@ -50,6 +52,7 @@ type UpdateParams struct {
 	Kind          *string
 	Workflow      *string
 	Notes         *string
+	RootPath      *string
 }
 
 type Repository interface {

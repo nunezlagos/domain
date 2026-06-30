@@ -1,9 +1,9 @@
--- migration: create_hu_drafts
--- author: nunezlagos
--- issue: HU-04.7
--- description: state machine persistente del wizard interactivo de HU
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE hu_drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -38,7 +38,7 @@ func (s *CodebaseSource) Run(ctx context.Context, env *wizardplan.ContextEnvelop
 		maxHits = 10
 	}
 
-	// Extract palabras clave del prompt (lowercase, len > 4, sin stopwords).
+
 	keywords := extractKeywords(env.RawPrompt, 8)
 	if len(keywords) == 0 {
 		return nil
@@ -82,7 +82,7 @@ func (s *CodebaseSource) Run(ctx context.Context, env *wizardplan.ContextEnvelop
 			line := scanner.Text()
 			lower := strings.ToLower(line)
 
-			// match endpoint?
+
 			if m := endpointRe.FindStringSubmatch(line); m != nil {
 				if matchesAnyKeyword(lower, keywords) {
 					hits = append(hits, wizardplan.CodeHit{
@@ -92,7 +92,7 @@ func (s *CodebaseSource) Run(ctx context.Context, env *wizardplan.ContextEnvelop
 					continue
 				}
 			}
-			// match type/func declaration?
+
 			if m := funcRe.FindStringSubmatch(line); m != nil && matchesAnyKeyword(lower, keywords) {
 				cat := "service"
 				if strings.HasSuffix(rel, "handler.go") || strings.Contains(rel, "/api/handler/") {
@@ -119,7 +119,7 @@ func (s *CodebaseSource) Run(ctx context.Context, env *wizardplan.ContextEnvelop
 
 	env.Code = &wizardplan.CodeGrepFinding{Hits: hits}
 
-	// Inferir affected_component si hay hits que comparten directorio.
+
 	if len(hits) > 0 {
 		dir := dirComponent(hits[0].Path)
 		conf := 0.5
@@ -168,7 +168,7 @@ func matchesAnyKeyword(line string, keywords []string) bool {
 }
 
 func dirComponent(path string) string {
-	// extract "service/agent" desde "internal/service/agent/service.go"
+
 	parts := strings.Split(path, string(filepath.Separator))
 	if len(parts) >= 3 && parts[0] == "internal" {
 		return strings.Join(parts[1:len(parts)-1], "/")

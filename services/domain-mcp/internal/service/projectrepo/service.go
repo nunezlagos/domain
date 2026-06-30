@@ -39,6 +39,7 @@ type AddInput struct {
 	IsDefault      bool
 	Workflow       string
 	Notes          string
+	RootPath       string
 }
 
 func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
@@ -53,7 +54,7 @@ func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
 	if _, ok := validWorkflows[strings.ToLower(strings.TrimSpace(in.Workflow))]; !ok {
 		return nil, ErrInvalidWorkflow
 	}
-	// Si es el primer repo del proyecto, lo marcamos default por defecto.
+
 	existing, _ := s.repo.List(ctx, uuid.Nil, in.ProjectID)
 	if len(existing) == 0 {
 		in.IsDefault = true
@@ -67,11 +68,12 @@ func (s *Service) Add(ctx context.Context, in AddInput) (*Repo, error) {
 		IsDefault:      in.IsDefault,
 		Workflow:       strings.ToLower(strings.TrimSpace(in.Workflow)),
 		Notes:          strings.TrimSpace(in.Notes),
+		RootPath:       strings.TrimSpace(in.RootPath),
 	})
 	if err != nil {
 		return nil, err
 	}
-	// Si IsDefault=true y había otros, hay que limpiar el previo via SetDefault.
+
 	if created.IsDefault && len(existing) > 0 {
 		updated, derr := s.repo.SetDefault(ctx, uuid.Nil, created.ID)
 		if derr == nil {

@@ -12,8 +12,8 @@
 //	AuthPool → connection como app_admin (BYPASSRLS).
 //	           SOLO para queries del path de auth donde org_id aún no se conoce:
 //	           - apikey.PGStore.Resolve (lookup auth_api_keys por prefix)
-//	           - apikey.PGStore.Issue   (INSERT auth_api_keys post-verify-otp)
-//	           - otp.Service.Request    (lookup users por email)
+//	           - apikey.PGStore.Issue   (INSERT auth_api_keys)
+//	           - apikey.PGStore.Resolve (auth path)
 //	           - audit.PGRecorder       (audit_log INSERT — orto, INSERT policy
 //	                                     ya es WITH CHECK true, pero por consistencia
 //	                                     queries de SELECT cross-org las hace audit
@@ -87,7 +87,7 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 		return nil, fmt.Errorf("open app pool: %w", err)
 	}
 	if authDSN == "" {
-		// dev fallback: reutilizar app pool. Documentado en .env.example.
+
 		return &Pools{App: app, Auth: app}, nil
 	}
 	auth, err := pgxpool.New(ctx, authDSN)
@@ -126,7 +126,7 @@ func OpenWithRoleOverride(ctx context.Context, dsn, appRole, authRole string) (*
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap pool: %w", err)
 	}
-	// Asegurar membership (idempotente)
+
 	for _, role := range []string{appRole, authRole} {
 		if _, err := bootstrap.Exec(ctx,
 			fmt.Sprintf(`GRANT %s TO CURRENT_USER`, pgIdent(role))); err != nil {

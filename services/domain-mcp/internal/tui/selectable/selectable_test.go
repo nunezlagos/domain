@@ -1,5 +1,5 @@
-// Tests para internal/tui/selectable (rediseño 2026-06-11):
-// enter/espacio elige sin avanzar; Continuar confirma.
+
+
 
 package selectable
 
@@ -46,7 +46,7 @@ func TestUpdate_UpWrapsToContinue(t *testing.T) {
 }
 
 func TestUpdate_EnterOnItem_SelectsAndAdvances(t *testing.T) {
-	// Estilo ptools: enter sobre un item lo elige Y avanza en un paso.
+
 	m := New("x", items3())
 	m.cursor = 1
 	m2, cmd := m.Update(key(tea.KeyEnter))
@@ -109,18 +109,18 @@ func TestUpdate_EscSendsCancel(t *testing.T) {
 	require.True(t, ok)
 }
 
-// --- multi ---
+
 
 func TestMulti_SpaceToggles_EnterConfirms(t *testing.T) {
 	m := NewMulti("Agentes", items3(), []int{0})
 	require.Equal(t, []int{0}, m.CheckedIndices())
 
-	// Espacio togglea off el 0
+
 	m2, cmd := m.Update(key(tea.KeySpace))
 	require.Nil(t, cmd)
 	require.Empty(t, m2.(Model).CheckedIndices())
 
-	// Bajar a 1, espacio lo marca; enter CONFIRMA desde cualquier lado
+
 	m3, _ := m2.Update(key(tea.KeyDown))
 	m4, cmd := m3.Update(key(tea.KeySpace))
 	require.Nil(t, cmd)
@@ -159,7 +159,7 @@ func TestMulti_DisabledNotToggleable(t *testing.T) {
 	require.Empty(t, m2.(Model).CheckedIndices())
 }
 
-// --- view ---
+
 
 func TestView_ContainsAllLabelsAndContinue(t *testing.T) {
 	m := New("Deployment mode", items3())

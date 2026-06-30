@@ -104,10 +104,10 @@ func TestGetIssue_ParsesADFDescription(t *testing.T) {
 func TestVerifyWebhookSignature_OK(t *testing.T) {
 	secret := "shared-secret"
 	payload := []byte(`{"webhookEvent":"jira:issue_updated"}`)
-	// Computa firma esperada
+
 	c := jira.EncodeBasicAuth("x", "y") // touch helper
 	_ = c
-	// Use the package-internal helper to make signature
+
 	require.False(t, jira.VerifyWebhookSignature(payload, "sha256=bogus", secret))
 }
 

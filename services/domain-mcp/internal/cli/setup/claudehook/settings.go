@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-const domainHookCommand = `domain setup auto-detect "$PWD" --quiet`
+const domainHookCommand = `domain setup auto-detect "$PWD" --quiet --session-context`
 
 func SettingsPath() string {
 	home, err := os.UserHomeDir()

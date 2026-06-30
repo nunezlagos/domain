@@ -14,9 +14,9 @@ func TestSDDVerifyHandler_Slug(t *testing.T) {
 
 func TestSDDVerifyHandler_Build_WithoutApplyOutput_BuildsGenericPrompt(t *testing.T) {
 	t.Parallel()
-	// Express pre-arma el plan up-front; al construir verify, apply
-	// todavía no terminó → no hay PriorOutputs. El handler debe tolerar
-	// y emitir un prompt genérico.
+
+
+
 	h := NewSDDVerifyHandler()
 	out, err := h.Build(context.Background(), Input{RawText: "fix bug"})
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestSDDVerifyHandler_Build_IncorporatesApplySummaryAndFiles(t *testing.T) {
 	require.Contains(t, out.UserPrompt, "retry en el cliente HTTP")
 	require.Contains(t, out.UserPrompt, "internal/http/client.go")
 	require.Equal(t, RetryReemit, out.RetryPolicy)
-	// D5: verify NO tiene required saves
+
 	for _, s := range out.SuggestedSaves {
 		require.False(t, s.Required, "verify suggested_saves no deben ser required")
 	}

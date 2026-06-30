@@ -111,7 +111,7 @@ func TestBatch_OnlyPOST(t *testing.T) {
 // Sabotaje: si ProcessItem retorna data NIL pero error=nil, no debe pretender success.
 func TestSabotage_NilResult_NoError_StillMarshals(t *testing.T) {
 	h := newHandler(t, func(*http.Request, item) (result, int, error) {
-		// zero-value result + 200 → success válido (no es panic).
+
 		return result{}, http.StatusOK, nil
 	})
 	rec := httptest.NewRecorder()

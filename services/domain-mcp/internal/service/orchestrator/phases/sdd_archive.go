@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// sddArchiveHandler — fase sdd-archive. Marca el issue como implemented.
-// system_prompt en BD.
+
+
 
 type sddArchiveHandler struct{}
 

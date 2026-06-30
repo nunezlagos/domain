@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// sddOnboardHandler — fase sdd-onboard. Opcional: genera knowledge_doc
-// para que otros usuarios/agentes encuentren la implementación en
-// memoria semántica. system_prompt en BD.
+
+
+
 
 type sddOnboardHandler struct{}
 
@@ -53,8 +53,8 @@ func (h *sddOnboardHandler) Validate(_ context.Context, _ *Output, result Client
 	if result.Output == nil {
 		return errors.New("sdd-onboard: cliente devolvió Output nulo")
 	}
-	// onboard es la única fase donde skipped=true es válido. Si el agente
-	// determinó que no hay nada que documentar, debe declararlo explícito.
+
+
 	skipped, _ := result.Output["skipped"].(bool)
 	docCreated, _ := result.Output["doc_created"].(bool)
 	if !skipped && !docCreated {

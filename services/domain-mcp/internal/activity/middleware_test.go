@@ -53,7 +53,7 @@ func TestSummarize_Matrix(t *testing.T) {
 		require.NotEmpty(t, summary)
 	}
 
-	// Fuera del API versionada → no genera activity
+
 	action, _, _, _ := Summarize("POST", "/health")
 	require.Empty(t, action)
 }
@@ -81,19 +81,19 @@ func TestMiddleware_SkipsReadsErrorsAndAuth(t *testing.T) {
 	rec := &captureRecorder{}
 	mw := &HTTPMiddleware{Recorder: rec, Principal: okPrincipal(uuid.New(), uuid.New())}
 
-	// GET no registra
+
 	h := mw.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/flows", nil))
 
-	// Mutación fallida (422) no registra
+
 	hFail := mw.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 	}))
 	hFail.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/v1/flows", nil))
 
-	// Auth endpoints excluidos
+
 	hAuth := mw.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

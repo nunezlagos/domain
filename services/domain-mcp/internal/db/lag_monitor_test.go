@@ -42,7 +42,7 @@ func TestLagMonitor_IsDegraded(t *testing.T) {
 }
 
 func TestPools_Read_NoReadOnly_FallbackApp(t *testing.T) {
-	// nil pools just verifies routing logic. Pool dereference happens later.
+
 	pools := &Pools{}
 	if pools.Read() != pools.App {
 		t.Fatal("Read() with no ReadOnly should return App")

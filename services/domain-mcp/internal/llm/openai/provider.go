@@ -260,7 +260,7 @@ func (p *Provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 	return out, nil
 }
 
-// --- Embeddings ---
+
 
 type EmbedderConfig struct {
 	APIKey     string
@@ -287,8 +287,8 @@ type Embedder struct {
 }
 
 func (e *Embedder) Dimensions() int {
-	// text-embedding-3-small = 1536 dims (default)
-	// text-embedding-3-large = 3072 dims (no compatible con tabla observations.embedding vector(1536))
+
+
 	return 1536
 }
 

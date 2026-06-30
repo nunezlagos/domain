@@ -70,7 +70,7 @@ func TestCapture_EstimatedTokensIn_RatioFourToOne(t *testing.T) {
 	if p.CharCount != 14 {
 		t.Errorf("CharCount = %d, want 14", p.CharCount)
 	}
-	// ceil(14/4) = 4
+
 	if p.EstimatedTokensIn != 4 {
 		t.Errorf("EstimatedTokensIn = %d, want 4 (ceil(14/4))", p.EstimatedTokensIn)
 	}
@@ -101,7 +101,7 @@ func TestCompleteTurn_EstimatesTokensOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteTurn: %v", err)
 	}
-	// ceil(100/4) = 25
+
 	if out.EstimatedTokensOut != 25 {
 		t.Errorf("EstimatedTokensOut = %d, want 25", out.EstimatedTokensOut)
 	}

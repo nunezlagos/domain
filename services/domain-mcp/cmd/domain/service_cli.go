@@ -1,13 +1,13 @@
-// `domain service` — systemd user service para que el server quede
-// corriendo siempre (plug-and-play, issue-01.10).
-//
-//	domain service install    crea + habilita + arranca el service
-//	domain service status     estado del service
-//	domain service uninstall  detiene + deshabilita + borra el unit
-//
-// El unit NO necesita EnvironmentFile: el binario carga su config en
-// cascada (~/.config/domain/env) vía loadEnvCascade. Linux only;
-// en macOS se difiere launchd.
+
+
+
+
+
+
+
+
+
+
 
 package main
 
@@ -63,7 +63,7 @@ func systemdUserAvailable() bool {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return false
 	}
-	// is-system-running falla en entornos sin user manager.
+
 	cmd := exec.Command("systemctl", "--user", "is-system-running")
 	out, _ := cmd.CombinedOutput()
 	state := strings.TrimSpace(string(out))
@@ -94,20 +94,20 @@ func installUserService(baseURL string) error {
 	content := serviceUnitContent(bin)
 	port := portFromBaseURL(baseURL)
 
-	// Idempotencia sin downtime: unit sin cambios + health OK + el
-	// listener es realmente el proceso del service + el proceso corre el
-	// binario ACTUAL → no-op. Si el binario en disco fue recompilado
-	// (update), /proc/PID/exe queda "(deleted)" → reiniciamos para tomarlo.
+
+
+
+
 	if existing, readErr := os.ReadFile(unitPath); readErr == nil && string(existing) == content {
 		if waitServerHealth(baseURL, 2*time.Second) == nil && listenerIsService(port) && !serviceRunsStaleBinary() {
 			return nil
 		}
 	}
 
-	// Huérfanos: si el puerto lo ocupa un proceso `domain` que NO es el
-	// del service (e.g. un `domain server` manual de una sesión vieja),
-	// lo terminamos acá — el user no tiene que matar nada a mano. Si lo
-	// ocupa OTRA app, error claro (no matamos procesos ajenos).
+
+
+
+
 	if err := reapOrphanOnPort(port); err != nil {
 		return err
 	}
@@ -128,12 +128,12 @@ func installUserService(baseURL string) error {
 			return fmt.Errorf("systemctl %s: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
-	// 60s: el restart hace graceful shutdown del proceso viejo (drain
-	// ~5-25s) + boot completo del nuevo. Con 20s reportaba warning por
-	// una carrera aunque el server terminara de levantar bien.
+
+
+
 	if err := waitServerHealth(baseURL, 60*time.Second); err != nil {
-		// Auto-diagnóstico: adjuntar el journal para que el warning diga
-		// la CAUSA, no solo "no respondió".
+
+
 		if tail := journalTail(5); tail != "" {
 			return fmt.Errorf("%v | journal: %s", err, tail)
 		}
@@ -199,8 +199,8 @@ func reapOrphanOnPort(port int) error {
 	}
 	comm := procComm(pid)
 	if comm != "domain" {
-		// Proceso ajeno (docker, otra app): NUNCA lo matamos. Informamos
-		// y proponemos el siguiente puerto libre.
+
+
 		return fmt.Errorf("puerto %d ocupado por otro proceso (%s, pid %d) — no lo toco; "+
 			"re-corré el install con --base-url http://localhost:%d (puerto libre sugerido)",
 			port, comm, pid, nextFreePort(port+1))
@@ -215,7 +215,7 @@ func reapOrphanOnPort(port int) error {
 		time.Sleep(200 * time.Millisecond)
 	}
 	_ = syscall.Kill(pid, syscall.SIGKILL)
-	// Esperar a que el kernel libere el puerto.
+
 	deadline = time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if portListenerPID(port) == 0 {
@@ -341,7 +341,7 @@ func listenInodesForPort(data string, port int) []string {
 			continue // header
 		}
 		fields := strings.Fields(line)
-		// sl local_address rem_address st ... inode en field 9
+
 		if len(fields) < 10 || fields[3] != "0A" {
 			continue
 		}

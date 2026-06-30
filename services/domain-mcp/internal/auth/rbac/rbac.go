@@ -148,7 +148,7 @@ var matrix = map[Role]map[Resource][]Action{
 		ResAPIKey:       {ActRead, ActWrite, ActDelete, ActAdmin},
 	},
 	RoleOwner: {
-		// inherits admin + billing + plan + organization admin
+
 		ResOrganization: {ActRead, ActWrite, ActDelete, ActAdmin},
 		ResProject:      {ActRead, ActWrite, ActDelete, ActAdmin},
 		ResObservation:  {ActRead, ActWrite, ActDelete},

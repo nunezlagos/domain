@@ -1,0 +1,38 @@
+{% extends "maintainers/_detail_base.html" %}
+{% comment %}Detalle de politica de plataforma para el modal dinamico.{% endcomment %}
+
+{% block detail_title %}{{ policy_obj.display_name }}{% endblock %}
+
+{% block detail_body %}
+  <p class="text-secondary mb-3">
+    <code>{{ policy_obj.slug }}</code>
+    · <span class="badge">{{ policy_obj.get_kind_display }}</span>
+    · {% if policy_obj.is_enabled %}<span class="badge badge-success">Activa</span>{% else %}<span class="badge badge-warning">Inactiva</span>{% endif %}
+  </p>
+
+  <h4 class="mnt-detail-section">Informacion</h4>
+  <table class="table mnt-table-sm">
+    <tbody>
+      <tr><th class="mnt-th-label">Nombre</th><td>{{ policy_obj.name }}</td></tr>
+      <tr><th>Slug</th><td><code>{{ policy_obj.slug }}</code></td></tr>
+      <tr><th>Tipo</th><td><span class="badge">{{ policy_obj.get_kind_display }}</span></td></tr>
+      <tr><th>Version</th><td>v{{ policy_obj.version }}</td></tr>
+      <tr><th>Archivo fuente</th><td>{{ policy_obj.source_file|default:"—" }}</td></tr>
+      <tr><th>Creada</th><td>{{ policy_obj.created_at|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Actualizada</th><td>{{ policy_obj.updated_at|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+
+  <h4 class="mnt-detail-section">Cuerpo</h4>
+  <pre class="mnt-pre">{{ policy_obj.body_md }}</pre>
+{% endblock %}
+
+{% block detail_actions %}
+  <button type="button" class="btn btn-primary" data-action="edit" data-id="{{ policy_obj.pk }}">Editar</button>
+  {% if policy_obj.is_enabled %}
+    <button type="button" class="btn btn-warning" data-action="toggle" data-id="{{ policy_obj.pk }}">Desactivar</button>
+  {% else %}
+    <button type="button" class="btn btn-success" data-action="toggle" data-id="{{ policy_obj.pk }}">Activar</button>
+  {% endif %}
+  <button type="button" class="btn btn-danger" data-action="delete" data-id="{{ policy_obj.pk }}" data-name="{{ policy_obj.display_name }}">Eliminar</button>
+{% endblock %}

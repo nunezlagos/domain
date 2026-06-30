@@ -1,9 +1,9 @@
--- migration: create_project_links
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-01.5
--- description: cross-project references (linked_project con access_level)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE project_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

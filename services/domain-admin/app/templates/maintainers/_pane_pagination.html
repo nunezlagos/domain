@@ -1,0 +1,18 @@
+{% comment %}
+Paginacion para un PANE AJAX dentro de un modal (skills/reglas del proyecto).
+Los botones llevan [data-pane-page]: project-skills.js los intercepta y re-fetchea
+el pane (su data-pane-url) con scope actual + page=N. Contexto: total, page,
+total_pages, has_prev, has_next.
+{% endcomment %}
+<div class="d-flex gap-2 mt-3 justify-between align-center">
+  <span class="text-secondary mnt-text-sm">{{ total }} registro{{ total|pluralize }}</span>
+  <div class="d-flex gap-2 align-center">
+    {% if has_prev %}
+      <button type="button" class="btn btn-ghost btn-sm" data-pane-page="{{ page|add:-1 }}">← Anterior</button>
+    {% endif %}
+    <span class="text-secondary mnt-text-sm">Pagina {{ page }} de {{ total_pages }}</span>
+    {% if has_next %}
+      <button type="button" class="btn btn-ghost btn-sm" data-pane-page="{{ page|add:1 }}">Siguiente →</button>
+    {% endif %}
+  </div>
+</div>

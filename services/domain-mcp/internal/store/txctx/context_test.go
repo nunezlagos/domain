@@ -44,12 +44,12 @@ func TestWithTxContext_RoundTrip(t *testing.T) {
 	ctx2 := txctx.WithTxContext(ctx, tx)
 	got := txctx.TxFromContext(ctx2)
 	require.NotNil(t, got, "tx inyectada debe estar presente")
-	// Comparamos por el id embebido (más simple que reflect sobre interface).
+
 	gotMock, ok := got.(mockTx)
 	require.True(t, ok, "type assertion a mockTx debe funcionar")
 	require.Equal(t, 42, gotMock.id, "tx inyectada debe ser la misma instance (mismo id)")
 
-	// TxFromContext no debe mutar ctx anterior
+
 	require.Nil(t, txctx.TxFromContext(ctx), "ctx original no debe mutarse")
 }
 

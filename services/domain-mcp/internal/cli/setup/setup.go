@@ -74,7 +74,7 @@ func SetupClaudeDesktop(mcpBinaryPath, apiKey, baseURL string) (string, error) {
 
 	cfg := ClaudeConfig{MCPServers: map[string]MCPServerConfig{}}
 	if data, err := os.ReadFile(configPath); err == nil {
-		// Config existente: parsear. Si parseo falla, no sobrescribimos.
+
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return "", fmt.Errorf("config existente inválido: %w", err)
 		}
@@ -84,7 +84,7 @@ func SetupClaudeDesktop(mcpBinaryPath, apiKey, baseURL string) (string, error) {
 		if _, ok := cfg.MCPServers["domain"]; ok {
 			return configPath, ErrAlreadyConfigured
 		}
-		// Backup con timestamp.
+
 		backupPath := configPath + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
 		if err := os.WriteFile(backupPath, data, 0o600); err != nil {
 			return "", fmt.Errorf("backup: %w", err)
@@ -123,7 +123,7 @@ func CreateAIDirectives(cwd string) (string, error) {
 	}
 	path := filepath.Join(aiDir, "directives.md")
 	if _, err := os.Stat(path); err == nil {
-		// Ya existe — no sobrescribimos.
+
 		return path, nil
 	}
 	content := `# Directivas para agentes AI — proyecto Domain

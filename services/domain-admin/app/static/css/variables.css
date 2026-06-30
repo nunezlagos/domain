@@ -1,0 +1,148 @@
+/* HU-47.2: master file de paleta y tokens de diseño.
+   Cambiar valores acá propaga a TODO el dashboard.
+
+   TEMA: claro (Skote) con SIDEBAR oscuro.
+   - Tokens generales (--color-*) = paleta CLARA: superficies blancas, texto
+     oscuro. Todo el CSS que los referencia se reskinea solo.
+   - Tokens --sidebar-* = paleta OSCURA, usados SOLO por el sidebar (layout.css).
+   El navbar/topbar usa los tokens generales => queda CLARO. */
+
+:root {
+  /* Background (light) */
+  --color-bg-app:        #f8f8fb;   /* fondo body/app */
+  --color-bg-surface:    #ffffff;   /* cards, modales, inputs, navbar, footer */
+  --color-bg-elevated:   #f8f9fa;   /* superficie elevada/sutil/tertiary */
+  --color-bg-hover:      #f8f9fa;   /* hover de filas / items */
+  --color-bg-input:      #ffffff;   /* fondo de inputs */
+
+  /* Text */
+  --color-text-primary:    #495057;  /* texto primario */
+  --color-text-secondary:  #74788d;  /* secundario / muted-fuerte */
+  --color-text-muted:      #74788d;  /* muted */
+  --color-text-inverse:    #ffffff;  /* texto sobre fondos de acento */
+  --color-text-link:       #556ee6;  /* enlaces / acento de texto */
+  --color-text-heading:    #343a40;  /* énfasis / headings */
+
+  /* Brand / Accent */
+  --color-accent:        #556ee6;
+  --color-accent-hover:  #485ec4;
+  --color-accent-active: #3b4fae;
+  --color-accent-soft:   rgba(85, 110, 230, 0.18);
+
+  /* Buttons — sizing estándar uniforme (todos los .btn comparten esto).
+     Las variantes solo cambian color, nunca el tamaño. */
+  --btn-height:      38px;
+  --btn-padding-y:   0;            /* la altura la fija --btn-height + flex center */
+  --btn-padding-x:   var(--space-md);
+  --btn-font-size:   var(--fs-sm);
+  --btn-line-height: 1.25;
+  --btn-radius:      var(--radius-md);
+
+  /* Botón outline (botón "crear" invertido).
+     Estado base: superficie transparente, borde + texto accent.
+     Hover: se rellena con accent y texto inverso. */
+  --btn-outline-bg:          transparent;
+  --btn-outline-fg:          var(--color-accent);
+  --btn-outline-border:      var(--color-accent);
+  --btn-outline-bg-hover:    var(--color-accent);
+  --btn-outline-fg-hover:    var(--color-text-inverse);
+  --btn-outline-border-hover: var(--color-accent);
+  --btn-outline-bg-active:   var(--color-accent-active);
+
+  /* Grid de campos del modal de formularios */
+  --form-grid-min:    220px;       /* ancho mínimo de cada columna */
+  --form-grid-gap-x:  var(--space-md);
+  --form-grid-gap-y:  var(--space-md);
+
+  /* Semantic */
+  --color-success:       #34c38f;
+  --color-success-bg:    rgba(52, 195, 143, 0.18);
+  --color-success-soft:  rgba(52, 195, 143, 0.18);
+  --color-warning:       #f1b44c;
+  --color-warning-bg:    rgba(241, 180, 76, 0.18);
+  --color-warning-soft:  rgba(241, 180, 76, 0.18);
+  --color-danger:        #f46a6a;
+  --color-danger-bg:     rgba(244, 106, 106, 0.18);
+  --color-danger-soft:   rgba(244, 106, 106, 0.18);
+  --color-info:          #50a5f1;
+  --color-info-bg:       rgba(80, 165, 241, 0.18);
+  --color-info-soft:     rgba(80, 165, 241, 0.18);
+  --color-secondary:     #74788d;
+
+  /* Borders & shadow (light) */
+  --color-border:        #eff2f7;   /* borde claro estándar */
+  --color-border-light:  #ced4da;   /* borde fuerte / translucent */
+  --color-bg-alt:        #eff2f7;   /* fondo alterno */
+  --color-shadow-sm:     rgba(18, 38, 63, 0.03);
+  --color-shadow-md:     rgba(18, 38, 63, 0.06);
+  --color-shadow-lg:     rgba(18, 38, 63, 0.1);
+
+  /* ============================================================
+     SIDEBAR (oscuro) — tokens propios, usados solo por layout.css.
+     Texto claro sobre fondo oscuro. El item activo lleva acento
+     primary en la barra lateral.
+     ============================================================ */
+  --sidebar-bg:           #2a3042;
+  --sidebar-item:         #a6b0cf;  /* item normal */
+  --sidebar-sub:          #79829c;  /* sub-item / footer */
+  --sidebar-icon:         #6a7187;  /* icono */
+  --sidebar-item-hover:   #ffffff;  /* item hover */
+  --sidebar-item-active:  #ffffff;  /* item activo */
+  --sidebar-section:      #79829c;  /* label de sección */
+  --sidebar-logo:         #ffffff;  /* logo / título */
+  --sidebar-accent:       #556ee6;  /* barra/acento del activo */
+  --sidebar-hover-bg:     rgba(255, 255, 255, 0.05);
+  --sidebar-active-bg:    rgba(255, 255, 255, 0.07);
+  --sidebar-border:       rgba(255, 255, 255, 0.08);
+
+  /* Footer (claro) */
+  --color-footer-bg:     #f2f2f5;
+  --color-footer-text:   #74788d;
+
+  /* Spacing */
+  --space-xs:  0.25rem;
+  --space-sm:  0.5rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2rem;
+  --space-2xl: 3rem;
+
+  /* Radius */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-base: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --fs-xs:   0.75rem;
+  --fs-sm:   0.875rem;
+  --fs-base: 1rem;
+  --fs-lg:   1.125rem;
+  --fs-xl:   1.25rem;
+  --fs-2xl:  1.5rem;
+  --fs-3xl:  1.875rem;
+  --fw-normal:  400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+
+  /* Layout dimensions */
+  --sidebar-width:  240px;
+  --sidebar-collapsed-width: 64px;
+  --navbar-height:  56px;
+  --footer-height:  40px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+
+  /* Z-index layers */
+  --z-sidebar:  10;
+  --z-navbar:   20;
+  --z-dropdown: 30;
+  --z-modal:    40;
+  --z-toast:    50;
+}

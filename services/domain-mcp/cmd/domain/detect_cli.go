@@ -1,7 +1,7 @@
-// F2+F3+F4: runDomainDetect — handler para `domain` sin args.
-// Detecta el proyecto en el CWD, hace auto-link por git_remote si no existe
-// por slug, muestra el inventario COMPLETO de capabilities, update branch
-// si difiere, e inicia session automáticamente.
+
+
+
+
 
 package main
 
@@ -47,7 +47,7 @@ func runDomainDetect(ctx context.Context) int {
 		return 1
 	}
 
-	// REQ-42.3: tabla sessions dropeada — auto-start de session removido.
+
 	if projectID != "" && meta.CurrentBranch != "" {
 		if uerr := link.UpdateBranch(ctx, projectID, meta.CurrentBranch); uerr != nil {
 			fmt.Fprintf(os.Stderr, "branch update: %v\n", uerr)
@@ -148,4 +148,4 @@ func detectMemoryProvidersSummary() map[string]any {
 	return summary
 }
 
-// REQ-42.3: startSession removido (tabla sessions dropeada).
+

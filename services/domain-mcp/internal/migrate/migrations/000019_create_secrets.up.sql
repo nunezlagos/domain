@@ -1,9 +1,9 @@
--- migration: create_secrets
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-02.3
--- description: secrets cifrados AES-256-GCM (master key gestionada via KMS/Vault)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE secrets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

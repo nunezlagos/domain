@@ -1,7 +1,7 @@
 //go:build integration
 
-// issue-12.1 MCP server tools integration test.
-// Usa mcptest.NewServer (in-process) para invocar tools sin levantar stdio real.
+
+
 
 package mcpserver_test
 
@@ -157,11 +157,11 @@ func TestMCP_MemSave_AndContext(t *testing.T) {
 func TestMCP_MemSearch_HybridFindsMatch(t *testing.T) {
 	f := setupMCP(t)
 	defer f.cleanup()
-	// Insertar varias observations
+
 	for _, c := range []string{
 		"decidimos usar pgvector con embeddings de openai",
-		"el clima en santiago está soleado",
-		"pgvector soporta búsqueda híbrida con ivfflat",
+		"el clima en santiago esta soleado",
+		"pgvector soporta busqueda hibrida con ivfflat",
 	} {
 		_ = callTool(t, f.srv, "domain_mem_save", map[string]any{
 			"project_slug": f.projectSlug,
@@ -189,7 +189,7 @@ func TestMCP_MemGetObservation_RoundTrip(t *testing.T) {
 	defer f.cleanup()
 	saveOut := callTool(t, f.srv, "domain_mem_save", map[string]any{
 		"project_slug": f.projectSlug,
-		"content":      "observación específica para round-trip",
+		"content":      "observacion especifica para round-trip",
 	})
 	var saveResp struct {
 		ID string `json:"id"`
@@ -202,7 +202,7 @@ func TestMCP_MemGetObservation_RoundTrip(t *testing.T) {
 	require.Contains(t, getOut, "round-trip")
 }
 
-// Sabotaje: get con UUID válido pero de otra org → not found (cross-org guard).
+// Sabotaje: get con UUID valido pero de otra org → not found (cross-org guard).
 func TestSabotage_MCP_CrossOrgGetReturnsNotFound(t *testing.T) {
 	f := setupMCP(t)
 	defer f.cleanup()
@@ -215,10 +215,10 @@ func TestSabotage_MCP_CrossOrgGetReturnsNotFound(t *testing.T) {
 	require.True(t, result.IsError, "UUID inexistente debe devolver IsError=true")
 }
 
-// Semántica nueva (plug-and-play): project_slug inexistente se
+// Semantica nueva (plug-and-play): project_slug inexistente se
 // AUTO-CREA en mem_save — en un install fresco no hay projects y el
 // agente debe poder guardar memoria igual. El sabotaje pasa a ser:
-// slug INVÁLIDO (no slugificable) → error limpio, sin panic ni project
+// slug INVALIDO (no slugificable) → error limpio, sin panic ni project
 // basura.
 func TestMCP_MemSave_AutoCreatesProject(t *testing.T) {
 	f := setupMCP(t)
@@ -231,14 +231,14 @@ func TestMCP_MemSave_AutoCreatesProject(t *testing.T) {
 	})
 	require.Contains(t, out, "id", "save con project nuevo debe funcionar (auto-create)")
 
-	// El project quedó creado y visible
+
 	listOut := callTool(t, f.srv, "domain_project_list", map[string]any{})
 	require.Contains(t, listOut, "proyecto-nuevo")
 
 	_ = ctx
 }
 
-// Sabotaje: slug inválido (mayúsculas/espacios) → el auto-create debe
+// Sabotaje: slug invalido (mayusculas/espacios) → el auto-create debe
 // rechazarlo con error de tool, no crear un project malformado.
 func TestSabotage_MCP_InvalidProjectSlug(t *testing.T) {
 	f := setupMCP(t)
@@ -247,10 +247,10 @@ func TestSabotage_MCP_InvalidProjectSlug(t *testing.T) {
 	req := mcp.CallToolRequest{}
 	req.Params.Name = "domain_mem_save"
 	req.Params.Arguments = map[string]any{
-		"project_slug": "NO Válido!!",
+		"project_slug": "NO Valido!!",
 		"content":      "x",
 	}
 	result, err := f.srv.Client().CallTool(ctx, req)
 	require.NoError(t, err)
-	require.True(t, result.IsError, "slug inválido debe fallar limpio")
+	require.True(t, result.IsError, "slug invalido debe fallar limpio")
 }

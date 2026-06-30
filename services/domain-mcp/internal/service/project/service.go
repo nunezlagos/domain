@@ -18,11 +18,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
 	clientsvc "nunezlagos/domain/internal/service/client"
+	"nunezlagos/domain/internal/service/project/projectdb"
 	"nunezlagos/domain/internal/service/projecttemplate"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -43,12 +46,9 @@ type Project struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	// ClientID (REQ-28.2): asocia el project con un client (mandante). NULL
-	// = proyecto interno (no asignado a cliente). Migración 000100 agregó
-	// la FK con ON DELETE SET NULL.
+
 	ClientID *uuid.UUID
-	// ClientSlug / ClientName: read-only, populated via LEFT JOIN project_clients.
-	// "" si client_id IS NULL.
+
 	ClientSlug string
 	ClientName string
 	CreatedAt  time.Time
@@ -64,31 +64,23 @@ type CreateInput struct {
 	RepositoryURL  string
 	TemplateID     *uuid.UUID
 	Settings       map[string]any
-	// ClientSlug (REQ-28.2): si non-empty, el Service resuelve slug → id vía
-	// ClientSvc y setea project.client_id. Si "" → proyecto interno (NULL).
+
 	ClientSlug string
 	ActorID    uuid.UUID
 }
 
 type Service struct {
-	// Pool — DEPRECATED (HU-28.1). Strangler Fig: callers que construyen
-	// &Service{Pool: ...} siguen funcionando.
 	Pool        *pgxpool.Pool
 	Audit       audit.Recorder
 	TemplateSvc *projecttemplate.Service // opcional — issue-01.4 apply template on create
-	// ClientSvc (REQ-28.2): opcional, resuelve client_slug → client_id en
-	// Create/Update/List. Si nil, los inputs con client_slug retornan error.
-	ClientSvc *clientsvc.Service
 
-	repo Repository
+	ClientSvc *clientsvc.Service
 }
 
 // NewService construye el Service con dependencias explícitas.
-func NewService(pool *pgxpool.Pool, audit audit.Recorder, tplSvc *projecttemplate.Service, repo Repository) *Service {
-	if repo == nil && pool != nil {
-		repo = NewPgRepository(pool)
-	}
-	return &Service{Pool: pool, Audit: audit, TemplateSvc: tplSvc, repo: repo}
+// El parámetro repo se mantiene por compatibilidad con callers existentes pero ya no se usa.
+func NewService(pool *pgxpool.Pool, audit audit.Recorder, tplSvc *projecttemplate.Service, _ interface{}) *Service {
+	return &Service{Pool: pool, Audit: audit, TemplateSvc: tplSvc}
 }
 
 // WithClientService inyecta el ClientService para resolver client_slug.
@@ -98,12 +90,11 @@ func (s *Service) WithClientService(cs *clientsvc.Service) *Service {
 	return s
 }
 
-func (s *Service) repository() Repository {
-	if s.repo != nil {
-		return s.repo
+func (s *Service) q(ctx context.Context) *projectdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return projectdb.New(tx)
 	}
-	s.repo = NewPgRepository(s.Pool)
-	return s.repo
+	return projectdb.New(s.Pool)
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) {
@@ -111,7 +102,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	if !reSlug.MatchString(in.Slug) {
 		return nil, ErrSlugInvalid
 	}
-	// issue-01.4: si se pasa template_id, mergear settings del template con override del request.
+
 	if in.TemplateID != nil && s.TemplateSvc != nil {
 		tpl, err := s.TemplateSvc.Get(ctx, in.OrganizationID, *in.TemplateID)
 		if err == nil && tpl != nil {
@@ -119,7 +110,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 			if len(tpl.Settings) > 0 {
 				_ = json.Unmarshal(tpl.Settings, &tplSettings)
 			}
-			// Template settings como base, request settings como override
+
 			merged := make(map[string]any, len(tplSettings)+len(in.Settings))
 			for k, v := range tplSettings {
 				merged[k] = v
@@ -135,7 +126,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 	}
 	settingsJSON, _ := json.Marshal(in.Settings)
 
-	// REQ-28.2: resolver client_slug → client_id si viene presente.
 	var clientID *uuid.UUID
 	if strings.TrimSpace(in.ClientSlug) != "" {
 		if s.ClientSvc == nil {
@@ -151,21 +141,34 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 		clientID = &c.ID
 	}
 
-	p, err := s.repository().Insert(ctx, InsertParams{
-		OrganizationID: in.OrganizationID,
-		Name:           in.Name,
-		Slug:           in.Slug,
-		Description:    in.Description,
-		RepositoryURL:  in.RepositoryURL,
-		TemplateID:     in.TemplateID,
-		SettingsJSON:   settingsJSON,
-		ClientID:       clientID,
+	var desc *string
+	if in.Description != "" {
+		desc = &in.Description
+	}
+	var repoURL *string
+	if in.RepositoryURL != "" {
+		repoURL = &in.RepositoryURL
+	}
+
+	id, err := s.q(ctx).InsertProject(ctx, projectdb.InsertProjectParams{
+		Name:          in.Name,
+		Slug:          in.Slug,
+		Description:   desc,
+		RepositoryUrl: repoURL,
+		TemplateID:    in.TemplateID,
+		Settings:      settingsJSON,
+		ClientID:      clientID,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return nil, ErrSlugTaken
 		}
+		return nil, err
+	}
+
+	p, err := s.GetByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	if s.Audit != nil {
@@ -183,21 +186,37 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Project, error) 
 }
 
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Project, error) {
-	return s.repository().GetBySlug(ctx, orgID, slug)
+	_ = orgID
+	row, err := s.q(ctx).GetProjectBySlug(ctx, slug)
+	if err != nil {
+		return nil, mapNotFound(err)
+	}
+	return rowToProject(row.ID, row.Name, row.Slug, row.Description, row.RepositoryUrl,
+		row.TemplateID, row.Settings, row.ClientID,
+		row.ClientSlug, row.ClientName,
+		row.CreatedAt, row.UpdatedAt, row.DeletedAt), nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
-	return s.repository().GetByID(ctx, id)
+	row, err := s.q(ctx).GetProjectByID(ctx, id)
+	if err != nil {
+		return nil, mapNotFound(err)
+	}
+	return rowToProject(row.ID, row.Name, row.Slug, row.Description, row.RepositoryUrl,
+		row.TemplateID, row.Settings, row.ClientID,
+		row.ClientSlug, row.ClientName,
+		row.CreatedAt, row.UpdatedAt, row.DeletedAt), nil
 }
 
 func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Project, error) {
-	return s.repository().List(ctx, orgID, ListFilter{})
+	_ = orgID
+	return s.listByFilter(ctx, nil)
 }
 
 // ListFiltered (REQ-28.2): variante con filtros (client_slug por ahora).
 // Mantiene List() retrocompatible para los callers existentes (MCP, etc).
 func (s *Service) ListFiltered(ctx context.Context, orgID uuid.UUID, clientSlug string) ([]Project, error) {
-	f := ListFilter{}
+	var clientID *uuid.UUID
 	clientSlug = strings.TrimSpace(clientSlug)
 	if clientSlug != "" {
 		if s.ClientSvc == nil {
@@ -211,9 +230,24 @@ func (s *Service) ListFiltered(ctx context.Context, orgID uuid.UUID, clientSlug 
 			return nil, err
 		}
 		id := c.ID
-		f.ClientID = &id
+		clientID = &id
 	}
-	return s.repository().List(ctx, orgID, f)
+	return s.listByFilter(ctx, clientID)
+}
+
+func (s *Service) listByFilter(ctx context.Context, clientID *uuid.UUID) ([]Project, error) {
+	rows, err := s.q(ctx).ListProjects(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Project, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *rowToProject(r.ID, r.Name, r.Slug, r.Description, r.RepositoryUrl,
+			r.TemplateID, r.Settings, r.ClientID,
+			r.ClientSlug, r.ClientName,
+			r.CreatedAt, r.UpdatedAt, r.DeletedAt))
+	}
+	return out, nil
 }
 
 type UpdateInput struct {
@@ -221,10 +255,7 @@ type UpdateInput struct {
 	Description   *string
 	RepositoryURL *string
 	Settings      map[string]any
-	// ClientSlug (REQ-28.2) — PATCH semantics:
-	//   nil          → no tocar
-	//   non-nil ""   → unset (NULL)
-	//   non-nil slug → resolver y setear
+
 	ClientSlug *string
 	ActorID    uuid.UUID
 }
@@ -252,7 +283,15 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 	}
 	settingsJSON, _ := json.Marshal(settings)
 
-	// REQ-28.2: resolución de client_slug en update con PATCH semantics.
+	var descPtr *string
+	if desc != "" {
+		descPtr = &desc
+	}
+	var repoPtr *string
+	if repo != "" {
+		repoPtr = &repo
+	}
+
 	clientID := prev.ClientID
 	clientChanged := false
 	if in.ClientSlug != nil {
@@ -275,14 +314,29 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Pr
 		}
 	}
 
-	p, err := s.repository().Update(ctx, id, UpdateParams{
-		Name:          name,
-		Description:   desc,
-		RepositoryURL: repo,
-		SettingsJSON:  settingsJSON,
-		ClientID:      clientID,
-		ClientChanged: clientChanged,
-	})
+	if clientChanged {
+		err = s.q(ctx).UpdateProjectWithClient(ctx, projectdb.UpdateProjectWithClientParams{
+			ID:            id,
+			Name:          name,
+			Description:   descPtr,
+			RepositoryUrl: repoPtr,
+			Settings:      settingsJSON,
+			ClientID:      clientID,
+		})
+	} else {
+		err = s.q(ctx).UpdateProject(ctx, projectdb.UpdateProjectParams{
+			ID:            id,
+			Name:          name,
+			Description:   descPtr,
+			RepositoryUrl: repoPtr,
+			Settings:      settingsJSON,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +361,7 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 	if prev.DeletedAt != nil {
 		return nil
 	}
-	if err := s.repository().SoftDelete(ctx, id); err != nil {
+	if err := s.q(ctx).SoftDeleteProject(ctx, id); err != nil {
 		return err
 	}
 	if s.Audit != nil {
@@ -321,6 +375,55 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
+}
+
+// rowToProject convierte los campos de una fila sqlc al tipo de dominio Project.
+func rowToProject(
+	id uuid.UUID, name, slug, description, repositoryURL string,
+	templateID *uuid.UUID,
+	settings []byte,
+	clientID *uuid.UUID,
+	clientSlug, clientName string,
+	createdAt, updatedAt time.Time,
+	deletedAt pgtype.Timestamptz,
+) *Project {
+	var settingsMap map[string]any
+	if len(settings) > 0 {
+		_ = json.Unmarshal(settings, &settingsMap)
+	}
+	if settingsMap == nil {
+		settingsMap = map[string]any{}
+	}
+	p := &Project{
+		ID:            id,
+		Name:          name,
+		Slug:          slug,
+		Description:   description,
+		RepositoryURL: repositoryURL,
+		TemplateID:    templateID,
+		Settings:      settingsMap,
+		ClientID:      clientID,
+		ClientSlug:    clientSlug,
+		ClientName:    clientName,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
+	}
+	if deletedAt.Valid {
+		t := deletedAt.Time
+		p.DeletedAt = &t
+	}
+	return p
+}
+
+func mapNotFound(err error) error {
+	if err == nil {
+		return nil
+	}
+	// pgx retorna pgx.ErrNoRows
+	if strings.Contains(err.Error(), "no rows") {
+		return ErrNotFound
+	}
+	return err
 }
 
 func nullStr(s string) any {

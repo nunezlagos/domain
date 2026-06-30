@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// FlowStateMachine implements deterministic state transitions for flow runs.
-// Each FlowRun has a global status and per-step status.
-// The machine validates transitions and rejects illegal ones.
+
+
+
 
 // ErrInvalidTransition is returned when a state transition is not allowed.
 var ErrInvalidTransition = errors.New("invalid state transition")
@@ -112,7 +112,7 @@ var stepTransitions = map[StepStatus]map[StepStatus]bool{
 
 // NewFlowStateMachine creates a state machine with default legal transitions.
 func NewFlowStateMachine() *FlowStateMachine {
-	// Copy maps to prevent mutation of globals
+
 	fm := make(map[FlowStatus]map[FlowStatus]bool, len(flowTransitions))
 	for from, tos := range flowTransitions {
 		tm := make(map[FlowStatus]bool, len(tos))

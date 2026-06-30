@@ -1,0 +1,88 @@
+{% extends "maintainers/_form_base.html" %}
+{% comment %}
+Form de usuario para el modal dinamico. Extiende maintainers/_form_base.html
+(form + csrf + non_field_errors + header + footer). Define solo el titulo,
+los campos y el label del submit.
+{% endcomment %}
+
+{% block form_title %}{% if mode == "create" %}Nuevo usuario{% else %}Editar usuario{% endif %}{% endblock %}
+{% block submit_label %}{% if mode == "create" %}Crear usuario{% else %}Guardar cambios{% endif %}{% endblock %}
+
+{% block fields %}
+  <div class="form-group">
+    <label class="form-label" for="{{ form.email.id_for_label }}">Email *</label>
+    {{ form.email }}
+    {% if form.email.errors %}<div class="form-help text-danger">{{ form.email.errors|join:", " }}</div>{% endif %}
+  </div>
+
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.first_name.id_for_label }}">Nombres</label>
+      {{ form.first_name }}
+      {% if form.first_name.errors %}<div class="form-help text-danger">{{ form.first_name.errors|join:", " }}</div>{% endif %}
+    </div>
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.paternal_surname.id_for_label }}">Apellido paterno</label>
+      {{ form.paternal_surname }}
+      {% if form.paternal_surname.errors %}<div class="form-help text-danger">{{ form.paternal_surname.errors|join:", " }}</div>{% endif %}
+    </div>
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.maternal_surname.id_for_label }}">Apellido materno</label>
+      {{ form.maternal_surname }}
+      {% if form.maternal_surname.errors %}<div class="form-help text-danger">{{ form.maternal_surname.errors|join:", " }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.role.id_for_label }}">Rol principal *</label>
+      {{ form.role }}
+      {% if form.role.help_text %}<div class="form-help">{{ form.role.help_text }}</div>{% endif %}
+      {% if form.role.errors %}<div class="form-help text-danger">{{ form.role.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.status.id_for_label }}">Estado</label>
+      {{ form.status }}
+    </div>
+  </div>
+
+  {% if mode == "create" %}
+    <hr>
+    <p class="text-secondary mb-3 mnt-text-sm">
+      La contraseña se guarda hasheada (PBKDF2).
+    </p>
+  {% endif %}
+
+  <div class="d-flex gap-3">
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.password.id_for_label }}">
+        {% if mode == "create" %}Contraseña *{% else %}Nueva contraseña (opcional){% endif %}
+      </label>
+      <div class="password-input-group">
+        {{ form.password }}
+        <button type="button" class="btn-password-toggle" data-target="{{ form.password.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      {% if form.password.help_text %}<div class="form-help">{{ form.password.help_text }}</div>{% endif %}
+      {% if form.password.errors %}<div class="form-help text-danger">{{ form.password.errors|join:", " }}</div>{% endif %}
+    </div>
+
+    <div class="form-group form-group--grow">
+      <label class="form-label" for="{{ form.password_confirm.id_for_label }}">
+        {% if mode == "create" %}Confirmar contraseña *{% else %}Confirmar nueva{% endif %}
+      </label>
+      <div class="password-input-group">
+        {{ form.password_confirm }}
+        <button type="button" class="btn-password-toggle" data-target="{{ form.password_confirm.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+{% endblock %}

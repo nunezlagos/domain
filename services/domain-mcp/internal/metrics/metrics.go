@@ -20,23 +20,23 @@ import (
 type Registry struct {
 	reg *prometheus.Registry
 
-	// HTTP
+
 	HTTPRequestsTotal   *prometheus.CounterVec
 	HTTPRequestDuration *prometheus.HistogramVec
 
-	// DB pool
+
 	DBPoolInUse      *prometheus.GaugeVec
 	DBPoolIdle       *prometheus.GaugeVec
 	DBPoolTotal      *prometheus.GaugeVec
 	DBPoolAcquired   prometheus.Counter
 	DBQueryDuration  *prometheus.HistogramVec
 
-	// Replicación (issue-25.9)
+
 	ReplicationLagSeconds prometheus.Gauge
 	ReplicaQueriesTotal   prometheus.Counter
 	ReplicaFallbackTotal  prometheus.Counter
 
-	// DB monitoring (issue-25.12)
+
 	DBConnectionsActive            prometheus.Gauge
 	DBConnectionsIdle              prometheus.Gauge
 	DBConnectionsIdleInTransaction prometheus.Gauge
@@ -44,7 +44,7 @@ type Registry struct {
 	DBLockWaitsTotal               *prometheus.CounterVec
 	DBTableDeadTuples              *prometheus.GaugeVec
 
-	// Dominio
+
 	AgentRunsTotal    *prometheus.CounterVec
 	AgentRunDuration  *prometheus.HistogramVec
 	LLMTokensTotal    *prometheus.CounterVec
@@ -54,34 +54,34 @@ type Registry struct {
 	PprofAccessTotal   prometheus.Counter
 	SlowQueriesTotal   *prometheus.CounterVec
 
-	// issue-08.11 heartbeat-watcher
+
 	HeartbeatWatcherStuckTotal *prometheus.CounterVec // labels: org_id, phase, reason
 	HeartbeatWatcherTicksTotal *prometheus.CounterVec // labels: result (ok|leader_skip|error)
-	// issue-08.12 orphan-runs-audit
+
 	AgentRunsOrphanTotal *prometheus.CounterVec // labels: org_id, reason
 	OrphanAuditTicksTotal *prometheus.CounterVec // labels: result
-	// issue-08.10 sdd-pipeline-orchestrator
+
 	OrchestratorRunsTotal       *prometheus.CounterVec   // labels: mode, status
 	OrchestratorPhaseDuration   *prometheus.HistogramVec // labels: phase, mode
 	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed)
 	OrchestratorConfirmsTotal   *prometheus.CounterVec   // labels: confirmed (true|false)
 	OrchestratorRequiredSaveMissingTotal *prometheus.CounterVec // labels: phase, save_type
 
-	// issue-09.6 durable-execution
+
 	FlowHeartbeatAgeSeconds prometheus.Gauge // age del heartbeat más reciente en flow_runs
 
-	// issue-33.3 max-flow-duration-per-org
+
 	FlowRunCancelledByMaxDuration *prometheus.CounterVec // labels: org_id
 
-	// issue-26.3 distributed locks
+
 	DlockAcquireTotal *prometheus.CounterVec   // labels: key, result (acquired|busy|error)
 	DlockHeldSeconds  *prometheus.HistogramVec // labels: key
 
-	// issue-35.1 unified-dispatcher
+
 	DispatchTotal    *prometheus.CounterVec   // labels: source, target_type, result
 	DispatchDuration *prometheus.HistogramVec // labels: source, target_type
 
-	// REQ-70 MCP tools + cache + SSE.
+
 	MCPToolCallsTotal  *prometheus.CounterVec   // labels: tool, status
 	MCPToolDuration    *prometheus.HistogramVec // labels: tool
 	MCPCacheHitsTotal  prometheus.Counter
@@ -94,7 +94,7 @@ type Registry struct {
 // New crea Registry con todas las métricas registradas.
 func New() *Registry {
 	reg := prometheus.NewRegistry()
-	// Runtime Go + process collectors (estándar Prometheus)
+
 	reg.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
@@ -226,7 +226,7 @@ func New() *Registry {
 		[]string{"threshold_ms"},
 	)
 
-	// issue-08.10 orchestrator
+
 	r.OrchestratorRunsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "domain_orchestrator_runs_total",
@@ -277,7 +277,7 @@ func New() *Registry {
 		[]string{"org_id"},
 	)
 
-	// issue-26.3 distributed locks — key es nombre lógico acotado (feature locks)
+
 	r.DlockAcquireTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "domain_dlock_acquire_total",
@@ -294,7 +294,7 @@ func New() *Registry {
 		[]string{"key"},
 	)
 
-	// issue-35.1 unified-dispatcher
+
 	r.DispatchTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "domain_dispatch_total",
@@ -311,7 +311,7 @@ func New() *Registry {
 		[]string{"source", "target_type"},
 	)
 
-	// issue-25.9 read-replicas
+
 	r.ReplicationLagSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_replication_lag_seconds",
 		Help: "Replication lag en segundos (0 si no hay replica)",
@@ -325,7 +325,7 @@ func New() *Registry {
 		Help: "Fallbacks a primary por replica degradada",
 	})
 
-	// issue-25.12 locks-vacuum
+
 	r.DBConnectionsActive = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_db_connections_active",
 		Help: "Conexiones activas en pg_stat_activity",
@@ -498,7 +498,7 @@ func (r *Registry) initREQ70() {
 func (r *Registry) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		// Wrap response writer para capturar status
+
 		ww := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(ww, req)
 		path := normalizePath(req.URL.Path)
@@ -515,12 +515,12 @@ func normalizePath(p string) string {
 		if part == "" {
 			continue
 		}
-		// UUID-ish: 36 chars with dashes
+
 		if len(part) == 36 && strings.Count(part, "-") == 4 {
 			parts[i] = ":id"
 			continue
 		}
-		// Pure number
+
 		if _, err := strconv.Atoi(part); err == nil {
 			parts[i] = ":n"
 		}

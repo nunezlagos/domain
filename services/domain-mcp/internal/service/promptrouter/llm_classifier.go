@@ -19,13 +19,28 @@ type LLMClassifier struct {
 	Provider llm.Provider
 	Model    string  // "claude-haiku-4-5-20251001" recomendado (rápido + cheap)
 	Fallback Classifier
-	// MaxTokens default 256 — suficiente para JSON corto.
+
 	MaxTokens int
-	// Temperature default 0.0 — clasificación, no creatividad.
+
 	Temperature float64
+
+
+
+
+
+	PromptLoader func(ctx context.Context) (string, error)
 }
 
-const llmClassifierSystemPrompt = `Sos un clasificador de prompts. Tu trabajo:
+// llmClassifierSystemPrompt es el alias interno del prompt de triage por
+// defecto. Apunta a DefaultTriageSystemPrompt para que el seeder (slug
+// 'triage') y el classifier hardcodeado nunca se desincronicen.
+const llmClassifierSystemPrompt = DefaultTriageSystemPrompt
+
+// DefaultTriageSystemPrompt es el system prompt de clasificación de intent
+// por defecto. Se seedea en la tabla prompts con slug='triage' para que sea
+// editable desde el dashboard. El classifier lo usa como fallback si la DB
+// no tiene el prompt o el loader no está cableado.
+const DefaultTriageSystemPrompt = `Sos un clasificador de prompts. Tu trabajo:
 dado un texto que un usuario escribió en su agente IA, identificás cuál de
 estas categorías describe MEJOR su intención:
 
@@ -67,11 +82,18 @@ func (c *LLMClassifier) Classify(ctx context.Context, rawText string) (Intent, f
 		maxTok = 256
 	}
 
+	systemPrompt := llmClassifierSystemPrompt
+	if c.PromptLoader != nil {
+		if loaded, err := c.PromptLoader(ctx); err == nil && strings.TrimSpace(loaded) != "" {
+			systemPrompt = loaded
+		}
+	}
+
 	resp, err := c.Provider.Complete(ctx, llm.CompletionOptions{
 		Model:        model,
 		Temperature:  c.Temperature,
 		MaxTokens:    maxTok,
-		SystemPrompt: llmClassifierSystemPrompt,
+		SystemPrompt: systemPrompt,
 		Messages: []llm.Message{
 			{Role: "user", Content: rawText},
 		},
@@ -104,7 +126,7 @@ type classifierParsed struct {
 }
 
 func parseClassifierResponse(raw string) (*classifierParsed, error) {
-	// Algunos providers envuelven JSON en fences ```json...```.
+
 	cleaned := strings.TrimSpace(raw)
 	cleaned = strings.TrimPrefix(cleaned, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")
@@ -135,6 +157,18 @@ func parseClassifierResponse(raw string) (*classifierParsed, error) {
 		confidence: conf,
 		reasoning:  shape.Reasoning,
 	}, nil
+}
+
+// ParseIntent convierte un string en un *Intent si es un intent válido del
+// enum. Devuelve nil si el string es vacío o no matchea ningún intent
+// (no es error: simplemente no hay override y el router clasifica normal).
+func ParseIntent(s string) *Intent {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" || !validIntent(s) {
+		return nil
+	}
+	i := Intent(s)
+	return &i
 }
 
 func validIntent(s string) bool {

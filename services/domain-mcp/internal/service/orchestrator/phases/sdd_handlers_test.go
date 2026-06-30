@@ -7,11 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Tests sanity para los 8 handlers de fase agregados al catálogo.
-// Cada test cubre: Slug correcto, Build con RawText vacío rechaza,
-// Build happy path devuelve AgentTemplateSlug correcto + SystemPrompt
-// vacío (BD source-of-truth) + RetryPolicy y SuggestedSaves canónicos.
-
 func TestAllHandlers_SlugIdentity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -26,6 +21,7 @@ func TestAllHandlers_SlugIdentity(t *testing.T) {
 		{"sdd-apply", NewSDDApplyHandler},
 		{"sdd-verify", NewSDDVerifyHandler},
 		{"sdd-judge", NewSDDJudgeHandler},
+		{"sdd-review", NewSDDReviewHandler},
 		{"sdd-archive", NewSDDArchiveHandler},
 		{"sdd-onboard", NewSDDOnboardHandler},
 	}
@@ -44,7 +40,8 @@ func TestAllHandlers_BuildRejectsEmptyRawText(t *testing.T) {
 	handlers := []Handler{
 		NewSDDExploreHandler(), NewSDDSpecHandler(), NewSDDProposeHandler(),
 		NewSDDDesignHandler(), NewSDDTasksHandler(),
-		NewSDDJudgeHandler(), NewSDDArchiveHandler(), NewSDDOnboardHandler(),
+		NewSDDJudgeHandler(), NewSDDReviewHandler(), NewSDDArchiveHandler(),
+		NewSDDOnboardHandler(),
 	}
 	for _, h := range handlers {
 		h := h
@@ -61,8 +58,8 @@ func TestAllHandlers_BuildReturnsEmptySystemPrompt_BDSourceOfTruth(t *testing.T)
 	handlers := []Handler{
 		NewSDDExploreHandler(), NewSDDSpecHandler(), NewSDDProposeHandler(),
 		NewSDDDesignHandler(), NewSDDTasksHandler(), NewSDDApplyHandler(),
-		NewSDDVerifyHandler(), NewSDDJudgeHandler(), NewSDDArchiveHandler(),
-		NewSDDOnboardHandler(),
+		NewSDDVerifyHandler(), NewSDDJudgeHandler(), NewSDDReviewHandler(),
+		NewSDDArchiveHandler(), NewSDDOnboardHandler(),
 	}
 	for _, h := range handlers {
 		h := h
@@ -78,8 +75,9 @@ func TestAllHandlers_BuildReturnsEmptySystemPrompt_BDSourceOfTruth(t *testing.T)
 	}
 }
 
-// D5 contract: design + apply + judge tienen un SuggestedSave Required=true;
-// el resto no.
+// D5 contract: propose + design + tasks + apply + judge tienen un
+// SuggestedSave Required=true (propose/design/tasks por Feature B: el
+// documento de la fase queda registrado en BD); el resto no.
 func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -88,12 +86,13 @@ func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 	}{
 		{NewSDDExploreHandler, ""},
 		{NewSDDSpecHandler, ""},
-		{NewSDDProposeHandler, ""},
+		{NewSDDProposeHandler, "knowledge_doc"},
 		{NewSDDDesignHandler, "adr"},
-		{NewSDDTasksHandler, ""},
+		{NewSDDTasksHandler, "knowledge_doc"},
 		{NewSDDApplyHandler, "code_reference"},
 		{NewSDDVerifyHandler, ""},
 		{NewSDDJudgeHandler, "sabotage_record"},
+		{NewSDDReviewHandler, ""},
 		{NewSDDArchiveHandler, ""},
 		{NewSDDOnboardHandler, ""},
 	}
@@ -150,7 +149,7 @@ func TestSDDProposeHandler_Validate_RequiresDraftStatus(t *testing.T) {
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"proposal_md": "...", "status": "draft"},
 	}))
-	// status != draft debe ser rechazado (anti-promoción automática)
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"proposal_md": "...", "status": "approved"},
 	}))
@@ -180,7 +179,7 @@ func TestSDDTasksHandler_Validate_RequiresShapedTasks(t *testing.T) {
 			},
 		},
 	}))
-	// task sin id
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{
 			"tasks": []any{map[string]any{"description": "x"}},
@@ -201,6 +200,25 @@ func TestSDDJudgeHandler_Validate_RequiresSabotageRecords(t *testing.T) {
 	}))
 }
 
+func TestSDDReviewHandler_Validate_GatesOnVerdict(t *testing.T) {
+	t.Parallel()
+	h := NewSDDReviewHandler()
+	// compliant → pasa
+	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{"verdict": "compliant"},
+	}))
+	// violations_found → bloquea el flow (error sentinela)
+	err := h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{"verdict": "violations_found"},
+	})
+	require.ErrorIs(t, err, ErrPolicyReviewFailed)
+	// verdict ausente o desconocido → error
+	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{},
+	}))
+	require.Error(t, h.Validate(context.Background(), nil, ClientResult{Output: nil}))
+}
+
 func TestSDDArchiveHandler_Validate_RequiresArchivedFlag(t *testing.T) {
 	t.Parallel()
 	h := NewSDDArchiveHandler()
@@ -215,15 +233,15 @@ func TestSDDArchiveHandler_Validate_RequiresArchivedFlag(t *testing.T) {
 func TestSDDOnboardHandler_Validate_SkippedOrDocCreated(t *testing.T) {
 	t.Parallel()
 	h := NewSDDOnboardHandler()
-	// skipped=true es válido (no había nada que documentar)
+
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"skipped": true},
 	}))
-	// doc_created=true también
+
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"doc_created": true},
 	}))
-	// ninguno → error (contract obliga a declarar explícito)
+
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{},
 	}))

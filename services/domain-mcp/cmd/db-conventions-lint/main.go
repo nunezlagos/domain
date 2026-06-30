@@ -63,7 +63,7 @@ func main() {
 		}
 		content := string(data)
 
-		// Fix mode: aplica auto-fix + lint
+
 		if *fix {
 			fixed, changed := dbconvlint.Fix(content)
 			if changed {

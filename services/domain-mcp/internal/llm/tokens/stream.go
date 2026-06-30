@@ -1,21 +1,21 @@
-// issue-06.6 token-count-stream — streaming token counter para responses LLM.
-//
-// Diseñado para ser consumido por wrappers de Anthropic/OpenAI/Ollama
-// que streamean tokens. Calcula:
-//   - Tokens emitidos hasta el momento (incremental).
-//   - Tasa (tokens/s) sliding window 5s.
-//   - Token budget enforcement: si excede limit, cancela el stream.
-//
-// Uso:
-//
-//	tc := tokens.NewStreamCounter(maxTokens, time.Second*5)
-//	for chunk := range llmStream {
-//	    if err := tc.Add(chunk.Text); err != nil { // budget exceeded
-//	        return err  // contexto cancelado upstream
-//	    }
-//	    emit(chunk.Text)
-//	}
-//	final := tc.Snapshot()  // total + duration + avg rate
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 package tokens
 

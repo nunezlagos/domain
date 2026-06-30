@@ -1,5 +1,7 @@
 // Package mcpserver — issue-12.4 service CRUD para MCP servers externos +
 // auto-discovery de tools + materialización como skills.
+//
+//go:generate go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 package mcpserver
 
 import (
@@ -16,6 +18,8 @@ import (
 
 	"nunezlagos/domain/internal/crypto"
 	"nunezlagos/domain/internal/mcp/client"
+	"nunezlagos/domain/internal/service/mcpserver/mcpserverdb"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 var (
@@ -32,30 +36,30 @@ const (
 
 // Server representa un MCP externo registrado.
 type Server struct {
-	ID              uuid.UUID         `json:"id"`
-	Name            string            `json:"name"`
-	Transport       string            `json:"transport"`
-	Command         string            `json:"command,omitempty"`
-	Args            []string          `json:"args"`
-	URL             string            `json:"url,omitempty"`
-	Enabled         bool              `json:"enabled"`
-	Status          string            `json:"status"`
-	LastConnectedAt *time.Time        `json:"last_connected_at,omitempty"`
-	LastError       string            `json:"last_error,omitempty"`
-	RetryCount      int               `json:"retry_count"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	Name            string     `json:"name"`
+	Transport       string     `json:"transport"`
+	Command         string     `json:"command,omitempty"`
+	Args            []string   `json:"args"`
+	URL             string     `json:"url,omitempty"`
+	Enabled         bool       `json:"enabled"`
+	Status          string     `json:"status"`
+	LastConnectedAt *time.Time `json:"last_connected_at,omitempty"`
+	LastError       string     `json:"last_error,omitempty"`
+	RetryCount      int        `json:"retry_count"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // Tool descubierta de un servidor MCP.
 type Tool struct {
-	ID            uuid.UUID       `json:"id"`
-	MCPServerID   uuid.UUID       `json:"mcp_server_id"`
-	ToolName      string          `json:"tool_name"`
-	Description   string          `json:"description"`
-	InputSchema   json.RawMessage `json:"input_schema"`
-	Enabled       bool            `json:"enabled"`
-	DiscoveredAt  time.Time       `json:"discovered_at"`
+	ID           uuid.UUID       `json:"id"`
+	MCPServerID  uuid.UUID       `json:"mcp_server_id"`
+	ToolName     string          `json:"tool_name"`
+	Description  string          `json:"description"`
+	InputSchema  json.RawMessage `json:"input_schema"`
+	Enabled      bool            `json:"enabled"`
+	DiscoveredAt time.Time       `json:"discovered_at"`
 }
 
 // CreateInput para POST.
@@ -73,6 +77,13 @@ type Service struct {
 	Pool   *pgxpool.Pool
 	Cipher *crypto.Cipher
 	Logger *slog.Logger
+}
+
+func (s *Service) q(ctx context.Context) *mcpserverdb.Queries {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return mcpserverdb.New(tx)
+	}
+	return mcpserverdb.New(s.Pool)
 }
 
 // Create registra un nuevo servidor MCP externo. NO conecta — usar SyncTools.
@@ -103,83 +114,64 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in CreateInput) (
 		envCipher = ct
 	}
 
-	row := s.Pool.QueryRow(ctx,
-		`INSERT INTO mcp_servers
-			(name, transport, command, args, env_cipher, url)
-		 VALUES ($1,$2,$3,$4,$5,$6)
-		 RETURNING id, created_at, updated_at`,
-		in.Name, in.Transport, nullStr(in.Command), in.Args,
-		envCipher, nullStr(in.URL))
+	row, err := s.q(ctx).InsertServer(ctx, mcpserverdb.InsertServerParams{
+		Name:      in.Name,
+		Transport: in.Transport,
+		Command:   nullStr(in.Command),
+		Args:      in.Args,
+		EnvCipher: envCipher,
+		Url:       nullStr(in.URL),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("insert: %w", err)
+	}
 	srv := &Server{
-		Name: in.Name, Transport: in.Transport,
+		ID: row.ID, Name: in.Name, Transport: in.Transport,
 		Command: in.Command, Args: in.Args, URL: in.URL,
 		Enabled: true, Status: "pending",
-	}
-	if err := row.Scan(&srv.ID, &srv.CreatedAt, &srv.UpdatedAt); err != nil {
-		return nil, fmt.Errorf("insert: %w", err)
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 	return srv, nil
 }
 
-func nullStr(s string) any {
+func nullStr(s string) *string {
 	if s == "" {
 		return nil
 	}
-	return s
+	return &s
 }
 
 // Get devuelve un server por id+org.
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID) (*Server, error) {
-	row := s.Pool.QueryRow(ctx,
-		`SELECT id, name, transport, COALESCE(command,''), args,
-			COALESCE(url,''), enabled, status, last_connected_at, COALESCE(last_error,''),
-			retry_count, created_at, updated_at
-		 FROM mcp_servers WHERE id=$1`, id)
-	var srv Server
-	err := row.Scan(&srv.ID, &srv.Name, &srv.Transport,
-		&srv.Command, &srv.Args, &srv.URL, &srv.Enabled, &srv.Status,
-		&srv.LastConnectedAt, &srv.LastError, &srv.RetryCount,
-		&srv.CreatedAt, &srv.UpdatedAt)
+	row, err := s.q(ctx).GetServer(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknown
 	}
 	if err != nil {
 		return nil, err
 	}
+	srv := toServerFromGet(row)
 	return &srv, nil
 }
 
 func (s *Service) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]Server, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, name, transport, COALESCE(command,''), args,
-			COALESCE(url,''), enabled, status, last_connected_at, COALESCE(last_error,''),
-			retry_count, created_at, updated_at
-		 FROM mcp_servers ORDER BY created_at DESC`)
+	rows, err := s.q(ctx).ListServers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []Server
-	for rows.Next() {
-		var srv Server
-		if err := rows.Scan(&srv.ID, &srv.Name, &srv.Transport,
-			&srv.Command, &srv.Args, &srv.URL, &srv.Enabled, &srv.Status,
-			&srv.LastConnectedAt, &srv.LastError, &srv.RetryCount,
-			&srv.CreatedAt, &srv.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, srv)
+	for _, row := range rows {
+		out = append(out, toServerFromList(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID) error {
-	ct, err := s.Pool.Exec(ctx,
-		`DELETE FROM mcp_servers WHERE id=$1`, id)
+	n, err := s.q(ctx).DeleteServer(ctx, id)
 	if err != nil {
 		return err
 	}
-	if ct.RowsAffected() == 0 {
+	if n == 0 {
 		return ErrUnknown
 	}
 	return nil
@@ -237,9 +229,7 @@ func (s *Service) SyncTools(ctx context.Context, orgID, id uuid.UUID) ([]Tool, e
 
 // decryptEnv devuelve env en formato KEY=VALUE (compatible exec.Cmd.Env).
 func (s *Service) decryptEnv(ctx context.Context, id uuid.UUID) ([]string, error) {
-	var ct []byte
-	err := s.Pool.QueryRow(ctx,
-		`SELECT env_cipher FROM mcp_servers WHERE id=$1`, id).Scan(&ct)
+	ct, err := s.q(ctx).GetServerEnvCipher(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -271,64 +261,42 @@ func (s *Service) upsertTools(ctx context.Context, serverID, orgID uuid.UUID, to
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{}`)
 		}
-		row := s.Pool.QueryRow(ctx,
-			`INSERT INTO mcp_server_tools
-				(mcp_server_id, tool_name, description, input_schema, discovered_at)
-			 VALUES ($1,$2,$3,$4,NOW())
-			 ON CONFLICT (mcp_server_id, tool_name) DO UPDATE
-			 SET description = EXCLUDED.description,
-				 input_schema = EXCLUDED.input_schema,
-				 discovered_at = NOW(),
-				 updated_at = NOW()
-			 RETURNING id, mcp_server_id, tool_name, description, input_schema,
-				 enabled, discovered_at`,
-			serverID, t.Name, t.Description, schema)
-		var dst Tool
-		if err := row.Scan(&dst.ID, &dst.MCPServerID, &dst.ToolName,
-			&dst.Description, &dst.InputSchema, &dst.Enabled, &dst.DiscoveredAt); err != nil {
+		row, err := s.q(ctx).UpsertTool(ctx, mcpserverdb.UpsertToolParams{
+			McpServerID: serverID,
+			ToolName:    t.Name,
+			Description: t.Description,
+			InputSchema: schema,
+		})
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, dst)
+		out = append(out, toToolFromUpsert(row))
 	}
 	return out, nil
 }
 
 func (s *Service) markConnected(ctx context.Context, id uuid.UUID) {
-	_, _ = s.Pool.Exec(ctx,
-		`UPDATE mcp_servers SET status='connected', last_connected_at=NOW(),
-		    last_error=NULL, retry_count=0
-		 WHERE id=$1`, id)
+	_ = s.q(ctx).MarkServerConnected(ctx, id)
 }
 
 func (s *Service) markFailed(ctx context.Context, id uuid.UUID, errMsg string) {
-	_, _ = s.Pool.Exec(ctx,
-		`UPDATE mcp_servers SET status='failed', last_error=$2,
-		    retry_count=retry_count+1
-		 WHERE id=$1`, id, errMsg)
+	_ = s.q(ctx).MarkServerFailed(ctx, mcpserverdb.MarkServerFailedParams{
+		ID:        id,
+		LastError: &errMsg,
+	})
 }
 
 // ListTools retorna las tools descubiertas para un server.
 func (s *Service) ListTools(ctx context.Context, orgID, serverID uuid.UUID) ([]Tool, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, mcp_server_id, tool_name, description, input_schema,
-			enabled, discovered_at
-		 FROM mcp_server_tools
-		 WHERE mcp_server_id=$1 AND enabled=TRUE
-		 ORDER BY tool_name`, serverID)
+	rows, err := s.q(ctx).ListToolsByServer(ctx, serverID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []Tool
-	for rows.Next() {
-		var t Tool
-		if err := rows.Scan(&t.ID, &t.MCPServerID, &t.ToolName,
-			&t.Description, &t.InputSchema, &t.Enabled, &t.DiscoveredAt); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
+	for _, row := range rows {
+		out = append(out, toToolFromList(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // InvokeTool ejecuta una tool externa: spawnea proceso, conecta, llama, cierra.
@@ -356,4 +324,72 @@ func (s *Service) InvokeTool(ctx context.Context, orgID, serverID uuid.UUID,
 		return nil, fmt.Errorf("initialize: %w", err)
 	}
 	return cli.CallTool(ctx, toolName, args)
+}
+
+func toServerFromGet(r mcpserverdb.GetServerRow) Server {
+	srv := Server{
+		ID:         r.ID,
+		Name:       r.Name,
+		Transport:  r.Transport,
+		Command:    r.Command,
+		Args:       r.Args,
+		URL:        r.Url,
+		Enabled:    r.Enabled,
+		Status:     r.Status,
+		LastError:  r.LastError,
+		RetryCount: int(r.RetryCount),
+		CreatedAt:  r.CreatedAt,
+		UpdatedAt:  r.UpdatedAt,
+	}
+	if r.LastConnectedAt.Valid {
+		t := r.LastConnectedAt.Time
+		srv.LastConnectedAt = &t
+	}
+	return srv
+}
+
+func toServerFromList(r mcpserverdb.ListServersRow) Server {
+	srv := Server{
+		ID:         r.ID,
+		Name:       r.Name,
+		Transport:  r.Transport,
+		Command:    r.Command,
+		Args:       r.Args,
+		URL:        r.Url,
+		Enabled:    r.Enabled,
+		Status:     r.Status,
+		LastError:  r.LastError,
+		RetryCount: int(r.RetryCount),
+		CreatedAt:  r.CreatedAt,
+		UpdatedAt:  r.UpdatedAt,
+	}
+	if r.LastConnectedAt.Valid {
+		t := r.LastConnectedAt.Time
+		srv.LastConnectedAt = &t
+	}
+	return srv
+}
+
+func toToolFromUpsert(r mcpserverdb.UpsertToolRow) Tool {
+	return Tool{
+		ID:           r.ID,
+		MCPServerID:  r.McpServerID,
+		ToolName:     r.ToolName,
+		Description:  r.Description,
+		InputSchema:  json.RawMessage(r.InputSchema),
+		Enabled:      r.Enabled,
+		DiscoveredAt: r.DiscoveredAt,
+	}
+}
+
+func toToolFromList(r mcpserverdb.ListToolsByServerRow) Tool {
+	return Tool{
+		ID:           r.ID,
+		MCPServerID:  r.McpServerID,
+		ToolName:     r.ToolName,
+		Description:  r.Description,
+		InputSchema:  json.RawMessage(r.InputSchema),
+		Enabled:      r.Enabled,
+		DiscoveredAt: r.DiscoveredAt,
+	}
 }

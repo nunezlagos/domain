@@ -1,7 +1,7 @@
 //go:build integration
 
-// issue-01.1 db-schema-migrations — integration tests con testcontainers.
-// Cubre Gherkin escenarios 1-5 + sabotaje.
+
+
 
 package migrate_test
 
@@ -51,7 +51,7 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 	require.NotZero(t, v, "debe terminar en la última migración aplicada")
 	require.False(t, dirty)
 
-	// Lista tablas
+
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
 	require.NoError(t, err)
@@ -76,10 +76,10 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 		"auth_secrets", "project_templates", "project_merges",
 		"schema_migrations",
 	}
-	// Nota: project_links, event_log, llm_semantic_cache, intake_attachments y
-	// domain_query_stats_history fueron dropeadas por 000130_drop_unused_tables.
-	// cost_logs fue dropeada por 000148 (REQ-42.2, dominio billing/costos).
-	// sessions fue dropeada por 000149 (REQ-42.3, legacy/infra).
+
+
+
+
 	for _, table := range expected {
 		require.Truef(t, got[table], "tabla %s no creada", table)
 	}
@@ -117,7 +117,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(ctx)
 
-	// Insert + select vector funciona
+
 	_, err = conn.Exec(ctx, `
 		INSERT INTO organizations (id, name, slug) VALUES (gen_random_uuid(), 'A', 'a');
 	`)
@@ -129,7 +129,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Construir literal vector(1536) como '[0.1,0.1,...,0.1]'
+
 	vec := make([]byte, 0, 1536*4+2)
 	vec = append(vec, '[')
 	for i := 0; i < 1536; i++ {
@@ -141,7 +141,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	vec = append(vec, ']')
 
 	var obsID string
-	// ISSUE-21.6 single-org: no se necesita JOIN con organizations.
+
 	err = conn.QueryRow(ctx, `
 		INSERT INTO knowledge_observations (project_id, content, embedding)
 		SELECT p.id, 'hola mundo', $1::vector(1536)
@@ -152,7 +152,7 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, obsID)
 
-	// FTS funciona
+
 	var matched bool
 	err = conn.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -210,8 +210,8 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	require.NoError(t, dmigrate.Down(dsn, -1))
 	require.NoError(t, dmigrate.Up(dsn))
 	vAfter, _, _ := dmigrate.Version(dsn)
-	// Round-trip debe volver a la última versión disponible (sin hardcodear el
-	// número, que quedaba stale con cada migración nueva).
+
+
 	require.NotZero(t, vAfter)
 	require.Equal(t, vBefore, vAfter, "up→down→up debe volver a la última versión")
 }
@@ -227,7 +227,7 @@ func TestSabotage_FK_Violation_Rejected(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(ctx)
 
-	// Intentar insertar user con organization_id inexistente
+
 	_, err = conn.Exec(ctx, `
 		INSERT INTO users (organization_id, email)
 		VALUES ('00000000-0000-0000-0000-000000000001', 'x@x.com')

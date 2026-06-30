@@ -74,7 +74,7 @@ func analyzeStep(ctx context.Context, step *flow.Step, inputs map[string]any,
 	case flow.StepTypeAgentRun:
 		agentSlug, _ := step.Config["agent_slug"].(string)
 		input, _ := step.Config["input"].(string)
-		// Estimate input tokens: chars/4 (latin) + chars/2 (CJK approximation).
+
 		ps.EstimatedTokIn = estimateTokens(resolveTemplateSimple(input, inputs))
 		ps.EstimatedTokOut = 500 // default. Mejor: leer agent.max_tokens cuando exista.
 		if agentSvc != nil && agentSlug != "" {
@@ -88,9 +88,9 @@ func analyzeStep(ctx context.Context, step *flow.Step, inputs map[string]any,
 				ps.Reason = "agent not found"
 			}
 		}
-		// Cost USD estimación. Para evitar acoplamiento, usamos rate constante
-		// promedio: $0.000005/token (mid-tier). Caller con el catálogo de pricing
-		// (internal/llm/registry) puede recalcular preciso.
+
+
+
 		ps.EstimatedCostUSD = float64(ps.EstimatedTokIn+ps.EstimatedTokOut) * 0.000005
 
 	case flow.StepTypeSkillRun:
@@ -102,8 +102,8 @@ func analyzeStep(ctx context.Context, step *flow.Step, inputs map[string]any,
 		ps.Warnings = append(ps.Warnings, "side-effects: persists row + embedding")
 
 	case flow.StepTypeCondition:
-		// Análisis estático: si la condición es {{inputs.X}} ==/!= literal,
-		// podemos evaluarla con los inputs provistos.
+
+
 		if isStaticallyEvaluable(step.Config, inputs) {
 			ps.Reason = "condition statically evaluable"
 		} else {

@@ -1,10 +1,10 @@
 //go:build integration
 
-// issue-21.6 Fase B: integration test del billing.Service que cubre S1.4
-// usage_counters (PK swap a id BIGSERIAL + UNIQUE period_start).
-//
-// REQ-42.2: la tabla plans se dropeó (dominio billing/costos eliminado);
-// los tests de GetPlan/ResolveLimits con plans se removieron.
+
+
+
+
+
 
 package billing
 
@@ -52,7 +52,7 @@ func setupBillingDB(t *testing.T) (*pgxpool.Pool, uuid.UUID, func()) {
 	}
 }
 
-// --- usage_counters ---
+
 
 func TestIncrementCounter_CreatesRowOnFirstCall(t *testing.T) {
 	pool, orgID, cleanup := setupBillingDB(t)

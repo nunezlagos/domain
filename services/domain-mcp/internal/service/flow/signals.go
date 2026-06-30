@@ -140,7 +140,7 @@ func (s *SignalStore) Wait(ctx context.Context, flowRunID uuid.UUID, stepKey *st
 		if time.Now().After(deadline) {
 			return nil, ErrSignalNotFound
 		}
-		// ISSUE-28.8: NewTimer reusable en poll loop (time.After leak).
+
 		t := time.NewTimer(pollInterval)
 		select {
 		case <-ctx.Done():
@@ -243,7 +243,7 @@ func (s *SignalStore) BroadcastSignal(ctx context.Context, name string, payload 
 // polling si la conexión dedicada no puede establecerse. Sin CPU mientras
 // espera: bloquea en WaitForNotification hasta NOTIFY o timeout.
 func (s *SignalStore) WaitNotify(ctx context.Context, runID uuid.UUID, stepKey *string, name string, timeout time.Duration) (*Signal, error) {
-	// Intento inmediato: la señal pudo llegar antes del LISTEN (early signal).
+
 	sig, err := s.Consume(ctx, runID, stepKey, name)
 	if err == nil {
 		return sig, nil
@@ -256,8 +256,8 @@ func (s *SignalStore) WaitNotify(ctx context.Context, runID uuid.UUID, stepKey *
 	if err != nil {
 		return s.WaitForSignal(ctx, runID, stepKey, name, timeout)
 	}
-	// La conexión queda con estado LISTEN: cerrarla al salir para que el pool
-	// no la reuse con suscripciones colgadas.
+
+
 	defer func() {
 		_ = conn.Conn().Close(context.Background())
 		conn.Release()
@@ -267,7 +267,7 @@ func (s *SignalStore) WaitNotify(ctx context.Context, runID uuid.UUID, stepKey *
 		return s.WaitForSignal(ctx, runID, stepKey, name, timeout)
 	}
 
-	// Re-chequear post-LISTEN: cierra la ventana entre Consume y LISTEN.
+
 	sig, err = s.Consume(ctx, runID, stepKey, name)
 	if err == nil {
 		return sig, nil
@@ -294,7 +294,7 @@ func (s *SignalStore) WaitNotify(ctx context.Context, runID uuid.UUID, stepKey *
 			}
 			return nil, fmt.Errorf("wait notification: %w", werr)
 		}
-		// Cualquier NOTIFY del canal: intentar consumir nuestra señal.
+
 		sig, err := s.Consume(ctx, runID, stepKey, name)
 		if err == nil {
 			return sig, nil

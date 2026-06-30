@@ -35,8 +35,8 @@ func GeneratePassword(nBytes int) (string, error) {
 
 // Rotator rota passwords de roles Postgres.
 type Rotator struct {
-	// AdminPool con un user que tenga permisos ALTER ROLE (superuser o
-	// owner del role target). En prod: usar app_admin solo si tiene CREATEROLE.
+
+
 	AdminPool *pgxpool.Pool
 }
 
@@ -50,7 +50,7 @@ func (r *Rotator) RotateRole(ctx context.Context, role string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// pgx no acepta parameters en DDL — quoteIdentifier + literal escape.
+
 	sql := fmt.Sprintf("ALTER ROLE %s PASSWORD %s",
 		pgQuoteIdent(role), pgQuoteLiteral(newPass))
 	if _, err := r.AdminPool.Exec(ctx, sql); err != nil {
@@ -91,7 +91,7 @@ func pgQuoteIdent(s string) string {
 // pgQuoteLiteral escapa un string literal con sintaxis dollar-quoted para evitar
 // problemas con caracteres de control en passwords base64.
 func pgQuoteLiteral(s string) string {
-	// Usar dollar-quoted con tag aleatorio improbable: $domain_pw$...$domain_pw$
+
 	const tag = "domain_pw"
 	return "$" + tag + "$" + s + "$" + tag + "$"
 }

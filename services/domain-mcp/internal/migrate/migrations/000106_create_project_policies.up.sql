@@ -1,11 +1,11 @@
--- migration: create_project_policies
--- author: mnunez@saargo.com
--- issue: REQ-43 policies por proyecto (Ola B)
--- description: policies scoped a (org, project). Resolver jerárquico:
---   project_policies → platform_policies (fallback). Mismo schema base
---   que platform_policies pero con scope explícito + RLS.
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
+
+
 
 CREATE TABLE project_policies (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -23,16 +23,16 @@ CREATE TABLE project_policies (
   body_structured JSONB NOT NULL DEFAULT '{}',
   version         INTEGER NOT NULL DEFAULT 1,
   is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-  -- override_platform: si true, esta policy OVERRIDE la del platform con
-  -- el mismo slug. Si false (default), AMPLÍA (LLM ve ambas concatenadas).
+
+
   override_platform BOOLEAN NOT NULL DEFAULT FALSE,
   source           VARCHAR(40) NOT NULL DEFAULT 'manual'
     CHECK (source IN ('manual','llm_generated','seed_imported','dashboard')),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at      TIMESTAMPTZ,
-  -- 1 policy activa por (org, project, slug). Active=false permite tener
-  -- versiones inactivas con el mismo slug en historial.
+
+
   CONSTRAINT project_policies_slug_active_unique
     UNIQUE (organization_id, project_id, slug, is_active)
 );
@@ -51,7 +51,7 @@ CREATE TRIGGER set_updated_at_project_policies
   BEFORE UPDATE ON project_policies
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Versiones históricas
+
 CREATE TABLE project_policy_versions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   policy_id       UUID NOT NULL REFERENCES project_policies(id) ON DELETE CASCADE,
@@ -63,7 +63,7 @@ CREATE TABLE project_policy_versions (
   UNIQUE (policy_id, version)
 );
 
--- RLS (defense-in-depth multi-tenant)
+
 ALTER TABLE project_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_policies FORCE ROW LEVEL SECURITY;
 CREATE POLICY project_policies_org_isolation ON project_policies

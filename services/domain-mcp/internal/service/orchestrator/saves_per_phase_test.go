@@ -13,11 +13,11 @@ import (
 // save-003 — Tests unit del contract D5 (RFC 0006) por cada fase.
 //
 // Verifica que:
-//  1. Las fases con Required=true (sdd-design, sdd-apply, sdd-judge)
-//     declaran el tipo correcto en su SuggestedSaves
+//  1. Las fases con Required=true (sdd-propose, sdd-design, sdd-tasks,
+//     sdd-apply, sdd-judge) declaran el tipo correcto en su SuggestedSaves
 //  2. ValidateRequiredSaves bloquea sin la memory_ref correcta
 //  3. ValidateRequiredSaves pasa con la memory_ref correcta
-//  4. Las fases sin required (explore/spec/propose/tasks/verify/archive/onboard)
+//  4. Las fases sin required (explore/spec/verify/archive/onboard)
 //     no bloquean independientemente de los memory_refs reportados
 
 func TestD5Contract_SDDDesign_RequiresADR(t *testing.T) {
@@ -31,26 +31,80 @@ func TestD5Contract_SDDDesign_RequiresADR(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// El handler declara EXACTAMENTE 1 SuggestedSave de tipo 'adr' Required=true
-	require.Len(t, out.SuggestedSaves, 1)
-	require.Equal(t, "adr", out.SuggestedSaves[0].Type)
-	require.True(t, out.SuggestedSaves[0].Required)
+	// Feature B: sdd-design declara 2 SuggestedSaves Required=true —
+	// 'adr' (decisiones arquitectónicas) y 'knowledge_doc' (el design.md
+	// como documento de primera clase, garantía de registro en BD).
+	require.Len(t, out.SuggestedSaves, 2)
+	requiredTypes := map[string]bool{}
+	for _, s := range out.SuggestedSaves {
+		require.True(t, s.Required, "ambos saves de sdd-design son Required")
+		requiredTypes[s.Type] = true
+	}
+	require.True(t, requiredTypes["adr"])
+	require.True(t, requiredTypes["knowledge_doc"])
 
-	// Sin memref → falla
 	err = ValidateRequiredSaves(phases.PhaseSlug("sdd-design"), out, phases.ClientResult{})
 	require.ErrorIs(t, err, ErrRequiredSaveMissing)
 
-	// Con memref del tipo correcto → pasa
+	// Sólo el adr (falta knowledge_doc) → sigue fallando
 	err = ValidateRequiredSaves(phases.PhaseSlug("sdd-design"), out, phases.ClientResult{
 		MemoryRefsSaved: []phases.MemoryRef{{Type: "adr", ID: uuid.New()}},
 	})
+	require.ErrorIs(t, err, ErrRequiredSaveMissing)
+
+	// Ambos tipos requeridos → pasa
+	err = ValidateRequiredSaves(phases.PhaseSlug("sdd-design"), out, phases.ClientResult{
+		MemoryRefsSaved: []phases.MemoryRef{
+			{Type: "adr", ID: uuid.New()},
+			{Type: "knowledge_doc", ID: uuid.New()},
+		},
+	})
 	require.NoError(t, err)
 
-	// Con memref de TIPO INCORRECTO → falla (D5 chequea por type)
 	err = ValidateRequiredSaves(phases.PhaseSlug("sdd-design"), out, phases.ClientResult{
 		MemoryRefsSaved: []phases.MemoryRef{{Type: "code_reference", ID: uuid.New()}},
 	})
 	require.ErrorIs(t, err, ErrRequiredSaveMissing)
+}
+
+// TestD5Contract_DocPhases_RequireKnowledgeDoc — Feature B: las fases que
+// generan un DOCUMENTO de primera clase (propose/design/tasks) exigen un
+// knowledge_doc Required=true para garantizar su registro en BD.
+func TestD5Contract_DocPhases_RequireKnowledgeDoc(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		factory func() phases.Handler
+	}{
+		{"sdd-propose", phases.NewSDDProposeHandler},
+		{"sdd-design", phases.NewSDDDesignHandler},
+		{"sdd-tasks", phases.NewSDDTasksHandler},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := tc.factory()
+			out, err := h.Build(context.Background(), phases.Input{RawText: "x"})
+			require.NoError(t, err)
+
+			var hasKnowledgeDoc bool
+			for _, s := range out.SuggestedSaves {
+				if s.Type == "knowledge_doc" {
+					require.True(t, s.Required,
+						"%s: el knowledge_doc debe ser Required=true (Feature B)", tc.name)
+					hasKnowledgeDoc = true
+				}
+			}
+			require.True(t, hasKnowledgeDoc,
+				"%s declara un SuggestedSave knowledge_doc", tc.name)
+
+			// Sin el knowledge_doc → la fase no avanza
+			require.ErrorIs(t,
+				ValidateRequiredSaves(phases.PhaseSlug(tc.name), out, phases.ClientResult{}),
+				ErrRequiredSaveMissing)
+		})
+	}
 }
 
 func TestD5Contract_SDDApply_RequiresCodeReference(t *testing.T) {
@@ -63,12 +117,10 @@ func TestD5Contract_SDDApply_RequiresCodeReference(t *testing.T) {
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)
 	require.True(t, out.SuggestedSaves[0].Required)
 
-	// Sin memref → falla
 	require.ErrorIs(t,
 		ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, phases.ClientResult{}),
 		ErrRequiredSaveMissing)
 
-	// Con memref correcto → pasa
 	require.NoError(t,
 		ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, phases.ClientResult{
 			MemoryRefsSaved: []phases.MemoryRef{{Type: "code_reference", ID: uuid.New()}},
@@ -85,12 +137,10 @@ func TestD5Contract_SDDJudge_RequiresSabotageRecord(t *testing.T) {
 	require.Equal(t, "sabotage_record", out.SuggestedSaves[0].Type)
 	require.True(t, out.SuggestedSaves[0].Required)
 
-	// Sin memref → falla
 	require.ErrorIs(t,
 		ValidateRequiredSaves(phases.PhaseSlug("sdd-judge"), out, phases.ClientResult{}),
 		ErrRequiredSaveMissing)
 
-	// Con memref correcto → pasa
 	require.NoError(t,
 		ValidateRequiredSaves(phases.PhaseSlug("sdd-judge"), out, phases.ClientResult{
 			MemoryRefsSaved: []phases.MemoryRef{{Type: "sabotage_record", ID: uuid.New()}},
@@ -107,8 +157,6 @@ func TestD5Contract_PhasesWithoutRequired_AlwaysPass(t *testing.T) {
 	}{
 		{"sdd-explore", phases.NewSDDExploreHandler, phases.Input{RawText: "x"}},
 		{"sdd-spec", phases.NewSDDSpecHandler, phases.Input{RawText: "x"}},
-		{"sdd-propose", phases.NewSDDProposeHandler, phases.Input{RawText: "x"}},
-		{"sdd-tasks", phases.NewSDDTasksHandler, phases.Input{RawText: "x"}},
 		{"sdd-verify", phases.NewSDDVerifyHandler, phases.Input{RawText: "x"}},
 		{"sdd-archive", phases.NewSDDArchiveHandler, phases.Input{RawText: "x"}},
 		{"sdd-onboard", phases.NewSDDOnboardHandler, phases.Input{RawText: "x"}},
@@ -120,12 +168,12 @@ func TestD5Contract_PhasesWithoutRequired_AlwaysPass(t *testing.T) {
 			h := tc.factory()
 			out, err := h.Build(context.Background(), tc.input)
 			require.NoError(t, err)
-			// Cero suggested_saves Required=true
+
 			for _, s := range out.SuggestedSaves {
 				require.Falsef(t, s.Required,
 					"fase %s no debe declarar SuggestedSave Required=true", tc.name)
 			}
-			// ValidateRequiredSaves pasa sin memory_refs
+
 			require.NoError(t,
 				ValidateRequiredSaves(phases.PhaseSlug(tc.name), out, phases.ClientResult{}))
 		})

@@ -6,15 +6,23 @@ import (
 	"path/filepath"
 )
 
+// configResult informa el efecto de configurar un cliente.
+type configResult struct {
+	Skipped bool   // true si no se tocó nada (ej. ya hay un 'domain' local)
+	Reason  string // motivo del skip, para informar al usuario
+}
+
 // configureClient escribe el config MCP de domain-mcp en el archivo apropiado
 // del cliente, preservando otras entries y migrando entry legacy "domain".
-// Devuelve (path_efectivo, error).
+// Devuelve el resultado (incl. skip por dedup) y error.
 //
 // La estructura del JSON depende del cliente:
-//   - claude-code/cursor/cline/claude-desktop: { "mcpServers": { "domain-mcp": {url, headers} } }
-//   - opencode:                                { "mcp":        { "domain-mcp": {type: "remote", url, headers, enabled} } }
-//   - continue:                                { "experimental": { "modelContextProtocolServers": [...] } }
-func configureClient(c Client, vpsURL, apiKey, timestamp string) error {
+//   - claude-code:  ~/.claude.json   { "mcpServers": { "domain-mcp": {type:http, url, headers} } }
+//   - cursor/cline: mcp.json         { "mcpServers": { "domain-mcp": {url, headers} } }
+//   - opencode:     opencode.json    { "mcp": { "domain-mcp": {type: "remote", url, headers, enabled} } }
+//   - continue:                      { "experimental": { "modelContextProtocolServers": [...] } }
+//   - claude-desktop:                STDIO-only (no soporta http remoto) → se omite con aviso
+func configureClient(c Client, vpsURL, apiKey, timestamp string) (configResult, error) {
 	entry := map[string]any{
 		"url": vpsURL + "/mcp",
 		"headers": map[string]any{
@@ -23,28 +31,52 @@ func configureClient(c Client, vpsURL, apiKey, timestamp string) error {
 	}
 	switch c.Name {
 	case "opencode":
-		// opencode usa "mcp" + type=remote + enabled=true.
 		entry["type"] = "remote"
 		entry["enabled"] = true
 		return upsertJSON(c.MCPPath, "mcp", entry, timestamp)
 	case "continue":
-		// Continue tiene shape distinto: array de servers bajo experimental.
-		return configureContinue(c.MCPPath, vpsURL, apiKey, timestamp)
+		if err := configureContinue(c.MCPPath, vpsURL, apiKey, timestamp); err != nil {
+			return configResult{}, err
+		}
+		return configResult{}, nil
+	case "claude-desktop":
+		// Claude Desktop NO soporta transporte http remoto en
+		// claude_desktop_config.json (solo stdio/command). Inyectar una
+		// entry {url, headers} sería descartada silenciosamente por la app.
+		// Para conectar el server remoto haría falta un puente stdio
+		// (npx mcp-remote <url>), que no asumimos instalado. Lo omitimos
+		// con un aviso explícito en vez de escribir config inútil.
+		return configResult{
+			Skipped: true,
+			Reason:  "Claude Desktop no soporta MCP remoto http; usá Claude Code/Cursor/OpenCode, o un puente stdio (mcp-remote)",
+		}, nil
+	case "claude-code":
+		// Claude Code soporta transporte http remoto: requiere type:"http".
+		entry["type"] = "http"
+		return upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
 	default:
+		// cursor, cline: mcpServers con {url, headers} (sin type explícito).
 		return upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
 	}
 }
 
-func upsertJSON(path, container string, entry map[string]any, timestamp string) error {
-	if _, err := backupIfExists(path, timestamp); err != nil {
-		return fmt.Errorf("backup: %w", err)
-	}
+func upsertJSON(path, container string, entry map[string]any, timestamp string) (configResult, error) {
+	// Cargamos primero para decidir si hay que tocar el archivo: si vamos a
+	// hacer skip por dedup, no creamos backup ni reescribimos nada.
 	m, err := loadOrEmptyJSON(path)
 	if err != nil {
-		return err
+		return configResult{}, err
 	}
-	upsertMCPEntry(m, container, entry)
-	return writeJSON(path, m)
+	if skipped := upsertMCPEntry(m, container, entry); skipped {
+		return configResult{
+			Skipped: true,
+			Reason:  "ya existe una entry 'domain' local (instalador del server); no agrego entry remota duplicada",
+		}, nil
+	}
+	if _, err := backupIfExists(path, timestamp); err != nil {
+		return configResult{}, fmt.Errorf("backup: %w", err)
+	}
+	return configResult{}, writeJSON(path, m)
 }
 
 func configureContinue(path, vpsURL, apiKey, timestamp string) error {
@@ -86,16 +118,12 @@ func uninstallClient(c Client) (removed bool, err error) {
 	}
 	r1 := removeMCPEntry(m, "mcpServers")
 	r2 := removeMCPEntry(m, "mcp")
-	// Continue: el shape es distinto — si el server tenía sólo nuestro entry,
-	// vaciamos el array. Si tiene más, no tocamos (no podemos diferenciar
-	// "el del usuario" de "el nuestro" sin más metadata).
+
 	r3 := false
 	if c.Name == "continue" {
 		if exp, ok := m["experimental"].(map[string]any); ok {
 			if arr, ok := exp["modelContextProtocolServers"].([]any); ok && len(arr) > 0 {
-				// Filtrar elementos cuya url contenga "/mcp" del VPS configurado
-				// no es trivial sin guardar la URL — borramos toda la entry
-				// si tiene solo 1 (asumimos era la nuestra). Si tiene >1, skip.
+
 				if len(arr) == 1 {
 					delete(exp, "modelContextProtocolServers")
 					r3 = true
@@ -145,7 +173,7 @@ func linkOpencodeToGlobal(paths Paths, osName string) error {
 		if err := os.MkdirAll(filepath.Dir(p.link), 0o755); err != nil {
 			return err
 		}
-		// Si ya existe (file o symlink), removerlo antes de crear el nuevo.
+
 		_ = os.Remove(p.link)
 		if osName == "windows" {
 			b, err := os.ReadFile(p.target)
@@ -167,7 +195,7 @@ func linkOpencodeToGlobal(paths Paths, osName string) error {
 func removeGlobalAssets(paths Paths) {
 	_ = os.Remove(paths.GlobalSkillPath)
 	_ = os.Remove(paths.GlobalAgentPath)
-	// Limpiar dirs padre si quedaron vacíos.
+
 	_ = os.Remove(filepath.Dir(paths.GlobalSkillPath))
 	_ = os.Remove(filepath.Dir(paths.GlobalAgentPath))
 }

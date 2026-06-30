@@ -17,7 +17,7 @@ func newSvc(repo Repository) *Service {
 	return NewService(nil, nil, repo)
 }
 
-// ---- Create -----------------------------------------------------------------
+
 
 func TestCreate_HappyPath(t *testing.T) {
 	repo := &mockRepo{}
@@ -58,8 +58,8 @@ func TestCreate_NameTooShort(t *testing.T) {
 }
 
 func TestCreate_InvalidSlug(t *testing.T) {
-	// Nota: "Acme" pasa porque el Service lowercasea antes de validar.
-	// "a" pasa porque cumple kebab-case mínimo. Acá probamos los rechazos.
+
+
 	cases := []string{"acme_corp", "-acme", "acme-", "acme corp", ""}
 	for _, slug := range cases {
 		repo := &mockRepo{}
@@ -127,8 +127,8 @@ func TestCreate_InvalidTaxID(t *testing.T) {
 }
 
 func TestCreate_SlugConflict_MapsTo_ErrClientSlugExists(t *testing.T) {
-	// El repo devuelve pgErr UniqueViolation; el Service debe mapearlo a
-	// ErrClientSlugExists (no a un error genérico).
+
+
 	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "clients_organization_id_slug_key"}
 	repo := &mockRepo{
 		InsertHook: func(_ context.Context, _ InsertParams) (*Client, error) {
@@ -145,7 +145,7 @@ func TestCreate_SlugConflict_MapsTo_ErrClientSlugExists(t *testing.T) {
 	}
 }
 
-// ---- Get --------------------------------------------------------------------
+
 
 func TestGet_ByUUID_HitsGetByID(t *testing.T) {
 	id := uuid.New()
@@ -197,7 +197,7 @@ func TestGet_NotFound_Propagates(t *testing.T) {
 	}
 }
 
-// ---- List -------------------------------------------------------------------
+
 
 func TestList_LimitClampAndDefault(t *testing.T) {
 	var gotLimit int
@@ -230,7 +230,7 @@ func TestList_InvalidStatus(t *testing.T) {
 	}
 }
 
-// ---- Update -----------------------------------------------------------------
+
 
 func TestUpdate_PatchOnlyName(t *testing.T) {
 	id := uuid.New()
@@ -293,7 +293,7 @@ func TestUpdate_InvalidStatus(t *testing.T) {
 	}
 }
 
-// ---- Delete / Restore -------------------------------------------------------
+
 
 func TestDelete_PropagatesNotFound(t *testing.T) {
 	repo := &mockRepo{
@@ -317,7 +317,7 @@ func TestRestore_OK(t *testing.T) {
 	}
 }
 
-// ---- SetStatus --------------------------------------------------------------
+
 
 func TestSetStatus_InvalidEnum(t *testing.T) {
 	repo := &mockRepo{}
@@ -352,7 +352,7 @@ func TestSetStatus_HappyPath(t *testing.T) {
 	}
 }
 
-// ---- Sabotage: repo arbitrary error propagates without panic ---------------
+
 
 func TestCreate_Sabotage_RepoError(t *testing.T) {
 	want := errors.New("db down")

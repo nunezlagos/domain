@@ -20,20 +20,20 @@ import (
 // Si se comenta el `logger.Error(...)` o se omite el return err
 // (sabotaje), este test DEBE FALLAR.
 func TestListenAndServeWithFatalLog_PortBusy(t *testing.T) {
-	// Ocupar el puerto: net.Listen sostiene el puerto hasta close.
+
 	blocker, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer blocker.Close()
 	port := blocker.Addr().(*net.TCPAddr).Port
 
-	// Capturar log en un buffer
+
 	var logBuf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	// Segundo srv intenta el mismo puerto
+
 	srv := &http.Server{Addr: net.JoinHostPort("127.0.0.1", itoa(port)), Handler: http.NewServeMux()}
 
-	// Correr la función en goroutine para no bloquear
+
 	done := make(chan error, 1)
 	go func() {
 		done <- ListenAndServeWithFatalLog(srv, logger)
@@ -75,7 +75,7 @@ func TestListenAndServeWithFatalLog_NilLogger(t *testing.T) {
 // TestRunPostBindWatchdog_FatalCalled verifica que el watchdog
 // llama a fatalFn si los 3 intentos de ProbeHealth fallan.
 func TestRunPostBindWatchdog_FatalCalled(t *testing.T) {
-	// Port 1: privileged y casi siempre cerrado.
+
 	var fatalCalled bool
 	var fatalErr error
 	var mu sync.Mutex
@@ -93,7 +93,7 @@ func TestRunPostBindWatchdog_FatalCalled(t *testing.T) {
 	RunPostBindWatchdog(ctx, 1, fatalFn)
 	elapsed := time.Since(start)
 
-	// 2s settle + 3 * 1s intentos = ~5s
+
 	require.GreaterOrEqual(t, elapsed, 4*time.Second,
 		"watchdog debe esperar al menos 4s antes de fatal (settle 2s + 3 retries de 1s)")
 
@@ -118,7 +118,7 @@ func TestRunPostBindWatchdog_ContextCancel(t *testing.T) {
 func TestRunPostBindWatchdog_NilFatalFn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// No debe crashear
+
 	RunPostBindWatchdog(ctx, 1, nil)
 }
 

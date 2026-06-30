@@ -92,18 +92,18 @@ func TestRoutes_PostCreateWithout201_Fails(t *testing.T) {
 func TestSnapshot_DriftWithoutUpdate_Fails(t *testing.T) {
 	dir, routesFile, snapDir := setupFake(t, fakeHandlers)
 
-	// Generar snapshots iniciales
+
 	_, err := runShapeChecks(dir, routesFile, snapDir, true)
 	require.NoError(t, err)
 
-	// Sin cambios → verde (salvo la violación kebab preexistente)
+
 	violations, err := runShapeChecks(dir, routesFile, snapDir, false)
 	require.NoError(t, err)
 	for _, v := range violations {
 		require.NotContains(t, v.Reason, "snapshot", "sin drift no debe fallar snapshot")
 	}
 
-	// Cambiar rutas → drift
+
 	writeFile(t, routesFile, fakeAPI+`
 func more() { mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow) }
 `)
@@ -131,7 +131,7 @@ func more() { mux.HandleFunc("DELETE /api/v1/flows/{id}", a.deleteFlow) }
 	_, err = runShapeChecks(dir, routesFile, snapDir, true)
 	require.NoError(t, err)
 
-	// Tras update, verificar pasa sin drift
+
 	violations, err := runShapeChecks(dir, routesFile, snapDir, false)
 	require.NoError(t, err)
 	for _, v := range violations {

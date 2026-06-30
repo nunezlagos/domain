@@ -115,7 +115,4 @@ func TestDefaultConfig_TienePolicyParaTablasPII(t *testing.T) {
 	if !cfg.Tables["auth_api_keys"].Skip {
 		t.Fatal("auth_api_keys MUST be skipped")
 	}
-	if !cfg.Tables["auth_otp_codes"].Skip {
-		t.Fatal("auth_otp_codes MUST be skipped")
-	}
 }

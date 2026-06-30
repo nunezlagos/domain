@@ -1,7 +1,7 @@
 //go:build integration
 
-// F5: workflowimport — tests específicos para la doctrina "AGENTS.md/CLAUDE.md
-// son los únicos .md permitidos; todo backup vive en DB".
+
+
 
 package workflowimport_test
 

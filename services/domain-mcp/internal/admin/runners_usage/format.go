@@ -31,7 +31,7 @@ func FormatTable(r *Report) string {
 	if len(r.BySource) == 0 {
 		b.WriteString("  (no data)\n")
 	} else {
-		// Sort by count desc para legibilidad.
+
 		type kv struct {
 			k string
 			v int
@@ -72,7 +72,7 @@ func FormatTable(r *Report) string {
 	}
 	b.WriteString("\n")
 
-	// WARNING final si hay NUNCA USADO.
+
 	if r.AgentRunner.Category == CategoryNeverUsed ||
 		r.FlowRunner.Category == CategoryNeverUsed ||
 		r.SkillRunner.Category == CategoryNeverUsed {

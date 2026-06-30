@@ -1,6 +1,6 @@
--- Revertir: SET NOT NULL + recreate UNIQUE constraints.
--- Falla si hay filas con organization_id NULL (post-up las hay).
--- En roundtrip (DB fresh) no hay filas, safe.
+
+
+
 
 DO $$
 BEGIN
@@ -30,6 +30,6 @@ BEGIN
     END IF;
 END $$;
 
--- Recreate UNIQUE constraints (best-effort).
+
 ALTER TABLE external_providers
   ADD CONSTRAINT IF NOT EXISTS external_providers_org_provider_unique UNIQUE (organization_id, provider, project_key);

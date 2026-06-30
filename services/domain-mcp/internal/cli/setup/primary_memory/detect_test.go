@@ -31,7 +31,7 @@ func TestDetect_OpenCode_FindsEngram(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 
-	// Construir map para asssert rápido.
+
 	byName := map[string]DetectedProvider{}
 	for _, p := range got {
 		byName[p.Name] = p
@@ -94,7 +94,7 @@ func TestDetect_MissingConfig_ReturnsEmpty(t *testing.T) {
 }
 
 func TestDetect_MalformedJSON_ReturnsEmpty(t *testing.T) {
-	// JSON inválido: warning + lista vacía. No fallamos.
+
 	path := writeConfig(t, `{"mcp": invalid json {{{`)
 	got, err := Detect("opencode", path)
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestMemoryProviders_FiltersCorrectly(t *testing.T) {
 }
 
 func TestDetect_PreservesValidJSON(t *testing.T) {
-	// Después del detect, el archivo original debe quedar intacto.
+
 	cfg := `{"mcp": {"engram": {"command": ["/engram"]}, "domain": {"command": ["/domain"]}}}`
 	path := writeConfig(t, cfg)
 	_, err := Detect("opencode", path)

@@ -53,7 +53,7 @@ func setupOrphanAuditor(t *testing.T) (*orphanFixture, *systemcron.OrphanAuditor
 	`, orgID)
 	require.NoError(t, err)
 
-	// agente base para crear agent_runs
+
 	agentID := uuid.New()
 	_, err = pool.Exec(ctx, `
 		INSERT INTO agents (id, organization_id, slug, name, system_prompt, model, provider)
@@ -82,7 +82,7 @@ func TestOrphanAudit_DetectsBypass(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Insertar 3 agent_runs orphan (sin flow_run_id, sin metadata.standalone)
+
 	for i := 0; i < 3; i++ {
 		_, err := fx.pool.Exec(ctx, `
 			INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
@@ -103,7 +103,7 @@ func TestOrphanAudit_StandaloneIgnored(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// 2 con standalone=true (legítimos) + 1 sin (bypass)
+
 	_, err := fx.pool.Exec(ctx, `
 		INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
 		VALUES
@@ -128,7 +128,7 @@ func TestOrphanAudit_CountsOrphansInWindow(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Insertar 2 orphans
+
 	for i := 0; i < 2; i++ {
 		_, err := fx.pool.Exec(ctx, `
 			INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
@@ -150,7 +150,7 @@ func TestOrphanAudit_Sabotage_BypassDetected(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Sabotage: INSERT directo, simulating someone bypassing service layer
+
 	_, err := fx.pool.Exec(ctx, `
 		INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
 		VALUES (gen_random_uuid(), $1, $2, NULL, 'running', '{}'::jsonb)

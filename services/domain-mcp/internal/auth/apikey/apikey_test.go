@@ -1,4 +1,4 @@
-// issue-02.1 api-key-auth unit tests.
+
 
 package apikey
 
@@ -94,11 +94,11 @@ func TestSabotage_VerifyWithWrongKey(t *testing.T) {
 	pt, _, hash, err := Generate("dev")
 	require.NoError(t, err)
 	require.NoError(t, Verify(pt, hash))
-	// misma key con byte corrupto debe fallar
+
 	wrong := pt[:len(pt)-1] + "X"
 	require.Error(t, Verify(wrong, hash), "corrupted key must fail verify")
 
-	// hash completamente distinto debe fallar
+
 	require.Error(t, Verify(pt, []byte("$2a$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")), "bogus hash must fail")
 }
 

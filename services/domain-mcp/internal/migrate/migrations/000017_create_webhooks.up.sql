@@ -1,9 +1,9 @@
--- migration: create_webhooks
--- author: mnunez@saargo.com
--- issue: HU-01.1 + HU-10.2
--- description: webhooks inbound (HMAC verify, GitHub/GitLab/generic mappers)
--- breaking: false
--- estimated_duration: <1s
+
+
+
+
+
+
 
 CREATE TABLE webhooks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,0 +1,25 @@
+{% extends "maintainers/list_base.html" %}
+{% comment %}
+Listado de reglas por proyecto. Extiende maintainers/list_base.html.
+{% endcomment %}
+
+{% block page_title %}Politicas por proyecto{% endblock %}
+{% block header_title %}Politicas por proyecto{% endblock %}
+{% block create_label %}+ Nueva politica{% endblock %}
+{% block search_placeholder %}Nombre, slug o cuerpo...{% endblock %}
+
+{% block header_actions %}
+  <button class="btn btn-primary" data-action="create">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Nueva regla
+  </button>
+{% endblock %}
+
+{% block table_area_id %}policies-table-area{% endblock %}
+{% block base_url %}/politicas-proyecto/{% endblock %}
+{% block signal_url %}{% url 'projectpolicies:signal' %}{% endblock %}
+
+{% block table %}{% include "projectpolicies/_table_partial.html" %}{% endblock %}

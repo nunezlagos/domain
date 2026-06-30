@@ -1,9 +1,9 @@
--- Down: revoca las DEFAULT PRIVILEGES seteadas por el up (sin FOR ROLE → pertenecen
--- al rol que corre las migraciones). Es necesario para que el down de 000025 pueda
--- DROP ROLE app_user/app_admin/app_readonly sin dependencias colgando.
---
--- NO se revierten los GRANT explícitos sobre tablas/secuencias existentes (sería
--- destructivo para apps en uso); solo las default privileges forward-looking.
+
+
+
+
+
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN

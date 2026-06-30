@@ -49,7 +49,7 @@ func findRepoRoot(t *testing.T) string {
 func TestCheckProjectRootGuard_FailsOutsideRepo(t *testing.T) {
 	empty := t.TempDir() // sin .env.example ni docker-compose.yml
 
-	// Capturar stderr
+
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
@@ -57,7 +57,7 @@ func TestCheckProjectRootGuard_FailsOutsideRepo(t *testing.T) {
 
 	_, ok := checkProjectRootGuard(empty)
 
-	// Cerrar el write end para que el read retorne
+
 	_ = w.Close()
 	buf := make([]byte, 4096)
 	n, _ := r.Read(buf)
@@ -79,14 +79,14 @@ func TestCheckProjectRootGuard_SrcOverrideOK(t *testing.T) {
 	originalCwd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(originalCwd) }()
 
-	// chdir a un dir random antes, para verificar que --src cambia
+
 	otherDir := t.TempDir()
 	require.NoError(t, os.Chdir(otherDir))
 
 	_, ok := checkProjectRootGuard(dir)
 	require.True(t, ok, "checkProjectRootGuard with --src should pass for valid dir")
 
-	// Después del guard, el cwd efectivo debe ser --src.
+
 	cwd, _ := os.Getwd()
 	require.True(t, strings.HasSuffix(cwd, filepath.Base(dir)),
 		"cwd should be the --src path, got %s", cwd)
@@ -112,8 +112,8 @@ func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
 
 	require.False(t, ok, "checkProjectRootGuard should fail for nonexistent --src")
 	require.Contains(t, stderr, "could not determine cwd", "no stderr capture — el helper loguea distinto para path inexistente")
-	// Realmente el log dice "project root check failed for %q: stat ... no such file"
-	// Aceptamos cualquiera de los dos formatos (más robusto a cambios).
+
+
 }
 
 // TestCheckProjectRootGuard_OnlyOneMarker: con solo .env.example
@@ -124,7 +124,7 @@ func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
 func TestCheckProjectRootGuard_OnlyOneMarker(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.example"), []byte("EX"), 0o600))
-	// NOTA: no escribimos docker-compose.yml.
+
 
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()

@@ -16,18 +16,18 @@ import (
 )
 
 const (
-	// PrefixLen chars visibles del API key para indexing y display.
+
 	PrefixLen = 16
-	// SecretBytes bytes random del secret part (32 → 43 chars base64url).
+
 	SecretBytes = 32
-	// BcryptCost cost del hash. 12 = ~250ms en hardware moderno.
+
 	BcryptCost = 12
 )
 
 var (
-	// ErrInvalidFormat key string no respeta `domk_{env}_{secret}`.
+
 	ErrInvalidFormat = errors.New("invalid api key format")
-	// ErrInvalidEnv prefix env desconocido.
+
 	ErrInvalidEnv = errors.New("invalid api key env (expected live/test/dev)")
 )
 

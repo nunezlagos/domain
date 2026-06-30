@@ -1,7 +1,7 @@
-// Tests para internal/installer (HU-01.11).
-//
-// Filosofía: estos tests son unitarios puros. NO ejecutan install
-// real (no sudo, no red, no mutation del sistema). Mockean conConfirm.
+
+
+
+
 
 package installer
 
@@ -13,12 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- Test: OS detection ---
+
 
 func TestDetectOS_CurrentPlatform(t *testing.T) {
 	p, err := DetectPlatform()
 	require.NoError(t, err)
-	// En linux + arch (este ambiente) debe detectar correctamente.
+
 	t.Logf("Detected: OS=%s Distro=%s PkgMgr=%s Version=%s", p.OS, p.Distro, p.PkgMgr, p.Version)
 	require.NotEmpty(t, p.PkgMgr, "pkg manager must be detected")
 }
@@ -62,7 +62,7 @@ func TestPkgMgrForDistro(t *testing.T) {
 	}
 }
 
-// --- Test: version comparison ---
+
 
 func TestCompareVersion(t *testing.T) {
 	cases := []struct {
@@ -84,7 +84,7 @@ func TestCompareVersion(t *testing.T) {
 	}
 }
 
-// --- Test: install command generation ---
+
 
 func TestInstallCommand(t *testing.T) {
 	cases := []struct {
@@ -114,10 +114,10 @@ func TestInstallCommand(t *testing.T) {
 	}
 }
 
-// --- Test: dep check (in real system, no mocking) ---
+
 
 func TestCheck_FindsGoInPATH(t *testing.T) {
-	// Asumimos que `go` esta en PATH (porque estamos corriendo los tests).
+
 	results := Check([]Dep{DepGo})
 	require.Len(t, results, 1)
 	r := results[0]
@@ -138,7 +138,7 @@ func TestCheck_NotFoundHasHint(t *testing.T) {
 	require.NotEmpty(t, r.Hint, "missing dep must have install hint")
 }
 
-// --- Test: install flow with confirm (mocked) ---
+
 
 func TestInstall_UserRejectsConfirm(t *testing.T) {
 	called := false
@@ -155,18 +155,18 @@ func TestInstall_UserRejectsConfirm(t *testing.T) {
 }
 
 func TestInstall_UserAcceptsConfirm_CommandFails(t *testing.T) {
-	// En este test: con sudo (no-op si no hay sudo), no podemos
-	// garantizar exito. Pero podemos verificar que withConfirm se
-	// llama y el install command se intenta.
-	// Si estamos en CI sin sudo, retorna error — eso es OK para
-	// el test (verificamos el flow, no el resultado).
+
+
+
+
+
 	confirm := func(prompt string) bool { return true }
 	_, err := Install(context.Background(),
 		Platform{OS: OSLinux, Distro: DistroUbuntu, PkgMgr: PkgApt},
 		Dep{Binary: "nonexistent-binary-xyz", PkgName: "fake"},
 		confirm)
-	// err puede ser nil (si sudo funciona y fake se "instala") o non-nil
-	// (si no hay sudo). Lo que nos importa es que NO panique.
+
+
 	_ = err
 }
 
@@ -177,17 +177,17 @@ func TestInstall_NilConfirm_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- Test: error wrapping ---
+
 
 func TestErrorsIs_UnsupportedOS(t *testing.T) {
-	// Forzamos un OS no-soportado via un Platform fake.
-	// El error se chequea en DetectPlatform cuando GOOS retorna algo
-	// no-linux/darwin/windows. Aqui testeamos el sentinel.
+
+
+
 	err := ErrUnsupportedOS
 	require.True(t, errors.Is(err, ErrUnsupportedOS))
 }
 
-// --- Test: runInstallCommand edge cases ---
+
 
 func TestRunInstallCommand_EmptyString(t *testing.T) {
 	err := runInstallCommand(context.Background(), "")

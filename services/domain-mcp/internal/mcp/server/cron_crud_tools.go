@@ -1,12 +1,12 @@
 // REQ-48 — tools CRUD de crons MCP. Hoy ya existe domain_cron_list pero
-// faltaba lo más importante: cómo CREARLOS, pausarlos, borrarlos y ver
+// faltaba lo mas importante: como CREARLOS, pausarlos, borrarlos y ver
 // su historial de ejecuciones. El usuario crea automatizaciones
 // apuntando a skills/flows/agents que ya existen (ej. skill custom
 // "jira-create-issue" o flow "weekly-backup").
 //
 // El scheduler interno (internal/scheduler/cron) polla crons enabled
-// con next_run_at vencido cada 30s y dispatcha vía internal/dispatch.
-// Ningún cambio acá — solo exponemos CRUD por MCP.
+// con next_run_at vencido cada 30s y dispatcha via internal/dispatch.
+// Ningun cambio aqui — solo exponemos CRUD por MCP.
 package mcpserver
 
 import (
@@ -18,29 +18,43 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 )
 
+type cronService interface {
+	Create(ctx context.Context, in cronsvc.CreateInput) (*cronsvc.Cron, error)
+	SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) error
+	SoftDelete(ctx context.Context, id, actorID uuid.UUID) error
+	History(ctx context.Context, cronID uuid.UUID, limit int) ([]cronsvc.Execution, error)
+}
+
+type cronHandlers struct {
+	crons     cronService
+	principal *apikey.Principal
+}
+
 func registerCronCRUDTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	h := &cronHandlers{crons: deps.Crons, principal: deps.Principal}
 	return []mcpgo.ServerTool{
-		{Tool: toolCronCreate(), Handler: wrap.Wrap("domain_cron_create", deps.handleCronCreate)},
-		{Tool: toolCronSetEnabled(), Handler: wrap.Wrap("domain_cron_set_enabled", deps.handleCronSetEnabled)},
-		{Tool: toolCronDelete(), Handler: wrap.Wrap("domain_cron_delete", deps.handleCronDelete)},
-		{Tool: toolCronHistory(), Handler: wrap.Wrap("domain_cron_history", deps.handleCronHistory)},
+		{Tool: toolCronCreate(), Handler: wrap.Wrap("domain_cron_create", h.handleCronCreate)},
+		{Tool: toolCronSetEnabled(), Handler: wrap.Wrap("domain_cron_set_enabled", h.handleCronSetEnabled)},
+		{Tool: toolCronDelete(), Handler: wrap.Wrap("domain_cron_delete", h.handleCronDelete)},
+		{Tool: toolCronHistory(), Handler: wrap.Wrap("domain_cron_history", h.handleCronHistory)},
 	}
 }
 
 func toolCronCreate() mcp.Tool {
 	return mcp.NewTool("domain_cron_create",
-		mcp.WithDescription("Crea un cron que dispara periódicamente un flow/agent/skill existente. El scheduler interno polla cada 30s y ejecuta lo que esté vencido. Validación: cron_expression debe ser un crontab válido (5 campos UNIX, ej '0 9 * * MON-FRI' = 9am lun-vie). Para automatizaciones concretas (email/jira/backup), crear primero un skill custom con domain_project_skill_register y apuntar el cron a ese skill_id."),
-		mcp.WithString("slug", mcp.Description("Slug único del cron en la org (kebab-case)"), mcp.Required()),
+		mcp.WithDescription("Crea un cron que dispara periodicamente un flow/agent/skill existente. El scheduler interno polla cada 30s y ejecuta lo que este vencido. Validacion: cron_expression debe ser un crontab valido (5 campos UNIX, ej '0 9 * * MON-FRI' = 9am lun-vie). Para automatizaciones concretas (email/jira/backup), crear primero un skill custom con domain_project_skill_register y apuntar el cron a ese skill_id."),
+		mcp.WithString("slug", mcp.Description("Slug unico del cron en la org (kebab-case)"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
-		mcp.WithString("description", mcp.Description("Para qué sirve este cron (1-2 líneas)")),
+		mcp.WithString("description", mcp.Description("Para que sirve este cron (1-2 lineas)")),
 		mcp.WithString("cron_expression", mcp.Description("Crontab UNIX 5-campos (ej: '0 9 * * MON-FRI', '*/15 * * * *', '0 0 1 * *')"), mcp.Required()),
 		mcp.WithString("timezone", mcp.Description("IANA timezone (ej: 'America/Santiago'). Default: UTC")),
-		mcp.WithString("target_type", mcp.Description("Qué disparar: flow | agent | skill"), mcp.Required()),
+		mcp.WithString("target_type", mcp.Description("Que disparar: flow | agent | skill"), mcp.Required()),
 		mcp.WithString("target_id", mcp.Description("UUID del flow/agent/skill a ejecutar"), mcp.Required()),
-		mcp.WithObject("inputs", mcp.Description("Inputs JSON pasados al target en cada ejecución")),
+		mcp.WithObject("inputs", mcp.Description("Inputs JSON pasados al target en cada ejecucion")),
 		mcp.WithBoolean("enabled", mcp.Description("Empezar habilitado (default true). Si false, queda creado pero no se ejecuta hasta domain_cron_set_enabled.")),
 	)
 }
@@ -55,24 +69,24 @@ func toolCronSetEnabled() mcp.Tool {
 
 func toolCronDelete() mcp.Tool {
 	return mcp.NewTool("domain_cron_delete",
-		mcp.WithDescription("Soft-delete de un cron. Las ejecuciones históricas se preservan; el cron deja de dispararse."),
+		mcp.WithDescription("Soft-delete de un cron. Las ejecuciones historicas se preservan; el cron deja de dispararse."),
 		mcp.WithString("id", mcp.Description("UUID del cron"), mcp.Required()),
 	)
 }
 
 func toolCronHistory() mcp.Tool {
 	return mcp.NewTool("domain_cron_history",
-		mcp.WithDescription("Historial de ejecuciones (running/completed/failed/skipped_overlap) de un cron. Para debugging y auditoría — ¿se está disparando? ¿está fallando?"),
+		mcp.WithDescription("Historial de ejecuciones (running/completed/failed/skipped_overlap) de un cron. Para debugging y auditoria — ¿se esta disparando? ¿esta fallando?"),
 		mcp.WithString("id", mcp.Description("UUID del cron"), mcp.Required()),
-		mcp.WithNumber("limit", mcp.Description("Máx resultados (default 20, max 100)")),
+		mcp.WithNumber("limit", mcp.Description("Max resultados (default 20, max 100)")),
 	)
 }
 
-func (d *Deps) handleCronCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *cronHandlers) handleCronCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Crons == nil {
+	if h.crons == nil {
 		return mcp.NewToolResultError("crons service not configured"), nil
 	}
 	args := req.GetArguments()
@@ -86,12 +100,12 @@ func (d *Deps) handleCronCreate(ctx context.Context, req mcp.CallToolRequest) (*
 	}
 	tID, err := uuid.Parse(tIDStr)
 	if err != nil {
-		return mcp.NewToolResultError("target_id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("target_id invalido (UUID requerido)"), nil
 	}
 	tType = strings.ToLower(strings.TrimSpace(tType))
 
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 
 	in := cronsvc.CreateInput{
 		OrganizationID: orgID,
@@ -117,65 +131,65 @@ func (d *Deps) handleCronCreate(ctx context.Context, req mcp.CallToolRequest) (*
 		in.Inputs = v
 	}
 
-	c, err := d.Crons.Create(ctx, in)
+	c, err := h.crons.Create(ctx, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create cron failed: %v", err)), nil
 	}
 	return toolResultJSON(c)
 }
 
-func (d *Deps) handleCronSetEnabled(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *cronHandlers) handleCronSetEnabled(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Crons == nil {
+	if h.crons == nil {
 		return mcp.NewToolResultError("crons service not configured"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	enabled, _ := args["enabled"].(bool)
-	if err := d.Crons.SetEnabled(ctx, id, enabled); err != nil {
+	if err := h.crons.SetEnabled(ctx, id, enabled); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("set_enabled failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "enabled": enabled})
 }
 
-func (d *Deps) handleCronDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *cronHandlers) handleCronDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Crons == nil {
+	if h.crons == nil {
 		return mcp.NewToolResultError("crons service not configured"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	if err := d.Crons.SoftDelete(ctx, id, userID); err != nil {
+	userID, _ := uuid.Parse(h.principal.UserID)
+	if err := h.crons.SoftDelete(ctx, id, userID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})
 }
 
-func (d *Deps) handleCronHistory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *cronHandlers) handleCronHistory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Crons == nil {
+	if h.crons == nil {
 		return mcp.NewToolResultError("crons service not configured"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido"), nil
+		return mcp.NewToolResultError("id invalido"), nil
 	}
 	limit := 20
 	if v, ok := args["limit"].(float64); ok {
@@ -184,7 +198,7 @@ func (d *Deps) handleCronHistory(ctx context.Context, req mcp.CallToolRequest) (
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	execs, err := d.Crons.History(ctx, id, limit)
+	execs, err := h.crons.History(ctx, id, limit)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("history failed: %v", err)), nil
 	}

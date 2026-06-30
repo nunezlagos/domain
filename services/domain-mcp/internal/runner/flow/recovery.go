@@ -77,7 +77,7 @@ func (r *Runner) RunRecovery(ctx context.Context, cfg RecoveryConfig) {
 // ReleaseStaleRuns libera runs stale y marca los que exceden crash-loop
 // threshold como failed. Retorna (released, crashLoopFailed, err).
 func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxRecoveries int) (int64, int64, error) {
-	// Primero: marcar como failed los que exceden el crash-loop threshold
+
 	var crashLoopCount int64
 	if maxRecoveries > 0 {
 		tag, err := r.Pool.Exec(ctx, `
@@ -97,8 +97,8 @@ func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxR
 		crashLoopCount = tag.RowsAffected()
 	}
 
-	// Liberar los demás: limpiar worker_id, incrementar recovery_count,
-	// dejar en running para que ClaimRun los tome.
+
+
 	tag, err := r.Pool.Exec(ctx, `
 		UPDATE flow_runs
 		SET worker_id = NULL,
@@ -113,7 +113,7 @@ func (r *Runner) ReleaseStaleRuns(ctx context.Context, stale time.Duration, maxR
 		return 0, crashLoopCount, err
 	}
 
-	// Log audit por cada run liberado (opcional, se podría hacer con RETURNING)
+
 	return tag.RowsAffected(), crashLoopCount, nil
 }
 

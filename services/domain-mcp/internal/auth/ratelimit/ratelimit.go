@@ -53,7 +53,7 @@ func (l *Limiter) AllowN(key string, n int) bool {
 		l.buckets[key] = b
 	}
 
-	// Refill: tokens += elapsed * refillRate, cap a capacity
+
 	elapsed := now.Sub(b.lastRefill).Seconds()
 	b.tokens += elapsed * l.refillRate
 	if b.tokens > l.capacity {

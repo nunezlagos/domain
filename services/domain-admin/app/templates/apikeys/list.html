@@ -1,0 +1,57 @@
+{% extends "maintainers/list_base.html" %}
+{% load static %}
+{% comment %}
+Listado de API Keys. Extiende maintainers/list_base.html: este define la
+estructura comun (header + contenedor [data-maintainer-table] con
+data-base-url/-signal-url/-signal) y carga maintainer.js. El bloque filters
+(usuario/estado/busqueda + export Excel) vive aca; los estilos en maintainers.css
+(.mnt-*). NO hay JS ni estilos inline.
+{% endcomment %}
+
+{% block page_title %}API Keys{% endblock %}
+{% block header_title %}API Keys{% endblock %}
+{% block page_subtitle %}Credenciales de acceso programatico{% endblock %}
+{% block create_label %}+ Nueva API Key{% endblock %}
+
+{% block filters %}
+  <div>
+    <label class="form-label" for="f-user">Usuario</label>
+    <select data-filter name="user" id="f-user" class="form-control form-select mnt-filter-select">
+      <option value="">Todos</option>
+      {% for u in user_options %}
+        <option value="{{ u.id }}" {% if u.id|stringformat:'s' == selected_user %}selected{% endif %}>{{ u.email }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="form-label" for="f-status">Estado</label>
+    <select data-filter name="status" id="f-status" class="form-control form-select mnt-filter-select">
+      <option value="">Todos</option>
+      {% for val, lbl in status_options %}
+        <option value="{{ val }}" {% if val == selected_status %}selected{% endif %}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mnt-filters-search">
+    <label class="form-label" for="q">Buscar</label>
+    <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+           placeholder="Nombre o prefijo..." autocomplete="off" data-search-input>
+  </div>
+  <div>
+    <button type="button" class="btn btn-excel" data-export="/api-keys/export/"
+            title="Exportar consolidado a Excel (CSV)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/>
+      </svg>
+      Excel
+    </button>
+  </div>
+{% endblock %}
+
+{% block table_area_id %}apikeys-table-area{% endblock %}
+{% block base_url %}/api-keys/{% endblock %}
+{% block signal_url %}{% url 'apikeys:signal' %}{% endblock %}
+
+{% block table %}{% include "apikeys/_table_partial.html" %}{% endblock %}

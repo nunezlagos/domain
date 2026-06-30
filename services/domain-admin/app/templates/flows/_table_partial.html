@@ -1,0 +1,60 @@
+{% extends "maintainers/_table_base.html" %}
+{% comment %}
+Tabla de flows. Extiende maintainers/_table_base.html (wrapper + thead/tbody +
+paginacion compartida). Define columnas y filas propias. Como la lista viene
+bajo `flows` (no `object_list`), se sobreescribe el bloque `rows` completo.
+{% endcomment %}
+
+{% block columns %}
+  <th>Nombre</th>
+  <th>Slug</th>
+  <th>Descripcion</th>
+  <th>Estado</th>
+  <th>Creado</th>
+  <th class="mnt-col-actions">Acciones</th>
+{% endblock %}
+
+{% block colspan %}6{% endblock %}
+{% block empty %}No hay flows{% if search %} que coincidan con "{{ search }}"{% endif %}.{% endblock %}
+
+{% block rows %}
+  {% for f in flows %}
+    <tr id="flow-row-{{ f.pk }}">
+      <td>{{ f.name }}</td>
+      <td><code>{{ f.slug }}</code></td>
+      <td>{{ f.description|default:"—"|truncatechars:60 }}</td>
+      <td>
+        {% if f.is_active %}<span class="badge badge-success">{{ f.status_label }}</span>
+        {% else %}<span class="badge badge-warning">{{ f.status_label }}</span>
+        {% endif %}
+      </td>
+      <td>{{ f.created_at|date:"d/m/Y" }}</td>
+      <td>
+        <div class="d-flex gap-1 mnt-row-actions">
+          <button class="btn btn-icon btn-ghost" title="Ver detalle"
+                  data-action="view" data-id="{{ f.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button class="btn btn-icon btn-ghost" title="Editar"
+                  data-action="edit" data-id="{{ f.pk }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+          {% comment %} Flows: solo visualizar + editar (sin toggle ni eliminar;
+             el catalogo lo gestiona la plataforma). {% endcomment %}
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr>
+      <td colspan="6" class="mnt-empty-cell">
+        No hay flows{% if search %} que coincidan con "{{ search }}"{% endif %}.
+      </td>
+    </tr>
+  {% endfor %}
+{% endblock %}

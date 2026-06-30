@@ -1,13 +1,13 @@
-// Package installer — auto-detect OS + distro + package manager
-// + auto-install dependencies with confirm (HU-01.11).
-//
-// Diseño: el binario `domain` chequea que Go/git/docker esten
-// disponibles antes de empezar el wizard de install. Si falta algo
-// crítico, ofrece auto-instalar via el package manager nativo del
-// sistema, pidiendo confirmacion previa.
-//
-// Tests-friendly: Install() acepta un callback `withConfirm` para
-// que la TUI/CLI decidan como pedir confirm. No se acopla a bubbletea.
+
+
+
+
+
+
+
+
+
+
 
 package installer
 
@@ -90,7 +90,7 @@ func DetectPlatform() (Platform, error) {
 		p.PkgMgr = PkgBrew
 	case OSWindows:
 		p.Distro = DistroWin
-		// Preferimos choco (más simple); fallback a winget.
+
 		if _, err := exec.LookPath("choco"); err == nil {
 			p.PkgMgr = PkgChoco
 		} else {
@@ -114,9 +114,9 @@ func detectOS() OS {
 	return OSUnknown
 }
 
-// readOSRelease lee /etc/os-release y retorna (ID, VERSION_ID, err).
-// Solo linux; en otros OS la implementacion de os_other.go retorna
-// error. No definimos el cuerpo aca para evitar conflicto con build tags.
+
+
+
 
 func mapDistroID(id string) Distro {
 	switch strings.ToLower(id) {

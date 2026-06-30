@@ -1,6 +1,6 @@
 //go:build integration
 
-// F4: projectlink — tests integration con DB seeded.
+
 
 package projectlink_test
 

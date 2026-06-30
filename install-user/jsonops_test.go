@@ -11,7 +11,7 @@ import (
 func TestUpsertMCPEntry_PreservesOthersAndMigratesLegacy(t *testing.T) {
 	m := map[string]any{
 		"mcpServers": map[string]any{
-			"domain": map[string]any{"url": "OLD"},        // legacy a migrar
+			"domain":    map[string]any{"url": "OLD"},       // legacy a migrar
 			"atlassian": map[string]any{"url": "https://x"}, // del usuario, NO tocar
 			"slack":     map[string]any{"command": "node"},  // del usuario, NO tocar
 		},
@@ -39,7 +39,64 @@ func TestUpsertMCPEntry_PreservesOthersAndMigratesLegacy(t *testing.T) {
 	}
 }
 
-// removeMCPEntry: borra domain-mcp Y domain (legacy), preserva otros.
+// Dedup: 'domain' LOCAL (con command) → upsert es no-op (skip), no se crea
+// 'domain-mcp' remoto contradictorio ni se altera el local.
+func TestUpsertMCPEntry_SkipsLocalDomain(t *testing.T) {
+	m := map[string]any{
+		"mcpServers": map[string]any{
+			"domain": map[string]any{"command": "/bin/domain-mcp", "args": []any{}},
+		},
+	}
+	skipped := upsertMCPEntry(m, "mcpServers", map[string]any{"url": "https://new"})
+	if !skipped {
+		t.Fatal("skipped = false, want true (domain local presente)")
+	}
+	servers := m["mcpServers"].(map[string]any)
+	if _, ok := servers["domain-mcp"]; ok {
+		t.Error("se creó 'domain-mcp' pese a 'domain' local")
+	}
+	if servers["domain"].(map[string]any)["command"] != "/bin/domain-mcp" {
+		t.Error("'domain' local fue alterado")
+	}
+}
+
+// Dedup OpenCode: 'domain' con type:local → skip.
+func TestUpsertMCPEntry_SkipsLocalTypeOpenCode(t *testing.T) {
+	m := map[string]any{
+		"mcp": map[string]any{
+			"domain": map[string]any{"type": "local", "command": []any{"/bin/domain-mcp"}},
+		},
+	}
+	if skipped := upsertMCPEntry(m, "mcp", map[string]any{"type": "remote", "url": "https://new"}); !skipped {
+		t.Fatal("skipped = false, want true (domain type:local presente)")
+	}
+	if _, ok := m["mcp"].(map[string]any)["domain-mcp"]; ok {
+		t.Error("se creó 'domain-mcp' pese a 'domain' type:local")
+	}
+}
+
+// uninstall NO debe borrar un 'domain' LOCAL ajeno (instalador del server).
+func TestRemoveMCPEntry_PreservesLocalDomain(t *testing.T) {
+	m := map[string]any{
+		"mcpServers": map[string]any{
+			"domain":     map[string]any{"command": "/bin/domain-mcp"},
+			"domain-mcp": map[string]any{"url": "https://remote"},
+		},
+	}
+	removed := removeMCPEntry(m, "mcpServers")
+	if !removed {
+		t.Error("removed = false, want true (sí removió domain-mcp remoto)")
+	}
+	servers := m["mcpServers"].(map[string]any)
+	if _, ok := servers["domain"]; !ok {
+		t.Error("'domain' local fue borrado por uninstall (no debería)")
+	}
+	if _, ok := servers["domain-mcp"]; ok {
+		t.Error("'domain-mcp' remoto debería haberse borrado")
+	}
+}
+
+// removeMCPEntry: borra domain-mcp Y domain (legacy remoto), preserva otros.
 // Si el container queda vacío, lo elimina del JSON.
 func TestRemoveMCPEntry_OnlyOurs(t *testing.T) {
 	m := map[string]any{
@@ -131,7 +188,6 @@ func TestBackupIfExists(t *testing.T) {
 		t.Errorf("backup no creado: %v", err)
 	}
 
-	// Caso archivo inexistente: no-op, no error
 	backup2, err := backupIfExists(filepath.Join(tmp, "ghost.json"), "20260615T000000Z")
 	if err != nil {
 		t.Errorf("inexistente debería ser no-op, got err: %v", err)

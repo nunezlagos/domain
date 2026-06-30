@@ -28,7 +28,7 @@ func (r *ConditionalRunner) Run(_ context.Context, input RunInput) (any, error) 
 	ifBranch := configSlice(input.Config, "if_branch")
 	elseBranch := configSlice(input.Config, "else_branch")
 
-	// Resolve template vars in condition first, then bare paths.
+
 	resolved := ResolveTemplate(condition, input.Inputs, input.StepOutputs)
 	resolved = ResolveBarePaths(resolved, input.Inputs, input.StepOutputs)
 
@@ -54,14 +54,14 @@ func (r *ConditionalRunner) Run(_ context.Context, input RunInput) (any, error) 
 // evalBool evaluates a simple boolean expression.
 // Supports: ==, !=, true, false, numbers.
 func evalBool(expr string) (bool, error) {
-	// Trim whitespace
+
 	i := 0
 	for i < len(expr) && (expr[i] == ' ' || expr[i] == '\t') {
 		i++
 	}
 	expr = expr[i:]
 
-	// Simple boolean literals
+
 	if expr == "true" {
 		return true, nil
 	}
@@ -69,8 +69,8 @@ func evalBool(expr string) (bool, error) {
 		return false, nil
 	}
 
-	// Comparison: left op right
-	// Supported ops: ==, !=, >=, <=, >, <
+
+
 	ops := []string{"==", "!=", ">=", "<=", ">", "<"}
 	var opIdx int = -1
 	var opLen int
@@ -99,7 +99,7 @@ func evalBool(expr string) (bool, error) {
 		if leftIsNum && rightIsNum {
 			return leftVal == rightVal, nil
 		}
-		// If both are "true"/"false", compare as bool
+
 		if (left == "true" || left == "false") && (right == "true" || right == "false") {
 			return (left == "true") == (right == "true"), nil
 		}
@@ -152,8 +152,8 @@ func findOp(expr, op string) int {
 		}
 		if !inSingle && !inDouble {
 			if i+len(op) <= len(expr) && expr[i:i+len(op)] == op {
-				// Ensure we don't match a longer operator prefix
-				// e.g. "==" should match "==" not "="
+
+
 				if op == "=" || op == "!" || op == ">" || op == "<" {
 					if i+len(op) < len(expr) && expr[i+len(op)] == '=' {
 						continue

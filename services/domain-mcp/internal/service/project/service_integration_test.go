@@ -135,7 +135,7 @@ func TestSabotage_Project_SlugReusableAcrossOrgs(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Crear segunda org en el mismo pool
+
 	var orgB uuid.UUID
 	require.NoError(t, svc.Pool.QueryRow(ctx,
 		`INSERT INTO organizations (name, slug) VALUES ('B', 'org-b') RETURNING id`).Scan(&orgB))

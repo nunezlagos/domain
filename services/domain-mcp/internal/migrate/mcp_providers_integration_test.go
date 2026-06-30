@@ -1,9 +1,9 @@
 //go:build integration
 
-// F1: mcp_providers table — catálogo de MCPs instalables por el cliente IA.
-// Verifica schema esperado: id, name (unique), description, command,
-// default_args, env_template jsonb, required_env text[], tags text[],
-// is_built_in, is_public, organization_id, timestamps.
+
+
+
+
 
 package migrate_test
 

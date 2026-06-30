@@ -135,6 +135,41 @@ else
   ok "Repo clonado"
 fi
 
+# Limpieza de leftovers: archivos untracked de layouts viejos. Un install
+# pre-restructura dejaba copias FLAT de services/* en la raíz de $INSTALL_DIR
+# (Makefile, domain-admin/, domain-mcp/, scripts/backup.sh, systemd/, ...).
+# Esas copias hacían que `make -C /opt/services` y los units systemd apuntaran
+# a CÓDIGO VIEJO.
+#
+# Usamos -ffd (doble -f): -fd solo no borra directorios con un .git anidado
+# (ej: domain-mcp/ que tenía un repo embebido) y los dejaba como residual.
+# -ff sí los remueve. SIN -x → respeta .gitignore, así que .env, certs/ y
+# backups/ (ignorados) se PRESERVAN; solo borra los duplicados obsoletos.
+if [[ -d "$INSTALL_DIR/.git" ]]; then
+  STALE=$(cd "$INSTALL_DIR" && git clean -nffd 2>/dev/null | wc -l)
+  if [[ "$STALE" -gt 0 ]]; then
+    log "Limpiando $STALE leftovers untracked (layouts viejos, incl. repos anidados)..."
+    (cd "$INSTALL_DIR" && git clean -ffd >/dev/null 2>&1) || true
+  fi
+  # Algunos leftovers flat tienen artefactos GITIGNOREADOS adentro (ej:
+  # domain-mcp/.../.ai/, .mcp.json) que git clean no remueve sin -x — y -x
+  # borraría .env/certs/backups. Los limpiamos de forma FUTURE-PROOF (sin
+  # hardcodear nombres): una entrada en la raíz es duplicado del layout viejo
+  # si su nombre también existe bajo services/ Y no está tracked en la raíz.
+  # Así, cualquier servicio nuevo que sumes bajo services/ queda cubierto
+  # automáticamente, sin tocar contenido tracked (README.md, scripts/...) ni
+  # los ignorados legítimos (.env, certs/, backups/).
+  for svc in "$INSTALL_DIR/services"/*; do
+    name=$(basename "$svc")
+    [[ "$name" == "certs" ]] && continue          # symlink, lo recrea STEP 5
+    [[ -e "$INSTALL_DIR/$name" ]] || continue       # no hay dup en la raíz
+    # Si algún archivo de ese path está tracked en la raíz → contenido legítimo.
+    git -C "$INSTALL_DIR" ls-files --error-unmatch "$name" >/dev/null 2>&1 && continue
+    rm -rf "${INSTALL_DIR:?}/$name"
+  done
+  ok "Working tree limpio (sin duplicados flat)"
+fi
+
 # === STEP 4: Generate or preserve .env ===
 log "4/8  Configurando credenciales..."
 ENV_FILE="$INSTALL_DIR/.env"
@@ -210,22 +245,34 @@ cd "$INSTALL_DIR/services"
 # Makefile usa --env-file .env (relativo al CWD). El .env real está en
 # $INSTALL_DIR/.env (parent). Symlink para que make lo encuentre.
 [[ -L .env ]] || ln -sf ../.env .env
+# docker-compose.yml de cada servicio busca .env en su propio directorio.
+# Sin esto, variables como APP_USER_PASSWORD quedan vacías → DB connection fail.
+for _svc in "$INSTALL_DIR/services"/*/; do
+  _name=$(basename "$_svc")
+  [[ "$_name" == "certs" || "$_name" == "systemd" ]] && continue
+  [[ -f "$_svc/docker-compose.yml" ]] || continue
+  [[ -L "$_svc/.env" ]] || ln -sf ../../.env "$_svc/.env"
+done
 make down 2>/dev/null || true
 make build
 make up
 make wait-healthy
 ok "5 servicios healthy"
 
-# === STEP 7: Systemd timers ===
-log "7/8  Configurando systemd timers..."
+# === STEP 7: Systemd units + timers ===
+log "7/8  Configurando systemd units + timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.service /etc/systemd/system/ 2>/dev/null || true
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
   sudo_run systemctl daemon-reload
+  # Persistencia al boot: el stack ya está arriba (STEP 6 via make up); enable
+  # sin --now solo lo registra para arrancar en el próximo boot desde la ruta
+  # correcta ($INSTALL_DIR/services). Evita el doble make up redundante.
+  sudo_run systemctl enable domain-services.service 2>/dev/null || true
   sudo_run systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
-  ok "Timers systemd activos"
+  ok "Units + timers systemd activos"
 else
-  warn "no se encontró $INSTALL_DIR/services/systemd/, saltando timers"
+  warn "no se encontró $INSTALL_DIR/services/systemd/, saltando systemd"
 fi
 
 # === STEP 8: Print credenciales ===

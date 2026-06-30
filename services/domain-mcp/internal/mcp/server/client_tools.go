@@ -1,4 +1,4 @@
-// Tools MCP de clients (mandantes). Útil para consultoras que gestionan
+// Tools MCP de clients (mandantes). Util para consultoras que gestionan
 // proyectos por cliente. Tools registradas con prefijo `domain_client_*`.
 //
 // Tools:
@@ -24,38 +24,55 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	clientsvc "nunezlagos/domain/internal/service/client"
 )
 
+type clientService interface {
+	Create(ctx context.Context, orgID uuid.UUID, in clientsvc.CreateInput) (*clientsvc.Client, error)
+	Get(ctx context.Context, orgID uuid.UUID, idOrSlug string) (*clientsvc.Client, error)
+	List(ctx context.Context, orgID uuid.UUID, filter clientsvc.ListFilter) ([]*clientsvc.Client, int64, error)
+	Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID, in clientsvc.UpdateInput) (*clientsvc.Client, error)
+	Delete(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error
+	Restore(ctx context.Context, orgID uuid.UUID, id uuid.UUID) error
+	SetStatus(ctx context.Context, orgID uuid.UUID, id uuid.UUID, status string) (*clientsvc.Client, error)
+}
+
+type clientHandlers struct {
+	clients   clientService
+	principal *apikey.Principal
+}
+
 func registerClientTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// rls: tx + SET LOCAL app.current_org_id para que el pg_repository del
-	// service (clients tiene RLS FORCE en migration 000099) lea la tx via
-	// txctx.TxFromContext y respete las policies.
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &clientHandlers{
+		clients:   deps.Clients,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolClientCreate(), Handler: wrap.Wrap("domain_client_create", rls(deps.handleClientCreate))},
-		{Tool: toolClientList(), Handler: wrap.Wrap("domain_client_list", rls(deps.handleClientList))},
-		{Tool: toolClientGet(), Handler: wrap.Wrap("domain_client_get", rls(deps.handleClientGet))},
-		{Tool: toolClientUpdate(), Handler: wrap.Wrap("domain_client_update", rls(deps.handleClientUpdate))},
-		{Tool: toolClientDelete(), Handler: wrap.Wrap("domain_client_delete", rls(deps.handleClientDelete))},
-		{Tool: toolClientRestore(), Handler: wrap.Wrap("domain_client_restore", rls(deps.handleClientRestore))},
-		{Tool: toolClientSetStatus(), Handler: wrap.Wrap("domain_client_set_status", rls(deps.handleClientSetStatus))},
+		{Tool: toolClientCreate(), Handler: wrap.Wrap("domain_client_create", rls(h.handleClientCreate))},
+		{Tool: toolClientList(), Handler: wrap.Wrap("domain_client_list", rls(h.handleClientList))},
+		{Tool: toolClientGet(), Handler: wrap.Wrap("domain_client_get", rls(h.handleClientGet))},
+		{Tool: toolClientUpdate(), Handler: wrap.Wrap("domain_client_update", rls(h.handleClientUpdate))},
+		{Tool: toolClientDelete(), Handler: wrap.Wrap("domain_client_delete", rls(h.handleClientDelete))},
+		{Tool: toolClientRestore(), Handler: wrap.Wrap("domain_client_restore", rls(h.handleClientRestore))},
+		{Tool: toolClientSetStatus(), Handler: wrap.Wrap("domain_client_set_status", rls(h.handleClientSetStatus))},
 	}
 }
 
-// --- tool builders ---
+
 
 func toolClientCreate() mcp.Tool {
 	return mcp.NewTool("domain_client_create",
-		mcp.WithDescription("Crea un cliente/mandante en la org actual del principal. Útil para consultoras que gestionan proyectos por cliente."),
+		mcp.WithDescription("Crea un cliente/mandante en la org actual del principal. Util para consultoras que gestionan proyectos por cliente."),
 		mcp.WithString("name",
-			mcp.Description("Nombre del cliente (razón social o nombre comercial)"),
+			mcp.Description("Nombre del cliente (razon social o nombre comercial)"),
 			mcp.Required(),
 		),
 		mcp.WithString("slug",
-			mcp.Description("Slug único del cliente dentro de la org (kebab-case)"),
+			mcp.Description("Slug unico del cliente dentro de la org (kebab-case)"),
 			mcp.Required(),
 		),
 		mcp.WithString("tax_id",
@@ -65,10 +82,10 @@ func toolClientCreate() mcp.Tool {
 			mcp.Description("Email de contacto principal (opcional)"),
 		),
 		mcp.WithString("contact_phone",
-			mcp.Description("Teléfono de contacto principal (opcional)"),
+			mcp.Description("Telefono de contacto principal (opcional)"),
 		),
 		mcp.WithString("address",
-			mcp.Description("Dirección postal (opcional)"),
+			mcp.Description("Direccion postal (opcional)"),
 		),
 		mcp.WithObject("metadata",
 			mcp.Description("Metadata estructurada arbitraria (JSONB)"),
@@ -78,15 +95,15 @@ func toolClientCreate() mcp.Tool {
 
 func toolClientList() mcp.Tool {
 	return mcp.NewTool("domain_client_list",
-		mcp.WithDescription("Lista los clientes/mandantes de la org actual. Filtros opcionales por status y paginación con limit/offset."),
+		mcp.WithDescription("Lista los clientes/mandantes de la org actual. Filtros opcionales por status y paginacion con limit/offset."),
 		mcp.WithString("status",
-			mcp.Description("Filtrar por status (ej: active, archived). Vacío = todos."),
+			mcp.Description("Filtrar por status (ej: active, archived). Vacio = todos."),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Máximo resultados (default 50, max 200)"),
+			mcp.Description("Maximo resultados (default 50, max 200)"),
 		),
 		mcp.WithNumber("offset",
-			mcp.Description("Offset para paginación (default 0)"),
+			mcp.Description("Offset para paginacion (default 0)"),
 		),
 	)
 }
@@ -149,13 +166,13 @@ func toolClientSetStatus() mcp.Tool {
 	)
 }
 
-// --- handlers ---
 
-func (d *Deps) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+
+func (h *clientHandlers) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -164,18 +181,18 @@ func (d *Deps) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) 
 	if name == "" || slug == "" {
 		return mcp.NewToolResultError("name y slug son requeridos"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	taxID, _ := args["tax_id"].(string)
 	email, _ := args["contact_email"].(string)
 	phone, _ := args["contact_phone"].(string)
 	address, _ := args["address"].(string)
 	metadata, _ := args["metadata"].(map[string]any)
 
-	cl, err := d.Clients.Create(ctx, orgID, clientsvc.CreateInput{
+	cl, err := h.clients.Create(ctx, orgID, clientsvc.CreateInput{
 		Name:         name,
 		Slug:         slug,
 		TaxID:        taxID,
@@ -191,14 +208,14 @@ func (d *Deps) handleClientCreate(ctx context.Context, req mcp.CallToolRequest) 
 	return toolResultJSON(cl)
 }
 
-func (d *Deps) handleClientList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
@@ -212,7 +229,7 @@ func (d *Deps) handleClientList(ctx context.Context, req mcp.CallToolRequest) (*
 	if v, ok := args["offset"].(float64); ok {
 		offset = int(v)
 	}
-	list, total, err := d.Clients.List(ctx, orgID, clientsvc.ListFilter{
+	list, total, err := h.clients.List(ctx, orgID, clientsvc.ListFilter{
 		Status: status, Limit: limit, Offset: offset,
 	})
 	if err != nil {
@@ -221,11 +238,11 @@ func (d *Deps) handleClientList(ctx context.Context, req mcp.CallToolRequest) (*
 	return toolResultJSON(map[string]any{"clients": list, "total": total})
 }
 
-func (d *Deps) handleClientGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -233,40 +250,40 @@ func (d *Deps) handleClientGet(ctx context.Context, req mcp.CallToolRequest) (*m
 	if idOrSlug == "" {
 		return mcp.NewToolResultError("id_or_slug requerido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	cl, err := lookupClientByIDOrSlug(ctx, d.Clients, orgID, idOrSlug)
+	cl, err := lookupClientByIDOrSlug(ctx, h.clients, orgID, idOrSlug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("not found: %v", err)), nil
 	}
 	return toolResultJSON(cl)
 }
 
-func (d *Deps) handleClientUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	fields, _ := args["fields"].(map[string]any)
 	if len(fields) == 0 {
-		return mcp.NewToolResultError("fields es requerido y no puede estar vacío"), nil
+		return mcp.NewToolResultError("fields es requerido y no puede estar vacio"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	userID, _ := uuid.Parse(d.Principal.UserID)
-	if _, err := d.Clients.Get(ctx, orgID, id.String()); err != nil {
+	userID, _ := uuid.Parse(h.principal.UserID)
+	if _, err := h.clients.Get(ctx, orgID, id.String()); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("not found: %v", err)), nil
 	}
 	in := clientsvc.UpdateInput{ActorID: &userID}
@@ -288,96 +305,96 @@ func (d *Deps) handleClientUpdate(ctx context.Context, req mcp.CallToolRequest) 
 	if v, ok := fields["metadata"].(map[string]any); ok {
 		in.Metadata = v
 	}
-	cl, err := d.Clients.Update(ctx, orgID, id, in)
+	cl, err := h.clients.Update(ctx, orgID, id, in)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update client failed: %v", err)), nil
 	}
 	return toolResultJSON(cl)
 }
 
-func (d *Deps) handleClientDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
 	_ = uuid.Nil // placeholder for backward compat — userID no usado directo en SoftDelete
-	if _, err := d.Clients.Get(ctx, orgID, id.String()); err != nil {
+	if _, err := h.clients.Get(ctx, orgID, id.String()); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("not found: %v", err)), nil
 	}
-	if err := d.Clients.Delete(ctx, orgID, id); err != nil {
+	if err := h.clients.Delete(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("delete client failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{"id": id.String(), "deleted": true})
 }
 
-func (d *Deps) handleClientRestore(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientRestore(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	// Restore directo: Service.Get excluye soft-deleted, así que un Get
-	// previo siempre devolvería "not found". El repo.Restore retorna
-	// ErrClientNotFound si el id no existe (RowsAffected=0). Tras restaurar,
-	// recargamos para devolver el client actualizado.
-	if err := d.Clients.Restore(ctx, orgID, id); err != nil {
+
+
+
+
+	if err := h.clients.Restore(ctx, orgID, id); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("restore client failed: %v", err)), nil
 	}
-	cl, err := d.Clients.Get(ctx, orgID, id.String())
+	cl, err := h.clients.Get(ctx, orgID, id.String())
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("reload after restore failed: %v", err)), nil
 	}
 	return toolResultJSON(cl)
 }
 
-func (d *Deps) handleClientSetStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *clientHandlers) handleClientSetStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Clients == nil {
+	if h.clients == nil {
 		return mcp.NewToolResultError("client service no configurado"), nil
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return mcp.NewToolResultError("id inválido (UUID requerido)"), nil
+		return mcp.NewToolResultError("id invalido (UUID requerido)"), nil
 	}
 	status, _ := args["status"].(string)
 	if status == "" {
 		return mcp.NewToolResultError("status requerido"), nil
 	}
-	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("invalid principal org_id"), nil
 	}
-	if _, err := d.Clients.Get(ctx, orgID, id.String()); err != nil {
+	if _, err := h.clients.Get(ctx, orgID, id.String()); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("not found: %v", err)), nil
 	}
-	cl, err := d.Clients.SetStatus(ctx, orgID, id, status)
+	cl, err := h.clients.SetStatus(ctx, orgID, id, status)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("set_status failed: %v", err)), nil
 	}
@@ -386,6 +403,6 @@ func (d *Deps) handleClientSetStatus(ctx context.Context, req mcp.CallToolReques
 
 // lookupClientByIDOrSlug delega en Service.Get (que ya parsea UUID vs slug
 // internamente y aplica el filtro por orgID).
-func lookupClientByIDOrSlug(ctx context.Context, svc *clientsvc.Service, orgID uuid.UUID, idOrSlug string) (*clientsvc.Client, error) {
+func lookupClientByIDOrSlug(ctx context.Context, svc clientService, orgID uuid.UUID, idOrSlug string) (*clientsvc.Client, error) {
 	return svc.Get(ctx, orgID, idOrSlug)
 }

@@ -36,8 +36,8 @@ func (p *provider) Complete(ctx context.Context, opts llm.CompletionOptions) (*l
 	if err != nil {
 		return nil, err
 	}
-	// La respuesta ya se consumió: se entrega siempre; si esto agota el
-	// budget, la SIGUIENTE llamada bloquea en Check.
+
+
 	_ = p.mgr.Track(resp.Usage.TotalTokens)
 	return resp, nil
 }
@@ -58,7 +58,7 @@ func (p *provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 		for chunk := range inner {
 			if chunk.Done {
 				if chunk.Usage != nil {
-					// Ajuste final con el conteo real del provider.
+
 					_ = p.mgr.Track(0)
 				}
 				out <- chunk
@@ -66,7 +66,7 @@ func (p *provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 			}
 			trackErr := p.mgr.Track(tokens.Estimate(chunk.Delta))
 			if errors.Is(trackErr, tokens.ErrBudgetTruncated) {
-				// Corte graceful: entregar el chunk en curso + Done.
+
 				out <- chunk
 				st := p.mgr.State()
 				out <- llm.StreamChunk{Done: true, Usage: &llm.Usage{
@@ -76,8 +76,8 @@ func (p *provider) CompleteStream(ctx context.Context, opts llm.CompletionOption
 				return
 			}
 			if errors.Is(trackErr, tokens.ErrBudgetExceeded) {
-				// Modo error: cerrar el stream sin Done limpio (el caller
-				// detecta el corte por ausencia de Done + Check posterior).
+
+
 				go drain(inner)
 				return
 			}

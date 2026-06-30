@@ -9,6 +9,7 @@ import (
 //   - claude-*           → anthropic
 //   - gpt-*, openai-*    → openai
 //   - gemini-*, google-* → google
+//   - minimax-*          → minimax (endpoint anthropic-compatible)
 //   - resto              → ollama (default self-hosted)
 //
 // Esto evita persistir un campo provider duplicado en agent_templates
@@ -22,6 +23,8 @@ func ProviderForModel(model string) string {
 		return "openai"
 	case strings.HasPrefix(m, "gemini"), strings.HasPrefix(m, "google"):
 		return "google"
+	case strings.HasPrefix(m, "minimax"):
+		return "minimax"
 	default:
 		return "ollama"
 	}

@@ -1,0 +1,89 @@
+from django import forms
+
+from core.forms import InstanceAwareMixin
+from maintainers.users.models import User
+
+from .models import ApiKey
+
+
+class ApiKeyForm(InstanceAwareMixin, forms.Form):
+    name = forms.CharField(
+        label="Nombre",
+        max_length=255,
+        widget=forms.TextInput(attrs={
+            "class": "form-control",
+            "placeholder": "Ej: Integracion CI/CD",
+            "autocomplete": "off",
+        }),
+        help_text="Etiqueta legible para identificar la key.",
+    )
+    user = forms.ChoiceField(
+        label="Usuario dueño",
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-control form-select"}),
+        help_text="Usuario al que pertenece la API Key.",
+    )
+    expires_at = forms.DateTimeField(
+        label="Expira el",
+        required=False,
+        widget=forms.DateTimeInput(attrs={
+            "class": "form-control",
+            "type": "datetime-local",
+        }, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"],
+        help_text="Dejala vacia para que no expire.",
+    )
+    status = forms.ChoiceField(
+        label="Estado",
+        choices=ApiKey.STATUS_CHOICES,
+        initial="active",
+        widget=forms.Select(attrs={"class": "form-control form-select"}),
+    )
+
+    def __init__(self, *args, instance: ApiKey | None = None, **kwargs):
+        super().__init__(*args, instance=instance, **kwargs)
+
+        self.fields["user"].choices = [
+            (str(u.pk), u.display_name)
+            for u in User.objects.filter(status="active").order_by("email")
+        ]
+
+        if instance is not None:
+            self.fields["user"].required = False
+            self.fields["user"].widget.attrs["disabled"] = "disabled"
+            self.fields["user"].choices = [
+                (str(instance.user.pk), instance.user.display_name)
+            ]
+            if not self.is_bound:
+                self.fields["name"].initial = instance.name
+                self.fields["user"].initial = str(instance.user.pk)
+                self.fields["status"].initial = instance.status
+                self.fields["expires_at"].initial = instance.expires_at
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        qs = self._exclude_self(ApiKey.objects.filter(name=name))
+        if qs.exists():
+            raise forms.ValidationError("Ya existe una API Key con ese nombre.")
+        return name
+
+    def clean_user(self):
+        if self.instance is not None:
+            return str(self.instance.user.pk)
+        user_id = self.cleaned_data.get("user")
+        if not user_id:
+            raise forms.ValidationError("Debes seleccionar un usuario dueño.")
+        if not User.objects.filter(pk=user_id).exists():
+            raise forms.ValidationError("El usuario seleccionado no existe.")
+        return user_id
+
+
+class ApiKeySearchForm(forms.Form):
+    q = forms.CharField(
+        label="Buscar",
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "form-control",
+            "placeholder": "Nombre o prefijo...",
+        }),
+    )

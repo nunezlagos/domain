@@ -32,9 +32,9 @@ type ContextEnvelope struct {
 	HUMatches   *HUDedupFinding    `json:"hu_dedup,omitempty"`
 	Code        *CodeGrepFinding   `json:"code,omitempty"`
 	History     *AgentHistoryFinding `json:"history,omitempty"`
-	// Slots agrupa qué se sabe y qué no por slot key.
+
 	Slots map[string]Slot `json:"slots"`
-	// Errors no-críticos por source. Una source que falla no detiene el pipeline.
+
 	SourceErrors map[string]string `json:"source_errors,omitempty"`
 }
 

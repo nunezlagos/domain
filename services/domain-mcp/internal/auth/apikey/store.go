@@ -1,7 +1,7 @@
-// Store/Resolver Postgres para API keys.
-//
-// Issue: emite key plaintext (devuelta UNA vez), persiste hash bcrypt + prefix.
-// Resolve: lookup por prefix (cheap indexed) + verify bcrypt (costoso pero acotado).
+
+
+
+
 
 package apikey
 
@@ -19,6 +19,11 @@ import (
 
 var ErrNotFound = errors.New("api key not found")
 
+// ErrNoEncKey se devuelve al emitir/rotar una key cuando la passphrase de
+// cifrado (FieldEncKey, de DOMAIN_FIELD_ENC_KEY) no esta seteada. NO se cae al
+// plaintext como fallback: preferimos fallar antes que persistir la key en claro.
+var ErrNoEncKey = errors.New("api key field encryption not configured (set DOMAIN_FIELD_ENC_KEY)")
+
 // ISSUE-21.6: UUID canónico para single-org. Se usa para poblar
 // APIKeyInfo.OrgID y variables orgID locales ahora que la columna
 // u.organization_id no se selecciona (Fase C).
@@ -27,6 +32,11 @@ var canonicalOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 // PGStore Postgres-backed.
 type PGStore struct {
 	Pool *pgxpool.Pool
+
+
+
+
+	FieldEncKey string
 }
 
 // Issue genera nueva key para el user, persiste hash + prefix, retorna plaintext.
@@ -35,15 +45,23 @@ type PGStore struct {
 // el org de una key se deriva de su user (users.organization_id) en Resolve/List.
 func (s *PGStore) Issue(ctx context.Context, orgID, userID uuid.UUID, name, env string) (plaintext string, keyID uuid.UUID, err error) {
 	_ = orgID
+	if s.FieldEncKey == "" {
+		return "", uuid.Nil, ErrNoEncKey
+	}
 	plaintext, prefix, hash, err := Generate(env)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
+
+
+
+
+
 	err = s.Pool.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
+		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
 		 RETURNING id`,
-		userID, hash, prefix, name,
+		userID, hash, prefix, name, plaintext, s.FieldEncKey,
 	).Scan(&keyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert api_key: %w", err)
@@ -70,8 +88,8 @@ type APIKeyInfo struct {
 // solo para devolver el campo en APIKeyInfo.OrgID).
 func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, error) {
 	_ = orgID
-	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C);
-	// se sigue retornando OrgID en APIKeyInfo con default canónico.
+
+
 	rows, err := s.Pool.Query(ctx, `
 		SELECT k.id, k.user_id, k.name, k.key_prefix,
 		       k.last_used_at, k.expires_at, k.revoked_at, k.created_at
@@ -86,8 +104,8 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 	var keys []APIKeyInfo
 	for rows.Next() {
 		var k APIKeyInfo
-		// ISSUE-21.6: OrgID canónico single-org (la columna
-		// u.organization_id no se selecciona de la DB).
+
+
 		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix,
 			&k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt, &k.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan api key: %w", err)
@@ -101,6 +119,9 @@ func (s *PGStore) List(ctx context.Context, orgID uuid.UUID) ([]APIKeyInfo, erro
 // Rotate genera nueva key, persiste, y revoca la anterior en una transacción.
 // Retorna plaintext de la nueva key.
 func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID uuid.UUID, name, env string) (newPlaintext string, newKeyID uuid.UUID, err error) {
+	if s.FieldEncKey == "" {
+		return "", uuid.Nil, ErrNoEncKey
+	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("begin tx: %w", err)
@@ -113,11 +134,13 @@ func (s *PGStore) Rotate(ctx context.Context, oldKeyID uuid.UUID, orgID, userID 
 		return "", uuid.Nil, fmt.Errorf("generate: %w", err)
 	}
 
+
+
 	err = tx.QueryRow(ctx,
-		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO auth_api_keys (user_id, key_hash, key_prefix, name, key_ciphertext)
+		 VALUES ($1, $2, $3, $4, pgp_sym_encrypt($5, $6))
 		 RETURNING id`,
-		userID, hash, prefix, name,
+		userID, hash, prefix, name, newPlaintext, s.FieldEncKey,
 	).Scan(&newKeyID)
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("insert new key: %w", err)
@@ -159,8 +182,8 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		return nil, ErrNotFound
 	}
 
-	// Buscar candidates por prefix (puede haber colision; prefix incluye 7 chars random)
-	// ISSUE-21.6: SELECT sin u.organization_id (dropeado en Fase C).
+
+
 	rows, err := s.Pool.Query(ctx,
 		`SELECT k.id, k.user_id, k.key_hash, COALESCE(u.role,'viewer')
 		 FROM auth_api_keys k
@@ -176,7 +199,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	defer rows.Close()
 
 	for rows.Next() {
-		// ISSUE-21.6: orgID local al Scan (ya no se selecciona de la DB).
+
 		var (
 			id     uuid.UUID
 			userID uuid.UUID
@@ -190,7 +213,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		orgID := canonicalOrgID
 		_ = orgID
 		if Verify(plaintext, hash) == nil {
-			// touch last_used_at (best effort, no bloqueante)
+
 			go func(id uuid.UUID) {
 				ctx2, cancel := context.WithTimeout(context.Background(), 1e9) // 1s
 				defer cancel()
@@ -208,7 +231,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 	return nil, ErrNotFound
 }
 
-// UserLookup adapter para otp.UserLookup interface.
+// UserLookup adapter para interfaces que necesitan lookup por email/RUT.
 type UserLookup struct {
 	Pool *pgxpool.Pool
 }
@@ -236,7 +259,7 @@ func (u *UserLookup) ByEmail(ctx context.Context, email string) (*UserRow, error
 }
 
 func (u *UserLookup) ByRUT(ctx context.Context, rut string) (*UserRow, error) {
-	// Tabla users no tiene columna RUT explícita en migration 000003;
-	// futura migración issue-02.7 puede agregarla. Por ahora: NotFound.
+
+
 	return nil, ErrNotFound
 }

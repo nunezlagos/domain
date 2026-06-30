@@ -23,19 +23,52 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
+
+	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/store/txctx"
+	projsvc "nunezlagos/domain/internal/service/project"
 )
 
+type verificationsProjectGetter interface {
+	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
+}
+
+type verificationsHandlers struct {
+	projects  verificationsProjectGetter
+	pool      *pgxpool.Pool
+	principal *apikey.Principal
+}
+
+func (h *verificationsHandlers) q(ctx context.Context) interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+} {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return h.pool
+}
+
 func registerVerificationsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
-		return withOrgTxHandler(&deps, h)
+	h := &verificationsHandlers{
+		projects:  deps.Projects,
+		pool:      deps.Pool,
+		principal: deps.Principal,
+	}
+	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withOrgTxHandler(&deps, fn)
 	}
 	return []mcpgo.ServerTool{
-		{Tool: toolVerifyStart(), Handler: wrap.Wrap("domain_verify_start", rls(deps.handleVerifyStart))},
-		{Tool: toolVerifyUpdateItem(), Handler: wrap.Wrap("domain_verify_update_item", rls(deps.handleVerifyUpdateItem))},
-		{Tool: toolVerifyComplete(), Handler: wrap.Wrap("domain_verify_complete", rls(deps.handleVerifyComplete))},
-		{Tool: toolVerifyPending(), Handler: wrap.Wrap("domain_verify_pending", rls(deps.handleVerifyPending))},
+		{Tool: toolVerifyStart(), Handler: wrap.Wrap("domain_verify_start", rls(h.handleVerifyStart))},
+		{Tool: toolVerifyUpdateItem(), Handler: wrap.Wrap("domain_verify_update_item", rls(h.handleVerifyUpdateItem))},
+		{Tool: toolVerifyComplete(), Handler: wrap.Wrap("domain_verify_complete", rls(h.handleVerifyComplete))},
+		{Tool: toolVerifyPending(), Handler: wrap.Wrap("domain_verify_pending", rls(h.handleVerifyPending))},
 	}
 }
 
@@ -43,7 +76,7 @@ func toolVerifyStart() mcp.Tool {
 	return mcp.NewTool("domain_verify_start",
 		mcp.WithDescription("Abre un checkpoint de verificación post-cambio. Llamar DESPUÉS de un edit no trivial (no para typos), antes de declarar 'listo'. items[] = lista de checks individuales que vas a correr (build, test, lint, smoke, typecheck, migration). Status del item arranca en 'pending' y vos lo updateás con domain_verify_update_item."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto en el que estás trabajando"), mcp.Required()),
-		mcp.WithString("kind", mcp.Description("build | test | lint | smoke | typecheck | migration | custom"), mcp.Required()),
+		mcp.WithString("kind", mcp.Description("build | test | lint | smoke | typecheck | migration | policy_review | custom"), mcp.Required()),
 		mcp.WithString("context", mcp.Description("Qué cambio gatilló esta verificación (1 línea, ej: 'agregué endpoint POST /api/v1/clients').")),
 		mcp.WithArray("items", mcp.Description("Array de items {label, command?}. label es obligatorio, command es informativo. Ej: [{label: 'go test ./internal/...', command: 'go test ./...'}, {label: 'go vet', command: 'go vet ./...'}]"), mcp.Required()),
 	)
@@ -75,15 +108,15 @@ func toolVerifyPending() mcp.Tool {
 	)
 }
 
-func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *verificationsHandlers) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	userID, _ := uuid.Parse(d.Principal.UserID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	userID, _ := uuid.Parse(h.principal.UserID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	kind := strings.ToLower(strings.TrimSpace(asString(args["kind"])))
@@ -121,13 +154,13 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 
 	// REQ-42.3: columna session_id dropeada de verifications (FK a sessions).
 
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
 	var id uuid.UUID
-	err := d.q(ctx).QueryRow(ctx,
+	err := h.q(ctx).QueryRow(ctx,
 		`INSERT INTO tdd_verifications
 		   (project_id, user_id,
 		    kind, items, status, context)
@@ -146,11 +179,11 @@ func (d *Deps) handleVerifyStart(ctx context.Context, req mcp.CallToolRequest) (
 	})
 }
 
-func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -175,7 +208,7 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 
 	// Leer items actuales, actualizar el matching label, persistir.
 	var itemsRaw []byte
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`SELECT items FROM tdd_verifications WHERE id = $1`,
 		id,
 	).Scan(&itemsRaw); err != nil {
@@ -203,7 +236,7 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError("label no encontrado en items del checkpoint"), nil
 	}
 	newRaw, _ := json.Marshal(items)
-	if _, err := d.q(ctx).Exec(ctx,
+	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE tdd_verifications SET items = $2 WHERE id = $1`,
 		id, newRaw,
 	); err != nil {
@@ -216,11 +249,11 @@ func (d *Deps) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolReque
 	})
 }
 
-func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *verificationsHandlers) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Pool == nil {
+	if h.pool == nil {
 		return mcp.NewToolResultError("pool not configured"), nil
 	}
 	args := req.GetArguments()
@@ -231,7 +264,7 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	var itemsRaw []byte
-	if err := d.q(ctx).QueryRow(ctx,
+	if err := h.q(ctx).QueryRow(ctx,
 		`SELECT items FROM tdd_verifications WHERE id = $1`,
 		id,
 	).Scan(&itemsRaw); err != nil {
@@ -268,7 +301,7 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 		finalStatus = "passed"
 	}
 
-	if _, err := d.q(ctx).Exec(ctx,
+	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE tdd_verifications SET status = $2, completed_at = NOW()
 		   WHERE id = $1`,
 		id, finalStatus,
@@ -284,14 +317,14 @@ func (d *Deps) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest
 	})
 }
 
-func (d *Deps) handleVerifyPending(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil {
+func (h *verificationsHandlers) handleVerifyPending(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
 	}
-	if d.Projects == nil || d.Pool == nil {
+	if h.projects == nil || h.pool == nil {
 		return mcp.NewToolResultError("projects service / pool not configured"), nil
 	}
-	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
 	args := req.GetArguments()
 	projSlug, _ := args["project_slug"].(string)
 	if projSlug == "" {
@@ -302,12 +335,12 @@ func (d *Deps) handleVerifyPending(ctx context.Context, req mcp.CallToolRequest)
 		limit = int(v)
 	}
 
-	proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug)
+	proj, perr := h.projects.GetBySlug(ctx, orgID, projSlug)
 	if perr != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
 	}
 
-	rows, err := d.q(ctx).Query(ctx,
+	rows, err := h.q(ctx).Query(ctx,
 		`SELECT id::text, kind, status, COALESCE(context,''),
 		        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM tdd_verifications

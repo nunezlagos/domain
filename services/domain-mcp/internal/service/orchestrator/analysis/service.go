@@ -32,6 +32,24 @@ import (
 // ErrNoProjectForOrg indica que la organización no tiene projects seedeados.
 var ErrNoProjectForOrg = errors.New("analysis: no projects found for organization — seed one first")
 
+// DefaultAnalysisSystemPrompt es el system prompt del mini-pipeline de
+// análisis read-only por defecto. Se seedea en la tabla prompts con
+// slug='analysis' para que sea editable desde el dashboard. El servicio lo
+// usa como fallback si la DB no tiene el prompt o el loader no está cableado.
+const DefaultAnalysisSystemPrompt = `Sos un analista técnico de proyectos de software.
+Dado un prompt de un usuario, producís un análisis markdown estructurado
+con la información solicitada.
+
+Reglas:
+- Respondé ÚNICAMENTE con markdown, sin JSON, sin código extra.
+- Si el prompt pide listar algo, producí una lista con formato markdown.
+- Si el prompt pide investigar algo, producí un informe estructurado.
+- Si no podés responder porque necesitás acceso al codebase, decilo
+  claramente en el análisis.
+- El análisis debe ser auto-contenido: cualquiera que lo lea debe
+  entender el contexto sin referencias externas.
+- Incluí un resumen ejecutivo al inicio y conclusiones al final.`
+
 // Service ejecuta el mini-pipeline de análisis read-only.
 type Service struct {
 	Pool    *pgxpool.Pool
@@ -39,6 +57,12 @@ type Service struct {
 	LLM     *llm.Factory
 	Knowledge *knowsvc.Service
 	Observation *obssvc.Service
+
+
+
+
+
+	PromptLoader func(ctx context.Context) (string, error)
 }
 
 // Input es lo que recibe RunAnalysis.
@@ -62,22 +86,22 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("analysis: LLM factory required")
 	}
 
-	// Resolver project_id desde la org (knowledge_docs y observations requieren FK)
+
 	projectID, err := s.resolveProjectID(ctx, in.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fase 1: explorar — generar contenido de análisis con el LLM
+
 	content, err := s.explore(ctx, in)
 	if err != nil {
 		return nil, fmt.Errorf("analysis explore: %w", err)
 	}
 
-	// Inferir título desde las primeras líneas del contenido
+
 	title := inferTitle(content, in.RawText)
 
-	// Fase 2: write_doc — persistir como knowledge_doc
+
 	doc, _, err := s.Knowledge.Save(ctx, knowsvc.SaveInput{
 		OrganizationID: in.OrganizationID,
 		ProjectID:      projectID,
@@ -95,7 +119,7 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("analysis save knowledge doc: %w", err)
 	}
 
-	// Fase 3: crear observation indexable apuntando al doc
+
 	obsContent := fmt.Sprintf("Analysis: %s\n\nSource prompt: %s\n\nKnowledge doc: %s",
 		title, in.RawText, doc.ID.String())
 	_, err = s.Observation.Save(ctx, obssvc.SaveInput{
@@ -153,19 +177,12 @@ func (s *Service) explore(ctx context.Context, in Input) (string, error) {
 		return "", fmt.Errorf("get provider: %w", err)
 	}
 
-	systemPrompt := `Sos un analista técnico de proyectos de software.
-Dado un prompt de un usuario, producís un análisis markdown estructurado
-con la información solicitada.
-
-Reglas:
-- Respondé ÚNICAMENTE con markdown, sin JSON, sin código extra.
-- Si el prompt pide listar algo, producí una lista con formato markdown.
-- Si el prompt pide investigar algo, producí un informe estructurado.
-- Si no podés responder porque necesitás acceso al codebase, decilo
-  claramente en el análisis.
-- El análisis debe ser auto-contenido: cualquiera que lo lea debe
-  entender el contexto sin referencias externas.
-- Incluí un resumen ejecutivo al inicio y conclusiones al final.`
+	systemPrompt := DefaultAnalysisSystemPrompt
+	if s.PromptLoader != nil {
+		if loaded, lerr := s.PromptLoader(ctx); lerr == nil && strings.TrimSpace(loaded) != "" {
+			systemPrompt = loaded
+		}
+	}
 
 	resp, err := provider.Complete(ctx, llm.CompletionOptions{
 		MaxTokens:    2048,
@@ -187,7 +204,7 @@ Reglas:
 // inferTitle extrae un título desde el contenido markdown o fallback al
 // prompt original truncado.
 func inferTitle(content, rawText string) string {
-	// Intentar extraer el primer heading h1/h2
+
 	lines := strings.SplitN(content, "\n", 5)
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -198,7 +215,7 @@ func inferTitle(content, rawText string) string {
 			return strings.TrimPrefix(trimmed, "## ")
 		}
 	}
-	// Fallback: primeras palabras del prompt original
+
 	words := strings.Fields(rawText)
 	if len(words) > 8 {
 		words = words[:8]

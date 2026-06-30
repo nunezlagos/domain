@@ -34,11 +34,11 @@ func (r *BlockMarkerReverser) Revert(entry Entry) error {
 	}
 
 	closeEnd := closeIdx + len(markerClose)
-	// Include the newline after marker_close if present
+
 	if closeEnd < len(content) && content[closeEnd] == '\n' {
 		closeEnd++
 	}
-	// Include newline before marker_open if present
+
 	beforeOpen := ""
 	if openIdx > 0 && content[openIdx-1] == '\n' {
 		beforeOpen = "\n"
@@ -50,12 +50,12 @@ func (r *BlockMarkerReverser) Revert(entry Entry) error {
 		newContent = content[:openIdx+1] + content[closeEnd:]
 	}
 
-	// Trim leading newline that was before the marker
+
 	if strings.HasPrefix(newContent, "\n") && beforeOpen == "\n" {
-		// Already handled
+
 	}
 
-	// Clean up double newlines
+
 	for strings.Contains(newContent, "\n\n\n") {
 		newContent = strings.ReplaceAll(newContent, "\n\n\n", "\n\n")
 	}

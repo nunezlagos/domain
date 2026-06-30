@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// Tests unitarios sin DB: cubren validaciones que cortan antes de tocar
-// el pool. Integration tests con testcontainers van en otro file detrás
-// del build tag integration.
+
+
+
 
 func TestEnroll_RejectsMalformedToken(t *testing.T) {
 	s := &Service{}
@@ -31,7 +31,7 @@ func TestEnroll_RejectsMalformedToken(t *testing.T) {
 }
 
 func TestEnroll_RejectsInvalidEmail(t *testing.T) {
-	// Generamos un token formato-válido para que llegue a la validación email.
+
 	pt, _, _, err := GeneratePlaintext()
 	if err != nil {
 		t.Fatal(err)
@@ -62,9 +62,9 @@ func TestRotate_RejectsInvalidRole(t *testing.T) {
 }
 
 func TestRotate_AcceptsBlankRoleAsDefaultMember(t *testing.T) {
-	// Con Pool == nil va a panic. Solo verificamos que la validación de role
-	// NO rechaza el string vacío (lo trata como "member").
-	// Para evitar el panic, comprobamos solo el dispatch de allowedRoles:
+
+
+
 	if !allowedRoles["member"] {
 		t.Fatal("member debería estar permitido como default")
 	}

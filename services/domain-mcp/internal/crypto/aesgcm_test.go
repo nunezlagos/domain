@@ -1,4 +1,4 @@
-// issue-02.3 secrets-encryption unit tests.
+
 
 package crypto
 
@@ -85,12 +85,12 @@ func TestCipher_KeyRotation(t *testing.T) {
 	require.NoError(t, c.AddKey(2, testKeyAlt()))
 	require.Equal(t, byte(2), c.CurrentVersion())
 
-	// v1 sigue decifrando
+
 	pt, err := c.Decrypt(v1Ciphertext)
 	require.NoError(t, err)
 	require.Equal(t, []byte("old secret"), pt)
 
-	// Nuevos encrypts usan v2
+
 	v2Ciphertext, _ := c.Encrypt([]byte("new secret"))
 	require.Equal(t, byte(2), v2Ciphertext[0], "new ciphertext uses v2")
 
@@ -158,7 +158,7 @@ func TestSabotage_TamperedCiphertext_Rejected(t *testing.T) {
 	c, _ := NewCipher(testKey())
 	ct, _ := c.Encrypt([]byte("untouched"))
 
-	// Flip 1 bit en el ciphertext body (no en version/nonce header)
+
 	tampered := make([]byte, len(ct))
 	copy(tampered, ct)
 	tampered[len(tampered)-1] ^= 0x01

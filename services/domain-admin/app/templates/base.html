@@ -1,0 +1,63 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Domain Admin{% endblock %}</title>
+
+  <link rel="stylesheet" href="{% static 'css/variables.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'css/components.css' %}">
+  <link rel="stylesheet" href="{% static 'css/maintainers.css' %}">
+  <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
+  <link rel="stylesheet" href="{% static 'css/chat.css' %}">
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-layout">
+    {% block sidebar %}{% include "components/_sidebar.html" %}{% endblock %}
+
+    {# Backdrop del drawer mobile (solo visible en mobile via responsive.css) #}
+    <div class="sidebar-backdrop" aria-hidden="true"></div>
+
+    <div class="app-main">
+      {% block navbar %}{% include "components/_navbar.html" %}{% endblock %}
+
+      <main class="content">
+        {% if messages %}
+          <div class="mb-3">
+            {% for message in messages %}
+              {% include "components/_alert.html" with message=message %}
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      {% include "components/_footer.html" %}
+    </div>
+  </div>
+
+  {% include "components/_modal_dynamic.html" %}
+  {% include "components/_modal_confirm.html" %}
+
+  {% block modals %}{% endblock %}
+
+  <script src="{% static 'js/csrf.js' %}"></script>
+  <script src="{% static 'js/modals.js' %}"></script>
+  <script src="{% static 'js/slug-autofill.js' %}"></script>
+  <script src="{% static 'js/projects-repos.js' %}"></script>
+  <script src="{% static 'js/project-skills.js' %}"></script>
+  <script src="{% static 'js/password-toggle.js' %}"></script>
+  <script src="{% static 'js/sidebar.js' %}"></script>
+  <script src="{% static 'js/clock.js' %}"></script>
+
+  {# Chat IA widget flotante (HU-49) #}
+  {% include "chat/widget.html" %}
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% comment %}
+============================================================
+Pagina BASE de listado de mantenedor. Extiende base.html y
+arma la estructura comun: header con boton crear, search input
+[data-search-input], contenedor [data-maintainer-table] con
+los data-attrs que consume maintainer.js, y la carga del JS.
+
+Cada app la EXTIENDE y define solo lo propio via bloques:
+
+  {% extends "maintainers/list_base.html" %}
+  {% block page_title %}Usuarios{% endblock %}           {# <title> del browser #}
+  {% block header_title %}Usuarios{% endblock %}         {# <h1> de la pagina #}
+  {% block page_subtitle %}Gestion de miembros...{% endblock %}
+  {% block create_label %}+ Nuevo usuario{% endblock %}
+  {% block search_placeholder %}Email o nombre...{% endblock %}
+  {% block table_area_id %}users-table-area{% endblock %}
+  {% block base_url %}/usuarios/{% endblock %}
+  {% block signal_url %}{% url 'users:signal' %}{% endblock %}
+  {% block table %}{% include "users/_table_partial.html" %}{% endblock %}
+
+Bloques disponibles:
+  page_title       <title> del browser
+  header_title     <h1> de la pagina
+  page_subtitle    bajada bajo el h1
+  header_actions   bloque entero de acciones (default: boton crear)
+  create_label     texto del boton crear
+  search           bloque entero de busqueda (default: input debounced)
+  search_placeholder
+  table_area_id    id del contenedor [data-maintainer-table]
+  base_url         data-base-url (ej "/usuarios/")
+  signal_url       data-signal-url
+  table            include del _table_partial de la app (REQUERIDO)
+
+Titulo del navbar: variable de contexto `page_title` (seteala en la view),
+o sobreescribi el bloque `navbar` completo.
+
+Variables esperadas en el contexto (de la view):
+  search         termino de busqueda activo (str)
+  signal_count   parte 1 de la señal (count)
+  signal_version parte 2 de la señal (max updated_at / version)
+  page_title     (opc) titulo mostrado en el navbar
+============================================================
+{% endcomment %}
+{% load static %}
+
+{% block title %}{% block page_title %}Mantenedor{% endblock %} - Domain Admin{% endblock %}
+
+{% comment %}
+  Titulo del navbar: por defecto usa la variable de contexto `page_title`
+  (seteala en la view). Si una app prefiere un literal, sobreescribe el
+  bloque `navbar` completo, igual que hacen hoy las list.html por-app.
+{% endcomment %}
+{% block navbar %}
+  {% include "components/_navbar.html" with title=page_title|default:"Domain Admin" %}
+{% endblock %}
+
+{% block content %}
+{% comment %} Layout estandar en CARD para TODOS los mantenedores: header (titulo
+   izq + acciones der), container de filtros (search + bloque filters opcional) y
+   tabla. Estilos en maintainers.css (.mnt-*). Cada app define los bloques. {% endcomment %}
+<div class="card mnt-panel">
+  <div class="mnt-head">
+    <div>
+      <h2 class="mnt-head-title">{% block header_title %}Mantenedor{% endblock %}</h2>
+      <p class="mnt-head-sub">{% block page_subtitle %}{% endblock %}</p>
+    </div>
+    <div class="mnt-actions">
+      {% block header_actions %}
+        <button class="btn btn-primary" data-action="create">
+          {% block create_label %}+ Nuevo{% endblock %}
+        </button>
+      {% endblock %}
+    </div>
+  </div>
+
+  <div class="mnt-filters">
+    {% block filters %}
+      <div class="mnt-filters-search">
+        <label class="form-label" for="q">Buscar</label>
+        <input type="text" name="q" id="q" value="{{ search }}" class="form-control"
+               placeholder="{% block search_placeholder %}Buscar...{% endblock %}"
+               autocomplete="off" data-search-input>
+      </div>
+    {% endblock %}
+  </div>
+
+  <div id="{% block table_area_id %}maintainer-table-area{% endblock %}"
+       data-maintainer-table
+       data-base-url="{% block base_url %}/{% endblock %}"
+       data-signal-url="{% block signal_url %}{% endblock %}"
+       data-signal="{{ signal_count }}|{{ signal_version }}">
+    {% block table %}{% endblock %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  <script src="{% static 'js/maintainer.js' %}"></script>
+{% endblock %}

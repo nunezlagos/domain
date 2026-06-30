@@ -23,6 +23,7 @@ func TestExpressD1_SmallChange_AutoApproves(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -31,6 +32,7 @@ func TestExpressD1_SmallChange_AutoApproves(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "fix typo",
 		Mode:           orchestrator.ModeExpress,
@@ -60,6 +62,7 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -68,6 +71,7 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "refactor grande",
 		Mode:           orchestrator.ModeExpress,
@@ -77,7 +81,7 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 	applyID := res.Plan.Steps[0].ID
 	verifyID := res.Plan.Steps[1].ID
 
-	// Reportamos apply con 25 líneas (supera el default 10)
+
 	r, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: applyID,
 		Output: map[string]any{
@@ -90,14 +94,14 @@ func TestExpressD1_LargeChange_RequiresConfirm(t *testing.T) {
 	require.True(t, r.RequiresConfirm, "25 líneas > 10 → confirm required")
 	require.NotEmpty(t, r.ConfirmMessage)
 
-	// El verify step debe estar blocked en BD
+
 	var status string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT status FROM flow_run_steps WHERE id=$1`, verifyID,
 	).Scan(&status))
 	require.Equal(t, "blocked", status)
 
-	// ConfirmContinue(true) lo desbloquea
+
 	confRes, err := s.ConfirmContinue(ctx, res.FlowRunID, true)
 	require.NoError(t, err)
 	require.Equal(t, "pending", confRes.StepStatus)
@@ -118,6 +122,7 @@ func TestExpressD1_MultiFile_RequiresConfirm(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -126,6 +131,7 @@ func TestExpressD1_MultiFile_RequiresConfirm(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
+		ProjectID:      projectID,
 		UserID:         userID,
 		RawText:        "x",
 		Mode:           orchestrator.ModeExpress,
@@ -153,6 +159,7 @@ func TestExpressD1_RejectConfirm_MarksFlowFailed(t *testing.T) {
 
 	orgID := newOrgID(t, pools)
 	userID := newUserID(t, pools, orgID)
+	projectID := newProjectID(t, pools, orgID)
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -161,6 +168,7 @@ func TestExpressD1_RejectConfirm_MarksFlowFailed(t *testing.T) {
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID:  orgID,
+		ProjectID:      projectID,
 		UserID:          userID,
 		RawText:         "x",
 		Mode:            orchestrator.ModeExpress,
@@ -179,7 +187,7 @@ func TestExpressD1_RejectConfirm_MarksFlowFailed(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Usuario rechaza
+
 	confRes, err := s.ConfirmContinue(ctx, res.FlowRunID, false)
 	require.NoError(t, err)
 	require.Equal(t, "failed", confRes.StepStatus)

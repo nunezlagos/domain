@@ -1,11 +1,11 @@
--- migration: create_outbound_webhooks
--- author: nunezlagos
--- issue: HU-10.4
--- description: subscriptions + deliveries para webhooks outbound (notify URL on events)
--- breaking: false
--- estimated_duration: <1s
 
--- Subscriptions: URL + event types + filtros + secret cifrado
+
+
+
+
+
+
+
 CREATE TABLE IF NOT EXISTS outbound_webhook_subscriptions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -32,7 +32,7 @@ CREATE TRIGGER set_updated_at_outbound_webhook_subscriptions
   BEFORE UPDATE ON outbound_webhook_subscriptions
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Deliveries: una row por intento de delivery (audit completo)
+
 CREATE TABLE IF NOT EXISTS outbound_webhook_deliveries (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subscription_id  UUID NOT NULL REFERENCES outbound_webhook_subscriptions(id) ON DELETE CASCADE,

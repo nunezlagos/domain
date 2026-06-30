@@ -1,6 +1,7 @@
 // Package observability: este archivo cubre el registro y dedup de errores
-// para early-error-reporting. Record categoriza, calcula fingerprint y hace
-// upsert con dedup; tras un upsert exitoso dispara el AlertHook.
+// para early-error-reporting. Record categoriza, calcula fingerprint y encola
+// el evento; un worker async hace el upsert con dedup y, tras un upsert
+// exitoso, dispara los hooks de alerting y self-heal.
 //
 // issue-53.9 early-error-reporting.
 package observability
@@ -8,6 +9,8 @@ package observability
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -29,34 +32,52 @@ type ErrorEventStore interface {
 	UpsertErrorEvent(ctx context.Context, e ErrorEvent) error
 }
 
-// AlertHook se invoca tras un upsert exitoso (alerting desacoplado).
+// AlertHook se invoca tras un upsert exitoso (alerting / self-heal desacoplados).
 type AlertHook func(ctx context.Context, e ErrorEvent)
 
 // ErrorTracker registra errores categorizados con dedup por fingerprint.
+// Record es NO-bloqueante: encola y un pool de workers persiste async (mismo
+// patron que SlowQueryTracer), por lo que es seguro en hot-paths.
 type ErrorTracker struct {
-	store   ErrorEventStore
-	logger  *slog.Logger
-	onAlert AlertHook
+	store     ErrorEventStore
+	logger    *slog.Logger
+	onAlert   AlertHook
+	onHeal    AlertHook
+	queue     chan ErrorEvent
+	done      chan struct{}
+	wg        sync.WaitGroup
+	closeMu   sync.Mutex
+	persistTO time.Duration
 }
 
-// NewErrorTracker construye el tracker. logger nil -> slog.Default().
+// NewErrorTracker construye el tracker y arranca sus workers.
+// logger nil -> slog.Default(). workers<=0 -> defaultWorkers.
 func NewErrorTracker(store ErrorEventStore, logger *slog.Logger) *ErrorTracker {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &ErrorTracker{store: store, logger: logger}
+	t := &ErrorTracker{
+		store:     store,
+		logger:    logger,
+		queue:     make(chan ErrorEvent, defaultQueueCap),
+		done:      make(chan struct{}),
+		persistTO: defaultTimeout,
+	}
+	for i := 0; i < defaultWorkers; i++ {
+		t.wg.Add(1)
+		go t.worker()
+	}
+	return t
 }
 
 // SetAlertHook registra el callback de alerting (idempotente).
 func (t *ErrorTracker) SetAlertHook(h AlertHook) { t.onAlert = h }
 
-// Record categoriza el error, calcula su fingerprint y lo deduplica.
-// Si el upsert falla, loguea WARN y NO dispara la alerta.
-//
-// HOTPATH: Record hace un upsert SINCRONO. NO lo enganches a paths de alta
-// frecuencia (pgx TraceQueryEnd, middleware HTTP por request) hasta refactorizar
-// a async (queue + workers, como SlowQueryTracer): un upsert por evento en el
-// hot-path degrada latencia y satura error_events ante cascadas (ej. 25P02).
+// SetHealHook registra el callback de self-heal (idempotente).
+func (t *ErrorTracker) SetHealHook(h AlertHook) { t.onHeal = h }
+
+// Record categoriza el error, calcula su fingerprint y lo encola (no bloquea).
+// Si la cola esta llena, dropea con WARN. Seguro para hot-paths.
 func (t *ErrorTracker) Record(ctx context.Context, err error, source string) {
 	if err == nil {
 		return
@@ -70,16 +91,74 @@ func (t *ErrorTracker) Record(ctx context.Context, err error, source string) {
 		Fingerprint: Fingerprint(cat, err.Error(), source, ""),
 		WorkflowID:  WorkflowIDFromContext(ctx).String(),
 	}
-	if uerr := t.store.UpsertErrorEvent(ctx, e); uerr != nil {
+	select {
+	case <-t.done:
+		return
+	default:
+	}
+	select {
+	case t.queue <- e:
+	default:
+		t.logger.Warn("error event queue full, dropping",
+			slog.String("source", source), slog.String("category", string(cat)))
+	}
+}
+
+func (t *ErrorTracker) worker() {
+	defer t.wg.Done()
+	for {
+		select {
+		case e := <-t.queue:
+			t.persist(e)
+		case <-t.done:
+			t.drain()
+			return
+		}
+	}
+}
+
+func (t *ErrorTracker) drain() {
+	for {
+		select {
+		case e := <-t.queue:
+			t.persist(e)
+		default:
+			return
+		}
+	}
+}
+
+// persist hace el upsert y, si sale OK, dispara alerting y self-heal.
+func (t *ErrorTracker) persist(e ErrorEvent) {
+	ctx, cancel := context.WithTimeout(context.Background(), t.persistTO)
+	defer cancel()
+	if err := t.store.UpsertErrorEvent(ctx, e); err != nil {
 		t.logger.Warn("error event persist failed",
-			slog.String("source", source),
-			slog.String("category", string(cat)),
-			slog.String("error", uerr.Error()))
+			slog.String("source", e.Source),
+			slog.String("category", string(e.Category)),
+			slog.String("error", err.Error()))
 		return
 	}
 	if t.onAlert != nil {
 		t.onAlert(ctx, e)
 	}
+	if t.onHeal != nil {
+		t.onHeal(ctx, e)
+	}
+}
+
+// Close senala el cierre y espera el drain final. Idempotente.
+func (t *ErrorTracker) Close() {
+	t.closeMu.Lock()
+	select {
+	case <-t.done:
+		t.closeMu.Unlock()
+		return
+	default:
+		close(t.done)
+	}
+	t.closeMu.Unlock()
+	t.wg.Wait()
 }
 
 // defaultSeverity mapea la categoria a una severidad inicial razonable.

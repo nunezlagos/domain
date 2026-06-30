@@ -347,6 +347,41 @@ func main() {
 	workflowStore := &observability.PGWorkflowStore{}
 	workflowStore.SetPool(pools.App)
 
+	// issue-53.9 early-error-reporting: tracker async + motor de alertas + self-healer.
+	errorStore := &observability.PGErrorEventStore{}
+	errorStore.SetPool(pools.App)
+	errorTracker := observability.NewErrorTracker(errorStore, slog.Default())
+	defer errorTracker.Close()
+	alertStore := &observability.PGAlertConfigStore{}
+	alertStore.SetPool(pools.App)
+	alertCfgs, acErr := alertStore.LoadConfigs(ctx)
+	if acErr != nil {
+		slog.Warn("alert configs load failed", slog.String("error", acErr.Error()))
+	}
+	alertEngine := observability.NewAlertEngine(alertCfgs, map[string]observability.Notifier{
+		"webhook": observability.NewWebhookNotifier(),
+		"ntfy":    observability.NewNtfyNotifier(),
+		"email":   observability.NewEmailNotifier(),
+	}, slog.Default())
+	selfHealer := observability.NewSelfHealer(&observability.PGKnownErrorStore{Pool: pools.App}, slog.Default())
+	// Los hooks corren fire-and-forget con ctx propio: alerting (webhook/SMTP) y
+	// self-heal (backoff hasta 36s) hacen I/O lento y NO deben bloquear los
+	// workers del ErrorTracker ni heredar el timeout del persist.
+	errorTracker.SetAlertHook(func(_ context.Context, e observability.ErrorEvent) {
+		go func() {
+			bg, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			alertEngine.Evaluate(bg, e)
+		}()
+	})
+	errorTracker.SetHealHook(func(_ context.Context, e observability.ErrorEvent) {
+		go func() {
+			bg, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			selfHealer.Heal(bg, e)
+		}()
+	})
+
 	boolToIntLocal := func(cond bool) int {
 		if cond {
 			return 1
@@ -387,6 +422,7 @@ func main() {
 		WorkflowImport:   workflowImportSvc,
 		Pool:             pools.App,
 		Principal:        principal,
+		ErrorTracker:     errorTracker,  // issue-53.9
 		Dispatcher:       mcpDispatcher, // issue-35.1
 		ServerName:       "domain-mcp",
 		ServerVer:        Version,

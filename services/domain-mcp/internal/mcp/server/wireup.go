@@ -17,6 +17,15 @@ import (
 	"nunezlagos/domain/internal/store/txctx"
 )
 
+// recordTxError registra el error SQL real (causa raiz) en el ErrorTracker.
+// errs[0] es el primer error de la tx — la causa raiz (ej. 42P01), no la
+// cascada de 25P02 (sintomas). issue-53.9.
+func recordTxError(d *Deps, ctx context.Context, errs []error) {
+	if d.ErrorTracker != nil && len(errs) > 0 {
+		d.ErrorTracker.Record(ctx, errs[0], "domain_mcp:tx_aborted")
+	}
+}
+
 // withOrgCtx abre una tx con SET LOCAL app.current_org_id y
 // app.current_user_id, e inyecta la tx en el ctx.
 //
@@ -83,6 +92,7 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 			if status := tx.Conn().PgConn().TxStatus(); status == 'E' {
 				if log := sqLErrorLogFromContext(txCtx); log != nil {
 					if errs, sqls := log.Snapshot(); len(errs) > 0 {
+						recordTxError(d, txCtx, errs)
 						return mcp.NewToolResultError(formatSQLErrorChain(errs, sqls, "transaction aborted before commit")), nil
 					}
 				}
@@ -95,6 +105,7 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 					// constraint deferrable). Caer al SQL log igual para diagnóstico.
 					if log := sqLErrorLogFromContext(txCtx); log != nil {
 						if errs, sqls := log.Snapshot(); len(errs) > 0 {
+							recordTxError(d, txCtx, errs)
 							return mcp.NewToolResultError(formatSQLErrorChain(errs, sqls, "transaction aborted before commit (Rollback)")), nil
 						}
 					}

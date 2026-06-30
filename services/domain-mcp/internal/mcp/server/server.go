@@ -25,6 +25,7 @@ import (
 	"nunezlagos/domain/internal/agentprotocol"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/dispatch"
+	"nunezlagos/domain/internal/observability"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
@@ -78,17 +79,18 @@ type Deps struct {
 	Policies         *policysvc.Service         // issue-01.8 domain_policy_get/list
 	Flows            *flowsvc.Service
 	FlowRunner       *flowrunner.Runner
-	Orchestrator     *orchsvc.Service        // issue-08.10 sdd-pipeline-orchestrator
-	Hubuilder        *husvc.Service          // issue-04.7 interactive HU wizard
-	IssueSvc         *issuesvc.Service       // domain_issue_set_status — cierre SDD
-	Spec             *specsvc.Service        // domain_openspec_* — round-trip specs DB↔repo
-	Tasks            *tasksvc.Service        // domain_openspec_* — sync de tasks por checkbox
-	Intake           *intakesvc.Service      // issue-04.8 intake pipeline
-	ExtSync          *syncsvc.Service        // issue-04.9 external provider sync
-	PromptRouter     *prouter.Router         // issue-12.7 single-shot prompt router
-	WorkflowImport   *workflowimport.Service // issue-12.7 override de .md
-	Pool             *pgxpool.Pool           // para queries de agent_run_logs
-	Principal        *apikey.Principal       // resuelto al boot
+	Orchestrator     *orchsvc.Service            // issue-08.10 sdd-pipeline-orchestrator
+	Hubuilder        *husvc.Service              // issue-04.7 interactive HU wizard
+	IssueSvc         *issuesvc.Service           // domain_issue_set_status — cierre SDD
+	Spec             *specsvc.Service            // domain_openspec_* — round-trip specs DB↔repo
+	Tasks            *tasksvc.Service            // domain_openspec_* — sync de tasks por checkbox
+	Intake           *intakesvc.Service          // issue-04.8 intake pipeline
+	ExtSync          *syncsvc.Service            // issue-04.9 external provider sync
+	PromptRouter     *prouter.Router             // issue-12.7 single-shot prompt router
+	WorkflowImport   *workflowimport.Service     // issue-12.7 override de .md
+	Pool             *pgxpool.Pool               // para queries de agent_run_logs
+	Principal        *apikey.Principal           // resuelto al boot
+	ErrorTracker     *observability.ErrorTracker // issue-53.9 captura el error SQL real en tx abortadas
 
 	Dispatcher *dispatch.Dispatcher
 	ServerName string

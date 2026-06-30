@@ -129,6 +129,7 @@ var toolGroups = []toolRegistrar{
 	registerProjectIndexTools,
 	registerOpenspecTools,
 	registerWorkflowTraceTools,
+	registerErrorReportingTools,
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).

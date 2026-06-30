@@ -12,7 +12,7 @@ NETWORK := domain_internal
 
 .PHONY: help up down restart ps logs build backup healthcheck \
         psql mc clean ensure-network certs certs-force wait-healthy \
-        monitoring-up monitoring-down
+        monitoring-up monitoring-down deploy-changed
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -115,6 +115,12 @@ monitoring-up: ## Levanta Prometheus + Grafana en :3000
 
 monitoring-down: ## Apaga el stack de monitoring
 	-$(COMPOSE_MONITORING) down
+
+deploy-changed: ## Lista SVC cambiados desde PREV_SHA hasta HEAD (HU 38.12)
+	@if [ -z "$(PREV_SHA)" ]; then \
+	  echo "ERROR: PREV_SHA=<sha> requerido (uso: make deploy-changed PREV_SHA=<sha>)" >&2; exit 1; \
+	fi
+	@../scripts/lib/detect_changed.sh "$(PREV_SHA)"
 
 clean: ## DESTRUCTIVO: borra volumes de PG y MinIO
 	@read -p "Escribí 'borrar todo' para confirmar: " confirm; \

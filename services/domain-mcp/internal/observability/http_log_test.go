@@ -1,7 +1,6 @@
 package observability
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -50,11 +49,6 @@ func (s *stubHTTPLogStore) count() int {
 	return len(s.logs)
 }
 
-func captureBuf() (*slog.Logger, *bytes.Buffer) {
-	buf := &bytes.Buffer{}
-	return slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})), buf
-}
-
 func nextHandler(captured *atomic.Int32) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.Add(1)
@@ -63,6 +57,7 @@ func nextHandler(captured *atomic.Int32) http.Handler {
 	})
 }
 
+func captureBuf() (*slog.Logger, *threadSafeBuffer) { return newCapture() }
 func TestHTTPLogger_Middleware_WritesRow(t *testing.T) {
 	store := &stubHTTPLogStore{}
 	h := NewHTTPLogger(store, nil, 1)
@@ -108,9 +103,6 @@ func TestHTTPLogger_RequestIDFromContext(t *testing.T) {
 	h := NewHTTPLogger(store, nil, 1)
 	defer h.Close()
 
-	_, buf := captureBuf()
-	_ = buf
-
 	var seenID uuid.UUID
 	mw := h.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenID = RequestIDFromContext(r.Context())
@@ -133,9 +125,9 @@ func TestHTTPLogger_Close_Idempotent(t *testing.T) {
 	h.Close()
 }
 
-func TestSabotage_FullQueue_DropsWithWarn(t *testing.T) {
+func TestHTTPSabotage_FullQueue_DropsWithWarn(t *testing.T) {
 	logger, buf := captureBuf()
-	h := NewHTTPLogger(&stubHTTPLogStore{insert: 100 * time.Millisecond}, logger, 1)
+	h := NewHTTPLogger(&stubHTTPLogStore{insert: time.Millisecond}, logger, 1)
 	mw := h.Middleware(nextHandler(&atomic.Int32{}))
 
 	for i := 0; i < 2000; i++ {
@@ -146,7 +138,7 @@ func TestSabotage_FullQueue_DropsWithWarn(t *testing.T) {
 	require.Contains(t, buf.String(), "queue full")
 }
 
-func TestSabotage_StoreFail_DoesNotLeakGoroutines(t *testing.T) {
+func TestHTTPSabotage_StoreFail_DoesNotLeakGoroutines(t *testing.T) {
 	store := &stubHTTPLogStore{fail: true}
 	logger, _ := captureBuf()
 	h := NewHTTPLogger(store, logger, 2)
@@ -190,7 +182,7 @@ func TestHTTPLogger_ConcurrentServedSafe(t *testing.T) {
 	require.Equal(t, 50, store.count())
 }
 
-func TestSabotage_DefaultLevelsInWarn(t *testing.T) {
+func TestHTTPSabotage_DefaultLevelsInWarn(t *testing.T) {
 	logger, buf := captureBuf()
 	store := &stubHTTPLogStore{fail: true}
 	h := NewHTTPLogger(store, logger, 1)

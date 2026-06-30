@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // FnLogEntry es el payload de UNA llamada a una fn interna.
@@ -55,7 +57,7 @@ type FnLogger struct {
 	queue   chan FnLogEntry
 	workers int
 	closeMu sync.Mutex
-	closed  bool
+	done    chan struct{}
 	wg      sync.WaitGroup
 }
 
@@ -73,6 +75,7 @@ func NewFnLogger(store FnLogStore, logger *slog.Logger, workers int) *FnLogger {
 		logger:  logger,
 		queue:   make(chan FnLogEntry, defaultQueueCap),
 		workers: workers,
+		done:    make(chan struct{}),
 	}
 	for i := 0; i < workers; i++ {
 		f.wg.Add(1)
@@ -81,23 +84,42 @@ func NewFnLogger(store FnLogStore, logger *slog.Logger, workers int) *FnLogger {
 	return f
 }
 
-// Close flushes + waits. Idempotente.
+// Close senala el cierre y espera el drain final. Idempotente.
+// NO cierra el canal `queue` (evita race con producers en vuelo).
 func (f *FnLogger) Close() {
 	f.closeMu.Lock()
-	if f.closed {
+	select {
+	case <-f.done:
 		f.closeMu.Unlock()
 		return
+	default:
+		close(f.done)
 	}
-	f.closed = true
-	close(f.queue)
 	f.closeMu.Unlock()
 	f.wg.Wait()
 }
 
 func (f *FnLogger) worker() {
 	defer f.wg.Done()
-	for e := range f.queue {
-		f.persist(e)
+	for {
+		select {
+		case e := <-f.queue:
+			f.persist(e)
+		case <-f.done:
+			f.drain()
+			return
+		}
+	}
+}
+
+func (f *FnLogger) drain() {
+	for {
+		select {
+		case e := <-f.queue:
+			f.persist(e)
+		default:
+			return
+		}
 	}
 }
 
@@ -122,6 +144,11 @@ func (f *FnLogger) Enter(fnName, pkg string, args []byte) func(error) {
 		if err != nil {
 			status = "error"
 			msg = err.Error()
+		}
+		select {
+		case <-f.done:
+			return
+		default:
 		}
 		select {
 		case f.queue <- FnLogEntry{

@@ -35,7 +35,6 @@ import (
 	"nunezlagos/domain/internal/logging"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
-	"nunezlagos/domain/internal/observability"
 	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/flow"

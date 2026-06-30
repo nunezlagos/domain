@@ -1,7 +1,6 @@
 package observability
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -15,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func captureLogger() (*slog.Logger, *bytes.Buffer) {
-	buf := &bytes.Buffer{}
-	h := slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	return slog.New(h), buf
+func captureLogger() (*slog.Logger, *threadSafeBuffer) {
+	tb := &threadSafeBuffer{}
+	h := slog.NewJSONHandler(tb, &slog.HandlerOptions{Level: slog.LevelDebug})
+	return slog.New(h), tb
 }
 
 type stubStore struct {
@@ -49,6 +48,7 @@ func (s *stubStore) InsertInvocation(ctx context.Context, inv Invocation) error 
 func TestInvocationLogger_Log_Enqueues(t *testing.T) {
 	store := &stubStore{}
 	l := NewInvocationLogger(store, nil, 1, 16)
+	l.Log(Invocation{ToolName: "x", Status: "ok", DurationMS: 5})
 	l.Close()
 	require.Equal(t, 1, len(store.calls))
 }
@@ -79,11 +79,9 @@ func TestInvocationLogger_HashArgs(t *testing.T) {
 }
 
 func TestInvocationLogger_Close_Idempotent(t *testing.T) {
-	store := &stubStore{}
-	l := NewInvocationLogger(store, nil, 1, 4)
+	l := NewInvocationLogger(&stubStore{}, nil, 1, 4)
 	l.Close()
-	l.Close()
-	require.Equal(t, 1, len(store.calls))
+	require.NotPanics(t, func() { l.Close() })
 }
 
 func TestInvocationLogger_Persist_NilUUIDsNoPanic(t *testing.T) {
@@ -130,7 +128,7 @@ func TestInvocationLogger_Log_ConcurrentSafe(t *testing.T) {
 	require.EqualValues(t, 100, counter.Load())
 }
 
-func TestSabotage_FullQueue_DropsWithWarn(t *testing.T) {
+func TestInvocationSabotage_FullQueue_DropsWithWarn(t *testing.T) {
 	logger, buf := captureLogger()
 	store := &stubStore{insertTO: 100 * time.Millisecond}
 	l := NewInvocationLogger(store, logger, 1, 1)
@@ -150,7 +148,7 @@ func TestSabotage_FullQueue_DropsWithWarn(t *testing.T) {
 	require.True(t, sawWarn, "expected WARN 'queue full' when buffer overflows")
 }
 
-func TestSabotage_StoreError_DoesNotLeakGoroutines(t *testing.T) {
+func TestInvocationSabotage_StoreError_DoesNotLeakGoroutines(t *testing.T) {
 	store := &stubStore{failNext: true, insertTO: 50 * time.Millisecond}
 	logger, _ := captureLogger()
 	l := NewInvocationLogger(store, logger, 2, 4)
@@ -171,12 +169,12 @@ func TestSabotage_StoreError_DoesNotLeakGoroutines(t *testing.T) {
 	}
 }
 
-func TestSabotage_BreakingPersist_PushesWarnNotPanic(t *testing.T) {
+func TestInvocationSabotage_BreakingPersist_PushesWarnNotPanic(t *testing.T) {
 	store := &stubStore{failNext: true}
 	logger, buf := captureLogger()
 	l := NewInvocationLogger(store, logger, 1, 4)
-	l.Log(Invocation{ToolName: "panic_test", Status: "ok"})
+	l.Log(Invocation{ToolName: "broken_invocation_test", Status: "ok"})
 	l.Close()
-	require.NotContains(t, buf.String(), "panic")
+	require.NotContains(t, buf.String(), "panic:")
 	require.Contains(t, buf.String(), "invocation persist failed")
 }

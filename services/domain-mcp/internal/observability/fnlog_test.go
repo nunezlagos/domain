@@ -11,12 +11,20 @@ import (
 )
 
 type stubFnStore struct {
-	mu   sync.Mutex
-	rows []FnLogEntry
-	fail bool
+	mu    sync.Mutex
+	rows  []FnLogEntry
+	fail  bool
+	delay time.Duration
 }
 
 func (s *stubFnStore) InsertFnLog(ctx context.Context, e FnLogEntry) error {
+	if s.delay > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(s.delay):
+		}
+	}
 	s.mu.Lock()
 	failed := s.fail
 	s.mu.Unlock()
@@ -101,20 +109,19 @@ func TestFnLogger_Trace_NoErrorReturnsNil(t *testing.T) {
 	require.Equal(t, "ok", store.rows[0].Status)
 }
 
-func TestSabotage_FullQueue_DropsWithWarn(t *testing.T) {
+func TestFNSabotage_FullQueue_DropsWithWarn(t *testing.T) {
 	logger, buf := captureBuf()
-	store := &stubFnStore{}
+	store := &stubFnStore{delay: time.Millisecond}
 	f := NewFnLogger(store, logger, 1)
 
 	for i := 0; i < 2000; i++ {
-		// encolar muchas invocaciones sin consumir
 		go f.Enter("bulk", "pkg", nil)(nil)
 	}
 	f.Close()
 	require.Contains(t, buf.String(), "queue full")
 }
 
-func TestSabotage_StoreFail_DoesNotLeakGoroutines(t *testing.T) {
+func TestFNSabotage_StoreFail_DoesNotLeakGoroutines(t *testing.T) {
 	store := &stubFnStore{fail: true}
 	f := NewFnLogger(store, nil, 1)
 

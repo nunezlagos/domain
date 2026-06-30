@@ -70,7 +70,7 @@ type InvocationLogger struct {
 	queue    chan Invocation
 	workers  int
 	closeMu  sync.Mutex
-	closed   bool
+	done     chan struct{}
 	wg       sync.WaitGroup
 	insertTO time.Duration
 }
@@ -99,6 +99,7 @@ func NewInvocationLogger(store InvocationStore, logger *slog.Logger, workers, qu
 		logger:   logger,
 		queue:    make(chan Invocation, queueSize),
 		workers:  workers,
+		done:     make(chan struct{}),
 		insertTO: defaultTimeout,
 	}
 	for i := 0; i < workers; i++ {
@@ -118,7 +119,13 @@ func HashArgs(args []byte) []byte {
 }
 
 // Log enqueuea una invocacion. No-bloqueante: si el canal esta lleno, dropea + WARN.
+// Si el logger ya cerro (post-shutdown), drop silencioso.
 func (l *InvocationLogger) Log(inv Invocation) {
+	select {
+	case <-l.done:
+		return
+	default:
+	}
 	select {
 	case l.queue <- inv:
 	default:
@@ -128,23 +135,43 @@ func (l *InvocationLogger) Log(inv Invocation) {
 	}
 }
 
-// Close marca el logger como cerrado y espera el flush. Idempotente.
+// Close senala el cierre y espera el drain final. Idempotente.
+// NO cierra el canal `queue` (evita race con producers en vuelo); los
+// workers drenan lo que queda al ver `done` y terminan.
 func (l *InvocationLogger) Close() {
 	l.closeMu.Lock()
-	if l.closed {
+	select {
+	case <-l.done:
 		l.closeMu.Unlock()
 		return
+	default:
+		close(l.done)
 	}
-	l.closed = true
-	close(l.queue)
 	l.closeMu.Unlock()
 	l.wg.Wait()
 }
 
 func (l *InvocationLogger) worker() {
 	defer l.wg.Done()
-	for inv := range l.queue {
-		l.persist(inv)
+	for {
+		select {
+		case inv := <-l.queue:
+			l.persist(inv)
+		case <-l.done:
+			l.drain()
+			return
+		}
+	}
+}
+
+func (l *InvocationLogger) drain() {
+	for {
+		select {
+		case inv := <-l.queue:
+			l.persist(inv)
+		default:
+			return
+		}
 	}
 }
 

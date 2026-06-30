@@ -8,10 +8,12 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // SlowQuery es el payload a persistir en sql_slow_queries.
@@ -54,24 +56,26 @@ type SlowQueryTracer struct {
 	queue     chan SlowQuery
 	workers   int
 	closeMu   sync.Mutex
-	closed    bool
+	done      chan struct{}
 	wg        sync.WaitGroup
 	threshold time.Duration
 	persistTO time.Duration
 }
 
 type slowStartKey struct{}
+type slowSQLKey struct{}
 
 // SlowThresholdDefaultMs es el threshold por default para considerar una query "slow".
 const SlowThresholdDefaultMs = 100
 
 // NewSlowQueryTracer arranca workers que procesan slow queries.
-// thresholdMs<=0 -> SlowThresholdDefaultMs. workers<=0 -> defaultWorkers.
+// thresholdMs<0 -> SlowThresholdDefaultMs (100). thresholdMs==0 -> sin threshold (toda query cuenta).
+// workers<=0 -> defaultWorkers.
 func NewSlowQueryTracer(inner pgx.QueryTracer, store SlowQueryStore, logger *slog.Logger, workers int, thresholdMs int) *SlowQueryTracer {
 	if workers <= 0 {
 		workers = defaultWorkers
 	}
-	if thresholdMs <= 0 {
+	if thresholdMs < 0 {
 		thresholdMs = SlowThresholdDefaultMs
 	}
 	if logger == nil {
@@ -86,6 +90,7 @@ func NewSlowQueryTracer(inner pgx.QueryTracer, store SlowQueryStore, logger *slo
 		logger:    logger,
 		queue:     make(chan SlowQuery, defaultQueueCap),
 		workers:   workers,
+		done:      make(chan struct{}),
 		threshold: time.Duration(thresholdMs) * time.Millisecond,
 		persistTO: defaultTimeout,
 	}
@@ -107,23 +112,42 @@ func NewFromEnv(inner pgx.QueryTracer, store SlowQueryStore, logger *slog.Logger
 	return NewSlowQueryTracer(inner, store, logger, workers, threshold)
 }
 
-// Close flush + wait. Idempotente.
+// Close senala el cierre y espera el drain final. Idempotente.
+// NO cierra el canal `queue` (evita race con producers en vuelo).
 func (t *SlowQueryTracer) Close() {
 	t.closeMu.Lock()
-	if t.closed {
+	select {
+	case <-t.done:
 		t.closeMu.Unlock()
 		return
+	default:
+		close(t.done)
 	}
-	t.closed = true
-	close(t.queue)
 	t.closeMu.Unlock()
 	t.wg.Wait()
 }
 
 func (t *SlowQueryTracer) worker() {
 	defer t.wg.Done()
-	for q := range t.queue {
-		t.persist(q)
+	for {
+		select {
+		case q := <-t.queue:
+			t.persist(q)
+		case <-t.done:
+			t.drain()
+			return
+		}
+	}
+}
+
+func (t *SlowQueryTracer) drain() {
+	for {
+		select {
+		case q := <-t.queue:
+			t.persist(q)
+		default:
+			return
+		}
 	}
 }
 
@@ -137,10 +161,13 @@ func (t *SlowQueryTracer) persist(q SlowQuery) {
 	}
 }
 
-// TraceQueryStart delega al inner y setea start time en ctx.
+// TraceQueryStart delega al inner y setea start time + SQL en ctx.
+// pgx v5 TraceQueryEndData NO incluye SQL — guardamos en ctx para recuperarlo en TraceQueryEnd.
 func (t *SlowQueryTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	ctx = t.inner.TraceQueryStart(ctx, conn, data)
-	return context.WithValue(ctx, slowStartKey{}, time.Now())
+	ctx = context.WithValue(ctx, slowStartKey{}, time.Now())
+	ctx = context.WithValue(ctx, slowSQLKey{}, data.SQL)
+	return ctx
 }
 
 // TraceQueryEnd delega al inner, mide duracion y enqueuea si lento.
@@ -154,9 +181,15 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, dat
 	if dur < t.threshold {
 		return
 	}
+	sqlText, _ := ctx.Value(slowSQLKey{}).(string)
+	select {
+	case <-t.done:
+		return
+	default:
+	}
 	select {
 	case t.queue <- SlowQuery{
-		QueryText:  data.SQL,
+		QueryText:  sqlText,
 		DurationMS: dur.Milliseconds(),
 	}:
 	default:

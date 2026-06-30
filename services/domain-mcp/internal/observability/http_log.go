@@ -61,7 +61,7 @@ type HTTPLogger struct {
 	queue   chan HTTPLog
 	workers int
 	closeMu sync.Mutex
-	closed  bool
+	done    chan struct{}
 	wg      sync.WaitGroup
 }
 
@@ -79,6 +79,7 @@ func NewHTTPLogger(store HTTPLogStore, logger *slog.Logger, workers int) *HTTPLo
 		logger:  logger,
 		queue:   make(chan HTTPLog, defaultQueueCap),
 		workers: workers,
+		done:    make(chan struct{}),
 	}
 	for i := 0; i < workers; i++ {
 		h.wg.Add(1)
@@ -87,23 +88,42 @@ func NewHTTPLogger(store HTTPLogStore, logger *slog.Logger, workers int) *HTTPLo
 	return h
 }
 
-// Close flushes + espera. Idempotente.
+// Close senala el cierre y espera el drain final. Idempotente.
+// NO cierra el canal `queue` (evita race con producers en vuelo).
 func (h *HTTPLogger) Close() {
 	h.closeMu.Lock()
-	if h.closed {
+	select {
+	case <-h.done:
 		h.closeMu.Unlock()
 		return
+	default:
+		close(h.done)
 	}
-	h.closed = true
-	close(h.queue)
 	h.closeMu.Unlock()
 	h.wg.Wait()
 }
 
 func (h *HTTPLogger) worker() {
 	defer h.wg.Done()
-	for entry := range h.queue {
-		h.persist(entry)
+	for {
+		select {
+		case entry := <-h.queue:
+			h.persist(entry)
+		case <-h.done:
+			h.drain()
+			return
+		}
+	}
+}
+
+func (h *HTTPLogger) drain() {
+	for {
+		select {
+		case entry := <-h.queue:
+			h.persist(entry)
+		default:
+			return
+		}
 	}
 }
 
@@ -119,7 +139,13 @@ func (h *HTTPLogger) persist(l HTTPLog) {
 }
 
 // enqueue non-blocking; drop + WARN si saturado.
+// Si el logger ya cerro, drop silencioso.
 func (h *HTTPLogger) enqueue(l HTTPLog) {
+	select {
+	case <-h.done:
+		return
+	default:
+	}
 	select {
 	case h.queue <- l:
 	default:

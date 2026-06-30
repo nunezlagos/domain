@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 12 }
+func (s *PlatformPoliciesSeeder) Version() int    { return 13 }
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -35,10 +35,10 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 		},
 		{
 			Slug:       "sdd-tdd-strict",
-			Name:       "TDD estricto para toda HU",
+			Name:       "TDD estricto para toda issue",
 			Kind:       "sdd_workflow",
 			SourceFile: ".claude/rules/sdd.md",
-			BodyMD: `Cada HU sigue el ciclo TDD obligatorio:
+			BodyMD: `Cada issue sigue el ciclo TDD obligatorio:
 1. Red: escribir test que falle por la razón correcta.
 2. Green: mínima implementación para pasar el test.
 3. Refactor: limpiar duplicación + naming + aplicar conventions.
@@ -139,7 +139,7 @@ preparados pero no se ejecutarán hasta que exista remote.`,
 Ej: TestUserService_CreateUser_DuplicateEmail_Returns409.
 require.NoError(t, err) — no assert.Nil(t, err).
 testcontainers para integration; build tag //go:build integration.
-Sabotaje test obligatorio por HU.`,
+Sabotaje test obligatorio por issue.`,
 		},
 		// ── Políticas v4: extraídas del análisis cross-project (9 proyectos Saargo) ──
 		{
@@ -282,10 +282,10 @@ CREATE INDEX CONCURRENTLY para no bloquear en tablas con datos.`,
 		},
 		{
 			Slug:       "sdd-minimo-directo",
-			Name:       "SDD mínimo incluso para cambios directos sin HU",
+			Name:       "SDD mínimo incluso para cambios directos sin issue",
 			Kind:       "sdd_workflow",
 			SourceFile: "openspec/config.yaml",
-			BodyMD: `TODO cambio en el código, incluso sin HU asociada (fixes directos,
+			BodyMD: `TODO cambio en el código, incluso sin issue asociada (fixes directos,
 experimentos one-shot, refactors sin issue), DEBE incluir documentación
 SDD mínima en el PR description o commit body:
 

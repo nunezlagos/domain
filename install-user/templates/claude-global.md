@@ -48,11 +48,12 @@ Server has NO LLM — fan-out parallelism via client subagents (Task tool / suba
 - **Session end**: `domain_session_summary(accomplished, next_steps)`.
 - **Significant commands** (deploy, migration, test suite): `domain_mem_save` the result.
 
-## Issues vs tickets
+## Issues vs tickets (v2)
 
-- **Issue** = formal requirement with Gherkin. Use `domain_issue_create_*`. Status via `domain_issue_set_status`. Alias legacy: `domain_hu_create_*`.
-- **Ticket** = bug / task / feature without Gherkin. Use `domain_ticket_create` + `domain_ticket_change_status`. Starts in `backlog`; move to actual state (never leave in backlog by inertia).
-- **Bridge**: `domain_ticket_link_issue(ticket_id, issue_id)` when a ticket implements an issue.
+- **Issue / spec** = formal requirement (lo que antes llamábamos "HU"). El spec vive en `openspec/changes/<slug>/state.yaml` como single source of truth. NO crear issue en BD para esto — el spec ya está en git. Tracking de aprobación se hace via PR.
+- **Ticket** = bug / task / feature simple sin spec formal. Use `domain_ticket_create` + `domain_ticket_change_status` para workflow operativo kanban. Distinto de issue/spec.
+- **Bridge**: `domain_ticket_link_issue(ticket_id, issue_id)` cuando un ticket implementa un issue del SDD.
+- **Regla fuerte**: nunca crear `domain_issue` o `domain_ticket` con contenido duplicado del state.yaml. El spec en git es suficiente.
 
 ## Skills and policies lifecycle
 
@@ -94,4 +95,4 @@ Domain is PULL — state lives in BD, not in conversation context. Compaction do
 
 ## SDD graph reference
 
-Domain-admin exposes the full 10-phase SDD graph with tools + DB ops per phase at `/flujo-sdd/` (rendered from `services/domain-admin/app/templates/sdd_flow.html`). Use as reference when planning a HU.
+Domain-admin exposes the full 10-phase SDD graph with tools + DB ops per phase at `/flujo-sdd/` (rendered from `services/domain-admin/app/templates/sdd_flow.html`). Use as reference when planning an issue.

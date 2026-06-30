@@ -36,11 +36,27 @@ func buildRouter(
 	metricsReg *metrics.Registry,
 	logger *slog.Logger,
 	queryCacheLRU *cache.LRU,
-) (http.Handler, *observability.InvocationLogger) {
+) (http.Handler, *observability.InvocationLogger, *observability.HTTPLogger, *observability.ResourceCollector, *observability.FnLogger) {
 	invocationLogger := observability.NewInvocationLogger(
 		&observability.PGInvocationStore{Pool: pools.App},
 		logger,
 		0, 0,
+	)
+	httpLogger := observability.NewHTTPLogger(
+		&observability.PGHTTPLogStore{Pool: pools.App},
+		logger,
+		0,
+	)
+	resourceCollector := observability.NewResourceCollector(
+		&observability.PGResourceStore{Pool: pools.App},
+		logger,
+		0,
+	)
+	resourceCollector.Start()
+	fnLogger := observability.NewFnLogger(
+		&observability.PGFnLogStore{Pool: pools.App},
+		logger,
+		0,
 	)
 	mux := http.NewServeMux()
 
@@ -204,8 +220,10 @@ func buildRouter(
 
 	finalHandler := httpserver.RecoverMiddleware(logger)(
 		metricsReg.HTTPMiddleware(
-			tracing.HTTPMiddleware("domain")(mux),
+			tracing.HTTPMiddleware("domain")(
+				httpLogger.Middleware(mux),
+			),
 		),
 	)
-	return finalHandler, invocationLogger
+	return finalHandler, invocationLogger, httpLogger, resourceCollector, fnLogger
 }

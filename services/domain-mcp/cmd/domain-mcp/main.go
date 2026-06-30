@@ -335,6 +335,25 @@ func main() {
 		0, 0,
 	)
 	defer invLogger.Close()
+	httpLogger := observability.NewHTTPLogger(
+		&observability.PGHTTPLogStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	defer httpLogger.Close()
+	resourceCollector := observability.NewResourceCollector(
+		&observability.PGResourceStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	resourceCollector.Start()
+	defer resourceCollector.Stop()
+	fnLogger := observability.NewFnLogger(
+		&observability.PGFnLogStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	defer fnLogger.Close()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	srv := mcpserver.New(mcpserver.Deps{

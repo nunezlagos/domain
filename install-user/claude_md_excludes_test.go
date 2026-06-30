@@ -78,6 +78,21 @@ func TestInstallClaudeMdExcludes_PreservesUserEntries(t *testing.T) {
 	}
 }
 
+func TestUpsertStringInArray_PreservesScalarValue(t *testing.T) {
+	// Si claudeMdExcludes viniera como string suelto (no array), no debe perderse.
+	m := map[string]any{"claudeMdExcludes": "**/secret.md"}
+	if !upsertStringInArray(m, "claudeMdExcludes", "**/AGENTS.md") {
+		t.Fatal("esperaba mutación")
+	}
+	got := toStringSet(m["claudeMdExcludes"])
+	if !got["**/secret.md"] {
+		t.Fatal("se perdió el valor escalar previo del usuario")
+	}
+	if !got["**/AGENTS.md"] {
+		t.Fatal("no se agregó el nuevo valor")
+	}
+}
+
 func TestInstallClaudeMdExcludes_Idempotent(t *testing.T) {
 	home := t.TempDir()
 	if err := installClaudeMdExcludes(home, "ts1", false); err != nil {

@@ -106,7 +106,7 @@ func main() {
 	}
 
 	if bootstrapGuided {
-		runBootstrapGuided(&platform, paths)
+		runBootstrapGuided(&platform, paths, keepLocalRules)
 		return
 	}
 
@@ -353,7 +353,7 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 
 // runBootstrapGuided: el operador ya generó la key con `domain bootstrap`
 // en el VPS, ahora solo necesita pegarla. La URL la pedimos, la key la pide.
-func runBootstrapGuided(p *Platform, paths Paths) {
+func runBootstrapGuided(p *Platform, paths Paths, keepLocalRules bool) {
 	step("domain-install — modo bootstrap guiado")
 
 	in := bufio.NewReader(os.Stdin)
@@ -399,9 +399,10 @@ func runBootstrapGuided(p *Platform, paths Paths) {
 	}
 
 	runInstall(*p, paths, installOptions{
-		URL:    url,
-		Email:  email,
-		APIKey: key,
+		URL:            url,
+		Email:          email,
+		APIKey:         key,
+		KeepLocalRules: keepLocalRules,
 	})
 }
 

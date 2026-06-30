@@ -134,7 +134,13 @@ func installOpencodeGlobalInstruction(paths Paths, timestamp string) error {
 func upsertStringInArray(m map[string]any, key, value string) bool {
 	raw, ok := m[key].([]any)
 	if !ok {
-		raw = []any{}
+		// Si había un valor escalar previo (ej. un string suelto), lo envolvemos
+		// en array en vez de pisarlo — evita data loss (issue-54.1 review).
+		if existing, isStr := m[key].(string); isStr && existing != "" {
+			raw = []any{existing}
+		} else {
+			raw = []any{}
+		}
 	}
 	for _, e := range raw {
 		if s, ok := e.(string); ok && s == value {

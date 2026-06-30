@@ -9,14 +9,15 @@ import (
 // domain neutraliza por DEFAULT (modo agresivo, REQ-54 / issue-54.1) para que en
 // cualquier proyecto apliquen SOLO las reglas globales de domain.
 //
-// OJO (verificar contra Claude Code vivo antes de shippear): el bloque global de
-// domain vive en ~/.claude/CLAUDE.md (user scope, lo carga Claude Code aparte). Hay
-// que confirmar que el glob **/CLAUDE.md NO excluya ese global propio; si el matcher
-// de claudeMdExcludes lo alcanzara, restringir el patrón a CLAUDE.md de proyecto.
+// VERIFICADO (docs Claude Code + fnmatch): claudeMdExcludes matchea contra paths
+// ABSOLUTOS. Por eso NO se incluyen globs de CLAUDE.md (**/CLAUDE.md,
+// **/.claude/CLAUDE.md, **/CLAUDE.local.md): matchearían también el bloque global
+// propio de domain en ~/.claude/CLAUDE.md y se AUTO-NEUTRALIZARÍA. Excluir el
+// CLAUDE.md de proyecto sin matar el global requiere project-scope settings o mover
+// el bloque domain fuera de ~/.claude/CLAUDE.md — decisión abierta (REQ-54 design).
+// Estos globs cubren los archivos de instrucciones de OTRAS herramientas + .claude/rules,
+// que NO colisionan con el global de domain.
 var localInstructionGlobs = []string{
-	"**/CLAUDE.md",
-	"**/CLAUDE.local.md",
-	"**/.claude/CLAUDE.md",
 	"**/AGENTS.md",
 	"**/.cursorrules",
 	"**/.windsurfrules",

@@ -79,6 +79,7 @@ func main() {
 		installOpencode bool
 		bootstrapGuided bool
 		yes             bool
+		keepLocalRules  bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
@@ -91,6 +92,8 @@ func main() {
 	flag.BoolVar(&bootstrapGuided, "bootstrap", false,
 		"Modo guiado: el operador genera la API key con `domain bootstrap` y la pega")
 	flag.BoolVar(&yes, "yes", false, "Asumir 'sí' a prompts no destructivos")
+	flag.BoolVar(&keepLocalRules, "keep-local-rules", false,
+		"NO neutralizar instrucciones locales de proyecto (CLAUDE.md/AGENTS.md/.claude). Por default domain las excluye para que solo apliquen las reglas globales")
 	flag.Usage = printHelp
 	flag.Parse()
 
@@ -115,6 +118,7 @@ func main() {
 		Target:         target,
 		AutoInstall:    installOpencode,
 		NonInteractive: yes,
+		KeepLocalRules: keepLocalRules,
 	})
 }
 
@@ -155,6 +159,7 @@ type installOptions struct {
 	Target         string
 	AutoInstall    bool
 	NonInteractive bool
+	KeepLocalRules bool // --keep-local-rules: NO neutralizar instrucciones locales (issue-54.1)
 }
 
 func runInstall(p Platform, paths Paths, opts installOptions) {
@@ -280,6 +285,17 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		warnL("precedencia global: " + err.Error())
 	} else {
 		ok("CLAUDE.md global: " + claudeGlobalPath(p.Home()))
+	}
+
+	// 5c. Domain global-first agresivo (issue-54.1): neutralizar instrucciones
+	// locales de proyecto vía claudeMdExcludes, salvo --keep-local-rules.
+	step("Neutralizando instrucciones locales (claudeMdExcludes)")
+	if err := installClaudeMdExcludes(p.Home(), Timestamp(), opts.KeepLocalRules); err != nil {
+		warnL("claudeMdExcludes: " + err.Error())
+	} else if opts.KeepLocalRules {
+		info("--keep-local-rules: se conservan las instrucciones locales de proyecto")
+	} else {
+		ok("claudeMdExcludes global: " + claudeSettingsPath(p.Home()))
 	}
 
 	step("Configurando clientes (MCP transport)")

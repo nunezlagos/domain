@@ -31,7 +31,23 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	mcpserver "nunezlagos/domain/internal/mcp/server"
 )
+
+// withAppPoolTracer parses the DSN, le pega el QueryTracer al ConnConfig,
+// y abre el pool con esa config. Centralizado para que las 3 funciones
+// (OpenProduction, OpenProductionWithReplica, OpenWithRoleOverride)
+// compartan el mismo setup — sin esto, los tools con withOrgTxHandler
+// no podrian capturar errores SQL durante la tx.
+func withAppPoolTracer(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse dsn: %w", err)
+	}
+	cfg.ConnConfig.Tracer = mcpserver.SQLErrorCaptureTracer()
+	return pgxpool.NewWithConfig(ctx, cfg)
+}
 
 // Pools agrupa los pools del proceso.
 //
@@ -82,7 +98,7 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 	if appDSN == "" {
 		return nil, errors.New("appDSN required")
 	}
-	app, err := pgxpool.New(ctx, appDSN)
+	app, err := withAppPoolTracer(ctx, appDSN)
 	if err != nil {
 		return nil, fmt.Errorf("open app pool: %w", err)
 	}
@@ -90,7 +106,7 @@ func OpenProduction(ctx context.Context, appDSN, authDSN string) (*Pools, error)
 
 		return &Pools{App: app, Auth: app}, nil
 	}
-	auth, err := pgxpool.New(ctx, authDSN)
+	auth, err := withAppPoolTracer(ctx, authDSN)
 	if err != nil {
 		app.Close()
 		return nil, fmt.Errorf("open auth pool: %w", err)
@@ -109,7 +125,7 @@ func OpenProductionWithReplica(ctx context.Context, appDSN, authDSN, readDSN str
 	if readDSN == "" {
 		return pools, nil
 	}
-	ro, err := pgxpool.New(ctx, readDSN)
+	ro, err := withAppPoolTracer(ctx, readDSN)
 	if err != nil {
 		pools.Close()
 		return nil, fmt.Errorf("open readonly pool: %w", err)

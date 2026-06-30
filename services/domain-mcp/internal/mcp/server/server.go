@@ -128,6 +128,7 @@ var toolGroups = []toolRegistrar{
 	registerHealthTools,
 	registerProjectIndexTools,
 	registerOpenspecTools,
+	registerWorkflowTraceTools,
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).

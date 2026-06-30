@@ -36,6 +36,8 @@ import (
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/secrets"
+
+	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/flow"
 	"nunezlagos/domain/internal/service/lifecycle"
@@ -259,12 +261,18 @@ func runServer() {
 
 	ctx := context.Background()
 
+	slowQueryTracer, slowQueryStore := setupSlowQueryTracer(logger)
+	db.SetObservabilityTracer(slowQueryTracer)
+	defer slowQueryTracer.Close()
+
 	pools, poolsClose, err := buildPools(ctx, cfg, logger, metricsReg)
 	if err != nil {
 		logger.Error("pools open failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 	defer poolsClose()
+
+	slowQueryStore.SetPool(pools.App)
 
 	otelSampleRatio := 0.1
 	if v := os.Getenv("DOMAIN_OTEL_SAMPLE_RATIO"); v != "" {

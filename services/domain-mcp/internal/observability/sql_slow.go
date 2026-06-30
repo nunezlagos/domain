@@ -6,6 +6,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"strconv"
@@ -31,12 +32,22 @@ type SlowQueryStore interface {
 }
 
 // PGSlowQueryStore persiste en sql_slow_queries.
+// Pool puede ser nil al inicio; setear via SetPool post-OpenProduction
+// cuando el pgxpool.Pool esta disponible.
 type PGSlowQueryStore struct {
 	Pool *pgxpool.Pool
 }
 
-// InsertSlowQuery ejecuta el INSERT.
+// SetPool setea el pool (post-init).
+func (s *PGSlowQueryStore) SetPool(p *pgxpool.Pool) {
+	s.Pool = p
+}
+
+// InsertSlowQuery ejecuta el INSERT. Si Pool es nil, dropea + WARN.
 func (s *PGSlowQueryStore) InsertSlowQuery(ctx context.Context, q SlowQuery) error {
+	if s.Pool == nil {
+		return ErrStoreNotReady
+	}
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO sql_slow_queries (query_text, args_hash, duration_ms, plan_text, workflow_id)
 		VALUES ($1, $2, $3, NULLIF($4,''), NULLIF($5,''))
@@ -46,9 +57,18 @@ func (s *PGSlowQueryStore) InsertSlowQuery(ctx context.Context, q SlowQuery) err
 	return err
 }
 
-// SlowQueryTracer implementa pgx.QueryTracer; captura duration por query y
-// enqueuea las que exceden threshold. Delega al inner tracer para mantener
-// compatibilidad con SQLErrorCaptureTracer del proyecto (HU 51.1).
+// ErrStoreNotReady indica que el store aun no recibio su pool.
+var ErrStoreNotReady = errors.New("observability: slow query store pool not set; call SetPool after db.Open*")
+
+// WireSlowQueryTracer construye un SlowQueryTracer listo para encadenar
+// a un pgxpool.Pool. Devuelve (tracer, store). El caller debe:
+//
+//	tracer, store := observability.WireSlowQueryTracer(logger)
+//	db.SetObservabilityTracer(tracer)         // ANTES de db.Open*
+//	pools, ... := db.OpenProduction(...)
+//	store.SetPool(pools.App)                    // DESPUES de Open*
+//
+// thresholdMs<0 usa el default (100ms); DOMAIN_SQL_SLOW_THRESHOLD_MS via env.
 type SlowQueryTracer struct {
 	inner     pgx.QueryTracer
 	store     SlowQueryStore
@@ -205,3 +225,19 @@ func (noopTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQ
 	return ctx
 }
 func (noopTracer) TraceQueryEnd(_ context.Context, _ *pgx.Conn, _ pgx.TraceQueryEndData) {}
+
+// WireSlowQueryTracer construye un SlowQueryTracer listo para encadenar
+// a un pgxpool.Pool. Devuelve (tracer, store). El caller debe:
+//
+//	tracer, store := observability.WireSlowQueryTracer(inner, logger, workers)
+//	db.SetObservabilityTracer(tracer)         // ANTES de db.Open*
+//	pools, _ := db.OpenProduction(...)
+//	store.SetPool(pools.App)                    // DESPUES de Open*
+//
+// thresholdMs<0 usa el default (100ms); DOMAIN_SQL_SLOW_THRESHOLD_MS via env.
+// `inner` debe ser el SQLErrorCaptureTracer para preservar HU 51.1.
+func WireSlowQueryTracer(inner pgx.QueryTracer, logger *slog.Logger, workers int) (*SlowQueryTracer, *PGSlowQueryStore) {
+	store := &PGSlowQueryStore{}
+	t := NewFromEnv(inner, store, logger, workers)
+	return t, store
+}

@@ -91,10 +91,6 @@ func main() {
 		}
 	}
 
-
-
-
-
 	loadGlobalEnvFallback()
 
 	cfg, err := config.Load()
@@ -111,9 +107,6 @@ func main() {
 	}
 	if apiKey == "" {
 
-
-
-
 		fmt.Fprintln(os.Stderr, "domain-mcp: DOMAIN_API_KEY is not set.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "To authenticate, run in your terminal:")
@@ -128,12 +121,22 @@ func main() {
 	}
 
 	ctx := context.Background()
+	slowQueryTracer, slowQueryStore := observability.WireSlowQueryTracer(
+		mcpserver.SQLErrorCaptureTracer(),
+		slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		0,
+	)
+	db.SetObservabilityTracer(slowQueryTracer)
+	defer slowQueryTracer.Close()
+
 	pools, err := db.OpenProduction(ctx, cfg.DatabaseURL, cfg.DatabaseAuthURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "domain-mcp: pools: %v\n", err)
 		os.Exit(1)
 	}
 	defer pools.Close()
+
+	slowQueryStore.SetPool(pools.App)
 
 	keys := &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
 	principal, err := keys.Resolve(ctx, apiKey)
@@ -150,8 +153,6 @@ func main() {
 	}
 
 	recorder := &audit.PGRecorder{Pool: pools.Auth}
-
-
 
 	clients := clientsvc.NewService(pools.App, recorder, nil)
 	capturedPrompts := capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))
@@ -170,8 +171,6 @@ func main() {
 	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
 	agents := agentsvc.NewService(pools.App, recorder, nil)
-
-
 
 	factory := llm.NewFactory()
 	wrapLLM := func(p llm.Provider) llm.Provider {
@@ -204,8 +203,6 @@ func main() {
 		Agents: agents, Skills: skills,
 		SkillRunner: skillRunnerInst, Models: modelRegistry,
 
-
-
 		Env: cfg.Env,
 	}
 
@@ -215,13 +212,7 @@ func main() {
 		Agents: agents, Skills: skills, Observations: observations,
 		AgentRunner: agentRunnerInst, SkillRunner: skillRunnerInst,
 		Signals: &flowsvc.SignalStore{Pool: pools.App},
-
 	}
-
-
-
-
-
 
 	orchPhases := phases.NewRegistry()
 	orchPhases.MustRegister(phases.NewSDDExploreHandler())
@@ -241,15 +232,12 @@ func main() {
 
 	orchestratorSvc.Skills = skills
 
-
-
 	analysisSvc := &analysissvc.Service{
 		Pool:        pools.App,
 		Audit:       recorder,
 		LLM:         factory,
 		Knowledge:   knowledgeSvc,
 		Observation: observations,
-
 
 		PromptLoader: func(ctx context.Context) (string, error) {
 			p, err := prompts.GetActive(ctx, uuid.Nil, nil, "analysis")
@@ -262,7 +250,6 @@ func main() {
 
 	issuebuilderSvc := &issuebuilder.Service{Pool: pools.App, Audit: recorder, DraftTTLHrs: 24}
 
-
 	issuebuilderSvc.ReqSvc = &issuebuilder.RequirementServiceAdapter{
 		Inner: &requirementsvc.Service{Pool: pools.App, Audit: recorder},
 	}
@@ -272,13 +259,11 @@ func main() {
 	intakeSvc := &intake.Service{Pool: pools.App, Audit: recorder}
 	extsyncSvc := &extsync.Service{Pool: pools.App}
 
-
 	var classifier promptrouter.Classifier = promptrouter.HeuristicClassifier{}
 	if anthrop, _ := factory.Get("anthropic"); anthrop != nil {
 		classifier = &promptrouter.LLMClassifier{
 			Provider: anthrop, Model: "claude-haiku-4-5-20251001",
 			Fallback: promptrouter.HeuristicClassifier{},
-
 
 			PromptLoader: func(ctx context.Context) (string, error) {
 				p, err := prompts.GetActive(ctx, uuid.Nil, nil, "triage")
@@ -294,15 +279,10 @@ func main() {
 		IssueBuilderService: issuebuilderSvc,
 		Classifier:          classifier,
 
-
-
 		Orchestrator:    orchestratorSvc,
 		AnalysisService: &analysisAdapter{inner: analysisSvc},
 	}
 	workflowImportSvc := &workflowimport.Service{Pool: pools.App}
-
-
-
 
 	// ExecutionService compartido: lo usan tanto el dispatcher (para persistir
 	// skill_executions con created_by, HU-52.2) como el tool MCP domain_skill_execute.
@@ -361,37 +341,37 @@ func main() {
 		ObservationEdges: observationEdges,
 		CodeGraph:        codeGraph,
 		Projects:         projects,
-		Prompts:      prompts,
-		Timeline:     timeline,
-		Search:       search,
-		Knowledge:    knowledgeSvc,
-		Skills:         skills,
-		SkillExecution: skillExecSvc,
-		Crons:           &cronsvc.Service{Pool: pools.App, Audit: recorder},
-		Clients:         clients,
-		CapturedPrompts: capturedPrompts,
-		ProjectRepos:    projectRepos,
-		ProjectPolicies: projectPolicies,
-		Tickets:         tickets,
-		Policies:        &policysvc.Service{Pool: pools.App},
-		Agents:          agents,
-		AgentRunner:     agentRunnerInst,
-		Flows:           flowService,
-		FlowRunner:      flowRunnerInst,
-		Orchestrator:    orchestratorSvc,
-		Hubuilder:       issuebuilderSvc,
-		IssueSvc:        &issuesvc.Service{Pool: pools.App, Audit: recorder},
-		Spec:            &specsvc.Service{Pool: pools.App, Audit: recorder},
-		Tasks:           &tasksvc.Service{Pool: pools.App, Audit: recorder},
-		Intake:          intakeSvc,
-		ExtSync:         extsyncSvc,
-		PromptRouter:    promptRouterSvc,
-		WorkflowImport:  workflowImportSvc,
-		Pool:            pools.App,
-		Principal:       principal,
-		Dispatcher:      mcpDispatcher, // issue-35.1
-		ServerName:      "domain-mcp",
-		ServerVer:       Version,
+		Prompts:          prompts,
+		Timeline:         timeline,
+		Search:           search,
+		Knowledge:        knowledgeSvc,
+		Skills:           skills,
+		SkillExecution:   skillExecSvc,
+		Crons:            &cronsvc.Service{Pool: pools.App, Audit: recorder},
+		Clients:          clients,
+		CapturedPrompts:  capturedPrompts,
+		ProjectRepos:     projectRepos,
+		ProjectPolicies:  projectPolicies,
+		Tickets:          tickets,
+		Policies:         &policysvc.Service{Pool: pools.App},
+		Agents:           agents,
+		AgentRunner:      agentRunnerInst,
+		Flows:            flowService,
+		FlowRunner:       flowRunnerInst,
+		Orchestrator:     orchestratorSvc,
+		Hubuilder:        issuebuilderSvc,
+		IssueSvc:         &issuesvc.Service{Pool: pools.App, Audit: recorder},
+		Spec:             &specsvc.Service{Pool: pools.App, Audit: recorder},
+		Tasks:            &tasksvc.Service{Pool: pools.App, Audit: recorder},
+		Intake:           intakeSvc,
+		ExtSync:          extsyncSvc,
+		PromptRouter:     promptRouterSvc,
+		WorkflowImport:   workflowImportSvc,
+		Pool:             pools.App,
+		Principal:        principal,
+		Dispatcher:       mcpDispatcher, // issue-35.1
+		ServerName:       "domain-mcp",
+		ServerVer:        Version,
 		MetricsOnToolCall: func(tool, status string, dur float64) {
 			invLogger.Log(observability.Invocation{
 				ToolName:   tool,

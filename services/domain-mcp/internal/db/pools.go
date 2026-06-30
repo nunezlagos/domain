@@ -28,6 +28,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,17 +36,46 @@ import (
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 )
 
-// withAppPoolTracer parses the DSN, le pega el QueryTracer al ConnConfig,
+// observabilityTracer es el extra tracer que se encadena encima de
+// SQLErrorCaptureTracer. Setear via SetObservabilityTracer ANTES de
+// llamar OpenProduction. nil = solo SQLErrorCaptureTracer.
+var (
+	observabilityTracerMu sync.RWMutex
+	observabilityTracer   pgx.QueryTracer
+)
+
+// SetObservabilityTracer registra un tracer adicional que se encadenara
+// con SQLErrorCaptureTracer del proyecto (HU 51.1). Idempotente. Safe
+// de llamar antes de cualquier Open*.
+func SetObservabilityTracer(t pgx.QueryTracer) {
+	observabilityTracerMu.Lock()
+	observabilityTracer = t
+	observabilityTracerMu.Unlock()
+}
+
+// withAppPoolTracer parses el DSN, le pega el QueryTracer al ConnConfig,
 // y abre el pool con esa config. Centralizado para que las 3 funciones
 // (OpenProduction, OpenProductionWithReplica, OpenWithRoleOverride)
 // compartan el mismo setup — sin esto, los tools con withOrgTxHandler
 // no podrian capturar errores SQL durante la tx.
+//
+// Tracer asignado: observabilityTracer (si SetObservabilityTracer lo seteo)
+// o SQLErrorCaptureTracer (default HU 51.1). El caller es responsable
+// de encadenar SlowQueryTracer SObre SQLErrorCaptureTracer si ambos se
+// requieren — el tracer debe implementar pgx.QueryTracer y delegar al
+// que reciba como inner.
 func withAppPoolTracer(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
-	cfg.ConnConfig.Tracer = mcpserver.SQLErrorCaptureTracer()
+	observabilityTracerMu.RLock()
+	tracer := observabilityTracer
+	observabilityTracerMu.RUnlock()
+	if tracer == nil {
+		tracer = mcpserver.SQLErrorCaptureTracer()
+	}
+	cfg.ConnConfig.Tracer = tracer
 	return pgxpool.NewWithConfig(ctx, cfg)
 }
 

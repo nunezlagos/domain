@@ -27,6 +27,7 @@ type HTTPLog struct {
 	BytesIn     int
 	BytesOut    int
 	UserAgent   string
+	WorkflowID  string
 }
 
 // HTTPLogStore abstrae la persistencia de HTTP logs.
@@ -44,11 +45,11 @@ func (s *PGHTTPLogStore) InsertHTTPLog(ctx context.Context, l HTTPLog) error {
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO http_request_log (
 			request_id, method, path, status, duration_ms,
-			principal_id, bytes_in, bytes_out, user_agent
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9,''))
+			principal_id, bytes_in, bytes_out, user_agent, workflow_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9,''), NULLIF($10,''))
 	`,
 		l.RequestID, l.Method, l.Path, l.Status, l.DurationMS,
-		nullableUUID(l.PrincipalID), l.BytesIn, l.BytesOut, l.UserAgent,
+		nullableUUID(l.PrincipalID), l.BytesIn, l.BytesOut, l.UserAgent, l.WorkflowID,
 	)
 	return err
 }
@@ -156,18 +157,32 @@ func (h *HTTPLogger) enqueue(l HTTPLog) {
 }
 
 // Middleware retorna un wrapper HTTP que captura cada request y lo enqueuea.
-// Tambien agrega X-Request-Id a la response.
+// Tambien agrega X-Request-Id y X-Workflow-Id a la response. Lee X-Workflow-Id
+// del request si viene, sino genera uno y lo propaga en ctx.
 func (h *HTTPLogger) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestID := uuid.New()
+		wfID := WorkflowIDFromContext(r.Context())
+		if wfID == uuid.Nil {
+			if hdr := r.Header.Get("X-Workflow-Id"); hdr != "" {
+				if parsed, err := uuid.Parse(hdr); err == nil {
+					wfID = parsed
+				}
+			}
+			if wfID == uuid.Nil {
+				wfID = NewWorkflowID()
+			}
+		}
 		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
 		ctx := context.WithValue(r.Context(), requestIDKey{}, requestID)
+		ctx = WithWorkflowID(ctx, wfID)
 		next.ServeHTTP(rw, r.WithContext(ctx))
 
 		dur := time.Since(start).Milliseconds()
 		rw.Header().Set("X-Request-Id", requestID.String())
+		rw.Header().Set("X-Workflow-Id", wfID.String())
 
 		h.enqueue(HTTPLog{
 			RequestID:  requestID,
@@ -178,6 +193,7 @@ func (h *HTTPLogger) Middleware(next http.Handler) http.Handler {
 			BytesIn:    int(r.ContentLength),
 			BytesOut:   rw.bytes,
 			UserAgent:  r.UserAgent(),
+			WorkflowID: wfID.String(),
 		})
 	})
 }

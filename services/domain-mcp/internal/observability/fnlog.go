@@ -134,10 +134,11 @@ func (f *FnLogger) persist(e FnLogEntry) {
 	}
 }
 
-// Enter registra el inicio y retorna un callback Exit que el caller usa
-// con defer. La exit captura duracion y error final.
-func (f *FnLogger) Enter(fnName, pkg string, args []byte) func(error) {
+// EnterContext es la variante que extrae workflow_id del ctx. Usar
+// cuando el caller tiene el ctx a mano (recomendado).
+func (f *FnLogger) EnterContext(ctx context.Context, fnName, pkg string, args []byte) func(error) {
 	start := time.Now()
+	wfID := WorkflowIDFromContext(ctx)
 	return func(err error) {
 		status := "ok"
 		msg := ""
@@ -158,7 +159,7 @@ func (f *FnLogger) Enter(fnName, pkg string, args []byte) func(error) {
 			DurationUS:   time.Since(start).Microseconds(),
 			Status:       status,
 			ErrorMessage: msg,
-			WorkflowID:   "",
+			WorkflowID:   wfID.String(),
 		}:
 		default:
 			f.logger.Warn("fn log queue full, dropping",
@@ -166,6 +167,14 @@ func (f *FnLogger) Enter(fnName, pkg string, args []byte) func(error) {
 				slog.String("status", status))
 		}
 	}
+}
+
+// Enter registra el inicio y retorna un callback Exit que el caller usa
+// con defer. La exit captura duracion y error final.
+// Mantenido por retro-compat; los callers con ctx disponible deberian usar
+// EnterContext para propagar workflow_id.
+func (f *FnLogger) Enter(fnName, pkg string, args []byte) func(error) {
+	return f.EnterContext(context.Background(), fnName, pkg, args)
 }
 
 // Trace se usa para capturar panics automaticos. Convierte panic en error y

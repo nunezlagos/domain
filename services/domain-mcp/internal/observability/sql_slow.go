@@ -202,6 +202,7 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, dat
 		return
 	}
 	sqlText, _ := ctx.Value(slowSQLKey{}).(string)
+	wfID := WorkflowIDFromContext(ctx)
 	select {
 	case <-t.done:
 		return
@@ -211,6 +212,7 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, dat
 	case t.queue <- SlowQuery{
 		QueryText:  sqlText,
 		DurationMS: dur.Milliseconds(),
+		WorkflowID: wfID.String(),
 	}:
 	default:
 		t.logger.Warn("slow query queue full, dropping",

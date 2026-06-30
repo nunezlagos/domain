@@ -35,6 +35,7 @@ import (
 	"nunezlagos/domain/internal/logging"
 	"nunezlagos/domain/internal/metrics"
 	dmigrate "nunezlagos/domain/internal/migrate"
+	"nunezlagos/domain/internal/observability"
 	"nunezlagos/domain/internal/secrets"
 	"nunezlagos/domain/internal/seeds"
 	"nunezlagos/domain/internal/service/flow"
@@ -339,7 +340,11 @@ func runServer() {
 	defer runners.SchedCancel()
 
 	queryCacheLRU := mcpQueryCache()
-	httpHandler := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
+	httpHandler, invocationLogger, httpLogger, resourceCollector, fnLogger := buildRouter(cfg, Version, pools, svc, metricsReg, logger, queryCacheLRU)
+	defer invocationLogger.Close()
+	defer httpLogger.Close()
+	defer resourceCollector.Stop()
+	defer fnLogger.Close()
 
 	logger.Info("domain server starting",
 		slog.String("version", Version),

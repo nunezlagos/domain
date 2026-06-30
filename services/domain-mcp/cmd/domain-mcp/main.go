@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	llmretry "nunezlagos/domain/internal/llm/retry"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
+	"nunezlagos/domain/internal/observability"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
@@ -327,6 +329,33 @@ func main() {
 		},
 	}
 
+	invLogger := observability.NewInvocationLogger(
+		&observability.PGInvocationStore{Pool: pools.App},
+		slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		0, 0,
+	)
+	defer invLogger.Close()
+	httpLogger := observability.NewHTTPLogger(
+		&observability.PGHTTPLogStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	defer httpLogger.Close()
+	resourceCollector := observability.NewResourceCollector(
+		&observability.PGResourceStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	resourceCollector.Start()
+	defer resourceCollector.Stop()
+	fnLogger := observability.NewFnLogger(
+		&observability.PGFnLogStore{Pool: pools.App},
+		slog.Default(),
+		0,
+	)
+	defer fnLogger.Close()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations:     observations,
 		ObservationEdges: observationEdges,
@@ -363,6 +392,17 @@ func main() {
 		Dispatcher:      mcpDispatcher, // issue-35.1
 		ServerName:      "domain-mcp",
 		ServerVer:       Version,
+		MetricsOnToolCall: func(tool, status string, dur float64) {
+			invLogger.Log(observability.Invocation{
+				ToolName:   tool,
+				Status:     status,
+				DurationMS: int(dur * 1000),
+			})
+			slog.Info("tool invocation",
+				slog.String("tool", tool),
+				slog.String("status", status),
+				slog.Int64("duration_ms", int64(dur*1000)))
+		},
 	})
 
 	fmt.Fprintf(os.Stderr, "domain-mcp %s ready (org=%s user=%s)\n",

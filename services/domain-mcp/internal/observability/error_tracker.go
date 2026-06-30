@@ -109,7 +109,7 @@ func (t *ErrorTracker) worker() {
 	for {
 		select {
 		case e := <-t.queue:
-			t.persist(e)
+			t.persist(e, true)
 		case <-t.done:
 			t.drain()
 			return
@@ -117,19 +117,23 @@ func (t *ErrorTracker) worker() {
 	}
 }
 
+// drain procesa lo encolado al cerrar. Persiste los eventos pendientes (dato
+// valioso) pero NO dispara los hooks: en shutdown alerting/self-heal son
+// inutiles y, al ser fire-and-forget, dejarian goroutines corriendo contra un
+// pool que ya se va a cerrar.
 func (t *ErrorTracker) drain() {
 	for {
 		select {
 		case e := <-t.queue:
-			t.persist(e)
+			t.persist(e, false)
 		default:
 			return
 		}
 	}
 }
 
-// persist hace el upsert y, si sale OK, dispara alerting y self-heal.
-func (t *ErrorTracker) persist(e ErrorEvent) {
+// persist hace el upsert y, si sale OK y fireHooks, dispara alerting y self-heal.
+func (t *ErrorTracker) persist(e ErrorEvent, fireHooks bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), t.persistTO)
 	defer cancel()
 	if err := t.store.UpsertErrorEvent(ctx, e); err != nil {
@@ -137,6 +141,9 @@ func (t *ErrorTracker) persist(e ErrorEvent) {
 			slog.String("source", e.Source),
 			slog.String("category", string(e.Category)),
 			slog.String("error", err.Error()))
+		return
+	}
+	if !fireHooks {
 		return
 	}
 	if t.onAlert != nil {

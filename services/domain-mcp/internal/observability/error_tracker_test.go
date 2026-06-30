@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -71,33 +72,59 @@ func TestErrorTracker_Record_NilError_NoOp(t *testing.T) {
 func TestErrorTracker_Record_FiresAlertAndHealHooks(t *testing.T) {
 	store := &fakeErrStore{}
 	tr := NewErrorTracker(store, nil)
-	var mu sync.Mutex
-	var fired ErrorEvent
-	var alerted, healed bool
-	tr.SetAlertHook(func(_ context.Context, e ErrorEvent) { mu.Lock(); fired, alerted = e, true; mu.Unlock() })
-	tr.SetHealHook(func(_ context.Context, _ ErrorEvent) { mu.Lock(); healed = true; mu.Unlock() })
+	defer tr.Close()
+	alertCh := make(chan ErrorEvent, 1)
+	healCh := make(chan struct{}, 1)
+	tr.SetAlertHook(func(_ context.Context, e ErrorEvent) { alertCh <- e })
+	tr.SetHealHook(func(_ context.Context, _ ErrorEvent) { healCh <- struct{}{} })
 	tr.Record(context.Background(), errors.New("context deadline exceeded"), "http")
-	tr.Close()
-	mu.Lock()
-	defer mu.Unlock()
-	if !alerted || !healed {
-		t.Fatalf("both hooks should fire after successful upsert (alert=%v heal=%v)", alerted, healed)
+	select {
+	case e := <-alertCh:
+		if e.Category != CategoryTimeout {
+			t.Fatalf("hook category: got %q want %q", e.Category, CategoryTimeout)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("alert hook should fire after successful upsert")
 	}
-	if fired.Category != CategoryTimeout {
-		t.Fatalf("hook category: got %q want %q", fired.Category, CategoryTimeout)
+	select {
+	case <-healCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("heal hook should fire after successful upsert")
 	}
 }
 
 func TestErrorTracker_Record_StoreFails_NoHooksNoPanic(t *testing.T) {
 	store := &fakeErrStore{fail: true}
 	tr := NewErrorTracker(store, nil)
+	defer tr.Close()
+	fired := make(chan struct{}, 2)
+	tr.SetAlertHook(func(_ context.Context, _ ErrorEvent) { fired <- struct{}{} })
+	tr.SetHealHook(func(_ context.Context, _ ErrorEvent) { fired <- struct{}{} })
+	tr.Record(context.Background(), errors.New("panic: nil pointer"), "worker")
+	select {
+	case <-fired:
+		t.Fatal("hooks must not fire when upsert fails")
+	case <-time.After(200 * time.Millisecond):
+		// ok: no se dispararon
+	}
+}
+
+// TestErrorTracker_Persist_DrainSkipsHooks verifica que el camino de drain
+// (fireHooks=false) persiste el evento pero NO dispara los hooks (evita el
+// leak de goroutines contra el pool en shutdown).
+func TestErrorTracker_Persist_DrainSkipsHooks(t *testing.T) {
+	store := &fakeErrStore{}
+	tr := NewErrorTracker(store, nil)
+	defer tr.Close()
 	var fired atomic.Bool
 	tr.SetAlertHook(func(_ context.Context, _ ErrorEvent) { fired.Store(true) })
 	tr.SetHealHook(func(_ context.Context, _ ErrorEvent) { fired.Store(true) })
-	tr.Record(context.Background(), errors.New("panic: nil pointer"), "worker")
-	tr.Close()
+	tr.persist(ErrorEvent{Category: CategorySQL, Fingerprint: []byte("x")}, false)
+	if store.count() == 0 {
+		t.Fatal("drain must still persist the event")
+	}
 	if fired.Load() {
-		t.Fatal("hooks must not fire when upsert fails")
+		t.Fatal("drain must not fire hooks")
 	}
 }
 

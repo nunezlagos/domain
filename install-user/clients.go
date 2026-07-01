@@ -33,7 +33,12 @@ func configureClient(c Client, vpsURL, apiKey, timestamp string) (configResult, 
 	case "opencode":
 		entry["type"] = "remote"
 		entry["enabled"] = true
-		return upsertJSON(c.MCPPath, "mcp", entry, timestamp)
+		res, err := upsertJSON(c.MCPPath, "mcp", entry, timestamp)
+		if err != nil {
+			return res, err
+		}
+		writeEnvIfConfigured(c, apiKey, timestamp)
+		return res, nil
 	case "continue":
 		if err := configureContinue(c.MCPPath, vpsURL, apiKey, timestamp); err != nil {
 			return configResult{}, err
@@ -53,10 +58,30 @@ func configureClient(c Client, vpsURL, apiKey, timestamp string) (configResult, 
 	case "claude-code":
 		// Claude Code soporta transporte http remoto: requiere type:"http".
 		entry["type"] = "http"
-		return upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
+		res, err := upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
+		if err != nil {
+			return res, err
+		}
+		writeEnvIfConfigured(c, apiKey, timestamp)
+		return res, nil
 	default:
 		// cursor, cline: mcpServers con {url, headers} (sin type explícito).
 		return upsertJSON(c.MCPPath, "mcpServers", entry, timestamp)
+	}
+}
+
+// writeEnvIfConfigured escribe el .env del cliente si tiene EnvPath seteado.
+// Backup del .env viejo antes de pisar (con timestamp). Idempotente.
+func writeEnvIfConfigured(c Client, apiKey, timestamp string) {
+	if c.EnvPath == "" {
+		return
+	}
+	if _, err := os.Stat(c.EnvPath); err == nil {
+		// backup del .env viejo
+		_ = os.Rename(c.EnvPath, c.EnvPath+".backup-"+timestamp)
+	}
+	if err := writeClientEnv(c.EnvPath, apiKey); err != nil {
+		warnL("no se pudo escribir " + c.EnvPath + ": " + err.Error())
 	}
 }
 

@@ -191,8 +191,17 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	if opts.Email == "" {
 		opts.Email = strings.TrimSpace(prompt(in, "  Email: "))
 	}
+
+	// API key: prioridad flag --api-key > configs existentes (opencode/claudecode) > prompt.
+	// En re-install, esto preserva la key sin que el usuario tenga que pegarla de nuevo.
 	if !opts.DryRun && opts.APIKey == "" {
-		opts.APIKey = strings.TrimSpace(promptHidden(in, "  API key (domk_live_xxx): "))
+		apiKey, src, err := resolveAPIKey(paths.OpencodeMCP, paths.ClaudeCodeMCP, "", in, opts.NonInteractive)
+		if err != nil {
+			failL(err.Error())
+			os.Exit(1)
+		}
+		opts.APIKey = apiKey
+		ok("API key (de " + src + ")")
 	}
 
 	if opts.URL == "" {

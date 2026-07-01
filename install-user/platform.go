@@ -138,16 +138,21 @@ func (p Platform) IsWSL() bool {
 // El return mantiene orden estable para output predecible.
 func (p Platform) DetectedClients() []Client {
 	paths := p.Paths()
+	// EnvPath: directorio del cliente donde escribimos el .env con la API key.
+	// Solo los 2 clientes oficialmente soportados tienen .env (los demas son legacy).
+	// GlobalSkillPath = ~/.claude/skills/domain/SKILL.md → 3 Dir arriba da ~/.claude
+	claudeEnv := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(paths.GlobalSkillPath))), ".env") // ~/.claude/.env
+	opencodeEnv := filepath.Join(filepath.Dir(paths.OpencodeMCP), ".env")                                // ~/.config/opencode/.env
 	candidates := []Client{
 		// claude-code: el config global vive en ~/.claude.json (file), pero el
 		// dir ~/.claude (skills/agents/sessions) es el signal de instalación.
 		// FileHint cubre el caso de un install fresco con .claude.json y sin dir.
-		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath)), FileHint: paths.ClaudeCodeMCP},
+		{Name: "claude-code", MCPPath: paths.ClaudeCodeMCP, EnvPath: claudeEnv, RootHint: filepath.Dir(filepath.Dir(paths.GlobalSkillPath)), FileHint: paths.ClaudeCodeMCP},
 		{Name: "cursor", MCPPath: paths.CursorMCP, RootHint: filepath.Dir(paths.CursorMCP)},
 		{Name: "cline", MCPPath: paths.ClineMCP, RootHint: filepath.Dir(paths.ClineMCP)},
 		{Name: "continue", MCPPath: paths.ContinueMCP, RootHint: filepath.Dir(paths.ContinueMCP)},
 		{Name: "claude-desktop", MCPPath: paths.ClaudeDesktopMCP, RootHint: filepath.Dir(paths.ClaudeDesktopMCP)},
-		{Name: "opencode", MCPPath: paths.OpencodeMCP, RootHint: paths.OpencodeDir},
+		{Name: "opencode", MCPPath: paths.OpencodeMCP, EnvPath: opencodeEnv, RootHint: paths.OpencodeDir},
 	}
 	out := []Client{}
 	for _, c := range candidates {
@@ -164,7 +169,7 @@ func (p Platform) DetectedClients() []Client {
 		}
 	}
 	if !hasOpencode && commandExists("opencode") {
-		out = append(out, Client{Name: "opencode", MCPPath: paths.OpencodeMCP, RootHint: paths.OpencodeDir})
+		out = append(out, Client{Name: "opencode", MCPPath: paths.OpencodeMCP, EnvPath: opencodeEnv, RootHint: paths.OpencodeDir})
 	}
 	return out
 }
@@ -172,6 +177,7 @@ func (p Platform) DetectedClients() []Client {
 type Client struct {
 	Name     string
 	MCPPath  string
+	EnvPath  string // .env del cliente (donde se persiste la API key). "" si no aplica.
 	RootHint string // dir cuya existencia indica que el cliente está instalado
 	FileHint string // archivo alternativo que también indica instalación (opcional)
 }

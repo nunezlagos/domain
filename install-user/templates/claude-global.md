@@ -63,6 +63,35 @@ Server has NO LLM — fan-out parallelism via client subagents (Task tool / suba
 6. If `domain_project_policy_list` shows files in `existing_rules_files` not yet imported: read each + `domain_project_policy_import_from_text`.
 7. `domain_policy_get(slug="agent-protocol")` for full live protocol.
 
+## Code graph (multi-lenguaje, client-side)
+
+⚠️ **NO uses `domain_code_build`** — esa tool corre server-side, lee el FS del VPS,
+y en setups remotos (opencode/Claude Code → VPS via HTTP) **FALLA con
+"stat: no such file or directory"** porque el server no tiene acceso al FS del cliente.
+
+El flow correcto es **client-side**:
+
+1. Llamá `domain_code_graph` (read-only) para chequear si ya hay grafo:
+   - `built: true` → listo, usá `domain_code_explore` / `domain_code_path` directamente.
+   - `built: false` o `total_nodes: 0` → no hay grafo todavía, hacé el paso 2.
+2. **Si NO hay grafo** (built: false): el grafo se construye EN TU MAQUINA
+   (no en el server). El server lo recibe via `domain_code_upload`:
+   ```bash
+   # en tu shell, una vez por proyecto (o cuando cambien archivos):
+   ~/.local/share/domain/scripts/domain-code-graph.sh <repo_path> <project_slug>
+   ```
+   El script:
+   - Detecta ast-grep (lo instala si falta: pacman/apt/brew/cargo)
+   - Parsea el repo localmente con patterns por lenguaje (TS/JS/TSX/JSX/Go/Python/Rust/Java)
+   - Construye el JSON del grafo
+   - POST a `domain_code_upload` con el JSON (el server persiste en code_nodes/code_edges/code_index_files)
+3. Después de subir, `domain_code_explore` / `domain_code_path` / `domain_code_graph` leen del grafo persistido.
+4. **Si el LLM está en opencode/Claude Code** y NO tiene shell/ast-grep: el grafo se construye
+   **en cada sesión** parseando archivos con tus Read tools (ts/js/py/etc) + enviando via
+   `domain_code_upload` con el formato {kind, name, qualified_name, file_path, line_start, line_end}.
+
+Idempotente: re-subir el grafo solo actualiza (identidad estable por qualified_name + kind).
+
 ## Auto-persistence rules
 
 - **Save** via `domain_mem_save`: discovery, decision, fix, pattern, context, artifact, session_summary. Tag with semantic `topic_key`. Include `project_slug` from bootstrap.

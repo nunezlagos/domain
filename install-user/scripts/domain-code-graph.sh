@@ -95,18 +95,35 @@ fi
 echo "[scan] ${#FILES[@]} archivos a parsear"
 
 # ---------- 5. extraer nodos y edges con ast-grep ----------
-# Formato del output: cada linea es un JSON con kind, name, qualified_name, line_start, line_end, file_path.
+# Solo corre patterns para los lenguajes realmente presentes (ahorra ~70%
+# de invocaciones). Detecta extensión desde FILES.
 NODES_FILE=$(mktemp)
 EDGES_FILE=$(mktemp)
 GRAPH_FILE=$(mktemp)
 REQ_FILE=$(mktemp)
 trap 'rm -f "$NODES_FILE" "$EDGES_FILE" "$GRAPH_FILE" "$REQ_FILE"' EXIT
 
+declare -A LANG_EXT
+LANG_EXT[typescript]=".ts .tsx"
+LANG_EXT[javascript]=".js .jsx .mjs .cjs"
+LANG_EXT[go]=".go"
+LANG_EXT[python]=".py"
+LANG_EXT[rust]=".rs .rlib"
+LANG_EXT[java]=".java"
+LANG_EXT[tsx]=".tsx"
+declare -A HAS_LANG
+for f in "${FILES[@]}"; do
+  ext="${f##*.}"
+  for lang in "${!LANG_EXT[@]}"; do
+    for e in ${LANG_EXT[$lang]}; do
+      [[ ".$ext" == "$e" ]] && HAS_LANG[$lang]=1
+    done
+  done
+done
+
 extract_for_lang() {
   local lang="$1" pattern="$2" kind="$3"
-  # ast-grep run devuelve un ARRAY JSON por invocación. Con xargs -I{}
-  # corre N veces (una por archivo), concatenando N arrays. Usamos
-  # json.JSONDecoder.raw_decode para leer todos los arrays concatenados.
+  [[ -v HAS_LANG[$lang] && "${HAS_LANG[$lang]}" == "1" ]] || return
   printf '%s\0' "${FILES[@]}" | xargs -0 -I{} ast-grep run \
     --pattern "$pattern" --lang "$lang" --json=compact {} 2>/dev/null | \
     python3 -c "
@@ -148,7 +165,7 @@ for m in entries:
 " 2>/dev/null
 }
 
-# Patterns por lenguaje (ast-grep usa tree-sitter grammars built-in)
+# Patterns por lenguaje — solo los que tengan archivos en el repo
 extract_for_lang typescript 'export function $FN($$$) { $$$ }' function >> "$NODES_FILE"
 extract_for_lang typescript 'function $FN($$$) { $$$ }' function >> "$NODES_FILE"
 extract_for_lang typescript 'export const $FN = ($$$) => $$$' function >> "$NODES_FILE"
@@ -183,24 +200,34 @@ extract_for_lang java 'class $CLS { $$$ }' type >> "$NODES_FILE"
 # Definimos ASTGREP_CMD para que las llamadas sg scan usen el binario correcto.
 ASTGREP_CMD="ast-grep"
 
-# Edges: buscar llamadas (heurística: nombre seguido de '(')
-> "$EDGES_FILE"
-for f in "${FILES[@]}"; do
-  rel="${f#$REPO_PATH/}"
-  # extraer identificadores seguidos de '(' (posibles calls)
-  python3 -c "
-import re, sys
-with open('$f', 'r', encoding='utf-8', errors='ignore') as fh:
-    lines = fh.readlines()
-for i, line in enumerate(lines, 1):
-    # matches: word boundary + name + (
-    for m in re.finditer(r'\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(', line):
-        name = m.group(1)
-        if name in ('if', 'for', 'while', 'switch', 'return', 'function', 'func', 'def', 'class'):
-            continue
-        print(f'{rel}\t{i}\t{name}')
-" >> "$EDGES_FILE" 2>/dev/null
-done
+# Edges: buscar llamadas (heurística: nombre seguido de '(').
+# El target_qn lo envía como nombre simple; el server resuelve por nombre
+# (fallback en resolveTarget: primero qualified_name exacto, luego name search).
+printf '%s\0' "${FILES[@]}" > "$EDGES_FILE.files"
+python3 -c "
+import re, sys, os
+repo_prefix = '$REPO_PATH'
+if not repo_prefix.endswith('/'):
+    repo_prefix += '/'
+files_path = '$EDGES_FILE.files'
+with open(files_path, 'rb') as fh:
+    raw = fh.read()
+paths = raw.rstrip(b'\x00').split(b'\x00')
+for fp_bytes in paths:
+    fp = fp_bytes.decode('utf-8', errors='replace')
+    rel = fp[len(repo_prefix):] if fp.startswith(repo_prefix) else fp
+    try:
+        lines = open(fp, 'r', encoding='utf-8', errors='ignore').readlines()
+    except:
+        continue
+    for lineno, line in enumerate(lines, 1):
+        for m in re.finditer(r'\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(', line):
+            name = m.group(1)
+            if name in ('if', 'for', 'while', 'switch', 'return', 'function', 'func', 'def', 'class'):
+                continue
+            print(f'{rel}\t{lineno}\t{name}')
+" > "$EDGES_FILE" 2>/dev/null
+rm -f "$EDGES_FILE.files"
 
 NODES_COUNT=$(wc -l < "$NODES_FILE" || echo 0)
 EDGES_COUNT=$(wc -l < "$EDGES_FILE" || echo 0)
@@ -222,12 +249,44 @@ with open('$NODES_FILE') as f:
         seen.add(qn)
         nodes.append({'kind':kind,'name':name,'qualified_name':qn,'file_path':rel,'line_start':int(ls) if ls else 0,'line_end':int(le) if le else 0,'signature':text[:200],'doc':''})
 edges=[]
+# Indexar nodos por file → [(line_start, line_end, qn)], ordenado por line_start
+nodes_by_file = {}
+with open('$NODES_FILE') as nf:
+    for line in nf:
+        parts=line.rstrip('\n').split('\t')
+        if len(parts)<6: continue
+        rel,name,qn,ls_s,le_s = parts[0],parts[2],parts[3],parts[4],parts[5]
+        try: ls_int=int(ls_s)
+        except: ls_int=0
+        try: le_int=int(le_s)
+        except: le_int=0
+        nodes_by_file.setdefault(rel, []).append((ls_int, le_int, qn or ''))
+# Ordenar por line_start ascendente
+for f in nodes_by_file:
+    nodes_by_file[f].sort()
+seen_edges=set()
 with open('$EDGES_FILE') as f:
     for line in f:
         parts=line.rstrip('\n').split('\t')
         if len(parts)<3: continue
-        rel,ls,target=parts
-        edges.append({'source_qn':f'{rel}:{ls}','target_qn':target,'edge_type':'calls'})
+        rel,ls_str,target=parts
+        try: edge_line=int(ls_str)
+        except: continue
+        # source_qn = nodo que contiene esta línea (func con mayor line_start <= edge_line)
+        src_qn = ''
+        funcs = nodes_by_file.get(rel, [])
+        # búsqueda binaria simplificada: recorrer hacia atrás desde el techo
+        # (funcs son pocas por archivo, O(n) es aceptable)
+        for f_ls, f_le, f_qn in reversed(funcs):
+            if f_ls <= edge_line and (f_le == 0 or edge_line <= f_le):
+                src_qn = f_qn
+                break
+        if not src_qn:
+            continue
+        key = (src_qn, target, 'calls')
+        if key in seen_edges: continue
+        seen_edges.add(key)
+        edges.append({'source_qn':src_qn,'target_qn':target,'edge_type':'calls'})
 # El tool espera project_slug + graph_json:{files_scanned,git_head,nodes,edges}
 with open('$GRAPH_FILE','w') as f:
     json.dump({

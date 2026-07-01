@@ -767,6 +767,7 @@ func (s *CodegraphService) resolveTargetCached(ctx context.Context, projectID uu
 // propaga cualquier error de DB NO-ErrNoRows para que el caller aborte la tx en
 // vez de tragarse el error como "arista faltante".
 func (s *CodegraphService) resolveTarget(ctx context.Context, projectID uuid.UUID, targetQN string) (uuid.UUID, bool, error) {
+	// 1) Exact qualified_name match (para edges server-side con qn completo)
 	for _, kind := range []string{KindFunc, KindMethod, KindType, KindInterface, KindFile} {
 		row, err := s.q(ctx).GetNodeByQualified(ctx, codegraphdb.GetNodeByQualifiedParams{
 			ProjectID:     projectID,
@@ -779,6 +780,18 @@ func (s *CodegraphService) resolveTarget(ctx context.Context, projectID uuid.UUI
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return uuid.Nil, false, err
 		}
+	}
+	// 2) Name match (client-side: edge detector línea-por-línea solo extrae
+	//    el nombre del call, no el qualified_name completo). Si hay múltiples
+	//    nodos con el mismo nombre, toma el primero (heurística).
+	exact := targetQN
+	rows, err := s.q(ctx).SearchNodesByName(ctx, codegraphdb.SearchNodesByNameParams{
+		ProjectID:   projectID,
+		Pattern:     &exact,
+		ResultLimit: 1,
+	})
+	if err == nil && len(rows) > 0 {
+		return rows[0].ID, true, nil
 	}
 	return uuid.Nil, false, nil
 }

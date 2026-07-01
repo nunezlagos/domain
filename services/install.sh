@@ -374,7 +374,12 @@ CURRENT_CRON=$(sudo_run crontab -u root -l 2>/dev/null || true)
 if echo "$CURRENT_CRON" | grep -qF "$WRAPPER"; then
   ok "Cron ya estaba instalado (no duplico)"
 else
-  printf '%s\n%s\n' "$CURRENT_CRON" "$CRON_LINE" | sudo_run crontab -u root -
+  # Temp file en vez de pipe: bash no propaga el stdin del pipe a la funcion
+  # sudo_run, entonces `printf | sudo_run crontab -u root -` leeria stdin vacio.
+  TMP_CRON=$(mktemp)
+  printf '%s\n%s\n' "$CURRENT_CRON" "$CRON_LINE" > "$TMP_CRON"
+  sudo_run crontab -u root "$TMP_CRON"
+  rm -f "$TMP_CRON"
   ok "Cron instalado: corre $WRAPPER todos los dias a las 03:00"
   ok "Log en /var/log/domain-update.log"
 fi

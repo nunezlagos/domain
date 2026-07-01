@@ -195,8 +195,11 @@ if [ ! -d "$REPO_DIR/.git" ]; then
   ok "repo clonado"
 else
   step "Actualizando repo en $REPO_DIR"
-  # git pull como el usuario real (para no cambiar ownership)
-  sudo -u "$REAL_USER" git -C "$REPO_DIR" pull --depth 1 origin main
+  # fetch + reset --hard (no pull): tolera divergencias, no requiere git config.
+  # Como el cache es read-only-by-design (el installer lo regenera desde origin),
+  # reset --hard es seguro: descarta cualquier commit local divergente.
+  sudo -u "$REAL_USER" git -C "$REPO_DIR" fetch --depth 1 origin main
+  sudo -u "$REAL_USER" git -C "$REPO_DIR" reset --hard origin/main
   ok "repo actualizado"
 fi
 

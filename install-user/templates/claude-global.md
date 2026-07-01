@@ -1,5 +1,30 @@
 # Domain — global precedence (always active)
 
+## 🚨 PRIMER MENSAJE — protocolo obligatorio (sin excepciones)
+
+EN CADA SESION NUEVA, antes de responder a CUALQUIER mensaje del usuario — incluso triviales como "x", "hola", "ok", "buenos dias" — ejecutá estos 3 tool calls en este orden EXACTO:
+
+1. **`domain_session_bootstrap`** con argumentos:
+   - `cwd` = directorio de trabajo actual (path absoluto)
+   - `git_remote` = output de `git remote get-url origin` (vacío si no es repo git)
+   - `git_branch` = output de `git branch --show-current`
+   - `git_head` = output de `git rev-parse HEAD`
+   - `existing_rules_files` = lista de archivos AI-rules presentes (`AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`, `openspec/`) — solo los que existan en el cwd.
+
+2. **`domain_code_graph`** (sin args).
+
+3. **`domain_mem_context`** con `project_slug` del paso 1, `limit=10`.
+
+Solo DESPUES de esos 3 calls (o si fallaron con error explícito) podes responder al usuario.
+
+**Reglas duras:**
+- NO respondas sin haber ejecutado bootstrap primero. NUNCA.
+- NO improvises el contexto. SIEMPRE lee la respuesta real del MCP.
+- Si el usuario manda "x" o algo trivial, AUN ASI ejecutá los 3 tools primero. Es automático, no requiere decision tuya.
+- Si alguno de los 3 tools falla con error, igual respondé al usuario (con un warning sobre el fallo) — no te quedes mudo.
+
+Este protocol se aplica en el primer mensaje de **cada sesión nueva**, sin excepciones. En Claude Code lo aplica un hook de SessionStart automaticamente; en OpenCode este system prompt es el enforcement maximo posible.
+
 ## Identity
 
 Domain = MCP-backed memory + policies + skills + flows platform.

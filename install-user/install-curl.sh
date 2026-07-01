@@ -231,6 +231,15 @@ install -m 0755 "$REPO_DIR/install-user/hooks/domain-session-start.sh" "$HOOKS_D
 chown -R "$REAL_USER" "$HOOKS_DIR"
 ok "hook de SessionStart instalado: $HOOKS_DIR/domain-session-start.sh"
 
+# Instalar el script de code graph (cliente-side, multi-lenguaje via ast-grep).
+# Se usa con: ~/.local/share/domain/scripts/domain-code-graph.sh [REPO_PATH] [PROJECT_SLUG]
+SCRIPTS_DIR="$REAL_HOME/.local/share/domain/scripts"
+mkdir -p "$SCRIPTS_DIR"
+install -m 0755 "$REPO_DIR/install-user/scripts/domain-code-graph.sh" "$SCRIPTS_DIR/domain-code-graph.sh"
+chown -R "$REAL_USER" "$SCRIPTS_DIR"
+ok "script de code graph instalado: $SCRIPTS_DIR/domain-code-graph.sh"
+ok "uso: $SCRIPTS_DIR/domain-code-graph.sh /path/al/repo project-slug"
+
 echo ""
 echo "${BOLD}==> Ejecutando como $REAL_USER (HOME=$REAL_HOME)${RESET}"
 exec sudo -u "$REAL_USER" HOME="$REAL_HOME" --preserve-env=PATH "$REPO_DIR/install-user/domain-install" "$@"

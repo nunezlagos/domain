@@ -63,21 +63,15 @@ if [ -z "$VPS_URL" ] || [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-# ---------- 2. asegurar ast-grep (sg es /usr/bin/sg = group, no ast-grep) ----------
+# ---------- 2. asegurar ast-grep instalado (sin sudo, lo asume el installer) ----------
 if ! command -v ast-grep >/dev/null 2>&1; then
-  echo "[install] ast-grep no esta. Instalando segun distro..."
-  if command -v pacman >/dev/null 2>&1; then
-    sudo pacman -S --needed --noconfirm ast-grep
-  elif command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -qq && sudo apt-get install -y -qq ast-grep
-  elif command -v brew >/dev/null 2>&1; then
-    brew install ast-grep
-  elif command -v cargo >/dev/null 2>&1; then
-    cargo install ast-grep --locked
-  else
-    echo "ERROR: no encontre package manager. Instala ast-grep manualmente: https://ast-grep.github.io/guide/quick-start.html" >&2
-    exit 1
-  fi
+  echo "ERROR: ast-grep no esta instalado en este sistema." >&2
+  echo "" >&2
+  echo "ast-grep es una dependencia del code graph. Lo instala el installer del user:" >&2
+  echo "  curl -fsSL https://raw.githubusercontent.com/nunezlagos/domain/main/install-user/install-curl.sh | sudo bash" >&2
+  echo "" >&2
+  echo "(el install detecta tu distro e instala ast-grep via pacman/apt/brew/cargo automaticamente)" >&2
+  exit 1
 fi
 echo "[scan] ast-grep OK: $(ast-grep --version 2>&1 | head -1)"
 

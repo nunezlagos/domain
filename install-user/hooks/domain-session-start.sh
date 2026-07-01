@@ -43,25 +43,62 @@ vps_url="${DOMAIN_VPS_URL:-}"
 api_key="${DOMAIN_API_KEY:-}"
 
 # loadEnv del .env global del installer (formato KEY=VAL, una por linea)
+# Acepta keys con o sin prefijo DOMAIN_ (DOMAIN_VPS_URL, DOMAIN_MCP_API_KEY, VPS_URL, API_KEY).
+# Tambien strip comillas del valor (los .env suelen tener KEY="VAL").
 if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
   for envf in "$HOME/.config/domain/install.env" "$HOME/.claude/.env" "$HOME/.config/opencode/.env"; do
     if [ -r "$envf" ]; then
       while IFS='=' read -r k v; do
-        case "$k" in
-          VPS_URL|URL) [ -z "$vps_url" ] && vps_url="$v" ;;
-          API_KEY)     [ -z "$api_key" ] && api_key="$v" ;;
+        # strip prefix DOMAIN_ para matchear
+        kk="${k#DOMAIN_}"
+        # strip leading/trailing comillas (soportamos " y ')
+        v="${v%\"}"; v="${v#\"}"
+        v="${v%\'}"; v="${v#\'}"
+        case "$kk" in
+          VPS_URL)          [ -z "$vps_url" ] && vps_url="$v" ;;
+          MCP_API_KEY|API_KEY) [ -z "$api_key" ] && api_key="$v" ;;
         esac
       done < "$envf"
     fi
   done
 fi
 
-# fallback: el JSON del cliente puede tener la URL/key directamente
-if [ -z "$vps_url" ] && [ -r "$HOME/.config/opencode/opencode.json" ]; then
-  vps_url=$(grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]+"' "$HOME/.config/opencode/opencode.json" 2>/dev/null | head -1 | sed 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | sed 's|/mcp$||')
-fi
-if [ -z "$api_key" ] && [ -r "$HOME/.config/opencode/opencode.json" ]; then
-  api_key=$(grep -oE '"Authorization"[[:space:]]*:[[:space:]]*"Bearer [^"]+"' "$HOME/.config/opencode/opencode.json" 2>/dev/null | head -1 | sed 's/.*Bearer //;s/"$//')
+# fallback: el JSON del cliente MCP, pero SOLO del entry "domain-mcp" (no de
+# otros MCPs como context7). Usamos un parser simple.
+if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
+  for jsonf in "$HOME/.config/opencode/opencode.json" "$HOME/.claude.json"; do
+    [ -r "$jsonf" ] || continue
+    # extraer URL del entry domain-mcp (admite "mcp":{...} o "mcpServers":{...})
+    if [ -z "$vps_url" ]; then
+      vps_url=$(python3 -c "
+import json,sys
+try:
+  d=json.load(open('$jsonf'))
+  for cont in ('mcp','mcpServers'):
+    e=d.get(cont,{}).get('domain-mcp',{})
+    u=e.get('url','')
+    if u:
+      print(u.rstrip('/mcp').rstrip('/'))
+      break
+except: pass
+" 2>/dev/null)
+    fi
+    if [ -z "$api_key" ]; then
+      api_key=$(python3 -c "
+import json,sys
+try:
+  d=json.load(open('$jsonf'))
+  for cont in ('mcp','mcpServers'):
+    e=d.get(cont,{}).get('domain-mcp',{})
+    h=e.get('headers',{}).get('Authorization','')
+    if h.startswith('Bearer '):
+      print(h[7:])
+      break
+except: pass
+" 2>/dev/null)
+    fi
+    [ -n "$vps_url" ] && [ -n "$api_key" ] && break
+  done
 fi
 
 if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
@@ -121,9 +158,33 @@ if [ -z "$mem_out" ]; then
   mem_out="⚠ domain_mem_context falló"
 fi
 
-# ---------- 6. emitir additionalContext ----------
-# El JSON va en una sola linea (Claude Code lo parsea)
-cat <<EOF
-{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"🟢 domain MCP ready (auto-cargado por SessionStart hook, vps=$vps_url, slug=$mem_slug)\n\n## domain_session_bootstrap\n$bootstrap_out\n\n## domain_code_graph\n$code_graph_out\n\n## domain_mem_context (ultimas 10 obs)\n$mem_out\n\n---\nTodo lo de arriba esta en tu system prompt. NO necesitas llamar bootstrap/code_graph/mem_context otra vez. Si el usuario pide algo, USÁ el contexto de arriba + domain_* tools para actuar."}}
-EOF
+# ---------- 6. emitir additionalContext (JSON construido con python para
+#            evitar problemas de escapeo de comillas/bash) ----------
+# Pasamos las 3 secciones por env vars a python, que arma el JSON final
+export HOOK_VPS_URL="$vps_url"
+export HOOK_MEM_SLUG="$mem_slug"
+export HOOK_BOOTSTRAP_OUT="$bootstrap_out"
+export HOOK_CODE_GRAPH_OUT="$code_graph_out"
+export HOOK_MEM_OUT="$mem_out"
+
+python3 - <<'PYEOF'
+import json, os
+ctx = (
+    f"🟢 domain MCP ready (auto-cargado por SessionStart hook, "
+    f"vps={os.environ.get('HOOK_VPS_URL','?')}, "
+    f"slug={os.environ.get('HOOK_MEM_SLUG','?')})\n\n"
+    f"## domain_session_bootstrap\n{os.environ.get('HOOK_BOOTSTRAP_OUT','')}\n\n"
+    f"## domain_code_graph\n{os.environ.get('HOOK_CODE_GRAPH_OUT','')}\n\n"
+    f"## domain_mem_context (ultimas 10 obs)\n{os.environ.get('HOOK_MEM_OUT','')}\n\n"
+    f"---\nTodo lo de arriba esta en tu system prompt. "
+    f"NO necesitas llamar bootstrap/code_graph/mem_context otra vez. "
+    f"Si el usuario pide algo, USÁ el contexto de arriba + domain_* tools para actuar."
+)
+print(json.dumps({
+    "hookSpecificOutput": {
+        "hookEventName": "SessionStart",
+        "additionalContext": ctx,
+    }
+}))
+PYEOF
 exit 0

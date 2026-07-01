@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# hooks/domain-session-start.sh
+#
+# Hook SessionStart de Claude Code que ejecuta domain_session_bootstrap
+# + domain_code_graph + domain_mem_context ANTES del primer prompt del
+# usuario. Devuelve el output como additionalContext (system message
+# inyectado por Claude Code, que el LLM no puede ignorar).
+#
+# El LLM recibe el contexto completo (proyecto, work_summary, recent
+# observations, code graph) antes de cualquier mensaje del usuario. Asi
+# NO tiene excusa de "olvidar" llamar las tools de domain — la info ya
+# esta en su system prompt.
+#
+# Output format: JSON con hookSpecificOutput.additionalContext.
+# Non-zero exit o stderr NO bloquea el inicio de sesion (es best-effort).
+# Si la API key falta o el MCP no responde, devolvemos un placeholder
+# indicando que el bootstrap fallo — pero dejamos arrancar igual.
+
+set +e
+
+# ---------- 1. detectar cwd + git info ----------
+cwd="${CWD:-$PWD}"
+git_remote=$(git -C "$cwd" remote get-url origin 2>/dev/null || echo "")
+git_branch=$(git -C "$cwd" branch --show-current 2>/dev/null || echo "")
+git_head=$(git -C "$cwd" rev-parse HEAD 2>/dev/null || echo "")
+
+# ---------- 2. detectar existing_rules_files ----------
+rules=()
+[ -f "$cwd/AGENTS.md" ]                              && rules+=("AGENTS.md")
+[ -f "$cwd/CLAUDE.md" ]                              && rules+=("CLAUDE.md")
+[ -f "$cwd/.claude/CLAUDE.md" ]                       && rules+=(".claude/CLAUDE.md")
+[ -f "$cwd/.cursorrules" ]                           && rules+=(".cursorrules")
+[ -f "$cwd/.windsurfrules" ]                         && rules+=(".windsurfrules")
+[ -f "$cwd/.github/copilot-instructions.md" ]         && rules+=(".github/copilot-instructions.md")
+[ -d "$cwd/.claude/rules" ]                          && rules+=(".claude/rules/**")
+[ -d "$cwd/openspec" ]                               && rules+=("openspec/")
+rules_json=$(printf '"%s",' "${rules[@]}")
+rules_json="[${rules_json%,}]"
+
+# ---------- 3. resolver VPS URL + API key ----------
+# Prioridad: env > ~/.config/domain/install.env > .env de opencode/claude
+vps_url="${DOMAIN_VPS_URL:-}"
+api_key="${DOMAIN_API_KEY:-}"
+
+# loadEnv del .env global del installer (formato KEY=VAL, una por linea)
+if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
+  for envf in "$HOME/.config/domain/install.env" "$HOME/.claude/.env" "$HOME/.config/opencode/.env"; do
+    if [ -r "$envf" ]; then
+      while IFS='=' read -r k v; do
+        case "$k" in
+          VPS_URL|URL) [ -z "$vps_url" ] && vps_url="$v" ;;
+          API_KEY)     [ -z "$api_key" ] && api_key="$v" ;;
+        esac
+      done < "$envf"
+    fi
+  done
+fi
+
+# fallback: el JSON del cliente puede tener la URL/key directamente
+if [ -z "$vps_url" ] && [ -r "$HOME/.config/opencode/opencode.json" ]; then
+  vps_url=$(grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]+"' "$HOME/.config/opencode/opencode.json" 2>/dev/null | head -1 | sed 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | sed 's|/mcp$||')
+fi
+if [ -z "$api_key" ] && [ -r "$HOME/.config/opencode/opencode.json" ]; then
+  api_key=$(grep -oE '"Authorization"[[:space:]]*:[[:space:]]*"Bearer [^"]+"' "$HOME/.config/opencode/opencode.json" 2>/dev/null | head -1 | sed 's/.*Bearer //;s/"$//')
+fi
+
+if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
+  cat <<'EOF' 2>/dev/null
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"⚠ domain bootstrap: VPS_URL o API_KEY no encontrados en ~/.config/domain/install.env, ~/.claude/.env, ~/.config/opencode/.env, ni en los JSONs de los clientes MCP. Re-corre el installer de domain con --api-key para configurar."}}
+EOF
+  exit 0
+fi
+
+# ---------- 4. helper: call MCP tool via curl (streamable-http, initialize + call) ----------
+# El MCP server usa Streamable HTTP (content-type application/json o text/event-stream).
+# Para simplicidad, mandamos 1 initialize + 1 tool call por separado.
+
+call_mcp_tool() {
+  local tool_name="$1"
+  local args_json="$2"
+
+  # initialize (el server puede rechazar sin esto, pero sessionless igual responde)
+  curl -fsS -X POST "${vps_url}/mcp" \
+    -H "Authorization: Bearer ${api_key}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"domain-session-start\",\"version\":\"0.1\"}}}" \
+    >/dev/null 2>&1
+
+  # tool call
+  curl -fsS -X POST "${vps_url}/mcp" \
+    -H "Authorization: Bearer ${api_key}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"${tool_name}\",\"arguments\":${args_json}}}"
+}
+
+# ---------- 5. ejecutar las 3 tools de domain ----------
+bootstrap_args=$(printf '{"cwd":"%s","git_remote":"%s","git_branch":"%s","git_head":"%s","existing_rules_files":%s}' \
+  "$cwd" "$git_remote" "$git_branch" "$git_head" "$rules_json")
+
+bootstrap_out=$(call_mcp_tool "domain_session_bootstrap" "$bootstrap_args" 2>/dev/null)
+if [ -z "$bootstrap_out" ]; then
+  bootstrap_out="⚠ domain_session_bootstrap falló (VPS no responde o key inválida)"
+fi
+
+# code graph: si no está built, sugiere build; si está, lee
+code_graph_out=$(call_mcp_tool "domain_code_graph" '{}' 2>/dev/null)
+if [ -z "$code_graph_out" ]; then
+  code_graph_out="⚠ domain_code_graph falló (VPS no responde o key inválida)"
+fi
+
+# mem context: pide observaciones recientes del proyecto
+# usamos el slug del proyecto si lo tenemos (lo sacamos del bootstrap output)
+# fallback: usamos 'domain-services' como slug global
+mem_slug=$(echo "$bootstrap_out" | grep -oE '"slug"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed 's/.*"slug"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[ -z "$mem_slug" ] && mem_slug="domain-services"
+mem_args=$(printf '{"project_slug":"%s","limit":10}' "$mem_slug")
+mem_out=$(call_mcp_tool "domain_mem_context" "$mem_args" 2>/dev/null)
+if [ -z "$mem_out" ]; then
+  mem_out="⚠ domain_mem_context falló"
+fi
+
+# ---------- 6. emitir additionalContext ----------
+# El JSON va en una sola linea (Claude Code lo parsea)
+cat <<EOF
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"🟢 domain MCP ready (auto-cargado por SessionStart hook, vps=$vps_url, slug=$mem_slug)\n\n## domain_session_bootstrap\n$bootstrap_out\n\n## domain_code_graph\n$code_graph_out\n\n## domain_mem_context (ultimas 10 obs)\n$mem_out\n\n---\nTodo lo de arriba esta en tu system prompt. NO necesitas llamar bootstrap/code_graph/mem_context otra vez. Si el usuario pide algo, USÁ el contexto de arriba + domain_* tools para actuar."}}
+EOF
+exit 0

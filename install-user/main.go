@@ -341,6 +341,9 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	step("Detectando sistemas de memoria legacy (engram)")
 	maybeRemoveEngram(p.Home(), opts, in)
 
+	step("Instalando hook de SessionStart (Claude Code)")
+	installClaudeSessionStartHook()
+
 	step("Listo")
 	fmt.Printf(`
   %s%sdomain MCP configurado%s

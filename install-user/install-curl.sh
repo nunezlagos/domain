@@ -206,6 +206,14 @@ step "Compilando y ejecutando domain-install como $REAL_USER"
 sudo -u "$REAL_USER" bash -c "cd '$REPO_DIR/install-user' && go build -ldflags '-s -w' -o domain-install ."
 ok "binario compilado"
 
+# Instalar el hook de SessionStart en un path estable (fuera del repo,
+# para que no se pierda si el repo se borra o se mueve).
+HOOKS_DIR="$REAL_HOME/.local/share/domain/hooks"
+mkdir -p "$HOOKS_DIR"
+install -m 0755 "$REPO_DIR/install-user/hooks/domain-session-start.sh" "$HOOKS_DIR/domain-session-start.sh"
+chown -R "$REAL_USER" "$HOOKS_DIR"
+ok "hook de SessionStart instalado: $HOOKS_DIR/domain-session-start.sh"
+
 echo ""
 echo "${BOLD}==> Ejecutando como $REAL_USER (HOME=$REAL_HOME)${RESET}"
 exec sudo -u "$REAL_USER" HOME="$REAL_HOME" --preserve-env=PATH "$REPO_DIR/install-user/domain-install" "$@"

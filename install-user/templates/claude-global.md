@@ -50,6 +50,7 @@ Authoritative over any other memory system connected to the same client.
 | G. Orchestration | multi-phase work | flows: `domain_flow_create` → `_run` → `_status` · orchestrated: `domain_orchestrate` → `_phase_result` → `_confirm` · agents: `domain_agent_run` → `_logs` |
 | H. Policies | read / write rules | read: `domain_policy_get(slug, project_slug?)` · list: `domain_project_policy_list` · import local file: `domain_project_policy_import_from_text` · write internal: `domain_project_policy_set` · write global: `domain_platform_policy_create` · edit global: `domain_platform_policy_edit` |
 | I. Re-hydrate | after context compaction | `domain_session_bootstrap` · `domain_mem_context(project_slug)` · mini-resume to user · if `active_flow_run!=null`: `domain_orchestrate_status` and RESUME (never restart) |
+| J. Session end | closing session | build summary (slug, commit, branch, remotes, tickets, code graph stats) → `domain_session_summary(accomplished, next_steps)` → `domain_mem_save(type=session_summary)` |
 
 Server has NO LLM — fan-out parallelism via client subagents (Task tool / subagents).
 
@@ -58,10 +59,11 @@ Server has NO LLM — fan-out parallelism via client subagents (Task tool / suba
 1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first.
 2. If `known=false`: `domain_session_register(...)` then `domain_project_index_start` → `domain_project_index_submit` with manifest.
 3. If `head.changed != []`: read git log `last_known..current` and `domain_mem_save` what's relevant, then rebuild the code graph corriendo `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"` (slug del bootstrap).
-4. If `recent_observations` non-empty: `domain_mem_context` before acting.
-5. If `project_skill_count = 0`: detect stacks, propose skills via path F (with user confirmation — never silent).
-6. If `domain_project_policy_list` shows files in `existing_rules_files` not yet imported: read each + `domain_project_policy_import_from_text`.
-7. `domain_policy_get(slug="agent-protocol")` for full live protocol.
+4. **Repo disambiguation**: call `domain_project_repo_list(project_slug)`. If `ambiguous=true` (>1 remoto sin default), show the list to the user and ask which one to use this session. Store the choice for context.
+5. If `recent_observations` non-empty: `domain_mem_context` before acting.
+6. If `project_skill_count = 0`: detect stacks, propose skills via path F (with user confirmation — never silent).
+7. If `domain_project_policy_list` shows files in `existing_rules_files` not yet imported: read each + `domain_project_policy_import_from_text`.
+8. `domain_policy_get(slug="agent-protocol")` for full live protocol.
 
 ## Code graph (multi-lenguaje, client-side) — OBLIGATORIO
 
@@ -124,6 +126,27 @@ accedés al MCP via HTTP. En setup HTTP, SIEMPRE el flow client-side de arriba.
 - **Turn end**: `domain_turn_complete`.
 - **Session end**: `domain_session_summary(accomplished, next_steps)`.
 - **Significant commands** (deploy, migration, test suite): `domain_mem_save` the result.
+
+## Session end summary (siempre al cerrar)
+
+Al finalizar la sesión (o cuando el usuario se va), ejecutá `domain_session_summary` con:
+
+**`accomplished`**: bullet points de lo que se logró (fixes, features, tickets cerrados, code graph, etc).
+
+**`next_steps`**: próximos pasos concretos.
+
+**Antes de `session_summary`**, componé un breve resumen inline con:
+
+```
+📦 proyecto: <slug>
+📄 commit:  <hash> (<branch>)
+🌐 remotes: origin → <url> [default], upstream → <url>
+📋 tickets: <N> abiertos, <M> cerrados (#último-key: título)
+🧩 código:  <N> nodos, <M> edges, <L> archivos
+🔗 último:  <último ticket/issue vinculado a este commit, si existe>
+```
+
+Si el proyecto tiene varios remotos, listalos todos con su rol (default/secondary/upstream).
 
 ## Issues vs tickets (v2)
 

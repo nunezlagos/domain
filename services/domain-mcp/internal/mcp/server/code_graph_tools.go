@@ -31,6 +31,7 @@ import (
 // codeGraphService abstrae el CodegraphService para testabilidad del handler.
 type codeGraphService interface {
 	Build(ctx context.Context, in codegraphsvc.BuildInput) (*codegraphsvc.BuildStats, error)
+	Upload(ctx context.Context, in codegraphsvc.UploadInput) (*codegraphsvc.UploadStats, error)
 	Explore(ctx context.Context, projectID uuid.UUID, symbol string) (*codegraphsvc.ExploreResult, error)
 	Path(ctx context.Context, projectID uuid.UUID, fromSymbol, toSymbol string, maxDepth int) ([]codegraphsvc.CodeEdge, error)
 	Overview(ctx context.Context, projectID uuid.UUID) (*codegraphsvc.Overview, error)
@@ -69,6 +70,7 @@ func registerCodeGraphTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerToo
 	}
 	return []mcpgo.ServerTool{
 		{Tool: toolCodeBuild(), Handler: wrap.Wrap("domain_code_build", rls(h.handleCodeBuild))},
+		{Tool: toolCodeUpload(), Handler: wrap.Wrap("domain_code_upload", rls(h.handleCodeUpload))},
 		{Tool: toolCodeExplore(), Handler: wrap.Wrap("domain_code_explore", rls(h.handleCodeExplore))},
 		{Tool: toolCodePath(), Handler: wrap.Wrap("domain_code_path", rls(h.handleCodePath))},
 		{Tool: toolCodeGraph(), Handler: wrap.Wrap("domain_code_graph", rls(h.handleCodeGraph))},
@@ -629,4 +631,112 @@ func linkedObservationJSON(o codegraphsvc.LinkedObservation) map[string]any {
 		m["note"] = o.Note
 	}
 	return m
+}
+
+// toolCodeUpload — domain_code_upload (multi-lenguaje client-side)
+//
+// Reemplaza el flujo server-side de domain_code_build (que recibe root_path y
+// recorre el FS). En setups donde domain-mcp corre en el VPS y no tiene acceso
+// al filesystem del cliente, el cliente parsea con ast-grep y sube el grafo
+// completo via esta tool.
+//
+// Input: graph_json con {nodes, edges, files_scanned, git_head}. El formato
+// de cada ParsedNode y ParsedEdge es el MISMO que el parser server-side
+// produce (ver service.go), asi que el cliente no necesita un formato custom.
+func toolCodeUpload() mcp.Tool {
+	return mcp.NewTool("domain_code_upload",
+		mcp.WithDescription("Sube el code graph parseado por el cliente (multi-lenguaje via ast-grep). Reemplaza a domain_code_build cuando el server no tiene acceso al filesystem del cliente. Input: graph_json con {nodes, edges, files_scanned, git_head}."),
+		mcp.WithString("project_slug",
+			mcp.Description("Slug del project donde persistir el grafo"),
+			mcp.Required(),
+		),
+		mcp.WithObject("graph_json",
+			mcp.Description("JSON con {files_scanned:int, git_head:string, nodes:[{kind,name,qualified_name,file_path,line_start,line_end,signature,doc}], edges:[{source_qn,target_qn,edge_type}]}"),
+			mcp.Required(),
+		),
+	)
+}
+
+func (h *codeGraphHandlers) handleCodeUpload(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	slug := strOf(args["project_slug"])
+	projectID, errRes := h.resolveProject(ctx, slug)
+	if errRes != nil {
+		return errRes, nil
+	}
+
+	graphArg, ok := args["graph_json"].(map[string]any)
+	if !ok {
+		return mcp.NewToolResultError("graph_json es requerido (objeto con {files_scanned, git_head, nodes, edges})"), nil
+	}
+
+	// Unmarshal de nodes y edges (formato ParsedNode/ParsedEdge).
+	nodesRaw, _ := graphArg["nodes"].([]any)
+	edgesRaw, _ := graphArg["edges"].([]any)
+	filesScanned := intOf(graphArg["files_scanned"])
+	gitHead := strOf(graphArg["git_head"])
+
+	nodes := make([]codegraphsvc.ParsedNode, 0, len(nodesRaw))
+	for _, n := range nodesRaw {
+		nm, ok := n.(map[string]any)
+		if !ok {
+			continue
+		}
+		nodes = append(nodes, codegraphsvc.ParsedNode{
+			Kind:          strOf(nm["kind"]),
+			Name:          strOf(nm["name"]),
+			QualifiedName: strOf(nm["qualified_name"]),
+			FilePath:      strOf(nm["file_path"]),
+			LineStart:     intOf(nm["line_start"]),
+			LineEnd:       intOf(nm["line_end"]),
+			Signature:     strOf(nm["signature"]),
+			Doc:           strOf(nm["doc"]),
+		})
+	}
+
+	edges := make([]codegraphsvc.ParsedEdge, 0, len(edgesRaw))
+	for _, e := range edgesRaw {
+		em, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		edges = append(edges, codegraphsvc.ParsedEdge{
+			SourceQN: strOf(em["source_qn"]),
+			TargetQN: strOf(em["target_qn"]),
+			EdgeType: strOf(em["edge_type"]),
+		})
+	}
+
+	stats, err := h.graph.Upload(ctx, codegraphsvc.UploadInput{
+		ProjectID:    projectID,
+		GitHead:      gitHead,
+		FilesScanned: filesScanned,
+		Nodes:        nodes,
+		Edges:        edges,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("upload failed: %v", err)), nil
+	}
+
+	return toolResultJSON(map[string]any{
+		"project_slug":  slug,
+		"files_scanned": stats.FilesScanned,
+		"nodes_upserted": stats.NodesUpserted,
+		"edges_created":  stats.EdgesCreated,
+	})
+}
+
+// intOf convierte un valor numerico de JSON a int, con default 0.
+func intOf(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int32:
+		return int(x)
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	}
+	return 0
 }

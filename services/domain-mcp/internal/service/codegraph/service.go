@@ -19,6 +19,7 @@ package codegraph
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,6 +124,214 @@ func (s *CodegraphService) withTx(ctx context.Context, fn func(context.Context) 
 		return fmt.Errorf("commit tx: %w", err)
 	}
 	return nil
+}
+
+// UploadInput describe una corrida de upload de grafo desde el cliente
+// (script bash client-side que parsea con ast-grep y sube via MCP HTTP).
+//
+// Es el equivalente remoto-friendly de Build: en vez de recorrer el FS, el cliente
+// ya hizo el parseo y nos manda los nodos+aristas como JSON. El formato de cada
+// ParsedNode y ParsedEdge es el MISMO que el parser server-side produce (ver
+// parser.go), así que el cliente no necesita un formato custom.
+type UploadInput struct {
+	ProjectID    uuid.UUID
+	GitHead      string
+	FilesScanned int
+	Nodes        []ParsedNode
+	Edges        []ParsedEdge
+}
+
+// UploadStats resume una corrida de Upload.
+type UploadStats struct {
+	FilesScanned  int
+	NodesUpserted int
+	EdgesCreated  int
+}
+
+// Upload persiste un grafo subido por el cliente (multi-lenguaje via ast-grep).
+//
+// Reusa el MISMO schema que Build: code_nodes / code_edges / code_index_files.
+// El flujo es más simple que Build (no hay walk de FS, no hay resolución de paths):
+//
+//	1) Soft-delete de los nodos de cada file_path que aparecen en el upload
+//	   (excepto los ids retenidos), para que un re-upload "reemplace" el grafo
+//	   del archivo en vez de duplicarlo.
+//	2) UpsertNode de cada ParsedNode (identidad estable por QN+kind, igual que Build).
+//	3) Acumular edges (source_qn -> target_qn) y resolverlos en la fase 2.
+//	4) UpsertIndexFile por cada file_path con un content_hash placeholder
+//	   (sha256 sobre la concatenacion de QNs del archivo) para que el
+//	   incremental-by-hash de Explore/Path no haga trabajo de más.
+//	5) Hard-delete aristas entrantes/salientes de los nodos soft-deleted en (1).
+func (s *CodegraphService) Upload(ctx context.Context, in UploadInput) (*UploadStats, error) {
+	if in.ProjectID == uuid.Nil {
+		return nil, fmt.Errorf("upload: project_id required")
+	}
+	stats := &UploadStats{FilesScanned: in.FilesScanned}
+
+	// Group nodes by file_path para (1) y (4): una sola operación por archivo.
+	type fileAgg struct {
+		keepIDs  []uuid.UUID
+		qnToID   map[string]uuid.UUID
+		nodes    []ParsedNode
+		hashSrc  []byte // para calcular el content_hash placeholder del index
+	}
+	byFile := make(map[string]*fileAgg)
+	for _, n := range in.Nodes {
+		f := n.FilePath
+		agg, ok := byFile[f]
+		if !ok {
+			agg = &fileAgg{qnToID: make(map[string]uuid.UUID)}
+			byFile[f] = agg
+		}
+		agg.nodes = append(agg.nodes, n)
+		// content_hash placeholder: bytes del qualified_name de cada nodo.
+		// Suficiente para que ListIndexFiles no considere el archivo idéntico
+		// entre uploads muy similares (no es un sha256 del contenido real porque
+		// el cliente no lo manda; el upsert por file_path es la identidad dura).
+		agg.hashSrc = append(agg.hashSrc, []byte(n.QualifiedName+"\n")...)
+	}
+
+	var pending []pendingEdge
+	err := s.withTx(ctx, func(ctx context.Context) error {
+		qx := s.q(ctx)
+
+		// 1) Para cada archivo: soft-delete de los nodos viejos (excepto los
+		//    que vamos a re-insertar en este mismo upload, que mantienen su id).
+		//    Pero como todavia no tenemos los ids, primero UPSERTEAMOS y
+		//    coleccionamos los ids retenidos. Luego SOFT-DELETE el resto.
+		//
+		//    Pero el orden importa: si UpsertNode hace ON CONFLICT por (project,
+		//    qualified_name, kind), entonces UpsertNode ya retorna el ID
+		//    existente, que es lo que queremos mantener. SoftDeleteNodesByFileExcept
+		//    borra todos los demas.
+		for filePath, agg := range byFile {
+			keepIDs := make([]uuid.UUID, 0, len(agg.nodes))
+			meta, _ := json.Marshal(map[string]any{})
+			for _, n := range agg.nodes {
+				row, err := qx.UpsertNode(ctx, codegraphdb.UpsertNodeParams{
+					ProjectID:     in.ProjectID,
+					Kind:          n.Kind,
+					Name:          strPtr(n.Name),
+					QualifiedName: strPtr(n.QualifiedName),
+					FilePath:      strPtr(n.FilePath),
+					LineStart:     int32Ptr(n.LineStart),
+					LineEnd:       int32Ptr(n.LineEnd),
+					Signature:     strPtr(n.Signature),
+					Doc:           strPtr(n.Doc),
+				Language:      defaultLanguage, // el cliente no manda language per-node; usamos default
+				ContentHash:   agg.hashSrc, // placeholder
+					Metadata:      meta,
+				})
+				if err != nil {
+					return fmt.Errorf("upsert node %s: %w", n.QualifiedName, err)
+				}
+				stats.NodesUpserted++
+				keepIDs = append(keepIDs, row.ID)
+				if _, ok := agg.qnToID[n.QualifiedName]; !ok {
+					agg.qnToID[n.QualifiedName] = row.ID
+				}
+			}
+
+			// Soft-delete los nodos viejos del archivo que NO fueron retenidos
+			// (archivos eliminados del repo o nodos removidos por re-parseo).
+			fp := filePath
+			removed, err := qx.SoftDeleteNodesByFileExcept(ctx, codegraphdb.SoftDeleteNodesByFileExceptParams{
+				ProjectID:   in.ProjectID,
+				FilePath:    &fp,
+				KeepNodeIds: keepIDs,
+			})
+			if err != nil {
+				return fmt.Errorf("soft delete vanished nodes: %w", err)
+			}
+			if len(removed) > 0 {
+				if _, err := qx.DeleteEdgesBySourceNodes(ctx, codegraphdb.DeleteEdgesBySourceNodesParams{
+					ProjectID:     in.ProjectID,
+					SourceNodeIds: removed,
+				}); err != nil {
+					return fmt.Errorf("delete removed-node out edges: %w", err)
+				}
+				if _, err := qx.DeleteEdgesByTargetNodes(ctx, codegraphdb.DeleteEdgesByTargetNodesParams{
+					ProjectID:     in.ProjectID,
+					TargetNodeIds: removed,
+				}); err != nil {
+					return fmt.Errorf("delete removed-node in edges: %w", err)
+				}
+			}
+
+			// Borrar las aristas salientes de los retenidos: se re-resuelven en
+			// la fase 2 (las entrantes desde otros archivos NO se tocan: la
+			// identidad estable las mantiene validas).
+			if len(keepIDs) > 0 {
+				if _, err := qx.DeleteEdgesBySourceNodes(ctx, codegraphdb.DeleteEdgesBySourceNodesParams{
+					ProjectID:     in.ProjectID,
+					SourceNodeIds: keepIDs,
+				}); err != nil {
+					return fmt.Errorf("delete kept-node out edges: %w", err)
+				}
+			}
+
+			// Acumular edges del archivo para fase 2.
+			agg.keepIDs = keepIDs
+		}
+
+		// Map global QN -> node_id para resolver el source de las aristas.
+		qnToID := make(map[string]uuid.UUID)
+		for _, agg := range byFile {
+			for qn, id := range agg.qnToID {
+				if _, ok := qnToID[qn]; !ok {
+					qnToID[qn] = id
+				}
+			}
+		}
+
+		// Acumular edges.
+		for _, e := range in.Edges {
+			srcID, ok := qnToID[e.SourceQN]
+			if !ok {
+				continue
+			}
+			pending = append(pending, pendingEdge{
+				sourceID: srcID,
+				targetQN: e.TargetQN,
+				edgeType: e.EdgeType,
+			})
+		}
+
+		// Actualizar code_index_files por archivo (content_hash placeholder
+		// calculado arriba). Asi el index no queda stale.
+		gh := in.GitHead
+		for filePath, agg := range byFile {
+			hash := sha256OfBytes(agg.hashSrc)
+			nodeCount := int32(len(agg.nodes))
+			if _, err := qx.UpsertIndexFile(ctx, codegraphdb.UpsertIndexFileParams{
+				ProjectID:   in.ProjectID,
+				FilePath:    filePath,
+				ContentHash: hash,
+				GitHead:     gitHeadPtr(gh),
+				NodeCount:   &nodeCount,
+			}); err != nil {
+				return fmt.Errorf("upsert index file %s: %w", filePath, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Fase 2: resolver y crear aristas.
+	created, err := s.resolveAndInsertEdges(ctx, in.ProjectID, pending)
+	if err != nil {
+		return nil, fmt.Errorf("upload resolve edges: %w", err)
+	}
+	stats.EdgesCreated = created
+	return stats, nil
+}
+
+// sha256OfBytes devuelve el SHA-256 de data como []byte (32 bytes).
+func sha256OfBytes(data []byte) []byte {
+	h := sha256.Sum256(data)
+	return h[:]
 }
 
 // BuildInput describe una corrida de construcción/actualización del grafo.

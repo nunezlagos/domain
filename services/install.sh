@@ -352,7 +352,7 @@ cat <<EOF
 EOF
 
 # === STEP 9: Daily-update cron ===
-# El comando canonico `sudo bash <(curl ...)` corre este mismo script desde
+# El comando canonico `curl ... | sudo bash` corre este mismo script desde
 # el cron de root una vez por dia. Es el MISMO entrypoint para install fresco
 # y para update diario (idempotente). Si el cron ya esta, no duplica la linea.
 log "9/9  Configurando cron de auto-update diario (03:00)..."

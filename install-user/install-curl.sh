@@ -105,7 +105,7 @@ ok "Usuario real: $REAL_USER (HOME=$REAL_HOME)"
 
 # ---------- instalar deps faltantes ----------
 missing=()
-for dep in curl tar git; do
+for dep in curl tar git ast-grep; do
   command -v "$dep" >/dev/null 2>&1 || missing+=("$dep")
 done
 
@@ -123,9 +123,9 @@ if [ ${#missing[@]} -gt 0 ]; then
     apk) apk add "${missing[@]}" ;;
     brew) brew install "${missing[@]}" ;;
   esac
-  ok "deps instaladas"
+  ok "deps instaladas (curl, tar, git, ast-grep)"
 else
-  ok "deps presentes: curl, tar, git"
+  ok "deps presentes: curl, tar, git, ast-grep"
 fi
 
 # ---------- verificar Go ----------

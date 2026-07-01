@@ -970,8 +970,8 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
             <span class="hero-stat-lbl">tipos de recursos</span>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-num">6</span>
-            <span class="hero-stat-lbl">clientes MCP</span>
+            <span class="hero-stat-num">2</span>
+            <span class="hero-stat-lbl">clientes MCP soportados</span>
           </div>
           <div class="hero-stat">
             <span class="hero-stat-num">1</span>
@@ -1066,9 +1066,9 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
           </div>
           <h3>Un servidor MCP para gobernarlos a todos</h3>
           <p style="margin-top:12px">
-            Registrás Domain MCP una sola vez en cada cliente (Claude Code, Cursor,
-            OpenCode…) y automáticamente tenés acceso a todas tus skills, políticas y
-            flujos. Sin duplicar configuraciones, sin archivos sueltos por el repo.
+            Registrás Domain MCP una sola vez en Claude Code CLI u OpenCode y automáticamente
+            tenés acceso a todas tus skills, políticas y flujos. Sin duplicar configuraciones,
+            sin archivos sueltos por el repo.
           </p>
           <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(250,248,242,.80)">
@@ -1150,32 +1150,18 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
   <div class="container">
     <div class="section-hd" style="text-align:center">
       <div class="section-label">Compatibilidad</div>
-      <h2 class="t-headline">Funciona con tu cliente MCP favorito</h2>
+      <h2 class="t-headline">Soporte oficial: 2 clientes CLI</h2>
       <p class="t-lead" style="margin:12px auto 0">
-        Un registro, todos los clientes. Domain MCP habla el protocolo estándar —
-        si soporta MCP, se conecta.
+        Domain MCP se integra nativamente con los dos clientes AI de terminal
+        más usados. El instalador los registra automáticamente.
       </p>
     </div>
     <div class="clients-grid">
       <div class="client-chip">
         <i class="fas fa-terminal"></i>
         <div>
-          <div>Claude Code</div>
+          <div>Claude Code CLI</div>
           <div class="client-note">CLI oficial Anthropic</div>
-        </div>
-      </div>
-      <div class="client-chip">
-        <i class="fas fa-code"></i>
-        <div>
-          <div>Cursor</div>
-          <div class="client-note">Editor AI-first</div>
-        </div>
-      </div>
-      <div class="client-chip">
-        <i class="fas fa-desktop"></i>
-        <div>
-          <div>Claude Desktop</div>
-          <div class="client-note">App de escritorio</div>
         </div>
       </div>
       <div class="client-chip">
@@ -1185,24 +1171,10 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
           <div class="client-note">Terminal AI</div>
         </div>
       </div>
-      <div class="client-chip">
-        <i class="fas fa-puzzle-piece"></i>
-        <div>
-          <div>Cline / Continue</div>
-          <div class="client-note">Extensiones VSCode</div>
-        </div>
-      </div>
-      <div class="client-chip">
-        <i class="fas fa-circle-nodes"></i>
-        <div>
-          <div>Cualquier cliente MCP</div>
-          <div class="client-note">Protocolo estándar</div>
-        </div>
-      </div>
     </div>
     <p class="clients-note">
       <i class="fas fa-info-circle" style="color:var(--green-mid)"></i>
-      El instalador detecta los clientes presentes y los registra automáticamente.
+      Otros clientes MCP pueden conectarse manualmente con la config estándar del protocolo.
     </p>
   </div>
 </section>
@@ -1324,9 +1296,8 @@ cd domain">
           <div class="install-note">
             <i class="fas fa-circle-info"></i>
             <span>
-              Registra automáticamente <strong>Claude Code</strong>, <strong>OpenCode</strong>,
-              <strong>Cursor</strong>, <strong>Claude Desktop</strong> y más si están instalados.
-              Idempotente: re-ejecutar actualiza sin duplicar.
+              Registra automáticamente <strong>Claude Code CLI</strong> y <strong>OpenCode</strong>
+              si están instalados. Idempotente: re-ejecutar actualiza sin duplicar.
             </span>
           </div>
         </div>

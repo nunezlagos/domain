@@ -88,7 +88,7 @@ env_set() {
 }
 
 # === STEP 1: Validate OS ===
-log "1/8  Validating OS..."
+log "1/9  Validating OS..."
 . /etc/os-release 2>/dev/null || fail "/etc/os-release no encontrado"
 [[ "${ID:-}" == "ubuntu" ]] || fail "OS no soportada. Solo Ubuntu. Detectado: ${PRETTY_NAME:-desconocido}"
 command -v systemctl &>/dev/null || fail "systemd no disponible"
@@ -103,7 +103,7 @@ esac
 ok "Ubuntu ${VERSION_ID} (${VERSION_CODENAME}) — ${ARCH}"
 
 # === STEP 2: Docker ===
-log "2/8  Checking Docker..."
+log "2/9  Checking Docker..."
 if ! command -v docker &>/dev/null; then
   warn "Docker no instalado, instalando..."
   apt-get update -qq
@@ -117,7 +117,7 @@ docker info >/dev/null 2>&1 || fail "Docker daemon no responde"
 ok "Docker daemon OK"
 
 # === STEP 3: Clone or pull repo ===
-log "3/8  Setting up repo at $INSTALL_DIR..."
+log "3/9  Setting up repo at $INSTALL_DIR..."
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   log "Repo ya clonado, git pull..."
   (cd "$INSTALL_DIR" && git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
@@ -171,7 +171,7 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
 fi
 
 # === STEP 4: Generate or preserve .env ===
-log "4/8  Configurando credenciales..."
+log "4/9  Configurando credenciales..."
 ENV_FILE="$INSTALL_DIR/.env"
 ENV_EXAMPLE="$INSTALL_DIR/services/.env.example"
 [[ -f "$ENV_EXAMPLE" ]] || fail ".env.example no encontrado en $INSTALL_DIR/services/"
@@ -210,7 +210,7 @@ fi
 chmod 600 "$ENV_FILE"
 
 # === STEP 5: Generate certs ===
-log "5/8  Generando certs autofirmados..."
+log "5/9  Generando certs autofirmados..."
 mkdir -p "$INSTALL_DIR/certs/postgres" "$INSTALL_DIR/certs/minio"
 # Los compose files usan paths relativos tipo ../certs/minio que resuelven
 # a /opt/services/services/certs/minio. Symlink para que apunte a los certs
@@ -240,7 +240,7 @@ else
 fi
 
 # === STEP 6: Build + Up ===
-log "6/8  Building + starting services (esto puede tardar 1-3 min)..."
+log "6/9  Building + starting services (esto puede tardar 1-3 min)..."
 cd "$INSTALL_DIR/services"
 # Makefile usa --env-file .env (relativo al CWD). El .env real está en
 # $INSTALL_DIR/.env (parent). Symlink para que make lo encuentre.
@@ -274,7 +274,7 @@ make wait-healthy
 ok "5 servicios healthy"
 
 # === STEP 7: Systemd units + timers ===
-log "7/8  Configurando systemd units + timers..."
+log "7/9  Configurando systemd units + timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.service /etc/systemd/system/ 2>/dev/null || true
   sudo_run cp "$INSTALL_DIR/services/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
@@ -332,4 +332,33 @@ cat <<EOF
 ══════════════════════════════════════════════════════════════════════
 
 EOF
+
+# === STEP 9: Daily-update cron ===
+# El comando canonico `sudo bash <(curl ...)` corre este mismo script desde
+# el cron de root una vez por dia. Es el MISMO entrypoint para install fresco
+# y para update diario (idempotente). Si el cron ya esta, no duplica la linea.
+log "9/9  Configurando cron de auto-update diario (03:00)..."
+
+CRON_LINE="0 3 * * * /opt/services/scripts/daily-update.sh >> /var/log/domain-update.log 2>&1"
+WRAPPER="/opt/services/scripts/daily-update.sh"
+
+# Crea el wrapper si el repo no lo bajo aun (caso fresh clone antes del git pull).
+if [[ ! -f "$WRAPPER" ]]; then
+  cat > "$WRAPPER" <<'WRAPPER_EOF'
+#!/usr/bin/env bash
+exec /opt/services/services/install.sh
+WRAPPER_EOF
+  chmod +x "$WRAPPER"
+  ok "Wrapper $WRAPPER creado"
+fi
+
+CURRENT_CRON=$(sudo_run crontab -u root -l 2>/dev/null || true)
+if echo "$CURRENT_CRON" | grep -qF "$WRAPPER"; then
+  ok "Cron ya estaba instalado (no duplico)"
+else
+  printf '%s\n%s\n' "$CURRENT_CRON" "$CRON_LINE" | sudo_run crontab -u root -
+  ok "Cron instalado: corre $WRAPPER todos los dias a las 03:00"
+  ok "Log en /var/log/domain-update.log"
+fi
+
 ok "DONE"

@@ -275,6 +275,25 @@ ACTUALIZAR el openspec LOCAL ("actualizá los openspec/tareas"):
   tasks, specs) y escribí los archivos openspec del repo con tu Write/Edit tool.
   domain provee el contenido; la escritura es tuya.
 
+SYNC AUTOMÁTICO DEL SDD (OBLIGATORIO — REQ-55, no discrecional):
+Los .md de openspec DEBEN quedar sincronizados con la BD en el repo tras CADA
+evento del ciclo SDD, para que quien NO use el MCP pueda auditarlos. Es redundante
+a propósito. Tras cada evento de abajo, ANTES de devolver el control al usuario,
+ejecutá el loop: domain_openspec_export(project_slug) → escribí cada archivo de
+changes[].files con tu Write tool → si editaste algo, domain_openspec_apply.
+Eventos que DISPARAN sync:
+- Definir/confirmar issue: tras domain_issue_create_commit / domain_hu_create_commit
+  (materializá spec.md + proposal/design/tasks/.openspec.yaml del issue nuevo).
+- Cada fase SDD: tras domain_orchestrate_phase_result que produzca o mute
+  proposal/design/tasks/spec — re-exportá y reescribí ese change.
+- Finalizar: tras domain_verify_complete (passed) — export final que sella el spec.
+- Archivar: tras domain_issue_set_status(archived) — exportá y MOVÉ los .md del change
+  a openspec/changes/archive/<fecha>-<slug>/ (el mv es tuyo; el server da el contenido).
+Reglas: NUNCA escribas state.yaml/.openspec a mano — el layout sale SIEMPRE del export.
+Tras escribir, conservá .openspec.yaml (hashes) o el próximo domain_openspec_status marca
+drift. Para 1 change, filtrá el export por su issue_slug. Best-effort: si el export falla,
+avisá y seguí (no bloquees el trabajo).
+
 VOLUMEN ALTO: si son muchos changes, paralelizá con subagentes (un slice de
 archivos por subagente), propagando las reglas. Ver "Ejecución con subagentes".
 

@@ -225,6 +225,10 @@ func (h *issueHandlers) handleHUCreateCommit(ctx context.Context, req mcp.CallTo
 	if draft.IssueID != nil {
 		out["issue_id"] = draft.IssueID.String()
 		out["issue_slug"] = draft.IssueSlug
+		// REQ-55 sync obligatorio: operacionaliza la directiva del agent-protocol
+		// en el momento exacto de la creación (el server no escribe el fs).
+		out["next_step"] = "REQ-55 sync: corré domain_openspec_export(project_slug) y escribí con tu Write tool los .md del change '" +
+			draft.IssueSlug + "' (proposal/design/tasks/specs/spec.md + .openspec.yaml) para dejar el spec auditable en el repo."
 	}
 	return toolResultJSON(out)
 }

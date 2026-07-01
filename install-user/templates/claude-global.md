@@ -63,34 +63,53 @@ Server has NO LLM — fan-out parallelism via client subagents (Task tool / suba
 6. If `domain_project_policy_list` shows files in `existing_rules_files` not yet imported: read each + `domain_project_policy_import_from_text`.
 7. `domain_policy_get(slug="agent-protocol")` for full live protocol.
 
-## Code graph (multi-lenguaje, client-side)
+## Code graph (multi-lenguaje, client-side) — OBLIGATORIO
 
 ⚠️ **NO uses `domain_code_build`** — esa tool corre server-side, lee el FS del VPS,
 y en setups remotos (opencode/Claude Code → VPS via HTTP) **FALLA con
 "stat: no such file or directory"** porque el server no tiene acceso al FS del cliente.
 
-El flow correcto es **client-side**:
+### Flow obligatorio (después del bootstrap):
 
-1. Llamá `domain_code_graph` (read-only) para chequear si ya hay grafo:
-   - `built: true` → listo, usá `domain_code_explore` / `domain_code_path` directamente.
-   - `built: false` o `total_nodes: 0` → no hay grafo todavía, hacé el paso 2.
-2. **Si NO hay grafo** (built: false): el grafo se construye EN TU MAQUINA
-   (no en el server). El server lo recibe via `domain_code_upload`:
-   ```bash
-   # en tu shell, una vez por proyecto (o cuando cambien archivos):
-   ~/.local/share/domain/scripts/domain-code-graph.sh <repo_path> <project_slug>
-   ```
-   El script:
-   - Detecta ast-grep (lo instala si falta: pacman/apt/brew/cargo)
-   - Parsea el repo localmente con patterns por lenguaje (TS/JS/TSX/JSX/Go/Python/Rust/Java)
-   - Construye el JSON del grafo
-   - POST a `domain_code_upload` con el JSON (el server persiste en code_nodes/code_edges/code_index_files)
-3. Después de subir, `domain_code_explore` / `domain_code_path` / `domain_code_graph` leen del grafo persistido.
-4. **Si el LLM está en opencode/Claude Code** y NO tiene shell/ast-grep: el grafo se construye
-   **en cada sesión** parseando archivos con tus Read tools (ts/js/py/etc) + enviando via
-   `domain_code_upload` con el formato {kind, name, qualified_name, file_path, line_start, line_end}.
+1. **Usá SIEMPRE `project_slug` del bootstrap** — el `slug` que devolvió
+   `domain_session_bootstrap`. NO lo inventes, NO omitas el argumento.
+   Ejemplo: `domain_code_graph(arguments={"project_slug": "<SLUG_DEL_BOOTSTRAP>"})`.
+   Si llamás cualquier tool de code_* SIN project_slug, falla con
+   `"project_slug es requerido"`.
 
-Idempotente: re-subir el grafo solo actualiza (identidad estable por qualified_name + kind).
+2. **Llamá `domain_code_graph`** con ese slug para chequear si ya hay grafo:
+   - **`built: true`** y `total_nodes > 0` → usá `domain_code_explore` / `domain_code_path` directamente. No parsees.
+   - **`built: false`** o `total_nodes: 0` o `total_nodes: 3` (los 3 son del test
+     e2e, basura) → NO hay grafo real. Hacé el paso 3.
+
+3. **Si NO hay grafo** (built: false o solo los 3 nodos de prueba):
+   - **Opción A (preferida, si tenés shell)**: corré en tu shell:
+     ```bash
+     ~/.local/share/domain/scripts/domain-code-graph.sh <repo_path> <project_slug>
+     ```
+     Esto parsea con ast-grep, sube via `domain_code_upload`, y queda
+     persistido en el server.
+   - **Opción B (sin shell, solo file reads)**: parseá vos mismo los archivos
+     con tus tools de Read (TS/JS/Python/etc), construí el JSON con el formato
+     `{kind, name, qualified_name, file_path, line_start, line_end, signature}`,
+     y llamá `domain_code_upload` pasando `project_slug` + `graph_json`
+     (object con `nodes`, `edges`, `files_scanned`, `git_head`).
+
+4. **Después de subir**, llamá `domain_code_explore` / `domain_code_path` /
+   `domain_code_graph` para navegar. Estos leen del grafo persistido (no vuelven
+   a parsear).
+
+### Idempotencia
+
+Re-subir el grafo solo actualiza (identidad estable por `qualified_name + kind`).
+No necesitás preocuparte por duplicar nodos o edges si re-corrés el script.
+
+### Cuando NO hacer el upload
+
+Si el repo es 100% Go y vos tenés acceso al server domain-mcp directamente (modo
+stdio local, ej. binario en la misma máquina donde corre el codigo), entonces
+`domain_code_build(root_path=...)` SÍ funciona — pero este NO es tu caso si
+accedés al MCP via HTTP. En setup HTTP, SIEMPRE el flow client-side de arriba.
 
 ## Auto-persistence rules
 

@@ -11,13 +11,14 @@
 # Uso:
 #   ./scripts/install-runner.sh --check
 #       Muestra qué haría, sin actuar.
-#   ./scripts/install-runner.sh --register TOKEN [LABEL]
-#       Descarga runner y lo registra (token: GitHub → repo Settings → Actions →
-#       Runners → New self-hosted runner → el token de ./config.sh --token XXX).
+#   ./scripts/install-runner.sh --register [TOKEN] [LABEL]
+#       Descarga runner y lo registra. Si TOKEN se omite, lo pide interactivamente
+#       (read -s, no queda en history). Obtenelo de GitHub → repo Settings →
+#       Actions → Runners → New self-hosted runner → token de ./config.sh --token XXX.
 #   ./scripts/install-runner.sh --install-service
 #       Setea DEPLOY_LOG_DIR + linger + unit systemd --user + enable --now.
-#   ./scripts/install-runner.sh --all TOKEN [LABEL]
-#       register + install-service de una.
+#   ./scripts/install-runner.sh --all [TOKEN] [LABEL]
+#       register + install-service de una. TOKEN opcional (prompt interactivo).
 #
 # Vars (override por env): RUNNER_VERSION, RUNNER_USER, RUNNER_HOME, RUNNER_LABEL,
 #   REPO_URL, DEPLOY_LOG_DIR.
@@ -53,7 +54,17 @@ cmd_check() {
 cmd_register() {
   local token="${1:-}"
   local label="${2:-$RUNNER_LABEL}"
-  [[ -n "$token" ]] || { echo "ERROR: token requerido (--register TOKEN [LABEL])" >&2; exit 1; }
+
+  if [[ -z "$token" ]]; then
+    echo "[register] Sin token como argumento, lo pido interactivamente."
+    echo "[register] Obtenelo en: GitHub → repo Settings → Actions → Runners → New self-hosted runner"
+    echo "[register] El token vive ~1h; si falla, generá uno nuevo."
+    read -rs -p "[register] Pegá el token (no se va a ver): " token
+    echo
+  fi
+  [[ -n "$token" ]] || { echo "ERROR: token requerido" >&2; exit 1; }
+  [[ "${#token}" -ge 30 ]] || { echo "ERROR: token muy corto (${#token} chars, esperábamos 30+)" >&2; exit 1; }
+  echo "[register] Token OK (${#token} chars)"
 
   mkdir -p "$RUNNER_HOME"
   if [[ ! -f "$RUNNER_HOME/run.sh" ]]; then

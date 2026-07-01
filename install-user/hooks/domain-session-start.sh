@@ -142,9 +142,43 @@ if [ -z "$bootstrap_out" ]; then
 fi
 
 # code graph: si no está built, sugiere build; si está, lee
-code_graph_out=$(call_mcp_tool "domain_code_graph" '{}' 2>/dev/null)
+# Le pasamos project_slug (del bootstrap) para que funcione en el setup remoto.
+# Si built=false y existe el script de code graph local + ast-grep, lo corre
+# auto (parsea el cwd y sube via domain_code_upload).
+code_graph_args=$(printf '{"project_slug":"%s"}' "$mem_slug")
+code_graph_out=$(call_mcp_tool "domain_code_graph" "$code_graph_args" 2>/dev/null)
 if [ -z "$code_graph_out" ]; then
   code_graph_out="⚠ domain_code_graph falló (VPS no responde o key inválida)"
+fi
+
+# ---------- 4b. AUTO-INDEXAR code graph si no existe ----------
+# Si el grafo está vacío o solo tiene los 3 del test e2e, parsear el cwd y subir.
+# Solo aplica a Claude Code (este hook corre acá, no en opencode).
+SCRIPT_PATH="$REAL_HOME/.local/share/domain/scripts/domain-code-graph.sh"
+if [ -x "$SCRIPT_PATH" ] && command -v ast-grep >/dev/null 2>&1; then
+  total_nodes=$(echo "$code_graph_out" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    r = d.get('result', {})
+    for c in r.get('content', []):
+        t = c.get('text','')
+        try: print(json.loads(t).get('total_nodes', 0))
+        except: pass
+except: pass
+" 2>/dev/null)
+  total_nodes="${total_nodes:-0}"
+  if [ "$total_nodes" -le 3 ]; then
+    # Parsear y subir (best-effort, no bloquea si falla)
+    if [ -d "$cwd" ] && [ -n "$mem_slug" ]; then
+      index_out=$("$SCRIPT_PATH" "$cwd" "$mem_slug" 2>&1)
+      index_status=$?
+      if [ "$index_status" -eq 0 ]; then
+        # Re-leer el grafo para reflejar el upload
+        code_graph_out=$(call_mcp_tool "domain_code_graph" "$code_graph_args" 2>/dev/null)
+      fi
+    fi
+  fi
 fi
 
 # mem context: pide observaciones recientes del proyecto

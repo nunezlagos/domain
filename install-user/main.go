@@ -344,9 +344,6 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	step("Instalando hook de SessionStart (Claude Code)")
 	installClaudeSessionStartHook()
 
-	step("Instalando system prompt (OpenCode)")
-	installOpencodeSystemPrompt()
-
 	step("Listo")
 	fmt.Printf(`
   %s%sdomain MCP configurado%s

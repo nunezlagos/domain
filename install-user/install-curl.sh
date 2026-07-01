@@ -9,14 +9,16 @@
 #   1. Detecta OS/arch/distro.
 #   2. Verifica deps (curl, tar, git). Si falta alguna, la instala con sudo
 #      (apt/pacman/dnf/zypper/apk/brew segun distro).
-#   3. Verifica Go. Si no esta, lo instala con sudo desde el package manager
-#      (la version del sistema suele alcanzar para compilar domain-install).
-#   4. Clona el repo a /tmp/domain-install (si no hay clone previo) y compila.
-#   5. Cambia al usuario real (SUDO_USER) y ejecuta el binario, pasandole los
-#      args de este script. Asi ~/.claude/ y ~/.config/opencode/ quedan con
-#      el owner correcto (no root).
+#   3. Verifica Go. Si no esta, lo instala con sudo desde el package manager.
+#   4. Clona el repo a $REAL_HOME/.cache/domain-install (cache del user, NO
+#      toca el filesystem global). Re-installs reutilizan el clone.
+#   5. Compila el binario y lo ejecuta como el usuario real (sudo -u $SUDO_USER)
+#      para que ~/.claude/ y ~/.config/opencode/ queden con owner correcto.
 #
-# Re-ejecutable. Si Go y deps ya estan, solo compila y ejecuta.
+# Se puede ejecutar desde CUALQUIER path: no toca el cwd ni /opt ni /tmp.
+# Para limpiar todo: rm -rf ~/.cache/domain-install
+#
+# Re-ejecutable. Si Go, deps y clone ya estan, solo compila y ejecuta.
 #
 # Flags (todos opcionales, se pasan al binario final):
 #   --url http://1.2.3.4          URL del VPS
@@ -38,9 +40,6 @@ fail() { echo "${RED}    ✗${RESET} $1" >&2; }
 info() { echo "${DIM}    ·${RESET} $1"; }
 
 # ---------- usuario real (cuando se corre con sudo) ----------
-# Si se invoca con sudo, SUDO_USER contiene el usuario original. Es importante
-# ejecutar el binario final como ese usuario, no como root, para que los
-# archivos en ~/.claude/ y ~/.config/opencode/ queden con owner correcto.
 REAL_USER="${SUDO_USER:-$(whoami)}"
 if command -v getent >/dev/null 2>&1; then
   REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
@@ -68,7 +67,6 @@ esac
 # ---------- detección distro ----------
 DISTRO="unknown"
 PKG_MGR="unknown"
-INSTALL_CMD=""
 if [ "$OS" = "linux" ] && [ -r /etc/os-release ]; then
   DISTRO=$(. /etc/os-release && printf '%s' "${ID:-unknown}")
 elif [ "$OS" = "darwin" ]; then
@@ -77,21 +75,21 @@ fi
 
 case "$DISTRO" in
   ubuntu|debian|pop|linuxmint|elementary|zorin|kubuntu)
-    PKG_MGR="apt"; INSTALL_CMD="apt-get update && apt-get install -y" ;;
+    PKG_MGR="apt" ;;
   arch|manjaro|endeavouros|garuda)
-    PKG_MGR="pacman"; INSTALL_CMD="pacman -S --needed --noconfirm" ;;
+    PKG_MGR="pacman" ;;
   fedora|rhel|centos|rocky|almalinux|nobara)
-    PKG_MGR="dnf"; INSTALL_CMD="dnf install -y" ;;
+    PKG_MGR="dnf" ;;
   opensuse*|suse)
-    PKG_MGR="zypper"; INSTALL_CMD="zypper install -y" ;;
+    PKG_MGR="zypper" ;;
   alpine)
-    PKG_MGR="apk"; INSTALL_CMD="apk add" ;;
+    PKG_MGR="apk" ;;
   darwin)
-    PKG_MGR="brew"; INSTALL_CMD="brew install" ;;
+    PKG_MGR="brew" ;;
   *) warn "distro no reconocida ($DISTRO); no instalaré paquetes automáticamente" ;;
 esac
 
-# ---------- verificar que soy root (necesario para instalar paquetes) ----------
+# ---------- verificar que soy root ----------
 if [ "$(id -u)" -ne 0 ]; then
   fail "este script necesita ejecutarse con sudo (para instalar paquetes si faltan)"
   echo "  Uso: curl -fsSL https://raw.githubusercontent.com/nunezlagos/domain/main/install-user/install-curl.sh | sudo bash" >&2
@@ -116,7 +114,6 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
   fi
   step "Instalando deps faltantes: ${missing[*]}"
-  info "comando: $INSTALL_CMD ${missing[*]}"
   case "$PKG_MGR" in
     apt) apt-get update -qq && apt-get install -y -qq "${missing[@]}" ;;
     pacman) pacman -S --needed --noconfirm "${missing[@]}" ;;
@@ -163,32 +160,30 @@ if [ "$need_go_install" -eq 1 ]; then
   ok "Go instalado"
 fi
 
-# ---------- obtener el código (clone shallow si no hay) ----------
-REPO_DIR="/opt/domain-services"  # compartido con el VPS (mismo repo)
+# ---------- clone a cache del user (no toca /opt, ni cwd, ni /tmp) ----------
+CACHE_DIR="$REAL_HOME/.cache/domain-install"
+REPO_DIR="$CACHE_DIR/repo"
+mkdir -p "$CACHE_DIR"
+
 if [ ! -d "$REPO_DIR/.git" ]; then
-  step "Clonando repo a $REPO_DIR"
-  mkdir -p "$(dirname "$REPO_DIR")"
+  step "Clonando repo a $REPO_DIR (cache del user)"
+  # Como root para crear la estructura, despues chown al usuario real
   git clone --depth 1 https://github.com/nunezlagos/domain.git "$REPO_DIR"
+  chown -R "$REAL_USER" "$CACHE_DIR"
   ok "repo clonado"
 else
   step "Actualizando repo en $REPO_DIR"
-  (cd "$REPO_DIR" && git pull --depth 1 origin main)
+  # git pull como el usuario real (para no cambiar ownership)
+  sudo -u "$REAL_USER" git -C "$REPO_DIR" pull --depth 1 origin main
   ok "repo actualizado"
 fi
 
 # ---------- compilar y ejecutar como el usuario real ----------
 step "Compilando y ejecutando domain-install como $REAL_USER"
-cd "$REPO_DIR/install-user"
-
-# Compilar como root (necesita permisos de escritura en el dir del repo, OK)
-if ! go build -ldflags "-s -w" -o domain-install .; then
-  fail "fallo de build"
-  exit 1
-fi
+# Compilar como el usuario real (asi el binario queda con owner correcto)
+sudo -u "$REAL_USER" bash -c "cd '$REPO_DIR/install-user' && go build -ldflags '-s -w' -o domain-install ."
 ok "binario compilado"
 
-# Ejecutar como el usuario real, con HOME correcto, para que los archivos en
-# ~/.claude/ y ~/.config/opencode/ queden con owner correcto (no root).
 echo ""
 echo "${BOLD}==> Ejecutando como $REAL_USER (HOME=$REAL_HOME)${RESET}"
 exec sudo -u "$REAL_USER" HOME="$REAL_HOME" --preserve-env=PATH "$REPO_DIR/install-user/domain-install" "$@"

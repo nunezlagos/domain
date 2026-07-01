@@ -83,12 +83,14 @@ y en setups remotos (opencode/Claude Code → VPS via HTTP) **FALLA con
      e2e, basura) → NO hay grafo real. Hacé el paso 3.
 
 3. **Si NO hay grafo** (built: false o solo los 3 nodos de prueba):
-   - **Opción A (preferida, si tenés shell)**: corré en tu shell:
+   - **Opción A (preferida, si tenés shell)**: corré ESTE comando EXACTO
+     en tu shell (path absoluto al script, cwd del repo, slug del bootstrap):
      ```bash
-     ~/.local/share/domain/scripts/domain-code-graph.sh <repo_path> <project_slug>
+     ~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<project_slug_del_bootstrap>"
      ```
-     Esto parsea con ast-grep, sube via `domain_code_upload`, y queda
-     persistido en el server.
+     Reemplaza `<project_slug_del_bootstrap>` por el `slug` que devolvió el
+     paso 1 del bootstrap (ej: `quien-sabe-de-web`). Esto parsea con ast-grep,
+     sube via `domain_code_upload`, y queda persistido en el server.
    - **Opción B (sin shell, solo file reads)**: parseá vos mismo los archivos
      con tus tools de Read (TS/JS/Python/etc), construí el JSON con el formato
      `{kind, name, qualified_name, file_path, line_start, line_end, signature}`,

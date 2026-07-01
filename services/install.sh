@@ -24,7 +24,7 @@ set -euo pipefail
 # === Config ===
 INSTALL_DIR="${INSTALL_DIR:-/opt/services}"
 REPO_URL="${REPO_URL:-https://github.com/nunezlagos/domain.git}"
-REPO_BRANCH="${REPO_BRANCH:-services}"
+REPO_BRANCH="${REPO_BRANCH:-main}"
 
 # Si el script no se corre como root pero SUDO_PASSWORD está seteada,
 # usamos sudo -S (lee password de stdin). Útil para VPS donde el user

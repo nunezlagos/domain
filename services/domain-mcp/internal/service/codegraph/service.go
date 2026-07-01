@@ -210,7 +210,7 @@ func (s *CodegraphService) Upload(ctx context.Context, in UploadInput) (*UploadS
 			for _, n := range agg.nodes {
 				row, err := qx.UpsertNode(ctx, codegraphdb.UpsertNodeParams{
 					ProjectID:     in.ProjectID,
-					Kind:          n.Kind,
+					Kind:          normalizeKind(n.Kind),
 					Name:          strPtr(n.Name),
 					QualifiedName: strPtr(n.QualifiedName),
 					FilePath:      strPtr(n.FilePath),
@@ -332,6 +332,35 @@ func (s *CodegraphService) Upload(ctx context.Context, in UploadInput) (*UploadS
 func sha256OfBytes(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
+}
+
+// normalizeKind mapea el kind que manda el cliente (que viene de ast-grep o
+// regex) al kind que espera el CHECK constraint de code_nodes. Si el kind ya
+// es válido, lo devuelve tal cual; si no está en el map, usa "func" como
+// fallback seguro (no rompe el grafo).
+func normalizeKind(kind string) string {
+	// ya es valido → devolver tal cual (evita warnings de switch duplicado)
+	switch kind {
+	case KindFile, KindPackage, KindFunc, KindMethod, KindType, KindInterface, KindConst, KindVar:
+		return kind
+	}
+	// aliases del cliente (ast-grep/regex generan estos nombres):
+	switch kind {
+	case "function", "fn", "def", "async function", "async def":
+		return KindFunc
+	case "public method", "private method":
+		return KindMethod
+	case "class", "struct", "impl", "abstract class", "enum class":
+		return KindType
+	case "trait", "protocol":
+		return KindInterface
+	case "enum":
+		return KindConst
+	case "let", "let var":
+		return KindVar
+	}
+	// kind desconocido: fallback a func (es lo más común y no rompe el grafo)
+	return KindFunc
 }
 
 // BuildInput describe una corrida de construcción/actualización del grafo.

@@ -185,11 +185,25 @@ CACHE_DIR="$REAL_HOME/.cache/domain-install"
 REPO_DIR="$CACHE_DIR/repo"
 mkdir -p "$CACHE_DIR"
 
-if [ ! -d "$REPO_DIR/.git" ]; then
+# Detectar si el cache existe pero está corrupto (sin .git, o sin remote
+# origin/main, o sin el marker nuestro). Si está, lo borramos para re-clonar
+# fresh. Asi el install es self-cleaning: el usuario NUNCA tiene que rm a mano.
+need_clone=1
+if [ -d "$REPO_DIR/.git" ]; then
+  if [ -f "$CACHE_DIR/.domain-user-install-marker" ]; then
+    if sudo -u "$REAL_USER" git -C "$REPO_DIR" remote get-url origin >/dev/null 2>&1; then
+      need_clone=0
+    fi
+  fi
+fi
+
+if [ "$need_clone" -eq 1 ]; then
+  if [ -d "$REPO_DIR" ]; then
+    warn "cache $REPO_DIR existe pero esta corrupto o no tiene marker. Borrando y re-clonando."
+    rm -rf "$REPO_DIR"
+  fi
   step "Clonando repo a $REPO_DIR (cache del user)"
-  # Como root para crear la estructura, despues chown al usuario real
-  git clone --depth 1 https://github.com/nunezlagos/domain.git "$REPO_DIR"
-  # Marker para identificar este clone como nuestro (no del VPS)
+  sudo -u "$REAL_USER" git clone --depth 1 https://github.com/nunezlagos/domain.git "$REPO_DIR"
   echo "created by install-user/install-curl.sh on $(date -Iseconds)" > "$REPO_DIR/.domain-user-install-marker"
   chown -R "$REAL_USER" "$CACHE_DIR"
   ok "repo clonado"

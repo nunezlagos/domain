@@ -88,18 +88,15 @@ env_set() {
 }
 
 # === STEP 0: Cleanup orphan containers ===
-# Borra containers stopped/created del install anterior que pueden tener
-# name conflicts (ej: domain-migrate Exited de un deploy viejo). No toca
-# containers Up — esos los baja el make down del STEP 6.
-log "0/9  Limpiando contenedores domain-* huerfanos (stopped/created)..."
+# Borra containers del install que pueden tener name conflicts. Lista
+# explicita para NO tocar grafana/prometheus (otro deploy, fuera del install).
+log "0/9  Limpiando contenedores del install (excluye grafana/prometheus)..."
 CLEANED=0
-for c in $(docker ps -a -q -f status=exited -f status=created 2>/dev/null); do
-  NAME=$(docker inspect --format '{{.Name}}' "$c" 2>/dev/null | sed 's|^/||')
-  case "$NAME" in
-    domain-*) docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1)) ;;
-  esac
+for name in domain-postgres domain-minio domain-minio-bootstrap domain-mcp domain-admin domain-caddy domain-migrate domain-seed; do
+  c=$(docker ps -a -q -f "name=^${name}$" 2>/dev/null || true)
+  [[ -n "$c" ]] && docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1))
 done
-ok "Huerfanos limpiados: $CLEANED"
+ok "Limpiados: $CLEANED"
 
 # === STEP 1: Validate OS ===
 log "1/9  Validating OS..."
@@ -282,15 +279,13 @@ for _svc in "$INSTALL_DIR/services"/*/; do
   ln -sfn ../../.env "$_svc/.env"
 done
 make down 2>/dev/null || true
-# Re-check huerfanos despues del down (pueden haber quedado nuevos Exited/created).
+# Re-check huerfanos despues del down (incluyendo running que no estan en el compose).
 CLEANED=0
-for c in $(docker ps -a -q -f status=exited -f status=created 2>/dev/null); do
-  NAME=$(docker inspect --format '{{.Name}}' "$c" 2>/dev/null | sed 's|^/||')
-  case "$NAME" in
-    domain-*) docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1)) ;;
-  esac
+for name in domain-postgres domain-minio domain-minio-bootstrap domain-mcp domain-admin domain-caddy domain-migrate domain-seed; do
+  c=$(docker ps -a -q -f "name=^${name}$" 2>/dev/null || true)
+  [[ -n "$c" ]] && docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1))
 done
-[[ "$CLEANED" -gt 0 ]] && log "Limpiados $CLEANED huerfanos post-down"
+[[ "$CLEANED" -gt 0 ]] && log "Limpiados $CLEANED post-down"
 make build
 make up
 make wait-healthy

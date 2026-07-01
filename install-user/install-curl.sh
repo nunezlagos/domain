@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-curl.sh — entry point del installer de user via curl.
+# install-curl.sh — entry point del installer de user via curl (v2)
 # (version 2: ~/.cache/domain-install)
 #
 # Pensado para invocarse con sudo (porque puede instalar paquetes del sistema):

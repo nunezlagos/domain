@@ -141,6 +141,29 @@ if [ -z "$bootstrap_out" ]; then
   bootstrap_out="⚠ domain_session_bootstrap falló (VPS no responde o key inválida)"
 fi
 
+# Extraer el project_slug del JSON (el output del MCP es JSON con el body dentro
+# de un string escapado tipo {"result":{"content":[{"type":"text","text":"{...\"slug\":\"X\"...}"}]}}.
+# El grep con '"slug"' no matchea porque el body está escapado (\"slug\").
+# Usamos python para parsear el JSON correctamente.
+mem_slug=$(echo "$bootstrap_out" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    r = d.get('result', {})
+    for c in r.get('content', []):
+        t = c.get('text', '')
+        try:
+            inner = json.loads(t)
+            p = inner.get('project', {})
+            if p.get('slug'):
+                print(p['slug'])
+                break
+        except: pass
+except: pass
+" 2>/dev/null)
+[ -z "$mem_slug" ] && mem_slug=$(basename "$cwd" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
+[ -z "$mem_slug" ] && mem_slug="domain-services"
+
 # code graph: si no está built, sugiere build; si está, lee
 # Le pasamos project_slug (del bootstrap) para que funcione en el setup remoto.
 # Si built=false y existe el script de code graph local + ast-grep, lo corre
@@ -181,10 +204,9 @@ except: pass
   fi
 fi
 
-# mem context: pide observaciones recientes del proyecto
-# usamos el slug del proyecto si lo tenemos (lo sacamos del bootstrap output)
-# fallback: usamos 'domain-services' como slug global
-mem_slug=$(echo "$bootstrap_out" | grep -oE '"slug"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed 's/.*"slug"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+# mem context: pide observaciones recientes del proyecto. mem_slug ya se extrajo
+# arriba (linea 148, con python que parsea el JSON correctamente). Si por algun
+# motivo quedo vacio, fallback a 'domain-services' como slug global.
 [ -z "$mem_slug" ] && mem_slug="domain-services"
 mem_args=$(printf '{"project_slug":"%s","limit":10}' "$mem_slug")
 mem_out=$(call_mcp_tool "domain_mem_context" "$mem_args" 2>/dev/null)

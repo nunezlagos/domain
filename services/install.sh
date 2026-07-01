@@ -87,6 +87,20 @@ env_set() {
   fi
 }
 
+# === STEP 0: Cleanup orphan containers ===
+# Borra containers stopped/created del install anterior que pueden tener
+# name conflicts (ej: domain-migrate Exited de un deploy viejo). No toca
+# containers Up — esos los baja el make down del STEP 6.
+log "0/9  Limpiando contenedores domain-* huerfanos (stopped/created)..."
+CLEANED=0
+for c in $(docker ps -a -q -f status=exited -f status=created 2>/dev/null); do
+  NAME=$(docker inspect --format '{{.Name}}' "$c" 2>/dev/null | sed 's|^/||')
+  case "$NAME" in
+    domain-*) docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1)) ;;
+  esac
+done
+ok "Huerfanos limpiados: $CLEANED"
+
 # === STEP 1: Validate OS ===
 log "1/9  Validating OS..."
 . /etc/os-release 2>/dev/null || fail "/etc/os-release no encontrado"
@@ -268,6 +282,15 @@ for _svc in "$INSTALL_DIR/services"/*/; do
   ln -sfn ../../.env "$_svc/.env"
 done
 make down 2>/dev/null || true
+# Re-check huerfanos despues del down (pueden haber quedado nuevos Exited/created).
+CLEANED=0
+for c in $(docker ps -a -q -f status=exited -f status=created 2>/dev/null); do
+  NAME=$(docker inspect --format '{{.Name}}' "$c" 2>/dev/null | sed 's|^/||')
+  case "$NAME" in
+    domain-*) docker rm -f "$c" >/dev/null 2>&1 && CLEANED=$((CLEANED + 1)) ;;
+  esac
+done
+[[ "$CLEANED" -gt 0 ]] && log "Limpiados $CLEANED huerfanos post-down"
 make build
 make up
 make wait-healthy

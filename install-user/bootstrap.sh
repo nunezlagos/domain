@@ -44,6 +44,63 @@ case "$(uname -m)" in
   *) fail "arquitectura no soportada: $(uname -m)"; exit 1 ;;
 esac
 
+# ---------- detección distro (Linux only; macOS es "darwin") ----------
+DISTRO="unknown"
+if [ "$OS" = "linux" ] && [ -r /etc/os-release ]; then
+  DISTRO=$(. /etc/os-release && printf '%s' "${ID:-unknown}")
+elif [ "$OS" = "darwin" ]; then
+  DISTRO="darwin"
+fi
+
+# ---------- checks de dependencias (curl, tar, git) ----------
+# Si alguna falta, abortamos con instrucciones específicas por distro.
+# NO instalamos automáticamente con sudo — eso sería agresivo y surprise-y.
+missing_deps=()
+for dep in curl tar git; do
+  if ! command -v "$dep" >/dev/null 2>&1; then
+    missing_deps+=("$dep")
+  fi
+done
+
+step "Entorno: ${OS}/${ARCH} (${DISTRO})"
+ok "OS: $OS"
+ok "Arch: $ARCH"
+ok "Distro: $DISTRO"
+if [ ${#missing_deps[@]} -eq 0 ]; then
+  ok "deps presentes: curl, tar, git"
+else
+  fail "deps faltantes: ${missing_deps[*]}"
+  echo ""
+  echo "  Instalá las deps con el package manager de tu distro:" >&2
+  echo "" >&2
+  case "$DISTRO" in
+    ubuntu|debian|pop|linuxmint|elementary|zorin|kubuntu)
+      echo "    sudo apt-get update && sudo apt-get install -y ${missing_deps[*]}" >&2
+      ;;
+    arch|manjaro|endeavouros|garuda)
+      echo "    sudo pacman -S --needed ${missing_deps[*]}" >&2
+      ;;
+    fedora|rhel|centos|rocky|almalinux|nobara)
+      echo "    sudo dnf install -y ${missing_deps[*]}" >&2
+      ;;
+    opensuse*|suse)
+      echo "    sudo zypper install ${missing_deps[*]}" >&2
+      ;;
+    alpine)
+      echo "    sudo apk add ${missing_deps[*]}" >&2
+      ;;
+    darwin)
+      echo "    brew install ${missing_deps[*]}" >&2
+      echo "    (o instalá Xcode Command Line Tools: xcode-select --install)" >&2
+      ;;
+    *)
+      echo "    instalá: ${missing_deps[*]} (usando el package manager de tu distro)" >&2
+      ;;
+  esac
+  echo "" >&2
+  exit 1
+fi
+
 # ---------- detección Go ----------
 go_ok=0
 if command -v go >/dev/null 2>&1; then

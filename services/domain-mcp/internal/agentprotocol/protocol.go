@@ -283,12 +283,16 @@ ejecutá el loop: domain_openspec_export(project_slug) → escribí cada archivo
 changes[].files con tu Write tool → si editaste algo, domain_openspec_apply.
 Eventos que DISPARAN sync:
 - Definir/confirmar issue: tras domain_issue_create_commit / domain_hu_create_commit
-  (materializá spec.md + proposal/design/tasks/.openspec.yaml del issue nuevo).
-- Cada fase SDD: tras domain_orchestrate_phase_result que produzca o mute
-  proposal/design/tasks/spec — re-exportá y reescribí ese change.
-- Finalizar: tras domain_verify_complete (passed) — export final que sella el spec.
-- Archivar: tras domain_issue_set_status(archived) — exportá y MOVÉ los .md del change
-  a openspec/changes/archive/<fecha>-<slug>/ (el mv es tuyo; el server da el contenido).
+  (materializá el change del issue nuevo: proposal/design/tasks/specs/spec.md + .openspec.yaml).
+- Fases que persisten openspec: tras domain_orchestrate_phase_result SOLO de sdd-propose,
+  sdd-design o sdd-tasks (son las únicas que mutan artefactos). Re-exportá y reescribí ese
+  change. El resto de fases (explore/apply/verify/judge/archive/onboard) no mutan openspec:
+  no requieren sync.
+- Finalizar: tras domain_verify_complete (passed) — re-exportá para dejar el spec al día.
+  OJO: verify_complete NO archiva; archivar es un paso aparte (domain_issue_set_status).
+- Archivar: tras domain_issue_set_status(archived) — re-exportá. El export ya te devuelve el
+  dir CORRECTO del change archivado en changes[].dir (bajo openspec/changes/archive/...).
+  USÁ ESE dir tal cual (NO lo construyas a mano) para escribir los .md, y borrá el dir viejo.
 Reglas: NUNCA escribas state.yaml/.openspec a mano — el layout sale SIEMPRE del export.
 Tras escribir, conservá .openspec.yaml (hashes) o el próximo domain_openspec_status marca
 drift. Para 1 change, filtrá el export por su issue_slug. Best-effort: si el export falla,

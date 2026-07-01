@@ -161,6 +161,25 @@ if [ "$need_go_install" -eq 1 ]; then
   ok "Go instalado"
 fi
 
+# ---------- limpiar basura de intentos anteriores ----------
+# Versiones viejas de este script clonaban a /opt/domain-services (que
+# coincide con el path del VPS y generaba confusion). Si encontramos ese dir
+# con un marker nuestro, lo limpiamos. Si NO tiene marker, asumimos que es
+# una instalacion real del VPS y NO LO TOCAMOS (con warning al usuario).
+LEGACY_DIR="/opt/domain-services"
+MARKER_FILE="$LEGACY_DIR/.domain-user-install-marker"
+if [ -d "$LEGACY_DIR" ]; then
+  if [ -f "$MARKER_FILE" ]; then
+    step "Limpiando basura de intentos anteriores: $LEGACY_DIR"
+    rm -rf "$LEGACY_DIR"
+    ok "basura limpiada"
+  else
+    warn "$LEGACY_DIR existe pero NO tiene marker nuestro."
+    warn "puede ser una instalacion real del VPS — no lo toco."
+    warn "si es basura y querés limpiarla: sudo rm -rf $LEGACY_DIR"
+  fi
+fi
+
 # ---------- clone a cache del user (no toca /opt, ni cwd, ni /tmp) ----------
 CACHE_DIR="$REAL_HOME/.cache/domain-install"
 REPO_DIR="$CACHE_DIR/repo"
@@ -170,6 +189,8 @@ if [ ! -d "$REPO_DIR/.git" ]; then
   step "Clonando repo a $REPO_DIR (cache del user)"
   # Como root para crear la estructura, despues chown al usuario real
   git clone --depth 1 https://github.com/nunezlagos/domain.git "$REPO_DIR"
+  # Marker para identificar este clone como nuestro (no del VPS)
+  echo "created by install-user/install-curl.sh on $(date -Iseconds)" > "$REPO_DIR/.domain-user-install-marker"
   chown -R "$REAL_USER" "$CACHE_DIR"
   ok "repo clonado"
 else

@@ -80,13 +80,14 @@ func main() {
 		bootstrapGuided bool
 		yes             bool
 		keepLocalRules  bool
+		removeEngram    bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
 	flag.StringVar(&apiKey, "api-key", "", "API key domk_* (si ya la tenés)")
 	flag.BoolVar(&uninstall, "uninstall", false, "Desinstala domain-mcp de los clientes")
 	flag.BoolVar(&dryRun, "dry-run", false, "Solo detecta clientes, no toca configs")
-	flag.StringVar(&target, "target", "", "Cliente único (opencode|claude-code|cursor|...)")
+	flag.StringVar(&target, "target", "", "Cliente único (opencode|claude-code|...)")
 	flag.BoolVar(&installOpencode, "install-opencode", false,
 		"Si no hay clientes MCP, sugerir el comando para instalar opencode")
 	flag.BoolVar(&bootstrapGuided, "bootstrap", false,
@@ -94,6 +95,8 @@ func main() {
 	flag.BoolVar(&yes, "yes", false, "Asumir 'sí' a prompts no destructivos")
 	flag.BoolVar(&keepLocalRules, "keep-local-rules", false,
 		"NO neutralizar instrucciones locales de proyecto (CLAUDE.md/AGENTS.md/.claude). Por default domain las excluye para que solo apliquen las reglas globales")
+	flag.BoolVar(&removeEngram, "remove-engram", false,
+		"Deshabilita el plugin engram si está activo (sistema de memoria legacy, reemplazado por domain)")
 	flag.Usage = printHelp
 	flag.Parse()
 
@@ -119,6 +122,7 @@ func main() {
 		AutoInstall:    installOpencode,
 		NonInteractive: yes,
 		KeepLocalRules: keepLocalRules,
+		RemoveEngram:   removeEngram,
 	})
 }
 
@@ -133,6 +137,7 @@ Uso:
   domain-install --bootstrap                              # guiado: te ayuda a obtener la key
   domain-install --target opencode                        # solo configura opencode
   domain-install --install-opencode                       # si no hay clientes, sugiere instalar
+  domain-install --remove-engram                          # deshabilita plugin engram (memoria legacy)
   domain-install --uninstall                              # deshacer
   domain-install --dry-run                                # solo detectar
 
@@ -160,6 +165,7 @@ type installOptions struct {
 	AutoInstall    bool
 	NonInteractive bool
 	KeepLocalRules bool // --keep-local-rules: NO neutralizar instrucciones locales (issue-54.1)
+	RemoveEngram   bool // --remove-engram: deshabilita plugin engram si está activo
 }
 
 func runInstall(p Platform, paths Paths, opts installOptions) {
@@ -331,6 +337,9 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 			}
 		}
 	}
+
+	step("Detectando sistemas de memoria legacy (engram)")
+	maybeRemoveEngram(p.Home(), opts, in)
 
 	step("Listo")
 	fmt.Printf(`

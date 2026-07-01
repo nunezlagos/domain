@@ -57,7 +57,7 @@ Server has NO LLM — fan-out parallelism via client subagents (Task tool / suba
 
 1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first.
 2. If `known=false`: `domain_session_register(...)` then `domain_project_index_start` → `domain_project_index_submit` with manifest.
-3. If `head.changed != []`: read git log `last_known..current` and `domain_mem_save` what's relevant.
+3. If `head.changed != []`: read git log `last_known..current` and `domain_mem_save` what's relevant, then rebuild the code graph corriendo `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"` (slug del bootstrap).
 4. If `recent_observations` non-empty: `domain_mem_context` before acting.
 5. If `project_skill_count = 0`: detect stacks, propose skills via path F (with user confirmation — never silent).
 6. If `domain_project_policy_list` shows files in `existing_rules_files` not yet imported: read each + `domain_project_policy_import_from_text`.
@@ -78,7 +78,9 @@ y en setups remotos (opencode/Claude Code → VPS via HTTP) **FALLA con
    `"project_slug es requerido"`.
 
 2. **Llamá `domain_code_graph`** con ese slug para chequear si ya hay grafo:
-   - **`built: true`** y `total_nodes > 0` → usá `domain_code_explore` / `domain_code_path` directamente. No parsees.
+   - **`built: true`** y `total_nodes > 3` → ya hay grafo. Si `head.changed != []` (del
+     bootstrap), corré el script para actualizarlo (es idempotente). Luego usá
+     `domain_code_explore` / `domain_code_path` directamente.
    - **`built: false`** o `total_nodes: 0` o `total_nodes: 3` (los 3 son del test
      e2e, basura) → NO hay grafo real. Hacé el paso 3.
 

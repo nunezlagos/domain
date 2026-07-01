@@ -18,7 +18,11 @@
 #
 # Requiere: ast-grep (sg) instalado (script lo instala si falta), curl, jq opcional.
 
-set -euo pipefail
+set -uo pipefail
+
+# NO usamos `set -e` porque ast-grep puede retornar !=0 para archivos que no
+# matchean patterns, y eso mataría el script entero. En su lugar, manejamos
+# errores explicitamente con `|| true` donde corresponde.
 
 REPO_PATH="${1:-$(pwd)}"
 PROJECT_SLUG="${2:-$(basename "$REPO_PATH")}"
@@ -94,39 +98,53 @@ echo "[scan] ${#FILES[@]} archivos a parsear"
 # Formato del output: cada linea es un JSON con kind, name, qualified_name, line_start, line_end, file_path.
 NODES_FILE=$(mktemp)
 EDGES_FILE=$(mktemp)
-trap 'rm -f "$NODES_FILE" "$EDGES_FILE"' EXIT
+GRAPH_FILE=$(mktemp)
+REQ_FILE=$(mktemp)
+trap 'rm -f "$NODES_FILE" "$EDGES_FILE" "$GRAPH_FILE" "$REQ_FILE"' EXIT
 
 extract_for_lang() {
   local lang="$1" pattern="$2" kind="$3"
-  # ast-grep scan --pattern '...' --lang X --json=compact imprime matches como JSON lines
-  ast-grep scan --pattern "$pattern" --lang "$lang" --json=compact 2>/dev/null | \
+  # ast-grep run devuelve un ARRAY JSON por invocación. Con xargs -I{}
+  # corre N veces (una por archivo), concatenando N arrays. Usamos
+  # json.JSONDecoder.raw_decode para leer todos los arrays concatenados.
+  printf '%s\0' "${FILES[@]}" | xargs -0 -I{} ast-grep run \
+    --pattern "$pattern" --lang "$lang" --json=compact {} 2>/dev/null | \
     python3 -c "
 import sys, json, os
 pat_kind = '$kind'
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
+data = sys.stdin.read()
+decoder = json.JSONDecoder()
+idx = 0
+entries = []
+while idx < len(data):
+    while idx < len(data) and data[idx] in ' \n\r\t':
+        idx += 1
+    if idx >= len(data): break
     try:
-        m = json.loads(line)
-    except: continue
-    file_path = m.get('file','')
-    if file_path.startswith('$REPO_PATH/'):
-        rel = file_path[len('$REPO_PATH/'):]
-    else:
-        rel = file_path
-    text = m.get('text','').split('\n')[0]
-    line_start = m.get('range',{}).get('start',{}).get('line', 0) + 1
-    line_end = m.get('range',{}).get('end',{}).get('line', line_start)
-    # nombre: limpiar el match (sacar parens, braces, return type, etc)
-    name = text.split('(')[0].split('{')[0].strip()
-    # para class: 'class Foo extends Bar' -> nombre 'Foo'
-    for kw in ('class ', 'function ', 'func ', 'def ', 'fn ', 'export function ', 'export const ', 'export default function ', 'async function ', 'public function ', 'private function '):
-        if name.startswith(kw):
-            name = name[len(kw):].strip()
-            break
-    # qualified_name: path:line:Nombre
-    qn = f'{rel}:{line_start}:{name}' if name else f'{rel}:{line_start}'
-    print(f'{rel}\t{pat_kind}\t{name}\t{qn}\t{line_start}\t{line_end}\t{text}')
+        obj, end = decoder.raw_decode(data, idx)
+        if isinstance(obj, list):
+            entries.extend(obj)
+        else:
+            entries.append(obj)
+        idx = end
+    except json.JSONDecodeError:
+        break
+for m in entries:
+        file_path = m.get('file','')
+        if file_path.startswith('$REPO_PATH/'):
+            rel = file_path[len('$REPO_PATH/'):]
+        else:
+            rel = file_path
+        text = m.get('text','').split('\n')[0]
+        line_start = m.get('range',{}).get('start',{}).get('line', 0) + 1
+        line_end = m.get('range',{}).get('end',{}).get('line', line_start)
+        name = text.split('(')[0].split('{')[0].strip()
+        for kw in ('class ', 'function ', 'func ', 'def ', 'fn ', 'export function ', 'export const ', 'export default function ', 'async function ', 'public function ', 'private function '):
+            if name.startswith(kw):
+                name = name[len(kw):].strip()
+                break
+        qn = f'{rel}:{line_start}:{name}' if name else f'{rel}:{line_start}'
+        print(f'{rel}\t{pat_kind}\t{name}\t{qn}\t{line_start}\t{line_end}\t{text}')
 " 2>/dev/null
 }
 
@@ -190,7 +208,8 @@ echo "[parse] $NODES_COUNT nodos, $EDGES_COUNT edges detectados"
 
 # ---------- 6. construir el JSON del grafo (vía python, robusto) ----------
 FILE_COUNT=${#FILES[@]}
-PAYLOAD=$(python3 -c "
+# Escribir a archivo temporal para evitar "argument list too long"
+python3 -c "
 import json,sys
 nodes=[]
 seen=set()
@@ -209,14 +228,18 @@ with open('$EDGES_FILE') as f:
         if len(parts)<3: continue
         rel,ls,target=parts
         edges.append({'source_qn':f'{rel}:{ls}','target_qn':target,'edge_type':'calls'})
-print(json.dumps({
-    'project_slug':'$PROJECT_SLUG',
-    'git_head':'$GIT_HEAD',
-    'files_scanned':$FILE_COUNT,
-    'nodes':nodes,
-    'edges':edges,
-}))
-")
+# El tool espera project_slug + graph_json:{files_scanned,git_head,nodes,edges}
+with open('$GRAPH_FILE','w') as f:
+    json.dump({
+        'project_slug':'$PROJECT_SLUG',
+        'graph_json': {
+            'git_head':'$GIT_HEAD',
+            'files_scanned':$FILE_COUNT,
+            'nodes':nodes,
+            'edges':edges,
+        }
+    }, f)
+"
 
 echo "[upload] $NODES_COUNT nodos + $EDGES_COUNT edges de $FILE_COUNT archivos, enviando a $VPS_URL"
 
@@ -230,22 +253,26 @@ curl -fsS -X POST "${VPS_URL}/mcp" \
   >/dev/null 2>&1 || true
 
 # tools/call con el grafo como argumento
+# tools/call: leer el grafo desde GRAPH_FILE y construir el request MCP
+python3 -c "
+import json,sys
+with open('$GRAPH_FILE') as f:
+    payload = json.load(f)
+with open('$REQ_FILE','w') as f:
+    json.dump({
+        'jsonrpc':'2.0','id':2,
+        'method':'tools/call',
+        'params':{
+            'name':'domain_code_upload',
+            'arguments': payload,
+        }
+    }, f)
+"
 RESP=$(curl -fsS -X POST "${VPS_URL}/mcp" \
   -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d "$(python3 -c "
-import json,sys
-payload = json.loads('''$PAYLOAD''')
-print(json.dumps({
-  'jsonrpc':'2.0','id':2,
-  'method':'tools/call',
-  'params':{
-    'name':'domain_code_upload',
-    'arguments': payload,
-  }
-}))
-")")
+  -d "@${REQ_FILE}")
 
 # respuesta puede ser JSON o SSE; el server usa 'result.content[0].text' con JSON adentro
 echo "$RESP" | python3 -c "

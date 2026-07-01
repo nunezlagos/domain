@@ -108,6 +108,22 @@ EOF
   exit 0
 fi
 
+# ---------- 3b. resolver usuario real + HOME (necesario para el auto-index) ----------
+# En modo normal (Claude Code local) SUDO_USER="" y whoami() da el user local.
+# En sudo, SUDO_USER tiene al user real. getent puede no estar disponible,
+# asi que tenemos varios fallbacks.
+REAL_USER="${SUDO_USER:-$(whoami)}"
+if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ] && command -v getent >/dev/null 2>&1; then
+  REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+elif [ -n "$HOME" ] && [ "$HOME" != "/" ]; then
+  REAL_HOME="$HOME"
+else
+  REAL_HOME=$(eval echo "~$REAL_USER" 2>/dev/null)
+fi
+if [ -z "$REAL_HOME" ] || [ "$REAL_HOME" = "/" ]; then
+  REAL_HOME="$HOME"
+fi
+
 # ---------- 4. helper: call MCP tool via curl (streamable-http, initialize + call) ----------
 # El MCP server usa Streamable HTTP (content-type application/json o text/event-stream).
 # Para simplicidad, mandamos 1 initialize + 1 tool call por separado.

@@ -232,6 +232,16 @@ func main() {
 	orchestratorSvc.LLM = factory
 
 	orchestratorSvc.Skills = skills
+	// REQ-54 issue-54.3 fix#3: este binario armaba el orquestador SIN
+	// Spec/Tasks/IssueSvc (persistOpenspec era no-op silencioso: propose/
+	// design/tasks no materializaban) ni ProjectPolicies/Observations (la
+	// preparación de contexto de issue-54.2 degradaba). Se iguala el wiring
+	// al de cmd/domain/server_services.go (buildOrchestrator).
+	orchestratorSvc.Spec = &specsvc.Service{Pool: pools.App, Audit: recorder}
+	orchestratorSvc.Tasks = &tasksvc.Service{Pool: pools.App, Audit: recorder}
+	orchestratorSvc.IssueSvc = &issuesvc.Service{Pool: pools.App, Audit: recorder}
+	orchestratorSvc.ProjectPolicies = projectPolicies
+	orchestratorSvc.Observations = observations
 
 	analysisSvc := &analysissvc.Service{
 		Pool:        pools.App,

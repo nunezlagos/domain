@@ -306,6 +306,7 @@ func runServer() {
 	seedRegistry.Register(&seeds.TriagePromptSeeder{})
 	seedRegistry.Register(&seeds.AnalysisPromptSeeder{})
 	seedRegistry.Register(&seeds.WizardFormulatorPromptSeeder{})
+	seedRegistry.Register(&seeds.FirstResponsePromptSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
 	if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))

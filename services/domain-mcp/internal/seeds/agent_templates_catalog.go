@@ -829,7 +829,12 @@ JSON estricto:
 		{
 			Slug: "project-stack-init",
 			Name: "Project Stack Initializer (one-time bootstrap)",
-			Role: "project-config",
+			// Worker one-shot: la constraint agent_templates_role_check
+			// (migracion 000075) solo admite 'orchestrator'|'phase-worker'.
+			// 'project-config' violaba el CHECK y abortaba TODA la cadena de
+			// seed (RunAll corta al primer error) antes de llegar a los
+			// seeders de prompts. Es un worker de bootstrap, no un rol nuevo.
+			Role: "phase-worker",
 			SystemPrompt: `<role>
 Sos el agente de inicialización de stack de proyecto. Detectás TODOS los
 stacks del repo (monorepo/submódulos incluidos) leyendo los archivos de

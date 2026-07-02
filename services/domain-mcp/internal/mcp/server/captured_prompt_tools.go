@@ -12,11 +12,13 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
+	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	projsvc "nunezlagos/domain/internal/service/project"
 )
 
@@ -35,6 +37,9 @@ type capturedPromptHandlers struct {
 	prompts   capturedPromptService
 	projects  capturedPromptProjectGetter
 	principal *apikey.Principal
+	// pool: lookup best-effort del flow_run activo del proyecto para la
+	// clasificación del prompt (REQ-54 issue-54.4). nil-safe.
+	pool *pgxpool.Pool
 }
 
 func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
@@ -42,6 +47,7 @@ func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serv
 		prompts:   deps.CapturedPrompts,
 		projects:  deps.Projects,
 		principal: deps.Principal,
+		pool:      deps.Pool,
 	}
 	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, fn)
@@ -56,7 +62,7 @@ func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serv
 
 func toolPromptCapture() mcp.Tool {
 	return mcp.NewTool("domain_prompt_capture",
-		mcp.WithDescription("Persiste el raw_text que el usuario escribio en este turn. Llamar UNA vez al inicio de cada turn, antes de actuar. char_count se computa server-side (proxy de tokens)."),
+		mcp.WithDescription("Persiste el raw_text que el usuario escribio en este turn. Llamar UNA vez al inicio de cada turn, antes de actuar. char_count se computa server-side (proxy de tokens). Responde ademas classification {complexity, suggested_action: none|ticket|orchestrate|resume, suggested_mode, active_flow_run_id?} para que el caller (hook UserPromptSubmit) inyecte la senal de orquestacion SDD al agente (REQ-54)."),
 		mcp.WithString("content",
 			mcp.Description("Texto plano del mensaje del usuario, tal cual lo escribio."),
 			mcp.Required(),
@@ -132,11 +138,74 @@ func (h *capturedPromptHandlers) handlePromptCapture(ctx context.Context, req mc
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 	}
+
+	// REQ-54 issue-54.4: clasificar el prompt (heurístico, cero LLM) para que
+	// el hook UserPromptSubmit pueda inyectar la señal de orquestación al
+	// agente. Si el proyecto tiene un flow activo, la acción pasa a "resume"
+	// (retomar, jamás re-orquestar). Best-effort: nunca falla el capture.
+	classification := classifyCapturedPrompt(content)
+	if in.ProjectID != nil && h.pool != nil && classification["suggested_action"] == "orchestrate" {
+		if flowID, ok := h.activeFlowRunID(ctx, *in.ProjectID); ok {
+			classification["suggested_action"] = "resume"
+			classification["active_flow_run_id"] = flowID
+		}
+	}
+
 	return toolResultJSON(map[string]any{
-		"id":         p.ID,
-		"char_count": p.CharCount,
-		"captured":   true,
+		"id":             p.ID,
+		"char_count":     p.CharCount,
+		"captured":       true,
+		"classification": classification,
 	})
+}
+
+// classifyCapturedPrompt mapea la complejidad heurística del prompt a una
+// acción sugerida para el agente (REQ-54 issue-54.4). Pura, testeable:
+//   - trivial          → none      (hacelo directo)
+//   - simple           → ticket    (bug/task simple: domain_ticket_create)
+//   - moderate|complex → orchestrate (requerimiento: domain_orchestrate)
+func classifyCapturedPrompt(content string) map[string]any {
+	sig := orchsvc.AnalyzeComplexity(content)
+	action := "none"
+	mode := ""
+	switch sig.Level {
+	case orchsvc.ComplexitySimple:
+		action = "ticket"
+	case orchsvc.ComplexityModerate:
+		action = "orchestrate"
+		mode = "lite"
+	case orchsvc.ComplexityComplex:
+		action = "orchestrate"
+		mode = "full"
+	}
+	out := map[string]any{
+		"complexity":       string(sig.Level),
+		"suggested_action": action,
+	}
+	if mode != "" {
+		out["suggested_mode"] = mode
+	}
+	if sig.MultiConcern {
+		out["multi_concern"] = true
+	}
+	return out
+}
+
+// activeFlowRunID busca el flow_run no-terminal más reciente del proyecto.
+// Best-effort: (id, true) si hay uno; ("", false) ante cualquier problema.
+func (h *capturedPromptHandlers) activeFlowRunID(ctx context.Context, projectID uuid.UUID) (string, bool) {
+	var id uuid.UUID
+	err := h.pool.QueryRow(ctx, `
+		SELECT id FROM flow_runs
+		WHERE project_id = $1
+		  AND status IN ('pending','running','paused','paused_awaiting_signal','paused_awaiting_human')
+		ORDER BY created_at DESC
+		LIMIT 1`, projectID,
+	).Scan(&id)
+	if err != nil {
+		return "", false
+	}
+	return id.String(), true
 }
 
 func toolTurnComplete() mcp.Tool {

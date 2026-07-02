@@ -43,24 +43,54 @@ print(json.dumps({"content": p, "project_slug": slug, "client_kind": "claude-cod
 
 domain_mcp_init >/dev/null 2>&1
 resp=$(domain_call_tool domain_prompt_capture "$prompt_json" 2>/dev/null)
-pid=$(printf '%s' "$resp" | python3 -c '
+
+# Parsear id (para el hook Stop) + classification (REQ-54 issue-54.4: señal
+# de orquestación). El python imprime: línea 1 = prompt_id, línea 2 = JSON de
+# additionalContext (o vacía si no corresponde señal).
+parsed=$(printf '%s' "$resp" | python3 -c '
 import json, sys
+pid, ctx = "", ""
 try:
     d = json.loads(sys.stdin.read())
     for c in d.get("result", {}).get("content", []):
         t = c.get("text", "")
         try:
-            print(json.loads(t)["id"])
-            break
+            body = json.loads(t)
         except Exception:
-            pass
+            continue
+        pid = body.get("id", "")
+        cls = body.get("classification") or {}
+        action = cls.get("suggested_action", "none")
+        if action == "orchestrate":
+            mode = cls.get("suggested_mode", "")
+            msg = ("domain: este prompt clasifica complexity=%s — es un REQUERIMIENTO. "
+                   "Ejecutá domain_orchestrate (mode sugerido: %s) ANTES de implementar; "
+                   "el pipeline SDD es el camino default. Si el usuario pide explícitamente "
+                   "saltearlo, obedecé.") % (cls.get("complexity", "?"), mode or "auto")
+            ctx = json.dumps({"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit", "additionalContext": msg}})
+        elif action == "resume":
+            msg = ("domain: el proyecto tiene un flow SDD ACTIVO (%s). "
+                   "Retomalo con domain_flow_status / domain_orchestrate_status — "
+                   "NUNCA re-orquestes un flow nuevo para el mismo trabajo.") % cls.get("active_flow_run_id", "?")
+            ctx = json.dumps({"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit", "additionalContext": msg}})
+        break
 except Exception:
     pass
+print(pid)
+print(ctx)
 ' 2>/dev/null)
+
+pid=$(printf '%s\n' "$parsed" | /usr/bin/head -1)
+ctx=$(printf '%s\n' "$parsed" | /usr/bin/tail -n +2)
 
 if [ -n "$pid" ] && [ -n "$session_id" ]; then
   state_dir="$HOME/.local/state/domain"
   mkdir -p "$state_dir" 2>/dev/null
   printf '%s' "$pid" > "$state_dir/turn-$session_id.id" 2>/dev/null
 fi
+
+# La señal (si hay) va por stdout: Claude Code la inyecta como additionalContext.
+[ -n "$ctx" ] && printf '%s\n' "$ctx"
 exit 0

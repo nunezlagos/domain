@@ -24,6 +24,13 @@ type ComplexitySignal struct {
 	Confidence   float64
 }
 
+// AnalyzeComplexity expone el heurístico a otros paquetes (REQ-54 issue-54.4:
+// domain_prompt_capture clasifica cada prompt para que el hook UserPromptSubmit
+// pueda inyectar la señal de orquestación). Cero LLM, cero latencia extra.
+func AnalyzeComplexity(rawText string) ComplexitySignal {
+	return analyzeComplexity(rawText)
+}
+
 // analyzeComplexity estimates the complexity of a request from raw_text.
 // Uses lexical heuristics only — no network, no LLM, safe to call inline.
 func analyzeComplexity(rawText string) ComplexitySignal {

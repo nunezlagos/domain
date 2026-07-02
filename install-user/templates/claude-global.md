@@ -27,6 +27,8 @@ EN CADA SESION NUEVA, antes de responder, ejecuta estos 3 tools en este orden:
 
 Solo DESPUES de esos 3 calls (o si fallaron con error) podes responder al usuario.
 
+DESPUES del bootstrap, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se desvía, violaste la regla.
+
 **Reglas duras:**
 - NO respondas sin bootstrap primero. NUNCA.
 - NO improvises contexto. Lee la respuesta real del MCP.

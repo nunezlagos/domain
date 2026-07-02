@@ -11,66 +11,55 @@ import (
 
 const firstResponsePromptSlug = "first-response"
 
-const DefaultFirstResponsePromptBody = `# First response after bootstrap - REGLA OBLIGATORIA
+const DefaultFirstResponsePromptBody = `# PROTOCOLO PRIMER MENSAJE - OBLIGATORIO
 
-Siempre arranca asi:
+Ejecutar los PASOS EN ORDEN. Aplica SIEMPRE, incluso si el mensaje del usuario
+es trivial, vacio o basura (ej: "asd", "hola", "x"). No hay excepciones.
 
-## 1. Saludar + 1 linea contexto
-"Buenas. En {proyecto} ({rama}), lo ultimo fue {tema ultima sesion}."
+## PASO 1 - Llamar 4 tools (en paralelo, ANTES de escribir nada al usuario)
+Con project_slug = el slug del bootstrap:
+1. ` + "`domain_project_skill_list(project_slug)`" + `
+2. ` + "`domain_project_policy_list(project_slug)`" + `
+3. ` + "`domain_policy_list()`" + `   (sin argumentos)
+4. ` + "`domain_ticket_list(project_slug, limit=5)`" + `
 
-NO mas de 2 lineas para el saludo+contexto.
+## PASO 2 - Calcular P (proyecto) y G (globales)
+- skills:   P = items de la tool 1 con scope=project ; G = items con scope=global
+- policies: P = total de la tool 2 ; G = total de la tool 3
 
-## 2. Llamar estos tools y compilar un bloque resumen
-SIEMPRE pasa el {project_slug} del bootstrap donde la tool lo acepte. Si lo
-omitis, algunas tools devuelven datos de TODA la org, no de este proyecto.
-Despues del saludo, llama simultaneamente:
-- ` + "`domain_project_skill_list(project_slug)`" + ` - skills del proyecto + globales (ya incluye globales; NO pases include_globals)
-- ` + "`domain_project_policy_list(project_slug)`" + ` - policies del proyecto
-- ` + "`domain_policy_list()`" + ` - policies globales (platform). NO tiene include_globals: es una tool aparte, sin args
-- ` + "`domain_ticket_list(project_slug, limit=5)`" + ` - tickets abiertos DE ESTE proyecto (pasa project_slug si o si)
-
-IMPORTANTE (asimetria skills vs policies): skills se traen en UNA sola llamada
-(project_skill_list ya incluye globales). Policies requieren DOS llamadas:
-project_policy_list (proyecto) + policy_list (globales). NO existe una tool que
-las combine. Mostra AMBOS counts, nunca omitas las globales.
-
-Como contar P (proyecto) y G (globales):
-- skills: project_skill_list devuelve un campo ` + "`scope`" + ` por item (project|global).
-  P = items con scope=project, G = items con scope=global.
-- policies: P = total de project_policy_list, G = total de policy_list.
-
-Muestra el resultado en YAML (P = proyecto, G = globales):
-
+## PASO 3 - Emitir EXACTAMENTE este bloque (primera cosa en el mensaje)
 ` + "```" + `
-slug:    {project_slug}
-rama:    {branch}
-remote:  {origin} [{kind}]
-head:    {hash[:8]}
+Buenas. En {project_slug} ({rama}), lo ultimo fue {ultima observation, 1 linea}.
+
+slug:     {project_slug}
+rama:     {branch}
+remote:   {origin} [{kind}]
+head:     {hash[:8]}
 
 skills:   {P} proyecto + {G} globales
 policies: {P} proyecto + {G} globales
-tickets open: {N}
+tickets:  {N} abiertos
 
 ultimo:   {1 linea de la observation mas reciente}
 ` + "```" + `
 
-Sin adornos, sin "veo que", sin explicar que tools llamaste.
+## PASO 4 - Solo despues del bloque
+Si el usuario pidio una tarea concreta: responderla debajo del bloque.
+Si el mensaje fue trivial/vacio: preguntar que necesita, en 1 linea.
 
-## Caso tarea directa (no saludo)
-Si el usuario dio una instruccion directa:
-1. Mostrar el bloque YAML
-2. Debajo, la respuesta a lo que pidio
-
-## Prohibido siempre
-- NO explicar que ejecutaste tools
-- NO "segun el bootstrap"
-- NO mas de ~12 lineas total en el bloque
-- Si head.changed=true Y toca archivos criticos, agregar UNA linea de advertencia`
+## REGLAS DURAS
+R1. PROHIBIDO omitir las lineas skills y policies.
+R2. PROHIBIDO omitir las globales (G). Siempre se muestran las 2 tools de policies.
+R3. PROHIBIDO parafrasear el contexto en prosa o bullets en vez del bloque.
+R4. PROHIBIDO responder al usuario antes de emitir el bloque.
+R5. PROHIBIDO explicar que tools llamaste o escribir "segun el bootstrap".
+R6. PROHIBIDO pasar include_globals a la tool 1 (ya trae globales por default).
+R7. El bloque completo: maximo 12 lineas.`
 
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 2 }
+func (s *FirstResponsePromptSeeder) Version() int    { return 3 }
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 

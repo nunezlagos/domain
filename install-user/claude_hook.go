@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 )
@@ -11,7 +10,9 @@ import (
 // (el cual pre-carga bootstrap + code graph + mem context antes del primer
 // prompt del usuario, forzando al LLM a tener el contexto disponible).
 //
-// Idempotente: si el hook ya está, no duplica.
+// Idempotente: si el hook ya está, no duplica. Si settings.json no existe
+// (instalación limpia, ej. VPS fresco), lo crea — de lo contrario el resumen
+// del proyecto nunca aparecería en el primer mensaje.
 func installClaudeSessionStartHook() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -23,15 +24,10 @@ func installClaudeSessionStartHook() {
 		warnL("hook script no encontrado en " + hookPath + " (re-corré el install canónico para instalarlo)")
 		return
 	}
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
-	data, err := os.ReadFile(settingsPath)
+	settingsPath := claudeSettingsPath(home)
+	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
-		warnL("no pude leer " + settingsPath + ": " + err.Error())
-		return
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		warnL(settingsPath + " corrupto, hook no instalado")
+		warnL(settingsPath + " corrupto, hook no instalado: " + err.Error())
 		return
 	}
 
@@ -71,12 +67,11 @@ func installClaudeSessionStartHook() {
 	}
 	hooks["SessionStart"] = append(toArray(hooks["SessionStart"]), newEntry)
 
-	out, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		warnL("marshal settings.json: " + err.Error())
+	if _, err := backupIfExists(settingsPath, Timestamp()); err != nil {
+		warnL("backup settings.json: " + err.Error())
 		return
 	}
-	if err := os.WriteFile(settingsPath, out, 0o600); err != nil {
+	if err := writeJSON(settingsPath, cfg); err != nil {
 		warnL("write settings.json: " + err.Error())
 		return
 	}

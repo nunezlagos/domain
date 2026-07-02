@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
+	"strconv"
 	"time"
 
 	"nunezlagos/domain/internal/config"
@@ -11,6 +13,7 @@ import (
 	cronsched "nunezlagos/domain/internal/scheduler/cron"
 	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 	"nunezlagos/domain/internal/scheduler/leader"
+	"nunezlagos/domain/internal/service/orchestrator"
 )
 
 // serverRunners agrupa scheduler, leaderElection y su contexto de cancelación.
@@ -55,6 +58,10 @@ func buildRunners(
 		go runSoftDeletePurge(leaderCtx, s.LifecycleService, logger)
 		go runAuditPruneScheduler(leaderCtx, s.Recorder, logger)
 		go runUsageAlertEvaluator(leaderCtx, s.UsageAlertsService, logger)
+		// REQ-54 issue-54.3 fix#1: worker de flows async del orquestador SDD.
+		// Bajo leader (defensa en profundidad) + claim atómico SKIP LOCKED en
+		// el repo (la garantía real contra doble ejecución).
+		go runAsyncFlowWorker(leaderCtx, s.OrchestratorSvc, logger)
 
 		if cfg.HeartbeatWatcherEnabled {
 			watcher := &systemcron.HeartbeatWatcher{
@@ -159,4 +166,31 @@ func buildRunners(
 		LeaderElection: leaderElection,
 		SchedCancel:    schedCancel,
 	}
+}
+
+// runAsyncFlowWorker lanza el worker de flows async del orquestador (REQ-54
+// issue-54.3 fix#1). Config por env:
+//   - DOMAIN_ASYNC_WORKER=off               → deshabilita el worker
+//   - DOMAIN_ASYNC_WORKER_CONCURRENCY=N     → flows simultáneos (default 1)
+//
+// El worker se auto-deshabilita (con log) si el orquestador no tiene LLM o si
+// el Repo no soporta claim atómico — el server arranca normal igual.
+func runAsyncFlowWorker(ctx context.Context, orch *orchestrator.Service, logger *slog.Logger) {
+	if orch == nil {
+		return
+	}
+	if os.Getenv("DOMAIN_ASYNC_WORKER") == "off" {
+		logger.Info("async flow worker: deshabilitado por DOMAIN_ASYNC_WORKER=off")
+		return
+	}
+	conc := 1
+	if v := os.Getenv("DOMAIN_ASYNC_WORKER_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			conc = n
+		}
+	}
+	orch.RunAsyncWorker(ctx, orchestrator.AsyncWorkerConfig{
+		Concurrency: conc,
+		Logger:      logger,
+	})
 }

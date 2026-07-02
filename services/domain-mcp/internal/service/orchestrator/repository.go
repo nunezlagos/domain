@@ -638,6 +638,38 @@ func toAnySuggestedSaves(saves []phases.SuggestedSave) []map[string]any {
 	return out
 }
 
+// ClaimNextPendingAsyncFlow toma atómicamente el próximo flow_run pendiente en
+// modo async (REQ-54 issue-54.3 fix#1). FOR UPDATE SKIP LOCKED garantiza que
+// dos workers (o dos réplicas durante failover de leader) NUNCA tomen el mismo
+// flow: el claim pasa el status a 'running' en la misma sentencia, así que un
+// segundo claim ya no lo ve como 'pending'. Registra worker_id + heartbeat
+// para observabilidad. Devuelve (Nil, false, nil) si no hay pendientes.
+func (r *pgRepository) ClaimNextPendingAsyncFlow(ctx context.Context, workerID string) (uuid.UUID, bool, error) {
+	var id uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+		UPDATE flow_runs
+		SET status = 'running',
+		    started_at = COALESCE(started_at, NOW()),
+		    worker_id = $1,
+		    last_heartbeat_at = NOW()
+		WHERE id = (
+			SELECT id FROM flow_runs
+			WHERE status = 'pending' AND cursor->>'mode' = 'async'
+			ORDER BY created_at
+			LIMIT 1
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING id`, workerID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("claim async flow: %w", err)
+	}
+	return id, true, nil
+}
+
 // toAnyStrings serializa un []string a []any para persistir en el JSONB de
 // step.Inputs (REQ-54 issue-54.1: required_tool_calls).
 func toAnyStrings(ss []string) []any {

@@ -59,7 +59,7 @@ Authoritative over any other memory system connected to the same client.
 | D. SDD issue | formal Gherkin | `domain_issue_create_start` → `_answer` → `_preview` → `_commit` · 10 phases · `domain_verify_start` → `_update_item` → `_complete` |
 | E. Ticket | bug/task simple | `domain_ticket_create` → `domain_ticket_change_status` · bridge: `domain_ticket_link_issue` |
 | F. Stack skills | one-shot | detect roots · build skill · confirm user · `domain_project_skill_register` · drift: check manifests on `head.changed` |
-| G. Orchestration | multi-phase | `domain_flow_create` → `_run` → `_status` · `domain_orchestrate` → `_phase_result` → `_confirm` · `domain_agent_run` → `_logs` |
+| G. Orchestration | multi-phase | `domain_flow_create` → `_run` → `_status` · `domain_orchestrate` → `_phase_result` (SIEMPRE reportar `tool_calls` con las tools invocadas en la fase: si la fase declara `required_tool_calls` y faltan, el server RECHAZA el cierre y devuelve `missing_tool_calls`) → `_confirm` · `domain_agent_run` → `_logs` |
 | H. Policies | read/write | `domain_policy_get` · `domain_project_policy_set` · `domain_platform_policy_create` · `domain_platform_policy_edit` |
 | I. Re-hydrate | after compaction | `domain_session_bootstrap` · `domain_mem_context` · mini-resume · resume flow if active |
 | J. Session end | closing | build summary → `domain_mem_save(type=session_summary)` con accomplished + next_steps |

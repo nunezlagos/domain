@@ -12,38 +12,29 @@
 
 ## PRIMER MENSAJE — protocolo obligatorio
 
-El bootstrap YA lo ejecuta el hook `SessionStart`
-(`~/.local/share/domain/hooks/domain-session-start.sh`), que corre ANTES
-de tu primer prompt e inyecta como `additionalContext` los resultados de:
+OpenCode NO tiene hook SessionStart: NADIE ejecuta el bootstrap por vos.
+EN CADA SESION NUEVA, antes de responder, ejecuta VOS estos 3 tools en
+este orden:
 
-1. `domain_session_bootstrap` (proyecto, counts, recent_observations, head)
-2. `domain_code_graph`
-3. `domain_mem_context` (últimas 10 obs)
+1. **`domain_session_bootstrap`** con:
+   - `cwd` = path absoluto del working directory
+   - `git_remote` = output de `git remote get-url origin`
+   - `git_branch` = output de `git branch --show-current`
+   - `git_head` = output de `git rev-parse HEAD`
+   - `existing_rules_files` = lista de AI-rules que existan en el cwd (`AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`, `openspec/`)
 
-Esos 3 resultados YA están en tu contexto al arrancar. Por lo tanto:
+2. **`domain_code_graph`** con `project_slug` del paso 1.
 
-- **PROHIBIDO** volver a llamar `domain_session_bootstrap`,
-  `domain_code_graph` ni `domain_mem_context` en el primer turn. Leé el
-  bloque `🟢 domain MCP ready` que el hook inyectó y usá ESE contexto.
-- Si el bloque del hook NO aparece (fallo de VPS/API key), recién ahí
-  ejecutá los 3 tools vos mismo como fallback.
+3. **`domain_mem_context`** con `project_slug` del paso 1, `limit=10`.
 
-En tu PRIMER mensaje, ANTES de responder, ejecutá en paralelo (con el
-`project_slug` que viene en el bloque del hook):
+Solo DESPUES de esos 3 calls (o si fallaron con error) podes responder al usuario.
 
-- `domain_project_skill_list(project_slug)`
-- `domain_project_policy_list(project_slug)`
-- `domain_policy_list()`
-- `domain_ticket_list(project_slug, limit=5)`
-
-DESPUES, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL
-PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se
-desvía, violaste la regla.
+DESPUES del bootstrap, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se desvía, violaste la regla.
 
 **Reglas duras:**
-- NO improvises contexto. Lee la respuesta real del hook / MCP.
-- Si el usuario manda "x" o algo trivial, IGUAL renderizá el bloque
-  first-response en el primer mensaje.
+- NO respondas sin bootstrap primero. NUNCA.
+- NO improvises contexto. Lee la respuesta real del MCP.
+- Si el usuario manda "x" o algo trivial, IGUAL ejecuta los 3 tools.
 - Si algun tool falla, igual responde con warning — no te quedes mudo.
 
 ## Identity
@@ -77,7 +68,7 @@ Server has NO LLM — fan-out via client subagents.
 
 ## Session start (mandatory)
 
-1. `domain_session_bootstrap(...)` — YA lo ejecuta el hook SessionStart y su resultado viene inyectado como `additionalContext`. NO lo re-llames; leé ese bloque. Solo ejecutalo vos si el bloque del hook no aparece (fallo de VPS/key).
+1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first (OpenCode no tiene hook: lo llamás vos).
 2. If `known=false`: `domain_session_register` then `domain_project_index_start` → `_submit`.
 3. If `head.changed != []`: read git log `last_known..current`, `domain_mem_save` relevant events, then rebuild code graph via `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"`.
 4. **Repo disambiguation**: call `domain_project_repo_list(project_slug)`. If `ambiguous=true` (>1 remoto sin default), show list and ask user which to use.

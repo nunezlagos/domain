@@ -16,9 +16,12 @@ const (
 )
 
 // domainBlock arma la sección gestionada: marcadores + el template embebido.
-// Se usa para el archivo dedicado de OpenCode (que se lee completo).
+// Se usa para el archivo dedicado de OpenCode (que se lee completo). Usa el
+// template propio de OpenCode: como OpenCode NO tiene hook SessionStart, su
+// protocolo de PRIMER MENSAJE instruye ejecutar el bootstrap manualmente,
+// a diferencia del template de Claude Code (donde el hook ya lo ejecutó).
 func domainBlock() string {
-	body := strings.TrimRight(string(claudeGlobalMD), "\n")
+	body := strings.TrimRight(string(opencodeGlobalMD), "\n")
 	return domainBlockStart + "\n" + body + "\n" + domainBlockEnd
 }
 

@@ -10,3 +10,6 @@ var agentDomainMemoryMD []byte
 
 //go:embed templates/claude-global.md
 var claudeGlobalMD []byte
+
+//go:embed templates/opencode-global.md
+var opencodeGlobalMD []byte

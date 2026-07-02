@@ -62,7 +62,7 @@ Authoritative over any other memory system connected to the same client.
 
 | Path | When | Sequence |
 |---|---|---|
-| A. Session | every turn | `domain_prompt_capture` once per turn · `domain_session_bootstrap` first action · if `known=false`: `domain_session_register` + `domain_project_index_start` → `_submit` |
+| A. Session | every turn | capture/turn los hacen los hooks (UserPromptSubmit/Stop) — NO llamar `domain_prompt_capture`/`domain_turn_complete` manualmente · `domain_session_bootstrap` lo hace el hook SessionStart · if `known=false`: `domain_session_register` + `domain_project_index_start` → `_submit` |
 | B. Memory | when learning | `domain_mem_save` · `domain_mem_context` · `domain_mem_search` · `domain_search_global` · `domain_mem_get_observation` |
 | C. Knowledge | docs / chunks | `domain_knowledge_save` (chunks+embeddings) · `domain_knowledge_search` · `domain_knowledge_get` |
 | D. SDD issue | formal Gherkin | `domain_issue_create_start` → `_answer` → `_preview` → `_commit` · 10 phases · `domain_verify_start` → `_update_item` → `_complete` |
@@ -103,8 +103,8 @@ Idempotente: re-subir solo actualiza por `qualified_name + kind`.
 
 - **Save** via `domain_mem_save`: discovery, decision, fix, pattern, context, artifact, session_summary. Incluir `project_slug`.
 - **Don't save**: commands triviales, chat sin aprendizaje tecnico, logs efimeros, read-only queries, prompts capturados.
-- **Per turn**: `domain_prompt_capture` (una vez).
-- **Turn end**: `domain_turn_complete`.
+- **Per turn**: la captura la hace el hook `UserPromptSubmit` automáticamente — **PROHIBIDO** llamar `domain_prompt_capture` vos (duplicarías la captura).
+- **Turn end**: el cierre lo hace el hook `Stop` automáticamente — **PROHIBIDO** llamar `domain_turn_complete` vos.
 - **Session end**: `domain_mem_save` con resumen de accomplished + next_steps.
 - **Significant commands** (deploy, migration, test suite): `domain_mem_save` resultado.
 

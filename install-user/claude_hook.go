@@ -5,68 +5,83 @@ import (
 	"path/filepath"
 )
 
-// installClaudeSessionStartHook agrega un hook SessionStart a
-// ~/.claude/settings.json que ejecuta el script domain-session-start.sh
-// (el cual pre-carga bootstrap + code graph + mem context antes del primer
-// prompt del usuario, forzando al LLM a tener el contexto disponible).
+// claudeHookSpec define un hook de Claude Code a registrar en
+// ~/.claude/settings.json: evento + script (en ~/.local/share/domain/hooks/)
+// + timeout opcional en segundos (0 = default del evento).
+type claudeHookSpec struct {
+	Event   string
+	Script  string
+	Timeout int
+}
+
+// claudeHooks es el set de lifecycle hooks de domain (REQ-54):
+//   - SessionStart: pre-carga bootstrap + code graph + mem context ANTES del
+//     primer prompt (inyecta additionalContext).
+//   - UserPromptSubmit: captura CADA prompt vía domain_prompt_capture y guarda
+//     el prompt_id por session (determinista, no depende del LLM).
+//   - Stop: cierra el turno vía domain_turn_complete con el prompt_id guardado.
 //
-// Idempotente: si el hook ya está, no duplica. Si settings.json no existe
-// (instalación limpia, ej. VPS fresco), lo crea — de lo contrario el resumen
-// del proyecto nunca aparecería en el primer mensaje.
+// Timeouts cortos en los de lifecycle: son best-effort y no deben demorar la
+// sesión si el VPS anda lento.
+var claudeHooks = []claudeHookSpec{
+	{Event: "SessionStart", Script: "domain-session-start.sh"},
+	{Event: "UserPromptSubmit", Script: "domain-user-prompt.sh", Timeout: 15},
+	{Event: "Stop", Script: "domain-stop.sh", Timeout: 15},
+}
+
+// installClaudeSessionStartHook registra los lifecycle hooks de domain en
+// ~/.claude/settings.json. Idempotente: si un hook ya está, no duplica. Si
+// settings.json no existe (instalación limpia), lo crea. Los scripts deben
+// existir en ~/.local/share/domain/hooks/ (los instala install-curl.sh /
+// el install canónico); si falta alguno, se avisa y se salta ese hook.
 func installClaudeSessionStartHook() {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		warnL("no pude resolver HOME para instalar hook: " + err.Error())
+		warnL("no pude resolver HOME para instalar hooks: " + err.Error())
 		return
 	}
-	hookPath := filepath.Join(home, ".local", "share", "domain", "hooks", "domain-session-start.sh")
-	if _, err := os.Stat(hookPath); err != nil {
-		warnL("hook script no encontrado en " + hookPath + " (re-corré el install canónico para instalarlo)")
-		return
-	}
+	hooksDir := filepath.Join(home, ".local", "share", "domain", "hooks")
 	settingsPath := claudeSettingsPath(home)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
-		warnL(settingsPath + " corrupto, hook no instalado: " + err.Error())
+		warnL(settingsPath + " corrupto, hooks no instalados: " + err.Error())
 		return
 	}
 
-	// verificar si ya está el hook
 	hooks, _ := cfg["hooks"].(map[string]any)
-	if hooks != nil {
-		if arr, ok := hooks["SessionStart"].([]any); ok {
-			for _, entry := range arr {
-				if m, ok := entry.(map[string]any); ok {
-					if hs, ok := m["hooks"].([]any); ok {
-						for _, h := range hs {
-							if hm, ok := h.(map[string]any); ok {
-								if cmd, _ := hm["command"].(string); cmd == hookPath {
-									// ya está, no duplicar
-									return
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// agregar
 	if hooks == nil {
 		hooks = map[string]any{}
 		cfg["hooks"] = hooks
 	}
-	newEntry := map[string]any{
-		"hooks": []any{
-			map[string]any{
-				"type":    "command",
-				"command": hookPath,
-			},
-		},
-	}
-	hooks["SessionStart"] = append(toArray(hooks["SessionStart"]), newEntry)
 
+	changed := false
+	for _, spec := range claudeHooks {
+		hookPath := filepath.Join(hooksDir, spec.Script)
+		if _, err := os.Stat(hookPath); err != nil {
+			warnL("hook script no encontrado en " + hookPath + " (re-corré el install canónico para instalarlo)")
+			continue
+		}
+		if claudeHookRegistered(hooks, spec.Event, hookPath) {
+			continue
+		}
+		entry := map[string]any{
+			"type":    "command",
+			"command": hookPath,
+		}
+		if spec.Timeout > 0 {
+			entry["timeout"] = spec.Timeout
+		}
+		newEntry := map[string]any{
+			"hooks": []any{entry},
+		}
+		hooks[spec.Event] = append(toArray(hooks[spec.Event]), newEntry)
+		changed = true
+		ok("hook " + spec.Event + " instalado: " + hookPath)
+	}
+
+	if !changed {
+		return
+	}
 	if _, err := backupIfExists(settingsPath, Timestamp()); err != nil {
 		warnL("backup settings.json: " + err.Error())
 		return
@@ -75,8 +90,36 @@ func installClaudeSessionStartHook() {
 		warnL("write settings.json: " + err.Error())
 		return
 	}
-	ok("hook SessionStart instalado: " + hookPath)
-	ok("→ cada nueva sesión de Claude Code pre-cargará bootstrap + code graph + mem context")
+	ok("→ lifecycle domain activo: bootstrap pre-prompt + captura de prompts + cierre de turnos")
+}
+
+// claudeHookRegistered indica si el evento ya tiene registrado un hook cuyo
+// command sea exactamente hookPath.
+func claudeHookRegistered(hooks map[string]any, event, hookPath string) bool {
+	arr, ok := hooks[event].([]any)
+	if !ok {
+		return false
+	}
+	for _, entry := range arr {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		hs, ok := m["hooks"].([]any)
+		if !ok {
+			continue
+		}
+		for _, h := range hs {
+			hm, ok := h.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cmd, _ := hm["command"].(string); cmd == hookPath {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func toArray(v any) []any {

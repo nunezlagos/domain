@@ -223,13 +223,18 @@ step "Compilando y ejecutando domain-install como $REAL_USER"
 sudo -u "$REAL_USER" bash -c "cd '$REPO_DIR/install-user' && go build -ldflags '-s -w' -o domain-install ."
 ok "binario compilado"
 
-# Instalar el hook de SessionStart en un path estable (fuera del repo,
-# para que no se pierda si el repo se borra o se mueve).
+# Instalar los lifecycle hooks en un path estable (fuera del repo,
+# para que no se pierdan si el repo se borra o se mueve).
+# REQ-54: SessionStart (bootstrap) + UserPromptSubmit (captura de prompts)
+# + Stop (cierre de turnos) + lib compartida de resolución de credenciales.
 HOOKS_DIR="$REAL_HOME/.local/share/domain/hooks"
 mkdir -p "$HOOKS_DIR"
 install -m 0755 "$REPO_DIR/install-user/hooks/domain-session-start.sh" "$HOOKS_DIR/domain-session-start.sh"
+install -m 0644 "$REPO_DIR/install-user/hooks/domain-hooks-lib.sh" "$HOOKS_DIR/domain-hooks-lib.sh"
+install -m 0755 "$REPO_DIR/install-user/hooks/domain-user-prompt.sh" "$HOOKS_DIR/domain-user-prompt.sh"
+install -m 0755 "$REPO_DIR/install-user/hooks/domain-stop.sh" "$HOOKS_DIR/domain-stop.sh"
 chown -R "$REAL_USER" "$HOOKS_DIR"
-ok "hook de SessionStart instalado: $HOOKS_DIR/domain-session-start.sh"
+ok "lifecycle hooks instalados: $HOOKS_DIR/ (session-start, user-prompt, stop)"
 
 # Instalar el script de code graph (cliente-side, multi-lenguaje via ast-grep).
 # Se usa con: ~/.local/share/domain/scripts/domain-code-graph.sh [REPO_PATH] [PROJECT_SLUG]

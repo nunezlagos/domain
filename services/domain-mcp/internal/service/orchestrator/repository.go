@@ -73,6 +73,12 @@ type Repository interface {
 // mode. Coincide con SeedAgentTemplatesForOrg + customizaciones del
 // operador (is_user_modified=true). El provider se infiere desde el
 // prefijo del Model name por convención (claude-* → anthropic, etc.).
+// AgentTemplate es la fila de la tabla agent_templates: la CONFIGURACIÓN de
+// cada fase SDD (system_prompt, modelo, overrides como required_tool_calls).
+// NO confundir con la tabla `agents` (service/agent + domain_agent_run), que
+// son agentes EJECUTABLES server-side — sistemas independientes (REQ-54
+// issue-54.3 fix#4: el paquete agent/orchestration que los mezclaba se
+// eliminó por no tener call-sites).
 type AgentTemplate struct {
 	Slug         string
 	Model        string

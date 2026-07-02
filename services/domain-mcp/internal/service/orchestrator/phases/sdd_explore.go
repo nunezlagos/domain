@@ -34,6 +34,8 @@ func (h *sddExploreHandler) Build(_ context.Context, in Input) (*Output, error) 
 				Hint: "guardar knowledge_doc si descubriste contexto reusable (módulos, decisiones previas)"},
 		},
 		SkillThreshold: 0,
+		// REQ-54 issue-54.6: explore debe partir del grafo de código vivo.
+		RequiredToolCalls: []string{"domain_code_graph"},
 		RetryPolicy:    RetryReemit,
 	}, nil
 }

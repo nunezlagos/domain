@@ -45,6 +45,8 @@ func (h *sddOnboardHandler) Build(_ context.Context, in Input) (*Output, error) 
 				Hint: "guardar knowledge_doc con el descubrimiento si aplica (Required=false: skip si no hay nada que documentar)"},
 		},
 		SkillThreshold: 0,
+		// REQ-54 issue-54.6: onboard materializa el conocimiento del cambio.
+		RequiredToolCalls: []string{"domain_knowledge_save"},
 		RetryPolicy:    RetryReemit,
 	}, nil
 }

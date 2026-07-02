@@ -74,6 +74,9 @@ func (h *sddReviewHandler) Build(_ context.Context, in Input) (*Output, error) {
 			},
 		},
 		SkillThreshold: 0,
+		// REQ-54 issue-54.6: el prompt de review YA instruía estas tools en prosa
+		// (causa raíz de tools huérfanas); ahora son contrato verificable.
+		RequiredToolCalls: []string{"domain_project_policy_list", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
 		RetryPolicy:    RetryReemit, // read-only, idempotente
 	}, nil
 }

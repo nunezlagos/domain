@@ -34,14 +34,26 @@ const (
 // le sirven. El server decide QUÉ preparar por PhaseSlug (no via interfaz de
 // handler, para no tocar los 11 handlers — decisión de alcance issue-54.2).
 // Vacío/ausente = no se prepara nada (no-op, retrocompat).
+// REQ-54 issue-54.6: las 11 fases registradas tienen entrada EXPLÍCITA —
+// vacía = "sin prep, deliberado" (tasks/verify/archive: el contexto útil ya
+// viene en PriorOutputs de la fase anterior). TestPrepContext_AllPhasesMapped
+// congela la invariante: fase nueva sin entrada = test rojo.
 var prepPhaseContext = map[string]struct {
 	policies bool
 	skills   bool
 	obs      bool
 }{
-	"sdd-apply":   {policies: true, skills: true},
 	"sdd-explore": {obs: true},
+	"sdd-spec":    {obs: true},           // decisiones previas informan el contrato
+	"sdd-propose": {policies: true},      // tradeoffs contra las reglas vigentes
 	"sdd-design":  {policies: true},
+	"sdd-tasks":   {},                    // el design (prior output) es el contexto
+	"sdd-apply":   {policies: true, skills: true},
+	"sdd-verify":  {},                    // valida contra el issue.md, no contra contexto
+	"sdd-judge":   {policies: true},      // juzga también conformidad con las reglas
+	"sdd-review":  {policies: true},
+	"sdd-archive": {},                    // cierre administrativo
+	"sdd-onboard": {obs: true},           // qué se aprendió antes de documentar
 }
 
 // prepareContext arma el bloque de contexto para una fase (crudo) y, si hay LLM,

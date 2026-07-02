@@ -38,6 +38,8 @@ func (h *sddArchiveHandler) Build(_ context.Context, in Input) (*Output, error) 
 				Hint: "guardar knowledge_doc apuntando al CHANGELOG diff + issue archivado"},
 		},
 		SkillThreshold: 0,
+		// REQ-54 issue-54.6: archive verifica el estado openspec antes de cerrar.
+		RequiredToolCalls: []string{"domain_openspec_status"},
 		RetryPolicy:    RetryReemit,
 	}, nil
 }

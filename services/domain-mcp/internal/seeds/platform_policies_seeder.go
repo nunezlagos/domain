@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 14 } // 14: REQ-55 sync SDD obligatorio en agent-protocol
+func (s *PlatformPoliciesSeeder) Version() int    { return 15 } // 15: REQ-54 issue-54.4/54.7 sdd-auto-trigger (SDD-para-codigo)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -343,6 +343,54 @@ Todas las respuestas en español. Sin excepciones.
 - Corrige sin piedad pero explica POR QUÉ técnicamente.
 - Celebra el razonamiento, no el resultado.
 - Senior que se frustra cuando alguien puede dar más — no por enojo, sino porque le importa que crezcan.`,
+		},
+		{
+			Slug:       "sdd-auto-trigger",
+			Name:       "SDD auto-trigger: el pipeline es el camino default",
+			Kind:       "sdd_workflow",
+			SourceFile: "openspec/changes/REQ-54-orchestrator-tool-contract/issue-54.4-sdd-auto-trigger/",
+			BodyMD: `# SDD auto-trigger v2: TODO código pasa por SDD (REQ-54 issues 54.4 + 54.7)
+
+TODO cambio que toque CÓDIGO — sin excepción por tamaño, incluido lo trivial —
+DEBE ocurrir dentro de un flow SDD activo (domain_orchestrate). El spec del
+cambio se produce en la fase sdd-spec; NO se implementa sin spec.
+
+## Reglas por tipo de pedido
+
+- **Cualquier cambio de código** → domain_orchestrate PRIMERO. Mode acotado
+  al tamaño: trivial/simple → express, contenido → lite, requerimiento → full.
+- **Bug/task operativa que NO toca código todavía** → domain_ticket_create
+  (path E); al implementarlo, orquestar.
+- **Consultas/lecturas/análisis sin editar** → sin ceremonia.
+
+## Consulta obligatoria en el spec
+
+En la fase sdd-spec: ante ambigüedades, decisiones abiertas o supuestos no
+confirmados, CONSULTAR al usuario (AskUserQuestion) ANTES de redactar. No se
+especulan requisitos. El gate hardspec pausa después del spec para revisión
+humana.
+
+## Flow activo
+
+Si el proyecto tiene un flow SDD no-terminal, RETOMARLO (domain_flow_status)
+— NUNCA re-orquestar un flow nuevo para el mismo trabajo.
+
+## Enforcement (capas)
+
+1. Señal determinista: el hook UserPromptSubmit inyecta la clasificación de
+   cada prompt (additionalContext).
+2. Gate de código: el hook PreToolUse intercepta Edit/Write/NotebookEdit y
+   Bash-de-edición SIN flow activo — en modo normal pregunta al humano (ask);
+   en modos automáticos DENIEGA y fuerza a orquestar. La marca de flow la pone
+   PostToolUse al ver domain_orchestrate/flow_status.
+3. Esta policy es la norma citable.
+
+## Escape hatch
+
+Solo el USUARIO puede ordenar saltear el SDD (explícitamente). En ese caso el
+agente obedece y las ediciones que el gate detenga las aprueba el usuario en
+el diálogo de permisos. Limitación conocida: la heurística de Bash puede no
+detectar ediciones exóticas — hacerlo deliberadamente viola esta policy.`,
 		},
 	}
 

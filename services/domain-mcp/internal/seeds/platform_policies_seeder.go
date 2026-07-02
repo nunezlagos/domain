@@ -396,22 +396,31 @@ detectar ediciones exóticas — hacerlo deliberadamente viola esta policy.`,
 
 	for _, p := range policies {
 
-		tag, err := tx.Exec(ctx, `
+		// REQ-54: ON CONFLICT DO UPDATE siempre reporta RowsAffected=1, así que
+		// el contador viejo (Created++ incondicional) mentía en re-runs. xmax=0
+		// distingue INSERT real de UPDATE; is_user_modified distingue update
+		// aplicado de fila preservada por edición del operador.
+		var inserted, userModified bool
+		err := tx.QueryRow(ctx, `
 			INSERT INTO platform_policies (slug, name, kind, body_md, source_file, is_active)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), TRUE)
 			ON CONFLICT (slug, is_active) DO UPDATE
 			SET name        = CASE WHEN platform_policies.is_user_modified THEN platform_policies.name        ELSE EXCLUDED.name        END,
 			    kind        = CASE WHEN platform_policies.is_user_modified THEN platform_policies.kind        ELSE EXCLUDED.kind        END,
 			    body_md     = CASE WHEN platform_policies.is_user_modified THEN platform_policies.body_md     ELSE EXCLUDED.body_md     END,
-			    source_file = CASE WHEN platform_policies.is_user_modified THEN platform_policies.source_file ELSE EXCLUDED.source_file END`,
+			    source_file = CASE WHEN platform_policies.is_user_modified THEN platform_policies.source_file ELSE EXCLUDED.source_file END
+			RETURNING (xmax = 0), is_user_modified`,
 			p.Slug, p.Name, p.Kind, p.BodyMD, p.SourceFile,
-		)
+		).Scan(&inserted, &userModified)
 		if err != nil {
 			return rep, fmt.Errorf("seed policy %s: %w", p.Slug, err)
 		}
-		if tag.RowsAffected() == 1 {
+		switch {
+		case inserted:
 			rep.Created++
-		} else {
+		case userModified:
+			rep.Preserved++
+		default:
 			rep.Updated++
 		}
 	}

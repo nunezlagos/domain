@@ -354,6 +354,7 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	type cached struct {
 		systemPrompt string
 		threshold    float64
+		subagentPlan string
 	}
 	cache := make(map[string]cached, len(plan.Steps))
 	for i := range plan.Steps {
@@ -371,7 +372,7 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 			return err
 		}
 		sysPrompt := t.SystemPrompt + rulesBlock
-		c := cached{systemPrompt: sysPrompt, threshold: t.SkillThreshold()}
+		c := cached{systemPrompt: sysPrompt, threshold: t.SkillThreshold(), subagentPlan: t.SubagentPlan()}
 		cache[slug] = c
 		plan.Steps[i].SystemPrompt = c.systemPrompt
 		plan.Steps[i].SkillThreshold = c.threshold
@@ -383,12 +384,30 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	// Se hace por PhaseSlug (plan.Steps[i].Slug), no cacheado por template slug,
 	// porque el contexto pertinente depende de la fase concreta.
 	for i := range plan.Steps {
-		prep := s.prepareContext(ctx, orgID, projectID, string(plan.Steps[i].Slug))
+		step := &plan.Steps[i]
+		// REQ-54 issue-54.5: plan de subagentes paralelos. El override del
+		// template (BD) gana sobre el default del handler. Se inyecta ANTES
+		// del prep para que el orden final sea prep → plan → prompt original.
+		effPlan := step.SubagentPlan
+		if c, ok := cache[step.AgentTemplateSlug]; ok && c.subagentPlan != "" {
+			effPlan = c.subagentPlan
+		}
+		if effPlan != "" {
+			step.UserPrompt = injectSubagentPlan(step.UserPrompt, effPlan)
+		}
+		prep := s.prepareContext(ctx, orgID, projectID, string(step.Slug))
 		if prep != "" {
-			plan.Steps[i].UserPrompt = injectPreparedContext(plan.Steps[i].UserPrompt, prep)
+			step.UserPrompt = injectPreparedContext(step.UserPrompt, prep)
 		}
 	}
 	return nil
+}
+
+// injectSubagentPlan antepone el plan de subagentes paralelos al user prompt
+// de la fase (REQ-54 issue-54.5). El fan-out lo ejecuta el cliente.
+func injectSubagentPlan(userPrompt, plan string) string {
+	return "## Plan de subagentes (ejecutar EN PARALELO con tus subagentes)\n" +
+		plan + "\n---\n" + userPrompt
 }
 
 // injectPreparedContext antepone el bloque de contexto preparado al user prompt

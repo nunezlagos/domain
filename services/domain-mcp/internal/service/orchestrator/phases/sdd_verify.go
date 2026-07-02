@@ -65,6 +65,8 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		// orquestador rechaza el cierre (reintentable). Override editable en
 		// agent_templates.metadata.required_tool_calls.
 		RequiredToolCalls: []string{"domain_verify_start", "domain_verify_complete"},
+		// REQ-54 issue-54.5: validación de escenarios en paralelo.
+		SubagentPlan: "Agrupá los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y validá cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Mergeá los lotes; un escenario failed en cualquier lote = failed global.",
 
 		RetryPolicy: RetryReemit,
 	}, nil

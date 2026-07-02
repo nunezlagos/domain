@@ -44,6 +44,8 @@ type PhaseStep struct {
 	// RequiredToolCalls: contrato de tools de la fase (REQ-54 issue-54.1).
 	// Se persiste en step.Inputs y lo recupera rebuildOutputFromStepInputs.
 	RequiredToolCalls []string
+	// SubagentPlan: plan de subagentes paralelos de la fase (REQ-54 issue-54.5).
+	SubagentPlan string
 }
 
 // ExpressPhases es el subconjunto que el modo Express ejecuta: sólo
@@ -92,6 +94,7 @@ func BuildExpressPlan(ctx context.Context, reg *phases.Registry, in phases.Input
 			RetryPolicy:       out.RetryPolicy,
 			SkillThreshold:    out.SkillThreshold,
 			RequiredToolCalls: out.RequiredToolCalls,
+			SubagentPlan:      out.SubagentPlan,
 		})
 	}
 	return plan, nil

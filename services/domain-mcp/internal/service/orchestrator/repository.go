@@ -135,6 +135,19 @@ func (t *AgentTemplate) RequiredToolCalls() []string {
 	return out
 }
 
+// SubagentPlan extrae el plan de subagentes paralelos de metadata (REQ-54
+// issue-54.5). Override editable en BD sobre el default del handler; ""
+// = sin override.
+func (t *AgentTemplate) SubagentPlan() string {
+	if t.Metadata == nil {
+		return ""
+	}
+	if s, ok := t.Metadata["subagent_plan"].(string); ok {
+		return s
+	}
+	return ""
+}
+
 // FlowRunRow es la vista de lectura completa de un flow_run.
 type FlowRunRow struct {
 	ID             uuid.UUID
@@ -604,6 +617,7 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 				"user_prompt":         step.UserPrompt,
 				"suggested_saves":     toAnySuggestedSaves(step.SuggestedSaves),
 				"required_tool_calls": toAnyStrings(step.RequiredToolCalls),
+				"subagent_plan":       step.SubagentPlan,
 				"retry_policy":        string(step.RetryPolicy),
 				"skill_threshold":     step.SkillThreshold,
 

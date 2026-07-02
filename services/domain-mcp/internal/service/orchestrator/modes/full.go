@@ -89,6 +89,7 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 			step.RetryPolicy = out.RetryPolicy
 			step.SkillThreshold = out.SkillThreshold
 			step.RequiredToolCalls = out.RequiredToolCalls
+			step.SubagentPlan = out.SubagentPlan
 		} else {
 
 

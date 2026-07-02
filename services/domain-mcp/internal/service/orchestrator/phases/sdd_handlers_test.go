@@ -190,14 +190,27 @@ func TestSDDTasksHandler_Validate_RequiresShapedTasks(t *testing.T) {
 func TestSDDJudgeHandler_Validate_RequiresSabotageRecords(t *testing.T) {
 	t.Parallel()
 	h := NewSDDJudgeHandler()
+	// REQ-54 issue-54.5: además de sabotage_records, judge exige el panel
+	// adversarial (judge_verdicts >= 2). Un solo juez no cierra la fase.
+	panel := []any{
+		map[string]any{"role": "correctness", "verdict": "approve"},
+		map[string]any{"role": "robustez", "verdict": "approve"},
+	}
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{
 			"sabotage_records": []any{map[string]any{"invariant": "x"}},
+			"judge_verdicts":   panel,
 		},
 	}))
 	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
 		Output: map[string]any{"sabotage_records": []any{}},
-	}))
+	}), "sin sabotage_records debe fallar")
+	require.Error(t, h.Validate(context.Background(), nil, ClientResult{
+		Output: map[string]any{
+			"sabotage_records": []any{map[string]any{"invariant": "x"}},
+			"judge_verdicts":   []any{map[string]any{"role": "solo", "verdict": "approve"}},
+		},
+	}), "un solo veredicto debe fallar (panel adversarial issue-54.5)")
 }
 
 func TestSDDReviewHandler_Validate_GatesOnVerdict(t *testing.T) {

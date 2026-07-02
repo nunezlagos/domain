@@ -75,6 +75,12 @@ type Output struct {
 	// nil/vacío = sin contrato (no-op), retrocompatible.
 	RequiredToolCalls []string
 
+	// SubagentPlan (REQ-54 issue-54.5): plan de subagentes paralelos que se
+	// inyecta en el user_prompt de la fase (roles, contexto por subagente,
+	// merge). El fan-out lo ejecuta el CLIENTE con sus subagentes. Override
+	// en agent_templates.metadata.subagent_plan. Vacío = fase monolítica.
+	SubagentPlan string
+
 
 	RetryPolicy RetryPolicy
 }

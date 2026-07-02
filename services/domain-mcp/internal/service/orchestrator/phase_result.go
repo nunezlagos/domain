@@ -508,12 +508,21 @@ func (s *Service) rebuildNextStepPrompt(ctx context.Context, next *FlowRunStepRo
 		return "", fmt.Errorf("handler.Build %s: %w", next.StepKey, err)
 	}
 
-	// REQ-54 issue-54.2: inyectar prepared_context también en el lazy rebuild
-	// (Full, pasos 2..N), que NO pasa por hydrateSystemPrompts. Sin esto, el
-	// contexto preparado solo llegaría al primer step de un flow Full. Necesita
+	// REQ-54 issues 54.2/54.5: inyectar subagent_plan + prepared_context también
+	// en el lazy rebuild (Full, pasos 2..N), que NO pasa por hydrateSystemPrompts.
+	// Orden final: prep → plan → prompt original (mismo que el punto A). Necesita
 	// orgID/projectID reales (Build usa Nil), que recuperamos del flow_run.
 	userPrompt := out.UserPrompt
 	if fr, ferr := s.Repo.GetFlowRun(ctx, next.FlowRunID); ferr == nil && fr != nil {
+		effPlan := out.SubagentPlan
+		if tmpl, terr := s.Repo.GetAgentTemplate(ctx, fr.OrganizationID, next.StepKey); terr == nil && tmpl != nil {
+			if override := tmpl.SubagentPlan(); override != "" {
+				effPlan = override
+			}
+		}
+		if effPlan != "" {
+			userPrompt = injectSubagentPlan(userPrompt, effPlan)
+		}
 		if prep := s.prepareContext(ctx, fr.OrganizationID, fr.ProjectID, next.StepKey); prep != "" {
 			userPrompt = injectPreparedContext(userPrompt, prep)
 		}

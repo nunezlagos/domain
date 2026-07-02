@@ -16,6 +16,8 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 	usvc "nunezlagos/domain/internal/service/issue"
+	obssvc "nunezlagos/domain/internal/service/observation"
+	ppolicysvc "nunezlagos/domain/internal/service/projectpolicy"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 	specsvc "nunezlagos/domain/internal/service/spec"
 	tsvc "nunezlagos/domain/internal/service/task"
@@ -77,6 +79,12 @@ type Service struct {
 
 
 	Skills *skillsvc.Service
+
+	// REQ-54 issue-54.2: servicios read-only para preparar contexto server-side
+	// (auto-policies / auto-mem). Opcionales (nil-safe): si no están inyectados,
+	// la preparación degrada a lo que haya. Skills ya está arriba.
+	ProjectPolicies *ppolicysvc.Service
+	Observations    *obssvc.Service
 }
 
 // New construye un Service. El registry debe venir poblado por el
@@ -368,7 +376,26 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 		plan.Steps[i].SystemPrompt = c.systemPrompt
 		plan.Steps[i].SkillThreshold = c.threshold
 	}
+	// REQ-54 issue-54.2: preparación de contexto server-side por fase. Se inyecta
+	// en el UserPrompt (no en SystemPrompt) para que sobreviva el lazy rebuild de
+	// Full, que descarta SystemPrompt. Best-effort: prepareContext devuelve "" si
+	// la fase no tiene contexto configurado o si todo falla — no bloquea.
+	// Se hace por PhaseSlug (plan.Steps[i].Slug), no cacheado por template slug,
+	// porque el contexto pertinente depende de la fase concreta.
+	for i := range plan.Steps {
+		prep := s.prepareContext(ctx, orgID, projectID, string(plan.Steps[i].Slug))
+		if prep != "" {
+			plan.Steps[i].UserPrompt = injectPreparedContext(plan.Steps[i].UserPrompt, prep)
+		}
+	}
 	return nil
+}
+
+// injectPreparedContext antepone el bloque de contexto preparado al user prompt
+// de una fase, con un encabezado claro para el agente cliente.
+func injectPreparedContext(userPrompt, prep string) string {
+	return "## Contexto preparado por el servidor (REQ-54)\n" +
+		prep + "\n---\n" + userPrompt
 }
 
 // buildRulesBlock arma un bloque markdown con las reglas vigentes: las de

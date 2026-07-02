@@ -493,6 +493,9 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 	svc.Spec = s.SpecService
 	svc.Tasks = s.TaskService
 	svc.IssueSvc = s.HUService
+	// REQ-54 issue-54.2: servicios read-only para preparar contexto server-side.
+	svc.ProjectPolicies = s.ProjectPolicyService
+	svc.Observations = s.ObsService
 	return svc
 }
 

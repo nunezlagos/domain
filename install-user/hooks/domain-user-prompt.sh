@@ -28,6 +28,16 @@ print("hook_cwd=%s" % shlex.quote(d.get("cwd", "")))
 
 # El prompt puede ser grande y contener cualquier cosa: lo pasamos por stdin,
 # nunca por argv ni eval.
+# Slug del proyecto: dentro de un WORKTREE, basename(cwd) es el nombre del
+# worktree y atribuiría la captura a un proyecto fantasma. Resolver el repo
+# PRINCIPAL vía git-common-dir (REQ-54 compat worktrees); fallback basename.
+proj_dir="${hook_cwd:-$PWD}"
+common=$(git -C "$proj_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+if [ -n "$common" ] && [ "$common" != ".git" ]; then
+  proj_dir=$(dirname "$common")
+fi
+slug=$(basename "$proj_dir" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
+
 prompt_json=$(printf '%s' "$payload" | python3 -c '
 import json, sys
 try:
@@ -39,7 +49,7 @@ if not p.strip():
     sys.exit(1)
 slug = sys.argv[1] if len(sys.argv) > 1 else ""
 print(json.dumps({"content": p, "project_slug": slug, "client_kind": "claude-code"}))
-' "$(basename "${hook_cwd:-$PWD}" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')" 2>/dev/null) || exit 0
+' "$slug" 2>/dev/null) || exit 0
 
 domain_mcp_init >/dev/null 2>&1
 resp=$(domain_call_tool domain_prompt_capture "$prompt_json" 2>/dev/null)
@@ -64,9 +74,12 @@ try:
         if action == "orchestrate":
             mode = cls.get("suggested_mode", "")
             msg = ("domain: este prompt clasifica complexity=%s — es un REQUERIMIENTO. "
-                   "Ejecutá domain_orchestrate (mode sugerido: %s) ANTES de implementar; "
-                   "el pipeline SDD es el camino default. Si el usuario pide explícitamente "
-                   "saltearlo, obedecé.") % (cls.get("complexity", "?"), mode or "auto")
+                   "PROHIBIDO tocar código sin flow SDD activo (hay gate en PreToolUse). "
+                   "Ejecutá domain_orchestrate (mode sugerido: %s) ANTES de implementar. "
+                   "En la fase sdd-spec, CONSULTÁ al usuario las dudas/ambigüedades ANTES "
+                   "de redactar el spec. Si el usuario ordena explícitamente saltear el "
+                   "SDD, obedecé y pedile que apruebe las ediciones que el gate detenga."
+                   ) % (cls.get("complexity", "?"), mode or "auto")
             ctx = json.dumps({"hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit", "additionalContext": msg}})
         elif action == "resume":

@@ -36,6 +36,9 @@ func (h *sddSpecHandler) Build(_ context.Context, in Input) (*Output, error) {
 		}
 		fmt.Fprintln(&b)
 	}
+	fmt.Fprintln(&b, "ANTES de redactar: si hay ambigüedades, decisiones abiertas o supuestos")
+	fmt.Fprintln(&b, "no confirmados, CONSULTÁ al usuario (AskUserQuestion) y esperá su respuesta.")
+	fmt.Fprintln(&b, "No especules requisitos: el spec fija el contrato (REQ-54 issue-54.7).")
 	fmt.Fprintln(&b, "Construye la spec issue.md siguiendo .claude/rules/sdd.md.")
 	return &Output{
 		AgentTemplateSlug: "sdd-spec",

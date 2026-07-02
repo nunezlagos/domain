@@ -12,6 +12,9 @@ type claudeHookSpec struct {
 	Event   string
 	Script  string
 	Timeout int
+	// Matcher filtra el hook por tool name (regex) en eventos que lo soportan
+	// (PreToolUse/PostToolUse). Vacío = sin matcher (el hook corre siempre).
+	Matcher string
 }
 
 // claudeHooks es el set de lifecycle hooks de domain (REQ-54):
@@ -27,6 +30,13 @@ var claudeHooks = []claudeHookSpec{
 	{Event: "SessionStart", Script: "domain-session-start.sh"},
 	{Event: "UserPromptSubmit", Script: "domain-user-prompt.sh", Timeout: 15},
 	{Event: "Stop", Script: "domain-stop.sh", Timeout: 15},
+	// REQ-54 issue-54.7: gate SDD-para-código. PostToolUse marca flow activo
+	// cuando el agente orquesta; PreToolUse intercepta ediciones sin flow
+	// (ask en modo normal, deny en modos automáticos).
+	{Event: "PostToolUse", Script: "domain-post-orchestrate.sh", Timeout: 10,
+		Matcher: "mcp__domain-mcp__domain_(orchestrate|flow_status|orchestrate_phase_result|orchestrate_confirm)"},
+	{Event: "PreToolUse", Script: "domain-pre-edit.sh", Timeout: 10,
+		Matcher: "Edit|Write|NotebookEdit|Bash"},
 }
 
 // installClaudeSessionStartHook registra los lifecycle hooks de domain en
@@ -73,6 +83,9 @@ func installClaudeSessionStartHook() {
 		}
 		newEntry := map[string]any{
 			"hooks": []any{entry},
+		}
+		if spec.Matcher != "" {
+			newEntry["matcher"] = spec.Matcher
 		}
 		hooks[spec.Event] = append(toArray(hooks[spec.Event]), newEntry)
 		changed = true

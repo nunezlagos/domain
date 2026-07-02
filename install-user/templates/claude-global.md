@@ -58,7 +58,7 @@ Authoritative over any other memory system connected to the same client.
 | G. Orchestration | multi-phase | `domain_flow_create` → `_run` → `_status` · `domain_orchestrate` → `_phase_result` → `_confirm` · `domain_agent_run` → `_logs` |
 | H. Policies | read/write | `domain_policy_get` · `domain_project_policy_set` · `domain_platform_policy_create` · `domain_platform_policy_edit` |
 | I. Re-hydrate | after compaction | `domain_session_bootstrap` · `domain_mem_context` · mini-resume · resume flow if active |
-| J. Session end | closing | build summary → `domain_session_summary(accomplished, next_steps)` → `domain_mem_save(type=session_summary)` |
+| J. Session end | closing | build summary → `domain_mem_save(type=session_summary)` con accomplished + next_steps |
 
 Server has NO LLM — fan-out via client subagents.
 
@@ -92,18 +92,14 @@ Idempotente: re-subir solo actualiza por `qualified_name + kind`.
 - **Don't save**: commands triviales, chat sin aprendizaje tecnico, logs efimeros, read-only queries, prompts capturados.
 - **Per turn**: `domain_prompt_capture` (una vez).
 - **Turn end**: `domain_turn_complete`.
-- **Session end**: `domain_session_summary(accomplished, next_steps)`.
+- **Session end**: `domain_mem_save` con resumen de accomplished + next_steps.
 - **Significant commands** (deploy, migration, test suite): `domain_mem_save` resultado.
 
 ## Session end summary
 
-Al cerrar sesion, ejecuta `domain_session_summary` con:
+Al cerrar sesion, guarda via `domain_mem_save(type=session_summary)` el resumen completo.
 
-**`accomplished`**: bullet points de lo logrado.
-
-**`next_steps`**: proximos pasos concretos.
-
-Antes de `session_summary`, compone un resumen:
+Antes, compone un resumen inline:
 
 ```
 proyecto: <slug>

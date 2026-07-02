@@ -71,6 +71,9 @@ func toolOrchestratePhaseResult() mcp.Tool {
 		mcp.WithArray("memory_refs_saved",
 			mcp.Description("Memory refs persistidas via mem_save durante la fase. Cada item: {type, id}. Requerido para satisfacer suggested_saves con Required=true (D5)."),
 		),
+		mcp.WithArray("tool_calls",
+			mcp.Description("Nombres de las tools domain_* que invocaste durante la fase (ej. [\"domain_verify_start\",\"domain_verify_complete\"]). Si la fase declara required_tool_calls, el servidor RECHAZA el cierre (step sigue running, reintentable) si falta alguna, devolviendo missing_tool_calls. REQ-54."),
+		),
 		mcp.WithNumber("duration_ms",
 			mcp.Description("Duracion en milisegundos de la ejecucion de la fase en el cliente (opcional, para metricas)."),
 		),
@@ -205,10 +208,20 @@ func (h *orchestrateHandlers) handleOrchestratePhaseResult(ctx context.Context, 
 		}
 	}
 
+	var toolCalls []string
+	if raw, ok := args["tool_calls"].([]any); ok {
+		for _, item := range raw {
+			if s, ok := item.(string); ok && s != "" {
+				toolCalls = append(toolCalls, s)
+			}
+		}
+	}
+
 	res, err := h.orchestrator.RecordPhaseResult(ctx, orchsvc.PhaseResultInput{
 		FlowRunStepID:   stepID,
 		Output:          output,
 		MemoryRefsSaved: refs,
+		ToolCallsSaved:  toolCalls,
 		DurationMS:      durationMS,
 	})
 	if err != nil {

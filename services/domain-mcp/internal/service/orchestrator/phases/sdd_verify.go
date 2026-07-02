@@ -45,7 +45,8 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		fmt.Fprintln(&b)
 	}
 	fmt.Fprintln(&b, "Valida los escenarios Gherkin del issue.md. NO modifiques código.")
-	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito.")
+	fmt.Fprintln(&b, "Corré la verificación con domain_verify_start → domain_verify_update_item (por escenario) → domain_verify_complete.")
+	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito y tool_calls=[las tools que invocaste].")
 	return &Output{
 		AgentTemplateSlug: "sdd-verify",
 		SystemPrompt:      "",
@@ -59,6 +60,11 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		},
 		SkillThreshold: 0,
 
+		// REQ-54 issue-54.1: fase piloto del contrato fase→tools. verify DEBE
+		// haber corrido el ciclo de verificación server-side; sin estas tools el
+		// orquestador rechaza el cierre (reintentable). Override editable en
+		// agent_templates.metadata.required_tool_calls.
+		RequiredToolCalls: []string{"domain_verify_start", "domain_verify_complete"},
 
 		RetryPolicy: RetryReemit,
 	}, nil

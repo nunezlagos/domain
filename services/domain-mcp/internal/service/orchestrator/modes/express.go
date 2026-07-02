@@ -41,6 +41,9 @@ type PhaseStep struct {
 	SuggestedSaves    []phases.SuggestedSave
 	RetryPolicy       phases.RetryPolicy
 	SkillThreshold    float64
+	// RequiredToolCalls: contrato de tools de la fase (REQ-54 issue-54.1).
+	// Se persiste en step.Inputs y lo recupera rebuildOutputFromStepInputs.
+	RequiredToolCalls []string
 }
 
 // ExpressPhases es el subconjunto que el modo Express ejecuta: sólo
@@ -88,6 +91,7 @@ func BuildExpressPlan(ctx context.Context, reg *phases.Registry, in phases.Input
 			SuggestedSaves:    out.SuggestedSaves,
 			RetryPolicy:       out.RetryPolicy,
 			SkillThreshold:    out.SkillThreshold,
+			RequiredToolCalls: out.RequiredToolCalls,
 		})
 	}
 	return plan, nil

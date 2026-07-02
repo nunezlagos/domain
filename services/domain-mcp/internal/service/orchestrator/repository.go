@@ -103,6 +103,32 @@ func (t *AgentTemplate) SkillThreshold() float64 {
 	return 0
 }
 
+// RequiredToolCalls extrae el contrato de tools obligatorias de metadata
+// (REQ-54 issue-54.1). Es el override editable en BD sobre el default del
+// handler: si está presente y no vacío, gana. Retorna nil si no está
+// configurado o si Metadata es nil — nil equivale a "sin contrato" (no-op),
+// lo que mantiene la retrocompatibilidad (activación incremental por fase).
+func (t *AgentTemplate) RequiredToolCalls() []string {
+	if t.Metadata == nil {
+		return nil
+	}
+	v, ok := t.Metadata["required_tool_calls"]
+	if !ok {
+		return nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // FlowRunRow es la vista de lectura completa de un flow_run.
 type FlowRunRow struct {
 	ID             uuid.UUID
@@ -571,6 +597,7 @@ func (s *Service) persistPlan(ctx context.Context, in OrchestrateInput, mode Mod
 				"system_prompt":       step.SystemPrompt,
 				"user_prompt":         step.UserPrompt,
 				"suggested_saves":     toAnySuggestedSaves(step.SuggestedSaves),
+				"required_tool_calls": toAnyStrings(step.RequiredToolCalls),
 				"retry_policy":        string(step.RetryPolicy),
 				"skill_threshold":     step.SkillThreshold,
 
@@ -601,6 +628,16 @@ func toAnySuggestedSaves(saves []phases.SuggestedSave) []map[string]any {
 			"required": s.Required,
 			"hint":     s.Hint,
 		}
+	}
+	return out
+}
+
+// toAnyStrings serializa un []string a []any para persistir en el JSONB de
+// step.Inputs (REQ-54 issue-54.1: required_tool_calls).
+func toAnyStrings(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
 	}
 	return out
 }

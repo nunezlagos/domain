@@ -23,7 +23,11 @@ type PhaseResultInput struct {
 	FlowRunStepID   uuid.UUID
 	Output          map[string]any
 	MemoryRefsSaved []phases.MemoryRef
-	DurationMS      int64
+	// ToolCallsSaved son los nombres de las tools domain_* que el cliente
+	// invocó durante la fase (REQ-54 issue-54.1). El servidor valida que el
+	// contrato required_tool_calls de la fase sea subconjunto de esta lista.
+	ToolCallsSaved []string
+	DurationMS     int64
 }
 
 // PhaseResultResult es lo que devolvemos al cliente: status del step,
@@ -44,7 +48,10 @@ type PhaseResultResult struct {
 	RequiresConfirm bool
 	ConfirmMessage  string
 
-
+	// MissingToolCalls: si la fase declara un contrato required_tool_calls y el
+	// cliente no reportó todas, el step NO se cierra (queda running, reintentable)
+	// y acá van las tools que faltan para que el cliente sepa qué llamar (REQ-54).
+	MissingToolCalls []string `json:"missing_tool_calls,omitempty"`
 
 	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
 
@@ -162,6 +169,24 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		}
 	}
 
+	// REQ-54 issue-54.1: contrato fase→tools. El contrato efectivo es el override
+	// de agent_templates.metadata.required_tool_calls (si está y no vacío) o el
+	// default del handler (rebuilt.RequiredToolCalls). Si el contrato no es
+	// subconjunto de lo que el cliente reportó, NO cerramos el step: queda
+	// running (reintentable), NO se marca failed, y devolvemos missing_tool_calls
+	// para que el cliente sepa qué llamar. Contrato vacío = no-op (retrocompat).
+	if missing := s.missingToolCalls(ctx, flowRun.OrganizationID, phaseSlug, rebuilt, in.ToolCallsSaved); len(missing) > 0 {
+		if s.Metrics != nil {
+			modeStr, _ := step.Inputs["mode"].(string)
+			s.Metrics.OrchestratorPhaseResultsTotal.
+				WithLabelValues(string(phaseSlug), modeStr, "tool_contract_unmet").Inc()
+		}
+		return &PhaseResultResult{
+			StepID:           step.ID,
+			StepStatus:       step.Status,
+			MissingToolCalls: missing,
+		}, nil
+	}
 
 	if err := s.Repo.MarkStepCompleted(ctx, step.ID, in.Output); err != nil {
 		return nil, fmt.Errorf("mark completed: %w", err)
@@ -760,6 +785,17 @@ func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, i
 // re-valida (eso ya pasó en handler.Build).
 func rebuildOutputFromStepInputs(step *FlowRunStepRow) *phases.Output {
 	out := &phases.Output{}
+	// REQ-54 issue-54.1: reconstruir el default de required_tool_calls que el
+	// handler declaró al planificar la fase (persistido en los Inputs del step).
+	// Independiente de suggested_saves — una fase puede tener contrato de tools
+	// sin tener required saves, y viceversa.
+	if tc, ok := step.Inputs["required_tool_calls"].([]any); ok {
+		for _, raw := range tc {
+			if s, ok := raw.(string); ok && s != "" {
+				out.RequiredToolCalls = append(out.RequiredToolCalls, s)
+			}
+		}
+	}
 	saves, ok := step.Inputs["suggested_saves"].([]any)
 	if !ok {
 		return out
@@ -782,4 +818,45 @@ func rebuildOutputFromStepInputs(step *FlowRunStepRow) *phases.Output {
 		out.SuggestedSaves = append(out.SuggestedSaves, s)
 	}
 	return out
+}
+
+// missingToolCalls resuelve el contrato efectivo de tools de la fase y devuelve
+// las que faltan respecto de lo reportado por el cliente (REQ-54 issue-54.1).
+//
+// Contrato efectivo: el override de agent_templates.metadata.required_tool_calls
+// gana si está presente y no vacío; si no, el default del handler (out). Si el
+// contrato resultante está vacío, devuelve nil (no-op, retrocompat).
+func (s *Service) missingToolCalls(ctx context.Context, orgID uuid.UUID, slug phases.PhaseSlug, out *phases.Output, reported []string) []string {
+	var contract []string
+	if out != nil {
+		contract = out.RequiredToolCalls
+	}
+	// Override desde BD (si el repo lo tiene y hay template para el slug).
+	if s.Repo != nil {
+		if tmpl, err := s.Repo.GetAgentTemplate(ctx, orgID, string(slug)); err == nil && tmpl != nil {
+			if override := tmpl.RequiredToolCalls(); len(override) > 0 {
+				contract = override
+			}
+		}
+	}
+	return missingFromContract(contract, reported)
+}
+
+// missingFromContract es la lógica pura de subconjunto: devuelve los elementos de
+// contract que no están en reported. Contrato vacío → nil. Testeable sin BD.
+func missingFromContract(contract, reported []string) []string {
+	if len(contract) == 0 {
+		return nil
+	}
+	have := make(map[string]struct{}, len(reported))
+	for _, r := range reported {
+		have[r] = struct{}{}
+	}
+	var missing []string
+	for _, c := range contract {
+		if _, ok := have[c]; !ok {
+			missing = append(missing, c)
+		}
+	}
+	return missing
 }

@@ -69,6 +69,13 @@ type Output struct {
 	SkillThreshold float64
 
 
+	// RequiredToolCalls es el contrato de tools que el cliente DEBE haber
+	// invocado para cerrar la fase (REQ-54 issue-54.1). Default por fase; el
+	// override de agent_templates.metadata.required_tool_calls gana si existe.
+	// nil/vacío = sin contrato (no-op), retrocompatible.
+	RequiredToolCalls []string
+
+
 	RetryPolicy RetryPolicy
 }
 

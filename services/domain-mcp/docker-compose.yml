@@ -74,6 +74,22 @@ services:
       DOMAIN_METRICS_ENABLED: "true"
       DOMAIN_METRICS_BIND: "0.0.0.0"
       DOMAIN_METRICS_PORT: "9090"
+      # REQ-54: LLM server-side (MiniMax). Sin esto el proceso Go no ve la key
+      # y rerank/inferencia-de-aristas/judge + la preparación de contexto
+      # degradan silenciosamente. La key vive en services/.env (LLM_API_KEY);
+      # el compose de domain-admin ya la pasa, este bloque faltaba.
+      # Nombres EXACTOS que lee el código Go (internal/llm/anthropic/minimax.go
+      # + cmd/domain/server_services.go): key = LLM_API_KEY→MINIMAX_API_KEY→
+      # DOMAIN_MINIMAX_API_KEY; provider default = DOMAIN_LLM_PROVIDER;
+      # modelo = LLM_MODEL→MINIMAX_MODEL.
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-MiniMax-M3}
+      DOMAIN_LLM_PROVIDER: ${LLM_PROVIDER:-minimax}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
+      MINIMAX_REGION: ${MINIMAX_REGION:-international}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-}
+      DOMAIN_ANTHROPIC_KEY: ${ANTHROPIC_API_KEY:-}
     expose:
       - "8000"
       - "9090"

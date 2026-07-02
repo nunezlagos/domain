@@ -21,12 +21,25 @@ Siempre arranca asi:
 NO mas de 2 lineas para el saludo+contexto.
 
 ## 2. Llamar estos tools y compilar un bloque resumen
+SIEMPRE pasa el {project_slug} del bootstrap donde la tool lo acepte. Si lo
+omitis, algunas tools devuelven datos de TODA la org, no de este proyecto.
 Despues del saludo, llama simultaneamente:
-- ` + "`domain_project_skill_list(project_slug)`" + ` - skills del proyecto
+- ` + "`domain_project_skill_list(project_slug)`" + ` - skills del proyecto + globales (ya incluye globales; NO pases include_globals)
 - ` + "`domain_project_policy_list(project_slug)`" + ` - policies del proyecto
-- ` + "`domain_ticket_list(project_slug, limit=5)`" + ` - tickets abiertos
+- ` + "`domain_policy_list()`" + ` - policies globales (platform). NO tiene include_globals: es una tool aparte, sin args
+- ` + "`domain_ticket_list(project_slug, limit=5)`" + ` - tickets abiertos DE ESTE proyecto (pasa project_slug si o si)
 
-Muestra el resultado en YAML:
+IMPORTANTE (asimetria skills vs policies): skills se traen en UNA sola llamada
+(project_skill_list ya incluye globales). Policies requieren DOS llamadas:
+project_policy_list (proyecto) + policy_list (globales). NO existe una tool que
+las combine. Mostra AMBOS counts, nunca omitas las globales.
+
+Como contar P (proyecto) y G (globales):
+- skills: project_skill_list devuelve un campo ` + "`scope`" + ` por item (project|global).
+  P = items con scope=project, G = items con scope=global.
+- policies: P = total de project_policy_list, G = total de policy_list.
+
+Muestra el resultado en YAML (P = proyecto, G = globales):
 
 ` + "```" + `
 slug:    {project_slug}
@@ -34,9 +47,9 @@ rama:    {branch}
 remote:  {origin} [{kind}]
 head:    {hash[:8]}
 
-skills (project):  {N}
-policies (project): {N}
-tickets open:      {N}
+skills:   {P} proyecto + {G} globales
+policies: {P} proyecto + {G} globales
+tickets open: {N}
 
 ultimo:   {1 linea de la observation mas reciente}
 ` + "```" + `
@@ -57,7 +70,7 @@ Si el usuario dio una instruccion directa:
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 1 }
+func (s *FirstResponsePromptSeeder) Version() int    { return 2 }
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 

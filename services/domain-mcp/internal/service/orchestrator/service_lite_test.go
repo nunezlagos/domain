@@ -92,9 +92,15 @@ func TestMode_Lite_IsValid(t *testing.T) {
 	require.True(t, Mode("lite").IsValid())
 }
 
-// TestService_Run_DefaultMode_StaysFull garantiza que Lite es opt-in y no
-// cambió el default: input sin Mode sigue resolviendo a Full (que falla
-// acá por falta de los 10 handlers, probando que NO cayó en Lite).
+// TestService_Run_DefaultMode_StaysFull garantiza que para input COMPLEJO sin
+// Mode el default sigue resolviendo a Full (que falla acá por falta de los 10
+// handlers, probando que NO cayó en Lite/Express).
+//
+// Nota histórica: la versión original usaba RawText "x", que con el decideMode
+// complexity-based (2026-06-26) clasifica moderate → auto-selecciona Lite (por
+// diseño, ya no es solo opt-in) y el plan construye OK con este registry — el
+// test quedó rojo en main por premisa obsoleta, no por bug. Se preserva el
+// espíritu usando un raw_text que clasifica complex (isComplexIntent).
 func TestService_Run_DefaultMode_StaysFull(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, buildRegistryLite(t), "dev")
@@ -102,10 +108,8 @@ func TestService_Run_DefaultMode_StaysFull(t *testing.T) {
 		OrganizationID: uuid.New(),
 		ProjectID:      uuid.New(),
 		UserID:         uuid.New(),
-		RawText:        "x",
-
+		RawText:        "implementar un nuevo módulo de pagos con migración de esquema y refactor del servicio",
 	})
-
 
 	require.Error(t, err)
 	require.Nil(t, res)

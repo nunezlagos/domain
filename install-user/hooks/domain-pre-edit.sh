@@ -65,6 +65,7 @@ esac
 
 reason="domain (issue-54.7): edición de código SIN flow SDD activo. TODO código pasa por SDD: ejecutá domain_orchestrate (el spec se arma en la fase sdd-spec — consultá dudas al usuario ANTES de redactarlo). Si el usuario ordenó explícitamente saltear el SDD, pedile que apruebe esta edición."
 
+domain_log_injection "PreToolUse" "$session_id" "gate $decision ($tool_name sin flow SDD)"
 python3 -c '
 import json, sys
 print(json.dumps({"hookSpecificOutput": {

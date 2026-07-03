@@ -43,3 +43,19 @@ domain_call_tool() {
     -H "Accept: application/json, text/event-stream" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}"
 }
+
+# domain_log_injection <hook> <session_id> <resumen> — REQ-55 issue-55.5.
+# additionalContext de los hooks es invisible en la UI de Claude Code (sin log
+# nativo). Dejamos rastro auditable en ~/.local/state/domain/injections.log:
+# timestamp ISO, hook, session, resumen del contexto inyectado. Best-effort:
+# nunca falla ni bloquea la sesión (todo redirigido, siempre "return 0").
+domain_log_injection() {
+  local dir="$HOME/.local/state/domain"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  local ts summary
+  ts=$(date -Iseconds 2>/dev/null || echo "?")
+  # resumen en una línea, recortado a 200 chars (el log es índice, no copia)
+  summary=$(printf '%s' "$3" | tr '\n' ' ' | cut -c1-200)
+  printf '%s\t%s\t%s\t%s\n' "$ts" "$1" "${2:-?}" "$summary" >> "$dir/injections.log" 2>/dev/null
+  return 0
+}

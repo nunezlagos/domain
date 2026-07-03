@@ -276,4 +276,12 @@ print(json.dumps({
     }
 }))
 PYEOF
+
+# REQ-55 issue-55.5: rastro auditable de la inyección (additionalContext es
+# invisible en la UI de Claude Code). Best-effort, nunca bloquea.
+_inj_dir="$REAL_HOME/.local/state/domain"
+mkdir -p "$_inj_dir" 2>/dev/null && \
+  printf '%s\tSessionStart\t%s\tbootstrap+code_graph+mem_context\n' \
+    "$(date -Iseconds 2>/dev/null || echo '?')" "${mem_slug:-?}" \
+    >> "$_inj_dir/injections.log" 2>/dev/null
 exit 0

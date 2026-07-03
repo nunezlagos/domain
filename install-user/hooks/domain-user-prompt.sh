@@ -105,5 +105,8 @@ if [ -n "$pid" ] && [ -n "$session_id" ]; then
 fi
 
 # La señal (si hay) va por stdout: Claude Code la inyecta como additionalContext.
-[ -n "$ctx" ] && printf '%s\n' "$ctx"
+if [ -n "$ctx" ]; then
+  domain_log_injection "UserPromptSubmit" "$session_id" "$ctx"
+  printf '%s\n' "$ctx"
+fi
 exit 0

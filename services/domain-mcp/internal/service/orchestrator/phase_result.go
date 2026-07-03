@@ -53,6 +53,12 @@ type PhaseResultResult struct {
 	// y acá van las tools que faltan para que el cliente sepa qué llamar (REQ-54).
 	MissingToolCalls []string `json:"missing_tool_calls,omitempty"`
 
+	// ValidationError: si el output del cliente no cumple el shape que la fase
+	// exige (ej. falta issue_md en sdd-spec), el step NO se cierra ni se marca
+	// failed — queda running/reintentable, igual que MissingToolCalls. Acá va el
+	// mensaje de qué falta para que el cliente corrija y reintente (REQ-56 issue-56.4).
+	ValidationError string `json:"validation_error,omitempty"`
+
 	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
 
 
@@ -155,6 +161,12 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	}
 
 
+	// REQ-56 issue-56.4: la validación de shape del output es un CONTRATO
+	// recuperable, igual que required_tool_calls. Antes un output inválido (ej.
+	// falta issue_md en sdd-spec) llamaba MarkStepFailed + propagateFlowStatusAfterFailure
+	// y mataba el step/flow IRREVERSIBLEMENTE en el primer intento. Ahora el step
+	// queda running (reintentable) y devolvemos validation_error para que el
+	// cliente corrija el shape y reintente — mismo patrón que MissingToolCalls.
 	if s.Phases != nil {
 		if h, lookupErr := s.Phases.Lookup(phases.PhaseSlug(step.StepKey)); lookupErr == nil {
 			result := phases.ClientResult{
@@ -162,9 +174,16 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				MemoryRefsSaved: in.MemoryRefsSaved,
 			}
 			if err := h.Validate(ctx, rebuilt, result); err != nil {
-				_ = s.Repo.MarkStepFailed(ctx, step.ID, err.Error())
-				_ = s.propagateFlowStatusAfterFailure(ctx, flowRun.ID)
-				return nil, err
+				if s.Metrics != nil {
+					modeStr, _ := step.Inputs["mode"].(string)
+					s.Metrics.OrchestratorPhaseResultsTotal.
+						WithLabelValues(string(phaseSlug), modeStr, "shape_contract_unmet").Inc()
+				}
+				return &PhaseResultResult{
+					StepID:          step.ID,
+					StepStatus:      step.Status,
+					ValidationError: err.Error(),
+				}, nil
 			}
 		}
 	}

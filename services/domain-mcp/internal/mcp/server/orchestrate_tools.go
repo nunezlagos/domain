@@ -65,7 +65,7 @@ func toolOrchestratePhaseResult() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithObject("output",
-			mcp.Description("Output JSON de la fase. Shape depende del slug del step (ver docs/agents/sdd-pipeline.md)."),
+			mcp.Description("Output JSON de la fase. Shape depende del slug del step (ver docs/agents/sdd-pipeline.md). Si el shape es inválido (falta un campo requerido), el servidor NO mata el step: queda running (reintentable) y devuelve validation_error para que corrijas y reintentes. REQ-56 issue-56.4."),
 			mcp.Required(),
 		),
 		mcp.WithArray("memory_refs_saved",

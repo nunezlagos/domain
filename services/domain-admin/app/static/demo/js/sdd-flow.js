@@ -97,8 +97,78 @@
       spec:'Modo solo: el server ejecuta el pipeline internamente sin desglose de fases cliente.',
       tasks:[], issues:[] },
   ];
+
+  /* ================================================================== *
+   *  BOOTSTRAP FLOW (client ↔ server) — secuencia real del arranque de
+   *  sesión, verificada contra install-user/hooks/domain-session-start.sh
+   *  y services/domain-mcp/internal/mcp/server/session_bootstrap_tools.go.
+   *  loc: 'client' (hook en la máquina del user) | 'server' (MCP en el VPS).
+   * ================================================================== */
+  var BOOTSTRAP_NODES = [
+    { id:'bs-env',     name:'Detectar env', icon:'key',            x:8,   y:180, type:'start', loc:'client',
+      desc:'Resolver VPS_URL + API_KEY desde env / install.env / .claude.json.',
+      tools:[], ops:[{type:'read',label:'install.env'}], output:'vps_url, api_key',
+      spec:'Credenciales para hablar con el server MCP.', tasks:[], issues:[] },
+    { id:'bs-git',     name:'Git info',     icon:'code-branch',    x:96,  y:180, type:'phase', loc:'client',
+      desc:'git remote get-url origin / branch / rev-parse HEAD en el cwd.',
+      tools:[], ops:[{type:'read',label:'git'}], output:'git_remote, git_branch, git_head',
+      spec:'Identidad del repo para resolver el proyecto.', tasks:[], issues:[] },
+    { id:'bs-rules',   name:'Rules files',  icon:'file-shield',    x:184, y:180, type:'phase', loc:'client',
+      desc:'Detectar AI-rules: AGENTS.md, CLAUDE.md, .cursorrules, openspec/…',
+      tools:[], ops:[{type:'read',label:'rules'}], output:'existing_rules_files[]',
+      spec:'Rules del repo para sugerir import de policies.', tasks:[], issues:[] },
+    { id:'bs-bootstrap', name:'bootstrap',  icon:'server',         x:288, y:180, type:'phase', loc:'server',
+      desc:'domain_session_bootstrap: resuelve project_id, code_graph.stale, recent_observations, counts, import_candidates.',
+      tools:['domain_session_bootstrap'],
+      ops:[{type:'read',label:'projects'},{type:'read',label:'observations'},{type:'read',label:'code_index_files'}],
+      output:'known, project, code_graph.stale, recent_observations[], import_candidates[]',
+      spec:'Overlay del proyecto desde la DB (server).', tasks:[], issues:[] },
+    { id:'bs-slug',    name:'Parse slug',   icon:'tag',            x:392, y:180, type:'phase', loc:'client',
+      desc:'Extraer project.slug del JSON de bootstrap (parseo local).',
+      tools:[], ops:[{type:'read',label:'json'}], output:'mem_slug',
+      spec:'Slug para las llamadas siguientes.', tasks:[], issues:[] },
+    { id:'bs-stale',   name:'¿Grafo stale?', icon:'code-compare',  x:480, y:180, type:'phase', loc:'client',
+      desc:'Si total_nodes ≤ 3 O stale=true → reconstruir (REQ-56 issue-56.3).',
+      tools:[], ops:[{type:'check',label:'stale'}], output:'rebuild? (si/no)',
+      spec:'Decisión de reconstruir el grafo.', tasks:[], issues:[] },
+    { id:'bs-cgraphsh', name:'code-graph.sh', icon:'diagram-project', x:568, y:70, type:'phase', loc:'client',
+      desc:'(Condicional) ast-grep parsea el cwd multi-lenguaje y arma nodos/edges.',
+      tools:[], ops:[{type:'read',label:'ast-grep'}], output:'graph_json {nodes, edges}',
+      spec:'Build del grafo EN CLIENTE (el server no tiene FS).', tasks:[], issues:[] },
+    { id:'bs-upload',  name:'code_upload',  icon:'server',         x:672, y:70, type:'phase', loc:'server',
+      desc:'domain_code_upload: persiste code_nodes/code_edges en la DB.',
+      tools:['domain_code_upload'],
+      ops:[{type:'write',label:'code_nodes'},{type:'write',label:'code_edges'}], output:'nodes_upserted, edges_created',
+      spec:'Persistir el grafo (server).', tasks:[], issues:[] },
+    { id:'bs-graph',   name:'code_graph',   icon:'server',         x:672, y:180, type:'phase', loc:'server',
+      desc:'domain_code_graph: overview del grafo (total_nodes, by_kind, god_nodes).',
+      tools:['domain_code_graph'],
+      ops:[{type:'read',label:'code_nodes'}], output:'total_nodes, by_kind[], god_nodes[]',
+      spec:'Leer el grafo para el contexto (server).', tasks:[], issues:[] },
+    { id:'bs-mem',     name:'mem_context',  icon:'server',         x:760, y:180, type:'phase', loc:'server',
+      desc:'domain_mem_context: últimas N observaciones del proyecto.',
+      tools:['domain_mem_context'],
+      ops:[{type:'read',label:'knowledge_observations'}], output:'results[], count',
+      spec:'Memoria reciente para el contexto (server).', tasks:[], issues:[] },
+    { id:'bs-cap',     name:'Cap contexto', icon:'compress',       x:848, y:180, type:'phase', loc:'client',
+      desc:'Truncar a DOMAIN_CTX_MAX_BYTES (12KB): bootstrap 45% / graph 25% / mem 30% (REQ-56 issue-56.1).',
+      tools:[], ops:[{type:'write',label:'truncar'}], output:'ctx acotado',
+      spec:'Evitar saturar la ventana del agente.', tasks:[], issues:[] },
+    { id:'bs-emit',    name:'Inyectar ctx', icon:'inbox',          x:936, y:180, type:'end', loc:'client',
+      desc:'Emitir additionalContext (3 secciones + reglas R1-R6) a Claude Code.',
+      tools:[], ops:[{type:'write',label:'stdout'}], output:'hookSpecificOutput.additionalContext',
+      spec:'Contexto listo para el primer turn.', tasks:[], issues:[] },
+  ];
+  var BOOTSTRAP_EDGES = [
+    { from:'bs-env',to:'bs-git'},{from:'bs-git',to:'bs-rules'},{from:'bs-rules',to:'bs-bootstrap'},
+    { from:'bs-bootstrap',to:'bs-slug'},{from:'bs-slug',to:'bs-stale'},
+    { from:'bs-stale',to:'bs-cgraphsh',label:'stale'},{from:'bs-stale',to:'bs-graph',label:'ok'},
+    { from:'bs-cgraphsh',to:'bs-upload'},{from:'bs-upload',to:'bs-graph'},
+    { from:'bs-graph',to:'bs-mem'},{from:'bs-mem',to:'bs-cap'},{from:'bs-cap',to:'bs-emit'},
+  ];
+
   var NODE_MAP = {};
-  NODES.forEach(function(n){ NODE_MAP[n.id] = n; });
+  NODES.concat(BOOTSTRAP_NODES).forEach(function(n){ NODE_MAP[n.id] = n; });
 
   /* ================================================================== *
    *  EDGES & WORKFLOWS
@@ -117,14 +187,24 @@
      full/async/detect = 11 fases; lite = explore+apply+verify; express = apply+verify;
      solo = ejecución server-side inline. hybrid/manual NO son modos: son exec_modes
      (controlan dónde pausa el flujo), por eso no aparecen como tabs. */
+  var _SDD_FULL = ['start','explore','spec','propose','design','tasks','apply','verify','judge','review','archive','onboard','end'];
+  var _BOOTSTRAP = ['bs-env','bs-git','bs-rules','bs-bootstrap','bs-slug','bs-stale','bs-cgraphsh','bs-upload','bs-graph','bs-mem','bs-cap','bs-emit'];
   var WORKFLOWS = [
-    { slug:'full',   name:'Full',    nodes:['start','explore','spec','propose','design','tasks','apply','verify','judge','review','archive','onboard','end'] },
-    { slug:'lite',   name:'Lite',    nodes:['start','explore','apply','verify','end'] },
-    { slug:'express',name:'Express', nodes:['start','apply','verify','end'] },
-    { slug:'async',  name:'Async',   nodes:['start','explore','spec','propose','design','tasks','apply','verify','judge','review','archive','onboard','end'] },
-    { slug:'detect', name:'Detect',  nodes:['start','explore','spec','propose','design','tasks','apply','verify','judge','review','archive','onboard','end'] },
-    { slug:'solo',   name:'Solo',    nodes:['start','solo','end'] },
+    { slug:'full',      name:'Full',      nodes:_SDD_FULL },
+    { slug:'lite',      name:'Lite',      nodes:['start','explore','apply','verify','end'] },
+    { slug:'express',   name:'Express',   nodes:['start','apply','verify','end'] },
+    { slug:'async',     name:'Async',     nodes:_SDD_FULL },
+    { slug:'detect',    name:'Detect',    nodes:_SDD_FULL },
+    { slug:'solo',      name:'Solo',      nodes:['start','solo','end'] },
+    { slug:'bootstrap', name:'Bootstrap', nodes:_BOOTSTRAP, edges:BOOTSTRAP_EDGES },
   ];
+  // edges por workflow: bootstrap trae los suyos; el resto usa EDGES (SDD).
+  function edgesFor(slug) {
+    for (var i = 0; i < WORKFLOWS.length; i++) {
+      if (WORKFLOWS[i].slug === slug && WORKFLOWS[i].edges) return WORKFLOWS[i].edges;
+    }
+    return EDGES;
+  }
 
   /* ================================================================== *
    *  HELPERS
@@ -302,7 +382,7 @@
     /* ---- status ---- */
     var statusEl = el('div', 'sdf-status');
     statusEl.innerHTML =
-      '<span class="sdf-status-flow"><i class="fas fa-diagram-project"></i> SDD Pipeline</span>' +
+      '<span class="sdf-status-flow"><i class="fas fa-diagram-project"></i> Workflow</span>' +
       '<span class="sdf-status-phase"><i class="fas fa-circle-notch fa-spin"></i> —</span>' +
       '<span class="sdf-status-bar"><i style="width:0%"></i></span>' +
       '<span class="sdf-status-meta">0/0 fases</span>';
@@ -317,8 +397,12 @@
     graph.appendChild(edgesSvg);
     host.appendChild(graph);
 
+    // ALL_NODES = fases SDD + nodos del flujo bootstrap. Se renderizan todos;
+    // applyWf muestra/oculta según el workflow activo.
+    var ALL_NODES = NODES.concat(BOOTSTRAP_NODES);
+
     var maxX = 0, maxY = 0;
-    NODES.forEach(function(n){
+    ALL_NODES.forEach(function(n){
       if (n.x + NODE_W > maxX) maxX = n.x + NODE_W;
       if (n.y + NODE_H > maxY) maxY = n.y + NODE_H;
     });
@@ -328,14 +412,20 @@
     graph.style.height = GRAPH_H + 'px';
 
     /* ---- node elements ---- */
-    NODES.forEach(function(n){
+    ALL_NODES.forEach(function(n){
       var div = el('div', 'sdf-node');
       div.dataset.id = n.id;
       div.style.left = n.x + 'px';
       div.style.top  = n.y + 'px';
       if (n.type === 'start') div.classList.add('is-start');
       if (n.type === 'end')   div.classList.add('is-end');
+      // Badge de ubicación server/client (REQ: distinguir dónde corre cada nodo).
+      if (n.loc) div.classList.add('sdf-loc-' + n.loc);
+      var locBadge = n.loc
+        ? '<span class="sdf-node-loc sdf-node-loc--' + n.loc + '">' + (n.loc === 'server' ? 'SRV' : 'CLI') + '</span>'
+        : '';
       div.innerHTML =
+        locBadge +
         '<span class="sdf-node-ic"><i class="fas fa-' + n.icon + '"></i></span>' +
         '<span class="sdf-node-txt"><b>' + n.name + '</b></span>';
       div.addEventListener('click', function(e){ onNodeClick(e, n, div); });
@@ -486,7 +576,7 @@
       edgesSvg.setAttribute('viewBox', '0 0 ' + GRAPH_W + ' ' + GRAPH_H);
       edgesSvg.setAttribute('width', GRAPH_W);
       edgesSvg.setAttribute('height', GRAPH_H);
-      EDGES.forEach(function(edge){
+      edgesFor(curSlug).forEach(function(edge){
         var a = NODE_MAP[edge.from], b = NODE_MAP[edge.to];
         if (!a || !b) return;
         var cx1 = a.x + NODE_W/2, cy1 = a.y + R;
@@ -528,7 +618,7 @@
       if (tick >= activeIds.length) tick = 0;
 
       // update node states but KEEP detail open if it was open
-      NODES.forEach(function(n){
+      ALL_NODES.forEach(function(n){
         var idx = activeIds.indexOf(n.id);
         var nEl = graph.querySelector('.sdf-node[data-id="' + n.id + '"]');
         if (!nEl) return;
@@ -585,7 +675,7 @@
       if (ids.length === 0) return;
       tick = (tick + 1) % (ids.length + 1);
 
-      NODES.forEach(function(n){
+      ALL_NODES.forEach(function(n){
         var idx = ids.indexOf(n.id);
         var nEl = graph.querySelector('.sdf-node[data-id="' + n.id + '"]');
         if (!nEl) return;

@@ -250,28 +250,30 @@ def components_demo(request):
 
 
 _SDD_PHASES = [
-    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el codigo existente.", "search"),
-    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptacion.", "doc"),
-    ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs.", "bulb"),
-    ("sdd-design", "Design", "spec", "Diseña la solucion y la arquitectura.", "blueprint"),
-    ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables.", "checklist"),
+    ("sdd-explore", "Explore", "spec", "Mapea el contexto y el codigo existente.", "magnifying-glass"),
+    ("sdd-spec", "Spec", "spec", "Define el contrato y los criterios de aceptacion.", "file-lines"),
+    ("sdd-propose", "Propose", "spec", "Propone enfoques con sus tradeoffs.", "lightbulb"),
+    ("sdd-design", "Design", "spec", "Diseña la solucion y la arquitectura.", "compass-drafting"),
+    ("sdd-tasks", "Tasks", "spec", "Descompone el diseño en tareas accionables.", "list-check"),
     ("sdd-apply", "Apply", "exec", "Implementa el codigo de las tareas.", "code"),
-    ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato.", "check"),
-    ("sdd-judge", "Judge", "tdd", "Revision adversarial de la implementacion.", "scale"),
-    ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos.", "archive"),
-    ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio.", "book"),
+    ("sdd-verify", "Verify", "tdd", "Corre y valida tests contra el contrato.", "shield-halved"),
+    ("sdd-judge", "Judge", "tdd", "Revision adversarial de la implementacion.", "gavel"),
+    ("sdd-review", "Review", "tdd", "Audita el cambio contra policies y skills del proyecto.", "clipboard-check"),
+    ("sdd-archive", "Archive", "close", "Archiva el resultado y los artefactos.", "box-archive"),
+    ("sdd-onboard", "Onboard", "close", "Documenta y deja onboarding del cambio.", "rocket"),
 ]
 
 _SDD_PHASE_OPS = {
     "sdd-explore": {
-        "output": "intent + directorio → contexto mapeado",
+        "output": "intent + scope + affected_paths → contexto mapeado desde el code graph",
         "tools_mcp": [
+            "domain_code_graph → grafo de código vivo (REQUERIDO)",
+            "domain_code_explore → navegación de nodos/edges del grafo",
             "domain_mem_search → SELECT FTS en knowledge_observations",
-            "domain_mem_save → INSERT knowledge_observations (intent)",
         ],
         "db_ops": [
+            {"type": "read", "label": "code_nodes + code_edges (grafo de código)"},
             {"type": "read", "label": "knowledge_observations (BM25/FTS: plainto_tsquery spanish)"},
-            {"type": "write", "label": "knowledge_observations (opcional)"},
         ],
     },
     "sdd-spec": {
@@ -366,6 +368,17 @@ _SDD_PHASE_OPS = {
             {"type": "write", "label": "knowledge_observations (sabotage_record REQUERIDO)"},
         ],
     },
+    "sdd-review": {
+        "output": "verdict: compliant | violations_found → auditoría de policies",
+        "tools_mcp": [
+            "domain_project_policy_list → SELECT project_policies (resolver project→platform)",
+            "domain_verify_start / domain_verify_update_item / domain_verify_complete → checkpoint en tdd_verifications",
+        ],
+        "db_ops": [
+            {"type": "read", "label": "project_policies + project_skills (resolver jerárquico)"},
+            {"type": "write", "label": "tdd_verifications (checkpoint de review; violations_found bloquea archive)"},
+        ],
+    },
     "sdd-archive": {
         "output": "archived=true → issue cerrado + artefactos",
         "tools_mcp": [
@@ -389,15 +402,19 @@ _SDD_PHASE_OPS = {
     },
 }
 
+# Modos REALES del orquestador (services/domain-mcp/internal/service/orchestrator/modes).
+# full/async/detect ejecutan las 11 fases; lite = explore+apply+verify; express = apply+verify;
+# solo = ejecución server-side inline (sin desglose de fases cliente).
+# hybrid y manual NO son modos: son exec_modes (controlan dónde PAUSA el flujo, no qué fases
+# corre). Por eso no aparecen como workflow tabs.
+_SDD_FULL_PHASES = ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard"]
 _SDD_WORKFLOWS = [
-    {"slug": "full",    "name": "Full",    "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "full",    "name": "Full",    "phases": _SDD_FULL_PHASES},
     {"slug": "lite",    "name": "Lite",    "phases": ["sdd-explore", "sdd-apply", "sdd-verify"]},
     {"slug": "express", "name": "Express", "phases": ["sdd-apply", "sdd-verify"]},
-    {"slug": "solo",    "name": "Solo",    "phases": ["sdd-spec", "sdd-archive"]},
-    {"slug": "async",   "name": "Async",   "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
-    {"slug": "detect",  "name": "Detect",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
-    {"slug": "hybrid",  "name": "Hybrid",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
-    {"slug": "manual",  "name": "Manual",  "phases": ["sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge", "sdd-archive", "sdd-onboard"]},
+    {"slug": "async",   "name": "Async",   "phases": _SDD_FULL_PHASES},
+    {"slug": "detect",  "name": "Detect",  "phases": _SDD_FULL_PHASES},
+    {"slug": "solo",    "name": "Solo",    "phases": _SDD_FULL_PHASES},
 ]
 
 
@@ -406,8 +423,9 @@ def sdd_flow(request):
     """Vista general del pipeline SDD como grafo de nodos.
 
     Resuelve los agent_templates por slug sdd-* (una sola query) y arma la lista
-    ordenada de las 10 fases. Cada nodo lleva el id del template si esta seedeado.
-    Workflow tabs filtran las fases por modo de ejecucion.
+    ordenada de las 11 fases. Cada nodo lleva el id del template si esta seedeado.
+    Workflow tabs filtran las fases por modo de ejecucion (full/lite/express/async/
+    detect/solo). hybrid y manual son exec_modes, no modos, por eso no son tabs.
     """
     redir = _require_auth(request)
     if redir:

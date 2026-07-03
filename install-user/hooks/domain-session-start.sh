@@ -207,7 +207,24 @@ try:
 except: pass
 " 2>/dev/null)
   total_nodes="${total_nodes:-0}"
-  if [ "$total_nodes" -le 3 ]; then
+  # REQ-56 issue-56.3: además de "grafo vacío", reconstruir cuando está STALE.
+  # El bootstrap reporta code_graph.stale=true cuando el grafo se construyó en un
+  # HEAD viejo; hasta ahora eso solo sugería correr el script a mano. Ahora el
+  # encadenamiento es automático: registrar/abrir un proyecto deja el grafo al día.
+  graph_stale=$(echo "$bootstrap_out" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    for c in d.get('result', {}).get('content', []):
+        try:
+            inner = json.loads(c.get('text',''))
+            cg = inner.get('code_graph', {})
+            print('1' if cg.get('stale') else '0'); break
+        except: pass
+except: pass
+" 2>/dev/null)
+  graph_stale="${graph_stale:-0}"
+  if [ "$total_nodes" -le 3 ] || [ "$graph_stale" = "1" ]; then
     # Parsear y subir (best-effort, no bloquea si falla)
     if [ -d "$cwd" ] && [ -n "$mem_slug" ]; then
       index_out=$("$SCRIPT_PATH" "$cwd" "$mem_slug" 2>&1)

@@ -713,10 +713,21 @@ func (h *sessionBootstrapHandlers) handleSessionRegister(ctx context.Context, re
 
 	// Refetch para devolver el project completo.
 	proj, _ := h.projects.GetByID(ctx, projID)
+	// REQ-56 issue-56.3: al registrar, el proyecto queda "conocido" pero SIN grafo
+	// de código. El server no tiene el FS del cliente (por eso no corre code_build
+	// acá), así que emite una señal explícita para que el cliente encadene el build
+	// del code_graph + project index apenas registra, en vez de dejarlo manual.
 	return toolResultJSON(map[string]any{
 		"known":   false, // recién creado
 		"created": true,
 		"project": proj,
 		"repo":    createdRepo,
+		"next_action": map[string]any{
+			"kind":   "build_code_graph",
+			"reason": "proyecto recién registrado sin grafo de código; el cliente debe construirlo",
+			"hint":   "correr el script cliente domain-code-graph.sh <cwd> <slug> (el server no tiene FS del cliente)",
+			"slug":   slug,
+			"cwd":    cwd,
+		},
 	})
 }

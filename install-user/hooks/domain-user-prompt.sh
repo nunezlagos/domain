@@ -52,7 +52,13 @@ print(json.dumps({"content": p, "project_slug": slug, "client_kind": "claude-cod
 ' "$slug" 2>/dev/null) || exit 0
 
 domain_mcp_init >/dev/null 2>&1
-resp=$(domain_call_tool domain_prompt_capture "$prompt_json" 2>/dev/null)
+resp=$(domain_call_tool domain_prompt_capture "$prompt_json" 2>&1)
+_cap_rc=$?
+# REQ-56 issue-56.2: si la captura falló (curl error o el server devolvió "error"),
+# dejar rastro auditable en hook-errors.log en vez de descartarlo en silencio.
+if [ "$_cap_rc" -ne 0 ] || printf '%s' "$resp" | grep -q '"error"'; then
+  domain_log_hook_error "UserPromptSubmit" "$session_id" "domain_prompt_capture" "rc=$_cap_rc resp=$resp"
+fi
 
 # Parsear id (para el hook Stop) + classification (REQ-54 issue-54.4: señal
 # de orquestación). El python imprime: línea 1 = prompt_id, línea 2 = JSON de

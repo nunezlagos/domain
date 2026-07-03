@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/observability"
 )
 
@@ -20,13 +22,44 @@ var errInvalidFingerprint = errors.New("invalid fingerprint: must be hex-encoded
 // reset de dedup de error_events (issue-53.9). Lee/escribe via deps.Pool
 // directo (las tablas no tienen org-scoping, igual que workflows).
 type errorReportingHandlers struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	principal *apikey.Principal
 }
 
-// NewErrorReportingHandlers construye el handler con el pool. Si es nil,
-// los tools devuelven error explicito al invocarse.
-func NewErrorReportingHandlers(pool *pgxpool.Pool) *errorReportingHandlers {
-	return &errorReportingHandlers{pool: pool}
+// NewErrorReportingHandlers construye el handler con el pool y el principal de la
+// sesion (para el audit trail, REQ-56 issue-56.2). Si el pool es nil, los tools
+// devuelven error explicito al invocarse. El principal puede ser nil (sesion sin
+// autenticar): en ese caso el audit queda con actor_id NULL.
+func NewErrorReportingHandlers(pool *pgxpool.Pool, principal *apikey.Principal) *errorReportingHandlers {
+	return &errorReportingHandlers{pool: pool, principal: principal}
+}
+
+// actorID devuelve el UUID del principal de la sesion, o uuid.Nil si no hay
+// principal o el UserID no parsea. Se usa para poblar actor_id en el audit.
+func (h *errorReportingHandlers) actorID() uuid.UUID {
+	if h.principal == nil {
+		return uuid.Nil
+	}
+	id, err := uuid.Parse(h.principal.UserID)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
+}
+
+// logDecision escribe una entrada append-only en error_decision_log. Best-effort:
+// si falla, NO revierte la decision principal (ya aplicada) — solo se pierde el
+// rastro, que es preferible a fallar la operacion del operador.
+func (h *errorReportingHandlers) logDecision(ctx context.Context, fp []byte, action, reason string, detail []byte) {
+	actor := h.actorID()
+	var actorArg any
+	if actor != uuid.Nil {
+		actorArg = actor
+	}
+	_, _ = h.pool.Exec(ctx, `
+		INSERT INTO error_decision_log (fingerprint, action, actor_id, reason, detail)
+		VALUES ($1,$2,$3,NULLIF($4,''),$5)
+	`, fp, action, actorArg, reason, detail)
 }
 
 // validHealActions limita auto_heal_action a las acciones soportadas.
@@ -50,16 +83,18 @@ func toolKnownErrorSet() mcp.Tool {
 		mcp.WithBoolean("recoverable", mcp.Description("Si el error es recuperable (default true)")),
 		mcp.WithString("auto_heal_action", mcp.Description("retry|clear_cache|restart_worker|none (default none)")),
 		mcp.WithObject("action_params", mcp.Description("Parametros opcionales de la accion (jsonb)")),
+		mcp.WithString("reason", mcp.Description("Razon de la decision (por que se clasifica asi). Queda en el audit trail (error_decision_log).")),
 	)
 }
 
 func toolErrorReset() mcp.Tool {
 	return mcp.NewTool("domain_error_reset",
-		mcp.WithDescription("Borra el error_event de un fingerprint para reiniciar el dedup_count (el proximo evento crea una fila nueva)."),
+		mcp.WithDescription("Soft-delete del error_event de un fingerprint para reiniciar el dedup_count (el proximo evento crea una fila nueva). Reversible: marca deleted_at/by/reason, no borra la fila."),
 		mcp.WithString("fingerprint",
 			mcp.Description("Fingerprint sha256 en hex a resetear"),
 			mcp.Required(),
 		),
+		mcp.WithString("reason", mcp.Description("Razon del reset (por que se descarta el historial). Queda en el audit trail (error_decision_log).")),
 	)
 }
 
@@ -100,6 +135,11 @@ func (h *errorReportingHandlers) handleKnownErrorSet(ctx context.Context, req mc
 	if err != nil {
 		return mcp.NewToolResultError("set known_error: " + err.Error()), nil
 	}
+	// REQ-56 issue-56.2: dejar rastro de la decision (quien/cuando/por que + snapshot).
+	detail, _ := json.Marshal(map[string]any{
+		"name": name, "recoverable": recoverable, "auto_heal_action": action,
+	})
+	h.logDecision(ctx, fp, "known_error_set", req.GetString("reason", ""), detail)
 	return toolResultJSON(map[string]any{"fingerprint": hex.EncodeToString(fp), "name": name, "set": true})
 }
 
@@ -111,11 +151,23 @@ func (h *errorReportingHandlers) handleErrorReset(ctx context.Context, req mcp.C
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	tag, err := h.pool.Exec(ctx, `DELETE FROM error_events WHERE fingerprint = $1`, fp)
+	reason := req.GetString("reason", "")
+	var actorArg any
+	if a := h.actorID(); a != uuid.Nil {
+		actorArg = a
+	}
+	// REQ-56 issue-56.2: soft-delete en vez de DELETE duro. Solo afecta filas vivas
+	// (deleted_at IS NULL) para que un reset repetido no pise la autoria original.
+	tag, err := h.pool.Exec(ctx, `
+		UPDATE error_events
+		SET deleted_at = now(), deleted_by = $2, deletion_reason = NULLIF($3,'')
+		WHERE fingerprint = $1 AND deleted_at IS NULL
+	`, fp, actorArg, reason)
 	if err != nil {
 		return mcp.NewToolResultError("reset: " + err.Error()), nil
 	}
-	return toolResultJSON(map[string]any{"fingerprint": hex.EncodeToString(fp), "deleted": tag.RowsAffected()})
+	h.logDecision(ctx, fp, "error_reset", reason, nil)
+	return toolResultJSON(map[string]any{"fingerprint": hex.EncodeToString(fp), "soft_deleted": tag.RowsAffected()})
 }
 
 // decodeFingerprint lee el param "fingerprint" (hex) y lo decodifica a bytes.
@@ -132,7 +184,7 @@ func decodeFingerprint(req mcp.CallToolRequest) ([]byte, error) {
 }
 
 func registerErrorReportingTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	h := NewErrorReportingHandlers(deps.Pool)
+	h := NewErrorReportingHandlers(deps.Pool, deps.Principal)
 	return []mcpgo.ServerTool{
 		{Tool: toolKnownErrorSet(), Handler: wrap.Wrap("domain_known_error_set", h.handleKnownErrorSet)},
 		{Tool: toolErrorReset(), Handler: wrap.Wrap("domain_error_reset", h.handleErrorReset)},

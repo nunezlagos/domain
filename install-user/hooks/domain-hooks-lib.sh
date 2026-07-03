@@ -59,3 +59,18 @@ domain_log_injection() {
   printf '%s\t%s\t%s\t%s\n' "$ts" "$1" "${2:-?}" "$summary" >> "$dir/injections.log" 2>/dev/null
   return 0
 }
+
+# domain_log_hook_error <hook> <session_id> <op> <detail> — REQ-56 issue-56.2.
+# Los hooks lifecycle silencian sus propios fallos (curl a domain_* falla → se
+# descarta con >/dev/null 2>&1). Esto deja rastro auditable de esos fallos en
+# ~/.local/state/domain/hook-errors.log: timestamp, hook, session, operación que
+# falló y un detalle corto. Best-effort: nunca falla ni bloquea la sesión.
+domain_log_hook_error() {
+  local dir="$HOME/.local/state/domain"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  local ts detail
+  ts=$(date -Iseconds 2>/dev/null || echo "?")
+  detail=$(printf '%s' "$4" | tr '\n' ' ' | cut -c1-300)
+  printf '%s\t%s\t%s\t%s\t%s\n' "$ts" "$1" "${2:-?}" "${3:-?}" "$detail" >> "$dir/hook-errors.log" 2>/dev/null
+  return 0
+}

@@ -40,5 +40,12 @@ rm -f "$id_file" 2>/dev/null
 
 args="{\"prompt_id\":\"$pid\",\"response_chars\":${resp_chars:-0}}"
 domain_mcp_init >/dev/null 2>&1
-domain_call_tool domain_turn_complete "$args" >/dev/null 2>&1
+# REQ-56 issue-56.2: no silenciar el fallo. Capturamos la respuesta/errores y, si
+# el turn_complete no salió bien, dejamos rastro en hook-errors.log. Sigue siendo
+# best-effort (exit 0), pero ahora el fallo es auditable en vez de invisible.
+resp=$(domain_call_tool domain_turn_complete "$args" 2>&1)
+rc=$?
+if [ "$rc" -ne 0 ] || printf '%s' "$resp" | grep -q '"error"'; then
+  domain_log_hook_error "Stop" "$session_id" "domain_turn_complete" "rc=$rc resp=$resp"
+fi
 exit 0

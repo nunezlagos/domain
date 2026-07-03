@@ -126,8 +126,8 @@ var toolChannel = map[string]ToolChannel{
 	"domain_mem_suggest_topic_key": ChannelPolicyTriggered,
 	"domain_mem_unlink":            ChannelUserIntent, // destructivo
 
-	"domain_openspec_apply":  ChannelUserIntent, // sync repo↔BD explícito
-	"domain_openspec_export": ChannelUserIntent,
+	"domain_openspec_apply":  ChannelPhaseContract, // REQ-55.3 sync en propose/design/tasks
+	"domain_openspec_export": ChannelPhaseContract, // REQ-55.3
 	"domain_openspec_status": ChannelPhaseContract, // contrato de sdd-archive
 
 	"domain_orchestrate":              ChannelPolicyTriggered, // señal determinista del hook (54.4) + policy

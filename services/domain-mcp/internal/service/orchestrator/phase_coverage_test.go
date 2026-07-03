@@ -36,9 +36,9 @@ func TestPhaseContracts_MatchCanonicalTable(t *testing.T) {
 	expected := map[string][]string{
 		"sdd-explore": {"domain_code_graph"},
 		"sdd-spec":    nil, // creativo: el contrato de saves lo cubre D5
-		"sdd-propose": nil, // creativo
-		"sdd-design":  nil, // las policies llegan por PREP, no se exige re-pedirlas
-		"sdd-tasks":   nil, // deriva del design (prior output)
+		"sdd-propose": {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
+		"sdd-design":  {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
+		"sdd-tasks":   {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
 		"sdd-apply":   nil, // el trabajo es código local; saves via D5
 		"sdd-verify":  {"domain_verify_start", "domain_verify_complete"},
 		"sdd-judge":   nil, // teeth via shape del Output (issue-54.5)

@@ -129,6 +129,15 @@ ok "Docker daemon OK"
 
 # === STEP 3: Clone or pull repo ===
 log "3/9  Setting up repo at $INSTALL_DIR..."
+# El repo suele ser de otro usuario (sysadmin) mientras este script corre como
+# root (sudo / cron de auto-update). Git rechaza operar sobre un repo con owner
+# distinto ("detected dubious ownership") y aborta con set -e, DESPUÉS del
+# make down → deja el stack caído. Marcamos el dir como seguro ANTES de tocar
+# git. Idempotente: el grep evita duplicar la entrada en re-corridas del cron.
+if [[ -d "$INSTALL_DIR" ]]; then
+  git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$INSTALL_DIR" \
+    || git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
+fi
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   log "Repo ya clonado, git pull..."
   (cd "$INSTALL_DIR" && git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")

@@ -81,6 +81,13 @@ JSON estricto:
 - skip_phases solo si una fase NO aplica al issue (ej: sin tests → skip sdd-judge).
 - El prompt para el sub-agente debe ser auto-contenido (no asume contexto previo).
 - NO inventes fases que no estén en <fases_disponibles>.
+- MODO DE EJECUCIÓN (REQ-55 issue-55.2): al ARRANCAR el flow (phase=null), ANTES
+  de la primera fase PREGUNTÁ al usuario con AskUserQuestion: modo "auto" (corre
+  sin pausas) vs "human-in-the-loop" (pausa en spec/design/apply/judge para tu
+  revisión). Pasá exec_mode=auto o exec_mode=hybrid a domain_orchestrate según
+  responda. NO asumas auto por omisión. hardspec queda true (spec siempre pausa).
+- spec y design NUNCA se delegan a subagentes: usan AskUserQuestion, que no
+  existe en subagentes (REQ-55 issue-55.1).
 </reglas>
 
 <example>
@@ -232,7 +239,9 @@ Cuando completed=true, next_question=null y missing_slots=[].
 </output_format>
 
 <reglas>
-- Preguntá UNA a la vez. Múltiples preguntas confunden al usuario.
+- Preguntá con AskUserQuestion: opciones concretas + 'Other' para texto libre.
+  NO preguntes en prosa plana (REQ-55 issue-55.1). Una pregunta a la vez.
+- NUNCA corras esta fase en un subagente: AskUserQuestion no existe ahí.
 - Si un slot se puede inferir del envelope, NO lo preguntes — infiere.
 - non_goals nunca se infiere solo — siempre confirmar con el usuario.
 - Idioma de las preguntas: español rioplatense.
@@ -923,7 +932,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 11
+const agentTemplatesSeedVersion = 12 // 12: REQ-55 exec_mode al inicio + AskUserQuestion en spec/design
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

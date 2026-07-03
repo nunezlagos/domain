@@ -238,16 +238,52 @@ export HOOK_MEM_SLUG="$mem_slug"
 export HOOK_BOOTSTRAP_OUT="$bootstrap_out"
 export HOOK_CODE_GRAPH_OUT="$code_graph_out"
 export HOOK_MEM_OUT="$mem_out"
+# REQ-56 issue-56.1: cap de bytes del additionalContext. Sin tope, el payload
+# (bootstrap + code_graph + mem_context + reglas) puede saturar la ventana de
+# contexto del agente al arrancar. Configurable via DOMAIN_CTX_MAX_BYTES
+# (default 12000). Cada sección se trunca de forma determinista preservando su
+# encabezado; el bloque de REGLAS DE ARRANQUE nunca se recorta.
+export HOOK_CTX_MAX_BYTES="${DOMAIN_CTX_MAX_BYTES:-12000}"
 
 python3 - <<'PYEOF'
 import json, os
+
+def _cap(text, limit):
+    """Trunca text a limit bytes (utf-8) preservando líneas completas; deja marca."""
+    if limit <= 0:
+        return text
+    raw = text.encode('utf-8')
+    if len(raw) <= limit:
+        return text
+    # cortar por líneas para no partir una línea a la mitad
+    kept, used = [], 0
+    marker = "\n… [recortado por DOMAIN_CTX_MAX_BYTES]"
+    budget = limit - len(marker.encode('utf-8'))
+    for line in text.splitlines(keepends=True):
+        b = len(line.encode('utf-8'))
+        if used + b > budget:
+            break
+        kept.append(line); used += b
+    return ''.join(kept).rstrip() + marker
+
+try:
+    max_bytes = int(os.environ.get('HOOK_CTX_MAX_BYTES', '12000'))
+except ValueError:
+    max_bytes = 12000
+
+# Las 3 secciones dinámicas comparten el presupuesto (reglas van aparte, íntegras).
+# Reparto: bootstrap 45%, code_graph 25%, mem_context 30%.
+_bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.45))
+_codegraph = _cap(os.environ.get('HOOK_CODE_GRAPH_OUT',''), int(max_bytes * 0.25))
+_memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.30))
+
 ctx = (
     f"🟢 domain MCP ready (auto-cargado por SessionStart hook, "
     f"vps={os.environ.get('HOOK_VPS_URL','?')}, "
     f"slug={os.environ.get('HOOK_MEM_SLUG','?')})\n\n"
-    f"## domain_session_bootstrap\n{os.environ.get('HOOK_BOOTSTRAP_OUT','')}\n\n"
-    f"## domain_code_graph\n{os.environ.get('HOOK_CODE_GRAPH_OUT','')}\n\n"
-    f"## domain_mem_context (ultimas 10 obs)\n{os.environ.get('HOOK_MEM_OUT','')}\n\n"
+    f"## domain_session_bootstrap\n{_bootstrap}\n\n"
+    f"## domain_code_graph\n{_codegraph}\n\n"
+    f"## domain_mem_context (ultimas 10 obs)\n{_memctx}\n\n"
     f"---\n"
     f"REGLAS DE ARRANQUE (ejecutar EN ORDEN, SIEMPRE, sin excepcion):\n"
     f"R1. PROHIBIDO volver a llamar domain_session_bootstrap, domain_code_graph, "

@@ -89,7 +89,7 @@ func registerSessionBootstrapTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Se
 
 func toolSessionBootstrap() mcp.Tool {
 	return mcp.NewTool("domain_session_bootstrap",
-		mcp.WithDescription("Llamar al PRIMER turn de cada sesión nueva. Manda cwd + git_remote + git_branch + git_head + (opcional) existing_rules_files al server. Devuelve overlay con datos del proyecto (si es conocido) o un cuestionario para registrarlo (si no). El client debe seguir el next_step indicado."),
+		mcp.WithDescription("Llamar al PRIMER turn de cada sesión nueva. Manda cwd + git_remote + git_branch + git_head + (opcional) existing_rules_files al server. Devuelve overlay con datos del proyecto (si es conocido) o un cuestionario para registrarlo (si no). Si hay .md de rules sin importar, devuelve import_candidates [{path, suggested_slug, suggested_kind, suggested_scope}] — el agente los propone al usuario (AskUserQuestion) antes de importar como policy (REQ-55). El client debe seguir el next_step indicado."),
 		mcp.WithString("cwd",
 			mcp.Description("Working directory absoluto del cliente (ej. /home/user/Proyectos/acme-web). El basename se usa como slug-candidate si no hay match."),
 			mcp.Required(),
@@ -402,6 +402,21 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		nextStep = cgSug + " " + nextStep
 	}
 
+	// REQ-55 issue-55.4: candidatos de auto-import. Comparamos los
+	// existing_rules_files reportados por el cliente contra las policies ya
+	// importadas (slug determinístico imported-<path>). Los que faltan son
+	// CANDIDATOS: el agente los lee, el server los clasifica, y se presentan al
+	// usuario con AskUserQuestion (confirmar/scope) antes de persistir. Esto
+	// hace VISIBLE el auto-skill/policy en vez de depender de que el agente
+	// recuerde el protocolo. Best-effort: si la query falla, candidatos vacío.
+	importCandidates := h.importCandidates(ctx, projID, rulesFiles)
+	if len(importCandidates) > 0 {
+		nextStep = "Hay " + fmt.Sprintf("%d", len(importCandidates)) +
+			" archivo(s) AI-rules del repo SIN importar a domain (ver import_candidates). " +
+			"Leelos, y proponé al usuario con AskUserQuestion cuáles importar como " +
+			"project_policy (o platform si aplica a toda la org) antes de persistir. " + nextStep
+	}
+
 	return toolResultJSON(map[string]any{
 		"known": true,
 		"project": map[string]any{
@@ -420,6 +435,7 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		},
 		"recent_observations":  recentObs,
 		"existing_rules_files": rulesFiles,
+		"import_candidates":    importCandidates,
 		"counts": map[string]any{
 			"project_policies":    projPoliciesCount,
 			"platform_policies":   platformPoliciesCount,
@@ -459,6 +475,51 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 // bloqueante en el primer turn de la sesión. El build sigue siendo explícito
 // vía domain_code_build; acá solo sugerimos correrlo cuando hace falta.
 //
+// importCandidates devuelve los existing_rules_files que AÚN NO tienen una
+// project_policy importada (slug determinístico imported-<path>). Son los
+// candidatos que el agente debe proponer al usuario para importar (REQ-55
+// issue-55.4). Best-effort: si la query falla, devuelve nil (sin candidatos)
+// para no bloquear el bootstrap.
+func (h *sessionBootstrapHandlers) importCandidates(ctx context.Context, projID uuid.UUID, rulesFiles []string) []map[string]any {
+	if len(rulesFiles) == 0 {
+		return nil
+	}
+	// Slugs de policies ya importadas para este proyecto.
+	imported := map[string]bool{}
+	rows, err := h.q(ctx).Query(ctx,
+		`SELECT slug FROM project_policies
+		   WHERE project_id = $1 AND source = 'seed_imported'
+		     AND is_active = TRUE AND deleted_at IS NULL`,
+		projID,
+	)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var slug string
+			if rows.Scan(&slug) == nil {
+				imported[slug] = true
+			}
+		}
+	}
+	var candidates []map[string]any
+	for _, f := range rulesFiles {
+		// openspec/ es un directorio de specs, no una policy importable directa.
+		if f == "openspec/" {
+			continue
+		}
+		if imported[slugFromSourcePath(f)] {
+			continue
+		}
+		candidates = append(candidates, map[string]any{
+			"path":            f,
+			"suggested_slug":  slugFromSourcePath(f),
+			"suggested_kind":  "convention",
+			"suggested_scope": "project",
+		})
+	}
+	return candidates
+}
+
 // Single-tenant: filtra exclusivamente por project_id. Best-effort: si la query
 // falla (p.ej. el grafo nunca se usó), reporta built=false sin abortar el
 // bootstrap.

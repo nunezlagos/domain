@@ -77,18 +77,26 @@ Server has NO LLM — fan-out via client subagents.
 7. If policies not yet imported from `existing_rules_files`: read each + `domain_project_policy_import_from_text`.
 8. `domain_policy_get(slug="agent-protocol")`.
 
-## Code graph (client-side)
+## Code graph (client-side, symbols-only + incremental)
 
 NO uses `domain_code_build` — corre server-side y falla en setups remotos (server no tiene FS del cliente). Usa este flujo:
 
 1. Usa siempre `project_slug` del bootstrap. Si llamas code_* sin slug, falla.
 2. Llama `domain_code_graph` para chequear:
-   - `built: true` y `total_nodes > 3` → ya hay grafo. Si `head.changed != []`, corre el script para actualizar.
+   - `built: true` y `total_nodes > 3` → ya hay grafo. Si `head.changed != []`, corre el script para actualizar (es barato: incremental).
    - `built: false` o `total_nodes <= 3` → no hay grafo real.
 3. Si no hay grafo: corre `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"`. Opcion B: parsea con Read y llama `domain_code_upload`.
-4. Despues de subir, usa `domain_code_explore` / `domain_code_path` / `domain_code_graph`.
+4. Despues de subir, usa `domain_code_explore` / `domain_code_graph`. (`domain_code_path` navega edges — el grafo es symbols-only, no esperes caminos de llamadas.)
 
-Idempotente: re-subir solo actualiza por `qualified_name + kind`.
+Comportamiento del script (v0.2, 2026-07-05):
+
+- **Symbols-only**: sube funciones/metodos/tipos/interfaces por archivo. NO genera edges "calls" (la heuristica por nombre producia god-nodes falsos y uploads de 20 min con lock storms 55P03).
+- **Incremental**: guarda el ultimo head subido en `~/.local/state/domain/code-graph-head-<slug>`. Corridas siguientes solo parsean/suben archivos cambiados (commits + working tree + untracked). Sin cambios de codigo → exit inmediato sin tocar el server. Cambiar 1 archivo → sube 1 archivo (~2 s).
+- **Filtros**: excluye archivos generados (`Code generated`/`DO NOT EDIT`/`@generated` en las primeras 5 lineas) y archivos > 2 MB.
+- Env vars: `DOMAIN_CODE_GRAPH_FULL=1` fuerza full scan (usar tras borrar/renombrar archivos masivamente — los nodos de archivos borrados quedan hasta el proximo full); `DOMAIN_CODE_GRAPH_MAX_FILE_BYTES` ajusta el cap de tamaño.
+- Exit code: != 0 si el server rechazo el upload (el estado incremental NO avanza en ese caso).
+
+Idempotente: re-subir solo actualiza por `qualified_name + kind`; el server reemplaza los nodos por archivo (`SoftDeleteNodesByFileExcept`), asi que el re-upload parcial no duplica.
 
 ## Auto-persistence
 

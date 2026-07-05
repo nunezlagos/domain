@@ -6,17 +6,35 @@
 # tiene acceso al filesystem del cliente, asi que el parseo se hace aca con
 # ast-grep (sg) y se sube via la tool MCP domain_code_upload.
 #
-# Multi-lenguaje via ast-grep: TypeScript/JavaScript/TSX/JSX/Go/Python/Rust/
-# Java. Si sg no esta instalado, lo instala segun distro (pacman/apt/brew/cargo).
+# ENFOQUE LITE (2026-07-05): solo SYMBOLS, sin edges.
+# Los edges "calls" heuristicos (regex nombre+parentesis, resolucion por nombre
+# global) producian god-nodes falsos (todo `New(...)` atribuido a un solo nodo)
+# y eran el 90% del costo: 50K SELECTs server-side por upload (~20 min de
+# transaccion, lock storms 55P03 entre uploads concurrentes). El outline de
+# simbolos por archivo es correcto, barato y suficiente para navegacion.
+#
+# INCREMENTAL: guarda el ultimo git head subido en
+# ~/.local/state/domain/code-graph-head-<slug>. En corridas siguientes solo
+# parsea y sube los archivos cambiados desde ese head (commits + working tree
+# + untracked). El server reemplaza nodos por archivo (SoftDeleteNodesByFileExcept),
+# asi que el re-upload parcial no duplica ni acumula basura.
+# Limitacion conocida: los nodos de archivos BORRADOS del repo quedan en el
+# grafo hasta el proximo full scan (el UploadInput del server no acepta
+# deleted_files todavia).
+#
+# Multi-lenguaje via ast-grep: TypeScript/JavaScript/TSX/JSX/Go/Python/Rust/Java.
 #
 # Uso:
 #   domain-code-graph.sh [REPO_PATH] [PROJECT_SLUG]
 #   - REPO_PATH: path absoluto al repo (default: cwd)
 #   - PROJECT_SLUG: slug del project en domain (default: basename del repo)
 #
-# Output: JSON con {nodes, edges, files} + POST a domain-mcp via MCP HTTP.
+# Env vars:
+#   DOMAIN_CODE_GRAPH_FULL=1              fuerza full scan (ignora el estado incremental)
+#   DOMAIN_CODE_GRAPH_MAX_FILE_BYTES=N    saltear archivos mayores a N bytes (default 2 MB)
+#   DOMAIN_VPS_URL / DOMAIN_API_KEY       override de la config del installer
 #
-# Requiere: ast-grep (sg) instalado (script lo instala si falta), curl, jq opcional.
+# Requiere: ast-grep, curl, python3, git (para el modo incremental).
 
 set -uo pipefail
 
@@ -82,11 +100,70 @@ echo "[scan] ast-grep OK: $(ast-grep --version 2>&1 | head -1)"
 # ---------- 3. git head best-effort ----------
 GIT_HEAD=$(git -C "$REPO_PATH" rev-parse HEAD 2>/dev/null || echo "")
 
-# ---------- 4. descubrir archivos por lenguaje (skip vendor/node_modules/dist/build/.git) ----------
-mapfile -t FILES < <(find "$REPO_PATH" -type f \
-  \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.rs" -o -name "*.java" \) \
-  -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.git/*" -not -path "*/vendor/*" \
-  2>/dev/null)
+# ---------- 4. modo incremental: solo archivos cambiados desde el ultimo upload ----------
+CODE_EXT_RE='\.(go|ts|tsx|js|jsx|py|rs|java)$'
+EXCLUDE_RE='(^|/)(node_modules|dist|build|\.git|vendor)/'
+STATE_DIR="$HOME/.local/state/domain"
+STATE_FILE="$STATE_DIR/code-graph-head-$PROJECT_SLUG"
+MODE="full"
+LAST_HEAD=""
+if [ "${DOMAIN_CODE_GRAPH_FULL:-0}" != "1" ] && [ -n "$GIT_HEAD" ] && [ -r "$STATE_FILE" ]; then
+  LAST_HEAD=$(tr -d '[:space:]' < "$STATE_FILE")
+  if [ -n "$LAST_HEAD" ] && git -C "$REPO_PATH" cat-file -e "$LAST_HEAD" 2>/dev/null; then
+    MODE="incremental"
+  fi
+fi
+
+if [ "$MODE" = "incremental" ]; then
+  # commits desde el ultimo upload + working tree (staged/unstaged) + untracked
+  mapfile -t FILES < <(
+    {
+      git -C "$REPO_PATH" diff --name-only --diff-filter=ACMR "$LAST_HEAD" HEAD 2>/dev/null
+      git -C "$REPO_PATH" diff --name-only --diff-filter=ACMR HEAD 2>/dev/null
+      git -C "$REPO_PATH" ls-files --others --exclude-standard 2>/dev/null
+    } | sort -u | grep -E "$CODE_EXT_RE" | grep -vE "$EXCLUDE_RE" | sed "s|^|$REPO_PATH/|"
+  )
+  if [ ${#FILES[@]} -eq 0 ]; then
+    echo "[scan] incremental: sin cambios de codigo desde $LAST_HEAD — nada que indexar"
+    exit 0
+  fi
+  echo "[scan] incremental desde ${LAST_HEAD:0:12}: ${#FILES[@]} archivos cambiados"
+else
+  mapfile -t FILES < <(find "$REPO_PATH" -type f \
+    \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.rs" -o -name "*.java" \) \
+    -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.git/*" -not -path "*/vendor/*" \
+    2>/dev/null)
+  echo "[scan] full scan: ${#FILES[@]} archivos candidatos"
+fi
+
+# Filtrar archivos generados (sqlc/protobuf/etc) y demasiado grandes: no aportan
+# al grafo y consumen parseo. Configurable: DOMAIN_CODE_GRAPH_MAX_FILE_BYTES (default 2 MB).
+if [ ${#FILES[@]} -gt 0 ]; then
+  mapfile -d '' -t FILES < <(printf '%s\0' "${FILES[@]}" | python3 -c "
+import sys, os
+max_bytes = int(os.environ.get('DOMAIN_CODE_GRAPH_MAX_FILE_BYTES', '2097152'))
+markers = ('Code generated', 'DO NOT EDIT', '@generated')
+raw = sys.stdin.buffer.read().rstrip(b'\x00')
+paths = raw.split(b'\x00') if raw else []
+skipped_size = skipped_gen = 0
+for p in paths:
+    fp = p.decode('utf-8', errors='replace')
+    try:
+        if os.path.getsize(fp) > max_bytes:
+            skipped_size += 1
+            continue
+        with open(fp, 'r', encoding='utf-8', errors='ignore') as fh:
+            head = ''.join(fh.readline() for _ in range(5))
+    except OSError:
+        continue
+    if any(m in head for m in markers):
+        skipped_gen += 1
+        continue
+    sys.stdout.buffer.write(p + b'\x00')
+if skipped_size or skipped_gen:
+    print(f'[scan] salteados: {skipped_gen} generados, {skipped_size} archivos > {max_bytes} bytes', file=sys.stderr)
+")
+fi
 
 if [ ${#FILES[@]} -eq 0 ]; then
   echo "[scan] no encontre archivos a parsear en $REPO_PATH"
@@ -94,14 +171,13 @@ if [ ${#FILES[@]} -eq 0 ]; then
 fi
 echo "[scan] ${#FILES[@]} archivos a parsear"
 
-# ---------- 5. extraer nodos y edges con ast-grep ----------
+# ---------- 5. extraer nodos con ast-grep ----------
 # Solo corre patterns para los lenguajes realmente presentes (ahorra ~70%
 # de invocaciones). Detecta extensión desde FILES.
 NODES_FILE=$(mktemp)
-EDGES_FILE=$(mktemp)
 GRAPH_FILE=$(mktemp)
 REQ_FILE=$(mktemp)
-trap 'rm -f "$NODES_FILE" "$EDGES_FILE" "$GRAPH_FILE" "$REQ_FILE"' EXIT
+trap 'rm -f "$NODES_FILE" "$GRAPH_FILE" "$REQ_FILE"' EXIT
 
 declare -A LANG_EXT
 LANG_EXT[typescript]=".ts .tsx"
@@ -196,42 +272,8 @@ extract_for_lang java 'public $T $FN($$$) { $$$ }' method >> "$NODES_FILE"
 extract_for_lang java 'private $T $FN($$$) { $$$ }' method >> "$NODES_FILE"
 extract_for_lang java 'class $CLS { $$$ }' type >> "$NODES_FILE"
 
-# ast-grep es el binario real (sg es /usr/bin/sg = group, no ast-grep).
-# Definimos ASTGREP_CMD para que las llamadas sg scan usen el binario correcto.
-ASTGREP_CMD="ast-grep"
-
-# Edges: buscar llamadas (heurística: nombre seguido de '(').
-# El target_qn lo envía como nombre simple; el server resuelve por nombre
-# (fallback en resolveTarget: primero qualified_name exacto, luego name search).
-printf '%s\0' "${FILES[@]}" > "$EDGES_FILE.files"
-python3 -c "
-import re, sys, os
-repo_prefix = '$REPO_PATH'
-if not repo_prefix.endswith('/'):
-    repo_prefix += '/'
-files_path = '$EDGES_FILE.files'
-with open(files_path, 'rb') as fh:
-    raw = fh.read()
-paths = raw.rstrip(b'\x00').split(b'\x00')
-for fp_bytes in paths:
-    fp = fp_bytes.decode('utf-8', errors='replace')
-    rel = fp[len(repo_prefix):] if fp.startswith(repo_prefix) else fp
-    try:
-        lines = open(fp, 'r', encoding='utf-8', errors='ignore').readlines()
-    except:
-        continue
-    for lineno, line in enumerate(lines, 1):
-        for m in re.finditer(r'\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(', line):
-            name = m.group(1)
-            if name in ('if', 'for', 'while', 'switch', 'return', 'function', 'func', 'def', 'class'):
-                continue
-            print(f'{rel}\t{lineno}\t{name}')
-" > "$EDGES_FILE" 2>/dev/null
-rm -f "$EDGES_FILE.files"
-
 NODES_COUNT=$(wc -l < "$NODES_FILE" || echo 0)
-EDGES_COUNT=$(wc -l < "$EDGES_FILE" || echo 0)
-echo "[parse] $NODES_COUNT nodos, $EDGES_COUNT edges detectados"
+echo "[parse] $NODES_COUNT nodos detectados (symbols-only, sin edges)"
 
 # ---------- 6. construir el JSON del grafo (vía python, robusto) ----------
 FILE_COUNT=${#FILES[@]}
@@ -248,46 +290,8 @@ with open('$NODES_FILE') as f:
         if qn in seen: continue
         seen.add(qn)
         nodes.append({'kind':kind,'name':name,'qualified_name':qn,'file_path':rel,'line_start':int(ls) if ls else 0,'line_end':int(le) if le else 0,'signature':text[:200],'doc':''})
-edges=[]
-# Indexar nodos por file → [(line_start, line_end, qn)], ordenado por line_start
-nodes_by_file = {}
-with open('$NODES_FILE') as nf:
-    for line in nf:
-        parts=line.rstrip('\n').split('\t')
-        if len(parts)<6: continue
-        rel,name,qn,ls_s,le_s = parts[0],parts[2],parts[3],parts[4],parts[5]
-        try: ls_int=int(ls_s)
-        except: ls_int=0
-        try: le_int=int(le_s)
-        except: le_int=0
-        nodes_by_file.setdefault(rel, []).append((ls_int, le_int, qn or ''))
-# Ordenar por line_start ascendente
-for f in nodes_by_file:
-    nodes_by_file[f].sort()
-seen_edges=set()
-with open('$EDGES_FILE') as f:
-    for line in f:
-        parts=line.rstrip('\n').split('\t')
-        if len(parts)<3: continue
-        rel,ls_str,target=parts
-        try: edge_line=int(ls_str)
-        except: continue
-        # source_qn = nodo que contiene esta línea (func con mayor line_start <= edge_line)
-        src_qn = ''
-        funcs = nodes_by_file.get(rel, [])
-        # búsqueda binaria simplificada: recorrer hacia atrás desde el techo
-        # (funcs son pocas por archivo, O(n) es aceptable)
-        for f_ls, f_le, f_qn in reversed(funcs):
-            if f_ls <= edge_line and (f_le == 0 or edge_line <= f_le):
-                src_qn = f_qn
-                break
-        if not src_qn:
-            continue
-        key = (src_qn, target, 'calls')
-        if key in seen_edges: continue
-        seen_edges.add(key)
-        edges.append({'source_qn':src_qn,'target_qn':target,'edge_type':'calls'})
 # El tool espera project_slug + graph_json:{files_scanned,git_head,nodes,edges}
+# edges siempre vacio: enfoque symbols-only (ver header).
 with open('$GRAPH_FILE','w') as f:
     json.dump({
         'project_slug':'$PROJECT_SLUG',
@@ -295,12 +299,12 @@ with open('$GRAPH_FILE','w') as f:
             'git_head':'$GIT_HEAD',
             'files_scanned':$FILE_COUNT,
             'nodes':nodes,
-            'edges':edges,
+            'edges':[],
         }
     }, f)
 "
 
-echo "[upload] $NODES_COUNT nodos + $EDGES_COUNT edges de $FILE_COUNT archivos, enviando a $VPS_URL"
+echo "[upload] $NODES_COUNT nodos de $FILE_COUNT archivos ($MODE), enviando a $VPS_URL"
 
 # ---------- 7. POST al MCP via curl (initialize + tools/call) ----------
 # Streamable HTTP MCP: initialize primero, después tools/call.
@@ -308,10 +312,9 @@ curl -fsS -X POST "${VPS_URL}/mcp" \
   -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"domain-code-graph","version":"0.1"}}}' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"domain-code-graph","version":"0.2"}}}' \
   >/dev/null 2>&1 || true
 
-# tools/call con el grafo como argumento
 # tools/call: leer el grafo desde GRAPH_FILE y construir el request MCP
 python3 -c "
 import json,sys
@@ -333,7 +336,9 @@ RESP=$(curl -fsS -X POST "${VPS_URL}/mcp" \
   -H "Accept: application/json, text/event-stream" \
   -d "@${REQ_FILE}")
 
-# respuesta puede ser JSON o SSE; el server usa 'result.content[0].text' con JSON adentro
+# respuesta puede ser JSON o SSE; el server usa 'result.content[0].text' con JSON adentro.
+# exit != 0 si el server reporto error — el caller (hook) y el estado incremental
+# dependen de distinguir exito real.
 echo "$RESP" | python3 -c "
 import json, sys
 try:
@@ -348,8 +353,23 @@ try:
         text += c.get('text', '')
     if not text and 'stats' in res:
         text = json.dumps(res)
+    if 'failed' in text.lower() or res.get('isError'):
+        print('[upload] ERROR del server:', text[:300])
+        sys.exit(1)
     print('[upload] OK', text[:500])
+except SystemExit:
+    raise
 except Exception as e:
     print('ERROR parseando respuesta:', e)
     print('raw:', sys.stdin.read()[:300])
+    sys.exit(1)
 "
+UPLOAD_STATUS=$?
+
+# ---------- 8. persistir el head subido (habilita el proximo run incremental) ----------
+if [ "$UPLOAD_STATUS" -eq 0 ] && [ -n "$GIT_HEAD" ]; then
+  mkdir -p "$STATE_DIR" 2>/dev/null
+  printf '%s' "$GIT_HEAD" > "$STATE_FILE" 2>/dev/null && \
+    echo "[state] head ${GIT_HEAD:0:12} guardado — proximo run sera incremental"
+fi
+exit "$UPLOAD_STATUS"

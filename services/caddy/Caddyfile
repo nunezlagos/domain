@@ -1,3 +1,12 @@
+# quiensabe.cl - Astro SSR reverse proxy (qs-app:4323, red domain_internal).
+# Cert LE via HTTP-01 automatico (storage en /data/caddy, volume domain_caddy_data).
+# SNI ordering: este block va ANTES del catch-all :80 para que quiensabe.cl
+# no caiga al dashboard domain-admin. El puerto 443 ya esta publicado en
+# docker-compose.yml (443:443).
+quiensabe.cl, www.quiensabe.cl {
+    reverse_proxy qs-app:4323
+}
+
 :80 {
   handle /api/* {
     reverse_proxy domain-mcp:8000

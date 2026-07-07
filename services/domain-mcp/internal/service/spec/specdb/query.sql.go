@@ -11,6 +11,31 @@ import (
 	"github.com/google/uuid"
 )
 
+const getDesignByID = `-- name: GetDesignByID :one
+SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
+FROM sdd_designs WHERE id = $1
+`
+
+func (q *Queries) GetDesignByID(ctx context.Context, id uuid.UUID) (SddDesign, error) {
+	row := q.db.QueryRow(ctx, getDesignByID, id)
+	var i SddDesign
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.ProposalID,
+		&i.Version,
+		&i.Status,
+		&i.ArchDecisions,
+		&i.Alternatives,
+		&i.DataFlow,
+		&i.TddPlan,
+		&i.RisksMitigation,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getLatestDesign = `-- name: GetLatestDesign :one
 SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1
@@ -317,17 +342,19 @@ func (q *Queries) MaxProposalVersion(ctx context.Context, issueID uuid.UUID) (in
 
 const updateDesignStatus = `-- name: UpdateDesignStatus :one
 UPDATE sdd_designs SET status = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND status = $3
 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
 `
 
 type UpdateDesignStatusParams struct {
-	ID     uuid.UUID `json:"id"`
-	Status string    `json:"status"`
+	ID             uuid.UUID `json:"id"`
+	Status         string    `json:"status"`
+	ExpectedStatus string    `json:"expected_status"`
 }
 
+// Guard optimista: exige el status leído para evitar transiciones concurrentes.
 func (q *Queries) UpdateDesignStatus(ctx context.Context, arg UpdateDesignStatusParams) (SddDesign, error) {
-	row := q.db.QueryRow(ctx, updateDesignStatus, arg.ID, arg.Status)
+	row := q.db.QueryRow(ctx, updateDesignStatus, arg.ID, arg.Status, arg.ExpectedStatus)
 	var i SddDesign
 	err := row.Scan(
 		&i.ID,
@@ -348,7 +375,7 @@ func (q *Queries) UpdateDesignStatus(ctx context.Context, arg UpdateDesignStatus
 
 const updateProposalStatus = `-- name: UpdateProposalStatus :one
 UPDATE sdd_proposals SET status = $2, rejection_reason = $3, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND status = $4
 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at
 `
 
@@ -356,10 +383,18 @@ type UpdateProposalStatusParams struct {
 	ID              uuid.UUID `json:"id"`
 	Status          string    `json:"status"`
 	RejectionReason *string   `json:"rejection_reason"`
+	ExpectedStatus  string    `json:"expected_status"`
 }
 
+// Guard optimista: el UPDATE exige el status leído (expected_status) para que
+// dos transiciones concurrentes no se pisen (la segunda no matchea → ErrNoRows).
 func (q *Queries) UpdateProposalStatus(ctx context.Context, arg UpdateProposalStatusParams) (SddProposal, error) {
-	row := q.db.QueryRow(ctx, updateProposalStatus, arg.ID, arg.Status, arg.RejectionReason)
+	row := q.db.QueryRow(ctx, updateProposalStatus,
+		arg.ID,
+		arg.Status,
+		arg.RejectionReason,
+		arg.ExpectedStatus,
+	)
 	var i SddProposal
 	err := row.Scan(
 		&i.ID,

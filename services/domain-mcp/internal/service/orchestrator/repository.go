@@ -505,14 +505,17 @@ func (r *pgRepository) UpdateStepInputs(ctx context.Context, stepID uuid.UUID, i
 	if err != nil {
 		return fmt.Errorf("marshal step inputs: %w", err)
 	}
+	// Guard de estado: nunca pisar inputs de un step terminal (completed/failed)
+	// — dos agentes concurrentes sobre el mismo flow corrompían el step.
 	tag, err := r.pool.Exec(ctx, `
-		UPDATE flow_run_steps SET inputs = $2 WHERE id = $1`,
+		UPDATE flow_run_steps SET inputs = $2
+		WHERE id = $1 AND status IN ('pending','running')`,
 		stepID, inputsJSON)
 	if err != nil {
 		return fmt.Errorf("update step inputs: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrFlowRunStepNotFound
+		return ErrFlowRunStepNotPending
 	}
 	return nil
 }

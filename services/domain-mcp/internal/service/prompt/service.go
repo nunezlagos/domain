@@ -146,6 +146,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Prompt, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Serializar Creates concurrentes del mismo (project, slug): sin esto,
+	// dos usuarios calculan el mismo NextVersion (unique violation para el
+	// segundo) y el par Deactivate+Insert puede dejar el invariante "una
+	// sola versión activa" en estado inconsistente. Lock liberado al commit.
+	lockScope := "global"
+	if in.ProjectID != nil {
+		lockScope = in.ProjectID.String()
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))", lockScope, in.Slug); err != nil {
+		return nil, fmt.Errorf("advisory lock prompt slug: %w", err)
+	}
+
 	q := promptdb.New(tx)
 
 	nextVersion, err := q.NextVersion(ctx, promptdb.NextVersionParams{

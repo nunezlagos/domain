@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/audit"
@@ -96,18 +98,27 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 		return nil, err
 	}
 
-	maxV, _ := s.q(ctx).MaxProposalVersion(ctx, issueID)
-	version := maxV + 1
-
-	row, err := s.q(ctx).InsertProposal(ctx, specdb.InsertProposalParams{
-		IssueID:      issueID,
-		Version:      version,
-		Intention:    intention,
-		Scope:        scope,
-		Approach:     approach,
-		Risks:        nullStr(risks),
-		TestingNotes: nullStr(testingNotes),
-	})
+	// MAX(version)+1 e INSERT no son atómicos: dos usuarios concurrentes
+	// calculan la misma versión y el UNIQUE(issue_id, version) rechaza al
+	// segundo. Retry con versión recalculada en vez de propagar el error crudo.
+	var row specdb.SddProposal
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		maxV, _ := s.q(ctx).MaxProposalVersion(ctx, issueID)
+		version := maxV + 1
+		row, err = s.q(ctx).InsertProposal(ctx, specdb.InsertProposalParams{
+			IssueID:      issueID,
+			Version:      version,
+			Intention:    intention,
+			Scope:        scope,
+			Approach:     approach,
+			Risks:        nullStr(risks),
+			TestingNotes: nullStr(testingNotes),
+		})
+		if err == nil || !isUniqueViolation(err) {
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("insert proposal: %w", err)
 	}
@@ -119,7 +130,7 @@ func (s *Service) CreateProposal(ctx context.Context, issueID uuid.UUID, intenti
 			Action:     "proposal.created",
 			EntityType: "proposal",
 			EntityID:   &p.ID,
-			NewValues:  map[string]any{"issue_id": issueID.String(), "version": int(version)},
+			NewValues:  map[string]any{"issue_id": issueID.String(), "version": p.Version},
 		})
 	}
 	return &p, nil
@@ -204,7 +215,13 @@ func (s *Service) ChangeProposalStatus(ctx context.Context, proposalID uuid.UUID
 		ID:              proposalID,
 		Status:          newStatus,
 		RejectionReason: reason,
+		ExpectedStatus:  current.Status,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Otra transacción cambió el status entre la lectura y este UPDATE
+		// (guard optimista): reportar como transición inválida, no pisar.
+		return nil, fmt.Errorf("%w: el proposal cambió de estado concurrentemente (leído %s)", ErrInvalidTransition, current.Status)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("update proposal status: %w", err)
 	}
@@ -229,23 +246,30 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 		return nil, err
 	}
 
-	maxV, _ := s.q(ctx).MaxDesignVersion(ctx, issueID)
-	version := maxV + 1
-
 	if proposalID != nil && *proposalID == uuid.Nil {
 		proposalID = nil
 	}
 
-	row, err := s.q(ctx).InsertDesign(ctx, specdb.InsertDesignParams{
-		IssueID:         issueID,
-		ProposalID:      proposalID,
-		Version:         version,
-		ArchDecisions:   archDecisions,
-		Alternatives:    nullStr(alternatives),
-		DataFlow:        nullStr(dataFlow),
-		TddPlan:         nullStr(tddPlan),
-		RisksMitigation: nullStr(risksMitigation),
-	})
+	// Retry ante carrera de versionado concurrente (ver CreateProposal).
+	var row specdb.SddDesign
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		maxV, _ := s.q(ctx).MaxDesignVersion(ctx, issueID)
+		version := maxV + 1
+		row, err = s.q(ctx).InsertDesign(ctx, specdb.InsertDesignParams{
+			IssueID:         issueID,
+			ProposalID:      proposalID,
+			Version:         version,
+			ArchDecisions:   archDecisions,
+			Alternatives:    nullStr(alternatives),
+			DataFlow:        nullStr(dataFlow),
+			TddPlan:         nullStr(tddPlan),
+			RisksMitigation: nullStr(risksMitigation),
+		})
+		if err == nil || !isUniqueViolation(err) {
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("insert design: %w", err)
 	}
@@ -257,7 +281,7 @@ func (s *Service) CreateDesign(ctx context.Context, issueID uuid.UUID, proposalI
 			Action:     "design.created",
 			EntityType: "design",
 			EntityID:   &d.ID,
-			NewValues:  map[string]any{"issue_id": issueID.String(), "version": int(version)},
+			NewValues:  map[string]any{"issue_id": issueID.String(), "version": d.Version},
 		})
 	}
 	return &d, nil
@@ -295,12 +319,23 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 		return nil, ErrInvalidStatus
 	}
 
-	row, err := s.q(ctx).UpdateDesignStatus(ctx, specdb.UpdateDesignStatusParams{
-		ID:     designID,
-		Status: newStatus,
-	})
+	current, err := s.q(ctx).GetDesignByID(ctx, designID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get design: %w", err)
+	}
+
+	row, err := s.q(ctx).UpdateDesignStatus(ctx, specdb.UpdateDesignStatusParams{
+		ID:             designID,
+		Status:         newStatus,
+		ExpectedStatus: current.Status,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Otra transacción cambió el status entre la lectura y este UPDATE
+		// (guard optimista): reportar en vez de pisar.
+		return nil, fmt.Errorf("%w: el design cambió de estado concurrentemente (leído %s)", ErrInvalidTransition, current.Status)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update design status: %w", err)
@@ -313,7 +348,7 @@ func (s *Service) ChangeDesignStatus(ctx context.Context, designID uuid.UUID, ne
 			Action:     "design.status_changed",
 			EntityType: "design",
 			EntityID:   &updated.ID,
-			OldValues:  map[string]any{"status": "previous"},
+			OldValues:  map[string]any{"status": current.Status},
 			NewValues:  map[string]any{"status": newStatus},
 		})
 	}
@@ -370,4 +405,11 @@ func toDesign(r specdb.SddDesign) Design {
 		CreatedAt:       r.CreatedAt,
 		UpdatedAt:       r.UpdatedAt,
 	}
+}
+
+// isUniqueViolation detecta la violación de UNIQUE(issue_id, version) que
+// produce la carrera MAX(version)+INSERT entre dos usuarios concurrentes.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation
 }

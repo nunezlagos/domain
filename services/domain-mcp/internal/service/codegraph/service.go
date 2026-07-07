@@ -193,6 +193,15 @@ func (s *CodegraphService) Upload(ctx context.Context, in UploadInput) (*UploadS
 
 	var pending []pendingEdge
 	err := s.withTx(ctx, func(ctx context.Context) error {
+		// Serializar uploads concurrentes del MISMO proyecto (2+ máquinas con
+		// el grafo stale suben a la vez → row-lock contention / 55P03 sobre los
+		// mismos file_paths). Advisory xact lock por project_id: proyectos
+		// distintos no se bloquean entre sí; se libera solo al commit/rollback.
+		if tx := txctx.TxFromContext(ctx); tx != nil {
+			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", in.ProjectID.String()); err != nil {
+				return fmt.Errorf("advisory lock project: %w", err)
+			}
+		}
 		qx := s.q(ctx)
 
 		// 1) Para cada archivo: soft-delete de los nodos viejos (excepto los

@@ -799,15 +799,18 @@ func (r *pgRepository) ChangeStatus(ctx context.Context, orgID, id uuid.UUID, to
 	} else if curr.Status == "done" || curr.Status == "cancelled" {
 		completeSet = ", completed_at = NULL"
 	}
+	// Guard optimista: el UPDATE exige el status leído; si otra transacción
+	// lo cambió en el medio, no matchea (evita last-write-wins y un
+	// FromStatus falso en el historial).
 	row := r.rawQ(ctx).QueryRow(ctx,
 		`UPDATE project_tickets SET status = $2`+startSet+completeSet+`
-		   WHERE id = $1 AND deleted_at IS NULL
+		   WHERE id = $1 AND deleted_at IS NULL AND status = $3
 		   RETURNING `+selectCols,
-		id, toStatus,
+		id, toStatus, curr.Status,
 	)
 	t, err := scanTicket(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, ErrStaleVersion
 	}
 	if err != nil {
 		return nil, fmt.Errorf("change status: %w", err)

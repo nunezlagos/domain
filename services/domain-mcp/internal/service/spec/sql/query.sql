@@ -23,8 +23,10 @@ SELECT id, issue_id, version, status, intention, scope, approach, risks, testing
 FROM sdd_proposals WHERE id = $1;
 
 -- name: UpdateProposalStatus :one
+-- Guard optimista: el UPDATE exige el status leído (expected_status) para que
+-- dos transiciones concurrentes no se pisen (la segunda no matchea → ErrNoRows).
 UPDATE sdd_proposals SET status = $2, rejection_reason = $3, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND status = sqlc.arg(expected_status)
 RETURNING id, issue_id, version, status, intention, scope, approach, risks, testing_notes, rejection_reason, created_at, updated_at;
 
 -- name: MaxDesignVersion :one
@@ -35,6 +37,10 @@ INSERT INTO sdd_designs (issue_id, proposal_id, version, status, arch_decisions,
 VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8)
 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at;
 
+-- name: GetDesignByID :one
+SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
+FROM sdd_designs WHERE id = $1;
+
 -- name: GetLatestDesign :one
 SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at
 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC LIMIT 1;
@@ -44,8 +50,9 @@ SELECT id, issue_id, proposal_id, version, status, arch_decisions, alternatives,
 FROM sdd_designs WHERE issue_id = $1 ORDER BY version DESC;
 
 -- name: UpdateDesignStatus :one
+-- Guard optimista: exige el status leído para evitar transiciones concurrentes.
 UPDATE sdd_designs SET status = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND status = sqlc.arg(expected_status)
 RETURNING id, issue_id, proposal_id, version, status, arch_decisions, alternatives, data_flow, tdd_plan, risks_mitigation, created_at, updated_at;
 
 -- name: IssueExists :one

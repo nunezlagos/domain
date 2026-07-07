@@ -105,7 +105,7 @@ ok "Usuario real: $REAL_USER (HOME=$REAL_HOME)"
 
 # ---------- instalar deps faltantes ----------
 missing=()
-for dep in curl tar git ast-grep; do
+for dep in curl tar git; do
   command -v "$dep" >/dev/null 2>&1 || missing+=("$dep")
 done
 
@@ -123,9 +123,9 @@ if [ ${#missing[@]} -gt 0 ]; then
     apk) apk add "${missing[@]}" ;;
     brew) brew install "${missing[@]}" ;;
   esac
-  ok "deps instaladas (curl, tar, git, ast-grep)"
+  ok "deps instaladas (curl, tar, git)"
 else
-  ok "deps presentes: curl, tar, git, ast-grep"
+  ok "deps presentes: curl, tar, git"
 fi
 
 # ---------- verificar Go ----------
@@ -238,14 +238,13 @@ install -m 0755 "$REPO_DIR/install-user/hooks/domain-pre-edit.sh" "$HOOKS_DIR/do
 chown -R "$REAL_USER" "$HOOKS_DIR"
 ok "lifecycle hooks instalados: $HOOKS_DIR/ (session-start, user-prompt, stop)"
 
-# Instalar el script de code graph (cliente-side, multi-lenguaje via ast-grep).
-# Se usa con: ~/.local/share/domain/scripts/domain-code-graph.sh [REPO_PATH] [PROJECT_SLUG]
+# Code graph RETIRADO (2026-07-07): el script domain-code-graph.sh ya no se
+# instala (auditoría: uso casi 100% automático, datos mayormente basura).
+# Limpiar restos de instalaciones previas para que nada lo dispare.
 SCRIPTS_DIR="$REAL_HOME/.local/share/domain/scripts"
-mkdir -p "$SCRIPTS_DIR"
-install -m 0755 "$REPO_DIR/install-user/scripts/domain-code-graph.sh" "$SCRIPTS_DIR/domain-code-graph.sh"
-chown -R "$REAL_USER" "$SCRIPTS_DIR"
-ok "script de code graph instalado: $SCRIPTS_DIR/domain-code-graph.sh"
-ok "uso: $SCRIPTS_DIR/domain-code-graph.sh /path/al/repo project-slug"
+rm -f "$SCRIPTS_DIR/domain-code-graph.sh" 2>/dev/null || true
+rm -f "$REAL_HOME/.local/state/domain/code-graph-head-"* 2>/dev/null || true
+ok "code graph retirado (script y estado incremental limpiados si existían)"
 
 echo ""
 echo "${BOLD}==> Ejecutando como $REAL_USER (HOME=$REAL_HOME)${RESET}"

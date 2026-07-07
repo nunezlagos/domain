@@ -549,8 +549,8 @@ func (h *sessionBootstrapHandlers) codeGraphStaleness(ctx context.Context, projI
 		projID,
 	).Scan(&fileCount, &indexedHead, &lastIndexed)
 	if err != nil {
-		// Grafo inexistente o no consultable: sugerir construirlo una vez.
-		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
+		// Code graph retirado (2026-07-07): sin sugerencia de build — el
+		// bootstrap ya no debe empujar al cliente a construir el grafo.
 		return out
 	}
 
@@ -559,17 +559,13 @@ func (h *sessionBootstrapHandlers) codeGraphStaleness(ctx context.Context, projI
 	out["last_indexed_at"] = safeDeref(lastIndexed)
 
 	if fileCount == 0 {
-		out["suggestion"] = "El grafo de código de este proyecto todavía no existe. Cuando vayas a navegar el código, corré domain_code_build (root_path = cwd) para poder usar domain_code_explore/path/graph."
 		return out
 	}
 
 	out["built"] = true
 
-	stale := codeGraphIsStale(safeDeref(indexedHead), currentHead)
-	out["stale"] = stale
-	if stale {
-		out["suggestion"] = "El grafo de código está desactualizado (se construyó en " + safeDeref(indexedHead) + " y el HEAD actual es " + currentHead + "). Si vas a navegar el código, corré domain_code_build (root_path = cwd) para refrescarlo incrementalmente."
-	}
+	// Code graph retirado: se reporta staleness informativo, sin sugerir rebuild.
+	out["stale"] = codeGraphIsStale(safeDeref(indexedHead), currentHead)
 	return out
 }
 

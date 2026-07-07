@@ -34,8 +34,11 @@ func (h *sddExploreHandler) Build(_ context.Context, in Input) (*Output, error) 
 				Hint: "guardar knowledge_doc si descubriste contexto reusable (módulos, decisiones previas)"},
 		},
 		SkillThreshold: 0,
-		// REQ-54 issue-54.6: explore debe partir del grafo de código vivo.
-		RequiredToolCalls: []string{"domain_code_graph"},
+		// Code graph retirado (2026-07-07): se eliminó el contrato
+		// domain_code_graph — obligaba una llamada burocrática a un grafo
+		// sin uso real (auditoría: 45-94% nodos basura, consumo casi 100%
+		// automático).
+		RequiredToolCalls: nil,
 		// REQ-54 issue-54.5: exploración paralela por área.
 		SubagentPlan: "Detectá las áreas del codebase relevantes a la tarea (máx 4: ej. rutas/handlers, servicios/lógica, esquema/migraciones, tests) y lanzá UN subagente Explore POR ÁREA, en paralelo. Cada subagente recibe el contexto preparado de su área y devuelve un mapa con referencias file:line. Mergeá los resultados en un único mapa sin duplicados; marcá contradicciones entre áreas como hallazgos.",
 		RetryPolicy:    RetryReemit,

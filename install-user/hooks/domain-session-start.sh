@@ -2,12 +2,12 @@
 # hooks/domain-session-start.sh
 #
 # Hook SessionStart de Claude Code que ejecuta domain_session_bootstrap
-# + domain_code_graph + domain_mem_context ANTES del primer prompt del
+# + domain_mem_context ANTES del primer prompt del
 # usuario. Devuelve el output como additionalContext (system message
 # inyectado por Claude Code, que el LLM no puede ignorar).
 #
 # El LLM recibe el contexto completo (proyecto, work_summary, recent
-# observations, code graph) antes de cualquier mensaje del usuario. Asi
+# observations) antes de cualquier mensaje del usuario. Asi
 # NO tiene excusa de "olvidar" llamar las tools de domain — la info ya
 # esta en su system prompt.
 #
@@ -180,62 +180,12 @@ except: pass
 [ -z "$mem_slug" ] && mem_slug=$(basename "$cwd" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
 [ -z "$mem_slug" ] && mem_slug="domain-services"
 
-# code graph: si no está built, sugiere build; si está, lee
-# Le pasamos project_slug (del bootstrap) para que funcione en el setup remoto.
-# Si built=false y existe el script de code graph local + ast-grep, lo corre
-# auto (parsea el cwd y sube via domain_code_upload).
-code_graph_args=$(printf '{"project_slug":"%s"}' "$mem_slug")
-code_graph_out=$(call_mcp_tool "domain_code_graph" "$code_graph_args" 2>/dev/null)
-if [ -z "$code_graph_out" ]; then
-  code_graph_out="⚠ domain_code_graph falló (VPS no responde o key inválida)"
-fi
-
-# ---------- 4b. AUTO-INDEXAR code graph si no existe ----------
-# Si el grafo está vacío o solo tiene los 3 del test e2e, parsear el cwd y subir.
-# Solo aplica a Claude Code (este hook corre acá, no en opencode).
-SCRIPT_PATH="$REAL_HOME/.local/share/domain/scripts/domain-code-graph.sh"
-if [ -x "$SCRIPT_PATH" ] && command -v ast-grep >/dev/null 2>&1; then
-  total_nodes=$(echo "$code_graph_out" | python3 -c "
-import sys, json
-try:
-    d = json.loads(sys.stdin.read())
-    r = d.get('result', {})
-    for c in r.get('content', []):
-        t = c.get('text','')
-        try: print(json.loads(t).get('total_nodes', 0))
-        except: pass
-except: pass
-" 2>/dev/null)
-  total_nodes="${total_nodes:-0}"
-  # REQ-56 issue-56.3: además de "grafo vacío", reconstruir cuando está STALE.
-  # El bootstrap reporta code_graph.stale=true cuando el grafo se construyó en un
-  # HEAD viejo; hasta ahora eso solo sugería correr el script a mano. Ahora el
-  # encadenamiento es automático: registrar/abrir un proyecto deja el grafo al día.
-  graph_stale=$(echo "$bootstrap_out" | python3 -c "
-import sys, json
-try:
-    d = json.loads(sys.stdin.read())
-    for c in d.get('result', {}).get('content', []):
-        try:
-            inner = json.loads(c.get('text',''))
-            cg = inner.get('code_graph', {})
-            print('1' if cg.get('stale') else '0'); break
-        except: pass
-except: pass
-" 2>/dev/null)
-  graph_stale="${graph_stale:-0}"
-  if [ "$total_nodes" -le 3 ] || [ "$graph_stale" = "1" ]; then
-    # Parsear y subir (best-effort, no bloquea si falla)
-    if [ -d "$cwd" ] && [ -n "$mem_slug" ]; then
-      index_out=$("$SCRIPT_PATH" "$cwd" "$mem_slug" 2>&1)
-      index_status=$?
-      if [ "$index_status" -eq 0 ]; then
-        # Re-leer el grafo para reflejar el upload
-        code_graph_out=$(call_mcp_tool "domain_code_graph" "$code_graph_args" 2>/dev/null)
-      fi
-    fi
-  fi
-fi
+# code graph RETIRADO (2026-07-07): la pre-carga de domain_code_graph y el
+# auto-rebuild en session-start se eliminaron tras la auditoría de uso:
+# ~450 llamadas automáticas vs ~14 con intención (8 fallidas) en 7 días,
+# 45-94% de nodos basura (.venv/minificados) en proyectos JS/Python, y el
+# auto-rebuild concurrente congeló la máquina del cliente (OOM 2026-07-07).
+# Las tools domain_code_* siguen disponibles server-side si se invocan a mano.
 
 # mem context: pide observaciones recientes del proyecto. mem_slug ya se extrajo
 # arriba (linea 148, con python que parsea el JSON correctamente). Si por algun
@@ -253,10 +203,9 @@ fi
 export HOOK_VPS_URL="$vps_url"
 export HOOK_MEM_SLUG="$mem_slug"
 export HOOK_BOOTSTRAP_OUT="$bootstrap_out"
-export HOOK_CODE_GRAPH_OUT="$code_graph_out"
 export HOOK_MEM_OUT="$mem_out"
 # REQ-56 issue-56.1: cap de bytes del additionalContext. Sin tope, el payload
-# (bootstrap + code_graph + mem_context + reglas) puede saturar la ventana de
+# (bootstrap + mem_context + reglas) puede saturar la ventana de
 # contexto del agente al arrancar. Configurable via DOMAIN_CTX_MAX_BYTES
 # (default 12000). Cada sección se trunca de forma determinista preservando su
 # encabezado; el bloque de REGLAS DE ARRANQUE nunca se recorta.
@@ -288,22 +237,20 @@ try:
 except ValueError:
     max_bytes = 12000
 
-# Las 3 secciones dinámicas comparten el presupuesto (reglas van aparte, íntegras).
-# Reparto: bootstrap 45%, code_graph 25%, mem_context 30%.
-_bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.45))
-_codegraph = _cap(os.environ.get('HOOK_CODE_GRAPH_OUT',''), int(max_bytes * 0.25))
-_memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.30))
+# Las 2 secciones dinámicas comparten el presupuesto (reglas van aparte, íntegras).
+# Reparto: bootstrap 60%, mem_context 40%.
+_bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.60))
+_memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.40))
 
 ctx = (
     f"🟢 domain MCP ready (auto-cargado por SessionStart hook, "
     f"vps={os.environ.get('HOOK_VPS_URL','?')}, "
     f"slug={os.environ.get('HOOK_MEM_SLUG','?')})\n\n"
     f"## domain_session_bootstrap\n{_bootstrap}\n\n"
-    f"## domain_code_graph\n{_codegraph}\n\n"
     f"## domain_mem_context (ultimas 10 obs)\n{_memctx}\n\n"
     f"---\n"
     f"REGLAS DE ARRANQUE (ejecutar EN ORDEN, SIEMPRE, sin excepcion):\n"
-    f"R1. PROHIBIDO volver a llamar domain_session_bootstrap, domain_code_graph, "
+    f"R1. PROHIBIDO volver a llamar domain_session_bootstrap y "
     f"domain_mem_context. Sus resultados ya estan arriba.\n"
     f"R2. En tu PRIMER mensaje, ANTES de responder al usuario, llamar estas 4 tools "
     f"(en paralelo, con project_slug={os.environ.get('HOOK_MEM_SLUG','?')}):\n"
@@ -334,7 +281,7 @@ PYEOF
 # invisible en la UI de Claude Code). Best-effort, nunca bloquea.
 _inj_dir="$REAL_HOME/.local/state/domain"
 mkdir -p "$_inj_dir" 2>/dev/null && \
-  printf '%s\tSessionStart\t%s\tbootstrap+code_graph+mem_context\n' \
+  printf '%s\tSessionStart\t%s\tbootstrap+mem_context\n' \
     "$(date -Iseconds 2>/dev/null || echo '?')" "${mem_slug:-?}" \
     >> "$_inj_dir/injections.log" 2>/dev/null
 exit 0

@@ -23,18 +23,16 @@ este orden:
    - `git_head` = output de `git rev-parse HEAD`
    - `existing_rules_files` = lista de AI-rules que existan en el cwd (`AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`, `openspec/`)
 
-2. **`domain_code_graph`** con `project_slug` del paso 1.
+2. **`domain_mem_context`** con `project_slug` del paso 1, `limit=10`.
 
-3. **`domain_mem_context`** con `project_slug` del paso 1, `limit=10`.
-
-Solo DESPUES de esos 3 calls (o si fallaron con error) podes responder al usuario.
+Solo DESPUES de esos 2 calls (o si fallaron con error) podes responder al usuario.
 
 DESPUES del bootstrap, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se desvía, violaste la regla.
 
 **Reglas duras:**
 - NO respondas sin bootstrap primero. NUNCA.
 - NO improvises contexto. Lee la respuesta real del MCP.
-- Si el usuario manda "x" o algo trivial, IGUAL ejecuta los 3 tools.
+- Si el usuario manda "x" o algo trivial, IGUAL ejecuta los 2 tools.
 - Si algun tool falla, igual responde con warning — no te quedes mudo.
 
 ## Identity
@@ -70,33 +68,19 @@ Server has NO LLM — fan-out via client subagents.
 
 1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first (OpenCode no tiene hook: lo llamás vos).
 2. If `known=false`: `domain_session_register` then `domain_project_index_start` → `_submit`.
-3. If `head.changed != []`: read git log `last_known..current`, `domain_mem_save` relevant events, then rebuild code graph via `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"`.
+3. If `head.changed != []`: read git log `last_known..current`, `domain_mem_save` relevant events.
 4. **Repo disambiguation**: call `domain_project_repo_list(project_slug)`. If `ambiguous=true` (>1 remoto sin default), show list and ask user which to use.
 5. If `recent_observations` non-empty: `domain_mem_context` before acting.
 6. If `project_skill_count = 0`: detect stacks, propose skills per path F.
 7. If policies not yet imported from `existing_rules_files`: read each + `domain_project_policy_import_from_text`.
 8. `domain_policy_get(slug="agent-protocol")`.
 
-## Code graph (client-side, symbols-only + incremental)
+## Code graph (RETIRADO 2026-07-07)
 
-NO uses `domain_code_build` — corre server-side y falla en setups remotos (server no tiene FS del cliente). Usa este flujo:
-
-1. Usa siempre `project_slug` del bootstrap. Si llamas code_* sin slug, falla.
-2. Llama `domain_code_graph` para chequear:
-   - `built: true` y `total_nodes > 3` → ya hay grafo. Si `head.changed != []`, corre el script para actualizar (es barato: incremental).
-   - `built: false` o `total_nodes <= 3` → no hay grafo real.
-3. Si no hay grafo: corre `~/.local/share/domain/scripts/domain-code-graph.sh "$(pwd)" "<slug>"`. Opcion B: parsea con Read y llama `domain_code_upload`.
-4. Despues de subir, usa `domain_code_explore` / `domain_code_graph`. (`domain_code_path` navega edges — el grafo es symbols-only, no esperes caminos de llamadas.)
-
-Comportamiento del script (v0.2, 2026-07-05):
-
-- **Symbols-only**: sube funciones/metodos/tipos/interfaces por archivo. NO genera edges "calls" (la heuristica por nombre producia god-nodes falsos y uploads de 20 min con lock storms 55P03).
-- **Incremental**: guarda el ultimo head subido en `~/.local/state/domain/code-graph-head-<slug>`. Corridas siguientes solo parsean/suben archivos cambiados (commits + working tree + untracked). Sin cambios de codigo → exit inmediato sin tocar el server. Cambiar 1 archivo → sube 1 archivo (~2 s).
-- **Filtros**: excluye archivos generados (`Code generated`/`DO NOT EDIT`/`@generated` en las primeras 5 lineas) y archivos > 2 MB.
-- Env vars: `DOMAIN_CODE_GRAPH_FULL=1` fuerza full scan (usar tras borrar/renombrar archivos masivamente — los nodos de archivos borrados quedan hasta el proximo full); `DOMAIN_CODE_GRAPH_MAX_FILE_BYTES` ajusta el cap de tamaño.
-- Exit code: != 0 si el server rechazo el upload (el estado incremental NO avanza en ese caso).
-
-Idempotente: re-subir solo actualiza por `qualified_name + kind`; el server reemplaza los nodos por archivo (`SoftDeleteNodesByFileExcept`), asi que el re-upload parcial no duplica.
+El code graph client-side fue retirado tras la auditoría de uso (llamadas
+casi todas automáticas, 45-94% de nodos basura en proyectos JS/Python).
+NO corras `domain-code-graph.sh` ni llames `domain_code_build`/`domain_code_upload`.
+Las tools `domain_code_*` quedan deprecadas — solo con pedido explícito del usuario.
 
 ## Auto-persistence
 

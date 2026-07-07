@@ -34,7 +34,7 @@ func TestPrepContext_AllPhasesMapped(t *testing.T) {
 func TestPhaseContracts_MatchCanonicalTable(t *testing.T) {
 	t.Parallel()
 	expected := map[string][]string{
-		"sdd-explore": {"domain_code_graph"},
+		"sdd-explore": nil, // code graph retirado 2026-07-07: sin contrato de tools
 		"sdd-spec":    nil, // creativo: el contrato de saves lo cubre D5
 		"sdd-propose": {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
 		"sdd-design":  {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3

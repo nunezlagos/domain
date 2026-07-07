@@ -29,9 +29,19 @@
 #   - REPO_PATH: path absoluto al repo (default: cwd)
 #   - PROJECT_SLUG: slug del project en domain (default: basename del repo)
 #
+# GUARDAS DE MEMORIA (2026-07-07): 4 capas anti-crash tras incidente OOM
+# (N sesiones concurrentes x JSON completo en RAM congelaron la maquina):
+#   capa 1: flock singleton por maquina (builds concurrentes salen solos)
+#   capa 2: ast-grep --json=stream + parseo linea a linea (memoria O(1))
+#   capa 3: cgroup v2 MemoryMax via systemd-run (techo duro, default 1G;
+#           fallback ulimit -v si no hay systemd)
+#   capa 4: oom_score_adj=900 (victima preferente) + pre-flight MemAvailable
+#
 # Env vars:
 #   DOMAIN_CODE_GRAPH_FULL=1              fuerza full scan (ignora el estado incremental)
 #   DOMAIN_CODE_GRAPH_MAX_FILE_BYTES=N    saltear archivos mayores a N bytes (default 2 MB)
+#   DOMAIN_CODE_GRAPH_MEM_MAX=N           techo de RAM del cgroup (default 1G)
+#   DOMAIN_CODE_GRAPH_MIN_AVAIL_MB=N      minimo MemAvailable para arrancar (default 2048)
 #   DOMAIN_VPS_URL / DOMAIN_API_KEY       override de la config del installer
 #
 # Requiere: ast-grep, curl, python3, git (para el modo incremental).
@@ -44,6 +54,48 @@ set -uo pipefail
 
 REPO_PATH="${1:-$(pwd)}"
 PROJECT_SLUG="${2:-$(basename "$REPO_PATH")}"
+
+# ---------- 0. guardas de memoria (4 capas anti-crash, 2026-07-07) ----------
+# El build sin limites tumbo la maquina del cliente: N sesiones concurrentes
+# construyendo el grafo a la vez, cada una cargando el JSON completo de
+# ast-grep en RAM. Capas: cgroup MemoryMax > flock singleton > oom_score_adj
+# + pre-flight MemAvailable > parseo streaming (en extract_for_lang).
+
+# Capa 3 — techo duro de RAM via cgroup v2 (systemd-run). Si el scope supera
+# MEM_MAX el kernel mata SOLO este arbol de procesos, nunca el resto del sistema.
+MEM_MAX="${DOMAIN_CODE_GRAPH_MEM_MAX:-1G}"
+if [[ -z "${DOMAIN_CG_WRAPPED:-}" ]] && command -v systemd-run >/dev/null 2>&1 && systemd-run --user --scope --quiet -p MemoryMax=infinity true 2>/dev/null; then
+  exec env DOMAIN_CG_WRAPPED=1 systemd-run --user --scope --quiet \
+    --nice=19 \
+    -p MemoryMax="$MEM_MAX" -p MemorySwapMax=256M \
+    "$0" "$@"
+fi
+# Fallback sin systemd: limite de memoria virtual por proceso (malloc falla ->
+# el proceso muere con error en vez de congelar la maquina).
+if [[ -z "${DOMAIN_CG_WRAPPED:-}" ]]; then
+  ulimit -v 1500000 2>/dev/null || true
+fi
+
+# Capa 1 — singleton por maquina: si otra sesion ya esta construyendo un
+# grafo, salir silenciosamente (el estado incremental cubre lo pendiente).
+GRAPH_LOCK="${XDG_RUNTIME_DIR:-/tmp}/domain-code-graph.lock"
+exec 9>"$GRAPH_LOCK"
+if ! flock -n 9; then
+  echo "[lock] otro build de code graph en curso — salgo (lo pendiente se toma en la proxima corrida)"
+  exit 0
+fi
+
+# Capa 4a — victima preferente del OOM killer: si igual hay presion de
+# memoria, el kernel mata este script antes que cualquier app del usuario.
+echo 900 > /proc/self/oom_score_adj 2>/dev/null || true
+
+# Capa 4b — backpressure: no arrancar si la maquina ya esta corta de memoria.
+MIN_AVAIL_MB="${DOMAIN_CODE_GRAPH_MIN_AVAIL_MB:-2048}"
+avail_mb=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 999999)
+if (( avail_mb < MIN_AVAIL_MB )); then
+  echo "[mem] solo ${avail_mb}MB disponibles (<${MIN_AVAIL_MB}MB) — difiero el build para no estresar la maquina"
+  exit 0
+fi
 
 # ---------- 1. resolver VPS URL + API key (mismo orden que el hook de session) ----------
 VPS_URL="${DOMAIN_VPS_URL:-}"
@@ -200,44 +252,35 @@ done
 extract_for_lang() {
   local lang="$1" pattern="$2" kind="$3"
   [[ -v HAS_LANG[$lang] && "${HAS_LANG[$lang]}" == "1" ]] || return
-  printf '%s\0' "${FILES[@]}" | xargs -0 -I{} ast-grep run \
-    --pattern "$pattern" --lang "$lang" --json=compact {} 2>/dev/null | \
+  # Capa 2 — streaming: --json=stream emite UN objeto JSON por linea; el
+  # parser procesa e imprime linea a linea. Memoria O(1) por match, nunca
+  # el repo completo en RAM (el slurp con sys.stdin.read() causaba OOM).
+  printf '%s\0' "${FILES[@]}" | xargs -0 -n 64 ast-grep run \
+    --pattern "$pattern" --lang "$lang" --json=stream 2>/dev/null | \
     python3 -c "
-import sys, json, os
+import sys, json
 pat_kind = '$kind'
-data = sys.stdin.read()
-decoder = json.JSONDecoder()
-idx = 0
-entries = []
-while idx < len(data):
-    while idx < len(data) and data[idx] in ' \n\r\t':
-        idx += 1
-    if idx >= len(data): break
+prefix = '$REPO_PATH/'
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
     try:
-        obj, end = decoder.raw_decode(data, idx)
-        if isinstance(obj, list):
-            entries.extend(obj)
-        else:
-            entries.append(obj)
-        idx = end
+        m = json.loads(line)
     except json.JSONDecodeError:
-        break
-for m in entries:
-        file_path = m.get('file','')
-        if file_path.startswith('$REPO_PATH/'):
-            rel = file_path[len('$REPO_PATH/'):]
-        else:
-            rel = file_path
-        text = m.get('text','').split('\n')[0]
-        line_start = m.get('range',{}).get('start',{}).get('line', 0) + 1
-        line_end = m.get('range',{}).get('end',{}).get('line', line_start)
-        name = text.split('(')[0].split('{')[0].strip()
-        for kw in ('class ', 'function ', 'func ', 'def ', 'fn ', 'export function ', 'export const ', 'export default function ', 'async function ', 'public function ', 'private function '):
-            if name.startswith(kw):
-                name = name[len(kw):].strip()
-                break
-        qn = f'{rel}:{line_start}:{name}' if name else f'{rel}:{line_start}'
-        print(f'{rel}\t{pat_kind}\t{name}\t{qn}\t{line_start}\t{line_end}\t{text}')
+        continue
+    file_path = m.get('file','')
+    rel = file_path[len(prefix):] if file_path.startswith(prefix) else file_path
+    text = m.get('text','').split('\n')[0]
+    line_start = m.get('range',{}).get('start',{}).get('line', 0) + 1
+    line_end = m.get('range',{}).get('end',{}).get('line', line_start)
+    name = text.split('(')[0].split('{')[0].strip()
+    for kw in ('class ', 'function ', 'func ', 'def ', 'fn ', 'export function ', 'export const ', 'export default function ', 'async function ', 'public function ', 'private function '):
+        if name.startswith(kw):
+            name = name[len(kw):].strip()
+            break
+    qn = f'{rel}:{line_start}:{name}' if name else f'{rel}:{line_start}'
+    print(f'{rel}\t{pat_kind}\t{name}\t{qn}\t{line_start}\t{line_end}\t{text}')
 " 2>/dev/null
 }
 

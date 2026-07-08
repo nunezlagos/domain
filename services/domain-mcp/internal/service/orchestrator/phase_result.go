@@ -59,6 +59,13 @@ type PhaseResultResult struct {
 	// mensaje de qué falta para que el cliente corrija y reintente (REQ-56 issue-56.4).
 	ValidationError string `json:"validation_error,omitempty"`
 
+	// MissingRequiredSaves: si el contrato D5 (suggested_saves con Required=true,
+	// ej. code_reference) no aparece en memory_refs_saved, el step NO se cierra ni
+	// se marca failed — queda running/reintentable, mismo patrón que MissingToolCalls
+	// y ValidationError. Acá van los saves que faltan para que el cliente los
+	// persista y reintente el reporte, sin perder el flow.
+	MissingRequiredSaves []MissingRequiredSaveInfo `json:"missing_required_saves,omitempty"`
+
 	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
 
 
@@ -91,7 +98,10 @@ type ConcernInfo struct {
 //   2. Validar contract D5 (suggested_saves required presentes)
 //   3. Llamar handler.Validate del registry para chequeos shape-specific
 //   4. Si todo verde → MarkStepCompleted; calcular si flow_run terminó
-//   5. Si falla validación → MarkStepFailed con el error como mensaje
+//   5. Si un contrato recuperable no se cumple (D5 required_saves, shape del
+//      output, o required_tool_calls) → el step queda running (reintentable) y
+//      se devuelve el detalle (missing_required_saves / validation_error /
+//      missing_tool_calls). Ningún contrato de reporte mata el step ni el flow.
 //
 // Devuelve PhaseResultResult con el status final del step + flow + next
 // step pending si aún hay fases por correr.
@@ -135,29 +145,39 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	phaseSlug := phases.PhaseSlug(step.StepKey)
 
 
+	// REQ-56 issue-56.5: el contrato D5 (suggested_saves con Required=true, ej.
+	// code_reference) es un CONTRATO RECUPERABLE, igual que required_tool_calls y
+	// el shape del output. Antes un save faltante llamaba MarkStepFailed +
+	// propagateFlowStatusAfterFailure y mataba el step/flow IRREVERSIBLEMENTE en el
+	// primer intento — sin forma de reintentar aunque el cliente hubiera guardado
+	// el code_reference en otro turno. Ahora el step queda running (reintentable) y
+	// devolvemos missing_required_saves para que el cliente persista lo que falta y
+	// reintente el reporte, sin perder el flow.
 	if err := ValidateRequiredSaves(phaseSlug, rebuilt,
 		phases.ClientResult{Output: in.Output, MemoryRefsSaved: in.MemoryRefsSaved}); err != nil {
 
-
-
-
-		_ = s.Repo.MarkStepFailed(ctx, step.ID, err.Error())
-		_ = s.propagateFlowStatusAfterFailure(ctx, flowRun.ID)
-
-
+		var rse *RequiredSaveError
+		if !errors.As(err, &rse) {
+			return nil, err
+		}
 		if s.Metrics != nil {
-			var rse *RequiredSaveError
-			if errors.As(err, &rse) {
-				for _, m := range rse.Missing {
-					s.Metrics.OrchestratorRequiredSaveMissingTotal.
-						WithLabelValues(string(phaseSlug), m.Type).Inc()
-				}
+			for _, m := range rse.Missing {
+				s.Metrics.OrchestratorRequiredSaveMissingTotal.
+					WithLabelValues(string(phaseSlug), m.Type).Inc()
 			}
 			modeStr, _ := step.Inputs["mode"].(string)
 			s.Metrics.OrchestratorPhaseResultsTotal.
-				WithLabelValues(string(phaseSlug), modeStr, "failed").Inc()
+				WithLabelValues(string(phaseSlug), modeStr, "required_save_unmet").Inc()
 		}
-		return nil, err
+		missing := make([]MissingRequiredSaveInfo, len(rse.Missing))
+		for i, m := range rse.Missing {
+			missing[i] = MissingRequiredSaveInfo{Type: m.Type, Hint: m.Hint}
+		}
+		return &PhaseResultResult{
+			StepID:               step.ID,
+			StepStatus:           step.Status,
+			MissingRequiredSaves: missing,
+		}, nil
 	}
 
 

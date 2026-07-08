@@ -191,6 +191,7 @@ type multiConcernRepo struct {
 	cancelledSteps  []uuid.UUID
 	updatedStatusTo string
 	completedID     uuid.UUID
+	failedID        uuid.UUID
 }
 
 func (m *multiConcernRepo) GetFlowIDBySlug(_ context.Context, _ uuid.UUID, _ string) (uuid.UUID, error) {
@@ -224,7 +225,8 @@ func (m *multiConcernRepo) MarkStepCompleted(_ context.Context, stepID uuid.UUID
 	m.completedID = stepID
 	return nil
 }
-func (m *multiConcernRepo) MarkStepFailed(_ context.Context, _ uuid.UUID, _ string) error {
+func (m *multiConcernRepo) MarkStepFailed(_ context.Context, stepID uuid.UUID, _ string) error {
+	m.failedID = stepID
 	return nil
 }
 
@@ -462,6 +464,58 @@ func TestRecordPhaseResult_DualOutput_ExtractsSummary(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Corregido typo en CHANGELOG.md", res.Summary)
 	require.Equal(t, "completed", res.StepStatus)
+}
+
+// TestRecordPhaseResult_MissingRequiredSave_IsRecoverable fija el contrato de
+// REQ-56 issue-56.5: si falta un suggested_save Required (ej. code_reference), el
+// step NO se mata — queda running y se devuelve missing_required_saves para que el
+// cliente lo persista y reintente. Antes marcaba failed irreversible (mismo
+// tecnicismo que ya se había arreglado para shape y tool_calls).
+func TestRecordPhaseResult_MissingRequiredSave_IsRecoverable(t *testing.T) {
+	stepID := uuid.New()
+	flowRunID := uuid.New()
+	orgID := uuid.New()
+
+	stepInputs := map[string]any{
+		"suggested_saves": []any{
+			map[string]any{"type": "code_reference", "required": true, "hint": "guardar code ref"},
+		},
+	}
+	repo := &multiConcernRepo{
+		flowRun: &FlowRunRow{ID: flowRunID, OrganizationID: orgID, Status: "running"},
+		step: &FlowRunStepRow{
+			ID:        stepID,
+			FlowRunID: flowRunID,
+			StepKey:   "sdd-apply",
+			Status:    "running",
+			Inputs:    stepInputs,
+		},
+		allSteps: []FlowRunStepRow{
+			{ID: stepID, FlowRunID: flowRunID, StepKey: "sdd-apply", Status: "running", Inputs: stepInputs},
+		},
+	}
+
+	reg := phases.NewRegistry()
+	reg.Register(phases.NewSDDApplyHandler())
+	s := &Service{Repo: repo, Phases: reg, Env: "dev"}
+
+	res, err := s.RecordPhaseResult(context.Background(), PhaseResultInput{
+		FlowRunStepID: stepID,
+		Output: map[string]any{
+			"summary":       "Cambio aplicado",
+			"files_changed": []any{"foo.go"},
+			"lines_changed": 3,
+		},
+		MemoryRefsSaved: nil, // FALTA el code_reference requerido
+	})
+
+	require.NoError(t, err, "un save faltante ya no es un error hard")
+	require.Equal(t, "running", res.StepStatus, "el step queda reintentable, no failed")
+	require.Equal(t, uuid.Nil, repo.failedID, "MarkStepFailed NO debe invocarse")
+	require.Empty(t, repo.updatedStatusTo, "el flow_run NO debe propagar a failed")
+	require.Len(t, res.MissingRequiredSaves, 1)
+	require.Equal(t, "code_reference", res.MissingRequiredSaves[0].Type)
+	require.Equal(t, "guardar code ref", res.MissingRequiredSaves[0].Hint)
 }
 
 func TestRecordPhaseResult_DualOutput_NoSummary_DefaultsEmpty(t *testing.T) {

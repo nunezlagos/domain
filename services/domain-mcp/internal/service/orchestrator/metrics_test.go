@@ -116,18 +116,23 @@ func TestService_RecordPhaseResult_IncrementsRequiredSaveMissingMetric(t *testin
 			},
 		},
 		allSteps: []FlowRunStepRow{
-			{ID: stepID, StepKey: "sdd-apply", Status: "failed"},
+			{ID: stepID, StepKey: "sdd-apply", Status: "running"},
 		},
 	}
 	s := &Service{Repo: repo, Phases: phases.NewRegistry(), Metrics: reg}
 
-
-	_, err := s.RecordPhaseResult(context.Background(), PhaseResultInput{
+	// REQ-56 issue-56.5: un save requerido faltante YA NO es un error hard ni mata
+	// el step. Queda running (reintentable) y devuelve missing_required_saves. La
+	// métrica de saves faltantes sigue incrementándose para observabilidad.
+	res, err := s.RecordPhaseResult(context.Background(), PhaseResultInput{
 		FlowRunStepID: stepID,
 		Output:        map[string]any{"summary": "no save"},
 	})
-	require.ErrorIs(t, err, ErrRequiredSaveMissing)
-	require.True(t, repo.markedFailed)
+	require.NoError(t, err)
+	require.False(t, repo.markedFailed, "el step no debe marcarse failed")
+	require.Equal(t, "pending", res.StepStatus, "el step queda reintentable")
+	require.Len(t, res.MissingRequiredSaves, 1)
+	require.Equal(t, "code_reference", res.MissingRequiredSaves[0].Type)
 
 	val := testMetricValue(t, reg, "domain_orchestrator_required_save_missing_total",
 		map[string]string{"phase": "sdd-apply", "save_type": "code_reference"})

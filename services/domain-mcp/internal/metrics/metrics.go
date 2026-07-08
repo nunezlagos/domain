@@ -63,7 +63,7 @@ type Registry struct {
 
 	OrchestratorRunsTotal       *prometheus.CounterVec   // labels: mode, status
 	OrchestratorPhaseDuration   *prometheus.HistogramVec // labels: phase, mode
-	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed)
+	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed|shape_contract_unmet|tool_contract_unmet|required_save_unmet)
 	OrchestratorConfirmsTotal   *prometheus.CounterVec   // labels: confirmed (true|false)
 	OrchestratorRequiredSaveMissingTotal *prometheus.CounterVec // labels: phase, save_type
 
@@ -245,7 +245,7 @@ func New() *Registry {
 	r.OrchestratorPhaseResultsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "domain_orchestrator_phase_results_total",
-			Help: "Resultados de fase reportados (completed o failed)",
+			Help: "Resultados de fase reportados (completed|failed|shape_contract_unmet|tool_contract_unmet|required_save_unmet)",
 		},
 		[]string{"phase", "mode", "result"},
 	)

@@ -34,6 +34,15 @@ func (e *RequiredSaveError) Error() string {
 
 func (e *RequiredSaveError) Unwrap() error { return ErrRequiredSaveMissing }
 
+// MissingRequiredSaveInfo es la forma serializable de un save faltante que
+// viaja al cliente en PhaseResultResult.MissingRequiredSaves. El cliente lo
+// usa para saber qué tipo persistir (ej. code_reference) y con qué hint antes
+// de reintentar el reporte de la fase.
+type MissingRequiredSaveInfo struct {
+	Type string `json:"type"`
+	Hint string `json:"hint,omitempty"`
+}
+
 // ValidateRequiredSaves aplica D5: cada SuggestedSave con Required=true
 // debe estar presente en ClientResult.MemoryRefsSaved por Type. Si
 // alguno falta, devuelve *RequiredSaveError detallando cuáles.

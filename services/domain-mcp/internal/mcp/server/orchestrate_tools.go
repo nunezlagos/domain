@@ -18,6 +18,7 @@ type orchestratorService interface {
 	RecordPhaseResult(ctx context.Context, in orchsvc.PhaseResultInput) (*orchsvc.PhaseResultResult, error)
 	ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, confirmed bool) (*orchsvc.PhaseResultResult, error)
 	GetFlowStatus(ctx context.Context, flowRunID uuid.UUID) (*orchsvc.FlowStatusResponse, error)
+	CancelFlow(ctx context.Context, flowRunID uuid.UUID, reason string) (*orchsvc.FlowStatusResponse, error)
 }
 
 type orchestrateHandlers struct {
@@ -100,6 +101,19 @@ func toolFlowStatus() mcp.Tool {
 		mcp.WithString("flow_run_id",
 			mcp.Description("UUID del flow_run a consultar (devuelto por domain_orchestrate)."),
 			mcp.Required(),
+		),
+	)
+}
+
+func toolFlowCancel() mcp.Tool {
+	return mcp.NewTool("domain_flow_cancel",
+		mcp.WithDescription("Lleva un flow_run a estado terminal 'cancelled' cuando el trabajo ya no aplica (feature retirada, flow huérfano, abort explícito). Cancela también los steps aún pendientes y persiste el motivo para audit trail. Solo cancela flows en estado no-terminal (running/paused/pending); rechaza los ya completed/failed/cancelled."),
+		mcp.WithString("flow_run_id",
+			mcp.Description("UUID del flow_run a cancelar (de domain_orchestrate o domain_flow_status)."),
+			mcp.Required(),
+		),
+		mcp.WithString("reason",
+			mcp.Description("Motivo de la cancelación (se persiste en flow_runs.error para trazabilidad)."),
 		),
 	)
 }
@@ -279,6 +293,30 @@ func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.Call
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
+func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if h.orchestrator == nil {
+		return mcp.NewToolResultError("orchestrator service not configured"), nil
+	}
+	idStr, err := req.RequireString("flow_run_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	flowRunID, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("invalid flow_run_id"), nil
+	}
+	reason := req.GetString("reason", "")
+	status, err := h.orchestrator.CancelFlow(ctx, flowRunID, reason)
+	if err != nil {
+		return mcp.NewToolResultError("flow_cancel: " + err.Error()), nil
+	}
+	body, _ := json.MarshalIndent(status, "", "  ")
+	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
@@ -294,5 +332,6 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
 		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm)},
 		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", h.handleFlowStatus)},
+		{Tool: toolFlowCancel(), Handler: wrap.Wrap("domain_flow_cancel", h.handleFlowCancel)},
 	}
 }

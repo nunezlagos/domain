@@ -3,8 +3,12 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
+
+	"nunezlagos/domain/internal/audit"
+	"nunezlagos/domain/internal/service/flow"
 )
 
 // FlowStatusResponse es la vista pública del estado de un flow_run
@@ -81,4 +85,55 @@ func truncatePreview(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// CancelFlow lleva un flow_run a estado terminal 'cancelled' cuando el
+// trabajo ya no aplica (p.ej. la feature fue retirada). Valida la
+// transición contra la state machine (running/paused/pending → cancelled
+// son legales; un flow ya terminal la rechaza) y persiste el motivo en
+// flow_runs.error para dejar audit trail. Devuelve el estado resultante.
+func (s *Service) CancelFlow(ctx context.Context, flowRunID uuid.UUID, reason string) (*FlowStatusResponse, error) {
+	if s.Repo == nil {
+		return nil, errors.New("orchestrator: Repo not configured")
+	}
+	flowRun, err := s.Repo.GetFlowRun(ctx, flowRunID)
+	if err != nil {
+		return nil, err
+	}
+	sm := flow.NewFlowStateMachine()
+	if err := sm.ValidateTransition(flow.FlowStatus(flowRun.Status), flow.FlowStatusCancelled); err != nil {
+		return nil, fmt.Errorf("no se puede cancelar un flow en estado %q: %w", flowRun.Status, err)
+	}
+	// Cancela los steps aún no-terminales para que no queden huérfanos
+	// en pending/running/blocked tras cerrar el flow.
+	steps, err := s.Repo.ListFlowRunSteps(ctx, flowRunID)
+	if err != nil {
+		return nil, err
+	}
+	for _, st := range steps {
+		if st.Status == "pending" || st.Status == "running" || st.Status == "blocked" {
+			if err := s.Repo.MarkStepCancelled(ctx, st.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if reason != "" {
+		if err := s.Repo.SetFlowRunError(ctx, flowRunID, reason); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.Repo.UpdateFlowRunStatus(ctx, flowRunID, string(flow.FlowStatusCancelled)); err != nil {
+		return nil, err
+	}
+	if s.Audit != nil {
+		audit.RecordOrLog(ctx, s.Audit, audit.Event{
+			ActorType:  audit.ActorSystem,
+			Action:     "flow_run.cancelled",
+			EntityType: "flow_run",
+			EntityID:   &flowRunID,
+			OldValues:  map[string]any{"status": flowRun.Status},
+			NewValues:  map[string]any{"status": string(flow.FlowStatusCancelled), "reason": reason},
+		})
+	}
+	return s.GetFlowStatus(ctx, flowRunID)
 }

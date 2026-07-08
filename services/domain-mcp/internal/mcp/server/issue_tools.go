@@ -26,6 +26,7 @@ type huService interface {
 type issueCRUD interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*issuesvc.Issue, error)
 	Update(ctx context.Context, slug string, title *string, description *string, status *string, priority *string) (*issuesvc.Issue, error)
+	List(ctx context.Context, filter issuesvc.UserStoryFilter) ([]issuesvc.Issue, error)
 }
 
 type issueHandlers struct {
@@ -307,6 +308,44 @@ func (h *issueHandlers) handleIssueSetStatus(ctx context.Context, req mcp.CallTo
 	})
 }
 
+func (h *issueHandlers) handleIssueList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil || h.issue == nil {
+		return mcp.NewToolResultError("issue service no configurado"), nil
+	}
+	pidStr := req.GetString("project_id", "")
+	if pidStr == "" {
+		return mcp.NewToolResultError("project_id es requerido (de domain_session_bootstrap)"), nil
+	}
+	p, perr := uuid.Parse(pidStr)
+	if perr != nil {
+		return mcp.NewToolResultError("project_id invalido"), nil
+	}
+	filter := issuesvc.UserStoryFilter{
+		Status:    req.GetString("status", ""),
+		Priority:  req.GetString("priority", ""),
+		ProjectID: &p,
+		Limit:     req.GetInt("limit", 0),
+		Offset:    req.GetInt("offset", 0),
+	}
+	issues, err := h.issue.List(ctx, filter)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
+	}
+	out := make([]map[string]any, 0, len(issues))
+	for _, is := range issues {
+		out = append(out, map[string]any{
+			"issue_id":   is.ID.String(),
+			"slug":       is.Slug,
+			"title":      is.Title,
+			"status":     is.Status,
+			"priority":   is.Priority,
+			"created_at": is.CreatedAt,
+			"updated_at": is.UpdatedAt,
+		})
+	}
+	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+}
+
 // registerHUTools registra los tools del wizard de issues (HU → issue
 // rename del REQ-56). Se registran tanto los NUEVOS nombres
 // domain_issue_* como los LEGACY domain_hu_* para no romper clientes
@@ -322,6 +361,7 @@ func registerHUTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 		{Tool: toolIssueCreateAbandon(), Handler: wrap.Wrap("domain_issue_create_abandon", h.handleHUCreateAbandon)},
 		{Tool: toolIssueDraftsList(), Handler: wrap.Wrap("domain_issue_drafts_list", h.handleHUDraftsList)},
 		{Tool: toolIssueSetStatus(), Handler: wrap.Wrap("domain_issue_set_status", h.handleIssueSetStatus)},
+		{Tool: toolIssueList(), Handler: wrap.Wrap("domain_issue_list", h.handleIssueList)},
 
 		{Tool: toolHUCreateStart(), Handler: wrap.Wrap("domain_hu_create_start", h.handleHUCreateStart)},
 		{Tool: toolHUCreateAnswer(), Handler: wrap.Wrap("domain_hu_create_answer", h.handleHUCreateAnswer)},
@@ -383,5 +423,16 @@ func toolIssueSetStatus() mcp.Tool {
 		mcp.WithDescription("Actualiza el status de una issue. Usado por sdd-archive para marcar la issue como implemented al cerrar el ciclo SDD. Valores validos: proposed | active | implemented | archived."),
 		mcp.WithString("issue_id", mcp.Description("UUID de la issue a actualizar"), mcp.Required()),
 		mcp.WithString("status", mcp.Description("Nuevo status: proposed | active | implemented | archived"), mcp.Required()),
+	)
+}
+
+func toolIssueList() mcp.Tool {
+	return mcp.NewTool("domain_issue_list",
+		mcp.WithDescription("Lista los issues (user stories SDD) de un proyecto con su UUID, slug, title, status y priority. Provee los issue_id que domain_issue_set_status requiere para cerrar/archivar. Filtrable por status."),
+		mcp.WithString("project_id", mcp.Description("UUID del proyecto (de domain_session_bootstrap). Scopea el listado al proyecto."), mcp.Required()),
+		mcp.WithString("status", mcp.Description("Filtro opcional: proposed | active | implemented | archived")),
+		mcp.WithString("priority", mcp.Description("Filtro opcional: low | medium | high | critical")),
+		mcp.WithNumber("limit", mcp.Description("Default 50, max 200")),
+		mcp.WithNumber("offset", mcp.Description("Default 0")),
 	)
 }

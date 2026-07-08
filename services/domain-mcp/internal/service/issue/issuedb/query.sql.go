@@ -190,16 +190,18 @@ LEFT JOIN sdd_requirements r ON r.id = us.req_id
 WHERE ($3::text IS NULL OR us.status = $3::text)
   AND ($4::text IS NULL OR us.priority = $4::text)
   AND ($5::text IS NULL OR r.slug = $5::text)
+  AND ($6::uuid IS NULL OR us.project_id = $6::uuid)
 ORDER BY us.slug
 LIMIT $1 OFFSET $2
 `
 
 type ListIssuesParams struct {
-	Limit    int32   `json:"limit"`
-	Offset   int32   `json:"offset"`
-	Status   *string `json:"status"`
-	Priority *string `json:"priority"`
-	ReqSlug  *string `json:"req_slug"`
+	Limit     int32      `json:"limit"`
+	Offset    int32      `json:"offset"`
+	Status    *string    `json:"status"`
+	Priority  *string    `json:"priority"`
+	ReqSlug   *string    `json:"req_slug"`
+	ProjectID *uuid.UUID `json:"project_id"`
 }
 
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue, error) {
@@ -209,6 +211,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue
 		arg.Status,
 		arg.Priority,
 		arg.ReqSlug,
+		arg.ProjectID,
 	)
 	if err != nil {
 		return nil, err

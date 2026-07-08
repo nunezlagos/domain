@@ -21,6 +21,7 @@ LEFT JOIN sdd_requirements r ON r.id = us.req_id
 WHERE (sqlc.narg('status')::text IS NULL OR us.status = sqlc.narg('status')::text)
   AND (sqlc.narg('priority')::text IS NULL OR us.priority = sqlc.narg('priority')::text)
   AND (sqlc.narg('req_slug')::text IS NULL OR r.slug = sqlc.narg('req_slug')::text)
+  AND (sqlc.narg('project_id')::uuid IS NULL OR us.project_id = sqlc.narg('project_id')::uuid)
 ORDER BY us.slug
 LIMIT $1 OFFSET $2;
 

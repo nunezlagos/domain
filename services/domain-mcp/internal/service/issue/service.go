@@ -79,11 +79,12 @@ type Scenario struct {
 
 // UserStoryFilter opcional para List.
 type UserStoryFilter struct {
-	Status   string
-	Priority string
-	ReqSlug  string
-	Limit    int
-	Offset   int
+	Status    string
+	Priority  string
+	ReqSlug   string
+	ProjectID *uuid.UUID
+	Limit     int
+	Offset    int
 }
 
 // Service CRUD para user stories.
@@ -236,11 +237,12 @@ func (s *Service) List(ctx context.Context, filter UserStoryFilter) ([]Issue, er
 	}
 
 	rows, err := s.q(ctx).ListIssues(ctx, issuedb.ListIssuesParams{
-		Limit:    int32(filter.Limit),
-		Offset:   int32(filter.Offset),
-		Status:   optStr(filter.Status),
-		Priority: optStr(filter.Priority),
-		ReqSlug:  optStr(filter.ReqSlug),
+		Limit:     int32(filter.Limit),
+		Offset:    int32(filter.Offset),
+		Status:    optStr(filter.Status),
+		Priority:  optStr(filter.Priority),
+		ReqSlug:   optStr(filter.ReqSlug),
+		ProjectID: filter.ProjectID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list issues: %w", err)

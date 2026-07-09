@@ -122,6 +122,20 @@ func TestTracker_Heartbeat_MarksIdle(t *testing.T) {
 	require.Contains(t, buf.String(), "idle")
 }
 
+func TestNullableStartedAt_ZeroBecomesNil(t *testing.T) {
+	// El zero-value de Go debe mapear a nil → SQL NULL → DEFAULT now().
+	// Es la raíz del bug: pasar el zero-value directo persistía
+	// started_at = 0001-01-01 en vez de disparar el DEFAULT.
+	require.Nil(t, nullableStartedAt(time.Time{}))
+}
+
+func TestNullableStartedAt_RealValuePreserved(t *testing.T) {
+	now := time.Now()
+	got := nullableStartedAt(now)
+	require.NotNil(t, got)
+	require.Equal(t, now, *got)
+}
+
 func TestTracker_Touch_NilUUID_NoOp(t *testing.T) {
 	store := &stubWorkflowStore{}
 	tr := NewTracker(store, nil, 0, 0)

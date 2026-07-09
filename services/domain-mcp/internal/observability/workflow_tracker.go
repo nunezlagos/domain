@@ -60,24 +60,47 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 	if s.Pool == nil {
 		return ErrStoreNotReady
 	}
+	// started_at: si el caller no seteó StartedAt (zero-value de Go =
+	// 0001-01-01), pasamos NULL para que actúe el DEFAULT now() de la
+	// columna. Pasar el zero-value directo lo persistía como timestamp
+	// basura (era un valor NOT NULL válido, así que el DEFAULT nunca
+	// disparaba). El ON CONFLICT además repara filas que ya quedaron en
+	// zero por el bug previo: COALESCE toma el primer started_at real.
+	startedAt := nullableStartedAt(w.StartedAt)
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO workflows (
 			id, name, status, started_at, ended_at,
 			total_tool_calls, total_errors, total_duration_ms,
 			actor_id, api_key_id, project_id, last_activity_at, metadata
-		) VALUES ($1, NULLIF($2,''), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, '{}'::jsonb)
+		) VALUES ($1, NULLIF($2,''), $3, COALESCE($4, now()), $5, $6, $7, $8, $9, $10, $11, $12, '{}'::jsonb)
 		ON CONFLICT (id) DO UPDATE SET
+			started_at = CASE
+				WHEN workflows.started_at = 'epoch'::timestamptz OR workflows.started_at < '1970-01-01'::timestamptz
+					THEN COALESCE(EXCLUDED.started_at, now())
+				ELSE workflows.started_at
+			END,
 			last_activity_at = EXCLUDED.last_activity_at,
 			total_tool_calls = workflows.total_tool_calls + EXCLUDED.total_tool_calls,
 			total_errors = workflows.total_errors + EXCLUDED.total_errors,
 			total_duration_ms = workflows.total_duration_ms + EXCLUDED.total_duration_ms
 	`,
-		w.ID, w.Name, string(w.Status), w.StartedAt, w.EndedAt,
+		w.ID, w.Name, string(w.Status), startedAt, w.EndedAt,
 		w.TotalToolCalls, w.TotalErrors, w.TotalDurationMS,
 		nullableUUID(w.ActorID), nullableUUID(w.APIKeyID), nullableUUID(w.ProjectID),
 		w.LastActivityAt,
 	)
 	return err
+}
+
+// nullableStartedAt convierte un StartedAt en el bind param correcto para
+// el INSERT: nil (→ SQL NULL, que dispara el DEFAULT now()) si el valor
+// es el zero-value de Go, o el timestamp real en caso contrario. Extraído
+// para poder testear la decisión sin una BD real.
+func nullableStartedAt(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 // MarkWorkflowIdle marca workflows running con last_activity_at < threshold como abandoned.

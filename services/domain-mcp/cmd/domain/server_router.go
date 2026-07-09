@@ -197,17 +197,19 @@ func buildRouter(
 			ServerName:       "domain-mcp-http",
 			ServerVer:        serverVersion,
 			SharedCache:      queryCacheLRU,
-			MetricsOnToolCall: func(ctx context.Context, tool, status string, dur float64) {
+			MetricsOnToolCall: func(ctx context.Context, tool, status, errCode, errMsg string, dur float64) {
 				metricsReg.MCPToolCallsTotal.WithLabelValues(tool, status).Inc()
 				if status != "cache_hit" {
 					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
 				}
 				wfID := observability.WorkflowIDFromContext(ctx)
 				invocationLogger.Log(observability.Invocation{
-					ToolName:   tool,
-					Status:     status,
-					DurationMS: int(dur * 1000),
-					WorkflowID: wfID.String(),
+					ToolName:     tool,
+					Status:       status,
+					DurationMS:   int(dur * 1000),
+					ErrorCode:    errCode,
+					ErrorMessage: errMsg,
+					WorkflowID:   wfID.String(),
 				})
 				if wfID != uuid.Nil {
 					workflowTracker.Touch(ctx, observability.WorkflowRow{
@@ -223,6 +225,8 @@ func buildRouter(
 				logger.Info("tool invocation",
 					slog.String("tool", tool),
 					slog.String("status", status),
+					slog.String("error_code", errCode),
+					slog.String("error_message", errMsg),
 					slog.Int64("duration_ms", int64(dur*1000)),
 					slog.String("workflow_id", wfID.String()))
 			},

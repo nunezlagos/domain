@@ -104,7 +104,7 @@ type ResilientWrapper struct {
 	invalidates map[string]bool          // tool -> true si invalida en escritura
 	orgIDFn     func() string            // accessor del orgID del principal vigente
 
-	metricsOnCall      func(ctx context.Context, tool, status string, durationSeconds float64)
+	metricsOnCall      func(ctx context.Context, tool, status, errCode, errMsg string, durationSeconds float64)
 	metricsOnCacheHit  func()
 	metricsOnCacheMiss func()
 }
@@ -157,7 +157,7 @@ func (r *ResilientWrapper) SetInvalidating(toolName string) {
 // El wrapper no conoce de Prometheus; quien crea el wrapper (server.Tools)
 // pasa los hooks que tocan los Counter/Histogram del Registry.
 func (r *ResilientWrapper) SetMetricsHooks(
-	onCall func(ctx context.Context, tool, status string, dur float64),
+	onCall func(ctx context.Context, tool, status, errCode, errMsg string, dur float64),
 	onCacheHit func(),
 	onCacheMiss func(),
 ) {
@@ -288,7 +288,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 					h()
 				}
 				if oc != nil {
-					oc(ctx, toolName, "cache_hit", time.Since(start).Seconds())
+					oc(ctx, toolName, "cache_hit", "", "", time.Since(start).Seconds())
 				}
 				return decodeCachedResult(cached), nil
 			}
@@ -328,13 +328,60 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 		r.mu.Unlock()
 		if oc != nil {
 			status := "ok"
+			var errCode, errMsg string
 			if err != nil || (result != nil && result.IsError) {
 				status = "error"
+				errCode, errMsg = classifyToolError(err, result)
 			}
-			oc(ctx, toolName, status, time.Since(start).Seconds())
+			oc(ctx, toolName, status, errCode, errMsg, time.Since(start).Seconds())
 		}
 		return result, err
 	}
+}
+
+// classifyToolError deriva (error_code, error_message) a partir del resultado
+// de una invocación de tool, para persistirlos en mcp_tool_invocations. Antes
+// del fix, el callback de métricas solo recibía el status y el error real se
+// descartaba, dejando error_code/error_message en NULL en el 100% de los fallos.
+//
+// Prioridad: un err de Go es un fallo de runtime/transport (code "internal");
+// un result.IsError es un rechazo del handler cuyo texto clasificamos por
+// heurística de substring (los códigos ya usados en el resto del codebase).
+func classifyToolError(err error, result *mcp.CallToolResult) (code, msg string) {
+	if err != nil {
+		return "internal", err.Error()
+	}
+	if result == nil || !result.IsError {
+		return "", ""
+	}
+	msg = toolResultText(result)
+	low := strings.ToLower(msg)
+	switch {
+	case strings.Contains(low, "circuit open"):
+		code = "circuit_open"
+	case strings.Contains(low, "rate limit"):
+		code = "rate_limited"
+	case strings.Contains(low, "missing") && strings.Contains(low, "tool"):
+		code = "missing_tool_calls"
+	case strings.Contains(low, "required") || strings.Contains(low, "invalid") ||
+		strings.Contains(low, "validation") || strings.Contains(low, "requerido"):
+		code = "validation_error"
+	default:
+		code = "tool_error"
+	}
+	return code, msg
+}
+
+// toolResultText extrae el texto plano de un CallToolResult de error para
+// persistirlo como error_message.
+func toolResultText(result *mcp.CallToolResult) string {
+	var parts []string
+	for _, c := range result.Content {
+		if t := mcp.GetTextFromContent(c); t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // execWithRetry corre el handler con retry + backoff exponencial para

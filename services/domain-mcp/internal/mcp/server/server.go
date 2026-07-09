@@ -98,7 +98,7 @@ type Deps struct {
 
 	SharedCache CacheStore
 
-	MetricsOnToolCall  func(ctx context.Context, tool, status string, dur float64)
+	MetricsOnToolCall  func(ctx context.Context, tool, status, errCode, errMsg string, dur float64)
 	MetricsOnCacheHit  func()
 	MetricsOnCacheMiss func()
 }

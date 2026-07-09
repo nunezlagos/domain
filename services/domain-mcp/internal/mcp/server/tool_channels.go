@@ -71,6 +71,7 @@ var toolChannel = map[string]ToolChannel{
 
 	"domain_error_reset": ChannelUserIntent,
 
+	"domain_flow_cancel": ChannelUserIntent,
 	"domain_flow_create": ChannelUserIntent,
 	"domain_flow_list":   ChannelUserIntent,
 	"domain_flow_run":    ChannelUserIntent,
@@ -98,6 +99,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_issue_create_preview": ChannelUserIntent,
 	"domain_issue_create_start":   ChannelUserIntent,
 	"domain_issue_drafts_list":    ChannelUserIntent,
+	"domain_issue_list":           ChannelUserIntent,
 	"domain_issue_set_status":     ChannelUserIntent,
 
 	"domain_knowledge_get":    ChannelPolicyTriggered,
@@ -175,7 +177,7 @@ var toolChannel = map[string]ToolChannel{
 
 	"domain_search_global": ChannelPolicyTriggered,
 
-	"domain_session_bootstrap": ChannelHook, // SessionStart
+	"domain_session_bootstrap": ChannelHook,            // SessionStart
 	"domain_session_register":  ChannelPolicyTriggered, // known=false
 
 	"domain_skill_create":  ChannelUserIntent, // confirmación humana

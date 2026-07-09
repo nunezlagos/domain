@@ -68,8 +68,10 @@ type PhaseResultResult struct {
 
 	SkillsRecommended *SkillsRecommended `json:"skills_recommended,omitempty"`
 
-
-
+	// CreatedTaskIDs: IDs de las tasks persistidas por la fase sdd-tasks (R2).
+	// El cliente los usa para escribir los marcadores <!-- t:uuid --> en
+	// tasks.md y cerrar el round-trip. Vacío si la fase no creó tasks.
+	CreatedTaskIDs []string `json:"created_task_ids,omitempty"`
 
 	MultiConcern *MultiConcernInfo `json:"multi_concern,omitempty"`
 
@@ -232,7 +234,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	}
 	span.SetAttributes(tracing.SafeAttr("phase.result", "completed"))
 
-	s.persistOpenspec(ctx, step, flowRun, in, span)
+	createdTaskIDs := s.persistOpenspec(ctx, step, flowRun, in, span)
 
 	if s.Metrics != nil {
 		modeStr, _ := step.Inputs["mode"].(string)
@@ -251,9 +253,10 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		return nil, fmt.Errorf("list steps for status: %w", err)
 	}
 	out := &PhaseResultResult{
-		StepID:        step.ID,
-		StepStatus:    "completed",
-		FlowRunStatus: flowRun.Status,
+		StepID:         step.ID,
+		StepStatus:     "completed",
+		FlowRunStatus:  flowRun.Status,
+		CreatedTaskIDs: createdTaskIDs,
 	}
 
 	if summary, ok := in.Output["summary"].(string); ok {
@@ -717,9 +720,11 @@ func extractConcerns(output map[string]any) []ConcernInfo {
 // persistOpenspec materializa el output de la fase en las tablas openspec
 // (sdd_proposals, sdd_designs, issue_tasks). Best-effort: si falla registra
 // error en span pero nunca interrumpe el flujo del orchestrator.
-func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flowRun *FlowRunRow, in PhaseResultInput, span trace.Span) {
+// persistOpenspec devuelve los IDs de tasks creadas cuando la fase es
+// sdd-tasks (R2); nil en cualquier otra fase o si no persistió nada.
+func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flowRun *FlowRunRow, in PhaseResultInput, span trace.Span) []string {
 	if s.IssueSvc == nil || (s.Spec == nil && s.Tasks == nil) {
-		return
+		return nil
 	}
 
 	issueSlug, _ := in.Output["issue_slug"].(string)
@@ -727,19 +732,19 @@ func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flo
 		steps, err := s.Repo.ListFlowRunSteps(ctx, flowRun.ID)
 		if err != nil {
 			span.RecordError(err)
-			return
+			return nil
 		}
 		issueSlug = findIssueSlug(steps)
 	}
 
 	if issueSlug == "" {
-		return
+		return nil
 	}
 
 	issue, err := s.IssueSvc.GetBySlug(ctx, issueSlug)
 	if err != nil {
 		span.RecordError(fmt.Errorf("persistOpenspec: get issue %s: %w", issueSlug, err))
-		return
+		return nil
 	}
 
 	switch step.StepKey {
@@ -748,8 +753,9 @@ func (s *Service) persistOpenspec(ctx context.Context, step *FlowRunStepRow, flo
 	case "sdd-design":
 		s.persistDesignOpenspec(ctx, issue, in, span)
 	case "sdd-tasks":
-		s.persistTasksOpenspec(ctx, issue, in, span)
+		return s.persistTasksOpenspec(ctx, issue, in, span)
 	}
+	return nil
 }
 
 func findIssueSlug(steps []FlowRunStepRow) string {
@@ -801,13 +807,15 @@ func (s *Service) persistDesignOpenspec(ctx context.Context, issue *usvc.Issue, 
 	}
 }
 
-func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) {
+// persistTasksOpenspec persiste las tasks del output de sdd-tasks y devuelve
+// los IDs generados (R2) para que el caller los propague al cliente.
+func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, in PhaseResultInput, span trace.Span) []string {
 	if s.Tasks == nil {
-		return
+		return nil
 	}
 	tasksRaw, ok := in.Output["tasks"].([]any)
 	if !ok || len(tasksRaw) == 0 {
-		return
+		return nil
 	}
 
 	inputs := make([]tsvc.CreateTaskInput, 0, len(tasksRaw))
@@ -828,13 +836,19 @@ func (s *Service) persistTasksOpenspec(ctx context.Context, issue *usvc.Issue, i
 	}
 
 	if len(inputs) == 0 {
-		return
+		return nil
 	}
 
-	_, err := s.Tasks.CreateTasks(ctx, issue.ID, inputs)
+	created, err := s.Tasks.CreateTasks(ctx, issue.ID, inputs)
 	if err != nil {
 		span.RecordError(fmt.Errorf("persistOpenspec: create tasks for %s: %w", issue.Slug, err))
+		return nil
 	}
+	ids := make([]string, 0, len(created))
+	for _, t := range created {
+		ids = append(ids, t.ID.String())
+	}
+	return ids
 }
 
 // rebuildOutputFromStepInputs reconstruye un phases.Output desde el

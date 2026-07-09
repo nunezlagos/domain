@@ -63,22 +63,58 @@ func ParseScenarios(md string) []ScenarioDoc {
 		switch {
 		case strings.HasPrefix(trimmed, "# ") && !strings.HasPrefix(trimmed, "## "):
 			feature = strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
-		case strings.HasPrefix(trimmed, "## Scenario:"):
+		case scenarioHeading(trimmed) != "":
 			flush()
-			name := strings.TrimSpace(strings.TrimPrefix(trimmed, "## Scenario:"))
-			cur = &ScenarioDoc{Scenario: name}
+			cur = &ScenarioDoc{Scenario: scenarioHeading(trimmed)}
 		case cur == nil:
 			continue
-		case strings.HasPrefix(trimmed, "- Given "):
-			cur.Given = append(cur.Given, strings.TrimPrefix(trimmed, "- Given "))
-		case strings.HasPrefix(trimmed, "- When "):
-			cur.When = strings.TrimPrefix(trimmed, "- When ")
-		case strings.HasPrefix(trimmed, "- Then "):
-			cur.Then = append(cur.Then, strings.TrimPrefix(trimmed, "- Then "))
+		default:
+			if kw, val, ok := gwtLine(trimmed); ok {
+				switch kw {
+				case "Given":
+					cur.Given = append(cur.Given, val)
+				case "When":
+					cur.When = val
+				case "Then":
+					cur.Then = append(cur.Then, val)
+				}
+			}
 		}
 	}
 	flush()
 	return out
+}
+
+// scenarioHeading reconoce el heading de un escenario en cualquiera de las
+// variantes aceptadas (R3): "## Scenario:" (H2) o "#### Scenario:" (H4), y
+// también "### Scenario:". Devuelve el nombre del escenario, o "" si la línea
+// no es un heading de escenario.
+func scenarioHeading(trimmed string) string {
+	for _, prefix := range []string{"## Scenario:", "### Scenario:", "#### Scenario:"} {
+		if strings.HasPrefix(trimmed, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+		}
+	}
+	return ""
+}
+
+// gwtLine reconoce una línea Given/When/Then en cualquiera de las variantes
+// aceptadas (R3): plano ("Given x"), con bullet ("- Given x") y con
+// bullet+negrita ("- **Given** x"). Devuelve la keyword canónica, el valor y
+// si hubo match.
+func gwtLine(trimmed string) (keyword, value string, ok bool) {
+	s := strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+	for _, kw := range []string{"Given", "When", "Then"} {
+		// forma con negrita: **Given** valor
+		if bold := "**" + kw + "**"; strings.HasPrefix(s, bold) {
+			return kw, strings.TrimSpace(s[len(bold):]), true
+		}
+		// forma plana o con bullet ya despojado: Given valor
+		if strings.HasPrefix(s, kw+" ") {
+			return kw, strings.TrimSpace(s[len(kw):]), true
+		}
+	}
+	return "", "", false
 }
 
 func parseTaskLine(trimmed, section string) (TaskDoc, bool) {

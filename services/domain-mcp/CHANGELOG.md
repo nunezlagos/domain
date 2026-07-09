@@ -6,6 +6,13 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ## [Unreleased]
 
+### Corregido
+
+- **SDD pipeline hardening (issue-64.1)**: tres contratos del pipeline SDD, verificados contra el código (recomendaciones R3/R2/R7 de la guía fable-5).
+  - **R3 — formato de escenarios**: `ParseScenarios` ahora acepta heading `##` y `####`, y `Given/When/Then` plano, con bullet o con negrita (`- **Given**`). La policy `openspec-spec-format` y el prompt `sdd-spec` documentan el formato canónico y aclaran las variantes toleradas. El error de spec sin escenarios incluye un ejemplo mínimo.
+  - **R2 — round-trip de tasks**: `sdd-tasks` devuelve `created_task_ids` en `PhaseResultResult` (antes descartaba los IDs generados por `CreateTasks`), y `applyTasks` reporta el conteo de tasks sin marcador ignoradas en `ApplyResult.ignored_tasks`.
+  - **R7 — errores de apply**: `ApplyResult` distingue `not_sent` (archivo omitido del array), `unknown_issue` (issue no está en BD, con hint accionable) y `conflict` (hash divergente). El mensaje genérico de `issue_id inválido` incluye ahora una guía de resolución.
+
 ### Añadido
 
 - **Memory graph** (mig 000175): grafo de relaciones explícitas y tipadas entre `knowledge_observations`, con aristas bi-temporales (valid_from/valid_to para valid time, created_at para transaction time). Tipos dirigidos: supersedes, derived_from, depends_on, contradicts, relates_to. Tabla `knowledge_observation_edges` + `observation/edge.go` + `memory_graph_tools.go`.

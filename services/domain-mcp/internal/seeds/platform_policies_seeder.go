@@ -154,11 +154,14 @@ Sabotaje test obligatorio por issue.`,
 
 LÍMITE: máximo 7 requisitos MUST por spec. Si hay más → dividir por área.
 
-Cada requisito MUST tiene al menos 1 escenario con 4 hashtags:
+Cada requisito MUST tiene al menos 1 escenario. Formato canónico (H4 + bullets):
 #### Scenario: Descripción clara
-Given [precondición]
-When [acción usuario/sistema]
-Then [resultado verificable]
+- **Given** [precondición]
+- **When** [acción usuario/sistema]
+- **Then** [resultado verificable]
+
+El parser tolera variantes: heading ## o #### y líneas Given/When/Then planas,
+con bullet "- " o con negrita "- **Given**". Preferí el formato canónico.
 
 Delta specs (modificaciones) incluyen el texto anterior completo:
 ## MODIFIED Requirements

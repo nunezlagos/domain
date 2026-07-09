@@ -345,6 +345,20 @@ type ApplyResult struct {
 	Error     string   `json:"error,omitempty"`
 	Applied   []string `json:"applied,omitempty"`
 	Conflicts []string `json:"conflicts,omitempty"`
+
+	// NotSent: archivos del change que no vinieron en el array de entrada (R7).
+	// NO son conflictos — simplemente se omitieron del apply. Antes caían en
+	// Conflicts con "archivo vacío o borrado", confundiendo al usuario.
+	NotSent []string `json:"not_sent,omitempty"`
+
+	// UnknownIssue: true cuando el .openspec.yaml apunta a un issue que no está
+	// en BD (R7). El Error incluye un hint accionable en ese caso.
+	UnknownIssue bool `json:"unknown_issue,omitempty"`
+
+	// IgnoredTasks: cantidad de tasks en tasks.md sin marcador <!-- t:uuid -->
+	// que se ignoraron por no tener round-trip (R2). Antes se descartaban en
+	// silencio y tasks.md se reportaba como "applied" sin distinción.
+	IgnoredTasks int `json:"ignored_tasks,omitempty"`
 }
 
 // Apply persiste en la DB los .md editados de todos los changes en files.
@@ -362,25 +376,31 @@ func (e *Engine) applyChange(ctx context.Context, dir string, files map[string]s
 	m := ParseMeta(files[".openspec.yaml"])
 	issueID, err := uuid.Parse(m.IssueID)
 	if err != nil {
-		return ApplyResult{Dir: dir, Error: "issue_id inválido o falta .openspec.yaml"}
+		return ApplyResult{Dir: dir, UnknownIssue: true,
+			Error: "issue_id inválido o falta .openspec.yaml: revisá que el change tenga .openspec.yaml con domain.issue_id, o corré domain_openspec_export para regenerarlo"}
 	}
 	iss, err := e.IssuesR.GetByID(ctx, issueID)
 	if err != nil || iss == nil {
-		return ApplyResult{Dir: dir, Error: "issue no encontrado en DB"}
+		return ApplyResult{Dir: dir, UnknownIssue: true,
+			Error: "issue no está en BD: creá el issue con domain_issue_create_* o corré domain_openspec_export antes de aplicar"}
 	}
 	dbRendered, err := e.renderFromDB(ctx, issueID, m.IssueSlug)
 	if err != nil {
 		return ApplyResult{Dir: dir, Error: err.Error()}
 	}
-	applied, conflicts := e.applyFiles(ctx, applyCtx{
+	res := e.applyFiles(ctx, applyCtx{
 		issueID: issueID, iss: iss, slug: m.IssueSlug,
 		meta: m, files: files, db: dbRendered, force: force,
 		completedBy: completedBy,
 	})
 	if st := e.applyStatus(ctx, iss, m.Status); st != "" {
-		applied = append(applied, st)
+		res.applied = append(res.applied, st)
 	}
-	return ApplyResult{Dir: dir, IssueSlug: m.IssueSlug, Applied: applied, Conflicts: conflicts}
+	return ApplyResult{
+		Dir: dir, IssueSlug: m.IssueSlug,
+		Applied: res.applied, Conflicts: res.conflicts,
+		NotSent: res.notSent, IgnoredTasks: res.ignoredTasks,
+	}
 }
 
 type applyCtx struct {
@@ -394,8 +414,17 @@ type applyCtx struct {
 	completedBy string
 }
 
-func (e *Engine) applyFiles(ctx context.Context, a applyCtx) ([]string, []string) {
-	var applied, conflicts []string
+// applyFilesResult agrupa la clasificación por archivo del apply (R7) más el
+// conteo de tasks ignoradas (R2).
+type applyFilesResult struct {
+	applied      []string
+	conflicts    []string
+	notSent      []string
+	ignoredTasks int
+}
+
+func (e *Engine) applyFiles(ctx context.Context, a applyCtx) applyFilesResult {
+	var res applyFilesResult
 	specName := "specs/" + a.slug + "/spec.md"
 	steps := []struct {
 		name string
@@ -404,22 +433,50 @@ func (e *Engine) applyFiles(ctx context.Context, a applyCtx) ([]string, []string
 		{"proposal.md", func() error { return e.applyProposal(ctx, a.issueID, a.files["proposal.md"]) }},
 		{"design.md", func() error { return e.applyDesign(ctx, a.issueID, a.files["design.md"]) }},
 		{specName, func() error { return e.applyScenarios(ctx, a.iss, a.files[specName]) }},
-		{"tasks.md", func() error { return e.applyTasks(ctx, a.issueID, a.files["tasks.md"], a.completedBy) }},
+		{"tasks.md", func() error {
+			_, err := e.applyTasks(ctx, a.issueID, a.files["tasks.md"], a.completedBy)
+			return err
+		}},
 	}
 	for _, s := range steps {
+		// R7: un archivo ausente del array de entrada es not_sent, no conflict.
+		if _, present := a.files[s.name]; !present {
+			res.notSent = append(res.notSent, s.name)
+			continue
+		}
+		// R2: el conteo de tasks sin marcador se calcula siempre que tasks.md
+		// venga presente, independiente de si decideFile lo aplica o lo saltea
+		// (skip/conflict). Antes solo se contaba en la rama 'apply', dejando
+		// IgnoredTasks en 0 cuando el archivo no cambiaba pero igual tenía tasks
+		// sin round-trip.
+		if s.name == "tasks.md" {
+			res.ignoredTasks = countUnmarkedTasks(a.files[s.name])
+		}
 		switch decideFile(a.meta.Hashes[s.name], ContentHash(a.files[s.name]), a.db.Hashes[s.name], a.force) {
 		case "skip":
 		case "conflict":
-			conflicts = append(conflicts, s.name)
+			res.conflicts = append(res.conflicts, s.name)
 		case "apply":
 			if err := s.fn(); err != nil {
-				conflicts = append(conflicts, s.name+": "+err.Error())
+				res.conflicts = append(res.conflicts, s.name+": "+err.Error())
 			} else {
-				applied = append(applied, s.name)
+				res.applied = append(res.applied, s.name)
 			}
 		}
 	}
-	return applied, conflicts
+	return res
+}
+
+// countUnmarkedTasks cuenta las tasks de tasks.md que no tienen marcador
+// <!-- t:uuid --> (sin round-trip). Puro, no toca BD (R2).
+func countUnmarkedTasks(md string) int {
+	n := 0
+	for _, td := range ParseTasks(md) {
+		if td.ID == "" {
+			n++
+		}
+	}
+	return n
 }
 
 func decideFile(stored, repoNow, dbNow string, force bool) string {
@@ -472,7 +529,12 @@ func (e *Engine) applyScenarios(ctx context.Context, iss *issuesvc.Issue, md str
 		})
 	}
 	if len(news) == 0 {
-		return errors.New("spec.md no contiene escenarios válidos: no se reemplaza para no perder los existentes")
+		return errors.New("spec.md no contiene escenarios válidos: no se reemplaza para no perder los existentes. " +
+			"Formato esperado (el parser acepta heading ## o #### y Given/When/Then plano, con bullet o con negrita):\n" +
+			"#### Scenario: descripción breve\n" +
+			"- **Given** precondición\n" +
+			"- **When** acción\n" +
+			"- **Then** resultado verificable")
 	}
 	for _, sc := range iss.Scenarios {
 		if err := e.IssuesW.RemoveScenario(ctx, sc.ID); err != nil {
@@ -512,24 +574,33 @@ func hasNonEmpty(xs []string) bool {
 	return false
 }
 
-func (e *Engine) applyTasks(ctx context.Context, issueID uuid.UUID, md, completedBy string) error {
+// applyTasks sincroniza el estado de las tasks con marcador <!-- t:uuid --> y
+// devuelve cuántas tasks sin marcador se ignoraron (R2), para que el apply lo
+// reporte en vez de descartarlas en silencio.
+func (e *Engine) applyTasks(ctx context.Context, issueID uuid.UUID, md, completedBy string) (int, error) {
 	current, err := e.TasksR.ListTasks(ctx, issueID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	status := map[string]string{}
 	for _, t := range current {
 		status[t.ID.String()] = t.Status
 	}
+	ignored := 0
 	for _, td := range ParseTasks(md) {
-		if td.ID == "" || !td.Completed {
+		if td.ID == "" {
+			// Task sin marcador: no tiene round-trip, no se puede sincronizar.
+			ignored++
+			continue
+		}
+		if !td.Completed {
 			continue
 		}
 		if err := e.advanceTaskToCompleted(ctx, td.ID, status[td.ID], completedBy); err != nil {
-			return err
+			return ignored, err
 		}
 	}
-	return nil
+	return ignored, nil
 }
 
 func (e *Engine) advanceTaskToCompleted(ctx context.Context, idStr, current, by string) error {

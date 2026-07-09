@@ -209,11 +209,12 @@ RFC 2119 para cada criterio:
 - SHOULD: recomendado — excepciones documentadas
 - MAY: opcional
 
-Cada MUST tiene al menos 1 scenario (4 hashtags):
+Cada MUST tiene al menos 1 scenario. Formato canónico (H4 + bullets):
 #### Scenario: descripción
-Given [precondición]
-When [acción]
-Then [resultado verificable]
+- **Given** [precondición]
+- **When** [acción]
+- **Then** [resultado verificable]
+(El parser también acepta heading ## y Given/When/Then plano o con bullet simple.)
 
 LÍMITE: máximo 7 MUSTs por spec. Si hay más → dividir.
 Sin ambigüedades: "< 200ms p95", no "rápido".

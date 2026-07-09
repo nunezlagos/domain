@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"nunezlagos/domain/internal/agentprotocol"
+	"nunezlagos/domain/internal/cli/install"
 )
 
 // Agent identifica un agente externo soportado.
@@ -438,9 +439,13 @@ func InstallSlashCommand(agent Agent) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(dir, "domain-login.md")
-	if _, err := os.Stat(path); err == nil {
-		backup := path + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
-		if err := os.Rename(path, backup); err != nil {
+	if existing, err := os.ReadFile(path); err == nil {
+		// dedup: el hook SessionStart corre esto cada sesión; si el contenido
+		// no cambió no reescribimos ni backupeamos
+		if string(existing) == DomainLoginCommandContent {
+			return path, nil
+		}
+		if _, err := install.BackupFile(path); err != nil {
 			return "", err
 		}
 	}

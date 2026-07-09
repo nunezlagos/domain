@@ -159,10 +159,14 @@ func BackupOpenCodeConfig(keepLast int) (*BackupResult, error) {
 	return backupFile(filepath.Join(home, ".config", "opencode", "opencode.json"), keepLast)
 }
 
+// keepLastBackups es el default de rotación: cada archivo conserva como
+// máximo los 3 backups más recientes.
+const keepLastBackups = 3
+
 // BackupFile es el helper genérico: backup de cualquier archivo.
 // Usado por los AGENTS.md injection y .md stub generators.
 func BackupFile(path string) (*BackupResult, error) {
-	return backupFile(path, 0) // keepLast=0 = sin prune
+	return backupFile(path, keepLastBackups)
 }
 
 // IsDomainManaged retorna true si el archivo tiene el marker de

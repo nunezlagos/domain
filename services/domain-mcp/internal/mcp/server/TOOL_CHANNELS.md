@@ -1,12 +1,11 @@
 # Matriz de cobertura tool→canal (REQ-54 issue-54.6)
 
-GENERADO desde `internal/mcp/server/tool_channels.go` — NO editar a mano.
-Total: 148 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
+Mantenido sincronizado con `internal/mcp/server/tool_channels.go` — validado por `TestToolChannelsDocInSync`.
+Total: 150 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
 
-## hook (5)
+## hook (4)
 Determinista por evento del cliente (SessionStart / UserPromptSubmit / Stop). No depende del modelo.
 
-- `domain_code_graph`
 - `domain_mem_context`
 - `domain_prompt_capture`
 - `domain_session_bootstrap`
@@ -21,10 +20,12 @@ Protocolo obligatorio del primer mensaje de sesión (regla R2 + prompt first-res
 - `domain_prompt_get`
 - `domain_ticket_list`
 
-## phase-contract (7)
+## phase-contract (9)
 Exigida por una fase del SDD vía required_tool_calls — el server RECHAZA el cierre sin ella.
 
 - `domain_knowledge_save`
+- `domain_openspec_apply`
+- `domain_openspec_export`
 - `domain_openspec_status`
 - `domain_orchestrate_phase_result`
 - `domain_verify_complete`
@@ -76,7 +77,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_skill_search`
 - `domain_ticket_create`
 
-## user-intent (95)
+## user-intent (96)
 Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 
 - `domain_agent_create`
@@ -92,12 +93,14 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_client_set_status`
 - `domain_client_update`
 - `domain_code_build`
+- `domain_code_graph`
 - `domain_cron_create`
 - `domain_cron_delete`
 - `domain_cron_history`
 - `domain_cron_list`
 - `domain_cron_set_enabled`
 - `domain_error_reset`
+- `domain_flow_cancel`
 - `domain_flow_create`
 - `domain_flow_list`
 - `domain_flow_run`
@@ -118,6 +121,7 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_issue_create_preview`
 - `domain_issue_create_start`
 - `domain_issue_drafts_list`
+- `domain_issue_list`
 - `domain_issue_set_status`
 - `domain_mem_delete`
 - `domain_mem_infer_edges`
@@ -125,8 +129,6 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_mem_save_prompt`
 - `domain_mem_stats`
 - `domain_mem_unlink`
-- `domain_openspec_apply`
-- `domain_openspec_export`
 - `domain_orchestrate_confirm`
 - `domain_platform_policy_create`
 - `domain_platform_policy_edit`
@@ -174,3 +176,4 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_workflow_recent`
 - `domain_workflow_slowest`
 - `domain_workflow_trace`
+

@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ### Corregido
 
+- **Sincronización tool→canal (issue-54.1)**: `domain_code_graph` pasa de `ChannelHook` a `ChannelUserIntent` (fue deprecada en el kill 007 del 2026-07-07 y ya no se pre-carga por hook; la etiqueta declaraba un comportamiento inexistente). `TOOL_CHANNELS.md` se regeneró consistente con el map `toolChannel` (estaba desincronizado: faltaban `domain_issue_list` y `domain_flow_cancel`, y `domain_openspec_apply`/`_export` figuraban en el canal equivocado). Se agregó `TestToolChannelsDocInSync` que valida la sincronización doc↔map bidireccional, para que CI detecte futuras divergencias. El canal es metadata de auditoría + contrato de CI, no afecta runtime.
+
 - **SDD orchestrate payload diet — R4 (issue-64.3)**: `domain_orchestrate` en modo full ya no embebe el `SystemPrompt` (template + ~20 policies) de los 11 steps en el payload inicial. `exportPlan` omite el `SystemPrompt` de los steps 2..N (solo el step 0 lo lleva), bajando el payload de ~220-320KB a ~20-40KB. El `SystemPrompt` de cada step sigue persistido en `step.Inputs` y se entrega reconstruido en `PhaseResultResult.next_step_system_prompt` al cerrar cada fase. Campo aditivo; `NextStepPrompt` (user) sin cambios. Modos express/lite conservan todo, y el modo detect (preview no persistido) también conserva el SystemPrompt (no hay `step.Inputs` de dónde reconstruirlo).
 
 - **SDD step delegation contract — R5 (issue-64.2)**: contrato de delegación completo entre el orquestador y el cliente que ejecuta las fases.

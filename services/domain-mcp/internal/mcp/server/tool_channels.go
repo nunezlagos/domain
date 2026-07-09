@@ -56,7 +56,7 @@ var toolChannel = map[string]ToolChannel{
 	// protocolo manda usar el script cliente + code_upload). Manual a pedido.
 	"domain_code_build":        ChannelUserIntent,
 	"domain_code_explore":      ChannelPolicyTriggered, // protocolo code graph (domain.md)
-	"domain_code_graph":        ChannelHook,            // SessionStart lo pre-carga
+	"domain_code_graph":        ChannelUserIntent,      // deprecado 2026-07-07 (kill 007): ya no se pre-carga por hook, solo a pedido explícito
 	"domain_code_observations": ChannelPolicyTriggered,
 	"domain_code_path":         ChannelPolicyTriggered,
 	"domain_code_upload":       ChannelPolicyTriggered, // script domain-code-graph.sh (protocolo)

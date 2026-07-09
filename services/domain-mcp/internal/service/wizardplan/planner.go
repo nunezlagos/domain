@@ -12,25 +12,24 @@ import (
 
 // Question es lo que el wizard devuelve al cliente.
 type Question struct {
-	SlotKey       string   `json:"slot_key"`
-	Prompt        string   `json:"prompt"`
-	ContextNote   string   `json:"context_note,omitempty"` // explica QUÉ encontramos antes de preguntar
-	Options       []Option `json:"options,omitempty"`      // sugerencias derivadas del envelope
-	AllowsFreeText bool    `json:"allows_free_text"`
+	SlotKey        string   `json:"slot_key"`
+	Prompt         string   `json:"prompt"`
+	ContextNote    string   `json:"context_note,omitempty"` // explica QUÉ encontramos antes de preguntar
+	Options        []Option `json:"options,omitempty"`      // sugerencias derivadas del envelope
+	AllowsFreeText bool     `json:"allows_free_text"`
 }
 
 // Option es una opción sugerida (no obligatoria de elegir).
 type Option struct {
-	Value       string `json:"value"`
-	Label       string `json:"label,omitempty"`
-	Description string `json:"description,omitempty"`
-	Source      string `json:"source,omitempty"`     // de qué finding salió
+	Value       string  `json:"value"`
+	Label       string  `json:"label,omitempty"`
+	Description string  `json:"description,omitempty"`
+	Source      string  `json:"source,omitempty"` // de qué finding salió
 	Confidence  float64 `json:"confidence,omitempty"`
 }
 
 // Planner decide qué slot pendiente preguntar próximo y formula la pregunta.
 type Planner struct {
-
 	QuestionFormulator QuestionFormulator
 
 	SlotThreshold float64
@@ -61,10 +60,10 @@ func (p *Planner) NextQuestion(ctx context.Context, env *ContextEnvelope) (*Ques
 
 	if p.QuestionFormulator != nil {
 		q, err := p.QuestionFormulator.FormulateQuestion(ctx, FormulateInput{
-			SlotKey:      slot,
-			Envelope:     env,
-			Suggestions:  options,
-			ContextNote:  contextNote,
+			SlotKey:     slot,
+			Envelope:    env,
+			Suggestions: options,
+			ContextNote: contextNote,
 		})
 		if err == nil && strings.TrimSpace(q) != "" {
 			prompt = q
@@ -132,7 +131,7 @@ func suggestionsForSlot(slot string, env *ContextEnvelope) []Option {
 				out = append(out, Option{
 					Value: c.Slug, Label: c.Title,
 					Description: fmt.Sprintf("similarity %.2f", c.Similarity),
-					Source: "hu_dedup", Confidence: c.Similarity,
+					Source:      "hu_dedup", Confidence: c.Similarity,
 				})
 				if len(out) >= 5 {
 					break
@@ -254,11 +253,6 @@ type LLMQuestionFormulator struct {
 	Provider llm.Provider
 	Model    string
 
-
-
-
-
-
 	PromptLoader func(ctx context.Context) (string, error)
 }
 
@@ -268,15 +262,15 @@ type LLMQuestionFormulator struct {
 // la DB no tiene el prompt o el loader no está cableado. Es solo el skeleton:
 // el envelope runtime que se concatena/interpola se arma aparte y sigue
 // siendo dinámico.
-const DefaultFormulatorSystemPrompt = `Sos un wizard interactivo que ayuda a un usuario a especificar una HU técnica.
+const DefaultFormulatorSystemPrompt = `Eres un wizard interactivo que ayuda a un usuario a especificar una HU técnica.
 
-Recibís: (a) el slot que necesitás clarificar, (b) un envelope con análisis automático del prompt original (intent, HUs similares, hits en código, memorias, agent runs previos), (c) opciones sugeridas.
+Recibes: (a) el slot que necesitas clarificar, (b) un envelope con análisis automático del prompt original (intent, HUs similares, hits en código, memorias, agent runs previos), (c) opciones sugeridas.
 
 Tu trabajo: formular UNA pregunta natural, breve (1-2 frases), en español rioplatense, que:
 1. Use el contexto del envelope ("encontré X..., ¿es eso?")
 2. Sea específica al slot ("severidad", "componente afectado", "comportamiento esperado", etc.)
-3. NO repita la pregunta tipo formulario ("¿Severity?") — formulá una pregunta que un humano haría en chat
-4. Si hay options, mencionalas al final como "(opciones: ...)" si son ≤4
+3. NO repita la pregunta tipo formulario ("¿Severity?") — formula una pregunta que un humano haría en chat
+4. Si hay options, menciónalas al final como "(opciones: ...)" si son ≤4
 
 Output: SOLO la pregunta en texto plano, sin markdown, sin prefijos, sin comillas.`
 

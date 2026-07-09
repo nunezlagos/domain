@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 6
+const skillsSeedVersion = 7
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -67,8 +67,8 @@ func SkillCatalog() []SkillCatalogEntry {
 			Description: "Clasifica un raw text en {type, severity, confidence} para el intake pipeline (issue-04.8).",
 			SkillType:   "prompt",
 			Content: `<role>
-Sos un classifier de requerimientos del intake de domain. Recibís
-texto libre del cliente y producís una clasificación estructurada
+Eres un classifier de requerimientos del intake de domain. Recibes
+texto libre del cliente y produces una clasificación estructurada
 para que el pipeline interno decida cómo procesar el requerimiento.
 </role>
 
@@ -131,8 +131,8 @@ Output: {"type":"hotfix","severity":"critical","confidence":0.95,"reasoning":"In
 			Description: "Genera {title, description, req_slug, hu_draft} desde raw text + classification.",
 			SkillType:   "prompt",
 			Content: `<role>
-Sos un structurer de requerimientos. Recibís el raw_text del cliente
-junto con la classification (type, severity) ya hecha, y producís
+Eres un structurer de requerimientos. Recibes el raw_text del cliente
+junto con la classification (type, severity) ya hecha, y produces
 una estructura formal con title, description completa, slug del REQ
 asociado y un draft inicial de HU/issue para el wizard.
 </role>
@@ -677,8 +677,8 @@ Output:
 			Description: "Auditoría de accesibilidad WCAG 2.2: principios POUR, niveles A/AA/AAA, 400+ criterios, patrones de remediación. Para proyectos con frontend web (Equable, dashboards, formularios).",
 			SkillType:   "prompt",
 			Content: `<role>
-Sos un especialista en accesibilidad web WCAG 2.2. Realizás auditorías
-completas y proponés remediaciones concretas. Sabés qué se puede
+Eres un especialista en accesibilidad web WCAG 2.2. Realizas auditorías
+completas y propones remediaciones concretas. Sabes qué se puede
 detectar automáticamente (30-50%) y qué requiere revisión manual.
 </role>
 
@@ -759,7 +759,7 @@ JSON estricto:
 			Description: "Protocolo para solicitar y estructurar un code review: contexto del cambio, áreas de riesgo, criterios de calidad. Para cualquier proyecto del ecosistema Saargo.",
 			SkillType:   "prompt",
 			Content: `<role>
-Ayudás a estructurar solicitudes de code review efectivas. Un buen
+Ayudas a estructurar solicitudes de code review efectivas. Un buen
 review request ahorra tiempo al reviewer y produce feedback más útil.
 </role>
 
@@ -813,6 +813,96 @@ JSON estricto:
 			TimeoutSeconds: 30,
 			Idempotent:     true,
 			Tags:           []string{"review", "quality", "workflow", "platform"},
+		},
+		{
+			Slug:        "judgment-day",
+			Name:        "Judgment Day — review adversarial dual",
+			Description: "Protocolo de review adversarial: lanza dos subagentes jueces ciegos en paralelo sobre el mismo target, sintetiza hallazgos, aplica fixes y re-juzga hasta que ambos pasen o escala tras 2 iteraciones. Para revisar cambios significativos antes de mergear.",
+			SkillType:   "prompt",
+			Content: `<role>
+Eres el orquestador de un review adversarial dual. Tu único trabajo es
+coordinar: lanzas dos jueces ciegos en paralelo, sintetizas sus veredictos,
+delegas los fixes y re-juzgas. NUNCA revisas el código tú mismo.
+</role>
+
+<cuando_usar>
+- El usuario pide explícitamente "judgment day", "juzgar", "doble review".
+- Tras una implementación significativa, antes de mergear.
+- Cuando el costo de un bug en producción supera el de dos rondas de review.
+</cuando_usar>
+
+<protocolo>
+1. SCOPE: si el target (archivos/feature/componente) no está claro, detente y
+   pregunta antes de lanzar. Reviews parciales son inútiles.
+2. REVIEW CIEGO PARALELO: lanza DOS subagentes con la Agent tool en paralelo.
+   Ambos reciben el MISMO target pero trabajan independientes. Ninguno sabe del
+   otro. Usan criterios idénticos.
+3. SÍNTESIS: el orquestador (no un subagente) compara ambos resultados:
+   - Confirmado   → lo hallan AMBOS       → alta confianza, fix inmediato
+   - Sospecha A/B → lo halla UNO solo     → triage, escala al usuario
+   - Contradicción → los jueces discrepan → marca para decisión manual
+4. CLASIFICACIÓN DE WARNINGS: cada juez clasifica todo WARNING en:
+   - real        → causa bug/pérdida de datos/hueco de seguridad en un escenario
+                   de producción realista. Requiere fix.
+   - teórico     → requiere escenario rebuscado o input corrupto que no surge en
+                   uso normal. Se reporta como INFO, NO se arregla, NO re-juzga.
+   Criterio: "¿un usuario normal, usando la herramienta como está previsto, lo
+   dispara?" SÍ→real, NO→teórico.
+5. FIX Y RE-JUDGE: si hay CRITICALs o WARNINGs reales confirmados, delega un Fix
+   Agent (subagente separado, nunca uno de los jueces). Tras el fix, re-lanza
+   ambos jueces en paralelo (mismo protocolo ciego).
+6. UMBRAL DE CONVERGENCIA: tras la ronda 1, presenta la tabla de veredicto y
+   pregunta al usuario si arregla. APROBADO = 0 CRITICALs + 0 WARNINGs reales
+   confirmados (teóricos y sugerencias pueden quedar). Tras 2 iteraciones sin
+   converger, pregunta al usuario si sigue; si dice que no, ESCALADO.
+</protocolo>
+
+<reglas_duras>
+- NUNCA declares APROBADO hasta que los jueces devuelvan limpio (0 CRITICAL +
+  0 WARNING real confirmado).
+- NUNCA hagas push/commit tras aplicar fixes hasta completar el re-judge.
+- El orquestador NUNCA revisa código: solo lanza jueces, lee resultados,
+  sintetiza.
+- El Fix Agent es una delegación aparte; jamás uses un juez como fixer.
+- Espera SIEMPRE a que ambos jueces terminen antes de sintetizar.
+</reglas_duras>
+
+<prompt_juez>
+Plantilla idéntica para AMBOS jueces:
+"Eres un revisor de código adversarial. Tu ÚNICO trabajo es encontrar problemas.
+Target: {describe}. Criterios: correctness, edge cases, manejo de errores,
+performance (N+1, loops, allocs), seguridad (inyección, secrets, auth), naming
+y convenciones del proyecto. Devuelve SOLO una lista de hallazgos, sin elogios.
+Cada hallazgo: Severidad (CRITICAL | WARNING real | WARNING teórico | SUGERENCIA)
++ archivo:línea + descripción + fix sugerido (intención, no código). Si no hay
+issues: 'VEREDICTO: LIMPIO'. Sé exhaustivo y adversarial."
+</prompt_juez>
+
+<input>
+target: {{ .target }}
+criterios_extra: {{ .custom_criteria }}
+</input>
+
+<output_format>
+JSON estricto:
+{
+  "round": 1,
+  "findings": [{"severity": "...", "file": "...", "line": 0, "desc": "...", "found_by": ["A","B"]}],
+  "confirmed": ["..."],
+  "verdict": "APROBADO | ESCALADO | PENDIENTE_FIX"
+}
+</output_format>`,
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"target":          map[string]string{"type": "string"},
+					"custom_criteria": map[string]string{"type": "string"},
+				},
+				"required": []string{"target"},
+			},
+			TimeoutSeconds: 300,
+			Idempotent:     true,
+			Tags:           []string{"review", "adversarial", "quality", "workflow", "platform"},
 		},
 	}
 }

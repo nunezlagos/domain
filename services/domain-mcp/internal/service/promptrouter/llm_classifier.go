@@ -17,16 +17,12 @@ import (
 // HeuristicClassifier para que el router siga funcionando offline).
 type LLMClassifier struct {
 	Provider llm.Provider
-	Model    string  // "claude-haiku-4-5-20251001" recomendado (rápido + cheap)
+	Model    string // "claude-haiku-4-5-20251001" recomendado (rápido + cheap)
 	Fallback Classifier
 
 	MaxTokens int
 
 	Temperature float64
-
-
-
-
 
 	PromptLoader func(ctx context.Context) (string, error)
 }
@@ -40,8 +36,8 @@ const llmClassifierSystemPrompt = DefaultTriageSystemPrompt
 // por defecto. Se seedea en la tabla prompts con slug='triage' para que sea
 // editable desde el dashboard. El classifier lo usa como fallback si la DB
 // no tiene el prompt o el loader no está cableado.
-const DefaultTriageSystemPrompt = `Sos un clasificador de prompts. Tu trabajo:
-dado un texto que un usuario escribió en su agente IA, identificás cuál de
+const DefaultTriageSystemPrompt = `Eres un clasificador de prompts. Tu trabajo:
+dado un texto que un usuario escribió en su agente IA, identificas cuál de
 estas categorías describe MEJOR su intención:
 
   - chat:     pregunta directa o conversación informal ("cómo se configura X?")
@@ -55,13 +51,13 @@ estas categorías describe MEJOR su intención:
   - analysis: investigación o análisis read-only ("cuántos endpoints tienen X?",
               "qué HUs tocan la tabla Y?", "dónde se usa Z?", "analizame X")
 
-IMPORTANTE: respondés ÚNICAMENTE con JSON estricto sin texto adicional, sin
+IMPORTANTE: respondes ÚNICAMENTE con JSON estricto sin texto adicional, sin
 fences markdown, sin comentarios. Schema:
 
   {"intent":"<category>","confidence":<0.0-1.0>,"reasoning":"<breve, 1-2 frases>"}
 
-Si tenés dudas entre dos categorías, elegí la que mejor matchee la INTENCIÓN
-del usuario (no las palabras literales). Si el prompt es ambiguo, devolvé
+Si tienes dudas entre dos categorías, elige la que mejor matchee la INTENCIÓN
+del usuario (no las palabras literales). Si el prompt es ambiguo, devuelve
 confidence < 0.6 y reasoning explicando el conflicto.`
 
 // Classify implements Classifier.

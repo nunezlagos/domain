@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 15 } // 15: REQ-54 issue-54.4/54.7 sdd-auto-trigger (SDD-para-codigo)
+func (s *PlatformPoliciesSeeder) Version() int    { return 16 } // 16: reglas AGENTS.md no cubiertas (comentarios auto-descriptivos + acoplamiento consumer-defined)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -391,6 +391,36 @@ Solo el USUARIO puede ordenar saltear el SDD (explícitamente). En ese caso el
 agente obedece y las ediciones que el gate detenga las aprueba el usuario en
 el diálogo de permisos. Limitación conocida: la heurística de Bash puede no
 detectar ediciones exóticas — hacerlo deliberadamente viola esta policy.`,
+		},
+		{
+			Slug:       "code-comments-self-descriptive",
+			Name:       "Comentarios: el código se explica solo, comentar solo lo no evidente",
+			Kind:       "convention",
+			SourceFile: "AGENTS.md",
+			BodyMD: `El código debe ser auto-descriptivo: nombres claros eliminan la necesidad de comentar.
+
+Solo se agrega un comentario cuando es estrictamente necesario:
+- workaround o restricción externa no evidente
+- decisión que sorprendería a quien lee el código
+
+Si sientes que necesitas comentar el QUÉ, es señal de que el nombre está mal: renombra, no comentes.
+
+Formato:
+- siempre en la línea anterior al código, nunca al final de la misma línea
+- frase corta, puntual, en minúscula, sin punto final
+- sin bloques multilínea, sin secciones decorativas, sin docstrings largos`,
+		},
+		{
+			Slug:       "coupling-consumer-defined-interfaces",
+			Name:       "Acoplamiento: interfaces chicas definidas en el consumidor",
+			Kind:       "architecture",
+			SourceFile: "AGENTS.md",
+			BodyMD: `Las interfaces se definen en el CONSUMIDOR, no junto a la implementación.
+
+- Interfaces chicas (1-3 métodos). Una interfaz de 10+ métodos es un God Interface.
+- Los handlers y tools MCP nunca dependen de tipos concretos de service: siempre contra interfaz.
+
+Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin tocar al consumidor.`,
 		},
 	}
 

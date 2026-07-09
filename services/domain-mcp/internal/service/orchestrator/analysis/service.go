@@ -36,31 +36,27 @@ var ErrNoProjectForOrg = errors.New("analysis: no projects found for organizatio
 // análisis read-only por defecto. Se seedea en la tabla prompts con
 // slug='analysis' para que sea editable desde el dashboard. El servicio lo
 // usa como fallback si la DB no tiene el prompt o el loader no está cableado.
-const DefaultAnalysisSystemPrompt = `Sos un analista técnico de proyectos de software.
-Dado un prompt de un usuario, producís un análisis markdown estructurado
+const DefaultAnalysisSystemPrompt = `Eres un analista técnico de proyectos de software.
+Dado un prompt de un usuario, produces un análisis markdown estructurado
 con la información solicitada.
 
 Reglas:
-- Respondé ÚNICAMENTE con markdown, sin JSON, sin código extra.
-- Si el prompt pide listar algo, producí una lista con formato markdown.
-- Si el prompt pide investigar algo, producí un informe estructurado.
-- Si no podés responder porque necesitás acceso al codebase, decilo
+- Responde ÚNICAMENTE con markdown, sin JSON, sin código extra.
+- Si el prompt pide listar algo, produce una lista con formato markdown.
+- Si el prompt pide investigar algo, produce un informe estructurado.
+- Si no puedes responder porque necesitas acceso al codebase, dilo
   claramente en el análisis.
 - El análisis debe ser auto-contenido: cualquiera que lo lea debe
   entender el contexto sin referencias externas.
-- Incluí un resumen ejecutivo al inicio y conclusiones al final.`
+- Incluye un resumen ejecutivo al inicio y conclusiones al final.`
 
 // Service ejecuta el mini-pipeline de análisis read-only.
 type Service struct {
-	Pool    *pgxpool.Pool
-	Audit   audit.Recorder
-	LLM     *llm.Factory
-	Knowledge *knowsvc.Service
+	Pool        *pgxpool.Pool
+	Audit       audit.Recorder
+	LLM         *llm.Factory
+	Knowledge   *knowsvc.Service
 	Observation *obssvc.Service
-
-
-
-
 
 	PromptLoader func(ctx context.Context) (string, error)
 }
@@ -86,21 +82,17 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("analysis: LLM factory required")
 	}
 
-
 	projectID, err := s.resolveProjectID(ctx, in.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
-
 
 	content, err := s.explore(ctx, in)
 	if err != nil {
 		return nil, fmt.Errorf("analysis explore: %w", err)
 	}
 
-
 	title := inferTitle(content, in.RawText)
-
 
 	doc, _, err := s.Knowledge.Save(ctx, knowsvc.SaveInput{
 		OrganizationID: in.OrganizationID,
@@ -118,7 +110,6 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("analysis save knowledge doc: %w", err)
 	}
-
 
 	obsContent := fmt.Sprintf("Analysis: %s\n\nSource prompt: %s\n\nKnowledge doc: %s",
 		title, in.RawText, doc.ID.String())

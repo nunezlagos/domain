@@ -75,6 +75,11 @@ type Output struct {
 	// nil/vacío = sin contrato (no-op), retrocompatible.
 	RequiredToolCalls []string
 
+	// OutputSchema es el JSON Schema del output que la fase espera del cliente
+	// (R5-A). Se declara por fase y se exporta upfront en el plan para que el
+	// cliente valide su reporte antes de enviarlo. nil = sin schema declarado.
+	OutputSchema map[string]any
+
 	// SubagentPlan (REQ-54 issue-54.5): plan de subagentes paralelos que se
 	// inyecta en el user_prompt de la fase (roles, contexto por subagente,
 	// merge). El fan-out lo ejecuta el CLIENTE con sus subagentes. Override

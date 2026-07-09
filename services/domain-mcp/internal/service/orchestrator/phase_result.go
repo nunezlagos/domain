@@ -155,9 +155,20 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	// el code_reference en otro turno. Ahora el step queda running (reintentable) y
 	// devolvemos missing_required_saves para que el cliente persista lo que falta y
 	// reintente el reporte, sin perder el flow.
+	// R5-B: contratos recuperables evaluados en UNA sola pasada, acumulando
+	// las tres categorías (required_saves + output shape + tool_calls) para
+	// devolverlas JUNTAS. Antes cada bloque hacía return temprano, forzando al
+	// cliente a descubrir los faltantes de a uno (medido: ~8 reintentos en un
+	// flow real). El step sigue quedando running (reintentable), no failed.
+	var (
+		missingSaves    []MissingRequiredSaveInfo
+		validationError string
+		missingTools    []string
+	)
+
+	// (1) required_saves — contrato D5 (REQ-56 issue-56.5).
 	if err := ValidateRequiredSaves(phaseSlug, rebuilt,
 		phases.ClientResult{Output: in.Output, MemoryRefsSaved: in.MemoryRefsSaved}); err != nil {
-
 		var rse *RequiredSaveError
 		if !errors.As(err, &rse) {
 			return nil, err
@@ -167,65 +178,55 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				s.Metrics.OrchestratorRequiredSaveMissingTotal.
 					WithLabelValues(string(phaseSlug), m.Type).Inc()
 			}
-			modeStr, _ := step.Inputs["mode"].(string)
-			s.Metrics.OrchestratorPhaseResultsTotal.
-				WithLabelValues(string(phaseSlug), modeStr, "required_save_unmet").Inc()
 		}
-		missing := make([]MissingRequiredSaveInfo, len(rse.Missing))
+		missingSaves = make([]MissingRequiredSaveInfo, len(rse.Missing))
 		for i, m := range rse.Missing {
-			missing[i] = MissingRequiredSaveInfo{Type: m.Type, Hint: m.Hint}
+			missingSaves[i] = MissingRequiredSaveInfo{Type: m.Type, Hint: m.Hint}
+		}
+	}
+
+	// (2) output shape — contrato de campos del output (REQ-56 issue-56.4).
+	if s.Phases != nil {
+		if h, lookupErr := s.Phases.Lookup(phases.PhaseSlug(step.StepKey)); lookupErr == nil {
+			result := phases.ClientResult{Output: in.Output, MemoryRefsSaved: in.MemoryRefsSaved}
+			if err := h.Validate(ctx, rebuilt, result); err != nil {
+				validationError = err.Error()
+			}
+		}
+	}
+
+	// (3) tool_calls — contrato fase→tools (REQ-54 issue-54.1).
+	missingTools = s.missingToolCalls(ctx, flowRun.OrganizationID, phaseSlug, rebuilt, in.ToolCallsSaved)
+
+	// Si CUALQUIER categoría tiene faltantes, NO cerramos el step: queda running
+	// (reintentable) y devolvemos las tres juntas para que el cliente corrija
+	// todo de una vez.
+	if len(missingSaves) > 0 || validationError != "" || len(missingTools) > 0 {
+		if s.Metrics != nil {
+			modeStr, _ := step.Inputs["mode"].(string)
+			// Emitir una métrica por CADA categoría que falló, preservando los
+			// label values históricos (required_save_unmet / shape_contract_unmet
+			// / tool_contract_unmet) para no romper dashboards ni perder
+			// granularidad al agregar las categorías en una sola respuesta (R5-B).
+			if len(missingSaves) > 0 {
+				s.Metrics.OrchestratorPhaseResultsTotal.
+					WithLabelValues(string(phaseSlug), modeStr, "required_save_unmet").Inc()
+			}
+			if validationError != "" {
+				s.Metrics.OrchestratorPhaseResultsTotal.
+					WithLabelValues(string(phaseSlug), modeStr, "shape_contract_unmet").Inc()
+			}
+			if len(missingTools) > 0 {
+				s.Metrics.OrchestratorPhaseResultsTotal.
+					WithLabelValues(string(phaseSlug), modeStr, "tool_contract_unmet").Inc()
+			}
 		}
 		return &PhaseResultResult{
 			StepID:               step.ID,
 			StepStatus:           step.Status,
-			MissingRequiredSaves: missing,
-		}, nil
-	}
-
-
-	// REQ-56 issue-56.4: la validación de shape del output es un CONTRATO
-	// recuperable, igual que required_tool_calls. Antes un output inválido (ej.
-	// falta issue_md en sdd-spec) llamaba MarkStepFailed + propagateFlowStatusAfterFailure
-	// y mataba el step/flow IRREVERSIBLEMENTE en el primer intento. Ahora el step
-	// queda running (reintentable) y devolvemos validation_error para que el
-	// cliente corrija el shape y reintente — mismo patrón que MissingToolCalls.
-	if s.Phases != nil {
-		if h, lookupErr := s.Phases.Lookup(phases.PhaseSlug(step.StepKey)); lookupErr == nil {
-			result := phases.ClientResult{
-				Output:          in.Output,
-				MemoryRefsSaved: in.MemoryRefsSaved,
-			}
-			if err := h.Validate(ctx, rebuilt, result); err != nil {
-				if s.Metrics != nil {
-					modeStr, _ := step.Inputs["mode"].(string)
-					s.Metrics.OrchestratorPhaseResultsTotal.
-						WithLabelValues(string(phaseSlug), modeStr, "shape_contract_unmet").Inc()
-				}
-				return &PhaseResultResult{
-					StepID:          step.ID,
-					StepStatus:      step.Status,
-					ValidationError: err.Error(),
-				}, nil
-			}
-		}
-	}
-
-	// REQ-54 issue-54.1: contrato fase→tools. El contrato efectivo es el override
-	// de agent_templates.metadata.required_tool_calls (si está y no vacío) o el
-	// default del handler (rebuilt.RequiredToolCalls). Si el contrato no es
-	// subconjunto de lo que el cliente reportó, NO cerramos el step: queda
-	// running (reintentable), NO se marca failed, y devolvemos missing_tool_calls
-	// para que el cliente sepa qué llamar. Contrato vacío = no-op (retrocompat).
-	if missing := s.missingToolCalls(ctx, flowRun.OrganizationID, phaseSlug, rebuilt, in.ToolCallsSaved); len(missing) > 0 {
-		if s.Metrics != nil {
-			modeStr, _ := step.Inputs["mode"].(string)
-			s.Metrics.OrchestratorPhaseResultsTotal.
-				WithLabelValues(string(phaseSlug), modeStr, "tool_contract_unmet").Inc()
-		}
-		return &PhaseResultResult{
-			StepID:           step.ID,
-			StepStatus:       step.Status,
-			MissingToolCalls: missing,
+			MissingRequiredSaves: missingSaves,
+			ValidationError:      validationError,
+			MissingToolCalls:     missingTools,
 		}, nil
 	}
 

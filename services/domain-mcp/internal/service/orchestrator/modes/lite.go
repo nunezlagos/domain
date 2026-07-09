@@ -94,6 +94,7 @@ func BuildLitePlan(ctx context.Context, reg *phases.Registry, in phases.Input, n
 			RetryPolicy:       out.RetryPolicy,
 			SkillThreshold:    out.SkillThreshold,
 			RequiredToolCalls: out.RequiredToolCalls,
+			OutputSchema:      out.OutputSchema,
 			SubagentPlan:      out.SubagentPlan,
 		})
 	}

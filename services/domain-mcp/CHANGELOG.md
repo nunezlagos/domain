@@ -8,6 +8,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ### Corregido
 
+- **SDD step delegation contract — R5 (issue-64.2)**: contrato de delegación completo entre el orquestador y el cliente que ejecuta las fases.
+  - **R5-A — contrato upfront**: `PhaseStepSummary` ahora expone `required_tool_calls` y `output_schema` (JSON Schema) de cada fase, poblados desde su definición y exportados en `exportPlan`. El cliente conoce el contrato antes de ejecutar, sin descubrirlo por rechazo. `sdd-spec` declara su `output_schema` (`issue_slug`, `issue_md`).
+  - **R5-B — validación agregada**: al reportar una fase, la validación evalúa en una sola pasada los `required_saves`, el shape del output y los `tool_calls` faltantes, y los devuelve TODOS juntos, en vez de rechazar de a uno. `sdd-spec.Validate` acumula sus campos faltantes. El step sigue quedando running/reintentable.
+
 - **SDD pipeline hardening (issue-64.1)**: tres contratos del pipeline SDD, verificados contra el código (recomendaciones R3/R2/R7 de la guía fable-5).
   - **R3 — formato de escenarios**: `ParseScenarios` ahora acepta heading `##` y `####`, y `Given/When/Then` plano, con bullet o con negrita (`- **Given**`). La policy `openspec-spec-format` y el prompt `sdd-spec` documentan el formato canónico y aclaran las variantes toleradas. El error de spec sin escenarios incluye un ejemplo mínimo.
   - **R2 — round-trip de tasks**: `sdd-tasks` devuelve `created_task_ids` en `PhaseResultResult` (antes descartaba los IDs generados por `CreateTasks`), y `applyTasks` reporta el conteo de tasks sin marcador ignoradas en `ApplyResult.ignored_tasks`.

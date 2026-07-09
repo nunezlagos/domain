@@ -175,6 +175,16 @@ type PhaseStepSummary struct {
 	SuggestedSaves    []SuggestedSaveSummary
 	RetryPolicy       string
 	SkillThreshold    float64
+
+	// RequiredToolCalls: tools domain_* que la fase exige que el cliente
+	// invoque antes de cerrar el step (R5-A). Se declara upfront para que el
+	// cliente conozca el contrato sin descubrirlo por rechazo. Aditivo.
+	RequiredToolCalls []string `json:"required_tool_calls,omitempty"`
+
+	// OutputSchema: JSON Schema del output esperado por la fase (R5-A). Permite
+	// al cliente validar su reporte antes de enviarlo. Aditivo; vacío si la
+	// fase no lo declara.
+	OutputSchema map[string]any `json:"output_schema,omitempty"`
 }
 
 // SuggestedSaveSummary expone el contrato D5 sin reexportar el tipo del

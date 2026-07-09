@@ -55,6 +55,16 @@ func (h *sddSpecHandler) Build(_ context.Context, in Input) (*Output, error) {
 		},
 		SkillThreshold: 0,
 		RetryPolicy:    RetryReemit,
+		// R5-A: contrato de output declarado upfront para que el cliente sepa
+		// qué campos son obligatorios antes de reportar la fase.
+		OutputSchema: map[string]any{
+			"type":     "object",
+			"required": []any{"issue_slug", "issue_md"},
+			"properties": map[string]any{
+				"issue_slug": map[string]any{"type": "string", "description": "slug del issue creado"},
+				"issue_md":   map[string]any{"type": "string", "description": "contenido markdown de la spec"},
+			},
+		},
 	}, nil
 }
 
@@ -62,11 +72,17 @@ func (h *sddSpecHandler) Validate(_ context.Context, _ *Output, result ClientRes
 	if result.Output == nil {
 		return errors.New("sdd-spec: cliente devolvió Output nulo")
 	}
+	// R5-B: acumular TODOS los campos faltantes en una pasada, en vez de
+	// retornar al primero. El cliente ve la lista completa en un solo rechazo.
+	var missing []string
 	if slug, _ := result.Output["issue_slug"].(string); slug == "" {
-		return errors.New("sdd-spec: campo 'issue_slug' requerido")
+		missing = append(missing, "issue_slug")
 	}
 	if md, _ := result.Output["issue_md"].(string); md == "" {
-		return errors.New("sdd-spec: campo 'issue_md' requerido (contenido de la spec)")
+		missing = append(missing, "issue_md (contenido de la spec)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("sdd-spec: campos requeridos faltantes: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }

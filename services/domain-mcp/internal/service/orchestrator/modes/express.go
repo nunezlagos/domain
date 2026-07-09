@@ -44,6 +44,9 @@ type PhaseStep struct {
 	// RequiredToolCalls: contrato de tools de la fase (REQ-54 issue-54.1).
 	// Se persiste en step.Inputs y lo recupera rebuildOutputFromStepInputs.
 	RequiredToolCalls []string
+	// OutputSchema: JSON Schema del output esperado por la fase (R5-A).
+	// Se exporta al cliente para que conozca el shape upfront. Vacío = sin schema.
+	OutputSchema map[string]any
 	// SubagentPlan: plan de subagentes paralelos de la fase (REQ-54 issue-54.5).
 	SubagentPlan string
 }
@@ -94,6 +97,7 @@ func BuildExpressPlan(ctx context.Context, reg *phases.Registry, in phases.Input
 			RetryPolicy:       out.RetryPolicy,
 			SkillThreshold:    out.SkillThreshold,
 			RequiredToolCalls: out.RequiredToolCalls,
+			OutputSchema:      out.OutputSchema,
 			SubagentPlan:      out.SubagentPlan,
 		})
 	}

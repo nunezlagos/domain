@@ -333,6 +333,8 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 			SuggestedSaves:    saves,
 			RetryPolicy:       string(st.RetryPolicy),
 			SkillThreshold:    st.SkillThreshold,
+			RequiredToolCalls: st.RequiredToolCalls,
+			OutputSchema:      st.OutputSchema,
 		}
 	}
 	return out

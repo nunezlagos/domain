@@ -67,6 +67,7 @@ func (a *API) Router() http.Handler {
 
 	mux.HandleFunc("POST /api/v1/auth/login", a.authLogin)
 	mux.HandleFunc("GET /api/v1/auth/first-run", a.authFirstRun)
+	mux.HandleFunc("GET /api/v1/auth/validate", a.authValidate)
 	mux.HandleFunc("POST /api/v1/auth/bootstrap", a.authBootstrap)
 	mux.HandleFunc("POST /api/v1/auth/enroll", a.enrollSelf)
 	mux.HandleFunc("POST /api/v1/webhooks/{slug}/receive", a.receiveWebhook)

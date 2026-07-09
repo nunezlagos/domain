@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
 )
 
@@ -160,4 +161,45 @@ func TestBehavior_BootstrapRequest_EmptyEmail(t *testing.T) {
 	var req bootstrapRequest
 	require.NoError(t, json.Unmarshal([]byte(`{"email":""}`), &req))
 	require.Equal(t, "", req.Email)
+}
+
+// authValidate es reachable SOLO si el middleware apikey ya inyectó un
+// Principal en el ctx (es decir, la key pasó auth). Sin Principal → 401
+// unauthorized. Esto cubre el caso defensivo de un bug futuro en el
+// routing que meta la ruta en AuthAllowlist por accidente.
+func TestBehavior_AuthValidate_SinPrincipal_401(t *testing.T) {
+	a := &API{}
+	req := httptest.NewRequest("GET", "/api/v1/auth/validate", nil)
+	rec := httptest.NewRecorder()
+	a.authValidate(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Contains(t, rec.Body.String(), "unauthorized")
+}
+
+// Con Principal vivo, retorna 200 con valid=true y los IDs del Principal.
+// Esto es lo que el installer de usuario usa para confirmar la key antes
+// de escribirla al .env.
+func TestBehavior_AuthValidate_ConPrincipal_200(t *testing.T) {
+	a := &API{}
+	req := httptest.NewRequest("GET", "/api/v1/auth/validate", nil)
+	ctx := apikey.WithPrincipal(req.Context(), &apikey.Principal{
+		UserID:         "00000000-0000-0000-0000-000000000010",
+		OrganizationID: "00000000-0000-0000-0000-000000000001",
+		APIKeyID:       "00000000-0000-0000-0000-000000000020",
+		Role:           "admin",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	a.authValidate(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	require.Equal(t, true, env.Data["valid"])
+	require.Equal(t, "00000000-0000-0000-0000-000000000010", env.Data["user_id"])
+	require.Equal(t, "00000000-0000-0000-0000-000000000001", env.Data["organization_id"])
+	require.Equal(t, "admin", env.Data["role"])
 }

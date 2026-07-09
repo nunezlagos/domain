@@ -125,6 +125,11 @@
     "handler": "authFirstRun"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/auth/validate",
+    "handler": "authValidate"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/auth/login",
     "handler": "authLogin"

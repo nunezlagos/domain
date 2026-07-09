@@ -4,8 +4,31 @@ import (
 	"errors"
 	"net/http"
 
+	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/bootstrap"
 )
+
+// GET /api/v1/auth/validate
+// Valida que la API key presentada (Authorization: Bearer ...) es valida
+// y resuelve a un Principal vivo. Usado por el installer de usuario para
+// confirmar la key antes de escribirla al .env del cliente y a los JSON
+// configs. Si el key es invalida, el middleware apikey retorna 401 antes
+// de llegar aca. NO debe estar en AuthAllowlist (romperia el flujo).
+func (a *API) authValidate(w http.ResponseWriter, r *http.Request) {
+	p, ok := apikey.FromContext(r.Context())
+	if !ok || p == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized",
+			"API key invalida o revocada")
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"valid":          true,
+		"user_id":        p.UserID,
+		"organization_id": p.OrganizationID,
+		"api_key_id":     p.APIKeyID,
+		"role":           p.Role,
+	})
+}
 
 // GET /api/v1/auth/first-run
 // Indica si la DB esta vacia (sin users). Helper para que el CLI

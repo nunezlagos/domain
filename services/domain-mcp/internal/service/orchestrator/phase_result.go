@@ -41,6 +41,12 @@ type PhaseResultResult struct {
 	NextStepKey    string
 	NextStepPrompt string
 
+	// NextStepSystemPrompt: SystemPrompt del siguiente step (R4). En modo full
+	// el plan inicial NO trae el SystemPrompt de los steps 2..N (payload a
+	// dieta); el cliente lo recibe acá, reconstruido desde step.Inputs. Campo
+	// aditivo: NextStepPrompt sigue siendo el user prompt (retrocompat).
+	NextStepSystemPrompt string `json:"next_step_system_prompt,omitempty"`
+
 
 
 
@@ -322,6 +328,11 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 				out.NextStepPrompt = built
 			}
 
+			// R4: entregar el SystemPrompt del siguiente step, que en modo full
+			// NO viajó en el plan inicial. Se lee de step.Inputs (persistido por
+			// persistPlan con el rulesBlock original), no se recomputa.
+			out.NextStepSystemPrompt = nextStepSystemPrompt(nextStep)
+
 
 
 			if shouldRequireConfirm(step, in.Output) {
@@ -517,6 +528,18 @@ func findStepByID(steps []FlowRunStepRow, id uuid.UUID) *FlowRunStepRow {
 		}
 	}
 	return nil
+}
+
+// nextStepSystemPrompt extrae el SystemPrompt persistido de un step (R4). El
+// plan inicial en modo full omite el SystemPrompt de los steps 2..N; este
+// helper lo recupera de step.Inputs para entregarlo en el phase_result. "" si
+// el step es nil o no tiene system_prompt persistido.
+func nextStepSystemPrompt(step *FlowRunStepRow) string {
+	if step == nil {
+		return ""
+	}
+	sys, _ := step.Inputs["system_prompt"].(string)
+	return sys
 }
 
 // rebuildNextStepPrompt — lazy build de user_prompt para el próximo step

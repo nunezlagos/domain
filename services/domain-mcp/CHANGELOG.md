@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ### Corregido
 
+- **SDD orchestrate payload diet — R4 (issue-64.3)**: `domain_orchestrate` en modo full ya no embebe el `SystemPrompt` (template + ~20 policies) de los 11 steps en el payload inicial. `exportPlan` omite el `SystemPrompt` de los steps 2..N (solo el step 0 lo lleva), bajando el payload de ~220-320KB a ~20-40KB. El `SystemPrompt` de cada step sigue persistido en `step.Inputs` y se entrega reconstruido en `PhaseResultResult.next_step_system_prompt` al cerrar cada fase. Campo aditivo; `NextStepPrompt` (user) sin cambios. Modos express/lite conservan todo, y el modo detect (preview no persistido) también conserva el SystemPrompt (no hay `step.Inputs` de dónde reconstruirlo).
+
 - **SDD step delegation contract — R5 (issue-64.2)**: contrato de delegación completo entre el orquestador y el cliente que ejecuta las fases.
   - **R5-A — contrato upfront**: `PhaseStepSummary` ahora expone `required_tool_calls` y `output_schema` (JSON Schema) de cada fase, poblados desde su definición y exportados en `exportPlan`. El cliente conoce el contrato antes de ejecutar, sin descubrirlo por rechazo. `sdd-spec` declara su `output_schema` (`issue_slug`, `issue_md`).
   - **R5-B — validación agregada**: al reportar una fase, la validación evalúa en una sola pasada los `required_saves`, el shape del output y los `tool_calls` faltantes, y los devuelve TODOS juntos, en vez de rechazar de a uno. `sdd-spec.Validate` acumula sus campos faltantes. El step sigue quedando running/reintentable.

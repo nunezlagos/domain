@@ -61,9 +61,11 @@ deployado el binario nuevo a `main`. Sirve como checklist de verificación.
 - **Esta sesión:** se hizo re-seed MANUAL vía UPDATE directo (policy `openspec-spec-format` + prompt `sdd-spec`), porque el deploy no bumpeó versión.
 - **Verificar:** `SELECT ... WHERE slug='openspec-spec-format'` → debe contener "parser tolera variantes".
 
-### B2. Payload obeso del orquestador (R4 — NO arreglado)
-- **Síntoma:** `domain_orchestrate` devuelve ~440.000 caracteres (11 prompts inline + ~20 policies repetidas por step). Excede el límite de tool-result; el harness lo vuelca a archivo.
-- **Estado:** PENDIENTE (fuera del scope de esta sesión). Es la recomendación R4 de la guía fable-5.
+### B2. Payload obeso del orquestador (R4 — ARREGLADO en issue-64.3)
+- **Síntoma:** `domain_orchestrate` devuelve ~220-440.000 caracteres (SystemPrompt de los 11 steps con ~20 policies embebidas cada uno). Excede el límite de tool-result; el harness lo vuelca a archivo.
+- **Fix:** issue-64.3 — `exportPlan` en modo full (persistido) omite el SystemPrompt de los steps 2..N; el cliente lo recibe reconstruido vía `PhaseResultResult.next_step_system_prompt` en cada phase_result. Baja a ~20-40KB. Modo detect (preview) lo conserva (no hay step.Inputs de dónde reconstruir).
+- **Replicar (post-deploy):** correr `domain_orchestrate` mode=full → el resultado NO debe exceder el límite de tool-result / debe traer solo el step 0 con SystemPrompt y el resto con `system_prompt` vacío. Cada `phase_result` debe traer `next_step_system_prompt` no vacío.
+- **Residual:** modo async no se beneficia (Mode=async no matchea el guard).
 
 ### B3. Gate PreToolUse en background crea flows huérfanos
 - **Síntoma:** el hook clasifica un prompt como "requerimiento" y crea un flow SDD aunque no haya trabajo SDD real; queda huérfano si el trabajo se hace por fuera.

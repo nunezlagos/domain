@@ -172,7 +172,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		if err := s.runSolo(ctx, in, flowID, res.FlowRunID, res.OrchestratorRunID, plan); err != nil {
 			return nil, err
 		}
-		res.Plan = exportPlan(plan)
+		res.Plan = exportPlan(plan, true)
 		span.SetAttributes(
 			tracing.SafeAttr("orchestrator.run_id", res.OrchestratorRunID.String()),
 			tracing.SafeAttr("flow_run.id", res.FlowRunID.String()),
@@ -273,13 +273,14 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 
 
 
-		if s.Repo != nil && mode != ModeDetect {
+		persisted := s.Repo != nil && mode != ModeDetect
+		if persisted {
 			if err := s.persistPlan(ctx, in, mode,
 				res.OrchestratorRunID, flowID, res.FlowRunID, plan, now); err != nil {
 				return nil, err
 			}
 		}
-		res.Plan = exportPlan(plan)
+		res.Plan = exportPlan(plan, persisted)
 		if len(res.Plan.Steps) > 0 {
 			res.SnapshotPrompt = res.Plan.Steps[0].UserPrompt
 		}
@@ -314,7 +315,7 @@ func convertSkipPhases(in []PhaseSlug) []phases.PhaseSlug {
 // exportPlan traduce el plan interno (modes.PhasePlan) al shape
 // exportado (PhasePlanSummary). Mantiene aislado el package modes/
 // del API público del service.
-func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
+func exportPlan(p *modes.PhasePlan, persisted bool) *PhasePlanSummary {
 	if p == nil {
 		return nil
 	}
@@ -324,11 +325,24 @@ func exportPlan(p *modes.PhasePlan) *PhasePlanSummary {
 		for j, s := range st.SuggestedSaves {
 			saves[j] = SuggestedSaveSummary{Type: s.Type, Required: s.Required, Hint: s.Hint}
 		}
+		// R4 (payload a dieta): en modo full solo el step 0 lleva el SystemPrompt
+		// (template + rulesBlock ~20-30KB) en el payload inicial. Los steps 2..N
+		// lo reciben reconstruido vía NextStepSystemPrompt en cada phase_result;
+		// su SystemPrompt completo sigue persistido en step.Inputs. Modos cortos
+		// (express/lite) conservan todo — no sufren el payload obeso.
+		//
+		// Solo se strippea si el plan se PERSISTIÓ: el modo detect (preview) usa
+		// Mode="full" pero NO persiste, así que ahí el SystemPrompt no podría
+		// reconstruirse desde step.Inputs — en ese caso se conserva en la salida.
+		sysPrompt := st.SystemPrompt
+		if persisted && p.Mode == "full" && i > 0 {
+			sysPrompt = ""
+		}
 		out.Steps[i] = PhaseStepSummary{
 			ID:                st.ID,
 			Slug:              PhaseSlug(st.Slug),
 			AgentTemplateSlug: st.AgentTemplateSlug,
-			SystemPrompt:      st.SystemPrompt,
+			SystemPrompt:      sysPrompt,
 			UserPrompt:        st.UserPrompt,
 			SuggestedSaves:    saves,
 			RetryPolicy:       string(st.RetryPolicy),

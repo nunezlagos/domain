@@ -563,3 +563,18 @@ func TestRecordPhaseResult_DualOutput_NoSummary_DefaultsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, res.Summary, "sin summary en output → Summary vacío")
 }
+
+// R4: nextStepSystemPrompt recupera el SystemPrompt persistido del siguiente
+// step, que en modo full no viaja en el plan inicial.
+
+func TestNextStepSystemPrompt_LeeDeInputs(t *testing.T) {
+	t.Parallel()
+	step := &FlowRunStepRow{Inputs: map[string]any{"system_prompt": "SYS reconstruido con rulesBlock"}}
+	require.Equal(t, "SYS reconstruido con rulesBlock", nextStepSystemPrompt(step))
+}
+
+func TestNextStepSystemPrompt_NilYVacio(t *testing.T) {
+	t.Parallel()
+	require.Empty(t, nextStepSystemPrompt(nil))
+	require.Empty(t, nextStepSystemPrompt(&FlowRunStepRow{Inputs: map[string]any{}}))
+}

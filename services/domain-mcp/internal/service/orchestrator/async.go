@@ -36,7 +36,7 @@ func (s *Service) runAsync(ctx context.Context, in OrchestrateInput,
 		FlowRunID:         flowRunID,
 		Mode:              ModeAsync,
 		StartedAt:         s.now(),
-		Plan:              exportPlan(plan),
+		Plan:              exportPlan(plan, true),
 	}
 	if len(plan.Steps) > 0 {
 		res.SnapshotPrompt = plan.Steps[0].UserPrompt

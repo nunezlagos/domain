@@ -23,7 +23,7 @@ func TestExportPlan_IncluyeRequiredToolCalls(t *testing.T) {
 			},
 		},
 	}
-	out := exportPlan(plan)
+	out := exportPlan(plan, true)
 	require.NotNil(t, out)
 	require.Len(t, out.Steps, 1)
 	assert.Equal(t, []string{"domain_verify_start", "domain_verify_complete"}, out.Steps[0].RequiredToolCalls)
@@ -40,7 +40,7 @@ func TestExportPlan_IncluyeOutputSchema(t *testing.T) {
 			{Slug: phases.PhaseSlug("sdd-spec"), OutputSchema: schema},
 		},
 	}
-	out := exportPlan(plan)
+	out := exportPlan(plan, true)
 	require.Len(t, out.Steps, 1)
 	assert.Equal(t, schema, out.Steps[0].OutputSchema)
 }
@@ -50,7 +50,7 @@ func TestExportPlan_FaseSinContrato_NoRompe(t *testing.T) {
 		Mode:  "full",
 		Steps: []modes.PhaseStep{{Slug: phases.PhaseSlug("sdd-archive")}},
 	}
-	out := exportPlan(plan)
+	out := exportPlan(plan, true)
 	require.Len(t, out.Steps, 1)
 	assert.Empty(t, out.Steps[0].RequiredToolCalls)
 	assert.Empty(t, out.Steps[0].OutputSchema)

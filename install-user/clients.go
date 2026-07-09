@@ -77,9 +77,9 @@ func writeEnvIfConfigured(c Client, apiKey, timestamp string) {
 	if c.EnvPath == "" {
 		return
 	}
-	if _, err := os.Stat(c.EnvPath); err == nil {
-		// backup del .env viejo
-		_ = os.Rename(c.EnvPath, c.EnvPath+".backup-"+timestamp)
+	// backup del .env viejo con dedup + poda (backupIfExists)
+	if _, err := backupIfExists(c.EnvPath, timestamp); err != nil {
+		warnL("no se pudo backupear " + c.EnvPath + ": " + err.Error())
 	}
 	if err := writeClientEnv(c.EnvPath, apiKey); err != nil {
 		warnL("no se pudo escribir " + c.EnvPath + ": " + err.Error())

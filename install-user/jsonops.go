@@ -1,10 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -44,20 +46,72 @@ func writeJSON(path string, m map[string]any) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
-// backupIfExists copia path → path.backup-YYYYMMDDTHHMMSSZ si existe.
+// keepLastBackups: cada archivo conserva como máximo los 3 backups más recientes.
+const keepLastBackups = 3
+
+// backupIfExists copia path → path.backup-YYYYMMDDTHHMMSSZ si existe. Deduplica
+// (no crea backup si el contenido coincide con el último) y poda a los
+// keepLastBackups más recientes. No importa el paquete install del server:
+// install-user es un módulo Go propio.
 func backupIfExists(path, timestamp string) (string, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil
 	}
-	backup := path + ".backup-" + timestamp
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
+
+	backups := listBackups(path)
+	if len(backups) > 0 {
+		if lastHash, err := fileSHA256(backups[len(backups)-1]); err == nil {
+			if lastHash == sha256Hex(src) {
+				return backups[len(backups)-1], nil
+			}
+		}
+	}
+
+	backup := path + ".backup-" + timestamp
 	if err := os.WriteFile(backup, src, 0o600); err != nil {
 		return "", err
 	}
+	pruneBackups(path, keepLastBackups)
 	return backup, nil
+}
+
+// listBackups devuelve los .backup-* de path ordenados del más viejo al más
+// nuevo (el timestamp compacto ordena lexicográficamente = cronológico).
+func listBackups(path string) []string {
+	matches, err := filepath.Glob(path + ".backup-*")
+	if err != nil {
+		return nil
+	}
+	sort.Strings(matches)
+	return matches
+}
+
+// pruneBackups deja solo los keepLast backups más recientes de path.
+func pruneBackups(path string, keepLast int) {
+	backups := listBackups(path)
+	if len(backups) <= keepLast {
+		return
+	}
+	for _, p := range backups[:len(backups)-keepLast] {
+		_ = os.Remove(p)
+	}
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func fileSHA256(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return sha256Hex(data), nil
 }
 
 // Timestamp ISO compacto (sin separadores) para nombres de backup.

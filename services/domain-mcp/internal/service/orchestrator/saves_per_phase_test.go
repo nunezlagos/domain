@@ -107,7 +107,10 @@ func TestD5Contract_DocPhases_RequireKnowledgeDoc(t *testing.T) {
 	}
 }
 
-func TestD5Contract_SDDApply_RequiresCodeReference(t *testing.T) {
+// code_graph retirado (2026-07-07): apply declara code_reference OPCIONAL. El
+// contrato D5 ya no lo exige, así que ValidateRequiredSaves pasa aunque el
+// cliente no lo persista.
+func TestD5Contract_SDDApply_CodeReferenceIsOptional(t *testing.T) {
 	t.Parallel()
 	h := phases.NewSDDApplyHandler()
 	out, err := h.Build(context.Background(), phases.Input{RawText: "implement x"})
@@ -115,16 +118,10 @@ func TestD5Contract_SDDApply_RequiresCodeReference(t *testing.T) {
 
 	require.Len(t, out.SuggestedSaves, 1)
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)
-	require.True(t, out.SuggestedSaves[0].Required)
-
-	require.ErrorIs(t,
-		ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, phases.ClientResult{}),
-		ErrRequiredSaveMissing)
+	require.False(t, out.SuggestedSaves[0].Required)
 
 	require.NoError(t,
-		ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, phases.ClientResult{
-			MemoryRefsSaved: []phases.MemoryRef{{Type: "code_reference", ID: uuid.New()}},
-		}))
+		ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, phases.ClientResult{}))
 }
 
 func TestD5Contract_SDDJudge_RequiresSabotageRecord(t *testing.T) {

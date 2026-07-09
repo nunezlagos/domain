@@ -46,21 +46,20 @@ func (h *sddApplyHandler) Build(_ context.Context, in Input) (*Output, error) {
 	return &Output{
 		AgentTemplateSlug: "sdd-apply",
 
-
 		SystemPrompt: "",
 		UserPrompt:   b.String(),
 		SuggestedSaves: []SuggestedSave{
 			{
-				Type:     "code_reference",
-				Required: true, // RFC 0006 D5
+				Type: "code_reference",
+				// code_graph retirado (2026-07-07): los agentes ya no producen
+				// code_reference, asi que exigirlo mataba todo sdd-apply. Queda
+				// sugerido (opcional) para no romper el pipeline.
+				Required: false,
 				Hint:     "guardar code_reference apuntando al archivo + identifier principal modificado",
 			},
 		},
 
-
 		SkillThreshold: 0,
-
-
 
 		RetryPolicy: RetryCleanup,
 	}, nil
@@ -74,9 +73,6 @@ func (h *sddApplyHandler) Validate(_ context.Context, _ *Output, result ClientRe
 		return errors.New("sdd-apply: cliente devolvió Output nulo")
 	}
 	if multi, ok := result.Output["multi_concern"].(bool); ok && multi {
-
-
-
 
 		return ErrMultiConcernDetected
 	}

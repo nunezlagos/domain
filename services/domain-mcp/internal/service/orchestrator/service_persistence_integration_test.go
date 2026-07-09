@@ -97,7 +97,6 @@ func TestService_Run_Express_WithoutSeededFlow_ReturnsErrFlowNotSeeded(t *testin
 	userID := newUserID(t, pools, orgID)
 	projectID := newProjectID(t, pools, orgID)
 
-
 	s := orchestrator.New(pools.App, nil, buildRegistry(), "dev")
 	_, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -118,8 +117,6 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	userID := newUserID(t, pools, orgID)
 	projectID := newProjectID(t, pools, orgID)
 
-
-
 	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -138,7 +135,6 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.NotNil(t, res.Plan)
 	require.Len(t, res.Plan.Steps, 2)
-
 
 	var (
 		status      string
@@ -159,13 +155,11 @@ func TestService_Run_Express_PersistsFlowRunAndSteps(t *testing.T) {
 		seeds.SDDPipelineFlowSlug).Scan(&seededID))
 	require.Equal(t, seededID, flowID)
 
-
 	var meta map[string]any
 	require.NoError(t, json.Unmarshal(metaRaw, &meta))
 	require.Equal(t, res.OrchestratorRunID.String(), meta["orchestrator_run_id"])
 	require.Equal(t, "express", meta["mode"])
 	require.Equal(t, "implementar typo fix", meta["raw_text"])
-
 
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
@@ -218,5 +212,6 @@ func TestService_Run_Express_StepInputsIncludeSuggestedSaves(t *testing.T) {
 	require.Len(t, saves, 1)
 	first, _ := saves[0].(map[string]any)
 	require.Equal(t, "code_reference", first["type"])
-	require.Equal(t, true, first["required"], "D5: code_reference Required=true en sdd-apply")
+	// code_graph retirado (2026-07-07): code_reference es opcional en sdd-apply.
+	require.Equal(t, false, first["required"], "code_reference opcional tras retiro del code_graph")
 }

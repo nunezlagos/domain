@@ -89,7 +89,7 @@ func TestHandlers_D5RequiredSavesByPhase(t *testing.T) {
 		{NewSDDProposeHandler, "knowledge_doc"},
 		{NewSDDDesignHandler, "adr"},
 		{NewSDDTasksHandler, "knowledge_doc"},
-		{NewSDDApplyHandler, "code_reference"},
+		{NewSDDApplyHandler, ""}, // code_graph retirado: code_reference ya no es required
 		{NewSDDVerifyHandler, ""},
 		{NewSDDJudgeHandler, "sabotage_record"},
 		{NewSDDReviewHandler, ""},

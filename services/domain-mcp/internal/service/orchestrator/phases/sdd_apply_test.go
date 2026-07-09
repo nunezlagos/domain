@@ -21,19 +21,19 @@ func TestSDDApplyHandler_Build_RejectsEmptyRawText(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSDDApplyHandler_Build_DeclaresRequiredCodeReference_D5(t *testing.T) {
+func TestSDDApplyHandler_Build_DeclaresOptionalCodeReference(t *testing.T) {
 	t.Parallel()
 	h := NewSDDApplyHandler()
 	out, err := h.Build(context.Background(), Input{RawText: "refactor X"})
 	require.NoError(t, err)
 	require.Equal(t, "sdd-apply", out.AgentTemplateSlug)
 
-
 	require.Empty(t, out.SystemPrompt)
 	require.Contains(t, out.UserPrompt, "refactor X")
 	require.Len(t, out.SuggestedSaves, 1)
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)
-	require.True(t, out.SuggestedSaves[0].Required, "D5: code_reference debe ser required en sdd-apply")
+	// code_graph retirado (2026-07-07): code_reference ya no se produce, deja de ser required.
+	require.False(t, out.SuggestedSaves[0].Required, "code_reference es opcional tras el retiro del code_graph")
 	require.Equal(t, RetryCleanup, out.RetryPolicy)
 }
 
@@ -99,8 +99,6 @@ func TestSDDApplyHandler_Sabotage_SuggestedSaveTypeIsCodeReference(t *testing.T)
 	h := NewSDDApplyHandler()
 	out, err := h.Build(context.Background(), Input{RawText: "x"})
 	require.NoError(t, err)
-
-
 
 	require.Equal(t, "code_reference", out.SuggestedSaves[0].Type)
 }

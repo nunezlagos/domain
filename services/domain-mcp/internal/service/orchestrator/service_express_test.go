@@ -52,7 +52,9 @@ func TestService_Run_ExpressMode_BuildsApplyAndVerifyPlan(t *testing.T) {
 	require.Equal(t, res.Plan.Steps[0].UserPrompt, res.SnapshotPrompt)
 }
 
-func TestService_Run_ExpressMode_DeclaresD5RequiredOnApply(t *testing.T) {
+// code_graph retirado (2026-07-07): apply declara code_reference como
+// SuggestedSave OPCIONAL (Required=false), ya no lo exige.
+func TestService_Run_ExpressMode_DeclaresOptionalCodeReferenceOnApply(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	res, err := s.Run(context.Background(), OrchestrateInput{
@@ -66,7 +68,7 @@ func TestService_Run_ExpressMode_DeclaresD5RequiredOnApply(t *testing.T) {
 	apply := res.Plan.Steps[0]
 	require.Len(t, apply.SuggestedSaves, 1)
 	require.Equal(t, "code_reference", apply.SuggestedSaves[0].Type)
-	require.True(t, apply.SuggestedSaves[0].Required)
+	require.False(t, apply.SuggestedSaves[0].Required)
 }
 
 func TestService_Run_ExpressMode_VerifySuggestedSavesAreOptional(t *testing.T) {
@@ -102,7 +104,6 @@ func TestService_Run_ExpressMode_RegistryWithoutHandlers_Fails(t *testing.T) {
 func TestService_Run_FullMode_WithoutAllHandlers_Fails(t *testing.T) {
 	t.Parallel()
 
-
 	s := New(nil, nil, buildRegistryWithApplyAndVerify(t), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID: uuid.New(),
@@ -114,11 +115,10 @@ func TestService_Run_FullMode_WithoutAllHandlers_Fails(t *testing.T) {
 	require.Error(t, err, "Full sin todos los handlers debe fallar al armar el plan")
 }
 
-// Sabotaje sab-003: el cliente IDE termina apply sin guardar el
-// code_reference required. La validación centralizada
-// orchestrator.ValidateRequiredSaves debe atrapar la condición y
-// retornar *RequiredSaveError envolviendo ErrRequiredSaveMissing.
-func TestService_Sabotage_ApplyMissingRequiredCodeReference(t *testing.T) {
+// code_graph retirado (2026-07-07): apply ya no exige code_reference, así que
+// terminar la fase sin guardarlo NO debe disparar ErrRequiredSaveMissing. El
+// code_reference queda como SuggestedSave opcional.
+func TestService_ApplyWithoutCodeReference_PassesAfterCodeGraphRetirement(t *testing.T) {
 	t.Parallel()
 	reg := buildRegistryWithApplyAndVerify(t)
 	h, err := reg.Lookup(phases.PhaseSlug("sdd-apply"))
@@ -128,10 +128,9 @@ func TestService_Sabotage_ApplyMissingRequiredCodeReference(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-
 	clientResult := phases.ClientResult{
 		Output: map[string]any{"summary": "looks good"},
 	}
 	err = ValidateRequiredSaves(phases.PhaseSlug("sdd-apply"), out, clientResult)
-	require.ErrorIs(t, err, ErrRequiredSaveMissing)
+	require.NoError(t, err)
 }

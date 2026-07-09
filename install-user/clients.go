@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // configResult informa el efecto de configurar un cliente.
@@ -116,19 +117,61 @@ func configureContinue(path, vpsURL, apiKey, timestamp string) error {
 	if exp == nil {
 		exp = map[string]any{}
 	}
-	exp["modelContextProtocolServers"] = []any{
-		map[string]any{
-			"transport": map[string]any{
-				"type": "http",
-				"url":  vpsURL + "/mcp",
-				"headers": map[string]any{
-					"Authorization": "Bearer " + apiKey,
-				},
+	domainURL := vpsURL + "/mcp"
+	domainEntry := map[string]any{
+		"transport": map[string]any{
+			"type": "http",
+			"url":  domainURL,
+			"headers": map[string]any{
+				"Authorization": "Bearer " + apiKey,
 			},
 		},
 	}
+	// issue-65.1: MERGE en vez de reemplazar. Preservar los MCP servers ajenos
+	// del usuario. Buscar la entrada de domain y actualizarla in-place; si no
+	// existe, hacer append. Antes se pisaba todo el array con un solo elemento,
+	// borrando los otros servers del usuario. El match reconoce una entrada de
+	// domain por su url exacta (mismo VPS) O por su header Authorization con una
+	// key domk_ (marca inequívoca de una entrada de domain): así, si el VPS
+	// migró de host, se actualiza la entrada vieja en vez de dejar una stale
+	// duplicada, sin confundirla con un server ajeno que casualmente use /mcp.
+	existing, _ := exp["modelContextProtocolServers"].([]any)
+	updated := false
+	for i, s := range existing {
+		sm, ok := s.(map[string]any)
+		if !ok {
+			continue
+		}
+		if isDomainContinueEntry(sm, domainURL) {
+			existing[i] = domainEntry
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		existing = append(existing, domainEntry)
+	}
+	exp["modelContextProtocolServers"] = existing
 	m["experimental"] = exp
 	return writeJSON(path, m)
+}
+
+// isDomainContinueEntry reconoce si una entrada de modelContextProtocolServers
+// es la de domain: por url exacta (mismo VPS) o por su header Authorization con
+// una key domk_ (marca inequívoca), lo que permite re-identificarla aunque el
+// VPS haya migrado de host. NO matchea por sufijo /mcp genérico para no pisar un
+// server ajeno del usuario que casualmente use ese path.
+func isDomainContinueEntry(sm map[string]any, domainURL string) bool {
+	tr, _ := sm["transport"].(map[string]any)
+	if tr == nil {
+		return false
+	}
+	if url, _ := tr["url"].(string); url == domainURL {
+		return true
+	}
+	headers, _ := tr["headers"].(map[string]any)
+	auth, _ := headers["Authorization"].(string)
+	return strings.Contains(auth, "Bearer domk_")
 }
 
 // uninstallClient remueve entries "domain-mcp" + "domain" del config sin
@@ -163,6 +206,11 @@ func uninstallClient(c Client) (removed bool, err error) {
 	}
 	if !(r1 || r2 || r3) {
 		return false, nil
+	}
+	// issue-65.1: backup antes de escribir (antes se escribía sin respaldo si
+	// solo se limpiaba la entrada de continue — r3).
+	if _, err := backupIfExists(c.MCPPath, Timestamp()); err != nil {
+		return false, err
 	}
 	return true, writeJSON(c.MCPPath, m)
 }

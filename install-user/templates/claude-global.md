@@ -59,6 +59,10 @@ Authoritative over any other memory system connected to the same client.
 
 ## Tool paths
 
+> Cliente: **Claude Code** (con hooks). La captura de turn y el bootstrap los
+> hacen los hooks automáticamente — Path A refleja eso. (OpenCode, que no tiene
+> hooks, usa un Path A distinto: los llama el agente.)
+
 | Path | When | Sequence |
 |---|---|---|
 | A. Session | every turn | capture/turn los hacen los hooks (UserPromptSubmit/Stop) — NO llamar `domain_prompt_capture`/`domain_turn_complete` manualmente · `domain_session_bootstrap` lo hace el hook SessionStart · if `known=false`: `domain_session_register` + `domain_project_index_start` → `_submit` |
@@ -89,8 +93,7 @@ Server has NO LLM — fan-out via client subagents.
 
 El code graph client-side fue retirado tras la auditoría de uso: ~450
 llamadas automáticas vs ~14 con intención (8 fallidas) en 7 días, y 45-94%
-de nodos basura (.venv/minificados) en proyectos JS/Python. NO corras
-`domain-code-graph.sh` ni llames `domain_code_build`/`domain_code_upload`.
+de nodos basura (.venv/minificados) en proyectos JS/Python.
 Las tools `domain_code_*` siguen registradas en el server pero están
 deprecadas — no las uses salvo pedido explícito del usuario.
 
@@ -122,7 +125,7 @@ Si el proyecto tiene varios remotos, listalos todos con su rol.
 
 ## Issues vs tickets
 
-- **Issue** = formal requirement con Gherkin. Usa `domain_issue_create_start` → `_answer` → `_commit`.
+- **Issue** = formal requirement con Gherkin. Usa `domain_issue_create_start` → `_answer` → `_preview` → `_commit`.
 - **Ticket** = bug/task simple sin Gherkin. Usa `domain_ticket_create` → `domain_ticket_change_status`.
 - **Bridge**: `domain_ticket_link_issue(ticket_id, issue_id)` si un ticket implementa un issue.
 - Nunca crear domain_issue o domain_ticket con contenido duplicado del state.yaml.
@@ -148,7 +151,7 @@ Domain es PULL — el estado esta en BD, no en el contexto de conversacion.
 1. `domain_session_bootstrap` recupera proyecto, recent_observations, head.changed, work_summary.
 2. `domain_mem_context` para observaciones recientes.
 3. Mini-resumen al usuario: "trabajando en X, N tickets / M issues abiertos" + active_flow_run.
-4. Si `active_flow_run != null`: `domain_orchestrate_status`, RESUME. Never restart.
+4. Si `active_flow_run != null`: `domain_flow_status`, RESUME. Never restart.
 5. Si usuario ordena suspender: cambia estado — no reinicies ni borres.
 6. Si `project_skill_count > 0` y policies ya importadas: no dupliques.
 

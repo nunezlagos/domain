@@ -18,7 +18,7 @@ type claudeHookSpec struct {
 }
 
 // claudeHooks es el set de lifecycle hooks de domain (REQ-54):
-//   - SessionStart: pre-carga bootstrap + code graph + mem context ANTES del
+//   - SessionStart: pre-carga bootstrap + mem context ANTES del
 //     primer prompt (inyecta additionalContext).
 //   - UserPromptSubmit: captura CADA prompt vía domain_prompt_capture y guarda
 //     el prompt_id por session (determinista, no depende del LLM).

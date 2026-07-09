@@ -168,3 +168,148 @@ func TestConfigureClient_BackupCreated(t *testing.T) {
 		t.Errorf("backup name = %q, want contiene timestamp", matches[0])
 	}
 }
+
+// issue-65.1 G1: configureContinue debe PRESERVAR los MCP servers ajenos del
+// usuario en experimental.modelContextProtocolServers, no reemplazar el array.
+
+func TestConfigureContinue_PreservaOtrosServers(t *testing.T) {
+	dir := t.TempDir()
+	original := `{"experimental":{"modelContextProtocolServers":[` +
+		`{"transport":{"type":"http","url":"https://otro.example/mcp"}},` +
+		`{"transport":{"type":"stdio","command":"foo"}}` +
+		`]}}`
+	writeFakeClientConfig(t, dir, "config.json", original)
+	path := filepath.Join(dir, "config.json")
+
+	if err := configureContinue(path, "http://vps.example", "domk_test", "20260620T000000Z"); err != nil {
+		t.Fatalf("configureContinue: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	var m map[string]any
+	json.Unmarshal(raw, &m)
+	exp := m["experimental"].(map[string]any)
+	servers := exp["modelContextProtocolServers"].([]any)
+
+	// Debe haber 3: los 2 ajenos + domain.
+	if len(servers) != 3 {
+		t.Fatalf("esperaba 3 servers (2 ajenos + domain), hay %d", len(servers))
+	}
+	var hasOtro, hasFoo, hasDomain bool
+	for _, s := range servers {
+		sm := s.(map[string]any)
+		tr, _ := sm["transport"].(map[string]any)
+		url, _ := tr["url"].(string)
+		cmd, _ := tr["command"].(string)
+		if url == "https://otro.example/mcp" {
+			hasOtro = true
+		}
+		if cmd == "foo" {
+			hasFoo = true
+		}
+		if url == "http://vps.example/mcp" {
+			hasDomain = true
+		}
+	}
+	if !hasOtro || !hasFoo {
+		t.Errorf("servers ajenos del usuario fueron pisados (otro=%v foo=%v)", hasOtro, hasFoo)
+	}
+	if !hasDomain {
+		t.Error("el server de domain no fue agregado")
+	}
+}
+
+func TestConfigureContinue_NoDuplicaDomain(t *testing.T) {
+	dir := t.TempDir()
+	original := `{"experimental":{"modelContextProtocolServers":[` +
+		`{"transport":{"type":"http","url":"http://vps.example/mcp","headers":{"Authorization":"Bearer viejo"}}}` +
+		`]}}`
+	writeFakeClientConfig(t, dir, "config.json", original)
+	path := filepath.Join(dir, "config.json")
+
+	if err := configureContinue(path, "http://vps.example", "domk_nueva", "20260620T000000Z"); err != nil {
+		t.Fatalf("configureContinue: %v", err)
+	}
+	raw, _ := os.ReadFile(path)
+	var m map[string]any
+	json.Unmarshal(raw, &m)
+	servers := m["experimental"].(map[string]any)["modelContextProtocolServers"].([]any)
+	if len(servers) != 1 {
+		t.Fatalf("re-configurar duplicó la entrada domain: hay %d, esperaba 1", len(servers))
+	}
+}
+
+// issue-65.1 G1: uninstall de continue debe crear backup antes de escribir.
+func TestUninstallContinue_BackupAntesDeEscribir(t *testing.T) {
+	dir := t.TempDir()
+	original := `{"experimental":{"modelContextProtocolServers":[` +
+		`{"transport":{"type":"http","url":"http://vps.example/mcp"}}` +
+		`]}}`
+	writeFakeClientConfig(t, dir, "config.json", original)
+	path := filepath.Join(dir, "config.json")
+
+	removed, err := uninstallClient(Client{Name: "continue", MCPPath: path})
+	if err != nil {
+		t.Fatalf("uninstallClient: %v", err)
+	}
+	if !removed {
+		t.Fatal("esperaba removed=true (había 1 server domain en continue)")
+	}
+	// Debe existir al menos un backup del config.json.
+	entries, _ := filepath.Glob(path + ".backup-*")
+	if len(entries) == 0 {
+		t.Error("no se creó backup del config.json antes del write en uninstall")
+	}
+}
+
+// issue-65.1 (hallazgo panel): si la entrada domain existía con OTRA url (VPS
+// migró), el merge debe ACTUALIZARLA in-place, no dejar una stale duplicada.
+func TestConfigureContinue_VpsMigrado_NoDuplica(t *testing.T) {
+	dir := t.TempDir()
+	original := `{"experimental":{"modelContextProtocolServers":[` +
+		`{"transport":{"type":"http","url":"http://viejo-vps.example/mcp","headers":{"Authorization":"Bearer domk_vieja"}}},` +
+		`{"transport":{"type":"http","url":"https://ajeno.example/api"}}` +
+		`]}}`
+	writeFakeClientConfig(t, dir, "config.json", original)
+	path := filepath.Join(dir, "config.json")
+
+	if err := configureContinue(path, "http://nuevo-vps.example", "domk_nueva", "20260620T000000Z"); err != nil {
+		t.Fatalf("configureContinue: %v", err)
+	}
+	raw, _ := os.ReadFile(path)
+	var m map[string]any
+	json.Unmarshal(raw, &m)
+	servers := m["experimental"].(map[string]any)["modelContextProtocolServers"].([]any)
+
+	// Debe haber 2: la entrada domain (actualizada al nuevo VPS) + el server ajeno.
+	// NO 3 (no debe quedar la entrada vieja del VPS migrado).
+	if len(servers) != 2 {
+		t.Fatalf("VPS migrado dejó entrada domain stale: hay %d servers, esperaba 2", len(servers))
+	}
+	var domainURL, headerKey string
+	var hasAjeno bool
+	for _, s := range servers {
+		sm := s.(map[string]any)
+		tr := sm["transport"].(map[string]any)
+		url, _ := tr["url"].(string)
+		if strings.HasSuffix(url, "/mcp") {
+			domainURL = url
+			if h, ok := tr["headers"].(map[string]any); ok {
+				headerKey, _ = h["Authorization"].(string)
+			}
+		}
+		if url == "https://ajeno.example/api" {
+			hasAjeno = true
+		}
+	}
+	if domainURL != "http://nuevo-vps.example/mcp" {
+		t.Errorf("la entrada domain no se actualizó al nuevo VPS: url=%q", domainURL)
+	}
+	// Hallazgo del juez A: el header Authorization debe refrescarse a la key nueva.
+	if headerKey != "Bearer domk_nueva" {
+		t.Errorf("el header Authorization no se refrescó: %q", headerKey)
+	}
+	if !hasAjeno {
+		t.Error("el server ajeno del usuario fue pisado")
+	}
+}

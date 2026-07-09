@@ -133,7 +133,7 @@ if [ "$go_ok" -eq 0 ]; then
   trap 'rm -rf "$TMP"' EXIT
 
   info "URL: $URL"
-  if ! curl -fsSL --retry 3 -o "$TMP/$TAR" "$URL"; then
+  if ! curl -fsSL --retry 3 -m 120 -o "$TMP/$TAR" "$URL"; then
     fail "no se pudo descargar Go desde go.dev"
     exit 1
   fi

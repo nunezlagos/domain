@@ -103,6 +103,11 @@ func writeSettingsOrWarn(path string, cfg map[string]any) {
 		warnL("marshal " + path + ": " + err.Error())
 		return
 	}
+	// issue-65.1: backup antes de desactivar engram (antes se escribía
+	// settings.json sin respaldo previo).
+	if _, err := backupIfExists(path, Timestamp()); err != nil {
+		warnL("backup " + path + ": " + err.Error())
+	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		warnL("write " + path + ": " + err.Error())
 	}

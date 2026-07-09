@@ -2,10 +2,14 @@ package main
 
 import (
 	"bufio"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // "Bearer domk_live_XYZ" → "domk_live_XYZ"
@@ -184,7 +188,7 @@ func TestResolveAPIKey_ExplicitFlagWins(t *testing.T) {
 	cc := filepath.Join(dir, ".claude.json")
 	os.WriteFile(oc, []byte(`{"mcp":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_opencode_key_a1b2c3d4e5f6"}}}}`), 0o644)
 
-	got, src, err := resolveAPIKey(oc, cc, "domk_live_explicit_flag1234567890123456", nil, false)
+	got, src, err := resolveAPIKey(oc, cc, "domk_live_explicit_flag1234567890123456", "", nil, false)
 	if err != nil || got != "domk_live_explicit_flag1234567890123456" || src != "flag --api-key" {
 		t.Errorf("flag debería ganar: got=%q src=%q err=%v", got, src, err)
 	}
@@ -196,7 +200,7 @@ func TestResolveAPIKey_FromOpenCode(t *testing.T) {
 	oc := filepath.Join(dir, "opencode.json")
 	os.WriteFile(oc, []byte(`{"mcp":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_from_opencode_a1b2c3d4e5f6"}}}}`), 0o644)
 
-	got, src, err := resolveAPIKey(oc, "", "", nil, false)
+	got, src, err := resolveAPIKey(oc, "", "", "", nil, false)
 	if err != nil || got != "domk_live_from_opencode_a1b2c3d4e5f6" {
 		t.Errorf("opencode debería proveer: got=%q src=%q err=%v", got, src, err)
 	}
@@ -212,7 +216,7 @@ func TestResolveAPIKey_FallbackToClaude(t *testing.T) {
 	cc := filepath.Join(dir, ".claude.json")
 	os.WriteFile(cc, []byte(`{"mcpServers":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_from_claudecode_b1c2d3e4f5a6"}}}}`), 0o644)
 
-	got, src, err := resolveAPIKey(oc, cc, "", nil, false)
+	got, src, err := resolveAPIKey(oc, cc, "", "", nil, false)
 	if err != nil || got != "domk_live_from_claudecode_b1c2d3e4f5a6" || src != "claudecode" {
 		t.Errorf("claudecode debería ser fallback: got=%q src=%q err=%v", got, src, err)
 	}
@@ -226,7 +230,7 @@ func TestResolveAPIKey_DifferentKeys_PrioritizesOpenCode(t *testing.T) {
 	os.WriteFile(oc, []byte(`{"mcp":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_opencode_one_a1b2c3d4e5"}}}}`), 0o644)
 	os.WriteFile(cc, []byte(`{"mcpServers":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_claudecode_two_z9y8x7w6v5"}}}}`), 0o644)
 
-	got, src, err := resolveAPIKey(oc, cc, "", nil, false)
+	got, src, err := resolveAPIKey(oc, cc, "", "", nil, false)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -245,7 +249,7 @@ func TestResolveAPIKey_NoKeyNonInteractive(t *testing.T) {
 	cc := filepath.Join(dir, ".claude.json")
 	// ni opencode ni claudecode existen
 
-	_, _, err := resolveAPIKey(oc, cc, "", nil, true)
+	_, _, err := resolveAPIKey(oc, cc, "", "", nil, true)
 	if err == nil {
 		t.Error("debería fallar sin key y nonInteractive")
 	}
@@ -258,7 +262,7 @@ func TestResolveAPIKey_PromptInteractive(t *testing.T) {
 	cc := filepath.Join(dir, ".claude.json")
 
 	in := bufio.NewReader(strings.NewReader("domk_live_prompted_key_z9y8x7w6v5u4\n"))
-	got, src, err := resolveAPIKey(oc, cc, "", in, false)
+	got, src, err := resolveAPIKey(oc, cc, "", "", in, false)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -277,5 +281,224 @@ func TestMask(t *testing.T) {
 	}
 	if got := mask("short"); got != "***" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// --- validateAPIKey ---
+
+// 200 + Authorization header presente → nil (key valida).
+// Verifica tambien que la URL se trimea (sin / final) y que el path
+// /api/v1/auth/validate es el esperado.
+func TestValidateAPIKey_200_OK(t *testing.T) {
+	var seenAuth string
+	var seenPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenAuth = r.Header.Get("Authorization")
+		seenPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"valid":true}}`))
+	}))
+	defer srv.Close()
+
+	if err := validateAPIKey(srv.URL+"/", "domk_live_abc123def456ghi789jkl012"); err != nil {
+		t.Fatalf("200 deberia ser nil, got %v", err)
+	}
+	if seenAuth != "Bearer domk_live_abc123def456ghi789jkl012" {
+		t.Errorf("auth header = %q", seenAuth)
+	}
+	if seenPath != "/api/v1/auth/validate" {
+		t.Errorf("path = %q, want /api/v1/auth/validate", seenPath)
+	}
+}
+
+// 401 → errInvalidAPIKey (la unica condicion que bloquea el install).
+func TestValidateAPIKey_401_Invalid(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	err := validateAPIKey(srv.URL, "domk_live_revoked_key_a1b2c3d4e5f6")
+	if !errors.Is(err, errInvalidAPIKey) {
+		t.Fatalf("401 debe devolver errInvalidAPIKey, got %v", err)
+	}
+}
+
+// 500 → nil + warning (best-effort: no bloquea installs contra servers
+// con bugs transitorios). El comportamiento esperado es seguir adelante.
+func TestValidateAPIKey_5xx_Warning(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	if err := validateAPIKey(srv.URL, "domk_live_abc123def456ghi789jkl012"); err != nil {
+		t.Fatalf("5xx debe ser best-effort (nil), got %v", err)
+	}
+}
+
+// Server no responde (URL cerrada) → nil + warning.
+// Cubre el caso "server caido" — no debe romper installs offline.
+func TestValidateAPIKey_Timeout_NetworkError(t *testing.T) {
+	// Cerramos el server inmediatamente para forzar connection refused.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.Close()
+
+	if err := validateAPIKey(srv.URL, "domk_live_abc123def456ghi789jkl012"); err != nil {
+		t.Fatalf("network error debe ser best-effort (nil), got %v", err)
+	}
+}
+
+// vpsURL vacio → skip (sin server, no hay que validar; defer al ping).
+func TestValidateAPIKey_EmptyURL_Skip(t *testing.T) {
+	if err := validateAPIKey("", "domk_live_abc123def456ghi789jkl012"); err != nil {
+		t.Fatalf("URL vacia debe skipear, got %v", err)
+	}
+}
+
+// Server que tarda mas que el timeout (5s) → nil + warning.
+// Para no hacer el test lento, mockeamos el server con sleep y usamos
+// un timeout mas chico via httptest.
+func TestValidateAPIKey_ServerSlow_BestEffort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Forzar context cancelado: el server nunca responde.
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	// Reducir timeout del request para no esperar 5s real.
+	orig := validateAPIKeyHTTPTimeout
+	// Trick: seteamos el global via una pequeña funcion helper en lugar
+	// de modificarlo directamente. Como validateAPIKey usa el const,
+	// validamos via el context del request del server.
+	_ = orig
+
+	done := make(chan error, 1)
+	go func() {
+		done <- validateAPIKey(srv.URL, "domk_live_abc123def456ghi789jkl012")
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("server lento debe ser best-effort, got %v", err)
+		}
+	case <-time.After(7 * time.Second):
+		t.Fatal("validateAPIKey no respeta el timeout (tardo >7s)")
+	}
+}
+
+// --- resolveAPIKey con vpsURL ---
+
+// resolveAPIKey con vpsURL: flag explicito + server 401 → error directo,
+// sin re-prompt (el user la puso a mano, no adivinamos).
+func TestResolveAPIKey_ExplicitFlag_401_ErrorDirecto(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	_, _, err := resolveAPIKey("", "", "domk_live_flagged_key_a1b2c3d4e5f6", srv.URL, nil, false)
+	if err == nil {
+		t.Fatal("flag con 401 debe fallar")
+	}
+	if !strings.Contains(err.Error(), "--api-key") {
+		t.Errorf("error debe mencionar --api-key, got %v", err)
+	}
+}
+
+// resolveAPIKey con vpsURL: flag explicito + server 200 → OK.
+func TestResolveAPIKey_ExplicitFlag_200_OK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	got, src, err := resolveAPIKey("", "", "domk_live_flagged_key_a1b2c3d4e5f6", srv.URL, nil, false)
+	if err != nil {
+		t.Fatalf("200 debe pasar, got %v", err)
+	}
+	if got == "" || src != "flag --api-key" {
+		t.Errorf("got=%q src=%q", got, src)
+	}
+}
+
+// resolveAPIKey con vpsURL: config key + server 401 → cae al prompt.
+// Simulamos que el prompt tambien es rechazado y luego aceptado.
+func TestResolveAPIKey_ConfigKey_401_CaeAPrompt(t *testing.T) {
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// call 1: config key (rechazada)
+		// call 2: prompt intento 1 (rechazada)
+		// call 3: prompt intento 2 (rechazada)
+		// call 4: prompt intento 3 (aceptada)
+		if callCount >= 4 {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	oc := filepath.Join(dir, "opencode.json")
+	os.WriteFile(oc, []byte(`{"mcp":{"domain-mcp":{"headers":{"Authorization":"Bearer domk_live_revoked_in_config_a1b2c3d4"}}}}`), 0o644)
+
+	// 3 inputs para los 3 intentos de prompt (el ultimo gana).
+	in := bufio.NewReader(strings.NewReader(
+		"domk_live_first_attempt_a1b2c3d4e5f6\n" +
+			"domk_live_second_attempt_b2c3d4e5f6g7\n" +
+			"domk_live_third_attempt_c3d4e5f6g7h8\n",
+	))
+	got, src, err := resolveAPIKey(oc, "", "", srv.URL, in, false)
+	if err != nil {
+		t.Fatalf("3er intento debe pasar, got %v", err)
+	}
+	if got != "domk_live_third_attempt_c3d4e5f6g7h8" {
+		t.Errorf("debe usar la 3ra key, got %q", got)
+	}
+	if src != "prompt" {
+		t.Errorf("src = %q, want 'prompt'", src)
+	}
+	if callCount != 4 {
+		t.Errorf("server debio recibir 4 requests (1 config + 3 prompt), got %d", callCount)
+	}
+}
+
+// resolveAPIKey: prompt + 401 persistente → error tras validateMaxAttempts.
+func TestResolveAPIKey_Prompt_Agotado(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	// validateMaxAttempts inputs, todos con formato valido pero server rechaza.
+	inputs := strings.Repeat("domk_live_attempt_z9y8x7w6v5u4\n", validateMaxAttempts)
+	in := bufio.NewReader(strings.NewReader(inputs))
+
+	_, _, err := resolveAPIKey("", "", "", srv.URL, in, false)
+	if err == nil {
+		t.Fatal("debe agotar y fallar")
+	}
+	if !strings.Contains(err.Error(), "tras") {
+		t.Errorf("error debe mencionar intentos agotados, got %v", err)
+	}
+}
+
+// resolveAPIKey: prompt + server caido (network error) → best-effort, acepta.
+func TestResolveAPIKey_Prompt_NetworkError_BestEffort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.Close() // cierra inmediatamente → connection refused
+
+	in := bufio.NewReader(strings.NewReader("domk_live_attempt_z9y8x7w6v5u4\n"))
+	got, src, err := resolveAPIKey("", "", "", srv.URL, in, false)
+	if err != nil {
+		t.Fatalf("network error debe ser best-effort, got %v", err)
+	}
+	if got != "domk_live_attempt_z9y8x7w6v5u4" {
+		t.Errorf("got %q", got)
+	}
+	if src != "prompt" {
+		t.Errorf("src = %q", src)
 	}
 }

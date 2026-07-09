@@ -200,8 +200,9 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 
 	// API key: prioridad flag --api-key > configs existentes (opencode/claudecode) > prompt.
 	// En re-install, esto preserva la key sin que el usuario tenga que pegarla de nuevo.
+	// Si opts.URL != "", resolveAPIKey valida la key contra el server (ver keyextract.go).
 	if !opts.DryRun && opts.APIKey == "" {
-		apiKey, src, err := resolveAPIKey(paths.OpencodeMCP, paths.ClaudeCodeMCP, "", in, opts.NonInteractive)
+		apiKey, src, err := resolveAPIKey(paths.OpencodeMCP, paths.ClaudeCodeMCP, "", opts.URL, in, opts.NonInteractive)
 		if err != nil {
 			failL(err.Error())
 			os.Exit(1)

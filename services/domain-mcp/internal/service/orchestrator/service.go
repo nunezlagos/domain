@@ -325,17 +325,22 @@ func exportPlan(p *modes.PhasePlan, persisted bool) *PhasePlanSummary {
 		for j, s := range st.SuggestedSaves {
 			saves[j] = SuggestedSaveSummary{Type: s.Type, Required: s.Required, Hint: s.Hint}
 		}
-		// R4 (payload a dieta): en modo full solo el step 0 lleva el SystemPrompt
-		// (template + rulesBlock ~20-30KB) en el payload inicial. Los steps 2..N
-		// lo reciben reconstruido vía NextStepSystemPrompt en cada phase_result;
-		// su SystemPrompt completo sigue persistido en step.Inputs. Modos cortos
-		// (express/lite) conservan todo — no sufren el payload obeso.
+		// R4 / DOMAINSERV-3 (payload a dieta): en CUALQUIER modo persistido solo el
+		// step 0 lleva el SystemPrompt (template + rulesBlock ~34KB) en el payload
+		// inicial. Los steps 1..N lo reciben reconstruido vía NextStepSystemPrompt
+		// en cada phase_result; su SystemPrompt completo sigue persistido en
+		// step.Inputs. Los modos cortos (express/lite) SÍ sufrían el payload obeso
+		// (medido: 129.601 chars en lite, el rulesBlock ~34KB duplicado por step),
+		// por eso el strip ya no se limita a full.
 		//
-		// Solo se strippea si el plan se PERSISTIÓ: el modo detect (preview) usa
-		// Mode="full" pero NO persiste, así que ahí el SystemPrompt no podría
-		// reconstruirse desde step.Inputs — en ese caso se conserva en la salida.
+		// El step 0 se conserva (i > 0): no tiene phase_result previo que emita su
+		// NextStepSystemPrompt, así que debe viajar inline.
+		//
+		// Solo se strippea si el plan se PERSISTIÓ: el modo detect (preview) NO
+		// persiste, así que ahí el SystemPrompt no podría reconstruirse desde
+		// step.Inputs — en ese caso se conserva en la salida.
 		sysPrompt := st.SystemPrompt
-		if persisted && p.Mode == "full" && i > 0 {
+		if persisted && i > 0 {
 			sysPrompt = ""
 		}
 		out.Steps[i] = PhaseStepSummary{

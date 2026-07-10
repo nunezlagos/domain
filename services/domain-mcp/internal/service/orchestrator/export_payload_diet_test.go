@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,9 +33,11 @@ func TestExportPlan_Full_SoloStep0TieneSystemPrompt(t *testing.T) {
 	assert.Equal(t, "sdd-spec", string(out.Steps[1].Slug))
 }
 
-// Retrocompat: en modos NO-full (express/lite), exportPlan mantiene los prompts
-// (esos modos son cortos y no sufren el payload obeso).
-func TestExportPlan_Express_ConservaTodosLosSystemPrompts(t *testing.T) {
+// DOMAINSERV-3: el stripping del SystemPrompt de los steps 1..N aplica a TODOS
+// los modos persistidos, no solo full. Los modos cortos (express/lite) SÍ sufrían
+// el payload obeso (medido: 129.601 chars en lite por el rulesBlock ~34KB duplicado
+// en cada step). El step 0 se conserva porque no tiene canal NextStepSystemPrompt.
+func TestExportPlan_Express_StrippeaSystemPromptDeStepsPosteriores(t *testing.T) {
 	plan := &modes.PhasePlan{
 		Mode: "express",
 		Steps: []modes.PhaseStep{
@@ -44,8 +47,40 @@ func TestExportPlan_Express_ConservaTodosLosSystemPrompts(t *testing.T) {
 	}
 	out := exportPlan(plan, true)
 	require.Len(t, out.Steps, 2)
-	assert.Equal(t, "SYS-A", out.Steps[0].SystemPrompt)
-	assert.Equal(t, "SYS-B", out.Steps[1].SystemPrompt, "express conserva todos los SystemPrompt")
+	assert.Equal(t, "SYS-A", out.Steps[0].SystemPrompt, "step 0 conserva SystemPrompt")
+	assert.Empty(t, out.Steps[1].SystemPrompt, "modo no-full persistido también strippea steps 1..N (DOMAINSERV-3)")
+}
+
+// DOMAINSERV-3: reproduce la medición real del bug. En lite, cada step arrastraba
+// el mismo rulesBlock (~34KB), inflando el response ~120k+. Tras la fix, el
+// rulesBlock duplicado de los steps 1..N desaparece del response inicial.
+func TestExportPlan_Lite_NoArrastraRulesBlockDuplicado(t *testing.T) {
+	rulesBlock := strings.Repeat("R", 34000)
+	plan := &modes.PhasePlan{
+		Mode: "lite",
+		Steps: []modes.PhaseStep{
+			{Slug: phases.PhaseSlug("sdd-explore"), SystemPrompt: "EXPLORE-" + rulesBlock},
+			{Slug: phases.PhaseSlug("sdd-apply"), SystemPrompt: "APPLY-" + rulesBlock},
+			{Slug: phases.PhaseSlug("sdd-verify"), SystemPrompt: "VERIFY-" + rulesBlock},
+		},
+	}
+	rawTotal := 0
+	for _, st := range plan.Steps {
+		rawTotal += len(st.SystemPrompt)
+	}
+
+	out := exportPlan(plan, true)
+	require.Len(t, out.Steps, 3)
+	assert.NotEmpty(t, out.Steps[0].SystemPrompt, "step 0 conserva su SystemPrompt inline")
+	assert.Empty(t, out.Steps[1].SystemPrompt, "step 1 no arrastra rulesBlock")
+	assert.Empty(t, out.Steps[2].SystemPrompt, "step 2 no arrastra rulesBlock")
+
+	exportedTotal := 0
+	for _, st := range out.Steps {
+		exportedTotal += len(st.SystemPrompt)
+	}
+	assert.Less(t, exportedTotal, rawTotal-60000,
+		"el rulesBlock duplicado de los steps 1..N (~68k) desaparece del response")
 }
 
 // R4: en modo detect (preview) el plan tiene Mode="full" pero NO se persiste,

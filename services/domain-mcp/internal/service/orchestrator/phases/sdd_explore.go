@@ -50,7 +50,7 @@ func (h *sddExploreHandler) Validate(_ context.Context, _ *Output, result Client
 		return errors.New("sdd-explore: cliente devolvió Output nulo")
 	}
 	if intent, _ := result.Output["intent"].(string); intent == "" {
-		return errors.New("sdd-explore: campo 'intent' requerido en output")
+		return errors.New("sdd-explore: campo 'intent' (string) requerido en output — describí en 1-2 líneas qué hay que resolver, derivado de la exploración")
 	}
 
 

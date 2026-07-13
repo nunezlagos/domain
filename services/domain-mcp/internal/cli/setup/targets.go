@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"nunezlagos/domain/internal/agentprotocol"
 	"nunezlagos/domain/internal/cli/install"
@@ -59,8 +58,7 @@ func readJSONFile(path string) (map[string]any, []byte, error) {
 // writeJSONWithBackup escribe el doc, respaldando el original si existía.
 func writeJSONWithBackup(path string, original []byte, doc map[string]any) error {
 	if len(original) > 0 {
-		backup := path + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
-		if err := os.WriteFile(backup, original, 0o600); err != nil {
+		if _, err := install.BackupFile(path); err != nil {
 			return fmt.Errorf("backup: %w", err)
 		}
 	}

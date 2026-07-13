@@ -41,9 +41,9 @@ Thumbs.db
 # services/domain-backend/.gitignore para detalle + issue-29.4 (test
 # que blinda que NUNCA vuelvan a trackearse).
 opencode.json
-opencode.json.backup-*
+opencode.json.bak.*
 .mcp.json
-.mcp.json.backup-*
+.mcp.json.bak.*
 
 # Tooling/dev (NO en repo, solo local)
 .ai/

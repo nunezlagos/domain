@@ -19,7 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
+
+	"nunezlagos/domain/internal/cli/install"
 )
 
 var (
@@ -85,8 +86,7 @@ func SetupClaudeDesktop(mcpBinaryPath, apiKey, baseURL string) (string, error) {
 			return configPath, ErrAlreadyConfigured
 		}
 
-		backupPath := configPath + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
-		if err := os.WriteFile(backupPath, data, 0o600); err != nil {
+		if _, err := install.BackupFile(configPath); err != nil {
 			return "", fmt.Errorf("backup: %w", err)
 		}
 	}

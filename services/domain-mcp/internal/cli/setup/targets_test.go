@@ -50,7 +50,7 @@ func TestSetupClaudeCode_PreservesExistingServers(t *testing.T) {
 	require.Contains(t, servers, "domain")
 
 
-	matches, _ := filepath.Glob(filepath.Join(dir, ".mcp.json.backup-*"))
+	matches, _ := filepath.Glob(filepath.Join(dir, ".mcp.json.bak.*"))
 	require.Len(t, matches, 1)
 }
 

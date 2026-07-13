@@ -29,7 +29,7 @@ func TestOpencodeJSONNotTracked(t *testing.T) {
 }
 
 // TestGitignoreHasLocalConfigEntries verifica que las 4 entradas
-// (opencode.json, opencode.json.backup-*, .mcp.json, .mcp.json.backup-*)
+// (opencode.json, opencode.json.bak.*, .mcp.json, .mcp.json.bak.*)
 // siguen en .gitignore.
 //
 // Si alguien remueve las entradas (sabotaje), este test DEBE FALLAR.
@@ -42,9 +42,9 @@ func TestGitignoreHasLocalConfigEntries(t *testing.T) {
 
 	required := []string{
 		"opencode.json",
-		"opencode.json.backup-*",
+		"opencode.json.bak.*",
 		".mcp.json",
-		".mcp.json.backup-*",
+		".mcp.json.bak.*",
 	}
 	for _, entry := range required {
 		require.True(t, strings.Contains(content, entry),

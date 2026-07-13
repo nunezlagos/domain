@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"nunezlagos/domain/internal/cli/install"
 )
 
 // Credentials se guarda en ~/.config/domain/credentials.json (chmod 600).
@@ -319,16 +321,16 @@ func CredentialsPath() string {
 }
 
 // SaveCredentialsDefault persiste con mode 0600. Si el archivo existe,
-// hace backup .bak antes de sobrescribir.
+// hace backup .bak.<ts> (dedup + poda, reconocible por domain restore)
+// antes de sobrescribir.
 func SaveCredentialsDefault(c *Credentials) error {
 	path := CredentialsPath()
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if _, err := os.Stat(path); err == nil {
-
-		_ = os.Rename(path, path+".bak")
+	if _, err := install.BackupFile(path); err != nil {
+		return err
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {

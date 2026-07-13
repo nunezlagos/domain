@@ -157,7 +157,7 @@ func TestInstaller_Install_BackupCreated(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	matches, err := filepath.Glob(configPath + ".backup-*")
+	matches, err := filepath.Glob(configPath + ".bak.*")
 	require.NoError(t, err)
 	require.NotEmpty(t, matches, "debe existir un backup con timestamp")
 

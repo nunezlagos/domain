@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/cli/install"
 	"nunezlagos/domain/internal/service/mcpinstaller/mcpinstallerdb"
 	"nunezlagos/domain/internal/store/txctx"
 )
@@ -123,14 +123,13 @@ func (s *Service) Install(ctx context.Context, in InstallInput) (*InstallResult,
 		}
 	}
 
-	originalData, _ := os.ReadFile(in.ConfigPath)
-
+	res, err := install.BackupFile(in.ConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("backup: %w", err)
+	}
 	var backupPath string
-	if len(originalData) > 0 {
-		backupPath = in.ConfigPath + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
-		if err := os.WriteFile(backupPath, originalData, 0o600); err != nil {
-			return nil, fmt.Errorf("backup: %w", err)
-		}
+	if res != nil {
+		backupPath = res.Backup
 	}
 
 	switch in.Agent {

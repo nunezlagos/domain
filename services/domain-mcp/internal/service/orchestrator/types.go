@@ -63,66 +63,43 @@ func (m Mode) IsValid() bool {
 type PhaseSlug string
 
 const (
-	PhaseExplore  PhaseSlug = "sdd-explore"
-	PhaseSpec     PhaseSlug = "sdd-spec"
-	PhasePropose  PhaseSlug = "sdd-propose"
-	PhaseDesign   PhaseSlug = "sdd-design"
-	PhaseTasks    PhaseSlug = "sdd-tasks"
-	PhaseApply    PhaseSlug = "sdd-apply"
-	PhaseVerify   PhaseSlug = "sdd-verify"
-	PhaseJudge    PhaseSlug = "sdd-judge"
-	PhaseReview   PhaseSlug = "sdd-review"
-	PhaseArchive  PhaseSlug = "sdd-archive"
-	PhaseOnboard  PhaseSlug = "sdd-onboard"
+	PhaseExplore PhaseSlug = "sdd-explore"
+	PhaseSpec    PhaseSlug = "sdd-spec"
+	PhasePropose PhaseSlug = "sdd-propose"
+	PhaseDesign  PhaseSlug = "sdd-design"
+	PhaseTasks   PhaseSlug = "sdd-tasks"
+	PhaseApply   PhaseSlug = "sdd-apply"
+	PhaseVerify  PhaseSlug = "sdd-verify"
+	PhaseJudge   PhaseSlug = "sdd-judge"
+	Phase4R      PhaseSlug = "sdd-4r"
+	PhaseReview  PhaseSlug = "sdd-review"
+	PhaseArchive PhaseSlug = "sdd-archive"
+	PhaseOnboard PhaseSlug = "sdd-onboard"
 )
 
 // OrchestrateInput es el contrato externo del orquestador. PromptRouter,
 // MCP tools y CLI lo construyen y se lo pasan a Service.Run.
 type OrchestrateInput struct {
-
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
 
-
-
-
 	ProjectID uuid.UUID
-
-
-
-
 
 	ExecMode string
 
-
-
-
 	Hardspec bool
-
-
 
 	RawText string
 
-
-
 	Mode Mode
-
-
 
 	StartingPhase PhaseSlug
 
-
-
 	SkipPhases []PhaseSlug
-
 
 	AsyncTimeout time.Duration
 
-
-
 	ExpressMaxLines int
-
-
 
 	Metadata map[string]any
 }
@@ -131,27 +108,15 @@ type OrchestrateInput struct {
 // asíncronos devuelven inmediatamente con OrchestratorRunID + FlowRunID
 // y status='pending'; el cliente debe pollear o suscribirse a signals.
 type OrchestrateResult struct {
-
-
 	OrchestratorRunID uuid.UUID
-
 
 	FlowRunID uuid.UUID
 
-
-
 	Mode Mode
-
 
 	StartedAt time.Time
 
-
-
-
 	SnapshotPrompt string
-
-
-
 
 	Plan *PhasePlanSummary
 }

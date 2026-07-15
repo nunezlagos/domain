@@ -232,6 +232,9 @@ el system_prompt que el orchestrator te da (buildRulesBlock: platform_policies
 — PROPAGA las reglas vigentes en el prompt de cada subagente. Un subagente sin
 las reglas las viola (no-N+1, conventions, commits, etc.). Las reglas se
 aplican SIEMPRE en cada subagente; las skills, por relevancia a su tarea.
+Nota: las platform_policies con body extenso (p.ej. agent-protocol) NO viajan
+embebidas en el rulesBlock — llega un puntero; un subagente que las necesite usa
+domain_policy_get(slug=...) para el texto vivo.
 
 CONTEXTO ACOTADO (anti-saturación): este es el punto de paralelizar. Tú
 (supervisor) mantén contexto MÍNIMO — el plan + los resúmenes. A cada

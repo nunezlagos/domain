@@ -438,28 +438,43 @@ func injectPreparedContext(userPrompt, prep string) string {
 		prep + "\n---\n" + userPrompt
 }
 
-// buildRulesBlock arma un bloque markdown con las reglas vigentes: las de
-// plataforma (platform_policies) + las del proyecto (project_policies),
-// respetando override_platform (si una policy de proyecto de un `kind`
-// marca override, se omiten las de plataforma de ese mismo kind). Best-effort:
-// si falla la lectura, devuelve "" (las reglas son aditivas, no bloqueantes).
+// maxInlinePolicyBody: las platform_policies con body más largo que esto no se
+// re-embeben verbatim en el rulesBlock (DOMAINSERV-3): se reemplazan por un
+// puntero a domain_policy_get para no inflar el SystemPrompt de cada fase por
+// encima del límite del tool result de domain_orchestrate. Solo aplica a
+// platform; las project_policies van SIEMPRE verbatim (son las convenciones
+// específicas que el subagente más necesita inline). El umbral queda entre la
+// 2da policy más grande (~1.9KB) y agent-protocol (~17.7KB): hoy solo se stubbea
+// agent-protocol, y cualquier policy que crezca a futuro queda acotada sola.
+const maxInlinePolicyBody = 4000
+
+// policyBodyStub reemplaza un body extenso por un puntero a su texto vivo.
+func policyBodyStub(slug string) string {
+	return `(Body extenso no re-embebido en el rulesBlock. Texto vivo: domain_policy_get(slug="` + slug + `").)`
+}
+
+// rulePolicy es una policy ya cargada, lista para formatear en el rulesBlock.
+type rulePolicy struct {
+	slug, name, body, kind string
+	override               bool
+}
+
+// buildRulesBlock lee las policies vigentes (platform + project, respetando
+// override_platform por kind) y las formatea. Best-effort: si falla la lectura
+// devuelve "" (las reglas son aditivas, no bloqueantes).
 func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) string {
 	if s.Pool == nil {
 		return ""
 	}
-	type pol struct {
-		name, body, kind string
-		override         bool
-	}
-	var platform, project []pol
+	var platform, project []rulePolicy
 
 	if rows, err := s.Pool.Query(ctx,
-		`SELECT name, COALESCE(body_md,''), COALESCE(kind,'')
+		`SELECT slug, name, COALESCE(body_md,''), COALESCE(kind,'')
 		   FROM platform_policies WHERE is_active = TRUE
 		   ORDER BY kind, slug`); err == nil {
 		for rows.Next() {
-			var p pol
-			if rows.Scan(&p.name, &p.body, &p.kind) == nil && p.body != "" {
+			var p rulePolicy
+			if rows.Scan(&p.slug, &p.name, &p.body, &p.kind) == nil && p.body != "" {
 				platform = append(platform, p)
 			}
 		}
@@ -468,14 +483,14 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) stri
 
 	if projectID != uuid.Nil {
 		if rows, err := s.Pool.Query(ctx,
-			`SELECT name, COALESCE(body_md,''), COALESCE(kind,''), override_platform
+			`SELECT slug, name, COALESCE(body_md,''), COALESCE(kind,''), override_platform
 			   FROM project_policies
 			   WHERE project_id = $1 AND is_active = TRUE
 			     AND deleted_at IS NULL AND proposed = FALSE
 			   ORDER BY kind, slug`, projectID); err == nil {
 			for rows.Next() {
-				var p pol
-				if rows.Scan(&p.name, &p.body, &p.kind, &p.override) == nil && p.body != "" {
+				var p rulePolicy
+				if rows.Scan(&p.slug, &p.name, &p.body, &p.kind, &p.override) == nil && p.body != "" {
 					project = append(project, p)
 				}
 			}
@@ -483,6 +498,14 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) stri
 		}
 	}
 
+	return formatRulesBlock(platform, project)
+}
+
+// formatRulesBlock arma el markdown de reglas a partir de las policies ya
+// cargadas. Puro (sin DB) para testear el stub por tamaño y el override por
+// kind. Las platform_policies con body extenso se stubbean (DOMAINSERV-3); las
+// project_policies van siempre verbatim.
+func formatRulesBlock(platform, project []rulePolicy) string {
 	overridden := make(map[string]bool)
 	for _, p := range project {
 		if p.override && p.kind != "" {
@@ -491,20 +514,24 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) stri
 	}
 
 	var b strings.Builder
-	write := func(p pol) {
+	write := func(p rulePolicy, canStub bool) {
 		b.WriteString("\n### ")
 		b.WriteString(p.name)
 		b.WriteString("\n")
-		b.WriteString(p.body)
+		if canStub && len(p.body) > maxInlinePolicyBody {
+			b.WriteString(policyBodyStub(p.slug))
+		} else {
+			b.WriteString(p.body)
+		}
 		b.WriteString("\n")
 	}
 	for _, p := range platform {
 		if !overridden[p.kind] {
-			write(p)
+			write(p, true)
 		}
 	}
 	for _, p := range project {
-		write(p)
+		write(p, false)
 	}
 	if b.Len() == 0 {
 		return ""

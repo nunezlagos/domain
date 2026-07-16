@@ -636,7 +636,7 @@ Si algún criterio falla → reportar en audit_gaps y NO emitir verdict=all_test
 <output_format>
 JSON estricto:
 {
-  "sabotages": [
+  "sabotage_records": [
     {
       "test_name": "...",
       "sabotage": "diff o descripción del cambio",
@@ -1011,7 +1011,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 13 // 13: agrega la fase sdd-4r (code review por 4 lenses) al catálogo
+const agentTemplatesSeedVersion = 14 // 14: acota sdd-judge a sabotaje TDD (sabotage_records), retira panel de jueces
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

@@ -287,17 +287,24 @@ for _svc in "$INSTALL_DIR/services"/*/; do
   fi
   ln -sfn ../../.env "$_svc/.env"
 done
-# Backup pre-migración (DOMAINSERV-26): en redeploy (domain-postgres ya corre)
-# respaldamos la BD ANTES de make down + el init-container domain-migrate (migrate up).
-# En install fresh no existe postgres → nada que respaldar. Si el backup falla en un
-# redeploy, ABORTAMOS: no migrar sin red de seguridad. La rotación de backup.sh
-# (BACKUP_DAILY_RETAIN) evita llenar el disco del server.
-if docker ps -q -f "name=^domain-postgres$" | grep -q .; then
+# Backup pre-migración (DOMAINSERV-26/37): respaldamos la BD ANTES de make down +
+# el init-container domain-migrate (migrate up). El guard decide por el VOLUMEN de
+# datos, no por el container: STEP 0 ya borró domain-postgres, así que chequear
+# `docker ps` omitía el backup en todo redeploy. backup.sh necesita el container
+# corriendo → si STEP 0 lo bajó, lo levantamos temporal (make up lo baja el make
+# down siguiente). Si el backup falla, ABORTAMOS: no migrar sin red de seguridad.
+source "$INSTALL_DIR/services/scripts/pg-backup-guard.sh"
+if should_run_pre_migration_backup; then
   log "Backup pre-migración (redeploy con datos)..."
+  if ! postgres_running; then
+    log "  postgres no corre (STEP 0 lo bajó) — levantando temporal para el dump..."
+    make up SVC=postgres >/dev/null 2>&1 || fail "no se pudo levantar postgres temporal para el backup"
+    pg_wait_ready 60 || fail "postgres no quedó listo en 60s — abortando deploy sin backup"
+  fi
   "$INSTALL_DIR/services/scripts/backup.sh" || fail "backup pre-migración falló — abortando deploy para no migrar sin respaldo"
   ok "backup pre-migración OK"
 else
-  log "Install fresh (sin postgres previo) — se omite backup pre-migración"
+  log "Install fresh (sin volumen de datos) — se omite backup pre-migración"
 fi
 make down 2>/dev/null || true
 # Re-check huerfanos despues del down (incluyendo running que no estan en el compose).

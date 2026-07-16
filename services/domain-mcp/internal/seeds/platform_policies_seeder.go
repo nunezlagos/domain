@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 16 } // 16: reglas AGENTS.md no cubiertas (comentarios auto-descriptivos + acoplamiento consumer-defined)
+func (s *PlatformPoliciesSeeder) Version() int    { return 17 } // 17: shippear fix formato de specs (23069dd7) + neutralizar voseo
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -161,7 +161,7 @@ Cada requisito MUST tiene al menos 1 escenario. Formato canónico (H4 + bullets)
 - **Then** [resultado verificable]
 
 El parser tolera variantes: heading ## o #### y líneas Given/When/Then planas,
-con bullet "- " o con negrita "- **Given**". Preferí el formato canónico.
+con bullet "- " o con negrita "- **Given**". Se prefiere el formato canónico.
 
 Delta specs (modificaciones) incluyen el texto anterior completo:
 ## MODIFIED Requirements

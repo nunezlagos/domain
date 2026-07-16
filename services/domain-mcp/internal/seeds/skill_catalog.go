@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 7
+const skillsSeedVersion = 8
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -90,7 +90,7 @@ JSON estricto con esta forma:
 - type=hotfix solo si urgencia prod (servicio caído, security).
 - severity refleja impacto, no urgencia.
 - confidence: 0.0–1.0. <0.5 → el caller debe pedir aclaración al usuario.
-- reasoning conciso. No expliques los enums, justificá la elección.
+- reasoning conciso. No expliques los enums, justifica la elección.
 - Idioma del reasoning: igual al del input.
 </reglas>
 
@@ -211,7 +211,7 @@ NO uses headers ni comentarios meta. Solo el resumen.
 
 <reglas>
 - Mantenete fiel al input. No inventes hechos.
-- Preservá nombres propios, fechas, números exactos.
+- Preserva nombres propios, fechas, números exactos.
 - Idioma del resumen: igual al del input.
 - Si el input ya es ≤ max_sentences, devolvelo tal cual.
 </reglas>
@@ -267,7 +267,7 @@ Si una categoría no tiene matches, devolvela como [].
 - NO duplicar. "Juan" y "Juan Pérez" en mismo texto → 1 entry con full name.
 - context: tokens cercanos que ayudan a desambiguar (ej. "Juan Pérez" context="lidera migración").
 - money.amount: número limpio. currency: ISO si conocible, sino tal cual.
-- NO inventes entidades. Si dudás, no incluyas.
+- NO inventes entidades. Si dudas, no incluyas.
 </reglas>
 
 <example>
@@ -381,9 +381,9 @@ body: separado de subject por línea en blanco. Explica POR QUÉ, no qué (el di
 <reglas>
 - Subject en español, imperativo: "agrega", "arregla", "refactoriza".
 - NUNCA incluyas "Co-Authored-By: Claude" ni similar — está prohibido por policy.
-- breaking=true → agregá "!" después del tipo: "feat(api)!: ..."
+- breaking=true → agrega "!" después del tipo: "feat(api)!: ..."
 - scope: 1-2 palabras kebab-case del área tocada. Si es ambiguo, omitilo.
-- Si hay BREAKING CHANGE en body, agregá línea "BREAKING CHANGE: ..." al final.
+- Si hay BREAKING CHANGE en body, agrega línea "BREAKING CHANGE: ..." al final.
 </reglas>
 
 <example>
@@ -438,9 +438,9 @@ JSON estricto:
 
 <reglas>
 - file_line: extraer el frame MÁS PROFUNDO del código del usuario (no del runtime).
-- root_cause_hint: 1 oración. No inventes — si dudás, pista genérica + confidence<0.5.
+- root_cause_hint: 1 oración. No inventes — si dudas, pista genérica + confidence<0.5.
 - suggested_skill: cuál skill de domain ayudaría a investigar. null si ninguno
-  aplica (para leer archivos o buscar en el código, usá tus tools nativos del
+  aplica (para leer archivos o buscar en el código, usa tus tools nativos del
   cliente —Read, Grep— no una skill de domain).
 - critical solo si: data loss, exposed secrets, prod down, security breach.
 </reglas>
@@ -506,7 +506,7 @@ JSON estricto:
 - when: 1 acción concreta. Si el reporte tiene N acciones, son N scenarios.
 - then: ARRAY de strings. Cada item es una aserción verificable.
 - Si el reporte no dice repro steps claros, missing_info lo lista.
-- NO inventes valores específicos (URLs, usuarios) — usá placeholders <user> <url>.
+- NO inventes valores específicos (URLs, usuarios) — usa placeholders <user> <url>.
 - title formato: "LoginForm_Submit_FailsInSafariIOS".
 </reglas>
 
@@ -645,7 +645,7 @@ JSON estricto:
 
 <reglas>
 - NO devolver el secret original en redactions ni en ningún log.
-- Si NO encontrás secrets, redacted_text=texto original sin cambios + had_secrets=false.
+- Si NO encuentras secrets, redacted_text=texto original sin cambios + had_secrets=false.
 - Preservar formato (JSON sigue siendo JSON parseable post-redact).
 - emails internos de devs (@saargo.com) también se redactan.
 </reglas>

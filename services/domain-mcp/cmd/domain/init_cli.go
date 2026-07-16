@@ -299,6 +299,7 @@ func runWorkflowResume(args []string) {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDD4RHandler())
 	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())

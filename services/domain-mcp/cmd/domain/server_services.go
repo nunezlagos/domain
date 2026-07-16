@@ -483,6 +483,7 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())
 	orchPhases.MustRegister(phases.NewSDDJudgeHandler())
+	orchPhases.MustRegister(phases.NewSDD4RHandler())
 	orchPhases.MustRegister(phases.NewSDDReviewHandler())
 	orchPhases.MustRegister(phases.NewSDDArchiveHandler())
 	orchPhases.MustRegister(phases.NewSDDOnboardHandler())

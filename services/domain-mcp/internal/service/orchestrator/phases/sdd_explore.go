@@ -40,7 +40,7 @@ func (h *sddExploreHandler) Build(_ context.Context, in Input) (*Output, error) 
 		// automático).
 		RequiredToolCalls: nil,
 		// REQ-54 issue-54.5: exploración paralela por área.
-		SubagentPlan: "Detectá las áreas del codebase relevantes a la tarea (máx 4: ej. rutas/handlers, servicios/lógica, esquema/migraciones, tests) y lanzá UN subagente Explore POR ÁREA, en paralelo. Cada subagente recibe el contexto preparado de su área y devuelve un mapa con referencias file:line. Mergeá los resultados en un único mapa sin duplicados; marcá contradicciones entre áreas como hallazgos.",
+		SubagentPlan: "Detecta las áreas del codebase relevantes a la tarea (máx 4: ej. rutas/handlers, servicios/lógica, esquema/migraciones, tests) y lanza UN subagente Explore POR ÁREA, en paralelo. Cada subagente recibe el contexto preparado de su área y devuelve un mapa con referencias file:line. Combina los resultados en un único mapa sin duplicados; marca contradicciones entre áreas como hallazgos.",
 		RetryPolicy:    RetryReemit,
 	}, nil
 }
@@ -50,7 +50,7 @@ func (h *sddExploreHandler) Validate(_ context.Context, _ *Output, result Client
 		return errors.New("sdd-explore: cliente devolvió Output nulo")
 	}
 	if intent, _ := result.Output["intent"].(string); intent == "" {
-		return errors.New("sdd-explore: campo 'intent' (string) requerido en output — describí en 1-2 líneas qué hay que resolver, derivado de la exploración")
+		return errors.New("sdd-explore: campo 'intent' (string) requerido en output — describe en 1-2 líneas qué hay que resolver, derivado de la exploración")
 	}
 
 

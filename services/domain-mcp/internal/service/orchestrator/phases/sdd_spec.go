@@ -37,8 +37,8 @@ func (h *sddSpecHandler) Build(_ context.Context, in Input) (*Output, error) {
 		fmt.Fprintln(&b)
 	}
 	fmt.Fprintln(&b, "ANTES de redactar: si hay ambigüedades, decisiones abiertas o supuestos")
-	fmt.Fprintln(&b, "no confirmados, CONSULTÁ al usuario con AskUserQuestion (opciones concretas")
-	fmt.Fprintln(&b, "+ 'Other' para que escriba su propia respuesta) y esperá su respuesta. Una")
+	fmt.Fprintln(&b, "no confirmados, CONSULTA al usuario con AskUserQuestion (opciones concretas")
+	fmt.Fprintln(&b, "+ 'Other' para que escriba su propia respuesta) y espera su respuesta. Una")
 	fmt.Fprintln(&b, "pregunta a la vez. NO uses prosa plana ni ejecutes esta fase en un subagente")
 	fmt.Fprintln(&b, "(AskUserQuestion no está disponible en subagentes). REQ-55 issue-55.1.")
 	fmt.Fprintln(&b, "No especules requisitos: el spec fija el contrato (REQ-54 issue-54.7).")

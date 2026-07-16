@@ -45,7 +45,7 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		fmt.Fprintln(&b)
 	}
 	fmt.Fprintln(&b, "Valida los escenarios Gherkin del issue.md. NO modifiques código.")
-	fmt.Fprintln(&b, "Corré la verificación con domain_verify_start → domain_verify_update_item (por escenario) → domain_verify_complete.")
+	fmt.Fprintln(&b, "Corre la verificación con domain_verify_start → domain_verify_update_item (por escenario) → domain_verify_complete.")
 	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito y tool_calls=[las tools que invocaste].")
 	return &Output{
 		AgentTemplateSlug: "sdd-verify",
@@ -66,7 +66,7 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		// agent_templates.metadata.required_tool_calls.
 		RequiredToolCalls: []string{"domain_verify_start", "domain_verify_complete"},
 		// REQ-54 issue-54.5: validación de escenarios en paralelo.
-		SubagentPlan: "Agrupá los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y validá cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Mergeá los lotes; un escenario failed en cualquier lote = failed global.",
+		SubagentPlan: "Agrupa los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y valida cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Combina los lotes; un escenario failed en cualquier lote = failed global.",
 
 		RetryPolicy: RetryReemit,
 	}, nil

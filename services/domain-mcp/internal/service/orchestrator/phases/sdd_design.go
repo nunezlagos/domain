@@ -32,12 +32,12 @@ func (h *sddDesignHandler) Build(_ context.Context, in Input) (*Output, error) {
 	fmt.Fprintln(&b, "Produce design.md con ADRs + test_plan + sabotage_plan.")
 	fmt.Fprintln(&b, "Recuerda: D5 REQUIERE guardar un mem_save type='adr' por cada ADR.")
 	fmt.Fprintln(&b, "INTERACTIVO (REQ-55): ante decisiones de diseño abiertas (tradeoffs, "+
-		"alternativas), CONSULTÁ al usuario con AskUserQuestion (opciones + 'Other' para "+
-		"texto libre) y esperá su respuesta. NO ejecutes esta fase en un subagente: "+
+		"alternativas), CONSULTA al usuario con AskUserQuestion (opciones + 'Other' para "+
+		"texto libre) y espera su respuesta. NO ejecutes esta fase en un subagente: "+
 		"AskUserQuestion no está disponible ahí.")
-	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corré domain_openspec_export, "+
-		"escribí los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
-		"Reportá ambas en tool_calls o el server RECHAZA el cierre de la fase.")
+	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corre domain_openspec_export, "+
+		"escribe los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
+		"Reporta ambas en tool_calls o el server RECHAZA el cierre de la fase.")
 	return &Output{
 		AgentTemplateSlug: "sdd-design",
 		SystemPrompt:      "",
@@ -50,7 +50,7 @@ func (h *sddDesignHandler) Build(_ context.Context, in Input) (*Output, error) {
 			{Type: "adr", Required: true,
 				Hint: "guardar al menos 1 ADR con type='adr' por decisión arquitectónica"},
 			{Type: "knowledge_doc", Required: true,
-				Hint: "persistí el design como knowledge_doc para que quede registro del change en BD"},
+				Hint: "persiste el design como knowledge_doc para que quede registro del change en BD"},
 		},
 		SkillThreshold: 0,
 		// REQ-55 issue-55.3: el sync openspec BD->repo es CONTRATO de esta fase,

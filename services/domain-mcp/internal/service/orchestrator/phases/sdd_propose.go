@@ -28,9 +28,9 @@ func (h *sddProposeHandler) Build(_ context.Context, in Input) (*Output, error) 
 		}
 	}
 	fmt.Fprintln(&b, "Genera proposal.md con scope formal del cambio + esfuerzo estimado.")
-	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corré domain_openspec_export, "+
-		"escribí los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
-		"Reportá ambas en tool_calls o el server RECHAZA el cierre de la fase.")
+	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corre domain_openspec_export, "+
+		"escribe los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
+		"Reporta ambas en tool_calls o el server RECHAZA el cierre de la fase.")
 	return &Output{
 		AgentTemplateSlug: "sdd-propose",
 		SystemPrompt:      "",
@@ -40,7 +40,7 @@ func (h *sddProposeHandler) Build(_ context.Context, in Input) (*Output, error) 
 		// knowledge_doc antes de avanzar, garantizando registro en BD.
 		SuggestedSaves: []SuggestedSave{
 			{Type: "knowledge_doc", Required: true,
-				Hint: "persistí el proposal como knowledge_doc para que quede registro del change en BD"},
+				Hint: "persiste el proposal como knowledge_doc para que quede registro del change en BD"},
 		},
 		SkillThreshold: 0,
 		// REQ-55 issue-55.3: el sync openspec BD->repo es CONTRATO de esta fase,

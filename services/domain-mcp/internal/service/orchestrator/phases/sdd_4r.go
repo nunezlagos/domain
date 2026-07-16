@@ -16,12 +16,12 @@ const fourRLensCount = 4
 // vez contra el initial_review_tree, escribe su reporte a archivo
 // (file-only) y el controller mergea con toda la autoridad — esta fase
 // no bloquea (sdd-review sigue siendo el gate duro).
-const fourRSubagentPlan = `Lanzá las 4 lenses del review 4R EN PARALELO, una vez cada una, contra el initial_review_tree. Cada lens es read-only, escribe su reporte a archivo (file-only) y devuelve candidate rows; si está limpia devuelve lista vacía CON evidencia del scope revisado. El controller tiene toda la autoridad: mergea y decide, esta fase no bloquea.
+const fourRSubagentPlan = `Lanza las 4 lenses del review 4R EN PARALELO, una vez cada una, contra el initial_review_tree. Cada lens es read-only, escribe su reporte a archivo (file-only) y devuelve candidate rows; si está limpia devuelve lista vacía CON evidencia del scope revisado. El controller tiene toda la autoridad: mergea y decide, esta fase no bloquea.
 - R1 Risk: seguridad, límites de privilegio, exposición de datos, dependencias, vulnerabilidades merge-blocking.
 - R2 Readability: naming, complejidad, intención, mantenibilidad, tamaño del review, claridad de contexto.
 - R3 Reliability: cobertura de tests behavior-first, edge cases, determinismo, contratos, regresiones.
 - R4 Resilience: fallbacks, retry/backoff, degradación elegante, observabilidad, carga, rollback, riesgos de SLO.
-Reportá los 4 resultados en lens_reports (uno por lens), cada uno {lens, findings[], evidence[]}. Un 'clean' exige findings=[] pero evidence NO vacío.`
+Reporta los 4 resultados en lens_reports (uno por lens), cada uno {lens, findings[], evidence[]}. Un 'clean' exige findings=[] pero evidence NO vacío.`
 
 type sdd4rHandler struct{}
 

@@ -34,9 +34,9 @@ func (h *sddTasksHandler) Build(_ context.Context, in Input) (*Output, error) {
 		}
 	}
 	fmt.Fprintln(&b, "Descompon en tasks atómicas con id + descripción + effort + depends_on.")
-	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corré domain_openspec_export, "+
-		"escribí los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
-		"Reportá ambas en tool_calls o el server RECHAZA el cierre de la fase.")
+	fmt.Fprintln(&b, "SYNC OBLIGATORIO (REQ-55): al terminar, corre domain_openspec_export, "+
+		"escribe los .md en openspec/changes/<change>/ con tu Write tool, y domain_openspec_apply. "+
+		"Reporta ambas en tool_calls o el server RECHAZA el cierre de la fase.")
 	return &Output{
 		AgentTemplateSlug: "sdd-tasks",
 		SystemPrompt:      "",
@@ -46,7 +46,7 @@ func (h *sddTasksHandler) Build(_ context.Context, in Input) (*Output, error) {
 		// persistirla como knowledge_doc antes de avanzar (registro en BD).
 		SuggestedSaves: []SuggestedSave{
 			{Type: "knowledge_doc", Required: true,
-				Hint: "persistí la descomposición de tasks como knowledge_doc para que quede registro en BD"},
+				Hint: "persiste la descomposición de tasks como knowledge_doc para que quede registro en BD"},
 		},
 		SkillThreshold: 0,
 		// REQ-55 issue-55.3: el sync openspec BD->repo es CONTRATO de esta fase,

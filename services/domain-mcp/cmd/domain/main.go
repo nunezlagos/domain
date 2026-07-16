@@ -308,7 +308,9 @@ func runServer() {
 	seedRegistry.Register(&seeds.WizardFormulatorPromptSeeder{})
 	seedRegistry.Register(&seeds.FirstResponsePromptSeeder{})
 	results, seedErr := seedRegistry.RunAll(ctx, pools.App, seeds.Env(cfg.Env))
-	if seedErr != nil {
+	if errors.Is(seedErr, seeds.ErrSeedLockHeld) {
+		logger.Info("seed skipped: otro proceso tiene el lock y seedea")
+	} else if seedErr != nil {
 		logger.Error("seed run failed (partial results may apply)", slog.Any("err", seedErr))
 	}
 	for name, rep := range results {

@@ -90,6 +90,32 @@ func TestSeeds_RunAll_SeederFalla_LosDeOrderMayorSiCorren(t *testing.T) {
 	require.NotEmpty(t, reports["failing_seed"].Errors, "el fallo se registra en el reporte del seeder roto")
 }
 
+// DOMAINSERV-36: cuando otro proceso tiene el advisory lock, RunAll NO es un
+// fallo — devuelve el sentinel ErrSeedLockHeld (no-op benigno) y no corre los
+// seeders. El llamador (container domain-seed) debe salir exit 0, no exit 1.
+func TestSeeds_RunAll_LockTomado_DevuelveSentinelBenigno(t *testing.T) {
+	pool, cleanup := setupSeededDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	holder, err := pool.Acquire(ctx)
+	require.NoError(t, err)
+	defer holder.Release()
+	var locked bool
+	require.NoError(t, holder.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", seeds.SeedLockID).Scan(&locked))
+	require.True(t, locked, "el holder debe tomar el lock primero")
+
+	reg := seeds.NewRegistry()
+	s := &counterSeeder{name: "test_seed_locked", version: 1}
+	reg.Register(s)
+
+	reports, err := reg.RunAll(ctx, pool, seeds.EnvProd)
+
+	require.ErrorIs(t, err, seeds.ErrSeedLockHeld, "perder el lock devuelve el sentinel benigno")
+	require.Empty(t, reports, "no se corre ningún seeder mientras otro proceso tiene el lock")
+	require.Equal(t, int32(0), s.calls.Load(), "el seeder no se ejecutó")
+}
+
 // Escenario: RunAll ejecuta primer seed.
 func TestSeeds_RunAll_FirstRun(t *testing.T) {
 	pool, cleanup := setupSeededDB(t)

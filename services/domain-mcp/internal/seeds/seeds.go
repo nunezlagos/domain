@@ -99,10 +99,14 @@ func (r *Registry) Find(name string) Seeder {
 	return nil
 }
 
-const (
+// SeedLockID identifica el advisory lock Postgres que serializa el seed entre
+// procesos que arrancan a la vez (container domain-seed + boot del server).
+const SeedLockID = int64(0x73656564) // "seed"
 
-	seedLockID = int64(0x73656564) // "seed"
-)
+// ErrSeedLockHeld indica que otro proceso ya tiene el advisory lock y está
+// seedeando. NO es un fallo: el llamador debe tratarlo como no-op benigno
+// (el otro proceso aplica el seed). Ver seeds.go:RunAll.
+var ErrSeedLockHeld = errors.New("another seed run in progress")
 
 // RunAll ejecuta todos los seeders aplicables al env, con advisory lock.
 // Si another pod tiene el lock, retorna nil sin ejecutar (otro está seedeando).
@@ -115,14 +119,14 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 
 
 	var locked bool
-	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", seedLockID).Scan(&locked); err != nil {
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", SeedLockID).Scan(&locked); err != nil {
 		return nil, fmt.Errorf("advisory lock: %w", err)
 	}
 	if !locked {
-		return nil, errors.New("another seed run in progress")
+		return nil, ErrSeedLockHeld
 	}
 	defer func() {
-		_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", seedLockID)
+		_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", SeedLockID)
 	}()
 
 	results := map[string]Report{}

@@ -1167,6 +1167,10 @@ func runSeedersViaRegistry(databaseURL string, envStr string) error {
 	registry.Register(&seeds.FirstResponsePromptSeeder{})
 
 	reports, err := registry.RunAll(ctx, pool, seeds.Env(envStr))
+	if errors.Is(err, seeds.ErrSeedLockHeld) {
+		fmt.Fprintln(os.Stderr, "  seeders: otro proceso tiene el lock, seedea él — skip benigno")
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("run all: %w", err)
 	}

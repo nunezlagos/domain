@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -371,9 +372,14 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	}
 
 
-	rulesBlock := s.buildRulesBlock(ctx, projectID)
+	// DOMAINSERV-24: el step 0 (único que viaja inline, DOMAINSERV-3) lleva las
+	// policies extensas verbatim; los steps 1..N las stubbean. Se carga una vez y
+	// se formatea dos veces (full para step 0, stub para el resto).
+	platform, project := s.loadRulePolicies(ctx, projectID)
+	rulesFull := formatRulesBlock(platform, project, false)
+	rulesStub := formatRulesBlock(platform, project, true)
 	type cached struct {
-		systemPrompt string
+		base         string
 		threshold    float64
 		subagentPlan string
 	}
@@ -383,19 +389,20 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 		if slug == "" {
 			continue
 		}
-		if c, ok := cache[slug]; ok {
-			plan.Steps[i].SystemPrompt = c.systemPrompt
-			plan.Steps[i].SkillThreshold = c.threshold
-			continue
+		c, ok := cache[slug]
+		if !ok {
+			t, err := s.Repo.GetAgentTemplate(ctx, orgID, slug)
+			if err != nil {
+				return err
+			}
+			c = cached{base: t.SystemPrompt, threshold: t.SkillThreshold(), subagentPlan: t.SubagentPlan()}
+			cache[slug] = c
 		}
-		t, err := s.Repo.GetAgentTemplate(ctx, orgID, slug)
-		if err != nil {
-			return err
+		rules := rulesStub
+		if i == 0 {
+			rules = rulesFull
 		}
-		sysPrompt := t.SystemPrompt + rulesBlock
-		c := cached{systemPrompt: sysPrompt, threshold: t.SkillThreshold(), subagentPlan: t.SubagentPlan()}
-		cache[slug] = c
-		plan.Steps[i].SystemPrompt = c.systemPrompt
+		plan.Steps[i].SystemPrompt = c.base + rules
 		plan.Steps[i].SkillThreshold = c.threshold
 	}
 	// REQ-54 issue-54.2: preparación de contexto server-side por fase. Se inyecta
@@ -459,14 +466,15 @@ type rulePolicy struct {
 	override               bool
 }
 
-// buildRulesBlock lee las policies vigentes (platform + project, respetando
-// override_platform por kind) y las formatea. Best-effort: si falla la lectura
-// devuelve "" (las reglas son aditivas, no bloqueantes).
-func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) string {
+// loadRulePolicies lee las policies vigentes (platform + project). Best-effort
+// PERO con señal: DOMAINSERV-23 — loguea en warn cuando no puede leer (pool nil o
+// query fallida) en vez de dejar al agente sin reglas en silencio. Las reglas son
+// aditivas, no bloqueantes, así que no propaga el error.
+func (s *Service) loadRulePolicies(ctx context.Context, projectID uuid.UUID) (platform, project []rulePolicy) {
 	if s.Pool == nil {
-		return ""
+		slog.Default().Warn("orchestrator: rulesBlock vacío, pool nil — el agente no recibirá policies")
+		return nil, nil
 	}
-	var platform, project []rulePolicy
 
 	if rows, err := s.Pool.Query(ctx,
 		`SELECT slug, name, COALESCE(body_md,''), COALESCE(kind,'')
@@ -479,6 +487,8 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) stri
 			}
 		}
 		rows.Close()
+	} else {
+		slog.Default().Warn("orchestrator: fallo al leer platform_policies para el rulesBlock", "err", err)
 	}
 
 	if projectID != uuid.Nil {
@@ -495,17 +505,25 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID) stri
 				}
 			}
 			rows.Close()
+		} else {
+			slog.Default().Warn("orchestrator: fallo al leer project_policies para el rulesBlock", "err", err, "project_id", projectID)
 		}
 	}
-
-	return formatRulesBlock(platform, project)
+	return platform, project
 }
 
-// formatRulesBlock arma el markdown de reglas a partir de las policies ya
-// cargadas. Puro (sin DB) para testear el stub por tamaño y el override por
-// kind. Las platform_policies con body extenso se stubbean (DOMAINSERV-3); las
-// project_policies van siempre verbatim.
-func formatRulesBlock(platform, project []rulePolicy) string {
+// buildRulesBlock lee las policies vigentes y las formatea. stubLarge controla si
+// las platform_policies extensas se stubbean (DOMAINSERV-3): true para los steps
+// 1..N (payload a dieta), false para el step 0 que las lleva verbatim (DOMAINSERV-24).
+func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID, stubLarge bool) string {
+	platform, project := s.loadRulePolicies(ctx, projectID)
+	return formatRulesBlock(platform, project, stubLarge)
+}
+
+// formatRulesBlock arma el markdown de reglas. stubLarge=true stubbea las
+// platform_policies extensas (steps 1..N, DOMAINSERV-3); stubLarge=false las
+// embebe verbatim (step 0, DOMAINSERV-24). Las project_policies van siempre verbatim.
+func formatRulesBlock(platform, project []rulePolicy, stubLarge bool) string {
 	overridden := make(map[string]bool)
 	for _, p := range project {
 		if p.override && p.kind != "" {
@@ -527,7 +545,7 @@ func formatRulesBlock(platform, project []rulePolicy) string {
 	}
 	for _, p := range platform {
 		if !overridden[p.kind] {
-			write(p, true)
+			write(p, stubLarge)
 		}
 	}
 	for _, p := range project {

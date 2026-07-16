@@ -48,7 +48,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 11)
+	require.Len(t, res.Plan.Steps, 12)
 	flowRunID := res.FlowRunID
 
 	exploreOut := map[string]any{
@@ -85,7 +85,7 @@ func TestService_ResumeCrossSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "running", status.Status)
 	require.Equal(t, "full", status.Mode)
-	require.Len(t, status.Steps, 11)
+	require.Len(t, status.Steps, 12)
 
 	require.Equal(t, "completed", status.Steps[0].Status, "sdd-explore completed")
 	require.Equal(t, "completed", status.Steps[1].Status, "sdd-spec completed")

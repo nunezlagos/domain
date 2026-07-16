@@ -14,11 +14,11 @@ func TestFlowsCatalog_HasExactlySDDPipeline(t *testing.T) {
 	require.Equal(t, SDDPipelineFlowSlug, c[0].Slug)
 }
 
-func TestFlowsCatalog_SDDPipelineSpec_HasAllElevenPhasesInOrder(t *testing.T) {
+func TestFlowsCatalog_SDDPipelineSpec_HasAllTwelvePhasesInOrder(t *testing.T) {
 	t.Parallel()
 	spec := buildSDDPipelineSpec()
 	require.Equal(t, 1, spec.Version)
-	require.Len(t, spec.Steps, 11, "11 fases SDD")
+	require.Len(t, spec.Steps, 12, "12 fases SDD")
 	for i, slug := range SDDPipelinePhaseSlugs {
 		require.Equal(t, slug, spec.Steps[i].ID, "orden canónico")
 		require.Equal(t, "agent_run", spec.Steps[i].Type)
@@ -39,6 +39,8 @@ func TestRetryPolicyForPhase_RFC0006Mapping(t *testing.T) {
 		"verify es read-only — RFC 0006 ADR-1")
 	require.Equal(t, "re-emit", retryPolicyForPhase("sdd-review"),
 		"review es read-only — gate de cumplimiento")
+	require.Equal(t, "re-emit", retryPolicyForPhase("sdd-4r"),
+		"4r es read-only — review por lenses")
 	require.Equal(t, "", retryPolicyForPhase("sdd-design"),
 		"resto: auto-retry default")
 	require.Equal(t, "", retryPolicyForPhase("phase-no-existe"),
@@ -51,21 +53,20 @@ func TestFlowsCatalog_SpecMarshalsToValidJSON(t *testing.T) {
 	raw, err := json.Marshal(c[0].Spec)
 	require.NoError(t, err)
 
-
 	var back FlowSpecJSON
 	require.NoError(t, json.Unmarshal(raw, &back))
 	require.Equal(t, c[0].Spec, back)
 }
 
 // Sabotage sanity: si alguien borrara una phase del slice canónico,
-// el spec resultante tendría menos de 11 steps. Esto rompe el orden
+// el spec resultante tendría menos de 12 steps. Esto rompe el orden
 // del pipeline → este test atrapa esa regresión.
 func TestSDDPipelinePhaseSlugs_NoMissingPhases(t *testing.T) {
 	t.Parallel()
 	expected := []string{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design",
 		"sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge",
-		"sdd-review", "sdd-archive", "sdd-onboard",
+		"sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 	}
 	require.Equal(t, expected, SDDPipelinePhaseSlugs,
 		"ningún reorder/drop del pipeline canónico sin actualizar este test + RFC")

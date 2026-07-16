@@ -24,9 +24,9 @@ import (
 // prepMaxPolicies / prepMaxSkills / prepMaxObs acotan el tamaño del bloque para
 // no inflar el prompt del cliente.
 const (
-	prepMaxPolicies = 10
-	prepMaxSkills    = 10
-	prepMaxObs       = 5
+	prepMaxPolicies    = 10
+	prepMaxSkills      = 10
+	prepMaxObs         = 5
 	prepMinimaxTimeout = 5 * time.Second
 )
 
@@ -44,16 +44,17 @@ var prepPhaseContext = map[string]struct {
 	obs      bool
 }{
 	"sdd-explore": {obs: true},
-	"sdd-spec":    {obs: true},           // decisiones previas informan el contrato
-	"sdd-propose": {policies: true},      // tradeoffs contra las reglas vigentes
+	"sdd-spec":    {obs: true},      // decisiones previas informan el contrato
+	"sdd-propose": {policies: true}, // tradeoffs contra las reglas vigentes
 	"sdd-design":  {policies: true},
-	"sdd-tasks":   {},                    // el design (prior output) es el contexto
+	"sdd-tasks":   {}, // el design (prior output) es el contexto
 	"sdd-apply":   {policies: true, skills: true},
-	"sdd-verify":  {},                    // valida contra el issue.md, no contra contexto
-	"sdd-judge":   {policies: true},      // juzga también conformidad con las reglas
+	"sdd-verify":  {},                          // valida contra el issue.md, no contra contexto
+	"sdd-judge":   {policies: true},            // juzga también conformidad con las reglas
+	"sdd-4r":      {policies: true, obs: true}, // review 4R contra reglas + contexto reciente
 	"sdd-review":  {policies: true},
-	"sdd-archive": {},                    // cierre administrativo
-	"sdd-onboard": {obs: true},           // qué se aprendió antes de documentar
+	"sdd-archive": {},          // cierre administrativo
+	"sdd-onboard": {obs: true}, // qué se aprendió antes de documentar
 }
 
 // prepareContext arma el bloque de contexto para una fase (crudo) y, si hay LLM,

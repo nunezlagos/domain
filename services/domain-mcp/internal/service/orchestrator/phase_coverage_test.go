@@ -9,11 +9,11 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
 
-// allSDDPhases: las 11 fases registradas del pipeline (fuente: los
+// allSDDPhases: las 12 fases registradas del pipeline (fuente: los
 // MustRegister de cmd/domain/server_services.go y cmd/domain-mcp/main.go).
 var allSDDPhases = []string{
 	"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
-	"sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive",
+	"sdd-apply", "sdd-verify", "sdd-judge", "sdd-4r", "sdd-review", "sdd-archive",
 	"sdd-onboard",
 }
 
@@ -34,14 +34,15 @@ func TestPrepContext_AllPhasesMapped(t *testing.T) {
 func TestPhaseContracts_MatchCanonicalTable(t *testing.T) {
 	t.Parallel()
 	expected := map[string][]string{
-		"sdd-explore": nil, // code graph retirado 2026-07-07: sin contrato de tools
-		"sdd-spec":    nil, // creativo: el contrato de saves lo cubre D5
+		"sdd-explore": nil,                                                 // code graph retirado 2026-07-07: sin contrato de tools
+		"sdd-spec":    nil,                                                 // creativo: el contrato de saves lo cubre D5
 		"sdd-propose": {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
 		"sdd-design":  {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
 		"sdd-tasks":   {"domain_openspec_export", "domain_openspec_apply"}, // REQ-55.3
-		"sdd-apply":   nil, // el trabajo es código local; saves via D5
+		"sdd-apply":   nil,                                                 // el trabajo es código local; saves via D5
 		"sdd-verify":  {"domain_verify_start", "domain_verify_complete"},
 		"sdd-judge":   nil, // teeth via shape del Output (issue-54.5)
+		"sdd-4r":      nil, // teeth via shape del Output (lens_reports>=4); controller con autoridad
 		"sdd-review":  {"domain_project_policy_list", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
 		"sdd-archive": {"domain_openspec_status"},
 		"sdd-onboard": {"domain_knowledge_save"},
@@ -56,6 +57,7 @@ func TestPhaseContracts_MatchCanonicalTable(t *testing.T) {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDD4RHandler())
 	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())

@@ -26,6 +26,7 @@ func buildFullRegistry() *phases.Registry {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDD4RHandler())
 	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
@@ -55,7 +56,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeFull, res.Mode)
-	require.Len(t, res.Plan.Steps, 11)
+	require.Len(t, res.Plan.Steps, 12)
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[10].Slug))
 
@@ -173,7 +174,7 @@ func TestService_Run_Full_SkipPhases_OmitsSelected(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 9, "11 - 2 skipped = 9 steps")
+	require.Len(t, res.Plan.Steps, 10, "12 - 2 skipped = 10 steps")
 	for _, st := range res.Plan.Steps {
 		require.NotEqual(t, "sdd-archive", string(st.Slug))
 		require.NotEqual(t, "sdd-onboard", string(st.Slug))
@@ -209,7 +210,7 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[5].Slug))
 }
 
-// Happy path completo: ejecutar las 11 fases en orden con outputs encadenados.
+// Happy path completo: ejecutar las 12 fases en orden con outputs encadenados.
 // Verifica que cada fase recibe los outputs de la anterior vía PriorOutputs
 // (la firma de Full mode).
 func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
@@ -234,7 +235,7 @@ func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 		Mode:           orchestrator.ModeFull,
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 11)
+	require.Len(t, res.Plan.Steps, 12)
 
 	outputs := []map[string]any{
 		{"intent": "feature", "scope": "single-file", "summary": "x"},           // explore

@@ -30,13 +30,12 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 	require.Equal(t, 0, rep.Updated)
 	require.Equal(t, 0, rep.Deleted)
 
-
 	var (
-		slug          string
-		seedManaged   bool
-		seedVersion   int
-		userModified  bool
-		specRaw       []byte
+		slug         string
+		seedManaged  bool
+		seedVersion  int
+		userModified bool
+		specRaw      []byte
 	)
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT slug, seed_managed, seed_version, is_user_modified, spec
@@ -48,10 +47,9 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 	require.False(t, userModified, "fresh seed → is_user_modified=false")
 	require.Equal(t, 1, seedVersion)
 
-
 	var spec seeds.FlowSpecJSON
 	require.NoError(t, json.Unmarshal(specRaw, &spec))
-	require.Len(t, spec.Steps, 11)
+	require.Len(t, spec.Steps, 12)
 	for i, ph := range seeds.SDDPipelinePhaseSlugs {
 		require.Equal(t, ph, spec.Steps[i].ID)
 	}
@@ -76,7 +74,6 @@ func TestSeedFlowsForOrg_Idempotent(t *testing.T) {
 	require.Equal(t, 0, rep2.Created, "segunda corrida no inserta")
 	require.Equal(t, 1, rep2.Updated, "segunda corrida hace UPDATE de la row existente")
 
-
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT COUNT(*) FROM flows`).Scan(&count))
@@ -98,7 +95,6 @@ func TestSeedFlowsForOrg_PreservesUserModifications(t *testing.T) {
 
 	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
-
 
 	_, err = pools.App.Exec(ctx,
 		`UPDATE flows
@@ -134,8 +130,6 @@ func TestSeedFlowsForOrg_CleansLegacySlugsWithoutActiveRuns(t *testing.T) {
 		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
 	).Scan(&orgID))
 
-
-
 	specJSON := `{"version":1,"steps":[{"id":"x","type":"agent_run","config":{}}]}`
 	_, err := pools.App.Exec(ctx,
 		`INSERT INTO flows
@@ -148,7 +142,6 @@ func TestSeedFlowsForOrg_CleansLegacySlugsWithoutActiveRuns(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, rep.Created)
 	require.Equal(t, 1, rep.Deleted, "legacy-removed se limpia")
-
 
 	var slugs []string
 	rows, err := pools.App.Query(ctx,
@@ -187,7 +180,6 @@ func TestSeedFlowsForOrg_KeepsLegacyWithActiveRuns(t *testing.T) {
 		orgID,
 	).Scan(&legacyFlowID))
 
-
 	_, err := pools.App.Exec(ctx,
 		`INSERT INTO flow_runs (organization_id, flow_id, status)
 		 VALUES ($1, $2, 'running')`,
@@ -197,7 +189,6 @@ func TestSeedFlowsForOrg_KeepsLegacyWithActiveRuns(t *testing.T) {
 	rep, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 	require.Equal(t, 0, rep.Deleted, "no se borra legacy con run activo")
-
 
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,

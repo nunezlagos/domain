@@ -12,7 +12,7 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator"
 )
 
-// Detect = dry-run: plan completo (11 fases) hidratado pero sin
+// Detect = dry-run: plan completo (12 fases) hidratado pero sin
 // flow_run/steps persistidos en BD. Si el caller quiere ejecutar de
 // verdad, vuelve a invocar con Mode=Full.
 func TestService_Run_Detect_BuildsPlanWithoutPersistence(t *testing.T) {
@@ -38,10 +38,9 @@ func TestService_Run_Detect_BuildsPlanWithoutPersistence(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeDetect, res.Mode)
-	require.Len(t, res.Plan.Steps, 11, "Detect arma plan completo igual que Full")
+	require.Len(t, res.Plan.Steps, 12, "Detect arma plan completo igual que Full")
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt, "primer prompt construido")
 	require.NotEmpty(t, res.Plan.Steps[0].SystemPrompt, "system_prompt hidratado desde BD")
-
 
 	var count int
 	require.NoError(t, pools.App.QueryRow(ctx,

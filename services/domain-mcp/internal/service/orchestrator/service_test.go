@@ -40,7 +40,7 @@ func TestService_Run_AsyncWithExpressMaxLines_Rejected_D6(t *testing.T) {
 	s := New(nil, nil, phases.NewRegistry(), "dev")
 	_, err := s.Run(context.Background(), OrchestrateInput{
 		OrganizationID:  uuid.New(),
-		ProjectID:      uuid.New(),
+		ProjectID:       uuid.New(),
 		UserID:          uuid.New(),
 		RawText:         "any",
 		Mode:            ModeAsync,
@@ -65,7 +65,6 @@ func TestService_Run_UnknownStartingPhase(t *testing.T) {
 func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	t.Parallel()
 
-
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDExploreHandler())
 	reg.MustRegister(phases.NewSDDSpecHandler())
@@ -75,6 +74,7 @@ func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDD4RHandler())
 	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
@@ -90,5 +90,5 @@ func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.Equal(t, ModeFull, res.Mode, "Mode vacío resuelve a Full por default")
 	require.NotNil(t, res.Plan, "Full mode arma plan in-memory cuando Repo es nil")
-	require.Len(t, res.Plan.Steps, 11, "Full plan = 11 fases sin skips")
+	require.Len(t, res.Plan.Steps, 12, "Full plan = 12 fases sin skips")
 }

@@ -77,7 +77,7 @@ type FlowSpecStepJSON struct {
 // string-literal.
 const SDDPipelineFlowSlug = "sdd-pipeline-v1"
 
-// SDDPipelinePhaseSlugs — orden canónico de las 10 fases SDD.
+// SDDPipelinePhaseSlugs — orden canónico de las 12 fases SDD.
 // Coincide con internal/service/orchestrator/types.go.PhaseSlug consts
 // pero replicado para evitar el cycle import.
 var SDDPipelinePhaseSlugs = []string{
@@ -89,6 +89,7 @@ var SDDPipelinePhaseSlugs = []string{
 	"sdd-apply",
 	"sdd-verify",
 	"sdd-judge",
+	"sdd-4r",
 	"sdd-review",
 	"sdd-archive",
 	"sdd-onboard",
@@ -101,11 +102,9 @@ func FlowsCatalog() []FlowCatalogEntry {
 		{
 			Slug:        SDDPipelineFlowSlug,
 			Name:        "SDD Pipeline v1",
-			Description: "Pipeline canónico del orquestador SDD (RFC 0006). 11 fases: explore→spec→propose→design→tasks→apply→verify→judge→review→archive→onboard.",
+			Description: "Pipeline canónico del orquestador SDD (RFC 0006). 12 fases: explore→spec→propose→design→tasks→apply→verify→judge→4r→review→archive→onboard.",
 			Spec:        buildSDDPipelineSpec(),
 			IsActive:    true,
-
-
 
 			DeterministicReplay: false,
 		},
@@ -141,7 +140,7 @@ func retryPolicyForPhase(phase string) string {
 	switch phase {
 	case "sdd-apply":
 		return "require-cleanup"
-	case "sdd-verify", "sdd-review":
+	case "sdd-verify", "sdd-4r", "sdd-review":
 		return "re-emit"
 	default:
 		return ""
@@ -150,7 +149,7 @@ func retryPolicyForPhase(phase string) string {
 
 // flowsSeedVersion bump por cambio semántico del spec (Version del
 // FlowSpecJSON refleja la API; este int controla el seeder dedup).
-const flowsSeedVersion = 2
+const flowsSeedVersion = 3
 
 // SeedFlowsForOrg aplica el catalog global de flows usando un pool.
 // El parámetro orgID quedó vestigial; se conserva como helper pool-based
@@ -201,8 +200,6 @@ func seedFlows(ctx context.Context, db execer) (Report, error) {
 			rep.Created++
 		} else {
 
-
-
 			var userModified bool
 			if scanErr := db.QueryRow(ctx,
 				`SELECT is_user_modified FROM flows WHERE slug=$1`,
@@ -214,8 +211,6 @@ func seedFlows(ctx context.Context, db execer) (Report, error) {
 			}
 		}
 	}
-
-
 
 	currentSlugs := make([]string, len(catalog))
 	for i, e := range catalog {

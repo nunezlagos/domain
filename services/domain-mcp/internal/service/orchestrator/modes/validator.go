@@ -20,7 +20,8 @@ var phaseDependencies = map[phases.PhaseSlug][]phases.PhaseSlug{
 	"sdd-apply":   {"sdd-tasks"},
 	"sdd-verify":  {"sdd-apply"},
 	"sdd-judge":   {"sdd-verify"},
-	"sdd-review":  {"sdd-judge"},
+	"sdd-4r":      {"sdd-judge"},
+	"sdd-review":  {"sdd-4r"},
 	"sdd-archive": {"sdd-review"},
 	"sdd-onboard": {"sdd-archive"},
 }
@@ -64,7 +65,6 @@ func ValidateDAG(base []phases.PhaseSlug, skipPhases []phases.PhaseSlug, startin
 		}
 	}
 
-
 	kept := make(map[phases.PhaseSlug]struct{}, len(base)-startIdx)
 	for _, slug := range base[startIdx:] {
 		if _, ok := skip[slug]; !ok {
@@ -72,15 +72,12 @@ func ValidateDAG(base []phases.PhaseSlug, skipPhases []phases.PhaseSlug, startin
 		}
 	}
 
-
 	for slug := range kept {
 		deps, hasDeps := phaseDependencies[slug]
 		if !hasDeps {
 			continue
 		}
 		for _, dep := range deps {
-
-
 
 			if isBeforeStart(base, dep, startIdx) {
 				continue

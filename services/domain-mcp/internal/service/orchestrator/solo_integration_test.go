@@ -25,10 +25,7 @@ func (p *fakeProvider) Name() string { return "fake" }
 func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
 	p.calls++
 
-
-
 	for slug, body := range p.byPhase {
-
 
 		if contains(opts.SystemPrompt, slug) {
 			return &llm.Response{
@@ -100,6 +97,14 @@ func cannedSoloResponses() map[string]string {
 		"sdd-judge": must(map[string]any{
 			"sabotage_records": []any{map[string]any{"invariant": "x"}},
 		}),
+		"sdd-4r": must(map[string]any{
+			"lens_reports": []any{
+				map[string]any{"lens": "R1", "findings": []any{}, "evidence": []any{"scope revisado"}},
+				map[string]any{"lens": "R2", "findings": []any{}, "evidence": []any{"scope revisado"}},
+				map[string]any{"lens": "R3", "findings": []any{}, "evidence": []any{"scope revisado"}},
+				map[string]any{"lens": "R4", "findings": []any{}, "evidence": []any{"scope revisado"}},
+			},
+		}),
 		"sdd-review": must(map[string]any{
 			"verdict": "compliant", "policies_checked": 2,
 		}),
@@ -108,7 +113,7 @@ func cannedSoloResponses() map[string]string {
 	}
 }
 
-func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
+func TestService_Run_Solo_Executes12PhasesEndToEnd(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -120,9 +125,6 @@ func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
-
-
-
 
 	factory := llm.NewFactory()
 	factory.Register("anthropic", &fakeProvider{byPhase: cannedSoloResponses()})
@@ -140,7 +142,6 @@ func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, orchestrator.ModeSolo, res.Mode)
 
-
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)
@@ -154,8 +155,7 @@ func TestService_Run_Solo_Executes11PhasesEndToEnd(t *testing.T) {
 			"step %s debe estar completed tras Solo run", k)
 		count++
 	}
-	require.Equal(t, 11, count, "11 fases SDD ejecutadas en Solo")
-
+	require.Equal(t, 12, count, "12 fases SDD ejecutadas en Solo")
 
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -204,7 +204,6 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
 
-
 	canned := cannedSoloResponses()
 	canned["sdd-explore"] = "no json here, just prose"
 
@@ -216,8 +215,8 @@ func TestService_Run_Solo_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	_, err = s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
-		ProjectID:      projectID,
-		RawText: "x", Mode: orchestrator.ModeSolo,
+		ProjectID: projectID,
+		RawText:   "x", Mode: orchestrator.ModeSolo,
 	})
 	require.Error(t, err, "Solo debe abortar con JSON inválido")
 }

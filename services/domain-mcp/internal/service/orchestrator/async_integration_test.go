@@ -46,8 +46,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 	require.Equal(t, orchestrator.ModeAsync, res.Mode)
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.NotNil(t, res.Plan, "Async debe devolver el plan")
-	require.Len(t, res.Plan.Steps, 11, "Async plan = 11 fases sin skips")
-
+	require.Len(t, res.Plan.Steps, 12, "Async plan = 12 fases sin skips")
 
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
@@ -62,7 +61,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 			"step %s debe estar pending tras Run async (sin Process)", k)
 		count++
 	}
-	require.Equal(t, 11, count, "11 fases SDD persistidas")
+	require.Equal(t, 12, count, "12 fases SDD persistidas")
 
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -72,7 +71,7 @@ func TestService_Run_Async_ReturnsImmediately(t *testing.T) {
 }
 
 // TestService_ProcessAsyncFlowRun_ExecutesAllSteps verifica que
-// ProcessAsyncFlowRun ejecuta las 11 fases, emite signals, y marca
+// ProcessAsyncFlowRun ejecuta las 12 fases, emite signals, y marca
 // flow_run + steps como completed.
 func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
@@ -106,7 +105,6 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 	err = s.ProcessAsyncFlowRun(ctx, res.FlowRunID)
 	require.NoError(t, err)
 
-
 	rows, err := pools.App.Query(ctx,
 		`SELECT step_key, status FROM flow_run_steps
 		 WHERE flow_run_id=$1 ORDER BY created_at`, res.FlowRunID)
@@ -119,8 +117,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 		require.Equal(t, "completed", st, "step %s debe estar completed", k)
 		count++
 	}
-	require.Equal(t, 11, count, "11 fases ejecutadas por ProcessAsyncFlowRun")
-
+	require.Equal(t, 12, count, "12 fases ejecutadas por ProcessAsyncFlowRun")
 
 	var flowStatus string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -128,11 +125,10 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 	).Scan(&flowStatus))
 	require.Equal(t, "completed", flowStatus)
 
-
 	signals, err := s.SignalStore.List(ctx, res.FlowRunID, true)
 	require.NoError(t, err)
 
-	require.GreaterOrEqual(t, len(signals), 12, "debe haber al menos 12 signals (11 step + 1 flow)")
+	require.GreaterOrEqual(t, len(signals), 13, "debe haber al menos 13 signals (12 step + 1 flow)")
 
 	stepCompletedCount := 0
 	flowCompletedCount := 0
@@ -144,7 +140,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 			flowCompletedCount++
 		}
 	}
-	require.Equal(t, 10, stepCompletedCount, "10 step_completed signals")
+	require.Equal(t, 11, stepCompletedCount, "11 step_completed signals")
 	require.Equal(t, 1, flowCompletedCount, "1 flow_completed signal")
 }
 
@@ -164,7 +160,6 @@ func TestService_ProcessAsyncFlowRun_WithoutLLMFactory_ReturnsError(t *testing.T
 	require.NoError(t, err)
 
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
-
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -196,7 +191,6 @@ func TestService_ProcessAsyncFlowRun_NonAsyncFlow_ReturnsError(t *testing.T) {
 
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	s.LLM = llm.NewFactory()
-
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID,
@@ -239,14 +233,13 @@ func TestService_ProcessAsyncFlowRun_InvalidJSON_MarksStepFailed(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
-		ProjectID:      projectID,
-		RawText: "x", Mode: orchestrator.ModeAsync,
+		ProjectID: projectID,
+		RawText:   "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
 
 	err = s.ProcessAsyncFlowRun(ctx, res.FlowRunID)
 	require.Error(t, err, "debe abortar con JSON inválido")
-
 
 	signals, err := s.SignalStore.List(ctx, res.FlowRunID, true)
 	require.NoError(t, err)
@@ -287,11 +280,10 @@ func TestService_ProcessAsyncFlowRun_WithoutSignalStore_WorksDegraded(t *testing
 	s := orchestrator.New(pools.App, nil, buildFullRegistry(), "dev")
 	s.LLM = factory
 
-
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
-		ProjectID:      projectID,
-		RawText: "x", Mode: orchestrator.ModeAsync,
+		ProjectID: projectID,
+		RawText:   "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
 
@@ -329,12 +321,10 @@ func TestService_ProcessAsyncFlowRun_ResumesFromSavedPriors(t *testing.T) {
 
 	res, err := s.Run(ctx, orchestrator.OrchestrateInput{
 		OrganizationID: orgID, UserID: userID,
-		ProjectID:      projectID,
-		RawText: "x", Mode: orchestrator.ModeAsync,
+		ProjectID: projectID,
+		RawText:   "x", Mode: orchestrator.ModeAsync,
 	})
 	require.NoError(t, err)
-
-
 
 	var firstStepID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -353,7 +343,6 @@ func TestService_ProcessAsyncFlowRun_ResumesFromSavedPriors(t *testing.T) {
 		 WHERE id=$1`, firstStepID, outJSON)
 	require.NoError(t, err)
 
-
 	err = s.ProcessAsyncFlowRun(ctx, res.FlowRunID)
 	require.NoError(t, err)
 
@@ -362,7 +351,6 @@ func TestService_ProcessAsyncFlowRun_ResumesFromSavedPriors(t *testing.T) {
 		`SELECT status FROM flow_runs WHERE id=$1`, res.FlowRunID,
 	).Scan(&flowStatus))
 	require.Equal(t, "completed", flowStatus)
-
 
 	rows, err := pools.App.Query(ctx,
 		`SELECT status FROM flow_run_steps WHERE flow_run_id=$1`, res.FlowRunID)
@@ -435,7 +423,7 @@ func TestService_Async_WithSkipPhases_OmittedPhases(t *testing.T) {
 		SkipPhases:     []orchestrator.PhaseSlug{"sdd-archive", "sdd-onboard"},
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 9, "11 - 2 skip = 9 (archive + onboard son sufijo válido)")
+	require.Len(t, res.Plan.Steps, 10, "12 - 2 skip = 10 (archive + onboard son sufijo válido)")
 
 	last := res.Plan.Steps[len(res.Plan.Steps)-1]
 	require.Equal(t, "sdd-review", string(last.Slug))

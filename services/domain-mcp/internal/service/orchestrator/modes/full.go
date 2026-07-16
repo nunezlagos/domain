@@ -11,7 +11,7 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
 
-// FullPhases — orden canónico de las 10 fases SDD que el modo Full
+// FullPhases — orden canónico de las 12 fases SDD que el modo Full
 // ejecuta (RFC 0006). El catálogo de seeds.SDDPipelinePhaseSlugs vive
 // en el package seeds; replicado aquí para evitar el cycle import.
 //
@@ -26,6 +26,7 @@ var FullPhases = []phases.PhaseSlug{
 	phases.PhaseSlug("sdd-apply"),
 	phases.PhaseSlug("sdd-verify"),
 	phases.PhaseSlug("sdd-judge"),
+	phases.PhaseSlug("sdd-4r"),
 	phases.PhaseSlug("sdd-review"),
 	phases.PhaseSlug("sdd-archive"),
 	phases.PhaseSlug("sdd-onboard"),
@@ -73,8 +74,6 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 			AgentTemplateSlug: string(slug),
 		}
 
-
-
 		if i == 0 {
 			stepInput := in
 			stepInput.PhaseSlug = slug
@@ -93,9 +92,6 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 			step.SubagentPlan = out.SubagentPlan
 		} else {
 
-
-
-
 			out, err := h.Build(ctx, phases.Input{
 				OrganizationID: in.OrganizationID,
 				UserID:         in.UserID,
@@ -105,7 +101,6 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 				PriorOutputs:   map[phases.PhaseSlug]map[string]any{},
 			})
 			if err != nil {
-
 
 				step.RetryPolicy = phases.RetryAutoEligible
 			} else {

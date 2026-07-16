@@ -21,6 +21,7 @@ func TestAllHandlers_SlugIdentity(t *testing.T) {
 		{"sdd-apply", NewSDDApplyHandler},
 		{"sdd-verify", NewSDDVerifyHandler},
 		{"sdd-judge", NewSDDJudgeHandler},
+		{"sdd-4r", NewSDD4RHandler},
 		{"sdd-review", NewSDDReviewHandler},
 		{"sdd-archive", NewSDDArchiveHandler},
 		{"sdd-onboard", NewSDDOnboardHandler},

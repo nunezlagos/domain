@@ -27,10 +27,10 @@ func TestValidateDAG_SkipSuffix_Valid(t *testing.T) {
 		{"skip onboard", []phases.PhaseSlug{"sdd-onboard"}, 10},
 		{"skip archive+onboard", []phases.PhaseSlug{"sdd-archive", "sdd-onboard"}, 9},
 		{"skip review+archive+onboard", []phases.PhaseSlug{"sdd-review", "sdd-archive", "sdd-onboard"}, 8},
-		{"skip judge+review+archive+onboard", []phases.PhaseSlug{"sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard"}, 7},
+		{"skip judge+4r+review+archive+onboard", []phases.PhaseSlug{"sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard"}, 7},
 		{"skip all after explore", []phases.PhaseSlug{
 			"sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
-			"sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard",
+			"sdd-apply", "sdd-verify", "sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 		}, 1},
 	}
 	for _, tt := range tests {
@@ -53,6 +53,7 @@ func TestValidateDAG_SkipMiddle_KeepsDependents_Invalid(t *testing.T) {
 		{"skip apply keep verify", []phases.PhaseSlug{"sdd-apply"}},
 		{"skip verify keep judge", []phases.PhaseSlug{"sdd-verify"}},
 		{"skip judge keep archive", []phases.PhaseSlug{"sdd-judge"}},
+		{"skip 4r keep review", []phases.PhaseSlug{"sdd-4r"}},
 		{"skip archive keep onboard", []phases.PhaseSlug{"sdd-archive"}},
 		{"skip judge+archive keep onboard", []phases.PhaseSlug{"sdd-judge", "sdd-archive"}},
 		{"skip explore keep spec", []phases.PhaseSlug{"sdd-explore"}},
@@ -68,19 +69,16 @@ func TestValidateDAG_SkipMiddle_KeepsDependents_Invalid(t *testing.T) {
 
 func TestValidateDAG_WithStartingPhase_AssumesPriorsDone(t *testing.T) {
 
-
 	err := ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-apply"},
 		phases.PhaseSlug("sdd-design"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requires")
 
-
 	err = ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-archive", "sdd-onboard"},
 		phases.PhaseSlug("sdd-design"))
 	require.NoError(t, err)
-
 
 	err = ValidateDAG(FullPhases,
 		[]phases.PhaseSlug{"sdd-judge"},
@@ -99,7 +97,7 @@ func TestValidateDAG_SkipAll_ValidBecauseNothingKept(t *testing.T) {
 	err := ValidateDAG(FullPhases, []phases.PhaseSlug{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design",
 		"sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge",
-		"sdd-review", "sdd-archive", "sdd-onboard",
+		"sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 	}, "")
 	require.NoError(t, err, "saltar todas las fases es válido (plan vacío)")
 }

@@ -1,5 +1,5 @@
 // Package modes implementa los dispatchers de los 5 modos del orquestador
-// (RFC 0006). Cada modo decide qué subconjunto de las 10 fases ejecutar
+// (RFC 0006). Cada modo decide qué subconjunto de las 12 fases ejecutar
 // y en qué orden.
 //
 // Esta primera versión es in-memory: el dispatcher arma un PhasePlan

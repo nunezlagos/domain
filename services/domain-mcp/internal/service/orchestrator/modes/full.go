@@ -32,7 +32,7 @@ var FullPhases = []phases.PhaseSlug{
 	phases.PhaseSlug("sdd-onboard"),
 }
 
-// BuildFullPlan construye el plan para el modo Full: las 10 fases
+// BuildFullPlan construye el plan para el modo Full: las 12 fases
 // (menos las skipped, opcionalmente arrancando en StartingPhase).
 //
 // IMPORTANTE — lazy build: a diferencia de Express, sólo el PRIMER step

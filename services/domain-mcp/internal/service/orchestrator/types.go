@@ -30,7 +30,7 @@ import (
 //     (propose/design/tasks/judge/archive/onboard). Más amplio que
 //     Express (incluye explore para ubicar el cambio) pero mucho más
 //     barato que Full. Opt-in: nunca es el default.
-//   - ModeFull: pipeline completo de 10 fases.
+//   - ModeFull: pipeline completo de 12 fases.
 //   - ModeSolo: ejecución inline server-side via LLM provider directo
 //     (sin cliente IDE colaborador).
 //   - ModeDetect: dry-run; persiste todo a status='draft' sin ejecutar

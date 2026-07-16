@@ -307,7 +307,7 @@ func (r *Router) RouteWithIntent(ctx context.Context, rawText string, createdBy 
 // orchestratorModeForIntent decide el modo del orquestador según el
 // intent clasificado. Reglas (RFC 0006):
 //   - hotfix/fix → Express (cambios pequeños, fast path 2 fases)
-//   - feature/refactor/doc/rfc → Full (pipeline 10 fases completo)
+//   - feature/refactor/doc/rfc → Full (pipeline 12 fases completo)
 //
 // El cliente puede override pasando Mode explícito si invoca el MCP
 // tool domain_orchestrate directamente.

@@ -8,7 +8,7 @@ import (
 )
 
 // BuildAsyncPlan construye el plan para el modo Async. Reusa BuildFullPlan
-// porque Async ejecuta las 10 fases (igual que Full) pero de forma asíncrona:
+// porque Async ejecuta las 12 fases (igual que Full) pero de forma asíncrona:
 // el caller recibe flow_run_id inmediatamente y un worker procesa los steps
 // emitiendo flow_signals en cada paso.
 //

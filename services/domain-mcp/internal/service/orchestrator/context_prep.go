@@ -34,7 +34,7 @@ const (
 // le sirven. El server decide QUÉ preparar por PhaseSlug (no via interfaz de
 // handler, para no tocar los 11 handlers — decisión de alcance issue-54.2).
 // Vacío/ausente = no se prepara nada (no-op, retrocompat).
-// REQ-54 issue-54.6: las 11 fases registradas tienen entrada EXPLÍCITA —
+// REQ-54 issue-54.6: las 12 fases registradas tienen entrada EXPLÍCITA —
 // vacía = "sin prep, deliberado" (tasks/verify/archive: el contexto útil ya
 // viene en PriorOutputs de la fase anterior). TestPrepContext_AllPhasesMapped
 // congela la invariante: fase nueva sin entrada = test rojo.

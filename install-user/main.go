@@ -314,6 +314,15 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		ok("claudeMdExcludes global: " + claudeSettingsPath(p.Home()))
 	}
 
+	// 5d. Allowlist de domain (DOMAINSERV-35): permissions.allow para que el
+	// protocolo no dependa del clasificador del permission mode "auto".
+	step("Allowlisteando domain en permissions.allow")
+	if err := installClaudePermissions(p.Home(), Timestamp()); err != nil {
+		warnL("permissions.allow: " + err.Error())
+	} else {
+		ok("permissions.allow global: " + claudeSettingsPath(p.Home()))
+	}
+
 	step("Configurando clientes (MCP transport)")
 	results, err := Apply(plan, opts.URL, opts.APIKey)
 	if err != nil {

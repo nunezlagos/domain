@@ -63,7 +63,7 @@ IDE en la fase sdd-apply.
 
 <fases_disponibles>
 sdd-onboard | sdd-explore | sdd-spec | sdd-propose | sdd-design |
-sdd-tasks | sdd-apply | sdd-verify | sdd-judge | sdd-review | sdd-archive
+sdd-tasks | sdd-apply | sdd-verify | sdd-judge | sdd-4r | sdd-review | sdd-archive
 </fases_disponibles>
 
 <output_format>
@@ -673,6 +673,84 @@ JSON estricto:
 			},
 		},
 		{
+			Slug: "sdd-4r",
+			Name: "SDD 4R Review Phase",
+			Role: "phase-worker",
+			SystemPrompt: `<role>
+Eres el agente de la fase sdd-4r: code review por 4 lenses (R1 Risk,
+R2 Readability, R3 Reliability, R4 Resilience) contra el
+initial_review_tree (archivos cambiados en sdd-apply + resumen de
+sdd-verify). Cada lens corre UNA vez, es READ-ONLY, y el controller
+(cliente) tiene toda la autoridad: esta fase NO bloquea el pipeline —
+sdd-review sigue siendo el gate duro de compliance.
+</role>
+
+<lenses>
+- R1 Risk: seguridad, límites de privilegio, exposición de datos,
+  dependencias, vulnerabilidades merge-blocking.
+- R2 Readability: naming, complejidad, intención, mantenibilidad,
+  tamaño del review, claridad de contexto.
+- R3 Reliability: cobertura de tests behavior-first, edge cases,
+  determinismo, contratos, regresiones.
+- R4 Resilience: fallbacks, retry/backoff, degradación elegante,
+  observabilidad, carga, rollback, riesgos de SLO.
+</lenses>
+
+<contrato_de_evidencia>
+Cada finding trae:
+- evidence_class: deterministic | inferential | insufficient
+- causal_disposition: introduced | behavior-activated | worsened |
+  pre-existing | base-only | unknown
+- severity: BLOCKER | CRITICAL | WARNING | SUGGESTION
+- proof_refs: refs verificables (changed-hunk:..., candidate-created-path:...)
+Un finding SIN proof_refs NO puede bloquear. Solo severos
+candidate-caused (introduced/behavior-activated/worsened) con proof
+válido son accionables; WARNING/SUGGESTION son informativos.
+Un resultado 'clean' de una lens exige findings=[] PERO evidence NO
+vacío (prueba de que la lens efectivamente revisó el scope).
+</contrato_de_evidencia>
+
+<output_format>
+JSON estricto con exactamente 4 lens_reports (R1..R4):
+{
+  "lens_reports": [
+    {
+      "lens": "R1",
+      "findings": [
+        {
+          "id": "...",
+          "location": "file:line",
+          "severity": "BLOCKER|CRITICAL|WARNING|SUGGESTION",
+          "evidence_class": "deterministic|inferential|insufficient",
+          "causal_disposition": "introduced|behavior-activated|worsened|pre-existing|base-only|unknown",
+          "proof_refs": ["changed-hunk:...", "candidate-created-path:..."]
+        }
+      ],
+      "evidence": ["qué revisó esta lens en el scope"]
+    }
+  ]
+}
+</output_format>
+
+<reglas>
+- READ-ONLY: no modificar código en esta fase.
+- El controller decide sobre los findings; esta fase no emite gate.
+- 'clean' exige findings=[] con evidence no vacío.
+- Idioma: español.
+</reglas>`,
+			Personality:   "riguroso, evidence-based, no-alarmista",
+			Capabilities:  []string{},
+			Model:         "claude-sonnet-4-6",
+			Temperature:   0.2,
+			MaxTokens:     8192,
+			HandoffPolicy: "forbid",
+			Metadata: map[string]any{
+				"phase":           "sdd-4r",
+				"retry_policy":    "re-emit",
+				"skill_threshold": 0.6,
+			},
+		},
+		{
 			Slug: "sdd-review",
 			Name: "SDD Review Phase (policy/skill compliance)",
 			Role: "phase-worker",
@@ -933,7 +1011,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 12 // 12: REQ-55 exec_mode al inicio + AskUserQuestion en spec/design
+const agentTemplatesSeedVersion = 13 // 13: agrega la fase sdd-4r (code review por 4 lenses) al catálogo
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/jackc/pgx/v5"
@@ -143,18 +144,24 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 		}
 
 
+		// DOMAINSERV-28: un seeder que falla NO aborta la cadena. Se registra el
+		// error en su Report y se continúa con los de Order mayor (antes un solo
+		// seeder roto los enmascaraba a todos). El error de infra (acquire/lock)
+		// sí corta, arriba; acá solo fallan seeders individuales.
 		tx, err := conn.Begin(ctx)
 		if err != nil {
-			return results, fmt.Errorf("begin tx for %s: %w", s.Name(), err)
+			slog.Default().Warn("seed: begin tx falló, se omite el seeder", "seeder", s.Name(), "err", err)
+			results[s.Name()] = Report{Errors: []string{err.Error()}}
+			continue
 		}
 		rep, runErr := s.Run(ctx, tx, env)
 		if runErr != nil {
 			_ = tx.Rollback(ctx)
 			rep.Errors = append(rep.Errors, runErr.Error())
 			results[s.Name()] = rep
-			return results, fmt.Errorf("seeder %s failed: %w", s.Name(), runErr)
+			slog.Default().Warn("seed: seeder falló, continuando con los de Order mayor", "seeder", s.Name(), "err", runErr)
+			continue
 		}
-
 
 		repJSON, _ := json.Marshal(rep)
 		_, err = tx.Exec(ctx, `
@@ -167,12 +174,30 @@ func (r *Registry) RunAll(ctx context.Context, pool *pgxpool.Pool, env Env) (map
 		`, s.Name(), s.Version(), repJSON)
 		if err != nil {
 			_ = tx.Rollback(ctx)
-			return results, fmt.Errorf("record seed_version %s: %w", s.Name(), err)
+			rep.Errors = append(rep.Errors, err.Error())
+			results[s.Name()] = rep
+			slog.Default().Warn("seed: no se pudo registrar seed_version, continuando", "seeder", s.Name(), "err", err)
+			continue
 		}
 		if err := tx.Commit(ctx); err != nil {
-			return results, fmt.Errorf("commit %s: %w", s.Name(), err)
+			rep.Errors = append(rep.Errors, err.Error())
+			results[s.Name()] = rep
+			slog.Default().Warn("seed: commit falló, continuando", "seeder", s.Name(), "err", err)
+			continue
 		}
 		results[s.Name()] = rep
+	}
+
+	// resumen agregado: los seeders con error no frenaron al resto, pero se listan.
+	var failed []string
+	for name, rep := range results {
+		if len(rep.Errors) > 0 {
+			failed = append(failed, name)
+		}
+	}
+	if len(failed) > 0 {
+		sort.Strings(failed)
+		slog.Default().Warn("seed: seeders con errores (los de Order mayor sí corrieron)", "failed", failed)
 	}
 	return results, nil
 }

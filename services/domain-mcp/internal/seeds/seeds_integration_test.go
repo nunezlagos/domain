@@ -60,6 +60,36 @@ func (c *counterSeeder) Run(ctx context.Context, tx pgx.Tx, env seeds.Env) (seed
 	return seeds.Report{Created: 1}, nil
 }
 
+// failingSeeder falla siempre, con Order menor que counterSeeder (1).
+type failingSeeder struct{ name string }
+
+func (f *failingSeeder) Name() string    { return f.name }
+func (f *failingSeeder) Version() int    { return 1 }
+func (f *failingSeeder) Order() int      { return 0 }
+func (f *failingSeeder) IsDevOnly() bool { return false }
+func (f *failingSeeder) Run(ctx context.Context, tx pgx.Tx, env seeds.Env) (seeds.Report, error) {
+	return seeds.Report{}, errors.New("boom")
+}
+
+// DOMAINSERV-28: un seeder que falla (Order menor) NO impide correr los de Order
+// mayor; el error queda en su Report y RunAll no aborta la cadena.
+func TestSeeds_RunAll_SeederFalla_LosDeOrderMayorSiCorren(t *testing.T) {
+	pool, cleanup := setupSeededDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	reg := seeds.NewRegistry()
+	failing := &failingSeeder{name: "failing_seed"}
+	ok := &counterSeeder{name: "ok_seed", version: 1}
+	reg.Register(failing)
+	reg.Register(ok)
+
+	reports, err := reg.RunAll(ctx, pool, seeds.EnvProd)
+
+	require.NoError(t, err, "el fallo de un seeder ya no aborta la cadena")
+	require.Equal(t, int32(1), ok.calls.Load(), "el seeder de Order mayor corrió pese al fallo previo")
+	require.NotEmpty(t, reports["failing_seed"].Errors, "el fallo se registra en el reporte del seeder roto")
+}
+
 // Escenario: RunAll ejecuta primer seed.
 func TestSeeds_RunAll_FirstRun(t *testing.T) {
 	pool, cleanup := setupSeededDB(t)

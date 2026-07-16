@@ -74,5 +74,35 @@ func (h *sdd4rHandler) Validate(_ context.Context, _ *Output, result ClientResul
 	if len(reports) < fourRLensCount {
 		return fmt.Errorf("sdd-4r: 'lens_reports' requiere las %d lenses (R1..R4), recibí %d", fourRLensCount, len(reports))
 	}
+	for i, r := range reports {
+		rep, _ := r.(map[string]any)
+		if err := validateLensReport(rep); err != nil {
+			return fmt.Errorf("sdd-4r: lens_report[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// validateLensReport aplica el contrato de evidencia (DOMAINSERV-11): un
+// 'clean' (findings vacío) exige evidence no vacío; cada finding debe traer
+// evidence_class y proof_refs — sin proof no puede accionar. El error es
+// inline (recuperable, re-emit), nunca un sentinela de bloqueo.
+func validateLensReport(rep map[string]any) error {
+	findings, _ := rep["findings"].([]any)
+	if len(findings) == 0 {
+		if ev, _ := rep["evidence"].([]any); len(ev) == 0 {
+			return errors.New("'clean' exige evidence no vacío")
+		}
+		return nil
+	}
+	for _, f := range findings {
+		fm, _ := f.(map[string]any)
+		if s, _ := fm["evidence_class"].(string); s == "" {
+			return errors.New("finding sin evidence_class")
+		}
+		if refs, _ := fm["proof_refs"].([]any); len(refs) == 0 {
+			return errors.New("finding sin proof_refs no puede accionar")
+		}
+	}
 	return nil
 }

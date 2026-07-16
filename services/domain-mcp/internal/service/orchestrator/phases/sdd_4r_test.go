@@ -36,10 +36,41 @@ func TestSDD4RHandler_Build_RawTextVacio_DevuelveError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSDD4RHandler_Validate_CuatroLenses_DevuelveNil(t *testing.T) {
+func cleanLens(id string) map[string]any {
+	return map[string]any{"lens": id, "findings": []any{}, "evidence": []any{"scope revisado"}}
+}
+
+func TestSDD4RHandler_Validate_CuatroLensesClean_DevuelveNil(t *testing.T) {
 	res := ClientResult{Output: map[string]any{"lens_reports": []any{
-		map[string]any{"lens": "R1"}, map[string]any{"lens": "R2"},
-		map[string]any{"lens": "R3"}, map[string]any{"lens": "R4"},
+		cleanLens("R1"), cleanLens("R2"), cleanLens("R3"), cleanLens("R4"),
+	}}}
+	require.NoError(t, NewSDD4RHandler().Validate(context.Background(), nil, res))
+}
+
+func TestSDD4RHandler_Validate_CleanSinEvidence_DevuelveError(t *testing.T) {
+	res := ClientResult{Output: map[string]any{"lens_reports": []any{
+		map[string]any{"lens": "R1", "findings": []any{}, "evidence": []any{}},
+		cleanLens("R2"), cleanLens("R3"), cleanLens("R4"),
+	}}}
+	require.Error(t, NewSDD4RHandler().Validate(context.Background(), nil, res))
+}
+
+func TestSDD4RHandler_Validate_FindingSinProofRefs_DevuelveError(t *testing.T) {
+	res := ClientResult{Output: map[string]any{"lens_reports": []any{
+		map[string]any{"lens": "R1", "findings": []any{
+			map[string]any{"id": "f1", "severity": "BLOCKER", "evidence_class": "deterministic", "proof_refs": []any{}},
+		}},
+		cleanLens("R2"), cleanLens("R3"), cleanLens("R4"),
+	}}}
+	require.Error(t, NewSDD4RHandler().Validate(context.Background(), nil, res))
+}
+
+func TestSDD4RHandler_Validate_FindingConProof_DevuelveNil(t *testing.T) {
+	res := ClientResult{Output: map[string]any{"lens_reports": []any{
+		map[string]any{"lens": "R1", "findings": []any{
+			map[string]any{"id": "f1", "severity": "BLOCKER", "evidence_class": "deterministic", "proof_refs": []any{"changed-hunk:x.go:10"}},
+		}},
+		cleanLens("R2"), cleanLens("R3"), cleanLens("R4"),
 	}}}
 	require.NoError(t, NewSDD4RHandler().Validate(context.Background(), nil, res))
 }

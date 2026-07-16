@@ -14,7 +14,7 @@ func TestFirstResponsePromptSeeder_ImplementsSeederInterface(t *testing.T) {
 func TestFirstResponsePromptSeeder_Metadata(t *testing.T) {
 	s := &FirstResponsePromptSeeder{}
 	require.Equal(t, "first_response_prompt", s.Name())
-	require.Equal(t, 3, s.Version())
+	require.Equal(t, 4, s.Version())
 	require.Equal(t, 63, s.Order())
 	require.False(t, s.IsDevOnly())
 }

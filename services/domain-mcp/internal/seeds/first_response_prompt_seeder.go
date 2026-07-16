@@ -59,7 +59,7 @@ R7. El bloque completo: maximo 12 lineas.`
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 3 }
+func (s *FirstResponsePromptSeeder) Version() int    { return 4 } // 4: guard is_user_modified (DOMAINSERV-27)
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 
@@ -80,13 +80,19 @@ func (s *FirstResponsePromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (
 
 	switch {
 	case err == nil:
-		if _, uerr := tx.Exec(ctx,
-			`UPDATE prompts SET body = $1, description = $2 WHERE id = $3::uuid`,
+		ct, uerr := tx.Exec(ctx,
+			`UPDATE prompts SET body = $1, description = $2
+			 WHERE id = $3::uuid AND NOT is_user_modified`,
 			body, description, existingID,
-		); uerr != nil {
+		)
+		if uerr != nil {
 			return rep, fmt.Errorf("update first-response prompt: %w", uerr)
 		}
-		rep.Updated++
+		if ct.RowsAffected() == 0 {
+			rep.Preserved++
+		} else {
+			rep.Updated++
+		}
 	case errors.Is(err, pgx.ErrNoRows):
 		if _, ierr := tx.Exec(ctx,
 			`INSERT INTO prompts (project_id, created_by, slug, version,

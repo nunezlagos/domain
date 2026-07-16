@@ -20,7 +20,7 @@ func TestTriagePromptSeeder_ImplementsSeederInterface(t *testing.T) {
 func TestTriagePromptSeeder_Metadata(t *testing.T) {
 	s := &TriagePromptSeeder{}
 	require.Equal(t, "triage_prompt", s.Name())
-	require.Equal(t, 1, s.Version())
+	require.Equal(t, 2, s.Version())
 	require.Equal(t, 60, s.Order())
 	require.False(t, s.IsDevOnly())
 }

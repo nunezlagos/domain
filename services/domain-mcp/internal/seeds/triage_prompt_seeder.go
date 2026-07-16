@@ -35,7 +35,7 @@ const triagePromptSlug = "triage"
 type TriagePromptSeeder struct{}
 
 func (s *TriagePromptSeeder) Name() string    { return "triage_prompt" }
-func (s *TriagePromptSeeder) Version() int    { return 1 }
+func (s *TriagePromptSeeder) Version() int    { return 2 } // 2: guard is_user_modified (DOMAINSERV-27)
 func (s *TriagePromptSeeder) Order() int      { return 60 }
 func (s *TriagePromptSeeder) IsDevOnly() bool { return false }
 
@@ -58,13 +58,19 @@ func (s *TriagePromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env) (Report,
 	switch {
 	case err == nil:
 
-		if _, uerr := tx.Exec(ctx,
-			`UPDATE prompts SET body = $1, description = $2 WHERE id = $3::uuid`,
+		ct, uerr := tx.Exec(ctx,
+			`UPDATE prompts SET body = $1, description = $2
+			 WHERE id = $3::uuid AND NOT is_user_modified`,
 			body, description, existingID,
-		); uerr != nil {
+		)
+		if uerr != nil {
 			return rep, fmt.Errorf("update triage prompt: %w", uerr)
 		}
-		rep.Updated++
+		if ct.RowsAffected() == 0 {
+			rep.Preserved++
+		} else {
+			rep.Updated++
+		}
 	case errors.Is(err, pgx.ErrNoRows):
 
 		if _, ierr := tx.Exec(ctx,

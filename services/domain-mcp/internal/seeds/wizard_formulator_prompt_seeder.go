@@ -31,7 +31,7 @@ const wizardFormulatorPromptSlug = "wizard-formulator"
 type WizardFormulatorPromptSeeder struct{}
 
 func (s *WizardFormulatorPromptSeeder) Name() string    { return "wizard_formulator_prompt" }
-func (s *WizardFormulatorPromptSeeder) Version() int    { return 1 }
+func (s *WizardFormulatorPromptSeeder) Version() int    { return 2 } // 2: guard is_user_modified (DOMAINSERV-27)
 func (s *WizardFormulatorPromptSeeder) Order() int      { return 62 }
 func (s *WizardFormulatorPromptSeeder) IsDevOnly() bool { return false }
 
@@ -54,13 +54,19 @@ func (s *WizardFormulatorPromptSeeder) Run(ctx context.Context, tx pgx.Tx, _ Env
 	switch {
 	case err == nil:
 
-		if _, uerr := tx.Exec(ctx,
-			`UPDATE prompts SET body = $1, description = $2 WHERE id = $3::uuid`,
+		ct, uerr := tx.Exec(ctx,
+			`UPDATE prompts SET body = $1, description = $2
+			 WHERE id = $3::uuid AND NOT is_user_modified`,
 			body, description, existingID,
-		); uerr != nil {
+		)
+		if uerr != nil {
 			return rep, fmt.Errorf("update wizard-formulator prompt: %w", uerr)
 		}
-		rep.Updated++
+		if ct.RowsAffected() == 0 {
+			rep.Preserved++
+		} else {
+			rep.Updated++
+		}
 	case errors.Is(err, pgx.ErrNoRows):
 
 		if _, ierr := tx.Exec(ctx,

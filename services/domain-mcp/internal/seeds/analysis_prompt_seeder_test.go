@@ -20,7 +20,7 @@ func TestAnalysisPromptSeeder_ImplementsSeederInterface(t *testing.T) {
 func TestAnalysisPromptSeeder_Metadata(t *testing.T) {
 	s := &AnalysisPromptSeeder{}
 	require.Equal(t, "analysis_prompt", s.Name())
-	require.Equal(t, 1, s.Version())
+	require.Equal(t, 2, s.Version())
 	require.Equal(t, 61, s.Order())
 	require.False(t, s.IsDevOnly())
 }

@@ -20,7 +20,7 @@ func TestWizardFormulatorPromptSeeder_ImplementsSeederInterface(t *testing.T) {
 func TestWizardFormulatorPromptSeeder_Metadata(t *testing.T) {
 	s := &WizardFormulatorPromptSeeder{}
 	require.Equal(t, "wizard_formulator_prompt", s.Name())
-	require.Equal(t, 1, s.Version())
+	require.Equal(t, 2, s.Version())
 	require.Equal(t, 62, s.Order())
 	require.False(t, s.IsDevOnly())
 }

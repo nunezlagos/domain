@@ -189,6 +189,42 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 	require.Contains(t, caps, "code-search")
 }
 
+// Guard DOMAINSERV-15/18: la sección de seguridad shift-left se HORNEA en el
+// system_prompt del agent_template (no es skill runtime). Se pone ROJO si alguien
+// borra la sección en cualquiera de las 3 fases SDD. Para sdd-4r los marcadores YA
+// existen (R1 Risk + contrato_de_evidencia); sdd-spec/sdd-design son rojo-primero
+// hasta hornear el bloque seguridad_shift_left y bumpear agentTemplatesSeedVersion.
+func TestSeedAgentTemplatesForOrg_SystemPrompt_ShiftLeftSecuritySection_Present(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, uuid.New())
+	require.NoError(t, err)
+
+	cases := []struct {
+		slug    string
+		markers []string
+	}{
+		{slug: "sdd-4r", markers: []string{"seguridad", "causal_disposition", "proof_refs"}},
+		{slug: "sdd-spec", markers: []string{"seguridad_shift_left", "causal_disposition", "pre-existing"}},
+		{slug: "sdd-design", markers: []string{"seguridad_shift_left", "causal_disposition", "pre-existing"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.slug, func(t *testing.T) {
+			var prompt string
+			require.NoError(t, pools.App.QueryRow(ctx,
+				`SELECT system_prompt FROM agent_templates WHERE slug=$1`, tc.slug,
+			).Scan(&prompt))
+			for _, m := range tc.markers {
+				require.Contains(t, prompt, m,
+					"%s: falta el marcador de seguridad shift-left %q — ¿se borró la sección? (DOMAINSERV-15)",
+					tc.slug, m)
+			}
+		})
+	}
+}
+
 // Sabotaje: SeedSkillsForOrg con is_user_modified=TRUE NO debe sobrescribir.
 func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 	pools, cleanup := setupSeedDB(t)

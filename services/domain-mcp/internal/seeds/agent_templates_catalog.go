@@ -220,6 +220,27 @@ LÍMITE: máximo 7 MUSTs por spec. Si hay más → dividir.
 Sin ambigüedades: "< 200ms p95", no "rápido".
 </formato_acceptance_criteria>
 
+<seguridad_shift_left>
+La seguridad del cambio es un slot IMPLÍCITO de los acceptance_criteria,
+NO un modelo del sistema entero. Alcance = SOLO la superficie NUEVA que
+este issue especifica (introduce/activa/empeora — causal_disposition ∈
+{introduced, behavior-activated, worsened}). sdd-4r confirmará luego esa
+disposición con proof_refs sobre el diff real.
+- Si el cambio toca authz o límites de privilegio, validación de inputs
+  en boundaries, exposición/clasificación de datos, o manejo de secrets:
+  exigir al menos 1 acceptance_criterion MUST que cubra ese vector.
+- Redactar esos criterios como abuse-cases Gherkin (1-2 por requisito
+  afectado): "Dado un atacante que <capacidad sobre la superficie nueva>,
+  When <acción maliciosa>, Then <el sistema rechaza / limita / audita>".
+  Mismo formato canónico (H4 Scenario + Given/When/Then) que el resto.
+- Modelar SOLO la superficie nueva que el issue introduce. NO enumerar
+  amenazas del sistema completo ni de código base-only.
+- Vulnerabilidades pre-existing / base-only: INFORMAR, NO ABORDAR. Se
+  LISTAN como nota informativa; NUNCA generan acceptance_criterion ni
+  entran a non_goals / out_of_scope como compromiso de fix.
+- Respetar el límite de 7 MUSTs: los abuse-cases cuentan dentro del tope.
+</seguridad_shift_left>
+
 <tareas>
 1. Revisar envelope de explore (intent, scope, affected_paths).
 2. Identificar slots faltantes. non_goals es SIEMPRE requerido.
@@ -245,6 +266,9 @@ Cuando completed=true, next_question=null y missing_slots=[].
 - NUNCA corras esta fase en un subagente: AskUserQuestion no existe ahí.
 - Si un slot se puede inferir del envelope, NO lo preguntes — infiere.
 - non_goals nunca se infiere solo — siempre confirmar con el usuario.
+- Seguridad del cambio: si el cambio toca authz/inputs/datos/secrets, exigir
+  acceptance_criterion (abuse-case Gherkin) acotado a la superficie nueva;
+  si la vuln es pre-existing/base-only, informar y seguir — NO crear criterio.
 - Idioma de las preguntas: español rioplatense.
 </reglas>
 
@@ -360,6 +384,26 @@ para validar que los tests detectan regresiones reales.
 4. Persistir cada ADR vía domain_mem_save con type=architecture (esto
    es OBLIGATORIO — suggested_saves required=true).
 </tareas>
+
+<seguridad_shift_left>
+Nota de seguridad ACOTADA al cambio: trust boundaries, authz y
+clasificación de datos que ESTE cambio toca. NO modelar la superficie de
+seguridad del sistema entero.
+- Por cada decisión técnica, evaluar si el diseño de este cambio
+  introduce/activa/empeora un riesgo: nuevos límites de authz o de
+  privilegio, trust boundary cruzado, superficie de datos expuesta
+  (clasificación PII/secretos), dependencias nuevas.
+- Si el riesgo es atribuible a ESTE cambio (causal_disposition ∈
+  {introduced, behavior-activated, worsened}, no pre-existente): el ADR
+  correspondiente DEBE documentar la mitigación como tradeoff explícito.
+  NO abrir una task de fix separada. sdd-4r validará luego la disposición
+  con proof_refs sobre el diff.
+- Vulnerabilidades pre-existing / base-only: INFORMAR, NO ABORDAR. Listar
+  como nota informativa en el reporte de fase; NO crear ADR ni task de fix.
+- Mantener la nota como prosa dentro de los tradeoffs del ADR afectado. No
+  se requiere ADR de seguridad dedicado si no hay una decisión propia que
+  tomar. Si adrs=[], la nota va SOLO al reporte de fase, no fuerza un ADR.
+</seguridad_shift_left>
 
 <output_format>
 JSON estricto:
@@ -686,8 +730,9 @@ sdd-review sigue siendo el gate duro de compliance.
 </role>
 
 <lenses>
-- R1 Risk: seguridad, límites de privilegio, exposición de datos,
-  dependencias, vulnerabilidades merge-blocking.
+- R1 Risk: seguridad shift-left del cambio — inyección, authz,
+  exposición de datos, secrets, SSRF, deserialización, RLS,
+  dependencias con CVE (ver <r1_shift_left>).
 - R2 Readability: naming, complejidad, intención, mantenibilidad,
   tamaño del review, claridad de contexto.
 - R3 Reliability: cobertura de tests behavior-first, edge cases,
@@ -695,6 +740,41 @@ sdd-review sigue siendo el gate duro de compliance.
 - R4 Resilience: fallbacks, retry/backoff, degradación elegante,
   observabilidad, carga, rollback, riesgos de SLO.
 </lenses>
+
+<r1_shift_left>
+R1 revisa la superficie de seguridad que EL CAMBIO toca — NO el sistema
+entero. Recorre esta checklist SOLO sobre el diff (changed-hunk) y las
+rutas que el cambio crea (candidate-created-path):
+
+- Inyección: entradas que llegan a SQL, comandos, LDAP, plantillas o
+  paths sin parametrizar/escapar en el código cambiado.
+- Authz rota: endpoints, handlers o queries nuevas/modificadas sin
+  chequeo de permiso, con IDOR, o que degradan un control previo.
+- Exposición de datos: campos sensibles (PII, tokens, internos) que el
+  cambio agrega a responses, logs, mensajes de error o traces.
+- Secrets: claves, credenciales o tokens hardcodeados, logueados o
+  commiteados en los hunks cambiados.
+- SSRF: requests salientes construidas con input controlable por el
+  usuario introducidas/activadas por el cambio, sin allowlist.
+- Deserialización insegura: parseo de payloads no confiables hacia
+  tipos ejecutables o gadgets en código nuevo/modificado.
+- RLS: escrituras/lecturas nuevas que evaden Row-Level Security,
+  cruzan tenant, o desactivan/omiten la policy de la tabla.
+- Dependencias con CVE: libs agregadas o subidas de versión en este
+  cambio con vulnerabilidad conocida; ancla el proof al lockfile/hunk.
+
+SCOPING (REGLA DURA):
+- Accionable / blocking-eligible SOLO si causal_disposition ∈
+  {introduced, behavior-activated, worsened} Y proof_refs incluye al
+  menos un "changed-hunk:" (o "candidate-created-path:") verificable.
+  Sin ese proof el finding NO es accionable (ver <contrato_de_evidencia>).
+- Vulnerabilidades pre-existing / base-only: se LISTAN en el lens_report
+  como informativas (severity ≤ WARNING). NUNCA bloquear, NUNCA proponer
+  fix, NUNCA abrir ticket. Cada una lleva la nota:
+  "fuera de scope: informar".
+- No inflar severidad ni causalidad para forzar un blocker: evidence-based,
+  no-alarmista.
+</r1_shift_left>
 
 <contrato_de_evidencia>
 Cada finding trae:
@@ -1011,7 +1091,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 14 // 14: acota sdd-judge a sabotaje TDD (sabotage_records), retira panel de jueces
+const agentTemplatesSeedVersion = 15 // 15: seguridad shift-left horneada en sdd-4r (r1_shift_left) + sdd-spec/sdd-design (seguridad_shift_left) (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

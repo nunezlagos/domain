@@ -287,6 +287,18 @@ for _svc in "$INSTALL_DIR/services"/*/; do
   fi
   ln -sfn ../../.env "$_svc/.env"
 done
+# Backup pre-migración (DOMAINSERV-26): en redeploy (domain-postgres ya corre)
+# respaldamos la BD ANTES de make down + el init-container domain-migrate (migrate up).
+# En install fresh no existe postgres → nada que respaldar. Si el backup falla en un
+# redeploy, ABORTAMOS: no migrar sin red de seguridad. La rotación de backup.sh
+# (BACKUP_DAILY_RETAIN) evita llenar el disco del server.
+if docker ps -q -f "name=^domain-postgres$" | grep -q .; then
+  log "Backup pre-migración (redeploy con datos)..."
+  "$INSTALL_DIR/services/scripts/backup.sh" || fail "backup pre-migración falló — abortando deploy para no migrar sin respaldo"
+  ok "backup pre-migración OK"
+else
+  log "Install fresh (sin postgres previo) — se omite backup pre-migración"
+fi
 make down 2>/dev/null || true
 # Re-check huerfanos despues del down (incluyendo running que no estan en el compose).
 CLEANED=0

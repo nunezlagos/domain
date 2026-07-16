@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 8
+const skillsSeedVersion = 9 // 9: neutralización de voseo en bodies de skills (DOMAINSERV-20)
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -210,10 +210,10 @@ NO uses headers ni comentarios meta. Solo el resumen.
 </output_format>
 
 <reglas>
-- Mantenete fiel al input. No inventes hechos.
+- Mantente fiel al input. No inventes hechos.
 - Preserva nombres propios, fechas, números exactos.
 - Idioma del resumen: igual al del input.
-- Si el input ya es ≤ max_sentences, devolvelo tal cual.
+- Si el input ya es ≤ max_sentences, devuélvelo tal cual.
 </reglas>
 
 <example>
@@ -260,7 +260,7 @@ JSON estricto:
   "location": [...],
   "product":  [...]
 }
-Si una categoría no tiene matches, devolvela como [].
+Si una categoría no tiene matches, devuélvela como [].
 </output_format>
 
 <reglas>
@@ -382,7 +382,7 @@ body: separado de subject por línea en blanco. Explica POR QUÉ, no qué (el di
 - Subject en español, imperativo: "agrega", "arregla", "refactoriza".
 - NUNCA incluyas "Co-Authored-By: Claude" ni similar — está prohibido por policy.
 - breaking=true → agrega "!" después del tipo: "feat(api)!: ..."
-- scope: 1-2 palabras kebab-case del área tocada. Si es ambiguo, omitilo.
+- scope: 1-2 palabras kebab-case del área tocada. Si es ambiguo, omítelo.
 - Si hay BREAKING CHANGE en body, agrega línea "BREAKING CHANGE: ..." al final.
 </reglas>
 
@@ -571,7 +571,7 @@ JSON estricto:
 
 <reglas>
 - risks=[] si la query es trivial y segura.
-- n_plus_1: SELECT dentro de loop conceptual (no detectable solo del SQL, marcalo solo si hay subselects que probablemente sean por-row).
+- n_plus_1: SELECT dentro de loop conceptual (no detectable solo del SQL, márcalo solo si hay subselects que probablemente sean por-row).
 - seq_scan: WHERE sobre columnas SIN index sugerido por table_context.
 - missing_where: UPDATE o DELETE SIN WHERE. severity=critical.
 - Recomendaciones concretas: "agregar index parcial WHERE deleted_at IS NULL".

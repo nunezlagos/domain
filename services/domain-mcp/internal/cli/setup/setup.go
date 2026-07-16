@@ -128,7 +128,7 @@ func CreateAIDirectives(cwd string) (string, error) {
 	}
 	content := `# Directivas para agentes AI — proyecto Domain
 
-Este proyecto tiene **Domain MCP** registrado. Usá las tools ` + "`domain_*`" + ` para:
+Este proyecto tiene **Domain MCP** registrado. Usa las tools ` + "`domain_*`" + ` para:
 
 - **Memoria persistente**: ` + "`domain_mem_save`" + ` para guardar observaciones,
   ` + "`domain_mem_search`" + ` para recuperar contexto previo.
@@ -139,10 +139,10 @@ Este proyecto tiene **Domain MCP** registrado. Usá las tools ` + "`domain_*`" +
   (prompts versionados, API calls validadas).
 - **Prompts**: ` + "`domain_prompt_render`" + ` con templates parametrizados.
 
-**Antes de actuar**: chequeá memoria con ` + "`domain_mem_search`" + ` para evitar
+**Antes de actuar**: revisa la memoria con ` + "`domain_mem_search`" + ` para evitar
 trabajo duplicado y mantener continuidad cross-sesión.
 
-**Al terminar tareas no triviales**: guardá un resumen con
+**Al terminar tareas no triviales**: guarda un resumen con
 ` + "`domain_mem_save`" + ` (decisión, bug fix, convention, gotcha) — esto
 preserva contexto para futuras sesiones del mismo proyecto.
 
@@ -155,7 +155,7 @@ NUNCA modificar archivos:
 - ` + "`credentials.*`" + `, ` + "`*credentials*`" + `
 - ` + "`*.kube/config`" + ` (cluster creds)
 
-Si una tarea requiere modificar uno de esos → preguntá explícito al humano antes.
+Si una tarea requiere modificar uno de esos → pregunta explícitamente al humano antes.
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return "", fmt.Errorf("write directives: %w", err)

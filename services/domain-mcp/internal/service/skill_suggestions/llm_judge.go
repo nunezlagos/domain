@@ -73,9 +73,9 @@ func (j *LLMJudge) RefineContent(ctx context.Context, skillSlug, currentContent,
 	if err != nil {
 		return "", err
 	}
-	system := "Sos un editor experto de skills (prompts/instrucciones reutilizables) de un agente. " +
+	system := "Eres un editor experto de skills (prompts/instrucciones reutilizables) de un agente. " +
 		"Te dan el CONTENIDO ACTUAL de un skill y una INSTRUCCION de mejora. " +
-		"Devolves UNICAMENTE el nuevo contenido del skill, listo para guardar, sin explicaciones, " +
+		"Devuelves UNICAMENTE el nuevo contenido del skill, listo para guardar, sin explicaciones, " +
 		"sin markdown de cierre, sin prefijos. Conserva el formato y el idioma del original."
 	var user strings.Builder
 	fmt.Fprintf(&user, "Skill: %s\n\n", skillSlug)
@@ -209,20 +209,20 @@ func (j *LLMJudge) Evaluate(ctx context.Context, in SkillInput) ([]CreateInput, 
 
 // buildJudgePrompt arma un prompt determinista que pide JSON estricto.
 func buildJudgePrompt(in SkillInput) (system, user string) {
-	system = "Sos un auditor de skills (prompts/herramientas reutilizables) de un agente. " +
+	system = "Eres un auditor de skills (prompts/herramientas reutilizables) de un agente. " +
 		"Te dan UN skill con sus metricas de 30 dias, feedback y skills similares. " +
 		"Proponer 0 o mas acciones, eligiendo kind entre:\n" +
 		"  split   : el skill hace demasiado (invocaciones/dia alto Y contenido grande Y argumentos variados). Dividir en hijos cohesivos.\n" +
 		"  merge   : hay otro skill MUY similar y ambos se usan poco. Consolidar.\n" +
 		"  refine  : el skill falla mucho (failure_rate>30%) O es lento (avg>30s) O junta feedback negativo (>=3 en 30d). Mejorar el contenido.\n" +
 		"  archive : 0 invocaciones en 90 dias Y NO es seed. Archivar.\n" +
-		"Se CONSERVADOR: si ninguna regla aplica con claridad, devolve lista vacia. NO inventes skills ni slugs que no esten en los similares.\n" +
+		"Se CONSERVADOR: si ninguna regla aplica con claridad, devuelve lista vacia. NO inventes skills ni slugs que no esten en los similares.\n" +
 		"El payload depende del kind:\n" +
 		"  split   -> {\"children\":[{\"slug\":\"\",\"name\":\"\",\"description\":\"\",\"instruction\":\"que debe hacer este hijo\"}, ...]}  (>=2 hijos)\n" +
 		"  merge   -> {\"with\":[\"<slug>\"],\"merged_slug\":\"\",\"merged_name\":\"\",\"merged_content\":\"(opcional)\"}\n" +
 		"  refine  -> {\"instruction\":\"que mejorar\",\"changelog\":\"\"}  (el contenido nuevo se genera al aplicar)\n" +
 		"  archive -> {\"reason\":\"\"}\n" +
-		"Respondé EXCLUSIVAMENTE un objeto JSON:\n" +
+		"Responde EXCLUSIVAMENTE un objeto JSON:\n" +
 		"{\"suggestions\":[{\"kind\":\"\",\"confidence\":0.0,\"rationale\":\"breve\",\"payload\":{...}}]}\n" +
 		"confidence en 0..1. Sin texto adicional, sin markdown, sin fences."
 
@@ -244,7 +244,7 @@ func buildJudgePrompt(in SkillInput) (system, user string) {
 	for _, s := range in.Similar {
 		fmt.Fprintf(&sb, "  - %s (%s) score=%.3f\n", s.Slug, s.Name, s.Score)
 	}
-	sb.WriteString("\nDevolvé solo el JSON {\"suggestions\":[...]} (puede estar vacio).")
+	sb.WriteString("\nDevuelve solo el JSON {\"suggestions\":[...]} (puede estar vacio).")
 	return system, sb.String()
 }
 

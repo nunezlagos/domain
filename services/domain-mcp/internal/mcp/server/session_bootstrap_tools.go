@@ -221,10 +221,10 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 				"cwd":             cwd,
 			},
 			"existing_rules_files": rulesFiles,
-			"next_step":            "Preguntale al usuario: (1) confirmá slug='" + suggestionSlug + "' o pasame otro; (2) confirmá remote=" + gitRemote + " (origin) o pasame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llamá domain_session_register.",
+			"next_step":            "Pregunta al usuario: (1) confirma slug='" + suggestionSlug + "' o pásame otro; (2) confirma remote=" + gitRemote + " (origin) o pásame otro; (3) ¿hay otros remotos (mirror/upstream)?; (4) qué workflow usan (pr/mr/merge/trunk_based); (5) ¿algo crítico sobre estructura (mono-repo, multi-servicio, migrations manuales, stack)? Después llama domain_session_register.",
 		}
 		if len(rulesFiles) > 0 {
-			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Después de registrar el proyecto, leelos con tu tool Read y llamá domain_project_policy_import_from_text por cada uno para que domain herede lo que el repo ya documenta sin pisar nada."
+			resp["suggested_imports_note"] = "Detecté " + fmt.Sprintf("%d", len(rulesFiles)) + " archivos AI-rules en el repo. Después de registrar el proyecto, léelos con tu tool Read y llama domain_project_policy_import_from_text por cada uno para que domain herede lo que el repo ya documenta sin pisar nada."
 		}
 		return toolResultJSON(resp)
 	}
@@ -391,12 +391,12 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 	// siendo explícito vía domain_code_build.
 	codeGraph := h.codeGraphStaleness(ctx, projID, gitHead)
 
-	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considerá leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llamá domain_policy_list o domain_project_policy_list según corresponda."
+	nextStep := "OK — proyecto conocido. Antes de actuar: si head_changed=true, considera leer git log <last_known_head>..<current_head> y refrescar memorias relevantes con domain_mem_save. Llama domain_policy_list o domain_project_policy_list según corresponda."
 	if headChanged {
-		nextStep = "HEAD cambió desde la última sesión. Ejecutá `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persistilos con domain_mem_save antes de seguir."
+		nextStep = "HEAD cambió desde la última sesión. Ejecuta `git log --oneline " + safeDeref(lastHead) + ".." + gitHead + "` para ver qué cambió; si hay decisiones/bugfixes nuevos, persístelos con domain_mem_save antes de seguir."
 	}
 	if activeRun != nil {
-		nextStep = "Hay un flow_run SDD en estado '" + safeDeref(activeRunStatus) + "' — quedó una tarea a medias. Llamá domain_orchestrate_status para ver en qué fase está y retomá; o si el usuario ordena suspenderla/archivarla, cambiá su estado en vez de reiniciar. " + nextStep
+		nextStep = "Hay un flow_run SDD en estado '" + safeDeref(activeRunStatus) + "' — quedó una tarea a medias. Llama domain_orchestrate_status para ver en qué fase está y retómala; o si el usuario ordena suspenderla/archivarla, cambia su estado en vez de reiniciar. " + nextStep
 	}
 	if cgSug, _ := codeGraph["suggestion"].(string); cgSug != "" {
 		nextStep = cgSug + " " + nextStep
@@ -413,7 +413,7 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 	if len(importCandidates) > 0 {
 		nextStep = "Hay " + fmt.Sprintf("%d", len(importCandidates)) +
 			" archivo(s) AI-rules del repo SIN importar a domain (ver import_candidates). " +
-			"Leelos, y proponé al usuario con AskUserQuestion cuáles importar como " +
+			"Léelos, y propón al usuario con AskUserQuestion cuáles importar como " +
 			"project_policy (o platform si aplica a toda la org) antes de persistir. " + nextStep
 	}
 

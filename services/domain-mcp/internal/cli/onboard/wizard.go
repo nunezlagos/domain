@@ -151,7 +151,7 @@ func (w *Wizard) auth(ctx context.Context, isFirstRun bool, email string) (*Cred
 		return w.bootstrap(ctx, email)
 	}
 	return nil, fmt.Errorf("server ya tiene usuarios; no hay flujo OTP. " +
-		"Pedile al admin que cree un miembro con /auth/member-create y pasame la API key via --api-key")
+		"Pídele al admin que cree un miembro con /auth/member-create y pásame la API key via --api-key")
 }
 
 func (w *Wizard) detectFirstRun(ctx context.Context) (bool, int, error) {

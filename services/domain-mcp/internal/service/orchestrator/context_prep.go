@@ -135,9 +135,9 @@ func (s *Service) refineWithMinimax(ctx context.Context, slug, raw string) strin
 		Model:       anthropic.MiniMaxModel,
 		Temperature: 0.2,
 		MaxTokens:   1024,
-		SystemPrompt: "Sos un asistente que filtra contexto para una fase de desarrollo. " +
-			"Recibís policies, skills y memoria de un proyecto. Devolvé SOLO lo pertinente a la fase '" + slug + "', " +
-			"conciso, en markdown. No inventes; si nada aplica, devolvé el input tal cual.",
+		SystemPrompt: "Eres un asistente que filtra contexto para una fase de desarrollo. " +
+			"Recibes policies, skills y memoria de un proyecto. Devuelve SOLO lo pertinente a la fase '" + slug + "', " +
+			"conciso, en markdown. No inventes; si nada aplica, devuelve el input tal cual.",
 		Messages: []llm.Message{{Role: "user", Content: raw}},
 	})
 	if err != nil || resp == nil || strings.TrimSpace(resp.Content) == "" {

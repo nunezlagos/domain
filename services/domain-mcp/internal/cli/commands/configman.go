@@ -113,7 +113,7 @@ Base URL (default http://localhost:8000).
 .nf
 domain projects ls
 domain search "pgvector" --limit 5 --format json
-domain agents run my-agent "Revisá el PR"
+domain agents run my-agent "Revisa el PR"
 domain obs save --project demo "Decidimos usar X"
 .fi
 .SH SEE ALSO

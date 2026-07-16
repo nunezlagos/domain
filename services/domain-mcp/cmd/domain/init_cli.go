@@ -124,11 +124,11 @@ Para rollback: domain workflow restore <rel-path>`)
 
 	fmt.Println()
 	fmt.Println("Próximos pasos:")
-	fmt.Println("  1. Conectá tu agente IA al MCP de Domain:")
+	fmt.Println("  1. Conecta tu agente IA al MCP de Domain:")
 	fmt.Println("     domain setup claude-code --api-key sk_... --base-url http://localhost:8000")
-	fmt.Println("  2. Verificá los archivos importados:")
+	fmt.Println("  2. Verifica los archivos importados:")
 	fmt.Println("     domain workflow list")
-	fmt.Println("  3. Rollback de uno específico (si querés):")
+	fmt.Println("  3. Rollback de uno específico (si quieres):")
 	fmt.Println("     domain workflow restore <rel-path>")
 }
 
@@ -205,7 +205,7 @@ func runWorkflowList(args []string) {
 		os.Exit(1)
 	}
 	if len(files) == 0 {
-		fmt.Println("No hay archivos importados. Corré 'domain init' primero.")
+		fmt.Println("No hay archivos importados. Ejecuta 'domain init' primero.")
 		return
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

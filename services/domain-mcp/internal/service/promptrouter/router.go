@@ -317,7 +317,7 @@ func (r *Router) handleAnalysis(ctx context.Context, rawText string, createdBy *
 	orgID *uuid.UUID, intent Intent, conf float64, reasoning string, intakeID uuid.UUID,
 ) (*Response, error) {
 	if r.AnalysisService == nil || orgID == nil {
-		reply := "Clasifiqué el prompt como análisis, pero no tengo el motor de análisis configurado. Si necesitás convertir esto en una feature, decime y arranco el wizard SDD."
+		reply := "Clasifiqué el prompt como análisis, pero no tengo el motor de análisis configurado. Si necesitas convertir esto en una feature, dime y arranco el wizard SDD."
 		return &Response{
 			Outcome:    OutcomeChat,
 			Intent:     intent,
@@ -400,7 +400,7 @@ func wizardModeForIntent(in Intent) string {
 // versión viva.
 func defaultChatReply(intent Intent, rawText string) string {
 	if intent == IntentIdea {
-		return "Anoté la idea. Si querés convertirla en feature concreto, pasame el alcance y arrancamos el orquestador SDD."
+		return "Anoté la idea. Si quieres convertirla en feature concreto, pásame el alcance y arrancamos el orquestador SDD."
 	}
 	return "Recibido."
 }

@@ -179,7 +179,7 @@ func reapOrphanOnPort(port int) error {
 	if comm != "domain" {
 
 		return fmt.Errorf("puerto %d ocupado por otro proceso (%s, pid %d) — no lo toco; "+
-			"re-corré el install con --base-url http://localhost:%d (puerto libre sugerido)",
+			"re-ejecuta el install con --base-url http://localhost:%d (puerto libre sugerido)",
 			port, comm, pid, nextFreePort(port+1))
 	}
 	fmt.Fprintf(os.Stderr, "  (terminando server domain huérfano pid=%d en :%d)\n", pid, port)
@@ -362,7 +362,7 @@ func waitServerHealth(baseURL string, timeout time.Duration) error {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("server no respondió /health en %s: %v (revisá: journalctl --user -u %s)", timeout, lastErr, serviceName)
+	return fmt.Errorf("server no respondió /health en %s: %v (revisa: journalctl --user -u %s)", timeout, lastErr, serviceName)
 }
 
 // runService es el entrypoint de `domain service`.
@@ -375,7 +375,7 @@ func runService(args []string) int {
 	case "install":
 		if !systemdUserAvailable() {
 			fmt.Fprintln(os.Stderr, "systemd user manager no disponible (¿macOS/container?).")
-			fmt.Fprintln(os.Stderr, "Corré el server manualmente: domain server")
+			fmt.Fprintln(os.Stderr, "Ejecuta el server manualmente: domain server")
 			return 1
 		}
 		baseURL := envOr("DOMAIN_BASE_URL", "http://localhost:8000")

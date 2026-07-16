@@ -154,8 +154,8 @@ func (s *Service) rerankWithLLM(
 // buildRerankPrompt arma un prompt acotado y determinista. Pide salida JSON
 // parseable: {"order": ["<id>", ...]} con los IDs reordenados por relevancia.
 func buildRerankPrompt(query string, candidates []SearchResult) (system, user string) {
-	system = "Sos un reordenador de resultados de búsqueda. Recibís una consulta y una lista de documentos candidatos, cada uno con un ID. " +
-		"Devolvé EXCLUSIVAMENTE un objeto JSON con la forma {\"order\": [\"id1\", \"id2\", ...]} " +
+	system = "Eres un reordenador de resultados de búsqueda. Recibes una consulta y una lista de documentos candidatos, cada uno con un ID. " +
+		"Devuelve EXCLUSIVAMENTE un objeto JSON con la forma {\"order\": [\"id1\", \"id2\", ...]} " +
 		"listando TODOS los IDs recibidos, ordenados del más relevante al menos relevante para la consulta. " +
 		"No agregues texto, explicaciones ni markdown. No inventes IDs. No omitas IDs."
 
@@ -172,7 +172,7 @@ func buildRerankPrompt(query string, candidates []SearchResult) (system, user st
 		snippet = strings.ReplaceAll(snippet, "\n", " ")
 		fmt.Fprintf(&sb, "- id=%s :: %s\n", c.ID.String(), snippet)
 	}
-	sb.WriteString("\nDevolvé solo el JSON {\"order\": [...]}.")
+	sb.WriteString("\nDevuelve solo el JSON {\"order\": [...]}.")
 	return system, sb.String()
 }
 

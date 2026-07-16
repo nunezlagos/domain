@@ -53,7 +53,7 @@ func runEmbedBackfill(args []string) {
 	logger := slog.Default()
 	embedder := chooseEmbedder(logger)
 	if _, isNoop := embedder.(llm.NopEmbedder); isNoop {
-		fmt.Println("Embedder = noop → nada que backfillear. Configurá DOMAIN_EMBEDDING_PROVIDER=openai y DOMAIN_OPENAI_API_KEY.")
+		fmt.Println("Embedder = noop → nada que backfillear. Configura DOMAIN_EMBEDDING_PROVIDER=openai y DOMAIN_OPENAI_API_KEY.")
 		return
 	}
 

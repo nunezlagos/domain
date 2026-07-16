@@ -93,7 +93,7 @@ Env:
 Ejemplos:
   domain projects ls
   domain search "pgvector" --limit 5 --format json
-  domain agents run my-agent "Revisá el PR"
+  domain agents run my-agent "Revisa el PR"
   domain obs save --project demo "Decidimos usar X"`)
 }
 

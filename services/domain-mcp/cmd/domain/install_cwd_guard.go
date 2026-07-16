@@ -37,7 +37,7 @@ func checkProjectRootGuard(srcFlag string) (string, bool) {
 	if !ok {
 		fmt.Fprintf(os.Stderr,
 			"no estás en el root del repo domain (cwd=%s, missing files: %s). "+
-				"Corré `bash install.sh` o pasá --src /path/al/repo\n",
+				"Ejecuta `bash install.sh` o pasa --src /path/al/repo\n",
 			projectRoot, strings.Join(missing, ", "))
 		return projectRoot, false
 	}

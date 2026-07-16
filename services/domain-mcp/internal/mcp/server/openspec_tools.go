@@ -58,7 +58,7 @@ func registerOpenspecTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool
 
 func toolOpenspecExport() mcp.Tool {
 	return mcp.NewTool("domain_openspec_export",
-		mcp.WithDescription("Renderiza los issues SDD del proyecto como un árbol openspec oficial (changes/<slug>/{proposal.md,design.md,tasks.md,specs/<slug>/spec.md,.openspec.yaml}). Devuelve {path: contenido}; vos (LLM) escribís cada archivo con tu tool Write. El server NO toca el filesystem. Issues proposed/active van bajo changes/; implemented/archived bajo changes/archive/<fecha>-<slug>/."),
+		mcp.WithDescription("Renderiza los issues SDD del proyecto como un árbol openspec oficial (changes/<slug>/{proposal.md,design.md,tasks.md,specs/<slug>/spec.md,.openspec.yaml}). Devuelve {path: contenido}; el LLM escribe cada archivo con su tool Write. El server NO toca el filesystem. Issues proposed/active van bajo changes/; implemented/archived bajo changes/archive/<fecha>-<slug>/."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto a exportar"), mcp.Required()),
 		mcp.WithString("scope", mcp.Description("active = solo proposed+active (default). all = incluye archived/implemented.")),
 	)
@@ -66,14 +66,14 @@ func toolOpenspecExport() mcp.Tool {
 
 func toolOpenspecStatus() mcp.Tool {
 	return mcp.NewTool("domain_openspec_status",
-		mcp.WithDescription("Auditoría/diff repo↔DB. Pasale los archivos actuales del repo ({path, content}, incluí los .openspec.yaml). El server compara 3 hashes por change: el del export (en .openspec.yaml), el del repo actual, y el de la DB actual. Reporta por change: clean | repo_modified (editaste, seguro de aplicar) | db_modified (repo desactualizado, re-exportá) | conflict (cambió en ambos)."),
+		mcp.WithDescription("Auditoría/diff repo↔DB. Pasa los archivos actuales del repo ({path, content}, incluye los .openspec.yaml). El server compara 3 hashes por change: el del export (en .openspec.yaml), el del repo actual, y el de la DB actual. Reporta por change: clean | repo_modified (editaste, seguro de aplicar) | db_modified (repo desactualizado, re-exporta) | conflict (cambió en ambos)."),
 		mcp.WithArray("files", mcp.Description("Array de {path: 'relativo al repo', content: 'texto'}"), mcp.Required()),
 	)
 }
 
 func toolOpenspecApply() mcp.Tool {
 	return mcp.NewTool("domain_openspec_apply",
-		mcp.WithDescription("Persiste en la DB los .md editados en el repo. Pasale los archivos del/los change(s) ({path, content}, incluí .openspec.yaml). Por cada change: proposal.md/design.md que cambiaron crean NUEVA versión (no pisan historial); spec.md reemplaza los escenarios Gherkin; tasks.md sincroniza estado por checkbox (vía marcador de id); .openspec.yaml status actualiza el estado del issue. Si la DB cambió desde el export (conflict) aborta el change salvo force=true."),
+		mcp.WithDescription("Persiste en la DB los .md editados en el repo. Pasa los archivos del/los change(s) ({path, content}, incluye .openspec.yaml). Por cada change: proposal.md/design.md que cambiaron crean NUEVA versión (no pisan historial); spec.md reemplaza los escenarios Gherkin; tasks.md sincroniza estado por checkbox (vía marcador de id); .openspec.yaml status actualiza el estado del issue. Si la DB cambió desde el export (conflict) aborta el change salvo force=true."),
 		mcp.WithArray("files", mcp.Description("Array de {path, content} de uno o más changes"), mcp.Required()),
 		mcp.WithBoolean("force", mcp.Description("Aplicar aunque haya conflict (la DB cambió desde el export). Default false.")),
 	)
@@ -109,7 +109,7 @@ func (h *openspecHandlers) handleExport(ctx context.Context, req mcp.CallToolReq
 		"project_slug": slug,
 		"change_count": len(out),
 		"changes":      out,
-		"next_step":    "Escribí cada archivo de changes[].files (key=path, value=contenido) con tu tool Write. Después editás los .md y corrés domain_openspec_apply.",
+		"next_step":    "Escribe cada archivo de changes[].files (key=path, value=contenido) con tu tool Write. Después editas los .md y ejecutas domain_openspec_apply.",
 	})
 }
 

@@ -74,7 +74,7 @@ func registerVerificationsTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serve
 
 func toolVerifyStart() mcp.Tool {
 	return mcp.NewTool("domain_verify_start",
-		mcp.WithDescription("Abre un checkpoint de verificación post-cambio. Llamar DESPUÉS de un edit no trivial (no para typos), antes de declarar 'listo'. items[] = lista de checks individuales que vas a correr (build, test, lint, smoke, typecheck, migration). Status del item arranca en 'pending' y vos lo updateás con domain_verify_update_item."),
+		mcp.WithDescription("Abre un checkpoint de verificación post-cambio. Llamar DESPUÉS de un edit no trivial (no para typos), antes de declarar 'listo'. items[] = lista de checks individuales que vas a correr (build, test, lint, smoke, typecheck, migration). Status del item arranca en 'pending' y lo actualizas con domain_verify_update_item."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto en el que estás trabajando"), mcp.Required()),
 		mcp.WithString("kind", mcp.Description("build | test | lint | smoke | typecheck | migration | policy_review | custom"), mcp.Required()),
 		mcp.WithString("context", mcp.Description("Qué cambio gatilló esta verificación (1 línea, ej: 'agregué endpoint POST /api/v1/clients').")),

@@ -235,8 +235,8 @@ func runServer() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Hint: corré 'domain install' (genera .env y ~/.config/domain/env),")
-		fmt.Fprintln(os.Stderr, "o exportá DOMAIN_DATABASE_URL manualmente.")
+		fmt.Fprintln(os.Stderr, "Hint: ejecuta 'domain install' (genera .env y ~/.config/domain/env),")
+		fmt.Fprintln(os.Stderr, "o exporta DOMAIN_DATABASE_URL manualmente.")
 		os.Exit(1)
 	}
 
@@ -1046,8 +1046,8 @@ func runWrapperSnippet(args []string) {
 			os.Exit(0)
 		}
 	}
-	fmt.Println("# Pegá esto en tu ~/.zshrc (o ~/.bashrc) y reiniciá la shell")
-	fmt.Println("# o corré: source ~/.zshrc")
+	fmt.Println("# Pega esto en tu ~/.zshrc (o ~/.bashrc) y reinicia la shell")
+	fmt.Println("# o ejecuta: source ~/.zshrc")
 	fmt.Println()
 	fmt.Println(setuppkg.GenerateWrapperSnippet())
 }
@@ -1262,7 +1262,7 @@ func runSetup(args []string) {
 
 		ex, err := os.Executable()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "no pude detectar el binario actual; pasá --mcp-binary")
+			fmt.Fprintln(os.Stderr, "no pude detectar el binario actual; pasa --mcp-binary")
 			os.Exit(1)
 		}
 
@@ -1276,7 +1276,7 @@ func runSetup(args []string) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			fmt.Fprintln(os.Stderr, "domain-mcp tampoco está en PATH. Compilalo primero:")
 			fmt.Fprintln(os.Stderr, "  go build -o ~/go/bin/domain-mcp ./cmd/domain-mcp")
-			fmt.Fprintln(os.Stderr, "o pasá la ruta con --mcp-binary /ruta/a/domain-mcp")
+			fmt.Fprintln(os.Stderr, "o pasa la ruta con --mcp-binary /ruta/a/domain-mcp")
 			os.Exit(1)
 		}
 	}
@@ -1295,7 +1295,7 @@ func runSetup(args []string) {
 		} else {
 
 			path, err = setuppkg.SetupClaudeCode(cwd, mcpBinary, apiKey, baseURL)
-			restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprobá el server al primer uso)."
+			restartHint = "Claude Code detecta .mcp.json al abrir el proyecto (aprueba el server al primer uso)."
 		}
 	case "opencode":
 		dir := cwd

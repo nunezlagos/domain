@@ -18,7 +18,7 @@ func runDomainDetect(ctx context.Context) int {
 	meta, err := projectdetect.Detect("")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "domain: no se detectó proyecto (%v)\n", err)
-		fmt.Fprintln(os.Stderr, "tip: ejecutá desde la raíz de un repo git o donde haya go.mod/composer.json/package.json")
+		fmt.Fprintln(os.Stderr, "tip: ejecuta desde la raíz de un repo git o donde haya go.mod/composer.json/package.json")
 		return 1
 	}
 

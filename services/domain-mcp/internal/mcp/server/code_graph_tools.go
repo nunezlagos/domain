@@ -237,7 +237,7 @@ func (h *codeGraphHandlers) handleCodeExplore(ctx context.Context, req mcp.CallT
 
 func toolCodePath() mcp.Tool {
 	return mcp.NewTool("domain_code_path",
-		mcp.WithDescription("Camino más corto (en número de aristas) entre dos símbolos Go recorriendo el grafo en dirección source->target (calls/method_of/etc). Cada símbolo debe resolver a UN solo nodo (si es ambiguo, usá un qualified_name). Devuelve la cadena de aristas o found=false."),
+		mcp.WithDescription("Camino más corto (en número de aristas) entre dos símbolos Go recorriendo el grafo en dirección source->target (calls/method_of/etc). Cada símbolo debe resolver a UN solo nodo (si es ambiguo, usa un qualified_name). Devuelve la cadena de aristas o found=false."),
 		mcp.WithString("project_slug",
 			mcp.Description("Slug del project"),
 			mcp.Required(),
@@ -279,7 +279,7 @@ func (h *codeGraphHandlers) handleCodePath(ctx context.Context, req mcp.CallTool
 		case errors.Is(err, codegraphsvc.ErrNodeNotFound):
 			return mcp.NewToolResultError("from_symbol o to_symbol no existe en el grafo (¿corriste domain_code_build?)"), nil
 		case errors.Is(err, codegraphsvc.ErrSymbolAmbiguous):
-			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usá un qualified_name (ej 'pkg.Tipo.Metodo')"), nil
+			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usa un qualified_name (ej 'pkg.Tipo.Metodo')"), nil
 		}
 		return mcp.NewToolResultError(fmt.Sprintf("path failed: %v", err)), nil
 	}
@@ -396,7 +396,7 @@ func codeEdgeJSON(e codegraphsvc.CodeEdge) map[string]any {
 
 func toolMemLinkCode() mcp.Tool {
 	return mcp.NewTool("domain_mem_link_code",
-		mcp.WithDescription("Vincula una memoria/decisión (observation_id) con un nodo del grafo de CÓDIGO del mismo project. El nodo se identifica por code_node_id (UUID) o por symbol (qualified_name o nombre simple, debe resolver a UN solo nodo). link_type: affects | decided_in | references | implements. Idempotente: si el vínculo ya existe lo reporta. Corré domain_code_build antes para tener nodos."),
+		mcp.WithDescription("Vincula una memoria/decisión (observation_id) con un nodo del grafo de CÓDIGO del mismo project. El nodo se identifica por code_node_id (UUID) o por symbol (qualified_name o nombre simple, debe resolver a UN solo nodo). link_type: affects | decided_in | references | implements. Idempotente: si el vínculo ya existe lo reporta. Ejecuta domain_code_build antes para tener nodos."),
 		mcp.WithString("observation_id",
 			mcp.Description("UUID de la observation/memoria a vincular"),
 			mcp.Required(),
@@ -482,7 +482,7 @@ func (h *codeGraphHandlers) handleMemLinkCode(ctx context.Context, req mcp.CallT
 		case errors.Is(err, codegraphsvc.ErrNodeNotFound):
 			return mcp.NewToolResultError("nodo de código no encontrado (¿corriste domain_code_build?)"), nil
 		case errors.Is(err, codegraphsvc.ErrSymbolAmbiguous):
-			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usá un qualified_name o code_node_id"), nil
+			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usa un qualified_name o code_node_id"), nil
 		case errors.Is(err, codegraphsvc.ErrLinkCrossProject):
 			return mcp.NewToolResultError("la observation y el nodo deben pertenecer al mismo project"), nil
 		case errors.Is(err, codegraphsvc.ErrLinkBadType):
@@ -528,7 +528,7 @@ func (h *codeGraphHandlers) handleCodeObservations(ctx context.Context, req mcp.
 		case errors.Is(err, codegraphsvc.ErrNodeNotFound):
 			return mcp.NewToolResultError(fmt.Sprintf("symbol '%s' not found en el grafo (¿corriste domain_code_build?)", symbol)), nil
 		case errors.Is(err, codegraphsvc.ErrSymbolAmbiguous):
-			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usá un qualified_name"), nil
+			return mcp.NewToolResultError("símbolo ambiguo: resolvió a más de un nodo, usa un qualified_name"), nil
 		}
 		return mcp.NewToolResultError(fmt.Sprintf("observations failed: %v", err)), nil
 	}

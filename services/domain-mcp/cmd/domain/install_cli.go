@@ -115,7 +115,7 @@ func runInstall(args []string) int {
 
 		if strings.Contains(msg, "no migration found for version") {
 			msg += " — tu BD tiene migraciones más nuevas que este código; " +
-				"actualizá el código y reintentá (re-corré install.sh, que hace git pull)"
+				"actualiza el código y reintenta (re-ejecuta install.sh, que hace git pull)"
 		}
 		progress.EndStep(StepFailed, msg)
 		progress.Summary()
@@ -286,7 +286,7 @@ func runInstall(args []string) int {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "⚠ server not running. Start it with:")
 		fmt.Fprintln(os.Stderr, "    domain server")
-		fmt.Fprintln(os.Stderr, "  (o instalalo como servicio: domain service install)")
+		fmt.Fprintln(os.Stderr, "  (o instálalo como servicio: domain service install)")
 	}
 	return 0
 }
@@ -784,7 +784,7 @@ func ensureAPIKey(cfg *config.Config, flags installFlags, mode string, serverUp 
 	}
 
 	return "", fmt.Errorf("hay usuarios en la BD pero no credentials.json; "+
-		"corré 'domain onboard --base-url %s' para autenticarte", flags.baseURL)
+		"ejecuta 'domain onboard --base-url %s' para autenticarte", flags.baseURL)
 }
 
 // bootstrapFirstAccount crea el primer user (owner) + API key directo a la BD.
@@ -1226,7 +1226,7 @@ func promptShellWrapper() (string, error) {
 			rcfile = strings.Replace(rcfile, home, "~", 1)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "  ¿Querés agregar el wrapper de shell para opencode+domain a %s? [y/N] ", rcfile)
+	fmt.Fprintf(os.Stderr, "  ¿Quieres agregar el wrapper de shell para opencode+domain a %s? [y/N] ", rcfile)
 	line, err := readLine()
 	if err != nil {
 		return "", nil

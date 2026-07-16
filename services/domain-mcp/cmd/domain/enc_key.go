@@ -141,8 +141,8 @@ func validateEncKeyAgainstDB(ctx context.Context, pool *pgxpool.Pool, key string
 		return fmt.Errorf(
 			"la enc-key (%s) no coincide con las %d API key(s) cifradas en la BD; "+
 				"no se pisará nada (perderías acceso a las keys emitidas). "+
-				"Restaurá la enc-key correcta en ~/.config/domain/env y .env, "+
-				"o si es intencional, rotá/revocá las keys antes de reinstalar. "+
+				"Restaura la enc-key correcta en ~/.config/domain/env y .env, "+
+				"o si es intencional, rota/revoca las keys antes de reinstalar. "+
 				"(detalle pgcrypto: %v)",
 			encKeyEnvName, n, err)
 	}

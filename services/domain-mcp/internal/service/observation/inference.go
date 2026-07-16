@@ -320,17 +320,17 @@ func inferenceConfidence(c float64) float32 {
 // buildInferencePrompt arma un prompt determinista que pide clasificación por
 // par en JSON. La dirección source->target es semántica (ver mig 000175).
 func buildInferencePrompt(pairs []CandidatePair) (system, user string) {
-	system = "Sos un analista de un grafo de conocimiento. Recibís PARES de memorias (notas/decisiones) de un mismo proyecto. " +
-		"Para CADA par decidí si existe una relación dirigida source -> target y de qué TIPO, eligiendo UNO de:\n" +
+	system = "Eres un analista de un grafo de conocimiento. Recibes PARES de memorias (notas/decisiones) de un mismo proyecto. " +
+		"Para CADA par decide si existe una relación dirigida source -> target y de qué TIPO, eligiendo UNO de:\n" +
 		"  supersedes   : source reemplaza/revierte a target (target queda obsoleto)\n" +
 		"  contradicts  : source contradice a target\n" +
 		"  derived_from : source se deriva de target\n" +
 		"  depends_on   : source depende de target\n" +
 		"  relates_to   : relación genérica relevante\n" +
 		"  none         : no hay relación que valga la pena registrar\n" +
-		"La DIRECCIÓN importa: si la relación va en el sentido inverso, intercambiá source_id y target_id en tu respuesta. " +
-		"Sé conservador: ante la duda usá 'none'. NO inventes IDs; usá solo los provistos.\n" +
-		"Respondé EXCLUSIVAMENTE un objeto JSON con la forma:\n" +
+		"La DIRECCIÓN importa: si la relación va en el sentido inverso, intercambia source_id y target_id en tu respuesta. " +
+		"Sé conservador: ante la duda usa 'none'. NO inventes IDs; usa solo los provistos.\n" +
+		"Responde EXCLUSIVAMENTE un objeto JSON con la forma:\n" +
 		"{\"results\":[{\"source_id\":\"<uuid>\",\"target_id\":\"<uuid>\",\"edge_type\":\"<tipo>\",\"confidence\":0.0,\"reason\":\"<breve>\"}]}\n" +
 		"Sin texto adicional, sin markdown, sin fences."
 
@@ -342,7 +342,7 @@ func buildInferencePrompt(pairs []CandidatePair) (system, user string) {
 		fmt.Fprintf(&sb, "target_id=%s (tipo=%s, tags=%s)\n  %s\n", p.TargetID, p.TargetType, strings.Join(p.TargetTags, ","), oneLine(p.TargetContent))
 		fmt.Fprintf(&sb, "señales: misma_sesion=%t tags_compartidos=%d solape_lexico=%t\n", p.SameSession, p.SharedTags, p.LexicalOverlap)
 	}
-	sb.WriteString("\nDevolvé solo el JSON {\"results\":[...]}.")
+	sb.WriteString("\nDevuelve solo el JSON {\"results\":[...]}.")
 	return system, sb.String()
 }
 

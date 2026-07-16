@@ -18,6 +18,16 @@
 
 set +e
 
+# ---------- 0. leer input del hook (stdin) para detectar source ----------
+# Claude Code pasa {"source":"startup|resume|clear|compact",...} por stdin.
+# DOMAINSERV-24: en compact el body de agent-protocol NO sobrevive la
+# compactación, así que hay que re-inyectar la directiva de re-hidratación.
+# timeout evita colgar si el hook se corre sin stdin (ej. manual).
+hook_input=$(timeout 1 cat 2>/dev/null || true)
+hook_source=$(printf '%s' "$hook_input" | python3 -c "import sys,json
+try: print(json.load(sys.stdin).get('source',''))
+except Exception: pass" 2>/dev/null || true)
+
 # ---------- 1. detectar cwd + git info ----------
 cwd="${CWD:-$PWD}"
 git_remote=$(git -C "$cwd" remote get-url origin 2>/dev/null || echo "")
@@ -210,6 +220,7 @@ export HOOK_MEM_OUT="$mem_out"
 # (default 12000). Cada sección se trunca de forma determinista preservando su
 # encabezado; el bloque de REGLAS DE ARRANQUE nunca se recorta.
 export HOOK_CTX_MAX_BYTES="${DOMAIN_CTX_MAX_BYTES:-12000}"
+export HOOK_SOURCE="$hook_source"
 
 python3 - <<'PYEOF'
 import json, os
@@ -269,6 +280,17 @@ ctx = (
     f"(ej: 'asd', 'hola', 'x'). El bloque va SIEMPRE en el primer mensaje.\n"
     f"R6. Despues del bloque, usar el contexto de arriba + domain_* tools para lo que pida el usuario."
 )
+
+# DOMAINSERV-24: post-compact el body del protocolo no sobrevive la compactación.
+# Se antepone una directiva de re-hidratación (no se embebe el body ~17.7KB para
+# respetar el cap de bytes; se instruye re-obtenerlo con domain_policy_get).
+if os.environ.get('HOOK_SOURCE', '') == 'compact':
+    ctx = (
+        "R0 (POST-COMPACT): tu contexto fue compactado y el body del protocolo NO "
+        "sobrevive. ANTES de responder, re-obtené domain_policy_get(slug=\"agent-protocol\") "
+        "y re-aplicá sus reglas.\n\n"
+    ) + ctx
+
 print(json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "SessionStart",

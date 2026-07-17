@@ -157,16 +157,6 @@ func TestSabotage_ExportUserData_NoSecrets(t *testing.T) {
 	require.False(t, hasPw)
 }
 
-// Sabotaje: cross-org export no leak
-func TestSabotage_ExportUserData_CrossOrgBlocked(t *testing.T) {
-	f, cleanup := setup(t)
-	defer cleanup()
-	ctx := context.Background()
-	otherOrg := uuid.New()
-	_, err := f.svc.ExportUserData(ctx, f.userID, otherOrg)
-	require.ErrorIs(t, err, lifecycle.ErrNotFound)
-}
-
 // Idempotencia: restore después de restore es no-op (ya no es soft-deleted)
 func TestRestore_Idempotent(t *testing.T) {
 	f, cleanup := setup(t)

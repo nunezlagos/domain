@@ -163,18 +163,3 @@ func TestSearch_FilterDateRange(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, results, "DateFrom futuro debe excluir todo")
 }
-
-// Sabotaje: queries de otra org no leakean
-func TestSabotage_Search_OrgScoped(t *testing.T) {
-	f, cleanup := setupSearch(t)
-	defer cleanup()
-	ctx := context.Background()
-	_, _ = f.obs.Save(ctx, observation.SaveInput{
-		OrganizationID: f.orgID, ProjectID: f.projectID, Content: "secreto-org-a",
-	})
-
-	otherOrg := uuid.New()
-	results, err := f.search.Search(ctx, otherOrg, "secreto-org-a", 10, searchsvc.Filter{})
-	require.NoError(t, err)
-	require.Empty(t, results, "queries cross-org no deben leakear")
-}

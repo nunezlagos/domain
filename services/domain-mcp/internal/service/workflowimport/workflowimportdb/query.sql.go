@@ -178,8 +178,8 @@ INSERT INTO project_imported_workflow_files
   (project_id, source_tool, rel_path, original_content,
    content_hash, size_bytes, status, replaced_with, replaced_at)
 VALUES ($1, $2, $3, $4,
-        $5, $6, $7, $8,
-        CASE WHEN $7 = 'replaced' THEN now() ELSE NULL END)
+        $5, $6, $7::text, $8,
+        CASE WHEN $7::text = 'replaced' THEN now() ELSE NULL END)
 ON CONFLICT (project_id, rel_path) DO UPDATE
 SET original_content = EXCLUDED.original_content,
     content_hash     = EXCLUDED.content_hash,

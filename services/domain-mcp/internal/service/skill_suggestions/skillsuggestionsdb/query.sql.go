@@ -199,7 +199,7 @@ UPDATE skill_suggestions
 SET status = 'approved', reviewed_by = $1, reviewed_at = NOW()
 WHERE id = $2 AND status = 'pending'
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at
 `
 
@@ -269,7 +269,7 @@ INSERT INTO skill_suggestions (
 )
 ON CONFLICT (skill_slug, kind) WHERE status = 'pending' DO NOTHING
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at
 `
 
@@ -337,7 +337,7 @@ func (q *Queries) SuggestionCreate(ctx context.Context, arg SuggestionCreatePara
 
 const suggestionGet = `-- name: SuggestionGet :one
 SELECT id, skill_slug, kind, payload, rationale, llm_model,
-       llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+       COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
        reviewed_at, applied_at, applied_changes, created_at
 FROM skill_suggestions
 WHERE id = $1
@@ -382,7 +382,7 @@ func (q *Queries) SuggestionGet(ctx context.Context, id uuid.UUID) (SuggestionGe
 
 const suggestionList = `-- name: SuggestionList :many
 SELECT id, skill_slug, kind, payload, rationale, llm_model,
-       llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+       COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
        reviewed_at, applied_at, applied_changes, created_at
 FROM skill_suggestions
 WHERE ($1::text = '' OR skill_slug = $1::text)
@@ -463,7 +463,7 @@ UPDATE skill_suggestions
 SET status = 'applied', applied_at = NOW(), applied_changes = $1
 WHERE id = $2 AND status = 'approved' AND applied_at IS NULL
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at
 `
 
@@ -516,7 +516,7 @@ UPDATE skill_suggestions
 SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW()
 WHERE id = $2 AND status = 'pending'
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at
 `
 

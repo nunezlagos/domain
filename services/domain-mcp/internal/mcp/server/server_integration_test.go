@@ -19,6 +19,7 @@ import (
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/db"
+	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/llm"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
 	dmigrate "nunezlagos/domain/internal/migrate"
@@ -76,21 +77,33 @@ func setupMCP(t *testing.T) *mcpFixture {
 
 	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
 	policyS := &policysvc.Service{Pool: pools.App}
+	skillExec := &skillsvc.ExecutionService{
+		Pool: pools.App, Skills: skillS,
+		Versions: &skillsvc.VersionStore{Pool: pools.App},
+		Runner:   skillrunner.New(),
+	}
+	// domain_skill_execute delega EXCLUSIVAMENTE en el dispatcher unificado
+	// (issue-35.1): sin él, el tool responde "dispatcher no configurado".
+	dispatcherAdapters := &dispatch.Adapters{
+		SkillRunner: skillrunner.New(),
+		Skills:      skillS,
+		SkillExec:   skillExec,
+	}
+	dispatcher := &dispatch.Dispatcher{
+		RunSkill: dispatcherAdapters.RunSkillForDispatcher(),
+	}
 	deps := mcpserver.Deps{
-		Observations: obsS,
-		Projects:     projS,
-		Prompts:      &promptsvc.Service{Pool: pools.App, Audit: rec},
-		Skills:       skillS,
-		SkillExecution: &skillsvc.ExecutionService{
-			Pool: pools.App, Skills: skillS,
-			Versions: &skillsvc.VersionStore{Pool: pools.App},
-			Runner:   skillrunner.New(),
-		},
-		Agents:   &agentsvc.Service{Pool: pools.App, Audit: rec},
-		Flows:    &flowsvc.Service{Pool: pools.App, Audit: rec},
-		Crons:    &cronsvc.Service{Pool: pools.App, Audit: rec},
-		Policies: policyS,
-		Pool:     pools.App,
+		Observations:   obsS,
+		Projects:       projS,
+		Prompts:        &promptsvc.Service{Pool: pools.App, Audit: rec},
+		Skills:         skillS,
+		SkillExecution: skillExec,
+		Dispatcher:     dispatcher,
+		Agents:         &agentsvc.Service{Pool: pools.App, Audit: rec},
+		Flows:          &flowsvc.Service{Pool: pools.App, Audit: rec},
+		Crons:          &cronsvc.Service{Pool: pools.App, Audit: rec},
+		Policies:       policyS,
+		Pool:           pools.App,
 		Principal: &apikey.Principal{
 			UserID:         owner.UserID.String(),
 			OrganizationID: org.ID.String(),

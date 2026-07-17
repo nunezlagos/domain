@@ -182,30 +182,6 @@ func TestExecute_ScrubbedParamsPersisted(t *testing.T) {
 	require.Equal(t, "stgo", got.Parameters["city"])
 }
 
-func TestExecute_CrossOrg_NotFound(t *testing.T) {
-	exec, skillS, orgID, userID, cleanup := setupExec(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	sk, err := skillS.Create(ctx, skillsvc.CreateInput{
-		OrganizationID: orgID, Slug: "mine", Name: "Mine",
-		SkillType: skillsvc.TypePrompt, Content: "x",
-		InputSchema: map[string]any{"type": "object"},
-		ActorID:     userID,
-	})
-	require.NoError(t, err)
-
-	_, err = exec.Execute(ctx, skillsvc.ExecuteInput{
-		OrganizationID: uuid.New(), SkillID: sk.ID,
-	})
-	require.ErrorIs(t, err, skillsvc.ErrNotFound, "cross-org debe ser not found (anti-enumeration)")
-
-
-	e, err := exec.Execute(ctx, skillsvc.ExecuteInput{OrganizationID: orgID, SkillID: sk.ID})
-	require.NoError(t, err)
-	_, err = exec.Get(ctx, uuid.New(), e.ID)
-	require.ErrorIs(t, err, skillsvc.ErrExecutionNotFound)
-}
 
 // createdByOf lee directamente skill_executions.created_by para una ejecución.
 func createdByOf(t *testing.T, exec *skillsvc.ExecutionService, id uuid.UUID) *uuid.UUID {

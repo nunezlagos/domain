@@ -68,7 +68,7 @@ func TestInventory_Load_BuiltinsAlwaysPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	require.GreaterOrEqual(t, len(inv.MCPProviders), 6, "debe traer los 6 built-ins de mcp_providers")
-	require.GreaterOrEqual(t, len(inv.Templates), 4, "debe traer los 4 built-ins de project_templates")
+	require.GreaterOrEqual(t, len(inv.Templates), 1, "debe traer el built-in 'default' de project_templates")
 	require.GreaterOrEqual(t, len(inv.Policies), 1, "debe traer al menos 1 policy built-in")
 }
 

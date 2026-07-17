@@ -286,6 +286,12 @@ func (h *catalogHandlers) runSkillDispatch(ctx context.Context, req mcp.CallTool
 		OrgID: orgID, Source: dispatch.SourceMCP, TargetType: dispatch.TargetSkill,
 		TargetID: sk.ID, Inputs: inputsRaw, TriggeredBy: triggeredBy,
 	})
+	// dispatchErr = el skill NO llegó a ejecutar (params inválidos, runner sin
+	// configurar, resolución fallida): es un error del tool, no un resultado.
+	// Preserva el comportamiento observable del path legacy previo al dispatcher.
+	if dispatchErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("skill execute: %v", dispatchErr)), nil
+	}
 	out := map[string]any{
 		"execution_id": res.RunID.String(),
 		"status":       res.Status,
@@ -293,9 +299,6 @@ func (h *catalogHandlers) runSkillDispatch(ctx context.Context, req mcp.CallTool
 	}
 	if len(res.Output) > 0 {
 		out["output"] = string(res.Output)
-	}
-	if dispatchErr != nil {
-		out["error"] = dispatchErr.Error()
 	}
 	return toolResultJSON(out)
 }

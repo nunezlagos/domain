@@ -231,8 +231,11 @@ func TestSabotage_SeederFails_NoVersionRecorded(t *testing.T) {
 	bad := &errSeeder{name: "bad", version: 1}
 	reg.Register(bad)
 
-	_, err := reg.RunAll(ctx, pool, seeds.EnvDev)
-	require.Error(t, err)
+	// DOMAINSERV-28: un seeder roto NO aborta la cadena; RunAll devuelve nil
+	// y reporta el error en el Report del seeder fallido.
+	results, err := reg.RunAll(ctx, pool, seeds.EnvDev)
+	require.NoError(t, err)
+	require.NotEmpty(t, results["bad"].Errors, "el seeder fallido reporta su error en el Report")
 
 	v, ok, err := seeds.AppliedVersion(ctx, pool, "bad")
 	require.NoError(t, err)

@@ -75,7 +75,7 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 		`SELECT COUNT(*) FROM agent_templates WHERE role='phase-worker' AND slug LIKE 'sdd-%'`,
 	).Scan(&workerCount)
 	require.NoError(t, err)
-	require.Equal(t, 10, workerCount, "debe haber 10 phase-workers sdd-*")
+	require.Equal(t, 12, workerCount, "debe haber 12 phase-workers sdd-*")
 
 
 	var orchSlug string
@@ -94,19 +94,19 @@ func TestAgentTemplates_SeederIdempotent(t *testing.T) {
 
 	rep1, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
 	require.NoError(t, err)
-	require.Equal(t, 11, rep1.Created, "primera pasada inserta 11 (1 orch + 10 workers)")
+	require.Equal(t, 14, rep1.Created, "primera pasada inserta 14 (1 orch + 13 workers)")
 
 	rep2, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
 	require.NoError(t, err)
 	require.Equal(t, 0, rep2.Created, "segunda pasada NO duplica")
-	require.Equal(t, 11, rep2.Updated, "segunda pasada updates 11")
+	require.Equal(t, 14, rep2.Updated, "segunda pasada updates 14")
 
 
 	var total int
 	err = pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM agent_templates`).Scan(&total)
 	require.NoError(t, err)
-	require.Equal(t, 11, total)
+	require.Equal(t, 14, total)
 }
 
 // Cleanup defensivo: borra slugs legacy seed_managed=true sin runs activos.

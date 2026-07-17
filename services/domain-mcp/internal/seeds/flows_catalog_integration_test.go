@@ -42,7 +42,7 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 	require.Equal(t, seeds.SDDPipelineFlowSlug, slug)
 	require.True(t, seedManaged, "flow seedeado debe estar marcado seed_managed=true")
 	require.False(t, userModified, "fresh seed → is_user_modified=false")
-	require.Equal(t, 1, seedVersion)
+	require.Equal(t, 3, seedVersion)
 
 	var spec seeds.FlowSpecJSON
 	require.NoError(t, json.Unmarshal(specRaw, &spec))

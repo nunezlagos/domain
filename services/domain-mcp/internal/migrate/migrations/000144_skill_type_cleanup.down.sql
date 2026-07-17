@@ -17,7 +17,10 @@
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_temp.tables WHERE table_name = 'skill_type_backup') THEN
+    -- pg_temp.tables no existe como catalogo; to_regclass devuelve NULL si la
+    -- temp table del up no esta en la sesion actual (el down corre en otra
+    -- conexion, asi que normalmente cae en el ELSE).
+    IF to_regclass('pg_temp.skill_type_backup') IS NOT NULL THEN
         UPDATE skills s
         SET skill_type = b.old_type,
             updated_at = NOW()

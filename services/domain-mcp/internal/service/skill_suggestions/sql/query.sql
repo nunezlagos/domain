@@ -18,12 +18,12 @@ INSERT INTO skill_suggestions (
 )
 ON CONFLICT (skill_slug, kind) WHERE status = 'pending' DO NOTHING
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at;
 
 -- name: SuggestionGet :one
 SELECT id, skill_slug, kind, payload, rationale, llm_model,
-       llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+       COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
        reviewed_at, applied_at, applied_changes, created_at
 FROM skill_suggestions
 WHERE id = sqlc.arg('id');
@@ -32,7 +32,7 @@ WHERE id = sqlc.arg('id');
 -- Lista con filtros opcionales (skill_slug, kind, status). Un filtro vacio
 -- ('') se ignora via el patron (arg = '' OR col = arg).
 SELECT id, skill_slug, kind, payload, rationale, llm_model,
-       llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+       COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
        reviewed_at, applied_at, applied_changes, created_at
 FROM skill_suggestions
 WHERE (sqlc.arg('skill_slug')::text = '' OR skill_slug = sqlc.arg('skill_slug')::text)
@@ -51,7 +51,7 @@ UPDATE skill_suggestions
 SET status = 'approved', reviewed_by = sqlc.narg('reviewed_by'), reviewed_at = NOW()
 WHERE id = sqlc.arg('id') AND status = 'pending'
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at;
 
 -- name: SuggestionReject :one
@@ -60,7 +60,7 @@ UPDATE skill_suggestions
 SET status = 'rejected', reviewed_by = sqlc.narg('reviewed_by'), reviewed_at = NOW()
 WHERE id = sqlc.arg('id') AND status = 'pending'
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at;
 
 -- name: SuggestionMarkApplied :one
@@ -70,7 +70,7 @@ UPDATE skill_suggestions
 SET status = 'applied', applied_at = NOW(), applied_changes = sqlc.arg('applied_changes')
 WHERE id = sqlc.arg('id') AND status = 'approved' AND applied_at IS NULL
 RETURNING id, skill_slug, kind, payload, rationale, llm_model,
-          llm_confidence::float8 AS llm_confidence, status, reviewed_by,
+          COALESCE(llm_confidence, 0)::float8 AS llm_confidence, status, reviewed_by,
           reviewed_at, applied_at, applied_changes, created_at;
 
 -- ============================================================

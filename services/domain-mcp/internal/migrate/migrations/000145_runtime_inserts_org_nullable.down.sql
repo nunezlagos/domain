@@ -31,5 +31,18 @@ BEGIN
 END $$;
 
 
-ALTER TABLE external_providers
-  ADD CONSTRAINT IF NOT EXISTS external_providers_org_provider_unique UNIQUE (organization_id, provider, project_key);
+-- Postgres no soporta ADD CONSTRAINT IF NOT EXISTS. Ademas organization_id ya
+-- no existe en el esquema (lo dropeo 000142, cuyo down corre DESPUES de este),
+-- asi que recrear la constraint solo tiene sentido si la columna sigue viva.
+-- Guardamos con un DO block: si no hay columna o la constraint ya existe, no-op.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='external_providers' AND column_name='organization_id')
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint
+               WHERE conname='external_providers_org_provider_unique') THEN
+        ALTER TABLE external_providers
+          ADD CONSTRAINT external_providers_org_provider_unique
+          UNIQUE (organization_id, provider, project_key);
+    END IF;
+END $$;

@@ -69,7 +69,7 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 	}
 
 	expected := []string{
-		"users", "auth_api_keys", "projects", "observations",
+		"users", "auth_api_keys", "projects", "knowledge_observations",
 		"prompts", "knowledge_docs", "knowledge_chunks",
 		"skills", "skill_versions", "agents", "flows", "flow_runs",
 		"agent_runs", "crons", "webhooks", "webhook_deliveries", "audit_log",

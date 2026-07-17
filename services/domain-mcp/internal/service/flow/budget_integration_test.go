@@ -52,7 +52,7 @@ func TestBudgetCache_DefaultIfNoConfig(t *testing.T) {
 	cache := NewBudgetCache(pool)
 	dur, err := cache.GetMaxDuration(context.Background(), uuid.Nil)
 	require.NoError(t, err)
-	require.Equal(t, 5*time.Minute, dur, "sin row en org_flow_config → default 5min")
+	require.Equal(t, 5*time.Minute, dur, "sin row en flow_config → default 5min")
 }
 
 func TestBudgetCache_ReturnsConfiguredValue(t *testing.T) {
@@ -61,7 +61,7 @@ func TestBudgetCache_ReturnsConfiguredValue(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := pool.Exec(ctx,
-		`INSERT INTO org_flow_config (max_flow_duration_seconds) VALUES (120)`)
+		`INSERT INTO flow_config (max_flow_duration_seconds) VALUES (120)`)
 	require.NoError(t, err)
 
 	cache := NewBudgetCache(pool)
@@ -76,7 +76,7 @@ func TestBudgetCache_InvalidateRefetches(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := pool.Exec(ctx,
-		`INSERT INTO org_flow_config (max_flow_duration_seconds) VALUES (60)`)
+		`INSERT INTO flow_config (max_flow_duration_seconds) VALUES (60)`)
 	require.NoError(t, err)
 
 	cache := NewBudgetCache(pool)
@@ -87,7 +87,7 @@ func TestBudgetCache_InvalidateRefetches(t *testing.T) {
 	require.Equal(t, 60*time.Second, dur1)
 
 
-	_, err = pool.Exec(ctx, `UPDATE org_flow_config SET max_flow_duration_seconds = 600`)
+	_, err = pool.Exec(ctx, `UPDATE flow_config SET max_flow_duration_seconds = 600`)
 	require.NoError(t, err)
 
 

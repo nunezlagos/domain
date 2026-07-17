@@ -21,7 +21,7 @@ import (
 // setupIntake levanta la DB, el service y un proyecto fixture. Fase 2: Submit
 // exige ProjectID (issue_intake_payloads.project_id es NOT NULL), asi que el
 // fixture devuelve el id del proyecto al cual scopear los intakes del test.
-func setupIntake(t *testing.T) (*intake.Service, uuid.UUID, func()) {
+func setupIntake(t *testing.T) (*intake.Service, uuid.UUID, uuid.UUID, func()) {
 	t.Helper()
 	ctx := context.Background()
 	pgC, err := postgres.Run(ctx,
@@ -48,15 +48,24 @@ func setupIntake(t *testing.T) (*intake.Service, uuid.UUID, func()) {
 		 VALUES ('Test Project', 'test-project') RETURNING id`,
 	).Scan(&projectID))
 
+	// issue_intake_payloads.reviewer_id tiene FK a users(id): Approve/Reject
+	// escriben ese campo, asi que sembramos un user real y devolvemos su id
+	// para usarlo como reviewer en los tests.
+	var reviewerID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO users (email, name, role)
+		 VALUES ('reviewer@test.com', 'Reviewer', 'owner') RETURNING id`,
+	).Scan(&reviewerID))
+
 	svc := &intake.Service{Pool: pools.App, Audit: &audit.PGRecorder{Pool: pools.Auth}}
-	return svc, projectID, func() {
+	return svc, projectID, reviewerID, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
 }
 
 func TestSubmit_AgentSource_OK(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, _, cleanup := setupIntake(t)
 	defer cleanup()
 
 	p, err := svc.Submit(context.Background(), intake.SubmitInput{
@@ -70,7 +79,7 @@ func TestSubmit_AgentSource_OK(t *testing.T) {
 }
 
 func TestSubmit_InvalidSource(t *testing.T) {
-	svc, _, cleanup := setupIntake(t)
+	svc, _, _, cleanup := setupIntake(t)
 	defer cleanup()
 
 	_, err := svc.Submit(context.Background(), intake.SubmitInput{
@@ -81,7 +90,7 @@ func TestSubmit_InvalidSource(t *testing.T) {
 }
 
 func TestSubmit_EmptyText(t *testing.T) {
-	svc, _, cleanup := setupIntake(t)
+	svc, _, _, cleanup := setupIntake(t)
 	defer cleanup()
 
 	_, err := svc.Submit(context.Background(), intake.SubmitInput{
@@ -91,7 +100,7 @@ func TestSubmit_EmptyText(t *testing.T) {
 }
 
 func TestFullFlow_AgentToCommitted(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, reviewerID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 
@@ -115,20 +124,29 @@ func TestFullFlow_AgentToCommitted(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	reviewerID := uuid.New()
 	approved, err := svc.Approve(ctx, p.ID, reviewerID)
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusApproved, approved.Status)
 
-	issueID := uuid.New()
-	reqID := uuid.New()
+	// committed_req_id -> sdd_requirements(id) y committed_issue_id ->
+	// issues(id) tienen FK (requirements/user_stories fueron renombradas en
+	// migs 000151/000073). Ambas exigen project_id NOT NULL (mig 000167).
+	var reqID, issueID uuid.UUID
+	require.NoError(t, svc.Pool.QueryRow(ctx,
+		`INSERT INTO sdd_requirements (slug, title, project_id) VALUES ('REQ-99-intake', 'Req intake', $1) RETURNING id`,
+		projectID,
+	).Scan(&reqID))
+	require.NoError(t, svc.Pool.QueryRow(ctx,
+		`INSERT INTO issues (slug, title, req_id, project_id) VALUES ('HU-99-intake', 'HU intake', $1, $2) RETURNING id`,
+		reqID, projectID,
+	).Scan(&issueID))
 	committed, err := svc.LinkCommitted(ctx, p.ID, &reqID, &issueID)
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusCommitted, committed.Status)
 }
 
 func TestApprove_WrongStatus(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, _, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
@@ -137,21 +155,21 @@ func TestApprove_WrongStatus(t *testing.T) {
 }
 
 func TestReject_FromPending(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, reviewerID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})
 	_, _ = svc.UpdateClassification(ctx, p.ID, "fix", "low", 0.7, "")
 	_, _ = svc.MarkPendingReview(ctx, p.ID, "t", "d", "REQ-04-opsx-sdd",
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
-	rejected, err := svc.Reject(ctx, p.ID, uuid.New(), "duplicate of issue-99")
+	rejected, err := svc.Reject(ctx, p.ID, reviewerID, "duplicate of issue-99")
 	require.NoError(t, err)
 	require.Equal(t, intake.StatusRejected, rejected.Status)
 	require.NotNil(t, rejected.RejectionReason)
 }
 
 func TestListPending_ExcludesCommitted(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, reviewerID, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 
@@ -160,9 +178,16 @@ func TestListPending_ExcludesCommitted(t *testing.T) {
 	_, _ = svc.UpdateClassification(ctx, p2.ID, "fix", "low", 0.9, "")
 	_, _ = svc.MarkPendingReview(ctx, p2.ID, "t", "d", "REQ-04-opsx-sdd",
 		map[string]any{}, []any{}, intake.MergeActionCreateNew)
-	rid := uuid.New()
-	_, _ = svc.Approve(ctx, p2.ID, rid)
-	issueID := uuid.New()
+	_, _ = svc.Approve(ctx, p2.ID, reviewerID)
+	var reqID, issueID uuid.UUID
+	require.NoError(t, svc.Pool.QueryRow(ctx,
+		`INSERT INTO sdd_requirements (slug, title, project_id) VALUES ('REQ-99-list', 'Req list', $1) RETURNING id`,
+		projectID,
+	).Scan(&reqID))
+	require.NoError(t, svc.Pool.QueryRow(ctx,
+		`INSERT INTO issues (slug, title, req_id, project_id) VALUES ('HU-99-list', 'HU list', $1, $2) RETURNING id`,
+		reqID, projectID,
+	).Scan(&issueID))
 	_, _ = svc.LinkCommitted(ctx, p2.ID, nil, &issueID)
 
 	list, err := svc.ListPending(ctx, 10)
@@ -177,7 +202,7 @@ func TestListPending_ExcludesCommitted(t *testing.T) {
 
 // Sabotaje: status='committed' impide approve directo.
 func TestSabotage_ApproveOnCommittedRejected(t *testing.T) {
-	svc, projectID, cleanup := setupIntake(t)
+	svc, projectID, _, cleanup := setupIntake(t)
 	defer cleanup()
 	ctx := context.Background()
 	p, _ := svc.Submit(ctx, intake.SubmitInput{Source: intake.SourceAgent, ProjectID: &projectID, RawText: "x"})

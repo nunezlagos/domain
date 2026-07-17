@@ -26,8 +26,9 @@ import (
 )
 
 type orchFixture struct {
-	srv     *mcptest.Server
-	cleanup func()
+	srv       *mcptest.Server
+	projectID string
+	cleanup   func()
 }
 
 func setupOrchMCP(t *testing.T) *orchFixture {
@@ -58,6 +59,13 @@ func setupOrchMCP(t *testing.T) *orchFixture {
 	_, err = seeds.SeedFlowsForOrg(ctx, pools.App, org.ID)
 	require.NoError(t, err)
 
+	// domain_orchestrate exige project_id (flow_runs.project_id NOT NULL): un
+	// project real al que scopear el run.
+	var projectID string
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (name, slug) VALUES ('Demo', 'demo') RETURNING id`,
+	).Scan(&projectID))
+
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
@@ -77,7 +85,8 @@ func setupOrchMCP(t *testing.T) *orchFixture {
 	require.NoError(t, err)
 
 	return &orchFixture{
-		srv: testSrv,
+		srv:       testSrv,
+		projectID: projectID,
 		cleanup: func() {
 			testSrv.Close()
 			pools.Close()
@@ -106,8 +115,9 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 	defer f.cleanup()
 
 	startTxt := callOrchTool(t, f.srv, "domain_orchestrate", map[string]any{
-		"raw_text": "fix typo en README",
-		"mode":     "express",
+		"raw_text":   "fix typo en README",
+		"mode":       "express",
+		"project_id": f.projectID,
 	})
 	var startRes struct {
 		OrchestratorRunID string `json:"OrchestratorRunID"`
@@ -163,6 +173,9 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 			"scenarios_failed": []any{},
 			"tests_passed":     1,
 		},
+		// La fase sdd-verify declara required_tool_calls (REQ-54): sin reportarlas
+		// el orquestador deja el step running (reintentable) y no lo cierra.
+		"tool_calls": []any{"domain_verify_start", "domain_verify_complete"},
 	})
 	var verifyRes struct {
 		StepStatus    string `json:"StepStatus"`

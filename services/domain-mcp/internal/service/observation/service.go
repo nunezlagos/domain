@@ -178,7 +178,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Observation, error) 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			if pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "observations_dedup_hash_uniq" {
+			if pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "knowledge_observations_dedup_hash_uniq" {
 				return nil, ErrDuplicate
 			}
 			if pgErr.Code == pgerrcode.ForeignKeyViolation && strings.Contains(pgErr.ConstraintName, "project") {

@@ -70,7 +70,7 @@ func TestBreaker_StreamErrorRecordsFailure(t *testing.T) {
 		{delta: "x", isError: true, isDone: true},
 	}}
 	b2 := New(p2, Config{FailureThreshold: 3, RecoveryTimeout: 100 * time.Millisecond})
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		out2, _ := b2.CompleteStream(context.Background(), llm.CompletionOptions{})
 		for range out2 {
 		}
@@ -109,7 +109,12 @@ func TestSabotage_StreamError_DeliberatelyOpensBreaker(t *testing.T) {
 	b := New(p, Config{FailureThreshold: 3, RecoveryTimeout: 100 * time.Millisecond})
 
 	for i := 0; i < 5; i++ {
-		out, _ := b.CompleteStream(context.Background(), llm.CompletionOptions{})
+		out, err := b.CompleteStream(context.Background(), llm.CompletionOptions{})
+		// Una vez Open, CompleteStream rechaza con ErrCircuitOpen y canal
+		// nil: no hay que drenar (rangear un canal nil colgaría para siempre).
+		if err != nil {
+			continue
+		}
 		for range out {
 		}
 	}

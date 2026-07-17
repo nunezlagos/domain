@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS organizations (
   deleted_at TIMESTAMPTZ
 );
 
-CREATE TRIGGER IF NOT EXISTS set_updated_at_organizations
+-- Postgres no soporta CREATE TRIGGER IF NOT EXISTS; drop + create para
+-- que el down sea reejecutable sin romper con syntax error.
+DROP TRIGGER IF EXISTS set_updated_at_organizations ON organizations;
+CREATE TRIGGER set_updated_at_organizations
   BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

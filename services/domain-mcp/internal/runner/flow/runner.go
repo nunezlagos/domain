@@ -769,10 +769,9 @@ func (r *Runner) execMemSave(ctx context.Context, step *flow.Step, orgID uuid.UU
 
 
 	var obs *observation.Observation
-	err = txctx.WithOrgTx(ctx, r.Pool, orgID, func(tx pgx.Tx) error {
-		txCtx := txctx.WithTxContext(ctx, tx)
+	save := func(c context.Context) error {
 		var saveErr error
-		obs, saveErr = r.Observations.Save(txCtx, observation.SaveInput{
+		obs, saveErr = r.Observations.Save(c, observation.SaveInput{
 			OrganizationID:  orgID,
 			ProjectID:       projectID,
 			CreatedBy:       userID,
@@ -780,7 +779,18 @@ func (r *Runner) execMemSave(ctx context.Context, step *flow.Step, orgID uuid.UU
 			ObservationType: obsType,
 		})
 		return saveErr
-	})
+	}
+	// Tras la de-org (000142/000143) el contexto ya no trae organization_id y
+	// la RLS por org está deshabilitada (000132): con orgID Nil la observación
+	// se guarda directo. WithOrgTx se conserva solo para contextos legacy que
+	// aún inyecten un org no-nulo.
+	if orgID == uuid.Nil {
+		err = save(ctx)
+	} else {
+		err = txctx.WithOrgTx(ctx, r.Pool, orgID, func(tx pgx.Tx) error {
+			return save(txctx.WithTxContext(ctx, tx))
+		})
+	}
 	if err != nil {
 		return nil, err
 	}

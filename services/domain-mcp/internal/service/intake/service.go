@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -342,8 +343,11 @@ func numericToFloat64Ptr(n pgtype.Numeric) *float64 {
 }
 
 func float64ToNumeric(f float64) pgtype.Numeric {
+	// pgtype.Numeric.Scan solo acepta string o nil (float64 devuelve
+	// "cannot scan float64"). Serializamos el float a decimal y lo
+	// parseamos como texto para persistir el valor real de confianza.
 	var n pgtype.Numeric
-	if err := n.Scan(f); err != nil {
+	if err := n.Scan(strconv.FormatFloat(f, 'f', -1, 64)); err != nil {
 		return pgtype.Numeric{Valid: false}
 	}
 	return n

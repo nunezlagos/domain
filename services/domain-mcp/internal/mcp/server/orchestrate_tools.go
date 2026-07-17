@@ -320,7 +320,14 @@ func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.Call
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	h := &orchestrateHandlers{orchestrator: deps.Orchestrator, principal: deps.Principal}
+	// Deps.Orchestrator es un *orchsvc.Service concreto; asignarlo directo a la
+	// interfaz cuando es nil produciría una interfaz NO-nil (typed-nil) y el
+	// guard `h.orchestrator == nil` nunca dispararía. Solo poblamos el campo si
+	// hay un service real.
+	h := &orchestrateHandlers{principal: deps.Principal}
+	if deps.Orchestrator != nil {
+		h.orchestrator = deps.Orchestrator
+	}
 	wrap.SetBudget("domain_orchestrate",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_phase_result",

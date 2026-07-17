@@ -168,7 +168,7 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 
 	rep, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, rep.Created, 8, "11 agent templates v3 (1 orchestrator + 10 workers)")
+	require.GreaterOrEqual(t, rep.Created, 8, "14 agent templates v3 (1 orchestrator + 13 workers)")
 
 	var slug string
 	require.NoError(t, pools.App.QueryRow(ctx,
@@ -180,7 +180,7 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT capabilities FROM agent_templates WHERE slug='sdd-explore'`,
 	).Scan(&caps))
-	require.Contains(t, caps, "code-search")
+	require.Contains(t, caps, "issue-dedup")
 }
 
 // Guard DOMAINSERV-15/18: la sección de seguridad shift-left se HORNEA en el

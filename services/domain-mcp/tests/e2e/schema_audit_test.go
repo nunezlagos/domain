@@ -42,39 +42,36 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 
 		"users", "projects", "auth_api_keys",
 
-		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
+		"knowledge_observations", "prompts", "knowledge_docs", "knowledge_chunks",
 
 		"sdd_requirements", "issues", "issue_gherkin_scenarios",
 		"sdd_proposals", "sdd_designs", "issue_tasks", "tdd_verification_results", "tdd_sabotage_records",
 		"issue_code_references", "file_attachments",
 
 		"issue_drafts", "issue_draft_steps_log",
-		"issue_intake_payloads", "intake_attachments",
+		"issue_intake_payloads",
 		"external_providers", "external_sync_state", "external_sync_events",
 
-		"imported_workflow_files",
+		"project_imported_workflow_files",
 
 		"agents", "agent_runs", "agent_run_logs", "agent_templates",
 		"skills", "skill_versions",
 		"flows", "flow_runs", "flow_run_steps", "flow_versions",
 		"flow_signals", "flow_run_step_snapshots",
 
-		"crons", "webhooks", "outbound_webhook_subscriptions", "outbound_webhook_deliveries",
-		"event_log",
+		"crons", "webhooks", "webhook_outbound_subscriptions", "webhook_outbound_deliveries",
 
-		"audit_log", "activity_log", "usage_counters", "usage_alerts",
+		"audit_log", "audit_activity_log", "usage_counters", "usage_alerts",
 		"notification_deliveries",
 
 
-		"custom_roles", "auth_invitations", "auth_secrets",
+		"roles", "auth_invitations", "auth_secrets",
 
 		"platform_policies", "platform_policy_versions",
-		"project_templates", "project_links", "project_merges",
+		"project_templates", "project_merges",
 
 		"seed_versions", "mcp_servers", "mcp_server_tools",
-		"selfhosted_runners", "selfhosted_tasks",
-		"domain_query_stats_history",
-		"llm_semantic_cache",
+		"runner_selfhosted", "runner_selfhosted_tasks",
 	}
 
 	missing := []string{}
@@ -175,7 +172,7 @@ func TestSchemaAudit_CriticalForeignKeysPresent(t *testing.T) {
 		{"file_attachments", "entity_id", ""}, // polymorphic, no FK
 		{"issue_intake_payloads", "committed_issue_id", "issues"},
 		{"external_sync_state", "provider_id", "external_providers"},
-		{"observations", "project_id", "projects"},
+		{"knowledge_observations", "project_id", "projects"},
 		{"flow_runs", "flow_id", "flows"},
 		{"flow_run_steps", "flow_run_id", "flow_runs"},
 	}

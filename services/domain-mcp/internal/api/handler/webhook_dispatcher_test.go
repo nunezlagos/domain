@@ -33,18 +33,37 @@ func TestWebhookDispatcher_EnqueueAccepts(t *testing.T) {
 // TestWebhookDispatcher_Backpressure: cola llena → Enqueue retorna false.
 func TestWebhookDispatcher_Backpressure(t *testing.T) {
 	blockCh := make(chan struct{})
-	defer close(blockCh)
+	started := make(chan struct{}, 1)
 	d := NewWebhookDispatcher(WebhookDispatcherConfig{
 		QueueSize: 2, // solo 2 slots
 		JobTimeout: 5 * time.Second,
 		Dispatch: func(ctx context.Context, _ webhookJob) {
+			select {
+			case started <- struct{}{}: // señala que el worker arrancó un job
+			default:
+			}
 			<-blockCh // bloquea hasta que cerremos el test
 		},
 	})
-	defer d.Shutdown(context.Background())
-
+	// Teardown en orden explicito: primero desbloqueamos al worker en
+	// vuelo (close(blockCh)) y recien despues Shutdown, que espera al wg.
+	// Con defers separados el orden LIFO invertiria esto y deadlockearia:
+	// Shutdown esperaria un job que nunca termina porque blockCh sigue
+	// abierto.
+	defer func() {
+		close(blockCh)
+		d.Shutdown(context.Background())
+	}()
 
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "1"}))
+	// Esperar a que el único worker saque el job 1 de la cola y quede
+	// bloqueado. Sin esto, el buffer podria seguir con el job 1 dentro y
+	// el enqueue del job 3 se rechazaria (carrera → falso negativo).
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("el worker no arrancó el primer job")
+	}
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "2"}))
 
 	require.True(t, d.Enqueue(context.Background(), webhookJob{hookID: "3"}))

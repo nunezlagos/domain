@@ -70,7 +70,14 @@ func registerMemoryTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	return []mcpgo.ServerTool{
 		{Tool: toolMemDelete(), Handler: wrap.Wrap("domain_mem_delete", rls(h.handleMemDelete))},
 		{Tool: toolMemSavePrompt(), Handler: wrap.Wrap("domain_mem_save_prompt", h.handleMemSavePrompt)},
-		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", rls(h.handleMemCapturePassive))},
+		// capture_passive NO va envuelto en rls(): la RLS por org de
+		// knowledge_observations está deshabilitada (000132), así que el tx +
+		// set_config no aporta nada. Peor: el dedup de observation.Save se apoya
+		// en una unique-violation que aborta el tx enclosing ('E'); el handler la
+		// traduce a {captured:false, reason:"duplicate"} pero withOrgTxHandler ya
+		// no puede commitear. Corriendo sobre el pool (autocommit por statement)
+		// el dedup devuelve el resultado gracioso sin poison de transacción.
+		{Tool: toolMemCapturePassive(), Handler: wrap.Wrap("domain_mem_capture_passive", h.handleMemCapturePassive)},
 		{Tool: toolMemSuggestTopicKey(), Handler: wrap.Wrap("domain_mem_suggest_topic_key", h.handleMemSuggestTopicKey)},
 		{Tool: toolMemStats(), Handler: wrap.Wrap("domain_mem_stats", rls(h.handleMemStats))},
 	}

@@ -22,7 +22,8 @@ import (
 	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
-// setupKeyStore levanta PG, migra, inserta org + user owner, y devuelve el store.
+// setupKeyStore levanta PG, migra, inserta user owner, y devuelve el store.
+// Ya no existe la tabla organizations: el orgID es un UUID libre single-org.
 func setupKeyStore(t *testing.T) (*PGStore, uuid.UUID, uuid.UUID, func()) {
 	t.Helper()
 	ctx := context.Background()
@@ -42,12 +43,11 @@ func setupKeyStore(t *testing.T) (*PGStore, uuid.UUID, uuid.UUID, func()) {
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	var orgID, userID uuid.UUID
+	orgID := uuid.New()
+	var userID uuid.UUID
 	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`).Scan(&orgID))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, 'owner@acme.com', 'Owner', 'owner') RETURNING id`, orgID).Scan(&userID))
+		`INSERT INTO users (email, name, role)
+		 VALUES ('owner@acme.com', 'Owner', 'owner') RETURNING id`).Scan(&userID))
 
 
 
@@ -72,7 +72,7 @@ func TestStore_IssueAndResolve(t *testing.T) {
 	p, err := s.Resolve(ctx, plaintext)
 	require.NoError(t, err)
 	require.Equal(t, userID.String(), p.UserID)
-	require.Equal(t, orgID.String(), p.OrganizationID, "org del Principal se deriva del user")
+	require.Equal(t, canonicalOrgID.String(), p.OrganizationID, "org del Principal es el canónico single-org")
 	require.Equal(t, keyID.String(), p.APIKeyID)
 	require.Equal(t, "owner", p.Role)
 }
@@ -116,7 +116,7 @@ func TestStore_List(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
 	for _, k := range keys {
-		require.Equal(t, orgID, k.OrgID, "List deriva el org del user")
+		require.Equal(t, canonicalOrgID, k.OrgID, "List usa el org canónico single-org")
 		require.Equal(t, userID, k.UserID)
 	}
 }
@@ -139,6 +139,6 @@ func TestStore_Rotate(t *testing.T) {
 
 	p, err := s.Resolve(ctx, newPlain)
 	require.NoError(t, err)
-	require.Equal(t, orgID.String(), p.OrganizationID)
+	require.Equal(t, canonicalOrgID.String(), p.OrganizationID)
 	require.Equal(t, newID.String(), p.APIKeyID)
 }

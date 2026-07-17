@@ -43,13 +43,10 @@ func setupHB(t *testing.T) (*hb.Service, uuid.UUID, func()) {
 	require.NoError(t, err)
 
 
-	var orgID, projectID uuid.UUID
+	var projectID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO projects (organization_id, name, slug)
-		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`, orgID,
+		`INSERT INTO projects (name, slug)
+		 VALUES ('Test Project', 'test-project') RETURNING id`,
 	).Scan(&projectID))
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}

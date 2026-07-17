@@ -198,9 +198,9 @@ func TestSignal_EarlySignal_DeliveredOnWait(t *testing.T) {
 	require.NoError(t, err)
 	var runID uuid.UUID
 	require.NoError(t, f.runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, trigger_type, status, inputs)
-		VALUES ($1, $2, 'manual', 'running', '{}') RETURNING id`,
-		f.orgID, fl.ID).Scan(&runID))
+		INSERT INTO flow_runs (flow_id, trigger_type, status, inputs)
+		VALUES ($1, 'manual', 'running', '{}') RETURNING id`,
+		fl.ID).Scan(&runID))
 
 	stepKey := "wait1"
 	_, err = signals.Send(ctx, runID, &stepKey, "early_event", []byte(`{"n":1}`))
@@ -230,9 +230,9 @@ func TestSignal_HasPendingExpectation_Expired(t *testing.T) {
 	require.NoError(t, err)
 	var runID uuid.UUID
 	require.NoError(t, f.runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, trigger_type, status, inputs)
-		VALUES ($1, $2, 'manual', 'running', '{}') RETURNING id`,
-		f.orgID, fl.ID).Scan(&runID))
+		INSERT INTO flow_runs (flow_id, trigger_type, status, inputs)
+		VALUES ($1, 'manual', 'running', '{}') RETURNING id`,
+		fl.ID).Scan(&runID))
 
 	pending, err := signals.HasPendingExpectation(ctx, runID, "approve")
 	require.NoError(t, err)

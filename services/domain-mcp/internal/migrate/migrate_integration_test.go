@@ -69,7 +69,7 @@ func TestMigrate_Up_CreatesAllTables(t *testing.T) {
 	}
 
 	expected := []string{
-		"organizations", "users", "auth_api_keys", "projects", "observations",
+		"users", "auth_api_keys", "projects", "observations",
 		"prompts", "knowledge_docs", "knowledge_chunks",
 		"skills", "skill_versions", "agents", "flows", "flow_runs",
 		"agent_runs", "crons", "webhooks", "webhook_deliveries", "audit_log",
@@ -119,13 +119,8 @@ func TestMigrate_Up_ObservationsHasVectorAndTSV(t *testing.T) {
 
 
 	_, err = conn.Exec(ctx, `
-		INSERT INTO organizations (id, name, slug) VALUES (gen_random_uuid(), 'A', 'a');
-	`)
-	require.NoError(t, err)
-
-	_, err = conn.Exec(ctx, `
-		INSERT INTO projects (id, organization_id, name, slug)
-		SELECT gen_random_uuid(), id, 'P', 'p' FROM organizations LIMIT 1;
+		INSERT INTO projects (id, name, slug)
+		VALUES (gen_random_uuid(), 'P', 'p');
 	`)
 	require.NoError(t, err)
 
@@ -216,44 +211,3 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	require.Equal(t, vBefore, vAfter, "up→down→up debe volver a la última versión")
 }
 
-// Sabotaje: violación FK debe fallar (constraint enforce).
-func TestSabotage_FK_Violation_Rejected(t *testing.T) {
-	dsn, cleanup := setupPG(t)
-	defer cleanup()
-	require.NoError(t, dmigrate.Up(dsn))
-
-	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, dsn)
-	require.NoError(t, err)
-	defer conn.Close(ctx)
-
-
-	_, err = conn.Exec(ctx, `
-		INSERT INTO users (organization_id, email)
-		VALUES ('00000000-0000-0000-0000-000000000001', 'x@x.com')
-	`)
-	require.Error(t, err, "FK violation must be rejected")
-}
-
-// Sabotaje: UNIQUE (organization_id, email) en users.
-func TestSabotage_UniqueEmailPerOrg_Enforced(t *testing.T) {
-	dsn, cleanup := setupPG(t)
-	defer cleanup()
-	require.NoError(t, dmigrate.Up(dsn))
-
-	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, dsn)
-	require.NoError(t, err)
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(ctx, `INSERT INTO organizations (name, slug) VALUES ('A', 'a')`)
-	require.NoError(t, err)
-
-	_, err = conn.Exec(ctx, `
-		INSERT INTO users (organization_id, email)
-		SELECT id, 'dup@x.com' FROM organizations LIMIT 1;
-		INSERT INTO users (organization_id, email)
-		SELECT id, 'dup@x.com' FROM organizations LIMIT 1;
-	`)
-	require.Error(t, err, "duplicate email in same org must fail")
-}

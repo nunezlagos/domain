@@ -41,12 +41,8 @@ func setupTemplatesV3(t *testing.T) (*pgxpool.Pool, uuid.UUID, func()) {
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
+	// org sin respaldo en BD tras 000142/000143: UUID libre, vestigial para el seeder.
 	orgID := uuid.New()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organizations (id, name, slug)
-		VALUES ($1, 'Test Org', 'test-org')
-	`, orgID)
-	require.NoError(t, err)
 
 	cleanup := func() {
 		pool.Close()
@@ -90,25 +86,6 @@ func TestAgentTemplates_SeederV3_InsertsSddPipeline(t *testing.T) {
 	require.Equal(t, "sdd-orchestrator", orchSlug)
 }
 
-// UNIQUE INDEX parcial: imposible insertar 2 orchestrators por org.
-func TestAgentTemplates_UniqueOrchestratorPerOrg(t *testing.T) {
-	pool, orgID, cleanup := setupTemplatesV3(t)
-	defer cleanup()
-	ctx := context.Background()
-
-
-	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)
-	require.NoError(t, err)
-
-
-	_, err = pool.Exec(ctx, `
-		INSERT INTO agent_templates
-		  (organization_id, slug, name, system_prompt, handoff_policy, role, seed_managed)
-		VALUES ($1, 'fake-orchestrator', 'Fake', 'sys', 'forbid', 'orchestrator', false)
-	`, orgID)
-	require.Error(t, err, "UNIQUE INDEX parcial debe rechazar 2do orchestrator")
-}
-
 // Idempotencia: seeder ejecutado 2x no duplica + Updated > 0.
 func TestAgentTemplates_SeederIdempotent(t *testing.T) {
 	pool, orgID, cleanup := setupTemplatesV3(t)
@@ -142,9 +119,9 @@ func TestAgentTemplates_CleanupRemovesLegacy(t *testing.T) {
 	for _, slug := range []string{"researcher", "coder", "tester"} {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO agent_templates
-			  (organization_id, slug, name, system_prompt, handoff_policy, role, seed_managed, is_user_modified)
-			VALUES ($1, $2, $2, 'sys', 'allow', 'phase-worker', true, false)
-		`, orgID, slug)
+			  (slug, name, system_prompt, handoff_policy, role, seed_managed, is_user_modified)
+			VALUES ($1, $1, 'sys', 'allow', 'phase-worker', true, false)
+		`, slug)
 		require.NoError(t, err)
 	}
 
@@ -170,9 +147,9 @@ func TestAgentTemplates_CleanupPreservesUserModified(t *testing.T) {
 
 	_, err := pool.Exec(ctx, `
 		INSERT INTO agent_templates
-		  (organization_id, slug, name, system_prompt, handoff_policy, role, seed_managed, is_user_modified)
-		VALUES ($1, 'my-custom', 'My Custom', 'sys', 'allow', 'phase-worker', true, true)
-	`, orgID)
+		  (slug, name, system_prompt, handoff_policy, role, seed_managed, is_user_modified)
+		VALUES ('my-custom', 'My Custom', 'sys', 'allow', 'phase-worker', true, true)
+	`)
 	require.NoError(t, err)
 
 	rep, err := seeds.SeedAgentTemplatesForOrg(ctx, pool, orgID)

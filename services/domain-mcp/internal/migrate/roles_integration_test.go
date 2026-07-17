@@ -133,12 +133,12 @@ func TestRoles_AppReadonly_OnlySelect(t *testing.T) {
 
 
 	_, err := conn.Exec(context.Background(),
-		"SELECT count(*) FROM organizations")
+		"SELECT count(*) FROM projects")
 	require.NoError(t, err)
 
 
 	_, err = conn.Exec(context.Background(),
-		"INSERT INTO organizations (name, slug) VALUES ('X', 'x')")
+		"INSERT INTO projects (name, slug) VALUES ('X', 'x')")
 	require.Error(t, err, "app_readonly INSERT debe fallar")
 }
 
@@ -173,6 +173,6 @@ func TestSabotage_AppUser_TruncateDenied(t *testing.T) {
 	conn := connectAs(t, dsn, "app_user", "testpass")
 	defer conn.Close(context.Background())
 
-	_, err := conn.Exec(context.Background(), "TRUNCATE TABLE organizations")
+	_, err := conn.Exec(context.Background(), "TRUNCATE TABLE projects")
 	require.Error(t, err, "TRUNCATE requiere TRUNCATE privilege que app_user no tiene")
 }

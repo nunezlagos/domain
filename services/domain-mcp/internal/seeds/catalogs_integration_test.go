@@ -113,7 +113,7 @@ func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
 	var publics, defaults int
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT COUNT(*), COUNT(*) FILTER (WHERE is_default)
-		 FROM project_templates WHERE organization_id IS NULL AND is_public`).
+		 FROM project_templates WHERE is_public`).
 		Scan(&publics, &defaults))
 	require.Equal(t, 1, publics)
 	require.Equal(t, 1, defaults)
@@ -121,7 +121,7 @@ func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
 	_, err = pools.App.Exec(ctx,
 		`UPDATE project_templates
 		 SET name='Mi Default Custom', is_user_modified=TRUE
-		 WHERE organization_id IS NULL AND slug='default'`)
+		 WHERE slug='default'`)
 	require.NoError(t, err)
 
 	tx, err := pools.Auth.Begin(ctx)
@@ -135,7 +135,7 @@ func TestProjectTemplatesSeeder_BuiltinsAndUserModified(t *testing.T) {
 	var name string
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`SELECT name FROM project_templates
-		 WHERE organization_id IS NULL AND slug='default'`).Scan(&name))
+		 WHERE slug='default'`).Scan(&name))
 	require.Equal(t, "Mi Default Custom", name, "edición del usuario preservada")
 }
 
@@ -144,11 +144,8 @@ func TestSeedSkillsForOrg_BuiltinCatalog(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	err := pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	rep, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1)
 	require.NoError(t, err)
@@ -166,11 +163,8 @@ func TestSeedAgentTemplatesForOrg_BuiltinCatalog(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	err := pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	rep, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
@@ -231,13 +225,10 @@ func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	err := pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
-	_, err = seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1)
+	_, err := seeds.SeedSkillsForOrg(ctx, pools.App, orgID, 1)
 	require.NoError(t, err)
 
 	_, err = pools.App.Exec(ctx,

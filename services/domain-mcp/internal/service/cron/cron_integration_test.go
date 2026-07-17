@@ -47,17 +47,12 @@ func TestCronService_PickDue_PicksDueCron(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-
 	cronID := uuid.New()
 	now := time.Now().UTC()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at)
-		VALUES ($1, $2, 'test-cron', 'Test Cron', '* * * * *', 'flow', $3, $4)`,
-		cronID, orgID, uuid.New(), now.Add(-time.Minute))
+	_, err := pool.Exec(ctx, `
+		INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at)
+		VALUES ($1, 'test-cron', 'Test Cron', '* * * * *', 'flow', $2, $3)`,
+		cronID, uuid.New(), now.Add(-time.Minute))
 	require.NoError(t, err)
 
 	svc := &cron.Service{Pool: pool}
@@ -75,16 +70,11 @@ func TestCronService_PickDue_DoesNotPickFuture(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-
 	future := time.Now().UTC().Add(24 * time.Hour)
-	_, err = pool.Exec(ctx, `
-		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at)
-		VALUES ($1, $2, 'future-cron', 'Future Cron', '* * * * *', 'flow', $3, $4)`,
-		uuid.New(), orgID, uuid.New(), future)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at)
+		VALUES ($1, 'future-cron', 'Future Cron', '* * * * *', 'flow', $2, $3)`,
+		uuid.New(), uuid.New(), future)
 	require.NoError(t, err)
 
 	svc := &cron.Service{Pool: pool}
@@ -98,15 +88,10 @@ func TestCronService_PickDue_SkipsDisabled(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-
-	_, err = pool.Exec(ctx, `
-		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at, enabled)
-		VALUES ($1, $2, 'disabled-cron', 'Disabled Cron', '* * * * *', 'flow', $3, $4, false)`,
-		uuid.New(), orgID, uuid.New(), time.Now().UTC().Add(-time.Minute))
+	_, err := pool.Exec(ctx, `
+		INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at, enabled)
+		VALUES ($1, 'disabled-cron', 'Disabled Cron', '* * * * *', 'flow', $2, $3, false)`,
+		uuid.New(), uuid.New(), time.Now().UTC().Add(-time.Minute))
 	require.NoError(t, err)
 
 	svc := &cron.Service{Pool: pool}
@@ -120,16 +105,11 @@ func TestCronService_PickDue_DoesNotPickDeleted(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-
 	now := time.Now().UTC()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at, deleted_at)
-		VALUES ($1, $2, 'deleted-cron', 'Deleted Cron', '* * * * *', 'flow', $3, $4, $5)`,
-		uuid.New(), orgID, uuid.New(), now.Add(-time.Minute), now)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at, deleted_at)
+		VALUES ($1, 'deleted-cron', 'Deleted Cron', '* * * * *', 'flow', $2, $3, $4)`,
+		uuid.New(), uuid.New(), now.Add(-time.Minute), now)
 	require.NoError(t, err)
 
 	svc := &cron.Service{Pool: pool}
@@ -143,17 +123,12 @@ func TestCronService_PickDue_RespectsLimit(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-
 	now := time.Now().UTC()
 	for i := 0; i < 3; i++ {
-		_, err = pool.Exec(ctx, `
-			INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at)
-			VALUES ($1, $2, $3, $4, '* * * * *', 'flow', $5, $6)`,
-			uuid.New(), orgID, "cron-"+uuid.New().String(), "Cron", uuid.New(), now.Add(-time.Hour))
+		_, err := pool.Exec(ctx, `
+			INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at)
+			VALUES ($1, $2, $3, '* * * * *', 'flow', $4, $5)`,
+			uuid.New(), "cron-"+uuid.New().String(), "Cron", uuid.New(), now.Add(-time.Hour))
 		require.NoError(t, err)
 	}
 
@@ -163,13 +138,13 @@ func TestCronService_PickDue_RespectsLimit(t *testing.T) {
 	require.Len(t, due, 2, "should respect limit=2")
 }
 
-func insertCron(t *testing.T, pool *pgxpool.Pool, orgID uuid.UUID) uuid.UUID {
+func insertCron(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	t.Helper()
 	cronID := uuid.New()
 	_, err := pool.Exec(context.Background(), `
-		INSERT INTO crons (id, organization_id, slug, name, cron_expression, target_type, target_id, next_run_at)
-		VALUES ($1, $2, $3, 'Cron', '* * * * *', 'flow', $4, NOW())`,
-		cronID, orgID, "cron-"+uuid.New().String(), uuid.New())
+		INSERT INTO crons (id, slug, name, cron_expression, target_type, target_id, next_run_at)
+		VALUES ($1, $2, 'Cron', '* * * * *', 'flow', $3, NOW())`,
+		cronID, "cron-"+uuid.New().String(), uuid.New())
 	require.NoError(t, err)
 	return cronID
 }
@@ -179,11 +154,7 @@ func TestCronService_ExecutionHistory_Lifecycle(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-	cronID := insertCron(t, pool, orgID)
+	cronID := insertCron(t, pool)
 	svc := &cron.Service{Pool: pool}
 
 
@@ -215,11 +186,7 @@ func TestSabotage_CronService_OverlapSkipped(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	orgID := uuid.New()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, orgID)
-	require.NoError(t, err)
-	cronID := insertCron(t, pool, orgID)
+	cronID := insertCron(t, pool)
 	svc := &cron.Service{Pool: pool}
 
 
@@ -239,7 +206,7 @@ func TestSabotage_CronService_OverlapSkipped(t *testing.T) {
 	require.Equal(t, "running", hist[1].Status)
 
 
-	otherID := insertCron(t, pool, orgID)
+	otherID := insertCron(t, pool)
 	_, skipped, err = svc.StartExecution(ctx, otherID, "flow")
 	require.NoError(t, err)
 	require.False(t, skipped, "el overlap es per-cron, no global")

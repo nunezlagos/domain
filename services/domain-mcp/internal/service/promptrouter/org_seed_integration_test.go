@@ -18,23 +18,16 @@ type seedMemberResult struct{ UserID uuid.UUID }
 
 // seedOrgUser inserta org + owner user directamente (el org.Service fue
 // removido). Replica el núcleo del antiguo org.Service.Create: las dos filas
-// que el resto del setup necesita (organizations + users con role owner). No
+// que el resto del setup necesita (solo el owner user; org_id es UUID libre, migraciones 000142/000143). No
 // ejecuta los post-create hooks (seeds de skills/agents/flows) porque ningún
 // test acá depende de ese seeding.
-func seedOrgUser(ctx context.Context, pool *pgxpool.Pool, name, slug, ownerEmail, ownerName string) (*seedOrgResult, *seedMemberResult, error) {
-	var org seedOrgResult
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug, settings)
-		 VALUES ($1, $2, '{}'::jsonb) RETURNING id`,
-		name, slug,
-	).Scan(&org.ID); err != nil {
-		return nil, nil, err
-	}
+func seedOrgUser(ctx context.Context, pool *pgxpool.Pool, _, _, ownerEmail, ownerName string) (*seedOrgResult, *seedMemberResult, error) {
+	org := seedOrgResult{ID: uuid.New()}
 	var member seedMemberResult
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role)
-		 VALUES ($1, $2, $3, 'owner') RETURNING id`,
-		org.ID, ownerEmail, ownerName,
+		`INSERT INTO users (email, name, role)
+		 VALUES ($1, $2, 'owner') RETURNING id`,
+		ownerEmail, ownerName,
 	).Scan(&member.UserID); err != nil {
 		return nil, nil, err
 	}
@@ -45,13 +38,12 @@ func seedOrgUser(ctx context.Context, pool *pgxpool.Pool, name, slug, ownerEmail
 // el camino orquestador/intake exige project_id (columnas NOT NULL), asi que
 // los tests del router que arrancan flujos feature/fix necesitan un proyecto al
 // cual scopear la corrida.
-func seedProject(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) uuid.UUID {
+func seedProject(t *testing.T, ctx context.Context, pool *pgxpool.Pool, _ uuid.UUID) uuid.UUID {
 	t.Helper()
 	var projectID uuid.UUID
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (organization_id, name, slug)
-		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`,
-		orgID,
+		`INSERT INTO projects (name, slug)
+		 VALUES ('Test Project', 'test-project') RETURNING id`,
 	).Scan(&projectID); err != nil {
 		t.Fatalf("seedProject: %v", err)
 	}

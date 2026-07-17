@@ -60,9 +60,9 @@ func setup(t *testing.T) (*pgxpool.Pool, *uuid.UUID, *uuid.UUID, func()) {
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	orgID, err := createOrg(ctx, pool)
-	require.NoError(t, err)
-	projectID, err := createProject(ctx, pool, orgID)
+	// org sin respaldo en BD tras 000142/000143: UUID libre en memoria.
+	orgID := uuid.New()
+	projectID, err := createProject(ctx, pool)
 	require.NoError(t, err)
 
 	return pool, &orgID, &projectID, func() {
@@ -71,19 +71,11 @@ func setup(t *testing.T) (*pgxpool.Pool, *uuid.UUID, *uuid.UUID, func()) {
 	}
 }
 
-func createOrg(ctx context.Context, pool *pgxpool.Pool) (uuid.UUID, error) {
+func createProject(ctx context.Context, pool *pgxpool.Pool) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO organizations (name, slug) VALUES ('Test Org', 'org') RETURNING id
+		INSERT INTO projects (name, slug) VALUES ('P', 'p') RETURNING id
 	`).Scan(&id)
-	return id, err
-}
-
-func createProject(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := pool.QueryRow(ctx, `
-		INSERT INTO projects (organization_id, name, slug) VALUES ($1, 'P', 'p') RETURNING id
-	`, orgID).Scan(&id)
 	return id, err
 }
 

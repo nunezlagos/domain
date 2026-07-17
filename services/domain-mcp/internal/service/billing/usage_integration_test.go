@@ -42,9 +42,8 @@ func setupBillingDB(t *testing.T) (*pgxpool.Pool, uuid.UUID, func()) {
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	var orgID uuid.UUID
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`).Scan(&orgID))
+	// org sin respaldo en BD tras 000142/000143: UUID libre en memoria.
+	orgID := uuid.New()
 
 	return pool, orgID, func() {
 		pool.Close()
@@ -57,7 +56,7 @@ func setupBillingDB(t *testing.T) (*pgxpool.Pool, uuid.UUID, func()) {
 func TestIncrementCounter_CreatesRowOnFirstCall(t *testing.T) {
 	pool, orgID, cleanup := setupBillingDB(t)
 	defer cleanup()
-	svc := &Service{Pool: pool, now: func() time.Time {
+	svc := &Service{Pool: pool, Now: func() time.Time {
 		return time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
 	}}
 
@@ -70,7 +69,7 @@ func TestIncrementCounter_CreatesRowOnFirstCall(t *testing.T) {
 func TestIncrementCounter_UpdatesRowOnSamePeriod(t *testing.T) {
 	pool, orgID, cleanup := setupBillingDB(t)
 	defer cleanup()
-	svc := &Service{Pool: pool, now: func() time.Time {
+	svc := &Service{Pool: pool, Now: func() time.Time {
 		return time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
 	}}
 
@@ -84,7 +83,7 @@ func TestIncrementCounter_UpdatesRowOnSamePeriod(t *testing.T) {
 func TestGetUsage_NoRowReturnsZeroUsage(t *testing.T) {
 	pool, orgID, cleanup := setupBillingDB(t)
 	defer cleanup()
-	svc := &Service{Pool: pool, now: func() time.Time {
+	svc := &Service{Pool: pool, Now: func() time.Time {
 		return time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
 	}}
 

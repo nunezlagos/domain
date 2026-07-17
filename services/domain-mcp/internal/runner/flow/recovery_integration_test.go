@@ -100,9 +100,9 @@ func TestRecovery_ReleaseStaleRun(t *testing.T) {
 
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status, started_at, last_heartbeat_at, worker_id)
-		VALUES ($1, $2, $3, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes', 'stale-worker-1')
-		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
+		INSERT INTO flow_runs (flow_id, triggered_by, status, started_at, last_heartbeat_at, worker_id)
+		VALUES ($1, $2, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes', 'stale-worker-1')
+		RETURNING id`, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
 
@@ -145,9 +145,9 @@ func TestRecovery_CrashLoopDetection(t *testing.T) {
 
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status, recovery_count, started_at, last_heartbeat_at, worker_id)
-		VALUES ($1, $2, $3, 'running', 10, NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes', 'stale-worker-2')
-		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
+		INSERT INTO flow_runs (flow_id, triggered_by, status, recovery_count, started_at, last_heartbeat_at, worker_id)
+		VALUES ($1, $2, 'running', 10, NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes', 'stale-worker-2')
+		RETURNING id`, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
 
@@ -188,9 +188,9 @@ func TestClaimRun_Pending(t *testing.T) {
 
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status)
-		VALUES ($1, $2, $3, 'pending')
-		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
+		INSERT INTO flow_runs (flow_id, triggered_by, status)
+		VALUES ($1, $2, 'pending')
+		RETURNING id`, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
 	claimer := &flowrunner.ClaimRunClaims{
@@ -230,9 +230,9 @@ func TestClaimRun_Stale(t *testing.T) {
 
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status, last_heartbeat_at, worker_id)
-		VALUES ($1, $2, $3, 'running', NOW() - INTERVAL '10 minutes', 'dead-worker')
-		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
+		INSERT INTO flow_runs (flow_id, triggered_by, status, last_heartbeat_at, worker_id)
+		VALUES ($1, $2, 'running', NOW() - INTERVAL '10 minutes', 'dead-worker')
+		RETURNING id`, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
 	claimer := &flowrunner.ClaimRunClaims{
@@ -273,9 +273,9 @@ func TestRace_TwoWorkersClaim(t *testing.T) {
 
 	var runID uuid.UUID
 	err = runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, triggered_by, status)
-		VALUES ($1, $2, $3, 'pending')
-		RETURNING id`, orgID, fl.ID, &userID).Scan(&runID)
+		INSERT INTO flow_runs (flow_id, triggered_by, status)
+		VALUES ($1, $2, 'pending')
+		RETURNING id`, fl.ID, &userID).Scan(&runID)
 	require.NoError(t, err)
 
 

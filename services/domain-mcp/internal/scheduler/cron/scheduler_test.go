@@ -44,9 +44,8 @@ func TestRunTarget_DelegatesToDispatcher_Flow(t *testing.T) {
 	}
 	s := &Scheduler{Dispatcher: d}
 	flowID := uuid.New()
-	orgID := uuid.New()
 	c := cron.Cron{
-		TargetType: "flow", TargetID: flowID, OrganizationID: orgID,
+		TargetType: "flow", TargetID: flowID,
 		Inputs: map[string]any{"k": "v"},
 	}
 	err := s.runTarget(context.Background(), c)
@@ -55,7 +54,7 @@ func TestRunTarget_DelegatesToDispatcher_Flow(t *testing.T) {
 	require.Equal(t, dispatch.SourceCron, gotReq.Source)
 	require.Equal(t, dispatch.TargetFlow, gotReq.TargetType)
 	require.Equal(t, flowID, gotReq.TargetID)
-	require.Equal(t, orgID, gotReq.OrgID)
+	require.Equal(t, uuid.Nil, gotReq.OrgID)
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(gotReq.Inputs, &parsed))

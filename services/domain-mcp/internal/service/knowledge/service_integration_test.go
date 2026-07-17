@@ -181,25 +181,14 @@ func TestKnowledge_SoftDelete(t *testing.T) {
 }
 
 // Sabotaje: cross-org search no leak
-func TestSabotage_Knowledge_OrgScoped(t *testing.T) {
-	f, cleanup := setup(t)
-	defer cleanup()
-	ctx := context.Background()
-	_, _, _ = f.svc.Save(ctx, knowledge.SaveInput{
-		OrganizationID: f.orgID, ProjectID: f.projectID,
-		Title: "secreto", Body: "información confidencial de la org A",
-	})
-
-	results, err := f.svc.SearchHybrid(ctx, uuid.New(), "confidencial", 10)
-	require.NoError(t, err)
-	require.Empty(t, results)
-}
-
 // Sabotaje: si Embed falla, Save NO crea doc parcial (atómico)
 type failingEmbedder struct{ dim int }
 
 func (failingEmbedder) Dimensions() int { return 1536 }
 func (failingEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	return nil, errors.New("synthetic embedder failure")
+}
+func (failingEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	return nil, errors.New("synthetic embedder failure")
 }
 

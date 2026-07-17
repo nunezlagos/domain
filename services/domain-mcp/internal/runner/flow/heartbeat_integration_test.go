@@ -35,9 +35,9 @@ func TestStepRow_LifecycleAndProgress(t *testing.T) {
 
 	var runID uuid.UUID
 	require.NoError(t, f.runner.Pool.QueryRow(ctx, `
-		INSERT INTO flow_runs (organization_id, flow_id, trigger_type, status, inputs)
-		VALUES ($1, $2, 'manual', 'running', '{}') RETURNING id`,
-		f.orgID, fl.ID).Scan(&runID))
+		INSERT INTO flow_runs (flow_id, trigger_type, status, inputs)
+		VALUES ($1, 'manual', 'running', '{}') RETURNING id`,
+		fl.ID).Scan(&runID))
 
 
 	conn, err := f.runner.Pool.Acquire(ctx)

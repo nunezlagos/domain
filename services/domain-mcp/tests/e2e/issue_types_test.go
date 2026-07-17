@@ -62,11 +62,9 @@ func bootstrapForIssueTypes(t *testing.T) (*issueFixture, func()) {
 	require.NoError(t, err)
 
 
-	var orgID, projectID uuid.UUID
-	err = pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// org sin respaldo en BD tras 000142/000143: UUID libre en memoria.
+	orgID := uuid.New()
+	var projectID uuid.UUID
 	err = pools.App.QueryRow(ctx,
 		`INSERT INTO projects (name, slug) VALUES ('Demo', 'demo') RETURNING id`,
 	).Scan(&projectID)

@@ -44,14 +44,11 @@ func setupDB(t *testing.T) (*pgxpool.Pool, func()) {
 	}
 }
 
-func seedOrg(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+func seedOrg(t *testing.T, _ *pgxpool.Pool) uuid.UUID {
 	t.Helper()
-	var id uuid.UUID
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO organizations (name, slug) VALUES ('T', 't') RETURNING id`,
-	).Scan(&id)
-	require.NoError(t, err)
-	return id
+	// La tabla organizations fue eliminada (mig 000143). El org queda como
+	// UUID libre sin respaldo en BD; audit_activity_log ya no tiene organization_id.
+	return uuid.New()
 }
 
 func TestPGStore_Record_HappyPath(t *testing.T) {
@@ -114,30 +111,6 @@ func TestPGStore_Record_DefaultVisibility(t *testing.T) {
 		`SELECT visibility FROM audit_activity_log WHERE id = $1`, id,
 	).Scan(&vis))
 	require.Equal(t, "org", vis)
-}
-
-func TestPGStore_List_FiltersByOrg(t *testing.T) {
-	pool, cleanup := setupDB(t)
-	defer cleanup()
-	orgA := seedOrg(t, pool)
-
-	var orgB uuid.UUID
-	require.NoError(t, pool.QueryRow(context.Background(),
-		`INSERT INTO organizations (name, slug) VALUES ('B', 'b') RETURNING id`,
-	).Scan(&orgB))
-
-	store := &activity.PGStore{Pool: pool}
-	_, _ = store.Record(context.Background(), activity.Event{
-		OrganizationID: orgA, Action: "a", EntityType: "x", Summary: "in A",
-	})
-	_, _ = store.Record(context.Background(), activity.Event{
-		OrganizationID: orgB, Action: "b", EntityType: "x", Summary: "in B",
-	})
-
-	entriesA, err := store.List(context.Background(), activity.Filter{OrganizationID: orgA})
-	require.NoError(t, err)
-	require.Len(t, entriesA, 1)
-	require.Equal(t, "in A", entriesA[0].Summary)
 }
 
 func TestPGStore_List_OrderedDescByCreatedAt(t *testing.T) {

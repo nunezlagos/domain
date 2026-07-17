@@ -23,7 +23,6 @@ import (
 // hbFixture aisla setup de heartbeat tests (no necesita services completos).
 type hbFixture struct {
 	pool   *pgxpool.Pool
-	orgID  uuid.UUID
 	flowID uuid.UUID
 }
 
@@ -48,18 +47,11 @@ func setupHBWatcher(t *testing.T) (*hbFixture, *systemcron.HeartbeatWatcher, fun
 	require.NoError(t, err)
 
 
-	orgID := uuid.New()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organizations (id, name, slug)
-		VALUES ($1, 'Test Org', 'test-org')
-	`, orgID)
-	require.NoError(t, err)
-
 	flowID := uuid.New()
 	_, err = pool.Exec(ctx, `
-		INSERT INTO flows (id, organization_id, slug, name, spec)
-		VALUES ($1, $2, 'test-flow', 'Test Flow', '{}'::jsonb)
-	`, flowID, orgID)
+		INSERT INTO flows (id, slug, name, spec)
+		VALUES ($1, 'test-flow', 'Test Flow', '{}'::jsonb)
+	`, flowID)
 	require.NoError(t, err)
 
 	reg := metrics.New()
@@ -75,7 +67,7 @@ func setupHBWatcher(t *testing.T) (*hbFixture, *systemcron.HeartbeatWatcher, fun
 		pool.Close()
 		_ = pgC.Terminate(ctx)
 	}
-	return &hbFixture{pool: pool, orgID: orgID, flowID: flowID}, watcher, cleanup
+	return &hbFixture{pool: pool, flowID: flowID}, watcher, cleanup
 }
 
 // Escenario 1: detecta step stuck + lo marca failed + dispara saga
@@ -87,9 +79,9 @@ func TestHeartbeatWatcher_DetectsAndMarksFailed(t *testing.T) {
 
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
-		VALUES ($1, $2, $3, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '6 minutes')
-	`, runID, fx.flowID, fx.orgID)
+		INSERT INTO flow_runs (id, flow_id, status, started_at, last_heartbeat_at)
+		VALUES ($1, $2, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '6 minutes')
+	`, runID, fx.flowID)
 	require.NoError(t, err)
 
 	stepID := uuid.New()
@@ -132,9 +124,9 @@ func TestHeartbeatWatcher_RecentHeartbeat_NotMarked(t *testing.T) {
 
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
-		VALUES ($1, $2, $3, 'running', NOW(), NOW())
-	`, runID, fx.flowID, fx.orgID)
+		INSERT INTO flow_runs (id, flow_id, status, started_at, last_heartbeat_at)
+		VALUES ($1, $2, 'running', NOW(), NOW())
+	`, runID, fx.flowID)
 	require.NoError(t, err)
 
 	stepID := uuid.New()
@@ -165,9 +157,9 @@ func TestHeartbeatWatcher_ConfigurableThreshold(t *testing.T) {
 
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
-		VALUES ($1, $2, $3, 'running', NOW() - INTERVAL '8 minutes', NOW() - INTERVAL '6 minutes')
-	`, runID, fx.flowID, fx.orgID)
+		INSERT INTO flow_runs (id, flow_id, status, started_at, last_heartbeat_at)
+		VALUES ($1, $2, 'running', NOW() - INTERVAL '8 minutes', NOW() - INTERVAL '6 minutes')
+	`, runID, fx.flowID)
 	require.NoError(t, err)
 
 	stepID := uuid.New()
@@ -192,9 +184,9 @@ func TestHeartbeatWatcher_RaceCondition_SkipsLocked(t *testing.T) {
 
 	runID := uuid.New()
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO flow_runs (id, flow_id, organization_id, status, started_at, last_heartbeat_at)
-		VALUES ($1, $2, $3, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '6 minutes')
-	`, runID, fx.flowID, fx.orgID)
+		INSERT INTO flow_runs (id, flow_id, status, started_at, last_heartbeat_at)
+		VALUES ($1, $2, 'running', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '6 minutes')
+	`, runID, fx.flowID)
 	require.NoError(t, err)
 
 	stepID := uuid.New()

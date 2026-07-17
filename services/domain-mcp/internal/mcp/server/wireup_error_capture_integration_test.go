@@ -145,13 +145,10 @@ func setupWireupPool(t *testing.T, ctx context.Context) (*pgxpool.Pool, func()) 
 
 func seedOrgAndMember(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (uuid.UUID, uuid.UUID) {
 	t.Helper()
-	var orgID, userID uuid.UUID
+	orgID := uuid.New()
+	var userID uuid.UUID
 	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug, settings) VALUES ('w-test', 'w-test', '{}') RETURNING id`,
-	).Scan(&orgID))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email, name, role) VALUES ($1, 'w-test@x', 'w-test', 'owner') RETURNING id`,
-		orgID,
+		`INSERT INTO users (email, name, role) VALUES ('w-test@x', 'w-test', 'owner') RETURNING id`,
 	).Scan(&userID))
 	return orgID, userID
 }

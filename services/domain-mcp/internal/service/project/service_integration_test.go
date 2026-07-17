@@ -76,16 +76,6 @@ func TestProject_SlugInvalid(t *testing.T) {
 	}
 }
 
-func TestProject_SlugTakenPerOrg(t *testing.T) {
-	svc, orgID, owner, cleanup := setupProj(t)
-	defer cleanup()
-	ctx := context.Background()
-	_, err := svc.Create(ctx, projsvc.CreateInput{OrganizationID: orgID, Name: "A", Slug: "x", ActorID: owner})
-	require.NoError(t, err)
-	_, err = svc.Create(ctx, projsvc.CreateInput{OrganizationID: orgID, Name: "B", Slug: "x", ActorID: owner})
-	require.ErrorIs(t, err, projsvc.ErrSlugTaken)
-}
-
 func TestProject_GetBySlug(t *testing.T) {
 	svc, orgID, owner, cleanup := setupProj(t)
 	defer cleanup()
@@ -127,21 +117,4 @@ func TestProject_SoftDelete(t *testing.T) {
 	_, err := svc.GetBySlug(ctx, orgID, "a")
 	require.ErrorIs(t, err, projsvc.ErrNotFound)
 	require.NoError(t, svc.SoftDelete(ctx, p.ID, owner), "idempotente")
-}
-
-// Sabotaje: slug puede repetirse en DIFERENTES orgs.
-func TestSabotage_Project_SlugReusableAcrossOrgs(t *testing.T) {
-	svc, orgID, owner, cleanup := setupProj(t)
-	defer cleanup()
-	ctx := context.Background()
-
-
-	var orgB uuid.UUID
-	require.NoError(t, svc.Pool.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('B', 'org-b') RETURNING id`).Scan(&orgB))
-
-	_, err := svc.Create(ctx, projsvc.CreateInput{OrganizationID: orgID, Name: "P", Slug: "shared", ActorID: owner})
-	require.NoError(t, err)
-	_, err = svc.Create(ctx, projsvc.CreateInput{OrganizationID: orgB, Name: "P", Slug: "shared", ActorID: owner})
-	require.NoError(t, err, "mismo slug en otra org DEBE permitirse")
 }

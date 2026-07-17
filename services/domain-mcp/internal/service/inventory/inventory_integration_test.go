@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -52,12 +53,10 @@ func setup(t *testing.T) (*pgxpool.Pool, string, func()) {
 	}
 }
 
-func createOrg(ctx context.Context, pool *pgxpool.Pool) (string, error) {
-	var id string
-	err := pool.QueryRow(ctx, `
-		INSERT INTO organizations (name, slug) VALUES ('Test Org', 'test-org') RETURNING id::text
-	`).Scan(&id)
-	return id, err
+// createOrg devuelve un org_id libre (UUID en memoria). La tabla organizations
+// y la columna organization_id fueron removidas (migraciones 000142/000143).
+func createOrg(_ context.Context, _ *pgxpool.Pool) (string, error) {
+	return uuid.NewString(), nil
 }
 
 func TestInventory_Load_BuiltinsAlwaysPresent(t *testing.T) {

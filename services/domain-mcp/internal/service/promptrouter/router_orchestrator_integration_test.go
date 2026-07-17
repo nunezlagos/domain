@@ -57,6 +57,8 @@ func buildFullPhasesRegistry() *phases.Registry {
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
 	reg.MustRegister(phases.NewSDDJudgeHandler())
+	reg.MustRegister(phases.NewSDD4RHandler())
+	reg.MustRegister(phases.NewSDDReviewHandler())
 	reg.MustRegister(phases.NewSDDArchiveHandler())
 	reg.MustRegister(phases.NewSDDOnboardHandler())
 	return reg
@@ -163,6 +165,9 @@ func TestRouter_WithOrchestrator_ChatBypassesOrchestrator(t *testing.T) {
 }
 
 // Sin orgID y con Orchestrator configurado → error explícito.
+// El intake exige project_id (NOT NULL), así que se siembra un proyecto para
+// alcanzar el check de orgID que sigue vivo en el router (org es un UUID libre
+// tras 000142/000143, pero el router aún lo requiere para el principal).
 func TestRouter_WithOrchestrator_RequiresOrgID(t *testing.T) {
 	pools, cleanup := setupRouterDB(t)
 	defer cleanup()
@@ -180,6 +185,7 @@ func TestRouter_WithOrchestrator_RequiresOrgID(t *testing.T) {
 	}
 
 	userID := uuid.New()
-	_, err := router.Route(ctx, "agregar feature", &userID, nil)
+	projectID := seedProject(t, ctx, pools.App, uuid.New())
+	_, err := router.RouteWithIntent(ctx, "agregar feature", &userID, nil, &projectID, nil)
 	require.ErrorIs(t, err, promptrouter.ErrOrgIDRequiredForOrchestrator)
 }

@@ -264,36 +264,8 @@ func TestSabotage_Dedup_DBConstraintEnforces(t *testing.T) {
 		`SELECT content_hash FROM knowledge_observations WHERE id = $1`, o.ID).Scan(&hash))
 
 	_, err = f.svc.Pool.Exec(ctx,
-		`INSERT INTO knowledge_observations (organization_id, project_id, content, observation_type, content_hash)
-		 VALUES ($1, $2, 'bypass-app', 'note', $3)`,
-		f.orgID, f.projectID, hash)
+		`INSERT INTO knowledge_observations (project_id, content, observation_type, content_hash)
+		 VALUES ($1, 'bypass-app', 'note', $2)`,
+		f.projectID, hash)
 	require.Error(t, err, "DB UNIQUE PARTIAL debe rechazar duplicado aunque la app lo permita")
-}
-
-// Sabotaje: cross-org search no leaks (filtro organization_id en la query).
-func TestSabotage_SearchHybrid_OrgIsolation(t *testing.T) {
-	f, cleanup := setup(t)
-	defer cleanup()
-	ctx := context.Background()
-	_, _ = f.svc.Save(ctx, obssvc.SaveInput{
-		OrganizationID: f.orgID, ProjectID: f.projectID,
-		Content: "secreto de org A: contraseña foobar"})
-
-
-	rec := &audit.PGRecorder{Pool: f.svc.Pool}
-	projS := &projsvc.Service{Pool: f.svc.Pool, Audit: rec}
-	org2, owner2, err := seedOrgUser(ctx, f.svc.Pool, "Other", "other", "x@x.com", "X")
-	require.NoError(t, err)
-	_, err = projS.Create(ctx, projsvc.CreateInput{
-		OrganizationID: org2.ID, Name: "P", Slug: "p", ActorID: owner2.UserID,
-	})
-	require.NoError(t, err)
-
-
-	results, err := f.svc.SearchHybrid(ctx, org2.ID, "secreto contraseña", 10)
-	require.NoError(t, err)
-	for _, r := range results {
-		require.NotContains(t, r.Content, "foobar",
-			"cross-org leak: org B no debe ver contenido de org A")
-	}
 }

@@ -40,7 +40,7 @@ func TestSchemaAudit_AllExpectedTablesExist(t *testing.T) {
 
 	expectedTables := []string{
 
-		"organizations", "users", "projects", "auth_api_keys",
+		"users", "projects", "auth_api_keys",
 
 		"observations", "prompts", "knowledge_docs", "knowledge_chunks",
 
@@ -173,12 +173,9 @@ func TestSchemaAudit_CriticalForeignKeysPresent(t *testing.T) {
 		{"sdd_designs", "issue_id", "issues"},
 		{"issue_tasks", "issue_id", "issues"},
 		{"file_attachments", "entity_id", ""}, // polymorphic, no FK
-		{"issue_drafts", "organization_id", "organizations"},
 		{"issue_intake_payloads", "committed_issue_id", "issues"},
 		{"external_sync_state", "provider_id", "external_providers"},
-		{"projects", "organization_id", "organizations"},
 		{"observations", "project_id", "projects"},
-		{"agent_runs", "organization_id", "organizations"},
 		{"flow_runs", "flow_id", "flows"},
 		{"flow_run_steps", "flow_run_id", "flow_runs"},
 	}

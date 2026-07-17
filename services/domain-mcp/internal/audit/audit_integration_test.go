@@ -44,14 +44,11 @@ func setupDB(t *testing.T) (*pgxpool.Pool, func()) {
 	}
 }
 
-func seedOrg(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+func seedOrg(t *testing.T, _ *pgxpool.Pool) uuid.UUID {
 	t.Helper()
-	var id uuid.UUID
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO organizations (name, slug) VALUES ('Test', 'test') RETURNING id`,
-	).Scan(&id)
-	require.NoError(t, err)
-	return id
+	// La tabla organizations fue eliminada (mig 000143). El org queda como
+	// UUID libre sin respaldo en BD; ninguna tabla tiene organization_id.
+	return uuid.New()
 }
 
 // Escenario 1: Record básico inserta row.

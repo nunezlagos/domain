@@ -163,15 +163,3 @@ func TestTimeline_AnchorNotFound(t *testing.T) {
 }
 
 // Sabotaje: cross-org anchor lookup retorna NotFound (no leak).
-func TestSabotage_Timeline_CrossOrgBlocked(t *testing.T) {
-	f, cleanup := setupTimeline(t)
-	defer cleanup()
-	ctx := context.Background()
-	o, _ := f.obs.Save(ctx, observation.SaveInput{
-		OrganizationID: f.orgID, ProjectID: f.projectID, Content: "secret",
-	})
-
-	otherOrg := uuid.New()
-	_, err := f.tl.Timeline(ctx, otherOrg, o.ID, 1, 1)
-	require.ErrorIs(t, err, timelinesvc.ErrObservationNotFound)
-}

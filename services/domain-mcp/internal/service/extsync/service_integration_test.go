@@ -45,11 +45,8 @@ func setupExtSync(t *testing.T) (*fix, func()) {
 
 	svc := &extsync.Service{Pool: pools.App}
 
-	var orgID uuid.UUID
-	err = pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// org_id es un UUID libre sin respaldo en BD (migraciones 000142/000143).
+	orgID := uuid.New()
 
 	provider, err := svc.RegisterProvider(ctx, orgID, extsync.ProviderJira,
 		"Acme Jira", "https://acme.atlassian.net", "DIDE",

@@ -8,6 +8,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -37,16 +38,14 @@ func setup(t *testing.T) (*pgxpool.Pool, string, string, func()) {
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	var orgID string
-	require.NoError(t, pool.QueryRow(ctx, `
-		INSERT INTO organizations (name, slug) VALUES ('Org', 'org') RETURNING id::text
-	`).Scan(&orgID))
+	// org_id es un UUID libre sin respaldo en BD (migraciones 000142/000143).
+	orgID := uuid.NewString()
 
 	var projectID string
 	require.NoError(t, pool.QueryRow(ctx, `
-		INSERT INTO projects (organization_id, name, slug, repository_url)
-		SELECT $1::uuid, 'P', 'p', 'https://github.com/acme/widgets' RETURNING id::text
-	`, orgID).Scan(&projectID))
+		INSERT INTO projects (name, slug, repository_url)
+		VALUES ('P', 'p', 'https://github.com/acme/widgets') RETURNING id::text
+	`).Scan(&projectID))
 
 	return pool, projectID, orgID, func() {
 		pool.Close()

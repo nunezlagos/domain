@@ -28,7 +28,7 @@ func TestSeeds_MCPProviders_BuiltInsCreated(t *testing.T) {
 	rows, err := pool.Query(ctx, `
 		SELECT name, description, command
 		FROM mcp_providers
-		WHERE organization_id IS NULL AND is_built_in = TRUE
+		WHERE is_built_in = TRUE
 		ORDER BY name
 	`)
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestSeeds_MCPProviders_Idempotent(t *testing.T) {
 
 	var count int
 	err = pool.QueryRow(ctx, `
-		SELECT count(*) FROM mcp_providers WHERE organization_id IS NULL
+		SELECT count(*) FROM mcp_providers
 	`).Scan(&count)
 	require.NoError(t, err)
 	require.Equal(t, 6, count, "segunda corrida no debe duplicar")
@@ -81,7 +81,7 @@ func TestSeeds_MCPProviders_GitHubRequiresToken(t *testing.T) {
 
 	var requiredEnv []string
 	err = pool.QueryRow(ctx, `
-		SELECT required_env FROM mcp_providers WHERE name = 'github' AND organization_id IS NULL
+		SELECT required_env FROM mcp_providers WHERE name = 'github'
 	`).Scan(&requiredEnv)
 	require.NoError(t, err)
 	require.Contains(t, requiredEnv, "GITHUB_TOKEN", "github provider debe requerir GITHUB_TOKEN")

@@ -229,7 +229,7 @@ func TestSabotage_Skill_TypeCheckEnforcedByDB(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	_, err := f.svc.Pool.Exec(ctx,
-		`INSERT INTO skills (organization_id, slug, name, skill_type, content)
-		 VALUES ($1, 'bypass', 'X', 'fake_type', 'x')`, f.orgID)
+		`INSERT INTO skills (slug, name, skill_type, content)
+		 VALUES ('bypass', 'X', 'fake_type', 'x')`)
 	require.Error(t, err, "DB CHECK constraint debe rechazar skill_type fuera del whitelist")
 }

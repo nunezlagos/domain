@@ -64,13 +64,10 @@ func TestMigrate_Up_ProjectRulesDefaultEmpty(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(ctx)
 
-	_, err = conn.Exec(ctx, `INSERT INTO organizations (name, slug) VALUES ('Org', 'org')`)
-	require.NoError(t, err)
-
 	var rules []string
 	err = conn.QueryRow(ctx, `
-		INSERT INTO projects (organization_id, name, slug)
-		SELECT id, 'P', 'p' FROM organizations LIMIT 1
+		INSERT INTO projects (name, slug)
+		VALUES ('P', 'p')
 		RETURNING rules
 	`).Scan(&rules)
 	require.NoError(t, err)

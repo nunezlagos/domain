@@ -68,7 +68,7 @@ func TestMigrate_Up_MCPProvidersSchema(t *testing.T) {
 	required := []string{
 		"id", "name", "description", "command", "default_args",
 		"env_template", "required_env", "tags", "is_built_in",
-		"is_public", "organization_id", "created_at", "updated_at",
+		"is_public", "created_at", "updated_at",
 	}
 	for _, c := range required {
 		require.Truef(t, cols[c], "column %s missing en mcp_providers", c)
@@ -85,18 +85,15 @@ func TestMigrate_Up_MCPProvidersNameUnique(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close(ctx)
 
-	_, err = conn.Exec(ctx, `INSERT INTO organizations (name, slug) VALUES ('Org', 'org')`)
-	require.NoError(t, err)
-
 	_, err = conn.Exec(ctx, `
 		INSERT INTO mcp_providers (name, description, command)
-		SELECT 'filesystem', 'FS read/write', 'npx' FROM organizations LIMIT 1
+		VALUES ('filesystem', 'FS read/write', 'npx')
 	`)
 	require.NoError(t, err)
 
 	_, err = conn.Exec(ctx, `
 		INSERT INTO mcp_providers (name, description, command)
-		SELECT 'filesystem', 'dup', 'npx' FROM organizations LIMIT 1
+		VALUES ('filesystem', 'dup', 'npx')
 	`)
 	require.Error(t, err, "name duplicado en mcp_providers debe fallar")
 }

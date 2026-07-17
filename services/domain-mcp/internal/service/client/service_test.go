@@ -129,7 +129,7 @@ func TestCreate_InvalidTaxID(t *testing.T) {
 func TestCreate_SlugConflict_MapsTo_ErrClientSlugExists(t *testing.T) {
 
 
-	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "clients_organization_id_slug_key"}
+	pgErr := &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "clients_slug_key"}
 	repo := &mockRepo{
 		InsertHook: func(_ context.Context, _ InsertParams) (*Client, error) {
 			return nil, pgErr

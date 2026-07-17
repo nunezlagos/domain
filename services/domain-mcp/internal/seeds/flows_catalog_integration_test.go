@@ -18,11 +18,8 @@ func TestSeedFlowsForOrg_CreatesSDDPipeline(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	err := pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID)
-	require.NoError(t, err)
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	rep, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
@@ -60,10 +57,8 @@ func TestSeedFlowsForOrg_Idempotent(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	rep1, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
@@ -88,10 +83,8 @@ func TestSeedFlowsForOrg_PreservesUserModifications(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	_, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
 	require.NoError(t, err)
@@ -125,17 +118,15 @@ func TestSeedFlowsForOrg_CleansLegacySlugsWithoutActiveRuns(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	specJSON := `{"version":1,"steps":[{"id":"x","type":"agent_run","config":{}}]}`
 	_, err := pools.App.Exec(ctx,
 		`INSERT INTO flows
-		   (organization_id, slug, name, spec, is_active, seed_managed, seed_version)
-		 VALUES ($1, 'legacy-removed', 'Legacy', $2::jsonb, true, true, 1)`,
-		orgID, specJSON)
+		   (slug, name, spec, is_active, seed_managed, seed_version)
+		 VALUES ('legacy-removed', 'Legacy', $1::jsonb, true, true, 1)`,
+		specJSON)
 	require.NoError(t, err)
 
 	rep, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)
@@ -164,26 +155,23 @@ func TestSeedFlowsForOrg_KeepsLegacyWithActiveRuns(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	var orgID uuid.UUID
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
+	// organizations fue eliminada (mig 000143); org es un UUID libre sin respaldo.
+	orgID := uuid.New()
 
 	var legacyFlowID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
 		`INSERT INTO flows
-		   (organization_id, slug, name, spec, is_active, seed_managed, seed_version)
-		 VALUES ($1, 'legacy-running', 'Legacy Running',
+		   (slug, name, spec, is_active, seed_managed, seed_version)
+		 VALUES ('legacy-running', 'Legacy Running',
 		         '{"version":1,"steps":[{"id":"x","type":"agent_run","config":{}}]}'::jsonb,
 		         true, true, 1)
 		 RETURNING id`,
-		orgID,
 	).Scan(&legacyFlowID))
 
 	_, err := pools.App.Exec(ctx,
-		`INSERT INTO flow_runs (organization_id, flow_id, status)
-		 VALUES ($1, $2, 'running')`,
-		orgID, legacyFlowID)
+		`INSERT INTO flow_runs (flow_id, status)
+		 VALUES ($1, 'running')`,
+		legacyFlowID)
 	require.NoError(t, err)
 
 	rep, err := seeds.SeedFlowsForOrg(ctx, pools.App, orgID)

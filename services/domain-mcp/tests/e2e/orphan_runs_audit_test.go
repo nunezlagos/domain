@@ -22,7 +22,6 @@ import (
 
 type orphanFixture struct {
 	pool    *pgxpool.Pool
-	orgID   uuid.UUID
 	agentID uuid.UUID
 }
 
@@ -46,19 +45,11 @@ func setupOrphanAuditor(t *testing.T) (*orphanFixture, *systemcron.OrphanAuditor
 	pool, err := pgxpool.New(ctx, dsn)
 	require.NoError(t, err)
 
-	orgID := uuid.New()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organizations (id, name, slug)
-		VALUES ($1, 'Test Org', 'test-org')
-	`, orgID)
-	require.NoError(t, err)
-
-
 	agentID := uuid.New()
 	_, err = pool.Exec(ctx, `
-		INSERT INTO agents (id, organization_id, slug, name, system_prompt, model, provider)
-		VALUES ($1, $2, 'test-agent', 'Test', 'sys', 'claude-haiku-4-5-20251001', 'anthropic')
-	`, agentID, orgID)
+		INSERT INTO agents (id, slug, name, system_prompt, model, provider)
+		VALUES ($1, 'test-agent', 'Test', 'sys', 'claude-haiku-4-5-20251001', 'anthropic')
+	`, agentID)
 	require.NoError(t, err)
 
 	reg := metrics.New()
@@ -73,7 +64,7 @@ func setupOrphanAuditor(t *testing.T) (*orphanFixture, *systemcron.OrphanAuditor
 		pool.Close()
 		_ = pgC.Terminate(ctx)
 	}
-	return &orphanFixture{pool: pool, orgID: orgID, agentID: agentID}, auditor, cleanup
+	return &orphanFixture{pool: pool, agentID: agentID}, auditor, cleanup
 }
 
 // Escenario 1: detección bypass (flow_run_id NULL + sin standalone)
@@ -85,9 +76,9 @@ func TestOrphanAudit_DetectsBypass(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		_, err := fx.pool.Exec(ctx, `
-			INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
-			VALUES (gen_random_uuid(), $1, $2, NULL, 'completed', '{}'::jsonb)
-		`, fx.orgID, fx.agentID)
+			INSERT INTO agent_runs (id, agent_id, flow_run_id, status, metadata)
+			VALUES (gen_random_uuid(), $1, NULL, 'completed', '{}'::jsonb)
+		`, fx.agentID)
 		require.NoError(t, err)
 	}
 
@@ -105,12 +96,12 @@ func TestOrphanAudit_StandaloneIgnored(t *testing.T) {
 
 
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
+		INSERT INTO agent_runs (id, agent_id, flow_run_id, status, metadata)
 		VALUES
-		  (gen_random_uuid(), $1, $2, NULL, 'completed', '{"standalone":true,"reason":"debug"}'::jsonb),
-		  (gen_random_uuid(), $1, $2, NULL, 'completed', '{"standalone":true,"reason":"test"}'::jsonb),
-		  (gen_random_uuid(), $1, $2, NULL, 'completed', '{}'::jsonb)
-	`, fx.orgID, fx.agentID)
+		  (gen_random_uuid(), $1, NULL, 'completed', '{"standalone":true,"reason":"debug"}'::jsonb),
+		  (gen_random_uuid(), $1, NULL, 'completed', '{"standalone":true,"reason":"test"}'::jsonb),
+		  (gen_random_uuid(), $1, NULL, 'completed', '{}'::jsonb)
+	`, fx.agentID)
 	require.NoError(t, err)
 
 	rows, _, err := auditor.Audit(ctx)
@@ -131,9 +122,9 @@ func TestOrphanAudit_CountsOrphansInWindow(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		_, err := fx.pool.Exec(ctx, `
-			INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
-			VALUES (gen_random_uuid(), $1, $2, NULL, 'completed', '{}'::jsonb)
-		`, fx.orgID, fx.agentID)
+			INSERT INTO agent_runs (id, agent_id, flow_run_id, status, metadata)
+			VALUES (gen_random_uuid(), $1, NULL, 'completed', '{}'::jsonb)
+		`, fx.agentID)
 		require.NoError(t, err)
 	}
 
@@ -152,9 +143,9 @@ func TestOrphanAudit_Sabotage_BypassDetected(t *testing.T) {
 
 
 	_, err := fx.pool.Exec(ctx, `
-		INSERT INTO agent_runs (id, organization_id, agent_id, flow_run_id, status, metadata)
-		VALUES (gen_random_uuid(), $1, $2, NULL, 'running', '{}'::jsonb)
-	`, fx.orgID, fx.agentID)
+		INSERT INTO agent_runs (id, agent_id, flow_run_id, status, metadata)
+		VALUES (gen_random_uuid(), $1, NULL, 'running', '{}'::jsonb)
+	`, fx.agentID)
 	require.NoError(t, err)
 
 	rows, _, err := auditor.Audit(ctx)

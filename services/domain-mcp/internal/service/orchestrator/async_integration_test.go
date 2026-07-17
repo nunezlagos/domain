@@ -140,7 +140,7 @@ func TestService_ProcessAsyncFlowRun_ExecutesAllSteps(t *testing.T) {
 			flowCompletedCount++
 		}
 	}
-	require.Equal(t, 11, stepCompletedCount, "11 step_completed signals")
+	require.Equal(t, 12, stepCompletedCount, "12 step_completed signals")
 	require.Equal(t, 1, flowCompletedCount, "1 flow_completed signal")
 }
 
@@ -393,7 +393,7 @@ func TestService_Async_WithStartingPhase_StartsFromPhase(t *testing.T) {
 		StartingPhase:  orchestrator.PhaseSlug("sdd-design"),
 	})
 	require.NoError(t, err)
-	require.Len(t, res.Plan.Steps, 7, "debe arrancar desde sdd-design (10-3 anteriores)")
+	require.Len(t, res.Plan.Steps, 9, "debe arrancar desde sdd-design (12 fases - 3 anteriores)")
 	require.Equal(t, "sdd-design", string(res.Plan.Steps[0].Slug))
 }
 

@@ -75,6 +75,9 @@ func TestExpress_FullHappyPath(t *testing.T) {
 			"tests_passed":     1,
 			"tests_failed":     0,
 		},
+		// sdd-verify declara un contrato required_tool_calls (domain_verify_*);
+		// sin reportarlas el step queda running (reintentable), no completed.
+		ToolCallsSaved: []string{"domain_verify_start", "domain_verify_complete"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "completed", verRes.StepStatus)
@@ -93,10 +96,13 @@ func TestExpress_FullHappyPath(t *testing.T) {
 	}
 }
 
-// Sabotage sab-003 vivo: cliente reporta apply SIN code_reference →
-// D5 enforcement bloquea, step se marca failed, flow_status refleja
-// el flow como failed.
-func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
+// code_reference dejó de ser un required save en sdd-apply tras el retiro del
+// code graph (2026-07-07): exigirlo mataba todo sdd-apply (ver sdd_apply.go).
+// Este test fija esa verdad de prod — reportar apply SIN code_reference ya NO
+// bloquea: el step completa, no hay missing_required_saves, y el flow avanza a
+// sdd-verify. Si alguien vuelve a marcar code_reference como Required=true, este
+// test se rompe y fuerza revisión consciente del contrato.
+func TestExpress_ApplyWithoutCodeReference_Completes(t *testing.T) {
 	pools, cleanup := setupOrchestratorDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -120,20 +126,20 @@ func TestExpress_ApplyMissingRequiredSave_MarksStepFailed(t *testing.T) {
 	require.NoError(t, err)
 
 	applyStepID := res.Plan.Steps[0].ID
-	_, err = s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
+	appRes, err := s.RecordPhaseResult(ctx, orchestrator.PhaseResultInput{
 		FlowRunStepID: applyStepID,
 		Output:        map[string]any{"summary": "looks good"},
-
 	})
-	require.Error(t, err)
-	require.ErrorIs(t, err, orchestrator.ErrRequiredSaveMissing)
-
+	require.NoError(t, err)
+	require.Equal(t, "completed", appRes.StepStatus)
+	require.Empty(t, appRes.MissingRequiredSaves, "code_reference es opcional: no debe faltar nada")
+	require.Equal(t, "running", appRes.FlowRunStatus)
+	require.Equal(t, "sdd-verify", appRes.NextStepKey)
 
 	st, err := s.GetFlowStatus(ctx, res.FlowRunID)
 	require.NoError(t, err)
-	require.Equal(t, "failed", st.Status, "flow_run pasa a failed por step failed")
-	require.Equal(t, "failed", st.Steps[0].Status)
-	require.NotEmpty(t, st.Steps[0].Error, "el step debe tener mensaje de error")
+	require.Equal(t, "running", st.Status, "flow sigue running: apply completó sin required save")
+	require.Equal(t, "completed", st.Steps[0].Status)
 }
 
 // El cliente reporta sobre un step ya completado → debe fallar con

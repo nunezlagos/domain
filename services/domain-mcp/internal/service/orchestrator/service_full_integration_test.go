@@ -15,7 +15,7 @@ import (
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
 
-// buildFullRegistry registra los 10 handlers para tests del modo Full.
+// buildFullRegistry registra los 12 handlers para tests del modo Full.
 func buildFullRegistry() *phases.Registry {
 	reg := phases.NewRegistry()
 	reg.MustRegister(phases.NewSDDExploreHandler())
@@ -58,10 +58,12 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	require.Equal(t, orchestrator.ModeFull, res.Mode)
 	require.Len(t, res.Plan.Steps, 12)
 	require.Equal(t, "sdd-explore", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[10].Slug))
+	require.Equal(t, "sdd-4r", string(res.Plan.Steps[8].Slug))
+	require.Equal(t, "sdd-archive", string(res.Plan.Steps[10].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[11].Slug))
 
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
-	for i := 1; i < 11; i++ {
+	for i := 1; i < 12; i++ {
 		require.Empty(t, res.Plan.Steps[i].UserPrompt,
 			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
@@ -90,7 +92,7 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	}
 	require.Equal(t, []string{
 		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
-		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-review", "sdd-archive", "sdd-onboard",
+		"sdd-apply", "sdd-verify", "sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 	}, keys)
 }
 
@@ -205,9 +207,9 @@ func TestService_Run_Full_StartingPhase_StartsFromMiddle(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Len(t, res.Plan.Steps, 6)
+	require.Len(t, res.Plan.Steps, 7)
 	require.Equal(t, "sdd-apply", string(res.Plan.Steps[0].Slug))
-	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[5].Slug))
+	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[6].Slug))
 }
 
 // Happy path completo: ejecutar las 12 fases en orden con outputs encadenados.
@@ -246,9 +248,15 @@ func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 		{"summary": "implemented", "files_changed": []any{"a.go"}},              // apply
 		{"scenarios_failed": []any{}, "tests_passed": 5},                        // verify
 		{"sabotage_records": []any{map[string]any{"invariant": "x"}}},           // judge
-		{"verdict": "compliant", "policies_checked": 3},                         // review
-		{"archived": true}, // archive
-		{"skipped": true},  // onboard
+		{"lens_reports": []any{ // 4r: 4 lenses limpias con evidencia
+			map[string]any{"lens": "R1", "findings": []any{}, "evidence": []any{"scope revisado"}},
+			map[string]any{"lens": "R2", "findings": []any{}, "evidence": []any{"scope revisado"}},
+			map[string]any{"lens": "R3", "findings": []any{}, "evidence": []any{"scope revisado"}},
+			map[string]any{"lens": "R4", "findings": []any{}, "evidence": []any{"scope revisado"}},
+		}},
+		{"verdict": "compliant", "policies_checked": 3}, // review
+		{"archived": true},                             // archive
+		{"skipped": true},                              // onboard
 	}
 
 	memrefs := []map[string][]phases.MemoryRef{
@@ -263,6 +271,7 @@ func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 		{"saves": {{Type: "code_reference", ID: uuid.New()}}}, // apply
 		{}, // verify
 		{"saves": {{Type: "sabotage_record", ID: uuid.New()}}}, // judge
+		{}, // 4r
 		{}, // review
 		{}, // archive
 		{}, // onboard
@@ -280,7 +289,7 @@ func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 		})
 		require.NoErrorf(t, err, "fase %d (%s) falló inesperado", i, step.Slug)
 		require.Equal(t, "completed", out.StepStatus)
-		if i < 10 {
+		if i < 11 {
 			require.Equal(t, "running", out.FlowRunStatus,
 				"flow sigue running tras fase %d", i)
 			require.NotNil(t, out.NextStepID)

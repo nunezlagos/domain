@@ -25,9 +25,15 @@ func (p *fakeProvider) Name() string { return "fake" }
 func (p *fakeProvider) Complete(_ context.Context, opts llm.CompletionOptions) (*llm.Response, error) {
 	p.calls++
 
+	// Match DETERMINISTA por fase: cada agent_template lleva un marcador único
+	// "Eres el agente de la fase <slug>" (una sola ocurrencia por template). El
+	// match por slug pelado cruzaba fases — ej. el system prompt de sdd-judge
+	// menciona "sdd-apply", así que el orden aleatorio del map podía devolver el
+	// canned de apply para el step de judge. Anclando al prefijo "de la fase "
+	// solo puede matchear el slug real de la fase en curso.
 	for slug, body := range p.byPhase {
 
-		if contains(opts.SystemPrompt, slug) {
+		if contains(opts.SystemPrompt, "de la fase "+slug) {
 			return &llm.Response{
 				Content:      body,
 				Model:        opts.Model,

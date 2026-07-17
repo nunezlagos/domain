@@ -66,6 +66,7 @@ type Registry struct {
 	OrchestratorPhaseResultsTotal *prometheus.CounterVec // labels: phase, mode, result (completed|failed|shape_contract_unmet|tool_contract_unmet|required_save_unmet)
 	OrchestratorConfirmsTotal   *prometheus.CounterVec   // labels: confirmed (true|false)
 	OrchestratorRequiredSaveMissingTotal *prometheus.CounterVec // labels: phase, save_type
+	OrchestratorContextPrepSectionsTotal *prometheus.CounterVec // labels: section (policies|skills|obs), result (ok|empty|no_service|error)
 
 
 	FlowHeartbeatAgeSeconds prometheus.Gauge // age del heartbeat más reciente en flow_runs
@@ -263,6 +264,13 @@ func New() *Registry {
 		},
 		[]string{"phase", "save_type"},
 	)
+	r.OrchestratorContextPrepSectionsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "domain_orchestrator_context_prep_sections_total",
+			Help: "Secciones del prepared_context server-side por resultado (DOMAINSERV-38): observabilidad del canal antes silencioso",
+		},
+		[]string{"section", "result"},
+	)
 
 	r.FlowHeartbeatAgeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "domain_flow_heartbeat_age_seconds",
@@ -391,6 +399,7 @@ func New() *Registry {
 		r.OrchestratorPhaseResultsTotal,
 		r.OrchestratorConfirmsTotal,
 		r.OrchestratorRequiredSaveMissingTotal,
+		r.OrchestratorContextPrepSectionsTotal,
 		r.FlowHeartbeatAgeSeconds,
 		r.FlowRunCancelledByMaxDuration,
 		r.DlockAcquireTotal,

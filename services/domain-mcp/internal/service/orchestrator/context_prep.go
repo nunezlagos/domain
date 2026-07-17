@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
-	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
 // REQ-54 issue-54.2: preparación de contexto server-side.
@@ -22,13 +20,19 @@ import (
 // la fase. TODO es best-effort: nunca bloquea ni falla la fase.
 
 // prepMaxPolicies / prepMaxSkills / prepMaxObs acotan el tamaño del bloque para
-// no inflar el prompt del cliente.
+// no inflar el prompt del cliente. prepSkillBodyMax acota el body de skill
+// inyectado (DOMAINSERV-38: antes solo la primera línea; ahora descripción útil).
 const (
 	prepMaxPolicies    = 10
-	prepMaxSkills      = 10
+	prepMaxSkills      = 5
 	prepMaxObs         = 5
+	prepSkillBodyMax   = 500
 	prepMinimaxTimeout = 5 * time.Second
 )
+
+// skillsSectionHeader marca el bloque de skills en el crudo. refineWithMinimax lo
+// usa para detectar drop del LLM y degradar a crudo (DOMAINSERV-38).
+const skillsSectionHeader = "### Skills disponibles"
 
 // prepPhaseToolCalls mapea cada fase a las categorías de contexto read-only que
 // le sirven. El server decide QUÉ preparar por PhaseSlug (no via interfaz de
@@ -38,6 +42,8 @@ const (
 // vacía = "sin prep, deliberado" (tasks/verify/archive: el contexto útil ya
 // viene en PriorOutputs de la fase anterior). TestPrepContext_AllPhasesMapped
 // congela la invariante: fase nueva sin entrada = test rojo.
+// DOMAINSERV-38: skills se inyecta en las fases donde importa (apply + review),
+// no solo apply.
 var prepPhaseContext = map[string]struct {
 	policies bool
 	skills   bool
@@ -46,13 +52,13 @@ var prepPhaseContext = map[string]struct {
 	"sdd-explore": {obs: true},
 	"sdd-spec":    {obs: true},      // decisiones previas informan el contrato
 	"sdd-propose": {policies: true}, // tradeoffs contra las reglas vigentes
-	"sdd-design":  {policies: true},
+	"sdd-design":  {policies: true, skills: true},
 	"sdd-tasks":   {}, // el design (prior output) es el contexto
 	"sdd-apply":   {policies: true, skills: true},
-	"sdd-verify":  {},                          // valida contra el issue.md, no contra contexto
-	"sdd-judge":   {policies: true},            // juzga también conformidad con las reglas
-	"sdd-4r":      {policies: true, obs: true}, // review 4R contra reglas + contexto reciente
-	"sdd-review":  {policies: true},
+	"sdd-verify":  {},                                        // valida contra el issue.md, no contra contexto
+	"sdd-judge":   {policies: true},                          // juzga también conformidad con las reglas
+	"sdd-4r":      {policies: true, skills: true, obs: true}, // review 4R contra reglas + skills + contexto
+	"sdd-review":  {policies: true, skills: true},
 	"sdd-archive": {},          // cierre administrativo
 	"sdd-onboard": {obs: true}, // qué se aprendió antes de documentar
 }
@@ -65,62 +71,27 @@ func (s *Service) prepareContext(ctx context.Context, orgID, projectID uuid.UUID
 	if !ok {
 		return "" // fase sin contexto configurado: no-op
 	}
-	raw := s.prepareContextRaw(ctx, orgID, projectID, cfg.policies, cfg.skills, cfg.obs)
+	var b strings.Builder
+	if cfg.policies {
+		s.prepPolicies(ctx, orgID, projectID, &b)
+	}
+	if cfg.skills {
+		s.prepSkills(ctx, orgID, projectID, slug, &b)
+	}
+	if cfg.obs {
+		s.prepObs(ctx, projectID, &b)
+	}
+	raw := b.String()
 	if strings.TrimSpace(raw) == "" {
 		return ""
 	}
 	return s.refineWithMinimax(ctx, slug, raw)
 }
 
-// prepareContextRaw corre las lecturas read-only server-side y arma un bloque
-// markdown. Best-effort por sección: si un servicio no está inyectado o falla,
-// esa sección se omite (no aborta).
-func (s *Service) prepareContextRaw(ctx context.Context, orgID, projectID uuid.UUID, wantPolicies, wantSkills, wantObs bool) string {
-	var b strings.Builder
-
-	if wantPolicies && s.ProjectPolicies != nil {
-		if pols, err := s.ProjectPolicies.List(ctx, orgID, projectID, ""); err == nil && len(pols) > 0 {
-			fmt.Fprintln(&b, "### Policies del proyecto (vigentes)")
-			n := 0
-			for _, p := range pols {
-				if !p.IsActive {
-					continue
-				}
-				fmt.Fprintf(&b, "- **%s** (%s): %s\n", p.Name, p.Kind, firstLine(p.BodyMD))
-				if n++; n >= prepMaxPolicies {
-					break
-				}
-			}
-			fmt.Fprintln(&b)
-		}
-	}
-
-	if wantSkills && s.Skills != nil {
-		if skills, err := s.Skills.List(ctx, orgID, skillsvc.ListFilter{Limit: prepMaxSkills}); err == nil && len(skills) > 0 {
-			fmt.Fprintln(&b, "### Skills disponibles")
-			for _, sk := range skills {
-				fmt.Fprintf(&b, "- **%s**: %s\n", sk.Name, firstLine(sk.Description))
-			}
-			fmt.Fprintln(&b)
-		}
-	}
-
-	if wantObs && s.Observations != nil {
-		if obs, err := s.Observations.List(ctx, projectID, prepMaxObs); err == nil && len(obs) > 0 {
-			fmt.Fprintln(&b, "### Contexto reciente (memoria)")
-			for _, o := range obs {
-				fmt.Fprintf(&b, "- [%s] %s\n", o.ObservationType, firstLine(o.Content))
-			}
-			fmt.Fprintln(&b)
-		}
-	}
-
-	return b.String()
-}
-
 // refineWithMinimax pasa el bloque crudo por el LLM barato (Minimax) para filtrar
 // lo pertinente a la fase, con timeout corto. DEGRADA al bloque crudo ante
-// cualquier problema (sin LLM, timeout, error): nunca aborta la fase.
+// cualquier problema (sin LLM, timeout, error) o si el refine DROPPEA el bloque
+// de skills que sí estaba en el crudo (DOMAINSERV-38): nunca aborta la fase.
 func (s *Service) refineWithMinimax(ctx context.Context, slug, raw string) string {
 	if s.LLM == nil {
 		return raw
@@ -143,20 +114,8 @@ func (s *Service) refineWithMinimax(ctx context.Context, slug, raw string) strin
 	if err != nil || resp == nil || strings.TrimSpace(resp.Content) == "" {
 		return raw // timeout/error/respuesta vacía: degradar a crudo
 	}
-	return resp.Content
-}
-
-// firstLine devuelve la primera línea no vacía de s, recortada, para resúmenes
-// de una línea en el bloque de contexto.
-func firstLine(s string) string {
-	for _, ln := range strings.Split(s, "\n") {
-		ln = strings.TrimSpace(ln)
-		if ln != "" {
-			if len(ln) > 160 {
-				return ln[:157] + "..."
-			}
-			return ln
-		}
+	if strings.Contains(raw, skillsSectionHeader) && !strings.Contains(resp.Content, skillsSectionHeader) {
+		return raw // el LLM droppeó el bloque de skills: degradar a crudo
 	}
-	return ""
+	return resp.Content
 }

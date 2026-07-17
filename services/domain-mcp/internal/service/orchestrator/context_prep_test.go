@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
+	"nunezlagos/domain/internal/metrics"
 )
 
 // fakeProvider implementa llm.Provider para tests de refineWithMinimax.
@@ -90,15 +92,15 @@ func TestRefineWithMinimax_Success_ReturnsRefined(t *testing.T) {
 func TestPrepareContext_UnconfiguredPhase_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
-	// sdd-judge no está en prepPhaseContext → no-op
-	require.Equal(t, "", s.prepareContext(context.Background(), uuid.Nil, uuid.Nil, "sdd-judge"))
+	// fase inexistente en prepPhaseContext → no-op
+	require.Equal(t, "", s.prepareContext(context.Background(), uuid.Nil, uuid.Nil, "sdd-nonexistent"))
 }
 
-func TestPrepareContextRaw_NoServices_ReturnsEmpty(t *testing.T) {
+func TestPrepareContext_NoServices_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test") // sin ProjectPolicies/Skills/Observations
 	// Aunque la fase quiera policies+skills, sin servicios inyectados degrada a "".
-	require.Equal(t, "", s.prepareContextRaw(context.Background(), uuid.Nil, uuid.Nil, true, true, true))
+	require.Equal(t, "", s.prepareContext(context.Background(), uuid.Nil, uuid.Nil, "sdd-apply"))
 }
 
 func TestInjectPreparedContext_PrependsBlock(t *testing.T) {
@@ -109,6 +111,41 @@ func TestInjectPreparedContext_PrependsBlock(t *testing.T) {
 	require.Contains(t, out, "PROMPT ORIGINAL")
 	require.Less(t, strings.Index(out, "### ctx"), strings.Index(out, "PROMPT ORIGINAL"),
 		"el contexto va ANTES del prompt original")
+}
+
+func TestRefineWithMinimax_DropsSkillsBlock_ReturnsRaw(t *testing.T) {
+	t.Parallel()
+	s := New(nil, nil, nil, "test")
+	f := llm.NewFactory()
+	// el LLM devuelve algo SIN el bloque de skills que sí estaba en el crudo
+	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{resp: "### Policies\n- solo policies"})
+	s.LLM = f
+	raw := "### Skills disponibles\n- **x**: y\n\n### Policies\n- z"
+	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+		"si el refine droppea el bloque de skills, degradar a crudo (DOMAINSERV-38)")
+}
+
+func TestRefineWithMinimax_KeepsSkillsBlock_ReturnsRefined(t *testing.T) {
+	t.Parallel()
+	s := New(nil, nil, nil, "test")
+	f := llm.NewFactory()
+	refined := "### Skills disponibles\n- **x**: y (filtrado)"
+	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{resp: refined})
+	s.LLM = f
+	raw := "### Skills disponibles\n- **x**: y\n\n### Policies\n- z"
+	require.Equal(t, refined, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+		"si el refine conserva el bloque de skills, usar el refinado")
+}
+
+func TestPrepSkills_NoService_RecordsNoServiceMetric(t *testing.T) {
+	t.Parallel()
+	s := New(nil, nil, nil, "test") // s.Skills == nil
+	s.Metrics = metrics.New()
+	var b strings.Builder
+	s.prepSkills(context.Background(), uuid.Nil, uuid.Nil, "sdd-apply", &b)
+	require.Empty(t, b.String(), "sin skill service no se inyecta nada")
+	c := s.Metrics.OrchestratorContextPrepSectionsTotal.WithLabelValues("skills", "no_service")
+	require.Equal(t, 1.0, testutil.ToFloat64(c), "debe registrar el fallo (antes era silencioso)")
 }
 
 func TestFirstLine(t *testing.T) {

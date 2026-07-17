@@ -195,6 +195,7 @@ func runMigrate(args []string) {
 	}
 	switch args[0] {
 	case "up":
+		ensureBackupBeforeMigrate(cfg.DatabaseURL)
 		if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
 			fmt.Fprintf(os.Stderr, "migrate up: %v\n", err)
 			os.Exit(1)
@@ -202,6 +203,7 @@ func runMigrate(args []string) {
 		v, dirty, _ := dmigrate.Version(cfg.DatabaseURL)
 		fmt.Printf("migrations applied. current version: %d (dirty=%v)\n", v, dirty)
 	case "down":
+		ensureBackupBeforeMigrate(cfg.DatabaseURL)
 		steps := 1
 		if len(args) > 1 {
 			n, err := strconv.Atoi(args[1])
@@ -228,6 +230,34 @@ func runMigrate(args []string) {
 		fmt.Fprintf(os.Stderr, "unknown migrate subcommand: %s\n", args[0])
 		os.Exit(2)
 	}
+}
+
+// backupGuardAllows decide si migrate puede correr sin un backup previo de la BD
+// (DOMAINSERV-39). Permite si install.sh ya respaldó (backupDone) o si la BD es
+// fresca — sin migraciones aplicadas (versionErr != nil, típico ErrNilVersion, o
+// version == 0): en ese caso no hay datos que proteger. Con datos y sin backup
+// rechaza: el binario corre en un container distroless sin pg_dump, así que el
+// respaldo lo hace install.sh (fail-safe, no reinventa pg_dump).
+func backupGuardAllows(backupDone bool, version uint, versionErr error) bool {
+	if backupDone {
+		return true
+	}
+	return versionErr != nil || version == 0
+}
+
+// ensureBackupBeforeMigrate aborta el proceso si migrate correría sobre una BD
+// con datos sin backup previo. DOMAIN_BACKUP_DONE=1 lo setea install.sh tras su
+// pg_dump; el cron de auto-update corre install.sh, así que no se rompe.
+func ensureBackupBeforeMigrate(dbURL string) {
+	backupDone := os.Getenv("DOMAIN_BACKUP_DONE") == "1"
+	version, _, versionErr := dmigrate.Version(dbURL)
+	if backupGuardAllows(backupDone, version, versionErr) {
+		return
+	}
+	fmt.Fprintln(os.Stderr, "migrate: BD con datos y sin backup previo (DOMAIN_BACKUP_DONE!=1).")
+	fmt.Fprintln(os.Stderr, "  Redeploy vía services/install.sh (hace pg_dump automático)")
+	fmt.Fprintln(os.Stderr, "  o seteá DOMAIN_BACKUP_DONE=1 tras un pg_dump manual.")
+	os.Exit(1)
 }
 
 func runServer() {

@@ -308,6 +308,8 @@ if should_run_pre_migration_backup; then
   ok "backup pre-migración OK"
   # backup ok: el make down siguiente maneja el ciclo normal, desarmar el trap
   TEMP_PG_UP=0
+  # marca para el guard de migrate (DOMAINSERV-39): ya hay pg_dump, migrar es seguro
+  export DOMAIN_BACKUP_DONE=1
 else
   log "Install fresh (sin volumen de datos) — se omite backup pre-migración"
 fi

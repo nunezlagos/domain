@@ -14,6 +14,9 @@ services:
     command: ["migrate", "up"]
     environment:
       DOMAIN_DATABASE_URL: postgres://${POSTGRES_USER:-domain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
+      # guard de backup (DOMAINSERV-39): install.sh lo setea a 1 tras el pg_dump.
+      # Sin backup y con BD con datos, migrate aborta (fail-safe).
+      DOMAIN_BACKUP_DONE: ${DOMAIN_BACKUP_DONE:-0}
     networks:
       - domain_internal
     restart: "no"

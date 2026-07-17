@@ -44,24 +44,19 @@ func setupOrchestratorDB(t *testing.T) (pools *db.Pools, cleanup func()) {
 	}
 }
 
-func newOrgID(t *testing.T, pools *db.Pools) uuid.UUID {
+// newOrgID: la tabla organizations fue removida (migración 000143). org_id es
+// ahora un UUID libre sin FK; se genera en memoria.
+func newOrgID(t *testing.T, _ *db.Pools) uuid.UUID {
 	t.Helper()
-	ctx := context.Background()
-	var orgID uuid.UUID
-	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO organizations (name, slug) VALUES ('Acme', 'acme') RETURNING id`,
-	).Scan(&orgID))
-	return orgID
+	return uuid.New()
 }
 
-func newUserID(t *testing.T, pools *db.Pools, orgID uuid.UUID) uuid.UUID {
+func newUserID(t *testing.T, pools *db.Pools, _ uuid.UUID) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
 	var userID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO users (organization_id, email)
-		 VALUES ($1, 'bob@example.com') RETURNING id`,
-		orgID,
+		`INSERT INTO users (email) VALUES ('bob@example.com') RETURNING id`,
 	).Scan(&userID))
 	return userID
 }
@@ -69,14 +64,12 @@ func newUserID(t *testing.T, pools *db.Pools, orgID uuid.UUID) uuid.UUID {
 // newProjectID crea un proyecto fixture para la org dada. Fase 2: el orquestador
 // exige ProjectID (flow_runs.project_id es NOT NULL), asi que los tests que
 // llaman Run necesitan un proyecto real al cual scopear la corrida.
-func newProjectID(t *testing.T, pools *db.Pools, orgID uuid.UUID) uuid.UUID {
+func newProjectID(t *testing.T, pools *db.Pools, _ uuid.UUID) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
 	var projectID uuid.UUID
 	require.NoError(t, pools.App.QueryRow(ctx,
-		`INSERT INTO projects (organization_id, name, slug)
-		 VALUES ($1, 'Test Project', 'test-project') RETURNING id`,
-		orgID,
+		`INSERT INTO projects (name, slug) VALUES ('Test Project', 'test-project') RETURNING id`,
 	).Scan(&projectID))
 	return projectID
 }

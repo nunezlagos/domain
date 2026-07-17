@@ -1,5 +1,5 @@
 -- name: LinkByGitRemote :one
-SELECT id::text, organization_id::text, slug
+SELECT id::text, slug
 FROM projects
 WHERE deleted_at IS NULL
   AND repository_url = ANY(sqlc.arg('candidates')::text[])

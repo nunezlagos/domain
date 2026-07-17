@@ -20,7 +20,7 @@ import (
 	"nunezlagos/domain/internal/service/wizardplan/sources"
 )
 
-func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, func()) {
+func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, uuid.UUID, func()) {
 	t.Helper()
 	ctx := context.Background()
 	pgC, err := postgres.Run(ctx,
@@ -37,6 +37,12 @@ func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, func
 	require.NoError(t, dmigrate.Up(dsn))
 	pools, err := db.OpenWithRoleOverride(ctx, dsn, "app_user", "app_admin")
 	require.NoError(t, err)
+
+	// project sembrado: el scoping por project exige project_id NOT NULL.
+	var projectID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (name, slug) VALUES ('Demo', 'demo') RETURNING id`,
+	).Scan(&projectID))
 
 	classifier := &promptrouter.WizardplanAdapter{Inner: promptrouter.HeuristicClassifier{}}
 
@@ -57,21 +63,21 @@ func setupAdaptive(t *testing.T) (*issuebuilder.AdaptiveService, *db.Pools, func
 		Planner:  &wp.Planner{},
 	}
 
-	return adaptive, pools, func() {
+	return adaptive, pools, projectID, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
 }
 
 func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
-	svc, _, cleanup := setupAdaptive(t)
+	svc, _, projectID, cleanup := setupAdaptive(t)
 	defer cleanup()
 	ctx := context.Background()
 
 
 	prompt := "URGENTE: producción caída, el endpoint /api/v1/observations falla con 500 al hacer POST"
 
-	d, q, err := svc.StartAdaptive(ctx, prompt, nil, nil)
+	d, q, err := svc.StartAdaptive(ctx, prompt, nil, &projectID)
 	require.NoError(t, err)
 	require.NotNil(t, d)
 	require.Equal(t, issuebuilder.ModeBugFix, d.Mode)
@@ -117,27 +123,28 @@ func TestE2E_WizardAdaptive_FewQuestionsForBugFix(t *testing.T) {
 }
 
 func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
-	svc, pools, cleanup := setupAdaptive(t)
+	svc, pools, projectID, cleanup := setupAdaptive(t)
 	defer cleanup()
 	ctx := context.Background()
 
 
 	var reqID, issueID uuid.UUID
 	err := pools.App.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
+		`INSERT INTO sdd_requirements (project_id, slug, title) VALUES ($1, 'REQ-03-memory-system', 'Sistema de memoria') RETURNING id`,
+		projectID,
 	).Scan(&reqID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO issues (req_id, slug, title, description)
-		 VALUES ($1, 'issue-03.1-observations',
+		`INSERT INTO issues (project_id, req_id, slug, title, description)
+		 VALUES ($1, $2, 'issue-03.1-observations',
 		         'CRUD de observaciones con búsqueda',
 		         'Endpoints para crear y listar observaciones del proyecto con búsqueda FTS')
-		 RETURNING id`, reqID,
+		 RETURNING id`, projectID, reqID,
 	).Scan(&issueID)
 	require.NoError(t, err)
 
 	prompt := "Bug: al crear una observación nueva el endpoint falla con error 500"
-	d, _, err := svc.StartAdaptive(ctx, prompt, nil, nil)
+	d, _, err := svc.StartAdaptive(ctx, prompt, nil, &projectID)
 	require.NoError(t, err)
 
 	env, err := svc.LoadEnvelope(ctx, d.ID)
@@ -159,7 +166,7 @@ func TestE2E_WizardAdaptive_HUDedupInfersREQParent(t *testing.T) {
 }
 
 func TestE2E_WizardAdaptive_ChatIntentSkipsWizard(t *testing.T) {
-	svc, _, cleanup := setupAdaptive(t)
+	svc, _, _, cleanup := setupAdaptive(t)
 	defer cleanup()
 
 	_, _, err := svc.StartAdaptive(context.Background(),

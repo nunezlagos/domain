@@ -72,22 +72,19 @@ func (l *Limiter) CheckQueue(ctx context.Context, q Queue, orgID uuid.UUID) erro
 	if q.GlobalCap == 0 && q.PerOrgCap == 0 {
 		return nil
 	}
+	// El esquema ya no tiene organization_id: solo se evalúa el cap global.
+	// orgID queda como parámetro vestigial (la quota per-org se retiró).
+	_ = orgID
 	sql := fmt.Sprintf(
-		`SELECT
-			(SELECT COUNT(*) FROM %s WHERE %s) AS global_count,
-			(SELECT COUNT(*) FROM %s WHERE %s AND %s = $1) AS org_count`,
-		q.Table, q.PendingCondition,
-		q.Table, q.PendingCondition, q.OrgColumn)
-	var globalCount, orgCount int
-	if err := l.Pool.QueryRow(ctx, sql, orgID).Scan(&globalCount, &orgCount); err != nil {
+		`SELECT COUNT(*) FROM %s WHERE %s`,
+		q.Table, q.PendingCondition)
+	var globalCount int
+	if err := l.Pool.QueryRow(ctx, sql).Scan(&globalCount); err != nil {
 
 		return fmt.Errorf("check queue: %w", err)
 	}
 	if q.GlobalCap > 0 && globalCount >= q.GlobalCap {
 		return ErrQueueFull
-	}
-	if q.PerOrgCap > 0 && orgCount >= q.PerOrgCap {
-		return ErrOrgQuotaExceeded
 	}
 	return nil
 }

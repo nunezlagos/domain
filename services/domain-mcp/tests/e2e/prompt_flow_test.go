@@ -77,6 +77,13 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 	defer pools.Close()
 
 
+	// project sembrado: el scoping por project exige project_id NOT NULL.
+	var projectID uuid.UUID
+	require.NoError(t, pools.App.QueryRow(ctx,
+		`INSERT INTO projects (name, slug) VALUES ('Demo', 'demo') RETURNING id`,
+	).Scan(&projectID))
+
+
 	intakeSvc := &intake.Service{Pool: pools.App}
 	hbSvc := &issuebuilder.Service{Pool: pools.App, Attachments: &mockAttSvc{}}
 	router := &promptrouter.Router{
@@ -99,9 +106,11 @@ func TestE2E_PluggandPlayFlow_PromptToCommit(t *testing.T) {
 
 
 	t.Run("bug_starts_wizard", func(t *testing.T) {
-		resp, err := router.Route(ctx,
+		resp, err := router.RouteWithIntent(ctx,
 			"El director no puede descargar la ficha aunque haya completado las 4 tasas. No funciona el botón de export, ya pasé el screenshot.",
 			nil,
+			nil,
+			&projectID,
 			nil,
 		)
 		require.NoError(t, err)

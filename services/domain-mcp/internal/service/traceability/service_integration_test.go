@@ -19,6 +19,7 @@ import (
 
 type fix struct {
 	svc     *tracesvc.Service
+	projID  uuid.UUID
 	reqID   uuid.UUID
 	issueID uuid.UUID
 }
@@ -46,18 +47,25 @@ func setupTrace(t *testing.T) (*fix, func()) {
 
 	svc := &tracesvc.Service{Pool: pools.App}
 
-	var reqID, issueID uuid.UUID
+	// El scoping por project hizo project_id NOT NULL en sdd_requirements,
+	// issues e issue_code_references. Sembramos un project y lo propagamos.
+	var projID, reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-trace-test', 'Trace Test REQ') RETURNING id`,
+		`INSERT INTO projects (name, slug) VALUES ('Trace Test', 'trace-test') RETURNING id`,
+	).Scan(&projID)
+	require.NoError(t, err)
+	err = pools.App.QueryRow(ctx,
+		`INSERT INTO sdd_requirements (project_id, slug, title) VALUES ($1, 'REQ-trace-test', 'Trace Test REQ') RETURNING id`,
+		projID,
 	).Scan(&reqID)
 	require.NoError(t, err)
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO issues (req_id, slug, title) VALUES ($1, 'HU-trace-test', 'Trace HU') RETURNING id`,
-		reqID,
+		`INSERT INTO issues (project_id, req_id, slug, title) VALUES ($1, $2, 'HU-trace-test', 'Trace HU') RETURNING id`,
+		projID, reqID,
 	).Scan(&issueID)
 	require.NoError(t, err)
 
-	return &fix{svc: svc, reqID: reqID, issueID: issueID}, func() {
+	return &fix{svc: svc, projID: projID, reqID: reqID, issueID: issueID}, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)
 	}
@@ -99,8 +107,8 @@ func TestGetCodeTrace_Match(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := f.svc.Pool.Exec(ctx,
-		`INSERT INTO issue_code_references (issue_id, file_path, repo) VALUES ($1, 'internal/x.go', 'domain')`,
-		f.issueID,
+		`INSERT INTO issue_code_references (project_id, issue_id, file_path, repo) VALUES ($1, $2, 'internal/x.go', 'domain')`,
+		f.projID, f.issueID,
 	)
 	require.NoError(t, err)
 
@@ -132,8 +140,8 @@ func TestSabotage_OrphanCodeReference(t *testing.T) {
 
 
 	_, err := f.svc.Pool.Exec(ctx,
-		`INSERT INTO issue_code_references (issue_id, file_path, repo) VALUES ($1, 'internal/y.go', 'domain')`,
-		f.issueID,
+		`INSERT INTO issue_code_references (project_id, issue_id, file_path, repo) VALUES ($1, $2, 'internal/y.go', 'domain')`,
+		f.projID, f.issueID,
 	)
 	require.NoError(t, err)
 

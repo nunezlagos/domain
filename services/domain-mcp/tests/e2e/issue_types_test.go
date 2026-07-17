@@ -150,7 +150,7 @@ func TestIssueType_Feature_StartsAdaptiveWizard(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Quiero implementar export de runs a CSV con streaming"
-	d, q, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
+	d, q, err := f.adaptive.StartAdaptive(ctx, prompt, nil, &f.projectID)
 	require.NoError(t, err)
 	require.NotNil(t, d)
 	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
@@ -172,7 +172,7 @@ func TestIssueType_Fix_PersistsClassificationAndDraft(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "El botón export no funciona, devuelve 500 al hacer click"
-	resp, err := f.router.Route(ctx, prompt, nil, nil)
+	resp, err := f.router.RouteWithIntent(ctx, prompt, nil, nil, &f.projectID, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeWizardStarted, resp.Outcome)
 	require.Equal(t, promptrouter.IntentFix, resp.Intent)
@@ -204,7 +204,7 @@ func TestIssueType_Hotfix_HighConfidenceCritical(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "URGENTE: producción caída, todos los logins fallan, esto es critical bug"
-	resp, err := f.router.Route(ctx, prompt, nil, nil)
+	resp, err := f.router.RouteWithIntent(ctx, prompt, nil, nil, &f.projectID, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.IntentHotfix, resp.Intent)
 	require.GreaterOrEqual(t, resp.Confidence, 0.8)
@@ -223,7 +223,7 @@ func TestIssueType_Refactor_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Necesito refactor del módulo de auth para extract los handlers en archivos separados"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, &f.projectID)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeRefactor, d.Mode)
 }
@@ -237,7 +237,7 @@ func TestIssueType_Doc_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "Hay que actualizar la documentación del README con los nuevos endpoints"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, &f.projectID)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeDoc, d.Mode)
 }
@@ -251,7 +251,7 @@ func TestIssueType_RFC_StartsCorrectMode(t *testing.T) {
 	ctx := context.Background()
 
 	prompt := "RFC: diseño arquitectura del nuevo sistema de cache multi-tier, tradeoffs entre redis vs pgvector"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, &f.projectID)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeRFC, d.Mode)
 }
@@ -267,18 +267,19 @@ func TestIssueType_Feature_WithHUDedup_InfersReqParent(t *testing.T) {
 
 	var reqID uuid.UUID
 	require.NoError(t, f.pools.App.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-13-http-api', 'API HTTP REST') RETURNING id`,
+		`INSERT INTO sdd_requirements (project_id, slug, title) VALUES ($1, 'REQ-13-http-api', 'API HTTP REST') RETURNING id`,
+		f.projectID,
 	).Scan(&reqID))
 	_, err := f.pools.App.Exec(ctx,
-		`INSERT INTO issues (req_id, slug, title, description)
-		 VALUES ($1, 'issue-13.5-bulk-batch', 'Endpoints batch de creación masiva',
+		`INSERT INTO issues (project_id, req_id, slug, title, description)
+		 VALUES ($1, $2, 'issue-13.5-bulk-batch', 'Endpoints batch de creación masiva',
 		         'Endpoints batch para crear múltiples observaciones simultáneamente')`,
-		reqID,
+		f.projectID, reqID,
 	)
 	require.NoError(t, err)
 
 	prompt := "Necesito un endpoint batch para crear múltiples observaciones simultáneamente"
-	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, nil)
+	d, _, err := f.adaptive.StartAdaptive(ctx, prompt, nil, &f.projectID)
 	require.NoError(t, err)
 	require.Equal(t, issuebuilder.ModeFeature, d.Mode)
 
@@ -305,8 +306,8 @@ func TestIssueType_FullHappyPath_FixWithCommit(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	resp, err := f.router.Route(ctx,
-		"El endpoint POST /api/v1/observations falla con error 500 al hacer click — no funciona el bug que reportaron los devs", nil, nil)
+	resp, err := f.router.RouteWithIntent(ctx,
+		"El endpoint POST /api/v1/observations falla con error 500 al hacer click — no funciona el bug que reportaron los devs", nil, nil, &f.projectID, nil)
 	require.NoError(t, err)
 	require.Equal(t, promptrouter.OutcomeWizardStarted, resp.Outcome)
 	draftID := *resp.DraftID

@@ -47,15 +47,23 @@ func setupSpec(t *testing.T) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	svc := &specsvc.Service{Pool: pools.App, Audit: rec}
 
-	var reqID, issueID uuid.UUID
+	// project_id es NOT NULL en sdd_requirements tras el scoping por proyecto:
+	// sembramos un project y lo asociamos al requirement.
+	var projectID, reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-spec-test', 'Spec Test REQ') RETURNING id`,
+		`INSERT INTO projects (name, slug) VALUES ('Spec Test Project', 'spec-test') RETURNING id`,
+	).Scan(&projectID)
+	require.NoError(t, err)
+
+	err = pools.App.QueryRow(ctx,
+		`INSERT INTO sdd_requirements (project_id, slug, title) VALUES ($1, 'REQ-spec-test', 'Spec Test REQ') RETURNING id`,
+		projectID,
 	).Scan(&reqID)
 	require.NoError(t, err)
 
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO issues (req_id, slug, title) VALUES ($1, 'HU-spec-test', 'Test HU') RETURNING id`,
-		reqID,
+		`INSERT INTO issues (project_id, req_id, slug, title) VALUES ($1, $2, 'HU-spec-test', 'Test HU') RETURNING id`,
+		projectID, reqID,
 	).Scan(&issueID)
 	require.NoError(t, err)
 

@@ -47,15 +47,23 @@ func setupTask(t *testing.T) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	svc := &tsvc.Service{Pool: pools.App, Audit: rec}
 
-	var reqID, issueID uuid.UUID
+	// project_id es NOT NULL en sdd_requirements/issues tras el scoping por
+	// proyecto: sembramos un project y lo propagamos a los inserts.
+	var projectID, reqID, issueID uuid.UUID
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO sdd_requirements (slug, title) VALUES ('REQ-task-test', 'Task Test REQ') RETURNING id`,
+		`INSERT INTO projects (name, slug) VALUES ('Task Test Project', 'task-test') RETURNING id`,
+	).Scan(&projectID)
+	require.NoError(t, err)
+
+	err = pools.App.QueryRow(ctx,
+		`INSERT INTO sdd_requirements (project_id, slug, title) VALUES ($1, 'REQ-task-test', 'Task Test REQ') RETURNING id`,
+		projectID,
 	).Scan(&reqID)
 	require.NoError(t, err)
 
 	err = pools.App.QueryRow(ctx,
-		`INSERT INTO issues (req_id, slug, title) VALUES ($1, 'HU-task-test', 'Test HU') RETURNING id`,
-		reqID,
+		`INSERT INTO issues (req_id, project_id, slug, title) VALUES ($1, $2, 'HU-task-test', 'Test HU') RETURNING id`,
+		reqID, projectID,
 	).Scan(&issueID)
 	require.NoError(t, err)
 

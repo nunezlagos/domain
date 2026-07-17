@@ -144,35 +144,14 @@ func QueryBySource(ctx context.Context, pool *pgxpool.Pool, days int) (map[strin
 }
 
 // QueryTopOrgs retorna las top `limit` orgs por total de runs.
+//
+// Tras las migraciones 000142/000143 se eliminó la columna organization_id
+// de agent_runs y flow_runs, y la tabla organizations dejó de existir. Sin
+// dimensión de organización no hay top orgs que agregar, por lo que retorna
+// vacío. Se conserva la firma pública para no romper callers ni la forma del
+// Report (TopOrgs).
 func QueryTopOrgs(ctx context.Context, pool *pgxpool.Pool, days, limit int) ([]TopEntity, error) {
-	var out []TopEntity
-	rows, err := pool.Query(ctx, `
-		SELECT org_id::text, total FROM (
-		  SELECT organization_id AS org_id, COUNT(*) AS total
-		  FROM agent_runs
-		  WHERE started_at >= NOW() - ($1 || ' days')::interval
-		  GROUP BY organization_id
-		  UNION ALL
-		  SELECT organization_id, COUNT(*)
-		  FROM flow_runs
-		  WHERE started_at >= NOW() - ($1 || ' days')::interval
-		  GROUP BY organization_id
-		) combined
-		GROUP BY org_id, total
-		ORDER BY total DESC LIMIT $2
-	`, fmt.Sprintf("%d", days), limit)
-	if err != nil {
-		return out, fmt.Errorf("query top orgs: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var n int
-		if err := rows.Scan(&id, &n); err == nil {
-			out = append(out, TopEntity{ID: id, Num: n})
-		}
-	}
-	return out, nil
+	return []TopEntity{}, nil
 }
 
 // QueryHighFailureAgents retorna los top `limit` agents con >50% failure

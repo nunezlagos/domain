@@ -24,7 +24,7 @@ func (q *Queries) GetRules(ctx context.Context, projectID uuid.UUID) ([]string, 
 }
 
 const linkByGitRemote = `-- name: LinkByGitRemote :one
-SELECT id::text, organization_id::text, slug
+SELECT id::text, slug
 FROM projects
 WHERE deleted_at IS NULL
   AND repository_url = ANY($1::text[])
@@ -33,15 +33,14 @@ LIMIT 1
 `
 
 type LinkByGitRemoteRow struct {
-	ID             string `json:"id"`
-	OrganizationID string `json:"organization_id"`
-	Slug           string `json:"slug"`
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
 }
 
 func (q *Queries) LinkByGitRemote(ctx context.Context, candidates []string) (LinkByGitRemoteRow, error) {
 	row := q.db.QueryRow(ctx, linkByGitRemote, candidates)
 	var i LinkByGitRemoteRow
-	err := row.Scan(&i.ID, &i.OrganizationID, &i.Slug)
+	err := row.Scan(&i.ID, &i.Slug)
 	return i, err
 }
 

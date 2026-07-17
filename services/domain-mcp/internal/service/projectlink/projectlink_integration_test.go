@@ -58,10 +58,9 @@ func TestProjectLink_LinkByGitRemote_Found(t *testing.T) {
 	defer cleanup()
 
 	svc := projectlink.New(pool)
-	id, org, slug, err := svc.LinkByGitRemote(context.Background(), "https://github.com/acme/widgets")
+	id, _, slug, err := svc.LinkByGitRemote(context.Background(), "https://github.com/acme/widgets")
 	require.NoError(t, err)
 	require.NotEmpty(t, id)
-	require.NotEmpty(t, org)
 	require.Equal(t, "p", slug)
 }
 

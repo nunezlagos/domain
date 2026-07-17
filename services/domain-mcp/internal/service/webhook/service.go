@@ -84,7 +84,20 @@ func (s *Service) q(ctx context.Context) *webhookdb.Queries {
 	return webhookdb.New(s.Pool)
 }
 
-func webhookFromRow(row webhookdb.Webhook) Webhook {
+// webhookRow agrupa las filas generadas por sqlc para las queries que
+// devuelven un webhook completo. Tras de-orgear, sqlc ya no reusa un unico
+// struct de tabla (organization_id fue dropeado de la BD pero sigue en el
+// schema estatico que sqlc lee), asi que cada query emite su propio Row
+// estructuralmente identico. El union permite un solo conversor.
+type webhookRow interface {
+	webhookdb.GetWebhookByIDRow |
+		webhookdb.GetWebhookBySlugRow |
+		webhookdb.InsertWebhookRow |
+		webhookdb.ListWebhooksRow
+}
+
+func webhookFromRow[T webhookRow](src T) Webhook {
+	row := webhookdb.GetWebhookByIDRow(src)
 	w := Webhook{
 		ID:         row.ID,
 		Slug:       row.Slug,

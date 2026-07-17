@@ -3,16 +3,27 @@ INSERT INTO webhooks
     (created_by, slug, name, secret_encrypted, source_type,
      target_type, target_id, inputs_mapping)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING *;
+RETURNING id, created_by, slug, name, secret_encrypted, source_type,
+          target_type, target_id, inputs_mapping, enabled,
+          last_delivery_at, created_at, updated_at, deleted_at;
 
 -- name: GetWebhookBySlug :one
-SELECT * FROM webhooks WHERE slug = $1 AND deleted_at IS NULL;
+SELECT id, created_by, slug, name, secret_encrypted, source_type,
+       target_type, target_id, inputs_mapping, enabled,
+       last_delivery_at, created_at, updated_at, deleted_at
+FROM webhooks WHERE slug = $1 AND deleted_at IS NULL;
 
 -- name: GetWebhookByID :one
-SELECT * FROM webhooks WHERE id = $1 AND deleted_at IS NULL;
+SELECT id, created_by, slug, name, secret_encrypted, source_type,
+       target_type, target_id, inputs_mapping, enabled,
+       last_delivery_at, created_at, updated_at, deleted_at
+FROM webhooks WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListWebhooks :many
-SELECT * FROM webhooks WHERE deleted_at IS NULL ORDER BY created_at DESC;
+SELECT id, created_by, slug, name, secret_encrypted, source_type,
+       target_type, target_id, inputs_mapping, enabled,
+       last_delivery_at, created_at, updated_at, deleted_at
+FROM webhooks WHERE deleted_at IS NULL ORDER BY created_at DESC;
 
 -- name: SetWebhookEnabled :one
 UPDATE webhooks SET enabled = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL

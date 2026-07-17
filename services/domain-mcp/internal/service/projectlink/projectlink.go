@@ -47,7 +47,8 @@ func (s *Service) LinkByGitRemote(ctx context.Context, remote string) (projectID
 		}
 		return "", "", "", err
 	}
-	return result.ID, result.OrganizationID, result.Slug, nil
+	// organization_id fue removido del esquema; el orgID publico queda vestigial ("").
+	return result.ID, "", result.Slug, nil
 }
 
 func remoteCandidates(remote string) []string {

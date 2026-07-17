@@ -206,7 +206,7 @@ func TestSeedAgentTemplatesForOrg_SystemPrompt_ShiftLeftSecuritySection_Present(
 		slug    string
 		markers []string
 	}{
-		{slug: "sdd-4r", markers: []string{"seguridad", "causal_disposition", "proof_refs"}},
+		{slug: "sdd-4r", markers: []string{"seguridad", "causal_disposition", "proof_refs", "Prompt-injection del contexto", "PII en embeddings"}},
 		{slug: "sdd-spec", markers: []string{"seguridad_shift_left", "causal_disposition", "pre-existing"}},
 		{slug: "sdd-design", markers: []string{"seguridad_shift_left", "causal_disposition", "pre-existing"}},
 	}

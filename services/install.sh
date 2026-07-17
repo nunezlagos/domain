@@ -299,10 +299,15 @@ if should_run_pre_migration_backup; then
   if ! postgres_running; then
     log "  postgres no corre (STEP 0 lo bajó) — levantando temporal para el dump..."
     make up SVC=postgres >/dev/null 2>&1 || fail "no se pudo levantar postgres temporal para el backup"
+    # si el deploy aborta entre acá y el backup, no dejar el postgres temporal huérfano
+    TEMP_PG_UP=1
+    trap '[[ "${TEMP_PG_UP:-0}" == "1" ]] && docker rm -f domain-postgres >/dev/null 2>&1 || true' EXIT
     pg_wait_ready 60 || fail "postgres no quedó listo en 60s — abortando deploy sin backup"
   fi
   "$INSTALL_DIR/services/scripts/backup.sh" || fail "backup pre-migración falló — abortando deploy para no migrar sin respaldo"
   ok "backup pre-migración OK"
+  # backup ok: el make down siguiente maneja el ciclo normal, desarmar el trap
+  TEMP_PG_UP=0
 else
   log "Install fresh (sin volumen de datos) — se omite backup pre-migración"
 fi

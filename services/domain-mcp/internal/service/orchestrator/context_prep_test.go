@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -146,6 +147,54 @@ func TestPrepSkills_NoService_RecordsNoServiceMetric(t *testing.T) {
 	require.Empty(t, b.String(), "sin skill service no se inyecta nada")
 	c := s.Metrics.OrchestratorContextPrepSectionsTotal.WithLabelValues("skills", "no_service")
 	require.Equal(t, 1.0, testutil.ToFloat64(c), "debe registrar el fallo (antes era silencioso)")
+}
+
+func TestPrepPolicies_NoService_RecordsNoServiceMetric(t *testing.T) {
+	t.Parallel()
+	s := New(nil, nil, nil, "test") // s.ProjectPolicies == nil
+	s.Metrics = metrics.New()
+	var b strings.Builder
+	s.prepPolicies(context.Background(), uuid.Nil, uuid.Nil, &b)
+	require.Empty(t, b.String())
+	c := s.Metrics.OrchestratorContextPrepSectionsTotal.WithLabelValues("policies", "no_service")
+	require.Equal(t, 1.0, testutil.ToFloat64(c))
+}
+
+func TestPrepObs_NoService_RecordsNoServiceMetric(t *testing.T) {
+	t.Parallel()
+	s := New(nil, nil, nil, "test") // s.Observations == nil
+	s.Metrics = metrics.New()
+	var b strings.Builder
+	s.prepObs(context.Background(), uuid.Nil, &b)
+	require.Empty(t, b.String())
+	c := s.Metrics.OrchestratorContextPrepSectionsTotal.WithLabelValues("obs", "no_service")
+	require.Equal(t, 1.0, testutil.ToFloat64(c))
+}
+
+// DOMAINSERV-40: congela qué fases inyectan skills y los caps. Si alguien revierte
+// skills:true en una fase de review o cambia los límites, este test se pone rojo.
+func TestPrepPhaseContext_SkillsPhases_Frozen(t *testing.T) {
+	t.Parallel()
+	withSkills := map[string]bool{"sdd-apply": true, "sdd-design": true, "sdd-4r": true, "sdd-review": true}
+	for slug, cfg := range prepPhaseContext {
+		require.Equal(t, withSkills[slug], cfg.skills,
+			"fase %s: skills debe ser %v (DOMAINSERV-38/40)", slug, withSkills[slug])
+	}
+	require.Equal(t, 5, prepMaxSkills, "cap de skills inyectadas")
+	require.Equal(t, 30, prepSkillCandidates, "pool de candidatos antes de filtrar")
+	require.Greater(t, prepSkillCandidates, prepMaxSkills, "el pool debe ser mayor al cap para filtrar sin quedar corto")
+}
+
+func TestTruncate_MultibyteUTF8_NoRompeRune(t *testing.T) {
+	t.Parallel()
+	// 498 'x' + 'á' (multibyte); con max=500 el corte cae justo en la tilde
+	s := strings.Repeat("x", 498) + "á" + strings.Repeat("y", 50)
+	out := truncate(s, 500)
+	require.True(t, utf8.ValidString(out), "el recorte no debe partir un rune UTF-8")
+	require.Equal(t, 500, utf8.RuneCountInString(out), "500 runes (497 + '...')")
+	require.True(t, strings.HasSuffix(out, "..."))
+	// corto: sin elipsis, intacto
+	require.Equal(t, "hólá", truncate("hólá", 500))
 }
 
 func TestFirstLine(t *testing.T) {

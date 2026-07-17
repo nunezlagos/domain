@@ -62,7 +62,7 @@ func (s *Service) prepSkills(ctx context.Context, orgID, projectID uuid.UUID, sl
 		return
 	}
 	query := fmt.Sprintf("skills for %s phase", slug)
-	results, err := s.Skills.SearchHybrid(ctx, orgID, query, prepMaxSkills)
+	results, err := s.Skills.SearchHybrid(ctx, orgID, query, prepSkillCandidates)
 	if err != nil {
 		s.recordPrepSection("skills", "error")
 		return
@@ -136,11 +136,13 @@ func firstLine(s string) string {
 }
 
 // truncate recorta s a max caracteres con elipsis, colapsando saltos de línea
-// para que el resumen quede en una sola línea del bloque markdown.
+// para que el resumen quede en una sola línea del bloque markdown. Recorta por
+// runes (no bytes) para no partir caracteres UTF-8 multibyte (tildes, ñ, —).
 func truncate(s string, max int) string {
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > max {
-		return s[:max-3] + "..."
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max-3]) + "..."
 	}
 	return s
 }

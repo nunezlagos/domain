@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 18 } // 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 19 } // 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -32,6 +32,24 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 			Kind:       "convention",
 			SourceFile: "internal/agentprotocol/protocol.go",
 			BodyMD:     agentprotocol.Full,
+		},
+		{
+			Slug:       "validate-with-sources-context7",
+			Name:       "Validar con fuentes: consultar documentación vía context7 antes de afirmar",
+			Kind:       "convention",
+			SourceFile: "",
+			BodyMD: `Antes de AFIRMAR sintaxis, API, versión, configuración o comportamiento de una
+librería, framework, SDK, CLI o servicio, VALIDAR contra la documentación oficial
+usando la tool context7 (resolve-library-id → query-docs). No responder de memoria.
+
+APLICA a: elección de API, migración de versión, configuración, debugging de una
+librería específica, setup/instalación.
+
+NO aplica a: refactors, lógica de negocio propia, código del repo, conceptos
+generales de programación.
+
+Si la librería no está en context7: decirlo EXPLÍCITAMENTE y buscar la fuente
+oficial antes de afirmar. Regla dura: no hacer cosas sin validar con fuentes.`,
 		},
 		{
 			Slug:       "sdd-tdd-strict",

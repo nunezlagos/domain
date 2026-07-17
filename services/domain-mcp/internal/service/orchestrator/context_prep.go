@@ -23,11 +23,16 @@ import (
 // no inflar el prompt del cliente. prepSkillBodyMax acota el body de skill
 // inyectado (DOMAINSERV-38: antes solo la primera línea; ahora descripción útil).
 const (
-	prepMaxPolicies    = 10
-	prepMaxSkills      = 5
-	prepMaxObs         = 5
-	prepSkillBodyMax   = 500
-	prepMinimaxTimeout = 5 * time.Second
+	prepMaxPolicies = 10
+	prepMaxSkills   = 5
+	// prepSkillCandidates: pool que se pide a SearchHybrid ANTES de filtrar por
+	// aplicabilidad. SearchHybrid no scopea por proyecto, así que si limitáramos
+	// a prepMaxSkills el top-N global podría ser todo de otros proyectos y quedar
+	// <prepMaxSkills tras el filtro. Se recorta a prepMaxSkills DESPUÉS de filtrar.
+	prepSkillCandidates = 30
+	prepMaxObs          = 5
+	prepSkillBodyMax    = 500
+	prepMinimaxTimeout  = 5 * time.Second
 )
 
 // skillsSectionHeader marca el bloque de skills en el crudo. refineWithMinimax lo

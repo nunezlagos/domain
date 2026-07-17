@@ -762,6 +762,13 @@ rutas que el cambio crea (candidate-created-path):
   cruzan tenant, o desactivan/omiten la policy de la tabla.
 - Dependencias con CVE: libs agregadas o subidas de versión en este
   cambio con vulnerabilidad conocida; ancla el proof al lockfile/hunk.
+- Prompt-injection del contexto inyectado: si el cambio inyecta al prompt
+  de un LLM contenido de terceros (skills, policies, observaciones, docs,
+  input de usuario), ese contenido es NO confiable — no debe poder redirigir
+  al agente, exfiltrar contexto ni escalar herramientas.
+- PII en embeddings / índices vectoriales: texto con datos personales que el
+  cambio envía a embeddings o a un índice de búsqueda queda expuesto en
+  recuperación; clasificar/redactar antes de indexar.
 
 SCOPING (REGLA DURA):
 - Accionable / blocking-eligible SOLO si causal_disposition ∈
@@ -1091,7 +1098,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 16 // 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 17 // 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

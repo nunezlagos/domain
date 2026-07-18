@@ -85,6 +85,31 @@ Server has NO LLM — fan-out via client subagents.
 7. If policies not yet imported from `existing_rules_files`: read each + `domain_project_policy_import_from_text`.
 8. `domain_policy_get(slug="agent-protocol")`.
 
+## Documentación externa (context7)
+
+Antes de AFIRMAR API, config, sintaxis o comportamiento de cualquier
+librería, framework, SDK, CLI o servicio cloud, consulta context7 —
+incluso para libs conocidas: tu training puede estar desactualizado.
+
+Ata la búsqueda al STACK del proyecto, no a "latest" genérico:
+
+1. Determina la versión REAL desde el manifest del stack donde estás
+   trabajando: `go.mod`, `package.json`, `composer.json`,
+   `pyproject.toml`, `Cargo.toml`, `Gemfile`, `pom.xml`, `*.csproj`.
+   O desde la skill de stack del proyecto: `domain_project_skill_list`
+   → usa el `root_path` que matchea el cwd.
+2. `resolve-library-id` para obtener el ID context7 de esa lib.
+3. `query-docs` con el ID resuelto, acotando a la versión del manifest
+   cuando context7 la soporte. NO consultes "latest" si el proyecto
+   está clavado a otra major.
+4. En monorepo: usa el manifest del subpath donde estás, NO el del root.
+   Cada stack tiene su propia versión.
+
+Si la lib no está en context7, dilo EXPLÍCITAMENTE y busca la fuente
+oficial antes de afirmar. NO uses context7 para: refactors, lógica de
+negocio propia, código del repo desde cero, review, ni conceptos
+generales de programación.
+
 ## Code graph (RETIRADO 2026-07-07)
 
 El code graph client-side fue retirado tras la auditoría de uso: ~450

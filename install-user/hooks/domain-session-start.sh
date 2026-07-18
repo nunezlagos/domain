@@ -207,6 +207,24 @@ if [ -z "$mem_out" ]; then
   mem_out="⚠ domain_mem_context falló"
 fi
 
+# ---------- 5b. AUTO-SKILL/POLICY (SUGGEST-ONLY, fase 2) ----------
+# Trae las skills/policies VIGENTES del proyecto para que el agente las aplique
+# desde el arranque. Es SOLO lectura: NO se registra ni persiste nada (persistir
+# activo desde un hook viola la confirmación humana síncrona). El agente, si
+# detecta que faltan, PROPONE con domain_propose_skill/domain_propose_policy.
+# Degradación graciosa: si el curl falla o da timeout, cada salida queda vacía y
+# el bloque se renderiza como aviso 'no disponible' — la sesión arranca igual
+# (nunca exit != 0). Se reutiliza call_mcp_tool() (mismo timeout/curl del hook).
+skpol_args=$(printf '{"project_slug":"%s"}' "$mem_slug")
+skill_out=$(call_mcp_tool "domain_project_skill_list" "$skpol_args" 2>/dev/null)
+if [ -z "$skill_out" ]; then
+  echo "⚠ domain-session-start: domain_project_skill_list no disponible (MCP sin respuesta)" >&2
+fi
+policy_out=$(call_mcp_tool "domain_project_policy_list" "$skpol_args" 2>/dev/null)
+if [ -z "$policy_out" ]; then
+  echo "⚠ domain-session-start: domain_project_policy_list no disponible (MCP sin respuesta)" >&2
+fi
+
 # ---------- 6. emitir additionalContext (JSON construido con python para
 #            evitar problemas de escapeo de comillas/bash) ----------
 # Pasamos las 3 secciones por env vars a python, que arma el JSON final
@@ -214,6 +232,8 @@ export HOOK_VPS_URL="$vps_url"
 export HOOK_MEM_SLUG="$mem_slug"
 export HOOK_BOOTSTRAP_OUT="$bootstrap_out"
 export HOOK_MEM_OUT="$mem_out"
+export HOOK_SKILL_OUT="$skill_out"
+export HOOK_POLICY_OUT="$policy_out"
 # REQ-56 issue-56.1: cap de bytes del additionalContext. Sin tope, el payload
 # (bootstrap + mem_context + reglas) puede saturar la ventana de
 # contexto del agente al arrancar. Configurable via DOMAIN_CTX_MAX_BYTES
@@ -243,15 +263,76 @@ def _cap(text, limit):
         kept.append(line); used += b
     return ''.join(kept).rstrip() + marker
 
+def _mcp_inner(raw):
+    """Extrae el dict del body de un envelope JSON-RPC del MCP.
+
+    Devuelve None si el curl no respondió o el JSON está corrupto (para que el
+    render lo marque como 'no disponible'); {} si respondió pero sin body útil.
+    Nunca lanza: valida antes de leer para no romper por payloads corruptos.
+    """
+    if not raw:
+        return None
+    try:
+        d = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(d, dict):
+        return None
+    for c in d.get('result', {}).get('content', []):
+        if not isinstance(c, dict):
+            continue
+        try:
+            inner = json.loads(c.get('text', ''))
+            if isinstance(inner, dict):
+                return inner
+        except Exception:
+            continue
+    return {}
+
+def _skills_policies_block():
+    """Bloque compacto SUGGEST-ONLY con skills/policies vigentes del proyecto."""
+    lines = ["## domain skills & policies VIGENTES "
+             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde acá)"]
+
+    sk = _mcp_inner(os.environ.get('HOOK_SKILL_OUT', ''))
+    if sk is None:
+        lines.append("skills: ⚠ no disponible (domain MCP sin respuesta)")
+    else:
+        items = sk.get('skills') if isinstance(sk.get('skills'), list) else []
+        proj = [s for s in items if isinstance(s, dict) and s.get('scope') == 'project']
+        glob = [s for s in items if isinstance(s, dict) and s.get('scope') == 'global']
+        def _slugs(xs):
+            return ", ".join(str(s.get('slug') or s.get('name') or '?') for s in xs) or "—"
+        lines.append(f"skills: P={len(proj)} [{_slugs(proj)}] · G={len(glob)} [{_slugs(glob)}]")
+        if len(proj) == 0:
+            lines.append("  nota: 0 skills de proyecto — detectá el/los stack(s) y "
+                         "PROPONÉ 1 skill/stack con domain_propose_skill (queda pending "
+                         "para revisión humana; NO auto-registres).")
+
+    pol = _mcp_inner(os.environ.get('HOOK_POLICY_OUT', ''))
+    if pol is None:
+        lines.append("policies: ⚠ no disponible (domain MCP sin respuesta)")
+    else:
+        pitems = pol.get('policies') if isinstance(pol.get('policies'), list) else []
+        def _pfmt(p):
+            slug = str(p.get('slug') or p.get('name') or '?')
+            kind = p.get('kind')
+            return f"{slug}({kind})" if kind else slug
+        rendered = ", ".join(_pfmt(p) for p in pitems if isinstance(p, dict)) or "—"
+        lines.append(f"policies: P={len(pitems)} [{rendered}]")
+
+    return "\n".join(lines)
+
 try:
     max_bytes = int(os.environ.get('HOOK_CTX_MAX_BYTES', '12000'))
 except ValueError:
     max_bytes = 12000
 
-# Las 2 secciones dinámicas comparten el presupuesto (reglas van aparte, íntegras).
-# Reparto: bootstrap 60%, mem_context 40%.
-_bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.60))
-_memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.40))
+# Las 3 secciones dinámicas comparten el presupuesto (las REGLAS van aparte,
+# íntegras). Reparto: bootstrap 50%, mem_context 30%, skills/policies 20%.
+_bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.50))
+_memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.30))
+_skpol     = _cap(_skills_policies_block(),                 int(max_bytes * 0.20))
 
 ctx = (
     f"🟢 domain MCP ready (auto-cargado por SessionStart hook, "
@@ -259,6 +340,7 @@ ctx = (
     f"slug={os.environ.get('HOOK_MEM_SLUG','?')})\n\n"
     f"## domain_session_bootstrap\n{_bootstrap}\n\n"
     f"## domain_mem_context (ultimas 10 obs)\n{_memctx}\n\n"
+    f"{_skpol}\n\n"
     f"---\n"
     f"REGLAS DE ARRANQUE (ejecutar EN ORDEN, SIEMPRE, sin excepcion):\n"
     f"R1. PROHIBIDO volver a llamar domain_session_bootstrap y "

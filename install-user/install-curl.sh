@@ -235,6 +235,7 @@ install -m 0755 "$REPO_DIR/install-user/hooks/domain-user-prompt.sh" "$HOOKS_DIR
 install -m 0755 "$REPO_DIR/install-user/hooks/domain-stop.sh" "$HOOKS_DIR/domain-stop.sh"
 install -m 0755 "$REPO_DIR/install-user/hooks/domain-post-orchestrate.sh" "$HOOKS_DIR/domain-post-orchestrate.sh"
 install -m 0755 "$REPO_DIR/install-user/hooks/domain-pre-edit.sh" "$HOOKS_DIR/domain-pre-edit.sh"
+install -m 0755 "$REPO_DIR/install-user/hooks/domain-post-test.sh" "$HOOKS_DIR/domain-post-test.sh"
 chown -R "$REAL_USER" "$HOOKS_DIR"
 ok "lifecycle hooks instalados: $HOOKS_DIR/ (session-start, user-prompt, stop)"
 

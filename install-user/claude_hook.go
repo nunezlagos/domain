@@ -37,6 +37,10 @@ var claudeHooks = []claudeHookSpec{
 		Matcher: "mcp__domain-mcp__domain_(orchestrate|flow_status|orchestrate_phase_result|orchestrate_confirm)"},
 	{Event: "PreToolUse", Script: "domain-pre-edit.sh", Timeout: 10,
 		Matcher: "Edit|Write|NotebookEdit|Bash"},
+	// PostToolUse tras Bash: captura el resultado de correr tests/suite para
+	// que el auto-behavior de domain lo observe (SUGGEST-ONLY, best-effort).
+	{Event: "PostToolUse", Script: "domain-post-test.sh", Timeout: 10,
+		Matcher: "Bash"},
 }
 
 // installClaudeSessionStartHook registra los lifecycle hooks de domain en

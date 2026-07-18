@@ -81,6 +81,7 @@ func main() {
 		yes             bool
 		keepLocalRules  bool
 		removeEngram    bool
+		check           bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
@@ -97,8 +98,15 @@ func main() {
 		"NO neutralizar instrucciones locales de proyecto (CLAUDE.md/AGENTS.md/.claude). Por default domain las excluye para que solo apliquen las reglas globales")
 	flag.BoolVar(&removeEngram, "remove-engram", false,
 		"Deshabilita el plugin engram si está activo (sistema de memoria legacy, reemplazado por domain)")
+	flag.BoolVar(&check, "check", false,
+		"Self-check (doctor): valida hooks, permisos, instrucciones y salud del MCP. No instala nada")
 	flag.Usage = printHelp
 	flag.Parse()
+
+	// Subcomando 'doctor' equivalente a --check (no corre la instalación).
+	if check || flag.Arg(0) == "doctor" {
+		os.Exit(runDoctor(DetectPlatform().Home()))
+	}
 
 	platform := DetectPlatform()
 	paths := platform.Paths()
@@ -138,6 +146,8 @@ Uso:
   domain-install --target opencode                        # solo configura opencode
   domain-install --install-opencode                       # si no hay clientes, sugiere instalar
   domain-install --remove-engram                          # deshabilita plugin engram (memoria legacy)
+  domain-install --check                                  # self-check (doctor): valida la instalación
+  domain-install doctor                                   # idem --check
   domain-install --uninstall                              # deshacer
   domain-install --dry-run                                # solo detectar
 

@@ -19,11 +19,11 @@ Esos 2 resultados YA están en tu contexto al arrancar. Por lo tanto:
 
 - **PROHIBIDO** volver a llamar `domain_session_bootstrap` ni
   `domain_mem_context` en el primer turn. Leé el
-  bloque `🟢 domain MCP ready` que el hook inyectó y usá ESE contexto.
+  bloque `🟢 domain MCP ready` que el hook inyectó y usa ESE contexto.
 - Si el bloque del hook NO aparece (fallo de VPS/API key), recién ahí
-  ejecutá los 2 tools vos mismo como fallback.
+  ejecuta los 2 tools tú mismo como fallback.
 
-En tu PRIMER mensaje, ANTES de responder, ejecutá en paralelo (con el
+En tu PRIMER mensaje, ANTES de responder, ejecuta en paralelo (con el
 `project_slug` que viene en el bloque del hook):
 
 - `domain_project_skill_list(project_slug)`
@@ -31,13 +31,13 @@ En tu PRIMER mensaje, ANTES de responder, ejecutá en paralelo (con el
 - `domain_policy_list()`
 - `domain_ticket_list(project_slug, limit=5)`
 
-DESPUES, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL
+DESPUÉS, EJECUTA `domain_prompt_get(slug="first-response")` y SÍGUELO AL
 PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se
 desvía, violaste la regla.
 
 **Reglas duras:**
 - NO improvises contexto. Lee la respuesta real del hook / MCP.
-- Si el usuario manda "x" o algo trivial, IGUAL renderizá el bloque
+- Si el usuario manda "x" o algo trivial, IGUAL renderiza el bloque
   first-response en el primer mensaje.
 - Si algun tool falla, igual responde con warning — no te quedes mudo.
 
@@ -76,7 +76,7 @@ Server has NO LLM — fan-out via client subagents.
 
 ## Session start (mandatory)
 
-1. `domain_session_bootstrap(...)` — YA lo ejecuta el hook SessionStart y su resultado viene inyectado como `additionalContext`. NO lo re-llames; leé ese bloque. Solo ejecutalo vos si el bloque del hook no aparece (fallo de VPS/key).
+1. `domain_session_bootstrap(...)` — YA lo ejecuta el hook SessionStart y su resultado viene inyectado como `additionalContext`. NO lo re-llames; lee ese bloque. Solo ejecútalo tú si el bloque del hook no aparece (fallo de VPS/key).
 2. If `known=false`: `domain_session_register` then `domain_project_index_start` → `_submit`.
 3. If `head.changed != []`: read git log `last_known..current`, `domain_mem_save` relevant events.
 4. **Repo disambiguation**: call `domain_project_repo_list(project_slug)`. If `ambiguous=true` (>1 remoto sin default), show list and ask user which to use.
@@ -122,8 +122,8 @@ deprecadas — no las uses salvo pedido explícito del usuario.
 
 - **Save** via `domain_mem_save`: discovery, decision, fix, pattern, context, artifact, session_summary. Incluir `project_slug`.
 - **Don't save**: commands triviales, chat sin aprendizaje tecnico, logs efimeros, read-only queries, prompts capturados.
-- **Per turn**: la captura la hace el hook `UserPromptSubmit` automáticamente — **PROHIBIDO** llamar `domain_prompt_capture` vos (duplicarías la captura).
-- **Turn end**: el cierre lo hace el hook `Stop` automáticamente — **PROHIBIDO** llamar `domain_turn_complete` vos.
+- **Per turn**: la captura la hace el hook `UserPromptSubmit` automáticamente — **PROHIBIDO** llamar `domain_prompt_capture` tú (duplicarías la captura).
+- **Turn end**: el cierre lo hace el hook `Stop` automáticamente — **PROHIBIDO** llamar `domain_turn_complete` tú.
 - **Session end**: `domain_mem_save` con resumen de accomplished + next_steps.
 - **Significant commands** (deploy, migration, test suite): `domain_mem_save` resultado.
 

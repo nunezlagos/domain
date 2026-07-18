@@ -10,9 +10,9 @@ versionada). Este archivo es solo el bootstrap.
 
 ## Al cargar este skill
 
-1. `domain_policy_get(slug="agent-protocol")` → seguí ese protocolo.
-2. Si la policy no carga (server caído / key inválida): seguí el mínimo
-   abajo y pedile al usuario `./install-user.sh --uninstall && ./install-user.sh`.
+1. `domain_policy_get(slug="agent-protocol")` → sigue ese protocolo.
+2. Si la policy no carga (server caído / key inválida): sigue el mínimo
+   abajo y pídele al usuario `./install-user.sh --uninstall && ./install-user.sh`.
 
 ## Mínimo si la policy no carga
 
@@ -22,5 +22,5 @@ versionada). Este archivo es solo el bootstrap.
   que pudo hacerse antes.
 - `domain_mem_context` al inicio de la sesión.
 - `domain_policy_get(slug=<dominio>)` antes de tocar código del dominio.
-- Si un tool `domain_*` falla con "Connection closed": pedile al usuario
+- Si un tool `domain_*` falla con "Connection closed": pídele al usuario
   correr el installer. NO uses otro sistema de memoria como fallback.

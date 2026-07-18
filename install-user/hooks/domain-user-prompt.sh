@@ -83,14 +83,14 @@ try:
             mode = cls.get("suggested_mode", "")
             msg = ("domain: este prompt clasifica complexity=%s — es un REQUERIMIENTO. "
                    "PROHIBIDO tocar código sin flow SDD activo (hay gate en PreToolUse). "
-                   "Ejecutá domain_orchestrate (mode sugerido: %s) ANTES de implementar. "
-                   "En la fase sdd-spec, CONSULTÁ al usuario las dudas/ambigüedades ANTES "
+                   "Ejecuta domain_orchestrate (mode sugerido: %s) ANTES de implementar. "
+                   "En la fase sdd-spec, CONSULTA al usuario las dudas/ambigüedades ANTES "
                    "de redactar el spec. Si el usuario ordena explícitamente saltear el "
-                   "SDD, obedecé y pedile que apruebe las ediciones que el gate detenga."
+                   "SDD, obedece y pídele que apruebe las ediciones que el gate detenga."
                    ) % (cls.get("complexity", "?"), mode or "auto")
         elif action == "resume":
             msg = ("domain: el proyecto tiene un flow SDD ACTIVO (%s). "
-                   "Retomalo con domain_flow_status / domain_orchestrate_status — "
+                   "Retómalo con domain_flow_status / domain_orchestrate_status — "
                    "NUNCA re-orquestes un flow nuevo para el mismo trabajo.") % cls.get("active_flow_run_id", "?")
         break
 except Exception:

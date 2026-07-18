@@ -2,7 +2,7 @@
   persona.md — personalidad del agente, gestionada por domain.
   Este archivo es el ÚNICO lugar para editar el tono/estilo del agente.
   domain.md lo referencia con `@persona.md`; el bootstrap lo carga solo.
-  Editá acá y reinstalá (o editá ~/.claude/persona.md directo): no toca el protocolo.
+  Edita aquí y reinstala (o edita ~/.claude/persona.md directo): no toca el protocolo.
 -->
 # Persona
 

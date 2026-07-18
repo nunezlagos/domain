@@ -78,7 +78,7 @@ pats = [
 print("yes" if any(re.search(p, cmd) for p in pats) else "")
 ' 2>/dev/null)
   if [ "$git_destructive" = "yes" ]; then
-    emit_decision "deny" "domain git-guard: comando git destructivo bloqueado (reset --hard / clean / stash / checkout -- | .). El agente NUNCA ejecuta git mutante sobre tu working tree. Si de verdad lo necesitás, corrélo vos manualmente fuera del agente."
+    emit_decision "deny" "domain git-guard: comando git destructivo bloqueado (reset --hard / clean / stash / checkout -- | .). El agente NUNCA ejecuta git mutante sobre tu working tree. Si de verdad lo necesitas, córrelo tú manualmente fuera del agente."
   fi
 fi
 
@@ -103,7 +103,7 @@ if re.search(r"\bgit\s+commit\b", cmd) and not re.search(r"--amend", cmd):
         default|plan) commit_dec="ask" ;;
         *)            commit_dec="deny" ;;
       esac
-      emit_decision "$commit_dec" "domain commit-gate: no hay corrida de tests verificada en esta sesión (falta el marker fresco tests-ok). Corré la suite de tests antes de commitear — el hook post-test deja el marker. ¿Commit igual?"
+      emit_decision "$commit_dec" "domain commit-gate: no hay corrida de tests verificada en esta sesión (falta el marker fresco tests-ok). Corre la suite de tests antes de commitear — el hook post-test deja el marker. ¿Commit igual?"
     fi
   fi
 fi
@@ -141,6 +141,6 @@ case "$perm_mode" in
   *)            decision="deny" ;;
 esac
 
-reason="domain (issue-54.7): edición de código SIN flow SDD activo. TODO código pasa por SDD: ejecutá domain_orchestrate (el spec se arma en la fase sdd-spec — consultá dudas al usuario ANTES de redactarlo). Si el usuario ordenó explícitamente saltear el SDD, pedile que apruebe esta edición."
+reason="domain (issue-54.7): edición de código SIN flow SDD activo. TODO código pasa por SDD: ejecuta domain_orchestrate (el spec se arma en la fase sdd-spec — consulta dudas al usuario ANTES de redactarlo). Si el usuario ordenó explícitamente saltear el SDD, pídele que apruebe esta edición."
 
 emit_decision "$decision" "$reason"

@@ -292,7 +292,7 @@ def _mcp_inner(raw):
 def _skills_policies_block():
     """Bloque compacto SUGGEST-ONLY con skills/policies vigentes del proyecto."""
     lines = ["## domain skills & policies VIGENTES "
-             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde acá)"]
+             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)"]
 
     sk = _mcp_inner(os.environ.get('HOOK_SKILL_OUT', ''))
     if sk is None:

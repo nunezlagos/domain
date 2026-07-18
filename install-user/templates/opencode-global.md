@@ -12,8 +12,8 @@
 
 ## PRIMER MENSAJE — protocolo obligatorio
 
-OpenCode NO tiene hook SessionStart: NADIE ejecuta el bootstrap por vos.
-EN CADA SESION NUEVA, antes de responder, ejecuta VOS estos 3 tools en
+OpenCode NO tiene hook SessionStart: NADIE ejecuta el bootstrap por ti.
+EN CADA SESION NUEVA, antes de responder, ejecuta TÚ estos 3 tools en
 este orden:
 
 1. **`domain_session_bootstrap`** con:
@@ -25,9 +25,9 @@ este orden:
 
 2. **`domain_mem_context`** con `project_slug` del paso 1, `limit=10`.
 
-Solo DESPUES de esos 2 calls (o si fallaron con error) podes responder al usuario.
+Solo DESPUÉS de esos 2 calls (o si fallaron con error) puedes responder al usuario.
 
-DESPUES del bootstrap, EJECUTA `domain_prompt_get(slug="first-response")` y SEGUILO AL PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se desvía, violaste la regla.
+DESPUÉS del bootstrap, EJECUTA `domain_prompt_get(slug="first-response")` y SÍGUELO AL PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se desvía, violaste la regla.
 
 **Reglas duras:**
 - NO respondas sin bootstrap primero. NUNCA.
@@ -70,7 +70,7 @@ Server has NO LLM — fan-out via client subagents.
 
 ## Session start (mandatory)
 
-1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first (OpenCode no tiene hook: lo llamás vos).
+1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)` — always first (OpenCode no tiene hook: lo llamas tú).
 2. If `known=false`: `domain_session_register` then `domain_project_index_start` → `_submit`.
 3. If `head.changed != []`: read git log `last_known..current`, `domain_mem_save` relevant events.
 4. **Repo disambiguation**: call `domain_project_repo_list(project_slug)`. If `ambiguous=true` (>1 remoto sin default), show list and ask user which to use.

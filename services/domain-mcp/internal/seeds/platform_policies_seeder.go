@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 19 } // 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 20 } // 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -42,11 +42,21 @@ func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (R
 librería, framework, SDK, CLI o servicio, VALIDAR contra la documentación oficial
 usando la tool context7 (resolve-library-id → query-docs). No responder de memoria.
 
+ATAR la búsqueda al STACK del proyecto, no a "latest" genérico:
+1. Determinar la versión REAL desde el manifest del stack donde se trabaja
+   (go.mod, package.json, composer.json, pyproject.toml, Cargo.toml, Gemfile,
+   pom.xml, *.csproj) o desde la skill de stack del proyecto
+   (domain_project_skill_list → root_path que matchea el cwd).
+2. resolve-library-id para el ID context7 de esa lib.
+3. query-docs acotado a la versión del manifest cuando context7 la soporte.
+   NO consultar "latest" si el proyecto está clavado a otra major.
+4. En monorepo: usar el manifest del subpath donde se trabaja, no el del root.
+
 APLICA a: elección de API, migración de versión, configuración, debugging de una
 librería específica, setup/instalación.
 
-NO aplica a: refactors, lógica de negocio propia, código del repo, conceptos
-generales de programación.
+NO aplica a: refactors, lógica de negocio propia, código del repo, review,
+conceptos generales de programación.
 
 Si la librería no está en context7: decirlo EXPLÍCITAMENTE y buscar la fuente
 oficial antes de afirmar. Regla dura: no hacer cosas sin validar con fuentes.`,

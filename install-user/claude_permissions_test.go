@@ -55,6 +55,24 @@ func TestInstallClaudePermissions_PreservesUserEntries(t *testing.T) {
 	}
 }
 
+func TestInstallClaudePermissions_WritesGitDeny(t *testing.T) {
+	home := t.TempDir()
+	if err := installClaudePermissions(home, "20260101T000000Z"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	perms, _ := readSettings(t, home)["permissions"].(map[string]any)
+	deny := toStringSet(perms["deny"])
+	for _, rule := range domainPermissionDenies {
+		if !deny[rule] {
+			t.Fatalf("falta la regla deny %q en %v", rule, deny)
+		}
+	}
+	// El deny de git destructivo NO debe bloquear cambio de rama legítimo.
+	if deny["Bash(git checkout:*)"] {
+		t.Fatal("el deny sobre-bloquea: git checkout <rama> quedaría bloqueado")
+	}
+}
+
 func TestInstallClaudePermissions_Idempotent(t *testing.T) {
 	home := t.TempDir()
 	if err := installClaudePermissions(home, "ts1"); err != nil {

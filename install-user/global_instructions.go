@@ -44,6 +44,18 @@ func claudeDomainMdPath(home string) string {
 	return filepath.Join(home, ".claude", "domain.md")
 }
 
+// claudePersonaMdPath es ~/.claude/persona.md: la personalidad del agente,
+// archivo dedicado y editable. domain.md lo referencia con `@persona.md`, así
+// que se puede editar el tono sin tocar el protocolo. 100% gestionado.
+func claudePersonaMdPath(home string) string {
+	return filepath.Join(home, ".claude", "persona.md")
+}
+
+// personaFileBody es el contenido de ~/.claude/persona.md (template embebido).
+func personaFileBody() string {
+	return strings.TrimRight(string(claudePersonaMD), "\n") + "\n"
+}
+
 // upsertDomainBlock devuelve el contenido con la sección domain insertada o
 // actualizada, preservando todo lo que el usuario tenga afuera de los
 // marcadores. Reglas:
@@ -87,6 +99,26 @@ func claudeGlobalPath(home string) string {
 // Además, si existe la config global de OpenCode, registra el mismo archivo
 // como instruction global de OpenCode (ver installOpencodeGlobalInstruction).
 func installGlobalInstructions(paths Paths, home, timestamp string) error {
+	// 0. Persona en archivo dedicado ~/.claude/persona.md (editable por el
+	//    usuario). domain.md la referencia con @persona.md. Backup si cambia.
+	personaPath := claudePersonaMdPath(home)
+	persona := personaFileBody()
+	if cur, existed, err := readIfExists(personaPath); err != nil {
+		return fmt.Errorf("read %s: %w", personaPath, err)
+	} else if !existed || cur != persona {
+		if err := os.MkdirAll(filepath.Dir(personaPath), 0o755); err != nil {
+			return fmt.Errorf("mkdir ~/.claude: %w", err)
+		}
+		if existed {
+			if _, err := backupIfExists(personaPath, timestamp); err != nil {
+				return fmt.Errorf("backup persona.md: %w", err)
+			}
+		}
+		if err := os.WriteFile(personaPath, []byte(persona), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", personaPath, err)
+		}
+	}
+
 	// 1. Contenido real de domain en archivo dedicado ~/.claude/domain.md
 	//    (nombre propio, 100% gestionado: se sobreescribe entero). Backup si cambia.
 	domainPath := claudeDomainMdPath(home)

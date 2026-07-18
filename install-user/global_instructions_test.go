@@ -89,6 +89,42 @@ func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 	}
 }
 
+// La persona vive en ~/.claude/persona.md (editable) y domain.md la referencia
+// con @persona.md, no inline. Idempotente.
+func TestInstallGlobalInstructions_WritesPersonaAndReference(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := Platform{OS: "linux"}.Paths()
+
+	if err := installGlobalInstructions(paths, home, "20260101T000000Z"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	pm, err := os.ReadFile(claudePersonaMdPath(home))
+	if err != nil {
+		t.Fatalf("read persona.md: %v", err)
+	}
+	if len(pm) == 0 {
+		t.Fatal("persona.md quedó vacío")
+	}
+
+	dm, err := os.ReadFile(claudeDomainMdPath(home))
+	if err != nil {
+		t.Fatalf("read domain.md: %v", err)
+	}
+	if !strings.Contains(string(dm), "@persona.md") {
+		t.Fatal("domain.md no referencia @persona.md")
+	}
+
+	// Idempotente: segunda corrida no crea backups nuevos de persona.md.
+	if err := installGlobalInstructions(paths, home, "20260202T000000Z"); err != nil {
+		t.Fatalf("2a corrida: %v", err)
+	}
+	if bk, _ := filepath.Glob(claudePersonaMdPath(home) + ".backup-*"); len(bk) != 0 {
+		t.Fatalf("corrida idempotente no debe backupear persona.md, hay %v", bk)
+	}
+}
+
 // upsertDomainBlock en contenido vacío: escribe solo el bloque.
 func TestUpsertDomainBlock_InsertIntoEmpty(t *testing.T) {
 	out := upsertDomainBlock("")

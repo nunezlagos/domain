@@ -17,6 +17,23 @@ var domainPermissionAllows = []string{
 	"Write(**)",
 }
 
+// domainPermissionDenies son bloqueos DUROS y deterministas en
+// ~/.claude/settings.json → permissions.deny. A diferencia del hook SDD (que
+// puede fallar o exit-0 con flow activo), un deny se evalúa PRIMERO (orden
+// deny → ask → allow) y se hereda por los subagentes — es la única barrera que
+// habría prevenido el incidente de `git reset --hard`/`git stash` de un
+// subagente. Se elige el set destructivo-al-worktree sin sobre-bloquear el
+// flujo normal: NO se deniega `git checkout <rama>` (cambio de rama legítimo),
+// solo el descarte de archivos (`git checkout --` / `git checkout .`). Si el
+// usuario los necesita, los corre con el prefijo `!` en el prompt.
+var domainPermissionDenies = []string{
+	"Bash(git reset --hard:*)",
+	"Bash(git clean:*)",
+	"Bash(git stash:*)",
+	"Bash(git checkout --:*)",
+	"Bash(git checkout .:*)",
+}
+
 // installClaudePermissions agrega las reglas de domainPermissionAllows a
 // permissions.allow en ~/.claude/settings.json, preservando las entradas del
 // usuario y sin tocar defaultMode. Idempotente: re-ejecutar no duplica ni
@@ -35,6 +52,11 @@ func installClaudePermissions(home, timestamp string) error {
 	mutated := false
 	for _, rule := range domainPermissionAllows {
 		if upsertStringInArray(perms, "allow", rule) {
+			mutated = true
+		}
+	}
+	for _, rule := range domainPermissionDenies {
+		if upsertStringInArray(perms, "deny", rule) {
 			mutated = true
 		}
 	}

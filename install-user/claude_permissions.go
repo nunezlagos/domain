@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 // domainPermissionAllows son las reglas de permisos que domain allowlistea en
@@ -10,11 +11,12 @@ import (
 // clasificador cae, sin estas reglas orchestrate/tickets/mem_save quedan
 // inusables. Edit/Write siguen gateados por el hook SDD (domain-pre-edit.sh);
 // esto solo saca al clasificador del camino, no el enforcement.
+// Edit(**) cubre Write/NotebookEdit para el chequeo de permisos de archivos
+// de Claude Code — una regla Write(path) ahí es muerta (ver migrateStaleWriteRules).
 var domainPermissionAllows = []string{
 	"mcp__domain-mcp",
 	"Read(**)",
 	"Edit(**)",
-	"Write(**)",
 }
 
 // domainPermissionDenies son bloqueos DUROS y deterministas en
@@ -34,6 +36,37 @@ var domainPermissionDenies = []string{
 	"Bash(git checkout .:*)",
 }
 
+// migrateStaleWriteRules convierte reglas Write(<path>) muertas de
+// permissions.allow a su equivalente Edit(<path>): el chequeo de permisos de
+// archivos de Claude Code solo honra reglas Edit(path), así que una Write(path)
+// quedó sin efecto y además dispara un warning al arrancar. Es sintáctico y
+// lossless: elimina cada Write(X) y garantiza Edit(X). Devuelve true si mutó.
+func migrateStaleWriteRules(perms map[string]any) bool {
+	raw, ok := perms["allow"].([]any)
+	if !ok {
+		return false
+	}
+	kept := make([]any, 0, len(raw))
+	var migrated []string
+	for _, e := range raw {
+		s, isStr := e.(string)
+		if isStr && strings.HasPrefix(s, "Write(") && strings.HasSuffix(s, ")") {
+			inner := s[len("Write(") : len(s)-1]
+			migrated = append(migrated, "Edit("+inner+")")
+			continue
+		}
+		kept = append(kept, e)
+	}
+	if len(migrated) == 0 {
+		return false
+	}
+	perms["allow"] = kept
+	for _, rule := range migrated {
+		upsertStringInArray(perms, "allow", rule)
+	}
+	return true
+}
+
 // installClaudePermissions agrega las reglas de domainPermissionAllows a
 // permissions.allow en ~/.claude/settings.json, preservando las entradas del
 // usuario y sin tocar defaultMode. Idempotente: re-ejecutar no duplica ni
@@ -50,6 +83,9 @@ func installClaudePermissions(home, timestamp string) error {
 		m["permissions"] = perms
 	}
 	mutated := false
+	if migrateStaleWriteRules(perms) {
+		mutated = true
+	}
 	for _, rule := range domainPermissionAllows {
 		if upsertStringInArray(perms, "allow", rule) {
 			mutated = true

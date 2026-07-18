@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +71,48 @@ func TestInstallClaudePermissions_WritesGitDeny(t *testing.T) {
 	// El deny de git destructivo NO debe bloquear cambio de rama legítimo.
 	if deny["Bash(git checkout:*)"] {
 		t.Fatal("el deny sobre-bloquea: git checkout <rama> quedaría bloqueado")
+	}
+}
+
+func TestInstallClaudePermissions_MigratesStaleWriteRules(t *testing.T) {
+	home := t.TempDir()
+	path := claudeSettingsPath(home)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeJSON(path, map[string]any{
+		"permissions": map[string]any{
+			"allow": []any{
+				"Write(**/.env*)",
+				"Edit(**/.env*)",
+				"Write(/home/foo/proyectos/x/**)",
+				"Write(**)",
+				"Bash(ls:*)",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := installClaudePermissions(home, "ts"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	got := toStringSet(readSettings(t, home)["permissions"].(map[string]any)["allow"])
+	for rule := range got {
+		if strings.HasPrefix(rule, "Write(") {
+			t.Fatalf("quedó una regla Write muerta sin migrar: %q", rule)
+		}
+	}
+	if !got["Edit(**/.env*)"] {
+		t.Fatal("se perdió Edit(**/.env*)")
+	}
+	if !got["Edit(/home/foo/proyectos/x/**)"] {
+		t.Fatal("no se migró Write(/home/foo/proyectos/x/**) a Edit(...)")
+	}
+	if !got["Edit(**)"] {
+		t.Fatal("no se migró Write(**) a Edit(**)")
+	}
+	if !got["Bash(ls:*)"] {
+		t.Fatal("se perdió la regla propia del usuario Bash(ls:*)")
 	}
 }
 

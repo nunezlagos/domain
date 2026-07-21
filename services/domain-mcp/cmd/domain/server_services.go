@@ -26,6 +26,7 @@ import (
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
+	"nunezlagos/domain/internal/llm/failover"
 	"nunezlagos/domain/internal/llm/google"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
@@ -503,7 +504,7 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 
 // buildPromptClassifier elige clasificador LLM (anthropic) o heurístico según disponibilidad.
 func buildPromptClassifier(s *serverServices, logger *slog.Logger) promptrouter.Classifier {
-	prov, model, err := s.LLMFactory.ProviderForRole(llm.RoleClassify)
+	prov, model, err := failover.ForRole(s.LLMFactory, llm.RoleClassify, nil)
 	if err != nil {
 		logger.Info("prompt classifier: heurístico (sin provider para rol classify)")
 		return promptrouter.HeuristicClassifier{}

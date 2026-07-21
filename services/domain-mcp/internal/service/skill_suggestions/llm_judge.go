@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/failover"
 )
 
 // ErrJudgeUnavailable se devuelve cuando se pide el judge LLM pero MiniMax no
@@ -36,7 +37,7 @@ func (j *LLMJudge) provider() (llm.Provider, string, error) {
 	if j == nil || j.LLM == nil {
 		return nil, "", ErrJudgeUnavailable
 	}
-	p, model, err := j.LLM.ProviderForRole(llm.RoleJudge)
+	p, model, err := failover.ForRole(j.LLM, llm.RoleJudge, nil)
 	if err != nil {
 		return nil, "", ErrJudgeUnavailable
 	}

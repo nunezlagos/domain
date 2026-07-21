@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/failover"
 )
 
 const (
@@ -122,7 +123,7 @@ func (s *Service) rerankWithLLM(
 
 	// Resuelve el provider/modelo del rol "rerank" (config-driven, DOMAINSERV-57).
 	// Sin provider disponible (ni default), degradar al orden BM25/RRF.
-	provider, model, err := s.LLM.ProviderForRole(llm.RoleRerank)
+	provider, model, err := failover.ForRole(s.LLM, llm.RoleRerank, nil)
 	if err != nil {
 		return nil, false
 	}

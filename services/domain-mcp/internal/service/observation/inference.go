@@ -29,6 +29,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/llm/failover"
 	"nunezlagos/domain/internal/service/observation/observationdb"
 )
 
@@ -229,7 +230,7 @@ func (s *Service) inferProvider() (llm.Provider, string, error) {
 	if s.LLM == nil {
 		return nil, "", ErrInferenceUnavailable
 	}
-	provider, model, err := s.LLM.ProviderForRole(llm.RoleInfer)
+	provider, model, err := failover.ForRole(s.LLM, llm.RoleInfer, nil)
 	if err != nil {
 		return nil, "", ErrInferenceUnavailable
 	}

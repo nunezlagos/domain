@@ -107,7 +107,11 @@ func BuildFullPlan(ctx context.Context, reg *phases.Registry, in phases.Input,
 				step.SuggestedSaves = out.SuggestedSaves
 				step.RetryPolicy = out.RetryPolicy
 				step.SkillThreshold = out.SkillThreshold
-
+				// contrato estático por fase (DOMAINSERV-53): sin esto, los
+				// steps 2..N cerraban en Full sin exigir sus tools
+				step.RequiredToolCalls = out.RequiredToolCalls
+				step.OutputSchema = out.OutputSchema
+				step.SubagentPlan = out.SubagentPlan
 			}
 		}
 		plan.Steps = append(plan.Steps, step)

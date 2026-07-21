@@ -114,7 +114,7 @@ func (s *Service) ProcessAsyncFlowRun(ctx context.Context, flowRunID uuid.UUID) 
 
 		provider, err := s.LLM.Get(modes.ProviderForModel(tmpl.Model))
 		if err != nil {
-			return fmt.Errorf("async: provider for %s: %w", tmpl.Model, err)
+			return fmt.Errorf("%w: async provider for %s: %v", ErrLLMFactoryRequired, tmpl.Model, err)
 		}
 
 		resp, err := provider.Complete(ctx, llm.CompletionOptions{

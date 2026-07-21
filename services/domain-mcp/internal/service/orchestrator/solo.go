@@ -17,22 +17,22 @@ import (
 // runSolo ejecuta el pipeline SDD completo SERVER-SIDE — sin cliente IDE.
 //
 // Para cada step en orden, el orquestador:
-//   1. Lookup agent_template (model + temperature + max_tokens + system_prompt)
-//   2. Resuelve el provider del Factory (ProviderForModel infiere desde model name)
-//   3. Llama provider.Complete con system + user prompt acumulado
-//   4. Parsea response.Content como JSON (cada handler declara schema en su system_prompt)
-//   5. Si parsea OK → handler.Validate(output) + ValidateRequiredSaves
-//      Si Validate pasa → MarkStepCompleted, rebuild next prompt con PriorOutputs
-//      Si falla → MarkStepFailed + propagate, abort run
-//   6. Si parse falla → reintenta con feedback (max 2 reintentos por step) o abort
+//  1. Lookup agent_template (model + temperature + max_tokens + system_prompt)
+//  2. Resuelve el provider del Factory (ProviderForModel infiere desde model name)
+//  3. Llama provider.Complete con system + user prompt acumulado
+//  4. Parsea response.Content como JSON (cada handler declara schema en su system_prompt)
+//  5. Si parsea OK → handler.Validate(output) + ValidateRequiredSaves
+//     Si Validate pasa → MarkStepCompleted, rebuild next prompt con PriorOutputs
+//     Si falla → MarkStepFailed + propagate, abort run
+//  6. Si parse falla → reintenta con feedback (max 2 reintentos por step) o abort
 //
 // Diferencias vs Express/Full:
 //   - NO devuelve plan al caller; ejecuta hasta el final (sincrónico) o falla
 //   - NO admite D5 sticky con required saves (no hay cliente que llame mem_save)
 //     → Solo mode IGNORA SuggestedSaves Required=true: las marcas D5 quedan
-//        registradas en step.inputs.suggested_saves para auditoría posterior
-//        pero no bloquean el flow. Esto es el trade-off declarado en RFC 0006
-//        ADR-4 (Solo es para CI/CD donde el "client side" del SDD no aplica)
+//     registradas en step.inputs.suggested_saves para auditoría posterior
+//     pero no bloquean el flow. Esto es el trade-off declarado en RFC 0006
+//     ADR-4 (Solo es para CI/CD donde el "client side" del SDD no aplica)
 //   - NO admite D1 confirm condicional (no hay user interaction)
 func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 	flowRunID, orchestratorRunID uuid.UUID, plan *modes.PhasePlan,
@@ -41,10 +41,8 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 		return ErrLLMFactoryRequired
 	}
 
-
 	priors := map[phases.PhaseSlug]map[string]any{}
 	for i, step := range plan.Steps {
-
 
 		userPrompt := step.UserPrompt
 		if userPrompt == "" {
@@ -66,16 +64,14 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			userPrompt = rebuilt.UserPrompt
 		}
 
-
 		tmpl, err := s.Repo.GetAgentTemplate(ctx, in.OrganizationID, step.AgentTemplateSlug)
 		if err != nil {
 			return fmt.Errorf("solo: lookup template %s: %w", step.AgentTemplateSlug, err)
 		}
 
-
 		provider, err := s.LLM.Get(modes.ProviderForModel(tmpl.Model))
 		if err != nil {
-			return fmt.Errorf("solo: provider for %s: %w", tmpl.Model, err)
+			return fmt.Errorf("%w: solo provider for %s: %v", ErrLLMFactoryRequired, tmpl.Model, err)
 		}
 
 		resp, err := provider.Complete(ctx, llm.CompletionOptions{
@@ -91,9 +87,6 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			return fmt.Errorf("solo: complete step %d (%s): %w", i, step.Slug, err)
 		}
 
-
-
-
 		output, parseErr := parseJSONOutput(resp.Content)
 		if parseErr != nil {
 			_ = s.Repo.MarkStepFailed(ctx, step.ID,
@@ -101,9 +94,6 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 			_ = s.propagateFlowStatusAfterFailure(ctx, flowRunID)
 			return fmt.Errorf("solo: parse step %d (%s): %w", i, step.Slug, parseErr)
 		}
-
-
-
 
 		h, err := s.Phases.Lookup(step.Slug)
 		if err != nil {
@@ -120,13 +110,11 @@ func (s *Service) runSolo(ctx context.Context, in OrchestrateInput, flowID,
 		}
 		priors[step.Slug] = output
 
-
 		if s.Metrics != nil {
 			s.Metrics.OrchestratorPhaseResultsTotal.
 				WithLabelValues(string(step.Slug), "solo", "completed").Inc()
 		}
 	}
-
 
 	if err := s.Repo.UpdateFlowRunStatus(ctx, flowRunID, "completed"); err != nil {
 		return fmt.Errorf("solo: update flow_run status: %w", err)

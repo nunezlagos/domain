@@ -43,9 +43,11 @@ import (
 var (
 	ErrAgentNotFound   = errors.New("agent not found")
 	ErrProviderMissing = errors.New("LLM provider not registered for agent.provider")
-	ErrMaxIterations   = errors.New("max iterations reached")
-
-
+	// ErrAgentLLMUnavailable señala que no hay provider LLM server-side para
+	// ejecutar el agente. Error estructurado y detectable (errors.Is): el caller
+	// puede degradar a delegación al cliente o reintentar, nunca crashear.
+	ErrAgentLLMUnavailable = errors.New("agent_run: LLM provider unavailable server-side; degrade to client delegation or retry")
+	ErrMaxIterations       = errors.New("max iterations reached")
 
 	ErrOrphanRunNotAllowed = errors.New("agent_run without flow_run_id requires WithStandalone in this environment")
 )
@@ -76,8 +78,6 @@ type Runner struct {
 	Emitter     EventEmitter        // si nil, no emite eventos outbound
 	Metrics     *metrics.Registry   // opcional, si nil no genera métricas
 
-
-
 	Env string
 }
 
@@ -106,6 +106,18 @@ type RunResult struct {
 // Las opciones variadic permiten al orquestador SDD (issue-08.10) atar el
 // run a un flow_run. Sin opciones, el comportamiento es el legacy:
 // standalone=true, flow_run_id NULL.
+
+// resolveProvider obtiene el provider LLM del agente o un error estructurado
+// (ErrAgentLLMUnavailable, que envuelve ErrProviderMissing). Aislado del path
+// con DB para poder verificar la degradación sin tocar Postgres.
+func (r *Runner) resolveProvider(providerName string) (llm.Provider, error) {
+	p, err := r.Factory.Get(providerName)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w: %v", ErrAgentLLMUnavailable, ErrProviderMissing, err)
+	}
+	return p, nil
+}
+
 func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunResult, error) {
 	ro := resolveRunOpts(opts)
 	if err := r.checkOrphanPolicy(ro); err != nil {
@@ -116,22 +128,17 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 		return nil, fmt.Errorf("get agent: %w", err)
 	}
 
-
-
 	orgID := ctxkeys.OrgID(ctx)
 
-	provider, err := r.Factory.Get(agent.Provider)
+	provider, err := r.resolveProvider(agent.Provider)
 	if err != nil {
-		return r.failedRun(ctx, orgID, in, ro, "provider_missing",
-			fmt.Errorf("%w: %v", ErrProviderMissing, err))
+		return r.failedRun(ctx, orgID, in, ro, "provider_missing", err)
 	}
-
 
 	tools, skillBySlug, err := r.loadSkillTools(ctx, agent)
 	if err != nil {
 		return r.failedRun(ctx, orgID, in, ro, "load_skills", err)
 	}
-
 
 	inputsJSON, _ := json.Marshal(map[string]any{
 		"user_prompt": in.UserPrompt,
@@ -149,8 +156,6 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 	if err != nil {
 		return nil, fmt.Errorf("create run: %w", err)
 	}
-
-
 
 	if agent.TokenBudget != nil && *agent.TokenBudget > 0 {
 		modelMax := 0
@@ -173,7 +178,6 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 			provider = budgetmw.New(provider, mgr)
 		}
 	}
-
 
 	messages := []llm.Message{{Role: "user", Content: in.UserPrompt}}
 	totalIn, totalOut, iterations := 0, 0, 0
@@ -199,9 +203,6 @@ LOOP:
 			}
 		}
 
-
-
-
 		r.appendPromptSnapshot(ctx, runID, iterations, opts, tools)
 
 		callStart := time.Now()
@@ -223,12 +224,10 @@ LOOP:
 			"tool_calls":    resp.ToolCalls,
 		}, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, latencyMS)
 
-
 		if len(resp.ToolCalls) == 0 {
 			finalText = resp.Content
 			break LOOP
 		}
-
 
 		messages = append(messages, llm.Message{
 			Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls,
@@ -259,7 +258,6 @@ LOOP:
 		finalErr = ErrMaxIterations
 	}
 
-
 	status := StatusCompleted
 	errStr := ""
 	if finalErr != nil {
@@ -268,7 +266,6 @@ LOOP:
 	}
 	finishedAt := time.Now().UTC()
 	outputJSON, _ := json.Marshal(map[string]any{"text": finalText})
-
 
 	var costUSD float64
 	if r.Models != nil {
@@ -286,7 +283,6 @@ LOOP:
 		 WHERE id = $9`,
 		status, outputJSON, nullStr(errStr), totalIn, totalOut, costUSD,
 		iterations, finishedAt, runID)
-
 
 	r.appendLog(ctx, runID, iterations, "final", map[string]any{
 		"status":   status,
@@ -407,8 +403,6 @@ func (r *Runner) failedRun(ctx context.Context, orgID uuid.UUID, in RunInput, ro
 		StartedAt: now, FinishedAt: now,
 	}, err
 }
-
-
 
 // appendLog persiste una entry en agent_run_logs (issue-08.3). Best-effort:
 // errores de logging NO interrumpen el run principal.

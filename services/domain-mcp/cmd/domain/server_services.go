@@ -465,6 +465,7 @@ func buildLLMFactory() *llm.Factory {
 		factory.Register("google", wrapLLM(google.New(k)))
 	}
 	anthropic.RegisterMiniMax(factory, wrapLLM)
+	llmopenai.RegisterOpenAICompat(factory, wrapLLM, slog.Default())
 	factory.Register("ollama", wrapLLM(ollama.New()))
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)

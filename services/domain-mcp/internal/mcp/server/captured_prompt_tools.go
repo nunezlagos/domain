@@ -27,6 +27,7 @@ type capturedPromptService interface {
 	List(ctx context.Context, orgID uuid.UUID, filter capturedpromptsvc.ListFilter) ([]*capturedpromptsvc.Prompt, int64, error)
 	CompleteTurn(ctx context.Context, in capturedpromptsvc.CompleteTurnInput) (*capturedpromptsvc.Prompt, error)
 	SummarizeByProject(ctx context.Context, orgID, projectID uuid.UUID) (*capturedpromptsvc.SessionUsage, error)
+	Heatmap(ctx context.Context, orgID, projectID uuid.UUID, minTurns, maxClusters int) (*capturedpromptsvc.HeatmapResult, error)
 }
 
 type capturedPromptProjectGetter interface {
@@ -57,6 +58,7 @@ func registerCapturedPromptTools(wrap *ResilientWrapper, deps Deps) []mcpgo.Serv
 		{Tool: toolPromptCapturedList(), Handler: wrap.Wrap("domain_prompt_captured_list", rls(h.handlePromptCapturedList))},
 		{Tool: toolTurnComplete(), Handler: wrap.Wrap("domain_turn_complete", rls(h.handleTurnComplete))},
 		{Tool: toolUsageSummary(), Handler: wrap.Wrap("domain_usage_summary", rls(h.handleUsageSummary))},
+		{Tool: toolPromptHeatmap(), Handler: wrap.Wrap("domain_prompt_heatmap", rls(h.handlePromptHeatmap))},
 	}
 }
 
@@ -270,6 +272,49 @@ func (h *capturedPromptHandlers) handleTurnComplete(ctx context.Context, req mcp
 		"estimated_tokens_out": p.EstimatedTokensOut,
 		"turn_completed_at":    p.TurnCompletedAt,
 	})
+}
+
+func toolPromptHeatmap() mcp.Tool {
+	return mcp.NewTool("domain_prompt_heatmap",
+		mcp.WithDescription("Mapa de calor de prompts capturados: agrupa por similitud (firma normalizada, en Postgres, sin LLM) con frecuencia + tokens, y PROPONE (sin crear) estandarizar los patrones repetidos como skill/policy. Read-only, scoped por project (human-in-the-loop: nunca auto-persiste)."),
+		mcp.WithString("project_slug", mcp.Description("Slug del proyecto a analizar")),
+		mcp.WithNumber("min_turns", mcp.Description("Mínimo de repeticiones para incluir un cluster (default 2)")),
+		mcp.WithNumber("max_clusters", mcp.Description("Máximo de clusters a devolver (default 50)")),
+	)
+}
+
+func (h *capturedPromptHandlers) handlePromptHeatmap(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal"), nil
+	}
+	if h.prompts == nil {
+		return mcp.NewToolResultError("captured_prompts service not configured"), nil
+	}
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	args := req.GetArguments()
+	projSlug, _ := args["project_slug"].(string)
+	if projSlug == "" {
+		return mcp.NewToolResultError("debe pasarse project_slug"), nil
+	}
+	if h.projects == nil {
+		return mcp.NewToolResultError("projects service not configured"), nil
+	}
+	proj, err := h.projects.GetBySlug(ctx, orgID, projSlug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", projSlug)), nil
+	}
+	minTurns, maxClusters := 0, 0
+	if v, ok := args["min_turns"].(float64); ok {
+		minTurns = int(v)
+	}
+	if v, ok := args["max_clusters"].(float64); ok {
+		maxClusters = int(v)
+	}
+	res, err := h.prompts.Heatmap(ctx, orgID, proj.ID, minTurns, maxClusters)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("heatmap failed: %v", err)), nil
+	}
+	return toolResultJSON(res)
 }
 
 func (h *capturedPromptHandlers) handleUsageSummary(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

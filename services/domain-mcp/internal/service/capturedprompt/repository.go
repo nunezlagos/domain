@@ -50,6 +50,15 @@ type SessionUsage struct {
 	TotalChars         int64      `json:"total_chars"`
 }
 
+// PromptCluster es un grupo de prompts con firma normalizada común (patrón
+// repetido) con su frecuencia y tokens. La agregación corre en Postgres.
+type PromptCluster struct {
+	Key    string `json:"cluster_key"`
+	Turns  int    `json:"turns"`
+	Tokens int64  `json:"tokens"`
+	Sample string `json:"sample"`
+}
+
 type InsertParams struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
@@ -73,4 +82,5 @@ type Repository interface {
 	Get(ctx context.Context, orgID uuid.UUID, id uuid.UUID) (*Prompt, error)
 	CompleteTurn(ctx context.Context, in CompleteTurnInput) (*Prompt, error)
 	SummarizeByProject(ctx context.Context, orgID uuid.UUID, projectID uuid.UUID) (*SessionUsage, error)
+	HeatmapByProject(ctx context.Context, orgID, projectID uuid.UUID, minTurns, maxClusters int) ([]PromptCluster, error)
 }

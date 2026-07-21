@@ -158,6 +158,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_prompt":               ChannelUserIntent, // router single-shot a pedido
 	"domain_prompt_capture":       ChannelHook,       // UserPromptSubmit
 	"domain_prompt_captured_list": ChannelUserIntent,
+	"domain_prompt_heatmap":       ChannelUserIntent,    // análisis a pedido (DOMAINSERV-61)
 	"domain_prompt_get":           ChannelFirstResponse, // first-response
 	"domain_prompt_render":        ChannelUserIntent,
 	"domain_prompt_search":        ChannelUserIntent,

@@ -13,6 +13,7 @@ type mockRepo struct {
 	inserted  []InsertParams
 	completed []CompleteTurnInput
 	byID      map[uuid.UUID]*Prompt
+	clusters  []PromptCluster
 }
 
 func newMockRepo() *mockRepo { return &mockRepo{byID: map[uuid.UUID]*Prompt{}} }
@@ -53,6 +54,10 @@ func (m *mockRepo) CompleteTurn(_ context.Context, in CompleteTurnInput) (*Promp
 }
 func (m *mockRepo) SummarizeByProject(_ context.Context, _, pid uuid.UUID) (*SessionUsage, error) {
 	return &SessionUsage{ProjectID: &pid, Turns: 5, EstimatedTokensIn: 120, EstimatedTokensOut: 500}, nil
+}
+
+func (m *mockRepo) HeatmapByProject(_ context.Context, _, _ uuid.UUID, _, _ int) ([]PromptCluster, error) {
+	return m.clusters, nil
 }
 
 func TestCapture_EstimatedTokensIn_RatioFourToOne(t *testing.T) {

@@ -23,8 +23,6 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
-	"nunezlagos/domain/internal/service/orchestrator/modes"
 )
 
 const (
@@ -122,10 +120,9 @@ func (s *Service) rerankWithLLM(
 		return nil, false
 	}
 
-	// Mismo patrón que orchestrator/solo.go: resolver provider por model name.
-	// ProviderForModel("MiniMax-M3") => "minimax". Si no está registrado
-	// (sin MINIMAX_API_KEY), Get devuelve error => degradar.
-	provider, err := s.LLM.Get(modes.ProviderForModel(anthropic.MiniMaxModel))
+	// Resuelve el provider/modelo del rol "rerank" (config-driven, DOMAINSERV-57).
+	// Sin provider disponible (ni default), degradar al orden BM25/RRF.
+	provider, model, err := s.LLM.ProviderForRole(llm.RoleRerank)
 	if err != nil {
 		return nil, false
 	}
@@ -133,7 +130,7 @@ func (s *Service) rerankWithLLM(
 	systemPrompt, userPrompt := buildRerankPrompt(query, candidates)
 
 	resp, err := provider.Complete(ctx, llm.CompletionOptions{
-		Model:        anthropic.MiniMaxModel,
+		Model:        model,
 		Temperature:  0,
 		MaxTokens:    rerankMaxTokens,
 		SystemPrompt: systemPrompt,

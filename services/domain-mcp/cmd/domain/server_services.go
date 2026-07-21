@@ -503,15 +503,15 @@ func buildOrchestrator(pools serverPools, s *serverServices, logger *slog.Logger
 
 // buildPromptClassifier elige clasificador LLM (anthropic) o heurístico según disponibilidad.
 func buildPromptClassifier(s *serverServices, logger *slog.Logger) promptrouter.Classifier {
-	anthropicProv, _ := s.LLMFactory.Get("anthropic")
-	if anthropicProv == nil {
-		logger.Info("prompt classifier: heurístico (no anthropic provider)")
+	prov, model, err := s.LLMFactory.ProviderForRole(llm.RoleClassify)
+	if err != nil {
+		logger.Info("prompt classifier: heurístico (sin provider para rol classify)")
 		return promptrouter.HeuristicClassifier{}
 	}
-	logger.Info("prompt classifier: LLM anthropic con fallback heurístico")
+	logger.Info("prompt classifier: LLM config-driven (rol classify) con fallback heurístico")
 	return &promptrouter.LLMClassifier{
-		Provider: anthropicProv,
-		Model:    "claude-haiku-4-5-20251001",
+		Provider: prov,
+		Model:    model,
 		Fallback: promptrouter.HeuristicClassifier{},
 		PromptLoader: func(ctx context.Context) (string, error) {
 			p, err := s.PromptService.GetActive(ctx, uuid.Nil, nil, "triage")

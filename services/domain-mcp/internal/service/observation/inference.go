@@ -29,9 +29,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/service/observation/observationdb"
-	"nunezlagos/domain/internal/service/orchestrator/modes"
 )
 
 // ErrInferenceUnavailable se devuelve cuando se pide inferencia LLM pero MiniMax
@@ -176,9 +174,13 @@ type InferredEdgeResult struct {
 // Idempotencia: Link maneja ErrEdgeExists (arista activa ya presente) → se
 // cuenta como Existing, no aborta el resto.
 func (s *Service) InferEdgesLLM(ctx context.Context, edges EdgeLinker, in InferEdgesLLMInput) (*InferEdgesLLMResult, error) {
-	provider, err := s.miniMaxProvider()
+	provider, model, err := s.inferProvider()
 	if err != nil {
 		return nil, err
+	}
+	inferredBy := model
+	if inferredBy == "" {
+		inferredBy = provider.Name()
 	}
 
 	pairs, err := s.SuggestLinks(ctx, SuggestLinksInput{
@@ -195,7 +197,7 @@ func (s *Service) InferEdgesLLM(ctx context.Context, edges EdgeLinker, in InferE
 
 	system, user := buildInferencePrompt(pairs)
 	resp, err := provider.Complete(ctx, llm.CompletionOptions{
-		Model:        anthropic.MiniMaxModel,
+		Model:        model,
 		Temperature:  0,
 		MaxTokens:    inferMaxTokens,
 		SystemPrompt: system,
@@ -210,7 +212,7 @@ func (s *Service) InferEdgesLLM(ctx context.Context, edges EdgeLinker, in InferE
 		return nil, fmt.Errorf("parseo de respuesta LLM falló: %w", perr)
 	}
 
-	return s.applyInferenceDecisions(ctx, edges, pairs, decisions, in.CreatedBy)
+	return s.applyInferenceDecisions(ctx, edges, pairs, decisions, in.CreatedBy, inferredBy)
 }
 
 // EdgeLinker es el subconjunto de EdgeService que InferEdgesLLM necesita para
@@ -219,19 +221,19 @@ type EdgeLinker interface {
 	Link(ctx context.Context, in LinkInput) (*Edge, error)
 }
 
-// miniMaxProvider resuelve el provider MiniMax o devuelve ErrInferenceUnavailable.
-// Misma resolución que rerank.go (ProviderForModel("MiniMax-M3") → "minimax"),
-// pero a diferencia del rerank, acá la ausencia ES un error (la inferencia LLM
-// no tiene fallback heurístico equivalente; el fallback es SuggestLinks crudo).
-func (s *Service) miniMaxProvider() (llm.Provider, error) {
+// inferProvider resuelve el provider/modelo del rol "infer" (config-driven,
+// DOMAINSERV-57) o devuelve ErrInferenceUnavailable. A diferencia del rerank,
+// acá la ausencia ES un error (la inferencia LLM no tiene fallback heurístico
+// equivalente; el fallback es SuggestLinks crudo).
+func (s *Service) inferProvider() (llm.Provider, string, error) {
 	if s.LLM == nil {
-		return nil, ErrInferenceUnavailable
+		return nil, "", ErrInferenceUnavailable
 	}
-	provider, err := s.LLM.Get(modes.ProviderForModel(anthropic.MiniMaxModel))
+	provider, model, err := s.LLM.ProviderForRole(llm.RoleInfer)
 	if err != nil {
-		return nil, ErrInferenceUnavailable
+		return nil, "", ErrInferenceUnavailable
 	}
-	return provider, nil
+	return provider, model, nil
 }
 
 // applyInferenceDecisions crea las aristas decididas por el LLM. Reconcilia las
@@ -239,7 +241,7 @@ func (s *Service) miniMaxProvider() (llm.Provider, error) {
 // IDs alucinados) y valida edge_type contra el set permitido.
 func (s *Service) applyInferenceDecisions(
 	ctx context.Context, edges EdgeLinker, pairs []CandidatePair,
-	decisions []inferenceDecision, createdBy *uuid.UUID,
+	decisions []inferenceDecision, createdBy *uuid.UUID, inferredBy string,
 ) (*InferEdgesLLMResult, error) {
 	// Index de pares válidos por (source,target) para no confiar en el LLM.
 	valid := make(map[string]CandidatePair, len(pairs))
@@ -287,7 +289,7 @@ func (s *Service) applyInferenceDecisions(
 			EdgeType:   et,
 			Confidence: inferenceConfidence(d.Confidence),
 			Note:       notePtr,
-			Metadata:   map[string]any{"origin": "inferred", "inferred_by": anthropic.MiniMaxModel},
+			Metadata:   map[string]any{"origin": "inferred", "inferred_by": inferredBy},
 			CreatedBy:  createdBy,
 		})
 		switch {

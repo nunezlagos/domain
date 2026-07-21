@@ -5,21 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
-	"nunezlagos/domain/internal/service/orchestrator/modes"
 )
 
 // ErrJudgeUnavailable se devuelve cuando se pide el judge LLM pero MiniMax no
 // esta configurado (sin MINIMAX_API_KEY). El cron, al recibirlo, loguea limpio y
 // NO corre (regla dura 7). No crashea.
 var ErrJudgeUnavailable = errors.New("judge LLM requiere MINIMAX_API_KEY")
-
-// judgeModelEnv permite override del modelo del judge (default MiniMax-M3).
-const judgeModelEnv = "DOMAIN_JUDGE_MODEL"
 
 // judgeMaxTokens techo de la respuesta del judge (lista de sugerencias).
 const judgeMaxTokens = 4096
@@ -36,22 +30,13 @@ type LLMJudge struct {
 	LLM *llm.Factory
 }
 
-// judgeModel devuelve el modelo configurado (env DOMAIN_JUDGE_MODEL) o el default.
-func (j *LLMJudge) judgeModel() string {
-	if v := strings.TrimSpace(os.Getenv(judgeModelEnv)); v != "" {
-		return v
-	}
-	return anthropic.MiniMaxModel
-}
-
-// provider resuelve el Provider del modelo del judge o ErrJudgeUnavailable.
-// Mismo patron canonico que observation/inference.go.
+// provider resuelve el provider/modelo del rol "judge" (config-driven,
+// DOMAINSERV-57) o ErrJudgeUnavailable. Env: DOMAIN_LLM_JUDGE_{PROVIDER,MODEL}.
 func (j *LLMJudge) provider() (llm.Provider, string, error) {
 	if j == nil || j.LLM == nil {
 		return nil, "", ErrJudgeUnavailable
 	}
-	model := j.judgeModel()
-	p, err := j.LLM.Get(modes.ProviderForModel(model))
+	p, model, err := j.LLM.ProviderForRole(llm.RoleJudge)
 	if err != nil {
 		return nil, "", ErrJudgeUnavailable
 	}

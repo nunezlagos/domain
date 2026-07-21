@@ -118,7 +118,7 @@ func TestApplyInferenceDecisions(t *testing.T) {
 	}
 
 	linker := &fakeLinker{}
-	res, err := s.applyInferenceDecisions(context.Background(), linker, pairs, decisions, nil)
+	res, err := s.applyInferenceDecisions(context.Background(), linker, pairs, decisions, nil, "test-model")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestApplyInferenceDecisions_IdempotentExisting(t *testing.T) {
 		{SourceID: a.String(), TargetID: b.String(), EdgeType: "relates_to", Reason: "r"},
 	}
 	linker := &fakeLinker{existAt: map[string]bool{pairKey(a, b): true}}
-	res, err := s.applyInferenceDecisions(context.Background(), linker, pairs, decisions, nil)
+	res, err := s.applyInferenceDecisions(context.Background(), linker, pairs, decisions, nil, "test-model")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

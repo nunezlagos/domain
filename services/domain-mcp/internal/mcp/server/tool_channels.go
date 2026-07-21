@@ -52,14 +52,8 @@ var toolChannel = map[string]ToolChannel{
 	"domain_client_set_status": ChannelUserIntent,
 	"domain_client_update":     ChannelUserIntent,
 
-	// code_build corre server-side y está deprecado para setups remotos (el
-	// protocolo manda usar el script cliente + code_upload). Manual a pedido.
-	"domain_code_build":        ChannelUserIntent,
-	"domain_code_explore":      ChannelPolicyTriggered, // protocolo code graph (domain.md)
-	"domain_code_graph":        ChannelUserIntent,      // deprecado 2026-07-07 (kill 007): ya no se pre-carga por hook, solo a pedido explícito
-	"domain_code_observations": ChannelPolicyTriggered,
-	"domain_code_path":         ChannelPolicyTriggered,
-	"domain_code_upload":       ChannelPolicyTriggered, // script domain-code-graph.sh (protocolo)
+	// domain_code_* retiradas del manifest (DOMAINSERV-54): ocultas por default,
+	// sin canal. Re-exponibles con DOMAIN_EXPOSE_CODE_TOOLS (ver code_graph_tools.go).
 
 	"domain_context_snapshot": ChannelPolicyTriggered, // re-hidratación post-compactación
 
@@ -109,7 +103,6 @@ var toolChannel = map[string]ToolChannel{
 	"domain_known_error_set": ChannelPolicyTriggered, // failure modes
 
 	"domain_mem_capture_passive":   ChannelPolicyTriggered,
-	"domain_mem_code_links":        ChannelPolicyTriggered,
 	"domain_mem_context":           ChannelHook, // SessionStart lo pre-carga
 	"domain_mem_delete":            ChannelUserIntent,
 	"domain_mem_get_observation":   ChannelPolicyTriggered,
@@ -117,7 +110,6 @@ var toolChannel = map[string]ToolChannel{
 	"domain_mem_infer_edges":       ChannelUserIntent, // costoso, a pedido
 	"domain_mem_infer_edges_llm":   ChannelUserIntent, // costoso (LLM), a pedido
 	"domain_mem_link":              ChannelPolicyTriggered,
-	"domain_mem_link_code":         ChannelPolicyTriggered,
 	"domain_mem_path":              ChannelPolicyTriggered,
 	"domain_mem_related":           ChannelPolicyTriggered,
 	"domain_mem_save":              ChannelPolicyTriggered, // auto-persistencia + D5 por fase

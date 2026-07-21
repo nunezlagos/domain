@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -59,7 +60,23 @@ type codeGraphHandlers struct {
 	principal *apikey.Principal
 }
 
+// codeToolsExposed indica si las tools domain_code_* se exponen en el manifest.
+// El code graph fue retirado (2026-07-07): por default quedan OCULTAS para no
+// contaminar el tool-search. Re-exponibles con DOMAIN_EXPOSE_CODE_TOOLS=1|true|yes
+// (escape hatch de compat; handlers y service siguen intactos).
+func codeToolsExposed() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("DOMAIN_EXPOSE_CODE_TOOLS"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
 func registerCodeGraphTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
+	if !codeToolsExposed() {
+		return nil
+	}
 	h := &codeGraphHandlers{
 		graph:     deps.CodeGraph,
 		projects:  deps.Projects,

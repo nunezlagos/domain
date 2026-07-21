@@ -37,13 +37,9 @@ Exigida por una fase del SDD vía required_tool_calls — el server RECHAZA el c
 Su función la entrega el server en la preparación de contexto por fase (issue-54.2).
 
 
-## policy-triggered (36)
+## policy-triggered (30)
 Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trigger 54.4).
 
-- `domain_code_explore`
-- `domain_code_observations`
-- `domain_code_path`
-- `domain_code_upload`
 - `domain_context_snapshot`
 - `domain_flow_status`
 - `domain_health`
@@ -51,11 +47,9 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_knowledge_search`
 - `domain_known_error_set`
 - `domain_mem_capture_passive`
-- `domain_mem_code_links`
 - `domain_mem_get_observation`
 - `domain_mem_graph`
 - `domain_mem_link`
-- `domain_mem_link_code`
 - `domain_mem_path`
 - `domain_mem_related`
 - `domain_mem_save`
@@ -77,7 +71,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_skill_search`
 - `domain_ticket_create`
 
-## user-intent (96)
+## user-intent (94)
 Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 
 - `domain_agent_create`
@@ -92,8 +86,6 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_client_restore`
 - `domain_client_set_status`
 - `domain_client_update`
-- `domain_code_build`
-- `domain_code_graph`
 - `domain_cron_create`
 - `domain_cron_delete`
 - `domain_cron_history`

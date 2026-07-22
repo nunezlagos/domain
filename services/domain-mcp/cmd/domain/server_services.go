@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/activity"
+	acpbridge "nunezlagos/domain/internal/agentbridge/acp"
 	"nunezlagos/domain/internal/audit"
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/auth/ratelimit"
@@ -24,6 +25,7 @@ import (
 	"nunezlagos/domain/internal/dispatch"
 	"nunezlagos/domain/internal/events"
 	"nunezlagos/domain/internal/llm"
+	llmacp "nunezlagos/domain/internal/llm/acp"
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/circuitbreaker"
 	"nunezlagos/domain/internal/llm/failover"
@@ -468,6 +470,7 @@ func buildLLMFactory() *llm.Factory {
 	anthropic.RegisterMiniMax(factory, wrapLLM)
 	llmopenai.RegisterOpenAICompat(factory, wrapLLM, slog.Default())
 	factory.Register("ollama", wrapLLM(ollama.New()))
+	llmacp.Register(factory, wrapLLM, acpbridge.Config{}, slog.Default())
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)
 	}

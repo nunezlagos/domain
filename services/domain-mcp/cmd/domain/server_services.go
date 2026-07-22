@@ -32,6 +32,7 @@ import (
 	"nunezlagos/domain/internal/llm/google"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
+	llmopencode "nunezlagos/domain/internal/llm/opencode"
 	llmratelimit "nunezlagos/domain/internal/llm/ratelimit"
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	llmretry "nunezlagos/domain/internal/llm/retry"
@@ -471,6 +472,7 @@ func buildLLMFactory() *llm.Factory {
 	llmopenai.RegisterOpenAICompat(factory, wrapLLM, slog.Default())
 	factory.Register("ollama", wrapLLM(ollama.New()))
 	llmacp.Register(factory, wrapLLM, acpbridge.Config{}, slog.Default())
+	llmopencode.Register(factory, wrapLLM, slog.Default())
 	if def := os.Getenv("DOMAIN_LLM_PROVIDER"); def != "" {
 		factory.SetDefault(def, def)
 	}

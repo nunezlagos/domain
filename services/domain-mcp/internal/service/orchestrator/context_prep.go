@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
 )
 
 // REQ-54 issue-54.2: preparación de contexto server-side.
@@ -16,7 +15,7 @@ import (
 // Antes de entregarle el prompt de una fase al cliente, el servidor corre tools
 // read-only baratas (policies del proyecto, skills aplicables, mem_context) y
 // arma un bloque "prepared_context" que se inyecta en el user_prompt. Si hay un
-// LLM barato disponible (Minimax), refina ese bloque filtrando lo pertinente a
+// LLM default disponible (ACP), refina ese bloque filtrando lo pertinente a
 // la fase. TODO es best-effort: nunca bloquea ni falla la fase.
 
 // prepMaxPolicies / prepMaxSkills / prepMaxObs acotan el tamaño del bloque para
@@ -32,10 +31,10 @@ const (
 	prepSkillCandidates = 30
 	prepMaxObs          = 5
 	prepSkillBodyMax    = 500
-	prepMinimaxTimeout  = 5 * time.Second
+	prepRefineTimeout   = 5 * time.Second
 )
 
-// skillsSectionHeader marca el bloque de skills en el crudo. refineWithMinimax lo
+// skillsSectionHeader marca el bloque de skills en el crudo. refineContext lo
 // usa para detectar drop del LLM y degradar a crudo (DOMAINSERV-38).
 const skillsSectionHeader = "### Skills disponibles"
 
@@ -90,25 +89,25 @@ func (s *Service) prepareContext(ctx context.Context, orgID, projectID uuid.UUID
 	if strings.TrimSpace(raw) == "" {
 		return ""
 	}
-	return s.refineWithMinimax(ctx, slug, raw)
+	return s.refineContext(ctx, slug, raw)
 }
 
-// refineWithMinimax pasa el bloque crudo por el LLM barato (Minimax) para filtrar
+// refineContext pasa el bloque crudo por el LLM default (ACP) para filtrar
 // lo pertinente a la fase, con timeout corto. DEGRADA al bloque crudo ante
-// cualquier problema (sin LLM, timeout, error) o si el refine DROPPEA el bloque
-// de skills que sí estaba en el crudo (DOMAINSERV-38): nunca aborta la fase.
-func (s *Service) refineWithMinimax(ctx context.Context, slug, raw string) string {
+// cualquier problema (sin LLM, sin default, timeout, error) o si el refine
+// DROPPEA el bloque de skills que sí estaba en el crudo (DOMAINSERV-38):
+// nunca aborta la fase.
+func (s *Service) refineContext(ctx context.Context, slug, raw string) string {
 	if s.LLM == nil {
 		return raw
 	}
-	provider, err := s.LLM.Get(anthropic.MiniMaxProviderName)
+	provider, err := s.LLM.GetDefault()
 	if err != nil {
-		return raw // sin provider (falta LLM_API_KEY): degradar a crudo
+		return raw // sin provider default (falta cerebro ACP): degradar a crudo
 	}
-	cctx, cancel := context.WithTimeout(ctx, prepMinimaxTimeout)
+	cctx, cancel := context.WithTimeout(ctx, prepRefineTimeout)
 	defer cancel()
 	resp, err := provider.Complete(cctx, llm.CompletionOptions{
-		Model:       anthropic.MiniMaxModel,
 		Temperature: 0.2,
 		MaxTokens:   1024,
 		SystemPrompt: "Eres un asistente que filtra contexto para una fase de desarrollo. " +

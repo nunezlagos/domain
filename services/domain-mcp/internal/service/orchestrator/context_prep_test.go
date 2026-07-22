@@ -12,11 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/metrics"
 )
 
-// fakeProvider implementa llm.Provider para tests de refineWithMinimax.
+// fakeProvider implementa llm.Provider para tests de refineContext.
 type fakeProvider struct {
 	resp    string
 	err     error
@@ -37,56 +36,59 @@ func (f *fakeProvider) CompleteStream(_ context.Context, _ llm.CompletionOptions
 	return nil, errors.New("not implemented")
 }
 
-func TestRefineWithMinimax_NoLLM_ReturnsRaw(t *testing.T) {
+func TestRefineContext_NoLLM_ReturnsRaw(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test") // LLM nil
 	raw := "### Policies\n- x"
-	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, raw, s.refineContext(context.Background(), "sdd-apply", raw),
 		"sin LLM factory debe degradar al bloque crudo")
 }
 
-func TestRefineWithMinimax_ProviderMissing_ReturnsRaw(t *testing.T) {
+func TestRefineContext_ProviderMissing_ReturnsRaw(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	s.LLM = llm.NewFactory() // factory vacío: Get("minimax") falla
 	raw := "### Policies\n- x"
-	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, raw, s.refineContext(context.Background(), "sdd-apply", raw),
 		"sin provider minimax (falta LLM_API_KEY) debe degradar a crudo")
 }
 
-func TestRefineWithMinimax_ProviderError_ReturnsRaw(t *testing.T) {
+func TestRefineContext_ProviderError_ReturnsRaw(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	f := llm.NewFactory()
-	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{err: errors.New("timeout")})
+	f.Register("opencode", &fakeProvider{err: errors.New("timeout")})
+	f.SetDefault("opencode", "")
 	s.LLM = f
 	raw := "### Policies\n- x"
-	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, raw, s.refineContext(context.Background(), "sdd-apply", raw),
 		"error/timeout del provider debe degradar a crudo, NO abortar")
 }
 
-func TestRefineWithMinimax_EmptyResponse_ReturnsRaw(t *testing.T) {
+func TestRefineContext_EmptyResponse_ReturnsRaw(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	f := llm.NewFactory()
-	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{resp: "   "})
+	f.Register("opencode", &fakeProvider{resp: "   "})
+	f.SetDefault("opencode", "")
 	s.LLM = f
 	raw := "### Policies\n- x"
-	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, raw, s.refineContext(context.Background(), "sdd-apply", raw),
 		"respuesta vacía debe degradar a crudo")
 }
 
-func TestRefineWithMinimax_Success_ReturnsRefined(t *testing.T) {
+func TestRefineContext_Success_ReturnsRefined(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	fp := &fakeProvider{resp: "### Filtrado\n- solo lo pertinente"}
 	f := llm.NewFactory()
-	f.Register(anthropic.MiniMaxProviderName, fp)
+	f.Register("opencode", fp)
+	f.SetDefault("opencode", "")
 	s.LLM = f
-	out := s.refineWithMinimax(context.Background(), "sdd-apply", "### Crudo\n- todo")
+	out := s.refineContext(context.Background(), "sdd-apply", "### Crudo\n- todo")
 	require.Equal(t, "### Filtrado\n- solo lo pertinente", out)
 	require.True(t, fp.called)
-	require.Equal(t, anthropic.MiniMaxModel, fp.gotOpts.Model, "debe usar el modelo MiniMax")
+	require.Empty(t, fp.gotOpts.Model, "no hardcodea modelo; usa el default del provider ACP")
 	require.Contains(t, fp.gotOpts.SystemPrompt, "sdd-apply", "el system prompt debe mencionar la fase")
 }
 
@@ -114,27 +116,29 @@ func TestInjectPreparedContext_PrependsBlock(t *testing.T) {
 		"el contexto va ANTES del prompt original")
 }
 
-func TestRefineWithMinimax_DropsSkillsBlock_ReturnsRaw(t *testing.T) {
+func TestRefineContext_DropsSkillsBlock_ReturnsRaw(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	f := llm.NewFactory()
 	// el LLM devuelve algo SIN el bloque de skills que sí estaba en el crudo
-	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{resp: "### Policies\n- solo policies"})
+	f.Register("opencode", &fakeProvider{resp: "### Policies\n- solo policies"})
+	f.SetDefault("opencode", "")
 	s.LLM = f
 	raw := "### Skills disponibles\n- **x**: y\n\n### Policies\n- z"
-	require.Equal(t, raw, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, raw, s.refineContext(context.Background(), "sdd-apply", raw),
 		"si el refine droppea el bloque de skills, degradar a crudo (DOMAINSERV-38)")
 }
 
-func TestRefineWithMinimax_KeepsSkillsBlock_ReturnsRefined(t *testing.T) {
+func TestRefineContext_KeepsSkillsBlock_ReturnsRefined(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil, nil, "test")
 	f := llm.NewFactory()
 	refined := "### Skills disponibles\n- **x**: y (filtrado)"
-	f.Register(anthropic.MiniMaxProviderName, &fakeProvider{resp: refined})
+	f.Register("opencode", &fakeProvider{resp: refined})
+	f.SetDefault("opencode", "")
 	s.LLM = f
 	raw := "### Skills disponibles\n- **x**: y\n\n### Policies\n- z"
-	require.Equal(t, refined, s.refineWithMinimax(context.Background(), "sdd-apply", raw),
+	require.Equal(t, refined, s.refineContext(context.Background(), "sdd-apply", raw),
 		"si el refine conserva el bloque de skills, usar el refinado")
 }
 

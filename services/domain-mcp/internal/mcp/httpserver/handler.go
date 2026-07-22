@@ -25,6 +25,7 @@ package httpserver
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
@@ -38,8 +39,6 @@ import (
 // principal); solo el Principal y los wrappers dependientes de Principal
 // se rearman por request.
 type Builder struct {
-
-
 	Base mcpserver.Deps
 }
 
@@ -88,13 +87,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
 	deps := h.Builder.Base
 	deps.Principal = principal
 	if deps.ServerName == "" {
 		deps.ServerName = "domain-mcp-http"
 	}
+	deps.Principal = scopePrincipalByDepth(principal, deps, r.Header.Get(mcpserver.DepthHeader))
 
 	srv := mcpserver.New(deps)
 	streamable := mcpgo.NewStreamableHTTPServer(srv,
@@ -102,6 +100,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mcpgo.WithEndpointPath("/mcp"),
 	)
 	streamable.ServeHTTP(w, r)
+}
+
+// scopePrincipalByDepth devuelve el Principal efectivo del request.
+// Anti-reentrancia (DOMAINSERV-85): si el request viene de un agent_run anidado
+// (header X-Domain-Agent-Depth>=1) clona el Principal restringiendo su allowlist
+// a todas las tools MENOS las reentrantes; si el token ya venía scoped, depth
+// solo RESTRINGE más (intersección), nunca amplía. Clonar evita contaminar el
+// Principal que cachea el resolver. Sin header/inválido (depth 0) lo deja intacto.
+func scopePrincipalByDepth(base *apikey.Principal, deps mcpserver.Deps, depthHeader string) *apikey.Principal {
+	depth := parseDepth(depthHeader)
+	if depth < 1 {
+		return base
+	}
+	clone := *base
+	clone.AllowedTools = mcpserver.AllowedToolsForDepthScoped(deps, depth, base.AllowedTools)
+	return &clone
+}
+
+// parseDepth interpreta el header de profundidad. Ausente/inválido = 0
+// (comportamiento actual, full access).
+func parseDepth(v string) int {
+	if v == "" {
+		return 0
+	}
+	d, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || d < 0 {
+		return 0
+	}
+	return d
 }
 
 func writeUnauthorized(w http.ResponseWriter) {

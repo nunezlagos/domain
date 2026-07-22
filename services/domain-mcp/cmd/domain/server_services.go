@@ -358,6 +358,7 @@ func buildServices(
 		Agents: s.AgentService, Skills: s.SkillService,
 		SkillRunner: s.SkillRunnerInst, Models: s.ModelRegistry,
 		Emitter: s.OutboundEmitter, Metrics: metricsReg,
+		ACPNative: buildACPNative(cfg),
 	}
 	s.FlowRunnerInst = &flowrunner.Runner{
 		Pool: pools.App, Audit: s.Recorder, Flows: s.FlowService,
@@ -477,6 +478,38 @@ func buildLLMFactory() *llm.Factory {
 		factory.SetDefault(def, def)
 	}
 	return factory
+}
+
+// buildACPNative arma el factory de sesión ACP nativa para el Runner
+// (DOMAINSERV-85 A1). Devuelve nil (legacy tool-loop intacto) salvo que
+// DOMAIN_ACP_NATIVE esté activo: opt-in explícito para no alterar el path de
+// producción sin intención. El closure recibe el runCtx de cada Run (nunca el
+// boot ctx): al cancelarse mata el subproceso opencode. McpURL apunta al /mcp
+// local; el header de depth (lo pone el bridge) dispara la anti-reentrancia.
+func buildACPNative(cfg *config.Config) agentrunner.ACPNativeFactory {
+	if os.Getenv("DOMAIN_ACP_NATIVE") == "" {
+		return nil
+	}
+	mcpURL := os.Getenv("DOMAIN_ACP_MCP_URL")
+	if mcpURL == "" {
+		mcpURL = "http://127.0.0.1:" + strconv.Itoa(cfg.HTTPPort) + "/mcp"
+	}
+	token := os.Getenv("DOMAIN_ACP_MCP_TOKEN")
+	logger := slog.Default()
+	if token == "" {
+		// Sin token el subproceso opencode autenticaría con Bearer vacío contra
+		// /mcp → 401 silencioso en cada turn. Deshabilitamos el path nativo
+		// (queda legacy tool-loop) en vez de correr roto.
+		logger.Warn("DOMAIN_ACP_NATIVE set but DOMAIN_ACP_MCP_TOKEN empty; ACP native disabled (legacy tool-loop)")
+		return nil
+	}
+	return func(ctx context.Context) (agentrunner.ACPTurn, error) {
+		return acpbridge.Spawn(ctx, acpbridge.Config{
+			McpURL:         mcpURL,
+			McpToken:       token,
+			PermissionMode: acpbridge.PermissionDenyAll,
+		}, logger)
+	}
 }
 
 // buildOrchestrator construye el servicio orchestrator con todas sus fases SDD.

@@ -13,6 +13,8 @@ type fakeAgent struct {
 	reply  string
 	chunks []string
 	err    error
+	// httpCap anuncia soporte MCP http en el initialize (capability gating)
+	httpCap bool
 }
 
 func (a *fakeAgent) Prompt(ctx context.Context, p acpsdk.PromptRequest) (acpsdk.PromptResponse, error) {
@@ -33,7 +35,12 @@ func (a *fakeAgent) Prompt(ctx context.Context, p acpsdk.PromptRequest) (acpsdk.
 }
 
 func (a *fakeAgent) Initialize(context.Context, acpsdk.InitializeRequest) (acpsdk.InitializeResponse, error) {
-	return acpsdk.InitializeResponse{ProtocolVersion: acpsdk.ProtocolVersionNumber}, nil
+	return acpsdk.InitializeResponse{
+		ProtocolVersion: acpsdk.ProtocolVersionNumber,
+		AgentCapabilities: acpsdk.AgentCapabilities{
+			McpCapabilities: acpsdk.McpCapabilities{Http: a.httpCap},
+		},
+	}, nil
 }
 
 func (a *fakeAgent) NewSession(context.Context, acpsdk.NewSessionRequest) (acpsdk.NewSessionResponse, error) {

@@ -2,7 +2,9 @@ package acp
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,4 +41,36 @@ func TestProcess_Close_Idempotent(t *testing.T) {
 		_ = p.Close()
 		_ = p.Close()
 	})
+}
+
+// countWorkspaces cuenta los dirs acp-ws-* dentro de dir.
+func countWorkspaces(t *testing.T, dir string) int {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	n := 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "acp-ws-") {
+			n++
+		}
+	}
+	return n
+}
+
+// Fix DOMAINSERV-85: un Spawn nativo (McpURL set) que falla tras crear el
+// workspace NO debe dejar el temp dir acp-ws-* huérfano en /tmp.
+func TestSpawn_NativeError_NoLeakWorkspace(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	_, err := Spawn(context.Background(), Config{
+		Bin:            "/nonexistent/opencode-does-not-exist",
+		McpURL:         "http://127.0.0.1:1/mcp",
+		McpToken:       "tok",
+		PermissionMode: PermissionDenyAll,
+	}, nil)
+	require.Error(t, err, "spawn con binario inexistente debe fallar")
+
+	require.Equal(t, 0, countWorkspaces(t, tmp),
+		"el workspace debe limpiarse en el error-path de Spawn")
 }

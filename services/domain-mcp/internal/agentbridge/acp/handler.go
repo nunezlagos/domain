@@ -9,17 +9,23 @@ import (
 	acpsdk "github.com/coder/acp-go-sdk"
 )
 
-// errUnsupported lo devuelven los handlers de fs/terminal: el núcleo liviano
-// (DOMAINSERV-63) no soporta operaciones de workspace; la implementación robusta
-// es del modo A de agent_run (DOMAINSERV-66)
-var errUnsupported = errors.New("acp: operación de workspace no soportada en el núcleo liviano")
+// errUnsupported lo devuelven los handlers de fs/terminal cuando la operación no
+// está habilitada: sin workspace (núcleo liviano, DOMAINSERV-63) o bajo un
+// PermissionMode que la rechaza. fs con workspace vive en handler_fs.go.
+var errUnsupported = errors.New("acp: operación de workspace no soportada en esta sesión")
 
 // handler implementa acpsdk.Client. Acumula el texto de los AgentMessageChunk
-// del stream session/update; fs/terminal degradan a error y los permisos se
-// rechazan por default (política segura hasta DOMAINSERV-66)
+// del stream session/update. Las operaciones de fs que opencode DELEGA vía ACP
+// pasan por el workspace (si hay uno); terminal degrada a error y los permisos
+// se rechazan por default. Esto NO aísla al subproceso opencode (mismo uid, sin
+// namespace): solo acota las ops delegadas — el aislamiento real es DOMAINSERV-86.
 type handler struct {
 	mu  sync.Mutex
 	buf strings.Builder
+	// ws acota los reads/writes al root del run; nil = fs no soportado
+	ws *Workspace
+	// permissionMode gobierna writes/permisos; "deny-all" (default) los rechaza
+	permissionMode string
 }
 
 func (h *handler) SessionUpdate(_ context.Context, p acpsdk.SessionNotification) error {
@@ -39,20 +45,6 @@ func (h *handler) take() string {
 	s := h.buf.String()
 	h.buf.Reset()
 	return s
-}
-
-func (h *handler) RequestPermission(context.Context, acpsdk.RequestPermissionRequest) (acpsdk.RequestPermissionResponse, error) {
-	return acpsdk.RequestPermissionResponse{
-		Outcome: acpsdk.RequestPermissionOutcome{Cancelled: &acpsdk.RequestPermissionOutcomeCancelled{}},
-	}, nil
-}
-
-func (h *handler) ReadTextFile(context.Context, acpsdk.ReadTextFileRequest) (acpsdk.ReadTextFileResponse, error) {
-	return acpsdk.ReadTextFileResponse{}, errUnsupported
-}
-
-func (h *handler) WriteTextFile(context.Context, acpsdk.WriteTextFileRequest) (acpsdk.WriteTextFileResponse, error) {
-	return acpsdk.WriteTextFileResponse{}, errUnsupported
 }
 
 func (h *handler) CreateTerminal(context.Context, acpsdk.CreateTerminalRequest) (acpsdk.CreateTerminalResponse, error) {

@@ -78,6 +78,12 @@ type Runner struct {
 	Emitter     EventEmitter        // si nil, no emite eventos outbound
 	Metrics     *metrics.Registry   // opcional, si nil no genera métricas
 
+	// ACPNative, si no es nil, activa el path nativo ACP (DOMAINSERV-85 A1):
+	// el agente corre en una sesión opencode con las tools reales del MCP en
+	// vez del tool-loop legacy. El factory recibe el runCtx de Run (nunca el
+	// boot ctx): al cancelarse mata el subproceso. Nil = legacy intacto.
+	ACPNative ACPNativeFactory
+
 	Env string
 }
 
@@ -129,6 +135,11 @@ func (r *Runner) Run(ctx context.Context, in RunInput, opts ...RunOption) (*RunR
 	}
 
 	orgID := ctxkeys.OrgID(ctx)
+
+	// Path nativo ACP: sesión con tools reales del MCP. El ctx es el runCtx.
+	if r.usesNativeACP() {
+		return r.runNativeACP(ctx, in, ro, agent, orgID)
+	}
 
 	provider, err := r.resolveProvider(agent.Provider)
 	if err != nil {

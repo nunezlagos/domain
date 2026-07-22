@@ -99,10 +99,11 @@ type ResilientWrapper struct {
 	defaults ToolBudget
 	now      func() time.Time
 
-	cacheLRU    CacheStore
-	cacheTTLs   map[string]time.Duration // tool -> ttl si es cacheable
-	invalidates map[string]bool          // tool -> true si invalida en escritura
-	orgIDFn     func() string            // accessor del orgID del principal vigente
+	cacheLRU       CacheStore
+	cacheTTLs      map[string]time.Duration // tool -> ttl si es cacheable
+	invalidates    map[string]bool          // tool -> true si invalida en escritura
+	orgIDFn        func() string            // accessor del orgID del principal vigente
+	allowedToolsFn func() []string          // allowlist de tools del principal; nil/vacío = full access
 
 	metricsOnCall      func(ctx context.Context, tool, status, errCode, errMsg string, durationSeconds float64)
 	metricsOnCacheHit  func()
@@ -177,6 +178,38 @@ func (r *ResilientWrapper) SetOrgIDAccessor(fn func() string) {
 	r.orgIDFn = fn
 }
 
+// SetAllowedToolsAccessor inyecta un closure que devuelve el allowlist de
+// tools del principal vigente. nil o vacío = full access (backward-compat).
+// Un allowlist no vacío que NO contiene el tool → deny: es la barrera
+// anti-reentrancia del service token del mcpServer ACP, que excluye
+// agent_run/orchestrate/flow_run (DOMAINSERV-85).
+func (r *ResilientWrapper) SetAllowedToolsAccessor(fn func() []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.allowedToolsFn = fn
+}
+
+// toolAllowed reporta si toolName está permitido para el principal vigente.
+// nil/vacío = todo permitido.
+func (r *ResilientWrapper) toolAllowed(toolName string) bool {
+	r.mu.Lock()
+	fn := r.allowedToolsFn
+	r.mu.Unlock()
+	if fn == nil {
+		return true
+	}
+	allowed := fn()
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, t := range allowed {
+		if t == toolName {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *ResilientWrapper) cacheFor(toolName string) (CacheStore, time.Duration, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -247,6 +280,10 @@ func (r *ResilientWrapper) breaker(toolName string) *cbState {
 // Wrap envuelve un handler con rate limiting + retry + cache + metricas.
 func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if !r.toolAllowed(toolName) {
+			return mcp.NewToolResultError(
+				fmt.Sprintf("tool '%s' no permitida para esta credencial (allowlist de la api key)", toolName)), nil
+		}
 		start := r.now()
 		b := r.budget(toolName)
 

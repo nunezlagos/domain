@@ -151,6 +151,15 @@ var defaultBudget = ToolBudget{
 func Tools(deps Deps) []mcpgo.ServerTool {
 	wrap := NewResilientWrapper(defaultBudget)
 
+	// authz por-tool: el allowlist del principal vigente (nil/vacío = full
+	// access). Barrera anti-reentrancia del service token ACP (DOMAINSERV-85).
+	wrap.SetAllowedToolsAccessor(func() []string {
+		if deps.Principal == nil {
+			return nil
+		}
+		return deps.Principal.AllowedTools
+	})
+
 	if deps.MetricsOnToolCall != nil || deps.MetricsOnCacheHit != nil || deps.MetricsOnCacheMiss != nil {
 		wrap.SetMetricsHooks(deps.MetricsOnToolCall, deps.MetricsOnCacheHit, deps.MetricsOnCacheMiss)
 	}

@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 package apikey
 
 import (
@@ -28,6 +19,10 @@ type Principal struct {
 	OrganizationID string
 	APIKeyID       string
 	Role           string
+	// AllowedTools es el allowlist de tools MCP de la credencial; nil/vacío =
+	// full access. Un service token de mínimo privilegio (ej. el mcpServer ACP)
+	// lo restringe para excluir agent_run/orchestrate/flow_run (DOMAINSERV-85).
+	AllowedTools []string
 }
 
 // principalKey context key.
@@ -67,11 +62,8 @@ var ErrUnauthorized = errors.New("unauthorized")
 // txctx.TxFromContext.
 type Middleware struct {
 	Resolver  Resolver
-	Allowlist []string // paths exactos que no requieren auth
+	Allowlist []string      // paths exactos que no requieren auth
 	Pool      *pgxpool.Pool // opcional; si nil, NO se abre tx (legacy auth-only)
-
-
-
 
 	SessionResolver SessionResolverFunc
 }
@@ -107,9 +99,6 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 		}
 		token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
 
-
-
-
 		var ctx context.Context
 		var p *Principal
 		if m.SessionResolver != nil && strings.HasPrefix(token, "sess_") {
@@ -138,11 +127,6 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 		}
 		ctx = WithPrincipal(ctx, p)
 
-
-
-
-
-
 		if m.Pool != nil {
 			orgID, orgErr := uuid.Parse(p.OrganizationID)
 			userID, userErr := uuid.Parse(p.UserID)
@@ -150,14 +134,10 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 				tx, terr := m.openTxWithOrg(ctx, orgID, userID)
 				if terr != nil {
 
-
 					http.Error(w, `{"error":{"code":"internal","message":"wireup failed"}}`,
 						http.StatusInternalServerError)
 					return
 				}
-
-
-
 
 				rec := &statusRecorder{ResponseWriter: w, status: 200}
 				defer func() {

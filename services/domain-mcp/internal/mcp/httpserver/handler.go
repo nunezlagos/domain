@@ -25,7 +25,6 @@ package httpserver
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
@@ -61,11 +60,16 @@ type Resolver = apikey.Resolver
 type Handler struct {
 	Builder  *Builder
 	Resolver Resolver
+	// NativeACPToken es el bearer del mcpServer ACP nativo (DOMAIN_ACP_MCP_TOKEN).
+	// Reconocerlo server-side acota ese token fail-closed aunque opencode no
+	// reenvíe el header de depth. Vacío = mecanismo inactivo. Nunca se loguea.
+	NativeACPToken string
 }
 
 // NewHandler crea un Handler listo para montar via http.Handle("/mcp", h).
-func NewHandler(b *Builder, resolver Resolver) *Handler {
-	return &Handler{Builder: b, Resolver: resolver}
+// nativeACPToken puede ir vacío (desactiva el reconocimiento del token nativo).
+func NewHandler(b *Builder, resolver Resolver, nativeACPToken string) *Handler {
+	return &Handler{Builder: b, Resolver: resolver, NativeACPToken: nativeACPToken}
 }
 
 // ServeHTTP implementa http.Handler.
@@ -92,7 +96,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if deps.ServerName == "" {
 		deps.ServerName = "domain-mcp-http"
 	}
-	deps.Principal = scopePrincipalByDepth(principal, deps, r.Header.Get(mcpserver.DepthHeader))
+	deps.Principal = h.effectivePrincipal(principal, deps, token, r.Header.Get(mcpserver.DepthHeader))
 
 	srv := mcpserver.New(deps)
 	streamable := mcpgo.NewStreamableHTTPServer(srv,
@@ -100,35 +104,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mcpgo.WithEndpointPath("/mcp"),
 	)
 	streamable.ServeHTTP(w, r)
-}
-
-// scopePrincipalByDepth devuelve el Principal efectivo del request.
-// Anti-reentrancia (DOMAINSERV-85): si el request viene de un agent_run anidado
-// (header X-Domain-Agent-Depth>=1) clona el Principal restringiendo su allowlist
-// a todas las tools MENOS las reentrantes; si el token ya venía scoped, depth
-// solo RESTRINGE más (intersección), nunca amplía. Clonar evita contaminar el
-// Principal que cachea el resolver. Sin header/inválido (depth 0) lo deja intacto.
-func scopePrincipalByDepth(base *apikey.Principal, deps mcpserver.Deps, depthHeader string) *apikey.Principal {
-	depth := parseDepth(depthHeader)
-	if depth < 1 {
-		return base
-	}
-	clone := *base
-	clone.AllowedTools = mcpserver.AllowedToolsForDepthScoped(deps, depth, base.AllowedTools)
-	return &clone
-}
-
-// parseDepth interpreta el header de profundidad. Ausente/inválido = 0
-// (comportamiento actual, full access).
-func parseDepth(v string) int {
-	if v == "" {
-		return 0
-	}
-	d, err := strconv.Atoi(strings.TrimSpace(v))
-	if err != nil || d < 0 {
-		return 0
-	}
-	return d
 }
 
 func writeUnauthorized(w http.ResponseWriter) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -234,7 +235,9 @@ func buildRouter(
 			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
 		},
 	}
-	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver)
+	// Token del mcpServer ACP nativo (mismo que usa buildACPNative): el handler
+	// lo reconoce para acotar fail-closed ese bearer sin depender del header.
+	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver, os.Getenv("DOMAIN_ACP_MCP_TOKEN"))
 	mux.Handle("/mcp", mcpHTTPHandler)
 	mux.Handle("/mcp/", mcpHTTPHandler)
 	logger.Info("MCP HTTP transport mounted",

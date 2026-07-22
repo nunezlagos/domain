@@ -60,7 +60,7 @@ func newTestHandler() (*Handler, *fakeResolver) {
 		ServerName: "domain-mcp-http-test",
 		ServerVer:  "test",
 	}}
-	return NewHandler(builder, resolver), resolver
+	return NewHandler(builder, resolver, ""), resolver
 }
 
 func TestHandler_MissingAuthorization_Returns401(t *testing.T) {

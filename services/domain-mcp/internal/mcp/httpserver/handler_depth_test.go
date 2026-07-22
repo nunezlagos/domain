@@ -61,5 +61,5 @@ func TestScopePrincipalByDepth_TokenScoped_Interseca(t *testing.T) {
 
 func mustScope(t *testing.T, base *apikey.Principal, header string) *apikey.Principal {
 	t.Helper()
-	return scopePrincipalByDepth(base, mcpserver.Deps{}, header)
+	return scopePrincipalByDepth(base, mcpserver.Deps{}, parseDepth(header))
 }

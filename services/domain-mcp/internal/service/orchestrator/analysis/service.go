@@ -163,7 +163,7 @@ func (s *Service) resolveProjectID(ctx context.Context, orgID uuid.UUID) (uuid.U
 // prompt del usuario. Usa un provider default del factory con system
 // prompt que instruye al modelo a producir markdown estructurado.
 func (s *Service) explore(ctx context.Context, in Input) (string, error) {
-	provider, err := s.LLM.Get("")
+	provider, err := s.LLM.GetDefault()
 	if err != nil {
 		return "", fmt.Errorf("get provider: %w", err)
 	}

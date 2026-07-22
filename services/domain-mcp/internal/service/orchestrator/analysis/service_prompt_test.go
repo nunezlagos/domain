@@ -29,7 +29,8 @@ func (p *recordingProvider) CompleteStream(_ context.Context, _ llm.CompletionOp
 
 func newServiceWith(prov llm.Provider, loader func(context.Context) (string, error)) *Service {
 	f := llm.NewFactory()
-	f.Register("", prov)
+	f.Register("opencode", prov)
+	f.SetDefault("opencode", "")
 	return &Service{LLM: f, PromptLoader: loader}
 }
 

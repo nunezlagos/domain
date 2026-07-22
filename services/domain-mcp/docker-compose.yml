@@ -87,12 +87,21 @@ services:
       # modelo = LLM_MODEL→MINIMAX_MODEL.
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-MiniMax-M3}
-      DOMAIN_LLM_PROVIDER: ${LLM_PROVIDER:-minimax}
+      # DOMAINSERV-62: el cerebro server-side default es opencode (sidecar ACP
+      # vía HTTP). Blank => internal/llm/opencode.Register lo deja default cuando
+      # DOMAIN_OPENCODE_URL está seteada. Setear LLM_PROVIDER en .env fuerza otro
+      # (minimax/anthropic) y saltea opencode.
+      DOMAIN_LLM_PROVIDER: ${LLM_PROVIDER:-}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
       MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
       MINIMAX_REGION: ${MINIMAX_REGION:-international}
       MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-}
       DOMAIN_ANTHROPIC_KEY: ${ANTHROPIC_API_KEY:-}
+      # Cerebro opencode (DOMAINSERV-64): URL del sidecar + basic auth. Sin la
+      # URL, opencode no se registra y el LLM cae a los providers por API key.
+      DOMAIN_OPENCODE_URL: ${DOMAIN_OPENCODE_URL:-http://opencode:4096}
+      OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME:-opencode}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
     expose:
       - "8000"
       - "9090"
@@ -104,6 +113,32 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Cerebro server-side (DOMAINSERV-62/64): opencode headless expuesto por HTTP.
+  # domain-mcp lo consume como provider LLM default (DOMAIN_OPENCODE_URL). NO es
+  # dependencia dura: si opencode no está, el LLM degrada a su fallback y el
+  # server igual arranca. El modelo/credenciales van por env (services/.env);
+  # OJO modelos que exijan OAuth interactivo NO andan headless — usar API key.
+  opencode:
+    image: ${OPENCODE_IMAGE:-ghcr.io/anomalyco/opencode:latest}
+    container_name: opencode
+    restart: unless-stopped
+    command: ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
+    environment:
+      OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME:-opencode}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    expose:
+      - "4096"
+    networks:
+      - domain_internal
     logging:
       driver: json-file
       options:

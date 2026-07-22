@@ -112,9 +112,9 @@ func (s *Service) ProcessAsyncFlowRun(ctx context.Context, flowRunID uuid.UUID) 
 			return fmt.Errorf("async: template %s: %w", slug, err)
 		}
 
-		provider, err := s.LLM.Get(modes.ProviderForModel(tmpl.Model))
+		provider, err := s.resolveAsyncProvider(tmpl.Model)
 		if err != nil {
-			return fmt.Errorf("%w: async provider for %s: %v", ErrLLMFactoryRequired, tmpl.Model, err)
+			return err
 		}
 
 		resp, err := provider.Complete(ctx, llm.CompletionOptions{
@@ -180,6 +180,21 @@ func (s *Service) ProcessAsyncFlowRun(ctx context.Context, flowRunID uuid.UUID) 
 		return fmt.Errorf("async: emit flow completed signal: %w", err)
 	}
 	return nil
+}
+
+// resolveAsyncProvider elige el provider para un step async. Intenta el
+// provider inferido del model; si no está registrado (caso prod: keys de
+// otros providers en blanco), cae al default del factory (opencode/ACP,
+// DOMAINSERV-66). Mismo patrón que ProviderForRole. Si tampoco hay default,
+// devuelve ErrLLMFactoryRequired.
+func (s *Service) resolveAsyncProvider(model string) (llm.Provider, error) {
+	if p, err := s.LLM.Get(modes.ProviderForModel(model)); err == nil {
+		return p, nil
+	}
+	if p, err := s.LLM.GetDefault(); err == nil {
+		return p, nil
+	}
+	return nil, fmt.Errorf("%w: sin provider para model %s ni default", ErrLLMFactoryRequired, model)
 }
 
 // resolveAsyncStepPrompt obtiene el user_prompt para un step. Si el step

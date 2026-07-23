@@ -93,7 +93,7 @@ if explicit_fail:
 elif explicit_ok is not None:
     ok = explicit_ok and not signal_fail
 else:
-    ok = not signal_fail
+    ok = False  # DOMAINSERV-74: sin estado explícito → no crear marker (fail-closed)
 
 print("session_id=%s" % shlex.quote(session_id))
 print("is_test=%s" % shlex.quote("1" if is_test else "0"))
@@ -109,7 +109,10 @@ mkdir -p "$state_dir" 2>/dev/null
 marker="$state_dir/tests-ok-$session_id"
 
 if [ "$tests_ok" = "1" ]; then
-  printf '%s' "$(date -Iseconds)" > "$marker" 2>/dev/null
+  # DOMAINSERV-74: marker con timestamp + tree hash (git diff HEAD) para
+  # invalidar ante cualquier edición posterior.
+  tree_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+  printf '%s\t%s\n' "$(date -Iseconds)" "${tree_hash:-}" > "$marker" 2>/dev/null
 else
   rm -f "$marker" 2>/dev/null
 fi

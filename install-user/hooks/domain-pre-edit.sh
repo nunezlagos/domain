@@ -110,20 +110,30 @@ if [ "$tool_name" = "Bash" ]; then
   is_commit=$(printf '%s' "$tool_cmd" | python3 -c '
 import re, sys
 cmd = sys.stdin.read()
-if re.search(r"\bgit\s+commit\b", cmd) and not re.search(r"--amend", cmd):
+if re.search(r"\bgit\s+commit\b", cmd):
     print("yes")
 ' 2>/dev/null)
   if [ "$is_commit" = "yes" ]; then
     marker="$HOME/.local/state/domain/tests-ok-$session_id"
     fresh=""
-    # fresco = existente y modificado en los últimos 120 minutos.
-    [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -120 2>/dev/null)" ] && fresh="yes"
+    # DOMAINSERV-74: marker debe existir, tener < 30 min, y el tree hash
+    # debe coincidir con el working tree actual (invalida ante ediciones
+    # posteriores a la corrida de tests).
+    if [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -30 2>/dev/null)" ]; then
+      stored_hash=$(cut -f2 "$marker" 2>/dev/null)
+      if [ -n "$stored_hash" ]; then
+        current_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+        [ "$current_hash" = "$stored_hash" ] && fresh="yes"
+      else
+        fresh="yes"  # legacy marker sin hash
+      fi
+    fi
     if [ "$fresh" != "yes" ]; then
       case "$perm_mode" in
         default|plan) commit_dec="ask" ;;
         *)            commit_dec="deny" ;;
       esac
-      emit_decision "$commit_dec" "domain commit-gate: no hay corrida de tests verificada en esta sesión (falta el marker fresco tests-ok). Corre la suite de tests antes de commitear — el hook post-test deja el marker. ¿Commit igual?"
+      emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corre la suite de tests antes de commitear. ¿Commit igual?"
     fi
   fi
 fi

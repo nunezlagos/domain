@@ -43,10 +43,15 @@ import (
 // intencional: declara su propia secuencia y la respeta tal cual, sin
 // chequeo de dependencias del DAG completo. Cualquier reordenamiento de
 // LitePhases es responsabilidad de quien lo edite.
+// sdd-archive cierra el ciclo de openspec también en Lite (DOMAINSERV-89): sin
+// él, los changes hechos en Lite nunca se archivaban y se acumulaban. El
+// handler es graceful (reporta nothing_to_archive si no hay issue/change), así
+// que un fix sin spec no rompe. Express queda afuera: su set está cerrado por RFC.
 var LitePhases = []phases.PhaseSlug{
 	phases.PhaseSlug("sdd-explore"),
 	phases.PhaseSlug("sdd-apply"),
 	phases.PhaseSlug("sdd-verify"),
+	phases.PhaseSlug("sdd-archive"),
 }
 
 // BuildLitePlan resuelve cada fase de LitePhases contra el registry, llama

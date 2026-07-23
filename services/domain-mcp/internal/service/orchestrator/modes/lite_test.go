@@ -18,6 +18,7 @@ func buildRegistryLite(t *testing.T) *phases.Registry {
 	reg.MustRegister(phases.NewSDDExploreHandler())
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
+	reg.MustRegister(phases.NewSDDArchiveHandler())
 	return reg
 }
 
@@ -30,10 +31,11 @@ func TestBuildLitePlan_RunsSubsetInOrder(t *testing.T) {
 	require.Equal(t, "lite", plan.Mode)
 	require.Equal(t, now, plan.StartedAt)
 
-	require.Len(t, plan.Steps, 3, "Lite default debe correr explore→apply→verify")
+	require.Len(t, plan.Steps, 4, "Lite corre explore→apply→verify→archive (DOMAINSERV-89)")
 	require.Equal(t, phases.PhaseSlug("sdd-explore"), plan.Steps[0].Slug)
 	require.Equal(t, phases.PhaseSlug("sdd-apply"), plan.Steps[1].Slug)
 	require.Equal(t, phases.PhaseSlug("sdd-verify"), plan.Steps[2].Slug)
+	require.Equal(t, phases.PhaseSlug("sdd-archive"), plan.Steps[3].Slug)
 }
 
 func TestBuildLitePlan_SkipsHeavyPhases(t *testing.T) {
@@ -44,7 +46,7 @@ func TestBuildLitePlan_SkipsHeavyPhases(t *testing.T) {
 
 	heavy := map[phases.PhaseSlug]struct{}{
 		"sdd-spec": {}, "sdd-propose": {}, "sdd-design": {}, "sdd-tasks": {},
-		"sdd-judge": {}, "sdd-archive": {}, "sdd-onboard": {},
+		"sdd-judge": {}, "sdd-onboard": {},
 	}
 	for _, st := range plan.Steps {
 		_, isHeavy := heavy[st.Slug]
@@ -92,5 +94,6 @@ func TestLitePhases_DefaultSet(t *testing.T) {
 		phases.PhaseSlug("sdd-explore"),
 		phases.PhaseSlug("sdd-apply"),
 		phases.PhaseSlug("sdd-verify"),
+		phases.PhaseSlug("sdd-archive"),
 	}, LitePhases)
 }

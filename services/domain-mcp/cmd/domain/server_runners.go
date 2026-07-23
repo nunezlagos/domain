@@ -158,6 +158,17 @@ func buildRunners(
 			go poller.Start(leaderCtx)
 		}
 
+		if cfg.AuthAnomalyAuditEnabled {
+			socAuditor := &systemcron.AuthAnomalyAuditor{
+				Pool:      pools.App,
+				Tick:      15 * time.Minute,
+				Window:    15 * time.Minute,
+				Threshold: 5,
+				Logger:    logger,
+			}
+			go socAuditor.Start(leaderCtx)
+		}
+
 		scheduler.Run(leaderCtx)
 	})
 

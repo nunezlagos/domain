@@ -76,6 +76,11 @@ type Config struct {
 	// en mcp_health_checks cada 60s. Default enabled (bajo consumo).
 	HealthPollerEnabled bool
 
+	// AuthAnomalyAudit — system cron SOC (DOMAINSERV-82 H3). Cada 15m detecta
+	// brute-force sobre auth_events y emite slog.Warn. Default enabled (barato:
+	// una query indexada por tick).
+	AuthAnomalyAuditEnabled bool
+
 	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
 	// Default disabled: requiere LLM_API_KEY (alias: MINIMAX_API_KEY) y consume tokens; opt-in explícito.
 	EdgeInferenceEnabled      bool
@@ -175,6 +180,8 @@ func Load() (*Config, error) {
 		OrphanAuditSchedule:            getEnv("DOMAIN_ORPHAN_AUDIT_SCHEDULE", "0 4 * * *"),
 
 		HealthPollerEnabled: getEnvBool("DOMAIN_HEALTH_POLLER_ENABLED", true),
+
+		AuthAnomalyAuditEnabled: getEnvBool("DOMAIN_AUTH_ANOMALY_AUDIT_ENABLED", true),
 
 		EdgeInferenceEnabled:      getEnvBool("DOMAIN_EDGE_INFERENCE_ENABLED", false),
 		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),

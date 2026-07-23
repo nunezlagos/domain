@@ -358,6 +358,13 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		}
 	}
 
+	step("Permisos declarativos OpenCode (git deny)")
+	if err := installOpencodePermission(paths, Timestamp()); err != nil {
+		warnL("opencode permission: " + err.Error())
+	} else {
+		ok("opencode permission: git deny rules instaladas")
+	}
+
 	step("Detectando sistemas de memoria legacy (engram)")
 	maybeRemoveEngram(p.Home(), opts, in)
 

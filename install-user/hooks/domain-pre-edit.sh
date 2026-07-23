@@ -121,11 +121,11 @@ if re.search(r"\bgit\s+commit\b", cmd):
     # posteriores a la corrida de tests).
     if [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -30 2>/dev/null)" ]; then
       stored_hash=$(cut -f2 "$marker" 2>/dev/null)
+      # DOMAINSERV-95: sin hash almacenado → NO fresco (fail-closed). Un marker
+      # legacy (solo-timestamp) o forjado con printf ya no habilita el commit.
       if [ -n "$stored_hash" ]; then
         current_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
         [ "$current_hash" = "$stored_hash" ] && fresh="yes"
-      else
-        fresh="yes"  # legacy marker sin hash
       fi
     fi
     if [ "$fresh" != "yes" ]; then

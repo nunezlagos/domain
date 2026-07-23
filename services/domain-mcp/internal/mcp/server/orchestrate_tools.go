@@ -388,8 +388,10 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 	}
 
-	// validate flow is still active server-side
-	active := true
+	// validate flow is still active server-side (fail-closed: DOMAINSERV-94)
+	// active solo pasa a true tras una lectura EXITOSA de status running/pending;
+	// error / not-found / parse-fail / orchestrator-nil → active=false (sin pase libre).
+	active := false
 	flowStatus := ""
 	if h.orchestrator != nil {
 		fid, err := uuid.Parse(payload.FlowRunID)
@@ -397,8 +399,8 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 			status, err := h.orchestrator.GetFlowStatus(ctx, fid)
 			if err == nil {
 				flowStatus = status.Status
-				if status.Status != "running" && status.Status != "pending" {
-					active = false
+				if status.Status == "running" || status.Status == "pending" {
+					active = true
 				}
 			}
 		}

@@ -24,6 +24,8 @@ type catalogProjectsService interface {
 	Create(ctx context.Context, in projsvc.CreateInput) (*projsvc.Project, error)
 	GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*projsvc.Project, error)
 	Update(ctx context.Context, id uuid.UUID, in projsvc.UpdateInput) (*projsvc.Project, error)
+	HasData(ctx context.Context, id uuid.UUID) (bool, error)
+	SoftDelete(ctx context.Context, id, actorID uuid.UUID) error
 }
 
 type catalogAgentsService interface {
@@ -72,6 +74,7 @@ func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool 
 		{Tool: toolCronList(), Handler: wrap.Wrap("domain_cron_list", h.handleCronList)},
 		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(h.handleProjectCreate))},
 		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(h.handleProjectUpdate))},
+		{Tool: toolProjectDelete(), Handler: wrap.Wrap("domain_project_delete", rls(h.handleProjectDelete))},
 	}
 	tools = append(tools, registerClientTools(wrap, deps)...)
 	return tools

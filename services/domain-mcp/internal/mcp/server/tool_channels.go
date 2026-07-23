@@ -65,13 +65,13 @@ var toolChannel = map[string]ToolChannel{
 
 	"domain_error_reset": ChannelUserIntent,
 
-	"domain_flow_cancel":        ChannelUserIntent,
-	"domain_flow_create":        ChannelUserIntent,
-	"domain_flow_grant_token":   ChannelHook, // post-orchestrate hook
-	"domain_flow_list":          ChannelUserIntent,
-	"domain_flow_run":           ChannelUserIntent,
-	"domain_flow_status":        ChannelPolicyTriggered, // retomar flow activo (señal resume 54.4)
-	"domain_flow_validate_token": ChannelHook, // pre-edit hook
+	"domain_flow_cancel":         ChannelUserIntent,
+	"domain_flow_create":         ChannelUserIntent,
+	"domain_flow_grant_token":    ChannelHook, // post-orchestrate hook
+	"domain_flow_list":           ChannelUserIntent,
+	"domain_flow_run":            ChannelUserIntent,
+	"domain_flow_status":         ChannelPolicyTriggered, // retomar flow activo (señal resume 54.4)
+	"domain_flow_validate_token": ChannelHook,            // pre-edit hook
 
 	"domain_health": ChannelPolicyTriggered, // failure modes: "cuando algo no funcione"
 
@@ -142,6 +142,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_project_index_submit": ChannelPolicyTriggered,
 	"domain_project_list":         ChannelUserIntent,
 	"domain_project_update":       ChannelUserIntent,
+	"domain_project_delete":       ChannelUserIntent,
 
 	"domain_project_policy_delete":           ChannelUserIntent,
 	"domain_project_policy_import_from_text": ChannelPolicyTriggered, // session start paso 7

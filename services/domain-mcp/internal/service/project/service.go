@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -375,6 +376,39 @@ func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
 		})
 	}
 	return nil
+}
+
+// rowQuerier abstrae pool y tx para queries de solo lectura (pgx.Tx y
+// pgxpool.Pool lo satisfacen). HasData usa el tx del context si hay (respeta RLS).
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func (s *Service) querier(ctx context.Context) rowQuerier {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return s.Pool
+}
+
+// HasData reporta si el proyecto tiene contenido real (observations, tickets,
+// knowledge, skills, policies, prompts, workflows). Guard de
+// domain_project_delete (DOMAINSERV-93): un proyecto con datos no se borra sin
+// force. Excluye logs/índices/sesiones (derivados/efímeros).
+func (s *Service) HasData(ctx context.Context, id uuid.UUID) (bool, error) {
+	const q = `SELECT
+		EXISTS(SELECT 1 FROM knowledge_observations WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM project_tickets WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM knowledge_docs WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM project_skills WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM project_policies WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM prompts WHERE project_id = $1)
+		OR EXISTS(SELECT 1 FROM workflows WHERE project_id = $1)`
+	var has bool
+	if err := s.querier(ctx).QueryRow(ctx, q, id).Scan(&has); err != nil {
+		return false, err
+	}
+	return has, nil
 }
 
 // rowToProject convierte los campos de una fila sqlc al tipo de dominio Project.

@@ -39,6 +39,19 @@ func setupHealthyHome(t *testing.T) string {
 	if err := installClaudeMdExcludes(home, "ts", false); err != nil {
 		t.Fatalf("installClaudeMdExcludes: %v", err)
 	}
+	// entry MCP con la misma forma que escribe el instalador (headers.Authorization).
+	claudeJSON := filepath.Join(home, ".claude.json")
+	if err := writeJSON(claudeJSON, map[string]any{
+		"mcpServers": map[string]any{
+			"domain-mcp": map[string]any{
+				"type":    "http",
+				"url":     "https://vps.example/mcp",
+				"headers": map[string]any{"Authorization": "Bearer test-key"},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("write .claude.json: %v", err)
+	}
 	return home
 }
 

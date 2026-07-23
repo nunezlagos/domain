@@ -199,7 +199,7 @@ func checkHookMatchers(home string) int {
 }
 
 // checkMCPEntry verifica que el MCP entry exista en los archivos de configuración
-// de los clientes detectados (Claude Code y OpenCode) con url + apiKey.
+// de los clientes detectados (Claude Code y OpenCode) con url + header Authorization.
 // Sin entry MCP, las tools domain_* no están disponibles (DOMAINSERV-76).
 func checkMCPEntry(home string) int {
 	step("Entry MCP (clients.json)")
@@ -237,17 +237,18 @@ func checkMCPEntry(home string) int {
 			continue
 		}
 		urlVal, _ := entry["url"].(string)
-		keyVal, _ := entry["apiKey"].(string)
+		headers, _ := entry["headers"].(map[string]any)
+		authVal, _ := headers["Authorization"].(string)
 		if urlVal == "" {
 			failL(path + ": entry domain-mcp sin url")
 			fails++
 		}
-		if keyVal == "" {
-			failL(path + ": entry domain-mcp sin apiKey")
+		if authVal == "" {
+			failL(path + ": entry domain-mcp sin header Authorization (Bearer)")
 			fails++
 		}
-		if urlVal != "" && keyVal != "" {
-			ok(path + ": entry domain-mcp presente (url + apiKey)")
+		if urlVal != "" && authVal != "" {
+			ok(path + ": entry domain-mcp presente (url + Authorization)")
 		}
 	}
 	return fails

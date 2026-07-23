@@ -19,6 +19,7 @@ func runDoctor(home string) int {
 	critical += checkInstructions(home)
 	critical += checkClaudeMdExcludes(home)
 	critical += checkOpencodePermission(home)
+	critical += checkOpencodePlugin(home)
 	checkMCPHealth(home) // best-effort, no suma a critical
 
 	step("Resumen")

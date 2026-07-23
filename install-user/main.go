@@ -365,6 +365,13 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		ok("opencode permission: git deny rules instaladas")
 	}
 
+	step("Plugin git-guard OpenCode (tool.execute.before)")
+	if err := installOpencodePlugin(paths, Timestamp()); err != nil {
+		warnL("opencode plugin: " + err.Error())
+	} else {
+		ok("opencode plugin: git-guard instalado")
+	}
+
 	step("Detectando sistemas de memoria legacy (engram)")
 	maybeRemoveEngram(p.Home(), opts, in)
 

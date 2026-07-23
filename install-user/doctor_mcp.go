@@ -102,6 +102,25 @@ func checkOpencodePermission(home string) int {
 	return 0
 }
 
+// checkOpencodePlugin verifica que el plugin git-guard esté instalado en
+// ~/.config/opencode/plugins/domain-git-guard.js (DOMAINSERV-69b). Si OpenCode
+// no está presente, omite. Presente sin plugin → falla crítica.
+func checkOpencodePlugin(home string) int {
+	step("Plugin OpenCode (git-guard)")
+	ocDir := filepath.Join(home, ".config", "opencode")
+	if !dirExists(ocDir) {
+		info("opencode no detectado — chequeo omitido")
+		return 0
+	}
+	path := filepath.Join(ocDir, "plugins", "domain-git-guard.js")
+	if !fileExists(path) {
+		failL(path + ": falta el plugin git-guard")
+		return 1
+	}
+	ok("plugin git-guard presente")
+	return 0
+}
+
 // checkMCPHealth chequea, best-effort, que el VPS del MCP domain responda.
 // NO es crítico: si no hay VPS_URL o el VPS no responde, avisa y sigue (la
 // instalación local puede estar intacta con el VPS temporalmente caído).

@@ -16,3 +16,6 @@ var claudePersonaMD []byte
 
 //go:embed templates/opencode-global.md
 var opencodeGlobalMD []byte
+
+//go:embed templates/opencode-git-guard.js
+var opencodeGitGuardJS []byte

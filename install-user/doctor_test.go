@@ -36,6 +36,9 @@ func setupHealthyHome(t *testing.T) string {
 	if err := installGlobalInstructions(paths, home, "ts"); err != nil {
 		t.Fatalf("installGlobalInstructions: %v", err)
 	}
+	if err := installClaudeMdExcludes(home, "ts", false); err != nil {
+		t.Fatalf("installClaudeMdExcludes: %v", err)
+	}
 	return home
 }
 

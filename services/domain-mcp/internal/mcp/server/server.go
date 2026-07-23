@@ -78,6 +78,7 @@ type Deps struct {
 	Tickets          *ticketsvc.Service         // REQ-51 sistema de tickets internos
 	Policies         *policysvc.Service         // issue-01.8 domain_policy_get/list
 	Flows            *flowsvc.Service
+	FlowToken        *flowsvc.FlowTokenService
 	FlowRunner       *flowrunner.Runner
 	Orchestrator     *orchsvc.Service            // issue-08.10 sdd-pipeline-orchestrator
 	Hubuilder        *husvc.Service              // issue-04.7 interactive HU wizard

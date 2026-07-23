@@ -400,6 +400,13 @@ func main() {
 		return 0
 	}
 
+	var flowTokenSvc *flowsvc.FlowTokenService
+	if secret := os.Getenv("DOMAIN_FLOW_TOKEN_SECRET"); secret != "" {
+		flowTokenSvc = flowsvc.NewFlowTokenService([]byte(secret))
+	} else if fk := cfg.FieldEncKey; fk != "" {
+		flowTokenSvc = flowsvc.NewFlowTokenService([]byte("flow-hmac-derive-" + fk))
+	}
+
 	srv := mcpserver.New(mcpserver.Deps{
 		Observations:     observations,
 		ObservationEdges: observationEdges,
@@ -421,6 +428,7 @@ func main() {
 		Agents:           agents,
 		AgentRunner:      agentRunnerInst,
 		Flows:            flowService,
+		FlowToken:        flowTokenSvc,
 		FlowRunner:       flowRunnerInst,
 		Orchestrator:     orchestratorSvc,
 		Hubuilder:        issuebuilderSvc,

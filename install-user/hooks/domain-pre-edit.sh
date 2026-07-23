@@ -5,10 +5,11 @@
 # REQ-54 issue-54.7: gate determinista SDD-para-código. TODO código pasa por
 # SDD (decisión del usuario, sin exención trivial):
 #
-#   - Si la sesión tiene flow SDD activo (marca de domain-post-orchestrate.sh)
+#   - Si la sesión tiene flow SDD activo validado por token HMAC server-side
+#     (domain-post-orchestrate.sh genera el token vía domain_flow_grant_token)
 #     → la edición pasa.
-#   - Sin flow: en modo normal (default/plan) → permissionDecision "ask" (el
-#     HUMANO decide en el diálogo); en modos automáticos (acceptEdits/
+#   - Sin flow o token inválido: en modo normal (default/plan) → permissionDecision
+#     "ask" (el HUMANO decide en el diálogo); en modos automáticos (acceptEdits/
 #     bypassPermissions/auto) → "deny" con razón: el agente es FORZADO a
 #     orquestar primero.
 #   - Bash solo se gatea si el comando PARECE edición de código (sed -i, tee,
@@ -18,8 +19,10 @@
 #
 # Endurecimiento (pre-edit-hardening):
 #   (A) GIT GUARD: git destructivo (reset --hard / clean / stash / checkout
-#       -- | .) → deny SIEMPRE, incluso con flow activo o en subagentes.
-#       Defensa en profundidad por si el permissions.deny fallara.
+#       -- | . / restore / rm / worktree remove) → deny SIEMPRE, incluso con
+#       flow activo o en subagentes. Normaliza global options (-C, -c,
+#       --git-dir, --work-tree) para evitar evasiones. Defensa en profundidad
+#       por si el permissions.deny fallara.
 #   (B) heurística de edición ampliada (ver arriba) para atrapar bypass.
 #   (C) COMMIT-GATE: git commit sin marker fresco de tests verificados →
 #       ask (default/plan) o deny (modos automáticos).
@@ -69,16 +72,26 @@ if [ "$tool_name" = "Bash" ]; then
   git_destructive=$(printf '%s' "$tool_cmd" | python3 -c '
 import re, sys
 cmd = sys.stdin.read()
+# strip git global options between "git" and subcommand to prevent
+# evasion via git -C . reset --hard, git -c x=y stash, etc.
+normalized = re.sub(
+    r"\bgit\s+(?:-[cC]\s+\S+\s+|--(?:git-dir|work-tree)(?:=\S+|\s+\S+)?\s+)*",
+    "git ",
+    cmd
+)
 pats = [
     r"git\s+reset\s+--hard",
     r"git\s+clean\b",
     r"git\s+stash\b",
     r"git\s+checkout\s+(--|\.)",
+    r"git\s+restore\b",
+    r"git\s+rm\b",
+    r"git\s+worktree\s+remove\b",
 ]
-print("yes" if any(re.search(p, cmd) for p in pats) else "")
+print("yes" if any(re.search(p, normalized) for p in pats) else "")
 ' 2>/dev/null)
   if [ "$git_destructive" = "yes" ]; then
-    emit_decision "deny" "domain git-guard: comando git destructivo bloqueado (reset --hard / clean / stash / checkout -- | .). El agente NUNCA ejecuta git mutante sobre tu working tree. Si de verdad lo necesitas, córrelo tú manualmente fuera del agente."
+    emit_decision "deny" "domain git-guard: comando git destructivo bloqueado (reset --hard / clean / stash / checkout -- | . / restore / rm / worktree remove). El agente NUNCA ejecuta git mutante sobre tu working tree. Si de verdad lo necesitas, córrelo tú manualmente fuera del agente."
   fi
 fi
 
@@ -108,8 +121,60 @@ if re.search(r"\bgit\s+commit\b", cmd) and not re.search(r"--amend", cmd):
   fi
 fi
 
-# Flow SDD activo en la sesión → pasa el resto (edición de código).
-[ -r "$HOME/.local/state/domain/flow-$session_id" ] && exit 0
+# ─── Flow SDD activo: validación server-side (FAIL-CLOSED, DOMAINSERV-70) ─────
+#    v2 token: marker = HMAC token + expires_at. SOLO un token VÁLIDO contra el
+#    server (firma + flow activo) habilita la edición.
+#    v1 legacy: timestamp + flow_run_id, validado contra flow_status real.
+#    Si el server NO puede validar (token inválido / server unreachable / sin
+#    creds / sin lib) NO se confía en el marker local — es forjable por el propio
+#    agente (mismo uid) — y se cae al gate (ask en modo normal, deny en modos
+#    automáticos). Se removió todo trust-local degradado por TTL.
+
+marker="$HOME/.local/state/domain/flow-$session_id"
+if [ -r "$marker" ] && [ -r "$LIB" ]; then
+  . "$LIB"
+  domain_resolve_env 2>/dev/null || true
+
+  first_line=$(head -1 "$marker" 2>/dev/null)
+  field1=$(printf '%s' "$first_line" | cut -f1)
+  field2=$(printf '%s' "$first_line" | cut -f2)
+
+  # sin vps_url/api_key no hay forma de validar contra el server → gate
+  if [ -n "$vps_url" ] && [ -n "$api_key" ]; then
+    domain_mcp_init >/dev/null 2>&1
+    case "$field1" in
+      [A-Za-z0-9_-]*[A-Za-z0-9_-]*)
+        # v2: token HMAC — solo pasa si el server valida firma + flow activo
+        resp=$(domain_call_tool domain_flow_validate_token \
+          "{\"token\":\"$field1\"}" 2>/dev/null)
+        valid=$(printf '%s' "$resp" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    for c in d.get("result",{}).get("content",[]):
+        if isinstance(c, dict) and c.get("type") == "text":
+            body = json.loads(c["text"])
+            print("yes" if body.get("valid") else "")
+            break
+except Exception:
+    pass
+' 2>/dev/null)
+        [ "$valid" = "yes" ] && exit 0
+        # inválido o server unreachable → fail-closed → cae al gate
+        ;;
+      *)
+        # v1 legacy: solo pasa si flow_status confirma running/pending
+        if [ -n "$field2" ]; then
+          resp=$(domain_call_tool domain_flow_status \
+            "{\"flow_run_id\":\"$field2\"}" 2>&1)
+          echo "$resp" | grep -qE '"status":"(running|pending)"' && exit 0
+        fi
+        # no confirmado / sin flow_run_id / server unreachable → fail-closed → gate
+        ;;
+    esac
+  fi
+fi
+# marker ausente, no validable o inválido → cae al gate de abajo (ask/deny)
 
 # ─── (B) Bash: solo gatear si el comando parece edición de código ────────────
 if [ "$tool_name" = "Bash" ]; then

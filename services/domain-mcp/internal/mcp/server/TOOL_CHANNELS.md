@@ -1,11 +1,13 @@
 # Matriz de cobertura tool→canal (REQ-54 issue-54.6)
 
 Mantenido sincronizado con `internal/mcp/server/tool_channels.go` — validado por `TestToolChannelsDocInSync`.
-Total: 150 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
+Total: 152 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
 
-## hook (4)
-Determinista por evento del cliente (SessionStart / UserPromptSubmit / Stop). No depende del modelo.
+## hook (6)
+Determinista por evento del cliente (SessionStart / UserPromptSubmit / Stop / post-orchestrate / pre-edit). No depende del modelo.
 
+- `domain_flow_grant_token`
+- `domain_flow_validate_token`
 - `domain_mem_context`
 - `domain_prompt_capture`
 - `domain_session_bootstrap`

@@ -32,7 +32,15 @@ print("resp_chars=%s" % shlex.quote(str(len(d.get("last_assistant_message") or "
 [ "$stop_active" = "1" ] && exit 0
 [ -n "$session_id" ] || exit 0
 
-id_file="$HOME/.local/state/domain/turn-$session_id.id"
+domain_state="$HOME/.local/state/domain"
+# flow y tests-ok se limpian SIEMPRE, antes del early-exit por turn-id: si el
+# capture del turn no ocurrió (no hay id_file) estos markers igual quedarían
+# huérfanos (DOMAINSERV-78).
+rm -f "$domain_state/flow-$session_id" 2>/dev/null
+rm -f "$domain_state/tests-ok-$session_id" 2>/dev/null
+
+# el turn_complete solo procede si hay turn-id (prompt capturado)
+id_file="$domain_state/turn-$session_id.id"
 [ -r "$id_file" ] || exit 0
 pid=$(cat "$id_file" 2>/dev/null)
 rm -f "$id_file" 2>/dev/null

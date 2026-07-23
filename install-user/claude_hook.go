@@ -34,7 +34,7 @@ var claudeHooks = []claudeHookSpec{
 	// cuando el agente orquesta; PreToolUse intercepta ediciones sin flow
 	// (ask en modo normal, deny en modos automáticos).
 	{Event: "PostToolUse", Script: "domain-post-orchestrate.sh", Timeout: 10,
-		Matcher: "mcp__domain-mcp__domain_(orchestrate|flow_status|orchestrate_phase_result|orchestrate_confirm)"},
+		Matcher: "mcp__domain-mcp__domain_(orchestrate|orchestrate_phase_result|orchestrate_confirm|flow_cancel)"},
 	{Event: "PreToolUse", Script: "domain-pre-edit.sh", Timeout: 10,
 		Matcher: "Edit|Write|NotebookEdit|Bash"},
 	// PostToolUse tras Bash: captura el resultado de correr tests/suite para

@@ -9,6 +9,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
+	flowsvc "nunezlagos/domain/internal/service/flow"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
@@ -24,6 +25,7 @@ type orchestratorService interface {
 type orchestrateHandlers struct {
 	orchestrator orchestratorService
 	principal    *apikey.Principal
+	flowToken    *flowsvc.FlowTokenService
 }
 
 func toolOrchestrate() mcp.Tool {
@@ -293,6 +295,134 @@ func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.Call
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }
 
+func toolFlowGrantToken() mcp.Tool {
+	return mcp.NewTool("domain_flow_grant_token",
+		mcp.WithDescription("Genera un token HMAC firmado que autoriza ediciones de código para un flow activo. El token incluye flow_run_id, session_id y expiry TTL. Válido mientras el flow esté en estado running/pending. El cliente guarda este token y lo presenta en domain_flow_validate_token en cada pre-edit."),
+		mcp.WithString("flow_run_id",
+			mcp.Description("UUID del flow_run activo (devuelto por domain_orchestrate)."),
+			mcp.Required(),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("session_id de la sesión del agente (del hook payload)."),
+			mcp.Required(),
+		),
+	)
+}
+
+func toolFlowValidateToken() mcp.Tool {
+	return mcp.NewTool("domain_flow_validate_token",
+		mcp.WithDescription("Valida un token HMAC de flow. Verifica firma, expiry y que el flow siga activo (running/pending). Devuelve {valid, flow_run_id, status, reason}."),
+		mcp.WithString("token",
+			mcp.Description("Token HMAC firmado (generado por domain_flow_grant_token)."),
+			mcp.Required(),
+		),
+	)
+}
+
+func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if h.flowToken == nil || !h.flowToken.IsConfigured() {
+		return mcp.NewToolResultError("flow token: HMAC secret not configured (set DOMAIN_FLOW_TOKEN_SECRET)"), nil
+	}
+
+	flowRunID := req.GetString("flow_run_id", "")
+	sessionID := req.GetString("session_id", "")
+	if flowRunID == "" || sessionID == "" {
+		return mcp.NewToolResultError("flow_run_id and session_id are required"), nil
+	}
+
+	// validate flow is active
+	if h.orchestrator != nil {
+		fid, err := uuid.Parse(flowRunID)
+		if err != nil {
+			return mcp.NewToolResultError("invalid flow_run_id"), nil
+		}
+		status, err := h.orchestrator.GetFlowStatus(ctx, fid)
+		if err != nil {
+			return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
+		}
+		if status.Status != "running" && status.Status != "pending" {
+			return mcp.NewToolResultError("flow_grant_token: flow is not active (status=" + status.Status + ")"), nil
+		}
+	}
+
+	token, err := h.flowToken.GenerateToken(flowRunID, sessionID)
+	if err != nil {
+		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
+	}
+
+	body, _ := json.MarshalIndent(map[string]any{
+		"token":       token,
+		"flow_run_id": flowRunID,
+		"session_id":  sessionID,
+		"expires_in":  int(flowsvc.FlowTokenTTL.Seconds()),
+	}, "", "  ")
+	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
+func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.principal == nil {
+		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
+	}
+	if h.flowToken == nil || !h.flowToken.IsConfigured() {
+		return mcp.NewToolResultError("flow token: HMAC secret not configured (set DOMAIN_FLOW_TOKEN_SECRET)"), nil
+	}
+
+	token := req.GetString("token", "")
+	if token == "" {
+		return mcp.NewToolResultError("token is required"), nil
+	}
+
+	payload, err := h.flowToken.ValidateToken(token)
+	if err != nil {
+		reason := "invalid"
+		if err == flowsvc.ErrTokenExpired {
+			reason = "expired"
+		}
+		body, _ := json.MarshalIndent(map[string]any{
+			"valid":  false,
+			"reason": reason,
+		}, "", "  ")
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	}
+
+	// validate flow is still active server-side
+	active := true
+	flowStatus := ""
+	if h.orchestrator != nil {
+		fid, err := uuid.Parse(payload.FlowRunID)
+		if err == nil {
+			status, err := h.orchestrator.GetFlowStatus(ctx, fid)
+			if err == nil {
+				flowStatus = status.Status
+				if status.Status != "running" && status.Status != "pending" {
+					active = false
+				}
+			}
+		}
+	}
+
+	if !active {
+		body, _ := json.MarshalIndent(map[string]any{
+			"valid":        false,
+			"reason":       "flow_inactive",
+			"flow_run_id":  payload.FlowRunID,
+			"flow_status":  flowStatus,
+		}, "", "  ")
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	}
+
+	body, _ := json.MarshalIndent(map[string]any{
+		"valid":        true,
+		"flow_run_id":  payload.FlowRunID,
+		"session_id":   payload.SessionID,
+		"flow_status":  flowStatus,
+	}, "", "  ")
+	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
 func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
@@ -320,13 +450,12 @@ func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.Call
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.
 // El caller (Tools() en server.go) los appendea al slice principal.
 func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
-	// Deps.Orchestrator es un *orchsvc.Service concreto; asignarlo directo a la
-	// interfaz cuando es nil produciría una interfaz NO-nil (typed-nil) y el
-	// guard `h.orchestrator == nil` nunca dispararía. Solo poblamos el campo si
-	// hay un service real.
 	h := &orchestrateHandlers{principal: deps.Principal}
 	if deps.Orchestrator != nil {
 		h.orchestrator = deps.Orchestrator
+	}
+	if deps.FlowToken != nil {
+		h.flowToken = deps.FlowToken
 	}
 	wrap.SetBudget("domain_orchestrate",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
@@ -334,11 +463,17 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	wrap.SetBudget("domain_orchestrate_confirm",
 		ToolBudget{CallsPerMinute: 60, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
+	wrap.SetBudget("domain_flow_grant_token",
+		ToolBudget{CallsPerMinute: 120, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
+	wrap.SetBudget("domain_flow_validate_token",
+		ToolBudget{CallsPerMinute: 300, MaxRetries: 1, RetryBackoff: defaultBudget.RetryBackoff})
 	return []mcpgo.ServerTool{
 		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", h.handleOrchestrate)},
 		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
 		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm)},
 		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", h.handleFlowStatus)},
 		{Tool: toolFlowCancel(), Handler: wrap.Wrap("domain_flow_cancel", h.handleFlowCancel)},
+		{Tool: toolFlowGrantToken(), Handler: wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken)},
+		{Tool: toolFlowValidateToken(), Handler: wrap.Wrap("domain_flow_validate_token", h.handleFlowValidateToken)},
 	}
 }

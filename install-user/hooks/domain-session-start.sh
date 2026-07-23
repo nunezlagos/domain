@@ -158,6 +158,17 @@ call_mcp_tool() {
     -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"${tool_name}\",\"arguments\":${args_json}}}"
 }
 
+# ---------- 4b. cleanup stale flow markers de sesiones previas ----------
+# DOMAINSERV-72: markers v2 (HMAC token, TTL 30 min) o v1 (timestamp, TTL
+# implícito) pueden quedar huérfanos si el agente crashea sin pasar por
+# domain_flow_cancel. Se limpian los >2h (safe window para TTL 30min).
+_cleanup_old_flow_markers() {
+  local state_dir="$HOME/.local/state/domain"
+  [ -d "$state_dir" ] || return 0
+  find "$state_dir" -maxdepth 1 -name 'flow-*' -mmin +120 -delete 2>/dev/null || true
+}
+_cleanup_old_flow_markers
+
 # ---------- 5. ejecutar las 3 tools de domain ----------
 bootstrap_args=$(printf '{"cwd":"%s","git_remote":"%s","git_branch":"%s","git_head":"%s","existing_rules_files":%s}' \
   "$cwd" "$git_remote" "$git_branch" "$git_head" "$rules_json")

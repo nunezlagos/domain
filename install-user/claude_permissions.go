@@ -34,6 +34,9 @@ var domainPermissionDenies = []string{
 	"Bash(git stash:*)",
 	"Bash(git checkout --:*)",
 	"Bash(git checkout .:*)",
+	"Bash(git restore:*)",
+	"Bash(git rm:*)",
+	"Bash(git worktree remove:*)",
 }
 
 // migrateStaleWriteRules convierte reglas Write(<path>) muertas de

@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 21 } // 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 22 } // 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -451,6 +451,39 @@ Formato:
 - Los handlers y tools MCP nunca dependen de tipos concretos de service: siempre contra interfaz.
 
 Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin tocar al consumidor.`,
+		},
+		{
+			Slug:       "context-preservation",
+			Name:       "Context Preservation Protocol",
+			Kind:       "architecture",
+			SourceFile: "AGENTS.md",
+			// DOMAINSERV-91: seedeada (antes solo vivía por domain_platform_policy_create
+			// → se perdía en rebuild de DB). Body con backticks → string con \n en vez de
+			// raw-string (que no admite backticks internos).
+			BodyMD: "# Context Preservation Protocol\n\n" +
+				"## Principio\n" +
+				"El agente NO sabe cuándo el LLM compactará contexto.\n" +
+				"La única defensa es re-hidratar al inicio de CADA turno.\n\n" +
+				"## Protocolo obligatorio\n\n" +
+				"### Al inicio de cada turno (SIEMPRE)\n" +
+				"1. `domain_session_bootstrap(cwd, git_remote, git_branch, git_head, existing_rules_files)`\n" +
+				"   → recupera project, recent_observations, work_summary, head.changed\n" +
+				"2. `domain_mem_context(project_slug, limit=10)`\n" +
+				"   → últimas 10 observaciones/decisiones del proyecto\n\n" +
+				"### Si el agente nota pérdida de hilo (post-compact)\n" +
+				"3. `domain_mem_search(\"session_summary\", limit=3)`\n" +
+				"   → último resumen de sesión guardado\n" +
+				"4. `domain_flow_status(flow_run_id)` si hay active_flow_run\n" +
+				"   → retomar exactamente donde quedó\n" +
+				"5. `domain_verify_pending(project_slug)`\n" +
+				"   → verificar si hay checkpoints de verificación pendientes\n\n" +
+				"### Checkpoint proactivo (sin medir %)\n" +
+				"Cada ~50 domain_prompt_capture en la misma sesión:\n" +
+				"6. `domain_context_snapshot(project_slug)`\n" +
+				"7. `domain_mem_save(type=context_snapshot, tags=[checkpoint])`\n\n" +
+				"## Excepciones\n" +
+				"- Si el proyecto es `known=false` en bootstrap → registrar primero\n" +
+				"- Si `active_flow_run` no existe → omitir flow_status",
 		},
 	}
 

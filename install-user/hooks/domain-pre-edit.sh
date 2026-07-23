@@ -48,6 +48,7 @@ import json, sys, shlex
 try:
     d = json.load(sys.stdin)
 except Exception:
+    print("parse_failed=yes")
     sys.exit(0)
 ti = d.get("tool_input") or {}
 print("session_id=%s" % shlex.quote(d.get("session_id", "")))
@@ -55,6 +56,15 @@ print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
 print("perm_mode=%s" % shlex.quote(d.get("permission_mode", "default")))
 print("tool_cmd=%s" % shlex.quote(ti.get("command", "") if isinstance(ti, dict) else ""))
 ' 2>/dev/null)"
+
+# DOMAINSERV-103: payload no-vacío pero no parseable como JSON → fail-closed.
+# Mismo criterio que python3-ausente (DOMAINSERV-71): no podemos derivar perm_mode
+# de un payload corrupto, así que denegamos en vez de exit 0 (que dejaba pasar la
+# edición sin gate, antes del git-guard y del commit-gate).
+if [ -n "$payload" ] && [ "${parse_failed:-}" = "yes" ]; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"CRITICAL (DOMAINSERV-103): el payload del hook no es JSON parseable. El gate SDD no puede operar sobre un payload corrupto, así que fail-closed (deny)."}}'
+  exit 0
+fi
 [ -n "$session_id" ] || exit 0
 
 # emit_decision <decision> <reason> — emite el permissionDecision y termina.

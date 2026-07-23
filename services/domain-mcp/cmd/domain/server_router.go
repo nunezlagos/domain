@@ -104,6 +104,7 @@ func buildRouter(
 		Allowlist:       handler.AuthAllowlist(),
 		Pool:            pools.App,
 		SessionResolver: sessionResolver,
+		FailureLogger:   s.SessionSvc,
 	}
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: s.RateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware

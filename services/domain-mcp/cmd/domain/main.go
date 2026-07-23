@@ -282,7 +282,7 @@ func runServer() {
 		metricsAddr := fmt.Sprintf("%s:%d", cfg.MetricsBind, cfg.MetricsPort)
 		go func() {
 			logger.Info("metrics endpoint starting", slog.String("addr", metricsAddr))
-			if err := metricsReg.Serve(metricsAddr, "", ""); err != nil && err != http.ErrServerClosed {
+			if err := metricsReg.Serve(metricsAddr, cfg.MetricsUser, cfg.MetricsPass); err != nil && err != http.ErrServerClosed {
 				logger.Error("metrics server failed", slog.Any("err", err))
 			}
 		}()

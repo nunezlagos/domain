@@ -31,6 +31,29 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 }
 
+// DOMAINSERV-82 H2: DOMAIN_METRICS_USER/PASS se leen del entorno (default "").
+func TestLoad_MetricsCredentials(t *testing.T) {
+	t.Setenv("DOMAIN_DATABASE_URL", "postgres://x:y@h/d?sslmode=disable")
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if c.MetricsUser != "" || c.MetricsPass != "" {
+		t.Errorf("default metrics creds deberían ser vacías, got user=%q pass=%q", c.MetricsUser, c.MetricsPass)
+	}
+
+	t.Setenv("DOMAIN_METRICS_USER", "prom")
+	t.Setenv("DOMAIN_METRICS_PASS", "s3cr3t")
+	c, err = Load()
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if c.MetricsUser != "prom" || c.MetricsPass != "s3cr3t" {
+		t.Errorf("metrics creds del env: got user=%q pass=%q", c.MetricsUser, c.MetricsPass)
+	}
+}
+
 func TestValidate_PortRange(t *testing.T) {
 	c := &Config{
 		Env:         "dev",

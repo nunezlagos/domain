@@ -3,6 +3,7 @@ package apikey
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -49,6 +50,14 @@ type Resolver interface {
 	Resolve(ctx context.Context, plaintext string) (*Principal, error)
 }
 
+// AuthFailureLogger registra un intento de auth con API key fallido en el
+// audit trail (auth_events). Interfaz definida en el consumidor (coupling
+// policy); la implementa session.Service. reason es un código + contexto NO
+// sensible (nunca el token, policy secrets-redaction). DOMAINSERV-82 H1.
+type AuthFailureLogger interface {
+	LogAPIKeyAuthFailure(ctx context.Context, reason, ip, userAgent string)
+}
+
 // ErrUnauthorized error tipado para 401.
 var ErrUnauthorized = errors.New("unauthorized")
 
@@ -66,6 +75,10 @@ type Middleware struct {
 	Pool      *pgxpool.Pool // opcional; si nil, NO se abre tx (legacy auth-only)
 
 	SessionResolver SessionResolverFunc
+
+	// FailureLogger registra fallos de auth con API key en auth_events
+	// (opcional, nil-safe). DOMAINSERV-82 H1.
+	FailureLogger AuthFailureLogger
 }
 
 // SessionResolverFunc resuelve un session token "sess_*". Devuelve
@@ -114,12 +127,14 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			}
 		} else {
 			if !IsAPIKeyFormat(token) {
+				m.logAPIKeyFailure(r, "invalid_format")
 				writeUnauthorized(w, "invalid_format", "invalid bearer token format")
 				return
 			}
 			var err error
 			p, err = m.Resolver.Resolve(r.Context(), token)
 			if err != nil {
+				m.logAPIKeyFailure(r, "invalid_credentials")
 				writeUnauthorized(w, "invalid_credentials", "api key not found or revoked")
 				return
 			}
@@ -176,6 +191,32 @@ func (m *Middleware) openTxWithOrg(ctx context.Context, orgID, userID uuid.UUID)
 		return nil, err
 	}
 	return tx, nil
+}
+
+// logAPIKeyFailure registra un fallo de auth con API key en auth_events vía el
+// FailureLogger (best-effort, nil-safe). Nunca incluye el token: solo el código
+// de fallo + path (contexto SOC) e IP/User-Agent del request. DOMAINSERV-82 H1.
+func (m *Middleware) logAPIKeyFailure(r *http.Request, code string) {
+	if m.FailureLogger == nil {
+		return
+	}
+	reason := code + " path=" + r.URL.Path
+	m.FailureLogger.LogAPIKeyAuthFailure(r.Context(), reason, clientIP(r), r.UserAgent())
+}
+
+// clientIP extrae la IP del cliente: primer hop de X-Forwarded-For si está, si
+// no el host de RemoteAddr (sin puerto).
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func writeUnauthorized(w http.ResponseWriter, code, msg string) {

@@ -48,6 +48,8 @@ type Config struct {
 	MetricsEnabled bool
 	MetricsBind    string
 	MetricsPort    int
+	MetricsUser    string
+	MetricsPass    string
 
 	OTelEnabled         bool
 	OTelExporterOTLPURL string
@@ -148,6 +150,8 @@ func Load() (*Config, error) {
 		MetricsEnabled: getEnvBool("DOMAIN_METRICS_ENABLED", false),
 		MetricsBind:    getEnv("DOMAIN_METRICS_BIND", "127.0.0.1"),
 		MetricsPort:    getEnvInt("DOMAIN_METRICS_PORT", 9090),
+		MetricsUser:    getEnv("DOMAIN_METRICS_USER", ""),
+		MetricsPass:    getEnv("DOMAIN_METRICS_PASS", ""),
 
 		OTelEnabled:         getEnvBool("DOMAIN_OTEL_ENABLED", false),
 		OTelExporterOTLPURL: getEnv("DOMAIN_OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),

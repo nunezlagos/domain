@@ -1,5 +1,3 @@
-
-
 package apikey
 
 import (
@@ -14,9 +12,9 @@ import (
 
 // Fake resolver para tests.
 type fakeResolver struct {
-	expected string
+	expected  string
 	principal *Principal
-	err      error
+	err       error
 }
 
 func (f *fakeResolver) Resolve(_ context.Context, plaintext string) (*Principal, error) {
@@ -42,6 +40,61 @@ func nextEchoHandler() http.HandlerFunc {
 	}
 }
 
+// fakeFailureLogger captura las llamadas al sink de auth_events (DOMAINSERV-82 H1).
+type fakeFailureLogger struct {
+	calls []failCall
+}
+type failCall struct{ reason, ip, ua string }
+
+func (f *fakeFailureLogger) LogAPIKeyAuthFailure(_ context.Context, reason, ip, ua string) {
+	f.calls = append(f.calls, failCall{reason, ip, ua})
+}
+
+func TestMiddleware_APIKeyInvalidCredentials_LogsAuthFailure(t *testing.T) {
+	fl := &fakeFailureLogger{}
+	pt, _, _, _ := Generate("live")
+	m := &Middleware{Resolver: &fakeResolver{err: errors.New("DB down")}, FailureLogger: fl}
+	req := httptest.NewRequest("GET", "/api/v1/foo", nil)
+	req.Header.Set("Authorization", "Bearer "+pt)
+	req.Header.Set("User-Agent", "curl/8.0")
+	m.Wrap(nextEchoHandler()).ServeHTTP(httptest.NewRecorder(), req)
+
+	require.Len(t, fl.calls, 1)
+	require.Contains(t, fl.calls[0].reason, "invalid_credentials")
+	require.Contains(t, fl.calls[0].reason, "/api/v1/foo")
+	require.Equal(t, "curl/8.0", fl.calls[0].ua)
+	require.NotEmpty(t, fl.calls[0].ip)
+	// el token NUNCA debe aparecer en los campos logueados (policy secrets-redaction)
+	require.NotContains(t, fl.calls[0].reason, pt)
+	require.NotContains(t, fl.calls[0].ua, pt)
+	require.NotContains(t, fl.calls[0].ip, pt)
+}
+
+func TestMiddleware_APIKeyInvalidFormat_LogsAuthFailure(t *testing.T) {
+	fl := &fakeFailureLogger{}
+	m := &Middleware{Resolver: &fakeResolver{}, FailureLogger: fl}
+	req := httptest.NewRequest("GET", "/api/v1/foo", nil)
+	req.Header.Set("Authorization", "Bearer not_an_api_key")
+	m.Wrap(nextEchoHandler()).ServeHTTP(httptest.NewRecorder(), req)
+
+	require.Len(t, fl.calls, 1)
+	require.Contains(t, fl.calls[0].reason, "invalid_format")
+}
+
+func TestMiddleware_APIKeySuccess_NoAuthFailure(t *testing.T) {
+	fl := &fakeFailureLogger{}
+	pt, _, _, _ := Generate("live")
+	m := &Middleware{
+		Resolver:      &fakeResolver{expected: pt, principal: &Principal{UserID: "u", OrganizationID: "o"}},
+		FailureLogger: fl,
+	}
+	req := httptest.NewRequest("GET", "/api/v1/foo", nil)
+	req.Header.Set("Authorization", "Bearer "+pt)
+	m.Wrap(nextEchoHandler()).ServeHTTP(httptest.NewRecorder(), req)
+
+	require.Empty(t, fl.calls)
+}
+
 func TestMiddleware_NoBearer_401(t *testing.T) {
 	r := &fakeResolver{}
 	m := &Middleware{Resolver: r}
@@ -63,7 +116,7 @@ func TestMiddleware_InvalidFormat_401(t *testing.T) {
 func TestMiddleware_ValidKey_PropagatesPrincipal(t *testing.T) {
 	pt, _, _, _ := Generate("live")
 	r := &fakeResolver{
-		expected: pt,
+		expected:  pt,
 		principal: &Principal{UserID: "user-1", OrganizationID: "org-1", APIKeyID: "k-1", Role: "member"},
 	}
 	m := &Middleware{Resolver: r}

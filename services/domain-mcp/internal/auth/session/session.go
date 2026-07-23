@@ -29,11 +29,11 @@ import (
 )
 
 const (
-	TokenPrefix      = "sess_"
-	BcryptCost       = 12
-	TempTokenTTL     = 15 * time.Minute
-	SessionTTL       = 8 * time.Hour
-	TempTokenSecret  = "domain-temp-token-v1" // prefix interno, no es secreto criptográfico
+	TokenPrefix     = "sess_"
+	BcryptCost      = 12
+	TempTokenTTL    = 15 * time.Minute
+	SessionTTL      = 8 * time.Hour
+	TempTokenSecret = "domain-temp-token-v1" // prefix interno, no es secreto criptográfico
 )
 
 var (
@@ -45,7 +45,6 @@ var (
 
 type Service struct {
 	Pool *pgxpool.Pool
-
 
 	AuthPool *pgxpool.Pool
 
@@ -79,9 +78,9 @@ type Role struct {
 }
 
 type LoginResult struct {
-	TempToken  string
-	User       User
-	Roles      []Role
+	TempToken string
+	User      User
+	Roles     []Role
 }
 
 // LoginInput agrega metadatos del request (ip, user_agent) para el
@@ -117,7 +116,6 @@ func (s *Service) LoginWithMeta(ctx context.Context, in LoginInput) (*LoginResul
 		in.Email,
 	).Scan(&u.ID, &u.Email, &u.Name, &hash)
 	if errors.Is(err, pgx.ErrNoRows) || len(hash) == 0 {
-
 
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$dummyhashfortimingsafety"), []byte(in.Password))
 		s.audit(ctx, authEvent{Kind: "login_attempt", EmailAttempted: in.Email,
@@ -187,11 +185,11 @@ func (s *Service) RolesOf(ctx context.Context, userID uuid.UUID) ([]Role, error)
 // SelectRole canjea un temp_token + role_slug por session_token.
 // Verifica que el user tenga ese rol asignado.
 type SelectResult struct {
-	Token       string
-	SessionID   uuid.UUID
-	User        User
-	Role        Role
-	ExpiresAt   time.Time
+	Token     string
+	SessionID uuid.UUID
+	User      User
+	Role      Role
+	ExpiresAt time.Time
 }
 
 func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent, ip string) (*SelectResult, error) {
@@ -230,7 +228,6 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 		return nil, ErrRoleNotGranted
 	}
 
-
 	plain, err := newSessionToken()
 	if err != nil {
 		return nil, err
@@ -239,7 +236,6 @@ func (s *Service) SelectRole(ctx context.Context, tempToken, roleSlug, userAgent
 	expires := s.now().Add(SessionTTL)
 	var sessID uuid.UUID
 	ipVal := parseIP(ip)
-
 
 	err = s.AuthPool.QueryRow(ctx,
 		`INSERT INTO auth_sessions
@@ -331,8 +327,6 @@ func (s *Service) Refresh(ctx context.Context, plainToken string) (*Active, time
 func (s *Service) Logout(ctx context.Context, plainToken string) error {
 	hash := hashToken(plainToken)
 
-
-
 	var sessID, userID uuid.UUID
 	_ = s.AuthPool.QueryRow(ctx,
 		`SELECT id, user_id FROM auth_sessions WHERE token_hash = $1`,
@@ -345,7 +339,6 @@ func (s *Service) Logout(ctx context.Context, plainToken string) error {
 		hash,
 	)
 	if err == nil && sessID != uuid.Nil {
-
 
 		s.audit(ctx, authEvent{Kind: "logout", UserID: &userID, OrgID: nil,
 			Success: true, Reason: "ok", SessionID: &sessID})
@@ -395,8 +388,6 @@ func (s *Service) GrantRole(ctx context.Context, userEmail, roleSlug string, gra
 	return err
 }
 
-
-
 type authEvent struct {
 	Kind           string
 	UserID         *uuid.UUID
@@ -414,7 +405,6 @@ func (s *Service) audit(ctx context.Context, e authEvent) {
 		return
 	}
 
-
 	c, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
@@ -429,7 +419,19 @@ func (s *Service) audit(ctx context.Context, e authEvent) {
 	)
 }
 
-
+// LogAPIKeyAuthFailure registra en auth_events un intento fallido de auth con
+// API key (DOMAINSERV-82 H1). Implementa apikey.AuthFailureLogger. Comparte el
+// path de audit() (AuthPool, bypassa RLS, apto para user/org nil). El reason
+// trae solo el código de fallo + path; NUNCA el token (policy secrets-redaction).
+func (s *Service) LogAPIKeyAuthFailure(ctx context.Context, reason, ip, userAgent string) {
+	s.audit(ctx, authEvent{
+		Kind:      "apikey_auth_failed",
+		Success:   false,
+		Reason:    reason,
+		IP:        ip,
+		UserAgent: userAgent,
+	})
+}
 
 func newSessionToken() (string, error) {
 	var buf [32]byte

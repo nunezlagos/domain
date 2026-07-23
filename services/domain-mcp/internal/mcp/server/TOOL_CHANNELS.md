@@ -73,7 +73,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_skill_search`
 - `domain_ticket_create`
 
-## user-intent (95)
+## user-intent (97)
 Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 
 - `domain_agent_create`
@@ -127,7 +127,9 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_platform_policy_create`
 - `domain_platform_policy_edit`
 - `domain_project_create`
+- `domain_project_delete`
 - `domain_project_list`
+- `domain_project_merge`
 - `domain_project_policy_delete`
 - `domain_project_policy_set`
 - `domain_project_repo_add`

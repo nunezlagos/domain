@@ -17,6 +17,7 @@ import (
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/service/projectmerge"
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
@@ -26,6 +27,10 @@ type catalogProjectsService interface {
 	Update(ctx context.Context, id uuid.UUID, in projsvc.UpdateInput) (*projsvc.Project, error)
 	HasData(ctx context.Context, id uuid.UUID) (bool, error)
 	SoftDelete(ctx context.Context, id, actorID uuid.UUID) error
+}
+
+type catalogMergeService interface {
+	Merge(ctx context.Context, sourceID, targetID, actorID uuid.UUID) (*projectmerge.MergeReport, error)
 }
 
 type catalogAgentsService interface {
@@ -46,6 +51,7 @@ type catalogSkillsService interface {
 
 type catalogHandlers struct {
 	projects   catalogProjectsService
+	merge      catalogMergeService
 	agents     catalogAgentsService
 	flows      catalogFlowsService
 	crons      catalogCronsService
@@ -57,6 +63,7 @@ type catalogHandlers struct {
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	h := &catalogHandlers{
 		projects:   deps.Projects,
+		merge:      &projectmerge.Service{Pool: deps.Pool},
 		agents:     deps.Agents,
 		flows:      deps.Flows,
 		crons:      deps.Crons,
@@ -75,6 +82,7 @@ func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool 
 		{Tool: toolProjectCreate(), Handler: wrap.Wrap("domain_project_create", rls(h.handleProjectCreate))},
 		{Tool: toolProjectUpdate(), Handler: wrap.Wrap("domain_project_update", rls(h.handleProjectUpdate))},
 		{Tool: toolProjectDelete(), Handler: wrap.Wrap("domain_project_delete", rls(h.handleProjectDelete))},
+		{Tool: toolProjectMerge(), Handler: wrap.Wrap("domain_project_merge", rls(h.handleProjectMerge))},
 	}
 	tools = append(tools, registerClientTools(wrap, deps)...)
 	return tools

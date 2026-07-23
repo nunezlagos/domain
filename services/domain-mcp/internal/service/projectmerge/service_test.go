@@ -63,23 +63,24 @@ func TestBehavior_SameProjectRejected_PreventingLogicLoss(t *testing.T) {
 
 
 
-// MergeReport tiene 11+ campos. JSON tags deben estar correctos (no
-// romperse accidentalmente en refactors).
+// MergeReport documenta las entidades project-scoped reales (DOMAINSERV-104).
+// JSON tags deben estar correctos (no romperse accidentalmente en refactors).
 func TestBehavior_MergeReport_JSONShape(t *testing.T) {
 	report := MergeReport{
 		SourceID:          uuid.New(),
 		TargetID:          uuid.New(),
 		ObservationsMoved: 10,
 		SkillsMoved:       3,
-		SkillsRenamed:     []string{"old → old-merged-source"},
-		FlowsMoved:        2,
-		AgentsMoved:       1,
-		CronsMoved:        0,
+		SkillsDeduped:     1,
+		PoliciesMoved:     2,
+		ReposMoved:        1,
+		DocsMoved:         2,
+		PromptsMoved:      4,
+		WorkflowsMoved:    5,
 	}
 	require.NotEqual(t, report.SourceID, report.TargetID,
 		"source y target deben ser distintos en un merge valido")
-	require.Equal(t, 1, len(report.SkillsRenamed))
-	require.Contains(t, report.SkillsRenamed[0], "-merged-")
+	require.Equal(t, 1, report.SkillsDeduped)
 }
 
 
@@ -136,22 +137,17 @@ func TestBehavior_NamingConvention_EmptySourceSlug(t *testing.T) {
 
 
 
-// El servicio mueve datos de 4 tablas con UNIQUE(slug, project_id):
-// skills, flows, agents, crons. La lista es fija. Si se agrega una
-// tabla nueva con esa constraint, debe agregarse a la lista.
-//
-// Test canary contra drift: si alguien borra una tabla de la lista
-// sin querer, este test rompe (la lista es static check).
+// DOMAINSERV-104: el merge opera sobre las tablas project-scoped reales.
+// flows/agents/crons son org-global (sin project_id) y quedaron FUERA;
+// tickets/issues son 93 C. Canary contra drift: si se agrega/quita una
+// entidad movible, actualizar esta lista y moveAll juntas.
 func TestBehavior_TablesToMove_AreComplete(t *testing.T) {
-
-
-	expectedTables := []string{"skills", "flows", "agents", "crons"}
-
-
-
-
-	require.Len(t, expectedTables, 4,
-		"se esperan 4 tablas con UNIQUE(slug, project_id) en el merge")
+	expectedTables := []string{
+		"knowledge_observations", "project_skills", "project_policies",
+		"project_repositories", "knowledge_docs", "prompts", "workflows",
+	}
+	require.Len(t, expectedTables, 7,
+		"se esperan 7 entidades project-scoped en el merge (ver moveAll)")
 }
 
 

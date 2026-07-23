@@ -201,6 +201,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 			"domain_ticket_link_external_bulk",
 			"domain_policy_upsert", "domain_policy_delete",
 			"domain_project_create", "domain_project_update", "domain_project_delete",
+			"domain_project_merge",
 			"domain_client_create", "domain_client_update", "domain_client_delete",
 			"domain_knowledge_save",
 			"domain_prompt_capture", "domain_turn_complete",

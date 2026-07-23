@@ -143,6 +143,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_project_list":         ChannelUserIntent,
 	"domain_project_update":       ChannelUserIntent,
 	"domain_project_delete":       ChannelUserIntent,
+	"domain_project_merge":        ChannelUserIntent,
 
 	"domain_project_policy_delete":           ChannelUserIntent,
 	"domain_project_policy_import_from_text": ChannelPolicyTriggered, // session start paso 7

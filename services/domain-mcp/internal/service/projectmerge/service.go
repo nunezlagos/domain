@@ -1,15 +1,16 @@
-// Package projectmerge — issue-01.5 fusiona un proyecto source en target.
+// Package projectmerge — DOMAINSERV-104: fusiona un proyecto source en target.
 //
-// Migra observations, skills, flows, crons, agents desde source.project_id
-// hacia target.project_id en una sola transaccion. Tabla project_merges
-// (000023) registra el merge para audit.
+// Mueve las entidades project-scoped reales (knowledge_observations,
+// project_skills, project_policies, project_repositories, knowledge_docs,
+// prompts, workflows) de source a target en una sola tx serializable.
+// flows/agents/crons son org-global (sin project_id) → NO se mueven; tickets e
+// issues quedan fuera (namespace display_key per-project, DOMAINSERV-93 C).
 //
-// Source project queda soft-deleted (deleted_at) post-merge para preservar
-// historial y permitir rollback manual si surge problema.
-//
-// Convencion de naming en conflictos (skills/agents/flows/crons que usan
-// slug+project_id UNIQUE): el item del target prevalece; los del source
-// con mismo slug se sufijean con "-merged-<source_slug>".
+// Tabla project_merges (000023) registra el merge para audit; el source queda
+// soft-deleted post-merge. El único unique per-project que sobrevivió a la
+// purga de organization_id (migración 000142) es project_skills(project_id,
+// skill_id): se dedupe por skill_id. El resto de tablas ya no tienen unique de
+// slug/name → move directo. No hay RLS activa sobre estas tablas.
 package projectmerge
 
 import (
@@ -34,42 +35,35 @@ var (
 	ErrAlreadyMerged = errors.New("source project already merged")
 )
 
-// MergeReport documenta que se movio.
+// MergeReport documenta qué se movió.
 type MergeReport struct {
 	MergeID           uuid.UUID `json:"merge_id"`
 	SourceID          uuid.UUID `json:"source_id"`
 	TargetID          uuid.UUID `json:"target_id"`
 	ObservationsMoved int       `json:"observations_moved"`
 	SkillsMoved       int       `json:"skills_moved"`
-	SkillsRenamed     []string  `json:"skills_renamed,omitempty"`
-	FlowsMoved        int       `json:"flows_moved"`
-	FlowsRenamed      []string  `json:"flows_renamed,omitempty"`
-	AgentsMoved       int       `json:"agents_moved"`
-	AgentsRenamed     []string  `json:"agents_renamed,omitempty"`
-	CronsMoved        int       `json:"crons_moved"`
-	CronsRenamed      []string  `json:"crons_renamed,omitempty"`
+	SkillsDeduped     int       `json:"skills_deduped,omitempty"`
+	PoliciesMoved     int       `json:"policies_moved"`
+	ReposMoved        int       `json:"repos_moved"`
+	DocsMoved         int       `json:"docs_moved"`
+	PromptsMoved      int       `json:"prompts_moved"`
+	WorkflowsMoved    int       `json:"workflows_moved"`
 	StartedAt         time.Time `json:"started_at"`
 	CompletedAt       time.Time `json:"completed_at"`
 }
 
-// Service ejecuta merges atomicamente.
+// Service ejecuta merges atómicamente.
 type Service struct {
 	Pool  *pgxpool.Pool
 	Audit *audit.PGRecorder
 }
 
-// Merge fusiona source → target. Atomico via tx; rollback completo en error.
+// Merge fusiona source → target. Atómico via tx serializable; rollback en error.
 func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UUID) (*MergeReport, error) {
 	if sourceID == targetID {
 		return nil, ErrSameProject
 	}
-
-	report := MergeReport{
-		MergeID:   uuid.New(),
-		SourceID:  sourceID,
-		TargetID:  targetID,
-		StartedAt: time.Now(),
-	}
+	report := MergeReport{MergeID: uuid.New(), SourceID: sourceID, TargetID: targetID, StartedAt: time.Now()}
 
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -78,7 +72,6 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	defer tx.Rollback(ctx)
 
 	db := projectmergedb.New(tx)
-
 	source, err := db.GetSourceProject(ctx, sourceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: source", ErrNotFound)
@@ -89,142 +82,58 @@ func (s *Service) Merge(ctx context.Context, sourceID, targetID, actorID uuid.UU
 	if source.DeletedAt.Valid {
 		return nil, ErrAlreadyMerged
 	}
-	sourceSlug := source.Slug
-
-	_, err = db.CheckTargetExists(ctx, targetID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if _, err := db.CheckTargetExists(ctx, targetID); errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: target", ErrNotFound)
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("lookup target: %w", err)
 	}
 
-	n, err := db.MoveObservations(ctx, projectmergedb.MoveObservationsParams{
-		TargetID: targetID,
-		SourceID: sourceID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("move observations: %w", err)
+	if err := moveAll(ctx, tx, db, sourceID, targetID, &report); err != nil {
+		return nil, err
 	}
-	report.ObservationsMoved = int(n)
-
-	for _, t := range []struct {
-		table   string
-		moved   *int
-		renamed *[]string
-	}{
-		{"skills", &report.SkillsMoved, &report.SkillsRenamed},
-		{"flows", &report.FlowsMoved, &report.FlowsRenamed},
-		{"agents", &report.AgentsMoved, &report.AgentsRenamed},
-		{"crons", &report.CronsMoved, &report.CronsRenamed},
-	} {
-		moved, renamed, err := moveWithRename(ctx, tx, t.table, sourceID, targetID, sourceSlug)
-		if err != nil {
-			return nil, fmt.Errorf("move %s: %w", t.table, err)
-		}
-		*t.moved = moved
-		*t.renamed = renamed
-	}
-
 	if err := db.SoftDeleteProject(ctx, sourceID); err != nil {
 		return nil, fmt.Errorf("soft-delete source: %w", err)
 	}
-
 	report.CompletedAt = time.Now()
-	reportJSON, _ := json.Marshal(report)
-	if err := db.InsertMergeRecord(ctx, projectmergedb.InsertMergeRecordParams{
-		ID:       report.MergeID,
-		SourceID: sourceID,
-		TargetID: targetID,
-		ActorID:  &actorID,
-		Report:   reportJSON,
-	}); err != nil {
-		_ = db.InsertMergeRecordNoActor(ctx, projectmergedb.InsertMergeRecordNoActorParams{
-			ID:       report.MergeID,
-			SourceID: sourceID,
-			TargetID: targetID,
-		})
+	if err := insertMergeRecord(ctx, db, report, actorID); err != nil {
+		return nil, fmt.Errorf("record merge: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
-
-	if s.Audit != nil {
-		audit.RecordOrLog(ctx, s.Audit, audit.Event{
-			ActorType:  audit.ActorUser,
-			ActorID:    &actorID,
-			Action:     "project.merged",
-			EntityType: "project",
-			EntityID:   &targetID,
-			NewValues: map[string]any{
-				"merge_id":  report.MergeID.String(),
-				"source_id": sourceID.String(),
-				"counts": map[string]int{
-					"observations": report.ObservationsMoved,
-					"skills":       report.SkillsMoved,
-					"flows":        report.FlowsMoved,
-					"agents":       report.AgentsMoved,
-					"crons":        report.CronsMoved,
-				},
-			},
-		})
-	}
+	s.auditMerge(ctx, actorID, targetID, sourceID, report)
 	return &report, nil
 }
 
-// moveWithRename actualiza project_id en source → target. Para slugs que
-// chocan con target, los sufijea con "-merged-<sourceSlug>" antes de mover.
-func moveWithRename(ctx context.Context, tx pgx.Tx, table string, sourceID, targetID uuid.UUID, sourceSlug string) (int, []string, error) {
-	rows, err := tx.Query(ctx,
-		fmt.Sprintf(`
-			SELECT s.id, s.slug
-			FROM %s s
-			WHERE s.project_id = $1
-			  AND EXISTS (
-			    SELECT 1 FROM %s t
-			    WHERE t.project_id = $2 AND t.slug = s.slug
-			  )`, table, table),
-		sourceID, targetID,
-	)
-	if err != nil {
-		return 0, nil, err
+// insertMergeRecord persiste el trail en project_merges. actor_id es nullable
+// (FK a users): uuid.Nil → NULL. En prod el actor es el user del Principal
+// (siempre válido); un actor inválido no-nil aborta el merge (bug del caller).
+func insertMergeRecord(ctx context.Context, db *projectmergedb.Queries, r MergeReport, actorID uuid.UUID) error {
+	reportJSON, _ := json.Marshal(r)
+	var actor *uuid.UUID
+	if actorID != uuid.Nil {
+		actor = &actorID
 	}
-	conflicts := []struct {
-		ID   uuid.UUID
-		Slug string
-	}{}
-	for rows.Next() {
-		var c struct {
-			ID   uuid.UUID
-			Slug string
-		}
-		if err := rows.Scan(&c.ID, &c.Slug); err != nil {
-			rows.Close()
-			return 0, nil, err
-		}
-		conflicts = append(conflicts, c)
-	}
-	rows.Close()
+	return db.InsertMergeRecord(ctx, projectmergedb.InsertMergeRecordParams{
+		ID: r.MergeID, SourceID: r.SourceID, TargetID: r.TargetID, ActorID: actor, Report: reportJSON,
+	})
+}
 
-	renamed := make([]string, 0, len(conflicts))
-	for _, c := range conflicts {
-		newSlug := c.Slug + "-merged-" + sourceSlug
-		if _, err := tx.Exec(ctx,
-			fmt.Sprintf(`UPDATE %s SET slug = $1 WHERE id = $2`, table),
-			newSlug, c.ID,
-		); err != nil {
-			return 0, nil, fmt.Errorf("rename %s.%s: %w", table, c.Slug, err)
-		}
-		renamed = append(renamed, c.Slug+" → "+newSlug)
+func (s *Service) auditMerge(ctx context.Context, actorID, targetID, sourceID uuid.UUID, r MergeReport) {
+	if s.Audit == nil {
+		return
 	}
-
-	tag, err := tx.Exec(ctx,
-		fmt.Sprintf(`UPDATE %s SET project_id = $1 WHERE project_id = $2`, table),
-		targetID, sourceID,
-	)
-	if err != nil {
-		return 0, renamed, err
-	}
-	return int(tag.RowsAffected()), renamed, nil
+	audit.RecordOrLog(ctx, s.Audit, audit.Event{
+		ActorType: audit.ActorUser, ActorID: &actorID,
+		Action: "project.merged", EntityType: "project", EntityID: &targetID,
+		NewValues: map[string]any{
+			"merge_id": r.MergeID.String(), "source_id": sourceID.String(),
+			"counts": map[string]int{
+				"observations": r.ObservationsMoved, "skills": r.SkillsMoved,
+				"policies": r.PoliciesMoved, "repos": r.ReposMoved,
+				"docs": r.DocsMoved, "prompts": r.PromptsMoved, "workflows": r.WorkflowsMoved,
+			},
+		},
+	})
 }

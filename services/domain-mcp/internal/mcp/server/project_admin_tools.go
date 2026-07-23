@@ -69,3 +69,53 @@ func (h *catalogHandlers) handleProjectDelete(ctx context.Context, req mcp.CallT
 		"forced":   force,
 	})
 }
+
+func toolProjectMerge() mcp.Tool {
+	return mcp.NewTool("domain_project_merge",
+		mcp.WithDescription("Fusiona un proyecto source en target: mueve observations, skills, policies, repos, knowledge_docs, prompts y workflows; soft-deletea el source. project_skills dedupe por skill_id. NO mueve tickets/issues (namespace per-project)."),
+		mcp.WithString("source_slug",
+			mcp.Description("Slug del proyecto origen (se vacía y soft-deletea)"),
+			mcp.Required(),
+		),
+		mcp.WithString("target_slug",
+			mcp.Description("Slug del proyecto destino (recibe las entidades)"),
+			mcp.Required(),
+		),
+	)
+}
+
+func (h *catalogHandlers) handleProjectMerge(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.projects == nil || h.merge == nil {
+		return mcp.NewToolResultError("merge service no configurado"), nil
+	}
+	args := req.GetArguments()
+	sourceSlug, _ := args["source_slug"].(string)
+	targetSlug, _ := args["target_slug"].(string)
+	if sourceSlug == "" || targetSlug == "" {
+		return mcp.NewToolResultError("source_slug y target_slug son requeridos"), nil
+	}
+	if sourceSlug == targetSlug {
+		return mcp.NewToolResultError("source_slug y target_slug deben ser distintos"), nil
+	}
+	orgID, err := uuid.Parse(h.principal.OrganizationID)
+	if err != nil {
+		return mcp.NewToolResultError("invalid principal org_id"), nil
+	}
+	source, err := h.projects.GetBySlug(ctx, orgID, sourceSlug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("source project '%s' not found", sourceSlug)), nil
+	}
+	target, err := h.projects.GetBySlug(ctx, orgID, targetSlug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("target project '%s' not found", targetSlug)), nil
+	}
+	var actorID uuid.UUID
+	if uid, uerr := uuid.Parse(h.principal.UserID); uerr == nil {
+		actorID = uid
+	}
+	report, err := h.merge.Merge(ctx, source.ID, target.ID, actorID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("merge: %v", err)), nil
+	}
+	return toolResultJSON(report)
+}

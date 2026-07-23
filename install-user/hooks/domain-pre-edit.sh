@@ -200,6 +200,15 @@ import re, sys
 cmd = sys.stdin.read()
 
 code_ext = r"\.(go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte|yaml|yml|json|toml|tf|hcl|env|xml|gradle|cs|scala|swift|proto|lua)\b"
+# DOMAINSERV-96: el redirect bare `>` omite json|yaml|yml|xml — son destino
+# frecuente de VOLCADO de output (curl > x.json, kubectl get -o yaml > x.yaml),
+# no edición de fuente. Esos formatos siguen gateados vía tee/cp/heredoc.
+src_ext = r"\.(go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte|toml|tf|hcl|env|gradle|cs|scala|swift|proto|lua)\b"
+# separadores de comando: los patrones de verbo no deben cruzarlos (evita
+# que un token de código en otro subcomando dispare el gate).
+sep = r"[^&;|]*"
+# ancla de comando: inicio de línea, tras separador, o tras sudo.
+cmd0 = r"(?:^|[;&|]\s*|\bsudo\s+)"
 
 # DOMAINSERV-75: patrones de escritura a archivos de código. Cualquier
 # coincidencia → el comando parece editar código y requiere gate SDD.
@@ -210,12 +219,12 @@ patterns = [
     r"\bawk\b[^|]*\b-i\s+inplace\b",
     # shell a archivos
     r"\btee\s+(-a\s+)?\S*" + code_ext,
-    r">>?\s*\S*" + code_ext,
+    r">>?\s*\S*" + src_ext,
     r"\bdd\b[^|]*\bof=",
     r"\btruncate\s+-s\b",
-    r"\b(cp|mv)\s+[\s\S]*" + code_ext,
+    r"\b(cp|mv)\s+" + sep + code_ext,
     # parches / apply
-    r"\bpatch\b",
+    cmd0 + r"patch\s",
     r"\bgit\s+apply\b",
     # here-doc a archivos de código
     r"<<[-~]?\s*[\x27\x22]?\w+[\x27\x22]?[\s\S]*" + code_ext,
@@ -225,8 +234,8 @@ patterns = [
     r"\bruby\b[^|]*-(?:e|execute)\b[\s\S]*(?:File\.\s*(?:write|open)|IO\.\s*(?:write|open))",  # ruby -e write
     # editores de línea
     r"\b(?:ed|ex)\s+\S+",
-    # install (copia con permisos)
-    r"\binstall\s+-[^-]*[moc]",
+    # install (copia con permisos) — anclado para no matchear pip/apt install
+    cmd0 + r"install\s+-[^-]*[moc]",
     # archivos sin extensión canónica
     r"\b(?:cp|mv|tee)\s+(-a\s+)?\S*(?:Dockerfile|Makefile)\b",
     r">>?\s*\S*(?:Dockerfile|Makefile)\b",

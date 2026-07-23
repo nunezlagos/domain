@@ -28,8 +28,10 @@ domain_resolve_env() {
 # domain_mcp_init manda el initialize (el server sessionless responde igual,
 # pero algunos setups lo exigen antes del tools/call).
 domain_mcp_init() {
+  # DOMAINSERV-77: el Bearer va por -K <(printf ...) y no por -H, para que no
+  # aparezca en argv (ps/proc). printf es builtin de bash → sin proceso propio.
   curl -fsS -m 4 -X POST "${vps_url}/mcp" \
-    -H "Authorization: Bearer ${api_key}" \
+    -K <(printf 'header = "Authorization: Bearer %s"\n' "$api_key") \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"domain-lifecycle-hook","version":"0.1"}}}'
@@ -37,8 +39,9 @@ domain_mcp_init() {
 
 # domain_call_tool <tool_name> <args_json> — imprime la respuesta JSON-RPC.
 domain_call_tool() {
+  # DOMAINSERV-77: Bearer por -K (fuera de argv), ver domain_mcp_init.
   curl -fsS -m 6 -X POST "${vps_url}/mcp" \
-    -H "Authorization: Bearer ${api_key}" \
+    -K <(printf 'header = "Authorization: Bearer %s"\n' "$api_key") \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}"

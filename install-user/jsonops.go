@@ -43,7 +43,9 @@ func writeJSON(path string, m map[string]any) error {
 		return err
 	}
 	b = append(b, '\n')
-	return os.WriteFile(path, b, 0o644)
+	// DOMAINSERV-77: 0600 — estos JSON llevan el header Authorization (Bearer);
+	// en host multiusuario 0644 los deja legibles por cualquiera.
+	return os.WriteFile(path, b, 0o600)
 }
 
 // keepLastBackups: cada archivo conserva como máximo los 3 backups más recientes.

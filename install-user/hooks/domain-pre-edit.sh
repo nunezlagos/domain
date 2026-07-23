@@ -252,6 +252,6 @@ case "$perm_mode" in
   *)            decision="deny" ;;
 esac
 
-reason="domain (issue-54.7): edición de código SIN flow SDD activo. TODO código pasa por SDD: ejecuta domain_orchestrate (el spec se arma en la fase sdd-spec — consulta dudas al usuario ANTES de redactarlo). Si el usuario ordenó explícitamente saltear el SDD, pídele que apruebe esta edición."
+reason="domain (issue-54.7): edición de código SIN flow SDD activo. TODO código pasa por SDD. Vía rápida: ejecuta domain_orchestrate (mode express para cambios ≤10 líneas single-file, lite para cambios chicos) — eso arma el flow y habilita la edición; en la fase sdd-spec consulta dudas al usuario ANTES de redactar. Nota: este gate es determinista y NO puede recibir una aprobación por chat; la única vía es abrir el flow."
 
 emit_decision "$decision" "$reason"

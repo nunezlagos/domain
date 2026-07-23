@@ -22,10 +22,16 @@ func checkPermissions(home string) int {
 	fails := 0
 
 	allow := doctorStringSet(perms["allow"])
-	if allow["mcp__domain-mcp"] {
-		ok("permissions.allow tiene mcp__domain-mcp")
+	var missingAllow []string
+	for _, rule := range domainPermissionAllows {
+		if !allow[rule] {
+			missingAllow = append(missingAllow, rule)
+		}
+	}
+	if len(missingAllow) == 0 {
+		ok(fmt.Sprintf("permissions.allow tiene las %d reglas de domain", len(domainPermissionAllows)))
 	} else {
-		failL("permissions.allow NO tiene mcp__domain-mcp")
+		failL(fmt.Sprintf("permissions.allow le faltan reglas: %v", missingAllow))
 		fails++
 	}
 

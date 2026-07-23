@@ -56,8 +56,8 @@ func setupHealthyHome(t *testing.T) string {
 
 // Caso todo-ok: una instalación consistente pasa el doctor con exit 0.
 func TestRunDoctor_AllOK(t *testing.T) {
-	home := setupHealthyHome(t)
-	if code := runDoctor(home); code != 0 {
+	setupHealthyHome(t)
+	if code := runDoctor(DetectPlatform()); code != 0 {
 		t.Fatalf("esperaba exit 0 en instalación consistente, got %d", code)
 	}
 }
@@ -69,7 +69,7 @@ func TestRunDoctor_MissingHookScript(t *testing.T) {
 	if err := os.Remove(victim); err != nil {
 		t.Fatalf("remove hook script: %v", err)
 	}
-	if code := runDoctor(home); code == 0 {
+	if code := runDoctor(DetectPlatform()); code == 0 {
 		t.Fatal("esperaba exit !=0 al faltar el script de un hook")
 	}
 }
@@ -88,7 +88,7 @@ func TestRunDoctor_MissingAllow(t *testing.T) {
 	if err := writeJSON(settingsPath, cfg); err != nil {
 		t.Fatalf("write settings: %v", err)
 	}
-	if code := runDoctor(home); code == 0 {
+	if code := runDoctor(DetectPlatform()); code == 0 {
 		t.Fatal("esperaba exit !=0 al faltar mcp__domain-mcp en allow")
 	}
 }
@@ -97,7 +97,7 @@ func TestRunDoctor_MissingAllow(t *testing.T) {
 func TestRunDoctor_EmptyHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	if code := runDoctor(home); code == 0 {
+	if code := runDoctor(DetectPlatform()); code == 0 {
 		t.Fatal("esperaba exit !=0 en HOME sin instalación")
 	}
 }

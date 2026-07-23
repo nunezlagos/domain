@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -11,13 +9,13 @@ import (
 // checkMCPEntry verifica que el MCP entry exista en los archivos de configuración
 // de los clientes detectados (Claude Code y OpenCode) con url + header Authorization.
 // Sin entry MCP, las tools domain_* no están disponibles (DOMAINSERV-76).
-func checkMCPEntry(home string) int {
+func checkMCPEntry(paths Paths) int {
 	step("Entry MCP (clients.json)")
 	fails := 0
 
 	for _, path := range []string{
-		filepath.Join(home, ".claude.json"),
-		filepath.Join(home, ".config", "opencode", "opencode.json"),
+		paths.ClaudeCodeMCP,
+		paths.OpencodeMCP,
 	} {
 		if !fileExists(path) {
 			continue
@@ -64,70 +62,12 @@ func checkMCPEntry(home string) int {
 	return fails
 }
 
-// checkOpencodePermission verifica que opencode.json tenga el bloque
-// `permission` con las reglas deny de git destructivo (DOMAINSERV-69).
-func checkOpencodePermission(home string) int {
-	step("Permisos OpenCode (opencode.json)")
-	path := filepath.Join(home, ".config", "opencode", "opencode.json")
-	if !fileExists(path) {
-		info("opencode no detectado — chequeo omitido")
-		return 0
-	}
-	m, err := loadOrEmptyJSON(path)
-	if err != nil {
-		failL(path + " ilegible: " + err.Error())
-		return 1
-	}
-	perm, _ := m["permission"].(map[string]any)
-	if perm == nil {
-		failL(path + ": falta bloque 'permission'")
-		return 1
-	}
-	bashRules, _ := perm["bash"].(map[string]any)
-	if bashRules == nil {
-		failL(path + ": permission falta 'bash'")
-		return 1
-	}
-	var missing []string
-	for _, rule := range opencodeGitDenyRules {
-		if v, ok := bashRules[rule]; !ok || fmt.Sprint(v) != "deny" {
-			missing = append(missing, rule)
-		}
-	}
-	if len(missing) > 0 {
-		failL(fmt.Sprintf("faltan reglas deny en permission.bash: %v", missing))
-		return 1
-	}
-	ok("todas las reglas git deny presentes en permission.bash")
-	return 0
-}
-
-// checkOpencodePlugin verifica que el plugin git-guard esté instalado en
-// ~/.config/opencode/plugins/domain-git-guard.js (DOMAINSERV-69b). Si OpenCode
-// no está presente, omite. Presente sin plugin → falla crítica.
-func checkOpencodePlugin(home string) int {
-	step("Plugin OpenCode (git-guard)")
-	ocDir := filepath.Join(home, ".config", "opencode")
-	if !dirExists(ocDir) {
-		info("opencode no detectado — chequeo omitido")
-		return 0
-	}
-	path := filepath.Join(ocDir, "plugins", "domain-git-guard.js")
-	if !fileExists(path) {
-		failL(path + ": falta el plugin git-guard")
-		return 1
-	}
-	ok("plugin git-guard presente")
-	return 0
-}
-
 // checkMCPHealth chequea, best-effort, que el VPS del MCP domain responda.
 // NO es crítico: si no hay VPS_URL o el VPS no responde, avisa y sigue (la
 // instalación local puede estar intacta con el VPS temporalmente caído).
-func checkMCPHealth(home string) {
+func checkMCPHealth(paths Paths) {
 	step("Salud del MCP domain")
-	envPath := filepath.Join(home, ".config", "domain", "install.env")
-	env, err := loadEnv(envPath)
+	env, err := loadEnv(paths.GlobalEnv)
 	if err != nil || env.VPSURL == "" {
 		warnL("sin VPS_URL en install.env — chequeo omitido (no crítico)")
 		return

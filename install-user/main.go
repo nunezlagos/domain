@@ -105,7 +105,7 @@ func main() {
 
 	// Subcomando 'doctor' equivalente a --check (no corre la instalación).
 	if check || flag.Arg(0) == "doctor" {
-		os.Exit(runDoctor(DetectPlatform().Home()))
+		os.Exit(runDoctor(DetectPlatform()))
 	}
 
 	platform := DetectPlatform()

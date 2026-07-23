@@ -7,20 +7,27 @@ import "fmt"
 // Los checks individuales viven en doctor_hooks.go, doctor_mcp.go y
 // doctor_config.go (mismo package). Devuelve el exit code: 0 si TODO lo
 // crítico pasó, !=0 si falta algo crítico. La salud del MCP NO es crítica.
-func runDoctor(home string) int {
+func runDoctor(p Platform) int {
 	step("domain doctor — self-check")
+
+	// paths es OS-aware (Windows usa %APPDATA%): los checks de OpenCode e
+	// install.env derivan de acá en vez de hardcodear ~/.config (DOMAINSERV-102).
+	// home cubre los paths de Claude Code (~/.claude), iguales en todos los OS.
+	home := p.Home()
+	paths := p.Paths()
 
 	critical := 0
 	critical += checkPython3()
 	critical += checkHooks(home)
 	critical += checkHookMatchers(home)
-	critical += checkMCPEntry(home)
+	critical += checkMCPEntry(paths)
 	critical += checkPermissions(home)
 	critical += checkInstructions(home)
 	critical += checkClaudeMdExcludes(home)
-	critical += checkOpencodePermission(home)
-	critical += checkOpencodePlugin(home)
-	checkMCPHealth(home) // best-effort, no suma a critical
+	critical += checkOpencodePermission(paths)
+	critical += checkOpencodeInstruction(paths)
+	critical += checkOpencodePlugin(paths)
+	checkMCPHealth(paths) // best-effort, no suma a critical
 
 	step("Resumen")
 	if critical == 0 {

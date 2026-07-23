@@ -10,10 +10,7 @@ import (
 	"time"
 )
 
-const (
-	FlowTokenTTL       = 30 * time.Minute
-	FlowTokenKeyPrefix = "flow-hmac-v1"
-)
+const FlowTokenTTL = 30 * time.Minute
 
 var (
 	ErrTokenNotConfigured = errors.New("flow token: HMAC secret not configured (set DOMAIN_FLOW_TOKEN_SECRET)")

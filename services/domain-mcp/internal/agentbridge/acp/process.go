@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -124,7 +125,29 @@ func scrubbedEnv(extra []string) []string {
 			env = append(env, k+"="+v)
 		}
 	}
-	return append(env, extra...)
+	return dedupEnv(append(env, extra...))
+}
+
+// dedupEnv colapsa claves repetidas con last-wins: extra (cfg.Env) debe poder
+// pisar el allowlist (ej. HOME para seleccionar el modelo del rolling). Sin
+// esto, execve resuelve getenv al PRIMER match (el allowlisted) y el override
+// no tendria efecto.
+func dedupEnv(env []string) []string {
+	seen := map[string]int{}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		k := kv
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			k = kv[:i]
+		}
+		if idx, ok := seen[k]; ok {
+			out[idx] = kv
+			continue
+		}
+		seen[k] = len(out)
+		out = append(out, kv)
+	}
+	return out
 }
 
 // Close termina el subproceso: cancela el ctx, espera con timeout y mata si no

@@ -32,8 +32,7 @@ func setupHealthyHome(t *testing.T) string {
 	if err := installClaudePermissions(home, "ts"); err != nil {
 		t.Fatalf("installClaudePermissions: %v", err)
 	}
-	paths := DetectPlatform().Paths()
-	if err := installGlobalInstructions(paths, home, "ts"); err != nil {
+	if err := installGlobalInstructions(home, "ts"); err != nil {
 		t.Fatalf("installGlobalInstructions: %v", err)
 	}
 	if err := installClaudeMdExcludes(home, "ts", false); err != nil {

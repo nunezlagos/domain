@@ -307,7 +307,7 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 
 	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
 	step("Escribiendo precedencia global de domain")
-	if err := installGlobalInstructions(paths, p.Home(), Timestamp()); err != nil {
+	if err := installGlobalInstructions(p.Home(), Timestamp()); err != nil {
 		warnL("precedencia global: " + err.Error())
 	} else {
 		ok("CLAUDE.md global: " + claudeGlobalPath(p.Home()))
@@ -356,6 +356,16 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 				ok("opencode skill/agent: " + linkVerb(p.OS) + " a globales")
 			}
 		}
+	}
+
+	// DOMAINSERV-101: post-Apply — recién acá existe ~/.config/opencode (lo crea
+	// Apply→configureClient). Escribir la instruction antes sería un no-op en
+	// install fresco de OpenCode.
+	step("Instrucción global OpenCode (instructions/domain.md)")
+	if err := installOpencodeGlobalInstruction(paths, Timestamp()); err != nil {
+		warnL("opencode instruction: " + err.Error())
+	} else {
+		ok("opencode instruction: instructions/domain.md")
 	}
 
 	step("Permisos declarativos OpenCode (git deny)")

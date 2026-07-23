@@ -96,9 +96,10 @@ func claudeGlobalPath(home string) string {
 // ~/.claude/CLAUDE.md dentro de una sección marcada, sin pisar el contenido del
 // usuario, con backup previo. Stdlib puro. Idempotente.
 //
-// Además, si existe la config global de OpenCode, registra el mismo archivo
-// como instruction global de OpenCode (ver installOpencodeGlobalInstruction).
-func installGlobalInstructions(paths Paths, home, timestamp string) error {
+// La instruction global de OpenCode se escribe aparte, en el cluster post-Apply
+// de runInstall (installOpencodeGlobalInstruction), porque su directorio de
+// config recién existe después de Apply (DOMAINSERV-101).
+func installGlobalInstructions(home, timestamp string) error {
 	// 0. Persona en archivo dedicado ~/.claude/persona.md (editable por el
 	//    usuario). domain.md la referencia con @persona.md. Backup si cambia.
 	personaPath := claudePersonaMdPath(home)
@@ -161,7 +162,10 @@ func installGlobalInstructions(paths Paths, home, timestamp string) error {
 		}
 	}
 
-	return installOpencodeGlobalInstruction(paths, timestamp)
+	// DOMAINSERV-101: la instruction global de OpenCode se escribe en el cluster
+	// post-Apply de runInstall (main.go), no acá — en install fresco
+	// ~/.config/opencode aún no existe en este punto y el write sería un no-op.
+	return nil
 }
 
 // installOpencodeGlobalInstruction escribe el bloque de precedencia como

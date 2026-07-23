@@ -48,14 +48,42 @@ func TestInstallOpencodeGlobalInstruction_Idempotent(t *testing.T) {
 	}
 }
 
+// DOMAINSERV-101: installGlobalInstructions ya NO escribe la instruction de
+// OpenCode. Esa responsabilidad se movió al cluster post-Apply (main.go) para
+// que ~/.config/opencode ya exista cuando se escriba. Aunque el dir esté
+// presente, installGlobalInstructions no debe tocarlo: el fix del ordering del
+// install fresco depende de este desacople.
+func TestInstallGlobalInstructions_DoesNotWriteOpencodeInstruction(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := Platform{OS: "linux"}.Paths()
+
+	// OpenCode ya presente (dir + json): el código viejo escribiría
+	// instructions/domain.md acá; el nuevo delega al paso post-Apply.
+	if err := os.MkdirAll(paths.OpencodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.OpencodeMCP, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	instrPath := filepath.Join(paths.OpencodeDir, "instructions", "domain.md")
+	if _, err := os.Stat(instrPath); !os.IsNotExist(err) {
+		t.Fatalf("installGlobalInstructions no debe escribir la instruction de OpenCode (DOMAINSERV-101); apareció %s", instrPath)
+	}
+}
+
 // installGlobalInstructions escribe el cuerpo real en ~/.claude/domain.md y deja
 // SOLO un @import en ~/.claude/CLAUDE.md (no el cuerpo completo). issue-54.1.
 func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	paths := Platform{OS: "linux"}.Paths()
 
-	if err := installGlobalInstructions(paths, home, "20260101T000000Z"); err != nil {
+	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -80,7 +108,7 @@ func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 	}
 
 	// Idempotente: segunda corrida no crea backups nuevos.
-	if err := installGlobalInstructions(paths, home, "20260202T000000Z"); err != nil {
+	if err := installGlobalInstructions(home, "20260202T000000Z"); err != nil {
 		t.Fatalf("2a corrida: %v", err)
 	}
 	bk, _ := filepath.Glob(claudeDomainMdPath(home) + ".backup-*")
@@ -94,9 +122,8 @@ func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 func TestInstallGlobalInstructions_WritesPersonaAndReference(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	paths := Platform{OS: "linux"}.Paths()
 
-	if err := installGlobalInstructions(paths, home, "20260101T000000Z"); err != nil {
+	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -117,7 +144,7 @@ func TestInstallGlobalInstructions_WritesPersonaAndReference(t *testing.T) {
 	}
 
 	// Idempotente: segunda corrida no crea backups nuevos de persona.md.
-	if err := installGlobalInstructions(paths, home, "20260202T000000Z"); err != nil {
+	if err := installGlobalInstructions(home, "20260202T000000Z"); err != nil {
 		t.Fatalf("2a corrida: %v", err)
 	}
 	if bk, _ := filepath.Glob(claudePersonaMdPath(home) + ".backup-*"); len(bk) != 0 {

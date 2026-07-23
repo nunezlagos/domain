@@ -16,6 +16,10 @@
 set +e
 
 payload=$(cat)
+
+# DOMAINSERV-71: si python3 no está disponible, no podemos parsear → skip
+[ -n "$payload" ] && command -v python3 >/dev/null 2>&1 || exit 0
+
 eval "$(printf '%s' "$payload" | python3 -c '
 import json, sys, shlex
 try:

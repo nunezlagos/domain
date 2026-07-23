@@ -105,7 +105,7 @@ ok "Usuario real: $REAL_USER (HOME=$REAL_HOME)"
 
 # ---------- instalar deps faltantes ----------
 missing=()
-for dep in curl tar git; do
+for dep in curl tar git python3; do
   command -v "$dep" >/dev/null 2>&1 || missing+=("$dep")
 done
 
@@ -115,17 +115,25 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
   fi
   step "Instalando deps faltantes: ${missing[*]}"
+  # Map package names: arch usa 'python', el resto 'python3'
+  mapped=()
+  for dep in "${missing[@]}"; do
+    case "$dep" in
+      python3) [ "$PKG_MGR" = "pacman" ] && mapped+=("python") || mapped+=("python3") ;;
+      *)       mapped+=("$dep") ;;
+    esac
+  done
   case "$PKG_MGR" in
-    apt) apt-get update -qq && apt-get install -y -qq "${missing[@]}" ;;
-    pacman) pacman -S --needed --noconfirm "${missing[@]}" ;;
-    dnf) dnf install -y "${missing[@]}" ;;
-    zypper) zypper install -y "${missing[@]}" ;;
-    apk) apk add "${missing[@]}" ;;
-    brew) brew install "${missing[@]}" ;;
+    apt) apt-get update -qq && apt-get install -y -qq "${mapped[@]}" ;;
+    pacman) pacman -S --needed --noconfirm "${mapped[@]}" ;;
+    dnf) dnf install -y "${mapped[@]}" ;;
+    zypper) zypper install -y "${mapped[@]}" ;;
+    apk) apk add "${mapped[@]}" ;;
+    brew) brew install "${mapped[@]}" ;;
   esac
-  ok "deps instaladas (curl, tar, git)"
+  ok "deps instaladas (${missing[*]})"
 else
-  ok "deps presentes: curl, tar, git"
+  ok "deps presentes: curl, tar, git, python3"
 fi
 
 # ---------- verificar Go ----------

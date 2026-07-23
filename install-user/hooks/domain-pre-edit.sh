@@ -36,6 +36,13 @@ LIB="$(dirname "$0")/domain-hooks-lib.sh"
 [ -r "$LIB" ] && . "$LIB"
 
 payload=$(cat)
+
+# DOMAINSERV-71: fail-closed — el gate necesita python3 para parsear el payload
+if [ -n "$payload" ] && ! command -v python3 >/dev/null 2>&1; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"CRITICAL (DOMAINSERV-71): python3 no está disponible. El gate SDD no puede operar sin python3. Instala python3 y reintenta."}}'
+  exit 0
+fi
+
 eval "$(printf '%s' "$payload" | python3 -c '
 import json, sys, shlex
 try:

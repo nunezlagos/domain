@@ -198,18 +198,38 @@ if [ "$tool_name" = "Bash" ]; then
   is_edit=$(printf '%s' "$tool_cmd" | python3 -c '
 import re, sys
 cmd = sys.stdin.read()
-code_ext = r"\.(go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte)\b"
+
+code_ext = r"\.(go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte|yaml|yml|json|toml|tf|hcl|env|xml|gradle|cs|scala|swift|proto|lua)\b"
+
+# DOMAINSERV-75: patrones de escritura a archivos de código. Cualquier
+# coincidencia → el comando parece editar código y requiere gate SDD.
 patterns = [
-    r"\bsed\s+(-\w*\s+)*-i",                              # sed -i (in-place)
-    r"\btee\s+(-a\s+)?\S*" + code_ext,                    # tee a archivo de código
+    # Editores in-place
+    r"\bsed\s+(-\w*\s+)*-i",
+    r"\bperl\s+(-\w*\s+)*-i",
+    r"\bawk\b[^|]*\b-i\s+inplace\b",
+    # shell a archivos
+    r"\btee\s+(-a\s+)?\S*" + code_ext,
+    r">>?\s*\S*" + code_ext,
+    r"\bdd\b[^|]*\bof=",
+    r"\btruncate\s+-s\b",
+    r"\b(cp|mv)\s+[\s\S]*" + code_ext,
+    # parches / apply
     r"\bpatch\b",
     r"\bgit\s+apply\b",
-    r">>?\s*\S*" + code_ext,                              # redirect a archivo de código
-    r"\bperl\s+(-\w*\s+)*-i",                             # perl -i (in-place)
-    r"\bpython3?\b[^|]*-c\b[\s\S]*open\s*\([^)]*[\x27\x22][wa]",  # python -c open(...,"w"/"a")
-    r"\bdd\b[^|]*\bof=",                                  # dd of=<archivo>
-    r"\b(cp|mv)\s+[\s\S]*" + code_ext,                    # cp/mv hacia (o desde) código
-    r"<<[-~]?\s*[\x27\x22]?\w+[\x27\x22]?[\s\S]*" + code_ext,  # here-doc a archivo de código
+    # here-doc a archivos de código
+    r"<<[-~]?\s*[\x27\x22]?\w+[\x27\x22]?[\s\S]*" + code_ext,
+    # escritura con intérpretes en línea
+    r"\bpython3?\b[^|]*-c\b[\s\S]*(?:open\s*\([^)]*[\x27\x22][wa]|write_text|writelines)",  # python -c open/write_text/writelines
+    r"\bnode\b[^|]*-(?:e|eval)\b[\s\S]*(?:writeFileSync|appendFileSync|writeSync|openSync\s*\([^)]*[\x27\x22][wa])",  # node -e write
+    r"\bruby\b[^|]*-(?:e|execute)\b[\s\S]*(?:File\.\s*(?:write|open)|IO\.\s*(?:write|open))",  # ruby -e write
+    # editores de línea
+    r"\b(?:ed|ex)\s+\S+",
+    # install (copia con permisos)
+    r"\binstall\s+-[^-]*[moc]",
+    # archivos sin extensión canónica
+    r"\b(?:cp|mv|tee)\s+(-a\s+)?\S*(?:Dockerfile|Makefile)\b",
+    r">>?\s*\S*(?:Dockerfile|Makefile)\b",
 ]
 if any(re.search(p, cmd) for p in patterns):
     print("yes")

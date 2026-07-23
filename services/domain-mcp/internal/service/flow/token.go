@@ -24,6 +24,7 @@ var (
 type FlowTokenPayload struct {
 	FlowRunID string `json:"f"`
 	SessionID string `json:"s"`
+	OrgID     string `json:"o"`
 	ExpiresAt int64  `json:"e"`
 }
 
@@ -43,7 +44,7 @@ func (s *FlowTokenService) IsConfigured() bool {
 	return len(s.secret) > 0
 }
 
-func (s *FlowTokenService) GenerateToken(flowRunID, sessionID string) (string, error) {
+func (s *FlowTokenService) GenerateToken(flowRunID, sessionID, orgID string) (string, error) {
 	if !s.IsConfigured() {
 		return "", ErrTokenNotConfigured
 	}
@@ -51,6 +52,7 @@ func (s *FlowTokenService) GenerateToken(flowRunID, sessionID string) (string, e
 	payload := FlowTokenPayload{
 		FlowRunID: flowRunID,
 		SessionID: sessionID,
+		OrgID:     orgID,
 		ExpiresAt: time.Now().UTC().Add(s.ttl).Unix(),
 	}
 

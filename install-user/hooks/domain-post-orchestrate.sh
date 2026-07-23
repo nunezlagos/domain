@@ -99,10 +99,15 @@ except Exception:
 fi
 
 marker="$state_dir/flow-$session_id"
+# DOMAINSERV-98: el marker guarda el token HMAC — protegerlo de otros usuarios
+# del host (state_dir 700, marker 600) para que no sea legible ni replayable.
+mkdir -p "$state_dir" 2>/dev/null
+chmod 700 "$state_dir" 2>/dev/null
 if [ -n "$token" ] && [ -n "$expires_at" ]; then
   printf '%s\t%s\n' "$token" "$expires_at" > "$marker" 2>/dev/null
 else
   # fallback: legacy format with flow_run_id (no HMAC configured on server)
   printf '%s\t%s\n' "$(date -Iseconds)" "$flow_run_id" > "$marker" 2>/dev/null
 fi
+chmod 600 "$marker" 2>/dev/null
 exit 0

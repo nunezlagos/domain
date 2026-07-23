@@ -163,7 +163,7 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       [A-Za-z0-9_-]*[A-Za-z0-9_-]*)
         # v2: token HMAC — solo pasa si el server valida firma + flow activo
         resp=$(domain_call_tool domain_flow_validate_token \
-          "{\"token\":\"$field1\"}" 2>/dev/null)
+          "{\"token\":\"$field1\",\"session_id\":\"$session_id\"}" 2>/dev/null)
         valid=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:

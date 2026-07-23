@@ -316,6 +316,10 @@ func toolFlowValidateToken() mcp.Tool {
 			mcp.Description("Token HMAC firmado (generado por domain_flow_grant_token)."),
 			mcp.Required(),
 		),
+		mcp.WithString("session_id",
+			mcp.Description("session_id de la sesión que valida (del hook payload). Debe coincidir con el del token."),
+			mcp.Required(),
+		),
 	)
 }
 
@@ -348,7 +352,7 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		}
 	}
 
-	token, err := h.flowToken.GenerateToken(flowRunID, sessionID)
+	token, err := h.flowToken.GenerateToken(flowRunID, sessionID, h.principal.OrganizationID)
 	if err != nil {
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
 	}
@@ -360,6 +364,11 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		"expires_in":  int(flowsvc.FlowTokenTTL.Seconds()),
 	}, "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
+func flowInvalidResult(reason string) *mcp.CallToolResult {
+	body, _ := json.MarshalIndent(map[string]any{"valid": false, "reason": reason}, "", "  ")
+	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}
 }
 
 func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -381,11 +390,17 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 		if err == flowsvc.ErrTokenExpired {
 			reason = "expired"
 		}
-		body, _ := json.MarshalIndent(map[string]any{
-			"valid":  false,
-			"reason": reason,
-		}, "", "  ")
-		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+		return flowInvalidResult(reason), nil
+	}
+
+	// DOMAINSERV-98: el token debe pertenecer a la org del principal y a la
+	// sesión que valida; corta replay cross-org y cross-sesión antes del
+	// check de flow activo.
+	if payload.OrgID != h.principal.OrganizationID {
+		return flowInvalidResult("org_mismatch"), nil
+	}
+	if payload.SessionID != req.GetString("session_id", "") {
+		return flowInvalidResult("session_mismatch"), nil
 	}
 
 	// validate flow is still active server-side (fail-closed: DOMAINSERV-94)

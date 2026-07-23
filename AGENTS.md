@@ -2,7 +2,7 @@
 
 Override del `~/.config/opencode/AGENTS.md` global.
 
-> **IMPORTANTE:** Este proyecto se construye 100% con agentes IA dirigidos por humanos. Antes de tocar nada, leé `.claude/rules/ai-generation.md` para entender el workflow.
+> **IMPORTANTE:** Este proyecto se construye 100% con agentes IA dirigidos por humanos. El workflow y las policies canónicas viven en la BD de domain (accesibles vía `domain_policy_get`/`domain_policy_list`); este AGENTS.md es el primer resumen local.
 
 ## Stack
 - **Lenguaje:** Go 1.22+

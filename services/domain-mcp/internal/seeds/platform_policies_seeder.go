@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 20 } // 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 21 } // 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -217,25 +217,24 @@ No usar "implementar", "hacer", "tarea" como prefijos — son verbos de acción,
 		},
 		{
 			Slug:       "file-size-limit",
-			Name:       "Límite de tamaño: archivos < 150 líneas, funciones < 30",
+			Name:       "Límite de tamaño: funciones ≤ 50 líneas (archivo advisory)",
 			Kind:       "convention",
-			SourceFile: ".claude/rules/structure.md",
-			BodyMD: `Límites de tamaño — aplicados a código nuevo:
-- Archivos: < 150 líneas de código (excluye imports y comentarios de bloque)
-- Funciones/métodos: < 30 líneas
-- Controllers: sin lógica de negocio > 20 líneas (extraer a Service)
-- Cada clase/módulo: una sola responsabilidad clara (SRP)
+			SourceFile: "AGENTS.md",
+			BodyMD: `Límites de tamaño — aplicados a código NUEVO (DOMAINSERV-87, reconciliado con AGENTS.md):
 
-Si se excede el límite:
-- Extraer funciones auxiliares a helpers/ o utils/
-- Dividir en módulos más pequeños con responsabilidad única
+- Funciones/métodos: ≤ 50 líneas. ENFORCED por cmd/size-lint en CI (el repo lo
+  cumple al ~95%; el viejo umbral < 30 era letra muerta).
+- Archivos: ~150 líneas es una guía ADVISORY, NO falla CI. Señal de que un
+  archivo hace demasiado; considerar dividir.
+- Controllers/handlers: sin lógica de negocio > 20 líneas (extraer a Service).
+- Cada módulo: una sola responsabilidad clara (SRP).
 
-Archivos existentes que excedan el límite son deuda técnica:
-- No agregar código a ellos sin refactorizar primero
-- Documentar como "deuda existente" en el design del change
+Exenciones del linter: wiring/DI (main, server_services.go), catálogos de datos
+(internal/seeds/*) y archivos de migración. Escape-hatch por comentario
+` + "`// size-lint:allow <razón>`" + ` con razón obligatoria.
 
-Excepción única: archivos de migración de datos (seed/migration) que
-son inherentemente largos por su naturaleza declarativa.`,
+Deuda existente congelada en baseline (.size-lint-baseline): CI falla solo ante
+funciones NUEVAS que superen el umbral, no ante las ya existentes.`,
 		},
 		{
 			Slug:       "yagni-simplicity",
@@ -271,7 +270,7 @@ documentarlo en el design del change con los números concretos.`,
 			BodyMD: `Toda lista de tasks DEBE incluir una task final de auditoría (sección "verify").
 Esta task valida que el change completo cumple:
 
-1. Ningún archivo nuevo supera 150 líneas de código
+1. Ninguna función nueva supera 50 líneas (archivo > 150 es advisory, no bloquea)
 2. Todos los inputs del usuario están validados en el boundary del sistema
    (FormRequest, express-validator, Pydantic, etc.)
 3. Sin secretos hardcodeados (API keys, passwords, tokens, rutas absolutas de prod)

@@ -89,6 +89,20 @@ jobs:
       - name: Lint invariante stateless
         run: /tmp/stateless-lint ./...
 
+  size-lint:
+    name: size-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: Build linter
+        run: go build -o /tmp/size-lint ./cmd/size-lint
+      - name: Lint tamaño de funciones (baseline)
+        run: /tmp/size-lint -dir . -baseline .size-lint-baseline
+
   commitlint:
     name: Conventional Commits
     runs-on: ubuntu-latest

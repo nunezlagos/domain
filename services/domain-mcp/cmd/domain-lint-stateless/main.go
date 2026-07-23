@@ -11,7 +11,8 @@
 //   - Channels globales sin owner claro.
 //   - Maps globales sin TTL marker en comment.
 //
-// Whitelist en .stateless-allowed.yaml en root del repo. Cada entrada
+// Whitelist en .stateless-allowed.yaml, resuelto relativo al working-directory
+// del linter (services/domain-mcp/, no el root del monorepo). Cada entrada
 // requiere {path, var, reason} para que esté auditada.
 //
 // Uso:

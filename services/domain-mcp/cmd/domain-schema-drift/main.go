@@ -18,11 +18,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 type result struct {
@@ -113,7 +114,7 @@ func dumpSchema(ctx context.Context, dsn string) (string, error) {
 		SELECT
 			n.nspname AS schema,
 			c.relname AS table,
-			c.relkind,
+			c.relkind::text AS relkind,
 			a.attname AS column,
 			format_type(a.atttypid, a.atttypmod) AS data_type,
 			a.attnotnull AS notnull,
@@ -235,15 +236,12 @@ func obfuscate(dsn string) string {
 	return dsn[:sl+3] + "***@" + dsn[at+1:]
 }
 
+// applyMigrations aplica las migraciones compiladas en ESTE binario (in-tree)
+// vía dmigrate.Up. DOMAINSERV-88: antes shelleaba a `domain migrate up`, lo que
+// dependía de un binario externo en PATH (frágil en CI) y podía usar una fuente
+// de migraciones distinta a la del repo → falso drift.
 func applyMigrations(dsn string) error {
-
-	cmd := exec.Command("domain", "migrate", "up")
-	cmd.Env = append(os.Environ(), "DOMAIN_DATABASE_URL="+dsn)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, string(out))
-	}
-	return nil
+	return dmigrate.Up(dsn)
 }
 
 func writeReport(r result, path string) {

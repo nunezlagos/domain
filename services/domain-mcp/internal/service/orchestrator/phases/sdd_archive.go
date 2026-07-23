@@ -33,9 +33,9 @@ func (h *sddArchiveHandler) Build(_ context.Context, in Input) (*Output, error) 
 	fmt.Fprintln(&b, "Actualiza el CHANGELOG.md Unreleased con entrada del issue.")
 	if !hasIssue {
 		// DOMAINSERV-89: en Lite (sin sdd-spec) puede no haber issue/change que
-		// archivar; en ese caso reportá nothing_to_archive=true en vez de forzar.
+		// archivar; en ese caso reportar nothing_to_archive=true en vez de forzar.
 		fmt.Fprintln(&b, "Si NO hay issue/change openspec asociado (modo liviano sin spec), "+
-			"reportá nothing_to_archive=true (no inventes un issue).")
+			"reportar nothing_to_archive=true (sin inventar un issue).")
 	}
 	return &Output{
 		AgentTemplateSlug: "sdd-archive",

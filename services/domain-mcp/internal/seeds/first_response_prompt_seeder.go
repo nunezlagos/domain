@@ -26,7 +26,7 @@ Con project_slug = el slug del bootstrap:
 ## PASO 2 - Calcular P (proyecto) y G (globales)
 - skills:   P = items de la tool 1 con scope=project ; G = items con scope=global
 - policies: P = total de la tool 2 ; G = total de la tool 3
-- Si el banner de host del hook dice host!=orca (Claude Code plano): EXCLUÍ de G
+- Si el banner de host del hook dice host!=orca (Claude Code plano): excluir de G
   las skills/policies cuyo slug empiece con orca- y cross-project-context (no
   aplican fuera de Orca). Bajo host=orca se cuentan normal.
 

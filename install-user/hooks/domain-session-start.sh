@@ -325,8 +325,8 @@ def _skills_policies_block():
     lines = ["## domain skills & policies VIGENTES "
              "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)",
              f"host={_HOST}" + ("" if _HOST == 'orca'
-                 else " — EXCLUÍ del bloque y de tu trabajo las skills/policies "
-                      "orca-* y cross-project-context; NO las cuentes en G.")]
+                 else " — excluir del bloque y del trabajo las skills/policies "
+                      "orca-* y cross-project-context; no contarlas en G.")]
 
     sk = _mcp_inner(os.environ.get('HOOK_SKILL_OUT', ''))
     if sk is None:

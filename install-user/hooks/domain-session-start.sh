@@ -236,9 +236,20 @@ if [ -z "$policy_out" ]; then
   echo "⚠ domain-session-start: domain_project_policy_list no disponible (MCP sin respuesta)" >&2
 fi
 
+# ---------- 5c. DETECCIÓN DE HOST (DOMAINSERV-92) ----------
+# Orca inyecta env vars en toda terminal/sesión de agente. Si estamos bajo Orca
+# → host=orca (las skills/policies orca-* aplican). Si no → host=cli (Claude Code
+# plano): esas convenciones son ruido y se filtran del contexto inyectado.
+if [ "$TERM_PROGRAM" = "Orca" ] || [ -n "$ORCA_WORKTREE_ID" ] || [ -n "$ORCA_WORKSPACE_ID" ] || [ -n "$ORCA_APP_VERSION" ] || [ -n "$ORCA_TERMINAL_HANDLE" ]; then
+  hook_host="orca"
+else
+  hook_host="cli"
+fi
+
 # ---------- 6. emitir additionalContext (JSON construido con python para
 #            evitar problemas de escapeo de comillas/bash) ----------
 # Pasamos las 3 secciones por env vars a python, que arma el JSON final
+export HOOK_HOST="$hook_host"
 export HOOK_VPS_URL="$vps_url"
 export HOOK_MEM_SLUG="$mem_slug"
 export HOOK_BOOTSTRAP_OUT="$bootstrap_out"
@@ -300,16 +311,30 @@ def _mcp_inner(raw):
             continue
     return {}
 
+# DOMAINSERV-92: skills/policies orca-* solo aplican bajo host=orca. En cli
+# plano son ruido (guían a comandos `orca ...` inexistentes) → se filtran.
+_HOST = os.environ.get('HOOK_HOST', 'cli')
+_ORCA_POLICY_SLUGS = {'orca-worktree-conventions', 'cross-project-context'}
+
+def _is_orca_item(x):
+    slug = str(x.get('slug') or '')
+    return slug.startswith('orca-') or slug in _ORCA_POLICY_SLUGS
+
 def _skills_policies_block():
     """Bloque compacto SUGGEST-ONLY con skills/policies vigentes del proyecto."""
     lines = ["## domain skills & policies VIGENTES "
-             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)"]
+             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)",
+             f"host={_HOST}" + ("" if _HOST == 'orca'
+                 else " — EXCLUÍ del bloque y de tu trabajo las skills/policies "
+                      "orca-* y cross-project-context; NO las cuentes en G.")]
 
     sk = _mcp_inner(os.environ.get('HOOK_SKILL_OUT', ''))
     if sk is None:
         lines.append("skills: ⚠ no disponible (domain MCP sin respuesta)")
     else:
         items = sk.get('skills') if isinstance(sk.get('skills'), list) else []
+        if _HOST != 'orca':
+            items = [s for s in items if isinstance(s, dict) and not _is_orca_item(s)]
         proj = [s for s in items if isinstance(s, dict) and s.get('scope') == 'project']
         glob = [s for s in items if isinstance(s, dict) and s.get('scope') == 'global']
         def _slugs(xs):
@@ -325,6 +350,8 @@ def _skills_policies_block():
         lines.append("policies: ⚠ no disponible (domain MCP sin respuesta)")
     else:
         pitems = pol.get('policies') if isinstance(pol.get('policies'), list) else []
+        if _HOST != 'orca':
+            pitems = [p for p in pitems if isinstance(p, dict) and not _is_orca_item(p)]
         def _pfmt(p):
             slug = str(p.get('slug') or p.get('name') or '?')
             kind = p.get('kind')

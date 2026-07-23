@@ -26,6 +26,9 @@ Con project_slug = el slug del bootstrap:
 ## PASO 2 - Calcular P (proyecto) y G (globales)
 - skills:   P = items de la tool 1 con scope=project ; G = items con scope=global
 - policies: P = total de la tool 2 ; G = total de la tool 3
+- Si el banner de host del hook dice host!=orca (Claude Code plano): EXCLUÍ de G
+  las skills/policies cuyo slug empiece con orca- y cross-project-context (no
+  aplican fuera de Orca). Bajo host=orca se cuentan normal.
 
 ## PASO 3 - Emitir EXACTAMENTE este bloque (primera cosa en el mensaje)
 ` + "```" + `
@@ -54,12 +57,13 @@ R3. PROHIBIDO parafrasear el contexto en prosa o bullets en vez del bloque.
 R4. PROHIBIDO responder al usuario antes de emitir el bloque.
 R5. PROHIBIDO explicar que tools llamaste o escribir "segun el bootstrap".
 R6. PROHIBIDO pasar include_globals a la tool 1 (ya trae globales por default).
-R7. El bloque completo: maximo 12 lineas.`
+R7. El bloque completo: maximo 12 lineas.
+R8. host!=orca: NO listes ni cuentes skills/policies orca-* ni cross-project-context (DOMAINSERV-92).`
 
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 4 } // 4: guard is_user_modified (DOMAINSERV-27)
+func (s *FirstResponsePromptSeeder) Version() int    { return 5 } // 5: regla host!=orca excluye skills/policies orca-* (DOMAINSERV-92); 4: guard is_user_modified (DOMAINSERV-27)
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 

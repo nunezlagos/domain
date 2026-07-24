@@ -45,7 +45,13 @@ out_parts = []
 explicit_fail = False
 explicit_ok = None  # None = sin dato explícito
 
-if isinstance(resp, dict):
+if isinstance(resp, list):
+    # DOMAINSERV-108: algunos clientes entregan tool_response como lista
+    # [{type,text}] (igual que las tools MCP). Extraemos el texto de cada item.
+    for c in resp:
+        if isinstance(c, dict) and isinstance(c.get("text"), str):
+            out_parts.append(c["text"])
+elif isinstance(resp, dict):
     for k in ("stdout", "stderr", "output", "content", "result"):
         v = resp.get(k)
         if isinstance(v, str):
@@ -93,7 +99,14 @@ if explicit_fail:
 elif explicit_ok is not None:
     ok = explicit_ok and not signal_fail
 else:
-    ok = False  # DOMAINSERV-74: sin estado explícito → no crear marker (fail-closed)
+    # DOMAINSERV-108: el tool_response de Bash en Claude Code NO expone exit_code
+    # (shape: {stdout,stderr,interrupted,isImage,noOutputExpected}). El fail-closed
+    # anterior (ok=False sin estado explícito) hacía que el marker tests-ok NUNCA
+    # se escribiera para `go test` → el commit-gate quedaba insatisfacible por vía
+    # automática. Inferimos OK cuando el comando ES una corrida de tests, no fue
+    # interrumpido (interrupted=True ya setea explicit_fail arriba) y el output no
+    # muestra señales de fallo. Un fallo real dispara fail_patterns (FAIL/panic/…).
+    ok = is_test and not signal_fail
 
 print("session_id=%s" % shlex.quote(session_id))
 print("is_test=%s" % shlex.quote("1" if is_test else "0"))

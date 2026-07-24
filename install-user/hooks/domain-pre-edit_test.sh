@@ -45,6 +45,21 @@ out="$(run "$valid")"
 check_contains "JSON válido sin flow (default) -> ask" '"permissionDecision":"ask"' "$out"
 check_not_contains "JSON válido no dispara el deny de payload corrupto" 'DOMAINSERV-103' "$out"
 
+# 3) COMMIT-GATE micro (DOMAINSERV-108): flow marker con field3=micro → el
+#    commit se exime del requisito de tests (no debe emitir el deny del gate).
+mkdir -p "$FAKE_HOME/.local/state/domain"
+printf 'faketoken\t2099-01-01T00:00:00+00:00\tmicro\n' > "$FAKE_HOME/.local/state/domain/flow-micro-sess"
+commit_micro='{"session_id":"micro-sess","tool_name":"Bash","permission_mode":"acceptEdits","tool_input":{"command":"git commit -m \"fix: texto\""}}'
+out="$(run "$commit_micro")"
+check_not_contains "commit-gate: micro exento (no exige tests)" 'commit-gate' "$out"
+
+# 4) COMMIT-GATE no-micro (DOMAINSERV-74 intacto): flow marker con field3=express
+#    y sin marker tests-ok → deny en modo automático.
+printf 'faketoken\t2099-01-01T00:00:00+00:00\texpress\n' > "$FAKE_HOME/.local/state/domain/flow-exp-sess"
+commit_exp='{"session_id":"exp-sess","tool_name":"Bash","permission_mode":"acceptEdits","tool_input":{"command":"git commit -m \"feat: x\""}}'
+out="$(run "$commit_exp")"
+check_contains "commit-gate: express NO exento -> deny sin tests-ok" 'commit-gate' "$out"
+
 if [[ "$FAILS" -gt 0 ]]; then
   printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1
 fi

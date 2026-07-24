@@ -29,18 +29,37 @@ except Exception:
 ti = d.get("tool_input") or {}
 print("session_id=%s" % shlex.quote(d.get("session_id", "")))
 print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
-# extract flow_run_id from orchestrate/phase_result response if present
+# extract flow_run_id from orchestrate/phase_result response if present.
+# DOMAINSERV-108: Claude Code entrega tool_response como LISTA [{type,text}]
+# para tools MCP; otros clientes (o payloads anidados) pueden darlo como dict
+# {content:[...]} o como string. Normalizamos a una lista de items antes de
+# parsear — el bug previo asumía SOLO dict.get("content") y con la lista real
+# de Claude Code fr quedaba "" → nunca se minteaba el token del gate.
 fr = ""
+mode = ""
 resp = d.get("tool_response")
 if isinstance(resp, dict):
-    for c in (resp.get("content") or []):
-        if isinstance(c, dict) and c.get("type") == "text":
-            try:
-                body = json.loads(c["text"])
-                fr = body.get("flow_run_id") or body.get("id") or ""
-            except (json.JSONDecodeError, TypeError):
-                pass
+    items = resp.get("content") or []
+elif isinstance(resp, list):
+    items = resp
+elif isinstance(resp, str):
+    items = [{"type": "text", "text": resp}]
+else:
+    items = []
+for c in items:
+    if isinstance(c, dict) and c.get("type") == "text":
+        try:
+            body = json.loads(c["text"])
+            fr = body.get("flow_run_id") or body.get("id") or ""
+            # DOMAINSERV-108: el modo del flow se persiste como 3er campo del
+            # marker para que el commit-gate exente los flows micro de tests.
+            mode = body.get("mode", "") or ""
+            if fr:
+                break
+        except (json.JSONDecodeError, TypeError):
+            pass
 print("flow_run_id=%s" % shlex.quote(fr))
+print("flow_mode=%s" % shlex.quote(mode))
 ' 2>/dev/null)"
 
 [ -n "$session_id" ] || exit 0
@@ -103,11 +122,14 @@ marker="$state_dir/flow-$session_id"
 # del host (state_dir 700, marker 600) para que no sea legible ni replayable.
 mkdir -p "$state_dir" 2>/dev/null
 chmod 700 "$state_dir" 2>/dev/null
+# DOMAINSERV-108: field3 = modo del flow (ej. "micro"). El commit-gate del
+# pre-edit lo lee para eximir los flows micro del requisito de tests. Vacío
+# para modos normales (express/lite/full) → sin cambio de comportamiento.
 if [ -n "$token" ] && [ -n "$expires_at" ]; then
-  printf '%s\t%s\n' "$token" "$expires_at" > "$marker" 2>/dev/null
+  printf '%s\t%s\t%s\n' "$token" "$expires_at" "$flow_mode" > "$marker" 2>/dev/null
 else
   # fallback: legacy format with flow_run_id (no HMAC configured on server)
-  printf '%s\t%s\n' "$(date -Iseconds)" "$flow_run_id" > "$marker" 2>/dev/null
+  printf '%s\t%s\t%s\n' "$(date -Iseconds)" "$flow_run_id" "$flow_mode" > "$marker" 2>/dev/null
 fi
 chmod 600 "$marker" 2>/dev/null
 exit 0

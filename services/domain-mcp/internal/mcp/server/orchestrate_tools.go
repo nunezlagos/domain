@@ -36,7 +36,7 @@ func toolOrchestrate() mcp.Tool {
 			mcp.Required(),
 		),
 		mcp.WithString("mode",
-			mcp.Description("Modo del orquestador: express | lite | full | solo | detect | async. Default: full. Express usa solo sdd-apply + sdd-verify para cambios ≤10 lineas single-file. Lite corre un subset (sdd-explore + sdd-apply + sdd-verify) para cambios triviales (fix de 1 linea, doc, refactor chico) salteando las fases pesadas."),
+			mcp.Description("Modo del orquestador: micro | express | lite | full | solo | detect | async. Default: full. MICRO (nuevo) corre SOLO sdd-apply, SIN sdd-verify y SIN requisito de tests (el commit-gate lo exenta): rutea aqui para ediciones TRIVIALES sin logica testeable — cambiar texto de front, crear/editar un script, doc/markdown/config, 1 archivo. Express usa sdd-apply + sdd-verify para cambios de codigo ≤10 lineas single-file (SI corre tests). Lite corre un subset (sdd-explore + sdd-apply + sdd-verify) para cambios triviales de codigo salteando las fases pesadas. Regla de ruteo: si el cambio NO toca logica (texto/doc/config/script nuevo) → micro; si toca codigo con logica → express/lite/full segun tamano."),
 		),
 		mcp.WithString("starting_phase",
 			mcp.Description("Phase slug para reanudar desde una fase especifica (p.ej. sdd-design). Si vacio, arranca en sdd-explore."),

@@ -22,6 +22,11 @@ import (
 
 // Mode enumera los cinco modos soportados por el orquestador (RFC 0006).
 //
+//   - ModeMicro: fast path MÍNIMO para ediciones triviales sin lógica
+//     (texto de front, crear un script, 1 archivo, doc/config). Sólo
+//     sdd-apply — NO corre sdd-verify. El commit-gate del cliente EXENTA
+//     estos flows del requisito de tests (marker mode=micro). Rutea aquí
+//     cuando el cambio no toca lógica testeable. Opt-in explícito.
 //   - ModeExpress: fast path para cambios ≤10 líneas single-file. Sólo
 //     sdd-apply + sdd-verify. Confirm condicional D1.
 //   - ModeLite: camino reducido para cambios triviales (fix de 1 línea,
@@ -40,6 +45,7 @@ import (
 type Mode string
 
 const (
+	ModeMicro   Mode = "micro"
 	ModeExpress Mode = "express"
 	ModeLite    Mode = "lite"
 	ModeFull    Mode = "full"
@@ -51,7 +57,7 @@ const (
 // IsValid reporta si el string corresponde a un modo soportado.
 func (m Mode) IsValid() bool {
 	switch m {
-	case ModeExpress, ModeLite, ModeFull, ModeSolo, ModeDetect, ModeAsync:
+	case ModeMicro, ModeExpress, ModeLite, ModeFull, ModeSolo, ModeDetect, ModeAsync:
 		return true
 	}
 	return false

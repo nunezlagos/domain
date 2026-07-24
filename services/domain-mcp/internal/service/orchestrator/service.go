@@ -216,7 +216,7 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 		)
 		return result, nil
 	}
-	if mode == ModeExpress || mode == ModeLite || mode == ModeFull || mode == ModeDetect {
+	if mode == ModeMicro || mode == ModeExpress || mode == ModeLite || mode == ModeFull || mode == ModeDetect {
 
 
 
@@ -241,6 +241,8 @@ func (s *Service) Run(ctx context.Context, in OrchestrateInput) (*OrchestrateRes
 			err  error
 		)
 		switch mode {
+		case ModeMicro:
+			plan, err = modes.BuildMicroPlan(ctx, s.Phases, phaseInput, now)
 		case ModeExpress:
 			plan, err = modes.BuildExpressPlan(ctx, s.Phases, phaseInput, now)
 		case ModeLite:
@@ -327,12 +329,15 @@ func exportPlan(p *modes.PhasePlan, persisted bool) *PhasePlanSummary {
 			saves[j] = SuggestedSaveSummary{Type: s.Type, Required: s.Required, Hint: s.Hint}
 		}
 		// R4 / DOMAINSERV-3 (payload a dieta): en CUALQUIER modo persistido solo el
-		// step 0 lleva el SystemPrompt (template + rulesBlock ~34KB) en el payload
-		// inicial. Los steps 1..N lo reciben reconstruido vía NextStepSystemPrompt
-		// en cada phase_result; su SystemPrompt completo sigue persistido en
-		// step.Inputs. Los modos cortos (express/lite) SÍ sufrían el payload obeso
-		// (medido: 129.601 chars en lite, el rulesBlock ~34KB duplicado por step),
+		// step 0 lleva el SystemPrompt en el payload inicial. Los steps 1..N lo
+		// reciben reconstruido vía NextStepSystemPrompt en cada phase_result; su
+		// SystemPrompt completo sigue persistido en step.Inputs. Los modos cortos
+		// (express/lite) SÍ sufrían el payload obeso (medido: 129.601 chars en lite),
 		// por eso el strip ya no se limita a full.
+		//
+		// DOMAINSERV-108: además el step 0 ahora usa rulesBlock STUB (ver
+		// hydrateSystemPrompts), bajando su SystemPrompt de ~49KB a ~18KB para no
+		// exceder el cap de tool-output del cliente.
 		//
 		// El step 0 se conserva (i > 0): no tiene phase_result previo que emita su
 		// NextStepSystemPrompt, así que debe viajar inline.
@@ -372,11 +377,17 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	}
 
 
-	// DOMAINSERV-24: el step 0 (único que viaja inline, DOMAINSERV-3) lleva las
-	// policies extensas verbatim; los steps 1..N las stubbean. Se carga una vez y
-	// se formatea dos veces (full para step 0, stub para el resto).
+	// DOMAINSERV-108: TODOS los steps (incluido el 0, único que viaja inline
+	// vía DOMAINSERV-3) usan el rulesBlock STUB. Antes el step 0 llevaba las
+	// policies verbatim (~34KB); sumado al base del template (~15KB) el
+	// system_prompt del step 0 pesaba ~49KB y el response de domain_orchestrate
+	// excedía el cap de tool-output del cliente (~25k tokens) → volvía como
+	// error → el hook post-orchestrate no podía extraer flow_run_id → el gate
+	// SDD nunca minteaba token. Con stub el step 0 baja a ~18KB y el response
+	// entra holgado. Las policies completas NO se pierden: el cliente las tiene
+	// del session bootstrap + snapshot_prompt (resumen) y puede pedir el cuerpo
+	// con domain_policy_get on-demand.
 	platform, project := s.loadRulePolicies(ctx, projectID)
-	rulesFull := formatRulesBlock(platform, project, false)
 	rulesStub := formatRulesBlock(platform, project, true)
 	type cached struct {
 		base         string
@@ -398,11 +409,7 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 			c = cached{base: t.SystemPrompt, threshold: t.SkillThreshold(), subagentPlan: t.SubagentPlan()}
 			cache[slug] = c
 		}
-		rules := rulesStub
-		if i == 0 {
-			rules = rulesFull
-		}
-		plan.Steps[i].SystemPrompt = c.base + rules
+		plan.Steps[i].SystemPrompt = c.base + rulesStub
 		plan.Steps[i].SkillThreshold = c.threshold
 	}
 	// REQ-54 issue-54.2: preparación de contexto server-side por fase. Se inyecta

@@ -124,12 +124,23 @@ if re.search(r"\bgit\s+commit\b", cmd):
     print("yes")
 ' 2>/dev/null)
   if [ "$is_commit" = "yes" ]; then
+    # DOMAINSERV-108: flows MICRO (ediciones triviales sin lógica testeable:
+    # texto de front, script nuevo, doc/config) están EXENTOS del requisito de
+    # tests (decisión explícita del usuario). El post-orchestrate escribe el
+    # modo del flow como field3 del marker; si es "micro" el commit pasa sin
+    # tests-ok. Cualquier otro modo mantiene el gate DOMAINSERV-74 intacto.
+    flow_marker="$HOME/.local/state/domain/flow-$session_id"
+    flow_mode=""
+    [ -r "$flow_marker" ] && flow_mode=$(head -1 "$flow_marker" 2>/dev/null | cut -f3)
     marker="$HOME/.local/state/domain/tests-ok-$session_id"
     fresh=""
+    if [ "$flow_mode" = "micro" ]; then
+      fresh="yes"
+    fi
     # DOMAINSERV-74: marker debe existir, tener < 30 min, y el tree hash
     # debe coincidir con el working tree actual (invalida ante ediciones
     # posteriores a la corrida de tests).
-    if [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -30 2>/dev/null)" ]; then
+    if [ "$fresh" != "yes" ] && [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -30 2>/dev/null)" ]; then
       stored_hash=$(cut -f2 "$marker" 2>/dev/null)
       # DOMAINSERV-95: sin hash almacenado → NO fresco (fail-closed). Un marker
       # legacy (solo-timestamp) o forjado con printf ya no habilita el commit.
@@ -179,7 +190,10 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       # v1 legacy: field2 = flow_run_id → validar vía flow_status (running/pending)
       resp=$(domain_call_tool domain_flow_status \
         "{\"flow_run_id\":\"$field2\"}" 2>&1)
-      echo "$resp" | grep -qE '"status":"(running|pending)"' && exit 0
+      # DOMAINSERV-108: flow_status devuelve JSON indentado ("status": "pending"
+      # con espacio tras el colon). El patrón sin espacio nunca matcheaba →
+      # rama legacy muerta. Tolerar whitespace opcional tras el colon.
+      echo "$resp" | grep -qE '"status":[[:space:]]*"(running|pending)"' && exit 0
       # no confirmado / server unreachable → fail-closed → gate
     elif [ -n "$field1" ]; then
       # v2: field1 = token HMAC → validar firma + flow activo server-side

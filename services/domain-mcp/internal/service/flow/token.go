@@ -23,6 +23,11 @@ type FlowTokenPayload struct {
 	SessionID string `json:"s"`
 	OrgID     string `json:"o"`
 	ExpiresAt int64  `json:"e"`
+	// AllowedPaths (DOMAINSERV-110): batch-mode. Si no está vacío, el gate
+	// pre-edit solo autoriza ediciones cuyo path matchee uno de estos globs
+	// (scope por sub-tarea en multiagent paralelo). Vacío = sin restricción de
+	// path (comportamiento histórico, backward-compatible).
+	AllowedPaths []string `json:"p,omitempty"`
 }
 
 type FlowTokenService struct {
@@ -41,16 +46,17 @@ func (s *FlowTokenService) IsConfigured() bool {
 	return len(s.secret) > 0
 }
 
-func (s *FlowTokenService) GenerateToken(flowRunID, sessionID, orgID string) (string, error) {
+func (s *FlowTokenService) GenerateToken(flowRunID, sessionID, orgID string, allowedPaths ...string) (string, error) {
 	if !s.IsConfigured() {
 		return "", ErrTokenNotConfigured
 	}
 
 	payload := FlowTokenPayload{
-		FlowRunID: flowRunID,
-		SessionID: sessionID,
-		OrgID:     orgID,
-		ExpiresAt: time.Now().UTC().Add(s.ttl).Unix(),
+		FlowRunID:    flowRunID,
+		SessionID:    sessionID,
+		OrgID:        orgID,
+		ExpiresAt:    time.Now().UTC().Add(s.ttl).Unix(),
+		AllowedPaths: allowedPaths,
 	}
 
 	body, err := json.Marshal(payload)
@@ -80,11 +86,13 @@ func (s *FlowTokenService) ValidateToken(encoded string) (*FlowTokenPayload, err
 		return nil, fmt.Errorf("flow token: base64: %w", err)
 	}
 
+	// separador = ÚLTIMO '.': el body es JSON y puede contener '.' (ej. paths con
+	// extensión en AllowedPaths, DOMAINSERV-110); la firma es base64url (sin '.'),
+	// así que el último '.' delimita body|sig sin ambigüedad.
 	idx := -1
 	for i, b := range raw {
 		if b == '.' {
 			idx = i
-			break
 		}
 	}
 	if idx < 0 {

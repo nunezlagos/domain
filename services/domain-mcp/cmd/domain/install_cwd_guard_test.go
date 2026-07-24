@@ -107,7 +107,7 @@ func TestCheckProjectRootGuard_SrcNotExists(t *testing.T) {
 	stderr := string(buf[:n])
 
 	require.False(t, ok, "checkProjectRootGuard should fail for nonexistent --src")
-	require.Contains(t, stderr, "could not determine cwd", "no stderr capture — el helper loguea distinto para path inexistente")
+	require.Contains(t, stderr, "project root check failed", "un --src inexistente aborta con el error de stat de IsProjectRoot")
 
 }
 

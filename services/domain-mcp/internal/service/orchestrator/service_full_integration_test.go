@@ -62,10 +62,15 @@ func TestService_Run_Full_Persists10StepsWithFirstPromptOnly(t *testing.T) {
 	require.Equal(t, "sdd-archive", string(res.Plan.Steps[10].Slug))
 	require.Equal(t, "sdd-onboard", string(res.Plan.Steps[11].Slug))
 
+	require.NotEmpty(t, res.Plan.Steps[0].SystemPrompt)
 	require.NotEmpty(t, res.Plan.Steps[0].UserPrompt)
+	// El lazy-strip del payload (DOMAINSERV-3) solo vacía SystemPrompt para i>=1;
+	// se reconstruye vía NextStepSystemPrompt en cada phase_result. UserPrompt NO
+	// se strippea (lleva prep-context, REQ-54 issue-54.2), pero puede venir vacío
+	// en fases sin contexto ni subagent-plan inyectado, así que no se asserta acá.
 	for i := 1; i < 12; i++ {
-		require.Empty(t, res.Plan.Steps[i].UserPrompt,
-			"step[%d] (%s) debe tener UserPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
+		require.Empty(t, res.Plan.Steps[i].SystemPrompt,
+			"step[%d] (%s) debe tener SystemPrompt vacío en Full (lazy)", i, res.Plan.Steps[i].Slug)
 	}
 
 	require.Equal(t, res.Plan.Steps[0].UserPrompt, res.SnapshotPrompt)
@@ -286,6 +291,10 @@ func TestService_Run_Full_EndToEnd_11Phases(t *testing.T) {
 			FlowRunStepID:   step.ID,
 			Output:          outputs[i],
 			MemoryRefsSaved: refs,
+			// REQ-54 issue-54.1: cada fase declara su contrato required_tool_calls;
+			// un cliente conforme reporta las tools que invocó. Se pasa el contrato
+			// de la propia fase para satisfacerlo (nil en fases sin contrato).
+			ToolCallsSaved: step.RequiredToolCalls,
 		})
 		require.NoErrorf(t, err, "fase %d (%s) falló inesperado", i, step.Slug)
 		require.Equal(t, "completed", out.StepStatus)

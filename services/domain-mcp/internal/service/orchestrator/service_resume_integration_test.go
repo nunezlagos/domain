@@ -108,6 +108,8 @@ func TestService_ResumeCrossSession(t *testing.T) {
 		Output:        proposeOut,
 		// Feature B: sdd-propose exige knowledge_doc Required=true.
 		MemoryRefsSaved: []phases.MemoryRef{{Type: "knowledge_doc", ID: uuid.New()}},
+		// REQ-54 issue-54.1: sdd-propose exige estos tool_calls.
+		ToolCallsSaved: []string{"domain_openspec_export", "domain_openspec_apply"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "completed", r3.StepStatus)

@@ -120,23 +120,23 @@ func TestMCP_Orchestrate_Express_RoundTrip(t *testing.T) {
 		"project_id": f.projectID,
 	})
 	var startRes struct {
-		OrchestratorRunID string `json:"OrchestratorRunID"`
-		FlowRunID         string `json:"FlowRunID"`
-		Mode              string `json:"Mode"`
+		OrchestratorRunID string `json:"orchestrator_run_id"`
+		FlowRunID         string `json:"flow_run_id"`
+		Mode              string `json:"mode"`
 		Plan              struct {
-			Mode  string `json:"Mode"`
+			Mode  string `json:"mode"`
 			Steps []struct {
-				ID                string `json:"ID"`
-				Slug              string `json:"Slug"`
-				AgentTemplateSlug string `json:"AgentTemplateSlug"`
-				SystemPrompt      string `json:"SystemPrompt"`
-				UserPrompt        string `json:"UserPrompt"`
+				ID                string `json:"id"`
+				Slug              string `json:"slug"`
+				AgentTemplateSlug string `json:"agent_template_slug"`
+				SystemPrompt      string `json:"system_prompt"`
+				UserPrompt        string `json:"user_prompt"`
 				SuggestedSaves    []struct {
-					Type     string `json:"Type"`
-					Required bool   `json:"Required"`
-				} `json:"SuggestedSaves"`
-			} `json:"Steps"`
-		} `json:"Plan"`
+					Type     string `json:"type"`
+					Required bool   `json:"required"`
+				} `json:"suggested_saves"`
+			} `json:"steps"`
+		} `json:"plan"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(startTxt), &startRes))
 	require.Equal(t, "express", startRes.Mode)

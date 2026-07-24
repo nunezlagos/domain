@@ -181,8 +181,32 @@ func (h *orchestrateHandlers) handleOrchestrate(ctx context.Context, req mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError("orchestrate: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(res, "", "  ")
+	body, _ := json.MarshalIndent(trimOrchestrateForTransport(res), "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+}
+
+// trimOrchestrateForTransport reduce el payload de OrchestrateResult para no
+// exceder el cap de tool-output del cliente (DOMAINSERV-108): el plan completo
+// inlinea SnapshotPrompt + los prompts de TODAS las fases (63-74k chars), lo que
+// hacía que el resultado volviera como error y el hook post-orchestrate no
+// pudiera extraer el flow_run_id (→ token del gate nunca minteado). Mantiene los
+// prompts SOLO de la primera fase; las siguientes llegan on-demand vía
+// domain_orchestrate_phase_result / domain_flow_status.
+func trimOrchestrateForTransport(res *orchsvc.OrchestrateResult) *orchsvc.OrchestrateResult {
+	if res == nil || res.Plan == nil {
+		return res
+	}
+	out := *res
+	plan := *res.Plan
+	steps := make([]orchsvc.PhaseStepSummary, len(plan.Steps))
+	copy(steps, plan.Steps)
+	for i := 1; i < len(steps); i++ {
+		steps[i].SystemPrompt = ""
+		steps[i].UserPrompt = ""
+	}
+	plan.Steps = steps
+	out.Plan = &plan
+	return &out
 }
 
 func (h *orchestrateHandlers) handleOrchestratePhaseResult(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

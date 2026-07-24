@@ -108,38 +108,41 @@ type OrchestrateInput struct {
 // asíncronos devuelven inmediatamente con OrchestratorRunID + FlowRunID
 // y status='pending'; el cliente debe pollear o suscribirse a signals.
 type OrchestrateResult struct {
-	OrchestratorRunID uuid.UUID
+	OrchestratorRunID uuid.UUID `json:"orchestrator_run_id"`
 
-	FlowRunID uuid.UUID
+	// DOMAINSERV-108: json tag snake_case OBLIGATORIO. El hook post-orchestrate
+	// extrae flow_run_id del resultado para mintear el token del gate SDD; sin
+	// tag marshalaba "FlowRunID" (PascalCase) y el hook nunca lo encontraba.
+	FlowRunID uuid.UUID `json:"flow_run_id"`
 
-	Mode Mode
+	Mode Mode `json:"mode"`
 
-	StartedAt time.Time
+	StartedAt time.Time `json:"started_at"`
 
-	SnapshotPrompt string
+	SnapshotPrompt string `json:"snapshot_prompt,omitempty"`
 
-	Plan *PhasePlanSummary
+	Plan *PhasePlanSummary `json:"plan,omitempty"`
 }
 
 // PhasePlanSummary es la vista exportada del modes.PhasePlan, sin
 // importar el subpaquete modes desde callers externos.
 type PhasePlanSummary struct {
-	Mode  string
-	Steps []PhaseStepSummary
+	Mode  string             `json:"mode"`
+	Steps []PhaseStepSummary `json:"steps"`
 }
 
 // PhaseStepSummary es la fase individual desde la perspectiva del
 // caller. El cliente IDE recibe esto y ejecuta usando AgentTemplateSlug
 // como referencia para resolver agent_templates → agent_id real.
 type PhaseStepSummary struct {
-	ID                uuid.UUID
-	Slug              PhaseSlug
-	AgentTemplateSlug string
-	SystemPrompt      string
-	UserPrompt        string
-	SuggestedSaves    []SuggestedSaveSummary
-	RetryPolicy       string
-	SkillThreshold    float64
+	ID                uuid.UUID              `json:"id"`
+	Slug              PhaseSlug              `json:"slug"`
+	AgentTemplateSlug string                 `json:"agent_template_slug,omitempty"`
+	SystemPrompt      string                 `json:"system_prompt,omitempty"`
+	UserPrompt        string                 `json:"user_prompt,omitempty"`
+	SuggestedSaves    []SuggestedSaveSummary `json:"suggested_saves,omitempty"`
+	RetryPolicy       string                 `json:"retry_policy,omitempty"`
+	SkillThreshold    float64                `json:"skill_threshold,omitempty"`
 
 	// RequiredToolCalls: tools domain_* que la fase exige que el cliente
 	// invoque antes de cerrar el step (R5-A). Se declara upfront para que el
@@ -155,7 +158,7 @@ type PhaseStepSummary struct {
 // SuggestedSaveSummary expone el contrato D5 sin reexportar el tipo del
 // subpaquete phases.
 type SuggestedSaveSummary struct {
-	Type     string
-	Required bool
-	Hint     string
+	Type     string `json:"type"`
+	Required bool   `json:"required"`
+	Hint     string `json:"hint,omitempty"`
 }

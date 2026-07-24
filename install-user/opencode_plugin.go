@@ -24,5 +24,13 @@ func installOpencodePlugin(paths Paths, timestamp string) error {
 	if _, err := backupIfExists(dst, timestamp); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, opencodeGitGuardJS, 0o644)
+	if err := os.WriteFile(dst, opencodeGitGuardJS, 0o644); err != nil {
+		return err
+	}
+	// DOMAINSERV-100: gate SDD + commit-gate (paridad con domain-pre-edit.sh).
+	gate := filepath.Join(pluginDir, "domain-sdd-gate.js")
+	if _, err := backupIfExists(gate, timestamp); err != nil {
+		return err
+	}
+	return os.WriteFile(gate, opencodeSddGateJS, 0o644)
 }

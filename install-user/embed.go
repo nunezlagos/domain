@@ -19,3 +19,6 @@ var opencodeGlobalMD []byte
 
 //go:embed templates/opencode-git-guard.js
 var opencodeGitGuardJS []byte
+
+//go:embed templates/opencode-sdd-gate.js
+var opencodeSddGateJS []byte

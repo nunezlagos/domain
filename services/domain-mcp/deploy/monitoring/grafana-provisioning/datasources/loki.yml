@@ -1,7 +1,11 @@
 # DOMAINSERV-81: datasource Loki (logs). Prometheus sigue siendo el default.
 apiVersion: 1
 datasources:
+  # uid fijo: los paneles del dashboard lo referencian explícitamente. Sin uid
+  # Grafana genera uno aleatorio por instalación y el panel provisionado
+  # quedaría apuntando a un datasource inexistente.
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://loki:3100

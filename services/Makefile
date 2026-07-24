@@ -7,6 +7,7 @@ COMPOSE_MINIO    := docker compose -f minio/docker-compose.yml $(ENV_FILE)
 COMPOSE_MCP  := docker compose -f domain-mcp/docker-compose.yml $(ENV_FILE)
 COMPOSE_ADMIN    := docker compose -f domain-admin/docker-compose.yml $(ENV_FILE)
 COMPOSE_CADDY    := docker compose -f caddy/docker-compose.yml $(ENV_FILE)
+COMPOSE_OLLAMA   := docker compose -f ollama/docker-compose.yml $(ENV_FILE)
 COMPOSE_MONITORING := docker compose -f domain-mcp/deploy/monitoring/docker-compose.yml $(ENV_FILE)
 NETWORK := domain_internal
 
@@ -28,19 +29,28 @@ build: ## Build imágenes locales (mcp + admin)
 # minio-bootstrap y domain-migrate que salen exit 0 después de su trabajo).
 LONG_RUNNING_COUNT := 5
 
-wait-healthy: ## Espera hasta 120s a que los 5 containers long-running estén healthy
+# ollama es opt-in (DOMAIN_EMBEDDING_PROVIDER=ollama): se cuenta solo si su
+# container existe, para no romper el wait en deploys que no lo usan.
+wait-healthy: ## Espera hasta 120s a que los containers long-running estén healthy
 	@echo "Esperando healthy (timeout 120s)..."; \
+	expected=$(LONG_RUNNING_COUNT); \
+	names='^domain-(postgres|minio|mcp|admin|caddy)$$'; \
+	if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx domain-ollama; then \
+	  expected=$$((expected + 1)); \
+	  names='^domain-(postgres|minio|mcp|admin|caddy|ollama)$$'; \
+	fi; \
 	for i in $$(seq 1 60); do \
-	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE '^domain-(postgres|minio|mcp|admin|caddy)$$' || true); \
-	  if [ "$$healthy" -ge $(LONG_RUNNING_COUNT) ]; then echo "  ✓ los $$healthy/$$healthy long-running están healthy"; exit 0; fi; \
+	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE "$$names" || true); \
+	  if [ "$$healthy" -ge "$$expected" ]; then echo "  ✓ los $$healthy/$$expected long-running están healthy"; exit 0; fi; \
 	  sleep 2; \
 	done; \
 	echo "  ! timeout esperando healthy. usar 'make ps' + 'make logs SVC=<svc>' para diagnosticar"; exit 1
 
-up: ensure-network ## Levanta servicios (SVC=postgres|minio|mcp|admin|caddy|all)
+up: ensure-network ## Levanta servicios (SVC=postgres|minio|ollama|mcp|admin|caddy|all)
 	@case "$(SVC)" in \
 	  postgres) $(COMPOSE_PG) up -d ;; \
 	  minio)    $(COMPOSE_MINIO) up -d ;; \
+	  ollama)   $(COMPOSE_OLLAMA) up -d ;; \
 	  mcp)  $(COMPOSE_MCP) up -d ;; \
 	  admin)    $(COMPOSE_ADMIN) up -d ;; \
 	  caddy)    $(COMPOSE_CADDY) up -d ;; \
@@ -50,13 +60,18 @@ up: ensure-network ## Levanta servicios (SVC=postgres|minio|mcp|admin|caddy|all)
 	            $(COMPOSE_ADMIN) up -d && \
 	            $(COMPOSE_CADDY) up -d && \
 	            $(MAKE) wait-healthy ;; \
-	  *) echo "SVC inválido: postgres|minio|mcp|admin|caddy|all"; exit 1 ;; \
+	  *) echo "SVC inválido: postgres|minio|ollama|mcp|admin|caddy|all"; exit 1 ;; \
 	esac
+
+# `all` NO incluye ollama a propósito: es opt-in por DOMAIN_EMBEDDING_PROVIDER.
+# install.sh lo levanta explícito ANTES del resto para que domain-mcp encuentre
+# el modelo al medir la dimensión; si arranca después, el server degrada a noop.
 
 down: ## Detiene containers en orden inverso (mantiene volumes y network)
 	-$(COMPOSE_CADDY) down
 	-$(COMPOSE_ADMIN) down
 	-$(COMPOSE_MCP) down
+	-$(COMPOSE_OLLAMA) down
 	-$(COMPOSE_MINIO) down
 	-$(COMPOSE_PG) down
 
@@ -67,6 +82,7 @@ restart: ## Update + restart (SVC=mcp|admin rebuildean; otros solo restart)
 	  mcp)  $(COMPOSE_MCP) build && $(COMPOSE_MCP) up -d ;; \
 	  admin)    $(COMPOSE_ADMIN) build && $(COMPOSE_ADMIN) up -d ;; \
 	  caddy)    $(COMPOSE_CADDY) restart ;; \
+	  ollama)   $(COMPOSE_OLLAMA) restart ;; \
 	  all)      $(MAKE) down && $(MAKE) build && $(MAKE) up ;; \
 	  *) echo "SVC inválido"; exit 1 ;; \
 	esac

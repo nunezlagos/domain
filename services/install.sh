@@ -323,9 +323,36 @@ for name in domain-postgres domain-minio domain-minio-bootstrap domain-mcp domai
 done
 [[ "$CLEANED" -gt 0 ]] && log "Limpiados $CLEANED post-down"
 make build
+
+# Embeddings opt-in (DOMAINSERV-80 H2): si el .env pide ollama, el servicio se
+# levanta ANTES que domain-mcp. El server mide la dimensión real del modelo al
+# arrancar; si ollama no responde todavía degrada a noop y la búsqueda semántica
+# queda apagada hasta el próximo restart.
+EMB_PROVIDER=$(env_get DOMAIN_EMBEDDING_PROVIDER "$ENV_FILE")
+EMB_MODEL=$(env_get DOMAIN_OLLAMA_EMBED_MODEL "$ENV_FILE"); EMB_MODEL="${EMB_MODEL:-bge-m3}"
+if [[ "$EMB_PROVIDER" == "ollama" ]]; then
+  log "Embeddings: provider=ollama modelo=$EMB_MODEL — levantando servicio..."
+  make up SVC=ollama
+  # el bootstrap hace `ollama pull`; la primera vez baja ~1.2 GB. Esperamos a que
+  # el modelo esté listo antes de arrancar el server, con tope de 15 min.
+  OLLAMA_READY=""
+  for _ in $(seq 1 180); do
+    if docker exec domain-ollama ollama list 2>/dev/null | grep -q "$EMB_MODEL"; then
+      OLLAMA_READY=1; break
+    fi
+    sleep 5
+  done
+  if [[ -n "$OLLAMA_READY" ]]; then
+    ok "modelo $EMB_MODEL disponible en ollama"
+  else
+    warn "timeout (15m) esperando el modelo $EMB_MODEL — el server arrancará con búsqueda semántica apagada"
+    warn "  revisá 'docker logs domain-ollama-bootstrap' y re-corré el instalador"
+  fi
+fi
+
 make up
 make wait-healthy
-ok "5 servicios healthy"
+ok "servicios healthy"
 
 # Self-check HTTP fail-loud (DOMAINSERV-84): wait-healthy solo verifica health de
 # contenedores; esto confirma que el stack SIRVE de verdad a traves de Caddy.
@@ -338,6 +365,21 @@ for _ in $(seq 1 30); do
 done
 [[ -n "$SELFCHECK_OK" ]] || fail "self-check: http://localhost/healthz no respondio 200 tras 60s — el stack no esta sirviendo. Revisá 'docker ps' y 'docker logs domain-caddy domain-mcp'."
 ok "Self-check HTTP OK (/healthz 200)"
+
+# Backfill de embeddings (DOMAINSERV-80 H2). BEST-EFFORT a propósito: un fallo
+# acá no debe tumbar un deploy que ya está sirviendo. Es idempotente porque el
+# backfill solo toma filas con embedding NULL — en el cron diario, con todo
+# poblado, son 0 filas y sale enseguida. --pause-ms=0 porque ollama es local y
+# no tiene rate-limit que respetar.
+if [[ "$EMB_PROVIDER" == "ollama" ]]; then
+  log "Backfill de embeddings pendientes (idempotente, best-effort)..."
+  if docker exec domain-mcp domain embed-backfill --all --pause-ms=0 2>&1 | tail -20; then
+    ok "backfill completado"
+  else
+    warn "el backfill falló o quedó incompleto — el stack sigue operativo"
+    warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
+  fi
+fi
 
 # === STEP 7: Systemd units + timers ===
 log "7/9  Configurando systemd units + timers..."

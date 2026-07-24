@@ -1,18 +1,19 @@
 -- name: InsertAttachment :one
+-- organization_id se autofill por DEFAULT current_org_id() (RLS, DOMAINSERV-112).
 INSERT INTO file_attachments (
     entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by
 ) VALUES (
     @entity_type, @entity_id, @filename, @s3_key, @size_bytes, @mime_type, @created_by
 )
-RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at;
+RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id;
 
 -- name: GetAttachment :one
-SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
+SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id
 FROM file_attachments
 WHERE id = @id;
 
 -- name: ListByEntity :many
-SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
+SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id
 FROM file_attachments
 WHERE entity_type = @entity_type AND entity_id = @entity_id
 ORDER BY created_at DESC;

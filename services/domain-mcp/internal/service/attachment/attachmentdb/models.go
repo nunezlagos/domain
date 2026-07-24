@@ -11,13 +11,14 @@ import (
 )
 
 type FileAttachment struct {
-	ID         uuid.UUID `json:"id"`
-	EntityType string    `json:"entity_type"`
-	EntityID   uuid.UUID `json:"entity_id"`
-	Filename   string    `json:"filename"`
-	S3Key      string    `json:"s3_key"`
-	SizeBytes  int64     `json:"size_bytes"`
-	MimeType   string    `json:"mime_type"`
-	CreatedBy  *string   `json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	EntityType     string     `json:"entity_type"`
+	EntityID       uuid.UUID  `json:"entity_id"`
+	Filename       string     `json:"filename"`
+	S3Key          string     `json:"s3_key"`
+	SizeBytes      int64      `json:"size_bytes"`
+	MimeType       string     `json:"mime_type"`
+	CreatedBy      *string    `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	OrganizationID *uuid.UUID `json:"organization_id"`
 }

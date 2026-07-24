@@ -51,7 +51,7 @@ func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) (string, e
 }
 
 const getAttachment = `-- name: GetAttachment :one
-SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
+SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id
 FROM file_attachments
 WHERE id = $1
 `
@@ -69,6 +69,7 @@ func (q *Queries) GetAttachment(ctx context.Context, id uuid.UUID) (FileAttachme
 		&i.MimeType,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.OrganizationID,
 	)
 	return i, err
 }
@@ -79,7 +80,7 @@ INSERT INTO file_attachments (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
+RETURNING id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id
 `
 
 type InsertAttachmentParams struct {
@@ -92,6 +93,7 @@ type InsertAttachmentParams struct {
 	CreatedBy  *string   `json:"created_by"`
 }
 
+// organization_id se autofill por DEFAULT current_org_id() (RLS, DOMAINSERV-112).
 func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentParams) (FileAttachment, error) {
 	row := q.db.QueryRow(ctx, insertAttachment,
 		arg.EntityType,
@@ -113,12 +115,13 @@ func (q *Queries) InsertAttachment(ctx context.Context, arg InsertAttachmentPara
 		&i.MimeType,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.OrganizationID,
 	)
 	return i, err
 }
 
 const listByEntity = `-- name: ListByEntity :many
-SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at
+SELECT id, entity_type, entity_id, filename, s3_key, size_bytes, mime_type, created_by, created_at, organization_id
 FROM file_attachments
 WHERE entity_type = $1 AND entity_id = $2
 ORDER BY created_at DESC
@@ -148,6 +151,7 @@ func (q *Queries) ListByEntity(ctx context.Context, arg ListByEntityParams) ([]F
 			&i.MimeType,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.OrganizationID,
 		); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,45 @@
+// DOMAINSERV-81: Grafana Alloy scrapea logs de los contenedores Docker y los
+// empuja a Loki. Labels de baja cardinalidad (container, env) — alinea con la
+// policy low-cardinality-metrics. Config validada con context7 /grafana/loki.
+
+// descubre contenedores vía el socket de Docker
+discovery.docker "domain" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "10s"
+}
+
+// mapea el nombre del contenedor al label 'container' (sin la barra inicial)
+discovery.relabel "domain" {
+	targets = []
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+// colecta los logs de los contenedores descubiertos
+loki.source.docker "domain" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.docker.domain.targets
+	forward_to       = [loki.process.domain.receiver]
+	relabel_rules    = discovery.relabel.domain.rules
+	refresh_interval = "10s"
+}
+
+// agrega el label estático de entorno (baja cardinalidad)
+loki.process "domain" {
+	stage.static_labels {
+		values = {
+			env = "prod",
+		}
+	}
+	forward_to = [loki.write.domain.receiver]
+}
+
+// empuja a Loki
+loki.write "domain" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

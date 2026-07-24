@@ -33,6 +33,7 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
+      - loki
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -46,9 +47,42 @@ services:
     ports:
       - "3000:3000"
 
+  # DOMAINSERV-81: Loki (agregación de logs) + Alloy (scrape de logs de Docker).
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: domain-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks:
+      - domain_internal
+    expose:
+      - "3100"
+
+  alloy:
+    image: grafana/alloy:v1.5.0
+    container_name: domain-alloy
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    networks:
+      - domain_internal
+
 volumes:
   prometheus-data:
   grafana-data:
+  loki-data:
+  alloy-data:
 
 networks:
   domain_internal:

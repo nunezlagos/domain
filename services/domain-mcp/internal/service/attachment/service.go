@@ -224,18 +224,28 @@ func validateFile(size int64, mimeType string) error {
 	return nil
 }
 
-func (s *Service) requireEntity(ctx context.Context, entityType string, entityID uuid.UUID) error {
-	var table string
+// entityTable mapea un entity_type de attachment a su tabla dueña. Función pura
+// (testeable sin DB). ok=false para tipos no soportados.
+func entityTable(entityType string) (string, bool) {
 	switch entityType {
 	case "user_story":
-		table = "issues"
+		return "issues", true
 	case "requirement":
-		table = "sdd_requirements"
+		return "sdd_requirements", true
 	case "hu_draft":
-		table = "issue_drafts"
+		return "issue_drafts", true
 	case "intake_payload":
-		table = "issue_intake_payloads"
+		return "issue_intake_payloads", true
+	case "ticket":
+		return "tickets", true
 	default:
+		return "", false
+	}
+}
+
+func (s *Service) requireEntity(ctx context.Context, entityType string, entityID uuid.UUID) error {
+	table, ok := entityTable(entityType)
+	if !ok {
 		return ErrInvalidEntity
 	}
 	var exists bool

@@ -51,7 +51,7 @@ func registerAttachmentTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTo
 	}
 }
 
-const attachmentEntityDesc = "Tipo de entidad dueña del adjunto. Aceptados: user_story, requirement, hu_draft, intake_payload."
+const attachmentEntityDesc = "Tipo de entidad dueña del adjunto. Aceptados: user_story, requirement, hu_draft, intake_payload, ticket."
 
 func toolAttachmentInitUpload() mcp.Tool {
 	return mcp.NewTool("domain_attachment_init_upload",

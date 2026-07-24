@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
@@ -11,10 +13,18 @@ import (
 	llmopenai "nunezlagos/domain/internal/llm/openai"
 )
 
-// embeddingDim es la dimensión del esquema pgvector (vector(1536) en todas las
-// columnas de embeddings: observations, knowledge_docs, skills, semantic_cache).
-// Un embedder con otra dimensión corrompería el índice → se degrada a noop.
-const embeddingDim = 1536
+// embeddingDim es la dimensión del esquema pgvector: knowledge_observations,
+// knowledge_chunks, skills y chat_document_embeddings son vector(1024) desde
+// la migración 000275 (bge-m3). Un embedder con otra dimensión rompería el
+// INSERT → se degrada a noop.
+const embeddingDim = 1024
+
+// defaultProbeTimeout acota la medición de dimensión al arrancar: un provider
+// lento o caído degrada a noop en vez de colgar el boot.
+const defaultProbeTimeout = 10 * time.Second
+
+// probeTimeout es var (no const) para que los tests no esperen el timeout real.
+var probeTimeout = defaultProbeTimeout
 
 // chooseEmbedder elige el embedder según env y valida su dimensión contra el
 // esquema pgvector. REQ-68 / DOMAINSERV-60.
@@ -78,16 +88,33 @@ func buildEmbedder(logger *slog.Logger) llm.Embedder {
 	}
 }
 
-// validateDim degrada a noop si la dimensión del embedder no coincide con el
-// esquema pgvector: escribir vectores de otra dimensión corrompería el índice.
-// El mismatch se detecta al boot (observable) y no en runtime.
+// validateDim degrada a noop si el embedder no produce vectores de la dimensión
+// del esquema: escribir otra dimensión rompe el INSERT contra la columna
+// vector(N). El mismatch se detecta al boot (observable) y no en runtime.
+//
+// DOMAINSERV-80 H2: mide la dimensión REAL con un embed de prueba en vez de
+// confiar en Dimensions(). Los 3 providers devolvían la constante del esquema
+// sin mirar el modelo configurado, así que la comparación era siempre 1536 ==
+// 1536 y el guard no protegía de nada: prender voyage (voyage-3 produce 1024)
+// u ollama (nomic-embed-text produce 768) pasaba el guard y reventaba en cada
+// escritura. Una tabla modelo→dimensión tendría el mismo defecto de fondo —
+// quedaría desactualizada ante cada modelo nuevo. Medir no se desactualiza.
 func validateDim(e llm.Embedder, logger *slog.Logger) llm.Embedder {
 	if _, isNop := e.(llm.NopEmbedder); isNop {
 		return e
 	}
-	if d := e.Dimensions(); d != embeddingDim {
-		logger.Warn("embedder: dimensión incompatible con el esquema pgvector; degradando a noop",
-			slog.Int("embedder_dim", d), slog.Int("schema_dim", embeddingDim))
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	v, err := e.Embed(ctx, "dimension probe")
+	if err != nil {
+		logger.Warn("embedder: no se pudo medir la dimensión real; degradando a noop",
+			slog.String("error", err.Error()), slog.Int("declarada", e.Dimensions()))
+		return llm.NopEmbedder{}
+	}
+	if len(v) != embeddingDim {
+		logger.Warn("embedder: la dimensión producida no coincide con el esquema pgvector; degradando a noop",
+			slog.Int("dim_real", len(v)), slog.Int("dim_declarada", e.Dimensions()),
+			slog.Int("schema_dim", embeddingDim))
 		return llm.NopEmbedder{}
 	}
 	return e

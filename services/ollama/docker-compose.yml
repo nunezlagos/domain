@@ -1,0 +1,53 @@
+services:
+
+  ollama:
+    image: ollama/ollama:0.32.3
+    container_name: domain-ollama
+    restart: unless-stopped
+    expose:
+      - "11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - domain_internal
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # descarga el modelo de embeddings al primer arranque; `ollama pull` es
+  # idempotente, así que en redeploys sale de inmediato sin volver a bajarlo
+  ollama-bootstrap:
+    image: ollama/ollama:0.32.3
+    container_name: domain-ollama-bootstrap
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      DOMAIN_OLLAMA_EMBED_MODEL: ${DOMAIN_OLLAMA_EMBED_MODEL:-bge-m3}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        ollama pull "$$DOMAIN_OLLAMA_EMBED_MODEL"
+    networks:
+      - domain_internal
+    restart: "no"
+
+volumes:
+  ollama_models:
+    name: domain_ollama_models
+
+networks:
+  domain_internal:
+    name: domain_internal
+    external: true

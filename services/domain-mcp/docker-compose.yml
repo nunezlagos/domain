@@ -75,6 +75,15 @@ services:
       DOMAIN_S3_BUCKET: ${MINIO_DEFAULT_BUCKET:-domain-attachments}
       DOMAIN_S3_REGION: us-east-1
       DOMAIN_S3_FORCE_PATH_STYLE: "true"
+      # DOMAINSERV-80 H2: embeddings semánticos. El default sigue siendo noop
+      # (búsqueda cae a FTS); services/ollama levanta bge-m3 en la misma red y
+      # basta con DOMAIN_EMBEDDING_PROVIDER=ollama en .env para prenderlo.
+      # El server MIDE la dimensión real al arrancar: si el modelo no produce
+      # exactamente la del esquema (1024, migración 000275) degrada a noop en
+      # vez de reventar cada INSERT.
+      DOMAIN_EMBEDDING_PROVIDER: ${DOMAIN_EMBEDDING_PROVIDER:-noop}
+      DOMAIN_OLLAMA_URL: ${DOMAIN_OLLAMA_URL:-http://ollama:11434}
+      DOMAIN_OLLAMA_EMBED_MODEL: ${DOMAIN_OLLAMA_EMBED_MODEL:-bge-m3}
       # REQ-70: expone /metrics en :9090 al network domain_internal
       # para que Prometheus pueda scrapear (mismo network).
       DOMAIN_METRICS_ENABLED: "true"

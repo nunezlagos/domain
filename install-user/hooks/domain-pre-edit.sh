@@ -18,14 +18,20 @@
 #     falsos negativos posibles — la policy explícita cubre el resto.
 #
 # Endurecimiento (pre-edit-hardening):
-#   (A) GIT GUARD: git destructivo (reset --hard / clean / stash / checkout
-#       -- | . / restore / rm / worktree remove) → deny SIEMPRE, incluso con
-#       flow activo o en subagentes. Normaliza global options (-C, -c,
-#       --git-dir, --work-tree) para evitar evasiones. Defensa en profundidad
-#       por si el permissions.deny fallara.
+#   (A) GIT GUARD: git destructivo (reset --hard / clean / stash mutante /
+#       checkout -- | . / restore / rm / worktree remove) → deny SIEMPRE,
+#       incluso con flow activo o en subagentes. Normaliza global options
+#       (-C, -c, --git-dir, --work-tree) para evitar evasiones. Defensa en
+#       profundidad por si el permissions.deny fallara. `git stash list|show`
+#       es read-only y pasa (DOMAINSERV-111).
 #   (B) heurística de edición ampliada (ver arriba) para atrapar bypass.
 #   (C) COMMIT-GATE: git commit sin marker fresco de tests verificados →
 #       ask (default/plan) o deny (modos automáticos).
+#   (D) SCOPE POR EXTENSIÓN (DOMAINSERV-111): Edit/Write/NotebookEdit sobre un
+#       archivo que NO es código (.md, .txt, .log, .csv, scratchpad) pasa sin
+#       gate. El SDD gobierna código; antes esta rama ignoraba file_path y
+#       bloqueaba notas y docs, mientras el mismo archivo vía Bash heredoc
+#       pasaba. Ambas ramas comparten ahora DOMAIN_CODE_EXTS.
 #
 # Best-effort en fallos de parseo: permitir (exit 0) antes que romper la sesión.
 set +e
@@ -34,6 +40,12 @@ set +e
 # el hook igual funciona — el logging es opcional, jamás bloquea.
 LIB="$(dirname "$0")/domain-hooks-lib.sh"
 [ -r "$LIB" ] && . "$LIB"
+
+# DOMAINSERV-111: fuente ÚNICA de qué extensión cuenta como código. La consumen
+# la rama Bash (heurística sobre el comando) y la rama Edit/Write (file_path).
+# Estaban divergidas: Bash filtraba por extensión y Edit/Write no, así que un
+# .md se bloqueaba por Write pero pasaba por heredoc.
+export DOMAIN_CODE_EXTS='go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte|yaml|yml|json|toml|tf|hcl|env|xml|gradle|cs|scala|swift|proto|lua'
 
 payload=$(cat)
 
@@ -90,6 +102,19 @@ if [ "$tool_name" = "Bash" ]; then
   git_destructive=$(printf '%s' "$tool_cmd" | python3 -c '
 import re, sys
 cmd = sys.stdin.read()
+
+# DOMAINSERV-111: el cuerpo de un here-doc y el texto entrecomillado son DATOS
+# (mensaje de commit, documentación), no comandos — mencionar "git reset --hard"
+# no lo ejecuta. Sin esto, un commit que DOCUMENTA el guard se auto-bloqueaba.
+# Excepción fail-closed: si hay un intérprete que EJECUTA el literal, no se
+# strippea nada. El reemplazo es un token SIN espacios a propósito: vaciarlo
+# rompería el normalizador de opciones globales de abajo
+# (git -C "/p" reset --hard → git  reset --hard → git --hard, un bypass).
+if not re.search(r"\b(?:bash|sh|zsh|dash|ksh)\s+(?:-\w+\s+)*-c\b|\beval\b|\bxargs\b", cmd):
+    cmd = re.sub(r"<<-?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^\2$", " LITERAL ", cmd, flags=re.M)
+    cmd = re.sub(r"\x27[^\x27]*\x27", " LITERAL ", cmd)
+    cmd = re.sub(r"\x22[^\x22]*\x22", " LITERAL ", cmd)
+
 # strip git global options between "git" and subcommand to prevent
 # evasion via git -C . reset --hard, git -c x=y stash, etc.
 normalized = re.sub(
@@ -100,7 +125,8 @@ normalized = re.sub(
 pats = [
     r"git\s+reset\s+--hard",
     r"git\s+clean\b",
-    r"git\s+stash\b",
+    # DOMAINSERV-111: list/show son READ-ONLY, no mutan el working tree
+    r"git\s+stash\b(?!\s+(?:list|show)\b)",
     r"git\s+checkout\s+(--|\.)",
     r"git\s+restore\b",
     r"git\s+rm\b",
@@ -254,10 +280,10 @@ fi
 # ─── (B) Bash: solo gatear si el comando parece edición de código ────────────
 if [ "$tool_name" = "Bash" ]; then
   is_edit=$(printf '%s' "$tool_cmd" | python3 -c '
-import re, sys
+import os, re, sys
 cmd = sys.stdin.read()
 
-code_ext = r"\.(go|py|ts|tsx|js|jsx|sql|sh|bash|rs|java|kt|php|rb|c|cc|cpp|h|hpp|vue|svelte|yaml|yml|json|toml|tf|hcl|env|xml|gradle|cs|scala|swift|proto|lua)\b"
+code_ext = r"\.(" + os.environ["DOMAIN_CODE_EXTS"] + r")\b"
 # DOMAINSERV-96: el redirect bare `>` omite json|yaml|yml|xml — son destino
 # frecuente de VOLCADO de output (curl > x.json, kubectl get -o yaml > x.yaml),
 # no edición de fuente. Esos formatos siguen gateados vía tee/cp/heredoc.
@@ -302,6 +328,25 @@ if any(re.search(p, cmd) for p in patterns):
     print("yes")
 ' 2>/dev/null)
   [ "$is_edit" = "yes" ] || exit 0
+fi
+
+# ─── (D) Edit/Write/NotebookEdit: gatear SOLO archivos de código ─────────────
+# DOMAINSERV-111: esta rama no miraba file_path, así que el gate frenaba
+# escribir una nota .md, un .txt de análisis o el scratchpad — operaciones que
+# no son código y que el SDD no gobierna. Peor: el MISMO archivo escrito con
+# Bash heredoc sí pasaba, porque allá la heurística sí filtra por extensión.
+# Ahora ambas ramas comparten DOMAIN_CODE_EXTS y el criterio es uno solo.
+if [ "$tool_name" != "Bash" ] && [ -n "$file_path" ]; then
+  is_code=$(printf '%s' "$file_path" | python3 -c '
+import os, re, sys
+fp = sys.stdin.read().strip()
+code_ext = r"\.(" + os.environ["DOMAIN_CODE_EXTS"] + r")$"
+# Dockerfile/Makefile son código sin extensión canónica (mismo criterio que Bash)
+noext = r"(?:^|/)(?:Dockerfile|Makefile)[^/]*$"
+if re.search(code_ext, fp) or re.search(noext, fp):
+    print("yes")
+' 2>/dev/null)
+  [ "$is_code" = "yes" ] || exit 0
 fi
 
 # Sin flow y tocando código → decidir según el modo de permisos.

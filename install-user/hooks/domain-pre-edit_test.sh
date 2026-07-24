@@ -60,6 +60,71 @@ commit_exp='{"session_id":"exp-sess","tool_name":"Bash","permission_mode":"accep
 out="$(run "$commit_exp")"
 check_contains "commit-gate: express NO exento -> deny sin tests-ok" 'commit-gate' "$out"
 
+# 5) DOMAINSERV-111: Edit/Write sobre archivo NO-código (doc/nota) → sin gate.
+#    El gate solo cubre CÓDIGO; hasta ahora la rama Edit/Write no miraba la
+#    extensión y bloqueaba un .md, mientras el mismo archivo vía Bash heredoc
+#    pasaba (la rama Bash sí filtra por code_ext). Asimetría corregida.
+for nc in /tmp/notas.md /tmp/consultas.txt /home/u/.claude/memory/x.md /tmp/salida.log /tmp/data.csv; do
+  p="{\"session_id\":\"nc-sess\",\"tool_name\":\"Write\",\"permission_mode\":\"acceptEdits\",\"tool_input\":{\"file_path\":\"$nc\"}}"
+  check_not_contains "no-código pasa sin gate: $nc" '"permissionDecision"' "$(run "$p")"
+done
+
+# 6) DOMAINSERV-111 (contra-prueba): el código SIGUE gateado en Edit/Write.
+for c in /tmp/x.go /repo/svc.py /repo/q.sql /repo/Dockerfile /repo/Makefile /repo/deploy.tf; do
+  p="{\"session_id\":\"c-sess\",\"tool_name\":\"Write\",\"permission_mode\":\"acceptEdits\",\"tool_input\":{\"file_path\":\"$c\"}}"
+  check_contains "código sigue gateado: $c" '"permissionDecision":"deny"' "$(run "$p")"
+done
+
+# 7) DOMAINSERV-111: git-guard NO bloquea subcomandos read-only de stash.
+for ro in 'git stash list' 'git stash show -p' 'git stash list --oneline'; do
+  p="{\"session_id\":\"ro-sess\",\"tool_name\":\"Bash\",\"permission_mode\":\"acceptEdits\",\"tool_input\":{\"command\":\"$ro\"}}"
+  check_not_contains "git-guard permite read-only: $ro" 'git-guard' "$(run "$p")"
+done
+
+# 8) DOMAINSERV-111 (contra-prueba): el stash MUTANTE sigue bloqueado.
+for mu in 'git stash' 'git stash push -m wip' 'git stash pop' 'git stash drop' 'git -C /repo stash'; do
+  p="{\"session_id\":\"mu-sess\",\"tool_name\":\"Bash\",\"permission_mode\":\"acceptEdits\",\"tool_input\":{\"command\":\"$mu\"}}"
+  check_contains "git-guard bloquea mutante: $mu" 'git-guard' "$(run "$p")"
+done
+
+# 9) DOMAINSERV-111: el git-guard no debe disparar por MENCIONES dentro de un
+#    literal (mensaje de commit, heredoc, string). Un mensaje que documenta el
+#    guard bloqueaba el propio commit que lo arreglaba.
+# payload <session> <command> → JSON bien formado (el escapado a mano corrompe
+# el JSON y el hook responde el deny de DOMAINSERV-103, no lo que se testea)
+payload() {
+  S="$1" C="$2" python3 -c '
+import json, os
+print(json.dumps({"session_id": os.environ["S"], "tool_name": "Bash",
+                  "permission_mode": "acceptEdits",
+                  "tool_input": {"command": os.environ["C"]}}))'
+}
+
+hd='git commit -F - <<MSG
+fix: git stash pop y git reset --hard siguen denegados
+MSG'
+check_not_contains "git-guard ignora menciones en heredoc" 'git-guard' \
+  "$(run "$(payload lit-sess "$hd")")"
+check_not_contains "git-guard ignora menciones en -m entrecomillado" 'git-guard' \
+  "$(run "$(payload lit-sess 'git commit -m "fix: git reset --hard ya no hace falta"')")"
+
+# 10) DOMAINSERV-111 (contra-prueba): el strip de literales NO debe abrir un
+#     bypass. Un intérprete que EJECUTA el literal sigue siendo destructivo.
+while IFS= read -r ev; do
+  check_contains "bypass por intérprete sigue bloqueado: $ev" 'git-guard' \
+    "$(run "$(payload ev-sess "$ev")")"
+done <<'EVS'
+bash -c "git reset --hard"
+sh -c 'git clean -fd'
+eval "git restore ."
+EVS
+check_contains "destructivo real sigue bloqueado" 'git-guard' \
+  "$(run "$(payload ev-sess 'git reset --hard HEAD~1')")"
+# el literal se reemplaza por un token, NO se borra: vaciarlo dejaría
+# `git -C  reset --hard` y el normalizador de opciones se comería "reset"
+check_contains "path entrecomillado no abre bypass" 'git-guard' \
+  "$(run "$(payload ev-sess 'git -C "/tmp/mi repo" reset --hard')")"
+
 if [[ "$FAILS" -gt 0 ]]; then
   printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1
 fi

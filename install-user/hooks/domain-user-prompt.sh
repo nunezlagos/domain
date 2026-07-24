@@ -128,6 +128,32 @@ if not p:
 # entero y así evitamos payloads enormes en el curl.
 print(json.dumps({"query": p[:500], "limit": 5}))
 ' 2>/dev/null)
+# DOMAINSERV-80 H1: mem_search por RELEVANCIA (no recencia), lanzado en BACKGROUND
+# para correr EN PARALELO con skill_search — el hook tiene techo de 15s (settings)
+# y serial (init + capture + 2 búsquedas) se pasaría. Best-effort, SUGGEST-ONLY.
+mem_msg=""
+mem_args=$(printf '%s' "$payload" | MEMSLUG="$slug" python3 -c '
+import json, sys, os
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+p = (d.get("prompt") or "").strip()
+if not p:
+    sys.exit(1)
+print(json.dumps({"query": p[:500], "project_slug": os.environ.get("MEMSLUG", ""), "limit": 5}))
+' 2>/dev/null)
+_memf=$(mktemp 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/dmem.$$")
+_mempid=""
+if [ -n "$mem_args" ]; then
+  curl -fsS -m 4 -X POST "${vps_url}/mcp" \
+    -H "Authorization: Bearer ${api_key}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"domain_mem_search\",\"arguments\":$mem_args}}" >"$_memf" 2>/dev/null &
+  _mempid=$!
+fi
+
 if [ -n "$skill_args" ]; then
   # curl inline con timeout MÁS CORTO (-m 4) que domain_call_tool (-m 6): el hook
   # UserPromptSubmit tiene un techo de 15s y el init (-m 4) + prompt_capture (-m 6)
@@ -171,12 +197,43 @@ print("domain: skills sugeridas para este prompt (SUGGEST-ONLY, no se persistió
 ' 2>/dev/null)
 fi
 
-# Fusionar señal de orquestación + sugerencia de skills en UN solo
+# DOMAINSERV-80 H1: recoger el mem_search lanzado en background + parsear top-3
+# observaciones relevantes. Best-effort: cualquier fallo deja mem_msg vacío.
+if [ -n "$_mempid" ]; then
+  wait "$_mempid" 2>/dev/null
+  mem_msg=$(cat "$_memf" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+except Exception:
+    sys.exit(0)
+items = []
+for c in d.get("result", {}).get("content", []):
+    t = c.get("text", "")
+    try:
+        body = json.loads(t)
+    except Exception:
+        continue
+    rows = body.get("results") or body.get("observations") or []
+    for r in rows[:3]:
+        txt = (r.get("content") or r.get("Content") or r.get("text") or "").strip().replace("\n", " ")
+        if txt:
+            items.append(txt[:160])
+    break
+if items:
+    print("domain: memorias relevantes a este prompt (por relevancia, no recencia) — "
+          "considerá si aplican antes de responder: " + " | ".join(items))
+' 2>/dev/null)
+fi
+rm -f "$_memf" 2>/dev/null
+
+# Fusionar señal de orquestación + sugerencia de skills + memorias en UN solo
 # additionalContext (Claude Code lee un único JSON por stdout). Se pasan por env
 # para no lidiar con escaping de textos grandes/multilínea en argv.
-final_ctx=$(DOMAIN_ORCH_MSG="$orch_msg" DOMAIN_SKILLS_MSG="$skills_msg" python3 -c '
+final_ctx=$(DOMAIN_ORCH_MSG="$orch_msg" DOMAIN_SKILLS_MSG="$skills_msg" DOMAIN_MEM_MSG="$mem_msg" python3 -c '
 import json, os
 parts = [p for p in (os.environ.get("DOMAIN_ORCH_MSG", "").strip(),
+                     os.environ.get("DOMAIN_MEM_MSG", "").strip(),
                      os.environ.get("DOMAIN_SKILLS_MSG", "").strip()) if p]
 if not parts:
     raise SystemExit(0)

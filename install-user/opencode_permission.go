@@ -56,7 +56,10 @@ func installOpencodePermission(paths Paths, timestamp string) error {
 			mutated = true
 		}
 	}
-	if bashRules["*"] == nil {
+	// idempotencia (DOMAINSERV-84): el catch-all "*" lo exige el doctor como "ask"
+	// (posición de seguridad: lo no listado pregunta, no auto-corre). Forzarlo aunque
+	// exista con otro valor (ej. "allow" de un install/default previo).
+	if v, _ := bashRules["*"].(string); v != "ask" {
 		bashRules["*"] = "ask"
 		mutated = true
 	}

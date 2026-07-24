@@ -55,8 +55,9 @@ func TestReconcileClaudeHook_NoRegistrado_ReturnsFalse(t *testing.T) {
 func TestInstallOpencodePermission_ForzaDenySobreAsk(t *testing.T) {
 	tmp := t.TempDir()
 	mcp := filepath.Join(tmp, "opencode.json")
-	// install previo dejó reset --hard como "ask" (no deny) + un catch-all del usuario
-	if err := os.WriteFile(mcp, []byte(`{"permission":{"bash":{"git reset --hard *":"ask","*":"ask"}}}`), 0o644); err != nil {
+	// install previo dejó la regla destructiva como "ask" (no deny) y el catch-all
+	// como "allow" (default de OpenCode) — ambos deben reconciliarse al valor domain.
+	if err := os.WriteFile(mcp, []byte(`{"permission":{"bash":{"git reset --hard *":"ask","*":"allow"}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := installOpencodePermission(Paths{OpencodeDir: tmp, OpencodeMCP: mcp}, "20260101000000"); err != nil {
@@ -68,9 +69,9 @@ func TestInstallOpencodePermission_ForzaDenySobreAsk(t *testing.T) {
 	}
 	bash := m["permission"].(map[string]any)["bash"].(map[string]any)
 	if got := bash["git reset --hard *"]; got != "deny" {
-		t.Fatalf("reset --hard debe forzarse a deny, quedó: %v", got)
+		t.Fatalf("regla destructiva debe forzarse a deny, quedó: %v", got)
 	}
 	if got := bash["*"]; got != "ask" {
-		t.Fatalf("el catch-all del usuario debe respetarse, quedó: %v", got)
+		t.Fatalf("el catch-all debe forzarse a ask (no quedar en allow), quedó: %v", got)
 	}
 }

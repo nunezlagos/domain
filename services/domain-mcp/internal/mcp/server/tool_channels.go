@@ -47,6 +47,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_attachment_confirm":     ChannelUserIntent,
 	"domain_attachment_delete":      ChannelUserIntent,
 	"domain_attachment_get_url":     ChannelUserIntent,
+	"domain_attachment_index":       ChannelUserIntent,
 	"domain_attachment_init_upload": ChannelUserIntent,
 	"domain_attachment_list":        ChannelUserIntent,
 

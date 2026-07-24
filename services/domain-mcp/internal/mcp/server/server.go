@@ -245,6 +245,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolTimeline(), Handler: wrap.Wrap("domain_timeline", rls(deps.handleTimeline))},
 		{Tool: toolGlobalSearch(), Handler: wrap.Wrap("domain_search_global", rls(deps.handleGlobalSearch))},
 		{Tool: toolKnowledgeSave(), Handler: wrap.Wrap("domain_knowledge_save", deps.handleKnowledgeSave)},
+		{Tool: toolAttachmentIndex(), Handler: wrap.Wrap("domain_attachment_index", deps.handleAttachmentIndex)},
 		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", deps.handleKnowledgeSearch)},
 		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", deps.handleKnowledgeGet)},
 		{Tool: toolSkillList(), Handler: wrap.Wrap("domain_skill_list", deps.handleSkillList)},

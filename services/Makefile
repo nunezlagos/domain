@@ -126,7 +126,7 @@ mc: ## Cliente mc contra MinIO local
 		-e MC_HOST_local="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000" \
 		minio/mc:RELEASE.2024-10-08T09-37-26Z --insecure
 
-monitoring-up: ## Levanta Prometheus + Grafana en :3000
+monitoring-up: ## Levanta Prometheus + Grafana + Loki + Alloy (Grafana en :3000)
 	$(COMPOSE_MONITORING) up -d --wait
 
 monitoring-down: ## Apaga el stack de monitoring

@@ -326,8 +326,9 @@ make build
 
 # Embeddings opt-in (DOMAINSERV-80 H2): si el .env pide ollama, el servicio se
 # levanta ANTES que domain-mcp. El server mide la dimensión real del modelo al
-# arrancar; si ollama no responde todavía degrada a noop y la búsqueda semántica
-# queda apagada hasta el próximo restart.
+# arrancar, reintentando hasta 90s: `ollama list` reporta el modelo apenas está en
+# disco, pero el primer embed todavía tiene que cargarlo a memoria (~18s para
+# bge-m3 en CPU). Esperar solo el pull dejaba la búsqueda semántica apagada.
 EMB_PROVIDER=$(env_get DOMAIN_EMBEDDING_PROVIDER "$ENV_FILE")
 EMB_MODEL=$(env_get DOMAIN_OLLAMA_EMBED_MODEL "$ENV_FILE"); EMB_MODEL="${EMB_MODEL:-bge-m3}"
 if [[ "$EMB_PROVIDER" == "ollama" ]]; then
@@ -372,13 +373,52 @@ ok "Self-check HTTP OK (/healthz 200)"
 # poblado, son 0 filas y sale enseguida. --pause-ms=0 porque ollama es local y
 # no tiene rate-limit que respetar.
 if [[ "$EMB_PROVIDER" == "ollama" ]]; then
-  log "Backfill de embeddings pendientes (idempotente, best-effort)..."
-  if docker exec domain-mcp domain embed-backfill --all --pause-ms=0 2>&1 | tail -20; then
-    ok "backfill completado"
+  # Verificación previa al backfill: si el guard de dimensión degradó a noop, el
+  # backfill corre contra un embedder que no escribe nada y reporta éxito igual.
+  # Así quedó el deploy del 2026-07-24: 0 de 2065 observaciones con embedding.
+  if docker logs domain-mcp 2>&1 | grep -q "degradando a noop"; then
+    warn "el embedder degradó a noop pese a DOMAIN_EMBEDDING_PROVIDER=ollama"
+    warn "  la búsqueda semántica queda apagada (cae a full-text) y el backfill no escribiría nada"
+    warn "  causa en el log: docker logs domain-mcp | grep 'degradando a noop'"
+    warn "  tras corregirla: docker restart domain-mcp && docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
   else
-    warn "el backfill falló o quedó incompleto — el stack sigue operativo"
-    warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
+    ok "embedder activo (el probe de dimensión pasó)"
+    log "Backfill de embeddings pendientes (idempotente, best-effort)..."
+    if docker exec domain-mcp domain embed-backfill --all --pause-ms=0 2>&1 | tail -20; then
+      ok "backfill completado"
+    else
+      warn "el backfill falló o quedó incompleto — el stack sigue operativo"
+      warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
+    fi
+    PENDIENTES=$(docker exec domain-postgres psql -U "$(env_get POSTGRES_USER "$ENV_FILE")" \
+      -d "$(env_get POSTGRES_DB "$ENV_FILE")" -tAc \
+      "SELECT count(*) FROM knowledge_observations WHERE embedding IS NULL" 2>/dev/null || echo "")
+    if [[ -z "$PENDIENTES" ]]; then
+      warn "no se pudo verificar cuántas observaciones quedaron sin embedding"
+    elif [[ "$PENDIENTES" != "0" ]]; then
+      warn "quedan $PENDIENTES observaciones sin embedding — la búsqueda semántica está incompleta"
+      warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
+    else
+      ok "sin observaciones pendientes de embedding"
+    fi
   fi
+fi
+
+# Monitoring opt-in (DOMAINSERV-81): Prometheus + Grafana + Loki + Alloy. Se
+# levanta solo si el .env define GRAFANA_ADMIN_PASSWORD — sin ella el compose cae
+# al default admin/admin y quedaría un Grafana abierto en :3000. Antes el stack
+# era enteramente manual, así que Loki y Alloy nunca llegaron al VPS y los paneles
+# de logs apuntaban a un datasource inexistente.
+if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
+  log "Monitoring: levantando Prometheus + Grafana + Loki + Alloy..."
+  if make monitoring-up; then
+    ok "monitoring arriba (Grafana en :3000)"
+  else
+    warn "el stack de monitoring no levantó — el resto del deploy sigue operativo"
+    warn "  reintentá con: cd $INSTALL_DIR/services && make monitoring-up"
+  fi
+else
+  log "Monitoring omitido (definí GRAFANA_ADMIN_PASSWORD en el .env para habilitarlo)"
 fi
 
 # === STEP 7: Systemd units + timers ===

@@ -21,12 +21,28 @@ import (
 // INSERT → se degrada a noop.
 const embeddingDim = 1024
 
-// defaultProbeTimeout acota la medición de dimensión al arrancar: un provider
-// lento o caído degrada a noop en vez de colgar el boot.
+// defaultProbeTimeout acota CADA intento de medición: un provider lento o caído
+// degrada a noop en vez de colgar el boot.
 const defaultProbeTimeout = 10 * time.Second
 
-// probeTimeout es var (no const) para que los tests no esperen el timeout real.
-var probeTimeout = defaultProbeTimeout
+// defaultProbeDeadline es el presupuesto TOTAL de la medición, sumando reintentos.
+// Un intento único no alcanza: ollama carga el modelo a memoria durante el primer
+// embed y eso tarda más que el timeout de un intento (bge-m3 en CPU, medido en el
+// VPS: ~18s contra 10s). Ese desfasaje dejó la búsqueda semántica apagada tras un
+// deploy que reportó éxito.
+const defaultProbeDeadline = 90 * time.Second
+
+// defaultProbePause espacia los reintentos. La carga sigue en curso del lado del
+// provider aunque nuestro intento haya cortado por timeout, así que el siguiente
+// suele encontrarla más avanzada.
+const defaultProbePause = 5 * time.Second
+
+// vars (no const) para que los tests no esperen los tiempos reales.
+var (
+	probeTimeout  = defaultProbeTimeout
+	probeDeadline = defaultProbeDeadline
+	probePause    = defaultProbePause
+)
 
 // chooseEmbedder elige el embedder según env y valida su dimensión contra el
 // esquema pgvector. REQ-68 / DOMAINSERV-60.
@@ -136,12 +152,11 @@ func validateDim(e llm.Embedder, logger *slog.Logger) llm.Embedder {
 	if _, isNop := e.(llm.NopEmbedder); isNop {
 		return e
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
-	defer cancel()
-	v, err := e.Embed(ctx, "dimension probe")
+	v, err := probeConReintentos(e, logger)
 	if err != nil {
 		logger.Warn("embedder: no se pudo medir la dimensión real; degradando a noop",
-			slog.String("error", err.Error()), slog.Int("declarada", e.Dimensions()))
+			slog.String("error", err.Error()), slog.Int("declarada", e.Dimensions()),
+			slog.Duration("presupuesto", probeDeadline))
 		return llm.NopEmbedder{Dim: embeddingDim}
 	}
 	if len(v) != embeddingDim {
@@ -151,4 +166,27 @@ func validateDim(e llm.Embedder, logger *slog.Logger) llm.Embedder {
 		return llm.NopEmbedder{Dim: embeddingDim}
 	}
 	return e
+}
+
+// probeConReintentos insiste hasta agotar probeDeadline. Un fallo del embed es
+// transitorio por definición durante el arranque —el provider puede estar
+// levantando o cargando el modelo—, así que degradar al primer error confunde
+// "todavía no" con "nunca". Una dimensión equivocada, en cambio, es definitiva:
+// la devuelve el llamador sin reintentar.
+func probeConReintentos(e llm.Embedder, logger *slog.Logger) ([]float32, error) {
+	limite := time.Now().Add(probeDeadline)
+	for intento := 1; ; intento++ {
+		ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+		v, err := e.Embed(ctx, "dimension probe")
+		cancel()
+		if err == nil {
+			return v, nil
+		}
+		if time.Now().Add(probePause).After(limite) {
+			return nil, err
+		}
+		logger.Info("embedder: el provider todavía no responde el probe; reintentando",
+			slog.Int("intento", intento), slog.String("error", err.Error()))
+		time.Sleep(probePause)
+	}
 }

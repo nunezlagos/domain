@@ -45,6 +45,76 @@ func (m mentirosoEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]
 	return out, nil
 }
 
+// arranqueEnFrioEmbedder falla los primeros intentos y después responde bien:
+// modela a ollama cargando el modelo a memoria durante el primer embed.
+type arranqueEnFrioEmbedder struct {
+	fallosRestantes int
+	dimProducida    int
+	intentos        int
+}
+
+func (e *arranqueEnFrioEmbedder) Dimensions() int { return embeddingDim }
+
+func (e *arranqueEnFrioEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	e.intentos++
+	if e.fallosRestantes > 0 {
+		e.fallosRestantes--
+		return nil, context.DeadlineExceeded
+	}
+	return make([]float32, e.dimProducida), nil
+}
+
+func (e *arranqueEnFrioEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range out {
+		out[i], _ = e.Embed(ctx, texts[i])
+	}
+	return out, nil
+}
+
+func probesInstantaneos(t *testing.T, deadline time.Duration) {
+	t.Helper()
+	probeTimeout = 100 * time.Millisecond
+	probePause = time.Millisecond
+	probeDeadline = deadline
+	t.Cleanup(func() {
+		probeTimeout = defaultProbeTimeout
+		probePause = defaultProbePause
+		probeDeadline = defaultProbeDeadline
+	})
+}
+
+// Regresión de prod (2026-07-24): ollama carga bge-m3 a memoria durante el PRIMER
+// embed y eso tarda ~18s medidos en el VPS, contra un probe único de 10s. El guard
+// degradaba a noop y la búsqueda semántica quedaba apagada tras un deploy que
+// reportaba éxito: 0 de 2065 observaciones con embedding.
+func TestValidateDim_ProviderRespondeTrasVariosIntentos_MantieneEmbedder(t *testing.T) {
+	probesInstantaneos(t, 5*time.Second)
+
+	e := &arranqueEnFrioEmbedder{fallosRestantes: 3, dimProducida: embeddingDim}
+	require.False(t, isNop(validateDim(e, testLogger())),
+		"degradar al primer timeout apaga la búsqueda semántica en cada arranque en frío")
+	require.Equal(t, 4, e.intentos, "debe reintentar hasta que el provider termine de cargar")
+}
+
+func TestValidateDim_ProviderNuncaResponde_DegradaANoopAlAgotarElDeadline(t *testing.T) {
+	probesInstantaneos(t, 50*time.Millisecond)
+
+	e := &arranqueEnFrioEmbedder{fallosRestantes: 1_000_000, dimProducida: embeddingDim}
+	require.True(t, isNop(validateDim(e, testLogger())),
+		"el reintento tiene presupuesto acotado: un provider caído no puede colgar el boot")
+}
+
+// La dimensión de un modelo no cambia con el tiempo. Reintentarla sería alargar el
+// boot para llegar a la misma conclusión.
+func TestValidateDim_DimensionIncorrecta_DegradaSinReintentar(t *testing.T) {
+	probesInstantaneos(t, time.Minute)
+
+	e := &arranqueEnFrioEmbedder{dimProducida: 768}
+	require.True(t, isNop(validateDim(e, testLogger())))
+	require.Equal(t, 1, e.intentos, "un mismatch de dimensión es definitivo, no transitorio")
+}
+
 func TestValidateDim_EmbedderDeclaraBienPeroProduceOtra_DegradaANoop(t *testing.T) {
 	e := validateDim(mentirosoEmbedder{declarada: embeddingDim, real: 768}, testLogger())
 	require.True(t, isNop(e),
@@ -58,6 +128,7 @@ func TestValidateDim_DimensionRealCoincide_MantieneEmbedder(t *testing.T) {
 }
 
 func TestValidateDim_ProbeFalla_DegradaANoop(t *testing.T) {
+	probesInstantaneos(t, 50*time.Millisecond)
 	e := validateDim(mentirosoEmbedder{declarada: embeddingDim, err: errors.New("provider caído")}, testLogger())
 	require.True(t, isNop(e),
 		"si no se puede medir la dimensión real, fail-closed: mejor FTS que corromper escrituras")
@@ -117,16 +188,14 @@ func TestValidateDim_FakeConOtraDim_DegradaANoop(t *testing.T) {
 // falta afirmar: antes estos tests fijaban 1536 como "dim de voyage/ollama",
 // consagrando el bug que este cambio corrige.
 func TestChooseEmbedder_VoyageSinConectividad_DegradaANoop(t *testing.T) {
-	probeTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { probeTimeout = defaultProbeTimeout })
+	probesInstantaneos(t, 300*time.Millisecond)
 	t.Setenv("DOMAIN_EMBEDDING_PROVIDER", "voyage")
 	t.Setenv("DOMAIN_VOYAGE_API_KEY", "vk-test-invalida")
 	require.True(t, isNop(chooseEmbedder(testLogger())))
 }
 
 func TestChooseEmbedder_OllamaSinConectividad_DegradaANoop(t *testing.T) {
-	probeTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { probeTimeout = defaultProbeTimeout })
+	probesInstantaneos(t, 300*time.Millisecond)
 	t.Setenv("DOMAIN_EMBEDDING_PROVIDER", "ollama")
 	t.Setenv("DOMAIN_OLLAMA_URL", "http://127.0.0.1:1")
 	require.True(t, isNop(chooseEmbedder(testLogger())))

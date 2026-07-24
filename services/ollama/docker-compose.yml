@@ -4,6 +4,12 @@ services:
     image: ollama/ollama:0.32.3
     container_name: domain-ollama
     restart: unless-stopped
+    environment:
+      # el default de 5 min descarga el modelo entre búsqueda y búsqueda, y cada
+      # recarga cuesta ~18s (bge-m3 en CPU). Una hora cubre una sesión de trabajo
+      # entera y libera los ~1.2 GB en reposo. No es lo que protege del arranque en
+      # frío: de eso se ocupa el reintento del probe en cmd/domain/embedder.go
+      OLLAMA_KEEP_ALIVE: "1h"
     expose:
       - "11434"
     volumes:

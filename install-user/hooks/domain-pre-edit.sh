@@ -55,6 +55,7 @@ print("session_id=%s" % shlex.quote(d.get("session_id", "")))
 print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
 print("perm_mode=%s" % shlex.quote(d.get("permission_mode", "default")))
 print("tool_cmd=%s" % shlex.quote(ti.get("command", "") if isinstance(ti, dict) else ""))
+print("file_path=%s" % shlex.quote(ti.get("file_path", "") if isinstance(ti, dict) else ""))
 ' 2>/dev/null)"
 
 # DOMAINSERV-103: payload no-vacío pero no parseable como JSON → fail-closed.
@@ -199,19 +200,51 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       # v2: field1 = token HMAC → validar firma + flow activo server-side
       resp=$(domain_call_tool domain_flow_validate_token \
         "{\"token\":\"$field1\",\"session_id\":\"$session_id\"}" 2>/dev/null)
-      valid=$(printf '%s' "$resp" | python3 -c '
+      # vinfo = "<valid>\t<allowed_paths_json>" (DOMAINSERV-110 batch-mode)
+      vinfo=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
     for c in d.get("result",{}).get("content",[]):
         if isinstance(c, dict) and c.get("type") == "text":
             body = json.loads(c["text"])
-            print("yes" if body.get("valid") else "")
+            if body.get("valid"):
+                ap = body.get("allowed_paths") or []
+                print("yes\t" + json.dumps(ap))
             break
 except Exception:
     pass
 ' 2>/dev/null)
-      [ "$valid" = "yes" ] && exit 0
+      valid=$(printf '%s' "$vinfo" | cut -f1)
+      allowed_json=$(printf '%s' "$vinfo" | cut -f2)
+      if [ "$valid" = "yes" ]; then
+        # sin allowlist (flow normal) → sin restricción de path (backward-compat).
+        if [ -z "$allowed_json" ] || [ "$allowed_json" = "[]" ] || [ "$allowed_json" = "null" ]; then
+          exit 0
+        fi
+        # sin file_path (ej. Bash-edit) no podemos scopear por path: el token es
+        # válido, dejamos pasar; la allowlist aplica a Edit/Write/NotebookEdit.
+        [ -z "$file_path" ] && exit 0
+        # el flow declaró paths: la edición pasa solo si el path matchea un glob.
+        match=$(FP="$file_path" AJ="$allowed_json" python3 -c '
+import os, sys, json, fnmatch
+fp = os.environ.get("FP","")
+try:
+    globs = json.loads(os.environ.get("AJ","[]"))
+except Exception:
+    globs = []
+cands = {fp}
+cwd = os.getcwd()
+if fp.startswith(cwd + "/"):
+    cands.add(fp[len(cwd)+1:])
+for g in globs:
+    for c in cands:
+        if fnmatch.fnmatch(c, g):
+            print("yes"); sys.exit(0)
+' 2>/dev/null)
+        [ "$match" = "yes" ] && exit 0
+        emit_decision "deny" "domain batch-mode (DOMAINSERV-110): el path '$file_path' está fuera de la allowlist del flow activo (paths permitidos: $allowed_json). Este flow scopea las ediciones a sus paths declarados — editá dentro del scope o abrí un flow para este path."
+      fi
       # inválido o server unreachable → fail-closed → cae al gate
     fi
   fi

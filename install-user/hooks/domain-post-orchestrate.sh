@@ -60,6 +60,10 @@ for c in items:
             pass
 print("flow_run_id=%s" % shlex.quote(fr))
 print("flow_mode=%s" % shlex.quote(mode))
+# DOMAINSERV-110 batch-mode: allowed_paths viene del tool_input de domain_orchestrate
+# (globs de scope). En phase_result/confirm no está → [] (el gate no restringe path).
+ap = ti.get("allowed_paths") if isinstance(ti.get("allowed_paths"), list) else []
+print("allowed_paths_json=%s" % shlex.quote(json.dumps([p for p in ap if isinstance(p, str) and p])))
 ' 2>/dev/null)"
 
 [ -n "$session_id" ] || exit 0
@@ -87,7 +91,7 @@ if [ -r "$LIB" ]; then
   if [ -n "$vps_url" ] && [ -n "$api_key" ]; then
     domain_mcp_init >/dev/null 2>&1
     resp=$(domain_call_tool domain_flow_grant_token \
-      "{\"flow_run_id\":\"$flow_run_id\",\"session_id\":\"$session_id\"}" 2>/dev/null)
+      "{\"flow_run_id\":\"$flow_run_id\",\"session_id\":\"$session_id\",\"allowed_paths\":${allowed_paths_json:-[]}}" 2>/dev/null)
     token=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:

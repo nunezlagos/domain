@@ -330,6 +330,9 @@ func toolFlowGrantToken() mcp.Tool {
 			mcp.Description("session_id de la sesión del agente (del hook payload)."),
 			mcp.Required(),
 		),
+		mcp.WithArray("allowed_paths",
+			mcp.Description("DOMAINSERV-110 batch-mode: globs de paths que este flow autoriza a editar. Si se pasa, el gate pre-edit solo permite ediciones cuyo path matchee uno de estos globs (scope por sub-tarea en multiagent paralelo). Vacío/omitido = sin restricción de path (comportamiento histórico)."),
+		),
 	)
 }
 
@@ -376,7 +379,16 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		}
 	}
 
-	token, err := h.flowToken.GenerateToken(flowRunID, sessionID, h.principal.OrganizationID)
+	var allowedPaths []string
+	if raw, ok := req.GetArguments()["allowed_paths"].([]any); ok {
+		for _, p := range raw {
+			if s, ok := p.(string); ok && s != "" {
+				allowedPaths = append(allowedPaths, s)
+			}
+		}
+	}
+
+	token, err := h.flowToken.GenerateToken(flowRunID, sessionID, h.principal.OrganizationID, allowedPaths...)
 	if err != nil {
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
 	}
@@ -456,10 +468,11 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 	}
 
 	body, _ := json.MarshalIndent(map[string]any{
-		"valid":        true,
-		"flow_run_id":  payload.FlowRunID,
-		"session_id":   payload.SessionID,
-		"flow_status":  flowStatus,
+		"valid":         true,
+		"flow_run_id":   payload.FlowRunID,
+		"session_id":    payload.SessionID,
+		"flow_status":   flowStatus,
+		"allowed_paths": payload.AllowedPaths,
 	}, "", "  ")
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
 }

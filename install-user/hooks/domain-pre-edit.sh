@@ -169,12 +169,23 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
   # sin vps_url/api_key no hay forma de validar contra el server → gate
   if [ -n "$vps_url" ] && [ -n "$api_key" ]; then
     domain_mcp_init >/dev/null 2>&1
-    case "$field1" in
-      [A-Za-z0-9_-]*[A-Za-z0-9_-]*)
-        # v2: token HMAC — solo pasa si el server valida firma + flow activo
-        resp=$(domain_call_tool domain_flow_validate_token \
-          "{\"token\":\"$field1\",\"session_id\":\"$session_id\"}" 2>/dev/null)
-        valid=$(printf '%s' "$resp" | python3 -c '
+    # DOMAINSERV-107: enrutar por field2 (UUID del flow_run), NO por un glob
+    # sobre field1. El marker legacy es "<timestamp>\t<flow_run_id>": su field1
+    # (timestamp) matcheaba el glob de token v2 [A-Za-z0-9_-]*... y enrutaba a
+    # validate_token, dejando la rama legacy (flow_status) INALCANZABLE → gate
+    # insatisfacible en servers sin HMAC secret. El marker v2 es
+    # "<token>\t<expires_at>": field2 = timestamp ISO, nunca un UUID.
+    if printf '%s' "$field2" | grep -qE '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+      # v1 legacy: field2 = flow_run_id → validar vía flow_status (running/pending)
+      resp=$(domain_call_tool domain_flow_status \
+        "{\"flow_run_id\":\"$field2\"}" 2>&1)
+      echo "$resp" | grep -qE '"status":"(running|pending)"' && exit 0
+      # no confirmado / server unreachable → fail-closed → gate
+    elif [ -n "$field1" ]; then
+      # v2: field1 = token HMAC → validar firma + flow activo server-side
+      resp=$(domain_call_tool domain_flow_validate_token \
+        "{\"token\":\"$field1\",\"session_id\":\"$session_id\"}" 2>/dev/null)
+      valid=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -186,19 +197,9 @@ try:
 except Exception:
     pass
 ' 2>/dev/null)
-        [ "$valid" = "yes" ] && exit 0
-        # inválido o server unreachable → fail-closed → cae al gate
-        ;;
-      *)
-        # v1 legacy: solo pasa si flow_status confirma running/pending
-        if [ -n "$field2" ]; then
-          resp=$(domain_call_tool domain_flow_status \
-            "{\"flow_run_id\":\"$field2\"}" 2>&1)
-          echo "$resp" | grep -qE '"status":"(running|pending)"' && exit 0
-        fi
-        # no confirmado / sin flow_run_id / server unreachable → fail-closed → gate
-        ;;
-    esac
+      [ "$valid" = "yes" ] && exit 0
+      # inválido o server unreachable → fail-closed → cae al gate
+    fi
   fi
 fi
 # marker ausente, no validable o inválido → cae al gate de abajo (ask/deny)

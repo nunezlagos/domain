@@ -13,6 +13,17 @@
 -- breaking: no
 -- duration: <1s
 
+-- current_org_id() fue creada en 000028 y eliminada en 000143 (drop_org_table_and_helpers,
+-- CASCADE). El GUC de sesión app.current_org_id (SET LOCAL de withOrgTxHandler) sigue vigente,
+-- así que recreamos el helper con el mismo cuerpo que 000028 para poder scopear por org.
+CREATE OR REPLACE FUNCTION current_org_id() RETURNS UUID AS $$
+BEGIN
+  RETURN nullif(current_setting('app.current_org_id', true), '')::uuid;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
 ALTER TABLE file_attachments ADD COLUMN IF NOT EXISTS organization_id UUID DEFAULT current_org_id();
 
 CREATE INDEX IF NOT EXISTS file_attachments_org_idx ON file_attachments (organization_id);

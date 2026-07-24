@@ -44,5 +44,18 @@ resp_intr='{"stdout":"running...","stderr":"","interrupted":true,"isImage":false
 check "interrumpido -> sin marker" "no" \
   "$(run "s4" "{\"session_id\":\"s4\",\"tool_input\":{\"command\":\"go test ./...\"},\"tool_response\":$resp_intr}")"
 
+# 5) DOMAINSERV-111: suites en bash (`bash x_test.sh`, `./x_test.sh`, `make test`).
+#    Los hooks de install-user se testean así: sin este patrón el commit-gate
+#    quedaba insatisfacible al tocarlos (nunca se escribía el marker).
+for c in 'bash install-user/hooks/domain-pre-edit_test.sh' './hooks/x_test.sh' 'make test'; do
+  check "suite bash reconocida: $c" "yes" \
+    "$(run "s5" "{\"session_id\":\"s5\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":$resp_ok}")"
+done
+
+# 6) DOMAINSERV-111 (contra-prueba): suite bash en rojo → sin marker.
+resp_sh_fail='{"stdout":"FAIL: algo\n\n1 test(s) FALLARON","stderr":"","interrupted":false,"isImage":false}'
+check "suite bash en rojo -> sin marker" "no" \
+  "$(run "s6" "{\"session_id\":\"s6\",\"tool_input\":{\"command\":\"bash x_test.sh\"},\"tool_response\":$resp_sh_fail}")"
+
 if [ "$FAILS" -gt 0 ]; then printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1; fi
 printf '\nTodos los tests pasaron\n'

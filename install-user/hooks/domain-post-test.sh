@@ -33,8 +33,12 @@ session_id = d.get("session_id", "")
 cmd = (d.get("tool_input") or {}).get("command", "") or ""
 
 # ¿El comando es una corrida de tests? (una de las suites soportadas)
+# DOMAINSERV-111: las suites en bash (los hooks de install-user se testean con
+# `bash x_test.sh`) no se reconocían → el marker nunca se escribía y el
+# commit-gate quedaba insatisfacible al tocar justamente estos archivos.
 test_re = re.compile(
-    r"\b(go\s+test|npm\s+(run\s+)?test|pytest|jest|vitest|cargo\s+test|phpunit|rspec)\b"
+    r"\b(go\s+test|npm\s+(run\s+)?test|pytest|jest|vitest|cargo\s+test|phpunit|rspec"
+    r"|make\s+test)\b|(?:\bbash\s+|\bsh\s+|\./)\S*_test\.sh\b"
 )
 is_test = bool(test_re.search(cmd))
 

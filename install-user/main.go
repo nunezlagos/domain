@@ -388,6 +388,12 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	step("Instalando hook de SessionStart (Claude Code)")
 	installClaudeSessionStartHook()
 
+	step("Self-check final (doctor)")
+	if rc := runDoctor(p); rc != 0 {
+		failL(fmt.Sprintf("self-check falló (doctor exit %d): la instalación quedó incompleta — revisá los ✗ de arriba", rc))
+		os.Exit(rc)
+	}
+
 	step("Listo")
 	fmt.Printf(`
   %s%sdomain MCP configurado%s

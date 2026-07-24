@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-vps-local.sh — levanta un container Ubuntu con systemd habilitado y
-# corre el install-vps.sh adentro, exponiendo el puerto 80 al host.
+# corre el install.sh adentro, exponiendo el puerto 80 al host.
 # Permite probar el deploy completo SIN tocar tu VPS real.
 #
 # Uso:
@@ -57,9 +57,9 @@ cmd_up() {
   docker exec "$CONTAINER" bash -c "cp -r /opt/domain-source /opt/domain && chmod -R u+w /opt/domain"
   ok "/opt/domain listo (rw)"
 
-  step "Corriendo install-vps.sh dentro del container"
-  docker exec "$CONTAINER" bash -c "cd /opt/domain && ./services/install-vps.sh --skip-compose-up"
-  ok "install-vps.sh terminó (modo --skip-compose-up; falta levantar containers)"
+  step "Corriendo install.sh dentro del container"
+  docker exec "$CONTAINER" bash -c "cd /opt/domain && ./services/install.sh"
+  ok "install.sh terminó (levanta el stack completo vía make up)"
 
   cat <<HINT
 

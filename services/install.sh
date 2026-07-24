@@ -327,6 +327,18 @@ make up
 make wait-healthy
 ok "5 servicios healthy"
 
+# Self-check HTTP fail-loud (DOMAINSERV-84): wait-healthy solo verifica health de
+# contenedores; esto confirma que el stack SIRVE de verdad a traves de Caddy.
+log "6/9  Self-check HTTP (stack sirviendo via Caddy en :80)..."
+SELFCHECK_OK=""
+for _ in $(seq 1 30); do
+  code=$(curl -fsS -o /dev/null -w '%{http_code}' -m 5 http://localhost/healthz 2>/dev/null || true)
+  if [[ "$code" == "200" ]]; then SELFCHECK_OK=1; break; fi
+  sleep 2
+done
+[[ -n "$SELFCHECK_OK" ]] || fail "self-check: http://localhost/healthz no respondio 200 tras 60s — el stack no esta sirviendo. Revisá 'docker ps' y 'docker logs domain-caddy domain-mcp'."
+ok "Self-check HTTP OK (/healthz 200)"
+
 # === STEP 7: Systemd units + timers ===
 log "7/9  Configurando systemd units + timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then

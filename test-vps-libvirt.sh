@@ -291,10 +291,10 @@ cmd_install() {
   '"
   ok ".env listo"
 
-  step "Corriendo install-vps.sh adentro (~5-20 min)"
-  ssh_vm "$ip" "cd /tmp/domain && sudo bash ./services/install-vps.sh" 2>&1 | tee "$LOG_DIR/01-install-vps.log"
+  step "Corriendo install.sh adentro (~5-20 min)"
+  ssh_vm "$ip" "cd /tmp/domain && sudo bash ./services/install.sh" 2>&1 | tee "$LOG_DIR/01-install.log"
   local s1=${PIPESTATUS[0]}
-  ok "install-vps.sh exit=$s1"
+  ok "install.sh exit=$s1"
 
   step "make up (si install no lo hizo solo)"
   ssh_vm "$ip" "cd /opt/services && sudo make up 2>&1 || true" | tee "$LOG_DIR/02-make-up.log" >/dev/null

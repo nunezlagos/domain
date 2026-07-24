@@ -198,6 +198,14 @@ func runMigrate(args []string) {
 		ensureBackupBeforeMigrate(cfg.DatabaseURL)
 		if err := dmigrate.Up(cfg.DatabaseURL); err != nil {
 			fmt.Fprintf(os.Stderr, "migrate up: %v\n", err)
+			// DOMAINSERV-84: dirty bloquea todo migrate up con un mensaje críptico;
+			// guiar la recuperación en vez de dejar al operador adivinando.
+			if v, dirty, verr := dmigrate.Version(cfg.DatabaseURL); verr == nil && dirty {
+				fmt.Fprintf(os.Stderr, "\nBD marcada DIRTY en la versión %d: una migración previa falló a mitad y bloquea todo migrate up.\n"+
+					"Postgres corre cada migración en transacción, así que normalmente rolleó completa (sin estado parcial).\n"+
+					"Recuperación: forzar la versión anterior y limpiar el flag, luego re-deploy:\n"+
+					"  docker exec domain-postgres psql -U domain -d domain -c \"UPDATE schema_migrations SET version=%d, dirty=false;\"\n", v, v-1)
+			}
 			os.Exit(1)
 		}
 		v, dirty, _ := dmigrate.Version(cfg.DatabaseURL)

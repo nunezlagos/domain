@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"nunezlagos/domain/internal/llm"
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/ollama"
@@ -44,20 +46,51 @@ func chooseEmbedder(logger *slog.Logger) llm.Embedder {
 	return validateDim(buildEmbedder(logger), logger)
 }
 
+// warnIfSchemaDimDiffers compara embeddingDim contra la dimensión REAL de las
+// columnas pgvector. Es el guard que faltaba: el de abajo verifica embedder vs
+// constante, pero nadie verificaba constante vs esquema, y ese desalineo no se
+// nota hasta que un INSERT falla en runtime — que fue exactamente lo que pasó al
+// desplegar la migración 000275 con un binario que creía 1536.
+//
+// Solo avisa: el server tiene que arrancar igual para poder diagnosticar. Es la
+// clase de error que se arregla redeployando, no reiniciando a ciegas.
+func warnIfSchemaDimDiffers(ctx context.Context, pool interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, logger *slog.Logger) {
+	if pool == nil {
+		return
+	}
+	var dim int
+	err := pool.QueryRow(ctx, `
+		SELECT a.atttypmod FROM pg_attribute a
+		JOIN pg_class c ON c.oid = a.attrelid
+		JOIN pg_type t ON t.oid = a.atttypid
+		WHERE t.typname = 'vector' AND c.relname = 'knowledge_observations'
+		  AND a.attname = 'embedding'`).Scan(&dim)
+	if err != nil || dim <= 0 {
+		return
+	}
+	if dim != embeddingDim {
+		logger.Error("DESALINEACIÓN: el esquema pgvector no coincide con el binario; "+
+			"toda escritura de embedding va a fallar. Redeployá con el binario que corresponde a la migración aplicada",
+			slog.Int("schema_dim", dim), slog.Int("binario_dim", embeddingDim))
+	}
+}
+
 func buildEmbedder(logger *slog.Logger) llm.Embedder {
 	kind := strings.ToLower(strings.TrimSpace(os.Getenv("DOMAIN_EMBEDDING_PROVIDER")))
 	switch kind {
 	case "", "noop":
 		logger.Info("embedder: noop (búsqueda semántica desactivada; RAG cae a FTS)")
-		return llm.NopEmbedder{}
+		return llm.NopEmbedder{Dim: embeddingDim}
 	case "fake":
 		logger.Warn("embedder: fake (determinístico, NO usar en prod)")
-		return llm.FakeEmbedder{}
+		return llm.FakeEmbedder{Dim: embeddingDim}
 	case "openai":
 		key := strings.TrimSpace(os.Getenv("DOMAIN_OPENAI_API_KEY"))
 		if key == "" {
 			logger.Warn("DOMAIN_EMBEDDING_PROVIDER=openai pero DOMAIN_OPENAI_API_KEY vacío; usando noop")
-			return llm.NopEmbedder{}
+			return llm.NopEmbedder{Dim: embeddingDim}
 		}
 		model := envOr("DOMAIN_OPENAI_EMBED_MODEL", "text-embedding-3-small")
 		logger.Info("embedder: openai", slog.String("model", model))
@@ -70,7 +103,7 @@ func buildEmbedder(logger *slog.Logger) llm.Embedder {
 		key := strings.TrimSpace(os.Getenv("DOMAIN_VOYAGE_API_KEY"))
 		if key == "" {
 			logger.Warn("DOMAIN_EMBEDDING_PROVIDER=voyage pero DOMAIN_VOYAGE_API_KEY vacío; usando noop")
-			return llm.NopEmbedder{}
+			return llm.NopEmbedder{Dim: embeddingDim}
 		}
 		model := envOr("DOMAIN_VOYAGE_EMBED_MODEL", "voyage-3")
 		logger.Info("embedder: voyage", slog.String("model", model))
@@ -84,7 +117,7 @@ func buildEmbedder(logger *slog.Logger) llm.Embedder {
 		return e
 	default:
 		logger.Warn("DOMAIN_EMBEDDING_PROVIDER desconocido; usando noop", slog.String("provider", kind))
-		return llm.NopEmbedder{}
+		return llm.NopEmbedder{Dim: embeddingDim}
 	}
 }
 
@@ -109,13 +142,13 @@ func validateDim(e llm.Embedder, logger *slog.Logger) llm.Embedder {
 	if err != nil {
 		logger.Warn("embedder: no se pudo medir la dimensión real; degradando a noop",
 			slog.String("error", err.Error()), slog.Int("declarada", e.Dimensions()))
-		return llm.NopEmbedder{}
+		return llm.NopEmbedder{Dim: embeddingDim}
 	}
 	if len(v) != embeddingDim {
 		logger.Warn("embedder: la dimensión producida no coincide con el esquema pgvector; degradando a noop",
 			slog.Int("dim_real", len(v)), slog.Int("dim_declarada", e.Dimensions()),
 			slog.Int("schema_dim", embeddingDim))
-		return llm.NopEmbedder{}
+		return llm.NopEmbedder{Dim: embeddingDim}
 	}
 	return e
 }

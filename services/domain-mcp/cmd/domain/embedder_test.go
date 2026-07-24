@@ -67,6 +67,43 @@ func TestValidateDim_Nop_SeMantiene(t *testing.T) {
 	require.True(t, isNop(validateDim(llm.NopEmbedder{}, testLogger())))
 }
 
+// Regresión de prod: llm.NopEmbedder tiene su PROPIO default hardcodeado (1536,
+// "to match migration 000006"). Al bajar embeddingDim a 1024 quedaron dos fuentes
+// de verdad, y como el noop igual escribe su vector cero en la columna, cada
+// INSERT reventó con "expected 1024 dimensions, not 1536". El guard no lo vio
+// porque solo mira embedders NO-noop.
+func TestChooseEmbedder_Noop_ProduceVectorDeLaDimensionDelEsquema(t *testing.T) {
+	for _, provider := range []string{"noop", "", "gibberish"} {
+		t.Setenv("DOMAIN_EMBEDDING_PROVIDER", provider)
+		e := chooseEmbedder(testLogger())
+		require.True(t, isNop(e))
+
+		v, err := e.Embed(context.Background(), "x")
+		require.NoError(t, err)
+		require.Len(t, v, embeddingDim,
+			"el vector cero del noop se escribe igual en la columna: si no mide "+
+				"embeddingDim, todo INSERT falla (provider=%q)", provider)
+		require.Equal(t, embeddingDim, e.Dimensions(), "provider=%q", provider)
+	}
+}
+
+// Los providers sin key caen a noop; ese noop también tiene que medir bien.
+func TestChooseEmbedder_SinKey_CaeANoopConLaDimensionCorrecta(t *testing.T) {
+	for _, c := range []struct{ provider, keyEnv string }{
+		{"openai", "DOMAIN_OPENAI_API_KEY"},
+		{"voyage", "DOMAIN_VOYAGE_API_KEY"},
+	} {
+		t.Setenv("DOMAIN_EMBEDDING_PROVIDER", c.provider)
+		t.Setenv(c.keyEnv, "")
+		e := chooseEmbedder(testLogger())
+		require.True(t, isNop(e), "provider=%q", c.provider)
+
+		v, err := e.Embed(context.Background(), "x")
+		require.NoError(t, err)
+		require.Len(t, v, embeddingDim, "provider=%q", c.provider)
+	}
+}
+
 func TestValidateDim_FakeConDimDelEsquema_SeMantiene(t *testing.T) {
 	require.False(t, isNop(validateDim(llm.FakeEmbedder{Dim: embeddingDim}, testLogger())))
 }

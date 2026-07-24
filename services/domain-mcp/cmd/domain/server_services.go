@@ -181,6 +181,9 @@ func buildServices(
 
 	s.Recorder = &audit.PGRecorder{Pool: pools.Auth}
 	s.Embedder = chooseEmbedder(logger)
+	// avisa si el binario y el esquema pgvector quedaron desalineados por un
+	// deploy parcial: sin esto el desalineo recién se nota al fallar un INSERT
+	warnIfSchemaDimDiffers(ctx, pools.App, logger)
 
 	s.ClientService = clientsvc.NewService(pools.App, s.Recorder, nil)
 	s.CapturedPromptService = capturedpromptsvc.NewService(capturedpromptsvc.NewPgRepository(pools.App))

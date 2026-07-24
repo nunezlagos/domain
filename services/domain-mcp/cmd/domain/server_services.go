@@ -113,6 +113,7 @@ type serverServices struct {
 	KnowledgeService       *knowledge.Service
 	LifecycleService       *lifecycle.Service
 	FlowService            *flow.Service
+	FlowTokenSvc           *flow.FlowTokenService
 	SkillService           *skillsvc.Service
 	AgentService           *agentsvc.Service
 	BillingService         *billing.Service
@@ -398,6 +399,18 @@ func buildServices(
 	s.CronService = &cronsvc.Service{Pool: pools.App, Audit: s.Recorder}
 
 	s.APIKeyStore = &apikey.PGStore{Pool: pools.Auth, FieldEncKey: cfg.FieldEncKey}
+
+	// DOMAINSERV-106: el server real es cmd/domain ("domain server"), NO
+	// cmd/domain-mcp. El FlowTokenService (que autoriza el gate SDD vía token
+	// HMAC) solo se cableaba en cmd/domain-mcp/main.go → en producción quedaba
+	// nil y domain_flow_grant_token devolvía "HMAC secret not configured"
+	// siempre, con el gate SDD insatisfacible. Se cablea acá con la misma
+	// lógica: secret explícito, o derivado de la field-enc-key como fallback.
+	if secret := os.Getenv("DOMAIN_FLOW_TOKEN_SECRET"); secret != "" {
+		s.FlowTokenSvc = flow.NewFlowTokenService([]byte(secret))
+	} else if cfg.FieldEncKey != "" {
+		s.FlowTokenSvc = flow.NewFlowTokenService([]byte("flow-hmac-derive-" + cfg.FieldEncKey))
+	}
 
 	s.ActivityStore = &activity.PGStore{Pool: pools.App}
 	s.SecretsStore = &secrets.PGStore{Pool: pools.App, Cipher: s.MasterCipher}

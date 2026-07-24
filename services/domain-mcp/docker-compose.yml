@@ -66,6 +66,9 @@ services:
       # Passphrase de cifrado at-rest de API keys (pgcrypto, mig 000168). DEBE ser
       # identica a la de domain-admin. Sin esto, Issue/Rotate fallan con ErrNoEncKey.
       DOMAIN_FIELD_ENC_KEY: ${DOMAIN_FIELD_ENC_KEY}
+      # Secret HMAC del gate SDD (flow-token, DOMAINSERV-106). Vacío ⇒ el server
+      # lo deriva de DOMAIN_FIELD_ENC_KEY. El instalador lo genera en .env.
+      DOMAIN_FLOW_TOKEN_SECRET: ${DOMAIN_FLOW_TOKEN_SECRET:-}
       DOMAIN_S3_ENDPOINT: http://minio:9000
       DOMAIN_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       DOMAIN_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}

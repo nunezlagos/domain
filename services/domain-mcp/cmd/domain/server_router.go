@@ -185,6 +185,7 @@ func buildRouter(
 			Tickets:          s.TicketService,
 			Policies:         s.PolicyService,
 			Flows:            s.FlowService,
+			FlowToken:        s.FlowTokenSvc,
 			FlowRunner:       s.FlowRunnerInst,
 			Hubuilder:        s.IssuebuilderSvc,
 			IssueSvc:         s.HUService,

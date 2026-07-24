@@ -75,7 +75,11 @@ func installClaudeSessionStartHook() {
 			warnL("hook script no encontrado en " + hookPath + " (re-corré el install canónico para instalarlo)")
 			continue
 		}
-		if claudeHookRegistered(hooks, spec.Event, hookPath) {
+		if exists, updated := reconcileClaudeHook(hooks, spec.Event, hookPath, spec.Matcher); exists {
+			if updated {
+				changed = true
+				ok("hook " + spec.Event + " matcher reconciliado: " + hookPath)
+			}
 			continue
 		}
 		entry := map[string]any{
@@ -112,10 +116,20 @@ func installClaudeSessionStartHook() {
 
 // claudeHookRegistered indica si el evento ya tiene registrado un hook cuyo
 // command sea exactamente hookPath.
+// claudeHookRegistered: ¿el hook (por command) ya está en la config? Read-only
+// (matcher="" → reconcileClaudeHook no muta). Lo usa el doctor.
 func claudeHookRegistered(hooks map[string]any, event, hookPath string) bool {
+	exists, _ := reconcileClaudeHook(hooks, event, hookPath, "")
+	return exists
+}
+
+// reconcileClaudeHook busca el hook por command. Si existe, reconcilia su matcher
+// al esperado (DOMAINSERV-84 idempotencia): un install previo pudo dejar un matcher
+// stale y el skip-si-existe lo perpetuaba. Devuelve (existe, actualizó-el-matcher).
+func reconcileClaudeHook(hooks map[string]any, event, hookPath, matcher string) (exists, updated bool) {
 	arr, ok := hooks[event].([]any)
 	if !ok {
-		return false
+		return false, false
 	}
 	for _, entry := range arr {
 		m, ok := entry.(map[string]any)
@@ -132,11 +146,17 @@ func claudeHookRegistered(hooks map[string]any, event, hookPath string) bool {
 				continue
 			}
 			if cmd, _ := hm["command"].(string); cmd == hookPath {
-				return true
+				if matcher != "" {
+					if cur, _ := m["matcher"].(string); cur != matcher {
+						m["matcher"] = matcher
+						return true, true
+					}
+				}
+				return true, false
 			}
 		}
 	}
-	return false
+	return false, false
 }
 
 func toArray(v any) []any {

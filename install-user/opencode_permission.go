@@ -49,7 +49,9 @@ func installOpencodePermission(paths Paths, timestamp string) error {
 
 	mutated := false
 	for _, rule := range opencodeGitDenyRules {
-		if bashRules[rule] == nil {
+		// idempotencia (DOMAINSERV-84): forzar "deny" aunque la regla exista con otro
+		// valor (ej. "ask" de un install previo). Son reglas gestionadas por domain.
+		if v, _ := bashRules[rule].(string); v != "deny" {
 			bashRules[rule] = "deny"
 			mutated = true
 		}

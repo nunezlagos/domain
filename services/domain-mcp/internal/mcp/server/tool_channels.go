@@ -44,6 +44,12 @@ var toolChannel = map[string]ToolChannel{
 	"domain_agent_run":      ChannelUserIntent,
 	"domain_agent_run_logs": ChannelUserIntent,
 
+	"domain_attachment_confirm":     ChannelUserIntent,
+	"domain_attachment_delete":      ChannelUserIntent,
+	"domain_attachment_get_url":     ChannelUserIntent,
+	"domain_attachment_init_upload": ChannelUserIntent,
+	"domain_attachment_list":        ChannelUserIntent,
+
 	"domain_client_create":     ChannelUserIntent,
 	"domain_client_delete":     ChannelUserIntent,
 	"domain_client_get":        ChannelUserIntent,

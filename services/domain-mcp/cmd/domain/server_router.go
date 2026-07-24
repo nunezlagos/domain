@@ -183,6 +183,7 @@ func buildRouter(
 			ProjectRepos:     s.ProjectRepoService,
 			ProjectPolicies:  s.ProjectPolicyService,
 			Tickets:          s.TicketService,
+			Attachments:      s.AttachmentService,
 			Policies:         s.PolicyService,
 			Flows:            s.FlowService,
 			FlowToken:        s.FlowTokenSvc,

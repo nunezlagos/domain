@@ -29,6 +29,7 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	agentsvc "nunezlagos/domain/internal/service/agent"
+	attachmentsvc "nunezlagos/domain/internal/service/attachment"
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
@@ -76,6 +77,7 @@ type Deps struct {
 	ProjectRepos     *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
 	ProjectPolicies  *projectpolicysvc.Service  // REQ-43 policies por proyecto
 	Tickets          *ticketsvc.Service         // REQ-51 sistema de tickets internos
+	Attachments      *attachmentsvc.Service     // DOMAINSERV-79 attachments (MinIO) vía MCP
 	Policies         *policysvc.Service         // issue-01.8 domain_policy_get/list
 	Flows            *flowsvc.Service
 	FlowToken        *flowsvc.FlowTokenService
@@ -128,6 +130,7 @@ var toolGroups = []toolRegistrar{
 	registerProposalsTools,
 	registerVerificationsTools,
 	registerTicketTools,
+	registerAttachmentTools,
 	registerHealthTools,
 	registerProjectIndexTools,
 	registerOpenspecTools,

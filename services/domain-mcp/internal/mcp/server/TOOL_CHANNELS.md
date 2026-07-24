@@ -73,7 +73,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_skill_search`
 - `domain_ticket_create`
 
-## user-intent (97)
+## user-intent (102)
 Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 
 - `domain_agent_create`
@@ -81,6 +81,11 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_agent_list`
 - `domain_agent_run`
 - `domain_agent_run_logs`
+- `domain_attachment_confirm`
+- `domain_attachment_delete`
+- `domain_attachment_get_url`
+- `domain_attachment_init_upload`
+- `domain_attachment_list`
 - `domain_client_create`
 - `domain_client_delete`
 - `domain_client_get`

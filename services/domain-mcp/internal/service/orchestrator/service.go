@@ -389,7 +389,7 @@ func (s *Service) hydrateSystemPrompts(ctx context.Context, orgID, projectID uui
 	// del session bootstrap + snapshot_prompt (resumen) y puede pedir el cuerpo
 	// con domain_policy_get on-demand.
 	platform, project := s.loadRulePolicies(ctx, projectID)
-	rulesStub := formatRulesBlock(platform, project, true)
+	rulesStub := formatRulesBlock(platform, project)
 	type cached struct {
 		base         string
 		threshold    float64
@@ -546,16 +546,12 @@ func (s *Service) loadRulePolicies(ctx context.Context, projectID uuid.UUID) (pl
 	return platform, project
 }
 
-// buildRulesBlock lee las policies vigentes y las formatea. stubLarge controla si
-// las platform_policies extensas se stubbean (DOMAINSERV-3): true para los steps
-// 1..N (payload a dieta), false para el step 0 que las lleva verbatim (DOMAINSERV-24).
-func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID, stubLarge bool) string {
-	platform, project := s.loadRulePolicies(ctx, projectID)
-	return formatRulesBlock(platform, project, stubLarge)
-}
-
-// formatRulesBlock arma el markdown de reglas. stubLarge=true stubbea las
-// platform_policies extensas (DOMAINSERV-3); stubLarge=false las embebe verbatim.
+// formatRulesBlock arma el markdown de reglas, stubbeando las platform_policies
+// extensas (DOMAINSERV-3).
+//
+// El stub aplica a TODOS los steps, incluido el 0. La variante "el step 0 las lleva
+// verbatim" (DOMAINSERV-24) dejó de existir en DOMAINSERV-108 —ver el comentario de
+// hydrateSystemPrompts— junto con el parámetro que la seleccionaba (DOMAINSERV-148).
 //
 // Además acota el TOTAL de bodies embebidos a maxRulesBlockBody (DOMAINSERV-142). Lo
 // que no entra en el presupuesto se stubbea igual que una policy extensa: queda el
@@ -578,7 +574,7 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID, stub
 // La decisión es determinística: mismas policies en el mismo orden ⇒ mismo bloque. El
 // empate por tamaño se rompe con el orden de entrada, que ya viene estable de
 // loadRulePolicies (ORDER BY kind, slug).
-func formatRulesBlock(platform, project []rulePolicy, stubLarge bool) string {
+func formatRulesBlock(platform, project []rulePolicy) string {
 	overridden := make(map[string]bool)
 	for _, p := range project {
 		if p.override && p.kind != "" {
@@ -596,7 +592,7 @@ func formatRulesBlock(platform, project []rulePolicy, stubLarge bool) string {
 		if !overridden[p.kind] {
 			// una platform extensa se stubbea por tamaño individual y NO consume
 			// presupuesto: ya está fuera antes de repartir
-			entries = append(entries, entry{p: p, inline: !(stubLarge && len(p.body) > maxInlinePolicyBody)})
+			entries = append(entries, entry{p: p, inline: len(p.body) <= maxInlinePolicyBody})
 		}
 	}
 	for _, p := range project {

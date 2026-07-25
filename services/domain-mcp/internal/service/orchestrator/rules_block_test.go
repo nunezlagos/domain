@@ -17,7 +17,7 @@ func TestFormatRulesBlock_PlatformBodyExtenso_SeStubbea(t *testing.T) {
 		{slug: "file-size-limit", name: "Límite de tamaño", body: "archivos < 150 líneas", kind: "convention"},
 	}
 
-	out := formatRulesBlock(platform, nil, true)
+	out := formatRulesBlock(platform, nil)
 
 	assert.NotContains(t, out, bigBody, "el body extenso NO debe embeberse")
 	assert.Contains(t, out, `domain_policy_get(slug="agent-protocol")`, "debe apuntar al texto vivo")
@@ -25,19 +25,20 @@ func TestFormatRulesBlock_PlatformBodyExtenso_SeStubbea(t *testing.T) {
 	assert.Contains(t, out, "archivos < 150 líneas", "las policies chicas siguen verbatim")
 }
 
-// DOMAINSERV-24: con stubLarge=false (step 0) la platform_policy extensa se embebe
-// verbatim para que el agente reciba el body completo (ej. agent-protocol), sin
-// stub. Los steps 1..N siguen stubbeados (test de arriba).
-func TestFormatRulesBlock_PlatformBodyExtenso_Step0_SeEmbebeVerbatim(t *testing.T) {
+// DOMAINSERV-148: el step 0 tampoco lleva las platform extensas verbatim. Lo hacía
+// con stubLarge=false (DOMAINSERV-24), rama que DOMAINSERV-108 dejó sin llamador de
+// producción y que se borró junto con el parámetro. El stub es ahora incondicional:
+// este test es el sabotaje que impide que la rama vuelva por la puerta de atrás.
+func TestFormatRulesBlock_PlatformBodyExtenso_SeStubbeaEnTodosLosSteps(t *testing.T) {
 	bigBody := strings.Repeat("P", maxInlinePolicyBody+1)
 	platform := []rulePolicy{
 		{slug: "agent-protocol", name: "Protocolo de agente", body: bigBody, kind: "convention"},
 	}
 
-	out := formatRulesBlock(platform, nil, false)
+	out := formatRulesBlock(platform, nil)
 
-	assert.Contains(t, out, bigBody, "en el step 0 el body extenso va verbatim")
-	assert.NotContains(t, out, "domain_policy_get", "el step 0 no stubbea: el agente recibe el body")
+	assert.NotContains(t, out, bigBody, "ningún step recibe el body extenso verbatim")
+	assert.Contains(t, out, `domain_policy_get(slug="agent-protocol")`, "queda el puntero al texto vivo")
 }
 
 // Fix del review DOMAINSERV-3: el stub es SOLO para platform. Una project_policy
@@ -49,7 +50,7 @@ func TestFormatRulesBlock_ProjectPolicyExtensa_NoSeStubbea(t *testing.T) {
 		{slug: "agent-protocol", name: "Protocolo del proyecto", body: bigBody, kind: "agent_protocol"},
 	}
 
-	out := formatRulesBlock(nil, project, true)
+	out := formatRulesBlock(nil, project)
 
 	assert.Contains(t, out, bigBody, "las project_policies van SIEMPRE verbatim, nunca stubbeadas")
 	assert.NotContains(t, out, "domain_policy_get", "no debe redirigir una project_policy")
@@ -64,7 +65,7 @@ func TestFormatRulesBlock_ProjectOverride_OcultaPlatformDelMismoKind(t *testing.
 		{slug: "commits-proyecto", name: "Commits proyecto", body: "regla proyecto", kind: "convention", override: true},
 	}
 
-	out := formatRulesBlock(platform, project, true)
+	out := formatRulesBlock(platform, project)
 
 	assert.NotContains(t, out, "regla plataforma", "la platform policy del kind overrideado se oculta")
 	assert.Contains(t, out, "regla proyecto", "la project policy que overridea se muestra")
@@ -72,5 +73,5 @@ func TestFormatRulesBlock_ProjectOverride_OcultaPlatformDelMismoKind(t *testing.
 
 // Sin policies el bloque es vacío: no debe emitir el header de reglas.
 func TestFormatRulesBlock_SinPolicies_DevuelveVacio(t *testing.T) {
-	assert.Empty(t, formatRulesBlock(nil, nil, true))
+	assert.Empty(t, formatRulesBlock(nil, nil))
 }

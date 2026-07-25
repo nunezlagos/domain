@@ -55,7 +55,7 @@ func TestFormatRulesBlock_TotalAcotado_AunqueNingunaPolicySeaExtensa(t *testing.
 	}
 	require.Greater(t, crudo, 33000, "el fixture reproduce los ~34KB de bodies medidos en prod")
 
-	out := formatRulesBlock(platform, project, true)
+	out := formatRulesBlock(platform, project)
 
 	assert.Less(t, len(out), crudo-15000,
 		"el bloque queda acotado por presupuesto, no por cuántas policies haya")
@@ -68,7 +68,7 @@ func TestFormatRulesBlock_TotalAcotado_AunqueNingunaPolicySeaExtensa(t *testing.
 func TestFormatRulesBlock_PresupuestoPrioriza_LasChicas(t *testing.T) {
 	platform, project := platformPoliciesReales(), projectPoliciesReales()
 
-	out := formatRulesBlock(platform, project, true)
+	out := formatRulesBlock(platform, project)
 
 	for _, p := range platform {
 		assert.Contains(t, out, p.body,
@@ -83,7 +83,7 @@ func TestFormatRulesBlock_PresupuestoPrioriza_LasChicas(t *testing.T) {
 func TestFormatRulesBlock_PolicyFueraDePresupuesto_ConservaNombreYPuntero(t *testing.T) {
 	project := projectPoliciesReales()
 
-	out := formatRulesBlock(nil, project, true)
+	out := formatRulesBlock(nil, project)
 
 	for _, p := range project {
 		assert.Contains(t, out, p.name, "toda policy aparece con su nombre, entre o no verbatim")
@@ -102,7 +102,7 @@ func TestFormatRulesBlock_ReparteP0rTamano_SinCambiarElOrdenDeSalida(t *testing.
 		{slug: "proj-grande", name: "Proyecto", body: strings.Repeat("J", maxRulesBlockBody), kind: "architecture"},
 	}
 
-	out := formatRulesBlock(platform, project, true)
+	out := formatRulesBlock(platform, project)
 
 	assert.Contains(t, out, "regla corta de plataforma", "la chica entra primero al presupuesto")
 	assert.NotContains(t, out, strings.Repeat("J", maxRulesBlockBody),
@@ -119,7 +119,7 @@ func TestFormatRulesBlock_PolicyQueNoEntra_NoBloqueaALasSiguientes(t *testing.T)
 		{slug: "flaca", name: "Flaca", body: "regla corta y valiosa", kind: "b"},
 	}
 
-	out := formatRulesBlock(nil, project, true)
+	out := formatRulesBlock(nil, project)
 
 	assert.NotContains(t, out, strings.Repeat("G", maxRulesBlockBody+1), "la gorda no entra")
 	assert.Contains(t, out, "regla corta y valiosa", "la flaca sí: el reparto no se corta en la primera que no cabe")
@@ -134,9 +134,9 @@ func TestFormatRulesBlock_Determinista(t *testing.T) {
 	}
 	project := projectPoliciesReales()
 
-	primero := formatRulesBlock(platform, project, true)
+	primero := formatRulesBlock(platform, project)
 	for i := 0; i < 5; i++ {
-		assert.Equal(t, primero, formatRulesBlock(platform, project, true))
+		assert.Equal(t, primero, formatRulesBlock(platform, project))
 	}
 }
 
@@ -148,7 +148,7 @@ func TestFormatRulesBlock_ProyectoChico_SigueVerbatimSinStubs(t *testing.T) {
 		{slug: "b", name: "B", body: "regla B", kind: "architecture"},
 	}
 
-	out := formatRulesBlock(nil, project, true)
+	out := formatRulesBlock(nil, project)
 
 	assert.Contains(t, out, "regla A")
 	assert.Contains(t, out, "regla B")

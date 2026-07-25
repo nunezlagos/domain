@@ -227,7 +227,7 @@ Cuando una fase SDD emite trabajo paralelizable, usa tus subagentes nativos
   domain_orchestrate_phase_result.
 
 REGLAS EN CADA SUBAGENTE (crítico): las reglas del proyecto van inyectadas en
-el system_prompt que el orchestrator te da (buildRulesBlock: platform_policies
+el system_prompt que el orchestrator te da (el rulesBlock: platform_policies
 + project_policies). Cuando delegas a un subagente, ese contexto NO viaja solo
 — PROPAGA las reglas vigentes en el prompt de cada subagente. Un subagente sin
 las reglas las viola (no-N+1, conventions, commits, etc.). Las reglas se

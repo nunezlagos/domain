@@ -193,16 +193,38 @@ func classifyCapturedPrompt(content string) map[string]any {
 	return out
 }
 
-// activeFlowRunID busca el flow_run no-terminal más reciente del proyecto.
-// Best-effort: (id, true) si hay uno; ("", false) ante cualquier problema.
+// flowRunActiveStatuses son los estados en que un flow_run tiene trabajo A
+// MEDIAS que retomar. Es la fuente única para las dos preguntas que el arranque
+// hace sobre lo mismo: el bootstrap de sesión y la clasificación por turno.
+//
+// DOMAINSERV-154: 'pending' NO está, y esa ausencia es el fix. Un run en
+// pending nunca arrancó —sus steps están todos pendientes— así que no hay nada
+// que retomar. Incluirlo hacía que el hook UserPromptSubmit anunciara "flow SDD
+// ACTIVO" en cada turno sobre runs que jamás se ejecutaron, y tres avisos
+// falsos seguidos enseñan a ignorar el aviso: el día que el flow activo es real
+// y quedó a mitad, se lo pisa.
+//
+// La causa raíz no fue la lista sino que HABÍA DOS, con criterios distintos: el
+// bootstrap ya excluía 'pending' y esta query lo incluía. Por eso vive acá y no
+// duplicada en cada query.
+var flowRunActiveStatuses = []string{
+	"running",
+	"paused",
+	"paused_awaiting_signal",
+	"paused_awaiting_human",
+}
+
+// activeFlowRunID busca el flow_run con trabajo a medias más reciente del
+// proyecto. Best-effort: (id, true) si hay uno; ("", false) ante cualquier
+// problema.
 func (h *capturedPromptHandlers) activeFlowRunID(ctx context.Context, projectID uuid.UUID) (string, bool) {
 	var id uuid.UUID
 	err := h.pool.QueryRow(ctx, `
 		SELECT id FROM flow_runs
 		WHERE project_id = $1
-		  AND status IN ('pending','running','paused','paused_awaiting_signal','paused_awaiting_human')
+		  AND status = ANY($2)
 		ORDER BY created_at DESC
-		LIMIT 1`, projectID,
+		LIMIT 1`, projectID, flowRunActiveStatuses,
 	).Scan(&id)
 	if err != nil {
 		return "", false

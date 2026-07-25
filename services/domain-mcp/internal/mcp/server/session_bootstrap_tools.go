@@ -369,9 +369,9 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM flow_runs
 		   WHERE project_id = $1
-		     AND status IN ('running','paused','paused_awaiting_signal','paused_awaiting_human')
+		     AND status = ANY($2)
 		   ORDER BY created_at DESC LIMIT 1`,
-		projID,
+		projID, flowRunActiveStatuses,
 	).Scan(&activeRunID, &activeRunStatus, &activeRunAt)
 
 	activeRun := map[string]any(nil)

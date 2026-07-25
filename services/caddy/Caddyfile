@@ -83,28 +83,29 @@ quiensabe.cl, www.quiensabe.cl {
 
 	import accesslog
 
-	# DOMAINSERV-130: rate limiting — NO ACTIVO, pero ya no falta nada tecnico.
+	# DOMAINSERV-130: rate limiting — ACTIVO desde 2026-07-25 (decision del usuario).
 	#
-	# La imagen con plugins YA esta promovida (DOMAINSERV-124), asi que el modulo
-	# http.handlers.rate_limit esta presente y basta descomentar. Queda apagado
-	# porque es una decision de producto —cuanto trafico legitimo se corta— y no
-	# se arrastra junto al bouncer: son dos cambios de comportamiento distintos.
-	#
-	# Al activarlo: correr `caddy validate` contra la imagen (abajo) antes de
-	# aplicar, igual que se hizo con el bouncer.
-	#
-	# El umbral acompaña la decision del usuario de banear solo volumen descomunal:
-	# 500 peticiones por minuto por IP, el mismo numero que el escenario
+	# El umbral acompaña la decision de cortar solo volumen descomunal: 500
+	# peticiones por minuto por IP, el mismo numero que el escenario
 	# domain/http-flood-extremo de CrowdSec. Este corta en el borde (429) y CrowdSec
 	# banea al reincidente — se complementan, no se pisan.
 	#
-	# rate_limit {
-	#   zone por_ip {
-	#     key    {remote_host}
-	#     events 500
-	#     window 1m
-	#   }
-	# }
+	# Va DESPUES de crowdsec y ANTES de @scanners: al ya baneado se le corta sin
+	# contarlo, y el barrido de rutas de escaneo si consume cuota.
+	#
+	# QUE PASA SI SE EXCEDE: 429 con Retry-After. No banea por si mismo — el ban lo
+	# decide CrowdSec al ver el patron repetido en el access log.
+	#
+	# `key {remote_host}` es la IP del cliente. Ojo si algun dia entra un CDN o proxy
+	# delante: ahi {remote_host} pasa a ser el proxy y TODO el trafico compartiria
+	# una sola cuota. Con Caddy como borde directo, es correcto.
+	rate_limit {
+		zone por_ip {
+			key {remote_host}
+			events 500
+			window 1m
+		}
+	}
 
 	# DOMAINSERV-130: rutas que solo piden bots y escaneres. `abort` cierra la
 	# conexion sin responder: no gasta backend y cada match queda en el access log

@@ -658,6 +658,23 @@ else
   warn "sin monitoring no hay CrowdSec: no hay deteccion de ataques ni baneo automatico"
 fi
 
+# DOMAINSERV-143: configs montadas stale. Docker monta por INODE y el deploy REEMPLAZA
+# los archivos, así que un container que ya estaba corriendo sigue leyendo el inode
+# viejo. `make monitoring-up` no lo recrea (compose no mira el contenido de un mount) y
+# `docker restart` tampoco (reusa el mismo mount). El stack core no sufre esto —el
+# make down + up de arriba lo recrea entero— pero el de monitoring NUNCA baja, y ahí
+# fue donde la retención de Loki (DOMAINSERV-128) pasó 17h sin estar activa con el
+# archivo correcto en disco.
+#
+# Va DESPUÉS de todos los `up` y cubre el stack completo: para el core es la
+# verificación de que el efecto se produjo (DOMAINSERV-84), no un fix esperado.
+log "Verificando que cada container tenga montada la config NUEVA..."
+source "$INSTALL_DIR/services/scripts/config-drift.sh"
+sync_config_drift
+if (( DRIFT_RECREATED == 0 && DRIFT_UNRESOLVED == 0 && DRIFT_UNVERIFIED == 0 )); then
+  ok "todas las configs montadas coinciden con el disco"
+fi
+
 # === STEP 7: Systemd units + timers ===
 log "7/9  Configurando systemd units + timers..."
 if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
@@ -763,6 +780,22 @@ else
   rm -f "$TMP_CRON"
   ok "Cron instalado: corre $WRAPPER todos los dias a las 03:00"
   ok "Log en /var/log/domain-update.log"
+fi
+
+# DOMAINSERV-143: una config que quedó vieja NO puede terminar en verde. El stack está
+# arriba y sirviendo, así que no abortamos nada — pero el exit code queda en rojo para
+# que el log del cron diario lo delate en vez de que se descubra 17h después.
+if (( ${DRIFT_UNRESOLVED:-0} > 0 )); then
+  warn "═══════════════════════════════════════════════════════════════"
+  warn "DEPLOY CON $DRIFT_UNRESOLVED CONFIG(S) VIEJA(S) TODAVÍA MONTADA(S)"
+  warn "El stack está arriba, pero al menos un container NO tomó su config nueva."
+  warn "Recreálo a mano desde $INSTALL_DIR/services (el --env-file no es opcional):"
+  warn "  docker compose --env-file .env -f <compose> up -d --force-recreate --no-deps <servicio>"
+  warn "═══════════════════════════════════════════════════════════════"
+  exit 1
+fi
+if (( ${DRIFT_UNVERIFIED:-0} > 0 )); then
+  warn "$DRIFT_UNVERIFIED config(s) no se pudieron verificar (docker cp falló): no sabemos si son las nuevas"
 fi
 
 ok "DONE"

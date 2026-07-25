@@ -13,7 +13,7 @@ NETWORK := domain_internal
 
 .PHONY: help up down restart ps logs build backup healthcheck \
         psql mc clean ensure-network certs certs-force wait-healthy \
-        monitoring-up monitoring-down deploy-changed
+        monitoring-up monitoring-down deploy-changed config-drift
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -136,6 +136,13 @@ monitoring-up: ## Levanta Prometheus + Grafana + Loki + Alloy + CrowdSec (Grafan
 
 monitoring-down: ## Apaga el stack de monitoring
 	-$(COMPOSE_MONITORING) down
+
+# DOMAINSERV-143: docker monta por inode, así que reemplazar un archivo montado no
+# llega al container corriendo. Compara el hash de cada config en disco contra la que
+# el container tiene de verdad y recrea solo los que quedaron viejos. install.sh ya lo
+# corre al final del deploy; este target es para verificar o arreglar a mano.
+config-drift: ## Detecta configs montadas stale y recrea solo los containers afectados
+	@bash -c 'source scripts/config-drift.sh && sync_config_drift'
 
 deploy-changed: ## Lista SVC cambiados desde PREV_SHA hasta HEAD (HU 38.12)
 	@if [ -z "$(PREV_SHA)" ]; then \

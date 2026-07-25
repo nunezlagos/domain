@@ -11,6 +11,22 @@ scrape_configs:
       - targets: ['domain-mcp:9090']
     metrics_path: /metrics
 
+  # DOMAINSERV-151: los ataques solo se veían por `cscli` vía SSH, sin serie temporal y
+  # perdiendo el histórico en cada recreate del container. CrowdSec ya expone Prometheus
+  # (`prometheus.enabled: true`, `level: full`, puerto 6060 en su config.yaml), así que
+  # centralizarlo era solo agregar el scrape.
+  #
+  # El 6060 NO se publica al host: crowdsec y prometheus comparten domain_internal, así
+  # que se resuelve por nombre de servicio y el puerto no queda expuesto a internet.
+  #
+  # Métricas que habilita: cs_active_decisions{action,origin,reason} — el `origin`
+  # distingue lo detectado acá (`crowdsec`) de la blocklist comunitaria (`CAPI`) —,
+  # cs_alerts{reason} y cs_bucket_overflowed_total por escenario.
+  - job_name: crowdsec
+    static_configs:
+      - targets: ['crowdsec:6060']
+    metrics_path: /metrics
+
   # Prometheus self-monitoring (útil para alertar si se cae).
   - job_name: prometheus
     static_configs:

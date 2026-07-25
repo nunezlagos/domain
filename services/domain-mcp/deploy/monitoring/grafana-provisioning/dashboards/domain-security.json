@@ -1,0 +1,115 @@
+{
+  "uid": "domain-security",
+  "title": "Domain Security — ataques y mitigación (DOMAINSERV-151)",
+  "tags": ["domain", "seguridad", "crowdsec"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Baneos activos (total)",
+      "description": "cscli decisions list TRUNCA la salida; esta métrica da el total real. La mayoría viene de la blocklist comunitaria, no de ataques a este host.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(cs_active_decisions)", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Baneos por detección PROPIA",
+      "description": "origin=crowdsec: lo que este host detectó por sí mismo (honeypot, flood, CVEs). Es el número que mide si te están atacando a VOS.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(cs_active_decisions{origin=\"crowdsec\"})", "refId": "A" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Baneos heredados de la comunidad",
+      "description": "origin=CAPI: blocklist de CrowdSec. Protege sin que nadie te haya atacado todavía.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(cs_active_decisions{origin=\"CAPI\"})", "refId": "A" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Alertas totales",
+      "description": "Cada alerta es un escenario que se desbordó: un comportamiento hostil identificado.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(cs_alerts)", "refId": "A" }]
+    },
+    {
+      "id": 5,
+      "type": "piechart",
+      "title": "Baneos propios por escenario — QUÉ los delató",
+      "description": "Solo origin=crowdsec: si se mezclara CAPI, sus ~16k entradas taparían todo lo demás.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value"] } },
+      "targets": [
+        { "expr": "sum by (reason) (cs_active_decisions{origin=\"crowdsec\"})", "legendFormat": "{{reason}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "barchart",
+      "title": "Alertas por tipo de ataque",
+      "description": "Distingue escaneo (http-probing, crawl) de explotación real (CVE-*, thinkphp, wordpress-scan).",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "options": { "orientation": "horizontal", "legend": { "showLegend": false } },
+      "targets": [
+        { "expr": "sort_desc(sum by (reason) (cs_alerts))", "legendFormat": "{{reason}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Ritmo de ataque — desbordes de escenario por minuto",
+      "description": "La derivada es lo que importa: un salto acá es un ataque EN CURSO, no historia acumulada.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum by (name) (rate(cs_bucket_overflowed_total[5m])) * 60", "legendFormat": "{{name}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Baneos activos en el tiempo (propios vs comunitarios)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 10, "lineWidth": 2 } } },
+      "targets": [
+        { "expr": "sum by (origin) (cs_active_decisions)", "legendFormat": "{{origin}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Salud del parseo por fuente (caddy vs honeypot)",
+      "description": "Desglosado por acquis_type a propósito. En el honeypot un KO alto es NORMAL: socat emite varias líneas por conexión y solo una matchea el parser (medido: 1970 KO de 2220). En caddy el KO debe ser bajo (32 de 1214) — un salto ahí sí significa parser roto o formato de log cambiado.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
+      "targets": [
+        { "expr": "sum by (acquis_type) (rate(cs_parser_hits_ok_total[5m]))", "legendFormat": "{{acquis_type}} — parseadas/s", "refId": "A" },
+        { "expr": "sum by (acquis_type) (rate(cs_parser_hits_ko_total[5m]))", "legendFormat": "{{acquis_type}} — sin parsear/s", "refId": "B" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "¿CrowdSec está siendo scrapeado?",
+      "description": "Si esto es 0, el resto del dashboard está congelado y no lo sabrías de otra forma. Vale más que cualquier panel de ataques.",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 21 },
+      "targets": [{ "expr": "up{job=\"crowdsec\"}", "refId": "A" }]
+    },
+    {
+      "id": 11,
+      "type": "logs",
+      "title": "Log de CrowdSec (Loki)",
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 21 },
+      "datasource": { "type": "loki" },
+      "targets": [{ "expr": "{container=\"domain-crowdsec\"}", "refId": "A" }]
+    }
+  ]
+}

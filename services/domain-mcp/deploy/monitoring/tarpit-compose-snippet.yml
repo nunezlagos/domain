@@ -1,0 +1,54 @@
+# DOMAINSERV-130: tarpit. FRAGMENTO, no un compose ejecutable.
+#
+# Pegar el bloque `tarpit:` bajo `services:` de docker-compose.yml (va al lado de
+# `honeypot:`). Se deja aparte porque docker-compose.yml lo estan tocando otros
+# en paralelo y pisarlo corrompe su trabajo.
+#
+# Ademas de este bloque hacen falta DOS cosas fuera de este archivo:
+#
+#   1. crowdsec-acquis.yaml — agregar un documento mas para que CrowdSec lea los
+#      hits del tarpit. El parser NO hay que tocarlo: `socat -d -d` emite la
+#      misma linea que el honeypot, asi que domain/honeypot-logs ya la parsea y
+#      el escenario domain/honeypot-puerto-tocado banea igual:
+#
+#        ---
+#        source: loki
+#        url: http://loki:3100/
+#        query: |
+#          {container="domain-tarpit"}
+#        labels:
+#          type: honeypot
+#
+#   2. SECURITY_ALLOWED_PUBLIC_PORTS del .env / install.sh — declarar el 2222 o
+#      el deploy aborta (y hace bien: un puerto publico no declarado es
+#      indistinguible de un error de configuracion).
+
+  # DOMAINSERV-130: tarpit SSH. Ver tarpit.sh para por que socat y no endlessh.
+  #
+  # network_mode: host por el MISMO motivo que el honeypot, y reverificado: con
+  # `ports:` el NAT de Docker enmascara el origen y socat logea 172.16.0.1, el
+  # gateway. Un tarpit asi haria que CrowdSec baneara al gateway de Docker.
+  #
+  # mem_limit + pids_limit no son decoracion: el tarpit acumula conexiones
+  # abiertas por diseño y cada una cuesta un socat hijo + un sh. max-children
+  # (en tarpit.sh) es el techo de la capa de aplicacion; estos dos son la red de
+  # contencion si ese techo se configura mal.
+  tarpit:
+    image: alpine/socat:1.8.0.0
+    container_name: domain-tarpit
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/tarpit.sh"]
+    volumes:
+      - ./tarpit.sh:/tarpit.sh:ro
+    environment:
+      TARPIT_PUERTO: "2222"
+      TARPIT_DELAY: "30"
+      TARPIT_MAX_CONEXIONES: "64"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 256
+    network_mode: host

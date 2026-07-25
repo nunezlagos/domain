@@ -9,8 +9,11 @@ import (
 // Las funciones piden su rol; no referencian un provider/modelo literal.
 type Role string
 
+// DOMAINSERV-116: ya no hay RoleRerank. El rerank de mem_search se retiró porque
+// una búsqueda siempre tiene a alguien esperando y no puede depender de inferencia
+// (policy llm-nunca-en-camino-caliente). El server devuelve scores; el cliente
+// reordena.
 const (
-	RoleRerank      Role = "rerank"
 	RoleInfer       Role = "infer"
 	RoleClassify    Role = "classify"
 	RoleJudge       Role = "judge"
@@ -28,7 +31,6 @@ type roleBinding struct {
 // defaultRoleBindings centraliza los defaults que antes vivían hardcodeados en
 // cada call-site. Overridables por env DOMAIN_LLM_<ROLE>_{PROVIDER,MODEL}.
 var defaultRoleBindings = map[Role]roleBinding{
-	RoleRerank:   {provider: "minimax", model: "MiniMax-M3"},
 	RoleInfer:    {provider: "minimax", model: "MiniMax-M3"},
 	RoleJudge:    {provider: "minimax", model: "MiniMax-M3"},
 	RoleClassify: {provider: "anthropic", model: "claude-haiku-4-5-20251001"},

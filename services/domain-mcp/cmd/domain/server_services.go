@@ -272,8 +272,9 @@ func buildServices(
 	s.OutboundRequireTLS = os.Getenv("DOMAIN_OUTBOUND_REQUIRE_TLS") == "true"
 
 	s.LLMFactory = buildLLMFactory()
-	// Inyectar el Factory en ObsService para el RERANK opcional de mem_search
-	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
+	// Inyectar el Factory en ObsService para la inferencia de observation/inference.go
+	// (RoleInfer), que corre FUERA del camino de búsqueda y degrada sin error si no hay
+	// provider. mem_search ya NO usa inferencia: ver DOMAINSERV-116.
 	s.ObsService.LLM = s.LLMFactory
 
 	// HU-52.3 — LLM-as-judge (skill suggestions). El judge resuelve el provider

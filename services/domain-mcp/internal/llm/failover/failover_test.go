@@ -92,18 +92,18 @@ func TestFailover_AllTransientFail_ReturnsLastError(t *testing.T) {
 func TestForRole_NoChainEnv_ReturnsSingleProviderWithRoleModel(t *testing.T) {
 	f := llm.NewFactory()
 	f.Register("minimax", fakeProv{name: "minimax", resp: "ok"})
-	p, model, err := ForRole(f, llm.RoleRerank, nil)
+	p, model, err := ForRole(f, llm.RoleInfer, nil)
 	require.NoError(t, err)
 	require.Equal(t, "minimax", p.Name())
 	require.Equal(t, "MiniMax-M3", model)
 }
 
 func TestForRole_ChainEnv_BuildsFailoverChain(t *testing.T) {
-	t.Setenv("DOMAIN_LLM_RERANK_CHAIN", "minimax,openai")
+	t.Setenv("DOMAIN_LLM_INFER_CHAIN", "minimax,openai")
 	f := llm.NewFactory()
 	f.Register("minimax", fakeProv{name: "minimax", err: errors.New("minimax 429: rate limit")})
 	f.Register("openai", fakeProv{name: "openai", resp: "ok"})
-	p, _, err := ForRole(f, llm.RoleRerank, nil)
+	p, _, err := ForRole(f, llm.RoleInfer, nil)
 	require.NoError(t, err)
 	resp, err := p.Complete(context.Background(), llm.CompletionOptions{})
 	require.NoError(t, err)

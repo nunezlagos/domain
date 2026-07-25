@@ -92,18 +92,13 @@ func (d *Deps) handleMemSearch(ctx context.Context, req mcp.CallToolRequest) (*m
 	if v, ok := args["limit"].(float64); ok {
 		limit = int(v)
 	}
-	rerank, _ := args["rerank"].(bool)
-	rerankTopN := 0
-	if v, ok := args["rerank_top_n"].(float64); ok {
-		rerankTopN = int(v)
-	}
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	// SearchHybridReranked degrada al orden BM25/RRF si rerank=false o si el LLM
-	// no esta disponible/falla — nunca devuelve error por culpa del rerank.
-	results, err := d.Observations.SearchHybridReranked(ctx, orgID, query, limit, obssvc.RerankOptions{
-		Enabled: rerank,
-		TopN:    rerankTopN,
-	})
+	// DOMAINSERV-116: sin rerank por LLM. Una búsqueda siempre tiene a alguien
+	// esperando, así que no puede depender de inferencia (policy
+	// llm-nunca-en-camino-caliente). El server devuelve los scores que calcula
+	// solo —BM25 + vector + RRF— y el cliente reordena con el contexto de la
+	// tarea, que es justamente lo que el server no tiene.
+	results, err := d.Observations.SearchHybrid(ctx, orgID, query, limit)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}

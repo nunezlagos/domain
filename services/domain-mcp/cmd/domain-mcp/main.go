@@ -192,8 +192,9 @@ func main() {
 		factory.SetDefault(def, def)
 	}
 
-	// Inyectar el Factory en observations para el RERANK opcional de mem_search
-	// (degrada solo si MiniMax no está registrado; ver observation/rerank.go).
+	// Inyectar el Factory en observations para la inferencia de observation/inference.go
+	// (RoleInfer), que corre FUERA del camino de búsqueda y degrada sin error si no hay
+	// provider. mem_search ya NO usa inferencia: ver DOMAINSERV-116.
 	observations.LLM = factory
 
 	skillRunnerInst := skillrunner.New()

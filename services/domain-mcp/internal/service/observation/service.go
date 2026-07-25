@@ -86,10 +86,13 @@ type Service struct {
 	Embedder llm.Embedder
 	Events   EventEmitter // nil = sin webhooks
 
-	// LLM es el Factory de providers para el paso opcional de RERANK
-	// (SearchHybridReranked). Opcional: si es nil, el rerank degrada al orden
-	// BM25/RRF original sin error. Se inyecta post-construcción porque el
-	// Factory se arma después del Service en el wiring (ver cmd/*).
+	// LLM es el Factory de providers para la inferencia de inference.go (RoleInfer),
+	// que corre FUERA del camino de búsqueda. Opcional: si es nil, esa inferencia
+	// degrada sin error. Se inyecta post-construcción porque el Factory se arma
+	// después del Service en el wiring (ver cmd/*).
+	//
+	// El rerank de búsqueda se retiró en DOMAINSERV-116: mem_search no puede
+	// depender de inferencia porque siempre tiene a alguien esperando.
 	LLM *llm.Factory
 
 	repo Repository

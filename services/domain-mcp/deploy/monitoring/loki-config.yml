@@ -1,5 +1,14 @@
 # DOMAINSERV-81: Loki single-binary, storage filesystem. Sidecar opt-in del stack
 # de monitoring. Retención 14d (336h) alineada con prometheus (15d).
+#
+# DOMAINSERV-128: retención diferenciada. Lo general queda en 14d; los streams de
+# seguridad se van a 90d vía limits_config.retention_stream. Cambios acá se
+# validan con ./loki-config_test.sh (binario real, no mock).
+#
+# El volumen loki-data SOBREVIVE al redeploy: install.sh corre `make down`, y ese
+# target sólo baja postgres/minio/ollama/mcp/admin/caddy — nunca
+# COMPOSE_MONITORING. Y ni `down` ni `monitoring-down` usan `-v`. Sin eso la
+# retención de 90d no significaría nada.
 auth_enabled: false
 
 server:
@@ -31,6 +40,15 @@ schema_config:
 
 limits_config:
   retention_period: 336h
+  # DOMAINSERV-128: caddy (access log), honeypot (hits de señuelos) y crowdsec
+  # (decisiones de baneo) comparten la MISMA ventana de 90d a propósito: un
+  # forense necesita el access log que disparó el baneo, si caddy expira antes
+  # que crowdsec queda la decisión sin la evidencia y la correlación se rompe.
+  # El label 'container' lo pone Alloy desde __meta_docker_container_name.
+  retention_stream:
+    - selector: '{container=~"domain-caddy|domain-honeypot|domain-crowdsec"}'
+      priority: 10
+      period: 2160h
   reject_old_samples: true
   reject_old_samples_max_age: 168h
 

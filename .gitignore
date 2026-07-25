@@ -58,3 +58,19 @@ openspec/
 # (la regla openspec/ era para los árboles SDD exportados, no para el código).
 !services/domain-mcp/internal/service/openspec/
 !services/domain-mcp/internal/service/openspec/**
+
+# Binarios compilados en la raíz del módulo Go. `go build ./cmd/X` sin -o deja el
+# ejecutable acá con el nombre del target: así apareció un domain-schema-drift de
+# 14 MB que un `git add -A` casi mete al repo.
+#
+# Cada patrón va ANCLADO con / inicial para que matchee SOLO el archivo en esa
+# ruta y nunca el directorio homónimo de cmd/, que sí va al repo.
+/services/domain-mcp/anonymize
+/services/domain-mcp/db-conventions-lint
+/services/domain-mcp/domain
+/services/domain-mcp/domain-admin
+/services/domain-mcp/domain-lint-stateless
+/services/domain-mcp/domain-mcp
+/services/domain-mcp/domain-schema-drift
+/services/domain-mcp/response-shape-lint
+/services/domain-mcp/size-lint

@@ -229,18 +229,36 @@ func installGlobalAssets(paths Paths) error {
 	if err := os.WriteFile(paths.GlobalAgentPath, agentDomainMemoryMD, 0o644); err != nil {
 		return err
 	}
+	// DOMAINSERV-135: el agente de OpenCode es un archivo propio, no un symlink al de
+	// Claude Code — los frontmatter son incompatibles (ver embed.go).
+	if paths.OpencodeAgentsLn != "" {
+		if err := os.MkdirAll(filepath.Dir(paths.OpencodeAgentsLn), 0o755); err != nil {
+			return err
+		}
+		// si venís de una instalación previa, acá hay un symlink: hay que sacarlo antes
+		// o WriteFile escribiría A TRAVÉS de él y pisaría el template de Claude Code
+		_ = os.Remove(paths.OpencodeAgentsLn)
+		if err := os.WriteFile(paths.OpencodeAgentsLn, agentDomainMemoryOpencodeMD, 0o644); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // linkOpencodeToGlobal: en Linux/macOS hace symlink. En Windows, donde
 // los symlinks requieren permisos especiales, COPIA el contenido.
+//
+// DOMAINSERV-135: el AGENTE ya no viaja por acá. Era un symlink al de Claude Code, o sea
+// un archivo único sirviendo dos esquemas de frontmatter incompatibles: al acotarle
+// modelo y tools para Claude Code, ese mismo `model: haiku` quedaba malformado para
+// OpenCode, que espera provider/model-id. Ahora cada cliente recibe su propio template
+// desde installGlobalAssets. El SKILL sí sigue symlinkeado: su formato es compatible.
 func linkOpencodeToGlobal(paths Paths, osName string) error {
 	pairs := []struct {
 		target string
 		link   string
 	}{
 		{paths.GlobalSkillPath, paths.OpencodeSkillsLn},
-		{paths.GlobalAgentPath, paths.OpencodeAgentsLn},
 	}
 	for _, p := range pairs {
 		if err := os.MkdirAll(filepath.Dir(p.link), 0o755); err != nil {

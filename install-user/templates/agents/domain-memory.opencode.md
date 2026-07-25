@@ -1,10 +1,12 @@
 ---
-name: domain-memory
 description: Subagent read-only de memoria domain. Delegale "buscá todo lo que domain recuerda sobre X" cuando el recall sea profundo y no quieras bloatear el contexto principal. Devuelve un resumen estructurado en menos de 400 palabras.
-model: haiku
-effort: low
-tools: mcp__domain-mcp__domain_mem_search, mcp__domain-mcp__domain_mem_get_observation, mcp__domain-mcp__domain_knowledge_search, mcp__domain-mcp__domain_timeline, ToolSearch
-disallowedTools: mcp__domain-mcp__domain_mem_save, mcp__domain-mcp__domain_knowledge_save
+mode: subagent
+model: anthropic/claude-haiku-4-5
+temperature: 0.2
+permission:
+  edit: deny
+  write: deny
+  bash: deny
 ---
 
 # domain-memory

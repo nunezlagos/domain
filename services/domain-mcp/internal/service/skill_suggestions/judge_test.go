@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/llm"
-	"nunezlagos/domain/internal/llm/anthropic"
+	"nunezlagos/domain/internal/llm/acp"
 )
 
 // fakeProvider implementa llm.Provider devolviendo un Content fijo (o error).
@@ -37,18 +37,20 @@ func (p *fakeProvider) CompleteStream(_ context.Context, _ llm.CompletionOptions
 	return ch, nil
 }
 
-// judgeWith arma un LLMJudge cuyo provider 'minimax' devuelve `content`.
+// judgeWith arma un LLMJudge cuyo provider ACP devuelve `content`. Se registra
+// acp porque es a donde resuelve RoleJudge desde DOMAINSERV-117; antes era minimax,
+// que ya no existe en el VPS.
 func judgeWith(content string, err error) (*LLMJudge, *fakeProvider) {
 	f := llm.NewFactory()
 	fp := &fakeProvider{content: content, err: err}
-	f.Register(anthropic.MiniMaxProviderName, fp)
+	f.Register(acp.ProviderName, fp)
 	return &LLMJudge{LLM: f}, fp
 }
 
 func TestJudge_Available_WithProvider(t *testing.T) {
 	j, _ := judgeWith(`{"suggestions":[]}`, nil)
 	if !j.Available() {
-		t.Fatal("judge con provider minimax registrado debe estar disponible")
+		t.Fatal("judge con provider acp registrado debe estar disponible")
 	}
 }
 
@@ -86,8 +88,14 @@ func TestJudge_Evaluate_EachKind(t *testing.T) {
 			if ci.Confidence == nil || *ci.Confidence != 0.85 {
 				t.Fatalf("confidence incorrecta: %v", ci.Confidence)
 			}
-			if ci.LLMModel == nil || *ci.LLMModel != anthropic.MiniMaxModel {
-				t.Fatalf("llm_model esperado %q, got %v", anthropic.MiniMaxModel, ci.LLMModel)
+			// No se fija un modelo concreto: RoleJudge resuelve a acp con model
+			// vacío para que la rotación de modelos free de opencode decida cuál
+			// usar (DOMAINSERV-117). Atar el test a un literal lo volvería frágil
+			// cada vez que cambia el roster. Lo que sí debe cumplirse es que el
+			// campo se registre, porque es la trazabilidad de qué generó la
+			// sugerencia.
+			if ci.LLMModel == nil {
+				t.Fatal("llm_model no registrado: se pierde la trazabilidad de la sugerencia")
 			}
 			if len(ci.Payload) == 0 || string(ci.Payload) == "{}" {
 				t.Fatalf("payload vacio para kind %s", tc.kind)

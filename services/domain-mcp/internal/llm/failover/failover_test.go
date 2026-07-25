@@ -89,13 +89,17 @@ func TestFailover_AllTransientFail_ReturnsLastError(t *testing.T) {
 	require.Contains(t, err.Error(), "503")
 }
 
+// Usa RoleClassify porque este test verifica que ForRole devuelve EL MODELO del
+// rol, y classify es el único binding con modelo fijo: infer y judge apuntan a acp
+// con model vacío a propósito, para no anular la rotación de modelos free de
+// opencode (DOMAINSERV-117).
 func TestForRole_NoChainEnv_ReturnsSingleProviderWithRoleModel(t *testing.T) {
 	f := llm.NewFactory()
-	f.Register("minimax", fakeProv{name: "minimax", resp: "ok"})
-	p, model, err := ForRole(f, llm.RoleInfer, nil)
+	f.Register("anthropic", fakeProv{name: "anthropic", resp: "ok"})
+	p, model, err := ForRole(f, llm.RoleClassify, nil)
 	require.NoError(t, err)
-	require.Equal(t, "minimax", p.Name())
-	require.Equal(t, "MiniMax-M3", model)
+	require.Equal(t, "anthropic", p.Name())
+	require.Equal(t, "claude-haiku-4-5-20251001", model)
 }
 
 func TestForRole_ChainEnv_BuildsFailoverChain(t *testing.T) {

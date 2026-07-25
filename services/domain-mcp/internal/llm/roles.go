@@ -30,9 +30,21 @@ type roleBinding struct {
 
 // defaultRoleBindings centraliza los defaults que antes vivían hardcodeados en
 // cada call-site. Overridables por env DOMAIN_LLM_<ROLE>_{PROVIDER,MODEL}.
+// DOMAINSERV-117: infer y judge apuntan a "acp", no a minimax. MiniMax dejó de
+// estar en el VPS —sin MINIMAX_API_KEY, anthropic.RegisterMiniMax no registra
+// nada— y estos roles venían resolviendo por el FALLBACK del factory, que ya es
+// acp ("ACP ON por defecto", ver llm/acp/register.go). El comportamiento en
+// runtime no cambia: lo que cambia es que el binding declarado deja de mentir
+// sobre qué se usa.
+//
+// El model va vacío a propósito: el provider acp rota entre los modelos free de
+// opencode (ver llm/acp/rolling.go), así que fijar uno acá anularía la rotación.
+//
+// classify se queda en anthropic: es el único rol con una key real y un modelo
+// elegido a mano por costo/latencia.
 var defaultRoleBindings = map[Role]roleBinding{
-	RoleInfer:    {provider: "minimax", model: "MiniMax-M3"},
-	RoleJudge:    {provider: "minimax", model: "MiniMax-M3"},
+	RoleInfer:    {provider: "acp", model: ""},
+	RoleJudge:    {provider: "acp", model: ""},
 	RoleClassify: {provider: "anthropic", model: "claude-haiku-4-5-20251001"},
 }
 

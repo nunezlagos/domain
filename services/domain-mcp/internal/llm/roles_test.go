@@ -25,13 +25,16 @@ func TestProviderNameForModel_Prefixes_MapToRegisteredNames(t *testing.T) {
 	require.Equal(t, "ollama", ProviderNameForModel("llama3"))
 }
 
+// Usa RoleClassify porque es el unico binding con modelo fijo: infer y judge
+// apuntan a acp con model vacio para no anular la rotacion de modelos free de
+// opencode (DOMAINSERV-117).
 func TestFactory_ProviderForRole_DefaultBinding_ResolvesProviderAndModel(t *testing.T) {
 	f := NewFactory()
-	f.Register("minimax", roleStub{name: "minimax"})
-	p, model, err := f.ProviderForRole(RoleInfer)
+	f.Register("anthropic", roleStub{name: "anthropic"})
+	p, model, err := f.ProviderForRole(RoleClassify)
 	require.NoError(t, err)
-	require.Equal(t, "minimax", p.Name())
-	require.Equal(t, "MiniMax-M3", model)
+	require.Equal(t, "anthropic", p.Name())
+	require.Equal(t, "claude-haiku-4-5-20251001", model)
 }
 
 func TestFactory_ProviderForRole_EnvOverride_UsesConfiguredProviderAndModel(t *testing.T) {
@@ -49,7 +52,7 @@ func TestFactory_ProviderForRole_PreferredAbsent_FallsBackToFactoryDefault(t *te
 	f := NewFactory()
 	f.Register("openai", roleStub{name: "openai"})
 	f.SetDefault("openai", "")
-	// RoleInfer default provider = minimax (ausente) -> cae al default openai
+	// RoleInfer default provider = acp (ausente en este factory) -> cae al default openai
 	p, model, err := f.ProviderForRole(RoleInfer)
 	require.NoError(t, err)
 	require.Equal(t, "openai", p.Name())

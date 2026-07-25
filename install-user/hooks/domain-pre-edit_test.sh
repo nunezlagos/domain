@@ -125,6 +125,78 @@ check_contains "destructivo real sigue bloqueado" 'git-guard' \
 check_contains "path entrecomillado no abre bypass" 'git-guard' \
   "$(run "$(payload ev-sess 'git -C "/tmp/mi repo" reset --hard')")"
 
+# 11) DOMAINSERV-146 — FALSO POSITIVO DEL COMMIT-GATE. El repro exacto del reporte:
+#     un grep cuyo PATRÓN contiene el literal "git commit". 100% read-only y quedaba
+#     bloqueado, porque el commit-gate matcheaba sobre la línea entera. Es el mismo
+#     linaje que DOMAINSERV-114 (arriba) pero en la rama C, que había quedado sin el
+#     tratamiento de literales-como-datos.
+while IFS= read -r ro; do
+  check_not_contains "commit-gate NO dispara en read-only: $ro" 'commit-gate' \
+    "$(run "$(payload ro-sess "$ro")")"
+done <<'ROS'
+grep -nE "commit|git commit|tests-ok" install-user/templates/opencode-sdd-gate.js
+rg 'git commit' install-user/hooks/
+echo "para commitear corré: git commit -m msg"
+awk '/git commit/ {print}' historial.txt
+git log --oneline --grep="git commit"
+ROS
+
+# El primer token manda: un git NO-commit tampoco dispara el gate de commits.
+check_not_contains "commit-gate NO dispara con git status" 'commit-gate' \
+  "$(run "$(payload ro-sess 'git status --porcelain')")"
+
+# 12) SABOTAJE del fix anterior: el commit REAL sigue bloqueado sin marker de tests,
+#     incluidas las formas que la normalización de prefijos debe seguir viendo.
+while IFS= read -r real; do
+  check_contains "commit real SIGUE bloqueado: $real" 'commit-gate' \
+    "$(run "$(payload real-sess "$real")")"
+done <<'REALS'
+git commit -m "fix: algo"
+cd /tmp/repo && git commit -m x
+git -C /tmp/repo commit -m x
+/usr/bin/git commit --no-verify -m x
+GIT_AUTHOR_NAME=x git commit -m y
+sudo git commit -m x
+sh -c "git commit -m x"
+bash -c 'git commit -am x'
+eval "git commit -m x"
+REALS
+
+# 13) DOMAINSERV-146 — FALSO POSITIVO DEL GATE SDD. Un heredoc que solo LEE no es
+#     edición: el patrón exigía apenas una extensión de código en cualquier parte
+#     después del marcador, así que mencionar un .js o un .sh alcanzaba.
+ssh_ro="ssh domain-vps 'bash -s' <<'REMOTE'
+grep -c retention_stream /opt/services/services/domain-mcp/deploy/monitoring/loki-config.yml
+md5sum /opt/services/services/install.sh
+wget -qO- http://localhost/healthz
+REMOTE"
+check_not_contains "gate SDD NO dispara con heredoc read-only" '"permissionDecision"' \
+  "$(run "$(payload ssh-sess "$ssh_ro")")"
+
+# 14) SABOTAJE del 13: un heredoc que SÍ escribe código sigue gateado. Si esto pasara,
+#     el fix habría abierto el agujero que el patrón laxo tapaba por accidente.
+#     Los casos van en un array y NO en un heredoc leído con `read -r`: cada comando es
+#     multilínea, y leerlo línea por línea partía el heredoc en tres payloads sueltos
+#     que ninguno era un heredoc completo. El test daba rojo por eso, no por el hook.
+escrituras=(
+  "cat > internal/x.go <<'EOF'
+package main
+EOF"
+  "cat <<'EOF' > internal/x.go
+package main
+EOF"
+  "tee install-user/hooks/x.sh <<'EOF'
+echo hola
+EOF"
+  "python3 - <<'PY'
+open(\"internal/x.go\", \"w\").write(\"package main\")
+PY"
+)
+for wr in "${escrituras[@]}"; do
+  check_contains "heredoc que ESCRIBE sigue gateado: ${wr%%$'\n'*}" '"permissionDecision"' \
+    "$(run "$(payload wr-sess "$wr")")"
+done
+
 if [[ "$FAILS" -gt 0 ]]; then
   printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1
 fi

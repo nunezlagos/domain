@@ -147,8 +147,54 @@ if [ "$tool_name" = "Bash" ]; then
   is_commit=$(printf '%s' "$tool_cmd" | python3 -c '
 import re, sys
 cmd = sys.stdin.read()
-if re.search(r"\bgit\s+commit\b", cmd):
+
+# DOMAINSERV-146: esto era un re.search de "git commit" sobre la línea ENTERA, así que
+# `grep -nE "commit|git commit|tests-ok" archivo.js` —100% read-only— disparaba el
+# commit-gate: el literal viajaba DENTRO del patrón de grep y la heurística lo leyó como
+# el comando a ejecutar.
+#
+# Mismo linaje que DOMAINSERV-114, que le enseñó al GIT-GUARD que un heredoc y un string
+# entrecomillado son DATOS y no comandos. El commit-gate había quedado sin ese
+# tratamiento. Acá van las dos capas: strippear datos, y exigir que git sea el PRIMER
+# token de algún comando de la lista. Con la primera alcanzaba para el caso reportado;
+# la segunda es la que hace que la decisión no dependa de dónde caiga una comilla.
+INTERPRETES = r"\b(?:bash|sh|zsh|dash|ksh)\s+(?:-\w+\s+)*-c\b|\beval\b|\bxargs\b"
+
+# fail-closed: con un intérprete que EJECUTA el literal (sh -c "git commit"), lo
+# entrecomillado SÍ es comando y no se strippea nada
+if not re.search(INTERPRETES, cmd):
+    cmd = re.sub(r"<<-?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^\2$", " LITERAL ", cmd, flags=re.M)
+    cmd = re.sub(r"\x27[^\x27]*\x27", " LITERAL ", cmd)
+    cmd = re.sub(r"\x22[^\x22]*\x22", " LITERAL ", cmd)
+
+def ejecuta_git_commit(texto):
+    # cada segmento de la lista/pipeline es un comando aparte: `cd x && git commit` sí,
+    # `grep "git commit" f` no
+    for seg in re.split(r"\|\||&&|[;|\n&]", texto):
+        seg = re.sub(r"^(?:\w+=\S*\s+)+", "", seg.strip())
+        seg = re.sub(r"^(?:sudo|command|env|time|nohup)\s+(?:-\w+\s+)*", "", seg)
+        toks = seg.split()
+        if not toks:
+            continue
+        if toks[0].rsplit("/", 1)[-1] != "git":
+            continue
+        resto = re.sub(
+            r"^(?:-[cC]\s+\S+\s+|--(?:git-dir|work-tree)(?:=\S+|\s+\S+)?\s+)*",
+            "", " ".join(toks[1:]))
+        if re.match(r"commit\b", resto):
+            return True
+    return False
+
+if ejecuta_git_commit(cmd):
     print("yes")
+    sys.exit(0)
+
+# el intérprete que ejecuta un literal tiene que seguir gateado: se mira ADENTRO
+if re.search(INTERPRETES, cmd):
+    for lit in re.findall(r"\x27([^\x27]*)\x27", cmd) + re.findall(r"\x22([^\x22]*)\x22", cmd):
+        if ejecuta_git_commit(lit):
+            print("yes")
+            sys.exit(0)
 ' 2>/dev/null)
   if [ "$is_commit" = "yes" ]; then
     # DOMAINSERV-108: flows MICRO (ediciones triviales sin lógica testeable:
@@ -310,8 +356,26 @@ patterns = [
     # parches / apply
     cmd0 + r"patch\s",
     r"\bgit\s+apply\b",
-    # here-doc a archivos de código
-    r"<<[-~]?\s*[\x27\x22]?\w+[\x27\x22]?[\s\S]*" + code_ext,
+    # DOMAINSERV-146: el here-doc solo cuenta como edición si ESCRIBE. Antes bastaba
+    # con que hubiera una extensión de código en cualquier parte después del marcador,
+    # así que un heredoc que solo MENCIONA un archivo lo disparaba: el
+    # ssh host bash-s <<REMOTE ... grep/md5sum ... REMOTE del reporte era 100%
+    # read-only y quedaba bloqueado por el gate SDD.
+    #
+    # (Sin comillas simples en estos comentarios: el bloque viaja dentro de un
+    # python3 -c entrecomillado con comilla simple, y una sola cierra el string.)
+    #
+    # Las dos formas en que un heredoc escribe código de verdad:
+    #   1. redirección/tee a un archivo de código EN LA MISMA línea del marcador
+    #      (cat > f.go <<EOF / cat <<EOF > f.go / tee f.sh <<EOF)
+    #   2. un intérprete que lee el script por stdin y escribe adentro
+    #      (python3 - <<PY … open("x.go","w") … PY). Sin -c, los patrones de
+    #      intérprete-en-línea de abajo no lo ven; esta es su contraparte por heredoc.
+    r"(?:>>?\s*\S*" + code_ext + r"[^\n]*<<|<<[^\n]*>>?\s*\S*" + code_ext
+        + r"|\btee\s+(?:-a\s+)?\S*" + code_ext + r"[^\n]*<<)",
+    r"<<[-~]?\s*[\x27\x22]?\w+[\x27\x22]?[\s\S]*?"
+        r"(?:open\s*\([^)]*[\x27\x22][wa]|write_text|writelines|writeFileSync"
+        r"|appendFileSync|File\.\s*(?:write|open)|IO\.\s*(?:write|open))",
     # escritura con intérpretes en línea
     r"\bpython3?\b[^|]*-c\b[\s\S]*(?:open\s*\([^)]*[\x27\x22][wa]|write_text|writelines)",  # python -c open/write_text/writelines
     r"\bnode\b[^|]*-(?:e|eval)\b[\s\S]*(?:writeFileSync|appendFileSync|writeSync|openSync\s*\([^)]*[\x27\x22][wa])",  # node -e write

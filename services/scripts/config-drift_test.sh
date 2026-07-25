@@ -52,6 +52,7 @@ case "$1" in
           domain-loki)       printf '%s|%s\n' "$HOST_DIR/loki-config.yml" /etc/loki/loki-config.yml ;;
           domain-prometheus) printf '%s|%s\n' "$HOST_DIR/prometheus.yml" /etc/prometheus/prometheus.yml ;;
           domain-nolabels)   printf '%s|%s\n' "$HOST_DIR/loki-config.yml" /etc/loki/loki-config.yml ;;
+          domain-secreto)    printf '%s|%s\n' "$HOST_DIR/ilegible.key" /etc/certs/ilegible.key ;;
           domain-sockonly)   printf '%s|%s\n' /var/run/docker.sock /var/run/docker.sock ;;
           *) : ;;
         esac ;;
@@ -119,6 +120,35 @@ check "config stale -> hashes distintos" 0 $?
 
 host_hash "$HOST_DIR/no-existe.yml" >/dev/null 2>&1
 check "archivo inexistente en disco -> host_hash rc 1" 1 $?
+
+# Falso positivo encontrado verificando el deploy en prod: domain-postgres reportaba
+# stale en certs/postgres/server.key. Era falso — el archivo no cambiaba desde junio y
+# el container tenía minutos. La key es 600 de otro owner, así que md5sum del lado del
+# HOST fallaba por permisos, host_hash devolvía string VACÍO con rc 0, y la comparación
+# "" != chash daba stale. Un archivo ilegible es NO-VERIFICABLE, nunca stale: si no,
+# `make config-drift` sin sudo recrearía el container de la base de datos sin necesidad.
+printf 'secreto\n' > "$HOST_DIR/ilegible.key"
+chmod 000 "$HOST_DIR/ilegible.key"
+if [[ -r "$HOST_DIR/ilegible.key" ]]; then
+  # root lee todo: el escenario no es reproducible acá
+  printf 'SKIP: archivo ilegible (corriendo como root, no aplica)\n'
+else
+  host_hash "$HOST_DIR/ilegible.key" >/dev/null 2>&1
+  check "archivo ilegible en disco -> host_hash rc 2 (no-verificable)" 2 $?
+
+  printf 'secreto\n' > "$INNER_DIR/ilegible.key"
+  estado=$(container_config_state domain-secreto 2>/dev/null | cut -d'|' -f1)
+  check "config ilegible -> unverified explícito, NUNCA stale ni silencio" "unverified" "$estado"
+
+  # el caso del ticket: sin permisos, el sweep NO recrea nada. Recrear el container de la
+  # base de datos porque no se pudo LEER un cert es peor que no verificarlo.
+  DOCKER_CONTAINERS="domain-secreto"
+  : > "$COMPOSE_LOG"
+  sync_config_drift >/dev/null 2>&1
+  check "  y el sweep no recrea por una config ilegible" "0 0" "$DRIFT_RECREATED $DRIFT_UNRESOLVED"
+  check "  ningún docker compose invocado" 0 "$(wc -l < "$COMPOSE_LOG")"
+  (( DRIFT_UNVERIFIED >= 1 )); check "  pero SÍ lo cuenta como no-verificable" 0 $?
+fi
 
 DOCKER_EXEC_FAIL=domain-loki
 container_hash domain-loki /etc/loki/loki-config.yml >/dev/null 2>&1

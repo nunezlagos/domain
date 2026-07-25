@@ -141,7 +141,9 @@ monitoring-down: ## Apaga el stack de monitoring
 # llega al container corriendo. Compara el hash de cada config en disco contra la que
 # el container tiene de verdad y recrea solo los que quedaron viejos. install.sh ya lo
 # corre al final del deploy; este target es para verificar o arreglar a mano.
-config-drift: ## Detecta configs montadas stale y recrea solo los containers afectados
+# Conviene con sudo: hay configs 600 de otro owner (certs/postgres/server.key) que sin
+# permisos de lectura quedan NO-VERIFICABLES y se reportan como tales.
+config-drift: ## Detecta configs montadas stale y recrea solo los afectados (mejor con sudo)
 	@bash -c 'source scripts/config-drift.sh && sync_config_drift'
 
 deploy-changed: ## Lista SVC cambiados desde PREV_SHA hasta HEAD (HU 38.12)

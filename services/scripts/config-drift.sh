@@ -79,9 +79,23 @@ container_label() {
   docker inspect --format "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/null || true
 }
 
+# hash del archivo en disco. rc 1 = no existe (se ignora en silencio, no hay nada que
+# comparar); rc 2 = existe pero NO es legible por quien corre el script → no-verificable.
+#
+# La distinción no es cosmética. Sin ella, un archivo ilegible (ej. certs/postgres/
+# server.key, que es 600 de otro owner) se comportaba distinto según una opción del shell
+# del CALLER: sin pipefail el md5sum fallido dejaba el hash VACÍO con rc 0 y la
+# comparación reportaba STALE —recreando el container de la base de datos sin
+# necesidad—; con pipefail devolvía 1 y la config quedaba salteada EN SILENCIO, sin
+# verificar nunca. Detectado en prod verificando el deploy de DOMAINSERV-143: postgres
+# daba stale en una key que no cambiaba desde junio, sobre un container de minutos.
 host_hash() {
   [[ -f "$1" ]] || return 1
-  md5sum "$1" 2>/dev/null | awk '{print $1}'
+  [[ -r "$1" ]] || return 2
+  local hash
+  hash=$(md5sum "$1" 2>/dev/null | awk '{print $1}')
+  [[ "$hash" =~ ^[0-9a-f]{32}$ ]] || return 2
+  printf '%s\n' "$hash"
 }
 
 # hash del archivo TAL CUAL lo ve el proceso del container. rc=2 si no se pudo leer
@@ -152,7 +166,15 @@ container_config_state() {
     while IFS= read -r pair; do
       [[ -z "$pair" ]] && continue
       hpath="${pair%%|*}"; cpath="${pair#*|}"
-      hhash=$(host_hash "$hpath") || continue
+      hhash=$(host_hash "$hpath"); rc=$?
+      # 1 = no existe en disco: nada que comparar, se ignora. 2 = ilegible: se AVISA,
+      # porque una config que no se puede verificar no es una config que esté bien
+      if (( rc == 1 )); then
+        continue
+      elif (( rc == 2 )); then
+        printf 'unverified|%s|%s\n' "$hpath" "$cpath"
+        continue
+      fi
       chash=$(container_hash "$container" "$cpath"); rc=$?
       if (( rc != 0 )); then
         printf 'unverified|%s|%s\n' "$hpath" "$cpath"

@@ -616,6 +616,14 @@ if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
     warn "  reintentá con: cd $INSTALL_DIR/services && make monitoring-up"
   fi
 
+  # DOMAINSERV-149: hasta acá el único container de monitoring que se verificaba era
+  # CrowdSec (abajo). Los otros seis quedaban sin chequear, así que un Loki que no
+  # levanta terminaba en verde: Alloy sin destino y logs perdidos en silencio. Loki
+  # además se verifica por su /ready y no solo por presencia — en prod estuvo Up y
+  # healthy mientras rechazaba ingesta.
+  source "$INSTALL_DIR/services/scripts/monitoring-verify.sh"
+  verify_monitoring_stack "$INSTALL_DIR/services/domain-mcp/deploy/monitoring/docker-compose.yml"
+
   # DOMAINSERV-124: el motor de deteccion es parte de la postura de seguridad, asi
   # que su ausencia se reporta. WARN y no FAIL porque el monitoring es opt-in: un
   # deploy sin el sigue sirviendo, solo queda sin deteccion.

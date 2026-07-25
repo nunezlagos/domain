@@ -359,13 +359,125 @@ ok "servicios healthy"
 # contenedores; esto confirma que el stack SIRVE de verdad a traves de Caddy.
 log "6/9  Self-check HTTP (stack sirviendo via Caddy en :80)..."
 SELFCHECK_OK=""
-for _ in $(seq 1 30); do
+for _ in $(seq 1 150); do
   code=$(curl -fsS -o /dev/null -w '%{http_code}' -m 5 http://localhost/healthz 2>/dev/null || true)
   if [[ "$code" == "200" ]]; then SELFCHECK_OK=1; break; fi
   sleep 2
 done
-[[ -n "$SELFCHECK_OK" ]] || fail "self-check: http://localhost/healthz no respondio 200 tras 60s — el stack no esta sirviendo. Revisá 'docker ps' y 'docker logs domain-caddy domain-mcp'."
+[[ -n "$SELFCHECK_OK" ]] || fail "self-check: http://localhost/healthz no respondio 200 tras 300s — el stack no esta sirviendo. Revisá 'docker ps' y 'docker logs domain-caddy domain-mcp'."
 ok "Self-check HTTP OK (/healthz 200)"
+
+# === Postura de seguridad fail-loud (DOMAINSERV-120) ===
+# El instalador no solo levanta servicios: valida que el stack no quede expuesto.
+# Mismo criterio que el self-check HTTP de arriba — si la postura es insegura, el
+# deploy NO reporta exito.
+log "6b/9  Endureciendo red y revisando puertos expuestos..."
+
+# ufw cubre los puertos del HOST (SSH y servicios no-docker). NO cubre los
+# puertos publicados por Docker: Docker inserta sus reglas en la tabla nat y en
+# la cadena DOCKER-USER, que se evaluan ANTES de las cadenas INPUT/FORWARD que
+# usa ufw. Por eso la revision de puertos de mas abajo es la defensa real para
+# los containers, y es fail-loud.
+SSH_PORT="$(ss -tlnp 2>/dev/null | awk '/sshd/ {n=split($4,a,":"); print a[n]; exit}')"
+SSH_PORT="${SSH_PORT:-22}"
+
+if ! command -v ufw >/dev/null 2>&1; then
+  log "  ufw no esta instalado, instalando..."
+  sudo_run apt-get update -qq >/dev/null 2>&1 || true
+  sudo_run apt-get install -y -qq ufw >/dev/null 2>&1 || warn "no se pudo instalar ufw"
+fi
+
+if command -v ufw >/dev/null 2>&1; then
+  # el allow de SSH va PRIMERO: habilitar ufw sin esa regla deja el VPS
+  # inaccesible y no hay forma de volver atras remotamente
+  sudo_run ufw allow "$SSH_PORT"/tcp >/dev/null 2>&1 || fail "ufw: no se pudo permitir SSH en $SSH_PORT — abortando antes de habilitar el firewall"
+  sudo_run ufw allow 80/tcp  >/dev/null 2>&1 || true
+  sudo_run ufw allow 443/tcp >/dev/null 2>&1 || true
+  sudo_run ufw default deny incoming  >/dev/null 2>&1 || true
+  sudo_run ufw default allow outgoing >/dev/null 2>&1 || true
+  sudo_run ufw --force enable >/dev/null 2>&1 || warn "ufw: no se pudo habilitar"
+
+  if sudo_run ufw status 2>/dev/null | grep -q "^Status: active"; then
+    if sudo_run ufw status 2>/dev/null | grep -qE "(^| )${SSH_PORT}/tcp"; then
+      ok "ufw activo (deny incoming; permitidos $SSH_PORT/tcp, 80/tcp, 443/tcp)"
+    else
+      fail "ufw quedo activo SIN regla para SSH en $SSH_PORT — riesgo de perder acceso. Revisar 'ufw status' YA."
+    fi
+  else
+    warn "ufw no quedo activo — los puertos del host siguen sin filtrar"
+  fi
+else
+  warn "ufw no disponible: los puertos del host quedan sin filtrar"
+fi
+
+# Revision de puertos publicados por Docker en 0.0.0.0. Allowlist: solo el borde
+# HTTP/HTTPS de Caddy. Cualquier otra cosa (bases de datos, dashboards, APIs
+# internas) alcanzable desde internet aborta el deploy.
+# Se distingue por dueño: un container domain-* expuesto es culpa de este
+# instalador y aborta el deploy. Un container de otro proyecto en el mismo host
+# no lo podemos arreglar desde aca (su compose no viaja en este bundle), asi que
+# se reporta fuerte en cada deploy pero no bloquea.
+# SECURITY_ALLOWED_PUBLIC_PORTS (opcional, en .env) declara puertos expuestos A
+# PROPOSITO — el RDS propio al que el dueño se conecta en remoto. La excepcion
+# tiene que ser DECLARADA para no avisar: asi queda auditable y, sobre todo, un
+# puerto NUEVO que aparezca sin declarar SI se reporta. Un warning recurrente que
+# se ignora no protege de nada.
+#   SECURITY_ALLOWED_PUBLIC_PORTS=6300,6301,6302,6303
+#
+# Estos puertos no quedan sin defensa: la estrategia elegida es lista negra en vez
+# de lista blanca, porque una allowlist de IP no sirve con IP dinamica. El baneo
+# por comportamiento vive en DOMAINSERV-124 y DOMAINSERV-130.
+log "  revisando puertos publicados a internet..."
+DECLARED_PORTS=",${SECURITY_ALLOWED_PUBLIC_PORTS:-},"
+EXPOSED_OWN=""
+EXPOSED_FOREIGN=""
+EXPOSED_DECLARED=""
+while read -r cname cports; do
+  [[ -z "$cports" ]] && continue
+  for hostport in $(printf '%s' "$cports" | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -u); do
+    case "$hostport" in
+      80|443) continue ;;
+    esac
+    if [[ "$DECLARED_PORTS" == *",${hostport},"* ]]; then
+      EXPOSED_DECLARED="${EXPOSED_DECLARED}    - ${cname}: puerto ${hostport}"$'\n'
+      continue
+    fi
+    entry="    - ${cname}: puerto ${hostport} alcanzable desde internet"$'\n'
+    case "$cname" in
+      domain-*) EXPOSED_OWN="${EXPOSED_OWN}${entry}" ;;
+      *)        EXPOSED_FOREIGN="${EXPOSED_FOREIGN}${entry}" ;;
+    esac
+  done
+done < <(docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null)
+
+if [[ -n "$EXPOSED_DECLARED" ]]; then
+  log "  expuestos DECLARADOS en SECURITY_ALLOWED_PUBLIC_PORTS (excepcion consciente):"
+  printf '%s' "$EXPOSED_DECLARED" >&2
+fi
+
+fix_hint() {
+  log "  ufw NO los bloquea: Docker publica via nat/DOCKER-USER y evita sus cadenas."
+  log "  Fix: bindear a loopback en el compose del servicio, por ejemplo"
+  log "      ports: [\"127.0.0.1:6300:5432\"]   en vez de   [\"6300:5432\"]"
+  log "  y acceder por tunel SSH: ssh -L 6300:localhost:6300 <host>"
+}
+
+if [[ -n "$EXPOSED_FOREIGN" ]]; then
+  log ""
+  warn "Containers AJENOS a domain expuestos a internet (este instalador no los gestiona):"
+  printf '%s' "$EXPOSED_FOREIGN" >&2
+  fix_hint
+  log ""
+fi
+
+if [[ -n "$EXPOSED_OWN" ]]; then
+  log ""
+  log "  Containers de domain publicados a internet fuera de la allowlist (80, 443):"
+  printf '%s' "$EXPOSED_OWN" >&2
+  fix_hint
+  fail "postura insegura: domain expone puertos a internet — deploy abortado (DOMAINSERV-121)"
+fi
+ok "Puertos: domain solo publica 80/443 a internet"
 
 # Backfill de embeddings (DOMAINSERV-80 H2). BEST-EFFORT a propósito: un fallo
 # acá no debe tumbar un deploy que ya está sirviendo. Es idempotente porque el
@@ -410,15 +522,28 @@ fi
 # era enteramente manual, así que Loki y Alloy nunca llegaron al VPS y los paneles
 # de logs apuntaban a un datasource inexistente.
 if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
-  log "Monitoring: levantando Prometheus + Grafana + Loki + Alloy..."
+  log "Monitoring: levantando Prometheus + Grafana + Loki + Alloy + CrowdSec..."
   if make monitoring-up; then
-    ok "monitoring arriba (Grafana en :3000)"
+    ok "monitoring arriba (Grafana solo en loopback — ssh -L 3000:localhost:3000)"
   else
     warn "el stack de monitoring no levantó — el resto del deploy sigue operativo"
     warn "  reintentá con: cd $INSTALL_DIR/services && make monitoring-up"
   fi
+
+  # DOMAINSERV-124: el motor de deteccion es parte de la postura de seguridad, asi
+  # que su ausencia se reporta. WARN y no FAIL porque el monitoring es opt-in: un
+  # deploy sin el sigue sirviendo, solo queda sin deteccion.
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx domain-crowdsec; then
+    ok "CrowdSec corriendo en MODO DETECCION (detecta y registra, todavia NO banea)"
+    log "  ver que detecto:  docker exec domain-crowdsec cscli alerts list"
+    log "  activar el baneo requiere antes: allowlist de tu IP + calibracion (DOMAINSERV-130)"
+  else
+    warn "CrowdSec NO esta corriendo: no hay deteccion de ataques ni baneo automatico"
+    warn "  los puertos declarados en SECURITY_ALLOWED_PUBLIC_PORTS quedan sin defensa activa"
+  fi
 else
   log "Monitoring omitido (definí GRAFANA_ADMIN_PASSWORD en el .env para habilitarlo)"
+  warn "sin monitoring no hay CrowdSec: no hay deteccion de ataques ni baneo automatico"
 fi
 
 # === STEP 7: Systemd units + timers ===

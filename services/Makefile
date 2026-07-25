@@ -31,15 +31,15 @@ LONG_RUNNING_COUNT := 5
 
 # ollama es opt-in (DOMAIN_EMBEDDING_PROVIDER=ollama): se cuenta solo si su
 # container existe, para no romper el wait en deploys que no lo usan.
-wait-healthy: ## Espera hasta 120s a que los containers long-running estén healthy
-	@echo "Esperando healthy (timeout 120s)..."; \
+wait-healthy: ## Espera hasta 300s a que los containers long-running estén healthy
+	@echo "Esperando healthy (timeout 300s)..."; \
 	expected=$(LONG_RUNNING_COUNT); \
 	names='^domain-(postgres|minio|mcp|admin|caddy)$$'; \
 	if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx domain-ollama; then \
 	  expected=$$((expected + 1)); \
 	  names='^domain-(postgres|minio|mcp|admin|caddy|ollama)$$'; \
 	fi; \
-	for i in $$(seq 1 60); do \
+	for i in $$(seq 1 150); do \
 	  healthy=$$(docker ps --filter health=healthy --format '{{.Names}}' | grep -cE "$$names" || true); \
 	  if [ "$$healthy" -ge "$$expected" ]; then echo "  ✓ los $$healthy/$$expected long-running están healthy"; exit 0; fi; \
 	  sleep 2; \
@@ -126,7 +126,7 @@ mc: ## Cliente mc contra MinIO local
 		-e MC_HOST_local="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000" \
 		minio/mc:RELEASE.2024-10-08T09-37-26Z --insecure
 
-monitoring-up: ## Levanta Prometheus + Grafana + Loki + Alloy (Grafana en :3000)
+monitoring-up: ## Levanta Prometheus + Grafana + Loki + Alloy + CrowdSec (Grafana solo en loopback: ssh -L 3000:localhost:3000)
 	$(COMPOSE_MONITORING) up -d --wait
 
 monitoring-down: ## Apaga el stack de monitoring

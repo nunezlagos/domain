@@ -52,6 +52,23 @@ quiensabe.cl, www.quiensabe.cl {
   # son mutuamente exclusivos, asi que este gana antes que el catch-all.
   @scanners path /.env /.env.* /wp-login.php /wp-admin* /xmlrpc.php /admin.php /phpmyadmin* /phpMyAdmin* /.git/* /.aws/* /config.json /server-status
   handle @scanners {
+    # DOMAINSERV-131: fingerprint del escaneo — metadatos, NUNCA el contenido.
+    #
+    # El body no se logea a proposito y no hay que agregarlo: toda ruta de
+    # @scanners que llega con body es un login, asi que guardarlo archiva
+    # credential stuffing (viola secrets-redaction; la redaccion por regex falla
+    # en base64 y multipart). Ademas `log_append` corre ANTES que `request_body`,
+    # asi que `max_size` no lo acota y un POST de 300MB a /.env mata a Caddy por
+    # OOM. Un hash tampoco: Caddy vanilla no expone ninguna funcion de hash.
+    #
+    # El prefijo `<` fuerza modo early. Sin el, el campo se escribe al responder
+    # y `abort` lo borra del entry: justo los requests que interesa registrar.
+    #
+    # Se usa el Content-Length declarado porque `bytes_read` sale 0: `abort`
+    # cierra la conexion sin leer el body.
+    log_append <scan_method {http.request.method}
+    log_append <scan_content_type {http.request.header.Content-Type}
+    log_append <scan_content_length {http.request.header.Content-Length}
     abort
   }
 

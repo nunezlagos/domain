@@ -213,13 +213,7 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		orgID := canonicalOrgID
 		_ = orgID
 		if Verify(plaintext, hash) == nil {
-
-			go func(id uuid.UUID) {
-				ctx2, cancel := context.WithTimeout(context.Background(), 1e9) // 1s
-				defer cancel()
-				_, _ = s.Pool.Exec(ctx2,
-					`UPDATE auth_api_keys SET last_used_at = NOW() WHERE id = $1`, id)
-			}(id)
+			s.touchLastUsed(id)
 			return &Principal{
 				UserID:         userID.String(),
 				OrganizationID: orgID.String(),
@@ -229,6 +223,17 @@ func (s *PGStore) Resolve(ctx context.Context, plaintext string) (*Principal, er
 		}
 	}
 	return nil, ErrNotFound
+}
+
+// touchLastUsed actualiza last_used_at fuera del camino crítico: el request no
+// espera por esta escritura ni falla si no sale.
+func (s *PGStore) touchLastUsed(id uuid.UUID) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, _ = s.Pool.Exec(ctx,
+			`UPDATE auth_api_keys SET last_used_at = NOW() WHERE id = $1`, id)
+	}()
 }
 
 // UserLookup adapter para interfaces que necesitan lookup por email/RUT.

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -61,8 +62,14 @@ type AuthFailureLogger interface {
 // ErrUnauthorized error tipado para 401.
 var ErrUnauthorized = errors.New("unauthorized")
 
-// Middleware autentica vía header `Authorization: Bearer domk_*`.
+// Middleware autentica vía header `Authorization`, aceptando dos schemes:
+// `Bearer <api-key|sess_*>` y `DOMAIN-HMAC-SHA256 ...` (firma, DOMAINSERV-129).
 // Skip si path está en allowlist (e.g. /health).
+//
+// ALCANCE: este middleware cubre solo /api/ (ver server_router.go). El
+// transporte MCP en /mcp tiene su propio Bearer en
+// internal/mcp/httpserver/handler.go y NO pasa por acá: la firma HMAC todavía
+// no aplica ahí.
 //
 // Si Pool != nil, post-auth abre una tx con SET LOCAL app.current_org_id
 // y app.current_user_id (issue-25.14). La tx vive lo que dura el handler;
@@ -79,6 +86,22 @@ type Middleware struct {
 	// FailureLogger registra fallos de auth con API key en auth_events
 	// (opcional, nil-safe). DOMAINSERV-82 H1.
 	FailureLogger AuthFailureLogger
+
+	// SignedResolver y NonceBurner habilitan el scheme DOMAIN-HMAC-SHA256.
+	// Si alguno es nil, una request firmada se rechaza (no hay anti-replay).
+	SignedResolver SignedResolver
+	NonceBurner    NonceBurner
+
+	// RequireSignature prohíbe el Bearer en claro: solo pasan requests
+	// firmadas. Default false para convivir con los clientes actuales.
+	RequireSignature bool
+
+	// MaxSignedBodyBytes override del tope de body a bufferear para hashear
+	// (0 = DefaultMaxSignedBodyBytes).
+	MaxSignedBodyBytes int64
+
+	// Now reloj inyectable para la ventana de skew (nil = time.Now).
+	Now func() time.Time
 }
 
 // SessionResolverFunc resuelve un session token "sess_*". Devuelve
@@ -90,57 +113,17 @@ type SessionResolverFunc func(ctx context.Context, plainToken string) (*Principa
 // ServeHTTP wraps next con check de auth + (opcional) tx wireup.
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		for _, p := range m.Allowlist {
-			if strings.HasSuffix(p, "/*") {
-				prefix := strings.TrimSuffix(p, "/*")
-				if strings.HasPrefix(r.URL.Path, prefix) {
-					next.ServeHTTP(w, r)
-					return
-				}
-			} else if r.URL.Path == p {
-				next.ServeHTTP(w, r)
-				return
-			}
-		}
-
-		header := r.Header.Get("Authorization")
-		const bearerPrefix = "Bearer "
-		if !strings.HasPrefix(header, bearerPrefix) {
-			writeUnauthorized(w, "missing_bearer", "Authorization header required")
+		if m.allowlisted(r.URL.Path) {
+			next.ServeHTTP(w, r)
 			return
 		}
-		token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
 
-		var ctx context.Context
-		var p *Principal
-		if m.SessionResolver != nil && strings.HasPrefix(token, "sess_") {
-			pp, attacher, err := m.SessionResolver(r.Context(), token)
-			if err != nil || pp == nil {
-				writeUnauthorized(w, "invalid_credentials", "session inválida o expirada")
-				return
-			}
-			p = pp
-			ctx = r.Context()
-			if attacher != nil {
-				ctx = attacher(ctx)
-			}
-		} else {
-			if !IsAPIKeyFormat(token) {
-				m.logAPIKeyFailure(r, "invalid_format")
-				writeUnauthorized(w, "invalid_format", "invalid bearer token format")
-				return
-			}
-			var err error
-			p, err = m.Resolver.Resolve(r.Context(), token)
-			if err != nil {
-				m.logAPIKeyFailure(r, "invalid_credentials")
-				writeUnauthorized(w, "invalid_credentials", "api key not found or revoked")
-				return
-			}
-			ctx = r.Context()
+		r, p, ok := m.authenticate(w, r)
+		if !ok {
+			writeUnauthorized(w)
+			return
 		}
-		ctx = WithPrincipal(ctx, p)
+		ctx := WithPrincipal(r.Context(), p)
 
 		if m.Pool != nil {
 			orgID, orgErr := uuid.Parse(p.OrganizationID)
@@ -169,6 +152,71 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// allowlisted true si el path no requiere auth. Soporta sufijo "/*" como
+// prefijo de subárbol.
+func (m *Middleware) allowlisted(path string) bool {
+	for _, p := range m.Allowlist {
+		if strings.HasSuffix(p, "/*") {
+			if strings.HasPrefix(path, strings.TrimSuffix(p, "/*")) {
+				return true
+			}
+		} else if path == p {
+			return true
+		}
+	}
+	return false
+}
+
+// authenticate despacha por el scheme del header Authorization. Devuelve la
+// request (con el body repuesto si hubo que hashearlo, o con el ctx de sesión
+// adjunto) y el Principal. Cada rama loguea su propio fallo: el caller solo
+// escribe el 401 uniforme.
+func (m *Middleware) authenticate(w http.ResponseWriter, r *http.Request) (*http.Request, *Principal, bool) {
+	header := r.Header.Get("Authorization")
+	if HasHMACScheme(header) {
+		return m.authenticateSigned(w, r)
+	}
+	if m.RequireSignature {
+		m.logAPIKeyFailure(r, "signature_required")
+		return r, nil, false
+	}
+	const bearerPrefix = "Bearer "
+	if !strings.HasPrefix(header, bearerPrefix) {
+		return r, nil, false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(header, bearerPrefix))
+	if m.SessionResolver != nil && strings.HasPrefix(token, "sess_") {
+		return m.authenticateSession(r, token)
+	}
+	return m.authenticateBearer(r, token)
+}
+
+// authenticateSession resuelve un token "sess_*" y adjunta el Active al ctx.
+func (m *Middleware) authenticateSession(r *http.Request, token string) (*http.Request, *Principal, bool) {
+	p, attacher, err := m.SessionResolver(r.Context(), token)
+	if err != nil || p == nil {
+		return r, nil, false
+	}
+	if attacher != nil {
+		r = r.WithContext(attacher(r.Context()))
+	}
+	return r, p, true
+}
+
+// authenticateBearer resuelve una API key que viaja en claro.
+func (m *Middleware) authenticateBearer(r *http.Request, token string) (*http.Request, *Principal, bool) {
+	if !IsAPIKeyFormat(token) {
+		m.logAPIKeyFailure(r, "invalid_format")
+		return r, nil, false
+	}
+	p, err := m.Resolver.Resolve(r.Context(), token)
+	if err != nil || p == nil {
+		m.logAPIKeyFailure(r, "invalid_credentials")
+		return r, nil, false
+	}
+	return r, p, true
 }
 
 // openTxWithOrg abre una tx y ejecuta SET LOCAL app.current_org_id +
@@ -219,14 +267,13 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func writeUnauthorized(w http.ResponseWriter, code, msg string) {
+// writeUnauthorized emite SIEMPRE el mismo 401: qué chequeo falló no se filtra
+// al cliente (anti-enumeration issue-02.7). El detalle va al audit trail.
+func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("WWW-Authenticate", `Bearer realm="domain"`)
 	w.WriteHeader(http.StatusUnauthorized)
-
 	_, _ = w.Write([]byte(`{"error":{"code":"unauthorized","message":"unauthorized"}}`))
-	_ = code
-	_ = msg
 }
 
 // statusRecorder captura el status code del response para que el wireup

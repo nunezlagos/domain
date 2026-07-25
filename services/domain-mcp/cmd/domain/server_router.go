@@ -99,13 +99,23 @@ func buildRouter(
 		return p, attacher, nil
 	}
 
+	// El camino firmado va contra el store directo, no contra cachedResolver: el
+	// lookup es por prefix + firma, no por la key en claro, así que no hay clave
+	// de caché estable (DOMAINSERV-129).
 	authMW := &apikey.Middleware{
-		Resolver:        cachedResolver,
-		Allowlist:       handler.AuthAllowlist(),
-		Pool:            pools.App,
-		SessionResolver: sessionResolver,
-		FailureLogger:   s.SessionSvc,
+		Resolver:         cachedResolver,
+		Allowlist:        handler.AuthAllowlist(),
+		Pool:             pools.App,
+		SessionResolver:  sessionResolver,
+		FailureLogger:    s.SessionSvc,
+		SignedResolver:   s.APIKeyStore,
+		NonceBurner:      s.APIKeyStore,
+		RequireSignature: cfg.HMACRequireSignature,
 	}
+	logger.Info("API auth schemes mounted",
+		slog.String("path", "/api/"),
+		slog.String("schemes", "Bearer + "+apikey.HMACScheme),
+		slog.Bool("signature_required", cfg.HMACRequireSignature))
 	rateLimitMW := &middleware.RateLimitMiddleware{Limiter: s.RateLimiter, KeyFunc: middleware.DefaultKeyFunc}
 	auditMW := middleware.AuditMiddleware
 
@@ -240,6 +250,10 @@ func buildRouter(
 	}
 	// Token del mcpServer ACP nativo (mismo que usa buildACPNative): el handler
 	// lo reconoce para acotar fail-closed ese bearer sin depender del header.
+	//
+	// FUERA DE ALCANCE de DOMAINSERV-129: /mcp NO pasa por authMW, tiene su
+	// propio Bearer en internal/mcp/httpserver/handler.go. La firma HMAC hoy
+	// cubre solo /api/; portarla al transporte MCP es otro ticket.
 	mcpHTTPHandler := mcphttpserver.NewHandler(mcpBuilder, cachedResolver, os.Getenv("DOMAIN_ACP_MCP_TOKEN"))
 	mux.Handle("/mcp", mcpHTTPHandler)
 	mux.Handle("/mcp/", mcpHTTPHandler)

@@ -59,6 +59,12 @@ type Config struct {
 
 	FieldEncKey string
 
+	// HMACRequireSignature exige el scheme DOMAIN-HMAC-SHA256 en /api/ y rechaza
+	// el `Bearer <api-key>` en claro (DOMAINSERV-129). Default false: los
+	// clientes actuales todavía mandan Bearer, y las API keys emitidas antes de
+	// la migración 000168 no pueden firmar hasta que se roten.
+	HMACRequireSignature bool
+
 	SeedOnBoot bool
 
 	RateLimitRequests int
@@ -166,6 +172,8 @@ func Load() (*Config, error) {
 
 		FieldEncKey: getEnv("DOMAIN_FIELD_ENC_KEY", ""),
 
+		HMACRequireSignature: getEnvBool("DOMAIN_HMAC_REQUIRE_SIGNATURE", false),
+
 		SeedOnBoot: getEnvBool("DOMAIN_SEED_ON_BOOT", true),
 
 		RateLimitRequests: getEnvInt("DOMAIN_RATE_LIMIT_REQUESTS", 100),
@@ -242,6 +250,11 @@ func (c *Config) Validate() error {
 	case "none", "plain", "login", "cram-md5":
 	default:
 		errs = append(errs, fmt.Sprintf("DOMAIN_SMTP_AUTH invalid: %q", c.SMTPAuth))
+	}
+	// sin la passphrase de cifrado no se puede recuperar el plaintext de ninguna
+	// key, así que NINGUNA firma validaría: exigirla dejaría la API inaccesible
+	if c.HMACRequireSignature && c.FieldEncKey == "" {
+		errs = append(errs, "DOMAIN_HMAC_REQUIRE_SIGNATURE requires DOMAIN_FIELD_ENC_KEY")
 	}
 	if c.OTelSampleRatio < 0 || c.OTelSampleRatio > 1 {
 		errs = append(errs, fmt.Sprintf("DOMAIN_OTEL_SAMPLE_RATIO out of range [0,1]: %f", c.OTelSampleRatio))

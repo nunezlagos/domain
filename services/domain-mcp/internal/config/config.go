@@ -87,6 +87,15 @@ type Config struct {
 	// una query indexada por tick).
 	AuthAnomalyAuditEnabled bool
 
+	// CrowdsecGeo — system cron que publica ataques por país leyendo la LAPI
+	// (DOMAINSERV-153). Alimenta el Geomap del dashboard de seguridad. Se activa
+	// solo si hay credencial de máquina: sin ella el colector no arranca y el
+	// resto del server sigue igual.
+	CrowdsecLAPIURL     string
+	CrowdsecMachineID   string
+	CrowdsecMachinePass string
+	CrowdsecGeoTickMins int
+
 	// EdgeInference — system cron de inferencia de aristas de memoria con MiniMax.
 	// Default disabled: requiere LLM_API_KEY (alias: MINIMAX_API_KEY) y consume tokens; opt-in explícito.
 	EdgeInferenceEnabled      bool
@@ -194,6 +203,14 @@ func Load() (*Config, error) {
 		HealthPollerEnabled: getEnvBool("DOMAIN_HEALTH_POLLER_ENABLED", true),
 
 		AuthAnomalyAuditEnabled: getEnvBool("DOMAIN_AUTH_ANOMALY_AUDIT_ENABLED", true),
+
+		// domain-crowdsec y NO crowdsec: el stack de monitoring es otro compose,
+		// y entre composes que comparten una red externa solo resuelve el
+		// container_name, no el alias del servicio. Mismo host que usa el Caddyfile.
+		CrowdsecLAPIURL:     getEnv("DOMAIN_CROWDSEC_LAPI_URL", "http://domain-crowdsec:8080"),
+		CrowdsecMachineID:   getEnv("DOMAIN_CROWDSEC_MACHINE_ID", ""),
+		CrowdsecMachinePass: getEnv("DOMAIN_CROWDSEC_MACHINE_PASSWORD", ""),
+		CrowdsecGeoTickMins: getEnvInt("DOMAIN_CROWDSEC_GEO_TICK_MINUTES", 5),
 
 		EdgeInferenceEnabled:      getEnvBool("DOMAIN_EDGE_INFERENCE_ENABLED", false),
 		EdgeInferenceTickHours:    getEnvInt("DOMAIN_EDGE_INFERENCE_TICK_HOURS", 6),

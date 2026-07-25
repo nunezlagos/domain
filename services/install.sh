@@ -657,6 +657,33 @@ if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
       warn "    docker exec domain-crowdsec cscli bouncers list"
       warn "    docker logs domain-caddy 2>&1 | grep -i crowdsec"
     fi
+
+    # DOMAINSERV-153: credencial de MAQUINA para el colector de geolocalizacion.
+    # No alcanza la bouncer key: el endpoint de bouncer devuelve las decisiones
+    # sin el campo `source`, o sea sin pais. Solo una machine ve /v1/alerts, que
+    # es donde CrowdSec deja cn/latitude/longitude.
+    #
+    # Idempotente y con la misma regla que el resto de credenciales: la password
+    # se genera UNA vez y se preserva. Si se regenerara en cada deploy, el
+    # colector quedaria fallando en silencio contra una credencial vieja.
+    CS_MACHINE_ID="domain-geo"
+    CS_MACHINE_PASS=$(env_get DOMAIN_CROWDSEC_MACHINE_PASSWORD "$ENV_FILE")
+    if [[ -z "$CS_MACHINE_PASS" ]]; then
+      CS_MACHINE_PASS=$(gen_uuid)
+      env_set DOMAIN_CROWDSEC_MACHINE_PASSWORD "$CS_MACHINE_PASS" "$ENV_FILE"
+      env_set DOMAIN_CROWDSEC_MACHINE_ID "$CS_MACHINE_ID" "$ENV_FILE"
+      log "  credencial de maquina para el colector de geo: generada"
+    fi
+    # --force reescribe la password si la machine ya existe, que es lo que hace
+    # el registro convergente: tras un .env preservado, ambos lados coinciden.
+    if docker exec domain-crowdsec cscli machines add "$CS_MACHINE_ID" \
+         --password "$CS_MACHINE_PASS" --force >/dev/null 2>&1; then
+      ok "machine '$CS_MACHINE_ID' registrada — el mapa de ataques por pais tiene de donde leer"
+    else
+      warn "no se pudo registrar la machine '$CS_MACHINE_ID' en CrowdSec"
+      warn "  el mapa por pais quedara vacio; el resto del stack no se ve afectado"
+      warn "  reintenta:  docker exec domain-crowdsec cscli machines add $CS_MACHINE_ID --password <pass del .env> --force"
+    fi
   else
     warn "CrowdSec NO esta corriendo: no hay deteccion de ataques ni baneo automatico"
     warn "  los puertos declarados en SECURITY_ALLOWED_PUBLIC_PORTS quedan sin defensa activa"

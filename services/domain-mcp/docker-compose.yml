@@ -89,6 +89,12 @@ services:
       DOMAIN_METRICS_ENABLED: "true"
       DOMAIN_METRICS_BIND: "0.0.0.0"
       DOMAIN_METRICS_PORT: "9090"
+      # DOMAINSERV-153: credencial del colector de ataques por pais. install.sh
+      # genera la password una vez y registra la machine en CrowdSec. Si falta,
+      # el colector no arranca y el resto del server sigue igual — por eso no
+      # hay un flag de enabled aparte.
+      DOMAIN_CROWDSEC_MACHINE_ID: ${DOMAIN_CROWDSEC_MACHINE_ID:-}
+      DOMAIN_CROWDSEC_MACHINE_PASSWORD: ${DOMAIN_CROWDSEC_MACHINE_PASSWORD:-}
       # REQ-54: LLM server-side (MiniMax). Sin esto el proceso Go no ve la key
       # y rerank/inferencia-de-aristas/judge + la preparación de contexto
       # degradan silenciosamente. La key vive en services/.env (LLM_API_KEY);

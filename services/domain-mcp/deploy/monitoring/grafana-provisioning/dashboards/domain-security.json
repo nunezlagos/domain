@@ -110,6 +110,34 @@
       "gridPos": { "h": 7, "w": 6, "x": 18, "y": 21 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{ "expr": "{container=\"domain-crowdsec\"}", "refId": "A" }]
+    },
+    {
+      "id": 12,
+      "type": "geomap",
+      "title": "De dónde vienen los ataques",
+      "description": "Alimentado por domain_attacks_by_country, que publica el colector de domain-mcp leyendo la LAPI (DOMAINSERV-153). El país es el único label: la IP reventaría la cardinalidad. Si el mapa está vacío, mirar 'colector de geo' abajo antes de sospechar de CrowdSec.",
+      "gridPos": { "h": 12, "w": 18, "x": 0, "y": 28 },
+      "options": {
+        "view": { "id": "zero", "lat": 0, "lon": 0, "zoom": 1 },
+        "basemap": { "type": "default", "name": "Basemap" },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Ataques por país",
+            "location": { "mode": "lookup", "lookup": "cn", "gazetteer": "public/gazetteer/countries.json" },
+            "config": { "showLegend": true, "style": { "color": { "field": "Value", "fixed": "dark-red" }, "size": { "field": "Value", "min": 4, "max": 20 } } }
+          }
+        ]
+      },
+      "targets": [{ "expr": "domain_attacks_by_country", "legendFormat": "{{cn}}", "instant": true, "format": "table", "refId": "A" }]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "¿El colector de geo está vivo?",
+      "description": "Cuenta cuántos países reporta el colector. Un 0 significa que el mapa está ciego —falta la credencial de máquina, la LAPI no responde o el login falla— y NO que no haya ataques. Sin este panel, un mapa vacío se lee como buenas noticias.",
+      "gridPos": { "h": 12, "w": 6, "x": 18, "y": 28 },
+      "targets": [{ "expr": "count(domain_attacks_by_country)", "refId": "A" }]
     }
   ]
 }

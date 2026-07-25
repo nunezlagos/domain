@@ -169,6 +169,20 @@ func buildRunners(
 			go socAuditor.Start(leaderCtx)
 		}
 
+		// DOMAINSERV-153: ataques por país para el Geomap. Start() se autodescarta
+		// si falta la credencial de máquina, así que no hace falta un flag aparte.
+		geo := &systemcron.CrowdsecGeoCollector{
+			LAPIURL:   cfg.CrowdsecLAPIURL,
+			MachineID: cfg.CrowdsecMachineID,
+			Password:  cfg.CrowdsecMachinePass,
+			Tick:      time.Duration(cfg.CrowdsecGeoTickMins) * time.Minute,
+			Logger:    logger,
+			SetCountry: func(cn string, count float64) {
+				metricsReg.AttacksByCountry.WithLabelValues(cn).Set(count)
+			},
+		}
+		go geo.Start(leaderCtx)
+
 		scheduler.Run(leaderCtx)
 	})
 

@@ -31,6 +31,8 @@ type Registry struct {
 	DBPoolAcquired   prometheus.Counter
 	DBQueryDuration  *prometheus.HistogramVec
 
+	AttacksByCountry *prometheus.GaugeVec
+
 
 	ReplicationLagSeconds prometheus.Gauge
 	ReplicaQueriesTotal   prometheus.Counter
@@ -131,6 +133,15 @@ func New() *Registry {
 		Name: "domain_db_pool_total",
 		Help: "Conexiones pgx totales (max)",
 	}, []string{"pool"})
+	// DOMAINSERV-153: ataques por país, para el Geomap del dashboard de
+	// seguridad. El país es el ÚNICO label posible: su cardinalidad está
+	// acotada (~200) mientras que la IP o el AS la reventarían — ver la policy
+	// low-cardinality-metrics. El detalle por IP vive en los logs, no acá.
+	r.AttacksByCountry = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "domain_attacks_by_country",
+		Help: "Alertas de CrowdSec agrupadas por país de origen",
+	}, []string{"cn"})
+
 	r.DBPoolAcquired = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "domain_db_pool_acquired_total",
 		Help: "Total conn acquires",
@@ -368,6 +379,7 @@ func New() *Registry {
 	reg.MustRegister(
 		r.HTTPRequestsTotal,
 		r.HTTPRequestDuration,
+		r.AttacksByCountry,
 		r.DBPoolInUse,
 		r.DBPoolIdle,
 		r.DBPoolTotal,

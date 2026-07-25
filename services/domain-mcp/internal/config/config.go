@@ -153,8 +153,12 @@ func Load() (*Config, error) {
 		SMTPTLS:      getEnvBool("DOMAIN_SMTP_TLS", false),
 		SMTPFrom:     getEnv("DOMAIN_SMTP_FROM", "no-reply@domain.local"),
 
-		LogLevel:     getEnv("DOMAIN_LOG_LEVEL", "info"),
-		LogFormat:    getEnv("DOMAIN_LOG_FORMAT", "text"),
+		LogLevel: getEnv("DOMAIN_LOG_LEVEL", "info"),
+		// json por default porque la policy structured-logging lo exige para el
+		// server y el destino real es Loki, que parsea JSON. El default anterior
+		// (text) hacía que producción corriera logfmt sin que nadie lo notara: el
+		// .env del VPS no define la variable. Para desarrollo local: text explícito.
+		LogFormat:    getEnv("DOMAIN_LOG_FORMAT", "json"),
 		LogOutput:    getEnv("DOMAIN_LOG_OUTPUT", "stdout"),
 		LogAddSource: getEnvBool("DOMAIN_LOG_ADD_SOURCE", false),
 

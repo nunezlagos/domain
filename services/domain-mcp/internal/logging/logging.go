@@ -30,6 +30,11 @@ type Config struct {
 	Format    string // text | json
 	Output    string // stdout | stderr
 	AddSource bool
+	// Writer sobrescribe Output. Existe para que otros paquetes puedan verificar
+	// el log REAL —con ctxEnrichHandler incluido— y no solo el context: el bug de
+	// DOMAINSERV-81 fue exactamente que las piezas existían sin conectarse, y un
+	// test que solo mira el context no lo habría detectado.
+	Writer io.Writer
 }
 
 // Setup crea logger root y lo asigna como default global.
@@ -39,6 +44,9 @@ func Setup(cfg Config) *slog.Logger {
 	var w io.Writer = os.Stdout
 	if strings.EqualFold(cfg.Output, "stderr") {
 		w = os.Stderr
+	}
+	if cfg.Writer != nil {
+		w = cfg.Writer
 	}
 
 	opts := &slog.HandlerOptions{
@@ -107,6 +115,13 @@ func WithOrgID(ctx context.Context, id string) context.Context {
 // WithProjectID retorna ctx con project_id.
 func WithProjectID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, ctxKeyProjectID, id)
+}
+
+// RequestIDFromContext retorna el request_id del ctx, o "" si no hay. Lo necesita
+// quien tenga que devolverlo al cliente o propagarlo a otro servicio.
+func RequestIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyRequestID).(string)
+	return v
 }
 
 // FromContext retorna logger por defecto (campos contextuales se inyectan vía handler).

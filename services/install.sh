@@ -410,6 +410,17 @@ if command -v ufw >/dev/null 2>&1; then
   sudo_run ufw allow "$SSH_PORT"/tcp >/dev/null 2>&1 || fail "ufw: no se pudo permitir SSH en $SSH_PORT — abortando antes de habilitar el firewall"
   sudo_run ufw allow 80/tcp  >/dev/null 2>&1 || true
   sudo_run ufw allow 443/tcp >/dev/null 2>&1 || true
+
+  # DOMAINSERV-130: los señuelos del honeypot TIENEN que quedar alcanzables — son
+  # carnada. Y hay que abrirlos explicitamente porque el honeypot usa
+  # network_mode:host, asi que NO pasa por las cadenas de Docker y ufw si lo
+  # filtra. Verificado en el deploy del 2026-07-25: con ufw activo los 14 puertos
+  # quedaron bloqueados y el honeypot no detectaba nada, mientras que las bases en
+  # 6300-6303 (publicadas por Docker) seguian abiertas. El mismo hallazgo de que
+  # ufw no cubre Docker, visto desde el otro lado.
+  for hp in 23 445 1433 3389 6379 9200 11211 27017 2375 4444 31337 5555 1099 50050; do
+    sudo_run ufw allow "$hp"/tcp >/dev/null 2>&1 || true
+  done
   sudo_run ufw default deny incoming  >/dev/null 2>&1 || true
   sudo_run ufw default allow outgoing >/dev/null 2>&1 || true
   sudo_run ufw --force enable >/dev/null 2>&1 || warn "ufw: no se pudo habilitar"

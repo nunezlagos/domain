@@ -207,6 +207,13 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    # los señuelos 23 (telnet) y 445 (SMB) estan por debajo de 1024 y sin esta
+    # capability socat no puede bindearlos: en el deploy del 2026-07-25 fueron los
+    # dos unicos que no levantaron. Se recuperan justo los mas escaneados por
+    # botnets. Es el permiso minimo para el caso — mucho menos que aflojar el
+    # cap_drop ALL
+    cap_add:
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     network_mode: host

@@ -83,9 +83,18 @@ func TestServerExitsOnHealthCheckFailure(t *testing.T) {
 	mux.HandleFunc("/other", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	srv := &http.Server{Addr: "127.0.0.1:0", Handler: mux}
+	// El listener se crea acá en vez de dejárselo a srv.ListenAndServe porque
+	// srv.Addr NO se actualiza con el puerto que asigna el kernel: queda literal
+	// en "127.0.0.1:0". El watchdog terminaba sondeando http://127.0.0.1:0/health
+	// y fallaba por conexión rechazada, no por el 404 que este test busca — o sea
+	// pasaba por la razón equivocada y tapaba lo que quería verificar.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	srv := &http.Server{Handler: mux}
 	go func() {
-		_ = srv.ListenAndServe()
+		_ = srv.Serve(ln)
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -93,17 +102,7 @@ func TestServerExitsOnHealthCheckFailure(t *testing.T) {
 		_ = srv.Shutdown(ctx)
 	}()
 
-
-	addr := srv.Addr
-	ln, err := net.Listen("tcp", addr)
-	if err == nil {
-
-
-		ln.Close()
-	}
-
 	time.Sleep(100 * time.Millisecond)
-	port := extractPort(t, addr)
 
 	var fatalErr error
 	fatalCalled := make(chan struct{})

@@ -24,6 +24,7 @@ import (
 func RecoverMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tracked := &panicTracker{ResponseWriter: w}
 			defer func() {
 				rec := recover()
 				if rec == nil {
@@ -38,11 +39,49 @@ func RecoverMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 					)
 				}
 
-
-
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				// Si el handler YA respondió, un http.Error acá empeora las cosas:
+				// el status no se puede cambiar (Go descarta el segundo WriteHeader)
+				// pero el texto SÍ se concatena al body ya enviado. El cliente
+				// recibía un 200 con "internal server error" pegado al final — JSON
+				// corrupto en vez de un error legible. El panic ya quedó en el log;
+				// la respuesta a medias se deja como está.
+				if tracked.wrote {
+					return
+				}
+				http.Error(tracked, "internal server error", http.StatusInternalServerError)
 			}()
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(tracked, r)
 		})
 	}
+}
+
+// panicTracker recuerda si el handler alcanzó a responder, para que el recover no
+// pise una respuesta ya enviada.
+type panicTracker struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (t *panicTracker) WriteHeader(code int) {
+	t.wrote = true
+	t.ResponseWriter.WriteHeader(code)
+}
+
+func (t *panicTracker) Write(b []byte) (int, error) {
+	t.wrote = true
+	return t.ResponseWriter.Write(b)
+}
+
+// Flush y Unwrap replican el patrón de apikey.statusRecorder: sin ellos el SSE de
+// /api/v1/events deja de funcionar detrás de este middleware, porque
+// runner/streaming hace un type assertion directo a http.Flusher sobre el writer
+// que recibe.
+func (t *panicTracker) Flush() {
+	if f, ok := t.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (t *panicTracker) Unwrap() http.ResponseWriter {
+	return t.ResponseWriter
 }

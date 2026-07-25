@@ -2,6 +2,7 @@ package propagate
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -139,18 +140,46 @@ func TestPropagate_SelectNone(t *testing.T) {
 	require.Empty(t, errs)
 }
 
+// El comando se inyecta en vez de confiar en que un path inexistente haga fallar al
+// binario `domain`: donde ese binario está instalado devuelve exit 0 igual, así que
+// el test veía 2 éxitos y fallaba. Dependía del entorno — pasaba solo en máquinas
+// SIN domain instalado, y se rompía en la de cualquiera que use la herramienta.
 func TestPropagate_ContinuesOnFailure(t *testing.T) {
-	if testing.Short() {
-		t.Skip("requires integration (domain binary)")
-	}
+	orig := execCommand
+	t.Cleanup(func() { execCommand = orig })
+	// `false` siempre sale 1: garantiza el fallo sin depender de rutas ni binarios
+	// del proyecto
+	execCommand = func(string, ...string) *exec.Cmd { return exec.Command("false") }
+
 	infos := []ProjectInfo{
-		{Name: "projA", Path: "/tmp/nonexistent-A-" + t.Name()},
-		{Name: "projB", Path: "/tmp/nonexistent-B-" + t.Name()},
+		{Name: "projA", Path: "/tmp/no-importa-A"},
+		{Name: "projB", Path: "/tmp/no-importa-B"},
 	}
 	success, failed, errs := Propagate(infos, false)
+
 	require.Equal(t, 0, success)
+	// lo que de verdad se verifica: el segundo proyecto se intenta aunque el primero
+	// haya fallado, y los dos errores quedan acumulados
 	require.Equal(t, 2, failed)
 	require.Len(t, errs, 2)
+	require.Contains(t, errs[0].Error(), "projA")
+	require.Contains(t, errs[1].Error(), "projB")
+}
+
+func TestPropagate_TodoOK_CuentaExitosSinErrores(t *testing.T) {
+	orig := execCommand
+	t.Cleanup(func() { execCommand = orig })
+	execCommand = func(string, ...string) *exec.Cmd { return exec.Command("true") }
+
+	infos := []ProjectInfo{
+		{Name: "projA", Path: "/tmp/no-importa-A"},
+		{Name: "projB", Path: "/tmp/no-importa-B"},
+	}
+	success, failed, errs := Propagate(infos, false)
+
+	require.Equal(t, 2, success)
+	require.Equal(t, 0, failed)
+	require.Empty(t, errs)
 }
 
 

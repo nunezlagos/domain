@@ -21,9 +21,14 @@ help:
 ensure-network: ## Crea la network domain_internal si no existe (idempotente)
 	@docker network inspect $(NETWORK) >/dev/null 2>&1 || docker network create $(NETWORK)
 
-build: ## Build imágenes locales (mcp + admin)
+build: ## Build imágenes locales (mcp + admin + caddy)
 	$(COMPOSE_MCP) build
 	$(COMPOSE_ADMIN) build
+	# DOMAINSERV-124: caddy ya no usa la imagen oficial — lleva el bouncer de
+	# CrowdSec y el plugin de rate limit compilados con xcaddy. Sin este build el
+	# Caddyfile no adapta (la directiva `crowdsec` no existiria) y el borde HTTP
+	# no arranca.
+	$(COMPOSE_CADDY) build
 
 # Containers long-running esperados (excluye init containers como
 # minio-bootstrap y domain-migrate que salen exit 0 después de su trabajo).

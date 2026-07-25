@@ -162,6 +162,16 @@ services:
       COLLECTIONS: "crowdsecurity/caddy crowdsecurity/http-dos crowdsecurity/http-cve crowdsecurity/base-http-scenarios"
       # sin esto el container reescribe acquis.yaml en cada arranque
       DISABLE_ONLINE_API: "false"
+      # DOMAINSERV-124: pre-registra el bouncer de Caddy con una key conocida.
+      # `BOUNCER_KEY_<nombre>` es el mecanismo oficial de la imagen (verificado en
+      # doc.crowdsec.net/u/getting_started/health_check) y es idempotente, asi que
+      # sobrevive a los redeploys sin duplicar el bouncer.
+      #
+      # Es la MISMA key que consume Caddy: sin este registro la LAPI rechaza al
+      # bouncer con 403, y como Caddy falla abierto a proposito, el resultado
+      # seria "todo parece bien pero nadie aplica los baneos". Silencioso.
+      # Comprobar despues de un deploy:  cscli bouncers list
+      BOUNCER_KEY_caddy: ${CROWDSEC_BOUNCER_API_KEY:-}
     volumes:
       - ./crowdsec-acquis.yaml:/etc/crowdsec/acquis.d/loki.yaml:ro
       - ./crowdsec-profiles.yaml:/etc/crowdsec/profiles.yaml:ro

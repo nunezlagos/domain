@@ -331,6 +331,33 @@ if should_run_pre_migration_backup; then
 else
   log "Install fresh (sin volumen de datos) — se omite backup pre-migración"
 fi
+# DOMAINSERV-124: pre-flight del borde HTTP, ANTES de bajar nada.
+#
+# Caddy dejo de usar la imagen oficial: lleva el bouncer de CrowdSec compilado con
+# xcaddy. Eso agrega un modo de falla nuevo — si el Caddyfile no adapta contra ESE
+# binario, Caddy no arranca y se cae el unico borde HTTP del host, que tambien
+# sirve quiensabe.cl.
+#
+# Por eso se valida ACA y no despues del `make down`: si algo esta mal, el deploy
+# aborta con el stack anterior INTACTO y sirviendo. Validar despues del down
+# significaria diagnosticar con el sitio ya caido.
+#
+# El self-check HTTP de mas abajo sigue siendo la red final; esto es la que evita
+# llegar hasta ahi.
+log "Pre-flight del borde HTTP (imagen con plugins + validacion del Caddyfile)..."
+# el CWD ya es $INSTALL_DIR/services y .env es el symlink a ../.env (ver arriba)
+if ! docker compose -f caddy/docker-compose.yml --env-file .env build; then
+  fail "no se pudo buildear la imagen de Caddy con plugins — abortando con el stack anterior intacto"
+fi
+if ! docker run --rm \
+      -v "$INSTALL_DIR/services/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+      -e CROWDSEC_BOUNCER_API_KEY="$(env_get CROWDSEC_BOUNCER_API_KEY "$ENV_FILE")" \
+      domain-caddy:plugins caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+  fail "el Caddyfile NO valida contra la imagen con plugins — abortando con el stack anterior intacto.
+  Reproducilo con:  docker run --rm -v $INSTALL_DIR/services/caddy/Caddyfile:/etc/caddy/Caddyfile:ro -e CROWDSEC_BOUNCER_API_KEY=x domain-caddy:plugins caddy validate --config /etc/caddy/Caddyfile"
+fi
+ok "pre-flight OK: imagen con plugins construida y Caddyfile valido"
+
 make down 2>/dev/null || true
 # Re-check huerfanos despues del down (incluyendo running que no estan en el compose).
 CLEANED=0
@@ -593,22 +620,34 @@ if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
   # que su ausencia se reporta. WARN y no FAIL porque el monitoring es opt-in: un
   # deploy sin el sigue sirviendo, solo queda sin deteccion.
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx domain-crowdsec; then
-    ok "CrowdSec corriendo en MODO DETECCION (detecta y registra, todavia NO banea)"
+    ok "CrowdSec corriendo"
     log "  ver que detecto:  docker exec domain-crowdsec cscli alerts list"
-    log "  activar el baneo requiere antes: allowlist de tu IP + calibracion (DOMAINSERV-130)"
 
-    # La key del bouncer se genera aca y NO se pide al usuario: la consumen los dos
-    # lados (Caddy para autenticarse, CrowdSec via BOUNCER_KEY_caddy para
-    # registrarlo), y un secreto que hay que copiar a mano entre dos servicios se
-    # copia mal. Solo se genera si falta: regenerarla en cada deploy invalidaria
-    # la que Caddy ya tiene y el bouncer quedaria fallando ABIERTO en silencio.
-    if [[ -z "$(env_get CROWDSEC_BOUNCER_API_KEY "$ENV_FILE")" ]]; then
-      if bouncer_key="$(openssl rand -hex 32 2>/dev/null)" && [[ -n "$bouncer_key" ]]; then
-        env_set CROWDSEC_BOUNCER_API_KEY "$bouncer_key" "$ENV_FILE"
-        ok "CROWDSEC_BOUNCER_API_KEY generada en el .env (el bouncer todavia NO esta activo)"
-      else
-        warn "no se pudo generar CROWDSEC_BOUNCER_API_KEY (falta openssl?)"
+    # DOMAINSERV-124: el bouncer es la pieza que APLICA los baneos. Se verifica
+    # explicito porque su modo de falla es SILENCIOSO: Caddy falla abierto a
+    # proposito, asi que un bouncer no registrado (LAPI devolviendo 403) se ve
+    # exactamente igual que todo funcionando — hasta que un atacante baneado entra.
+    #
+    # Se espera un poco: el registro por BOUNCER_KEY_caddy ocurre en el arranque
+    # del container y puede no estar listo apenas responde el healthcheck.
+    BOUNCER_OK=""
+    for _ in $(seq 1 15); do
+      if docker exec domain-crowdsec cscli bouncers list -o json 2>/dev/null | grep -q '"name"'; then
+        BOUNCER_OK=1; break
       fi
+      sleep 2
+    done
+    if [[ -n "$BOUNCER_OK" ]]; then
+      ok "bouncer registrado — los baneos SE APLICAN en la capa HTTP (403)"
+      log "  quien esta baneado:  docker exec domain-crowdsec cscli decisions list"
+      log "  si te baneaste:      sudo $INSTALL_DIR/services/domain-mcp/deploy/monitoring/unban.sh allow-me"
+      log "  el SSH nunca se filtra: este bouncer actua solo sobre HTTP"
+    else
+      warn "CrowdSec corre pero NO hay bouncer registrado: detecta y decide, pero NADIE aplica los baneos"
+      warn "  Caddy falla abierto a proposito, asi que esto NO rompe el sitio — pero no hay enforcement"
+      warn "  revisa que CROWDSEC_BOUNCER_API_KEY del .env coincida en ambos lados:"
+      warn "    docker exec domain-crowdsec cscli bouncers list"
+      warn "    docker logs domain-caddy 2>&1 | grep -i crowdsec"
     fi
   else
     warn "CrowdSec NO esta corriendo: no hay deteccion de ataques ni baneo automatico"

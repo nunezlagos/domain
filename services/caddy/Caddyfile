@@ -1,16 +1,66 @@
+# DOMAINSERV-124: bouncer de CrowdSec — ACA SE APLICAN LOS BANEOS.
+#
+# Hasta aca CrowdSec detectaba y decidia, pero NADIE aplicaba: `cscli bouncers
+# list` estaba vacio y una IP baneada seguia entrando. El stack era un IDS, no
+# un IPS.
+#
+# POR QUE EL BOUNCER HTTP Y NO EL DE FIREWALL: la IP del dueño es DINAMICA, asi
+# que puede heredar por DHCP una IP ya baneada. Un bouncer de firewall filtra
+# TODOS los puertos —incluido el 22— y en ese escenario lo deja afuera del VPS.
+# Este actua solo en la capa HTTP: el peor caso es perder el dashboard hasta que
+# expire el ban, y el SSH NUNCA se toca. El lockout es imposible por
+# construccion, no por configuracion. Ademas existe unban.sh allow-me como
+# segunda red (whitelist de la IP detectada de la sesion SSH).
+#
+# FALLA ABIERTO A PROPOSITO: NO se usa `enable_hard_fails`. Con esa opcion Caddy
+# se niega a arrancar si la LAPI es inalcanzable, y este Caddy es el unico borde
+# HTTP del host — tambien sirve quiensabe.cl. Que una caida de CrowdSec se lleve
+# un sitio de produccion es peor que servir un rato sin filtrar IPs, sobre todo
+# cuando la deteccion sigue registrando todo en Loki.
+#
+# `order crowdsec first` es OBLIGATORIO: las directivas de plugin no estan en el
+# orden nativo del Caddyfile y sin esto el adapter falla con "directive not
+# ordered". Y `first` es lo que se quiere igual — filtrar antes de gastar
+# cualquier handler.
+#
+# Requiere la imagen de services/caddy/Dockerfile (caddy:2-alpine NO trae el
+# modulo) y que CROWDSEC_BOUNCER_API_KEY este en el .env: install.sh la genera y
+# la registra en CrowdSec via BOUNCER_KEY_caddy.
+{
+	order crowdsec first
+
+	crowdsec {
+		# dentro de domain_internal por DNS de container. La LAPI no se publica a
+		# internet (solo 127.0.0.1:8080 del host, para cscli).
+		api_url http://domain-crowdsec:8080
+		api_key {env.CROWDSEC_BOUNCER_API_KEY}
+		# modo streaming (default): pull periodico de la lista de decisiones y cache
+		# local. Asi cada request se resuelve en memoria, sin una llamada a la LAPI
+		# por peticion — que es justo lo que no puede pasar en el camino caliente.
+		#
+		# CONSECUENCIA A TENER PRESENTE: un ban tarda HASTA 15s en empezar a
+		# aplicarse, porque hasta el proximo pull el cache local no lo conoce. Se
+		# verifico probando: con 10s de espera el request pasaba, con 25s daba 403.
+		# Es irrelevante para lo que baneamos (honeypot 24h, flood 4h) y bajarlo
+		# solo agregaria trafico contra la LAPI. Si algun dia una prueba de ban
+		# "no funciona", esperar el ticker ANTES de sospechar de la config.
+		ticker_interval 15s
+	}
+}
+
 # DOMAINSERV-122: el access log alimenta a CrowdSec (baneo) y a Loki (forense).
 # Sin esto no hay registro de accesos: ningun ataque a la capa web queda visible.
 # Caddy redacta Authorization y Cookie por defecto; el filter explicito es
 # defensa en profundidad para que la API key nunca llegue a Loki.
 (accesslog) {
-  log {
-    format filter {
-      wrap json
-      request>headers>Authorization delete
-      request>headers>Cookie delete
-    }
-    output stdout
-  }
+	log {
+		format filter {
+			wrap json
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+		}
+		output stdout
+	}
 }
 
 # quiensabe.cl - Astro SSR reverse proxy (qs-app:4323, red domain_internal).
@@ -19,83 +69,94 @@
 # no caiga al dashboard domain-admin. El puerto 443 ya esta publicado en
 # docker-compose.yml (443:443).
 quiensabe.cl, www.quiensabe.cl {
-    import accesslog
-    reverse_proxy qs-app:4323
+	# el sitio publico tambien se filtra: es el que mas escaneo recibe
+	crowdsec
+	import accesslog
+	reverse_proxy qs-app:4323
 }
 
 :80 {
-  import accesslog
+	# 403 a las IPs con decision de ban activa (honeypot 24h, flood extremo 4h).
+	# Va antes que @scanners a proposito: al reincidente ya identificado se le
+	# corta sin evaluar la ruta.
+	crowdsec
 
-  # DOMAINSERV-130: rate limiting — LISTO PERO NO ACTIVO.
-  #
-  # Requiere la imagen con plugins de services/caddy/Dockerfile; con caddy:2-alpine
-  # esta directiva NO existe y Caddy se niega a arrancar. Descomentar SOLO despues
-  # de promover esa imagen y correr `caddy validate` contra ella.
-  #
-  # El umbral acompaña la decision del usuario de banear solo volumen descomunal:
-  # 500 peticiones por minuto por IP, el mismo numero que el escenario
-  # domain/http-flood-extremo de CrowdSec. Este corta en el borde (429) y CrowdSec
-  # banea al reincidente — se complementan, no se pisan.
-  #
-  # rate_limit {
-  #   zone por_ip {
-  #     key    {remote_host}
-  #     events 500
-  #     window 1m
-  #   }
-  # }
+	import accesslog
 
-  # DOMAINSERV-130: rutas que solo piden bots y escaneres. `abort` cierra la
-  # conexion sin responder: no gasta backend y cada match queda en el access log
-  # como senal limpia de escaneo para alimentar el baneo automatico.
-  # Va PRIMERO a proposito: los bloques handle se evaluan en orden de escritura y
-  # son mutuamente exclusivos, asi que este gana antes que el catch-all.
-  @scanners path /.env /.env.* /wp-login.php /wp-admin* /xmlrpc.php /admin.php /phpmyadmin* /phpMyAdmin* /.git/* /.aws/* /config.json /server-status
-  handle @scanners {
-    # DOMAINSERV-131: fingerprint del escaneo — metadatos, NUNCA el contenido.
-    #
-    # El body no se logea a proposito y no hay que agregarlo: toda ruta de
-    # @scanners que llega con body es un login, asi que guardarlo archiva
-    # credential stuffing (viola secrets-redaction; la redaccion por regex falla
-    # en base64 y multipart). Ademas `log_append` corre ANTES que `request_body`,
-    # asi que `max_size` no lo acota y un POST de 300MB a /.env mata a Caddy por
-    # OOM. Un hash tampoco: Caddy vanilla no expone ninguna funcion de hash.
-    #
-    # El prefijo `<` fuerza modo early. Sin el, el campo se escribe al responder
-    # y `abort` lo borra del entry: justo los requests que interesa registrar.
-    #
-    # Se usa el Content-Length declarado porque `bytes_read` sale 0: `abort`
-    # cierra la conexion sin leer el body.
-    log_append <scan_method {http.request.method}
-    log_append <scan_content_type {http.request.header.Content-Type}
-    log_append <scan_content_length {http.request.header.Content-Length}
-    abort
-  }
+	# DOMAINSERV-130: rate limiting — NO ACTIVO, pero ya no falta nada tecnico.
+	#
+	# La imagen con plugins YA esta promovida (DOMAINSERV-124), asi que el modulo
+	# http.handlers.rate_limit esta presente y basta descomentar. Queda apagado
+	# porque es una decision de producto —cuanto trafico legitimo se corta— y no
+	# se arrastra junto al bouncer: son dos cambios de comportamiento distintos.
+	#
+	# Al activarlo: correr `caddy validate` contra la imagen (abajo) antes de
+	# aplicar, igual que se hizo con el bouncer.
+	#
+	# El umbral acompaña la decision del usuario de banear solo volumen descomunal:
+	# 500 peticiones por minuto por IP, el mismo numero que el escenario
+	# domain/http-flood-extremo de CrowdSec. Este corta en el borde (429) y CrowdSec
+	# banea al reincidente — se complementan, no se pisan.
+	#
+	# rate_limit {
+	#   zone por_ip {
+	#     key    {remote_host}
+	#     events 500
+	#     window 1m
+	#   }
+	# }
 
-  handle /api/* {
-    reverse_proxy domain-mcp:8000
-  }
-  handle /mcp* {
-    reverse_proxy domain-mcp:8000
-  }
-  handle /healthz {
-    reverse_proxy domain-mcp:8000
-  }
-  # REQ-45: admin dashboard (Django placeholder en HU-45.1, vistas reales
-  # en HU-45.2+). Si el container domain-admin no está corriendo, Caddy
-  # responde 502 (no hay fallback).
-  handle {
-    reverse_proxy domain-admin:80
-  }
+	# DOMAINSERV-130: rutas que solo piden bots y escaneres. `abort` cierra la
+	# conexion sin responder: no gasta backend y cada match queda en el access log
+	# como senal limpia de escaneo para alimentar el baneo automatico.
+	# Va PRIMERO a proposito: los bloques handle se evaluan en orden de escritura y
+	# son mutuamente exclusivos, asi que este gana antes que el catch-all.
+	@scanners path /.env /.env.* /wp-login.php /wp-admin* /xmlrpc.php /admin.php /phpmyadmin* /phpMyAdmin* /.git/* /.aws/* /config.json /server-status
+	handle @scanners {
+		# DOMAINSERV-131: fingerprint del escaneo — metadatos, NUNCA el contenido.
+		#
+		# El body no se logea a proposito y no hay que agregarlo: toda ruta de
+		# @scanners que llega con body es un login, asi que guardarlo archiva
+		# credential stuffing (viola secrets-redaction; la redaccion por regex falla
+		# en base64 y multipart). Ademas `log_append` corre ANTES que `request_body`,
+		# asi que `max_size` no lo acota y un POST de 300MB a /.env mata a Caddy por
+		# OOM. Un hash tampoco: Caddy vanilla no expone ninguna funcion de hash.
+		#
+		# El prefijo `<` fuerza modo early. Sin el, el campo se escribe al responder
+		# y `abort` lo borra del entry: justo los requests que interesa registrar.
+		#
+		# Se usa el Content-Length declarado porque `bytes_read` sale 0: `abort`
+		# cierra la conexion sin leer el body.
+		log_append <scan_method {http.request.method}
+		log_append <scan_content_type {http.request.header.Content-Type}
+		log_append <scan_content_length {http.request.header.Content-Length}
+		abort
+	}
 
-  encode zstd gzip
+	handle /api/* {
+		reverse_proxy domain-mcp:8000
+	}
+	handle /mcp* {
+		reverse_proxy domain-mcp:8000
+	}
+	handle /healthz {
+		reverse_proxy domain-mcp:8000
+	}
+	# REQ-45: admin dashboard (Django placeholder en HU-45.1, vistas reales
+	# en HU-45.2+). Si el container domain-admin no está corriendo, Caddy
+	# responde 502 (no hay fallback).
+	handle {
+		reverse_proxy domain-admin:80
+	}
 
-  header {
-    X-Content-Type-Options "nosniff"
-    Referrer-Policy "strict-origin-when-cross-origin"
-    # el dashboard no se embebe en ningun sitio: clickjacking innecesario
-    X-Frame-Options "DENY"
-    # no revelar la version del servidor a los escaneres
-    -Server
-  }
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# el dashboard no se embebe en ningun sitio: clickjacking innecesario
+		X-Frame-Options "DENY"
+		# no revelar la version del servidor a los escaneres
+		-Server
+	}
 }

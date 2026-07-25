@@ -1,11 +1,29 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    # DOMAINSERV-124/130: imagen propia con el bouncer de CrowdSec y el plugin de
+    # rate limiting. Ya NO es caddy:2-alpine — ese binario no trae los modulos y
+    # el Caddyfile, que ahora usa la directiva `crowdsec`, no adaptaria.
+    #
+    # `build` + `image` juntos a proposito: compose la construye si falta (primer
+    # deploy en un host limpio) y la reusa si ya esta. install.sh la buildea
+    # explicito para que un cambio en el Dockerfile se recoja igual.
+    #
+    # Verificado en el build 2026-07-25 (caddy v2.11.4): los modulos presentes son
+    # crowdsec, http.handlers.crowdsec, admin.api.crowdsec y http.handlers.rate_limit.
+    image: domain-caddy:plugins
+    build:
+      context: .
     container_name: domain-caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # la consumen los dos lados: Caddy para autenticarse contra la LAPI y
+      # CrowdSec via BOUNCER_KEY_caddy para registrar este bouncer. install.sh la
+      # genera una sola vez en el .env — si se regenera, el bouncer queda
+      # fallando ABIERTO en silencio.
+      CROWDSEC_BOUNCER_API_KEY: ${CROWDSEC_BOUNCER_API_KEY:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

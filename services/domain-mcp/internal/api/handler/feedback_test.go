@@ -98,7 +98,7 @@ func TestCreateFeedback_ValidRatingUp(t *testing.T) {
 	rec := postFeedback(t, api, map[string]any{
 		"message_id": 10, "rating": 1, "skill_slug": "go-testing", "user_email": "a@b.com",
 	})
-	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusCreated, rec.Code)
 	require.Equal(t, 1, repo.byMessage[10].Rating)
 }
 
@@ -107,7 +107,7 @@ func TestCreateFeedback_ValidRatingDown(t *testing.T) {
 	rec := postFeedback(t, api, map[string]any{
 		"message_id": 11, "rating": -1, "comment": "no sirvio", "user_email": "a@b.com",
 	})
-	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusCreated, rec.Code)
 	require.Equal(t, -1, repo.byMessage[11].Rating)
 	require.Equal(t, "no sirvio", repo.byMessage[11].Comment)
 }
@@ -136,9 +136,9 @@ func TestCreateFeedback_MissingMessageID(t *testing.T) {
 func TestCreateFeedback_Idempotent(t *testing.T) {
 	api, repo := newFeedbackAPI()
 	rec1 := postFeedback(t, api, map[string]any{"message_id": 20, "rating": 1, "user_email": "x@y.com"})
-	require.Equal(t, http.StatusOK, rec1.Code)
+	require.Equal(t, http.StatusCreated, rec1.Code)
 	rec2 := postFeedback(t, api, map[string]any{"message_id": 20, "rating": -1, "user_email": "x@y.com"})
-	require.Equal(t, http.StatusOK, rec2.Code)
+	require.Equal(t, http.StatusCreated, rec2.Code)
 	require.Len(t, repo.byMessage, 1)
 	require.Equal(t, -1, repo.byMessage[20].Rating)
 }
@@ -151,7 +151,7 @@ func TestCreateFeedback_RateLimited(t *testing.T) {
 	}
 	for i := 0; i < 2; i++ {
 		rec := postFeedback(t, api, map[string]any{"message_id": 100 + i, "rating": 1, "user_email": "spam@x.com"})
-		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, http.StatusCreated, rec.Code)
 	}
 	rec := postFeedback(t, api, map[string]any{"message_id": 999, "rating": 1, "user_email": "spam@x.com"})
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)

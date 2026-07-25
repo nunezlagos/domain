@@ -68,7 +68,12 @@ func (a *API) createFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeData(w, http.StatusOK, f)
+	// 201 aunque el service haga upsert: la convención del repo (verificada por
+	// cmd/response-shape-lint) es que todo handler de creación responda Created, y
+	// tras la operación el recurso existe. Distinguir 201/200 según creó o
+	// actualizó exigiría que el service devuelva ese flag, y ningún consumidor lo
+	// necesita — el dashboard no usa este endpoint (escribe directo a la DB).
+	writeData(w, http.StatusCreated, f)
 }
 
 // listFeedback maneja GET /api/v1/feedback?skill_slug=&days=&rating=&limit=&offset=.

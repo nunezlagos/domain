@@ -8,10 +8,28 @@
 // stream de /containers/<id>/logs?follow=1 cada 10s. Con tcp:// usa el
 // transporte del cliente de Docker, sin timeout.
 
+// DOMAINSERV-150: el discovery ve TODOS los containers del host, no solo los de
+// este stack. En el VPS conviven proyectos ajenos (rds-*, qs-*) cuyos logs viejos
+// Loki rechaza en bucle con "timestamp too old" contra su ventana de retención
+// (DOMAINSERV-128), llenando el log de errores que no son accionables.
+// Se acota el discovery, no se ensancha la ventana: este stack observa lo suyo,
+// mismo criterio que el prefijo domain- de config-drift.sh. Si algún día se quiere
+// observabilidad unificada del VPS, se relaja el keep de abajo.
+
 // descubre contenedores vía el socket-proxy (GET /containers/json + /networks)
 discovery.docker "domain" {
 	host             = "tcp://socket-proxy:2375"
 	refresh_interval = "10s"
+}
+
+// deja pasar SOLO los containers domain-*; los de otros proyectos ni se scrapean
+discovery.relabel "domain_only" {
+	targets = discovery.docker.domain.targets
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/domain-.*"
+		action        = "keep"
+	}
 }
 
 // mapea el nombre del contenedor al label 'container' (sin la barra inicial)
@@ -27,7 +45,7 @@ discovery.relabel "domain" {
 // colecta los logs de los contenedores descubiertos
 loki.source.docker "domain" {
 	host             = "tcp://socket-proxy:2375"
-	targets          = discovery.docker.domain.targets
+	targets          = discovery.relabel.domain_only.output
 	forward_to       = [loki.process.domain.receiver]
 	relabel_rules    = discovery.relabel.domain.rules
 	refresh_interval = "10s"

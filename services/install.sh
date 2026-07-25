@@ -197,6 +197,12 @@ ENV_EXAMPLE="$INSTALL_DIR/services/.env.example"
 [[ -f "$ENV_EXAMPLE" ]] || fail ".env.example no encontrado en $INSTALL_DIR/services/"
 
 # Map: variable name → .env.example key (suelen ser iguales)
+#
+# TODO SECRETO VA ACA. Lo que no esté en esta lista se despliega con el valor
+# literal del .env.example, y eso ya pasó en producción: GRAFANA_ADMIN_PASSWORD y
+# DOMAIN_FIELD_ENC_KEY faltaban, así que el VPS quedó con "CHANGE_ME" — un valor
+# publicado en un repo público, junto con la IP del servidor. Grafana estuvo
+# alcanzable en 0.0.0.0:3000 con esa password (incidente del 2026-07-24).
 declare -A CREDS=(
   [POSTGRES_PASSWORD]=POSTGRES_PASSWORD
   [APP_USER_PASSWORD]=APP_USER_PASSWORD
@@ -204,6 +210,12 @@ declare -A CREDS=(
   [MINIO_ROOT_PASSWORD]=MINIO_ROOT_PASSWORD
   [BACKUP_GPG_PASSPHRASE]=BACKUP_GPG_PASSPHRASE
   [DOMAIN_FLOW_TOKEN_SECRET]=DOMAIN_FLOW_TOKEN_SECRET
+  [GRAFANA_ADMIN_PASSWORD]=GRAFANA_ADMIN_PASSWORD
+  # cifra auth_api_keys.key_ciphertext. Se regenera SOLO si está vacía o en
+  # CHANGE_ME, nunca si ya tiene valor real: rotarla dejaría ilegible todo
+  # ciphertext previo y esas API keys habría que rotarlas a mano
+  [DOMAIN_FIELD_ENC_KEY]=DOMAIN_FIELD_ENC_KEY
+  [CROWDSEC_BOUNCER_API_KEY]=CROWDSEC_BOUNCER_API_KEY
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -218,10 +230,15 @@ else
   log ".env existe — preservando credenciales"
   for key in "${!CREDS[@]}"; do
     EXISTING=$(env_get "$key" "$ENV_FILE")
-    if [[ -z "$EXISTING" ]] || [[ "$EXISTING" == "CHANGE_ME" ]]; then
+    # comparar contra el .env.example es la deteccion que de verdad sirve:
+    # buscar solo la cadena "CHANGE_ME" deja pasar cualquier otro placeholder
+    # que el example use ahora o en el futuro
+    PLACEHOLDER=$(env_get "$key" "$ENV_EXAMPLE")
+    if [[ -z "$EXISTING" ]] || [[ "$EXISTING" == "CHANGE_ME" ]] \
+       || { [[ -n "$PLACEHOLDER" ]] && [[ "$EXISTING" == "$PLACEHOLDER" ]]; }; then
       NEW=$(gen_uuid)
       env_set "$key" "$NEW" "$ENV_FILE"
-      log "  $key: regenerada (estaba vacía o CHANGE_ME)"
+      log "  $key: regenerada (estaba vacía o con el placeholder del .env.example)"
     else
       log "  $key: preservada"
     fi
@@ -568,6 +585,20 @@ if [[ -n "$(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")" ]]; then
     ok "CrowdSec corriendo en MODO DETECCION (detecta y registra, todavia NO banea)"
     log "  ver que detecto:  docker exec domain-crowdsec cscli alerts list"
     log "  activar el baneo requiere antes: allowlist de tu IP + calibracion (DOMAINSERV-130)"
+
+    # La key del bouncer se genera aca y NO se pide al usuario: la consumen los dos
+    # lados (Caddy para autenticarse, CrowdSec via BOUNCER_KEY_caddy para
+    # registrarlo), y un secreto que hay que copiar a mano entre dos servicios se
+    # copia mal. Solo se genera si falta: regenerarla en cada deploy invalidaria
+    # la que Caddy ya tiene y el bouncer quedaria fallando ABIERTO en silencio.
+    if [[ -z "$(env_get CROWDSEC_BOUNCER_API_KEY "$ENV_FILE")" ]]; then
+      if bouncer_key="$(openssl rand -hex 32 2>/dev/null)" && [[ -n "$bouncer_key" ]]; then
+        env_set CROWDSEC_BOUNCER_API_KEY "$bouncer_key" "$ENV_FILE"
+        ok "CROWDSEC_BOUNCER_API_KEY generada en el .env (el bouncer todavia NO esta activo)"
+      else
+        warn "no se pudo generar CROWDSEC_BOUNCER_API_KEY (falta openssl?)"
+      fi
+    fi
   else
     warn "CrowdSec NO esta corriendo: no hay deteccion de ataques ni baneo automatico"
     warn "  los puertos declarados en SECURITY_ALLOWED_PUBLIC_PORTS quedan sin defensa activa"
@@ -620,11 +651,25 @@ cat <<EOF
   BACKUP_GPG_PASSPHRASE: $(env_get BACKUP_GPG_PASSPHRASE "$ENV_FILE")
   ──────────────────────────────────────────────────────────────────
 
+  GRAFANA — usuario: $(env_get GRAFANA_ADMIN_USER "$ENV_FILE")
+  GRAFANA_ADMIN_PASSWORD: $(env_get GRAFANA_ADMIN_PASSWORD "$ENV_FILE")
+  ──────────────────────────────────────────────────────────────────
+
+  SECRETOS INTERNOS (no se usan a mano, pero perderlos tiene costo):
+    DOMAIN_FIELD_ENC_KEY:     $(env_get DOMAIN_FIELD_ENC_KEY "$ENV_FILE")
+      ↑ cifra las API keys. Sin ella, las keys emitidas quedan ilegibles.
+    DOMAIN_FLOW_TOKEN_SECRET: $(env_get DOMAIN_FLOW_TOKEN_SECRET "$ENV_FILE")
+    CROWDSEC_BOUNCER_API_KEY: $(env_get CROWDSEC_BOUNCER_API_KEY "$ENV_FILE")
+  ──────────────────────────────────────────────────────────────────
+
   URLS (HTTP plano por IP):
     Dashboard:  http://$VPS_IP/
     API:        http://$VPS_IP/api/v1/...
     MCP HTTP:   http://$VPS_IP/mcp
     Health:     http://$VPS_IP/healthz
+    Grafana:    NO se publica a internet. Túnel SSH:
+                  ssh -L 3000:localhost:3000 $VPS_IP
+                y después http://localhost:3000
 
   ──────────────────────────────────────────────────────────────────
   PRÓXIMOS PASOS:

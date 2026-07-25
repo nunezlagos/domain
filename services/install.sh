@@ -479,6 +479,37 @@ if [[ -n "$EXPOSED_OWN" ]]; then
 fi
 ok "Puertos: domain solo publica 80/443 a internet"
 
+# Segunda pasada, a nivel de KERNEL. El chequeo de arriba usa `docker ps`, que
+# tiene un punto ciego verificado: para un container con network_mode:host el
+# campo .Ports viene VACIO, asi que sus puertos no se ven. El honeypot usa
+# justamente host networking (lo necesita para ver la IP real del atacante), y
+# cualquier servicio del host fuera de Docker tampoco aparecia.
+#
+# `ss` no miente: enumera lo que realmente escucha, venga de donde venga. No
+# requiere sudo para listar puertos (si para ver el proceso dueño, que no hace
+# falta aca).
+log "  revisando puertos a nivel de kernel (cubre host-networking y no-docker)..."
+KERNEL_PORTS=""
+while read -r kport; do
+  [[ -z "$kport" ]] && continue
+  case "$kport" in
+    80|443|"$SSH_PORT") continue ;;
+  esac
+  [[ "$DECLARED_PORTS" == *",${kport},"* ]] && continue
+  # los señuelos del honeypot son carnada deliberada, no un descuido
+  case "$kport" in
+    23|445|1433|3389|6379|9200|11211|27017|2375|4444|31337|5555|1099|50050) continue ;;
+  esac
+  KERNEL_PORTS="${KERNEL_PORTS} ${kport}"
+done < <(ss -tlnH 2>/dev/null | awk '{print $4}' | grep -E '^(0\.0\.0\.0|\[::\]|\*):' | sed 's/.*://' | sort -un)
+
+if [[ -n "$KERNEL_PORTS" ]]; then
+  warn "puertos escuchando en todas las interfaces, sin declarar:${KERNEL_PORTS}"
+  warn "  si son deliberados, declaralos en SECURITY_ALLOWED_PUBLIC_PORTS del .env"
+else
+  ok "Kernel: no hay puertos publicos sin declarar"
+fi
+
 # Backfill de embeddings (DOMAINSERV-80 H2). BEST-EFFORT a propósito: un fallo
 # acá no debe tumbar un deploy que ya está sirviendo. Es idempotente porque el
 # backfill solo toma filas con embedding NULL — en el cron diario, con todo

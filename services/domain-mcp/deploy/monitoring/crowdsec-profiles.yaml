@@ -1,0 +1,43 @@
+# DOMAINSERV-124: qué alerta se convierte en BANEO y qué queda solo registrada.
+#
+# Distincion clave de CrowdSec: los ESCENARIOS generan alertas; los PROFILES
+# deciden cuales de esas alertas se vuelven decisiones (bans). Por eso podemos
+# ver TODO y banear solo lo descomunal — que es exactamente lo pedido.
+#
+# Los profiles se evaluan EN ORDEN y `on_success: break` corta la cadena. Asi que
+# los dos que banean van primero y el catch-all de solo-alerta va al final.
+
+# 1. Flood extremo: >500 req/min desde una IP. Umbral inalcanzable por un cliente
+#    legitimo (ver crowdsec-scenario-flood.yaml).
+name: flood_extremo
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() == "domain/http-flood-extremo"
+decisions:
+  - type: ban
+    duration: 4h
+on_success: break
+---
+# 2. Honeypot: tocar un puerto señuelo no tiene explicacion legitima posible, asi
+#    que no hay falsos positivos. Ban mas largo que el flood justamente por eso.
+name: honeypot_tocado
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() == "domain/honeypot-puerto-tocado"
+decisions:
+  - type: ban
+    duration: 24h
+on_success: break
+---
+# 3. TODO LO DEMAS: solo alerta, sin decision.
+#
+#    Aca caen http-cve, http-dos, base-http-scenarios y los escenarios de la
+#    comunidad. Detectan, puntuan y quedan en `cscli alerts list`, pero NO banean
+#    a nadie. Es deliberado: son los que tienen umbrales bajos (5-10 intentos) y
+#    podrian banear al propio dueño durante un diagnostico.
+#
+#    Para promover uno a baneo: copiarlo a un profile propio arriba de este, con
+#    su nombre exacto en el filtro. Nunca aflojar este catch-all.
+name: solo_alerta
+filters:
+  - "true"
+decisions: []
+on_success: break

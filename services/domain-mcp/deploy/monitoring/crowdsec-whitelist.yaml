@@ -1,0 +1,31 @@
+# DOMAINSERV-124: SALVAGUARDA ANTI-AUTOBANEO.
+#
+# Este archivo existe para que el dueño no se quede afuera de su propio VPS. Se
+# evalua en la etapa de enriquecimiento, ANTES de que los escenarios decidan, asi
+# que una IP de aca nunca llega a generar una decision de ban.
+#
+# LIMITE IMPORTANTE, de la doc oficial: la whitelist solo PREVIENE decisiones
+# nuevas — NO borra las que ya existen. Si ya te baneaste, primero desbanea:
+#
+#   docker exec domain-crowdsec cscli decisions delete --ip <tu-ip>
+#
+# COMO AGREGAR TU IP: la IP del dueño es DINAMICA, asi que hardcodearla se rompe
+# en cada rotacion del ISP. Usar unban.sh, que la detecta sola de tu sesion SSH:
+#
+#   ssh domain-vps 'sudo /opt/services/services/domain-mcp/deploy/monitoring/unban.sh allow-me'
+
+name: domain/whitelist-admin
+description: "IPs que NUNCA se banean: administracion y redes internas"
+whitelist:
+  reason: "administracion de domain — no banear jamas"
+  ip:
+    - "127.0.0.1"
+    # <-- unban.sh allow-me agrega aca la IP publica del admin
+  cidr:
+    # redes privadas: nunca tiene sentido banearlas. El rango de Docker
+    # (172.16/12) es CRITICO — sin el, un error de configuracion que haga ver al
+    # gateway como origen banearia el trafico interno del propio stack. Ya paso
+    # una version del honeypot con ese bug exacto (ver DOMAINSERV-130).
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"

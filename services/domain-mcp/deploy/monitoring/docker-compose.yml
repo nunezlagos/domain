@@ -36,7 +36,8 @@ services:
       - loki
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # sin default: un .env sin la variable dejaba Grafana con admin/admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?definir GRAFANA_ADMIN_PASSWORD en .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
@@ -44,8 +45,11 @@ services:
       - ./grafana-provisioning:/etc/grafana/provisioning:ro
     networks:
       - domain_internal
+    # DOMAINSERV-123: solo loopback. Sin TLS, publicarlo en 0.0.0.0 mandaba la
+    # password de admin en claro por internet. Acceso via tunel SSH:
+    #   ssh -L 3000:localhost:3000 domain-vps
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   # DOMAINSERV-81: Loki (agregación de logs) + Alloy (scrape de logs de Docker).
   loki:
@@ -61,30 +65,166 @@ services:
     expose:
       - "3100"
 
+  # DOMAINSERV-127: Alloy ya NO monta /var/run/docker.sock. El socket es el API
+  # completo del daemon: con un POST /containers/create se levanta un container
+  # privilegiado que monta / y se sale al host — montarlo era regalar root.
+  # Ahora se interpone HAProxy con allowlist de paths y POST deshabilitado.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    container_name: domain-socket-proxy
+    restart: unless-stopped
+    environment:
+      # habilita GET /containers/json (discovery.docker),
+      # /containers/<id>/json (inspect para detectar tty) y
+      # /containers/<id>/logs (el stream que sigue loki.source.docker)
+      CONTAINERS: "1"
+      # obligatorio y no evidente: discovery.docker envuelve el SD de Prometheus,
+      # que llama NetworkList para armar los labels de red. Si /networks da 403,
+      # el refresh devuelve error y el discovery entrega CERO targets
+      NETWORKS: "1"
+      # lo pide client.WithAPIVersionNegotiation() al construir el cliente
+      PING: "1"
+      # la imagen los trae en 1 por default y Alloy no los usa
+      EVENTS: "0"
+      VERSION: "0"
+      # sin esto el proxy no protege nada: POST /containers/create es la fuga
+      POST: "0"
+    volumes:
+      # el :ro es del bind mount, no del API: un socket montado read-only sigue
+      # aceptando POST. Lo que restringe de verdad es la allowlist + POST=0
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    # el entrypoint renderiza el config en /tmp y HAProxy escribe /run/haproxy.pid;
+    # sin estos dos tmpfs el container muere con exit 1
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    # red dedicada, NO domain_internal: ahi cualquier container comprometido
+    # (mcp, admin, caddy, postgres, minio) podria enumerar containers del host y
+    # leer los logs de todos los demas
+    networks:
+      - socket_proxy
+
   alloy:
     image: grafana/alloy:v1.5.0
     container_name: domain-alloy
     restart: unless-stopped
     depends_on:
-      - loki
+      loki:
+        condition: service_started
+      # si el proxy no responde /_ping, Alloy arranca sin poder descubrir nada
+      socket-proxy:
+        condition: service_healthy
     command:
       - run
       - /etc/alloy/config.alloy
       - --storage.path=/var/lib/alloy/data
     volumes:
       - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy-data:/var/lib/alloy/data
     networks:
       - domain_internal
+      - socket_proxy
+
+  # DOMAINSERV-124: motor de deteccion + threat intelligence comunitaria.
+  #
+  # ARRANCA EN MODO DETECCION: no hay bouncer instalado, asi que CrowdSec detecta,
+  # puntua y registra decisiones pero NO bloquea a nadie. Es deliberado — un
+  # auto-ban mal calibrado puede banear la IP del propio dueño y dejarlo sin
+  # acceso. El orden es: observar que HABRIA baneado, calibrar, allowlist de la IP
+  # de administracion, y solo entonces activar el enforcement.
+  #
+  # Para ver que detecto:
+  #   docker exec domain-crowdsec cscli alerts list
+  #   docker exec domain-crowdsec cscli decisions list
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.8
+    container_name: domain-crowdsec
+    restart: unless-stopped
+    depends_on:
+      - loki
+    environment:
+      # colecciones verificadas contra el hub (hub-cdn.crowdsec.net):
+      #   caddy                -> parsers del access log
+      #   http-dos             -> baneo por volumen de requests
+      #   http-cve             -> explotacion de CVEs conocidos
+      #   base-http-scenarios  -> escaneo, path traversal, fuzzing
+      COLLECTIONS: "crowdsecurity/caddy crowdsecurity/http-dos crowdsecurity/http-cve crowdsecurity/base-http-scenarios"
+      # sin esto el container reescribe acquis.yaml en cada arranque
+      DISABLE_ONLINE_API: "false"
+    volumes:
+      - ./crowdsec-acquis.yaml:/etc/crowdsec/acquis.d/loki.yaml:ro
+      - ./crowdsec-profiles.yaml:/etc/crowdsec/profiles.yaml:ro
+      - ./crowdsec-scenario-flood.yaml:/etc/crowdsec/scenarios/domain-flood.yaml:ro
+      - ./crowdsec-scenario-honeypot.yaml:/etc/crowdsec/scenarios/domain-honeypot.yaml:ro
+      - ./crowdsec-parser-honeypot.yaml:/etc/crowdsec/parsers/s01-parse/domain-honeypot.yaml:ro
+      # salvaguarda anti-autobaneo. NO va :ro — unban.sh allow-me la reescribe
+      # para agregar la IP del admin cuando cambia (ver DOMAINSERV-124)
+      - ./crowdsec-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/zz-domain-whitelist.yaml
+      - crowdsec-db:/var/lib/crowdsec/data
+      - crowdsec-config:/etc/crowdsec
+    networks:
+      - domain_internal
+    # la LAPI NO se publica a internet: solo loopback del host, para que un futuro
+    # bouncer o cscli desde el host puedan hablarle
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # DOMAINSERV-130: puertos señuelo. Ver honeypot.sh para la eleccion de puertos.
+  #
+  # network_mode: host NO es negociable acá, y la razon se verifico probando:
+  # publicando puertos con `ports:` el NAT de Docker enmascara el origen y socat
+  # ve la IP del GATEWAY (172.16.0.1), no la del atacante. Un honeypot asi
+  # banearia al gateway de Docker en cada hit — peor que no tenerlo, porque
+  # cortaria trafico legitimo. Con host networking llega la IP real.
+  #
+  # El trade-off se acepta con los ojos abiertos: el container comparte el stack
+  # de red del host. Se compensa con que no tiene secretos, no habla con ningun
+  # otro servicio, su unico output es stdout, y va con read_only + cap_drop ALL +
+  # no-new-privileges. Si alguien lograra salirse de socat, no tiene desde donde
+  # escalar ni que robar.
+  #
+  # Los puertos que abre quedan visibles en 0.0.0.0 a proposito: son la carnada.
+  # Hay que declararlos en SECURITY_ALLOWED_PUBLIC_PORTS del .env o install.sh
+  # aborta el deploy (y hace bien: sin declarar, son indistinguibles de un error).
+  honeypot:
+    image: alpine/socat:1.8.0.0
+    container_name: domain-honeypot
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/honeypot.sh"]
+    volumes:
+      - ./honeypot.sh:/honeypot.sh:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: host
 
 volumes:
   prometheus-data:
   grafana-data:
   loki-data:
   alloy-data:
+  crowdsec-db:
+  crowdsec-config:
 
 networks:
   domain_internal:
     name: domain_internal
     external: true
+  # DOMAINSERV-127: solo alloy + socket-proxy. internal:true = sin gateway,
+  # el proxy no necesita ninguna salida a internet
+  socket_proxy:
+    name: domain_socket_proxy
+    internal: true

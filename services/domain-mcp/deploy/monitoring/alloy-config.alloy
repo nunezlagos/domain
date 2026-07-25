@@ -1,10 +1,16 @@
 // DOMAINSERV-81: Grafana Alloy scrapea logs de los contenedores Docker y los
 // empuja a Loki. Labels de baja cardinalidad (container, env) — alinea con la
 // policy low-cardinality-metrics. Config validada con context7 /grafana/loki.
+//
+// DOMAINSERV-127: el host es el socket-proxy por TCP, no el socket del host.
+// TIENE que ser tcp:// y no http://: con http/https Alloy arma un http.Client
+// con Timeout = refresh_interval (docker.go:300-309 de v1.5.0) y eso corta el
+// stream de /containers/<id>/logs?follow=1 cada 10s. Con tcp:// usa el
+// transporte del cliente de Docker, sin timeout.
 
-// descubre contenedores vía el socket de Docker
+// descubre contenedores vía el socket-proxy (GET /containers/json + /networks)
 discovery.docker "domain" {
-	host             = "unix:///var/run/docker.sock"
+	host             = "tcp://socket-proxy:2375"
 	refresh_interval = "10s"
 }
 
@@ -20,7 +26,7 @@ discovery.relabel "domain" {
 
 // colecta los logs de los contenedores descubiertos
 loki.source.docker "domain" {
-	host             = "unix:///var/run/docker.sock"
+	host             = "tcp://socket-proxy:2375"
 	targets          = discovery.docker.domain.targets
 	forward_to       = [loki.process.domain.receiver]
 	relabel_rules    = discovery.relabel.domain.rules

@@ -1,0 +1,26 @@
+# DOMAINSERV-130: tocar un puerto señuelo = baneo inmediato.
+#
+# `type: trigger` dispara con UN solo evento, sin umbral ni ventana. Es lo correcto
+# acá: no existe una razon legitima para conectarse a un puerto señuelo de este
+# host, asi que no hay falsos positivos que amortiguar. Un toque, un ban.
+#
+# Contraste con domain/http-flood-extremo, que es `leaky` con capacity 500 porque
+# ahi si hay trafico legitimo del cual distinguirse.
+#
+# Ban de 24h (ver crowdsec-profiles.yaml), mas largo que el del flood justamente
+# porque la señal es inequivoca.
+type: trigger
+name: domain/honeypot-puerto-tocado
+description: "Conexion a un puerto señuelo: sin explicacion legitima posible"
+filter: "evt.Meta.service == 'honeypot'"
+groupby: "evt.Meta.source_ip"
+blackhole: 1m
+labels:
+  service: honeypot
+  confidence: 5
+  spoofable: 0
+  behavior: "tcp:scan"
+  label: "Puerto señuelo tocado"
+  classification:
+    - attack.T1595
+  remediation: true

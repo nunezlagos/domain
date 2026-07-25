@@ -1,0 +1,33 @@
+# DOMAINSERV-124/130: escenario de volumen descomunal.
+#
+# Decision del usuario (2026-07-24): no banear en general, solo volumen
+# descomunal — del orden de 500 peticiones en 1 minuto desde una misma IP.
+#
+# El umbral es deliberadamente altisimo. Un humano no lo alcanza y un cliente MCP
+# legitimo tampoco: 500 req/min son 8 sostenidas por segundo. Eso reduce a casi
+# cero el riesgo de banear al propio dueño, que es el motivo por el que el resto
+# de los escenarios se quedan en modo alerta (ver crowdsec-profiles.yaml).
+#
+# Calculo del leaky bucket: 500 req / 60 s = 8.33 req/s. Para que el balde
+# desborde solo POR ENCIMA de esa tasa, drena 1 evento cada 120 ms (1/8.33).
+# Con capacity 500, hace falta superar 500 en la ventana para gatillar.
+type: leaky
+name: domain/http-flood-extremo
+description: "Volumen descomunal de peticiones HTTP desde una sola IP (>500/min)"
+filter: "evt.Meta.service == 'http'"
+groupby: "evt.Meta.source_ip"
+capacity: 500
+leakspeed: "120ms"
+# el balde se descarta 5 min despues del ultimo evento: evita alertas duplicadas
+# de una IP que sigue goteando
+blackhole: 5m
+labels:
+  service: http
+  confidence: 3
+  spoofable: 0
+  behavior: "http:dos"
+  label: "Flood HTTP extremo (>500 req/min)"
+  classification:
+    - attack.T1498
+  # sin remediation:true el profile de ban no lo toma
+  remediation: true

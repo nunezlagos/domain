@@ -1,0 +1,34 @@
+# DOMAINSERV-130: parser de los hits del honeypot.
+#
+# honeypot.sh usa `socat -d -d`, que emite por cada conexion aceptada:
+#   2026/07/24 20:08:39 socat[446653] N accepting connection from AF=2 1.2.3.4:54321 on AF=2 10.0.0.5:4444
+#
+# Formato verificado con una conexion real, no supuesto.
+#
+# Se saca la IP de origen y el puerto señuelo que toco. La doc de CrowdSec es
+# explicita en que la IP hay que poblarla en evt.Meta.source_ip Y en
+# evt.Parsed.source_ip — con una sola de las dos el escenario no agrupa.
+#
+# El filtro usa evt.Line.Labels.type, que es el label declarado en el acquis
+# (source: loki); evt.Parsed.program aplicaria a syslog, no a este caso.
+onsuccess: next_stage
+name: domain/honeypot-logs
+description: "Extrae IP de origen y puerto señuelo de los hits del honeypot"
+filter: "evt.Line.Labels.type == 'honeypot'"
+pattern_syntax:
+  HPADDR: "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
+  HPPORT: "[0-9]+"
+grok:
+  pattern: "accepting connection from AF=%{HPPORT} %{HPADDR:src_ip}:%{HPPORT} on AF=%{HPPORT} %{HPADDR}:%{HPPORT:dst_port}"
+  apply_on: message
+statics:
+  - meta: source_ip
+    expression: "evt.Parsed.src_ip"
+  - parsed: source_ip
+    expression: "evt.Parsed.src_ip"
+  - meta: honeypot_port
+    expression: "evt.Parsed.dst_port"
+  - meta: service
+    value: honeypot
+  - meta: log_type
+    value: honeypot_hit

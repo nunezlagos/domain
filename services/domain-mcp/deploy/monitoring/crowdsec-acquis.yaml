@@ -1,0 +1,31 @@
+# DOMAINSERV-124: de dónde lee CrowdSec.
+#
+# Se lee de LOKI, no del socket de Docker, a propósito. Alloy ya scrapea todos los
+# containers y los empuja a Loki (DOMAINSERV-81), así que la tubería existe y
+# funciona. Montar /var/run/docker.sock en CrowdSec repetiría el problema de
+# DOMAINSERV-127: un segundo container con acceso equivalente a root en el host.
+#
+#   Caddy (stdout JSON) -> Alloy -> Loki -> CrowdSec
+#
+# Contrapartida asumida: si Loki se cae, CrowdSec deja de ver eventos. Es
+# aceptable — degrada la detección, no rompe el servicio, y alinea con la policy
+# llm-nunca-en-camino-caliente (nadie espera a que esto responda).
+#
+# El label `container` lo pone Alloy desde __meta_docker_container_name (ver
+# alloy-config.alloy). El label `type: caddy` es lo que hace que la colección
+# crowdsecurity/caddy aplique sus parsers.
+source: loki
+url: http://loki:3100/
+query: |
+  {container="domain-caddy"}
+labels:
+  type: caddy
+---
+# DOMAINSERV-130: hits del honeypot. El label `type: honeypot` es lo que engancha
+# el parser domain/honeypot-logs, que a su vez alimenta el escenario que banea.
+source: loki
+url: http://loki:3100/
+query: |
+  {container="domain-honeypot"}
+labels:
+  type: honeypot

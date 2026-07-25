@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -462,6 +463,32 @@ func injectPreparedContext(userPrompt, prep string) string {
 // agent-protocol, y cualquier policy que crezca a futuro queda acotada sola.
 const maxInlinePolicyBody = 4000
 
+// maxRulesBlockBody: presupuesto TOTAL de bodies embebidos en el rulesBlock.
+//
+// maxInlinePolicyBody acota cada policy por separado, pero no acota CUÁNTAS hay, y esa
+// era la dimensión que crecía sin techo hasta que el payload de domain_orchestrate
+// volvió a exceder el límite del tool result (58.532 chars medidos, DOMAINSERV-142). La
+// dieta de DOMAINSERV-3 atacó la multiplicación (11 copias del rulesBlock) y la de
+// DOMAINSERV-108 el tamaño individual de las platform; ninguna acotó el total.
+//
+// Desglose REAL del SystemPrompt del step 0, medido 2026-07-25 (no estimado):
+//
+//	project_policies         ~20.000   8 policies, avg 2.5KB — ensayos de arquitectura
+//	platform_policies         13.806   24 policies, avg 575B — reglas duras y densas
+//	agent-protocol           (17.700)  única que superaba maxInlinePolicyBody → stub
+//	template base del agente  1.1-4.8K  según la fase (sdd-4r es la más grande)
+//	                         --------
+//	                          ~38.600   ≈ los 37.853 medidos en prod
+//
+// Corrige de paso al comentario de DOMAINSERV-108, que asumía "~15KB del template
+// base": el template más grande son 4.811 bytes. El peso estaba en las policies, no en
+// el template — de ahí que acotar el rulesBlock sea la palanca correcta.
+//
+// El presupuesto deja el SystemPrompt en ~21KB y el payload completo en ~33KB, con
+// margen para un raw_text del doble que el del repro (medido en
+// orchestrate_payload_test.go).
+const maxRulesBlockBody = 16000
+
 // policyBodyStub reemplaza un body extenso por un puntero a su texto vivo.
 func policyBodyStub(slug string) string {
 	return `(Body extenso no re-embebido en el rulesBlock. Texto vivo: domain_policy_get(slug="` + slug + `").)`
@@ -528,8 +555,29 @@ func (s *Service) buildRulesBlock(ctx context.Context, projectID uuid.UUID, stub
 }
 
 // formatRulesBlock arma el markdown de reglas. stubLarge=true stubbea las
-// platform_policies extensas (steps 1..N, DOMAINSERV-3); stubLarge=false las
-// embebe verbatim (step 0, DOMAINSERV-24). Las project_policies van siempre verbatim.
+// platform_policies extensas (DOMAINSERV-3); stubLarge=false las embebe verbatim.
+//
+// Además acota el TOTAL de bodies embebidos a maxRulesBlockBody (DOMAINSERV-142). Lo
+// que no entra en el presupuesto se stubbea igual que una policy extensa: queda el
+// nombre y el puntero a domain_policy_get.
+//
+// El presupuesto se reparte de MENOR A MAYOR body, no por grupo. Los números reales
+// justifican el criterio: las platform son 24 reglas duras de ~575 bytes promedio y las
+// project 8 ensayos de arquitectura de ~2.5KB. A igual presupuesto, entran muchas más
+// reglas accionables priorizando las chicas, y lo que queda afuera es justamente el
+// contenido largo de referencia — que es para lo que existe domain_policy_get.
+//
+// Esto CAMBIA el invariante anterior ("las project_policies van siempre verbatim",
+// DOMAINSERV-3): una project_policy larga puede quedar stubbeada si el presupuesto ya
+// se gastó. Es deliberado — ese invariante era justamente la puerta por la que el
+// rulesBlock crecía sin techo, y una project_policy chica sigue entrando siempre.
+//
+// El orden de SALIDA sigue siendo plataforma-luego-proyecto: el reparto decide QUÉ va
+// verbatim, no en qué orden se escribe, así que el shape no le cambia al consumidor.
+//
+// La decisión es determinística: mismas policies en el mismo orden ⇒ mismo bloque. El
+// empate por tamaño se rompe con el orden de entrada, que ya viene estable de
+// loadRulePolicies (ORDER BY kind, slug).
 func formatRulesBlock(platform, project []rulePolicy, stubLarge bool) string {
 	overridden := make(map[string]bool)
 	for _, p := range project {
@@ -538,25 +586,56 @@ func formatRulesBlock(platform, project []rulePolicy, stubLarge bool) string {
 		}
 	}
 
-	var b strings.Builder
-	write := func(p rulePolicy, canStub bool) {
-		b.WriteString("\n### ")
-		b.WriteString(p.name)
-		b.WriteString("\n")
-		if canStub && len(p.body) > maxInlinePolicyBody {
-			b.WriteString(policyBodyStub(p.slug))
-		} else {
-			b.WriteString(p.body)
-		}
-		b.WriteString("\n")
+	// entradas que realmente se escriben, en orden de salida
+	type entry struct {
+		p      rulePolicy
+		inline bool
 	}
+	entries := make([]entry, 0, len(platform)+len(project))
 	for _, p := range platform {
 		if !overridden[p.kind] {
-			write(p, stubLarge)
+			// una platform extensa se stubbea por tamaño individual y NO consume
+			// presupuesto: ya está fuera antes de repartir
+			entries = append(entries, entry{p: p, inline: !(stubLarge && len(p.body) > maxInlinePolicyBody)})
 		}
 	}
 	for _, p := range project {
-		write(p, false)
+		entries = append(entries, entry{p: p, inline: true})
+	}
+
+	// reparto del presupuesto de menor a mayor body. Una policy que no entra NO corta
+	// el reparto: se saltea y se sigue con las siguientes (que son más grandes, así que
+	// en la práctica el corte es limpio, pero el guard evita depender de eso).
+	orden := make([]int, 0, len(entries))
+	for i := range entries {
+		orden = append(orden, i)
+	}
+	sort.SliceStable(orden, func(a, b int) bool {
+		return len(entries[orden[a]].p.body) < len(entries[orden[b]].p.body)
+	})
+	budget := maxRulesBlockBody
+	for _, i := range orden {
+		if !entries[i].inline {
+			continue
+		}
+		if len(entries[i].p.body) > budget {
+			entries[i].inline = false
+			continue
+		}
+		budget -= len(entries[i].p.body)
+	}
+
+	var b strings.Builder
+	for _, e := range entries {
+		b.WriteString("\n### ")
+		b.WriteString(e.p.name)
+		b.WriteString("\n")
+		if e.inline {
+			b.WriteString(e.p.body)
+		} else {
+			b.WriteString(policyBodyStub(e.p.slug))
+		}
+		b.WriteString("\n")
 	}
 	if b.Len() == 0 {
 		return ""

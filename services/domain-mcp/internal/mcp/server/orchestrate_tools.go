@@ -204,6 +204,26 @@ func trimOrchestrateForTransport(res *orchsvc.OrchestrateResult) *orchsvc.Orches
 		steps[i].SystemPrompt = ""
 		steps[i].UserPrompt = ""
 	}
+	// DOMAINSERV-142: snapshot_prompt y steps[0].user_prompt son el MISMO string
+	// (service.go copia el segundo en el primero), ~5.7k de duplicación pura en un
+	// payload que ya excedía el límite del tool result. Se manda una sola vez.
+	//
+	// El que se suelta es snapshot_prompt, y la elección es por evidencia del contrato
+	// (mcp-response-shape-contract): la descripción de la tool le promete al cliente
+	// "plan con los steps (system_prompt + user_prompt + suggested_saves) que el
+	// cliente IDE debe ejecutar en orden" — steps[].user_prompt ES el contrato
+	// documentado; snapshot_prompt no se menciona en ninguna parte. Soltar el step 0
+	// habría dejado la primera fase sin prompt por el campo que el cliente sí tiene
+	// documentado.
+	//
+	// El recorte es solo de TRANSPORTE: el OrchestrateResult del service conserva los
+	// dos campos, así que el worker async y promptrouter no se enteran. Consumidores
+	// verificados, no asumidos: hooks del installer (session-start, user-prompt, stop,
+	// post-orchestrate, pre-edit), prompts seeded (first-response, agent-protocol) y
+	// dashboard admin — cero usos de snapshot_prompt fuera del propio service.
+	if len(steps) > 0 && out.SnapshotPrompt == steps[0].UserPrompt {
+		out.SnapshotPrompt = ""
+	}
 	plan.Steps = steps
 	out.Plan = &plan
 	return &out

@@ -2,15 +2,23 @@
 # DOMAINSERV-131 fase 1: el fingerprint de escaneo registra METADATOS del ataque
 # (metodo, content-type, longitud declarada) y NUNCA el contenido del body.
 #
-# Corre Caddy real (caddy:2-alpine) contra el Caddyfile del repo, con limite de
-# memoria, y verifica 4 invariantes + 2 controles negativos (sabotaje).
+# Corre Caddy real contra el Caddyfile del repo, con limite de memoria, y verifica
+# 4 invariantes + 2 controles negativos (sabotaje).
+#
+# DOMAINSERV-124: la imagen ya NO es caddy:2-alpine. El Caddyfile usa la directiva
+# `crowdsec`, que solo existe en el binario con plugins de ./Dockerfile — con la
+# imagen oficial el adapter falla y este test no probaria nada.
+#
+# El bouncer no encuentra su LAPI en la red del test, y eso es CORRECTO: falla
+# abierto por diseño, asi que Caddy sirve igual. Que este test pase es evidencia
+# de que el fail-open funciona.
 #
 # Uso: ./caddyfile-scan-fingerprint_test.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CADDYFILE="$SCRIPT_DIR/Caddyfile"
-IMAGE="caddy:2-alpine"
+IMAGE="domain-caddy:plugins"
 PORT="${CADDY_TEST_PORT:-18131}"
 NET="scanfp-net-$$"
 CADDY_NAME="scanfp-caddy-$$"
@@ -34,19 +42,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# el bloque de opciones globales tiene que ser el PRIMER bloque: se antepone
-# aca (nunca en el repo) para que el test no dispare ACME contra quiensabe.cl
+# auto_https off evita que el test dispare ACME contra quiensabe.cl. Se INYECTA
+# DENTRO del bloque global del repo (DOMAINSERV-124 agrego uno para el bouncer) y
+# no se antepone otro: Caddy exige que el bloque global sea el PRIMERO y ademas
+# unico, asi que dos bloques rompen el adapter.
+#
+# `0,/^{$/` limita la sustitucion a la PRIMERA linea que sea exactamente `{` — la
+# apertura del bloque global. Sin ese rango, sed inyectaria en cada bloque.
+inject_auto_https_off() {
+  sed '0,/^{$/s/^{$/{\n\tauto_https off/' "$1"
+}
+
 prepare_config() {
   local sabotage="$1" out="$WORK/Caddyfile.$1"
-  printf '{\n  auto_https off\n}\n' >"$out"
+  : >"$out"
   case "$sabotage" in
-    none) cat "$CADDYFILE" >>"$out" ;;
+    none) inject_auto_https_off "$CADDYFILE" >>"$out" ;;
     # sabotaje 1: quita el prefijo `<` -> el append pasa a late y abort lo borra
-    late) sed 's/log_append <scan_/log_append scan_/' "$CADDYFILE" >>"$out" ;;
+    late) inject_auto_https_off "$CADDYFILE" | sed 's/log_append <scan_/log_append scan_/' >>"$out" ;;
     # sabotaje 2: archiva el body (lo que la fase 1 original pedia y viola la policy)
     body)
-      sed '/log_append <scan_content_length/a\    log_append <scan_body {http.request.body}' \
-        "$CADDYFILE" >>"$out"
+      inject_auto_https_off "$CADDYFILE" \
+        | sed '/log_append <scan_content_length/a\    log_append <scan_body {http.request.body}' >>"$out"
       ;;
     *) log "modo de sabotaje desconocido: $sabotage"; exit 2 ;;
   esac
@@ -72,8 +89,12 @@ start_stack() {
   docker network create "$NET" >/dev/null
   docker run --rm -d --name "$STUB_NAME" --network "$NET" --network-alias domain-mcp \
     -v "$WORK/stub.Caddyfile:/etc/caddy/Caddyfile:ro" "$IMAGE" >/dev/null
+  # la key NO puede ir vacia: el modulo crowdsec rechaza "" y Caddy no arranca
+  # ("crowdsec API key must not be empty"). Es un valor cualquiera — no hay LAPI
+  # en esta red y el bouncer falla abierto, que es justo lo que se quiere aca.
   docker run --rm --name "$CADDY_NAME" --network "$NET" \
     --memory "$MEM_LIMIT" --memory-swap "$MEM_LIMIT" -p "$PORT:80" \
+    -e CROWDSEC_BOUNCER_API_KEY=key-de-prueba-sin-lapi \
     -v "$cfg:/etc/caddy/Caddyfile:ro" "$IMAGE" >"$out" 2>&1 &
   local i
   for i in $(seq 1 40); do

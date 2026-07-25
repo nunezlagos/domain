@@ -1,13 +1,60 @@
+# DOMAINSERV-122: el access log alimenta a CrowdSec (baneo) y a Loki (forense).
+# Sin esto no hay registro de accesos: ningun ataque a la capa web queda visible.
+# Caddy redacta Authorization y Cookie por defecto; el filter explicito es
+# defensa en profundidad para que la API key nunca llegue a Loki.
+(accesslog) {
+  log {
+    format filter {
+      wrap json
+      request>headers>Authorization delete
+      request>headers>Cookie delete
+    }
+    output stdout
+  }
+}
+
 # quiensabe.cl - Astro SSR reverse proxy (qs-app:4323, red domain_internal).
 # Cert LE via HTTP-01 automatico (storage en /data/caddy, volume domain_caddy_data).
 # SNI ordering: este block va ANTES del catch-all :80 para que quiensabe.cl
 # no caiga al dashboard domain-admin. El puerto 443 ya esta publicado en
 # docker-compose.yml (443:443).
 quiensabe.cl, www.quiensabe.cl {
+    import accesslog
     reverse_proxy qs-app:4323
 }
 
 :80 {
+  import accesslog
+
+  # DOMAINSERV-130: rate limiting — LISTO PERO NO ACTIVO.
+  #
+  # Requiere la imagen con plugins de services/caddy/Dockerfile; con caddy:2-alpine
+  # esta directiva NO existe y Caddy se niega a arrancar. Descomentar SOLO despues
+  # de promover esa imagen y correr `caddy validate` contra ella.
+  #
+  # El umbral acompaña la decision del usuario de banear solo volumen descomunal:
+  # 500 peticiones por minuto por IP, el mismo numero que el escenario
+  # domain/http-flood-extremo de CrowdSec. Este corta en el borde (429) y CrowdSec
+  # banea al reincidente — se complementan, no se pisan.
+  #
+  # rate_limit {
+  #   zone por_ip {
+  #     key    {remote_host}
+  #     events 500
+  #     window 1m
+  #   }
+  # }
+
+  # DOMAINSERV-130: rutas que solo piden bots y escaneres. `abort` cierra la
+  # conexion sin responder: no gasta backend y cada match queda en el access log
+  # como senal limpia de escaneo para alimentar el baneo automatico.
+  # Va PRIMERO a proposito: los bloques handle se evaluan en orden de escritura y
+  # son mutuamente exclusivos, asi que este gana antes que el catch-all.
+  @scanners path /.env /.env.* /wp-login.php /wp-admin* /xmlrpc.php /admin.php /phpmyadmin* /phpMyAdmin* /.git/* /.aws/* /config.json /server-status
+  handle @scanners {
+    abort
+  }
+
   handle /api/* {
     reverse_proxy domain-mcp:8000
   }
@@ -29,5 +76,9 @@ quiensabe.cl, www.quiensabe.cl {
   header {
     X-Content-Type-Options "nosniff"
     Referrer-Policy "strict-origin-when-cross-origin"
+    # el dashboard no se embebe en ningun sitio: clickjacking innecesario
+    X-Frame-Options "DENY"
+    # no revelar la version del servidor a los escaneres
+    -Server
   }
 }

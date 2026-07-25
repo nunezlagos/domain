@@ -18,6 +18,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    # DOMAINSERV-131: limite de memoria. Sin esto un POST grande a Caddy puede
+    # llevarse la RAM del HOST, que es el mismo que corre las 4 bases de datos de
+    # clientes. Verificado: un body de 300MB con 512m de limite mata al container
+    # (OOMKilled, exit 137) — con limite muere Caddy y se reinicia solo; sin
+    # limite el OOM killer del kernel elige victima y puede tocarle a Postgres.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     logging:
       driver: json-file
       options:

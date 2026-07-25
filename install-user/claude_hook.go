@@ -33,8 +33,12 @@ var claudeHooks = []claudeHookSpec{
 	// REQ-54 issue-54.7: gate SDD-para-código. PostToolUse marca flow activo
 	// cuando el agente orquesta; PreToolUse intercepta ediciones sin flow
 	// (ask en modo normal, deny en modos automáticos).
+	// DOMAINSERV-115: flow_status y flow_grant_token TIENEN que estar en el
+	// matcher. El token dura 30 min y sin ellas no hay forma de renovar el
+	// marker: el flow sigue vivo server-side pero el gate deniega, y la única
+	// salida era re-orquestar — que sdd-auto-trigger prohíbe.
 	{Event: "PostToolUse", Script: "domain-post-orchestrate.sh", Timeout: 10,
-		Matcher: "mcp__domain-mcp__domain_(orchestrate|orchestrate_phase_result|orchestrate_confirm|flow_cancel)"},
+		Matcher: "mcp__domain-mcp__domain_(orchestrate|orchestrate_phase_result|orchestrate_confirm|flow_cancel|flow_status|flow_grant_token)"},
 	{Event: "PreToolUse", Script: "domain-pre-edit.sh", Timeout: 10,
 		Matcher: "Edit|Write|NotebookEdit|Bash"},
 	// PostToolUse tras Bash: captura el resultado de correr tests/suite para

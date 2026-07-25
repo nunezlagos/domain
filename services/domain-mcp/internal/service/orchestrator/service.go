@@ -456,9 +456,10 @@ func injectPreparedContext(userPrompt, prep string) string {
 // maxInlinePolicyBody: las platform_policies con body más largo que esto no se
 // re-embeben verbatim en el rulesBlock (DOMAINSERV-3): se reemplazan por un
 // puntero a domain_policy_get para no inflar el SystemPrompt de cada fase por
-// encima del límite del tool result de domain_orchestrate. Solo aplica a
-// platform; las project_policies van SIEMPRE verbatim (son las convenciones
-// específicas que el subagente más necesita inline). El umbral queda entre la
+// encima del límite del tool result de domain_orchestrate. Este umbral INDIVIDUAL
+// solo aplica a platform: una project_policy no se stubbea por su propio tamaño,
+// pero desde DOMAINSERV-142 puede quedar afuera si el presupuesto TOTAL del bloque
+// ya se gastó (ver formatRulesBlock). El umbral queda entre la
 // 2da policy más grande (~1.9KB) y agent-protocol (~17.7KB): hoy solo se stubbea
 // agent-protocol, y cualquier policy que crezca a futuro queda acotada sola.
 const maxInlinePolicyBody = 4000

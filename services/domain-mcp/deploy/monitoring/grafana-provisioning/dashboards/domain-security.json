@@ -108,7 +108,7 @@
       "type": "logs",
       "title": "Log de CrowdSec (Loki)",
       "gridPos": { "h": 7, "w": 6, "x": 18, "y": 21 },
-      "datasource": { "type": "loki" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{ "expr": "{container=\"domain-crowdsec\"}", "refId": "A" }]
     }
   ]

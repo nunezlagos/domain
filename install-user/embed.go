@@ -1,6 +1,17 @@
 package main
 
-import _ "embed"
+import (
+	"embed"
+	_ "embed"
+)
+
+// agentsDir es la raíz del catálogo de agentes dentro del binario. DOMAINSERV-137: se
+// embebe el DIRECTORIO en vez de cada archivo por nombre, así agregar un agente al
+// catálogo es agregar un archivo y no editar el installer.
+const agentsDir = "templates/agents"
+
+//go:embed templates/agents
+var agentsFS embed.FS
 
 //go:embed templates/skill-domain/SKILL.md
 var skillDomainMD []byte

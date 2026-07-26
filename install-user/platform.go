@@ -65,9 +65,11 @@ func (p Platform) LocalAppData() string {
 
 // Paths agrupa las rutas de configs MCP de cada cliente para esta plataforma.
 type Paths struct {
-	GlobalEnv        string // ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env (Windows)
-	GlobalSkillPath  string // ~/.claude/skills/domain/SKILL.md (todos los OS)
-	GlobalAgentPath  string // ~/.claude/agents/domain-memory.md
+	GlobalEnv       string // ~/.config/domain/install.env (Linux/macOS) o %APPDATA%\domain\install.env (Windows)
+	GlobalSkillPath string // ~/.claude/skills/domain/SKILL.md (todos los OS)
+	// DOMAINSERV-137: directorio, no archivo — el catálogo tiene N agentes y el installer
+	// ya no nombra ninguno.
+	GlobalAgentsDir  string // ~/.claude/agents/
 	ClaudeCodeMCP    string // ~/.claude.json (config global real que lee Claude Code; top-level "mcpServers")
 	OpencodeMCP      string // ~/.config/opencode/opencode.json
 	CursorMCP        string // ~/.cursor/mcp.json
@@ -76,7 +78,14 @@ type Paths struct {
 	ClaudeDesktopMCP string // macOS: ~/Library/Application Support/Claude/claude_desktop_config.json; linux: ~/.config/Claude/...; windows: %APPDATA%\Claude\...
 	OpencodeDir      string
 	OpencodeSkillsLn string // ~/.config/opencode/skills/domain/SKILL.md (symlink al global)
-	OpencodeAgentsLn string
+	// Los agentes de OpenCode NO son symlinks: cada harness recibe su propio template
+	// porque los esquemas de frontmatter son incompatibles (ver embed.go).
+	OpencodeAgentsDir string // ~/.config/opencode/agents/
+	// AgentHooksDir es donde viven los guards PreToolUse que un agente declare, junto a
+	// los demás hooks de domain. El frontmatter no puede referenciarlos con ruta relativa:
+	// se resuelve contra el cwd, así que el guard solo se encontraría si el proyecto actual
+	// casualmente lo tuviera — y un guard que no se encuentra no bloquea nada.
+	AgentHooksDir string // ~/.local/share/domain/hooks/
 }
 
 func (p Platform) Paths() Paths {
@@ -86,10 +95,16 @@ func (p Platform) Paths() Paths {
 		configDir = p.AppData() // %APPDATA% sirve como "config dir" en Windows
 	}
 
+	dataDir := filepath.Join(home, ".local", "share")
+	if p.OS == "windows" {
+		dataDir = p.AppData()
+	}
+
 	out := Paths{
 		GlobalEnv:       filepath.Join(configDir, "domain", "install.env"),
 		GlobalSkillPath: filepath.Join(home, ".claude", "skills", "domain", "SKILL.md"),
-		GlobalAgentPath: filepath.Join(home, ".claude", "agents", "domain-memory.md"),
+		GlobalAgentsDir: filepath.Join(home, ".claude", "agents"),
+		AgentHooksDir:   filepath.Join(dataDir, "domain", "hooks"),
 		ClaudeCodeMCP:   filepath.Join(home, ".claude.json"),
 		OpencodeDir:     filepath.Join(configDir, "opencode"),
 		OpencodeMCP:     filepath.Join(configDir, "opencode", "opencode.json"),
@@ -97,7 +112,7 @@ func (p Platform) Paths() Paths {
 		ContinueMCP:     filepath.Join(home, ".continue", "config.json"),
 	}
 	out.OpencodeSkillsLn = filepath.Join(out.OpencodeDir, "skills", "domain", "SKILL.md")
-	out.OpencodeAgentsLn = filepath.Join(out.OpencodeDir, "agents", "domain-memory.md")
+	out.OpencodeAgentsDir = filepath.Join(out.OpencodeDir, "agents")
 
 	switch p.OS {
 	case "darwin":

@@ -297,13 +297,14 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		return
 	}
 
-	step("Plantando skill + subagent globales")
-	if err := installGlobalAssets(paths); err != nil {
+	step("Plantando skill + catálogo de agentes globales")
+	res, err := installGlobalAssets(paths)
+	if err != nil {
 		failL("install global assets: " + err.Error())
 		os.Exit(1)
 	}
 	ok("skill: " + paths.GlobalSkillPath)
-	ok("agent: " + paths.GlobalAgentPath)
+	reportarAgentes(paths, res)
 
 	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
 	step("Escribiendo precedencia global de domain")
@@ -419,7 +420,7 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 
 `,
 		cGreen, cBold, cReset, opts.URL, opts.Email,
-		paths.GlobalSkillPath, paths.GlobalAgentPath)
+		paths.GlobalSkillPath, paths.GlobalAgentsDir)
 }
 
 // runBootstrapGuided: el operador ya generó la key con `domain bootstrap`

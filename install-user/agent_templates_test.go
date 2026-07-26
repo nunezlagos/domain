@@ -13,6 +13,23 @@ import (
 // fondo: el MISMO archivo se instalaba en Claude Code y —por symlink— en OpenCode, y sus
 // esquemas de frontmatter son incompatibles. De ahí el split en dos templates.
 
+// DOMAINSERV-137: los templates salen del catálogo, no de un embed por nombre. Así estos
+// tests siguen la misma fuente que el installer y no pueden divergir de ella.
+func tplDe(t *testing.T, slug string) agentTemplate {
+	t.Helper()
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+	for _, a := range cat {
+		if a.slug == slug {
+			return a
+		}
+	}
+	t.Fatalf("el catálogo no trae %q", slug)
+	return agentTemplate{}
+}
+
 // frontmatter devuelve el bloque YAML entre los dos '---' de un template.
 func frontmatter(t *testing.T, tpl []byte) string {
 	t.Helper()
@@ -28,7 +45,7 @@ func frontmatter(t *testing.T, tpl []byte) string {
 }
 
 func TestAgentTemplate_ClaudeCode_AcotaModeloEffortYTools(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").claude)
 
 	for _, campo := range []string{"name:", "description:", "model:", "effort:", "tools:"} {
 		if !strings.Contains(fm, campo) {
@@ -52,7 +69,7 @@ func TestAgentTemplate_ClaudeCode_AcotaModeloEffortYTools(t *testing.T) {
 // El agente se declara read-only. Antes eso era una frase en el body ("No mem_save /
 // knowledge_save"), que no es un constraint: tenía capacidad de escritura real.
 func TestAgentTemplate_ClaudeCode_SinToolsDeEscritura(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").claude)
 
 	for _, escritura := range []string{
 		"domain_mem_save", "domain_knowledge_save", "Write", "Edit", "NotebookEdit",
@@ -71,7 +88,7 @@ func TestAgentTemplate_ClaudeCode_SinToolsDeEscritura(t *testing.T) {
 // están deferred. Sin ToolSearch el agente no puede cargar el schema de domain_mem_search
 // y no puede invocar nada — se queda mudo sin error visible.
 func TestAgentTemplate_ClaudeCode_IncluyeToolSearch(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").claude)
 
 	if !strings.Contains(lineaDe(fm, "tools:"), "ToolSearch") {
 		t.Error("ToolSearch debe estar en la allowlist: los schemas MCP están deferred")
@@ -81,7 +98,7 @@ func TestAgentTemplate_ClaudeCode_IncluyeToolSearch(t *testing.T) {
 // Los nombres de las tools MCP tienen que ser los EXACTOS: si una entrada de `tools` no
 // resuelve, el subagente falla al spawnear con un error nombrando las entradas.
 func TestAgentTemplate_ClaudeCode_NombresMCPCompletos(t *testing.T) {
-	linea := lineaDe(frontmatter(t, agentDomainMemoryMD), "tools:")
+	linea := lineaDe(frontmatter(t, tplDe(t, "domain-memory").claude), "tools:")
 
 	for _, tool := range []string{
 		"mcp__domain-mcp__domain_mem_search",
@@ -99,7 +116,7 @@ func TestAgentTemplate_ClaudeCode_NombresMCPCompletos(t *testing.T) {
 // `permission`, no por `tools`. Un `model: haiku` pelado es un valor MALFORMADO de un
 // campo que OpenCode sí conoce — no un campo desconocido que pueda ignorar.
 func TestAgentTemplate_Opencode_UsaSuPropioEsquema(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryOpencodeMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").opencode)
 
 	if !strings.Contains(fm, "mode: subagent") {
 		t.Error("falta mode: subagent")
@@ -115,7 +132,7 @@ func TestAgentTemplate_Opencode_UsaSuPropioEsquema(t *testing.T) {
 // El corazón del split: ninguna clave exclusiva de Claude Code puede viajar en el
 // template de OpenCode, ni al revés.
 func TestAgentTemplate_Opencode_SinClavesDeClaudeCode(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryOpencodeMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").opencode)
 
 	for _, soloClaude := range []string{"effort:", "disallowedTools:", "tools:", "model: haiku"} {
 		if strings.Contains(fm, soloClaude) {
@@ -125,7 +142,7 @@ func TestAgentTemplate_Opencode_SinClavesDeClaudeCode(t *testing.T) {
 }
 
 func TestAgentTemplate_ClaudeCode_SinClavesDeOpencode(t *testing.T) {
-	fm := frontmatter(t, agentDomainMemoryMD)
+	fm := frontmatter(t, tplDe(t, "domain-memory").claude)
 
 	for _, soloOpencode := range []string{"mode:", "permission:", "temperature:"} {
 		if strings.Contains(fm, soloOpencode) {
@@ -143,7 +160,7 @@ func TestAgentTemplate_AmbosClientes_MismoBody(t *testing.T) {
 		return strings.TrimSpace(s[4+i+4:])
 	}
 
-	if body(agentDomainMemoryMD) != body(agentDomainMemoryOpencodeMD) {
+	if body(tplDe(t, "domain-memory").claude) != body(tplDe(t, "domain-memory").opencode) {
 		t.Error("el body de los dos templates divergió: es el mismo agente")
 	}
 }
@@ -153,20 +170,21 @@ func TestAgentTemplate_AmbosClientes_MismoBody(t *testing.T) {
 func TestInstallGlobalAssets_AgenteOpencode_NoEsSymlinkDelDeClaude(t *testing.T) {
 	tmp := t.TempDir()
 	paths := Paths{
-		GlobalSkillPath:  filepath.Join(tmp, "claude", "skills", "domain", "SKILL.md"),
-		GlobalAgentPath:  filepath.Join(tmp, "claude", "agents", "domain-memory.md"),
-		OpencodeSkillsLn: filepath.Join(tmp, "opencode", "skills", "domain"),
-		OpencodeAgentsLn: filepath.Join(tmp, "opencode", "agents", "domain-memory.md"),
+		GlobalSkillPath:   filepath.Join(tmp, "claude", "skills", "domain", "SKILL.md"),
+		GlobalAgentsDir:   filepath.Join(tmp, "claude", "agents"),
+		OpencodeSkillsLn:  filepath.Join(tmp, "opencode", "skills", "domain"),
+		OpencodeAgentsDir: filepath.Join(tmp, "opencode", "agents"),
 	}
+	agenteOpencode := filepath.Join(paths.OpencodeAgentsDir, "domain-memory.md")
 
-	if err := installGlobalAssets(paths); err != nil {
+	if _, err := installGlobalAssets(paths); err != nil {
 		t.Fatalf("installGlobalAssets: %v", err)
 	}
 	if err := linkOpencodeToGlobal(paths, "linux"); err != nil {
 		t.Fatalf("linkOpencodeToGlobal: %v", err)
 	}
 
-	fi, err := os.Lstat(paths.OpencodeAgentsLn)
+	fi, err := os.Lstat(agenteOpencode)
 	if err != nil {
 		t.Fatalf("el agente de OpenCode no se escribió: %v", err)
 	}
@@ -174,7 +192,7 @@ func TestInstallGlobalAssets_AgenteOpencode_NoEsSymlinkDelDeClaude(t *testing.T)
 		t.Fatal("el agente de OpenCode es un symlink al de Claude Code: un archivo no puede satisfacer los dos esquemas")
 	}
 
-	b, err := os.ReadFile(paths.OpencodeAgentsLn)
+	b, err := os.ReadFile(agenteOpencode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,20 +216,20 @@ func TestInstallGlobalAssets_AgenteOpencode_NoEsSymlinkDelDeClaude(t *testing.T)
 func TestInstallGlobalAssets_Windows_AgenteOpencodeEsSuPropioTemplate(t *testing.T) {
 	tmp := t.TempDir()
 	paths := Paths{
-		GlobalSkillPath:  filepath.Join(tmp, "claude", "skills", "domain", "SKILL.md"),
-		GlobalAgentPath:  filepath.Join(tmp, "claude", "agents", "domain-memory.md"),
-		OpencodeSkillsLn: filepath.Join(tmp, "opencode", "skills", "domain"),
-		OpencodeAgentsLn: filepath.Join(tmp, "opencode", "agents", "domain-memory.md"),
+		GlobalSkillPath:   filepath.Join(tmp, "claude", "skills", "domain", "SKILL.md"),
+		GlobalAgentsDir:   filepath.Join(tmp, "claude", "agents"),
+		OpencodeSkillsLn:  filepath.Join(tmp, "opencode", "skills", "domain"),
+		OpencodeAgentsDir: filepath.Join(tmp, "opencode", "agents"),
 	}
 
-	if err := installGlobalAssets(paths); err != nil {
+	if _, err := installGlobalAssets(paths); err != nil {
 		t.Fatalf("installGlobalAssets: %v", err)
 	}
 	if err := linkOpencodeToGlobal(paths, "windows"); err != nil {
 		t.Fatalf("linkOpencodeToGlobal: %v", err)
 	}
 
-	b, err := os.ReadFile(paths.OpencodeAgentsLn)
+	b, err := os.ReadFile(filepath.Join(paths.OpencodeAgentsDir, "domain-memory.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

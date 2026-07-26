@@ -215,34 +215,27 @@ func uninstallClient(c Client) (removed bool, err error) {
 	return true, writeJSON(c.MCPPath, m)
 }
 
-// installGlobalAssets escribe el skill + subagent globales. Idempotente.
-func installGlobalAssets(paths Paths) error {
+// installGlobalAssets escribe el skill global y el catálogo completo de agentes.
+// Idempotente. DOMAINSERV-137: antes instalaba UN agente nombrado a mano, así que los
+// agentes nuevos del repo no llegaban al cliente.
+func installGlobalAssets(paths Paths) (resultadoAgentes, error) {
 	if err := os.MkdirAll(filepath.Dir(paths.GlobalSkillPath), 0o755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(paths.GlobalAgentPath), 0o755); err != nil {
-		return err
+		return resultadoAgentes{}, err
 	}
 	if err := os.WriteFile(paths.GlobalSkillPath, skillDomainMD, 0o644); err != nil {
-		return err
+		return resultadoAgentes{}, err
 	}
-	if err := os.WriteFile(paths.GlobalAgentPath, agentDomainMemoryMD, 0o644); err != nil {
-		return err
+
+	cat, err := agentCatalog()
+	if err != nil {
+		return resultadoAgentes{}, err
 	}
-	// DOMAINSERV-135: el agente de OpenCode es un archivo propio, no un symlink al de
-	// Claude Code — los frontmatter son incompatibles (ver embed.go).
-	if paths.OpencodeAgentsLn != "" {
-		if err := os.MkdirAll(filepath.Dir(paths.OpencodeAgentsLn), 0o755); err != nil {
-			return err
-		}
-		// si venís de una instalación previa, acá hay un symlink: hay que sacarlo antes
-		// o WriteFile escribiría A TRAVÉS de él y pisaría el template de Claude Code
-		_ = os.Remove(paths.OpencodeAgentsLn)
-		if err := os.WriteFile(paths.OpencodeAgentsLn, agentDomainMemoryOpencodeMD, 0o644); err != nil {
-			return err
-		}
+	// antes de copiar: dos agentes con el mismo `name` hacen que Claude Code cargue uno de
+	// los dos por orden de lectura del filesystem, sin precedencia documentada
+	if err := validarNombresUnicos(cat); err != nil {
+		return resultadoAgentes{}, err
 	}
-	return nil
+	return instalarAgentes(paths, cat)
 }
 
 // linkOpencodeToGlobal: en Linux/macOS hace symlink. En Windows, donde
@@ -285,13 +278,15 @@ func linkOpencodeToGlobal(paths Paths, osName string) error {
 
 func removeGlobalAssets(paths Paths) {
 	_ = os.Remove(paths.GlobalSkillPath)
-	_ = os.Remove(paths.GlobalAgentPath)
-
 	_ = os.Remove(filepath.Dir(paths.GlobalSkillPath))
-	_ = os.Remove(filepath.Dir(paths.GlobalAgentPath))
+
+	// el catálogo se remueve agente por agente para no borrar los que el usuario tenga en
+	// el mismo directorio
+	if cat, err := agentCatalog(); err == nil {
+		desinstalarAgentes(paths, cat)
+	}
 }
 
 func removeOpencodeLinks(paths Paths) {
 	_ = os.Remove(paths.OpencodeSkillsLn)
-	_ = os.Remove(paths.OpencodeAgentsLn)
 }

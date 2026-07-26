@@ -290,8 +290,20 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 }
 
 // vectorLiteral convierte []float32 a literal '[v1,v2,...]' para pgvector.
+// vectorLiteral serializa el embedding para el INSERT. Devuelve "[]" cuando no
+// hay embedding útil, y el CASE de sql/query.sql:7 lo traduce a NULL.
+//
+// DOMAINSERV-157: el vector CERO cuenta como "no hay". El NopEmbedder devuelve
+// un slice de N ceros —no vacío—, así que sin este guard se serializaba
+// "[0,0,...]" y quedaba persistido como si fuera un embedding legítimo. En prod
+// eso dejó 44 observaciones con embedding NO NULL y norma 0.
+//
+// No basta con que hoy la búsqueda degrade limpio: ese guard (useVector) mira el
+// vector de la QUERY, mientras que el CTE `vec` filtra por `embedding IS NOT
+// NULL` sin mirar la norma. Los ceros almacenados se activan como ruido recién
+// cuando el embedder vuelve a funcionar.
 func vectorLiteral(v []float32) string {
-	if len(v) == 0 {
+	if len(v) == 0 || llm.IsZero(v) {
 		return "[]"
 	}
 	var sb strings.Builder

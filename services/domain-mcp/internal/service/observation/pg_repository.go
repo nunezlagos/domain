@@ -233,3 +233,27 @@ LIMIT $2
 	}
 	return out, rows.Err()
 }
+
+// PromptExists — DOMAINSERV-145. Ver el comentario de la interface.
+func (r *pgRepository) PromptExists(ctx context.Context, promptID uuid.UUID) (bool, error) {
+	ok, err := r.q(ctx).PromptCapturedExists(ctx, promptID)
+	if err != nil {
+		return false, fmt.Errorf("prompt exists: %w", err)
+	}
+	return ok, nil
+}
+
+// RecordUsage persiste el reporte de consumo del turno. Devuelve cuántas filas
+// se insertaron: puede ser menos que los candidatos si alguno ya estaba
+// registrado (reintento) o si la observación fue borrada.
+func (r *pgRepository) RecordUsage(ctx context.Context, in RecordUsageParams) (int64, error) {
+	n, err := r.q(ctx).RecordObservationUsage(ctx, observationdb.RecordObservationUsageParams{
+		PromptID:     in.PromptID,
+		CandidateIds: in.CandidateIDs,
+		UsedIds:      in.UsedIDs,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("record usage: %w", err)
+	}
+	return n, nil
+}

@@ -44,6 +44,24 @@ type Repository interface {
 
 
 	SearchHybrid(ctx context.Context, in SearchInput) ([]SearchResult, error)
+
+	// PromptExists pre-valida el turno antes de escribir la señal de consumo.
+	// Sin esto una FK violation aborta la tx del handler (DOMAINSERV-145).
+	PromptExists(ctx context.Context, promptID uuid.UUID) (bool, error)
+
+	RecordUsage(ctx context.Context, in RecordUsageParams) (int64, error)
+}
+
+// RecordUsageParams es el reporte de consumo de UN turno (DOMAINSERV-145).
+//
+// CandidateIDs son todas las observaciones que el cliente tuvo a la vista, y
+// UsedIDs las que declara haber usado. Guardar ambos es lo que da denominador:
+// sin los candidatos, "nunca reportada" y "nunca mostrada" son la misma fila
+// ausente y no hay tasa que medir.
+type RecordUsageParams struct {
+	PromptID     uuid.UUID
+	CandidateIDs []uuid.UUID
+	UsedIDs      []uuid.UUID
 }
 
 // InsertParams agrupa todos los campos requeridos por el INSERT, ya

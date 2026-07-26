@@ -22,8 +22,8 @@ type mockRepo struct {
 	ListPaginatedHook func(ctx context.Context, in ListPageInput) ([]Observation, bool, error)
 	SoftDeleteHook    func(ctx context.Context, id uuid.UUID) error
 	SearchHook        func(ctx context.Context, in SearchInput) ([]SearchResult, error)
-
-
+	PromptExistsHook  func(ctx context.Context, promptID uuid.UUID) (bool, error)
+	RecordUsageHook   func(ctx context.Context, in RecordUsageParams) (int64, error)
 
 	InsertCalls, GetCalls, ListCalls, SoftDeleteCalls, SearchCalls int
 }
@@ -197,4 +197,21 @@ func errorContains(err error, want string) bool {
 		}
 	}
 	return false
+}
+
+// DOMAINSERV-145: el mock implementa los métodos nuevos con hooks opcionales;
+// sin hook devuelven el caso feliz para no obligar a cada test preexistente a
+// declararlos.
+func (m *mockRepo) PromptExists(ctx context.Context, promptID uuid.UUID) (bool, error) {
+	if m.PromptExistsHook != nil {
+		return m.PromptExistsHook(ctx, promptID)
+	}
+	return true, nil
+}
+
+func (m *mockRepo) RecordUsage(ctx context.Context, in RecordUsageParams) (int64, error) {
+	if m.RecordUsageHook != nil {
+		return m.RecordUsageHook(ctx, in)
+	}
+	return int64(len(in.CandidateIDs)), nil
 }

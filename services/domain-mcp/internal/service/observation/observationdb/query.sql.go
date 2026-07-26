@@ -822,6 +822,59 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 	return items, nil
 }
 
+const promptCapturedExists = `-- name: PromptCapturedExists :one
+SELECT EXISTS(SELECT 1 FROM prompt_captured WHERE id = $1)
+`
+
+// Pre-validación de DOMAINSERV-145. Sin esto, un prompt_id desconocido produce
+// una FK violation que aborta la tx del handler y le devuelve SQL crudo al
+// usuario — y solo cuando los observation_ids son válidos, o sea de forma no
+// determinista. El cliente reporta al final del turno: que se equivoque de id
+// es un caso esperable, no un error del sistema.
+func (q *Queries) PromptCapturedExists(ctx context.Context, promptID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, promptCapturedExists, promptID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const recordObservationUsage = `-- name: RecordObservationUsage :execrows
+INSERT INTO knowledge_observation_usage_log (prompt_id, observation_id, project_id, used)
+SELECT $1::uuid, o.id, o.project_id,
+       (o.id = ANY($2::uuid[]))
+FROM knowledge_observations o
+WHERE o.id = ANY($3::uuid[])
+  AND o.deleted_at IS NULL
+ON CONFLICT (prompt_id, observation_id) DO NOTHING
+`
+
+type RecordObservationUsageParams struct {
+	PromptID     uuid.UUID   `json:"prompt_id"`
+	UsedIds      []uuid.UUID `json:"used_ids"`
+	CandidateIds []uuid.UUID `json:"candidate_ids"`
+}
+
+// Registra qué observaciones se le mostraron al cliente en un turno y cuáles
+// dice haber usado (DOMAINSERV-145).
+//
+// El SELECT contra knowledge_observations filtra ids inexistentes o borrados en
+// vez de confiar en la lista del cliente: un INSERT ... VALUES directo
+// reventaría con FK violation y perdería TODO el reporte por un solo id malo.
+// Un reporte parcial vale más que un reporte fallido.
+//
+// project_id se denormaliza en el mismo SELECT, a costo cero, para poder medir
+// después la atribución cruzada entre projects.
+//
+// ON CONFLICT DO NOTHING: el reintento del mismo turno es idempotente y la
+// tabla es append-only (nunca se pisa un used=true con un false posterior).
+func (q *Queries) RecordObservationUsage(ctx context.Context, arg RecordObservationUsageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordObservationUsage, arg.PromptID, arg.UsedIds, arg.CandidateIds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const softDeleteEdge = `-- name: SoftDeleteEdge :execrows
 UPDATE knowledge_observation_edges
 SET deleted_at = NOW()

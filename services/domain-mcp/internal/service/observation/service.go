@@ -317,3 +317,69 @@ func vectorLiteral(v []float32) string {
 	sb.WriteByte(']')
 	return sb.String()
 }
+
+// maxUsageIDsPerTurn acota el payload del reporte de consumo. El hook inyecta
+// un puñado de memorias por turno, así que una lista mucho más larga es señal
+// de un cliente mal implementado, no de uso real. Se recorta en vez de fallar:
+// un reporte parcial sigue siendo útil.
+const maxUsageIDsPerTurn = 20
+
+// RecordUsage persiste qué observaciones se le mostraron al cliente en un turno
+// y cuáles dice haber usado (DOMAINSERV-145).
+//
+// La ausencia de reporte significa "sin dato", NUNCA "no sirvió": por eso un
+// reporte con usadas vacías SÍ se registra —"se mostraron y no sirvieron" es
+// información— y un turno que nunca reporta simplemente no deja filas.
+//
+// Devuelve cuántas se registraron y cuántas se descartaron.
+func (s *Service) RecordUsage(ctx context.Context, promptID uuid.UUID, candidateIDs, usedIDs []uuid.UUID) (int, int, error) {
+	if promptID == uuid.Nil {
+		return 0, 0, fmt.Errorf("prompt_id requerido")
+	}
+	// used ⊆ candidates: una usada no declarada se suma al denominador en vez
+	// de descartarse, o la tasa usados/candidatos podría superar 1 y dejaría de
+	// ser interpretable.
+	candidatos, descartados := normalizarIDs(append(append([]uuid.UUID{}, candidateIDs...), usedIDs...))
+	usadas, _ := normalizarIDs(usedIDs)
+	if len(candidatos) == 0 {
+		return 0, descartados, nil
+	}
+
+	existe, err := s.repository().PromptExists(ctx, promptID)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Un prompt desconocido es esperable —el cliente reporta al cerrar el turno
+	// y puede equivocarse—, no un error del sistema: se informa y no se escribe.
+	if !existe {
+		return 0, len(candidatos), nil
+	}
+
+	n, err := s.repository().RecordUsage(ctx, RecordUsageParams{
+		PromptID: promptID, CandidateIDs: candidatos, UsedIDs: usadas,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return int(n), descartados, nil
+}
+
+// normalizarIDs deduplica preservando el orden, descarta uuid.Nil y recorta al
+// cap. Devuelve los ids válidos y cuántos quedaron afuera.
+func normalizarIDs(in []uuid.UUID) ([]uuid.UUID, int) {
+	visto := make(map[uuid.UUID]bool, len(in))
+	out := make([]uuid.UUID, 0, len(in))
+	descartados := 0
+	for _, id := range in {
+		if id == uuid.Nil || visto[id] {
+			continue
+		}
+		visto[id] = true
+		if len(out) >= maxUsageIDsPerTurn {
+			descartados++
+			continue
+		}
+		out = append(out, id)
+	}
+	return out, descartados
+}

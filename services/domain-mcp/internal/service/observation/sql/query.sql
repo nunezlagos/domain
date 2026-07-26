@@ -206,3 +206,33 @@ FROM pairs
 WHERE same_session OR shared_tags > 0 OR lexical_overlap
 ORDER BY signal_score DESC, source_id, target_id
 LIMIT sqlc.arg('result_limit');
+
+-- name: PromptCapturedExists :one
+-- Pre-validación de DOMAINSERV-145. Sin esto, un prompt_id desconocido produce
+-- una FK violation que aborta la tx del handler y le devuelve SQL crudo al
+-- usuario — y solo cuando los observation_ids son válidos, o sea de forma no
+-- determinista. El cliente reporta al final del turno: que se equivoque de id
+-- es un caso esperable, no un error del sistema.
+SELECT EXISTS(SELECT 1 FROM prompt_captured WHERE id = sqlc.arg('prompt_id'));
+
+-- name: RecordObservationUsage :execrows
+-- Registra qué observaciones se le mostraron al cliente en un turno y cuáles
+-- dice haber usado (DOMAINSERV-145).
+--
+-- El SELECT contra knowledge_observations filtra ids inexistentes o borrados en
+-- vez de confiar en la lista del cliente: un INSERT ... VALUES directo
+-- reventaría con FK violation y perdería TODO el reporte por un solo id malo.
+-- Un reporte parcial vale más que un reporte fallido.
+--
+-- project_id se denormaliza en el mismo SELECT, a costo cero, para poder medir
+-- después la atribución cruzada entre projects.
+--
+-- ON CONFLICT DO NOTHING: el reintento del mismo turno es idempotente y la
+-- tabla es append-only (nunca se pisa un used=true con un false posterior).
+INSERT INTO knowledge_observation_usage_log (prompt_id, observation_id, project_id, used)
+SELECT sqlc.arg('prompt_id')::uuid, o.id, o.project_id,
+       (o.id = ANY(sqlc.arg('used_ids')::uuid[]))
+FROM knowledge_observations o
+WHERE o.id = ANY(sqlc.arg('candidate_ids')::uuid[])
+  AND o.deleted_at IS NULL
+ON CONFLICT (prompt_id, observation_id) DO NOTHING;

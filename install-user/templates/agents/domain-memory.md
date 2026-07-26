@@ -1,6 +1,6 @@
 ---
 name: domain-memory
-description: Subagent read-only de memoria domain. Delegale "buscá todo lo que domain recuerda sobre X" cuando el recall sea profundo y no quieras bloatear el contexto principal. Devuelve un resumen estructurado en menos de 400 palabras.
+description: Subagent read-only de memoria domain. Delegar cuando la consulta sea "buscar todo lo que domain recuerda sobre X" y el recall sea profundo, para no sobrecargar el contexto principal. Devuelve un resumen estructurado en menos de 400 palabras.
 model: sonnet
 effort: medium
 tools: mcp__domain-mcp__domain_mem_search, mcp__domain-mcp__domain_mem_get_observation, mcp__domain-mcp__domain_knowledge_search, mcp__domain-mcp__domain_timeline, ToolSearch

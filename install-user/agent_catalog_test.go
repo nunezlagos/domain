@@ -62,12 +62,15 @@ func TestAgentCatalog_AgenteSinVariante_NoInventaUnaParaOpencode(t *testing.T) {
 		t.Fatalf("agentCatalog: %v", err)
 	}
 
-	rs := buscar(t, cat, "repo-scout")
-	if len(rs.opencode) != 0 {
-		t.Errorf("repo-scout no tiene variante .opencode.md en el repo; el catálogo devolvió %d bytes", len(rs.opencode))
+	// git-archaeology no lleva variante a propósito: su guard es un hook PreToolUse y en
+	// OpenCode los hooks son plugins JS GLOBALES, no por agente, así que su restricción no
+	// es expresable ahí. Se instala solo donde puede estar acotado.
+	ga := buscar(t, cat, "git-archaeology")
+	if len(ga.opencode) != 0 {
+		t.Errorf("git-archaeology no debe tener variante de OpenCode: su guard no es expresable ahí (%d bytes)", len(ga.opencode))
 	}
-	if len(rs.claude) == 0 {
-		t.Error("repo-scout debe traer su template de Claude Code")
+	if len(ga.claude) == 0 {
+		t.Error("git-archaeology debe traer su template de Claude Code")
 	}
 }
 
@@ -148,4 +151,59 @@ func buscar(t *testing.T, cat []agentTemplate, slug string) agentTemplate {
 	}
 	t.Fatalf("el catálogo no trae %q; trae %v", slug, slugs(cat))
 	return agentTemplate{}
+}
+
+// DOMAINSERV-137: los invariantes de la variante valen para TODO el catálogo, no solo para
+// domain-memory. Sin esto, la próxima variante puede divergir del original o mezclar
+// esquemas sin que nada lo note.
+func TestAgentCatalog_TodaVariante_MismoBodyYSinMezclarEsquemas(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	body := func(tpl []byte) string {
+		s := string(tpl)
+		i := strings.Index(s[4:], "\n---")
+		if i < 0 {
+			return s
+		}
+		return strings.TrimSpace(s[4+i+4:])
+	}
+
+	conVariante := 0
+	for _, a := range cat {
+		if len(a.opencode) == 0 {
+			continue
+		}
+		conVariante++
+
+		if body(a.claude) != body(a.opencode) {
+			t.Errorf("%s: el body de las dos variantes divergió, es el mismo agente", a.slug)
+		}
+
+		fmOpencode := frontmatter(t, a.opencode)
+		for _, soloClaude := range []string{"effort:", "disallowedTools:", "tools:", "model: haiku"} {
+			if strings.Contains(fmOpencode, soloClaude) {
+				t.Errorf("%s: %q es de Claude Code y OpenCode no lo entiende", a.slug, soloClaude)
+			}
+		}
+		if !strings.Contains(fmOpencode, "mode: subagent") {
+			t.Errorf("%s: la variante de OpenCode necesita mode: subagent", a.slug)
+		}
+		if !strings.Contains(fmOpencode, "model: anthropic/") {
+			t.Errorf("%s: OpenCode necesita el modelo como provider/model-id", a.slug)
+		}
+
+		fmClaude := frontmatter(t, a.claude)
+		for _, soloOpencode := range []string{"mode:", "permission:", "temperature:"} {
+			if strings.Contains(fmClaude, soloOpencode) {
+				t.Errorf("%s: %q es de OpenCode y Claude Code no lo entiende", a.slug, soloOpencode)
+			}
+		}
+	}
+
+	if conVariante < 4 {
+		t.Errorf("se esperaban al menos 4 agentes con variante, hay %d", conVariante)
+	}
 }

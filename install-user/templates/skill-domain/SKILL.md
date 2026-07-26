@@ -12,7 +12,11 @@ versionada). Este archivo es solo el bootstrap.
 
 1. `domain_policy_get(slug="agent-protocol")` → sigue ese protocolo.
 2. Si la policy no carga (server caído / key inválida): sigue el mínimo
-   abajo y pídele al usuario `./install-user.sh --uninstall && ./install-user.sh`.
+   abajo y pídele al usuario que reinstale con el one-liner canónico:
+   `curl -fsSL https://raw.githubusercontent.com/nunezlagos/domain/main/install-user/install-curl.sh | sudo bash`
+   (compila y ejecuta domain-install, que instala el catálogo completo de
+   agentes; install-user.sh quedó fuera del camino canónico y reinstalar con
+   él degrada lo instalado).
 
 ## Mínimo si la policy no carga
 

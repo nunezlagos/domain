@@ -115,6 +115,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_mem_context":           ChannelHook, // SessionStart lo pre-carga
 	"domain_mem_delete":            ChannelUserIntent,
 	"domain_mem_get_observation":   ChannelPolicyTriggered,
+	"domain_mem_used":              ChannelPolicyTriggered,
 	"domain_mem_graph":             ChannelPolicyTriggered,
 	"domain_mem_infer_edges":       ChannelUserIntent, // costoso, a pedido
 	"domain_mem_infer_edges_llm":   ChannelUserIntent, // costoso (LLM), a pedido

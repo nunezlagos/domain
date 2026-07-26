@@ -39,7 +39,7 @@ Exigida por una fase del SDD vía required_tool_calls — el server RECHAZA el c
 Su función la entrega el server en la preparación de contexto por fase (issue-54.2).
 
 
-## policy-triggered (30)
+## policy-triggered (31)
 Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trigger 54.4).
 
 - `domain_context_snapshot`
@@ -50,6 +50,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_known_error_set`
 - `domain_mem_capture_passive`
 - `domain_mem_get_observation`
+- `domain_mem_used`
 - `domain_mem_graph`
 - `domain_mem_link`
 - `domain_mem_path`

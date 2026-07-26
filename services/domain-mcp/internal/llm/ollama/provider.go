@@ -239,11 +239,32 @@ func NewEmbedder(model string) *Embedder {
 	}
 }
 
+// dimsPorModelo: dimensión de salida de cada modelo de embeddings conocido.
+//
+// DOMAINSERV-157: acá había un `return 1536` fijo, y el esquema pgvector es
+// vector(1024) desde la migración 000275 (bge-m3). Como embed() rellenaba el
+// vector hasta Dimensions(), el probe de arranque medía SIEMPRE 1536 sin
+// importar qué devolviera el modelo: validateDim no encontraba coincidencia y
+// degradaba a noop en CADA arranque, dejando la búsqueda semántica apagada en
+// producción sin que nada fallara a la vista.
+var dimsPorModelo = map[string]int{
+	"bge-m3":            1024,
+	"nomic-embed-text":  768,
+	"mxbai-embed-large": 1024,
+	"all-minilm":        384,
+}
+
+// dimDesconocida se usa cuando el modelo no está en el mapa. Es deliberadamente
+// la dimensión del esquema: un modelo nuevo no debe degradar el embedder por no
+// estar en una lista, y si de verdad produce otra cosa el probe lo detecta
+// midiendo el vector real —que es justamente lo que el bug impedía—.
+const dimDesconocida = 1024
+
 func (e *Embedder) Dimensions() int {
-
-
-
-	return 1536
+	if d, ok := dimsPorModelo[e.Model]; ok {
+		return d
+	}
+	return dimDesconocida
 }
 
 type embedReq struct {
@@ -296,11 +317,13 @@ func (e *Embedder) embed(ctx context.Context, text string) ([]float32, error) {
 	if len(er.Embedding) == 0 {
 		return nil, errors.New("empty embedding")
 	}
-	out := make([]float32, e.Dimensions())
+	// DOMAINSERV-157: el largo sale de lo que devolvió el provider, NO de
+	// Dimensions(). Antes se rellenaba/truncaba hasta la dimensión declarada, y
+	// eso enmascaraba cualquier desalineo: el probe de validateDim medía la
+	// constante en vez del modelo, así que un modelo con otra dimensión pasaba
+	// desapercibido y uno correcto podía degradarse por una constante mal puesta.
+	out := make([]float32, len(er.Embedding))
 	for i, f := range er.Embedding {
-		if i >= len(out) {
-			break
-		}
 		out[i] = float32(f)
 	}
 	return out, nil

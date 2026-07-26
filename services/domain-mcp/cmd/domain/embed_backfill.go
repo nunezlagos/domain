@@ -60,10 +60,16 @@ func parseBackfillArgs(args []string) backfillOpts {
 	return o
 }
 
-// buildBackfillQuery arma el SELECT de filas pendientes. El filtro
-// "<embCol> IS NULL" es lo que hace idempotente al backfill: una vez poblada,
-// la fila no se vuelve a tocar, así que re-correrlo (lo hace el cron diario)
-// no gasta llamadas al provider.
+// buildBackfillQuery arma el SELECT de filas pendientes: sin embedding, o con uno
+// en cero. Ese segundo caso existe porque el embedder degradado a noop
+// (DOMAINSERV-157) escribió vectores de ceros, y un vector de ceros NO es NULL:
+// quedaban fuera del backfill para siempre mientras competían en el ranking con
+// la misma distancia contra cualquier búsqueda. Se detectan por el producto
+// interno consigo mismo —-||v||², cero solo en el vector nulo— porque l2_norm es
+// ambiguo en pgvector y vector_dims obligaría a conocer la dimensión.
+//
+// La idempotencia se conserva: una fila con norma real no vuelve a tomarse, así
+// que re-correr el backfill no gasta llamadas al provider.
 func buildBackfillQuery(table, textCol, embCol string, hasDeletedAt bool) string {
 	deleted := ""
 	if hasDeletedAt {
@@ -71,11 +77,11 @@ func buildBackfillQuery(table, textCol, embCol string, hasDeletedAt bool) string
 	}
 	return fmt.Sprintf(
 		`SELECT %s, %s FROM %s
-		 WHERE %s IS NULL%s
+		 WHERE (%s IS NULL OR (%s <#> %s) = 0)%s
 		   AND LENGTH(TRIM(%s)) > 0
 		 ORDER BY created_at ASC
 		 LIMIT $1`,
-		"id", textCol, table, embCol, deleted, textCol,
+		"id", textCol, table, embCol, embCol, embCol, deleted, textCol,
 	)
 }
 
@@ -138,16 +144,13 @@ func runEmbedBackfill(args []string) {
 	totals := map[string]int{}
 	for _, tg := range backfillTargets() {
 		for {
-			n, err := backfillTable(ctx, pool, embedder, tg, limit, dryRun, o.pauseMS)
+			escritos, candidatos, err := backfillTable(ctx, pool, embedder, tg, limit, dryRun, o.pauseMS)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", tg.table, err)
 				os.Exit(1)
 			}
-			totals[tg.table] += n
-			// sin --all se procesa un lote; con --all se itera hasta que una
-			// pasada no encuentre pendientes. En dry-run no se persiste nada,
-			// así que iterar daría el mismo lote para siempre.
-			if !o.all || dryRun || n < limit {
+			totals[tg.table] += escritos
+			if !debeIterarOtroLote(o, escritos, candidatos, limit) {
 				break
 			}
 		}
@@ -156,13 +159,28 @@ func runEmbedBackfill(args []string) {
 		totals["knowledge_observations"], totals["knowledge_chunks"], dryRun)
 }
 
+// debeIterarOtroLote decide si queda trabajo por hacer. El corte por escrituras
+// es lo que impide un loop infinito: un lote lleno que no escribió NADA son filas
+// que el provider rechaza siempre (texto que excede su contexto, por ejemplo), así
+// que volver a pedirlas devuelve el mismo lote para siempre. Antes el corte
+// miraba la cantidad de candidatos, que no baja cuando el embed falla.
+func debeIterarOtroLote(o backfillOpts, escritos, candidatos, limit int) bool {
+	if !o.all || o.dryRun {
+		return false
+	}
+	return escritos > 0 && candidatos >= limit
+}
+
+// backfillTable devuelve (escritos, candidatos): son distintos cuando el provider
+// rechaza una fila, y confundirlos es lo que hacía que el backfill reportara éxito
+// habiendo fallado en todas.
 func backfillTable(ctx context.Context, pool *pgxpool.Pool, emb llm.Embedder,
-	tg backfillTarget, limit int, dryRun bool, pauseMS int) (int, error) {
+	tg backfillTarget, limit int, dryRun bool, pauseMS int) (int, int, error) {
 	table, textCol, embCol := tg.table, tg.textCol, tg.embCol
 	rows, err := pool.Query(ctx,
 		buildBackfillQuery(table, textCol, embCol, tg.hasDeletedAt), limit)
 	if err != nil {
-		return 0, fmt.Errorf("query %s: %w", table, err)
+		return 0, 0, fmt.Errorf("query %s: %w", table, err)
 	}
 	type row struct {
 		ID   uuid.UUID
@@ -173,31 +191,19 @@ func backfillTable(ctx context.Context, pool *pgxpool.Pool, emb llm.Embedder,
 		var r row
 		if err := rows.Scan(&r.ID, &r.Text); err != nil {
 			rows.Close()
-			return 0, err
+			return 0, 0, err
 		}
 		items = append(items, r)
 	}
 	rows.Close()
-	fmt.Printf("  %s: %d filas sin embedding\n", table, len(items))
+	fmt.Printf("  %s: %d filas con embedding faltante o en cero\n", table, len(items))
 	if dryRun {
-		return len(items), nil
+		return 0, len(items), nil
 	}
+	escritos := 0
 	for i, it := range items {
-		v, err := emb.Embed(ctx, it.Text)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  embed %s/%s: %v\n", table, it.ID, err)
-			continue
-		}
-		if v == nil || llm.IsZero(v) {
-			continue
-		}
-		lit := vectorLiteral(v)
-		if _, err := pool.Exec(ctx, fmt.Sprintf(
-			`UPDATE %s SET %s = $2::vector WHERE id=$1`,
-			table, embCol,
-		), it.ID, lit); err != nil {
-			fmt.Fprintf(os.Stderr, "  update %s/%s: %v\n", table, it.ID, err)
-			continue
+		if embedYPersistir(ctx, pool, emb, tg, it.ID, it.Text) {
+			escritos++
 		}
 		if (i+1)%10 == 0 {
 			fmt.Printf("  %s: %d/%d\n", table, i+1, len(items))
@@ -206,7 +212,35 @@ func backfillTable(ctx context.Context, pool *pgxpool.Pool, emb llm.Embedder,
 			time.Sleep(time.Duration(pauseMS) * time.Millisecond)
 		}
 	}
-	return len(items), nil
+	if escritos < len(items) {
+		fmt.Fprintf(os.Stderr, "  %s: %d de %d filas quedaron sin embedding\n",
+			table, len(items)-escritos, len(items))
+	}
+	return escritos, len(items), nil
+}
+
+// embedYPersistir devuelve si la fila quedó con un embedding real. Una fila que
+// falla no corta el backfill —el resto de la tabla sigue siendo recuperable— pero
+// su fallo tiene que ser visible: es lo que distingue "no había nada que hacer" de
+// "no se pudo hacer nada".
+func embedYPersistir(ctx context.Context, pool *pgxpool.Pool, emb llm.Embedder,
+	tg backfillTarget, id uuid.UUID, text string) bool {
+	v, err := emb.Embed(ctx, text)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  embed %s/%s: %v\n", tg.table, id, err)
+		return false
+	}
+	if v == nil || llm.IsZero(v) {
+		return false
+	}
+	if _, err := pool.Exec(ctx, fmt.Sprintf(
+		`UPDATE %s SET %s = $2::vector WHERE id=$1`,
+		tg.table, tg.embCol,
+	), id, vectorLiteral(v)); err != nil {
+		fmt.Fprintf(os.Stderr, "  update %s/%s: %v\n", tg.table, id, err)
+		return false
+	}
+	return true
 }
 
 func vectorLiteral(v []float32) string {

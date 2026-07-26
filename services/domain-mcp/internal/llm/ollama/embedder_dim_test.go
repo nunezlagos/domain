@@ -51,7 +51,7 @@ func TestEmbedder_Embed_DevuelveElLargoRealDelProvider_NoUnaConstante(t *testing
 		for i := range vals {
 			vals[i] = 0.5
 		}
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"embedding": vals}))
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"embeddings": [][]float64{vals}}))
 	}))
 	defer srv.Close()
 
@@ -69,7 +69,7 @@ func TestEmbedder_Embed_DevuelveElLargoRealDelProvider_NoUnaConstante(t *testing
 // constante hacía que un modelo equivocado pasara desapercibido.
 func TestEmbedder_Embed_ProviderDevuelveOtraDimension_NoSeEnmascara(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"embedding": make([]float64, 384)}))
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"embeddings": [][]float64{make([]float64, 384)}}))
 	}))
 	defer srv.Close()
 

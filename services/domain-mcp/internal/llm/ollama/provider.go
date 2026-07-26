@@ -268,12 +268,12 @@ func (e *Embedder) Dimensions() int {
 }
 
 type embedReq struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
+	Model string `json:"model"`
+	Input string `json:"input"`
 }
 
 type embedResp struct {
-	Embedding []float64 `json:"embedding"`
+	Embeddings [][]float64 `json:"embeddings"`
 }
 
 func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
@@ -292,11 +292,15 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 	return out, nil
 }
 
+// embed usa /api/embed y NO /api/embeddings: el legacy no trunca y devuelve 500
+// "the input length exceeds the context length" en cuanto el texto pasa el num_ctx
+// efectivo del modelo (medido en 2048 tokens con bge-m3, ~6000 chars en español).
+// Ese error dejaba las observaciones largas con embedding NULL de forma permanente.
 func (e *Embedder) embed(ctx context.Context, text string) ([]float32, error) {
-	body := embedReq{Model: e.Model, Prompt: text}
+	body := embedReq{Model: e.Model, Input: text}
 	raw, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		e.BaseURL+"/api/embeddings", bytes.NewReader(raw))
+		e.BaseURL+"/api/embed", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +318,7 @@ func (e *Embedder) embed(ctx context.Context, text string) ([]float32, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&er); err != nil {
 		return nil, err
 	}
-	if len(er.Embedding) == 0 {
+	if len(er.Embeddings) == 0 || len(er.Embeddings[0]) == 0 {
 		return nil, errors.New("empty embedding")
 	}
 	// DOMAINSERV-157: el largo sale de lo que devolvió el provider, NO de
@@ -322,8 +326,9 @@ func (e *Embedder) embed(ctx context.Context, text string) ([]float32, error) {
 	// eso enmascaraba cualquier desalineo: el probe de validateDim medía la
 	// constante en vez del modelo, así que un modelo con otra dimensión pasaba
 	// desapercibido y uno correcto podía degradarse por una constante mal puesta.
-	out := make([]float32, len(er.Embedding))
-	for i, f := range er.Embedding {
+	vec := er.Embeddings[0]
+	out := make([]float32, len(vec))
+	for i, f := range vec {
 		out[i] = float32(f)
 	}
 	return out, nil

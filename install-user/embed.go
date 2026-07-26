@@ -10,7 +10,10 @@ import (
 // catálogo es agregar un archivo y no editar el installer.
 const agentsDir = "templates/agents"
 
-//go:embed templates/agents
+// agents-hooks viaja en el MISMO FS que los agentes: un guard que no llegue al cliente deja
+// abierto el tool que venía a acotar, así que no puede quedar como artefacto opcional.
+//
+//go:embed templates/agents templates/agents-hooks
 var agentsFS embed.FS
 
 //go:embed templates/skill-domain/SKILL.md

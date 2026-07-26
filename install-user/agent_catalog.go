@@ -19,6 +19,10 @@ type agentTemplate struct {
 	slug     string
 	claude   []byte
 	opencode []byte
+	// guards son los scripts PreToolUse que el agente declare, por basename. Van con el
+	// agente porque su ausencia no degrada una función: la ABRE. Un hook que apunta a un
+	// script inexistente no bloquea nada, y el agente que se creía acotado deja de estarlo.
+	guards map[string][]byte
 }
 
 // agentCatalog enumera templates/agents/ en orden estable. Antes el installer nombraba un
@@ -56,7 +60,13 @@ func agentCatalog() ([]agentTemplate, error) {
 			return nil, fmt.Errorf("leer %s: %w", nombre, err)
 		}
 		slug := strings.TrimSuffix(nombre, ".md")
-		cat = append(cat, agentTemplate{slug: slug, claude: contenido, opencode: variantes[slug]})
+		guards, err := guardsDelBundle(contenido)
+		if err != nil {
+			return nil, err
+		}
+		cat = append(cat, agentTemplate{
+			slug: slug, claude: contenido, opencode: variantes[slug], guards: guards,
+		})
 	}
 	sort.Slice(cat, func(i, j int) bool { return cat[i].slug < cat[j].slug })
 	return cat, nil

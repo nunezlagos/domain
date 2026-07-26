@@ -16,6 +16,8 @@ type resultadoAgentes struct {
 	opencode         []string
 	omitidosOpencode []string
 	conflictos       []string
+	guardsInstalados []string
+	guardsFaltantes  []string
 	dirCreado        bool
 }
 
@@ -32,6 +34,11 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 	if err := os.MkdirAll(paths.GlobalAgentsDir, 0o755); err != nil {
 		return res, err
 	}
+	if paths.AgentHooksDir != "" {
+		if err := os.MkdirAll(paths.AgentHooksDir, 0o755); err != nil {
+			return res, err
+		}
+	}
 	if paths.OpencodeAgentsDir != "" {
 		if err := os.MkdirAll(paths.OpencodeAgentsDir, 0o755); err != nil {
 			return res, err
@@ -39,8 +46,17 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 	}
 
 	for _, a := range cat {
+		// un guard que no resuelve deja ABIERTO el tool que venía a acotar, así que el
+		// agente no se instala en vez de instalarse sin protección
+		tpl, guards, err := resolverGuards(paths, a)
+		if err != nil {
+			res.guardsFaltantes = append(res.guardsFaltantes, a.slug)
+			continue
+		}
+		res.guardsInstalados = append(res.guardsInstalados, guards...)
+
 		destino := filepath.Join(paths.GlobalAgentsDir, a.slug+".md")
-		if err := escribirTemplate(destino, a.claude); err != nil {
+		if err := escribirTemplate(destino, tpl); err != nil {
 			return res, err
 		}
 		res.instalados = append(res.instalados, a.slug)
@@ -73,6 +89,14 @@ func reportarAgentes(paths Paths, res resultadoAgentes) {
 			strings.Join(res.omitidosOpencode, ", "))
 		warnL("  su frontmatter de Claude Code sería malformado en OpenCode; instalarlo igual es peor que omitirlo")
 	}
+	if len(res.guardsInstalados) > 0 {
+		ok(fmt.Sprintf("guards: %d en %s (%s)", len(res.guardsInstalados), paths.AgentHooksDir,
+			strings.Join(res.guardsInstalados, ", ")))
+	}
+	for _, slug := range res.guardsFaltantes {
+		failL("NO instalado: " + slug + " declara un guard que no vino en el bundle")
+		failL("  sin el guard, el tool que ese hook acota queda abierto: instalarlo igual sería peor")
+	}
 	for _, c := range res.conflictos {
 		warnL("sin actualizar (difiere de lo instalado por domain, se respeta tu edición): " + c)
 	}
@@ -90,6 +114,16 @@ func escribirTemplate(destino string, contenido []byte) error {
 	}
 	_ = os.Remove(destino)
 	return os.WriteFile(destino, contenido, 0o644)
+}
+
+// escribirEjecutable es escribirTemplate para los guards: sin el bit de ejecución el hook
+// no puede correr el script, y un hook que no corre no bloquea nada.
+func escribirEjecutable(destino string, contenido []byte) error {
+	if actual, err := os.ReadFile(destino); err == nil && bytes.Equal(actual, contenido) {
+		return os.Chmod(destino, 0o755)
+	}
+	_ = os.Remove(destino)
+	return os.WriteFile(destino, contenido, 0o755)
 }
 
 // desinstalarAgentes remueve exactamente lo que instaló el catálogo. Un agente que el

@@ -237,7 +237,7 @@ func entityTable(entityType string) (string, bool) {
 	case "intake_payload":
 		return "issue_intake_payloads", true
 	case "ticket":
-		return "tickets", true
+		return "project_tickets", true
 	default:
 		return "", false
 	}

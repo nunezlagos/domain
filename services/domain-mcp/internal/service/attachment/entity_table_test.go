@@ -12,8 +12,13 @@ func TestEntityTable(t *testing.T) {
 		"user_story":     {"issues", true},
 		"requirement":    {"sdd_requirements", true},
 		"hu_draft":       {"issue_drafts", true},
+		// DOMAINSERV-144: decía "tickets", y esa tabla NO existe — la real es
+		// project_tickets (000112). requireEntity interpola este nombre en un
+		// fmt.Sprintf, así que todo init_upload sobre un ticket moría con
+		// 42P01. Este test asserteaba el valor equivocado, o sea FIJABA el bug:
+		// por eso file_attachments tenía 0 filas y parecía falta de uso.
 		"intake_payload": {"issue_intake_payloads", true},
-		"ticket":         {"tickets", true},
+		"ticket":         {"project_tickets", true},
 		"bogus":          {"", false},
 		"":               {"", false},
 	}

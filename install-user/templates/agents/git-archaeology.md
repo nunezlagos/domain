@@ -2,7 +2,7 @@
 name: git-archaeology
 description: Reconstruye por qué existe una línea, un archivo o un cambio usando SOLO git log/show/blame — cero riesgo de mutación, reforzado por un hook PreToolUse propio de este agente que bloquea cualquier otro comando. Usalo para historia de un archivo, quién y cuándo tocó una línea puntual, o contexto de un commit específico. NO lo uses para status/diff del working tree actual (corré git status/diff directo en el hilo principal), para ninguna operación que mute el repo (commit, merge, rebase, checkout, reset, stash, push, worktree remove) — el hook las bloquea igual, pero no malgastes el spawn intentándolo — ni para una sola consulta de `git log -1` que de todas formas vas a correr vos mismo.
 model: sonnet
-effort: low
+effort: medium
 tools: Bash
 hooks:
   PreToolUse:

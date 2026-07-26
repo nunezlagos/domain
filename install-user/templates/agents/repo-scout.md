@@ -2,7 +2,7 @@
 name: repo-scout
 description: Explora el repo con Read/Grep/Glob para lecturas exploratorias — dónde vive un símbolo, qué archivos usan un patrón, cómo está organizado un módulo — sin traer decenas de archivos completos al hilo principal. Usalo para preguntas tipo "dónde está X" / "qué archivos referencian Y" / "cómo está estructurado Z". NO lo uses para editar o escribir nada (no tiene Edit/Write/Bash), para análisis de diseño cross-file profundo o revisión de calidad (eso es trabajo del hilo principal o de un agente Plan/Explore con más presupuesto), ni para un único grep puntual que de todas formas vas a correr vos mismo en una sola llamada.
 model: sonnet
-effort: low
+effort: medium
 tools: Read, Grep, Glob
 disallowedTools: Edit, Write, NotebookEdit, Bash
 ---

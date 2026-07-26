@@ -2,7 +2,7 @@
 name: ticket-triage
 description: Lee tickets de Domain (list/get/status_history) sin traer descripciones completas al hilo principal — cada domain_ticket_get pesa ~10-12k tokens. Usalo para listar tickets de un proyecto/epic, resolver el estado de varios tickets puntuales, o reconstruir el historial de status de uno. NO lo uses para crear, actualizar, cambiar de estado, reasignar, comentar o vincular tickets (es read-only, cero escritura: eso lo decide el hilo principal), ni para una sola consulta trivial de un ticket que ya vas a leer completo de todas formas — ahí llamalo directo, no delegues una única llamada.
 model: sonnet
-effort: low
+effort: medium
 tools: mcp__domain-mcp__domain_ticket_list, mcp__domain-mcp__domain_ticket_get, mcp__domain-mcp__domain_ticket_status_history, ToolSearch
 disallowedTools: mcp__domain-mcp__domain_ticket_create, mcp__domain-mcp__domain_ticket_update, mcp__domain-mcp__domain_ticket_delete, mcp__domain-mcp__domain_ticket_change_status, mcp__domain-mcp__domain_ticket_claim, mcp__domain-mcp__domain_ticket_release, mcp__domain-mcp__domain_ticket_reassign, mcp__domain-mcp__domain_ticket_comment_add, mcp__domain-mcp__domain_ticket_link_issue, mcp__domain-mcp__domain_ticket_link_external, mcp__domain-mcp__domain_ticket_link_external_bulk
 ---

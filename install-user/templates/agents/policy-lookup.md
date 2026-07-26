@@ -2,7 +2,7 @@
 name: policy-lookup
 description: Recupera el body de UNA policy (o una lista corta) citable, sin traer el catálogo completo de policies del proyecto al hilo principal — domain_project_policy_list devuelve las policies COMPLETAS cuando normalmente hacen falta 1-2 datos. Usalo para citar la regla vigente sobre un tema (modelo, convención, tech stack, workflow) antes de tocar código o decidir algo. NO lo uses para crear, editar o borrar policies (project_policy_set/_delete, platform_policy_create/_edit): toda escritura de policy pasa por confirmación humana síncrona en el hilo principal, nunca por este agente. Tampoco para una sola llamada a policy_get de la que ya sabés el slug exacto — ahí llamalo directo, no delegues una única llamada.
 model: sonnet
-effort: low
+effort: medium
 tools: mcp__domain-mcp__domain_policy_get, mcp__domain-mcp__domain_policy_list, mcp__domain-mcp__domain_project_policy_list, ToolSearch
 disallowedTools: mcp__domain-mcp__domain_project_policy_set, mcp__domain-mcp__domain_project_policy_delete, mcp__domain-mcp__domain_project_policy_import_from_text, mcp__domain-mcp__domain_platform_policy_create, mcp__domain-mcp__domain_platform_policy_edit
 ---

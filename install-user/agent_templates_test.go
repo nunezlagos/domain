@@ -70,8 +70,13 @@ func TestAgentTemplate_ClaudeCode_AcotaModeloEffortYTools(t *testing.T) {
 	if strings.Contains(fm, "model: claude-") || strings.Contains(fm, "model: anthropic/") {
 		t.Error("el frontmatter de Claude Code lleva TIER, no un provider/model-id pineado")
 	}
-	if !strings.Contains(fm, "effort: low") {
-		t.Error("effort debe ser low: es búsqueda con formato de salida fijo")
+	// medium y no low: el contrato ahora exige que el agente verifique su propio retorno
+	// (re-grepear referencias, comparar cobertura contra el universo), que es trabajo con
+	// criterio y no transcripción. medium y no high porque el fallo medido era de CAPACIDAD
+	// del tier —ya resuelto al subir a sonnet— y no de presupuesto de razonamiento: copiar un
+	// número de la salida de un grep no lo necesita.
+	if !strings.Contains(fm, "effort: medium") {
+		t.Error("effort debe ser medium: el contrato exige auto-verificación, no solo transcribir")
 	}
 }
 

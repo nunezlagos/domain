@@ -57,9 +57,18 @@ func TestAgentTemplate_ClaudeCode_AcotaModeloEffortYTools(t *testing.T) {
 	if !strings.Contains(fm, "name: domain-memory") {
 		t.Error("name debe ser domain-memory")
 	}
-	// el recall es mecánico: no puede correr en el modelo de la sesión
-	if !strings.Contains(fm, "model: haiku") {
-		t.Error("model debe ser haiku, no heredado")
+	// Decisión del usuario 2026-07-26: sonnet para búsquedas y tareas normales; opus queda
+	// para el orquestador y la implementación puntual. Sube desde haiku porque la medición A/B
+	// mostró que el modo de falla del agente único era de CAPACIDAD —estimar referencias bajo
+	// presión de contexto, 6 de 6 números de línea errados— y el tier ataca la causa.
+	if !strings.Contains(fm, "model: sonnet") {
+		t.Error("model debe ser el tier sonnet, no heredado de la sesión")
+	}
+	// El campo acepta TIERS, no IDs. Un ID pineado devuelve 404 el día que el modelo se
+	// retira: le pasó a claude-3-7-sonnet-20250219 desde el 2026-02-19. Con el tier, un
+	// modelo nuevo lo heredan los 5 agentes sin editar un archivo.
+	if strings.Contains(fm, "model: claude-") || strings.Contains(fm, "model: anthropic/") {
+		t.Error("el frontmatter de Claude Code lleva TIER, no un provider/model-id pineado")
 	}
 	if !strings.Contains(fm, "effort: low") {
 		t.Error("effort debe ser low: es búsqueda con formato de salida fijo")

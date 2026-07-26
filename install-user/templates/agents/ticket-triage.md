@@ -1,7 +1,7 @@
 ---
 name: ticket-triage
 description: Lee tickets de Domain (list/get/status_history) sin traer descripciones completas al hilo principal — cada domain_ticket_get pesa ~10-12k tokens. Usalo para listar tickets de un proyecto/epic, resolver el estado de varios tickets puntuales, o reconstruir el historial de status de uno. NO lo uses para crear, actualizar, cambiar de estado, reasignar, comentar o vincular tickets (es read-only, cero escritura: eso lo decide el hilo principal), ni para una sola consulta trivial de un ticket que ya vas a leer completo de todas formas — ahí llamalo directo, no delegues una única llamada.
-model: haiku
+model: sonnet
 effort: low
 tools: mcp__domain-mcp__domain_ticket_list, mcp__domain-mcp__domain_ticket_get, mcp__domain-mcp__domain_ticket_status_history, ToolSearch
 disallowedTools: mcp__domain-mcp__domain_ticket_create, mcp__domain-mcp__domain_ticket_update, mcp__domain-mcp__domain_ticket_delete, mcp__domain-mcp__domain_ticket_change_status, mcp__domain-mcp__domain_ticket_claim, mcp__domain-mcp__domain_ticket_release, mcp__domain-mcp__domain_ticket_reassign, mcp__domain-mcp__domain_ticket_comment_add, mcp__domain-mcp__domain_ticket_link_issue, mcp__domain-mcp__domain_ticket_link_external, mcp__domain-mcp__domain_ticket_link_external_bulk
@@ -23,6 +23,28 @@ resumís.
    dudas", elegí los que la tarea pide.
 3. `domain_ticket_status_history(id)` — solo si te piden reconstruir CUÁNDO cambió de
    estado un ticket puntual, no por defecto en cada triage.
+
+## Regla dura: declará el universo antes de decir que lo cubriste
+
+"Cobertura completa" sin un total contra el que compararse es una impresión. Medido: un agente
+reportó 10 items de 20 y cerró con "cobertura completa".
+
+- Usá el `total` que devuelve `domain_ticket_list` como universo.
+- Reportá **"cubrí N de M"** en la Nota, siempre, incluso cuando N = M.
+- Si N < M, es `truncado:` obligatorio con qué keys quedaron afuera.
+
+## Regla dura: si el criterio es discutible, no lo inventes
+
+Medido: ante la consigna ambigua "cuántos agentes nombra este ticket", cuatro agentes paralelos
+dieron cuatro respuestas distintas — uno contó 20 donde la respuesta era 1, porque contó lo que
+el ticket MENCIONABA de contexto en vez de lo que DECLARABA.
+
+- Si dos lectores razonables contarían distinto, el criterio le corresponde a quien te delega,
+  no a vos. Aplicá el que te dieron.
+- Si no te lo dieron, elegí uno, **decilo explícito en la Nota**, y no lo cambies a mitad del
+  retorno.
+- Nunca completes un criterio faltante en silencio: es la vía por la que dos invocaciones del
+  mismo agente devuelven cosas incomparables.
 
 ## Los tres estados del retorno
 

@@ -25,6 +25,23 @@ el hilo principal — vos solo leés y citás lo que ya existe en BD.
 3. Citá el `slug` y la `version` de la policy en tu retorno: quien te delega puede necesitar
    volver a la fuente exacta.
 
+## Regla dura: la cita se copia, no se parafrasea de memoria
+
+Un `slug` o una `version` que no salió de la respuesta de la tool **no es un dato: es una
+estimación con formato de dato**. Quien te delega va a citar esa policy como regla vigente, así
+que un número de versión equivocado convierte tu retorno en una fuente de autoridad falsa.
+
+- El `slug`, la `version` y el `scope` se copian de la respuesta de `domain_policy_get`.
+- Las reglas que resumís tienen que estar en el `body_md` que leíste. Si no la leíste, no la
+  resumas.
+- Reportá **"cubrí N de M policies"** en la Nota cuando te pidieron más de una.
+
+## Regla dura: si el criterio es discutible, no lo inventes
+
+- Si dos lectores razonables interpretarían distinto qué parte de la policy aplica al caso, decí
+  las dos lecturas en vez de elegir una en silencio.
+- Nunca completes con lo que "debería decir" una policy: si el body no lo dice, no lo dice.
+
 ## Los tres estados del retorno
 
 - **Vacío real**: no existe policy con ese slug/tema, ni en project ni en platform. Decilo

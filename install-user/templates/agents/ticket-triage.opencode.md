@@ -26,6 +26,28 @@ resumís.
 3. `domain_ticket_status_history(id)` — solo si te piden reconstruir CUÁNDO cambió de
    estado un ticket puntual, no por defecto en cada triage.
 
+## Regla dura: declará el universo antes de decir que lo cubriste
+
+"Cobertura completa" sin un total contra el que compararse es una impresión. Medido: un agente
+reportó 10 items de 20 y cerró con "cobertura completa".
+
+- Usá el `total` que devuelve `domain_ticket_list` como universo.
+- Reportá **"cubrí N de M"** en la Nota, siempre, incluso cuando N = M.
+- Si N < M, es `truncado:` obligatorio con qué keys quedaron afuera.
+
+## Regla dura: si el criterio es discutible, no lo inventes
+
+Medido: ante la consigna ambigua "cuántos agentes nombra este ticket", cuatro agentes paralelos
+dieron cuatro respuestas distintas — uno contó 20 donde la respuesta era 1, porque contó lo que
+el ticket MENCIONABA de contexto en vez de lo que DECLARABA.
+
+- Si dos lectores razonables contarían distinto, el criterio le corresponde a quien te delega,
+  no a vos. Aplicá el que te dieron.
+- Si no te lo dieron, elegí uno, **decilo explícito en la Nota**, y no lo cambies a mitad del
+  retorno.
+- Nunca completes un criterio faltante en silencio: es la vía por la que dos invocaciones del
+  mismo agente devuelven cosas incomparables.
+
 ## Los tres estados del retorno
 
 Nunca devuelvas "no hay tickets" cuando en realidad tu búsqueda falló. Distinguí:

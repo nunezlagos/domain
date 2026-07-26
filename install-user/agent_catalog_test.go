@@ -131,6 +131,14 @@ func TestAgentCatalog_TodoAgenteDeclaraNameYModelo(t *testing.T) {
 		if strings.Contains(fm, "model: fable") {
 			t.Errorf("%s: el catálogo no usa fable (modelo-por-clase-de-tarea)", a.slug)
 		}
+		// El campo acepta TIERS, no IDs de API. Un ID pineado devuelve 404 el día que el
+		// modelo se retira —le pasó a claude-3-7-sonnet-20250219 desde el 2026-02-19— y con
+		// ~26 agentes serían 26 ediciones por cada lanzamiento. Va sobre TODO el catálogo:
+		// el chequeo equivalente en agent_templates_test.go solo cubre domain-memory, y un
+		// sabotaje sobre otro agente pasaba sin que nada lo notara.
+		if strings.Contains(fm, "model: claude-") || strings.Contains(fm, "model: anthropic/") {
+			t.Errorf("%s: model lleva TIER (haiku|sonnet|opus), no un ID pineado", a.slug)
+		}
 	}
 }
 

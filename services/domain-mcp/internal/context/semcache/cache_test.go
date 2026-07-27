@@ -155,3 +155,36 @@ func TestBehavior_ErrCacheMiss_Sentinel(t *testing.T) {
 	require.False(t, errors.Is(ErrCacheMiss, errors.New("otro error")),
 		"ErrCacheMiss NO debe matchear con un error distinto")
 }
+
+// DOMAINSERV-157: el vector CERO tampoco entra al cache semántico.
+//
+// vectorLiteral acá es un espejo del helper de internal/llm —el paquete no puede
+// importarlo por ciclo de imports (ver el comentario de cache.go)— y ese espejo
+// se quedó a mitad de camino: copió el chequeo de largo pero no el de norma. Con
+// el embedder degradado a noop, cada entrada del cache guardaba '[0,0,...]'.
+//
+// El daño es peor que en las otras tablas: un cache semántico compara por
+// distancia, así que dos prompts CUALESQUIERA con embedding cero dan distancia
+// idéntica. El cache pasa a devolver hits cruzados entre prompts que no tienen
+// nada que ver.
+func TestVectorLiteral_VectorCero_NoSeSerializa(t *testing.T) {
+	if got := vectorLiteral(make([]float32, 1024)); got != "'[]'::vector" {
+		t.Errorf("un vector de ceros no es un embedding, debe dar '[]'::vector; dio %s", got)
+	}
+	if got := vectorLiteral([]float32{0, 0, 0}); got != "'[]'::vector" {
+		t.Errorf("esperaba '[]'::vector, dio %s", got)
+	}
+}
+
+func TestVectorLiteral_VectorVacio_NoSeSerializa(t *testing.T) {
+	if got := vectorLiteral(nil); got != "'[]'::vector" {
+		t.Errorf("esperaba '[]'::vector, dio %s", got)
+	}
+}
+
+// El guard no puede pasarse de celoso: un embedding real se serializa entero.
+func TestVectorLiteral_VectorReal_SeSerializaCompleto(t *testing.T) {
+	if got := vectorLiteral([]float32{0.1, -0.5, 0}); got != "'[0.1,-0.5,0]'::vector" {
+		t.Errorf("esperaba '[0.1,-0.5,0]'::vector, dio %s", got)
+	}
+}

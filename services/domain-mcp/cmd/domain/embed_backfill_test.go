@@ -109,7 +109,9 @@ func TestDebeIterarOtroLote_DryRun_Corta(t *testing.T) {
 // retornara 0 siempre. Los 114 chunks nunca se backfilleaban.
 func TestBackfillTargets_IncluyeKnowledgeChunksReal(t *testing.T) {
 	targets := backfillTargets()
-	require.Len(t, targets, 2)
+	// el conteo atrapa el borrado accidental de un target; subirlo es deliberado
+	// (DOMAINSERV-157 agregó skills como tercero)
+	require.Len(t, targets, 3)
 
 	byTable := map[string]backfillTarget{}
 	for _, tg := range targets {
@@ -132,4 +134,38 @@ func TestBackfillTargets_IncluyeKnowledgeChunksReal(t *testing.T) {
 		require.NotContains(t, tg.embCol, "SELECT",
 			"ningún target puede llevar un embCol dummy con SELECT")
 	}
+}
+
+// DOMAINSERV-157: skills entra al backfill.
+//
+// Era la única tabla con columna embedding que no estaba en backfillTargets, así
+// que sus vectores en cero no se regeneraban ni con el binario arreglado: el
+// backfill ni los miraba. Sin esto, cerrar el guard de escritura solo evita
+// ceros NUEVOS y deja los viejos enterrados.
+//
+// El texto no sale de UNA columna: el service embebe `Name + " " + Description`
+// (skill/service.go), así que el target lleva una expresión SQL. Es válido
+// porque buildBackfillQuery interpola textCol tanto en el SELECT como en el
+// LENGTH(TRIM(...)).
+func TestBackfillTargets_IncluyeSkills_ConExpresionDeTextoYDeletedAt(t *testing.T) {
+	var skills *backfillTarget
+	for i, tg := range backfillTargets() {
+		if tg.table == "skills" {
+			skills = &backfillTargets()[i]
+		}
+	}
+	require.NotNil(t, skills, "skills debe estar en backfillTargets: es la única tabla con embedding que quedaba afuera")
+	require.True(t, skills.hasDeletedAt, "skills tiene deleted_at (migración 000010:30); omitirlo backfillea filas borradas")
+	require.Contains(t, skills.textCol, "name", "el texto embebido combina name y description, no una sola columna")
+	require.Contains(t, skills.textCol, "description")
+}
+
+// El shape de la expresión tiene que sobrevivir a la interpolación en las DOS
+// posiciones donde buildBackfillQuery la usa.
+func TestBuildBackfillQuery_TextColEsExpresion_SeInterpolaEnSelectYEnLength(t *testing.T) {
+	q := buildBackfillQuery("skills", "name || ' ' || COALESCE(description, '')", "embedding", true)
+
+	require.Contains(t, q, "SELECT id, name || ' ' || COALESCE(description, '') FROM skills")
+	require.Contains(t, q, "LENGTH(TRIM(name || ' ' || COALESCE(description, ''))) > 0")
+	require.Contains(t, q, "deleted_at IS NULL")
 }

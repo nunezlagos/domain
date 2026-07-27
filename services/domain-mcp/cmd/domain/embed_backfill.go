@@ -36,6 +36,11 @@ func backfillTargets() []backfillTarget {
 	return []backfillTarget{
 		{table: "knowledge_observations", textCol: "content", embCol: "embedding", hasDeletedAt: true},
 		{table: "knowledge_chunks", textCol: "content", embCol: "embedding", hasDeletedAt: false},
+		// DOMAINSERV-157: skills era la única tabla con embedding fuera del
+		// backfill, así que sus vectores en cero no se regeneraban ni con el
+		// binario arreglado. textCol es una expresión porque el service embebe
+		// name + description, no una sola columna.
+		{table: "skills", textCol: "name || ' ' || COALESCE(description, '')", embCol: "embedding", hasDeletedAt: true},
 	}
 }
 
@@ -155,8 +160,13 @@ func runEmbedBackfill(args []string) {
 			}
 		}
 	}
-	fmt.Printf("Backfill done: observations=%d knowledge_chunks=%d dry_run=%v\n",
-		totals["knowledge_observations"], totals["knowledge_chunks"], dryRun)
+	// recorre los targets en vez de nombrar tablas: un target nuevo que no
+	// aparezca en el resumen se lee como que no se backfilleó nada
+	var resumen strings.Builder
+	for _, tg := range backfillTargets() {
+		fmt.Fprintf(&resumen, "%s=%d ", tg.table, totals[tg.table])
+	}
+	fmt.Printf("Backfill done: %sdry_run=%v\n", resumen.String(), dryRun)
 }
 
 // debeIterarOtroLote decide si queda trabajo por hacer. El corte por escrituras

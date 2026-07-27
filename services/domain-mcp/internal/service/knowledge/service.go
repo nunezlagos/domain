@@ -264,9 +264,8 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	chunks := make([]Chunk, 0, len(rawChunks))
 	for i, content := range rawChunks {
 		var emb *pgvector.Vector
-		if i < len(embeds) && len(embeds[i]) > 0 {
-			v := pgvector.NewVector(embeds[i])
-			emb = &v
+		if i < len(embeds) {
+			emb = embeddingOrNil(embeds[i])
 		}
 		chRow, err := q.InsertChunk(ctx, knowledgedb.InsertChunkParams{
 			KnowledgeDocID: docRow.ID,

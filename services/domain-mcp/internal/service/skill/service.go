@@ -271,7 +271,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 	inJSON, _ := json.Marshal(in.InputSchema)
 	outJSON, _ := json.Marshal(in.OutputSchema)
 
-	emb := pgvector.NewVector(vec)
+	emb := embeddingOrNil(vec)
 	row, err := s.q(ctx).SkillCreate(ctx, skilldb.SkillCreateParams{
 		Slug:           in.Slug,
 		Name:           in.Name,
@@ -285,7 +285,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Skill, error) {
 		HasSideEffects: in.HasSideEffects,
 		DependsOn:      in.DependsOn,
 		Tags:           in.Tags,
-		Embedding:      &emb,
+		Embedding:      emb,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -379,8 +379,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Sk
 		if err != nil {
 			return nil, fmt.Errorf("embed: %w", err)
 		}
-		v := pgvector.NewVector(vec)
-		embedVec = &v
+		embedVec = embeddingOrNil(vec)
 	}
 
 	inJSON, _ := json.Marshal(inSchema)

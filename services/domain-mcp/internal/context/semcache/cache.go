@@ -20,18 +20,18 @@ import (
 
 // Entry es una entrada cacheada.
 type Entry struct {
-	ID            string    `json:"id"`
-	OrgID         string    `json:"organization_id"`
-	Provider      string    `json:"provider"`
-	Model         string    `json:"model"`
-	ParamsHash    string    `json:"params_hash"`
-	PromptHash    string    `json:"prompt_hash"`
-	PromptPreview string    `json:"prompt_preview"`
+	ID            string          `json:"id"`
+	OrgID         string          `json:"organization_id"`
+	Provider      string          `json:"provider"`
+	Model         string          `json:"model"`
+	ParamsHash    string          `json:"params_hash"`
+	PromptHash    string          `json:"prompt_hash"`
+	PromptPreview string          `json:"prompt_preview"`
 	Response      json.RawMessage `json:"response"`
-	Tokens        int       `json:"tokens"`
-	HitCount      int       `json:"hit_count"`
-	CreatedAt     time.Time `json:"created_at"`
-	LastUsedAt    time.Time `json:"last_used_at"`
+	Tokens        int             `json:"tokens"`
+	HitCount      int             `json:"hit_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	LastUsedAt    time.Time       `json:"last_used_at"`
 }
 
 // Lookup result.
@@ -104,7 +104,6 @@ func (c *Cache) Lookup(ctx context.Context, orgID, provider, model, paramsHash s
 		return nil, fmt.Errorf("lookup: %w", err)
 	}
 
-
 	_, _ = c.Pool.Exec(ctx,
 		`UPDATE llm_semantic_cache SET hit_count = hit_count + 1, last_used_at = now() WHERE id = $1`,
 		e.ID,
@@ -137,8 +136,12 @@ func (c *Cache) Store(ctx context.Context, e Entry, embedding []float32) error {
 
 // vectorLiteral convierte []float32 a literal pgvector inline '[v1,v2,...]'::vector.
 // Espejo simple del helper en internal/llm para evitar import cycle.
+// DOMAINSERV-157: el espejo copió el chequeo de largo pero no el de norma, así
+// que el slice de ceros del NopEmbedder se serializaba entero. En un cache
+// semántico eso es peor que en las otras tablas: dos prompts cualesquiera con
+// embedding cero quedan a distancia idéntica y el cache devuelve hits cruzados.
 func vectorLiteral(v []float32) string {
-	if len(v) == 0 {
+	if len(v) == 0 || esCero(v) {
 		return "'[]'::vector"
 	}
 	var b strings.Builder
@@ -170,4 +173,15 @@ func (c *Cache) Evict(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("evict: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
+}
+
+// esCero replica llm.IsZero. El paquete no puede importar internal/llm por ciclo
+// de imports, igual que vectorLiteral.
+func esCero(v []float32) bool {
+	for _, x := range v {
+		if x != 0 {
+			return false
+		}
+	}
+	return true
 }

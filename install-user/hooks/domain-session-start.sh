@@ -113,7 +113,7 @@ fi
 
 if [ -z "$vps_url" ] || [ -z "$api_key" ]; then
   cat <<'EOF' 2>/dev/null
-{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"⚠ domain bootstrap: VPS_URL o API_KEY no encontrados en ~/.config/domain/install.env, ~/.claude/.env, ~/.config/opencode/.env, ni en los JSONs de los clientes MCP. Re-corre el installer de domain con --api-key para configurar."}}
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"## domain skills & policies VIGENTES [skpol=unavailable]\n⚠ domain bootstrap: VPS_URL o API_KEY no encontrados en ~/.config/domain/install.env, ~/.claude/.env, ~/.config/opencode/.env, ni en los JSONs de los clientes MCP. Re-corre el installer de domain con --api-key para configurar.\nFALLBACK OBLIGATORIO: el hook no pudo consultar nada. Si el MCP domain responde igual, llama vos domain_project_skill_list(project_slug) y domain_project_policy_list(project_slug), marca el bloque de saludo con (fallback), y si no estas bajo Orca excluí del conteo las skills/policies orca-* y cross-project-context (DOMAINSERV-92)."}}
 EOF
   exit 0
 fi
@@ -320,16 +320,26 @@ def _is_orca_item(x):
     slug = str(x.get('slug') or '')
     return slug.startswith('orca-') or slug in _ORCA_POLICY_SLUGS
 
+# DOMAINSERV-179: el token y los counts van en el header porque _cap corta por
+# líneas completas desde arriba: el header sobrevive siempre, las listas de slugs
+# son descartables. Sin esto, una truncación dropea la línea de counts entera y el
+# agente no puede distinguir "0 skills" de "el hook no corrió".
+def _skpol_head(status, counts):
+    marca = " ".join([f"skpol={status}"] + [f"{k}={v}" for k, v in counts.items()])
+    return (f"## domain skills & policies VIGENTES [{marca}] "
+            "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)")
+
 def _skills_policies_block():
     """Bloque compacto SUGGEST-ONLY con skills/policies vigentes del proyecto."""
-    lines = ["## domain skills & policies VIGENTES "
-             "(SUGGEST-ONLY: aplicar, NUNCA registrar/persistir desde aquí)",
-             f"host={_HOST}" + ("" if _HOST == 'orca'
+    status = "ok"
+    counts = {}
+    lines = [f"host={_HOST}" + ("" if _HOST == 'orca'
                  else " — excluir del bloque y del trabajo las skills/policies "
                       "orca-* y cross-project-context; no contarlas en G.")]
 
     sk = _mcp_inner(os.environ.get('HOOK_SKILL_OUT', ''))
     if sk is None:
+        status = "degraded"
         lines.append("skills: ⚠ no disponible (domain MCP sin respuesta)")
     else:
         items = sk.get('skills') if isinstance(sk.get('skills'), list) else []
@@ -339,6 +349,8 @@ def _skills_policies_block():
         glob = [s for s in items if isinstance(s, dict) and s.get('scope') == 'global']
         def _slugs(xs):
             return ", ".join(str(s.get('slug') or s.get('name') or '?') for s in xs) or "—"
+        # counts POST-filtro orca: si fueran los crudos, el header contradiría R8
+        counts["P_sk"], counts["G_sk"] = len(proj), len(glob)
         lines.append(f"skills: P={len(proj)} [{_slugs(proj)}] · G={len(glob)} [{_slugs(glob)}]")
         if len(proj) == 0:
             lines.append("  nota: 0 skills de proyecto — detectá el/los stack(s) y "
@@ -347,6 +359,7 @@ def _skills_policies_block():
 
     pol = _mcp_inner(os.environ.get('HOOK_POLICY_OUT', ''))
     if pol is None:
+        status = "degraded"
         lines.append("policies: ⚠ no disponible (domain MCP sin respuesta)")
     else:
         pitems = pol.get('policies') if isinstance(pol.get('policies'), list) else []
@@ -357,9 +370,10 @@ def _skills_policies_block():
             kind = p.get('kind')
             return f"{slug}({kind})" if kind else slug
         rendered = ", ".join(_pfmt(p) for p in pitems if isinstance(p, dict)) or "—"
+        counts["P_pol"] = len(pitems)
         lines.append(f"policies: P={len(pitems)} [{rendered}]")
 
-    return "\n".join(lines)
+    return "\n".join([_skpol_head(status, counts)] + lines)
 
 try:
     max_bytes = int(os.environ.get('HOOK_CTX_MAX_BYTES', '12000'))
@@ -387,8 +401,13 @@ ctx = (
     f"(en paralelo, con project_slug={os.environ.get('HOOK_MEM_SLUG','?')}):\n"
     f"    a) domain_policy_list()\n"
     f"    b) domain_ticket_list(project_slug, limit=5)\n"
-    f"    NO llamar domain_project_skill_list ni domain_project_policy_list: sus counts "
-    f"y slugs ya estan en el bloque de arriba (DOMAINSERV-177).\n"
+    f"    Sobre skills/policies del proyecto, mira la linea que empieza con "
+    f"'## domain skills & policies VIGENTES':\n"
+    f"      · dice skpol=ok -> PROHIBIDO llamar domain_project_skill_list y "
+    f"domain_project_policy_list. P y G salen de ahi (DOMAINSERV-177).\n"
+    f"      · dice skpol=degraded o skpol=unavailable, O esa linea NO EXISTE -> "
+    f"llamalas vos, marca el bloque con (fallback), y aplica vos el filtro "
+    f"host!=orca (excluir orca-* y cross-project-context).\n"
     f"R3. Renderizar el bloque YAML exacto que define la prompt first-response. "
     f"skills y policies van con formato '{{P}} proyecto + {{G}} globales'. "
     f"skills: P y G salen del bloque de arriba. "

@@ -14,7 +14,7 @@ func TestFirstResponsePromptSeeder_ImplementsSeederInterface(t *testing.T) {
 func TestFirstResponsePromptSeeder_Metadata(t *testing.T) {
 	s := &FirstResponsePromptSeeder{}
 	require.Equal(t, "first_response_prompt", s.Name())
-	require.Equal(t, 6, s.Version())
+	require.Equal(t, 7, s.Version())
 	require.Equal(t, 63, s.Order())
 	require.False(t, s.IsDevOnly())
 }
@@ -39,7 +39,21 @@ func TestFirstResponsePromptSeeder_DefaultBodyNotEmpty(t *testing.T) {
 	// server-side e inyecta sus counts y slugs. Re-bajarlas en el turn 1 cuesta
 	// ~40.000 chars de payload por datos que ya estan en contexto.
 	require.Contains(t, DefaultFirstResponsePromptBody, "PASO 1 - Llamar 2 tools")
-	require.Contains(t, DefaultFirstResponsePromptBody, "NO llamar domain_project_skill_list")
+	// DOMAINSERV-179: la prohibicion absoluta paso a ser condicional. El contrato
+	// que se assertea ahora es el predicado sobre el token, no la prohibicion:
+	// con skpol=ok sigue prohibido, con degraded/unavailable o sin bloque hay que
+	// llamarlas. Que domain_project_skill_list aparezca en el body dejo de ser un
+	// olor y es el fallback.
+	require.Contains(t, DefaultFirstResponsePromptBody, "skpol=ok")
+	require.Contains(t, DefaultFirstResponsePromptBody, "skpol=degraded")
+	require.Contains(t, DefaultFirstResponsePromptBody, "skpol=unavailable")
+	require.Contains(t, DefaultFirstResponsePromptBody, "domain_project_skill_list")
+	// el predicado tiene que cubrir la ausencia: si el hook muere no emite nada,
+	// asi que el agente razona sobre la falta del marcador, no sobre un error
+	require.Contains(t, DefaultFirstResponsePromptBody, "NO EXISTE")
+	// el filtro host!=orca lo aplica hoy solo el hook: en fallback las tools
+	// crudas devuelven todo y el agente tiene que re-aplicarlo o infla P y G
+	require.Contains(t, DefaultFirstResponsePromptBody, "(fallback)")
 	// Estructura imperativa: pasos numerados + reglas duras contra omitir
 	// skills/policies o parafrasear en prosa (feedback del usuario: sin
 	// ambiguedad, la IA debe seguirlo a cabalidad).

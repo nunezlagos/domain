@@ -21,10 +21,13 @@ Con project_slug = el slug del bootstrap:
 1. ` + "`domain_policy_list()`" + `   (sin argumentos)
 2. ` + "`domain_ticket_list(project_slug, limit=5)`" + `
 
-NO llamar domain_project_skill_list ni domain_project_policy_list. El bloque
-"domain skills & policies VIGENTES" que el hook YA inyecto arriba trae sus counts
-y sus slugs; re-bajarlas cuesta ~40.000 chars de payload por datos que ya estan
-en contexto (DOMAINSERV-177).
+Sobre skills/policies del proyecto, mira la linea que empieza con
+"## domain skills & policies VIGENTES" y decidi por su token:
+- dice ` + "`skpol=ok`" + ` -> NO llamar domain_project_skill_list ni
+  domain_project_policy_list. Sus counts y slugs ya estan en esa linea;
+  re-bajarlas cuesta ~40.000 chars de payload (DOMAINSERV-177).
+- dice ` + "`skpol=degraded`" + ` o ` + "`skpol=unavailable`" + `, O esa linea NO EXISTE ->
+  llamalas vos, porque nadie mas te va a dar el P (DOMAINSERV-179).
 
 ## PASO 2 - Calcular P (proyecto) y G (globales)
 - skills:   P y G salen del bloque del hook ("skills: P=N [...] · G=M [...]")
@@ -32,6 +35,9 @@ en contexto (DOMAINSERV-177).
 - Si el banner de host del hook dice host!=orca (Claude Code plano): excluir de G
   las skills/policies cuyo slug empiece con orca- y cross-project-context (no
   aplican fuera de Orca). Bajo host=orca se cuentan normal.
+- En modo fallback (skpol=degraded/unavailable o sin bloque): el P sale de las
+  tools, marca el bloque con (fallback), y el filtro host!=orca lo aplicas VOS
+  — las tools crudas devuelven todo y sin filtrar el P y el G salen inflados.
 
 ## PASO 3 - Emitir EXACTAMENTE este bloque (primera cosa en el mensaje)
 ` + "```" + `
@@ -59,14 +65,14 @@ R2. PROHIBIDO omitir las globales (G). El G de policies sale de la tool 1; el P,
 R3. PROHIBIDO parafrasear el contexto en prosa o bullets en vez del bloque.
 R4. PROHIBIDO responder al usuario antes de emitir el bloque.
 R5. PROHIBIDO explicar que tools llamaste o escribir "segun el bootstrap".
-R6. PROHIBIDO re-bajar skills/policies del proyecto con sus tools: ya vienen en el bloque del hook.
+R6. PROHIBIDO re-bajar skills/policies del proyecto con sus tools si el bloque dice skpol=ok. Si dice skpol=degraded o skpol=unavailable, o el bloque no esta, bajalas y marca (fallback).
 R7. El bloque completo: maximo 12 lineas.
 R8. host!=orca: NO listes ni cuentes skills/policies orca-* ni cross-project-context (DOMAINSERV-92).`
 
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 6 } // 6: PASO 1 baja de 4 a 2 tools, skills/policies del proyecto salen del bloque del hook (DOMAINSERV-177); 5: regla host!=orca excluye skills/policies orca-* (DOMAINSERV-92); 4: guard is_user_modified (DOMAINSERV-27)
+func (s *FirstResponsePromptSeeder) Version() int    { return 7 } // 7: fallback condicional por token skpol, la prohibicion absoluta pasa a predicado (DOMAINSERV-179); 6: PASO 1 baja de 4 a 2 tools, skills/policies del proyecto salen del bloque del hook (DOMAINSERV-177); 5: regla host!=orca excluye skills/policies orca-* (DOMAINSERV-92); 4: guard is_user_modified (DOMAINSERV-27)
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 

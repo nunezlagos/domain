@@ -29,9 +29,21 @@ En tu PRIMER mensaje, ANTES de responder, ejecuta en paralelo (con el
 - `domain_policy_list()`
 - `domain_ticket_list(project_slug, limit=5)`
 
-NO llames `domain_project_skill_list` ni `domain_project_policy_list`: el bloque
-`domain skills & policies VIGENTES` que inyecta el hook ya trae sus counts y sus
-slugs, y re-bajarlas cuesta ~40.000 chars de payload (DOMAINSERV-177).
+Sobre skills/policies del proyecto, mirá la línea que empieza con
+`## domain skills & policies VIGENTES` y decidí por su token:
+
+- dice `skpol=ok` → **NO** llames `domain_project_skill_list` ni
+  `domain_project_policy_list`. Sus counts y slugs ya están en esa línea, y
+  re-bajarlas cuesta ~40.000 chars de payload (DOMAINSERV-177).
+- dice `skpol=degraded` o `skpol=unavailable`, **o esa línea NO EXISTE** →
+  llamalas vos, marcá el bloque de saludo con `(fallback)`, y aplicá vos el
+  filtro `host!=orca` (excluir `orca-*` y `cross-project-context`): las tools
+  crudas devuelven todo y sin filtrar el P y el G salen inflados
+  (DOMAINSERV-179).
+
+Este archivo es el único locus del predicado que sobrevive una caída total del
+VPS: la copia de la prompt `first-response` se obtiene con `domain_prompt_get`,
+que necesita el MCP arriba. Si el server está caído, esa copia no se lee.
 
 DESPUÉS, EJECUTA `domain_prompt_get(slug="first-response")` y SÍGUELO AL
 PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se

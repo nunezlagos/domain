@@ -16,16 +16,19 @@ const DefaultFirstResponsePromptBody = `# PROTOCOLO PRIMER MENSAJE - OBLIGATORIO
 Ejecutar los PASOS EN ORDEN. Aplica SIEMPRE, incluso si el mensaje del usuario
 es trivial, vacio o basura (ej: "asd", "hola", "x"). No hay excepciones.
 
-## PASO 1 - Llamar 4 tools (en paralelo, ANTES de escribir nada al usuario)
+## PASO 1 - Llamar 2 tools (en paralelo, ANTES de escribir nada al usuario)
 Con project_slug = el slug del bootstrap:
-1. ` + "`domain_project_skill_list(project_slug)`" + `
-2. ` + "`domain_project_policy_list(project_slug)`" + `
-3. ` + "`domain_policy_list()`" + `   (sin argumentos)
-4. ` + "`domain_ticket_list(project_slug, limit=5)`" + `
+1. ` + "`domain_policy_list()`" + `   (sin argumentos)
+2. ` + "`domain_ticket_list(project_slug, limit=5)`" + `
+
+NO llamar domain_project_skill_list ni domain_project_policy_list. El bloque
+"domain skills & policies VIGENTES" que el hook YA inyecto arriba trae sus counts
+y sus slugs; re-bajarlas cuesta ~40.000 chars de payload por datos que ya estan
+en contexto (DOMAINSERV-177).
 
 ## PASO 2 - Calcular P (proyecto) y G (globales)
-- skills:   P = items de la tool 1 con scope=project ; G = items con scope=global
-- policies: P = total de la tool 2 ; G = total de la tool 3
+- skills:   P y G salen del bloque del hook ("skills: P=N [...] · G=M [...]")
+- policies: P sale del bloque del hook ("policies: P=N [...]") ; G = total de la tool 1
 - Si el banner de host del hook dice host!=orca (Claude Code plano): excluir de G
   las skills/policies cuyo slug empiece con orca- y cross-project-context (no
   aplican fuera de Orca). Bajo host=orca se cuentan normal.
@@ -52,18 +55,18 @@ Si el mensaje fue trivial/vacio: preguntar que necesita, en 1 linea.
 
 ## REGLAS DURAS
 R1. PROHIBIDO omitir las lineas skills y policies.
-R2. PROHIBIDO omitir las globales (G). Siempre se muestran las 2 tools de policies.
+R2. PROHIBIDO omitir las globales (G). El G de policies sale de la tool 1; el P, del bloque del hook.
 R3. PROHIBIDO parafrasear el contexto en prosa o bullets en vez del bloque.
 R4. PROHIBIDO responder al usuario antes de emitir el bloque.
 R5. PROHIBIDO explicar que tools llamaste o escribir "segun el bootstrap".
-R6. PROHIBIDO pasar include_globals a la tool 1 (ya trae globales por default).
+R6. PROHIBIDO re-bajar skills/policies del proyecto con sus tools: ya vienen en el bloque del hook.
 R7. El bloque completo: maximo 12 lineas.
 R8. host!=orca: NO listes ni cuentes skills/policies orca-* ni cross-project-context (DOMAINSERV-92).`
 
 type FirstResponsePromptSeeder struct{}
 
 func (s *FirstResponsePromptSeeder) Name() string    { return "first_response_prompt" }
-func (s *FirstResponsePromptSeeder) Version() int    { return 5 } // 5: regla host!=orca excluye skills/policies orca-* (DOMAINSERV-92); 4: guard is_user_modified (DOMAINSERV-27)
+func (s *FirstResponsePromptSeeder) Version() int    { return 6 } // 6: PASO 1 baja de 4 a 2 tools, skills/policies del proyecto salen del bloque del hook (DOMAINSERV-177); 5: regla host!=orca excluye skills/policies orca-* (DOMAINSERV-92); 4: guard is_user_modified (DOMAINSERV-27)
 func (s *FirstResponsePromptSeeder) Order() int      { return 63 }
 func (s *FirstResponsePromptSeeder) IsDevOnly() bool { return false }
 

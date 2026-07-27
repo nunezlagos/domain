@@ -26,10 +26,12 @@ Esos 2 resultados YA están en tu contexto al arrancar. Por lo tanto:
 En tu PRIMER mensaje, ANTES de responder, ejecuta en paralelo (con el
 `project_slug` que viene en el bloque del hook):
 
-- `domain_project_skill_list(project_slug)`
-- `domain_project_policy_list(project_slug)`
 - `domain_policy_list()`
 - `domain_ticket_list(project_slug, limit=5)`
+
+NO llames `domain_project_skill_list` ni `domain_project_policy_list`: el bloque
+`domain skills & policies VIGENTES` que inyecta el hook ya trae sus counts y sus
+slugs, y re-bajarlas cuesta ~40.000 chars de payload (DOMAINSERV-177).
 
 DESPUÉS, EJECUTA `domain_prompt_get(slug="first-response")` y SÍGUELO AL
 PIE DE LA LETRA. Esa prompt define CÓMO responder — si tu respuesta se

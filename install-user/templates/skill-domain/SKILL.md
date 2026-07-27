@@ -14,9 +14,8 @@ versionada). Este archivo es solo el bootstrap.
 2. Si la policy no carga (server caído / key inválida): sigue el mínimo
    abajo y pídele al usuario que reinstale con el one-liner canónico:
    `curl -fsSL https://raw.githubusercontent.com/nunezlagos/domain/main/install-user/install-curl.sh | sudo bash`
-   (compila y ejecuta domain-install, que instala el catálogo completo de
-   agentes; install-user.sh quedó fuera del camino canónico y reinstalar con
-   él degrada lo instalado).
+   Es el único camino soportado: compila y ejecuta domain-install, que instala
+   el catálogo completo de agentes, sus guards y los lifecycle hooks.
 
 ## Mínimo si la policy no carga
 

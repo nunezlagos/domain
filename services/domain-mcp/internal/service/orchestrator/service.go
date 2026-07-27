@@ -576,33 +576,45 @@ func (s *Service) loadRulePolicies(ctx context.Context, projectID uuid.UUID) (pl
 // empate por tamaño se rompe con el orden de entrada, que ya viene estable de
 // loadRulePolicies (ORDER BY kind, slug).
 func formatRulesBlock(platform, project []rulePolicy) string {
+	entries := entradasDelRulesBlock(platform, project)
+	repartirPresupuesto(entries)
+	return renderRulesBlock(entries)
+}
+
+// rulesEntry es una policy con la decisión de si su body va verbatim o stubbeado.
+type rulesEntry struct {
+	p      rulePolicy
+	inline bool
+}
+
+// entradasDelRulesBlock arma las entradas en orden de salida: plataforma primero,
+// salteando las que una project_policy override por kind.
+func entradasDelRulesBlock(platform, project []rulePolicy) []rulesEntry {
 	overridden := make(map[string]bool)
 	for _, p := range project {
 		if p.override && p.kind != "" {
 			overridden[p.kind] = true
 		}
 	}
-
-	// entradas que realmente se escriben, en orden de salida
-	type entry struct {
-		p      rulePolicy
-		inline bool
-	}
-	entries := make([]entry, 0, len(platform)+len(project))
+	entries := make([]rulesEntry, 0, len(platform)+len(project))
 	for _, p := range platform {
 		if !overridden[p.kind] {
 			// una platform extensa se stubbea por tamaño individual y NO consume
 			// presupuesto: ya está fuera antes de repartir
-			entries = append(entries, entry{p: p, inline: len(p.body) <= maxInlinePolicyBody})
+			entries = append(entries, rulesEntry{p: p, inline: len(p.body) <= maxInlinePolicyBody})
 		}
 	}
 	for _, p := range project {
-		entries = append(entries, entry{p: p, inline: true})
+		entries = append(entries, rulesEntry{p: p, inline: true})
 	}
+	return entries
+}
 
-	// reparto del presupuesto de menor a mayor body. Una policy que no entra NO corta
-	// el reparto: se saltea y se sigue con las siguientes (que son más grandes, así que
-	// en la práctica el corte es limpio, pero el guard evita depender de eso).
+// repartirPresupuesto stubbea in-place las entradas que no entran, de menor a mayor
+// body. Una policy que no entra NO corta el reparto: se saltea y se sigue con las
+// siguientes (más grandes, así que en la práctica el corte es limpio, pero el guard
+// evita depender de eso).
+func repartirPresupuesto(entries []rulesEntry) {
 	orden := make([]int, 0, len(entries))
 	for i := range entries {
 		orden = append(orden, i)
@@ -621,7 +633,9 @@ func formatRulesBlock(platform, project []rulePolicy) string {
 		}
 		budget -= len(entries[i].p.body)
 	}
+}
 
+func renderRulesBlock(entries []rulesEntry) string {
 	var b strings.Builder
 	for _, e := range entries {
 		b.WriteString("\n### ")

@@ -17,6 +17,7 @@ func pathsDePrueba(t *testing.T) Paths {
 		GlobalAgentsDir:   filepath.Join(tmp, "claude", "agents"),
 		OpencodeDir:       filepath.Join(tmp, "opencode"),
 		OpencodeAgentsDir: filepath.Join(tmp, "opencode", "agents"),
+		AgentsManifest:    filepath.Join(tmp, "domain", "agents-manifest.json"),
 	}
 }
 

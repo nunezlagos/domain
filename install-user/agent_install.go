@@ -21,29 +21,33 @@ type resultadoAgentes struct {
 	dirCreado        bool
 }
 
+// prepararDirectorios crea los destinos y marca si el de agentes no existía: el watcher del
+// harness solo cubre directorios que ya estaban al arrancar la sesión, así que crearlo ahora
+// implica que esta sesión no descubre los agentes hasta reiniciar.
+func prepararDirectorios(paths Paths, res *resultadoAgentes) error {
+	if _, err := os.Stat(paths.GlobalAgentsDir); os.IsNotExist(err) {
+		res.dirCreado = true
+	}
+	for _, dir := range []string{paths.GlobalAgentsDir, paths.AgentHooksDir, paths.OpencodeAgentsDir} {
+		if dir == "" {
+			continue
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // instalarAgentes escribe el catálogo en Claude Code y, para los agentes que tengan
 // variante, también en OpenCode. Idempotente: reinstalar lo mismo no reporta conflicto.
 func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error) {
 	var res resultadoAgentes
 
-	// el watcher del harness solo cubre directorios que existían al arrancar la sesión: si
-	// lo creamos ahora, esta sesión no descubre los agentes hasta reiniciar
-	if _, err := os.Stat(paths.GlobalAgentsDir); os.IsNotExist(err) {
-		res.dirCreado = true
-	}
-	if err := os.MkdirAll(paths.GlobalAgentsDir, 0o755); err != nil {
+	if err := prepararDirectorios(paths, &res); err != nil {
 		return res, err
 	}
-	if paths.AgentHooksDir != "" {
-		if err := os.MkdirAll(paths.AgentHooksDir, 0o755); err != nil {
-			return res, err
-		}
-	}
-	if paths.OpencodeAgentsDir != "" {
-		if err := os.MkdirAll(paths.OpencodeAgentsDir, 0o755); err != nil {
-			return res, err
-		}
-	}
+	manifiesto := cargarManifiesto(paths.AgentsManifest)
 
 	for _, a := range cat {
 		// un guard que no resuelve deja ABIERTO el tool que venía a acotar, así que el
@@ -56,9 +60,16 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 		res.guardsInstalados = append(res.guardsInstalados, guards...)
 
 		destino := filepath.Join(paths.GlobalAgentsDir, a.slug+".md")
+		// un conflicto es información, no una excepción: se reporta y se sigue con el resto
+		// del catálogo en vez de abortar la instalación entera
+		if clasificar(destino, tpl, manifiesto[a.slug]) == delUsuario {
+			res.conflictos = append(res.conflictos, a.slug)
+			continue
+		}
 		if err := escribirTemplate(destino, tpl); err != nil {
 			return res, err
 		}
+		manifiesto[a.slug] = sha256Hex(tpl)
 		res.instalados = append(res.instalados, a.slug)
 
 		if paths.OpencodeAgentsDir == "" {
@@ -72,6 +83,12 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 			return res, err
 		}
 		res.opencode = append(res.opencode, a.slug)
+	}
+
+	// se persiste una vez al final, no por agente: si algo falla en el medio, el manifest no
+	// queda declarando agentes que no se escribieron
+	if err := guardarManifiesto(paths.AgentsManifest, manifiesto); err != nil {
+		return res, err
 	}
 	return res, nil
 }
@@ -118,6 +135,10 @@ func escribirTemplate(destino string, contenido []byte) error {
 
 // escribirEjecutable es escribirTemplate para los guards: sin el bit de ejecución el hook
 // no puede correr el script, y un hook que no corre no bloquea nada.
+//
+// Los guards quedan FUERA del esquema de procedencia a propósito: no son configuración que el
+// usuario ajuste, son la restricción que acota un tool. Respetar una edición local acá dejaría
+// vigente un guard debilitado sin que nada lo señale, así que el del bundle gana siempre.
 func escribirEjecutable(destino string, contenido []byte) error {
 	if actual, err := os.ReadFile(destino); err == nil && bytes.Equal(actual, contenido) {
 		return os.Chmod(destino, 0o755)
@@ -129,11 +150,20 @@ func escribirEjecutable(destino string, contenido []byte) error {
 // desinstalarAgentes remueve exactamente lo que instaló el catálogo. Un agente que el
 // usuario haya puesto en el mismo directorio no se toca.
 func desinstalarAgentes(paths Paths, cat []agentTemplate) {
+	manifiesto := cargarManifiesto(paths.AgentsManifest)
 	for _, a := range cat {
 		_ = os.Remove(filepath.Join(paths.GlobalAgentsDir, a.slug+".md"))
 		if paths.OpencodeAgentsDir != "" && len(a.opencode) > 0 {
 			_ = os.Remove(filepath.Join(paths.OpencodeAgentsDir, a.slug+".md"))
 		}
+		// una entrada que sobreviva al archivo haría que la instalación siguiente compare
+		// contra el hash de algo que ya no está
+		delete(manifiesto, a.slug)
+	}
+	if len(manifiesto) == 0 {
+		_ = os.Remove(paths.AgentsManifest)
+	} else {
+		_ = guardarManifiesto(paths.AgentsManifest, manifiesto)
 	}
 	// solo se van si quedaron vacíos, así que un agente ajeno los preserva
 	_ = os.Remove(paths.GlobalAgentsDir)

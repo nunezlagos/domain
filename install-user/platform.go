@@ -86,6 +86,11 @@ type Paths struct {
 	// se resuelve contra el cwd, así que el guard solo se encontraría si el proyecto actual
 	// casualmente lo tuviera — y un guard que no se encuentra no bloquea nada.
 	AgentHooksDir string // ~/.local/share/domain/hooks/
+	// AgentsManifest registra el sha256 del template que domain escribió por agente. Sin ese
+	// registro no se puede distinguir una edición del usuario de un template actualizado, y
+	// quedan solo dos comportamientos, los dos malos: pisar siempre (se pierde la edición) o
+	// no pisar nunca (el catálogo se congela y un fix de template no llega al cliente).
+	AgentsManifest string // ~/.local/share/domain/agents-manifest.json
 }
 
 func (p Platform) Paths() Paths {
@@ -105,6 +110,7 @@ func (p Platform) Paths() Paths {
 		GlobalSkillPath: filepath.Join(home, ".claude", "skills", "domain", "SKILL.md"),
 		GlobalAgentsDir: filepath.Join(home, ".claude", "agents"),
 		AgentHooksDir:   filepath.Join(dataDir, "domain", "hooks"),
+		AgentsManifest:  filepath.Join(dataDir, "domain", "agents-manifest.json"),
 		ClaudeCodeMCP:   filepath.Join(home, ".claude.json"),
 		OpencodeDir:     filepath.Join(configDir, "opencode"),
 		OpencodeMCP:     filepath.Join(configDir, "opencode", "opencode.json"),

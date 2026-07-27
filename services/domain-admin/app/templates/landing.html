@@ -531,8 +531,6 @@ html.dark .feat-icon {
   flex-shrink: 0;
 }
 .fmc-dot--ok  { background: #6aac82; }
-.fmc-dot--mid { background: var(--amber); }
-.fmc-dot--off { background: var(--stone); }
 .fmc-name { font-size: 13px; font-weight: 600; color: rgba(250,248,242,.92); flex: 1; }
 .fmc-badge {
   font-size: 11px;
@@ -541,10 +539,6 @@ html.dark .feat-icon {
   border-radius: 4px;
   background: rgba(106,172,130,.25);
   color: var(--green-pale);
-}
-.fmc-badge--mid {
-  background: rgba(196,145,79,.25);
-  color: #d4a870;
 }
 
 /* ── Clientes ───────────────────────────────────────────────────────── */
@@ -986,7 +980,7 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
                alt="Domain MCP">
           <div class="hero-card hero-card--top-right">
             <i class="fas fa-bolt"></i>
-            <span>247 skills activas</span>
+            <span>Catálogo de skills versionado</span>
           </div>
           <div class="hero-card hero-card--bot-left">
             <i class="fas fa-shield-halved"></i>
@@ -1085,23 +1079,23 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
         <div class="feat-hero-visual">
           <div class="feat-mini-card">
             <span class="fmc-dot fmc-dot--ok"></span>
-            <span class="fmc-name">send-email</span>
-            <span class="fmc-badge">1.247 calls</span>
+            <span class="fmc-name">commit-message</span>
+            <span class="fmc-badge">global</span>
           </div>
           <div class="feat-mini-card">
             <span class="fmc-dot fmc-dot--ok"></span>
-            <span class="fmc-name">query-database</span>
-            <span class="fmc-badge">892 calls</span>
+            <span class="fmc-name">gherkin-from-bug</span>
+            <span class="fmc-badge">global</span>
           </div>
           <div class="feat-mini-card">
-            <span class="fmc-dot fmc-dot--mid"></span>
-            <span class="fmc-name">web-search</span>
-            <span class="fmc-badge fmc-badge--mid">68% success</span>
+            <span class="fmc-dot fmc-dot--ok"></span>
+            <span class="fmc-name">schema-migration-authoring</span>
+            <span class="fmc-badge">proyecto</span>
           </div>
           <div class="feat-mini-card">
-            <span class="fmc-dot fmc-dot--off"></span>
+            <span class="fmc-dot fmc-dot--ok"></span>
             <span class="fmc-name">text-redact-secrets</span>
-            <span class="fmc-badge">activa</span>
+            <span class="fmc-badge">global</span>
           </div>
         </div>
       </div>
@@ -1123,9 +1117,9 @@ html.dark .install-note { background: rgba(61,122,84,.10); border-color: rgba(61
       <div class="feat-card">
         <div class="feat-icon"><i class="fas fa-chart-line"></i></div>
         <h3>Observabilidad real</h3>
-        <p>Métricas por skill (calls, success rate, latencia), feedback de usuarios,
-        A/B testing automático entre versiones. Queda claro exactamente qué funciona
-        y qué no.</p>
+        <p>Feedback de usuarios sobre cada skill, trazas completas de cada flujo
+        multi-fase, uptime del servidor MCP y consumo de tokens por proyecto.
+        Queda registrado qué se ejecutó, cuándo y cuánto costó.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon"><i class="fas fa-clock"></i></div>

@@ -474,7 +474,7 @@ func (h *ticketHandlers) handleTicketList(ctx context.Context, req mcp.CallToolR
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"tickets": list, "total": total})
+	return toolResultJSON(map[string]any{"tickets": proyectarTicketsParaListado(list), "total": total})
 }
 
 func (h *ticketHandlers) handleTicketUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

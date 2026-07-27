@@ -44,9 +44,22 @@ func buildCatalog() map[string]*Model {
 	}
 	entries := []entry{
 
-		{"anthropic", "claude-opus-4-7", "Claude Opus 4.7", "completion", 1_000_000, 15.0, 75.0, 0},
-		{"anthropic", "claude-sonnet-4-6", "Claude Sonnet 4.6", "completion", 200_000, 3.0, 15.0, 0},
-		{"anthropic", "claude-haiku-4-5-20251001", "Claude Haiku 4.5", "completion", 200_000, 0.8, 4.0, 0},
+		// DOMAINSERV-162: verificado contra la referencia de modelos vigente el
+		// 2026-07-26. Antes faltaban las dos generaciones en uso —Opus 5 y
+		// Sonnet 5— y las tres entradas que había tenían algún dato mal: opus-4-7
+		// a 15/75 (3× de más), sonnet-4-6 con 200K de contexto siendo 1M, y haiku
+		// a 0.8/4.0. Un modelo ausente no falla: el runner descartaba
+		// ErrModelNotFound y la corrida quedaba con costo 0.
+		{"anthropic", "claude-fable-5", "Claude Fable 5", "completion", 1_000_000, 10.0, 50.0, 0},
+		{"anthropic", "claude-opus-5", "Claude Opus 5", "completion", 1_000_000, 5.0, 25.0, 0},
+		{"anthropic", "claude-opus-4-8", "Claude Opus 4.8", "completion", 1_000_000, 5.0, 25.0, 0},
+		{"anthropic", "claude-opus-4-7", "Claude Opus 4.7", "completion", 1_000_000, 5.0, 25.0, 0},
+		// sonnet-5 va al precio de LISTA. Tiene un introductorio de 2.0/10.0
+		// hasta el 2026-08-31, pero el registry no modela vigencia temporal:
+		// cargarlo acá dejaría un precio que caduca en silencio.
+		{"anthropic", "claude-sonnet-5", "Claude Sonnet 5", "completion", 1_000_000, 3.0, 15.0, 0},
+		{"anthropic", "claude-sonnet-4-6", "Claude Sonnet 4.6", "completion", 1_000_000, 3.0, 15.0, 0},
+		{"anthropic", "claude-haiku-4-5-20251001", "Claude Haiku 4.5", "completion", 200_000, 1.0, 5.0, 0},
 
 		{"openai", "gpt-4o", "GPT-4o", "completion", 128_000, 2.5, 10.0, 0},
 		{"openai", "gpt-4o-mini", "GPT-4o mini", "completion", 128_000, 0.15, 0.6, 0},

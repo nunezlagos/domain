@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -280,10 +281,25 @@ LOOP:
 
 	var costUSD float64
 	if r.Models != nil {
-		if c, cerr := r.Models.CostUSD(ctx, agent.Provider, agent.Model, llm.Usage{
+		c, cerr := r.Models.CostUSD(ctx, agent.Provider, agent.Model, llm.Usage{
 			PromptTokens: totalIn, CompletionTokens: totalOut,
-		}); cerr == nil {
+		})
+		switch {
+		case cerr == nil:
 			costUSD = c
+		// DOMAINSERV-162: un modelo sin cotizar dejaba costUSD en 0 y la corrida
+		// se persistía como si fuera gratis. El cero sigue siendo lo que se
+		// guarda —cambiar el esquema para distinguirlo de NULL es otro ticket—
+		// pero ahora al menos deja rastro en el log.
+		case errors.Is(cerr, registry.ErrModelNotFound):
+			slog.Warn("costo no calculado: el modelo no está en el registry de pricing; la corrida queda con costo 0",
+				slog.String("provider", agent.Provider),
+				slog.String("model", agent.Model))
+		default:
+			slog.Warn("costo no calculado",
+				slog.String("provider", agent.Provider),
+				slog.String("model", agent.Model),
+				slog.String("error", cerr.Error()))
 		}
 	}
 

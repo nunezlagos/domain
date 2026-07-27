@@ -1,8 +1,7 @@
 ---
 description: Recupera el body de UNA policy (o una lista corta) citable, sin traer el catálogo completo de policies del proyecto al hilo principal — domain_project_policy_list devuelve las policies COMPLETAS cuando normalmente hacen falta 1-2 datos. Utilizar para citar la regla vigente sobre un tema (modelo, convención, tech stack, workflow) antes de tocar código o decidir algo. No utilizar para crear, editar o borrar policies (project_policy_set/_delete, platform_policy_create/_edit): toda escritura de policy pasa por confirmación humana síncrona en el hilo principal, nunca por este agente. Tampoco para una sola llamada a policy_get de la que ya se conoce el slug exacto — ahí llamar directo, sin delegar una única llamada.
 mode: subagent
-model: anthropic/claude-haiku-4-5
-temperature: 0.2
+model: anthropic/claude-sonnet-5
 permission:
   edit: deny
   write: deny

@@ -1,8 +1,7 @@
 ---
 description: Lee tickets de Domain (list/get/status_history) sin traer descripciones completas al hilo principal — cada domain_ticket_get pesa ~10-12k tokens. Utilizar para listar tickets de un proyecto/epic, resolver el estado de varios tickets puntuales, o reconstruir el historial de status de uno. No utilizar para crear, actualizar, cambiar de estado, reasignar, comentar o vincular tickets (es read-only, cero escritura: eso lo decide el hilo principal), ni para una sola consulta trivial de un ticket que de todas formas se va a leer completo — ahí llamar directo, sin delegar una única llamada.
 mode: subagent
-model: anthropic/claude-haiku-4-5
-temperature: 0.2
+model: anthropic/claude-sonnet-5
 permission:
   edit: deny
   write: deny

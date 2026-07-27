@@ -1,8 +1,7 @@
 ---
 description: Subagent read-only de memoria domain. Delegar cuando la consulta sea "buscar todo lo que domain recuerda sobre X" y el recall sea profundo, para no sobrecargar el contexto principal. Devuelve un resumen estructurado en menos de 400 palabras.
 mode: subagent
-model: anthropic/claude-haiku-4-5
-temperature: 0.2
+model: anthropic/claude-sonnet-5
 permission:
   edit: deny
   write: deny

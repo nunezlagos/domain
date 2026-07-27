@@ -1,8 +1,7 @@
 ---
 description: Explora el repo con Read/Grep/Glob para lecturas exploratorias — dónde vive un símbolo, qué archivos usan un patrón, cómo está organizado un módulo — sin traer decenas de archivos completos al hilo principal. Utilizar para preguntas tipo "dónde está X" / "qué archivos referencian Y" / "cómo está estructurado Z". No utilizar para editar o escribir nada (no tiene Edit/Write/Bash), para análisis de diseño cross-file profundo o revisión de calidad (eso es trabajo del hilo principal o de un agente Plan/Explore con más presupuesto), ni para un único grep puntual que de todas formas se va a ejecutar en el hilo principal en una sola llamada.
 mode: subagent
-model: anthropic/claude-haiku-4-5
-temperature: 0.2
+model: anthropic/claude-sonnet-5
 permission:
   edit: deny
   write: deny

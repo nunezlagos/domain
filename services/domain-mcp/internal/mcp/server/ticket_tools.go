@@ -127,7 +127,7 @@ func (h *ticketHandlers) handleTicketClaim(ctx context.Context, req mcp.CallTool
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("claim failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func (h *ticketHandlers) handleTicketRelease(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -146,7 +146,7 @@ func (h *ticketHandlers) handleTicketRelease(ctx context.Context, req mcp.CallTo
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("release failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func (h *ticketHandlers) handleTicketReassign(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -170,7 +170,7 @@ func (h *ticketHandlers) handleTicketReassign(ctx context.Context, req mcp.CallT
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("reassign failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func toolTicketCreate() mcp.Tool {
@@ -385,7 +385,7 @@ func (h *ticketHandlers) handleTicketCreate(ctx context.Context, req mcp.CallToo
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("create ticket failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func (h *ticketHandlers) handleTicketGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -534,7 +534,7 @@ func (h *ticketHandlers) handleTicketUpdate(ctx context.Context, req mcp.CallToo
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func (h *ticketHandlers) handleTicketChangeStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -558,7 +558,7 @@ func (h *ticketHandlers) handleTicketChangeStatus(ctx context.Context, req mcp.C
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("change_status failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func (h *ticketHandlers) handleTicketDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -657,7 +657,7 @@ func (h *ticketHandlers) handleTicketLinkExternal(ctx context.Context, req mcp.C
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("link failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 func toolTicketLinkIssue() mcp.Tool {
@@ -691,7 +691,7 @@ func (h *ticketHandlers) handleTicketLinkIssue(ctx context.Context, req mcp.Call
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("link_issue failed: %v", err)), nil
 	}
-	return toolResultJSON(t)
+	return toolResultJSON(proyectarTicketSlim(t))
 }
 
 // REQ-58: bulk link (sync inicial Jira→domain)

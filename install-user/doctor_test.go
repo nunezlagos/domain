@@ -51,6 +51,18 @@ func setupHealthyHome(t *testing.T) string {
 	}); err != nil {
 		t.Fatalf("write .claude.json: %v", err)
 	}
+
+	// 3. Catálogo de agentes. DOMAINSERV-137: el doctor ahora también lo verifica, así que un
+	// HOME sin agentes ya no es una instalación consistente.
+	//
+	// OpencodeAgentsDir se vacía a propósito: este fixture describe una máquina SIN OpenCode
+	// —es lo que describía antes, con todos los checks de OpenCode omitidos— y crear
+	// ~/.config/opencode/agents/ los activaría en cascada.
+	paths := DetectPlatform().Paths()
+	paths.OpencodeAgentsDir = ""
+	if _, err := installGlobalAssets(paths); err != nil {
+		t.Fatalf("installGlobalAssets: %v", err)
+	}
 	return home
 }
 

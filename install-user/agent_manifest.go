@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // manifiestoAgentes mapea slug -> sha256 del template que domain escribió la última vez. Es
@@ -39,6 +40,39 @@ func clasificar(destino string, contenido []byte, hashRegistrado string) procede
 		return deDomain
 	}
 	return delUsuario
+}
+
+// podarRetirados borra los agentes que domain instaló y ya no están en el catálogo. El
+// manifest es lo que hace esto seguro: un agente que el usuario puso a mano nunca tuvo
+// entrada, así que queda fuera del alcance sin necesidad de adivinar de quién es cada
+// archivo. Devuelve los slugs removidos y los que se dejaron por estar editados.
+func podarRetirados(paths Paths, cat []agentTemplate, manifiesto manifiestoAgentes) (removidos, editados []string) {
+	enCatalogo := make(map[string]bool, len(cat))
+	for _, a := range cat {
+		enCatalogo[a.slug] = true
+	}
+
+	for slug, hashRegistrado := range manifiesto {
+		if enCatalogo[slug] {
+			continue
+		}
+		destino := filepath.Join(paths.GlobalAgentsDir, slug+".md")
+		// una edición no se descarta por un cambio de catálogo: misma semántica que en la
+		// instalación, se reporta y se deja
+		if hashActual, err := fileSHA256(destino); err == nil && hashActual != hashRegistrado {
+			editados = append(editados, slug)
+			continue
+		}
+		_ = os.Remove(destino)
+		if paths.OpencodeAgentsDir != "" {
+			_ = os.Remove(filepath.Join(paths.OpencodeAgentsDir, slug+".md"))
+		}
+		delete(manifiesto, slug)
+		removidos = append(removidos, slug)
+	}
+	sort.Strings(removidos)
+	sort.Strings(editados)
+	return removidos, editados
 }
 
 // cargarManifiesto devuelve el registro, o vacío si no existe o no se puede leer. Un manifest

@@ -27,6 +27,12 @@ func runDoctor(p Platform) int {
 	critical += checkOpencodePermission(paths)
 	critical += checkOpencodeInstruction(paths)
 	critical += checkOpencodePlugin(paths)
+	if cat, err := agentCatalog(); err == nil {
+		critical += checkAgentCatalog(paths, cat)
+	} else {
+		failL("no se pudo leer el catálogo embebido: " + err.Error())
+		critical++
+	}
 	checkMCPHealth(paths) // best-effort, no suma a critical
 
 	step("Resumen")

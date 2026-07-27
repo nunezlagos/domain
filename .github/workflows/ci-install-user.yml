@@ -1,0 +1,68 @@
+name: CI install-user
+
+# install-user/ es su propio módulo Go (nunezlagos/domain-install) y hasta ahora no tenía
+# ningún workflow: ci-mcp.yml corre con working-directory services/domain-mcp y solo se
+# dispara ante services/domain-mcp/**, y release-installer.yml hace `go build` sin correr
+# tests. O sea que el binario que se publica como Release se compilaba sin que nada
+# ejecutara la suite. Este workflow cierra ese hueco.
+
+on:
+  push:
+    branches: [services, main]
+    paths:
+      - 'install-user/**'
+      - '.github/workflows/ci-install-user.yml'
+  pull_request:
+    paths:
+      - 'install-user/**'
+      - '.github/workflows/ci-install-user.yml'
+
+defaults:
+  run:
+    working-directory: install-user
+
+jobs:
+  lint-and-test:
+    name: Lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          # el módulo es stdlib-only: no hay go.sum que cachear
+          cache: false
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -count=1 ./...
+
+      # los hooks se distribuyen como scripts, así que un error de sintaxis no aparece
+      # hasta que el hook corre en la máquina de alguien
+      - name: Sintaxis de los hooks y guards shell
+        run: |
+          for f in hooks/*.sh templates/agents-hooks/*.sh; do
+            [ -e "$f" ] || continue
+            bash -n "$f" && echo "ok  $f"
+          done
+
+  size-lint:
+    name: size-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/go.sum
+
+      # el linter vive en el módulo de services/domain-mcp, así que se compila desde ahí
+      # y se apunta a este directorio
+      - name: Build linter
+        working-directory: services/domain-mcp
+        run: go build -o /tmp/size-lint ./cmd/size-lint
+
+      - name: Lint tamaño de funciones (baseline)
+        run: /tmp/size-lint -dir . -baseline .size-lint-baseline

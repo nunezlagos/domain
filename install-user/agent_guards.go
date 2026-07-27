@@ -69,21 +69,34 @@ func resolverGuards(paths Paths, a agentTemplate) ([]byte, []string, error) {
 		return nil, nil, fmt.Errorf("%s declara guards pero no hay directorio de hooks", a.slug)
 	}
 
-	tpl := string(a.claude)
 	var instalados []string
 	for _, nombre := range declarados {
 		contenido, ok := a.guards[nombre]
 		if !ok || len(contenido) == 0 {
 			return nil, nil, fmt.Errorf("%s declara el guard %q y no viene en el bundle", a.slug, nombre)
 		}
-		destino := filepath.Join(paths.AgentHooksDir, nombre)
-		if err := escribirEjecutable(destino, contenido); err != nil {
+		if err := escribirEjecutable(filepath.Join(paths.AgentHooksDir, nombre), contenido); err != nil {
 			return nil, nil, err
 		}
-		tpl = reescribirReferencia(tpl, nombre, destino)
 		instalados = append(instalados, nombre)
 	}
-	return []byte(tpl), instalados, nil
+	return plantillaResuelta(paths, a), instalados, nil
+}
+
+// plantillaResuelta aplica la reescritura de rutas sin tocar el disco: es exactamente lo que
+// queda instalado. Comparar contra `a.claude` en crudo daría "desactualizado" para TODO
+// agente con guards, siempre, porque el template declara la ruta relativa y en disco vive la
+// absoluta.
+func plantillaResuelta(paths Paths, a agentTemplate) []byte {
+	declarados := guardsDeclarados(a.claude)
+	if len(declarados) == 0 {
+		return a.claude
+	}
+	tpl := string(a.claude)
+	for _, nombre := range declarados {
+		tpl = reescribirReferencia(tpl, nombre, filepath.Join(paths.AgentHooksDir, nombre))
+	}
+	return []byte(tpl)
 }
 
 // reescribirReferencia reemplaza la ruta que el template declara por la absoluta del guard

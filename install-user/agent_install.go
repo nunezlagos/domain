@@ -16,6 +16,7 @@ type resultadoAgentes struct {
 	opencode         []string
 	omitidosOpencode []string
 	conflictos       []string
+	removidos        []string
 	guardsInstalados []string
 	guardsFaltantes  []string
 	dirCreado        bool
@@ -72,18 +73,14 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 		manifiesto[a.slug] = sha256Hex(tpl)
 		res.instalados = append(res.instalados, a.slug)
 
-		if paths.OpencodeAgentsDir == "" {
-			continue
-		}
-		if len(a.opencode) == 0 {
-			res.omitidosOpencode = append(res.omitidosOpencode, a.slug)
-			continue
-		}
-		if err := escribirTemplate(filepath.Join(paths.OpencodeAgentsDir, a.slug+".md"), a.opencode); err != nil {
+		if err := instalarEnOpencode(paths, a, &res); err != nil {
 			return res, err
 		}
-		res.opencode = append(res.opencode, a.slug)
 	}
+
+	removidos, editados := podarRetirados(paths, cat, manifiesto)
+	res.removidos = removidos
+	res.conflictos = append(res.conflictos, editados...)
 
 	// se persiste una vez al final, no por agente: si algo falla en el medio, el manifest no
 	// queda declarando agentes que no se escribieron
@@ -91,6 +88,24 @@ func instalarAgentes(paths Paths, cat []agentTemplate) (resultadoAgentes, error)
 		return res, err
 	}
 	return res, nil
+}
+
+// instalarEnOpencode escribe la variante del agente si la tiene. Un agente sin variante NO
+// se instala ahí: su frontmatter de Claude Code sería malformado en OpenCode, y la omisión
+// se registra para poder reportarla.
+func instalarEnOpencode(paths Paths, a agentTemplate, res *resultadoAgentes) error {
+	if paths.OpencodeAgentsDir == "" {
+		return nil
+	}
+	if len(a.opencode) == 0 {
+		res.omitidosOpencode = append(res.omitidosOpencode, a.slug)
+		return nil
+	}
+	if err := escribirTemplate(filepath.Join(paths.OpencodeAgentsDir, a.slug+".md"), a.opencode); err != nil {
+		return err
+	}
+	res.opencode = append(res.opencode, a.slug)
+	return nil
 }
 
 // reportarAgentes deja a la vista qué se instaló y qué NO. Un agente ausente sin aviso se
@@ -113,6 +128,9 @@ func reportarAgentes(paths Paths, res resultadoAgentes) {
 	for _, slug := range res.guardsFaltantes {
 		failL("NO instalado: " + slug + " declara un guard que no vino en el bundle")
 		failL("  sin el guard, el tool que ese hook acota queda abierto: instalarlo igual sería peor")
+	}
+	if len(res.removidos) > 0 {
+		ok(fmt.Sprintf("removidos por salir del catálogo: %s", strings.Join(res.removidos, ", ")))
 	}
 	for _, c := range res.conflictos {
 		warnL("sin actualizar (difiere de lo instalado por domain, se respeta tu edición): " + c)
@@ -155,6 +173,12 @@ func desinstalarAgentes(paths Paths, cat []agentTemplate) {
 		_ = os.Remove(filepath.Join(paths.GlobalAgentsDir, a.slug+".md"))
 		if paths.OpencodeAgentsDir != "" && len(a.opencode) > 0 {
 			_ = os.Remove(filepath.Join(paths.OpencodeAgentsDir, a.slug+".md"))
+		}
+		// un guard que sobreviva a su agente apunta a un agente que ya no existe
+		for basename := range a.guards {
+			if paths.AgentHooksDir != "" {
+				_ = os.Remove(filepath.Join(paths.AgentHooksDir, basename))
+			}
 		}
 		// una entrada que sobreviva al archivo haría que la instalación siguiente compare
 		// contra el hash de algo que ya no está

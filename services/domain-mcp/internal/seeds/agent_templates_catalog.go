@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
 
 // AgentTemplatesCatalogSeeder implementa el interface Seeder para el
@@ -1098,7 +1100,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 17 // 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 18 // 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son
@@ -1117,10 +1119,17 @@ func seedAgentTemplates(ctx context.Context, db execer) (Report, error) {
 	var rep Report
 	catalog := AgentTemplateCatalog()
 
+	planes := phases.SubagentPlans()
+
 	for _, e := range catalog {
 		meta := e.Metadata
 		if meta == nil {
 			meta = map[string]any{}
+		}
+		// DOMAINSERV-180: el plan no se transcribe al catálogo, se toma del
+		// handler. Dos copias del mismo texto se desincronizan.
+		if plan, ok := planes[e.Slug]; ok {
+			meta["subagent_plan"] = plan
 		}
 		metaJSON, _ := json.Marshal(meta)
 		caps := e.Capabilities

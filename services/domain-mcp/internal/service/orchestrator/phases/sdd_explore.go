@@ -9,6 +9,18 @@ import (
 
 
 
+// exploreSubagentPlan reparte las tareas del system_prompt por AGENTE, no por
+// área: las tareas 4 y 5 buscan cosas distintas (memoria vs repo) y las cubren
+// agentes distintos del catálogo. El mapa de diseño se queda en un subagente de
+// exploración amplia porque repo-scout se autoexcluye del análisis cross-file.
+const exploreSubagentPlan = `Reparte la exploración EN PARALELO y combina los resultados en un único mapa sin duplicados; marca las contradicciones como hallazgos.
+
+1. Issues/HUs similares ya implementadas (tarea 4): delega en el agente domain-memory (` + MarcaFallback + ` hazlo en el hilo principal con domain_mem_search y domain_knowledge_search).
+2. Handlers, servicios y paths reales afectados (tarea 5): delega en el agente repo-scout (` + MarcaFallback + ` usa un subagente read-only de búsqueda, o Read/Grep/Glob en el hilo principal).
+3. Mapa de diseño del área cuando el cambio cruza módulos: NO es trabajo de repo-scout. Usa un subagente de exploración amplia con Read/Grep/Glob/Bash, uno por área (máx 4: rutas/handlers, servicios/lógica, esquema/migraciones, tests).
+
+Cada subagente devuelve referencias file:line concretas, nunca salida cruda de tools. Los agentes nombrados son una preferencia: si el cliente no los tiene instalados, la fase se ejecuta igual por el camino alternativo.`
+
 type sddExploreHandler struct{}
 
 func NewSDDExploreHandler() Handler { return &sddExploreHandler{} }
@@ -39,9 +51,10 @@ func (h *sddExploreHandler) Build(_ context.Context, in Input) (*Output, error) 
 		// sin uso real (auditoría: 45-94% nodos basura, consumo casi 100%
 		// automático).
 		RequiredToolCalls: nil,
-		// REQ-54 issue-54.5: exploración paralela por área.
-		SubagentPlan: "Detecta las áreas del codebase relevantes a la tarea (máx 4: ej. rutas/handlers, servicios/lógica, esquema/migraciones, tests) y lanza UN subagente Explore POR ÁREA, en paralelo. Cada subagente recibe el contexto preparado de su área y devuelve un mapa con referencias file:line. Combina los resultados en un único mapa sin duplicados; marca contradicciones entre áreas como hallazgos.",
-		RetryPolicy:    RetryReemit,
+		// REQ-54 issue-54.5: exploración paralela. DOMAINSERV-180: el reparto es
+		// por agente del catálogo, no por área.
+		SubagentPlan: exploreSubagentPlan,
+		RetryPolicy:  RetryReemit,
 	}, nil
 }
 

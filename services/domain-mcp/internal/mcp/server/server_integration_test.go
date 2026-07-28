@@ -16,7 +16,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"nunezlagos/domain/internal/audit"
+
 	"nunezlagos/domain/internal/auth/apikey"
 	"nunezlagos/domain/internal/db"
 	"nunezlagos/domain/internal/dispatch"
@@ -41,6 +43,8 @@ type mcpFixture struct {
 	policies    *policysvc.Service
 	orgID       uuid.UUID
 	userID      uuid.UUID
+	projectID   uuid.UUID
+	pool        *pgxpool.Pool
 	cleanup     func()
 }
 
@@ -123,6 +127,8 @@ func setupMCP(t *testing.T) *mcpFixture {
 		policies:    policyS,
 		orgID:       org.ID,
 		userID:      owner.UserID,
+		projectID:   proj.ID,
+		pool:        pools.App,
 		cleanup: func() {
 			testSrv.Close()
 			pools.Close()

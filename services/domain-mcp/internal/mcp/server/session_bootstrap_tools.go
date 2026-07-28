@@ -229,41 +229,50 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		return toolResultJSON(resp)
 	}
 
-	// Proyecto conocido: leer estado previo + last_known_head
+	// Proyecto conocido: los datos del proyecto son COMPARTIDOS; el puntero de sesión
+	// es del usuario que llama (DOMAINSERV-188).
 	var (
-		lastHead   *string
-		lastBranch *string
-		lastCwd    *string
-		lastSeen   *string
-		name       string
-		desc       *string
+		lastSeen *string
+		name     string
+		desc     *string
 	)
 	err := h.q(ctx).QueryRow(ctx,
-		`SELECT name, description, last_known_head, last_seen_branch,
-		        last_seen_cwd, to_char(last_seen_at AT TIME ZONE 'UTC',
-		                               'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+		`SELECT name, description,
+		        to_char(last_seen_at AT TIME ZONE 'UTC',
+		                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 		   FROM projects
 		   WHERE id = $1`,
 		projID,
-	).Scan(&name, &desc, &lastHead, &lastBranch, &lastCwd, &lastSeen)
+	).Scan(&name, &desc, &lastSeen)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("read project state: %v", err)), nil
 	}
 
+	userID, uerr := uuid.Parse(h.principal.UserID)
+	if uerr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("principal sin user_id válido: %v", uerr)), nil
+	}
+	estado, err := ReadUserProjectState(ctx, h.q(ctx), userID, projID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	lastHead := &estado.LastKnownHead
+	lastBranch := &estado.LastSeenBranch
+	lastCwd := &estado.LastSeenCwd
+
 	headChanged := false
-	if lastHead != nil && *lastHead != "" && gitHead != "" && *lastHead != gitHead {
+	if estado.LastKnownHead != "" && gitHead != "" && estado.LastKnownHead != gitHead {
 		headChanged = true
 	}
 
-	// Bump last_seen_*
+	if err := BumpUserProjectState(ctx, h.q(ctx), userID, projID, gitHead, gitBranch, cwd); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	// last_seen_at del PROYECTO sigue siendo del proyecto: "cuándo lo tocó alguien"
+	// es dato del equipo. Las otras tres columnas de projects quedan intactas pero
+	// ya no se leen — su cleanup es deuda declarada de DOMAINSERV-188.
 	if _, err := h.q(ctx).Exec(ctx,
-		`UPDATE projects
-		   SET last_known_head  = COALESCE(NULLIF($2,''), last_known_head),
-		       last_seen_branch = COALESCE(NULLIF($3,''), last_seen_branch),
-		       last_seen_cwd    = COALESCE(NULLIF($4,''), last_seen_cwd),
-		       last_seen_at     = NOW()
-		   WHERE id = $1`,
-		projID, gitHead, gitBranch, cwd,
+		`UPDATE projects SET last_seen_at = NOW() WHERE id = $1`, projID,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update last_seen: %v", err)), nil
 	}

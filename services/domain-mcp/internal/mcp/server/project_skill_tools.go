@@ -216,7 +216,7 @@ func (h *projectSkillHandlers) handleProjectSkillList(ctx context.Context, req m
 // project_skills (regla "no usable si no enlazada").
 func toolSkillCreate() mcp.Tool {
 	return mcp.NewTool("domain_skill_create",
-		mcp.WithDescription("Crea una skill GLOBAL (project_id NULL) disponible para toda la org. No la enlaza a ningun proyecto — una skill global solo es usable cuando se enlaza con domain_project_skill_register. Usar para patrones reusables cross-proyecto. Para una skill propia de un proyecto usar domain_project_skill_register."),
+		mcp.WithDescription("Crea una skill GLOBAL (project_id NULL) disponible para toda la org. Aplica automaticamente a TODOS los proyectos, sin enlazar nada: no hace falta llamar a domain_project_skill_register despues. Si hay que desactivarla en un proyecto puntual, se EXCLUYE con domain_project_skill_unlink. Usar para patrones reusables cross-proyecto. Para una skill propia de un solo proyecto usar domain_project_skill_register."),
 		mcp.WithString("slug", mcp.Description("Slug de la skill (kebab-case)"), mcp.Required()),
 		mcp.WithString("name", mcp.Description("Nombre legible"), mcp.Required()),
 		mcp.WithString("description", mcp.Description("Descripcion 1-2 lineas. Sirve al matching de skill_search.")),
@@ -263,7 +263,7 @@ func (h *projectSkillHandlers) handleSkillCreate(ctx context.Context, req mcp.Ca
 	return toolResultJSON(map[string]any{
 		"id": id.String(), "scope": "global",
 		"slug": slug, "name": name, "skill_type": skillType,
-		"note": "Skill global creada. No es usable hasta enlazarla a un proyecto con domain_project_skill_register.",
+		"note": "Skill global creada. Ya aplica automaticamente a todos los proyectos — no hace falta enlazarla. Para desactivarla en uno puntual, excluirla con domain_project_skill_unlink.",
 	})
 }
 

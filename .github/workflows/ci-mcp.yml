@@ -2,7 +2,10 @@ name: CI mcp
 
 on:
   push:
-    branches: [services]
+    # DOMAINSERV-192: `main` faltaba desde que el trabajo se migró de la rama services.
+    # Durante ese tiempo el push a main solo disparaba "CI install-user", que valida otro
+    # módulo: un check verde que no decía nada de domain-mcp
+    branches: [services, main]
     paths:
       - 'services/domain-mcp/**'
       - '.github/workflows/ci-mcp.yml'

@@ -1,13 +1,13 @@
 name: Deploy
 
+# DOMAINSERV-192: solo manual. Con el trigger `push` este workflow encolaba un run en cada
+# push a main que tocara services/**, y lo único que impedía el deploy era que no hubiera
+# ningún runner con la label deploy-vps registrado — verificado: 0 runners, y los runs
+# quedaban pending hasta que el siguiente push los cancelaba por el concurrency group.
+# Eso es un CD desarmado por accidente, no por diseño: registrar un runner lo habría
+# activado sin tocar una línea. La decisión vigente es deploy manual (DOMAINSERV-166),
+# así que el disparador tiene que ser explícito.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'services/**'
-      - 'services/Makefile'
-      - 'services/**/docker-compose*.yml'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 concurrency:

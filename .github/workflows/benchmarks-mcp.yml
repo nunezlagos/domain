@@ -2,7 +2,8 @@ name: Benchmarks mcp
 
 on:
   push:
-    branches: [services]
+    # DOMAINSERV-192: igual que ci-mcp.yml, se quedó apuntando a la rama vieja
+    branches: [services, main]
     paths:
       - 'services/domain-mcp/**'
       - '.github/workflows/benchmarks-mcp.yml'

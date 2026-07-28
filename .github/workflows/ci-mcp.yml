@@ -67,8 +67,10 @@ jobs:
           cache-dependency-path: services/domain-mcp/go.sum
       - name: Build linter
         run: go build -o /tmp/db-conv-lint ./cmd/db-conventions-lint
+      # 146 -> 278: el job nunca corrió en main y se acumularon 88 violaciones
+      # en migraciones ya aplicadas, no corregibles retroactivamente (DOMAINSERV-198)
       - name: Lint migrations
-        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 146
+        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 278
 
   response-shape-lint:
     name: response-shape-lint

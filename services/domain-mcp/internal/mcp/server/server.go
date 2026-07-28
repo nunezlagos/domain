@@ -270,6 +270,12 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 // initialize del MCP. Unica fuente: internal/agentprotocol (el mismo
 // contenido se seedea en BD como policy 'agent-protocol' — la version
 // viva que el agente debe preferir via domain_policy_get).
+//
+// Por que va por el handshake y no en archivos en disco: la decision es NO
+// dejar instrucciones/memoria/rules sueltas en la laptop. En disco solo
+// quedan el config del transporte por cliente y los templates de agentes;
+// el protocolo llega editable y versionado desde BD. Rescatado de
+// install-user.sh, que se borro por codigo muerto en DOMAINSERV-165.
 const ServerInstructions = agentprotocol.Full
 
 // New monta el servidor MCP con los tools del prefijo `domain_*`.

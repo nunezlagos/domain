@@ -96,6 +96,8 @@ func main() {
 		runSeedDemo(os.Args[2:])
 	case "embed-backfill":
 		runEmbedBackfill(os.Args[2:])
+	case "embed-reindex":
+		runEmbedReindex(os.Args[2:])
 	case "admin-passwd":
 		runAdminPasswd(os.Args[2:])
 	case "service":
@@ -172,6 +174,17 @@ Plug-and-play:
                       Catálogo de MCPs instalables (filesystem, fetch,
                       github, git, memory, time) en opencode/claude-code.
   detect              Auto-detect del proyecto en CWD + inventario + sesión.
+
+Embeddings:
+  embed-backfill [--all] [--limit=N] [--pause-ms=N] [--dry-run]
+                      Genera los embeddings faltantes o en cero con el provider
+                      activo, en knowledge_observations, knowledge_chunks y skills.
+  embed-reindex [--all] [--no-concurrently] [--dry-run] [--dsn=DSN]
+                      Reconstruye los índices ivfflat después de un backfill
+                      masivo: sus centroides se entrenaron con los vectores
+                      viejos, así que el escaneo va a listas que ya no
+                      corresponden y se pierden vecinos relevantes. Requiere un
+                      DSN dueño del schema (POSTGRES_USER), no app_user.
 
 Common:
   version             Version + commit + build time

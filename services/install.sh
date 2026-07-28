@@ -566,10 +566,11 @@ else
 fi
 
 # Backfill de embeddings (DOMAINSERV-80 H2). BEST-EFFORT a propósito: un fallo
-# acá no debe tumbar un deploy que ya está sirviendo. Es idempotente porque el
-# backfill solo toma filas con embedding NULL — en el cron diario, con todo
-# poblado, son 0 filas y sale enseguida. --pause-ms=0 porque ollama es local y
-# no tiene rate-limit que respetar.
+# acá no debe tumbar un deploy que ya está sirviendo. Toma las filas sin embedding
+# Y las que tienen un vector en cero (DOMAINSERV-157: el embedder degradado a noop
+# escribió ceros, y un cero NO es NULL). Es idempotente porque una fila con norma
+# real no se vuelve a tomar — en el cron diario, con todo poblado, son 0 filas y
+# sale enseguida. --pause-ms=0 porque ollama es local y no tiene rate-limit.
 if [[ "$EMB_PROVIDER" == "ollama" ]]; then
   # Verificación previa al backfill: si el guard de dimensión degradó a noop, el
   # backfill corre contra un embedder que no escribe nada y reporta éxito igual.
@@ -584,20 +585,46 @@ if [[ "$EMB_PROVIDER" == "ollama" ]]; then
     log "Backfill de embeddings pendientes (idempotente, best-effort)..."
     if docker exec domain-mcp domain embed-backfill --all --pause-ms=0 2>&1 | tail -20; then
       ok "backfill completado"
+      # Un UPDATE masivo no re-entrena los centroides de un ivfflat: si el backfill
+      # escribió filas, el índice sigue particionando según una distribución que ya
+      # no existe y se pierden vecinos relevantes. No se ejecuta acá a propósito —un
+      # REINDEX no-concurrente toma ACCESS EXCLUSIVE y un deploy no debe congelar la
+      # búsqueda sin que nadie lo pida.
+      log "  si el backfill escribió filas, reconstruí los ivfflat (fuera del deploy):"
+      log "    docker exec domain-mcp domain embed-reindex --dsn=\"postgres://\$POSTGRES_USER:\$POSTGRES_PASSWORD@postgres:5432/\$POSTGRES_DB?sslmode=disable\""
     else
       warn "el backfill falló o quedó incompleto — el stack sigue operativo"
       warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
     fi
+    # DOMAINSERV-163: este chequeo contaba solo embedding IS NULL en una de las tres
+    # tablas, así que reportó "sin pendientes" durante meses con 44 vectores de norma
+    # cero adentro. Era la herramienta que debería haber detectado DOMAINSERV-157 y
+    # tenía el mismo bug que el ticket. El predicado de abajo es ESPEJO de
+    # buildBackfillQuery (cmd/domain/embed_backfill.go): si uno cambia, este también.
+    # knowledge_chunks va SIN deleted_at porque la columna no existe y el filtro
+    # rompería la query entera, y el || echo "" lo tragaría degradando al warn
+    # genérico. El LENGTH(TRIM(...)) > 0 es parte del predicado: sin él, una fila de
+    # texto vacío que el backfill nunca toma quedaría pendiente en todos los deploys.
     PENDIENTES=$(docker exec domain-postgres psql -U "$(env_get POSTGRES_USER "$ENV_FILE")" \
       -d "$(env_get POSTGRES_DB "$ENV_FILE")" -tAc \
-      "SELECT count(*) FROM knowledge_observations WHERE embedding IS NULL" 2>/dev/null || echo "")
+      "SELECT (SELECT count(*) FROM knowledge_observations
+                WHERE (embedding IS NULL OR (embedding <#> embedding) = 0)
+                  AND deleted_at IS NULL
+                  AND LENGTH(TRIM(content)) > 0)
+            + (SELECT count(*) FROM knowledge_chunks
+                WHERE (embedding IS NULL OR (embedding <#> embedding) = 0)
+                  AND LENGTH(TRIM(content)) > 0)
+            + (SELECT count(*) FROM skills
+                WHERE (embedding IS NULL OR (embedding <#> embedding) = 0)
+                  AND deleted_at IS NULL
+                  AND LENGTH(TRIM(name || ' ' || COALESCE(description, ''))) > 0)" 2>/dev/null || echo "")
     if [[ -z "$PENDIENTES" ]]; then
-      warn "no se pudo verificar cuántas observaciones quedaron sin embedding"
+      warn "no se pudo verificar cuántas filas quedaron sin embedding"
     elif [[ "$PENDIENTES" != "0" ]]; then
-      warn "quedan $PENDIENTES observaciones sin embedding — la búsqueda semántica está incompleta"
+      warn "quedan $PENDIENTES filas sin embedding o con el vector en cero (knowledge_observations + knowledge_chunks + skills) — la búsqueda semántica está incompleta"
       warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
     else
-      ok "sin observaciones pendientes de embedding"
+      ok "sin filas pendientes de embedding en las 3 tablas"
     fi
   fi
 fi

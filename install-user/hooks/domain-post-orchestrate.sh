@@ -46,11 +46,20 @@ elif isinstance(resp, str):
     items = [{"type": "text", "text": resp}]
 else:
     items = []
+# DOMAINSERV-181: orchestrate y flow_status devuelven flow_run_id en snake_case,
+# pero orchestrate_confirm y phase_result serializan el struct de Go sin tags y
+# salen en PascalCase — y son JUSTO las dos que se usan al RETOMAR un flow
+# pausado. Sin leer FlowRunID el hook salía sin escribir el marker y el gate
+# denegaba toda edición con el flow todavía running. El server ahora emite
+# también flow_run_id; se leen las dos claves para que el fix aplique sin
+# esperar el redeploy.
+CLAVES_FLOW = ("flow_run_id", "FlowRunID", "id")
+
 for c in items:
     if isinstance(c, dict) and c.get("type") == "text":
         try:
             body = json.loads(c["text"])
-            fr = body.get("flow_run_id") or body.get("id") or ""
+            fr = next((body[k] for k in CLAVES_FLOW if body.get(k)), "")
             # DOMAINSERV-108: el modo del flow se persiste como 3er campo del
             # marker para que el commit-gate exente los flows micro de tests.
             mode = body.get("mode", "") or ""

@@ -41,6 +41,13 @@ type PhaseResultResult struct {
 	NextStepKey    string
 	NextStepPrompt string
 
+	// FlowRunID identifica el flow al que pertenece el step (DOMAINSERV-181).
+	// Campo aditivo con tag snake_case: el hook post-orchestrate del cliente
+	// mintea el token del gate SDD a partir de esta clave, y sin ella salía sin
+	// escribir el marker — dejando al agente sin poder editar al retomar un flow
+	// pausado. Los campos PascalCase de arriba no cambian.
+	FlowRunID uuid.UUID `json:"flow_run_id"`
+
 	// NextStepSystemPrompt: SystemPrompt del siguiente step (R4). En modo full
 	// el plan inicial NO trae el SystemPrompt de los steps 2..N (payload a
 	// dieta); el cliente lo recibe acá, reconstruido desde step.Inputs. Campo
@@ -230,6 +237,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 		return &PhaseResultResult{
 			StepID:               step.ID,
 			StepStatus:           step.Status,
+			FlowRunID:            flowRun.ID,
 			MissingRequiredSaves: missingSaves,
 			ValidationError:      validationError,
 			MissingToolCalls:     missingTools,
@@ -262,6 +270,7 @@ func (s *Service) RecordPhaseResult(ctx context.Context, in PhaseResultInput) (*
 	out := &PhaseResultResult{
 		StepID:         step.ID,
 		StepStatus:     "completed",
+		FlowRunID:      flowRun.ID,
 		FlowRunStatus:  flowRun.Status,
 		CreatedTaskIDs: createdTaskIDs,
 	}
@@ -499,6 +508,7 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 		return &PhaseResultResult{
 			StepID:        blocked.ID,
 			StepStatus:    "failed",
+			FlowRunID:     flowRunID,
 			FlowRunStatus: "failed",
 		}, nil
 	}
@@ -513,6 +523,7 @@ func (s *Service) ConfirmContinue(ctx context.Context, flowRunID uuid.UUID, conf
 	return &PhaseResultResult{
 		StepID:         blocked.ID,
 		StepStatus:     "pending",
+		FlowRunID:      flowRunID,
 		FlowRunStatus:  "running",
 		NextStepID:     &blocked.ID,
 		NextStepKey:    blocked.StepKey,

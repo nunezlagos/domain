@@ -15,7 +15,6 @@ set +e
 LIB="$(dirname "$0")/domain-hooks-lib.sh"
 [ -r "$LIB" ] || exit 0
 . "$LIB"
-domain_resolve_env || exit 0
 
 payload=$(cat)
 eval "$(printf '%s' "$payload" | python3 -c '
@@ -33,11 +32,22 @@ print("resp_chars=%s" % shlex.quote(str(len(d.get("last_assistant_message") or "
 [ -n "$session_id" ] || exit 0
 
 domain_state="$HOME/.local/state/domain"
-# flow y tests-ok se limpian SIEMPRE, antes del early-exit por turn-id: si el
-# capture del turn no ocurrió (no hay id_file) estos markers igual quedarían
-# huérfanos (DOMAINSERV-78).
-rm -f "$domain_state/flow-$session_id" 2>/dev/null
+# La limpieza va ANTES de domain_resolve_env: es higiene de disco y no necesita
+# credenciales. Estaba detrás del early-exit por creds, así que en una máquina
+# sin resolver nunca corría, al revés de lo que decía este comentario.
+
+# tests-ok muere con el turno: el commit-gate exige una corrida que cubra el
+# estado ACTUAL del código (DOMAINSERV-74).
 rm -f "$domain_state/tests-ok-$session_id" 2>/dev/null
+
+# DOMAINSERV-181: el marker de flow NO se borra por turno. Un flow SDD dura
+# varios turnos por diseño —el modo hybrid pausa para el humano, o sea que
+# GARANTIZA cruzar de turno— y borrarlo dejaba al agente sin poder editar con el
+# flow todavía running. No es un agujero de seguridad: el marker local no es la
+# autoridad, el gate revalida el token contra el server en cada edición.
+# Los huérfanos que DOMAINSERV-78 quería evitar se podan por antigüedad: ninguna
+# sesión sigue viva 24h después, y el token HMAC ya venció mucho antes.
+find "$domain_state" -maxdepth 1 -name 'flow-*' -type f -mmin +1440 -delete 2>/dev/null
 
 # el turn_complete solo procede si hay turn-id (prompt capturado)
 id_file="$domain_state/turn-$session_id.id"
@@ -45,6 +55,10 @@ id_file="$domain_state/turn-$session_id.id"
 pid=$(cat "$id_file" 2>/dev/null)
 rm -f "$id_file" 2>/dev/null
 [ -n "$pid" ] || exit 0
+
+# las credenciales recién hacen falta acá: el turn_complete es lo único que sale
+# a la red
+domain_resolve_env || exit 0
 
 args="{\"prompt_id\":\"$pid\",\"response_chars\":${resp_chars:-0}}"
 domain_mcp_init >/dev/null 2>&1

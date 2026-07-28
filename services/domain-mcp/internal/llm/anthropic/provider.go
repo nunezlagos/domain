@@ -22,7 +22,9 @@ import (
 const (
 	defaultBaseURL    = "https://api.anthropic.com"
 	defaultAPIVersion = "2023-06-01"
-	defaultModel      = "claude-sonnet-4-5"
+	// tiene que estar cotizado en internal/llm/registry o la corrida que caiga en este
+	// default se contabiliza con costo 0 sin fallar (DOMAINSERV-183)
+	defaultModel = "claude-sonnet-5"
 )
 
 type Provider struct {
@@ -66,7 +68,7 @@ type requestMessage struct {
 }
 
 type requestContentBlock struct {
-	Type      string         `json:"type"`              // "text" | "tool_use" | "tool_result"
+	Type      string         `json:"type"` // "text" | "tool_use" | "tool_result"
 	Text      string         `json:"text,omitempty"`
 	ID        string         `json:"id,omitempty"`
 	Name      string         `json:"name,omitempty"`
@@ -323,13 +325,10 @@ func normalizeStopReason(r string) string {
 	}
 }
 
-
-
-
 type EmbedderConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string // "voyage-3", "voyage-3-large", etc.
+	APIKey     string
+	BaseURL    string
+	Model      string // "voyage-3", "voyage-3-large", etc.
 	HTTPClient *http.Client
 }
 
@@ -351,8 +350,6 @@ type VoyageEmbedder struct {
 }
 
 func (v *VoyageEmbedder) Dimensions() int {
-
-
 
 	return 1536
 }

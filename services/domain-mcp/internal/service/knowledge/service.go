@@ -301,8 +301,11 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	return &doc, chunks, nil
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Document, []Chunk, error) {
-	docRow, err := s.q(ctx).GetDoc(ctx, id)
+// Get exige el projectID además del id: sin él, un id de otro proyecto devolvía su
+// documento completo — un IDOR por UUID, el mismo modo de falla que DOMAINSERV-112
+// (DOMAINSERV-182).
+func (s *Service) Get(ctx context.Context, projectID, id uuid.UUID) (*Document, []Chunk, error) {
+	docRow, err := s.q(ctx).GetDoc(ctx, knowledgedb.GetDocParams{ID: id, ProjectID: projectID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
@@ -323,7 +326,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Document, []Chunk, er
 	return &doc, chunks, nil
 }
 
-func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]SearchResult, error) {
+// SearchHybrid scopea por projectID. Antes recibía un orgID que NO usaba: la
+// migración 000142 le había borrado organization_id a knowledge_docs, así que el
+// parámetro quedó decorativo y la búsqueda devolvía chunks de cualquier proyecto. Un
+// parámetro de scope que se acepta y se ignora es peor que no tenerlo, porque quien
+// lee la firma asume que filtra (DOMAINSERV-182).
+func (s *Service) SearchHybrid(ctx context.Context, projectID uuid.UUID, query string, limit int) ([]SearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, nil
 	}
@@ -342,6 +350,7 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 	if useVector {
 		qvec := pgvector.NewVector(vec)
 		rows, err := s.q(ctx).SearchHybrid(ctx, knowledgedb.SearchHybridParams{
+			ProjectID:   projectID,
 			ResultLimit: int32(limit),
 			QueryText:   query,
 			Candidates:  int32(candidates),
@@ -359,6 +368,7 @@ func (s *Service) SearchHybrid(ctx context.Context, orgID uuid.UUID, query strin
 	}
 
 	rows, err := s.q(ctx).SearchBm25(ctx, knowledgedb.SearchBm25Params{
+		ProjectID:   projectID,
 		QueryText:   query,
 		ResultLimit: int32(limit),
 	})

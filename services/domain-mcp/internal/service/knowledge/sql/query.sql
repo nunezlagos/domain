@@ -19,7 +19,9 @@ SELECT id, project_id, created_by, title, body, source,
        source_url,
        tags, metadata, has_attachments, created_at, updated_at
 FROM knowledge_docs
-WHERE id = sqlc.arg('id') AND deleted_at IS NULL;
+WHERE id = sqlc.arg('id')
+  AND project_id = sqlc.arg('project_id')
+  AND deleted_at IS NULL;
 
 -- name: GetChunks :many
 SELECT id, knowledge_doc_id, chunk_index, content, created_at
@@ -28,11 +30,16 @@ WHERE knowledge_doc_id = sqlc.arg('knowledge_doc_id')
 ORDER BY chunk_index ASC;
 
 -- name: SearchHybrid :many
+-- El filtro de proyecto va en LOS DOS CTEs, no solo en el SELECT final: si no, el
+-- LIMIT de candidatos se gasta escaneando filas de otros proyectos y la búsqueda
+-- devuelve menos resultados propios de los que hay, además de seguir siendo
+-- cross-tenant por dentro (DOMAINSERV-182).
 WITH bm25 AS (
   SELECT c.id, ROW_NUMBER() OVER (ORDER BY ts_rank(c.content_tsv, q) DESC) AS r
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.deleted_at IS NULL,
+       AND d.deleted_at IS NULL
+       AND d.project_id = sqlc.arg('project_id'),
        plainto_tsquery('spanish', sqlc.arg('query_text')) AS q
   WHERE c.content_tsv @@ q
   LIMIT sqlc.arg('candidates')::int
@@ -42,6 +49,7 @@ vec AS (
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
        AND d.deleted_at IS NULL
+       AND d.project_id = sqlc.arg('project_id')
   WHERE c.embedding IS NOT NULL
   LIMIT sqlc.arg('candidates')::int
 ),
@@ -64,7 +72,8 @@ SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
        ts_rank(c.content_tsv, q)::float8 AS score
 FROM knowledge_chunks c
 JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-     AND d.deleted_at IS NULL,
+     AND d.deleted_at IS NULL
+     AND d.project_id = sqlc.arg('project_id'),
      plainto_tsquery('spanish', sqlc.arg('query_text')) AS q
 WHERE c.content_tsv @@ q
 ORDER BY score DESC

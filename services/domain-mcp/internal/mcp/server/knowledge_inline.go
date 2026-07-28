@@ -57,15 +57,23 @@ func (d *Deps) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolReques
 	}
 	args := req.GetArguments()
 	query, _ := args["query"].(string)
-	if query == "" {
-		return mcp.NewToolResultError("query requerido"), nil
+	slug, _ := args["project_slug"].(string)
+	if query == "" || slug == "" {
+		return mcp.NewToolResultError("query y project_slug son requeridos"), nil
 	}
 	limit := 20
 	if v, ok := args["limit"].(float64); ok {
 		limit = int(v)
 	}
+	// project_slug es obligatorio a propósito: sin él la búsqueda no tendría eje de
+	// scope y devolvería chunks de cualquier proyecto, que es el bug de DOMAINSERV-182.
+	// Un default silencioso acá reabriría el agujero.
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
-	results, err := d.Knowledge.SearchHybrid(ctx, orgID, query, limit)
+	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+	}
+	results, err := d.Knowledge.SearchHybrid(ctx, proj.ID, query, limit)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
 	}
@@ -81,11 +89,22 @@ func (d *Deps) handleKnowledgeGet(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	args := req.GetArguments()
 	idStr, _ := args["id"].(string)
+	slug, _ := args["project_slug"].(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return mcp.NewToolResultError("id invalido (UUID)"), nil
 	}
-	doc, chunks, err := d.Knowledge.Get(ctx, id)
+	if slug == "" {
+		return mcp.NewToolResultError("project_slug requerido"), nil
+	}
+	// resolver por id a secas era un IDOR: quien conserve un id lee el doc de otro
+	// proyecto (DOMAINSERV-182)
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+	}
+	doc, chunks, err := d.Knowledge.Get(ctx, proj.ID, id)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 	}

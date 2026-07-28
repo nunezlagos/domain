@@ -566,9 +566,13 @@ func toolKnowledgeSave() mcp.Tool {
 
 func toolKnowledgeSearch() mcp.Tool {
 	return mcp.NewTool("domain_knowledge_search",
-		mcp.WithDescription("Busqueda hibrida (vector + BM25 + RRF) sobre chunks de knowledge documents."),
+		mcp.WithDescription("Busqueda hibrida (vector + BM25 + RRF) sobre chunks de knowledge documents de UN proyecto."),
 		mcp.WithString("query",
 			mcp.Description("Texto de busqueda"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Proyecto en el que buscar. Obligatorio: la busqueda esta scopeada por proyecto"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("limit",
@@ -582,6 +586,10 @@ func toolKnowledgeGet() mcp.Tool {
 		mcp.WithDescription("Recupera un knowledge document completo (todos sus chunks reconstruidos)."),
 		mcp.WithString("id",
 			mcp.Description("UUID del documento"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Proyecto dueno del documento. Obligatorio: un id de otro proyecto no resuelve"),
 			mcp.Required(),
 		),
 	)

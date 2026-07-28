@@ -114,7 +114,7 @@ func TestKnowledge_Get_ReturnsDocPlusChunks(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Title: "T", Body: strings.Repeat("hola amigo. ", 300),
 	})
-	got, chunks, err := f.svc.Get(ctx, doc.ID)
+	got, chunks, err := f.svc.Get(ctx, f.projectID, doc.ID)
 	require.NoError(t, err)
 	require.Equal(t, doc.ID, got.ID)
 	require.True(t, len(chunks) >= 1)
@@ -176,7 +176,7 @@ func TestKnowledge_SoftDelete(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: f.projectID, Title: "T", Body: "y",
 	})
 	require.NoError(t, f.svc.SoftDelete(ctx, doc.ID, f.userID))
-	_, _, err := f.svc.Get(ctx, doc.ID)
+	_, _, err := f.svc.Get(ctx, f.projectID, doc.ID)
 	require.ErrorIs(t, err, knowledge.ErrNotFound)
 }
 

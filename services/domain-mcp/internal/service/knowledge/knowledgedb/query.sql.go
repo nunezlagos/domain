@@ -59,8 +59,15 @@ SELECT id, project_id, created_by, title, body, source,
        source_url,
        tags, metadata, has_attachments, created_at, updated_at
 FROM knowledge_docs
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1
+  AND project_id = $2
+  AND deleted_at IS NULL
 `
+
+type GetDocParams struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+}
 
 type GetDocRow struct {
 	ID             uuid.UUID  `json:"id"`
@@ -77,8 +84,8 @@ type GetDocRow struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-func (q *Queries) GetDoc(ctx context.Context, id uuid.UUID) (GetDocRow, error) {
-	row := q.db.QueryRow(ctx, getDoc, id)
+func (q *Queries) GetDoc(ctx context.Context, arg GetDocParams) (GetDocRow, error) {
+	row := q.db.QueryRow(ctx, getDoc, arg.ID, arg.ProjectID)
 	var i GetDocRow
 	err := row.Scan(
 		&i.ID,
@@ -272,16 +279,18 @@ SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
        ts_rank(c.content_tsv, q)::float8 AS score
 FROM knowledge_chunks c
 JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-     AND d.deleted_at IS NULL,
-     plainto_tsquery('spanish', $1) AS q
+     AND d.deleted_at IS NULL
+     AND d.project_id = $1,
+     plainto_tsquery('spanish', $2) AS q
 WHERE c.content_tsv @@ q
 ORDER BY score DESC
-LIMIT $2::int
+LIMIT $3::int
 `
 
 type SearchBm25Params struct {
-	QueryText   string `json:"query_text"`
-	ResultLimit int32  `json:"result_limit"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	QueryText   string    `json:"query_text"`
+	ResultLimit int32     `json:"result_limit"`
 }
 
 type SearchBm25Row struct {
@@ -296,7 +305,7 @@ type SearchBm25Row struct {
 }
 
 func (q *Queries) SearchBm25(ctx context.Context, arg SearchBm25Params) ([]SearchBm25Row, error) {
-	rows, err := q.db.Query(ctx, searchBm25, arg.QueryText, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, searchBm25, arg.ProjectID, arg.QueryText, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -329,22 +338,24 @@ WITH bm25 AS (
   SELECT c.id, ROW_NUMBER() OVER (ORDER BY ts_rank(c.content_tsv, q) DESC) AS r
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
-       AND d.deleted_at IS NULL,
-       plainto_tsquery('spanish', $2) AS q
+       AND d.deleted_at IS NULL
+       AND d.project_id = $2,
+       plainto_tsquery('spanish', $3) AS q
   WHERE c.content_tsv @@ q
-  LIMIT $3::int
+  LIMIT $4::int
 ),
 vec AS (
-  SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $4::vector ASC) AS r
+  SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $5::vector ASC) AS r
   FROM knowledge_chunks c
   JOIN knowledge_docs d ON d.id = c.knowledge_doc_id
        AND d.deleted_at IS NULL
+       AND d.project_id = $2
   WHERE c.embedding IS NOT NULL
-  LIMIT $3::int
+  LIMIT $4::int
 ),
 fused AS (
   SELECT COALESCE(bm25.id, vec.id) AS id,
-         COALESCE(1.0 / ($5::int + bm25.r), 0) + COALESCE(1.0 / ($5::int + vec.r), 0) AS score
+         COALESCE(1.0 / ($6::int + bm25.r), 0) + COALESCE(1.0 / ($6::int + vec.r), 0) AS score
   FROM bm25 FULL OUTER JOIN vec ON bm25.id = vec.id
 )
 SELECT c.id, c.knowledge_doc_id, c.chunk_index, d.title, c.content,
@@ -358,6 +369,7 @@ LIMIT $1::int
 
 type SearchHybridParams struct {
 	ResultLimit int32            `json:"result_limit"`
+	ProjectID   uuid.UUID        `json:"project_id"`
 	QueryText   string           `json:"query_text"`
 	Candidates  int32            `json:"candidates"`
 	QueryVec    *pgvector.Vector `json:"query_vec"`
@@ -375,9 +387,14 @@ type SearchHybridRow struct {
 	Score          float64   `json:"score"`
 }
 
+// El filtro de proyecto va en LOS DOS CTEs, no solo en el SELECT final: si no, el
+// LIMIT de candidatos se gasta escaneando filas de otros proyectos y la búsqueda
+// devuelve menos resultados propios de los que hay, además de seguir siendo
+// cross-tenant por dentro (DOMAINSERV-182).
 func (q *Queries) SearchHybrid(ctx context.Context, arg SearchHybridParams) ([]SearchHybridRow, error) {
 	rows, err := q.db.Query(ctx, searchHybrid,
 		arg.ResultLimit,
+		arg.ProjectID,
 		arg.QueryText,
 		arg.Candidates,
 		arg.QueryVec,

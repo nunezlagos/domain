@@ -246,3 +246,35 @@ func TestSabotage_SkillsForOrg_PreservesUserModified(t *testing.T) {
 	).Scan(&desc))
 	require.Equal(t, "CUSTOM USER VERSION", desc, "user modifications no se sobrescriben")
 }
+
+// DOMAINSERV-159: el guard de Go vigila el struct del catálogo, pero el runner lee
+// la FILA (repository.go, GetBySlug), y la columna es NUMERIC(3,2) NOT NULL DEFAULT
+// 0.7 (migración 000068). O sea que sacar temperature del INSERT deja cada fila
+// naciendo en 0.7 y el 400 vuelve con el catálogo Go aparentemente correcto. Este
+// test es el único que mira lo que la API va a recibir de verdad.
+func TestSeedAgentTemplatesForOrg_FilasClaude5_TemperatureEnCero(t *testing.T) {
+	pools, cleanup := setupSeedDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := seeds.SeedAgentTemplatesForOrg(ctx, pools.App, uuid.New())
+	require.NoError(t, err)
+
+	rows, err := pools.App.Query(ctx,
+		`SELECT slug, model, temperature FROM agent_templates
+		  WHERE seed_managed = TRUE AND model LIKE '%-5'`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var evaluadas int
+	for rows.Next() {
+		var slug, model string
+		var temperature float64
+		require.NoError(t, rows.Scan(&slug, &model, &temperature))
+		evaluadas++
+		require.Zero(t, temperature,
+			"la fila %s (%s) quedó con temperature %v: la API responde 400 en cada invocación", slug, model, temperature)
+	}
+	require.NoError(t, rows.Err())
+	require.NotZero(t, evaluadas, "ninguna fila sembrada con modelo Claude 5: el guard no está mirando nada")
+}

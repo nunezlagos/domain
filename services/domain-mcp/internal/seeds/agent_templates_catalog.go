@@ -104,9 +104,8 @@ Output:
 </example>`,
 			Personality:   "estratega, decisivo, sintetiza",
 			Capabilities:  []string{},
-			Model:         "claude-opus-4-7",
-			Temperature:   0.2,
-			MaxTokens:     4096,
+			Model:         "claude-opus-5",
+			MaxTokens:     16384,
 			HandoffPolicy: "forbid", // orquestador no hace handoff: invoca phase-workers
 			Metadata: map[string]any{
 				"pattern":         "sdd-pipeline-orchestrator",
@@ -175,8 +174,7 @@ Output:
 </example>`,
 			Personality:   "metódico, exhaustivo, busca contexto",
 			Capabilities:  []string{"issue-dedup"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.3,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -290,8 +288,7 @@ Output (turn 1):
 </example>`,
 			Personality:   "pedagógico, pregunta lo justo y necesario",
 			Capabilities:  []string{"wizard-adaptive"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.4,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -355,8 +352,7 @@ Output:
 </example>`,
 			Personality:   "estratega, prevé riesgos, escribe claro",
 			Capabilities:  []string{"summarize"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.3,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -437,8 +433,7 @@ JSON estricto:
 </reglas>`,
 			Personality:   "rigurroso, documenta tradeoffs explícitos",
 			Capabilities:  []string{"summarize"},
-			Model:         "claude-opus-4-7",
-			Temperature:   0.3,
+			Model:         "claude-opus-5",
 			MaxTokens:     12288,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -532,8 +527,7 @@ Output:
 </example>`,
 			Personality:   "ordenado, atómico, sin tasks ambiguas",
 			Capabilities:  []string{},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.2,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -589,8 +583,7 @@ JSON estricto por task completada:
 </output_format>`,
 			Personality:   "TDD strict, code conventions, no over-engineering",
 			Capabilities:  []string{"go-test-runner", "git-commit-conventional"},
-			Model:         "claude-opus-4-7",
-			Temperature:   0.2,
+			Model:         "claude-opus-5",
 			MaxTokens:     12288,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -639,8 +632,7 @@ verdict=pass solo si scenarios_failed=[] y scenarios_uncovered=[].
 </reglas>`,
 			Personality:   "skeptical, exhaustivo, evidence-based",
 			Capabilities:  []string{"go-test-runner"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.1,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -707,8 +699,7 @@ JSON estricto:
 </reglas>`,
 			Personality:   "adversarial, busca falsos positivos",
 			Capabilities:  []string{"go-test-runner"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.2,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -829,8 +820,7 @@ JSON estricto con exactamente 4 lens_reports (R1..R4):
 </reglas>`,
 			Personality:   "riguroso, evidence-based, no-alarmista",
 			Capabilities:  []string{},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.2,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -894,8 +884,7 @@ JSON estricto:
 </reglas>`,
 			Personality:   "riguroso, orientado a la solución implementada, sin falsos bloqueos",
 			Capabilities:  []string{},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.2,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -992,8 +981,7 @@ JSON estricto:
 </reglas>`,
 			Personality:   "pedagógico, sintetiza para nuevos devs",
 			Capabilities:  []string{"summarize"},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.4,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -1083,8 +1071,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 </reglas>`,
 			Personality:   "analítico, preciso con versiones, inferencia desde código",
 			Capabilities:  []string{},
-			Model:         "claude-sonnet-4-6",
-			Temperature:   0.3,
+			Model:         "claude-sonnet-5",
 			MaxTokens:     8192,
 			HandoffPolicy: "forbid",
 			Metadata: map[string]any{
@@ -1100,7 +1087,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 18 // 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 19 // 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

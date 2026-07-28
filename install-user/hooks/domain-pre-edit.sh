@@ -222,12 +222,28 @@ if re.search(INTERPRETES, cmd):
         [ "$current_hash" = "$stored_hash" ] && fresh="yes"
       fi
     fi
+    # DOMAINSERV-195: bypass explícito de un solo uso. En modos automáticos el gate
+    # era insatisfacible: ahí el case de abajo hace deny duro, así que un "commiteá
+    # igual" del usuario nunca llegaba a ofrecerse como prompt. El marker lo crea el
+    # HUMANO con la razón como contenido y se CONSUME acá, de modo que habilita UN
+    # commit y no la sesión entera. No es barrera contra un agente adversario —es
+    # forjable con el mismo uid, igual que los markers de flow— sino la diferencia
+    # entre un bypass explícito y auditado y uno silencioso.
+    bypass="$HOME/.local/state/domain/gate-bypass-$session_id"
+    if [ "$fresh" != "yes" ] && [ -r "$bypass" ]; then
+      bypass_razon=$(head -1 "$bypass" 2>/dev/null)
+      rm -f "$bypass"
+      type domain_log_injection >/dev/null 2>&1 && \
+        domain_log_injection "PreToolUse" "$session_id" \
+          "commit-gate bypass consumido ($tool_name): ${bypass_razon:-sin razón declarada}"
+      fresh="yes"
+    fi
     if [ "$fresh" != "yes" ]; then
       case "$perm_mode" in
         default|plan) commit_dec="ask" ;;
         *)            commit_dec="deny" ;;
       esac
-      emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corre la suite de tests antes de commitear. ¿Commit igual?"
+      emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corre la suite de tests antes de commitear. Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit con: echo 'tu razón' > $bypass"
     fi
   fi
 fi

@@ -197,6 +197,37 @@ for wr in "${escrituras[@]}"; do
     "$(run "$(payload wr-sess "$wr")")"
 done
 
+# 15) DOMAINSERV-195: el deny del commit-gate tiene que nombrar la ruta del marker
+#     de bypass. Sin eso el gate es insatisfacible en modos automáticos: el usuario
+#     aprueba "commiteá igual" y esa aprobación nunca llega a ofrecerse como prompt.
+printf 'faketoken\t2099-01-01T00:00:00+00:00\texpress\n' > "$FAKE_HOME/.local/state/domain/flow-msg-sess"
+out="$(run "$(payload msg-sess 'git commit -m "feat: x"')")"
+check_contains "commit-gate: el deny nombra el marker de bypass" 'gate-bypass-' "$out"
+
+# 16) DOMAINSERV-195: con el marker de bypass presente el commit pasa...
+printf 'faketoken\t2099-01-01T00:00:00+00:00\texpress\n' > "$FAKE_HOME/.local/state/domain/flow-byp-sess"
+printf 'suite exige VPN, contenido ya testeado aguas arriba\n' > "$FAKE_HOME/.local/state/domain/gate-bypass-byp-sess"
+out="$(run "$(payload byp-sess 'git commit -m "feat: x"')")"
+check_not_contains "commit-gate: con bypass el commit pasa" 'commit-gate' "$out"
+
+# 17) ...y el marker se CONSUME: un solo uso, no una sesión entera abierta.
+if [ -e "$FAKE_HOME/.local/state/domain/gate-bypass-byp-sess" ]; then
+  printf 'FAIL: el bypass no se consumió (el marker sigue existiendo)\n'; FAILS=$((FAILS + 1))
+else
+  printf 'PASS: el bypass se consumió al usarlo\n'
+fi
+
+# 18) SABOTAJE del 16: consumido el bypass, el segundo commit de la misma sesión
+#     vuelve a rechazarse. Si esto pasara, un bypass habilitaría la sesión entera.
+out="$(run "$(payload byp-sess 'git commit -m "feat: otro"')")"
+check_contains "commit-gate: segundo commit sin bypass vuelve a denegar" 'commit-gate' "$out"
+
+# 19) SABOTAJE: el bypass es SOLO del commit-gate, no una llave maestra. Con el
+#     marker presente, escribir código sin flow activo sigue gateado.
+printf 'razon\n' > "$FAKE_HOME/.local/state/domain/gate-bypass-sab-sess"
+sab='{"session_id":"sab-sess","tool_name":"Write","permission_mode":"acceptEdits","tool_input":{"file_path":"/tmp/x.go"}}'
+check_contains "el bypass NO habilita escribir código" '"permissionDecision":"deny"' "$(run "$sab")"
+
 if [[ "$FAILS" -gt 0 ]]; then
   printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1
 fi

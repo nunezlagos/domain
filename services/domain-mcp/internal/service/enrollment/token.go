@@ -28,6 +28,9 @@ const (
 	BcryptCost = 12
 )
 
+// los tests lo bajan a MinCost; con 12 el paquete no entra en el timeout (DOMAINSERV-197)
+var bcryptCost = BcryptCost
+
 // ErrInvalidFormat se devuelve cuando el plaintext no respeta "et_<chars>".
 var ErrInvalidFormat = errors.New("invalid enrollment token format")
 
@@ -41,7 +44,7 @@ func GeneratePlaintext() (plaintext, prefix string, hash []byte, err error) {
 	encoded := base64.RawURLEncoding.EncodeToString(secret)
 	plaintext = TokenPrefix + encoded
 	prefix = plaintext[:PrefixLen]
-	hash, err = bcrypt.GenerateFromPassword([]byte(plaintext), BcryptCost)
+	hash, err = bcrypt.GenerateFromPassword([]byte(plaintext), bcryptCost)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("bcrypt: %w", err)
 	}

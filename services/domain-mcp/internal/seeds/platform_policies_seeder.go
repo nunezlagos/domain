@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 23 } // 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 24 } // 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -484,6 +484,60 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"## Excepciones\n" +
 				"- Si el proyecto es `known=false` en bootstrap → registrar primero\n" +
 				"- Si `active_flow_run` no existe → omitir flow_status",
+		},
+		{
+			Slug:       "migracion-aplicada-no-se-edita",
+			Name:       "Una migración ya aplicada no se edita: se congela y se corrige hacia adelante",
+			Kind:       "migration_rule",
+			SourceFile: "AGENTS.md",
+			BodyMD: "Una migración ya aplicada en producción NO se edita: ni su DDL, ni su numeración.\n\n" +
+				"El archivo no cambia la base —`golang-migrate` la tiene marcada como corrida— pero un\n" +
+				"deploy limpio la vuelve a ejecutar, así que el schema nuevo diverge del de producción.\n" +
+				"La divergencia no se detecta hasta que alguien levanta un ambiente desde cero.\n\n" +
+				"Por tipo de violación:\n" +
+				"- Headers faltantes: son comentarios, agregarlos es seguro. Pero un header inventado a\n" +
+				"  posteriori documenta una intención que nadie tuvo; vale menos que su ausencia.\n" +
+				"- Nombre de tabla o columna: se corrige con una migración NUEVA de rename.\n" +
+				"- `CREATE INDEX` sin `CONCURRENTLY`: irreparable, el lock ya ocurrió. Solo aplica\n" +
+				"  hacia adelante.\n\n" +
+				"La deuda vieja se congela en el baseline del linter y el guard falla solo ante lo\n" +
+				"nuevo. Establecido en DOMAINSERV-198 sobre 88 violaciones entre la 176 y la 278.",
+		},
+		{
+			Slug:       "guards-deben-ejecutarse",
+			Name:       "Un guard que no se ejecuta no es un guard",
+			Kind:       "convention",
+			SourceFile: "AGENTS.md",
+			BodyMD: "Todo guard —linter, test, hook, workflow— declara DÓNDE corre y QUÉ lo hace fallar.\n" +
+				"Uno que existe pero no se ejecuta no protege: da sensación de cobertura, que es peor\n" +
+				"que no tenerlo.\n\n" +
+				"Al crear o modificar uno, verificar que corre sobre la rama y los paths que pretende\n" +
+				"cubrir, y dejar registrado cómo se comprueba.\n\n" +
+				"Señal de alarma: un check verde que valida OTRO componente. \"CI install-user ✓\" no\n" +
+				"dice nada de domain-mcp.\n\n" +
+				"## Corolario: reconocer a medias es peor que no reconocer\n\n" +
+				"Al ampliar un guard para que acepte un caso nuevo, agregar en el MISMO commit su\n" +
+				"señal de fallo. Un runner de tests reconocido sin su patrón de rojo es un falso\n" +
+				"verde: el hook lo toma por corrida exitosa y deja commitear sobre tests fallando.\n" +
+				"Verificar siempre con un caso negativo explícito.\n\n" +
+				"Cuatro casos reales el 2026-07-28: el CI filtrando por una rama vieja, un deploy\n" +
+				"automático frenado solo por la ausencia de un runner, un baseline congelado 132\n" +
+				"migraciones atrás, y `govulncheck` un mes sin correr con 3 CVEs acumuladas.",
+		},
+		{
+			Slug:       "delegar-lecturas-multiples",
+			Name:       "Lecturas múltiples van a subagentes, salvo que el detalle sea el entregable",
+			Kind:       "convention",
+			SourceFile: "AGENTS.md",
+			BodyMD: "Cuando resolver algo exige VARIAS llamadas de lectura, delegar en un subagente en vez\n" +
+				"de acumular los payloads en el hilo principal.\n\n" +
+				"Umbral práctico: 3 o más lecturas del mismo tipo. Una sola no se delega — el spawn\n" +
+				"cuesta más que la lectura.\n\n" +
+				"EXCEPCIÓN: si la tarea es detectar contradicciones o drift ENTRE documentos, leerlos\n" +
+				"en el hilo. Un resumen no deja ver que un ticket se declara bloqueado mientras otro\n" +
+				"ya lo desbloqueó. A veces el detalle ES el entregable.\n\n" +
+				"Al delegar: pedir referencias `file:line` concretas y prohibir salida cruda de tools.\n" +
+				"El retorno debe distinguir vacío real, degradación y truncamiento.",
 		},
 	}
 

@@ -57,5 +57,43 @@ resp_sh_fail='{"stdout":"FAIL: algo\n\n1 test(s) FALLARON","stderr":"","interrup
 check "suite bash en rojo -> sin marker" "no" \
   "$(run "s6" "{\"session_id\":\"s6\",\"tool_input\":{\"command\":\"bash x_test.sh\"},\"tool_response\":$resp_sh_fail}")"
 
+# 7) DOMAINSERV-175: los runners nativos de domain-admin, el único servicio Python.
+#    Sin estos patrones el gate quedaba insatisfacible al tocarlo: los tests pasaban
+#    y el marker no se escribía nunca. Mismo modo de falla que DOMAINSERV-111.
+resp_py_ok='{"stdout":"....\n----------------------------------------------------------------------\nRan 4 tests in 0.03s\n\nOK","stderr":"","interrupted":false,"isImage":false}'
+for c in 'python3 -m unittest config.tests.test_landing' 'python -m unittest discover' \
+         'python manage.py test' 'python3 manage.py test config' \
+         '/venv/bin/python3 -m unittest config.tests.test_x'; do
+  check "runner Python reconocido: $c" "yes" \
+    "$(run "s7" "{\"session_id\":\"s7\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":$resp_py_ok}")"
+done
+
+# 8) DOMAINSERV-175 (contra-prueba): unittest en rojo → sin marker.
+#    Las tres variantes del resumen de unittest, porque el patrón las distingue por
+#    el número: reconocer el runner sin reconocer su rojo sería peor que no reconocerlo.
+for resumen in 'FAILED (failures=1)' 'FAILED (errors=1)' 'FAILED (failures=0, errors=2)'; do
+  resp_py_fail="{\"stdout\":\"F...\n$resumen\",\"stderr\":\"\",\"interrupted\":false,\"isImage\":false}"
+  check "unittest en rojo -> sin marker: $resumen" "no" \
+    "$(run "s8" "{\"session_id\":\"s8\",\"tool_input\":{\"command\":\"python3 -m unittest config.tests.test_x\"},\"tool_response\":$resp_py_fail}")"
+done
+
+#    Contra-prueba del número: el patrón NO debe disparar con todo en cero.
+resp_py_zero='{"stdout":"..\nOK","stderr":"","interrupted":false,"isImage":false}'
+check "unittest en verde -> marker escrito" "yes" \
+  "$(run "s8b" "{\"session_id\":\"s8b\",\"tool_input\":{\"command\":\"python3 -m unittest config.tests.test_x\"},\"tool_response\":$resp_py_zero}")"
+
+# 9) DOMAINSERV-175: pedir ayuda NO es correr la suite. Sale exit 0 y sin FAIL en el
+#    output, así que sin esta exclusión marcaba verde sin haber ejecutado un solo test.
+resp_help='{"stdout":"usage: manage.py test [-h] [--keepdb] [--parallel]","stderr":"","interrupted":false,"isImage":false}'
+for c in 'python manage.py test --help' 'go test -h' 'pytest --version' 'python3 -m unittest -h'; do
+  check "ayuda/versión NO es corrida: $c" "no" \
+    "$(run "s9" "{\"session_id\":\"s9\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":$resp_help}")"
+done
+
+# 10) SABOTAJE del 9: la exclusión no debe comerse una corrida real que mencione
+#     un path con "-h" adentro. Si esto fallara, el fix del 9 rompió el caso normal.
+check "la exclusión no mata una corrida real con -h en un path" "yes" \
+  "$(run "s10" "{\"session_id\":\"s10\",\"tool_input\":{\"command\":\"python3 -m unittest config.tests.test_hook-handler\"},\"tool_response\":$resp_py_ok}")"
+
 if [ "$FAILS" -gt 0 ]; then printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1; fi
 printf '\nTodos los tests pasaron\n'

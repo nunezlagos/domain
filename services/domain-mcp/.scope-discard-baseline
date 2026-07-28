@@ -1,0 +1,27 @@
+# DOMAINSERV-187 — descartes de parámetros de scope, congelados.
+#
+# Formato: relpath:count — cuántos `_ = orgID` (o variantes) tiene cada archivo.
+# Por archivo y no por línea a propósito: una edición que corre las líneas sin
+# agregar descartes no debería tocar este archivo.
+#
+# La plataforma es SINGLE-TENANT: la migración 000142 eliminó organization_id de
+# todas las tablas, la 000143 dropeó la tabla organizations, y los headers de la
+# 000180 y la 000277 lo declaran por escrito. Estos 22 descartes son firmas que
+# todavía prometen un aislamiento por org que ya no existe.
+#
+# NO se limpian acá: eliminar los parámetros toca ~90 call sites para un cambio de
+# comportamiento nulo (el valor ya se ignora). Es deuda con fundamento, no una
+# tarea pendiente de este guard, cuyo único trabajo es que la deuda no CREZCA.
+#
+# Regenerar: go test -run TestScopeDiscard ./cmd/size-lint/... y ajustar a mano,
+# o el grep de una línea que documenta el commit de DOMAINSERV-187.
+internal/api/backpressure/backpressure.go:1
+internal/auth/apikey/store.go:4
+internal/runner/selfhosted/selfhosted.go:2
+internal/service/billing/service.go:3
+internal/service/capturedprompt/pg_repository.go:2
+internal/service/flow/budget.go:1
+internal/service/orchestrator/analysis/service.go:2
+internal/service/orchestrator/repository.go:3
+internal/service/project/pg_repository.go:2
+internal/service/project/service.go:2

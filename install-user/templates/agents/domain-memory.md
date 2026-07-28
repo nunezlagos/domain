@@ -14,7 +14,7 @@ Read-only over Domain MCP. No mutations.
 ## Procedimiento
 
 1. `domain_mem_search(query, project_slug?)` — limit 10.
-2. `domain_knowledge_search(query)` — SOPs / ADRs.
+2. `domain_knowledge_search(query, project_slug)` — SOPs / ADRs. project_slug es obligatorio: la búsqueda está scopeada por proyecto.
 3. Expandí con `domain_mem_get_observation` los hits truncados que valgan.
 4. `domain_timeline` si recencia importa.
 

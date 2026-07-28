@@ -56,6 +56,11 @@ services:
       domain-migrate:
         condition: service_completed_successfully
     environment:
+      # DOMAINSERV-194: explícito aunque el cgroup ya lo permita derivar. Sin
+      # límite de cgroup el runtime loguea "GOMEMLIMIT not auto-set" y el GC
+      # trabaja sin techo suave; dejarlo escrito mantiene el contrato del GC
+      # visible si alguien mueve el límite de abajo sin pensar en el GC.
+      GOMEMLIMIT: 1800MiB
       DOMAIN_HTTP_PORT: 8000
       DOMAIN_HTTP_BIND: 0.0.0.0
       DOMAIN_DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable
@@ -131,6 +136,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # DOMAINSERV-194: mismo razonamiento que el límite de Caddy (DOMAINSERV-131)
+    # — el host corre además Postgres y las bases de clientes, así que sin techo
+    # el OOM killer del kernel elige víctima y puede no ser este proceso. 2G es
+    # ~87x el uso medido (23 MiB en régimen): el techo está para atajar un leak
+    # o un pico patológico, NO para racionar: estrangular este proceso sale más
+    # caro que la RAM que ahorra.
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     logging:
       driver: json-file
       options:

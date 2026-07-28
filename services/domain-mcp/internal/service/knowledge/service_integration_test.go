@@ -55,8 +55,11 @@ func setup(t *testing.T) (*fix, func()) {
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,
 	})
 
+	// Dim explícito: la migración 000275 llevó las columnas de embedding a
+	// vector(1024) y llm.DefaultDim sigue en 1536, así que un FakeEmbedder sin Dim
+	// falla el insert con "expected 1024 dimensions, not 1536"
 	svc := &knowledge.Service{
-		Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{},
+		Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: 1024},
 	}
 	return &fix{svc: svc, orgID: org.ID, projectID: proj.ID, userID: owner.UserID}, func() {
 		pools.Close()
@@ -133,7 +136,7 @@ func TestKnowledge_SearchHybrid_Semantic(t *testing.T) {
 		Title: "B", Body: "El clima ayer fue lluvioso en Santiago.",
 	})
 
-	results, err := f.svc.SearchHybrid(ctx, f.orgID, "pgvector búsqueda", 5)
+	results, err := f.svc.SearchHybrid(ctx, f.projectID, "pgvector búsqueda", 5)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 	require.Contains(t, strings.ToLower(results[0].Snippet), "pgvector")
@@ -148,7 +151,7 @@ func TestKnowledge_SearchHybrid_NopEmbedderDegradesToTSVector(t *testing.T) {
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Title: "T", Body: "documentación del módulo de memoria de domain.",
 	})
-	results, err := f.svc.SearchHybrid(ctx, f.orgID, "memoria domain", 5)
+	results, err := f.svc.SearchHybrid(ctx, f.projectID, "memoria domain", 5)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 }

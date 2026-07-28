@@ -66,7 +66,10 @@ func setupDosProyectos(t *testing.T) (*fixDosProyectos, func()) {
 	})
 	require.NoError(t, err)
 
-	svc := &knowledge.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	// Dim explícito: la migración 000275 llevó las columnas de embedding a
+	// vector(1024) y llm.DefaultDim sigue en 1536, así que un FakeEmbedder sin Dim
+	// falla el insert con "expected 1024 dimensions, not 1536"
+	svc := &knowledge.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: 1024}}
 
 	return &fixDosProyectos{
 			svc: svc, orgID: org.ID, userID: owner.UserID,

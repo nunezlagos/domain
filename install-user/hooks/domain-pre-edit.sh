@@ -222,13 +222,8 @@ if re.search(INTERPRETES, cmd):
         [ "$current_hash" = "$stored_hash" ] && fresh="yes"
       fi
     fi
-    # DOMAINSERV-195: bypass explícito de un solo uso. En modos automáticos el gate
-    # era insatisfacible: ahí el case de abajo hace deny duro, así que un "commiteá
-    # igual" del usuario nunca llegaba a ofrecerse como prompt. El marker lo crea el
-    # HUMANO con la razón como contenido y se CONSUME acá, de modo que habilita UN
-    # commit y no la sesión entera. No es barrera contra un agente adversario —es
-    # forjable con el mismo uid, igual que los markers de flow— sino la diferencia
-    # entre un bypass explícito y auditado y uno silencioso.
+    # bypass de un solo uso que crea el humano: en modos automáticos el deny de
+    # abajo es duro y el gate quedaba insatisfacible (DOMAINSERV-195)
     bypass="$HOME/.local/state/domain/gate-bypass-$session_id"
     if [ "$fresh" != "yes" ] && [ -r "$bypass" ]; then
       bypass_razon=$(head -1 "$bypass" 2>/dev/null)

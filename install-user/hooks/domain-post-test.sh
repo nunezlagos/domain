@@ -36,16 +36,14 @@ cmd = (d.get("tool_input") or {}).get("command", "") or ""
 # DOMAINSERV-111: las suites en bash (los hooks de install-user se testean con
 # `bash x_test.sh`) no se reconocían → el marker nunca se escribía y el
 # commit-gate quedaba insatisfacible al tocar justamente estos archivos.
-# DOMAINSERV-175: los dos runners nativos de domain-admin, el único servicio Python.
-# `python\S*` cubre python3, python3.11 y una ruta absoluta de venv.
+# DOMAINSERV-175: los runners de domain-admin; python\S* cubre python3 y rutas de venv
 test_re = re.compile(
     r"\b(go\s+test|npm\s+(run\s+)?test|pytest|jest|vitest|cargo\s+test|phpunit|rspec"
     r"|make\s+test|python\S*\s+-m\s+unittest|manage\.py\s+test)\b"
     r"|(?:\bbash\s+|\bsh\s+|\./)\S*_test\.sh\b"
 )
-# pedir ayuda o versión no ejecuta ningún test, pero sale con exit 0 y sin FAIL en el
-# output, así que satisfacía al clasificador de abajo y marcaba el marker en verde.
-# Va como token suelto para no comerse un path que lleve "-h" adentro
+# --help sale exit 0 y sin FAIL, así que marcaba verde sin correr nada; token
+# suelto para no comerse un path con "-h" adentro
 ayuda_re = re.compile(r"(?:^|\s)(--help|-h|--version)(?:\s|$)")
 is_test = bool(test_re.search(cmd)) and not ayuda_re.search(cmd)
 
@@ -100,10 +98,7 @@ fail_patterns = [
     r"(?im)\b[1-9]\d*\s+failed\b",           # jest/vitest/pytest: "N failed"
     r"(?im)\b[1-9]\d*\s+failing\b",          # mocha: "N failing"
     r"(?im)\b[1-9]\d*\s+failure(s)?\b",      # rspec: "N failures"
-    # DOMAINSERV-175: unittest/Django resumen "FAILED (failures=1, errors=2)". Ninguno
-    # de los de arriba lo agarraba: ^FAIL\b no matchea FAILED (la E rompe el \b) y el de
-    # rspec espera "1 failures", no "failures=1". Sin esto, reconocer el runner sin
-    # reconocer su señal de rojo era PEOR que no reconocerlo: marker verde con tests rojos
+    # unittest: ^FAIL\b no matchea FAILED porque la E rompe el \b (DOMAINSERV-175)
     r"FAILED\s*\([^)]*(?:failures|errors)=[1-9]",
 ]
 signal_fail = any(re.search(p, output) for p in fail_patterns)

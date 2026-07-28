@@ -32,6 +32,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # DOMAINSERV-194: 4G sale del peor caso de postgresql.conf, no de un número
+    # a ojo: shared_buffers 256MB + work_mem 16MB x max_connections 100 +
+    # maintenance_work_mem 64MB x 3 autovacuum workers + overhead por conexión
+    # ≈ 3.05G. Por debajo de eso el techo deja de proteger y empieza a matar la
+    # BD ante una tanda de queries con sort pesado. Si alguien sube work_mem o
+    # max_connections, este número hay que recalcularlo.
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     logging:
       driver: json-file
       options:

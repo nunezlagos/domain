@@ -22,6 +22,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # DOMAINSERV-194: es el proceso más grande del host (2.29 GiB medidos con
+    # bge-m3 cargado, 19.6% de la RAM), así que es el candidato natural a
+    # descontrolarse y arrastrar al resto. 6G deja margen para un modelo bastante
+    # más grande sin romper la carga — un techo apretado acá no protege nada:
+    # falla el pull y los embeddings degradan a noop en silencio.
+    deploy:
+      resources:
+        limits:
+          memory: 6G
     logging:
       driver: json-file
       options:

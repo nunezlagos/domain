@@ -11,6 +11,17 @@ COMPOSE_OLLAMA   := docker compose -f ollama/docker-compose.yml $(ENV_FILE)
 COMPOSE_MONITORING := docker compose -f domain-mcp/deploy/monitoring/docker-compose.yml $(ENV_FILE)
 NETWORK := domain_internal
 
+# DOMAINSERV-193: el Dockerfile declara ARG VERSION/COMMIT/BUILD_TIME y los inyecta por
+# ldflags, pero nadie se los pasaba, así que el binario salía con los defaults y /healthz
+# reportaba commit=unknown — sin forma de auditar qué commit corre en prod. El fallback
+# importa: si el bundle se despliega sin .git, el build no debe romperse.
+# BUILD_TIME invalida la capa de compilación en cada build; se acepta porque un deploy
+# normalmente trae un commit nuevo, que la invalidaría igual.
+COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+export COMMIT VERSION BUILD_TIME
+
 .PHONY: help up down restart ps logs build backup healthcheck \
         psql mc clean ensure-network certs certs-force wait-healthy \
         monitoring-up monitoring-down deploy-changed config-drift

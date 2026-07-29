@@ -15,7 +15,29 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = "hu-47.2-rotate-me-before-prod-3f8a9b2c1d4e5f6a"
+_CLAVE_PUBLICADA = "hu-47.2-rotate-me-before-prod-3f8a9b2c1d4e5f6a"
+
+_EN_TEST = (
+    os.environ.get("DJANGO_ENV", "").lower() == "test"
+    or os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith(".test")
+)
+
+# Sin default fuera de test: la sesion ES la autenticacion del panel
+# (signed_cookies + session["authenticated"]), asi que quien tenga esta clave
+# puede firmar una sesion valida y entrar sin pasar por el login. Estuvo
+# hardcodeada en este archivo, dentro de un repo publico (DOMAINSERV-203).
+# Preferimos no arrancar antes que servir con una clave que cualquiera lee.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if _EN_TEST:
+    SECRET_KEY = SECRET_KEY or "clave-solo-para-la-suite-de-tests"
+elif not SECRET_KEY or SECRET_KEY in ("CHANGE_ME", _CLAVE_PUBLICADA):
+    raise RuntimeError(
+        "DJANGO_SECRET_KEY no esta definida, o trae el placeholder, o trae la "
+        "clave que estuvo publicada en el repo. install.sh la genera: esta en "
+        "el mapa CREDS. Rotarla invalida las sesiones existentes, que es el "
+        "efecto deseado."
+    )
+
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = ["*"]
 

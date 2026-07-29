@@ -216,6 +216,14 @@ declare -A CREDS=(
   # ciphertext previo y esas API keys habría que rotarlas a mano
   [DOMAIN_FIELD_ENC_KEY]=DOMAIN_FIELD_ENC_KEY
   [CROWDSEC_BOUNCER_API_KEY]=CROWDSEC_BOUNCER_API_KEY
+  # password del panel. Faltaba, así que toda instalación quedaba con el
+  # q1w2e3r4 del .env.example — mismo incidente que arriba, esta vez en la
+  # puerta del admin (DOMAINSERV-203)
+  [ADMIN_PASSWORD]=ADMIN_PASSWORD
+  # firma las cookies de sesión de Django, y la sesión ES la autenticación
+  # (signed_cookies + session["authenticated"]). Con la clave publicada en el
+  # repo, cualquiera forjaba una sesión válida sin pasar por el login
+  [DJANGO_SECRET_KEY]=DJANGO_SECRET_KEY
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -769,6 +777,9 @@ cat <<EOF
   ADMIN_EMAIL:           $ADMIN_EMAIL
   ──────────────────────────────────────────────────────────────────
 
+  ADMIN_PASSWORD:        $(env_get ADMIN_PASSWORD "$ENV_FILE")
+      ↑ ESTA es la del panel, la que se usa para entrar con ADMIN_EMAIL.
+        No confundir con APP_ADMIN_PASSWORD, que es un rol de Postgres.
   POSTGRES_PASSWORD:     $(env_get POSTGRES_PASSWORD "$ENV_FILE")
   APP_USER_PASSWORD:     $(env_get APP_USER_PASSWORD "$ENV_FILE")
   APP_ADMIN_PASSWORD:    $(env_get APP_ADMIN_PASSWORD "$ENV_FILE")

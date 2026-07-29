@@ -16,10 +16,14 @@ services:
       # HU-45.1 sin DB todavía. HU-45.2 sumará DATABASES + read replica config.
       DJANGO_SETTINGS_MODULE: config.settings
       PYTHONUNBUFFERED: "1"
-      # HU-47.1: credenciales master del admin. Defaults para dev/demo.
-      # Override via /opt/services/.env en producción.
+      # HU-47.1: credenciales master del admin.
+      # Sin default para la password ni para la clave de firma: el compose FALLA
+      # a propósito si el .env no las trae. Un default acá es la puerta del panel
+      # abierta con un valor publicado en el repo (DOMAINSERV-203). install.sh las
+      # rota: están en el mapa CREDS.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@admin.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?definí ADMIN_PASSWORD en el .env — install.sh la genera}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?definí DJANGO_SECRET_KEY en el .env — install.sh la genera}
       # HU-48.1: conexión a Postgres compartido (mismas vars que domain-mcp).
       POSTGRES_DB: ${POSTGRES_DB:-domain}
       DB_APP_USER: ${POSTGRES_DB_USER:-app_user}

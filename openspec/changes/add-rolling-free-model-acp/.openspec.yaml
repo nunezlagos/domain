@@ -1,5 +1,8 @@
 change: add-rolling-free-model-acp
-status: active
+# archived y no active: el epic DOMAINSERV-62 se cerro el 2026-07-24. Este change usa
+# la forma legado del meta (change/epic/specs, sin bloque domain), asi que no tiene
+# issue_id y NUNCA va a poder auditarse por hash. Decidido en DOMAINSERV-200
+status: archived
 epic: DOMAINSERV-62
 created: 2026-07-22
 specs:

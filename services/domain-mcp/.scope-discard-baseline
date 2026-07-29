@@ -1,27 +1,55 @@
-# DOMAINSERV-187 — descartes de parámetros de scope, congelados.
+# DOMAINSERV-187 — firmas que piden un parámetro de scope y no lo usan, congeladas.
 #
-# Formato: relpath:count — cuántos `_ = orgID` (o variantes) tiene cada archivo.
-# Por archivo y no por línea a propósito: una edición que corre las líneas sin
-# agregar descartes no debería tocar este archivo.
+# Formato: relpath:count — cuántas firmas de ese archivo aceptan orgID (o una variante:
+# orgId, organizationID, organizationId, tenantID, tenantId) sin usarlo en el cuerpo.
+# Por archivo y no por línea a propósito: una edición que corre las líneas sin agregar
+# firmas no debería tocar este archivo.
 #
-# La plataforma es SINGLE-TENANT: la migración 000142 eliminó organization_id de
-# todas las tablas, la 000143 dropeó la tabla organizations, y los headers de la
-# 000180 y la 000277 lo declaran por escrito. Estos 22 descartes son firmas que
-# todavía prometen un aislamiento por org que ya no existe.
+# Estado congelado: 95 firmas en 34 archivos — 20 con descarte explícito (`_ = orgID`)
+# y 75 que nunca mencionan el parámetro. Las segundas son invisibles a un grep, y son la
+# mayoría: por eso el guard analiza el AST y no busca un patrón de texto.
 #
-# NO se limpian acá: eliminar los parámetros toca ~90 call sites para un cambio de
-# comportamiento nulo (el valor ya se ignora). Es deuda con fundamento, no una
-# tarea pendiente de este guard, cuyo único trabajo es que la deuda no CREZCA.
+# La plataforma es SINGLE-TENANT: la migración 000142 eliminó organization_id de todas las
+# tablas, la 000143 dropeó la tabla organizations, y los headers de la 000180 y la 000277
+# lo declaran por escrito. Estas firmas prometen un aislamiento por org que ya no existe.
 #
-# Regenerar: go test -run TestScopeDiscard ./cmd/size-lint/... y ajustar a mano,
-# o el grep de una línea que documenta el commit de DOMAINSERV-187.
+# NO se limpian acá: eliminar los parámetros toca 23+ archivos y cientos de call sites,
+# con cadenas de hasta 3 capas (ListFiltered → ClientSvc.Get → repo.GetBySlug), para un
+# cambio de comportamiento nulo. Es deuda con fundamento, no una tarea pendiente de este
+# guard, cuyo único trabajo es que la deuda no CREZCA.
+#
+# Regenerar: SCOPE_DISCARD_REGEN=1 go test -run TestScopeDiscard_RegenerarBaseline ./cmd/size-lint/...
+cmd/domain/seed_demo.go:2
 internal/api/backpressure/backpressure.go:1
-internal/auth/apikey/store.go:4
+internal/auth/apikey/store.go:3
+internal/context/semcache/cache.go:1
+internal/mcp/server/session_bootstrap_tools.go:1
+internal/runner/agent/runner.go:1
 internal/runner/selfhosted/selfhosted.go:2
+internal/secrets/store.go:2
+internal/service/agent/pg_repository.go:4
 internal/service/billing/service.go:3
 internal/service/capturedprompt/pg_repository.go:2
+internal/service/client/pg_repository.go:7
+internal/service/cost/service.go:2
+internal/service/cron/service.go:1
+internal/service/extsync/service.go:1
 internal/service/flow/budget.go:1
-internal/service/orchestrator/analysis/service.go:2
+internal/service/flow/pg_repository.go:3
+internal/service/inventory/inventory.go:1
+internal/service/mcpserver/service.go:6
+internal/service/orchestrator/analysis/service.go:1
 internal/service/orchestrator/repository.go:3
+internal/service/outboundwebhook/service.go:3
 internal/service/project/pg_repository.go:2
 internal/service/project/service.go:2
+internal/service/projectrepo/pg_repository.go:5
+internal/service/projecttemplate/service.go:5
+internal/service/prompt/service.go:3
+internal/service/search/service.go:3
+internal/service/skill/execution.go:1
+internal/service/skill/service.go:3
+internal/service/ticket/pg_repository.go:9
+internal/service/timeline/service.go:3
+internal/service/usagealerts/service.go:7
+internal/service/webhook/management.go:1

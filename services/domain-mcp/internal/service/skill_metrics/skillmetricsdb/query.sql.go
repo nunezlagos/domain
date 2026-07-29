@@ -547,7 +547,10 @@ SELECT
         )::int
     END                          AS avg_duration_ms,
     MAX(p95_duration_ms)::int    AS p95_duration_ms,
-    MAX(unique_callers_count)::int AS unique_callers_count
+    MAX(unique_callers_count)::int AS unique_callers_count,
+    -- el target la declara, asi que sin esta expresion el INSERT no llega a
+    -- contarse: falla al preparar con "more target columns than expressions"
+    NOW()                        AS updated_at
 FROM skill_metrics_daily
 WHERE day >= $1::date
   AND day <  ($1::date + INTERVAL '7 days')

@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: fed6501e-3fc4-4212-a1fd-2f6c5b0a4df5
+  issue_slug: issue-65.1-install-user-cleanup
+  req: REQ-65-install-user-hardening
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": b2b69d8a852d1b34d06ca81a42a805033473519eb7109fe2b6b9e654fc5e0c48
+  "design.md": 6af91226ee1d19b0c2015c24ceed8f14e7606da94b4a91ca1076f14883456138
+  "tasks.md": e2ab44fbb747cefad1b9797f1984257eb4da99c7f8b3d46cc1173419ac4108a3
+  "specs/issue-65.1-install-user-cleanup/spec.md": dbdc13483be0abd1534e4d12455ad52fdd542215c13771d7e2230593fa30e56c

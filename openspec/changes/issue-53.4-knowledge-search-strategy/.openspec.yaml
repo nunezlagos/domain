@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: c3b71968-9be5-45da-9c97-8fd91f9267fb
+  issue_slug: issue-53.4-knowledge-search-strategy
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": cea11faeb9911d98ec9f3e408cb4568cc3ec9f04884906d857ebb85eb6e12f8f
+  "design.md": 2ba6571c09c97d716cdb2c0cbbb7d75a507b9f269b4365627499571b82220785
+  "tasks.md": 500b67328e2fe361528276f5b7a8867bf4d0fe6b9aa7d63b6079760a3033204a
+  "specs/issue-53.4-knowledge-search-strategy/spec.md": 7e0a3db1aeee29f1bc51240b402bb411d776fd8285e37f942afa1c3d25ba38fd

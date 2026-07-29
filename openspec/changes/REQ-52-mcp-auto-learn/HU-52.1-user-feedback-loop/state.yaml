@@ -1,0 +1,70 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: User feedback loop (👍/👎 en cada respuesta del chat)
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/migrate/migrations/000186_create_skill_feedback.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000186_create_skill_feedback.down.sql
+  - services/domain-mcp/internal/service/feedback/models.go
+  - services/domain-mcp/internal/service/feedback/service.go
+  - services/domain-mcp/internal/service/feedback/repository.go
+  - services/domain-mcp/internal/service/feedback/handler.go
+  - services/domain-mcp/internal/service/feedback/aggregator.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-admin/app/maintainers/feedback/__init__.py
+  - services/domain-admin/app/maintainers/feedback/apps.py
+  - services/domain-admin/app/maintainers/feedback/models.py
+  - services/domain-admin/app/maintainers/feedback/views.py
+  - services/domain-admin/app/maintainers/feedback/urls.py
+  - services/domain-admin/app/templates/chat/widget.html
+  - services/domain-admin/app/static/js/chat.js
+  - services/domain-admin/app/static/css/chat.css
+  - services/domain-admin/app/maintainers/feedback/templates/feedback/list.html
+  - openspec/changes/REQ-52-mcp-auto-learn/HU-52.1-user-feedback-loop/proposal.md
+tests:
+  - services/domain-mcp/internal/service/feedback/handler_test.go
+  - services/domain-mcp/internal/service/feedback/aggregator_test.go
+  - services/domain-admin/app/maintainers/feedback/tests/test_views.py
+tasks:
+  - Crear migracion 000186: tabla skill_feedback (id, message_id BIGINT FK chat_messages, skill_slug TEXT, rating SMALLINT CHECK (rating IN (1, -1)), comment TEXT, user_email TEXT, created_at TIMESTAMPTZ, UNIQUE(message_id))
+  - Service feedback: Create, GetByMessage, ListBySkill (paginated), AggregateByDay
+  - Handler HTTP: POST /api/v1/feedback (body: message_id, rating, comment, skill_slug), GET /api/v1/feedback?skill_slug=&days=
+  - Registrar rutas en api.go
+  - CSRF exempt para el endpoint de feedback
+  - Rate limit: 30 feedbacks por minuto por user (anti-spam)
+  - Chat widget: agregar botones 👍/👎 discretos debajo de cada respuesta del assistant
+  - Al click en 👍 o 👎: POST /feedback con message_id, skill_slug (de la source del mensaje)
+  - Si feedback con comentario: abrir textbox inline para escribir el comentario
+  - Visual feedback: despues de click, ocultar botones y mostrar "Gracias por tu feedback"
+  - Admin (Django): vista /feedback/ con lista de feedback por skill, filtro por rating (positive/negative)
+  - Cron aggregator: cada 6h, agrega feedback_count, last_feedback_at en skill_metrics
+  - Tests: handler con rating valido + invalido, aggregator con datos de prueba
+specs:
+  - skill_feedback.message_id: FK a chat_messages (bigserial, NO cascade delete)
+  - skill_feedback.rating: 1 (thumbs up) o -1 (thumbs down)
+  - skill_feedback.skill_slug: extraido del source del mensaje (NO FK porque chat_messages no tiene skill_slug directo)
+  - rate_limit: 30 req/min por user_email
+  - idempotency: 1 feedback por message_id (UNIQUE constraint); segundo submit = update del existente
+  - privacy: comment puede contener PII, NO se loguea en audit_log
+  - aggregator: cada 6h, UPDATE skill_metrics SET feedback_count = ..., last_feedback_at = NOW()
+  - UI widget: botones despues de cada respuesta assistant, oculto si el mensaje es del user
+  - visual: thumbs up verde si rating=1, thumbs down rojo si rating=-1
+  - retention: feedback se retiene por 365 dias (limpieza anual)
+notes: |
+  Esta HU es el PREREQUISITO de todas las demas. Sin feedback signal,
+  no podemos saber que mejorar. Es la pieza que convierte al MCP de
+  "ejecuta skills" a "ejecuta skills y aprende de la ejecucion".
+
+  El feedback del usuario es el signal mas fuerte de calidad. Si un
+  usuario marca 👎, sabemos que ese skill no esta funcionando bien.
+
+  El componente "Agregator" corre como cron cada 6h y consolida el
+  feedback en skill_metrics. Asi, la HU-52.3 (LLM-as-judge) puede
+  consultar "que skills tienen feedback negativo reciente" y sugerir
+  mejoras.
+
+  Privacy: el comment del usuario puede contener PII (emails, nombres).
+  NO se loguea en audit_log (solo el rating numerico). Solo el admin
+  autorizado ve los comments.

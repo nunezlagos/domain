@@ -1,0 +1,78 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Resiliencia del backend Django (timeouts DB, async tasks, watchdog)
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-admin/app/config/settings/base.py
+  - services/domain-admin/requirements.txt
+  - services/domain-admin/app/chat/services.py
+  - services/domain-admin/app/chat/views.py
+  - services/domain-admin/app/chat/async_tasks.py
+  - services/domain-admin/app/chat/watchdog.py
+  - services/domain-admin/app/chat/management/commands/chat_watchdog.py
+  - services/domain-admin/app/chat/tests/test_watchdog.py
+  - services/domain-admin/app/chat/tests/test_chat_resilience.py
+  - openspec/changes/REQ-51-resilience/HU-51.2-backend-timeouts-watchdog/proposal.md
+tests:
+  - services/domain-admin/app/chat/tests/test_watchdog.py
+  - services/domain-admin/app/chat/tests/test_chat_async.py
+  - services/domain-admin/app/chat/tests/test_db_timeouts.py
+tasks:
+  - requirements.txt: agregar `celery>=5.3` y `redis>=5.0` (broker)
+  - settings/base.py:
+    * DATABASES.default.OPTIONS: agregar `connect_timeout=5, statement_timeout=30, options="-c statement_timeout=30s"`
+    * Para el rol app_user (chat): timeouts mas permisivos (60s) por la latencia de LLM
+  - chat/services.py: refactor process_message a async:
+    * Si request llega, validar y crear mensaje con status=pending
+    * Encolar task async (Celery) con el message_id
+    * Devolver 202 inmediatamente con message_id
+    * El cliente hace polling del estado
+  - chat/async_tasks.py: nuevo modulo con `process_message_task(message_id)`:
+    * Recuperar mensaje de DB
+    * Setear status=processing
+    * Llamar al retrieval + LLM (con timeout por operacion)
+    * Capturar errores: LlmProviderError, TimeoutError, DBError
+    * Actualizar mensaje con resultado o error
+  - chat/watchdog.py: detectar stuck messages:
+    * Query: SELECT * FROM chat_messages WHERE status IN ('pending', 'processing') AND updated_at < NOW() - INTERVAL '5 minutes'
+    * Por cada uno, marcar como error con message: "El proceso se interrumpio. Reintentar."
+    * Log a audit con el message_id y el user_id
+  - chat/management/commands/chat_watchdog.py: CLI para correr el watchdog manualmente
+  - Cron (HU-50.5 o similar): correr `python manage.py chat_watchdog` cada 5 minutos
+  - chat/views.py: actualizar create_message para usar async_tasks en vez de llamar process_message directamente
+  - Tests: watchdog marca stuck, async task actualiza estado, timeouts configurados
+specs:
+  - DATABASES.OPTIONS.connect_timeout: 5 (segundos)
+  - DATABASES.OPTIONS.statement_timeout: 30 (segundos para queries normales)
+  - DATABASES.OPTIONS.statement_timeout: 60 (segundos para el chat user)
+  - Celery broker: redis://redis:6379/0
+  - Celery result backend: redis://redis:6379/1
+  - async_task timeout: 90 segundos (LLM + retrieval + buffer)
+  - watchdog threshold: 5 minutos en pending/processing
+  - watchdog action: marca como error con message_user friendly
+  - audit log: registra cada stuck message con contexto (user_id, message_id, conversation_id, last_status, last_updated_at)
+  - recovery: el usuario ve el mensaje como error y puede "Reintentar" (re-crea el mensaje con mismo client_id para idempotencia)
+notes: |
+  El `process_message` actual es sincrono: bloquea el request HTTP del
+  cliente hasta que el LLM responda (hasta 30s). Esto causa:
+  1. Timeouts del cliente (request largo = cliente desespera)
+  2. Si el cliente cierra la conexion, el server sigue procesando
+  3. No hay forma de cancelar la operacion
+
+  Solucion: convertirlo en Celery task async. El endpoint POST devuelve
+  202 Accepted con el message_id inmediatamente, y el cliente hace
+  polling del estado.
+
+  El watchdog es critical para el edge case: "se cae Django a mitad de
+  process_message". Sin watchdog, el mensaje queda en PROCESSING para
+  siempre. Con watchdog, cada 5 minutos un job limpia los stuck.
+
+  La diferencia entre HU-51.2 (async) y HU-51.1 (cliente con retry):
+  - HU-51.1: el cliente sabe que puede fallar y reintenta
+  - HU-51.2: el server puede fallar a mitad de proceso y se recupera
+
+  Los dos se complementan. Si solo HU-51.1, un server crash deja
+  mensajes en limbo. Si solo HU-51.2, un cliente crash pierde el request.
+  Con los dos, end-to-end resilience.

@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: d0226a72-915d-454e-be73-ad0abe6adf7b
+  issue_slug: issue-53.1-mcp-tool-invocation-logging
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 5acf1ea00048efa5b5ba1650692947934e3db3ac816d5ced9f29dc3b7a68c2b0
+  "design.md": e937d02c68ecbee950ce5810ab13fca65e40628cd867a79915e974fbe981d291
+  "tasks.md": bb86ae93de222316b0809883abfc4ff7611320e5e758fe9975493ebececc6161
+  "specs/issue-53.1-mcp-tool-invocation-logging/spec.md": 11a2e9232b8d547b65a3628fd20933a23c08322371c1cc6e3c5f183d7168a4b1

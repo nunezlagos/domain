@@ -1,0 +1,6 @@
+change: add-rolling-free-model-acp
+status: active
+epic: DOMAINSERV-62
+created: 2026-07-22
+specs:
+  - acp-rolling-model

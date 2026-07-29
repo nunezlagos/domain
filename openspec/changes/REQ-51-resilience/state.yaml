@@ -1,0 +1,9 @@
+status: active
+created: 2026-06-26
+archived: ~
+
+title: Resiliencia de conexiones (cliente -> admin -> MCP -> DB -> LLM)
+summary: 3 HUs incrementales para manejar disconnections, timeouts, retries y recovery:
+  1. Capa cliente: offline detection, exponential backoff, persistent queue
+  2. Capa admin (Django): timeouts en DB, async tasks, watchdog de stuck messages
+  3. Capa MCP (Go): timeouts por operacion, idempotency keys, ctx propagation

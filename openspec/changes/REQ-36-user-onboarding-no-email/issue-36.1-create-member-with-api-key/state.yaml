@@ -1,0 +1,18 @@
+status: implemented
+created: 2026-06-13
+implemented: 2026-06-13
+slug: create-member-with-api-key
+issue: 36.1
+parent_req: REQ-36-user-onboarding-no-email
+effort: M
+priority: alta
+notes: >
+  Reutiliza apikey.Generate("live") existente en lugar de extraer
+  helper nuevo (mejor crypto/rand que el generateAPIKey del bootstrap).
+  Atomicidad en tx: INSERT users + INSERT api_keys, rollback en falla.
+  RBAC owner/admin enforced en handler (anti-enumeration: 404 si org
+  no es la del principal). Plaintext retornado UNA sola vez en
+  response 201; nunca persistido ni recuperable. Audit log
+  member.created_with_key con key_prefix (no plaintext).
+  Tests unit: validación email/role/orgID. Integration con DB
+  pendiente (testcontainers no disponible esta sesión).

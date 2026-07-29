@@ -1,0 +1,76 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Adjuntos (imagenes, PDFs) con endpoints HTTP y upload a MinIO
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/api/handler/attachment.go
+  - services/domain-mcp/internal/api/handler/attachment_test.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/service/attachment/service.go
+  - services/domain-mcp/internal/service/attachment/handler.go
+  - services/domain-mcp/internal/service/attachment/admin.go
+  - services/domain-admin/app/maintainers/attachments/__init__.py
+  - services/domain-admin/app/maintainers/attachments/apps.py
+  - services/domain-admin/app/maintainers/attachments/models.py
+  - services/domain-admin/app/maintainers/attachments/views.py
+  - services/domain-admin/app/maintainers/attachments/urls.py
+  - services/domain-admin/app/maintainers/attachments/services.py
+  - services/domain-admin/app/templates/attachments/list.html
+  - services/domain-admin/app/templates/attachments/detail.html
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - openspec/changes/REQ-50-mcp-extensions/HU-50.3-attachments-minio-api/proposal.md
+tests:
+  - services/domain-mcp/internal/api/handler/attachment_test.go
+  - services/domain-admin/app/maintainers/attachments/tests/test_views.py
+tasks:
+  - Service attachment ya existe (HU-50 inicial), completar:
+    * InitUpload: validar MIME, validar size, validar entity existe, crear registro, generar presigned PUT URL para MinIO
+    * Confirm: marcar attachment.is_uploaded=true, generar presigned GET URL
+    * Download: stream el archivo desde MinIO al cliente (con auth)
+  - Handler HTTP nuevo (internal/api/handler/attachment.go):
+    * POST /api/v1/attachments/init (body: entity_type, entity_id, filename, mime_type, size_bytes) -> {attachment_id, upload_url}
+    * POST /api/v1/attachments/{id}/confirm -> {attachment, download_url}
+    * GET /api/v1/attachments/{id}/download -> redirect a presigned URL
+    * GET /api/v1/attachments?entity_type=&entity_id= -> lista de attachments
+    * DELETE /api/v1/attachments/{id} -> soft delete
+  - Registrar rutas en api.go (router con HandleFunc)
+  - Django app attachments:
+    * models managed=False contra file_attachments table
+    * views: list, detail, upload form, download handler
+    * templates: list.html (grid con thumbnails), detail.html, upload form
+    * signed URL generator (usa la API del MCP)
+  - Sidebar: link "Adjuntos" (global, no por proyecto)
+  - Integrar con chat: cuando el bot responde, si hay attachment_id
+    relevante (ej: certificado PDF, factura), lo muestra como link
+  - Tests: handlers HTTP con mock de MinIO, integracion Django
+specs:
+  - entity: cualquier entity del sistema (project, requirement, observation, message, goal, etc)
+  - size_limit: 10MB (hardcoded en service, debe ser configurable)
+  - mime_whitelist: image/*, application/pdf, text/markdown, text/plain
+  - storage: MinIO bucket (default: domain-attachments, configurable)
+  - s3_key_pattern: attachments/{entity_type}/{entity_id}/{uuid}-{filename}
+  - presigned_url_ttl: 15 minutos para upload, 1 hora para download
+  - listing: por entity_type + entity_id, con paginacion
+  - search: full-text en filename (tsvector) + filtro mime
+  - thumbnails: para image/*, generar thumbnail 200x200 on-upload
+  - virus_scan: hook pre-download (opcional, requiere ClamAV)
+  - privacy: attachment solo visible para users del mismo org
+notes: |
+  El service de attachment ya existe desde hace tiempo pero NUNCA se
+  expuso como endpoints HTTP. Esta HU solo agrega los handlers HTTP, la
+  integracion con el router, y la UI en domain-admin.
+
+  Use cases principales:
+  1. Usuario adjunta un PDF en un proyecto (certificado, factura, etc)
+  2. Usuario adjunta un screenshot en una issue
+  3. Bot referencia un attachment_id en su respuesta (link de descarga)
+  4. Audit: ver todos los adjuntos de un proyecto
+
+  MinIO ya esta deployado y funcionando (services/minio/). Solo falta
+  exponer la API y la UI.
+
+  Los adjuntos NO son un objetivo HU-50.1, son un objetivo transversal
+  que cualquier entity puede tener. Por eso la tabla tiene entity_type +
+  entity_id en vez de FK a una tabla especifica.

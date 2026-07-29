@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: e3e2d642-2416-444e-9df7-6f442334034f
+  issue_slug: issue-56.1-cap-additional-context-hook
+  req: REQ-56-robustez-hooks-observabilidad
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 04aa5ab2ddac771f057445f9336d6d25334453ef924ab2f47b1215bcf0845275
+  "design.md": 736031b4b37b3111322af80a5a44d96a7834e6c6a927d2f12657cbab9f50ad1d
+  "tasks.md": da1fce287a5cac8d5dbce7ec33a90d4a260503554c600c7ed3a604334e5c2bcc
+  "specs/issue-56.1-cap-additional-context-hook/spec.md": 022623295ac41797cd52d5d2bf52e262b21b0706659bc1859df43dffa4ccac49

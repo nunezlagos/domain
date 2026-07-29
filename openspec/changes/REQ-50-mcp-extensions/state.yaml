@@ -1,0 +1,10 @@
+status: active
+created: 2026-06-26
+archived: ~
+
+title: Extensiones del MCP (goals + auto-mejora skills + adjuntos MinIO + policies scope)
+summary: 4 features para llevar el MCP al siguiente nivel:
+  1. Goals/met sistema central de objetivos con criterios de exito
+  2. Auto-mejora de skills (split/merge/refine con LLM-as-judge)
+  3. Adjuntos (imagenes/PDFs) via MinIO con endpoints HTTP
+  4. Policies unificadas: globales (platform) + por proyecto + por skill

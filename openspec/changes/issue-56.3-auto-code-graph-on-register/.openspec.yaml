@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 70b08f33-a38b-4a63-bd7c-2164a5d5fba5
+  issue_slug: issue-56.3-auto-code-graph-on-register
+  req: REQ-56-robustez-hooks-observabilidad
+  status: proposed
+  priority: medium
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": d9150ff515a8b1fb50cc4df8ace9ea8f27e249b9bee783bf22663c8b17ec185d
+  "design.md": 145200fde188b620df7abd936552a0e7d463f8201480232f7bbe98815d436517
+  "tasks.md": bb7ab334cccc07a17706a882ca7b8c84fca59cab50d506452e64a5130e1dea27
+  "specs/issue-56.3-auto-code-graph-on-register/spec.md": 19157ee3447cbd64750af47f452efaeb3eb58bca05bbadf076af15d8701c2635

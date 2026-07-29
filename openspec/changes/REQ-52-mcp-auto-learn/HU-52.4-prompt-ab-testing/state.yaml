@@ -1,0 +1,72 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: A/B testing de prompts (traffic split 50/50 entre 2 versiones)
+depends_on:
+  - HU-52.2-skill-success-tracking
+blocked_by: []
+files:
+  - services/domain-mcp/internal/migrate/migrations/000189_create_skill_ab_tests.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000189_create_skill_ab_tests.down.sql
+  - services/domain-mcp/internal/service/skill_ab_test/models.go
+  - services/domain-mcp/internal/service/skill_ab_test/service.go
+  - services/domain-mcp/internal/service/skill_ab_test/router.go
+  - services/domain-mcp/internal/service/skill_ab_test/analyzer.go
+  - services/domain-mcp/internal/service/skill_ab_test/cron.go
+  - services/domain-mcp/internal/cli/cmd/skill_ab_test.go
+  - openspec/changes/REQ-52-mcp-auto-learn/HU-52.4-prompt-ab-testing/proposal.md
+tests:
+  - services/domain-mcp/internal/service/skill_ab_test/router_test.go
+  - services/domain-mcp/internal/service/skill_ab_test/analyzer_test.go
+tasks:
+  - Crear migracion 000189: tabla skill_ab_tests (id, skill_slug TEXT, version_a INT, version_b INT, traffic_split_a DECIMAL(3,2) DEFAULT 0.50, started_at TIMESTAMPTZ, ended_at TIMESTAMPTZ, winner VARCHAR(10) CHECK (winner IN (a/b/inconclusive)), confidence DECIMAL(4,2), status VARCHAR(20) DEFAULT 'running' CHECK (status IN (running/completed/cancelled)), created_by UUID, UNIQUE(skill_slug, started_at))
+  - Crear tabla skill_ab_test_results (ab_test_id UUID FK, version VARCHAR(1), invocations_count INT, success_count INT, success_rate DECIMAL(5,2), avg_feedback DECIMAL(4,2), PRIMARY KEY (ab_test_id, version))
+  - Service SkillAbTest: Create (con 2 versiones), Start, GetResults, DeclareWinner, Cancel
+  - Router: cuando un skill tiene ab_test activo, al recibir una peticion:
+    * Hash(skill_slug + user_id) % 100 < traffic_split_a * 100 -> version_a
+    * Else -> version_b
+    * Hash deterministico: el mismo user siempre cae en la misma version
+    * Loggear en audit cual version se uso
+  - Analyzer: despues de N invocaciones (configurable, default 100), corre statistical test:
+    * H0: no hay diferencia entre A y B
+    * H1: A > B o A < B
+    * Test: z-test para proporciones (success rate), t-test para duracion
+    * Si p-value < 0.05: declarar winner (a o b)
+    * Si inconclusive: status='completed' winner='inconclusive'
+  - Cron: cada 6h, corre Analyzer para todos los ab_tests running
+  - CLI: `domain skill ab-test start --slug=X --version-a=N --version-b=M --min-invocations=100`
+  - CLI: `domain skill ab-test results --id=...` (muestra resultados parciales)
+  - CLI: `domain skill ab-test stop --id=...` (cancela manualmente)
+  - Tests: router con split 50/50, 70/30, 0/100, analyzer con datos sinteticos
+  - UI: dominio-admin (opcional) con dashboard de ab-tests activos
+specs:
+  - traffic_split: default 50/50, configurable por test
+  - min_invocations: default 100 (puede subir/bajar por test)
+  - statistical_test: z-test para success rate, alpha=0.05
+  - winner_declaration: automatica cuando min_invocations alcanzado + p < 0.05
+  - manual_override: el operador puede forzar winner via CLI
+  - hashing: SHA-256(skill_slug + user_id) % 100 para determinismo
+  - audit: cada invocacion loggea (skill_slug, version, user_id, success, feedback)
+  - retention: resultados se retienen 365 dias, ab_tests viejos se archivan
+  - privacy: no se loggea el contenido de los inputs, solo metadata
+  - cost: usar el LLM mas barato para analyze (haiku) vs generate (sonnet)
+  - rate_limit: max 100 ab_tests concurrentes
+notes: |
+  El A/B testing es opt-in: solo los skills marcados como ab_test=true
+  participan. Para los demas, se sigue usando la version pin normal.
+
+  Caso de uso tipico: tengo un skill "summarize_email" con version 3
+  (production) y quiero probar una version 4 (experimental). Marco la v4
+  como ab_test=true, defino traffic_split=0.5 (50% cada una), y dejo
+  correr. Despues de 100 invocaciones, el analyzer me dice: "v4 tiene
+  15% mejor success rate con p<0.01, declaro v4 como winner".
+
+  El hashing deterministico (SHA-256(skill_slug + user_id) % 100) es
+  critical: garantiza que el mismo user siempre vea la misma version.
+  Sin esto, un user podria ver A en una llamada y B en otra, lo que
+  introduce ruido en las metricas.
+
+  El analyzer corre como cron cada 6h. Cuando declara un winner, el
+  skill pin se actualiza a la version ganadora (automaticamente).
+  PERO solo si el operador configuro auto_apply_winner=true. Por
+  default es false: el winner se notifica pero requiere confirmacion.

@@ -1,0 +1,83 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Policies con scope: globales (platform) + por proyecto + por skill
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/service/policy/scoped.go
+  - services/domain-mcp/internal/service/policy/scoped_test.go
+  - services/domain-mcp/internal/service/policy/resolver.go
+  - services/domain-mcp/internal/service/policy/resolver_test.go
+  - services/domain-mcp/internal/service/skill/load_skill_tools.go
+  - services/domain-mcp/internal/api/handler/policy.go
+  - services/domain-mcp/internal/api/handler/policy_test.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/migrate/migrations/000184_create_skill_policies.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000184_create_skill_policies.down.sql
+  - services/domain-admin/app/maintainers/policiescoped/__init__.py
+  - services/domain-admin/app/maintainers/policiescoped/apps.py
+  - services/domain-admin/app/maintainers/policiescoped/models.py
+  - services/domain-admin/app/maintainers/policiescoped/views.py
+  - services/domain-admin/app/maintainers/policiescoped/urls.py
+  - services/domain-admin/app/templates/policiescoped/list.html
+  - services/domain-admin/app/templates/policiescoped/detail.html
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - openspec/changes/REQ-50-mcp-extensions/HU-50.4-policy-scope-system/proposal.md
+tests:
+  - services/domain-mcp/internal/service/policy/resolver_test.go
+  - services/domain-mcp/internal/service/policy/scoped_test.go
+  - services/domain-admin/app/maintainers/policiescoped/tests/test_views.py
+tasks:
+  - Crear migracion 000184: tabla skill_policies (id, skill_id FK, project_id FK nullable, body_md, body_structured, priority INT, is_active, created_by, created_at, updated_at, UNIQUE(skill_id, project_id))
+  - Refactor PolicyResolver: dado (org_id, project_id, skill_slug), retorna lista de policies aplicables en orden de precedencia:
+    1. skill-level + project-specific (maxima prioridad)
+    2. skill-level + global
+    3. project-level (project_policies)
+    4. platform-level (platform_policies)
+  - SkillLoader: cuando carga un skill, automaticamente carga TODAS las policies aplicables (skill-level + project-level + platform-level) y las inyecta en el system prompt del agent
+  - Override logic: skill_policies con misma slug que platform_policy reemplazan el contenido (override_platform=true)
+  - Handler HTTP nuevo (internal/api/handler/policy.go):
+    * GET /api/v1/policies/scoped?project_id=&skill_slug= -> lista de policies aplicables con precedencia
+    * POST /api/v1/policies/skills/{skill_id} -> crear skill-scoped policy
+    * GET /api/v1/policies/skills/{skill_id} -> listar skill-scoped policies
+    * DELETE /api/v1/policies/skills/{id} -> soft delete
+  - Registrar rutas en api.go
+  - Django app policiescoped: vista unificada "Policies" que muestra platform + project + skill-level en un solo lugar con filtro por scope
+  - Sidebar: consolidar link "Politicas" que apunte a la vista unificada (reemplaza los 2 actuales)
+  - Migracion: copiar las platform_policies existentes a skill_policies "global" para mantener compatibilidad (solo si la tabla no estaba ya poblada)
+  - Tests: resolver con multiples scopes, precedencia, override
+specs:
+  - precedencia: skill+project > skill+global > project > platform
+  - override: skill_policies con override_platform=true REEMPLAZA platform_policy del mismo slug
+  - merge: si hay multiples policies del mismo scope, se concatenan con separador --- 
+  - effective_at: timestamp, solo se retornan policies con effective_at <= now
+  - cache: las policies se cachean por 60 segundos en memoria (invalidation al CRUD)
+  - audit: cada vez que se lee una policy, se loguea en audit_log (que policy, por quien, cuando)
+  - version: las policies tienen version, se retorna la ultima activa
+  - force_refresh: header X-Force-Refresh=true en GET bypassea el cache
+  - policy_md: markdown body se pasa tal cual al LLM
+  - policy_structured: JSONB se serializa a JSON y se inyecta como bloque JSON en system prompt
+  - max_size: las policies se truncan a 50KB total para no saturar el context window
+notes: |
+  Hoy las policies son:
+  - platform_policies: globales, applies to todo el org
+  - project_policies: por proyecto, applies a todos los skills del proyecto
+
+  Falta el nivel SKILL: policies que aplican SOLO a un skill especifico
+  (ej: "el skill send_email solo permite attachments < 5MB" o "el skill
+  query_db solo permite SELECT, no DELETE").
+
+  Esta HU agrega:
+  1. El nivel skill_policies (nueva tabla)
+  2. Un resolver unificado que retorna policies en orden de precedencia
+  3. Inyeccion automatica en el system prompt del agent cuando carga un skill
+  4. UI unificada en domain-admin que muestra las 3 capas
+
+  Ejemplo de policy stack para el skill "send_email" en proyecto "acme":
+  - platform: "no PII in emails" (applies to todo)
+  - project (acme): "max 100 emails per day" (applies a todos los skills del proyecto)
+  - skill (send_email): "max 10MB attachment" (applies solo a este skill)
+  
+  Effective policies: las 3, en orden de precedencia, en el system prompt
+  del agent cuando ejecute send_email. El agent las ve todas y decide.

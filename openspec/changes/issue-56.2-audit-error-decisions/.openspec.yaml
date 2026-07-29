@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: a707bd36-0a76-43a3-b283-9e67a76b41b7
+  issue_slug: issue-56.2-audit-error-decisions
+  req: REQ-56-robustez-hooks-observabilidad
+  status: proposed
+  priority: medium
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 73e16caa7f292afb41de0d1d00766a5748f69772f4bd4c8dfb76b66328f178b8
+  "design.md": 8d6e6a7cb9701b2d2a9fc231467a84835b36c284253e239cb7aff2b9d0e1f496
+  "tasks.md": 05a3be5dd2cb098fa2cc6157d6ec458c0ae9d94034feb9ba3d46e68eac3ada0d
+  "specs/issue-56.2-audit-error-decisions/spec.md": e4188e756ac1e6bcb850aa90f2239f3919ef232bf677e9d343f21f9b01017ecf

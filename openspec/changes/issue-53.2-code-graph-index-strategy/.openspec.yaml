@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 2d841d86-7122-4bbc-9084-eef60207bd80
+  issue_slug: issue-53.2-code-graph-index-strategy
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 297bbda20ad172147eb08ad214aeea3aa1d0a68d7e357ea5858e672f7bd3f3b1
+  "design.md": 59e2121a73fb5749c5e5cc0f7197b97522a7358dc29793e1c1eb2dfc577c8dd8
+  "tasks.md": 6f5525d78cb342b75378343a4de99b49812aa2166f93617d53783ac0f40d37be
+  "specs/issue-53.2-code-graph-index-strategy/spec.md": 3b9a1009edb3221cd32cd07926afddd0cad37de04d595497531ea18dfc3d0333

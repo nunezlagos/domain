@@ -1,0 +1,10 @@
+status: active
+created: 2026-06-26
+archived: ~
+
+title: Auto-mejora del MCP (feedback loop, success tracking, LLM-as-judge, A/B testing)
+summary: 4 HUs incrementales para que el MCP aprenda de su uso:
+  1. User feedback loop (👍/👎 en respuestas)
+  2. Skill success tracking automatico (de skill_executions)
+  3. LLM-as-judge (cron semanal que sugiere split/merge/refine/archive)
+  4. A/B testing de prompts (50/50 traffic entre 2 versiones)

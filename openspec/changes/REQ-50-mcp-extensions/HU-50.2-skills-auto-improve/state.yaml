@@ -1,0 +1,84 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Auto-mejora de skills (split / merge / refine con LLM-as-judge)
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/service/skill/auto_engine.go
+  - services/domain-mcp/internal/service/skill/auto_engine_test.go
+  - services/domain-mcp/internal/service/skill/llm_judge.go
+  - services/domain-mcp/internal/service/skill/llm_judge_test.go
+  - services/domain-mcp/internal/service/skill/repository.go
+  - services/domain-mcp/internal/service/skill/handler.go
+  - services/domain-mcp/internal/service/skill/metrics.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/cli/cmd/skill_improve.go
+  - services/domain-mcp/internal/migrate/migrations/000182_create_skill_metrics.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000182_create_skill_metrics.down.sql
+  - services/domain-mcp/internal/migrate/migrations/000183_create_skill_suggestions.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000183_create_skill_suggestions.down.sql
+  - services/domain-admin/app/maintainers/skillimprove/__init__.py
+  - services/domain-admin/app/maintainers/skillimprove/apps.py
+  - services/domain-admin/app/maintainers/skillimprove/models.py
+  - services/domain-admin/app/maintainers/skillimprove/views.py
+  - services/domain-admin/app/maintainers/skillimprove/urls.py
+  - services/domain-admin/app/maintainers/skillimprove/services.py
+  - services/domain-admin/app/templates/skillimprove/list.html
+  - services/domain-admin/app/templates/skillimprove/detail.html
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - openspec/changes/REQ-50-mcp-extensions/HU-50.2-skills-auto-improve/proposal.md
+tests:
+  - services/domain-mcp/internal/service/skill/auto_engine_test.go
+  - services/domain-mcp/internal/service/skill/llm_judge_test.go
+  - services/domain-admin/app/maintainers/skillimprove/tests/test_services.py
+  - services/domain-admin/app/maintainers/skillimprove/tests/test_views.py
+tasks:
+  - Crear migracion 000182: tabla skill_metrics (id, skill_id FK, period_start, period_end, invocations_count, success_count, failure_count, avg_duration_ms, total_tokens_in, total_tokens_out, unique_callers_count)
+  - Crear migracion 000183: tabla skill_suggestions (id, skill_id FK, kind enum: split/merge/refine/archive, payload JSONB, rationale TEXT, llm_model, llm_confidence, status enum: pending/approved/rejected/applied, reviewed_by, reviewed_at, applied_at, created_at)
+  - SkillRepository: agregar GetUsageMetrics, GetExecutionHistory, FindSimilar (top-K via embeddings)
+  - LLMJudge: dado un skill + metrics + similar skills, genera 4 tipos de sugerencias:
+    * SPLIT si usage > 100/dia Y content > 2000 chars Y se invoca con args distintos
+    * MERGE si similar > 0.85 (cosine) Y usage < 10/dia cada uno
+    * REFINE si failure_rate > 30% O avg_duration > 30s O N consecutive failures
+    * ARCHIVE si usage == 0 por 90 dias Y no es seed_managed
+  - AutoEngine: corre batch que escanea todos los skills activos, genera sugerencias, las persiste
+  - Handler HTTP: GET /api/v1/skills/{slug}/suggestions, POST /api/v1/skills/{slug}/suggestions/{id}/apply, POST /api/v1/skills/{slug}/suggestions/{id}/reject
+  - CLI command: `domain skill improve` corre el batch manualmente
+  - Cron semanal (HU-50.5): corre AutoEngine automaticamente cada lunes 3am
+  - Django app skillimprove: lista de sugerencias pendientes, detail con diff, approve/reject buttons
+  - Al aprobar SPLIT: crea 2 nuevos skills con `parent_skill_id` (nueva columna), marca el original como archived
+  - Al aprobar MERGE: mergea content, schema, tags en un skill nuevo, marca los 2 originales como archived
+  - Al aprobar REFINE: genera nuevo content via LLM, crea version nuevo, actualiza skills
+  - Al aprobar ARCHIVE: marca como deleted_at (soft delete)
+  - Sidebar: link "Skill improvements" (solo visible para role=admin)
+  - Tests: mocks de LLM, escenarios de cada tipo de sugerencia, validacion de approval flow
+specs:
+  - skill_metrics: agregado diario/semanal/mensual de uso + performance
+  - skill_suggestions: cola de sugerencias con approval workflow
+  - LLMJudge: prompt que incluye skill content + top-3 similar skills + metrics de uso
+  - SPLIT: genera 2 skills hijo con scopes mas chicos, parent_skill_id link
+  - MERGE: genera 1 skill consolidado, marca los 2 originales como superseded_by
+  - REFINE: 3 estrategias: (a) re-escribir content con mas claridad, (b) agregar ejemplos al prompt, (c) simplificar schema
+  - ARCHIVE: soft delete + notificar al owner del proyecto
+  - rate_limit: max 50 sugerencias por batch (evitar runaway)
+  - require_human_approval: SIEMPRE. Nunca se aplica automaticamente.
+  - privacy: solo skills del org_id del operador son visibles
+notes: |
+  Skills son la unidad central de ejecucion del MCP. Hoy son estaticos:
+  alguien los crea manualmente y nunca se tocan. Con el volumen creciendo,
+  el drift se acumula: skills duplicados, skills grandes que deberian ser
+  varios chicos, skills con alto failure rate que necesitan revision.
+
+  El LLM-as-judge hace 4 tipos de sugerencias:
+  - SPLIT: el skill es muy grande/general, deberia ser varios
+  - MERGE: hay skills muy similares que deberian ser uno
+  - REFINE: el skill tiene problemas de calidad (failure rate, complejidad)
+  - ARCHIVE: el skill ya no se usa
+
+  IMPORTANTE: ninguna sugerencia se aplica automaticamente. Siempre requiere
+  aprobacion humana via UI. El bot sugiere, el humano decide.
+
+  Las metricas se recopilan automaticamente: cada ejecucion de skill (en
+  skill_executions) incrementa el counter correspondiente. El batch corre
+  una vez por semana y agrega al historial de metricas.

@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 802d57f8-9ca8-408f-83dc-b4c675ff729d
+  issue_slug: issue-53.7-server-observability
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 053fc66bf5afb5078dd5aabc1187f3b146951bfb1f3c6427436090c878026a0e
+  "design.md": 1369a9da9eeb452499a47c9f1b593cf35465d9191fa461b25b836d5cddfce328
+  "tasks.md": efc84a62bec3bc3797d35b82452dfcce25d6706a2541e76181e93adae0e0e8b6
+  "specs/issue-53.7-server-observability/spec.md": 0040434ada907952ed732b4254b818dae9e03770c6f1676bd700d8b6430d402e

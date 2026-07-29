@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: fa7d306d-9942-40c2-8db3-80580063a0d0
+  issue_slug: issue-64.2-step-delegation-contract
+  req: REQ-64-sdd-pipeline-hardening
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": afe8f903a66622769ec423b7992b0134984fa538e6a2916b142881100d3aed30
+  "design.md": 1a04abf3adc7dedd2dc393a4394f1c4a4c5e3334533b0137a8a773b6dde26b13
+  "tasks.md": e401b9863eff12301b19914379c12f0adb7d020ee809bcda3bbf81611ad59862
+  "specs/issue-64.2-step-delegation-contract/spec.md": 1cf2908e2558afb17d4d38f806552b7eaaf6ad6f7d88827a181b727a0ca0e6c0

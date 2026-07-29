@@ -1,0 +1,13 @@
+status: implemented
+created: 2026-06-13
+implemented: 2026-06-13
+slug: enrollment-token-self-service
+parent: null
+issues_total: 1
+issues_implemented: 1
+priority: alta
+notes: >
+  Auto-enrollment con token compartido por org. Reemplaza
+  temporalmente al flujo OTP+email hasta que llegue SMTP/2FA en cloud.
+  Multi-use con rotación manual. Bootstrap extendido para emitir el
+  primer token al crear el primer owner.

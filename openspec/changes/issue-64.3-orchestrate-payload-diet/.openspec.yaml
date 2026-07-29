@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 37ff3ae0-59ae-4cc3-8551-c7287f79f772
+  issue_slug: issue-64.3-orchestrate-payload-diet
+  req: REQ-64-sdd-pipeline-hardening
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 971554c13d4ed8e83b0492df6fcf066cb19e27759803bc2d2c56fe4311e50676
+  "design.md": 89f9911c5397b8c3e53fbe4e111e3418125f66c8e40ddaf0ee3fa25f9e37ad87
+  "tasks.md": 544a83d932765b9394d184274de4b374b966158923a92d210d5651610bce5bbd
+  "specs/issue-64.3-orchestrate-payload-diet/spec.md": ee6b653dd631ddf12f3bea1fe4eabf34bd0008b90e376cc02fa9c1d45223d943

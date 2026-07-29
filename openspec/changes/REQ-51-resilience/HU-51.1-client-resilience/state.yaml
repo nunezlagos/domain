@@ -1,0 +1,69 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Resiliencia del cliente (offline detection, retry, persistent queue)
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-admin/app/static/js/chat.js
+  - services/domain-admin/app/static/js/chat-resilience.js
+  - services/domain-admin/app/static/js/chat-idb.js
+  - services/domain-admin/app/templates/chat/widget.html
+  - openspec/changes/REQ-51-resilience/HU-51.1-client-resilience/proposal.md
+tests:
+  - services/domain-admin/app/chat/tests/test_chat_resilience.py
+tasks:
+  - Modulo chat-idb.js: wrapper de IndexedDB con stores `pending_messages` y `inflight_messages`
+  - Modulo chat-resilience.js: implementa RetryPolicy con backoff exponencial
+  - Detectar `navigator.onLine` y eventos `online`/`offline` con banner UI
+  - AbortController en cada fetch con timeout configurable por operacion
+  - Retry exponencial: 1s, 2s, 5s, 10s con jitter +-20% (patron OpenCode)
+  - Timeouts por operacion:
+    * GET listar conversaciones: 5s, 3 reintentos
+    * GET mensajes (polling): 3s, 5 reintentos
+    * POST enviar mensaje: 10s, 2 reintentos
+    * POST create conversation: 10s, 2 reintentos
+  - Cuando un fetch falla por timeout/red, guardar el mensaje en IndexedDB
+  - Al detectar `online` event, replay de la cola: POST mensajes pendientes
+  - UI feedback:
+    * Banner amarillo cuando offline
+    * Badge en mensajes pendientes con "Enviando cuando vuelva online..."
+    * Boton "Reintentar" para mensajes stuck
+    * Spinner en reintentos automaticos
+  - Visible solo si el widget esta abierto
+  - Cuando llega respuesta exitosa, mensaje pasa a estado "sent" y se borra de IndexedDB
+  - Manejar conflictos de duplicados: si el server respondio pero el cliente no se entero, usar la respuesta del server
+  - Polling adaptativo: si falla el polling, hacer backoff (1s, 2s, 5s, 10s) en vez de seguir pegando
+specs:
+  - IndexedDB stores: pending_messages (key: client_id), inflight_messages (key: message_id)
+  - client_id: UUID v4 generado en el cliente para identificar mensajes
+  - offline_banner: muestra "Sin conexion a internet" cuando navigator.onLine = false
+  - retry_policy: [1s, 2s, 5s, 10s] con jitter +-20%
+  - jitter: random 0.8-1.2 multiplicador sobre el delay
+  - timeout_por_operacion: dict en chat-resilience.js
+  - max_retries: por operacion (3 GETs, 2 POSTs, 5 polling)
+  - exponential_backoff: delay = base * 2^attempt + jitter
+  - circuit_breaker: si 5 fetches consecutivos fallan, parar de intentar por 30s
+  - on_online_event: replay queue
+  - on_window_focus: re-fetch messages (caso comun: laptop con pantalla que se suspende)
+  - message_states: pending -> inflight -> sent | failed
+  - max_queue_size: 100 mensajes (luego descartar los mas viejos con warning)
+  - privacy: IndexedDB es por origin, no se comparte entre dominios
+notes: |
+  Patron OpenCode: cada herramienta tiene su propio timeout y retry policy.
+  Adaptamos eso: el chat cliente tiene un modulo de resiliencia que envuelve
+  cada fetch con su timeout y retry policy segun la operacion.
+
+  IndexedDB en vez de localStorage porque:
+  - localStorage tiene limite de ~5MB (suficiente para ~50 mensajes, no escala)
+  - IndexedDB soporta queries estructuradas
+  - IndexedDB es async, no bloquea el main thread
+
+  El circuit breaker evita que el cliente haga 100 requests fallidos
+  cuando el server esta claramente caido. Despues de 5 fallos consecutivos,
+  para de intentar por 30s y reintenta.
+
+  El on_window_focus es importante para laptops: si el user cierra la
+  pantalla y la abre 5 minutos despues, el navegador dispara focus y
+  queremos re-sync el estado del chat con el server (por si hubo
+  respuestas que no recibimos).

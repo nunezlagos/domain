@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 906c42f6-c311-4e9d-940e-cb09c7435588
+  issue_slug: issue-54.1-tool-channels-sync
+  req: REQ-54-tool-channels
+  status: proposed
+  priority: low
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": a2712235779d6175bc1ce66c8161b0349acef68e9717abde69764908d7249702
+  "design.md": 816ef0331dbf1a4168da3c533ec3429670462bcb1836e70cccc2741b6d7d58af
+  "tasks.md": fc25d40a2019ab589c9f9f63b22bf14ec22f55b6301b8670988d689c20f91892
+  "specs/issue-54.1-tool-channels-sync/spec.md": 33414088bbc2da34b1cb0fc04ace28041108faa45ae60009126d19ff7de71cdd

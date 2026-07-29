@@ -1,0 +1,48 @@
+status: implemented
+created: 2026-06-26
+implemented: 2026-06-26
+archived: ~
+title: Provider MiniMax (Anthropic-compatible) + abstraccion LlmProvider
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-admin/requirements.txt
+  - services/domain-admin/app/core/llm/__init__.py
+  - services/domain-admin/app/core/llm/provider.py
+  - services/domain-admin/app/core/llm/minimax_provider.py
+  - services/domain-admin/app/core/llm/anthropic_provider.py
+  - services/domain-admin/app/core/llm/factory.py
+  - services/domain-admin/app/core/llm/types.py
+  - services/domain-admin/app/core/llm/tests/__init__.py
+  - services/domain-admin/app/core/llm/tests/factories.py
+  - services/domain-admin/app/core/llm/tests/test_minimax_provider.py
+  - services/domain-admin/app/core/llm/tests/test_factory.py
+  - services/domain-admin/.env.example
+tests:
+  - services/domain-admin/app/core/llm/tests/test_minimax_provider.py
+  - services/domain-admin/app/core/llm/tests/test_factory.py
+tasks:
+  - Agregar `anthropic>=0.40.0` a requirements.txt
+  - Definir interface LlmProvider con 2 metodos (chat_stream, chat_complete) en core/llm/provider.py
+  - Definir dataclasses ChatMessage, ChatRequest, ChatChunk, ChatResponse en core/llm/types.py
+  - Implementar AnthropicProvider con SDK oficial (base_url configurable)
+  - Implementar MinimaxProvider que extiende AnthropicProvider con base_url=https://api.minimaxi.com/v1 y headers x-api-key
+  - Implementar LlmFactory.for_admin() que resuelve provider segun env var LLM_PROVIDER (default minimax)
+  - Configurar settings via env vars LLM_PROVIDER, LLM_MODEL, MINIMAX_API_KEY, MINIMAX_BASE_URL, MINIMAX_MODEL
+  - Tests: MinimaxProvider envia headers correctos, factory resuelve correctamente, AnthropicProvider fallback funciona
+specs:
+  - interface: LlmProvider.chat_stream(request) -> Iterator[ChatChunk]
+  - interface: LlmProvider.chat_complete(request) -> ChatResponse
+  - env: LLM_PROVIDER=minimax|anthropic (default minimax)
+  - env: LLM_MODEL=identificador del modelo en el provider elegido
+  - env: MINIMAX_API_KEY=sk-cp-...
+  - env: MINIMAX_BASE_URL=https://api.minimaxi.com/v1 (default)
+  - env: MINIMAX_MODEL=MiniMax-M3 (default)
+  - env: ANTHROPIC_API_KEY, ANTHROPIC_MODEL (para fallback)
+notes: |
+  Esta HU es FUNDACION: HU-49.2 y HU-49.3 dependen de esta. MiniMax expone una API
+  compatible con Anthropic (mensajes en formato Anthropic Messages API), por eso
+  reutilizamos la SDK oficial de anthropic y solo cambiamos base_url + headers.
+  Patron copiado de saargo_curriculum (backend Laravel) que ya tiene la misma
+  abstraccion LlmFactory + LlmProvider con GeminiProvider + AnthropicProvider.
+  Aca en Python el patron es identico, solo cambia el transport (SDK vs HTTP).

@@ -1,0 +1,5 @@
+status: active
+created: 2026-06-26
+archived: ~
+title: Chat IA estilo NotebookLM sobre datos de domain-admin
+summary: Pestaña de chat en el admin que responde preguntas sobre agentes, skills, flows, prompts, proyectos y uso, usando MiniMax (Anthropic-compatible) como provider LLM, con RAG sobre las tablas de domain-mcp.

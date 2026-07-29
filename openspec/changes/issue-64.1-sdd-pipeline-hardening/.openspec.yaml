@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 4369e61c-321c-40fa-a5eb-9d3d2210b2ff
+  issue_slug: issue-64.1-sdd-pipeline-hardening
+  req: REQ-64-sdd-pipeline-hardening
+  status: proposed
+  priority: medium
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 8b3d21242322c49f7016db0cf993decc612bbf74ef1529d9acc392c45b239bb1
+  "design.md": 62cf48eab6eec673f9d5e2c9ce8d4cd8784bb5c0259af4aeff5078d397e65dc5
+  "tasks.md": b99da26ba14496855ea8d1ccfedad096fb1647f51f21aba95d9744a0003d58de
+  "specs/issue-64.1-sdd-pipeline-hardening/spec.md": 9eae9866bca88c71501936d0839521fef9da4acc0e5d5e0d9934be150292fc17

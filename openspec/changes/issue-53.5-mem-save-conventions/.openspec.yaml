@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 07942243-09e6-4109-83de-099b9faba232
+  issue_slug: issue-53.5-mem-save-conventions
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: medium
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": f79fe2b3b33a7725ad4dc38a7d8bb4fb9e7d2f45f5d9e3eb34a81f6442f27517
+  "design.md": fb480012f402a9b4530b85879598b5d428b9f4539b339d427081d9f7002fcab9
+  "tasks.md": 1f03deb868d11241feaf0d3a2375a72b1bdb902da821b5ee7e620e1bf625b51a
+  "specs/issue-53.5-mem-save-conventions/spec.md": b863ae3ec3cebbbfc5d7360c76532dacccdf98be45d18620f43641f9877fe0ac

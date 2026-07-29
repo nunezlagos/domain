@@ -1,0 +1,8 @@
+schema: spec-driven
+domain:
+  issue_slug: add-openai-compat-provider
+  req: DOMAINSERV-56
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0

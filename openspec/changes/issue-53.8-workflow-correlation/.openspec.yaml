@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: a5af4f30-88af-47a4-a2e4-80b5f114ab15
+  issue_slug: issue-53.8-workflow-correlation
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 89a512167355eff15c1efaa2fa08c1f3944ebe646c8fa980ac9275232636e16e
+  "design.md": c538e53cbb0ff37072688d1fca4331b7a81d63cd121244bc039a21795b283070
+  "tasks.md": 6194af4f867ce26347d6b4d7870ac31c2a6fb023ff4a810b467a1d5874b184c7
+  "specs/issue-53.8-workflow-correlation/spec.md": f69e2aa10e2849269e35ee6cc66f446ea94d3587451ee294f2e38e49844bc071

@@ -1,0 +1,11 @@
+# issue-54.7 — Tasks
+- [x] domain-post-orchestrate.sh (marca flow-activo)
+- [x] domain-pre-edit.sh (gate ask/deny + heurística Bash)
+- [x] domain-user-prompt.sh: señal v2 imperativa + slug worktree-aware
+- [x] claude_hook.go: Matcher + registro de los 2 hooks nuevos
+- [x] install-curl.sh: instala los 2 scripts
+- [x] sdd_spec.go: CONSULTÁ dudas antes de redactar
+- [x] Policy sdd-auto-trigger v2 (BD, confirmada por el usuario)
+- [x] Tests: 6 escenarios del gate + installer 84 verdes
+- [x] Validado en producción (dogfooding con flow e73c7079)
+- [ ] Distribución: re-correr install-curl.sh en los demás clientes

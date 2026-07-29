@@ -1,0 +1,72 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Goals / objetivos del sistema con criterios de exito
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/migrate/migrations/000180_create_goals.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000180_create_goals.down.sql
+  - services/domain-mcp/internal/migrate/migrations/000181_create_goal_progress.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000181_create_goal_progress.down.sql
+  - services/domain-mcp/internal/service/goal/models.go
+  - services/domain-mcp/internal/service/goal/service.go
+  - services/domain-mcp/internal/service/goal/repository.go
+  - services/domain-mcp/internal/service/goal/handler.go
+  - services/domain-mcp/internal/service/goal/router.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/memory/observation/service.go
+  - services/domain-admin/app/maintainers/goals/__init__.py
+  - services/domain-admin/app/maintainers/goals/apps.py
+  - services/domain-admin/app/maintainers/goals/models.py
+  - services/domain-admin/app/maintainers/goals/views.py
+  - services/domain-admin/app/maintainers/goals/urls.py
+  - services/domain-admin/app/maintainers/goals/progress_service.py
+  - services/domain-admin/app/templates/goals/list.html
+  - services/domain-admin/app/templates/goals/detail.html
+  - services/domain-admin/app/templates/goals/form.html
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - openspec/changes/REQ-50-mcp-extensions/HU-50.1-goals-system/proposal.md
+tests:
+  - services/domain-mcp/internal/service/goal/service_test.go
+  - services/domain-mcp/internal/service/goal/handler_test.go
+  - services/domain-admin/app/maintainers/goals/tests/test_views.py
+  - services/domain-admin/app/maintainers/goals/tests/test_progress.py
+tasks:
+  - Crear migracion 000180: tabla goals (id, organization_id, project_id, parent_goal_id, slug, name, description, success_criteria JSONB, metric, target_value, current_value, status, priority, deadline, owner_id, created_by, created_at, updated_at, archived_at, deleted_at)
+  - Crear migracion 000181: tabla goal_progress (id, goal_id, recorded_at, value, notes, recorded_by)
+  - Indexes: (organization_id, status), (project_id, status), (parent_goal_id), embedding vector(1536) para semantic search, UNIQUE(org_id, slug)
+  - CHECK constraints: status IN (draft/active/blocked/at_risk/done/canceled/archived), priority IN (low/medium/high/critical)
+  - Servicio goal con: Create, Get, GetBySlug, List (con filtros), Update (con versionado), AddProgress, GetProgressHistory, SuggestLinkedRequirements, SuggestLinkedObservations
+  - Handler HTTP: 5 endpoints REST (GET list, POST create, GET detail, PATCH update, POST progress, GET suggestions)
+  - LLM-as-suggester: dado un goal, sugerir requirements + observations relacionadas (usando embeddings)
+  - LLM-as-evaluator: dado un goal + progress, evaluar status (on_track / at_risk / blocked)
+  - RLS: app_user con CRUD en goals + read-only en goal_progress (HU-40 RLS existente)
+  - Django app goals: models managed=False contra tablas MCP, views con CRUD, list/detail/form templates
+  - Sidebar: link "Goals" en el admin
+  - Tests: unitarios + integracion
+specs:
+  - modelo: goals (uuid PK, org_id FK, project_id FK nullable, parent_goal_id FK self-ref, slug unique per org, name, description, success_criteria JSONB, metric, target_value numeric, current_value numeric default 0, status enum, priority enum, deadline timestamptz, owner_id FK users, embedding vector(1536))
+  - modelo: goal_progress (uuid PK, goal_id FK, recorded_at, value numeric, notes text, recorded_by FK users)
+  - estado: draft → active → (blocked/at_risk) → done | canceled | archived
+  - endpoints: GET/POST/PATCH/DELETE /api/v1/goals, POST /api/v1/goals/{id}/progress, GET /api/v1/goals/{id}/suggestions
+  - admin: /goals/ (list), /goals/{id}/ (detail), /goals/nuevo/ (form), /goals/{id}/editar/ (form)
+  - metric: string (ej: "issues_resolved", "revenue_usd", "users_active")
+  - target_value: numeric (ej: 100, 50000)
+  - current_value: numeric (computado del ultimo progress o agregado de tabla relacionada)
+  - suggestions: lista de requirements y observations mas similares semanticamente al goal
+  - progress_history: lista cronologica de goal_progress con timestamp y value
+  - privacy: campos sensibles (deadline de stakeholders) se manejan via project_policies
+notes: |
+  El goal es la abstraccion de nivel mas alto. Vincula requirements (cual es el
+  alcance), observations (que sabemos sobre el dominio), intake (que feedback
+  externo tenemos), y metrics (como medimos exito). Sin goals, el sistema solo
+  reacciona a inputs; con goals, puede priorizar trabajo y medir progreso.
+
+  Cada goal es jerarquico (parent_goal_id) para soportar OKRs / epics. La
+  jerarquia se renderiza como tree en la UI.
+
+  El sistema de evaluacion automatica (LLM-as-evaluator) corre como cron
+  semanal: revisa current_value vs target_value, compara contra deadline,
+  y actualiza el status a at_risk si el progreso esta < 70% del esperado.
+  Requiere que HU-49 (CRUD de cron) este deployado.

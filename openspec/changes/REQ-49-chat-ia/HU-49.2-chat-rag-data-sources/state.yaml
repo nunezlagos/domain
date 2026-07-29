@@ -1,0 +1,83 @@
+status: implemented
+created: 2026-06-26
+implemented: 2026-06-26
+archived: ~
+title: RAG sobre tablas de domain-admin + endpoints de chat
+depends_on:
+  - HU-49.1-chat-provider-minimax
+blocked_by: []
+files:
+  - services/domain-admin/app/chat/__init__.py
+  - services/domain-admin/app/chat/apps.py
+  - services/domain-admin/app/chat/urls.py
+  - services/domain-admin/app/chat/views.py
+  - services/domain-admin/app/chat/services.py
+  - services/domain-admin/app/chat/retrieval.py
+  - services/domain-admin/app/chat/prompts.py
+  - services/domain-admin/app/chat/models.py
+  - services/domain-admin/app/chat/admin_models.py
+  - services/domain-admin/app/chat/migrations/__init__.py
+  - services/domain-admin/app/chat/migrations/0001_initial.py
+  - services/domain-admin/app/chat/migrations/0002_enable_pgvector.py
+  - services/domain-admin/app/chat/migrations/0003_embedding_job.py
+  - services/domain-admin/app/chat/tests/__init__.py
+  - services/domain-admin/app/chat/tests/test_views.py
+  - services/domain-admin/app/chat/tests/test_retrieval.py
+  - services/domain-admin/app/chat/tests/test_services.py
+  - services/domain-admin/app/config/settings/base.py
+  - services/domain-admin/app/config/urls.py
+  - services/domain-admin/docker-compose.yml
+  - services/domain-admin/.env.example
+tests:
+  - services/domain-admin/app/chat/tests/test_views.py
+  - services/domain-admin/app/chat/tests/test_retrieval.py
+  - services/domain-admin/app/chat/tests/test_services.py
+tasks:
+  - Crear app Django `chat` con admin_models (Conversation, Message, Document, Embedding) managed=False contra domain-mcp
+  - Modelos nuevos (managed=True, viven en domain-admin DB): ninguno en MVP; las conversaciones/mensajes se persisten en domain-mcp via tablas nuevas
+  - Migraciones: crear tablas conversations, messages, document_embeddings en domain-mcp (CREATE TABLE sin managed=True; DDL crudo en migrations de domain-mcp)
+  - Endpoint `GET /chat/` (HTML) que renderiza el split view
+  - Endpoint `GET /chat/api/conversations` lista conversaciones del usuario
+  - Endpoint `POST /chat/api/conversations` crea conversacion
+  - Endpoint `GET /chat/api/conversations/<uuid>/messages` lista mensajes paginados
+  - Endpoint `POST /chat/api/conversations/<uuid>/messages` envia mensaje y dispara RAG async
+  - Endpoint `GET /chat/api/messages/<id>` polling de estado
+  - Retrieval service: dada una pregunta, busca en document_embeddings los chunks mas similares (cosine similarity >= 0.7) y arma contexto
+  - Sources: cada chunk devuelve {tabla, uuid, score, snippet, titulo, url_detalle}
+  - System prompt en prompts.py: identidad del admin, reglas de privacidad, formato de respuesta Markdown, idioma espanol
+  - Polling cada 1.5s en frontend mientras status sea pending/processing
+  - Streaming SSE opcional: para MVP devolvemos completo, streaming en HU futura
+  - Tests: views retornan 200/202, retrieval rankea correctamente, services arma prompt con contexto
+specs:
+  - endpoint: GET /chat/ (HTML, render template)
+  - endpoint: GET /chat/api/conversations (JSON, paginated)
+  - endpoint: POST /chat/api/conversations (JSON, create)
+  - endpoint: GET /chat/api/conversations/<uuid>/messages (JSON, paginated DESC)
+  - endpoint: POST /chat/api/conversations/<uuid>/messages (JSON, 202 con message_id del assistant en pending)
+  - endpoint: GET /chat/api/messages/<id> (JSON, status actual)
+  - tabla: conversations (id uuid, user_email, title, created_at, updated_at, deleted_at)
+  - tabla: messages (id bigserial, conversation_id uuid FK, role user|assistant, content text, content_partial text, status pending|processing|completed|error, sources jsonb, tokens_in int, tokens_out int, model text, duration_ms int, created_at)
+  - tabla: document_embeddings (id bigserial, source_table text, source_id uuid, source_url text, chunk_text text, chunk_index int, embedding vector(1536), created_at)
+  - sources: array de {tabla, uuid, score 0-1, snippet 200 chars, titulo, url_detalle}
+  - privacy: no incluir credenciales (api_key_ciphertext, secret), emails en sources solo si el admin lo solicita
+data_sources:
+  - agents (slug, name, description, provider, model, system_prompt)
+  - skills (slug, name, description, skill_type)
+  - flows (slug, name, description)
+  - prompts (slug, name, content, model, temperature)
+  - projects (name, slug, description, status)
+  - users (email, name, role)
+  - prompt_captured (tokens, model, project_id, user_id) — solo agregados
+notes: |
+  Tablas NUEVAS en domain-mcp (managed=False en Django, DDL en migrations Go):
+  - conversations (uuid PK, user_email text, title text, created_at, updated_at, deleted_at)
+  - messages (bigserial PK, conversation_id uuid FK, role text, content text,
+             content_partial text, status text, sources jsonb, tokens_in int,
+             tokens_out int, model text, duration_ms int, created_at)
+  - document_embeddings (bigserial PK, source_table text, source_id uuid,
+                        source_url text, chunk_text text, chunk_index int,
+                        embedding vector(1536), created_at)
+  El embedding usa 1536 dimensiones (compatible con text-embedding-3-small de
+  OpenAI o equivalente del provider). Para MVP usamos el endpoint de embeddings
+  de MiniMax si lo expone; si no, fallback a OpenAI/Anthropic embeddings.
+  Privacy: NO incluir api_key_ciphertext ni password_hash en sources.

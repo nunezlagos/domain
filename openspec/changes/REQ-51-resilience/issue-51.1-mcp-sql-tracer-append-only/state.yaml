@@ -1,0 +1,98 @@
+status: proposed
+created: 2026-06-30
+archived: ~
+title: SQL tracer append-only — capturar todos los errores en orden para diagnosticar cascades 25P02
+depends_on: []
+blocked_by: []
+files:
+  - openspec/changes/REQ-51-resilience/issue-51.1-mcp-sql-tracer-append-only/state.yaml
+  - services/domain-mcp/internal/mcp/server/wireup_txlog.go
+  - services/domain-mcp/internal/mcp/server/wireup.go
+  - services/domain-mcp/internal/mcp/server/wireup_txlog_test.go
+  - services/domain-mcp/internal/mcp/server/wireup_error_capture_integration_test.go
+tests:
+  - services/domain-mcp/internal/mcp/server/wireup_txlog_test.go
+  - services/domain-mcp/internal/mcp/server/wireup_error_capture_integration_test.go
+tasks:
+  - '[TDD Red] Renombrar TestSQLErrorCaptureTracer_MultipleErroresLastWins por TestSQLErrorCaptureTracer_MultipleErrorsRecordedInOrder y reescribir aserciones: el codigo actual solo guarda el ultimo, el test debe esperar la lista completa en orden.'
+  - '[TDD Red] Agregar test de cascade explicito: 1ª query con error real 42P01 (relation does not exist) seguido de 2ª query con 25P02 (tx aborted), assert Snapshot devuelve ambos en orden [0]=42P01, [1]=25P02.'
+  - '[TDD Green] Cambiar SQLErrorLog en wireup_txlog.go: campos (err error; sql string) por ([]error; []string). Record() hace append protegido por mutex. Snapshot() devuelve los slices completos.'
+  - '[TDD Green] Actualizar wireup.go lugares que llaman log.Snapshot() (linea ~85 pre-check TxStatus==E y linea ~99 post-Commit ErrTxCommitRollback): iterar slices y emitir mensaje multi-linea con indices [i/N] + truncateSQL(sqls[i], 240).'
+  - '[TDD Green integration] Agregar test integration que reproduce cascade real con testcontainers: 1ª query crea tabla temporal y la dropea, 2ª query falla con 42P01 sobre la tabla dropped; bajo la misma tx, 3ª query falla con 25P02; assert el mensaje devuelto por el wireup contiene el 42P01 en posicion [1/N], no el 25P02.'
+  - '[TDD Refactor] Renombrar comentarios y docstrings de wireup_txlog.go (hoy justifican last-write-wins con razonamiento falso para el caso cascade). Reemplazar por append-only rationale.'
+  - '[Sabotaje unit] Cambiar Record() para que vuelva a sobreescribir (last-write-wins) en vez de append. Confirmar que TestSQLErrorCaptureTracer_MultipleErrorsRecordedInOrder cae. Restaurar. Documentar en commit message del sabotaje.'
+  - '[Sabotaje integration] Cambiar el wireup.go para que ignore errs[0] y solo muestre el ultimo (revertir al comportamiento pre-fix). Confirmar que el integration test cae. Restaurar.'
+  - '[Commit] feat(mcp/wireup): SQL tracer append-only — captura todos los errores SQL en orden para diagnosticar cascades 25P02. Tests + sabotaje + integration.'
+  - '[Push + deploy] Push a origin/services. ssh domain-vps (sysadmin@13.140.183.236). cd /opt/services. git pull. ./scripts/deploy.sh deploy-changed (o deploy completo si hubo migrations, no es el caso).'
+  - '[Smoke post-deploy] curl /healthz para confirmar UP. POST a /mcp con handleSessionBootstrap (o equivalente) y confirmar que el 25P02 cascade ahora expone la causa raiz real (ej 42P01 relation does not exist) en posicion [1/N] en vez de ser el unico error visible.'
+specs:
+  - append_only_log: SQLErrorLog cambia de (err error; sql string) a ([]error, []string) manteniendo orden de insercion
+  - thread_safe: append protegido por el mutex interno que ya tiene el struct (no quitar el mutex)
+  - snapshot_returns_all: Snapshot() devuelve todos los errores capturados en orden; no devuelve solo el ultimo
+  - snapshot_empty: sin errores capturados → slices vacios (no nil panic); wireup corta la rama
+  - wireup_call_sites: ambos lugares de wireup.go que llaman log.Snapshot() quedan actualizados (pre-check TxStatus==E ~linea 85; post-Commit ErrTxCommitRollback ~linea 99)
+  - wireup_message_format: '[N/total] <error>\n  in query: <truncateSQL(sql, 240)>' por cada entrada; un solo string con newlines
+  - cascade_primary_visible: cuando la primera query falla con error real (42P01, 42703, 42501) y las siguientes devuelven 25P02, el cliente MCP ve el primer error real en posicion [1/N]; el 25P02 aparece despues, no antes
+  - single_error_unchanged: queries con un solo error → message sigue siendo el mismo string en sustancia (solo cambia formato, no contenido semantico)
+  - truncateSQL_kept: helper truncateSQL sin cambios; mismo cap 240 chars, mismo sufijo '... (truncated)'
+  - integration_with_testcontainers: el test integration corre contra postgres real, no contra mock del tracer
+notes: |
+  Contexto del bug:
+
+  El SQLErrorLog del pgx QueryTracer (services/domain-mcp/internal/mcp/server/wireup_txlog.go)
+  usa last-write-wins: cada nueva query que falla SOBREESCRIBE el error previo en el struct
+  (lineas 35-39 del archivo actual). Cuando una tx tiene varias queries y la primera falla con
+  error real (42P01 relation does not exist, 42703 undefined_column, 42501 permission denied)
+  y las siguientes fallan con SQLSTATE 25P02 (current transaction is aborted, commands
+  ignored), el tracer sobrescribe el error real con el 25P02 y el wireup expone solo el sintoma
+  generico al cliente MCP. Operador pierde la causa raiz. Bug activo observable via
+  handleSessionBootstrap (session_bootstrap_tools.go:181) sobre code_graph_staleness (~linea 481
+  query a code_index_files).
+
+  Decision de diseno (opcion B del choice point previo):
+
+  Append-only slices vs alternativas A (primer error solo) o C (last-write-wins + debug flag).
+  Cliente MCP recibe la lista completa enumerada. Operador experto usa el primero como causa
+  raiz; operador nuevo tiene contexto completo. Trade-off: mensaje de error MCP pasa de un
+  unico error string a una lista ordenada. Cambio de contrato del error string pero no de
+  protocolo (sigue siendo mcp.NewToolResultError con string).
+
+  Por que append y no peek+stop:
+
+  El tracer de pgx ya esta conectado (pools.go:48 cfg.ConnConfig.Tracer = SQLErrorCaptureTracer()).
+  Cambiar a "stop at first error" implicaria un tracer stateful con cancelacion de queries
+  posteriores, lo que interfiere con la semantica actual de la tx (el handler decide cuando
+  abortar). Append es no-invasivo: el handler mantiene control total con `_ = err`.
+
+  Por que no opcion A (primer error):
+
+  Perder visibilidad de la cadena. Cuando la primera falla con un error X y la segunda con un
+  error Y completamente distinto (no cascade), el operador quiere ver ambos. Cascade es el
+  caso comun pero no el unico.
+
+  Por que no opcion C (debug flag):
+
+  Mantiene last-write-wins como default. El bug seguiria activo en produccion y solo apareceria
+  bajo flag manual. Operador NUNCA veria la causa raiz salvo que active el flag, lo opuesto
+  al objetivo.
+
+  Out of scope explicito:
+
+  - Cambiar el formato del mensaje MCP de error a un tipo structured (JSON). Otra HU si el
+    cliente MCP lo necesita estructuralmente. Hoy sigue siendo string con newlines.
+  - Cross-service correlation de cascades (domain-mcp <-> domain-admin). Otra HU.
+  - Metricas: contar cascades para detectar bug patterns en produccion. Otra HU.
+
+  TDD red -> green -> sabotaje (patron del proyecto, AGENTS.md):
+
+  1. Red: test nuevo del cascade (espera [err_real, 25P02]) -> falla porque la implementacion
+     actual solo devuelve el ultimo (25P02).
+  2. Green: cambio minimo en wireup_txlog.go + wireup.go -> tests pasan.
+  3. Refactor: renombrar comentarios + mensaje limpio.
+  4. Sabotaje: revertir Record a last-write-wins -> test cae. Restaurar. Documentar.
+
+  Deploy (HU 38.12 stack):
+
+  Push a origin/services. ssh al VPS (alias 'domain-vps', puerto 22, user 'sysadmin').
+  cd /opt/services. git pull origin services. ./scripts/deploy.sh deploy-changed o deploy
+  completo segun si hay migrations (no es el caso).

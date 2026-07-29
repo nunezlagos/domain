@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 6a4b6050-1e0e-4351-bcde-79b6bfb6aab8
+  issue_slug: issue-53.3-mem-search-strategy
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 16b8cc0c3ba0bd348d47a96240b6b4699778e23ab9d5eabf8a21e9eb626eaadb
+  "design.md": cf3c4c9e463cc351e86dd34de7645d37ce25726ae15e8db5f5dae27fca5a8712
+  "tasks.md": 531322d8d3785f2bf4c954a2da52d7518d006c708bb1571ad522bcf7375e95b5
+  "specs/issue-53.3-mem-search-strategy/spec.md": dfc58c5ec774398a46e258cb47b5e7f5021c3d133855f2ffd89c5df8b8a22e50

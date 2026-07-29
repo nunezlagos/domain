@@ -1,0 +1,76 @@
+status: implemented
+created: 2026-06-20
+implemented: 2026-06-26
+archived: ~
+slug: simple-login
+issue: 47.1
+parent_req: REQ-47-simple-login
+effort: L
+priority: alta
+notes: >
+  Eliminar el flujo OTP del stack (auth_otp_codes, /auth/request-otp,
+  /auth/verify-otp, mailer.SendOTP en smtp/ses/sendgrid, otp.Service).
+  Reemplazo funcional ya implementado en REQ-36 (member-with-api-key)
+  y REQ-37 (enrollment-token). Sin pérdida de capacidad: dev usa
+  dev-bootstrap; first-run usa member-create o enrollment; re-installs
+  reciben API key vía handler con RBAC owner/admin (sin email).
+
+  Ejecución por fases (estilo REQ-21.6):
+  FASE A - no-destructiva, deployable (commit único): IMPLEMENTADA 2026-06-26.
+    Archivos eliminados:
+    - services/domain-mcp/internal/auth/otp/ (otp.go + 2 tests)
+    - services/domain-mcp/cmd/domain/install_otp.go
+    - services/domain-mcp/internal/api/handler/auth.go (solo tenía OTP)
+    - services/domain-mcp/internal/api/handler/authz_test.go (test huérfano)
+    Archivos modificados:
+    - internal/api/handler/api.go: quitar OTPService/OTPRateLimiter/endpoints/allowlist
+    - cmd/domain/main.go: quitar import otp + otpUserLookupAdapter + pgx unused
+    - cmd/domain/server_services.go: quitar OTPService/OtpMailer/OTPRateLimiter wiring
+    - cmd/domain/server_router.go: quitar OTP fields del API struct
+    - cmd/domain/install_cli.go: quitar otpFlowViaServer/saveCredentialsFromOTP
+    - internal/mail/mailer.go: quitar SendOTP de interfaz
+    - internal/mail/{smtp,ses,sendgrid,resend}/sender.go: quitar SendOTP impl
+    - internal/mail/{smtp,ses,resend}/sender_test.go: quitar TestSendOTP
+    - internal/cli/onboard/wizard.go: quitar requestOTP/verifyOTP, mensaje claro
+    - internal/anonymizer/types.go + test: quitar skip auth_otp_codes
+    - internal/seeds/platform_policies_seeder.go: quitar ref en comentario
+    - internal/store/txctx/txctx.go: limpiar comentarios
+    - internal/db/pools.go: limpiar comentario
+    - internal/auth/apikey/store.go: limpiar comentario
+    - tests/e2e/schema_audit_test.go: quitar "auth_otp_codes" de lista
+    Verificación: go build ./... VERDE, go vet ./... VERDE, tests adyacentes
+    verde (mail/anonymizer/cli/onboard/seeds/store). 2 tests pre-existentes
+    fallan (install_cwd_guard, service/orchestrator) — no son por esta HU.
+
+  FASE B - destructiva, reversible con down.sql (commit único + script):
+    IMPLEMENTADA 2026-06-26 (lista para ejecutar en prod).
+    Archivos:
+    - services/domain-mcp/internal/migrate/migrations/000173_drop_auth_otp_codes.up.sql
+        DROP POLICY + DISABLE RLS + DROP TABLE CASCADE + REVOKE
+    - services/domain-mcp/internal/migrate/migrations/000173_drop_auth_otp_codes.down.sql
+        CREATE TABLE + CREATE INDEX + ENABLE/FORCE RLS + CREATE POLICY + GRANT
+    - scripts/req-47.1-fase-b-deploy.sh: estilo req-21.6-fase-c-deploy.sh
+        --dry-run, --rollback, pre-check (pgBackRest <24h), backup,
+        dry-run en testcontainers, apply en prod, post-verification
+    - docs/runbooks/req-47.1-fase-b.md: runbook completo
+
+  Auth post-OTP (consolidado):
+    DEV:      domain dev-bootstrap -> API key directo en stdout
+    FIRST-RUN: domain bootstrap o member-create (REQ-36) emite API key
+    SELF-ENROLL: enrollment token (REQ-37) -> user nuevo con API key
+    RE-INSTALL: --email flag -> handler emite key a la DB (no email)
+                o el operador la emite a mano
+
+  CRITERIOS DE ACEPTACIÓN:
+    [Fase A] IMPLEMENTADO — go build verde, go vet verde, tests verdes
+    [Fase B] IMPLEMENTADO — script + runbook listos, NO ejecutado en prod
+            (operador corre tras validar Fase A en prod)
+    [Deploy] PENDIENTE — operador corre services/install.sh en vps-domain
+    [Cliente] PENDIENTE — instalar domain-install en laptop
+
+  RIESGOS:
+    - Migración Fase B es destructiva -> reversible con down.sql + backup
+    - API keys huérfanas si hubo install previo con OTP -> services/install.sh
+      preserva credenciales (idempotente en reinstall)
+    - install-user binario fresco ya construido con 44 tests verde
+    - SMTP block en .env.example eliminado (no hay otro consumidor)

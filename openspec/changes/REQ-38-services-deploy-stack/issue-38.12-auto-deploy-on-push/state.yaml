@@ -1,0 +1,129 @@
+status: active
+created: 2026-06-29
+active: 2026-06-30
+archived: ~
+title: Auto-deploy en push a main (GitHub Actions + self-hosted runner en VPS Contabo)
+depends_on:
+  - REQ-38-services-deploy-stack/issue-38.8-makefile-orchestration
+  - REQ-38-services-deploy-stack/issue-38.9-systemd-multi-service
+blocked_by: []
+files:
+  - .github/workflows/deploy.yml
+  - scripts/deploy.sh
+  - scripts/tests/test_deploy.sh
+  - scripts/tests/test_path_filters.sh
+  - scripts/install-runner.sh
+  - services/Makefile
+  - openspec/changes/REQ-38-services-deploy-stack/issue-38.12-auto-deploy-on-push/state.yaml
+  - docs/auto-deploy.md
+tests:
+  - scripts/tests/test_deploy.sh
+  - scripts/tests/test_path_filters.sh
+tasks:
+  - Diseñar filter de paths para trigger: services/**, services/Makefile, services/**/docker-compose*.yml, .github/workflows/**. Discutir qué pasa si cambia docs/ o openspec/ — fallback: ignorar (no deployar).
+  - Diseñar el contrato del deploy.sh: 4 fases exit-by-exit-code (fetch → build → restart → verify), cada fase loguea al inicio y al éxito/fallo. Exit 0 = success, exit != 0 = rollback automático antes de propagar el error.
+  - Diseñar detección de servicios cambiados: comparar SHA anterior vs nuevo con `git diff --name-only <prev_sha>..HEAD -- services/` y mapear paths a SVC de make (postgres|minio|mcp|admin|caddy|all). Edge case: si cambia Makefile o cualquier docker-compose.yml → all.
+  - Diseñar storage del SHA anterior: archivo `.git/DEPLOY_PREV_SHA` en el VPS, escrito al final de cada deploy exitoso, leído al inicio del siguiente. Idempotente: si el archivo no existe, primer deploy = comparación contra `HEAD~1` o hardcoded default.
+  - Crear `.github/workflows/deploy.yml`: trigger `on: push: branches: [main]`, paths filter como arriba, `runs-on: self-hosted` con label `deploy-vps`, steps checkout → fetch-depth 0 + fetch tags → ejecutar scripts/deploy.sh desde el runner.
+  - Crear `scripts/deploy.sh`: bash con `set -euo pipefail`, fases separadas por funciones, logging a `.deploy.log` con timestamp, trampa de rollback automática (`trap 'rollback' ERR`).
+  - Crear `scripts/install-runner.sh`: helper idempotente que descarga el runner de GitHub Actions, valida checksum, lo configura con token (pasado por arg o env), y ofrece registrarlo como servicio systemd de usuario. NO corre `./svc.sh install` automáticamente — pide confirmación.
+  - Crear `scripts/tests/test_deploy.sh`: bats-style o bash + assert puro. Casos: (a) sin cambios desde el último deploy → exit 0 sin actuar; (b) cambio en services/domain-mcp/Dockerfile → detecta y rebuilds solo mcp; (c) cambio en services/Makefile → all; (d) SHA inválido en `.git/DEPLOY_PREV_SHA` → fallback a HEAD~1; (e) `git pull --ff-only` con non-ff divergencia → exit != 0 con mensaje claro sin rollback (no es error de deploy, es del usuario).
+  - Crear `scripts/tests/test_path_filters.sh`: valida el matching de paths contra la lista blanca. Casos: path en services/ → match; path en services/legacy/foo → match (recursivo); path en services/static (no docker) → match (Makefile filter); path en docs/ → no match; path en openspec/ → no match; path en root .gitignore → no match.
+  - Modificar `services/Makefile`: agregar target `deploy-changed` que invoca `../scripts/detect-changed.sh <prev_sha>` y devuelve la lista de SVC. Sin pisar targets existentes.
+  - Crear `docs/auto-deploy.md`: runbook con (1) prerrequisitos (VPS user con systemd user instance, SSH outbound permitido, /opt/services/ writable), (2) setup inicial paso a paso, (3) secret rotation, (4) rollback manual, (5) troubleshooting (deploy falla → grep .deploy.log; runner offline → systemctl --user status; secrets rotados → ver docs/secrets).
+  - Validar que `scripts/deploy.sh` no pisa `DOMAIN_FIELD_ENC_KEY` ni `/opt/services/.env`. El script debe ser read-only sobre `.env` — log warning si encuentra drift entre `.env.example` y `.env` (excepto líneas obviamente diferentes como secrets generados).
+  - Validar tamaño del payload: el runner loguea duración de cada fase, exit code, y SHA deployed. GitHub Actions retiene 90 días de logs por default.
+specs:
+  - trigger: push a main del repo github.com/nunezlagos/domain
+  - paths_filter: [services/**, services/Makefile, services/**/docker-compose*.yml, .github/workflows/**]
+  - paths_excluidos: [docs/**, openspec/**, *.md (root), .gitignore, LICENSE]
+  - runner_tipo: self-hosted con label deploy-vps
+  - runner_user: usuario no-root con systemd user instance habilitado (loginctl enable-linger <user>)
+  - runner_puerto: ninguno (conexión saliente HTTPS 443 a api.github.com)
+  - runner_token_storage: ~/.actions-runner/.credentials (permisos 0600)
+  - secrets_github: VPS_HOST (13.140.183.236), VPS_USER, RUNNER_LABEL (deploy-vps)
+  - secrets_en_vps: ninguno adicional (el runner se autentica a GitHub via token, no al revés)
+  - deploy_fases: [fetch, detect-changes, build, restart, verify]
+  - fetch: git fetch origin main + git reset --hard origin/main (con backup a .git/DEPLOY_PREV_SHA antes)
+  - detect-changes: git diff --name-only <prev_sha>..HEAD sobre paths filtrados; mapear a SVC
+  - build: make -C services build SVC=<changed> (o SVC=all si cambia Makefile/compose raíz)
+  - restart: make -C services restart SVC=<changed>
+  - verify: make -C services wait-healthy (timeout 120s) + curl -sf https://<vps-domain>/healthz
+  - rollback_trigger: cualquier exit != 0 durante build/restart/verify
+  - rollback_accion: git checkout <prev_sha> (si fue fetch OK) + make restart SVC=all + notificar via GitHub Actions summary
+  - idempotencia: rerun del mismo SHA → exit 0 sin actuar (comparación muestra 0 paths cambiados)
+  - observabilidad: GitHub Actions UI muestra log completo; .deploy.log local retiene últimos 100 deploys (rotación)
+  - no_pisa: DOMAIN_FIELD_ENC_KEY, /opt/services/.env (read-only), secrets generados (DOMAIN_*_ENC_KEY, JWT_SECRET, etc.)
+  - latencia_objetivo: desde push hasta healthy ≤ 6 min (build + restart + warm-up)
+  - concurrencia: una corrida a la vez (concurrency group = deploy-vps con cancel-in-progress: false)
+  - audit: cada deploy deja en GitHub Actions: SHA deployed, prev SHA, lista de archivos cambiados, SVC rebuilds, duración por fase, exit code
+  - secrets_visibility: el runner NO expone secrets a logs; `::add-mask::` sobre cualquier valor sensible que pudiera imprimirse
+notes: |
+  Por que GitHub Actions + self-hosted runner (vs SSH-action o webhook receiver):
+
+  - Self-hosted runner: NO hay credenciales SSH en GitHub Secrets — el secreto
+    vive solo en el VPS, lo que reduce superficie de ataque si GitHub se ve
+    comprometido. El runner hace pull saliente a GitHub (HTTPS 443) en lugar
+    de que GitHub empuje via SSH.
+  - SSH-action: requiere SSH key privada con passphrase en GitHub Secrets. Es
+    valido pero peor postura de seguridad. Ademas, SSH-action pierde audit
+    trail rico de Actions (logs estructurados, retries, summaries).
+  - Webhook receiver propio: reimplementa lo que Actions ya da gratis (HMAC
+    validation, retries, audit). Multiplica superficie sin beneficio.
+
+  Por que push directo a main (sin approval/branch protection extra):
+
+  - El repo sigue git flow develop → main. main ya esta protegido por CI
+    (issue-38.6 ci-build-backend, issue-38.7 ci-build-frontend implementadas).
+  - El gate de calidad ya corre ANTES del auto-deploy (CI checks como required
+    status checks en branch protection).
+  - Agregar approval manual reintroduce el problema que este HU quiere resolver.
+    Si en el futuro se necesita gatera, se hace con branch protection rules en
+    GitHub (no con logica de deploy).
+
+  Por que filter de paths (no deploy si cambia docs/openspec):
+
+  - Cambios en docs/, openspec/, *.md, LICENSE no afectan el runtime.
+  - Evita deploys innecesarios (build de imagenes Go lleva 30-90s).
+  - Documentado explicitamente en paths_excluidos para auditoria.
+
+  Por que `git reset --hard` y no `git pull --ff-only`:
+
+  - El runner es self-hosted de un solo usuario (el operador). No hay otros
+    actores haciendo commits en /opt/services. --ff-only falla si hay commits
+    locales divergentes, lo cual no deberia pasar.
+  - Reset --hard es deterministic, predecible, y falla visible si hay drift.
+  - Backup automatico del SHA anterior (DEPLOY_PREV_SHA) garantiza rollback.
+  - Si se prefiere no usar --hard: el script puede chear `git status --porcelain`
+    y abortar si hay cambios locales no esperados.
+
+  Out of scope explicito:
+
+  - Rotar el `DOMAIN_FIELD_ENC_KEY` actual de `CHANGE_ME` a un valor seguro
+    (observation 3ea843df): es otro ticket. Este HU no pisa la key actual
+    pero tampoco la rota.
+  - Auto-rollback automatico por healthcheck failure post-deploy: el rollback
+    de este HU es por exit code del build/restart, no por observabilidad
+    post-deploy. Si se quiere rollback por healthcheck persistente, es otro HU.
+  - Deploy a multiples environments (staging/prod): se hace con multiples
+    runners + labels diferentes (deploy-vps-staging, deploy-vps-prod) cuando
+    se necesiten. Hoy solo hay un target.
+
+  Alternativas evaluadas y descartadas:
+
+  - Webhook receiver propio (Node/Go service en el VPS): reimplementa HMAC,
+    retries, audit, dashboards. Multiplica superficie de ataque y de
+    mantenimiento. Descartado.
+  - Cron cada 5 min que hace `git pull` + diff: introduce latencia media
+    de 2.5 min + ruido innecesario cuando no hay cambios. Descartado.
+  - ArgoCD/FluxCD: tooling completo de GitOps, overkill para un solo cluster.
+    Se justifica cuando hay multiples targets y/o teams. Descartado.
+  - Script bash ejecutado por cron de systemd + timer: similar al cron-shell
+    pero peor que Actions porque no tiene audit trail ni UI. Descartado.
+
+  Posibles followups:
+
+  - HU 38.13: multi-environment (staging + prod runners separados)
+  - HU 38.14: auto-rollback por healthcheck failure post-deploy
+  - HU 38.15: rotation de DOMAIN_FIELD_ENC_KEY con canary check (cierra el
+    pendiente de la observation 3ea843df)

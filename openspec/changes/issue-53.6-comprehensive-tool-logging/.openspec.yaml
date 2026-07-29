@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 348d4399-a01f-4b3a-a8f2-6b6f73c4bf69
+  issue_slug: issue-53.6-comprehensive-tool-logging
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 128b32031e49d0cc9dbefaa671c34d3e7e1d6f7f933f266053aa608b4986f394
+  "design.md": c454cbd60b913523b772df515578ad03c44ee43cafa7d92f62520e0946888b86
+  "tasks.md": 668e2123f64c2911f2c24e78a250b758739a0bccf31ee86befcc67c42e17d4a1
+  "specs/issue-53.6-comprehensive-tool-logging/spec.md": efae6c79eed7592042ea78309c1e41c51eea8feb86d938c62a80b677997400ff

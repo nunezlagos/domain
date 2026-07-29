@@ -1,0 +1,75 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Resiliencia del MCP (timeouts por operacion, idempotency keys, ctx)
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/api/handler/middleware.go
+  - services/domain-mcp/internal/api/handler/timeout.go
+  - services/domain-mcp/internal/api/handler/idempotency.go
+  - services/domain-mcp/internal/api/handler/idempotency_test.go
+  - services/domain-mcp/internal/api/handler/timeout_test.go
+  - services/domain-mcp/internal/service/attachment/service.go
+  - services/domain-mcp/internal/store/txctx/txctx.go
+  - services/domain-mcp/internal/migrate/migrations/000185_create_idempotency_keys.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000185_create_idempotency_keys.down.sql
+  - openspec/changes/REQ-51-resilience/HU-51.3-mcp-timeouts-idempotency/proposal.md
+tests:
+  - services/domain-mcp/internal/api/handler/idempotency_test.go
+  - services/domain-mcp/internal/api/handler/timeout_test.go
+tasks:
+  - Crear migracion 000185: tabla idempotency_keys (key VARCHAR(64) PK, method VARCHAR(10), path VARCHAR(255), user_id UUID, request_hash VARCHAR(64), response_status INT, response_body BYTEA, created_at TIMESTAMPTZ, expires_at TIMESTAMPTZ)
+  - Indice: (user_id, expires_at) para limpieza
+  - Middleware: leer header `Idempotency-Key` (UUID v4 o client-provided string)
+  - Si existe: devolver respuesta cacheada sin ejecutar el handler
+  - Si no existe: ejecutar handler, guardar respuesta (status + body) con TTL de 24h
+  - Timeouts: definir tabla timeouts por path:
+    * GET /api/v1/auth/*: 5s
+    * GET /api/v1/skills/*: 10s
+    * GET /api/v1/projects/*: 10s
+    * POST /api/v1/*: 30s
+    * GET /api/v1/mcp/*: 60s (lecturas de MCP server pueden ser lentas)
+    * POST /api/v1/mcp/*: 120s (escrituras pueden ser lentas)
+  - Wrap cada handler con `context.WithTimeout(parent, timeoutPerPath)`
+  - Si el cliente cierra la conexion (request.Context().Done()), el handler
+    se entera via ctx y puede abortar (cancelar DB queries, etc)
+  - Connection pool: aumentar max_connections a 25, min_idle a 5
+  - Statement timeout en pgxpool.Config: 30s para queries, 60s para chat user
+  - Service attachment: agregar context a InitUpload y Confirm (que ya deberia tener)
+  - Tests: idempotency key duplicada devuelve misma respuesta, key expirada ejecuta nuevo, context cancelado aborta correctamente
+specs:
+  - Idempotency-Key header: client-provided, max 64 chars, recomendado UUID v4
+  - key TTL: 24 horas (limpieza diaria via cron)
+  - request_hash: SHA-256 del body normalizado (para detectar conflicto)
+  - response_cache: solo se cachea si status es 2xx o 4xx (no 5xx)
+  - response_size_limit: 1MB (no cacheamos respuestas grandes)
+  - timeouts: dict pathPattern -> duration
+  - ctx_propagation: cada handler recibe ctx que ya tiene timeout
+  - on_ctx_cancel: log estructurado + cleanup best-effort
+  - pgxpool: max_conns=25, min_conns=5, max_conn_lifetime=30min, health_check_period=1min
+  - statement_timeout: 30s default, 60s para chat user
+  - graceful_shutdown: al recibir SIGTERM, dejar de aceptar requests nuevos, esperar max 30s por los en curso
+  - health_endpoint: GET /healthz devuelve 200 si DB + LLM reachable, 503 si no
+  - metric_endpoint: GET /metrics expone conexiones activas, latencia p50/p95/p99
+notes: |
+  Hoy el MCP no tiene timeouts por operacion. Un GET rapido (lista
+  skills) puede quedar esperando 30s si la DB esta lenta. Un POST de
+  attachment puede quedarse 5min si el LLM esta colgado.
+
+  Ademas, si el cliente cierra la conexion (navegador cerrado, internet
+  caido), el MCP sigue procesando. Solo se entera cuando intenta escribir
+  la respuesta y obtiene "broken pipe". Es desperdicio de CPU/red.
+
+  Solucion: cada handler usa `context.WithTimeout` con timeout por path.
+  Si el cliente cierra la conexion, el handler recibe `ctx.Done()` y puede
+  abortar.
+
+  Idempotency keys son el patron estandar para APIs que aceptan retries
+  (Stripe, PayPal, AWS, etc). El cliente envia un `Idempotency-Key` con
+  cada POST. Si el server ya vio esa key, devuelve la respuesta cacheada
+  sin ejecutar de nuevo. Asi un retry no duplica side effects.
+
+  El health endpoint es critical para kubernetes/load balancers: pueden
+  detectar cuando el MCP no esta healthy y sacarlo del pool.

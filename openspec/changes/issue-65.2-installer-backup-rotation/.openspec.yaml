@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 714a15ac-bc30-4cb2-ac98-586a0eaecf31
+  issue_slug: issue-65.2-installer-backup-rotation
+  req: REQ-65-install-user-hardening
+  status: proposed
+  priority: medium
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 2e3e61002e53a3d088c83226e7ad77e1777051da7d8f1fa9fbfa361a8549860e
+  "design.md": 725e1cc37057e072da4a018d8a9da85ab0531288fd6afd0f125a10c2b525036f
+  "tasks.md": 6fcdea0093ced510ae3bd878d535d75cd0d5e0ee7061f775168a9e6e5dc6932e
+  "specs/issue-65.2-installer-backup-rotation/spec.md": cc3c279906a375d897d2fb74e8656c2314ac77f68ea6c76af7642d19daf2259e

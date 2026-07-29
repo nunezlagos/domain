@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: c19d9855-c6a4-445b-8229-5cfbde13e9ea
+  issue_slug: issue-53.9-early-error-reporting
+  req: REQ-53-memory-and-code-graph-strategy
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": a70a8103fb34179e64ae73ad08042d6f40f6d83619e1d17029415df13d71df20
+  "design.md": 335ff386b5d862eae127d335feedc29eadf2b77a672d36dba6e46a5e6d245b84
+  "tasks.md": e4f690a52138ad212574a4bb7b0102bd666e9dac5e4f17ae5fd4a57ce085a2c9
+  "specs/issue-53.9-early-error-reporting/spec.md": aa0879111a0c23ed6203849800bfaa01d95d477d099ed2f19124461ac3203274

@@ -1,0 +1,83 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: LLM-as-judge con cron semanal y human-in-the-loop approval
+depends_on:
+  - HU-52.1-user-feedback-loop
+  - HU-52.2-skill-success-tracking
+blocked_by: []
+files:
+  - services/domain-mcp/internal/migrate/migrations/000188_create_skill_suggestions.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000188_create_skill_suggestions.down.sql
+  - services/domain-mcp/internal/service/skill_suggestions/models.go
+  - services/domain-mcp/internal/service/skill_suggestions/service.go
+  - services/domain-mcp/internal/service/skill_suggestions/llm_judge.go
+  - services/domain-mcp/internal/service/skill_suggestions/aggregator.go
+  - services/domain-mcp/internal/service/skill_suggestions/cron.go
+  - services/domain-mcp/internal/api/handler/api.go
+  - services/domain-mcp/internal/cli/cmd/skill_suggestions.go
+  - services/domain-admin/app/maintainers/skillsuggestions/__init__.py
+  - services/domain-admin/app/maintainers/skillsuggestions/apps.py
+  - services/domain-admin/app/maintainers/skillsuggestions/models.py
+  - services/domain-admin/app/maintainers/skillsuggestions/views.py
+  - services/domain-admin/app/maintainers/skillsuggestions/urls.py
+  - services/domain-admin/app/maintainers/skillsuggestions/services.py
+  - services/domain-admin/app/templates/skillsuggestions/list.html
+  - services/domain-admin/app/templates/skillsuggestions/detail.html
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - openspec/changes/REQ-52-mcp-auto-learn/HU-52.3-llm-as-judge/proposal.md
+tests:
+  - services/domain-mcp/internal/service/skill_suggestions/llm_judge_test.go
+  - services/domain-mcp/internal/service/skill_suggestions/aggregator_test.go
+  - services/domain-admin/app/maintainers/skillsuggestions/tests/test_services.py
+tasks:
+  - Crear migracion 000188: tabla skill_suggestions (id, skill_slug TEXT, kind VARCHAR(10) CHECK (kind IN (split/merge/refine/archive)), payload JSONB, rationale TEXT, llm_model TEXT, llm_confidence DECIMAL(4,2), status VARCHAR(20) DEFAULT 'pending' CHECK (status IN (pending/approved/rejected/applied)), reviewed_by UUID, reviewed_at TIMESTAMPTZ, applied_at TIMESTAMPTZ, applied_changes JSONB, created_at TIMESTAMPTZ, UNIQUE(skill_slug, kind, status) WHERE status = 'pending')
+  - Service SkillSuggestions: Create, Get, List (filtros: skill, kind, status), Approve, Reject, Apply
+  - LLMJudge: dado un skill + metricas (success rate, p95, feedback count) + top-3 skills similares (por embedding cosine), genera 4 tipos de sugerencia:
+    * SPLIT: si invocations_per_day > 100 Y content_size > 2000 chars Y se invoca con args distintos (p50 unique args hash > 5)
+    * MERGE: si existe skill similar (cosine > 0.85) Y usage < 10/dia cada uno
+    * REFINE: si failure_rate > 30% O avg_duration_ms > 30000 O negative_feedback >= 3 en 30 dias
+    * ARCHIVE: si invocations == 0 en ultimos 90 dias Y no es seed_managed
+  - Cron semanal: lunes 3am, escanea todos los skills activos, ejecuta LLMJudge, persiste sugerencias pending
+  - Handler HTTP: GET /api/v1/skill-suggestions (filtros), GET /api/v1/skill-suggestions/{id}, POST /api/v1/skill-suggestions/{id}/approve, POST /api/v1/skill-suggestions/{id}/reject
+  - Registrar rutas en api.go
+  - CLI: `domain skill suggest run` (corre el batch manualmente)
+  - CLI: `domain skill suggest list` (lista pendientes)
+  - Django app skillsuggestions: lista con detalle, approve/reject con comentario, vista del diff
+  - Sidebar: link "Skill suggestions" (con badge de count de pending)
+  - Al aprobar SPLIT: crea 2 skills hijos con `parent_skill_id`, marca original como superseded_by
+  - Al aprobar MERGE: mergea content + schema + tags, crea nuevo skill, marca los 2 originales como superseded_by
+  - Al aprobar REFINE: genera nuevo content via LLM, crea version nuevo, actualiza skill
+  - Al aprobar ARCHIVE: soft delete + audit log
+  - Audit: cada sugerencia generada/aplicada se loguea en audit_log con llm_model, llm_confidence, payload_hash
+  - Tests: judge con cada tipo de sugerencia, approve flow, apply flow
+specs:
+  - llm_model: configurable via env var, default sonnet (claude-sonnet-4-5)
+  - prompt_includes: skill.content + skill.description + metrics (last 30 days) + top-3 similar + recent_feedback
+  - confidence_threshold: solo persistir sugerencias con llm_confidence >= 0.6
+  - rate_limit: max 50 sugerencias por batch (anti-runaway)
+  - dedup: no sugerir lo mismo 2 veces en 30 dias (UNIQUE constraint)
+  - require_human_approval: SIEMPRE, nunca auto-apply
+  - payload: cada sugerencia tiene un JSONB con la propuesta concreta (ej: para SPLIT, los 2 nuevos contents)
+  - audit: hash SHA-256 del payload para detectar tampering
+  - rollback: si Apply falla, la sugerencia queda en status='approved' pero applied_at=NULL, no se reverte (la intervencion humana es necesaria)
+notes: |
+  Esta es la pieza central de la auto-mejora. Toma data de HU-52.1
+  (feedback) y HU-52.2 (success rate), la pasa al LLM, y el LLM
+  genera sugerencias concretas.
+
+  El prompt al LLM es detallado y estructurado: incluye el skill
+  completo, sus metricas, los top-3 skills similares, y el feedback
+  reciente. Asi el LLM tiene contexto suficiente para hacer sugerencias
+  utiles.
+
+  Los 4 tipos de sugerencias (split/merge/refine/archive) son los clasicos
+  en software engineering para mantener una codebase limpia. Cada uno
+  tiene un payload JSONB con la propuesta concreta:
+  - SPLIT: { "children": [{"name": "...", "content": "..."}, ...] }
+  - MERGE: { "merged_content": "...", "merged_tags": [...] }
+  - REFINE: { "new_content": "...", "diff_summary": "..." }
+  - ARCHIVE: { "reason": "0 invocations in 90 days" }
+
+  La UI en domain-admin muestra el diff (generado por el LLM) y el
+  rationale. El humano aprueba o rechaza. Nada se aplica automaticamente.

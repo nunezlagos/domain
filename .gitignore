@@ -53,11 +53,12 @@ opencode.json.bak.*
 .playwright-mcp/
 
 # SDD specs (NO en repo, solo local)
-openspec/
-# excepción: el paquete Go internal/service/openspec SÍ va al repo
-# (la regla openspec/ era para los árboles SDD exportados, no para el código).
-!services/domain-mcp/internal/service/openspec/
-!services/domain-mcp/internal/service/openspec/**
+# DOMAINSERV-191: el árbol openspec/ SÍ se versiona. Estaba ignorado, y con eso
+# domain_openspec_status no podía auditar drift repo↔BD en CI: comparaba contra
+# archivos que no existían para nadie más. Las dos excepciones que rescataban el
+# paquete Go internal/service/openspec quedaron sin objeto al quitar la regla.
+# Verificado antes de versionarlo: 238 archivos .md/.yaml, sin binarios, cero
+# valores del .env y cero tokens; los 18 UUIDs son issue_id de la BD.
 
 # Binarios compilados en la raíz del módulo Go. `go build ./cmd/X` sin -o deja el
 # ejecutable acá con el nombre del target: así apareció un domain-schema-drift de

@@ -1,0 +1,58 @@
+status: proposed
+created: 2026-06-26
+archived: ~
+title: Skill success rate tracking automatico
+depends_on: []
+blocked_by: []
+files:
+  - services/domain-mcp/internal/migrate/migrations/000187_create_skill_metrics.up.sql
+  - services/domain-mcp/internal/migrate/migrations/000187_create_skill_metrics.down.sql
+  - services/domain-mcp/internal/service/skill_metrics/models.go
+  - services/domain-mcp/internal/service/skill_metrics/service.go
+  - services/domain-mcp/internal/service/skill_metrics/aggregator.go
+  - services/domain-mcp/internal/service/skill_metrics/aggregator_cron.go
+  - services/domain-mcp/internal/cli/cmd/skill_metrics.go
+  - openspec/changes/REQ-52-mcp-auto-learn/HU-52.2-skill-success-tracking/proposal.md
+tests:
+  - services/domain-mcp/internal/service/skill_metrics/aggregator_test.go
+  - services/domain-mcp/internal/service/skill_metrics/service_test.go
+tasks:
+  - Crear migracion 000187: tabla skill_metrics_daily (skill_id UUID, day DATE, invocations_count INT, success_count INT, failure_count INT, success_rate DECIMAL(5,2), avg_duration_ms INT, p95_duration_ms INT, unique_callers_count INT, primary key (skill_id, day))
+  - Indice: (skill_id, day DESC), (day DESC) para agregaciones globales
+  - Service: GetBySkill, GetByDay, ListTopFailed, ListSlowest
+  - Aggregator: funcion `Aggregate(skill_id, day)` que toma los skill_executions
+    de ese dia y los agrega a la tabla daily
+  - Definicion de "exito": status='completed' AND output IS NOT NULL AND output != '' AND execution_time_ms > 0 AND execution_time_ms < 60000
+  - Definicion de "fallo": status='failed' OR (status='completed' AND (output IS NULL OR output = '' OR execution_time_ms >= 60000))
+  - Cron job: cada 1h, ejecuta Aggregate para (today, todos los skills activos)
+  - Cleanup: cada domingo, agrega metrics de la semana a una tabla skill_metrics_weekly (rollup)
+  - CLI: `domain skill metrics show --slug=X --days=7`
+  - CLI: `domain skill metrics top-failed --days=7` (devuelve top 10 con peor success rate)
+  - CLI: `domain skill metrics slowest --days=7` (devuelve top 10 con peor p95)
+  - Tests: aggregator con datos de prueba, edge cases (0 invocaciones, 100% success, 0% success)
+specs:
+  - granularity: daily (mantiene 90 dias), weekly (mantiene 1 ano), monthly (mantiene forever)
+  - success_rate = success_count / (success_count + failure_count)
+  - p95_duration_ms: percentil 95 calculado en SQL con ntile(20)
+  - unique_callers: COUNT(DISTINCT created_by) de skill_executions ese dia
+  - retention: daily 90 dias, weekly 365 dias, monthly forever
+  - cron: hourly aggregate, daily cleanup, weekly rollup
+  - queries_optimized: indices en (skill_id, day) y (day)
+  - thresholds: si invocations < 10 en un dia, no computar percentiles (no hay suficiente data)
+  - alerts: si success_rate cae bajo 70% por 3 dias consecutivos, crear entrada en usage_alerts
+notes: |
+  Esta HU es automatica: no requiere UI ni interaccion del usuario.
+  Solo agrega la logica de agregacion que convierte skill_executions
+  (que ya existe) en metrics utiles.
+
+  El "success rate" se define conservadoramente: un skill se considera
+  exitoso SOLO si completo en menos de 60 segundos Y devolvio output no
+  vacio. Esto filtra skills que cuelgan o devuelven errores silenciosos.
+
+  Las metrics se persisten en una tabla daily (granularidad fina) y se
+  rollupean a weekly/monthly. Esto permite queries rapidas para el
+  LLM-as-judge (HU-52.3) sin escanear millones de skill_executions.
+
+  Las queries del CLI son utiles para el operador: "cuales son los skills
+  con peor performance?" se responde en menos de 100ms con la tabla
+  daily indexada.

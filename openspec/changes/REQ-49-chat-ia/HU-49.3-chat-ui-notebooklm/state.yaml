@@ -1,0 +1,65 @@
+status: implemented
+created: 2026-06-26
+implemented: 2026-06-26
+archived: ~
+notes: |
+  MVP UI completo: link en sidebar, template, CSS, JS cliente (vanilla) con
+  fetch+polling 1.5s, marked.js local v12.0.2, search con debounce, back
+  button mobile, badge "Nuevo mensaje", source cards con tooltip snippet.
+  E2E validado con API real de MiniMax: respuesta con Markdown + tabla +
+  bold en fuentes. Pendiente: streaming SSE (HU-49.4), MediaPreview PDF.
+title: UI NotebookLM — split view sidebar de conversaciones + ventana de chat
+depends_on:
+  - HU-49.2-chat-rag-data-sources
+blocked_by: []
+files:
+  - services/domain-admin/app/templates/chat/list.html
+  - services/domain-admin/app/templates/chat/window.html
+  - services/domain-admin/app/templates/chat/message_bubble.html
+  - services/domain-admin/app/templates/chat/message_input.html
+  - services/domain-admin/app/templates/chat/source_card.html
+  - services/domain-admin/app/templates/chat/empty_state.html
+  - services/domain-admin/app/templates/chat/_list_item.html
+  - services/domain-admin/app/static/css/chat.css
+  - services/domain-admin/app/static/js/chat.js
+  - services/domain-admin/app/static/js/chat-polling.js
+  - services/domain-admin/app/static/js/chat-markdown.js
+  - services/domain-admin/app/templates/components/_sidebar.html
+  - services/domain-admin/app/templates/dashboard.html (opcional: link a /chat/)
+tests:
+  - tests manuales via navegador (sin test automatizado para UI en este proyecto)
+tasks:
+  - Crear template `chat/list.html` que extiende base.html con layout split
+  - Sidebar izquierdo (300px): lista de conversaciones, boton "Nueva conversacion", search input
+  - Panel principal: header con titulo + estado + ventana de mensajes + input
+  - Message bubble: diferenciada user (derecha, fondo primary) vs assistant (izquierda, fondo neutral)
+  - Markdown rendering: usar marked.js desde CDN o lib local (sin npm, vanilla JS)
+  - Source cards: debajo de cada mensaje assistant, lista compacta con {titulo, score%, snippet, link a detalle}
+  - Polling JS: cada 1.5s consulta /chat/api/messages/<id> mientras status sea pending/processing
+  - Empty state: cuando no hay conversacion activa, mostrar CTA "Nueva conversacion"
+  - Mobile responsive: <768px muestra solo lista, al seleccionar muestra chat fullscreen con back button
+  - Auto-scroll: al final cuando llega mensaje nuevo y user esta en el fondo
+  - Badge "Nuevo mensaje ↓" cuando user scrollea arriba y llega respuesta
+  - Optimistic UI: el mensaje user aparece instantaneamente
+  - Indicador "Pensando..." (3 dots animados) mientras status=pending
+  - Cursor parpadeante mientras status=processing (contenido_parcial)
+  - Boton "Reintentar" en mensajes con status=error
+  - Agregar link "Chat IA" al sidebar (seccion Principal, antes de Panel) con icono MessageSquare (SVG inline)
+specs:
+  - layout: split 300px sidebar + flex-1 chat window, height = viewport - navbar - footer
+  - sidebar: lista vertical de conversaciones, cada item muestra titulo (truncado 40 chars), preview ultimo mensaje (truncado 60 chars), fecha relativa ("hace 2h", "ayer")
+  - new-conversation-btn: icono +, abrevia si ya hay titulo
+  - search-input: filtra lista localmente por titulo (case-insensitive, debounce 200ms)
+  - message-input: textarea autosize, Enter envia, Shift+Enter newline, max 4000 chars
+  - polling-interval: 1500ms
+  - streaming: NO en MVP (futuro upgrade a SSE)
+  - sources-card: titulo, score (badge porcentaje), snippet (2 lineas truncadas), link "Ver detalle" a /<entidad>/detalle/<uuid>
+  - markdown: H1-H3, **bold**, *italic*, listas, tablas, code blocks, links
+  - sidebar-link: /chat/ activo cuando request.path empieza con /chat
+notes: |
+  Estilo inspirado en NotebookLM: sidebar de conversaciones + main panel con
+  burbujas + sources cards visibles. Sin streaming en MVP (polling es suficiente
+  para MVP funcional). Mobile-first responsive: en <768px el sidebar ocupa full
+  screen, y al tocar una conversacion se navega al chat fullscreen.
+  Sin dependencias npm: usamos vanilla JS + marked.js via CDN. Esto evita romper
+  el flujo de collectstatic de WhiteNoise (HU-47.2).

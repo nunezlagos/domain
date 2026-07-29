@@ -291,9 +291,17 @@ func (e *Engine) statusForChange(ctx context.Context, dir string, files map[stri
 		return StatusResult{Dir: dir, Verdict: "error", Reason: "falta .openspec.yaml"}
 	}
 	m := ParseMeta(metaRaw)
+	// DOMAINSERV-167: el campo ausente y el UUID corrupto son causas distintas y hasta
+	// acá daban el mismo motivo. En los dos el change sale de la auditoría de drift sin
+	// que eso se vea como una falla, así que el motivo tiene que decir cuál de los dos es
+	if strings.TrimSpace(m.IssueID) == "" {
+		return StatusResult{Dir: dir, Verdict: "error",
+			Reason: "sin domain.issue_id: el change nunca pasó por domain_openspec_export, así que queda fuera de la auditoría de drift; corré el export para hacerlo auditable"}
+	}
 	issueID, err := uuid.Parse(m.IssueID)
 	if err != nil {
-		return StatusResult{Dir: dir, Verdict: "error", Reason: "issue_id inválido en meta"}
+		return StatusResult{Dir: dir, Verdict: "error",
+			Reason: fmt.Sprintf("domain.issue_id no es un UUID (%q): el .openspec.yaml está corrupto o se editó a mano", m.IssueID)}
 	}
 	dbRendered, derr := e.renderFromDB(ctx, issueID, m.IssueSlug)
 	if derr != nil {

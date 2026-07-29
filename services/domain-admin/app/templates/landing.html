@@ -9,27 +9,28 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'demo/brand/favicon.svg' %}">
   <link rel="icon" href="{% static 'demo/brand/favicon.ico' %}" sizes="any">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="{% static 'demo/tokens.css' %}">
   <style>
 /* ── Tokens ────────────────────────────────────────────────────────── */
 :root {
-  --bg:          #faf8f2;
-  --bg-warm:     #f4f0e3;
-  --chrome:      #ebe5d6;
-  --ink:         #141412;
-  --charcoal:    #24231e;
-  --slate:       #3e3e38;
-  --ash:         #8a8a80;
-  --stone:       #c8c5bb;
+  --bg:          var(--wag-cream-soft);
+  --bg-warm:     var(--wag-cream);
+  --chrome:      var(--wag-cream-warm);
+  --ink:         var(--wag-ink);
+  --charcoal:    var(--wag-charcoal);
+  --slate:       var(--wag-slate);
+  --ash:         var(--wag-ash);
+  --stone:       var(--wag-stone);
   --divider:     rgba(62,62,56,.14);
   --glass:       rgba(255,255,255,.72);
   --glass-b:     rgba(62,62,56,.14);
-  --green-dark:  #1a3328;
-  --green:       #2e5c3e;
-  --green-mid:   #3d7a54;
-  --green-light: #6aac82;
-  --green-pale:  #b5d4bc;
-  --green-mist:  #e6f1e8;
-  --amber:       #c4914f;
+  --green-dark:  var(--wag-green-dark);
+  --green:       var(--wag-green);
+  --green-mid:   var(--wag-green-mid);
+  --green-light: var(--wag-green-light);
+  --green-pale:  var(--wag-green-pale);
+  --green-mist:  var(--wag-green-mist);
+  --amber:       var(--wag-amber);
   --shadow:      0 2px 24px rgba(36,35,30,.09);
   --shadow-lg:   0 8px 48px rgba(36,35,30,.13);
   --r:           12px;
@@ -38,22 +39,19 @@
 }
 
 html.dark {
-  --bg:          #141412;
-  --bg-warm:     #1a1a16;
-  --chrome:      #242420;
-  --ink:         #f4f0e3;
-  --charcoal:    #ebe5d6;
-  --slate:       #c8c5bb;
-  --ash:         #8a8a80;
-  --stone:       #3e3e38;
+  --bg:          var(--wag-ink);
+  --bg-warm:     var(--wag-ink-soft);
+  --chrome:      var(--wag-ink-chrome);
+  --ink:         var(--wag-cream);
+  --charcoal:    var(--wag-cream-warm);
+  --slate:       var(--wag-stone);
+  --ash:         var(--wag-ash);
+  --stone:       var(--wag-slate);
   --divider:     rgba(255,255,255,.10);
   --glass:       rgba(255,255,255,.06);
   --glass-b:     rgba(255,255,255,.10);
-  --green:       #4a9464;
-  --green-mid:   #5aac74;
-  --green-light: #8ac89a;
-  --green-pale:  #2a4e38;
-  --green-mist:  #162218;
+  /* los verdes no se repiten aca: --wag-green* ya flipan en tokens.css
+     bajo html.dark, asi que los alias del :root de arriba siguen sirviendo */
   --shadow:      0 2px 24px rgba(0,0,0,.30);
   --shadow-lg:   0 8px 48px rgba(0,0,0,.40);
 }

@@ -6,24 +6,26 @@
   <title>Domain Admin — Acceso</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'demo/brand/favicon.svg' %}">
   <link rel="icon" href="{% static 'demo/brand/favicon.ico' %}" sizes="any">
+  <link rel="stylesheet" href="{% static 'demo/tokens.css' %}">
   <style>
     /* ── Reset mínimo ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --ink:         #141412;
-      --charcoal:    #24231e;
-      --slate:       #3e3e38;
-      --ash:         #8a8a80;
-      --stone:       #c8c5bb;
-      --cream-soft:  #faf8f2;
-      --cream:       #f4f0e3;
-      --cream-warm:  #ebe5d6;
-      --green:       #2e5c3e;
-      --green-mid:   #3d7a54;
-      --green-light: #6aac82;
-      --green-pale:  #b5d4bc;
-      --green-mist:  #e6f1e8;
+      --ink:         var(--wag-ink);
+      --charcoal:    var(--wag-charcoal);
+      --slate:       var(--wag-slate);
+      --ash:         var(--wag-ash);
+      --stone:       var(--wag-stone);
+      --cream-soft:  var(--wag-cream-soft);
+      --cream:       var(--wag-cream);
+      --cream-warm:  var(--wag-cream-warm);
+      --green-dark:  var(--wag-green-dark);
+      --green:       var(--wag-green);
+      --green-mid:   var(--wag-green-mid);
+      --green-light: var(--wag-green-light);
+      --green-pale:  var(--wag-green-pale);
+      --green-mist:  var(--wag-green-mist);
       --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
 
@@ -60,7 +62,7 @@
       position: relative;
       overflow: hidden;
       background: linear-gradient(140deg,
-        #1a3328 0%,
+        var(--green-dark) 0%,
         var(--green) 22%,
         var(--green-mid) 48%,
         var(--green-light) 72%,

@@ -217,11 +217,27 @@
   --wag-cream-soft:   #faf8f2;
   --wag-cream:        #f4f0e3;
   --wag-cream-warm:   #ebe5d6;
+  --wag-green-dark:   #1a3328;
   --wag-green:        #2e5c3e;
-  --wag-green-mid:    #4a8a62;
+  /* #4a8a62 daba 3.9:1 sobre la crema y 4.1:1 bajo texto blanco, abajo del
+     4.5 que exige el texto chico donde se usa este token */
+  --wag-green-mid:    #3d7a54;
   --wag-green-light:  #6aac82;
   --wag-green-pale:   #b5d4bc;
   --wag-green-mist:   #e6f1e8;
+  --wag-amber:        #c4914f;
+  --wag-ink-soft:     #1a1a16;
+  --wag-ink-chrome:   #242420;
+}
+
+/* la rampa oscura solo la activa landing.html con <html class="dark">:
+   login y portal todavia no tienen toggle */
+html.dark {
+  --wag-green:        #4a9464;
+  --wag-green-mid:    #5aac74;
+  --wag-green-light:  #8ac89a;
+  --wag-green-pale:   #2a4e38;
+  --wag-green-mist:   #162218;
 }
 
 .theme-wag {
@@ -304,11 +320,14 @@
     0 10px 30px rgba(20,20,18,0.18);
 
   /* ── Paleta de marca WAG ──────────────────────────────────────
-   * primary #3d7a54 → ratio 4.50:1 sobre crema — WCAG AA.
-   * (original #4a8a62 daba 4.4:1, 0.1 por debajo del umbral)       */
+   * primary #3d7a54 → 4.48:1 sobre crema, 4.81:1 sobre cream-soft — AA.
+   * (#4a8a62 da 3.61:1 y 3.88:1: no era 0.1 abajo del umbral, era ~0.9) */
   --dj-primary:        #3d7a54;
   --dj-secondary:      var(--wag-green);
   --dj-accent:         var(--wag-cream-warm);
+  /* TODO(DOMAINSERV-171): estos dos siguen en #4a8a62, que como color de texto
+     falla AA sobre crema (3.61:1). Cambiarlos toca el contraste de todo el
+     admin, asi que va con el rediseño del portal y no acá */
   --dj-link:           #4a8a62;
   --dj-link-hover:     var(--wag-green);
   --dj-button-hover:   #4a8a62;

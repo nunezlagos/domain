@@ -37,6 +37,11 @@ function filterViewData(seg) {
   });
 }
 
+// null o undefined = nadie midio; un 0 afirmaria "medimos y no hubo ninguna"
+function fmtMetric(v, suffix) {
+  return (v === null || v === undefined) ? '—' : `${v}${suffix || ''}`;
+}
+
 function computeViewStats(data) {
   return {
     total: data.length,
@@ -109,7 +114,7 @@ function renderTableRow(seg, row) {
   if (seg.id === 'agents') {
     cells = `<td><b>${row.name}</b></td><td><code>${row.slug}</code></td><td>${row.provider}</td><td><code>${row.model}</code></td><td>${statusBadge}</td><td>${row.calls}</td>`;
   } else if (seg.id === 'skills') {
-    cells = `<td><b>${row.name}</b></td><td><code>${row.slug}</code></td><td><span class="badge ${row.type}">${row.type.toUpperCase()}</span></td><td>${row.desc}</td><td>${row.calls}</td><td>${row.success}%</td>`;
+    cells = `<td><b>${row.name}</b></td><td><code>${row.slug}</code></td><td><span class="badge ${row.type}">${row.type.toUpperCase()}</span></td><td>${row.desc}</td><td>${fmtMetric(row.calls)}</td><td>${fmtMetric(row.success, '%')}</td>`;
   } else if (seg.id === 'flows') {
     cells = `<td><b>${row.name}</b></td><td><code>${row.slug}</code></td><td>${row.phases}</td><td>${statusBadge}</td><td>${row.runs}</td>`;
   } else if (seg.id === 'prompts') {

@@ -129,7 +129,9 @@ function bindFormSubmit() {
     if (!valid) { showToast('Corrige los errores', 'error'); return; }
 
     const seg = activeSegment;
-    const newItem = { name, slug, desc, status, type: 'code', calls: 0, success: 100 };
+    // sin calls ni success: el spread de abajo los pisaria con valores inventados
+    // sobre lo que el cron ya midio, y en un alta no hay nada medido todavia
+    const newItem = { name, slug, desc, status, type: 'code' };
 
     if (modalMode === 'edit' && editingItem) {
       const idx = MOCK_DATA[seg.id].findIndex(d => d === editingItem);

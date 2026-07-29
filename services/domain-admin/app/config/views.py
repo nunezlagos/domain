@@ -100,6 +100,63 @@ def home_view(request):
     return render(request, "landing.html")
 
 
+# sin fila agregada nadie midio: el portal lo pinta como guion, no como cero
+_SIN_MEDICION = {"calls": None, "success": None}
+
+
+def _skill_metrics_rows_to_map(rows) -> dict:
+    """Filas (skill_id, invocations, success, failure) -> {skill_id: {calls, success}}."""
+    out = {}
+    for skill_id, invocations, success_count, failure_count in rows:
+        contables = (success_count or 0) + (failure_count or 0)
+        out[str(skill_id)] = {
+            "calls": int(invocations or 0),
+            # sin exitos ni fallos no hay tasa: un 0% afirmaria que todas fallaron
+            "success": round((success_count or 0) * 100 / contables, 1) if contables else None,
+        }
+    return out
+
+
+def _skill_metrics_7d() -> dict:
+    """Agregado de 7 dias por skill desde skill_metrics_daily.
+
+    La escribe el cron del MCP (DOMAIN_SKILL_METRICS_ENABLED); PK compuesta que el
+    ORM no modela limpio, mismo criterio que skill_feedback_daily. Ventana de 7d
+    para que coincida con el 'Uso 7d' que ya muestra la tabla.
+    """
+    from django.db import connection
+
+    exists_sql = """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'skill_metrics_daily'
+        )
+    """
+    sql = """
+        SELECT skill_id,
+               SUM(invocations_count),
+               SUM(success_count),
+               SUM(failure_count)
+        FROM skill_metrics_daily
+        WHERE day >= (CURRENT_DATE - INTERVAL '7 days')::date
+        GROUP BY skill_id
+    """
+    try:
+        with connection.cursor() as cur:
+            # la tabla la crea golang-migrate, no Django: en la DB de test no existe,
+            # y un SQL fallido dentro de un atomic block aborta toda la transaccion
+            cur.execute(exists_sql)
+            if not cur.fetchone()[0]:
+                return {}
+            cur.execute(sql)
+            return _skill_metrics_rows_to_map(cur.fetchall())
+    except Exception:
+        # exception y no warning: un rename de columna en una migracion futura dejaria
+        # el portal en guiones para siempre, y una sola linea sin traza no se investiga
+        logger.exception("skill_metrics_daily no legible: el portal muestra guiones")
+        return {}
+
+
 def _build_portal_ctx():
     """Construye el contexto del portal con datos reales de todos los modelos."""
     from datetime import timedelta
@@ -150,9 +207,11 @@ def _build_portal_ctx():
         for a in Agent.objects.filter(deleted_at__isnull=True).order_by("-created_at")
     ])
 
+    skill_metrics = _skill_metrics_7d()
     skills = _q(lambda: [
         {"name": s.name, "slug": s.slug, "type": s.skill_type,
-         "desc": (s.description or "")[:80], "status": s.status, "calls": 0, "success": 100}
+         "desc": (s.description or "")[:80], "status": s.status,
+         **skill_metrics.get(str(s.id), _SIN_MEDICION)}
         for s in Skill.objects.filter(deleted_at__isnull=True).order_by("-created_at")
     ])
 

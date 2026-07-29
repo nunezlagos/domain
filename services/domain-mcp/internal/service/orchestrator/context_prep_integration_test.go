@@ -49,7 +49,7 @@ func TestPrepSkills_FiltraExcluidaYRegistraOK(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO projects (name, slug) VALUES ('P','p') RETURNING id`).Scan(&projectID))
 
-	skillSvc := &skillsvc.Service{Pool: pool, Audit: &audit.PGRecorder{Pool: pool}, Embedder: llm.FakeEmbedder{}}
+	skillSvc := &skillsvc.Service{Pool: pool, Audit: &audit.PGRecorder{Pool: pool}, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	_, err = skillSvc.Create(ctx, skillsvc.CreateInput{
 		OrganizationID: orgID, Slug: "included-skill", Name: "Included Skill",
 		Description: "skill relevante para la fase apply", SkillType: "prompt", Content: "body", ActorID: userID,

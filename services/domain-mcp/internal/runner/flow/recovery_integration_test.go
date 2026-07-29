@@ -49,8 +49,8 @@ func recoverySetup(t *testing.T) (*flowrunner.Runner, *flow.Service, *skillsvc.S
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
 	flowS := &flow.Service{Pool: pools.App, Audit: rec}
 
-	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
-	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{}}
+	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}}
+	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}}
 
 	org, owner, _ := seedOrgUser(ctx, pools.Auth, "RecoveryTestOrg", "recoverytest", "r@x.com", "R")
 	proj, _ := projS.Create(ctx, projsvc.CreateInput{

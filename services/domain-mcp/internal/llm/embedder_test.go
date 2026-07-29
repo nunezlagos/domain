@@ -7,12 +7,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNopEmbedder_ReturnsZero(t *testing.T) {
+func TestNopEmbedder_ConDim_DevuelveVectorCeroDeEsaDimension(t *testing.T) {
+	e := NopEmbedder{Dim: 16}
+	v, err := e.Embed(context.Background(), "hello")
+	require.NoError(t, err)
+	require.Equal(t, 16, len(v))
+	require.True(t, IsZero(v))
+}
+
+// El paquete no conoce la dimensión del esquema: sin Dim no inventa una. Un
+// default acá quedó en 1536 cuando la migración 000275 llevó las columnas a 1024,
+// y cada INSERT falló. El vector de largo cero lo descartan los guards de
+// escritura, así que la columna queda NULL y el backfill la regenera.
+func TestNopEmbedder_SinDim_DevuelveVectorVacio(t *testing.T) {
 	e := NopEmbedder{}
 	v, err := e.Embed(context.Background(), "hello")
 	require.NoError(t, err)
-	require.Equal(t, 1536, len(v))
-	require.True(t, IsZero(v))
+	require.Empty(t, v, "sin Dim declarado no hay dimensión que suponer")
+	require.Zero(t, e.Dimensions())
 }
 
 func TestFakeEmbedder_Deterministic(t *testing.T) {
@@ -47,12 +59,12 @@ func TestIsZero(t *testing.T) {
 }
 
 func TestNopEmbedder_EmbedBatch(t *testing.T) {
-	e := NopEmbedder{}
+	e := NopEmbedder{Dim: 16}
 	vs, err := e.EmbedBatch(context.Background(), []string{"a", "b", "c"})
 	require.NoError(t, err)
 	require.Len(t, vs, 3)
 	for _, v := range vs {
-		require.Len(t, v, 1536)
+		require.Len(t, v, 16)
 		require.True(t, IsZero(v))
 	}
 }

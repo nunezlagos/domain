@@ -56,7 +56,7 @@ func setup(t *testing.T) (*fixture, func()) {
 	})
 	require.NoError(t, err)
 
-	svc := &obssvc.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	svc := &obssvc.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	f := &fixture{svc: svc, orgID: org.ID, projectID: proj.ID, owner: owner.UserID}
 	return f, func() {
 		pool.Close()
@@ -154,7 +154,7 @@ func TestObservation_SearchHybrid_NopEmbedder_TSVectorOnly(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	f.svc.Embedder = llm.NopEmbedder{}
+	f.svc.Embedder = llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}
 	_, _ = f.svc.Save(ctx, obssvc.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Content: "documentación de domain mcp server"})

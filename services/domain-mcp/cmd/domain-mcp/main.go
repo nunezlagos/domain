@@ -40,6 +40,7 @@ import (
 	llmregistry "nunezlagos/domain/internal/llm/registry"
 	llmretry "nunezlagos/domain/internal/llm/retry"
 	mcpserver "nunezlagos/domain/internal/mcp/server"
+	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/observability"
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
@@ -162,15 +163,17 @@ func main() {
 	tickets := ticketsvc.NewService(ticketsvc.NewPgRepository(pools.App))
 	projects := projsvc.NewService(pools.App, recorder, nil, nil).
 		WithClientService(clients)
-	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{}, nil, nil)
-	observationEdges := observation.NewEdgeService(pools.App, llm.NopEmbedder{}, recorder)
+	// este binario no pasa por chooseEmbedder, así que no hereda su validateDim ni
+	// su warnIfSchemaDimDiffers: la dimensión va explícita o se desincroniza sola
+	observations := observation.NewService(pools.App, recorder, llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}, nil, nil)
+	observationEdges := observation.NewEdgeService(pools.App, llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}, recorder)
 	codeGraph := codegraphsvc.NewCodegraphService(pools.App)
 
 	prompts := &promptsvc.Service{Pool: pools.App, Audit: recorder}
 	timeline := &timelinesvc.Service{Pool: pools.App}
 	search := &searchsvc.Service{Pool: pools.App}
-	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
-	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{}}
+	knowledgeSvc := &knowledge.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}}
+	skills := &skillsvc.Service{Pool: pools.App, Audit: recorder, Embedder: llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}}
 	agents := agentsvc.NewService(pools.App, recorder, nil)
 
 	factory := llm.NewFactory()

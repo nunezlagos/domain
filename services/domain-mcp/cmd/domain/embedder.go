@@ -13,13 +13,14 @@ import (
 	"nunezlagos/domain/internal/llm/anthropic"
 	"nunezlagos/domain/internal/llm/ollama"
 	llmopenai "nunezlagos/domain/internal/llm/openai"
+	dmigrate "nunezlagos/domain/internal/migrate"
 )
 
 // embeddingDim es la dimensión del esquema pgvector: knowledge_observations,
 // knowledge_chunks, skills y chat_document_embeddings son vector(1024) desde
 // la migración 000275 (bge-m3). Un embedder con otra dimensión rompería el
 // INSERT → se degrada a noop.
-const embeddingDim = 1024
+const embeddingDim = dmigrate.EmbeddingDim
 
 // defaultProbeTimeout acota CADA intento de medición: un provider lento o caído
 // degrada a noop en vez de colgar el boot.

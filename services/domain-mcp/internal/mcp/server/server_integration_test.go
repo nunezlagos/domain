@@ -70,7 +70,7 @@ func setupMCP(t *testing.T) *mcpFixture {
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	projS := &projsvc.Service{Pool: pools.App, Audit: rec}
-	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	obsS := &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 
 	org, owner, err := seedOrgUser(ctx, pools.App, "Acme", "acme", "owner@acme.com", "Owner")
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func setupMCP(t *testing.T) *mcpFixture {
 	})
 	require.NoError(t, err)
 
-	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	policyS := &policysvc.Service{Pool: pools.App}
 	skillExec := &skillsvc.ExecutionService{
 		Pool: pools.App, Skills: skillS,

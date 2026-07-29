@@ -54,11 +54,11 @@ func TestFactory_GetDefault(t *testing.T) {
 
 func TestFactory_EmbedderRegistry(t *testing.T) {
 	f := NewFactory()
-	f.RegisterEmbedder("fake", FakeEmbedder{})
+	f.RegisterEmbedder("fake", FakeEmbedder{Dim: 16})
 	f.SetDefault("", "fake")
 	e, err := f.GetDefaultEmbedder()
 	require.NoError(t, err)
-	require.Equal(t, 1536, e.Dimensions())
+	require.Equal(t, 16, e.Dimensions(), "el registry devuelve el embedder registrado, con la dimensión que declaró")
 }
 
 func TestFactory_List(t *testing.T) {

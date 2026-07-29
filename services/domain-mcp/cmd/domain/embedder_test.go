@@ -138,11 +138,15 @@ func TestValidateDim_Nop_SeMantiene(t *testing.T) {
 	require.True(t, isNop(validateDim(llm.NopEmbedder{}, testLogger())))
 }
 
-// Regresión de prod: llm.NopEmbedder tiene su PROPIO default hardcodeado (1536,
+// Regresión de prod: llm.NopEmbedder tenía su PROPIO default hardcodeado (1536,
 // "to match migration 000006"). Al bajar embeddingDim a 1024 quedaron dos fuentes
 // de verdad, y como el noop igual escribe su vector cero en la columna, cada
 // INSERT reventó con "expected 1024 dimensions, not 1536". El guard no lo vio
 // porque solo mira embedders NO-noop.
+//
+// El default ya no existe (DOMAINSERV-186): la dimensión sale de
+// dmigrate.EmbeddingDim. Este test sigue afirmando lo que importa — que
+// chooseEmbedder la pase explícita en TODOS los caminos que caen a noop.
 func TestChooseEmbedder_Noop_ProduceVectorDeLaDimensionDelEsquema(t *testing.T) {
 	for _, provider := range []string{"noop", "", "gibberish"} {
 		t.Setenv("DOMAIN_EMBEDDING_PROVIDER", provider)

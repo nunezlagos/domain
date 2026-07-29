@@ -45,7 +45,7 @@ func setupExec(t *testing.T) (*skillsvc.ExecutionService, *skillsvc.Service, uui
 	require.NoError(t, err)
 
 	rec := &audit.PGRecorder{Pool: pools.Auth}
-	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	skillS := &skillsvc.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	org, owner, err := seedOrgUser(ctx, pools.App, "ExecOrg", "execorg", "e@x.com", "E")
 	require.NoError(t, err)
 

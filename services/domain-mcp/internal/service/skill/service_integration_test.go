@@ -48,7 +48,7 @@ func setup(t *testing.T) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 
-	svc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	svc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	return &fix{svc: svc, orgID: org.ID, userID: owner.UserID}, func() {
 		pools.Close()
 		_ = pgC.Terminate(ctx)

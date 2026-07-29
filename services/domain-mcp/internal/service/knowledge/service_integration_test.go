@@ -55,11 +55,10 @@ func setup(t *testing.T) (*fix, func()) {
 		OrganizationID: org.ID, Name: "Demo", Slug: "demo", ActorID: owner.UserID,
 	})
 
-	// Dim explícito: la migración 000275 llevó las columnas de embedding a
-	// vector(1024) y llm.DefaultDim sigue en 1536, así que un FakeEmbedder sin Dim
-	// falla el insert con "expected 1024 dimensions, not 1536"
+	// sin Dim el embedder no produce vector y el insert queda sin embedding: la
+	// dimensión la declara el caller desde la migración que fijó las columnas
 	svc := &knowledge.Service{
-		Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: 1024},
+		Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim},
 	}
 	return &fix{svc: svc, orgID: org.ID, projectID: proj.ID, userID: owner.UserID}, func() {
 		pools.Close()
@@ -146,7 +145,7 @@ func TestKnowledge_SearchHybrid_NopEmbedderDegradesToTSVector(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
 	ctx := context.Background()
-	f.svc.Embedder = llm.NopEmbedder{}
+	f.svc.Embedder = llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}
 	_, _, _ = f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Title: "T", Body: "documentación del módulo de memoria de domain.",

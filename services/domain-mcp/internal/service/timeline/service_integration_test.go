@@ -61,7 +61,7 @@ func setupTimeline(t *testing.T) (*fix, func()) {
 
 	f := &fix{
 		tl:        &timelinesvc.Service{Pool: pools.App},
-		obs:       &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}},
+		obs:       &observation.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}},
 		prompts:   &promptsvc.Service{Pool: pools.App, Audit: rec},
 		orgID:     org.ID,
 		projectID: proj.ID,

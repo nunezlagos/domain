@@ -72,7 +72,7 @@ func setup(t *testing.T, responses []*llm.Response) (*fix, func()) {
 	rec := &audit.PGRecorder{Pool: pools.Auth}
 	org, owner, _ := seedOrgUser(ctx, pools.App, "Acme", "acme", "o@x.com", "O")
 
-	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{}}
+	skillSvc := &skill.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 	agentSvc := &agentsvc.Service{Pool: pools.App, Audit: rec}
 
 	provider := &stubProvider{responses: responses}

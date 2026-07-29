@@ -28,23 +28,17 @@ type Embedder interface {
 // NopEmbedder devuelve vector zero. La búsqueda híbrida degrada cleanly al
 // vector zero porque cosine(v, 0) está undefined; el service filtra vector zero
 // y queda con tsvector-only ranking.
+//
+// Dim la declara el caller con migrate.EmbeddingDim: este paquete no conoce la
+// dimensión del esquema. Un default acá se desincronizó de la migración 000275 y
+// dejó todo INSERT fallando con "expected 1024 dimensions, not 1536"; sin número
+// que derive, la deriva no puede volver a pasar. Dim=0 produce un vector de largo
+// cero, que los guards de escritura ya tratan como "no hay embedding".
 type NopEmbedder struct {
 	Dim int
 }
 
-// DefaultDim es el fallback de los embedders de este paquete cuando el caller no
-// declara dimensión. NO es la dimensión del esquema: quien la conoce es main
-// (embeddingDim en cmd/domain/embedder.go) y debe pasarla explícita.
-//
-// Tener el número acá fue una regresión real: al migrar el esquema a vector(1024)
-// este default quedó en 1536, el noop siguió escribiendo su vector cero de 1536 y
-// todo INSERT de observación falló con "expected 1024 dimensions, not 1536".
-const DefaultDim = 1536
-
 func (n NopEmbedder) Dimensions() int {
-	if n.Dim == 0 {
-		return DefaultDim
-	}
 	return n.Dim
 }
 
@@ -69,9 +63,6 @@ type FakeEmbedder struct {
 }
 
 func (f FakeEmbedder) Dimensions() int {
-	if f.Dim == 0 {
-		return DefaultDim
-	}
 	return f.Dim
 }
 

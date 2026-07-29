@@ -66,10 +66,9 @@ func setupDosProyectos(t *testing.T) (*fixDosProyectos, func()) {
 	})
 	require.NoError(t, err)
 
-	// Dim explícito: la migración 000275 llevó las columnas de embedding a
-	// vector(1024) y llm.DefaultDim sigue en 1536, así que un FakeEmbedder sin Dim
-	// falla el insert con "expected 1024 dimensions, not 1536"
-	svc := &knowledge.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: 1024}}
+	// sin Dim el embedder no produce vector y el insert queda sin embedding: la
+	// dimensión la declara el caller desde la migración que fijó las columnas
+	svc := &knowledge.Service{Pool: pools.App, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
 
 	return &fixDosProyectos{
 			svc: svc, orgID: org.ID, userID: owner.UserID,
@@ -115,7 +114,7 @@ func TestKnowledge_SearchBm25_SinVector_TampocoCruzaDeProyecto(t *testing.T) {
 	ctx := context.Background()
 
 	svcSinVector := &knowledge.Service{
-		Pool: f.svc.Pool, Audit: f.svc.Audit, Embedder: llm.NopEmbedder{},
+		Pool: f.svc.Pool, Audit: f.svc.Audit, Embedder: llm.NopEmbedder{Dim: dmigrate.EmbeddingDim},
 	}
 
 	_, _, err := svcSinVector.Save(ctx, knowledge.SaveInput{

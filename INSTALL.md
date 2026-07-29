@@ -99,6 +99,15 @@ solo persiste `DOMAIN_*_ENABLED=true` para las que actives explícitamente con
 | `--enable-skill-judge` | `DOMAIN_SKILL_JUDGE_ENABLED` | Evalúa calidad de skills semanalmente (LLM-as-judge) | Sí |
 | `--enable-ab-test` | `DOMAIN_AB_TEST_ENABLED` | Analiza experimentos A/B de skills | No |
 
+> Excepción (DOMAINSERV-174): en el deploy VPS,
+> `services/domain-mcp/docker-compose.yml` pasa `DOMAIN_SKILL_METRICS_ENABLED`
+> con default **`true`**. Es la única fuente de `skill_metrics_daily`, que es lo
+> que el portal muestra, y como `install.sh` preserva el `.env` existente sin
+> agregarle claves nuevas, dejarlo en `false` mantendría el portal sin datos para
+> siempre. Para apagarlo: `DOMAIN_SKILL_METRICS_ENABLED=false` en
+> `/opt/services/.env`. El flag `--enable-skill-metrics` NO sirve para el VPS:
+> escribe en `~/.config/domain/env` de la máquina cliente, que el container no lee.
+
 ### Cómo activar
 
 ```bash

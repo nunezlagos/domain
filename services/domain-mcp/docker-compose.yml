@@ -112,6 +112,11 @@ services:
       # hay un flag de enabled aparte.
       DOMAIN_CROWDSEC_MACHINE_ID: ${DOMAIN_CROWDSEC_MACHINE_ID:-}
       DOMAIN_CROWDSEC_MACHINE_PASSWORD: ${DOMAIN_CROWDSEC_MACHINE_PASSWORD:-}
+      # única fuente de skill_metrics_daily, de donde el portal saca Calls/Success.
+      # config.go defaultea a false y esta var no estaba acá, así que el cron nunca
+      # corrió en el VPS. El default va en true y no en el .env porque install.sh
+      # preserva el .env viejo sin agregarle claves nuevas
+      DOMAIN_SKILL_METRICS_ENABLED: "${DOMAIN_SKILL_METRICS_ENABLED:-true}"
       # REQ-54: LLM server-side (MiniMax). Sin esto el proceso Go no ve la key
       # y rerank/inferencia-de-aristas/judge + la preparación de contexto
       # degradan silenciosamente. La key vive en services/.env (LLM_API_KEY);

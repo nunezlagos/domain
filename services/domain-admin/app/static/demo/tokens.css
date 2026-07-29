@@ -218,10 +218,12 @@
   --wag-cream:        #f4f0e3;
   --wag-cream-warm:   #ebe5d6;
   --wag-green-dark:   #1a3328;
-  --wag-green:        #2e5c3e;
+  --wag-green-forest: #2e5c3e;
   /* #4a8a62 daba 3.9:1 sobre la crema y 4.1:1 bajo texto blanco, abajo del
      4.5 que exige el texto chico donde se usa este token */
-  --wag-green-mid:    #3d7a54;
+  --wag-green-moss:   #3d7a54;
+  --wag-green:        var(--wag-green-forest);
+  --wag-green-mid:    var(--wag-green-moss);
   --wag-green-light:  #6aac82;
   --wag-green-pale:   #b5d4bc;
   --wag-green-mist:   #e6f1e8;

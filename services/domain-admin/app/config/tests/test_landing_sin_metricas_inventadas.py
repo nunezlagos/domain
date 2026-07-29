@@ -61,10 +61,18 @@ SKILLS_DEL_CATALOGO = frozenset(
 )
 
 # Terminos que describen mediciones que el usuario NO recibe hoy.
+# La landing se escribe en espanol: un blocklist solo en ingles deja pasar la
+# parafrasis. "tasa de acierto por skill" prometia exactamente success_rate y
+# ningun guard lo vio.
 METRICAS_DESCONECTADAS = (
     "success rate",
     "latencia",
     "a/b testing",
+    "tasa de acierto",
+    "tasa de exito",
+    "tasa de éxito",
+    "disponibilidad",
+    "uptime",
 )
 
 
@@ -135,11 +143,13 @@ class LandingSinMetricasInventadasTests(unittest.TestCase):
                 )
 
     def test_las_features_no_prometen_metricas_desconectadas(self):
+        # [^>]* tolera atributos extra (aria-labelledby): la version anterior
+        # exigia el > pegado al id y cualquier atributo nuevo la apagaba.
         seccion = re.search(
-            r'<section id="caracteristicas">(.*?)</section>', self.html, re.DOTALL
+            r'<section id="features"[^>]*>(.*?)</section>', self.html, re.DOTALL
         )
         self.assertIsNotNone(
-            seccion, "no se encontro la seccion #caracteristicas en la landing"
+            seccion, "no se encontro la seccion #features en la landing"
         )
         texto = _texto_visible(seccion.group(1)).lower()
         for termino in METRICAS_DESCONECTADAS:

@@ -24,7 +24,17 @@ _APP = Path(__file__).resolve().parent.parent.parent
 _TOKENS = _APP / "static" / "demo" / "tokens.css"
 
 # consumidores: leen la paleta, no la copian
-_CONSUMIDORES = ("templates/landing.html", "templates/login.html")
+# incluye el CSS extraido de la landing: cuando el bloque inline se movio a su
+# propio archivo este guard se quedo sin nada que inspeccionar y paso en verde
+# por ausencia, no por cumplirse el invariante
+_CONSUMIDORES = (
+    "templates/landing.html",
+    "templates/login.html",
+    "static/landing/landing.css",
+)
+# solo los documentos servidos cargan tokens.css con un <link>; un archivo .css
+# hereda las variables del documento que lo incluye
+_CARGAN_TOKENS = ("templates/landing.html", "templates/login.html")
 
 _DECL_WAG = re.compile(r"(--wag-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})")
 _DECL_TOKEN = re.compile(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})")
@@ -99,7 +109,7 @@ class PaletaUnicaEnTokensTests(unittest.TestCase):
                     )
 
     def test_los_consumidores_cargan_tokens_css(self):
-        for rel in _CONSUMIDORES:
+        for rel in _CARGAN_TOKENS:
             with self.subTest(archivo=rel):
                 self.assertIn(
                     "demo/tokens.css",

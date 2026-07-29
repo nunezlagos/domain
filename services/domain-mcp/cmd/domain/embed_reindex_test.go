@@ -1,11 +1,32 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// El comentario de abajo describe el problema; este guard cubre el modo en que la
+// solución se degradó. DOMAINSERV-163 dejó el reindex como una sugerencia impresa por
+// install.sh, y en un mes nadie la ejecutó: el recall siguió degradado con el comando
+// ya escrito y disponible. Ahora el script lo corre, y esto impide que vuelva a ser
+// texto sin que alguien lo note.
+//
+// LÍMITE conocido: install.sh no es una dependencia declarada de este paquete, así que
+// `go test` devuelve el resultado CACHEADO cuando solo cambia el script — verificado,
+// da "ok (cached)" incluso con el guard en rojo. Localmente hace falta `-count=1`; el
+// que lo garantiza de verdad es el CI, donde cada job arranca con la caché vacía.
+func TestInstallSh_EjecutaElReindex_NoSoloLoSugiere(t *testing.T) {
+	sh, err := os.ReadFile("../../../install.sh")
+	require.NoError(t, err, "install.sh se movió: sin el archivo este guard queda ciego")
+
+	require.Regexp(t, `\n\s*if docker exec [^\n]*domain embed-reindex`, string(sh),
+		"install.sh tiene que EJECUTAR el reindex y evaluar su resultado, no imprimirlo")
+	require.NotRegexp(t, `log\s+"[^"]*embed-reindex`, string(sh),
+		"el reindex volvió a ser una sugerencia impresa: eso ya falló una vez")
+}
 
 // DOMAINSERV-163: un UPDATE masivo de embeddings no re-entrena los centroides de un
 // ivfflat, así que después del backfill el índice sigue particionando el espacio

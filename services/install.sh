@@ -585,13 +585,9 @@ if [[ "$EMB_PROVIDER" == "ollama" ]]; then
     log "Backfill de embeddings pendientes (idempotente, best-effort)..."
     if docker exec domain-mcp domain embed-backfill --all --pause-ms=0 2>&1 | tail -20; then
       ok "backfill completado"
-      # Un UPDATE masivo no re-entrena los centroides de un ivfflat: si el backfill
-      # escribió filas, el índice sigue particionando según una distribución que ya
-      # no existe y se pierden vecinos relevantes. No se ejecuta acá a propósito —un
-      # REINDEX no-concurrente toma ACCESS EXCLUSIVE y un deploy no debe congelar la
-      # búsqueda sin que nadie lo pida.
-      log "  si el backfill escribió filas, reconstruí los ivfflat (fuera del deploy):"
-      log "    docker exec domain-mcp domain embed-reindex --dsn=\"postgres://\$POSTGRES_USER:\$POSTGRES_PASSWORD@postgres:5432/\$POSTGRES_DB?sslmode=disable\""
+      # Un UPDATE masivo no re-entrena los centroides de un ivfflat: el índice sigue
+      # particionando según una distribución que ya no existe y se pierden vecinos
+      # relevantes. El reindex que lo corrige está al final del script.
     else
       warn "el backfill falló o quedó incompleto — el stack sigue operativo"
       warn "  reintentá con: docker exec domain-mcp domain embed-backfill --all --pause-ms=0"
@@ -843,6 +839,41 @@ else
   ok "Cron instalado: corre $WRAPPER todos los dias a las 03:00"
   ok "Log en /var/log/domain-update.log"
 fi
+
+# Reindex de los ivfflat. Va al FINAL y SIEMPRE: el subcomando existe desde
+# DOMAINSERV-163 pero el script solo lo imprimía como sugerencia, y en un mes nadie lo
+# corrió — el recall quedó degradado. Un paso que depende de que alguien lo recuerde no
+# se ejecuta, así que se ejecuta acá.
+#
+# Sin --no-concurrently: no toma ACCESS EXCLUSIVE y la búsqueda sigue respondiendo
+# mientras corre. Best-effort como el backfill — un índice desalineado degrada el
+# recall, no rompe el servicio, y este deploy ya está sirviendo.
+#
+# REINDEX exige ownership en PG16 (el privilegio MAINTAIN recién llega en PG17) y el
+# DSN del container es app_user, que no es dueño de nada: el dueño es POSTGRES_USER, el
+# mismo rol que corre domain-migrate. Va por DOMAIN_DATABASE_ADMIN_URL en vez de --dsn
+# para que la password no quede en el argv del proceso dentro del container.
+REINDEX_PASS="$(env_get POSTGRES_PASSWORD "$ENV_FILE")"
+if [[ -z "$REINDEX_PASS" ]]; then
+  # sin esto el DSN queda sin credenciales y pgx cae al usuario del proceso (nonroot),
+  # que falla con un "password authentication failed" que no señala la causa real
+  warn "sin POSTGRES_PASSWORD en el .env: no se reindexan los ivfflat (REINDEX exige el rol dueño)"
+else
+  REINDEX_USER="$(env_get POSTGRES_USER "$ENV_FILE")"
+  REINDEX_DB="$(env_get POSTGRES_DB "$ENV_FILE")"
+  # los defaults son los mismos que usa el compose en ${POSTGRES_USER:-domain}
+  REINDEX_DSN="postgres://${REINDEX_USER:-domain}:${REINDEX_PASS}@postgres:5432/${REINDEX_DB:-domain}?sslmode=disable"
+  log "Reindex de los ivfflat (CONCURRENTLY, best-effort)..."
+  if docker exec -e DOMAIN_DATABASE_ADMIN_URL="$REINDEX_DSN" domain-mcp domain embed-reindex 2>&1 | tail -10; then
+    ok "ivfflat reindexados"
+  else
+    warn "el reindex de los ivfflat falló — el stack sigue operativo, solo se degrada el recall"
+    warn "  un CONCURRENTLY abortado puede dejar un índice inválido ocupando disco:"
+    warn "  buscalo con: docker exec domain-postgres psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c '\\di *_ccold'"
+  fi
+  unset REINDEX_DSN
+fi
+unset REINDEX_PASS
 
 # DOMAINSERV-143: una config que quedó vieja NO puede terminar en verde. El stack está
 # arriba y sirviendo, así que no abortamos nada — pero el exit code queda en rojo para

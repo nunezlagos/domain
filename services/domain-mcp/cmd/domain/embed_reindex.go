@@ -131,8 +131,10 @@ func assertOwnerOrFail(ctx context.Context, pool *pgxpool.Pool, indexes []string
 		return nil
 	}
 	return fmt.Errorf("el rol de %s no es dueño de %d índice(s) (%s) y REINDEX lo exige en PostgreSQL 16.\n"+
-		"  Corré con el DSN de POSTGRES_USER:\n"+
-		"  docker exec domain-mcp domain embed-reindex --dsn=\"postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres:5432/$POSTGRES_DB?sslmode=disable\"",
+		"  Corré con el rol dueño (POSTGRES_USER), desde el directorio del compose:\n"+
+		"  docker compose run --rm --no-deps domain-seed embed-reindex\n"+
+		"  domain-seed comparte la imagen y ya recibe el DSN de POSTGRES_USER. Un docker exec\n"+
+		"  con $POSTGRES_USER escrito en la shell del host expande VACÍO y falla como nonroot.",
 		origen, len(ajenos), strings.Join(ajenos, ", "))
 }
 
@@ -181,9 +183,10 @@ func reindexAll(ctx context.Context, pool *pgxpool.Pool, indexes []string, o rei
 //
 // Uso: domain embed-reindex [--all] [--no-concurrently] [--dry-run] [--dsn=DSN]
 //
-// Por qué es un subcomando explícito y no un paso de install.sh: un REINDEX
-// no-concurrente toma ACCESS EXCLUSIVE sobre la tabla, y un deploy no debería
-// congelar la búsqueda sin que nadie lo haya pedido.
+// install.sh lo corre al final de cada deploy. Antes solo imprimía el comando como
+// sugerencia —para no congelar la búsqueda sin que nadie lo pidiera— pero en un mes
+// nadie lo corrió y el recall quedó degradado: la sugerencia protegía de un riesgo que
+// solo aplica con --no-concurrently, que no es el default.
 //
 // Requiere un DSN dueño del schema. El del container es app_user, que no lo es, y
 // además la migración 000029 le fija statement_timeout=30s: de ahí el SET a 0.

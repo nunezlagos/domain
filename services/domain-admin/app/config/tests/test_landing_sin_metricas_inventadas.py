@@ -1,27 +1,43 @@
-"""Guard contra metricas inventadas en la landing publica (DOMAINSERV-169).
+"""Guard de la landing publica: minima, sin cifras y sin superficie (DOMAINSERV-169).
 
-PROBLEMA QUE RESUELVE: `landing.html` se sirve en `/` sin autenticacion, y hasta
-HEAD 27a26b58 publicaba cuatro cifras que nadie medía — "247 skills activas"
-(el catalogo real tiene 18), "1.247 calls" y "892 calls" para skills que no
-existen en el catalogo, y "68% success" para otra inexistente. Una cifra
-inventada en una pagina publica es indistinguible de una medicion real: nadie
-que la lea puede saber que es falsa.
+HISTORIA DE ESTE GUARD, que importa para no re-aflojarlo:
 
-No hay nada en el pipeline que lo detecte. La landing es un template estatico,
-no pasa por ningun form ni serializer, y `test_views.py` solo cubre los
-mantenedores. Este guard cierra ese hueco por inspeccion del template.
+1. DOMAINSERV-169. `landing.html` se sirve en `/` sin autenticacion y publicaba
+   cuatro cifras que nadie medía — "247 skills activas" (el catalogo real tiene
+   18), "1.247 calls" y "892 calls" para skills inexistentes, y "68% success"
+   para otra. Una cifra inventada en una pagina publica es indistinguible de una
+   medicion real: nadie que la lea puede saber que es falsa. Nada en el pipeline
+   lo detectaba, porque la landing es un template estatico que no pasa por
+   ningun form ni serializer.
 
-Los tres primeros tests prohiben cifras donde la UI las presenta como metrica
-(los badges y las tarjetas flotantes del hero). El cuarto prohibe PROMETER
-metricas que hoy no llegan al usuario: `internal/service/skill_metrics` y
-`internal/service/skill_ab_test` estan implementados en el MCP pero
-DESCONECTADOS — nadie invoca `UpsertDaily` fuera de sus tests, y
-`feedback_aggregator.go:13` lo dice explicito ("en HU-52.2 se integrara con
-skill_metrics"). Ver DOMAINSERV-174.
+2. DOMAINSERV-174 sumo el cuarto check: prohibir PROMETER metricas que hoy no
+   llegan al usuario. `internal/service/skill_metrics` y `skill_ab_test` estan
+   implementados en el MCP pero DESCONECTADOS — nadie invoca `UpsertDaily`
+   fuera de sus tests.
 
-Mantenimiento: al agregar una skill a las tarjetas de ejemplo, agregala tambien
-a `SKILLS_DEL_CATALOGO`. Ese paso manual es intencional — obliga a verificar que
-la skill exista antes de publicarla.
+3. 2026-07-30. La landing se reduce a una puerta: logo, una linea y el boton de
+   entrar. Los cuatro checks anteriores miraban `fmc-badge`, `hero-card`,
+   `fmc-name` y la seccion `#features`, que dejaron de existir — habrian fallado
+   por la razon equivocada. El guard pasa a vigilar la invariante nueva, que
+   SUBSUME la vieja: en una pagina sin contenido no hay donde publicar una cifra.
+
+Lo que se vigila ahora, y por que cada cosa:
+
+- Sin cifras en el texto visible. Es el invariante de 169, ahora trivial de
+  cumplir y facil de verificar sobre la pagina entera en vez de por seccion.
+- Sin comandos de instalacion ni URLs internas. La revision de seguridad del
+  2026-07-29 los marco como superficie de enumeracion gratuita en una pagina
+  publica: `curl | sudo bash` desde `main` sin pinear, las formas de URL de
+  `/mcp` y `/api/v1/`, y el path absoluto del `.env`.
+- Sin promesas de metricas desconectadas. Es el check de 174, ahora sobre toda
+  la pagina. El blocklist esta en espanol Y en ingles a proposito: cuando estaba
+  solo en ingles, "tasa de acierto por skill" prometia `success_rate` y ningun
+  guard lo veia.
+- El boton de entrar existe y apunta al login. Sin el, la unica funcion de la
+  pagina desaparece y no hay forma de llegar al portal.
+- La pagina sigue siendo chica. Es un tope, no una metrica de calidad: si
+  alguien vuelve a llenarla de secciones, este test falla y obliga a decidirlo
+  a proposito en vez de que la superficie crezca de a poco.
 """
 from __future__ import annotations
 
@@ -34,36 +50,9 @@ _LANDING_PATH = (
     Path(__file__).resolve().parent.parent.parent / "templates" / "landing.html"
 )
 
-# Skills verificadas en el catalogo del MCP. Las globales salen del seeder
-# (`internal/seeds/skill_catalog.go`), asi que existen en cualquier instalacion;
-# las de proyecto existen en la BD de domain-services.
-SKILLS_DEL_CATALOGO = frozenset(
-    {
-        "commit-message",
-        "diff-summarize",
-        "error-classify",
-        "extract-entities",
-        "gherkin-from-bug",
-        "intake-classify",
-        "intake-structure",
-        "judgment-day",
-        "orca-webbrowser-workflow",
-        "orca-worktree-workflow",
-        "requesting-code-review",
-        "schema-migration-authoring",
-        "sql-explain-impact",
-        "summarize",
-        "text-redact-secrets",
-        "wcag-audit",
-        "mcp-tool-security-review",
-        "vps-deploy-admin",
-    }
-)
-
 # Terminos que describen mediciones que el usuario NO recibe hoy.
-# La landing se escribe en espanol: un blocklist solo en ingles deja pasar la
-# parafrasis. "tasa de acierto por skill" prometia exactamente success_rate y
-# ningun guard lo vio.
+# En los dos idiomas: la landing se escribe en espanol y un blocklist solo en
+# ingles deja pasar la parafrasis.
 METRICAS_DESCONECTADAS = (
     "success rate",
     "latencia",
@@ -75,22 +64,43 @@ METRICAS_DESCONECTADAS = (
     "uptime",
 )
 
+# Comandos y rutas que no van en una pagina publica. Cada uno le ahorra un paso
+# de reconocimiento a quien busque un blanco.
+SUPERFICIE_PROHIBIDA = (
+    "curl ",
+    "sudo bash",
+    "raw.githubusercontent",
+    "/api/v1",
+    "/opt/",
+    "install.sh",
+)
+
+# Tope de tamano de la puerta. Generoso respecto de las ~55 lineas actuales:
+# deja agregar un parrafo o un meta sin tocar el guard, y ataja que vuelvan las
+# secciones.
+MAX_LINEAS = 80
+
 
 def _leer_landing() -> str:
     return _LANDING_PATH.read_text(encoding="utf-8")
 
 
-def _texto_visible(fragmento: str) -> str:
-    """Devuelve solo el texto entre tags, descartando atributos.
+def _texto_visible(html: str) -> str:
+    """Devuelve el texto entre tags, sin atributos ni contenido de script/style.
 
-    Los atributos traen digitos legitimos (`font-size:8px`, colores hex) que
-    no son metricas y no deben disparar el guard.
+    Los atributos traen digitos legitimos (`width="72"`, colores hex) que no son
+    metricas. El contenido de `script` y `style` tambien, y encima es codigo: si
+    manana el snippet de tema usa un numero, el guard no tiene que confundirlo
+    con una cifra publicada.
     """
-    return " ".join(re.findall(r">([^<>]+)<", fragmento))
+    sin_codigo = re.sub(
+        r"<(script|style)\b[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE
+    )
+    return " ".join(re.findall(r">([^<>]+)<", sin_codigo))
 
 
-class LandingSinMetricasInventadasTests(unittest.TestCase):
-    """La landing publica no puede afirmar numeros que nadie mide.
+class LandingMinimaTests(unittest.TestCase):
+    """La landing publica es una puerta: sin cifras, sin superficie, con salida.
 
     Hereda de `unittest.TestCase` y no de `SimpleTestCase` a proposito: el guard
     inspecciona un archivo de template, no comportamiento de Django, asi que
@@ -101,64 +111,63 @@ class LandingSinMetricasInventadasTests(unittest.TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.html = _leer_landing()
+        cls.visible = _texto_visible(cls.html)
 
-    def test_los_badges_de_skill_no_publican_cifras(self):
-        badges = re.findall(r'class="fmc-badge[^"]*"\s*>([^<]*)<', self.html)
-        self.assertTrue(badges, "no se encontro ningun fmc-badge en la landing")
-        for badge in badges:
-            with self.subTest(badge=badge):
-                self.assertFalse(
-                    any(char.isdigit() for char in badge),
-                    f'el badge "{badge.strip()}" publica una cifra: la UI la presenta '
-                    "como metrica medida y nadie la calcula (DOMAINSERV-174)",
+    def test_el_texto_visible_no_publica_cifras(self):
+        digitos = [char for char in self.visible if char.isdigit()]
+        self.assertEqual(
+            digitos,
+            [],
+            "la landing publica una cifra en su texto visible: "
+            f"{self.visible.strip()!r}. En una pagina publica una cifra es "
+            "indistinguible de una medicion real (DOMAINSERV-169). Si de verdad "
+            "hay algo que medir, tiene que salir del contexto de la vista, no "
+            "del template.",
+        )
+
+    def test_no_publica_comandos_de_instalacion_ni_rutas_internas(self):
+        bajo = self.html.lower()
+        for fragmento in SUPERFICIE_PROHIBIDA:
+            with self.subTest(fragmento=fragmento):
+                self.assertNotIn(
+                    fragmento,
+                    bajo,
+                    f'la landing publica "{fragmento}". Es una pagina sin '
+                    "autenticar delante del login: cada comando o ruta interna "
+                    "que muestre le ahorra reconocimiento a quien busque un "
+                    "blanco. La instalacion se documenta en el repo, no aca.",
                 )
 
-    def test_las_tarjetas_del_hero_no_publican_cifras(self):
-        tarjetas = re.findall(
-            r'class="hero-card[^"]*">(.*?)</div>', self.html, re.DOTALL
-        )
-        self.assertTrue(tarjetas, "no se encontro ninguna hero-card en la landing")
-        for tarjeta in tarjetas:
-            texto = _texto_visible(tarjeta).strip()
-            with self.subTest(tarjeta=texto):
-                self.assertFalse(
-                    any(char.isdigit() for char in texto),
-                    f'la hero-card "{texto}" publica una cifra sin respaldo. Los '
-                    "stats del hero (hero-stat-num) si son verificables y quedan "
-                    "fuera de este guard",
-                )
-
-    def test_los_nombres_de_skill_existen_en_el_catalogo(self):
-        nombres = re.findall(r'class="fmc-name"\s*>([^<]*)<', self.html)
-        self.assertTrue(nombres, "no se encontro ningun fmc-name en la landing")
-        for nombre in nombres:
-            slug = nombre.strip()
-            with self.subTest(skill=slug):
-                self.assertIn(
-                    slug,
-                    SKILLS_DEL_CATALOGO,
-                    f'la landing publica la skill "{slug}", que no existe en el '
-                    "catalogo. Si la agregaste al seeder, agregala tambien a "
-                    "SKILLS_DEL_CATALOGO",
-                )
-
-    def test_las_features_no_prometen_metricas_desconectadas(self):
-        # [^>]* tolera atributos extra (aria-labelledby): la version anterior
-        # exigia el > pegado al id y cualquier atributo nuevo la apagaba.
-        seccion = re.search(
-            r'<section id="features"[^>]*>(.*?)</section>', self.html, re.DOTALL
-        )
-        self.assertIsNotNone(
-            seccion, "no se encontro la seccion #features en la landing"
-        )
-        texto = _texto_visible(seccion.group(1)).lower()
+    def test_no_promete_metricas_desconectadas(self):
+        bajo = self.visible.lower()
         for termino in METRICAS_DESCONECTADAS:
             with self.subTest(termino=termino):
                 self.assertNotIn(
                     termino,
-                    texto,
-                    f'la seccion de features promete "{termino}", que hoy no llega al '
-                    "usuario: skill_metrics y skill_ab_test estan implementados pero "
-                    "desconectados (DOMAINSERV-174). La seccion #por-que si puede "
-                    "nombrarlos como problema",
+                    bajo,
+                    f'la landing promete "{termino}", que hoy no llega al '
+                    "usuario: skill_metrics y skill_ab_test estan implementados "
+                    "pero desconectados (DOMAINSERV-174).",
                 )
+
+    def test_el_boton_de_entrar_apunta_al_login(self):
+        self.assertRegex(
+            self.html,
+            r"""\{%\s*url\s+['"]login['"]\s*%\}""",
+            "la landing no tiene un enlace al login resuelto con {% url 'login' %}. "
+            "Es la unica funcion de la pagina: sin el no hay forma de llegar al "
+            "portal. Con {% url %} y no con /login/ hardcodeado, para que un "
+            "cambio de ruta no lo rompa en silencio.",
+        )
+
+    def test_la_landing_sigue_siendo_minima(self):
+        lineas = len(self.html.splitlines())
+        self.assertLessEqual(
+            lineas,
+            MAX_LINEAS,
+            f"la landing crecio a {lineas} lineas (tope {MAX_LINEAS}). Se redujo "
+            "a una puerta a proposito, para no dejar expuesto el login detras de "
+            "una pagina llena de informacion. Si hace falta agregar contenido, "
+            "que sea una decision explicita: subi el tope en el mismo commit y "
+            "deja el motivo.",
+        )

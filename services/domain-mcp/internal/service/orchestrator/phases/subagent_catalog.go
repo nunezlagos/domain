@@ -34,8 +34,14 @@ func AgentesNombradosEn(plan string) []string {
 // AgentTemplatesCatalogSeeder lo siembre a agent_templates.metadata.subagent_plan.
 // El plan vive acá y NO en el catálogo del seeder: dos copias del mismo texto se
 // desincronizan, que es el defecto que DOMAINSERV-180 vino a cerrar.
+// Exponía solo sdd-explore, así que los planes de sdd-4r y sdd-verify existían en el código y
+// nunca llegaban a la BD (DOMAINSERV-208). El guard de subagent_plan_registro_test.go cruza
+// este map contra lo que cada fase declara, en las dos direcciones.
 func SubagentPlans() map[string]string {
 	return map[string]string{
 		"sdd-explore": exploreSubagentPlan,
+		"sdd-4r":      fourRSubagentPlan,
+		"sdd-verify":  verifySubagentPlan,
+		"sdd-onboard": onboardSubagentPlan,
 	}
 }

@@ -11,6 +11,15 @@ import (
 
 
 
+// onboardSubagentPlan delega el recall en domain-memory. Criterio de DOMAINSERV-180 que quedó
+// sin entregar: la fase pedía "buscar via mem_search" desde el hilo principal, o sea traerse el
+// recall completo al contexto que justo esta fase intenta no ensuciar.
+const onboardSubagentPlan = `Antes de decidir si el descubrimiento amerita un knowledge_doc, determinar si ya está documentado: delegar esa consulta en el agente domain-memory (si no está disponible: hacerlo en el hilo principal con domain_mem_search y domain_knowledge_search).
+
+Lo que se delega es la BÚSQUEDA, no la decisión: el agente devuelve qué hay ya persistido y con qué ids, y este hilo decide si el descubrimiento es nuevo, si funde con algo existente, o si no amerita nada. Un agente que no vio la implementación no puede juzgar si lo aprendido es novedoso.
+
+Si el retorno viene degradado —MCP sin responder, búsqueda sin project_slug— tratarlo como "no se pudo consultar", NO como "no hay nada documentado": crear un doc duplicado es peor que no crearlo.`
+
 type sddOnboardHandler struct{}
 
 func NewSDDOnboardHandler() Handler { return &sddOnboardHandler{} }
@@ -47,7 +56,8 @@ func (h *sddOnboardHandler) Build(_ context.Context, in Input) (*Output, error) 
 		SkillThreshold: 0,
 		// REQ-54 issue-54.6: onboard materializa el conocimiento del cambio.
 		RequiredToolCalls: []string{"domain_knowledge_save"},
-		RetryPolicy:    RetryReemit,
+		SubagentPlan:      onboardSubagentPlan,
+		RetryPolicy:       RetryReemit,
 	}, nil
 }
 

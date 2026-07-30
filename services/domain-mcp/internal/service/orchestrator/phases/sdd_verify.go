@@ -11,6 +11,10 @@ import (
 
 
 
+// verifySubagentPlan estaba inline en el Output, así que no se podía exponer en
+// SubagentPlans() y el seeder nunca lo llevaba a agent_templates.metadata (DOMAINSERV-208).
+const verifySubagentPlan = "Agrupa los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y valida cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Combina los lotes; un escenario failed en cualquier lote = failed global."
+
 type sddVerifyHandler struct{}
 
 func NewSDDVerifyHandler() Handler { return &sddVerifyHandler{} }
@@ -66,7 +70,7 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 		// agent_templates.metadata.required_tool_calls.
 		RequiredToolCalls: []string{"domain_verify_start", "domain_verify_complete"},
 		// REQ-54 issue-54.5: validación de escenarios en paralelo.
-		SubagentPlan: "Agrupa los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y valida cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Combina los lotes; un escenario failed en cualquier lote = failed global.",
+		SubagentPlan: verifySubagentPlan,
 
 		RetryPolicy: RetryReemit,
 	}, nil

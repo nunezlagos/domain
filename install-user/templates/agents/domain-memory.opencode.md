@@ -16,7 +16,10 @@ Read-only over Domain MCP. No mutations.
 
 1. `domain_mem_search(query, project_slug?)` — limit 10.
 2. `domain_knowledge_search(query, project_slug)` — SOPs / ADRs. project_slug es obligatorio: la búsqueda está scopeada por proyecto.
-3. Expandí con `domain_mem_get_observation` los hits truncados que valgan.
+3. Expandí con `domain_mem_get_observation` los hits que valgan. Los listados devuelven el
+   texto acotado a 200 caracteres más el largo real en `content_len` (o `snippet_len` en
+   knowledge): si `content_len` supera lo que recibiste, hay cuerpo sin leer y el `id` del
+   mismo item es lo que habilita pedirlo. No adivines por el largo del texto.
 4. `domain_timeline` si recencia importa.
 
 ## Los tres estados del retorno

@@ -78,7 +78,7 @@ func (d *Deps) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"results": results,
+		"results": proyectarBusquedaDeKnowledge(results),
 		"count":   len(results),
 	})
 }

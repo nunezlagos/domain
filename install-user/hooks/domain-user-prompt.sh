@@ -217,8 +217,13 @@ for c in d.get("result", {}).get("content", []):
     rows = body.get("results") or body.get("observations") or []
     for r in rows[:3]:
         txt = (r.get("content") or r.get("Content") or r.get("text") or "").strip().replace("\n", " ")
-        if txt:
-            items.append(txt[:160])
+        if not txt:
+            continue
+        # DOMAINSERV-161: content llega acotado a 200 con el marcador del helper truncate.
+        # El corte a 160 de acá suele comérselo, pero no cuando la observación mide entre
+        # 160 y 200: ahí quedaría "...[truncated]" pegado al final del texto inyectado.
+        txt = txt.replace(" ...[truncated]", "").replace("...[truncated]", "")
+        items.append(txt[:160].rstrip())
     break
 if items:
     print("domain: memorias relevantes a este prompt (por relevancia, no recencia) — "

@@ -102,19 +102,7 @@ func (d *Deps) handleMemSearch(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}
-	out := make([]map[string]any, 0, len(results))
-	for _, r := range results {
-		out = append(out, map[string]any{
-			"id":               r.ID.String(),
-			"content":          r.Content,
-			"observation_type": r.ObservationType,
-			"tags":             r.Tags,
-			"score":            r.Score,
-			"bm25_rank":        r.BM25Rank,
-			"vector_rank":      r.VectorRank,
-			"created_at":       r.CreatedAt,
-		})
-	}
+	out := proyectarBusquedaDeObservaciones(results)
 	return toolResultJSON(map[string]any{
 		"results": out,
 		"count":   len(out),
@@ -143,16 +131,7 @@ func (d *Deps) handleMemContext(ctx context.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
-	out := make([]map[string]any, 0, len(obs))
-	for _, o := range obs {
-		out = append(out, map[string]any{
-			"id":               o.ID.String(),
-			"content":          o.Content,
-			"observation_type": o.ObservationType,
-			"tags":             o.Tags,
-			"created_at":       o.CreatedAt,
-		})
-	}
+	out := proyectarContextoDeObservaciones(obs)
 	return toolResultJSON(map[string]any{
 		"project_slug": projectSlug,
 		"results":      out,

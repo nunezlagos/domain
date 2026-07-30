@@ -1,6 +1,8 @@
 package seeds
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,4 +58,34 @@ func TestAgentTemplates_FanOutDePolicyGet_ExigeBumpDeVersion(t *testing.T) {
 		"el prompt debe declarar que un compliant con policies_checked en 0 se rechaza")
 	require.GreaterOrEqual(t, agentTemplatesSeedVersion, 21,
 		"el fan-out en el prompt seedeado exige bump a 21: sin él el seeder se skippea y el prompt viejo sigue en BD")
+}
+
+
+// MUST-7 de DOMAINSERV-161: mem_search pasa a devolver 200 caracteres, así que la policy
+// que re-hidrata tras compactación tiene que pedir la observación completa por id. Sin
+// esto el agente lee el 4% del resumen y cree que retomó el hilo.
+// Lee el fuente porque el catálogo vive inline en Run(), igual que voseo_guard_test.
+func TestPlatformPolicies_ContextPreservation_ReHidrataConFanOut(t *testing.T) {
+	b, err := os.ReadFile("platform_policies_seeder.go")
+	require.NoError(t, err)
+	fuente := string(b)
+
+	idx := strings.Index(fuente, `Slug:       "context-preservation"`)
+	require.Greater(t, idx, 0, "context-preservation debe estar en el catálogo")
+	// El corte va en la entrada SIGUIENTE del catálogo. Dos trampas: SourceFile precede a
+	// BodyMD, así que cortar ahí dejaría el body afuera; y buscar el marcador desde la
+	// posición 0 encuentra el propio Slug de esta entrada, con lo cual no cortaría nada y
+	// el test terminaría buscando en el resto del archivo — verde por la razón equivocada.
+	const marcador = `Slug:       "`
+	bloque := fuente[idx+len(marcador):]
+	fin := strings.Index(bloque, marcador)
+	require.Greater(t, fin, 0, "no se pudo acotar la ventana a la entrada de context-preservation")
+	bloque = bloque[:fin]
+
+	require.Contains(t, bloque, "domain_mem_get_observation",
+		"la policy debe ordenar el fan-out por id: el snippet de 200 no alcanza para re-hidratar")
+	require.Contains(t, bloque, "content_len",
+		"la policy debe nombrar el campo que revela que hay cuerpo sin leer")
+	require.GreaterOrEqual(t, (&PlatformPoliciesSeeder{}).Version(), 26,
+		"editar el body de una platform policy exige bump o el seeder se skippea y la versión vieja sigue en BD")
 }

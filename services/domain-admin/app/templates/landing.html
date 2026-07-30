@@ -13,11 +13,17 @@
   <link rel="manifest" href="{% static 'demo/brand/site.webmanifest' %}">
   <script>
     (function () {
+      var guardado = null;
       try {
-        if (window.localStorage.getItem('domain-theme') === 'dark') {
-          document.documentElement.classList.add('dark');
-        }
+        guardado = window.localStorage.getItem('domain-theme');
       } catch (error) {}
+      // sin preferencia propia manda el sistema; con preferencia, gana la propia
+      var oscuro = guardado === null
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : guardado === 'dark';
+      if (oscuro) {
+        document.documentElement.classList.add('dark');
+      }
     })();
   </script>
   <link rel="stylesheet" href="{% static 'vendor/fontawesome/css/all.min.css' %}">

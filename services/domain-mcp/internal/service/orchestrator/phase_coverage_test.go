@@ -43,7 +43,9 @@ func TestPhaseContracts_MatchCanonicalTable(t *testing.T) {
 		"sdd-verify":  {"domain_verify_start", "domain_verify_complete"},
 		"sdd-judge":   nil, // teeth via shape del Output (issue-54.5)
 		"sdd-4r":      nil, // teeth via shape del Output (lens_reports>=4); controller con autoridad
-		"sdd-review":  {"domain_project_policy_list", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
+		// domain_policy_get se sumó en DOMAINSERV-161: project_policy_list dejó de devolver
+		// body_md, así que sin el fan-out por slug el gate evaluaría contra nombres vacíos
+		"sdd-review":  {"domain_project_policy_list", "domain_policy_get", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
 		"sdd-archive": {"domain_openspec_status"},
 		"sdd-onboard": {"domain_knowledge_save"},
 	}

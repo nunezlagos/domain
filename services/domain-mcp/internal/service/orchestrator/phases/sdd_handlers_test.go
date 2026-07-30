@@ -206,9 +206,11 @@ func TestSDDJudgeHandler_Validate_RequiresSabotageRecords(t *testing.T) {
 func TestSDDReviewHandler_Validate_GatesOnVerdict(t *testing.T) {
 	t.Parallel()
 	h := NewSDDReviewHandler()
-	// compliant → pasa
+	// compliant → pasa. DOMAINSERV-161 sumó policies_checked al contrato: un compliant
+	// con cero policies evaluadas dejó de pasar, así que el fixture ahora lo declara.
+	// Ese caso tiene cobertura propia en sdd_review_gate_test.go.
 	require.NoError(t, h.Validate(context.Background(), nil, ClientResult{
-		Output: map[string]any{"verdict": "compliant"},
+		Output: map[string]any{"verdict": "compliant", "policies_checked": 11},
 	}))
 	// violations_found → bloquea el flow (error sentinela)
 	err := h.Validate(context.Background(), nil, ClientResult{

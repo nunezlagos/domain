@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 25 } // 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 26 } // 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -472,7 +472,11 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"   → últimas 10 observaciones/decisiones del proyecto\n\n" +
 				"### Si el agente nota pérdida de hilo (post-compact)\n" +
 				"3. `domain_mem_search(\"session_summary\", limit=3)`\n" +
-				"   → último resumen de sesión guardado\n" +
+				"   → devuelve id + los primeros 200 caracteres del resumen, más `content_len`\n" +
+				"     con el largo real (DOMAINSERV-161). Ese snippet NO alcanza para re-hidratar.\n" +
+				"3b. `domain_mem_get_observation(id)` con el id del hit que corresponda\n" +
+				"   → el resumen COMPLETO. Sin este paso quedan solo 200 caracteres y el hilo\n" +
+				"     parece retomado sin estarlo, que es peor que saber que falta contexto.\n" +
 				"4. `domain_flow_status(flow_run_id)` si hay active_flow_run\n" +
 				"   → retomar exactamente donde quedó\n" +
 				"5. `domain_verify_pending(project_slug)`\n" +

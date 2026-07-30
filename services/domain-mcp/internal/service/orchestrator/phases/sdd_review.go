@@ -50,6 +50,10 @@ func (h *sddReviewHandler) Build(_ context.Context, in Input) (*Output, error) {
 	fmt.Fprintln(&b, "   domain_policy_list. Para skills: domain_project_skill_list(project_slug,")
 	fmt.Fprintln(&b, "   include_globals=true). El resolver jerárquico (project → platform) ya")
 	fmt.Fprintln(&b, "   resuelve override_platform: respeta la regla efectiva.")
+	fmt.Fprintln(&b, "   Esos listados devuelven slug, name, kind y override_platform, pero NO el")
+	fmt.Fprintln(&b, "   cuerpo de la regla (DOMAINSERV-161). Traé el body_md de CADA slug aplicable")
+	fmt.Fprintln(&b, "   con domain_policy_get(slug) — en paralelo, un fan-out por slug. Sin ese")
+	fmt.Fprintln(&b, "   cuerpo no estás revisando nada: estás leyendo nombres.")
 	fmt.Fprintln(&b, "2. Abre un checkpoint: domain_verify_start(project_slug, kind='policy_review',")
 	fmt.Fprintln(&b, "   context=<issue>, items=[1 item por policy/skill evaluada, label=slug]).")
 	fmt.Fprintln(&b, "3. Contrasta CADA regla contra el diff de los archivos modificados. Reporta")
@@ -76,7 +80,7 @@ func (h *sddReviewHandler) Build(_ context.Context, in Input) (*Output, error) {
 		SkillThreshold: 0,
 		// REQ-54 issue-54.6: el prompt de review YA instruía estas tools en prosa
 		// (causa raíz de tools huérfanas); ahora son contrato verificable.
-		RequiredToolCalls: []string{"domain_project_policy_list", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
+		RequiredToolCalls: []string{"domain_project_policy_list", "domain_policy_get", "domain_verify_start", "domain_verify_update_item", "domain_verify_complete"},
 		RetryPolicy:    RetryReemit, // read-only, idempotente
 	}, nil
 }
@@ -88,11 +92,32 @@ func (h *sddReviewHandler) Validate(_ context.Context, _ *Output, result ClientR
 	verdict, _ := result.Output["verdict"].(string)
 	switch verdict {
 	case "compliant":
+		// Un 'compliant' con cero policies evaluadas no es un review: es un sello de goma.
+		// Antes de DOMAINSERV-161 esto pasaba, y con los listados proyectados sin body_md
+		// habría pasado siempre — el modo de falla es indistinguible del éxito.
+		if contadas := contarEnteroDelOutput(result.Output, "policies_checked"); contadas <= 0 {
+			return errors.New("sdd-review: verdict 'compliant' con policies_checked en cero o ausente; el review tiene que traer el body_md de cada slug con domain_policy_get y evaluarlo")
+		}
 		return nil
 	case "violations_found":
 		return ErrPolicyReviewFailed
 	default:
 		return errors.New("sdd-review: campo 'verdict' requerido (compliant | violations_found)")
+	}
+}
+
+// json.Unmarshal entrega los números como float64, pero un output construido en Go llega
+// como int: aceptar solo uno de los dos rechazaría reviews legítimos
+func contarEnteroDelOutput(out map[string]any, clave string) int {
+	switch v := out[clave].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
 	}
 }
 

@@ -847,6 +847,13 @@ proyecto. Eres read-only: NO modificas código.
    - domain_project_policy_list(project_slug) + domain_policy_list
    - domain_project_skill_list(project_slug, include_globals=true)
    Respeta override_platform: vale la regla efectiva, no la duplicada.
+1b. Obtén el CUERPO de cada regla aplicable con domain_policy_get(slug), en
+   paralelo — un fan-out por slug. Los listados del paso 1 devuelven slug,
+   name, kind y override_platform pero NO el body_md (DOMAINSERV-161).
+   Contrastar contra un listado sin cuerpo no es revisar: es leer nombres, y
+   produce un 'compliant' que no significa nada. Si el cuerpo de una regla no
+   se pudo obtener, ese item va status="skipped" con la razón, nunca
+   status="pass".
 2. Abre el checkpoint:
    domain_verify_start(project_slug, kind="policy_review", context=<issue>,
      items=[{label:<policy_or_skill_slug>, status:"pending"}, ...])
@@ -870,6 +877,10 @@ JSON estricto:
   "policies_checked": 0,
   "skills_checked": 0
 }
+
+policies_checked es la cantidad de reglas cuyo cuerpo trajiste y evaluaste
+de verdad. Un verdict="compliant" con policies_checked en 0 lo RECHAZA el
+server: no es un review, es un sello de goma.
 </output_format>
 
 <reglas>
@@ -1087,7 +1098,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 20 // 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 21 // 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

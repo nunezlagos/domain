@@ -42,7 +42,9 @@ func (h *sddSpecHandler) Build(_ context.Context, in Input) (*Output, error) {
 	fmt.Fprintln(&b, "pregunta a la vez. NO uses prosa plana ni ejecutes esta fase en un subagente")
 	fmt.Fprintln(&b, "(AskUserQuestion no está disponible en subagentes). REQ-55 issue-55.1.")
 	fmt.Fprintln(&b, "No especules requisitos: el spec fija el contrato (REQ-54 issue-54.7).")
-	fmt.Fprintln(&b, "Construye la spec issue.md siguiendo .claude/rules/sdd.md.")
+	fmt.Fprintln(&b, "Construye la spec issue.md siguiendo la policy openspec-spec-format")
+	fmt.Fprintln(&b, "(domain_policy_get): RFC 2119, máximo 7 requisitos MUST, y cada MUST con al")
+	fmt.Fprintln(&b, "menos un escenario Given/When/Then.")
 	return &Output{
 		AgentTemplateSlug: "sdd-spec",
 		SystemPrompt:      "",

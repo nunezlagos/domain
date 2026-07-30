@@ -330,7 +330,9 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 				if oc != nil {
 					oc(ctx, toolName, "cache_hit", "", "", time.Since(start).Seconds())
 				}
-				return decodeCachedResult(cached), nil
+				// también en el hit: una entrada escrita antes de que existiera el guard
+				// seguiría sirviendo el payload gordo hasta que expire su TTL
+				return acotarResultado(toolName, decodeCachedResult(cached), r.limiteDeResultado()), nil
 			}
 			r.mu.Lock()
 			m := r.metricsOnCacheMiss
@@ -342,7 +344,7 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 
 		result, err := execWithRetry(ctx, b, handler, req)
 		// antes de cachear: si no, el payload gordo queda viviendo en el cache
-		result = acotarResultado(result, r.limiteDeResultado())
+		result = acotarResultado(toolName, result, r.limiteDeResultado())
 
 		if cb != nil {
 			cooldown := b.CBCooldown

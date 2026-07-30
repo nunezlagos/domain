@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -32,14 +33,10 @@ func (r *ResilientWrapper) limiteDeResultado() int {
 	return r.maxResultBytes
 }
 
-// acotarResultado reemplaza un resultado que excede el límite por un envelope JSON
-// válido. El corte se aplica al VALOR y el marshal viene después: así un carácter
-// multibyte partido en el borde lo normaliza el encoder. Cortar la cadena ya serializada
-// dejaría un escape a medias, y el hook SessionStart parsea con json.loads — un JSON
-// inválido lo degrada a skpol=degraded y dispara la re-llamada de project_skill_list y
-// project_policy_list, que es la regresión de 28.206 tokens que eliminó DOMAINSERV-177.
-// O sea: un guard mal hecho acá empeora el problema que viene a resolver.
-func acotarResultado(result *mcp.CallToolResult, maxBytes int) *mcp.CallToolResult {
+// el corte va sobre el VALOR y el marshal después, así el encoder normaliza un multibyte
+// partido en el borde; cortar la cadena ya serializada deja un escape a medias y el
+// json.loads del hook SessionStart falla, degradando a skpol=degraded (DOMAINSERV-177)
+func acotarResultado(toolName string, result *mcp.CallToolResult, maxBytes int) *mcp.CallToolResult {
 	if result == nil || maxBytes <= 0 {
 		return result
 	}
@@ -47,6 +44,16 @@ func acotarResultado(result *mcp.CallToolResult, maxBytes int) *mcp.CallToolResu
 	if len(texto) <= maxBytes {
 		return result
 	}
+
+	// El envelope preserva IsError, así que un truncado sobre un resultado exitoso sigue
+	// contando como status ok en las métricas: sin esta línea, recortar un payload en
+	// producción es indistinguible de una llamada normal. Se loguea el largo y NUNCA el
+	// contenido, que es key bloqueada por la policy secrets-redaction.
+	slog.Warn("tool result truncado por exceder el límite de bytes",
+		"tool", toolName,
+		"original_bytes", len(texto),
+		"max_bytes", maxBytes,
+	)
 
 	envelope, err := json.Marshal(map[string]any{
 		"truncated":      true,

@@ -8,13 +8,9 @@ import (
 	skillsvc "nunezlagos/domain/internal/service/skill"
 )
 
-// Mismo idiom que ticketSlim (ver ticket_slim_dto.go), aplicado a los structs que NO
-// declaran tags json: sus keys salen con el nombre de campo Go en PascalCase, así que
-// el tag del campo shadowed tiene que replicar ese nombre exacto o el cuerpo sigue
-// saliendo. Se preserva el naming a propósito (DOMAINSERV-161, ADR-161.1): normalizar a
-// snake_case cambiaría TODAS las keys y no solo el cuerpo.
-// El shadowing depende del nombre del campo en el struct de origen: si se renombra,
-// el cuerpo vuelve al JSON sin error de compilación.
+// mismo idiom que ticketSlim, sobre structs sin tags json: el tag del campo shadowed
+// replica el nombre Go en PascalCase o el cuerpo sigue saliendo (ADR-161.1)
+// si el campo se renombra en el origen, el cuerpo vuelve al JSON sin fallar la compilación
 
 type skillSlim struct {
 	skillsvc.Skill
@@ -22,10 +18,8 @@ type skillSlim struct {
 	ContentLen int
 }
 
-// SearchResult embebe Skill, así que Content queda a profundidad 2 y el shadowing de
-// profundidad 0 lo tapa igual. Se omite en vez de truncar porque una skill se elige por
-// slug y descripción, no por su cuerpo; el snippet acotado solo aplica a las tools cuyo
-// consumidor lee el texto (mem_search, mem_context, knowledge_search).
+// Content queda a profundidad 2 vía Skill embebido, y el shadowing de profundidad 0 gana
+// se omite en vez de truncar: una skill se elige por slug, no por su cuerpo
 type skillSearchSlim struct {
 	skillsvc.SearchResult
 	Content    campoOmitido `json:"Content,omitempty"`

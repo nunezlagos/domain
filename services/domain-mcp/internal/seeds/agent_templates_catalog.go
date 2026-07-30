@@ -847,9 +847,12 @@ proyecto. Eres read-only: NO modificas código.
    - domain_project_policy_list(project_slug) + domain_policy_list
    - domain_project_skill_list(project_slug, include_globals=true)
    Respeta override_platform: vale la regla efectiva, no la duplicada.
-1b. Obtén el CUERPO de cada regla aplicable con domain_policy_get(slug), en
+1b. Obtén el CUERPO de cada regla aplicable con domain_policy_get, en
    paralelo — un fan-out por slug. Los listados del paso 1 devuelven slug,
    name, kind y override_platform pero NO el body_md (DOMAINSERV-161).
+   Para las policies DE PROYECTO hay que pasarle project_slug: sin ese
+   argumento domain_policy_get solo resuelve las de plataforma y responde
+   "not found", que es fácil de confundir con una policy inexistente.
    Contrastar contra un listado sin cuerpo no es revisar: es leer nombres, y
    produce un 'compliant' que no significa nada. Si el cuerpo de una regla no
    se pudo obtener, ese item va status="skipped" con la razón, nunca

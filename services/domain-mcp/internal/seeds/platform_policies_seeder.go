@@ -526,7 +526,7 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 		},
 		{
 			Slug:       "delegar-lecturas-multiples",
-			Name:       "Lecturas múltiples van a subagentes, salvo que el detalle sea el entregable",
+			Name:       "Delegación a subagentes: lecturas múltiples, y escritura solo para ejecutar",
 			Kind:       "convention",
 			SourceFile: "AGENTS.md",
 			BodyMD: "Cuando resolver algo exige VARIAS llamadas de lectura, delegar en un subagente en vez\n" +
@@ -537,7 +537,33 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"en el hilo. Un resumen no deja ver que un ticket se declara bloqueado mientras otro\n" +
 				"ya lo desbloqueó. A veces el detalle ES el entregable.\n\n" +
 				"Al delegar: pedir referencias `file:line` concretas y prohibir salida cruda de tools.\n" +
-				"El retorno debe distinguir vacío real, degradación y truncamiento.",
+				"El retorno debe distinguir vacío real, degradación y truncamiento.\n\n" +
+				"## Escritura delegada\n\n" +
+				"La regla que decide: **se delega escritura cuando el agente EJECUTA una decisión ya\n" +
+				"tomada; NO cuando la toma.**\n\n" +
+				"PERMITIDO — transformación mecánica de un input voluminoso. El orquestador dice qué\n" +
+				"documento se ingesta y con qué scope; el agente lee, llama la tool y devuelve solo el\n" +
+				"ack (ids + conteo), nunca el contenido. Ahí la delegación convierte 20k tokens de\n" +
+				"contexto en ~80.\n\n" +
+				"PROHIBIDO — que el agente decida qué merece persistirse. Un efímero de tier bajo que\n" +
+				"leyó ocho archivos no tiene el historial de la sesión: sus criterios de relevancia son\n" +
+				"ciegos por construcción. Precedente medido en este repo: el code graph client-side se\n" +
+				"retiró con 45-94% de nodos basura, y en memoria es peor, porque el recall es híbrido y\n" +
+				"el ruido COMPITE POR EL RANKING.\n\n" +
+				"La vía para no perder un hallazgo sin darle la tool: una sección `## Candidato a\n" +
+				"memoria` en el contrato de retorno. Cuesta 20-40 tokens y deja la decisión en quien\n" +
+				"tiene contexto. Un candidato NO se persiste automáticamente: el orquestador lo evalúa\n" +
+				"contra la memoria existente y funde antes de crear un duplicado.\n\n" +
+				"Al delegar escritura, allowlist mínima y explícita: solo la tool de escritura que la\n" +
+				"tarea necesita, más lo indispensable para leer. Nunca `mem_save`, `ticket_*`,\n" +
+				"`policy_*`, `Write`, `Edit` ni `Bash` \"por si acaso\". Verificar la allowlist con un\n" +
+				"intento fallido real, no por omisión en la lista.\n\n" +
+				"## Prohibición dura: web y escritura no se combinan\n\n" +
+				"Ningún agente que consuma contenido web puede escribir en memoria ni en knowledge. Una\n" +
+				"página hostil se convierte en instrucción PERSISTENTE, re-inyectada en todas las\n" +
+				"sesiones futuras: prompt-injection con persistencia. Es la única de estas reglas que no\n" +
+				"admite excepción por conveniencia, y queda escrita antes de que exista el primer agente\n" +
+				"web —no después.\n",
 		},
 	}
 

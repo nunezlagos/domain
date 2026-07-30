@@ -108,6 +108,8 @@ type ResilientWrapper struct {
 	metricsOnCall      func(ctx context.Context, tool, status, errCode, errMsg string, durationSeconds float64)
 	metricsOnCacheHit  func()
 	metricsOnCacheMiss func()
+
+	maxResultBytes int // ver result_size_guard.go
 }
 
 // CacheStore abstrae el LRU (interface para poder mockear en tests).
@@ -125,9 +127,10 @@ func NewResilientWrapper(defaults ToolBudget) *ResilientWrapper {
 		cbs:         map[string]*cbState{},
 		budgets:     map[string]ToolBudget{},
 		defaults:    defaults,
-		now:         time.Now,
-		cacheTTLs:   map[string]time.Duration{},
-		invalidates: map[string]bool{},
+		now:            time.Now,
+		cacheTTLs:      map[string]time.Duration{},
+		invalidates:    map[string]bool{},
+		maxResultBytes: maxResultBytesPorDefecto,
 	}
 }
 
@@ -338,6 +341,8 @@ func (r *ResilientWrapper) Wrap(toolName string, handler mcpgo.ToolHandlerFunc) 
 		}
 
 		result, err := execWithRetry(ctx, b, handler, req)
+		// antes de cachear: si no, el payload gordo queda viviendo en el cache
+		result = acotarResultado(result, r.limiteDeResultado())
 
 		if cb != nil {
 			cooldown := b.CBCooldown

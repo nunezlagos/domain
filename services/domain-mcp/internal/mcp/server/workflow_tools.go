@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -69,12 +68,11 @@ func (h *workflowHandlers) handleWorkflowImport(ctx context.Context, req mcp.Cal
 		if err != nil {
 			return mcp.NewToolResultError("scan: " + err.Error()), nil
 		}
-		body, _ := json.MarshalIndent(map[string]any{
+		return toolResultJSON(map[string]any{
 			"dry_run":  true,
 			"detected": files,
 			"count":    len(files),
-		}, "", "  ")
-		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+		})
 	}
 
 	rep, err := h.workflow.Import(ctx, workflowimport.ImportInput{
@@ -85,8 +83,7 @@ func (h *workflowHandlers) handleWorkflowImport(ctx context.Context, req mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError("import: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(rep, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(rep)
 }
 
 func (h *workflowHandlers) handleWorkflowList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -112,8 +109,7 @@ func (h *workflowHandlers) handleWorkflowList(ctx context.Context, req mcp.CallT
 			"created_at":   f.CreatedAt,
 		})
 	}
-	body, _ := json.MarshalIndent(lite, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(lite)
 }
 
 func (h *workflowHandlers) handleWorkflowRestore(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -128,10 +124,9 @@ func (h *workflowHandlers) handleWorkflowRestore(ctx context.Context, req mcp.Ca
 	if err := h.workflow.Restore(ctx, nil, relPath, root); err != nil {
 		return mcp.NewToolResultError("restore: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"restored": true, "rel_path": relPath,
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
 func registerWorkflowTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {

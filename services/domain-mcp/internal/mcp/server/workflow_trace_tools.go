@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,10 +86,9 @@ func (h *workflowTraceHandlers) handleWorkflowTrace(ctx context.Context, req mcp
 	if err != nil {
 		return mcp.NewToolResultError("get workflow: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"workflow": workflowRowToMap(wf),
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
 func (h *workflowTraceHandlers) handleWorkflowRecent(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -127,12 +125,11 @@ func (h *workflowTraceHandlers) handleWorkflowRecent(ctx context.Context, req mc
 		}
 		out = append(out, workflowRowToMap(w))
 	}
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"workflows": out,
 		"count":     len(out),
 		"since":     sinceAt,
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
 func (h *workflowTraceHandlers) handleWorkflowSlowest(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -169,12 +166,11 @@ func (h *workflowTraceHandlers) handleWorkflowSlowest(ctx context.Context, req m
 		}
 		out = append(out, workflowRowToMap(w))
 	}
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"workflows": out,
 		"count":     len(out),
 		"since":     sinceAt,
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
 func workflowRowToMap(w observability.WorkflowRow) map[string]any {

@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -87,10 +86,7 @@ func (h *promptHandlers) handlePromptRoute(ctx context.Context, req mcp.CallTool
 		return mcp.NewToolResultError(fmt.Sprintf("route: %v", err)), nil
 	}
 
-	body, _ := json.MarshalIndent(resp, "", "  ")
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{mcp.NewTextContent(string(body))},
-	}, nil
+	return toolResultJSON(resp)
 }
 
 // registerPromptTools agrega tools del prompt router al listado.

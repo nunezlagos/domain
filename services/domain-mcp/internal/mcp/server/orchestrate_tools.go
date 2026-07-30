@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -181,8 +180,7 @@ func (h *orchestrateHandlers) handleOrchestrate(ctx context.Context, req mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError("orchestrate: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(trimOrchestrateForTransport(res), "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(trimOrchestrateForTransport(res))
 }
 
 // trimOrchestrateForTransport reduce el payload de OrchestrateResult para no
@@ -287,8 +285,7 @@ func (h *orchestrateHandlers) handleOrchestratePhaseResult(ctx context.Context, 
 	if err != nil {
 		return mcp.NewToolResultError("phase_result: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(res, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(res)
 }
 
 func (h *orchestrateHandlers) handleOrchestrateConfirm(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -312,8 +309,7 @@ func (h *orchestrateHandlers) handleOrchestrateConfirm(ctx context.Context, req 
 	if err != nil {
 		return mcp.NewToolResultError("confirm: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(res, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(res)
 }
 
 func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -335,8 +331,7 @@ func (h *orchestrateHandlers) handleFlowStatus(ctx context.Context, req mcp.Call
 	if err != nil {
 		return mcp.NewToolResultError("flow_status: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(status, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(status)
 }
 
 func toolFlowGrantToken() mcp.Tool {
@@ -413,18 +408,18 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
 	}
 
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"token":       token,
 		"flow_run_id": flowRunID,
 		"session_id":  sessionID,
 		"expires_in":  int(flowsvc.FlowTokenTTL.Seconds()),
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
+// devuelve solo el result porque los callers lo usan como valor, no como par (res, err)
 func flowInvalidResult(reason string) *mcp.CallToolResult {
-	body, _ := json.MarshalIndent(map[string]any{"valid": false, "reason": reason}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}
+	res, _ := toolResultJSON(map[string]any{"valid": false, "reason": reason})
+	return res
 }
 
 func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -478,23 +473,21 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 	}
 
 	if !active {
-		body, _ := json.MarshalIndent(map[string]any{
-			"valid":        false,
-			"reason":       "flow_inactive",
-			"flow_run_id":  payload.FlowRunID,
-			"flow_status":  flowStatus,
-		}, "", "  ")
-		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+		return toolResultJSON(map[string]any{
+			"valid":       false,
+			"reason":      "flow_inactive",
+			"flow_run_id": payload.FlowRunID,
+			"flow_status": flowStatus,
+		})
 	}
 
-	body, _ := json.MarshalIndent(map[string]any{
+	return toolResultJSON(map[string]any{
 		"valid":         true,
 		"flow_run_id":   payload.FlowRunID,
 		"session_id":    payload.SessionID,
 		"flow_status":   flowStatus,
 		"allowed_paths": payload.AllowedPaths,
-	}, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	})
 }
 
 func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -517,8 +510,7 @@ func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.Call
 	if err != nil {
 		return mcp.NewToolResultError("flow_cancel: " + err.Error()), nil
 	}
-	body, _ := json.MarshalIndent(status, "", "  ")
-	return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(string(body))}}, nil
+	return toolResultJSON(status)
 }
 
 // registerOrchestrateTools devuelve los 3 ServerTool del orquestador.

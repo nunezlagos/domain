@@ -17,7 +17,7 @@ import (
 // Knowledge.Save + Projects.GetBySlug (patrón de handleKnowledgeSave) sin acoplar
 // el servicio de attachments.
 func (d *Deps) handleAttachmentIndex(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if d.Principal == nil || d.Knowledge == nil {
+	if d.Principal == nil || d.Knowledge == nil || d.Attachments == nil {
 		return mcp.NewToolResultError("knowledge service no configurado"), nil
 	}
 	args := req.GetArguments()
@@ -35,6 +35,19 @@ func (d *Deps) handleAttachmentIndex(ctx context.Context, req mcp.CallToolReques
 	if title == "" {
 		title = "adjunto " + attIDStr
 	}
+	// el adjunto tiene que existir ANTES de escribir el doc: sin esto el attachment_id de
+	// metadata era decorativo y un knowledge_doc podía declarar procedencia de un adjunto
+	// inexistente, o sea trazabilidad falsa (DOMAINSERV-207).
+	//
+	// El mismo error cubre "no existe" y "es de otra organización": bajo el RLS FORCE de
+	// file_attachments el segundo caso se ve igual que el primero, y distinguirlos le
+	// confirmaría a quien llama que ese UUID existe en otra parte.
+	if _, err := d.Attachments.Get(ctx, attID); err != nil {
+		return mcp.NewToolResultError("attachment_id no encontrado"), nil
+	}
+	// el project_slug PUEDE no corresponder a la entidad dueña del adjunto, y es deliberado:
+	// un adjunto cuelga de un ticket o un requirement, no de un proyecto, así que no existe
+	// una relación adjunto→proyecto que validar. Lo que se valida es que ambos existan.
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	userID, _ := uuid.Parse(d.Principal.UserID)
 	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)

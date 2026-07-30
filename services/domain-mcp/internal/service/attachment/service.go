@@ -161,6 +161,25 @@ func (s *Service) GetDownloadURL(ctx context.Context, attachmentID uuid.UUID) (*
 	return &ConfirmResult{Attachment: toAttachment(fa), DownloadURL: dlURL}, nil
 }
 
+// Get devuelve el adjunto sin firmar ninguna URL. Existe porque un consumidor que solo
+// necesita saber si el adjunto existe no debería pagar el efecto secundario de
+// GetDownloadURL, que genera una presigned URL de S3 (DOMAINSERV-207).
+//
+// El scoping por organización lo hace el RLS FORCE de file_attachments (migración 000274):
+// dentro de una transacción con SET LOCAL app.current_org_id, un adjunto de otra org no
+// aparece y esto devuelve ErrNotFound. Sin esa transacción NO hay scoping.
+func (s *Service) Get(ctx context.Context, attachmentID uuid.UUID) (*Attachment, error) {
+	fa, err := s.q(ctx).GetAttachment(ctx, attachmentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get attachment: %w", err)
+	}
+	att := toAttachment(fa)
+	return &att, nil
+}
+
 func (s *Service) ListByEntity(ctx context.Context, entityType, entityIDStr string) ([]Attachment, error) {
 	entityID, err := uuid.Parse(entityIDStr)
 	if err != nil {

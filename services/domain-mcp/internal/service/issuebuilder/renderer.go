@@ -3,6 +3,7 @@ package issuebuilder
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // renderFeaturePreview renderiza los archivos SDD desde answers de mode=feature.
@@ -31,7 +32,7 @@ func renderFeaturePreview(d *Draft, answers map[string]any) (*Preview, error) {
 		"proposal.md": renderProposalMd(suggested, summary, reqParent, effort),
 		"design.md":   renderDesignMd(suggested, summary),
 		"tasks.md":    renderTasksMd(suggested),
-		"state.yaml":  renderStateYaml(),
+		"state.yaml":  renderStateYaml(d.CreatedAt),
 	}
 
 	return &Preview{
@@ -119,6 +120,11 @@ func renderTasksMd(slug string) string {
 `, slug)
 }
 
-func renderStateYaml() string {
-	return "status: proposed\ncreated: 2026-06-09\narchived: ~\n"
+// el state.yaml se versiona en el repo tal cual sale del preview, así que la fecha
+// tiene que ser real; un draft sin CreatedAt se degrada a hoy, nunca al zero value
+func renderStateYaml(creado time.Time) string {
+	if creado.IsZero() {
+		creado = time.Now()
+	}
+	return fmt.Sprintf("status: proposed\ncreated: %s\narchived: ~\n", creado.UTC().Format("2006-01-02"))
 }

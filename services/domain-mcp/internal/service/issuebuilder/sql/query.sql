@@ -43,8 +43,8 @@ SELECT id FROM sdd_requirements WHERE slug = $1;
 -- name: GetDraftProjectID :one
 SELECT project_id FROM issue_drafts WHERE id = $1;
 
--- name: CountIssuesByReqID :one
-SELECT COUNT(*)::int FROM issues WHERE req_id = $1;
+-- name: ListIssueSlugsByReqID :many
+SELECT slug FROM issues WHERE req_id = $1;
 
 -- name: AbandonDraft :exec
 UPDATE issue_drafts SET status = $1, updated_at = now() WHERE id = $2;

@@ -81,17 +81,6 @@ func (q *Queries) CommitDraft(ctx context.Context, arg CommitDraftParams) (Commi
 	return i, err
 }
 
-const countIssuesByReqID = `-- name: CountIssuesByReqID :one
-SELECT COUNT(*)::int FROM issues WHERE req_id = $1
-`
-
-func (q *Queries) CountIssuesByReqID(ctx context.Context, reqID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countIssuesByReqID, reqID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const findRequirementBySlug = `-- name: FindRequirementBySlug :one
 SELECT id FROM sdd_requirements WHERE slug = $1
 `
@@ -308,6 +297,30 @@ func (q *Queries) ListDrafts(ctx context.Context, statusFilter *string) ([]ListD
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIssueSlugsByReqID = `-- name: ListIssueSlugsByReqID :many
+SELECT slug FROM issues WHERE req_id = $1
+`
+
+func (q *Queries) ListIssueSlugsByReqID(ctx context.Context, reqID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listIssueSlugsByReqID, reqID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

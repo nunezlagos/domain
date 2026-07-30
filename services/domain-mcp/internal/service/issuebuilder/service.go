@@ -525,11 +525,11 @@ func (s *Service) draftProjectID(ctx context.Context, draftID uuid.UUID) *uuid.U
 }
 
 func (s *Service) nextIssueOrdinal(ctx context.Context, reqID uuid.UUID) (int, error) {
-	count, err := s.q(ctx).CountIssuesByReqID(ctx, reqID)
+	slugs, err := s.q(ctx).ListIssueSlugsByReqID(ctx, reqID)
 	if err != nil {
-		return 0, fmt.Errorf("contar issues del REQ: %w", err)
+		return 0, fmt.Errorf("listar issues del REQ: %w", err)
 	}
-	return int(count) + 1, nil
+	return siguienteOrdinal(slugs), nil
 }
 
 func (s *Service) issueMarkdownFromPreview(d *Draft, answers map[string]any, summary string) string {

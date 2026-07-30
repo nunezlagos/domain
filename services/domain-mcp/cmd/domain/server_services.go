@@ -48,7 +48,6 @@ import (
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
-	"nunezlagos/domain/internal/service/cost"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	"nunezlagos/domain/internal/service/flow"
@@ -117,7 +116,6 @@ type serverServices struct {
 	SkillService           *skillsvc.Service
 	AgentService           *agentsvc.Service
 	BillingService         *billing.Service
-	CostService            *cost.Service
 	OutboundWebhookService *outboundwebhook.Service
 	InboundWebhookService  *webhooksvc.Service
 	OutboundDispatcher     *outboundwebhook.Dispatcher
@@ -248,7 +246,6 @@ func buildServices(
 	s.SkillService = &skillsvc.Service{Pool: pools.App, Audit: s.Recorder, Embedder: s.Embedder}
 	s.AgentService = agentsvc.NewService(pools.App, s.Recorder, nil)
 	s.BillingService = &billing.Service{Pool: pools.App}
-	s.CostService = &cost.Service{Pool: pools.App}
 
 	if mk := os.Getenv("DOMAIN_MASTER_KEY"); mk != "" {
 		c, err := crypto.LoadFromBase64(mk)

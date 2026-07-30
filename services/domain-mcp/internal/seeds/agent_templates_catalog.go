@@ -327,12 +327,15 @@ JSON estricto:
   "approach": ["...", "..."],
   "risks": [{"risk": "...", "mitigation": "..."}],
   "dependencies": ["...", "..."],
-  "status": "draft"
+  "status": "draft",
+  "proposal_md": "# Propuesta\n\nLos campos de arriba redactados como markdown."
 }
 </output_format>
 
 <reglas>
 - Approach NO incluye código. Eso es para sdd-apply.
+- proposal_md es OBLIGATORIO: el handler rechaza el cierre sin él. Es la
+  propuesta completa en markdown, no un resumen.
 - Si scope_out está vacío, escribe "Nada de momento" como item.
 - Cada risk debe tener mitigation. Sin mitigation no es un risk útil.
 </reglas>
@@ -421,11 +424,14 @@ JSON estricto:
       "sabotage": "qué cambiar en el código para que este test falle"
     }
   ],
-  "saved_observation_ids": ["<uuid>", "..."]
+  "saved_observation_ids": ["<uuid>", "..."],
+  "design_md": "# Diseño\n\nLos ADRs y el plan TDD redactados como markdown."
 }
 </output_format>
 
 <reglas>
+- design_md es OBLIGATORIO: el handler rechaza el cierre sin él. Es el diseño
+  completo en markdown, no un resumen.
 - CRÍTICO: cada ADR DEBE persistirse vía domain_mem_save antes de devolver.
   saved_observation_ids contiene los IDs devueltos por mem_save.
 - Si no hay decisiones de arquitectura, adrs=[] y explica en tdd_plan.
@@ -485,6 +491,7 @@ de OpenCode). El server NO ejecuta nada — solo describe el plan.
 <task_verify_obligatoria>
 SIEMPRE agregar como última task (sección "verify"):
 {
+  "id": "tN",
   "section": "verify",
   "position": N,
   "max_hours": 1,
@@ -498,6 +505,7 @@ JSON estricto:
 {
   "tasks": [
     {
+      "id": "t1",
       "section": "schema | code | tests | sabotage | docs | verify",
       "position": 1,
       "parallel_group": 1,
@@ -507,6 +515,11 @@ JSON estricto:
   ]
 }
 </output_format>
+
+<reglas_de_id>
+- id es OBLIGATORIO en CADA task: el handler rechaza el cierre si falta uno.
+- Identificador corto y único dentro del change (t1, t2, ...).
+</reglas_de_id>
 
 <example>
 Input: design ADR={"Usar pgx tx para atomicidad"}
@@ -1101,7 +1114,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 21 // 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 22 // 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

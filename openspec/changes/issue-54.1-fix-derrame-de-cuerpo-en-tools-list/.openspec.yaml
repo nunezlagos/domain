@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 3a82ef2e-fe9e-46d6-ab7a-10a34176301c
+  issue_slug: issue-54.1-fix-derrame-de-cuerpo-en-tools-list
+  req: REQ-54
+  status: proposed
+  priority: high
+  proposal_version: 1
+  design_version: 1
+hashes:
+  "proposal.md": ca3f46ac57ec90ce09d7c97a6c3bd33bd6fa127d54a618b5a8ee15d70acb7b9c
+  "design.md": f3dac0949fa314108a1e3b56a3cda9ef592dba4a80d7e684efe93e5b6b9562fd
+  "tasks.md": 64815a4bdf05965fb63cae369c60e9c650b873d5661d26f45f930de9eb5f04a0
+  "specs/issue-54.1-fix-derrame-de-cuerpo-en-tools-list/spec.md": 143aa3fb8c8f761b5698b6e86d360e8edf738d3d6466a64547d32ffbb0b5998b

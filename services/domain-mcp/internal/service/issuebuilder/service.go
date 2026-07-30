@@ -467,7 +467,9 @@ func (s *Service) materialize(ctx context.Context, d *Draft) (*uuid.UUID, string
 
 	reqNum := reqNumberFromSlug(reqParent)
 	if reqNum == "" {
-		return nil, "", fmt.Errorf("req_parent %q invalido: se espera formato REQ-NN", reqParent)
+		return nil, "", fmt.Errorf("req_parent %q invalido: se espera formato REQ-NN. "+
+			"El draft ya esta en finished y _answer no admite correccion: abandonalo con "+
+			"domain_issue_create_abandon y recrealo", reqParent)
 	}
 
 	reqID, err := s.resolveOrCreateReq(ctx, d, reqParent)

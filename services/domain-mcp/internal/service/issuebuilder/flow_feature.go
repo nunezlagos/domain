@@ -41,6 +41,19 @@ var slugValidator = func(a any) error {
 	return nil
 }
 
+// usa el MISMO regex que materialize: un valor que solo el commit rechaza deja el
+// draft en finished, y desde ahí _answer ya no admite corrección (DOMAINSERV-210)
+var reqParentValidator = func(a any) error {
+	s, ok := a.(string)
+	if !ok || s == "" {
+		return fmt.Errorf("string required")
+	}
+	if reqNumberFromSlug(s) == "" {
+		return fmt.Errorf("se espera formato REQ-NN (ej REQ-03-memory-system), recibido %q", s)
+	}
+	return nil
+}
+
 var featureFlow = []step{
 	{
 		Key:    "change_type",
@@ -76,16 +89,7 @@ var featureFlow = []step{
 	{
 		Key:    "req_parent",
 		Prompt: "¿Bajo qué REQ vive esta issue? (slug, ej REQ-03-memory-system)",
-		Validate: func(a any) error {
-			s, ok := a.(string)
-			if !ok || s == "" {
-				return fmt.Errorf("string required")
-			}
-			if !strings.HasPrefix(s, "REQ-") {
-				return fmt.Errorf("must start with REQ-")
-			}
-			return nil
-		},
+		Validate: reqParentValidator,
 	},
 	{
 		Key:    "effort",

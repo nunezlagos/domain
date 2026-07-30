@@ -399,7 +399,7 @@ func (h *capturedPromptHandlers) handlePromptCapturedList(ctx context.Context, r
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
-		"prompts": list,
+		"prompts": proyectarPromptsCapturadosParaListado(list),
 		"total":   total,
 	})
 }

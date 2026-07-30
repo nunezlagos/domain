@@ -30,7 +30,7 @@ func (d *Deps) handleSkillList(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+	return toolResultJSON(map[string]any{"results": proyectarSkillsParaListado(out), "count": len(out)})
 }
 
 func (d *Deps) handleSkillSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -51,7 +51,7 @@ func (d *Deps) handleSkillSearch(ctx context.Context, req mcp.CallToolRequest) (
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"results": results, "count": len(results)})
+	return toolResultJSON(map[string]any{"results": proyectarSkillSearchParaListado(results), "count": len(results)})
 }
 
 func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

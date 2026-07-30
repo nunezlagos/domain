@@ -282,7 +282,7 @@ func (h *policyHandlers) handleProjectPolicyList(ctx context.Context, req mcp.Ca
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list failed: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"policies": list, "total": len(list)})
+	return toolResultJSON(map[string]any{"policies": proyectarPoliciesParaListado(list), "total": len(list)})
 }
 
 func toolProjectPolicyDelete() mcp.Tool {

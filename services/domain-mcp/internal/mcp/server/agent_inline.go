@@ -143,7 +143,7 @@ func (d *Deps) handleAgentList(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+	return toolResultJSON(map[string]any{"results": proyectarAgentsParaListado(out), "count": len(out)})
 }
 
 func (d *Deps) handleAgentGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

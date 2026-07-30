@@ -25,7 +25,7 @@ func (d *Deps) handleFlowList(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("list: %v", err)), nil
 	}
-	return toolResultJSON(map[string]any{"results": out, "count": len(out)})
+	return toolResultJSON(map[string]any{"results": proyectarFlowsParaListado(out), "count": len(out)})
 }
 
 // runFlowDispatch (issue-35.1 phase 5): la ejecucion de flows desde

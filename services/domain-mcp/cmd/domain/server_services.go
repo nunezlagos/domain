@@ -438,11 +438,12 @@ func buildServices(
 
 	if cfg.S3Bucket != "" {
 		s3c, err := s3client.New(s3client.Config{
-			Endpoint: cfg.S3Endpoint,
-			Region:   cfg.S3Region,
-			Bucket:   cfg.S3Bucket,
-			Key:      cfg.S3AccessKey,
-			Secret:   cfg.S3SecretKey,
+			Endpoint:       cfg.S3Endpoint,
+			PublicEndpoint: cfg.S3PublicEndpoint,
+			Region:         cfg.S3Region,
+			Bucket:         cfg.S3Bucket,
+			Key:            cfg.S3AccessKey,
+			Secret:         cfg.S3SecretKey,
 		})
 		if err != nil {
 			logger.Warn("s3 client init failed; attachments disabled", slog.Any("err", err))
@@ -451,6 +452,7 @@ func buildServices(
 			logger.Info("s3 storage configured",
 				slog.String("bucket", cfg.S3Bucket),
 				slog.String("endpoint", cfg.S3Endpoint),
+				slog.String("public_endpoint", cfg.S3PublicEndpoint),
 			)
 		}
 	} else {

@@ -25,12 +25,15 @@ type Config struct {
 	DatabaseAuthURL     string // app_admin pool — auth/audit lookups (BYPASSRLS).
 	DatabaseReadOnlyURL string // issue-25.9 read replica DSN (opcional, default vacío)
 
-	S3Endpoint     string
-	S3Region       string
-	S3Bucket       string
-	S3AccessKey    string
-	S3SecretKey    string
-	S3UsePathStyle bool
+	S3Endpoint string
+	// S3PublicEndpoint es el endpoint que alcanza el CLIENTE MCP: las URLs
+	// presignadas se firman contra él. Vacío ⇒ se usa S3Endpoint.
+	S3PublicEndpoint string
+	S3Region         string
+	S3Bucket         string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3UsePathStyle   bool
 
 	SMTPHost     string
 	SMTPPort     int
@@ -147,12 +150,13 @@ func Load() (*Config, error) {
 		DatabaseAuthURL:     getEnv("DOMAIN_DATABASE_AUTH_URL", ""),
 		DatabaseReadOnlyURL: getEnv("DOMAIN_DATABASE_READONLY_URL", ""),
 
-		S3Endpoint:     getEnv("DOMAIN_S3_ENDPOINT", ""),
-		S3Region:       getEnv("DOMAIN_S3_REGION", "us-east-1"),
-		S3Bucket:       getEnv("DOMAIN_S3_BUCKET", ""),
-		S3AccessKey:    getEnv("DOMAIN_S3_ACCESS_KEY", ""),
-		S3SecretKey:    getEnv("DOMAIN_S3_SECRET_KEY", ""),
-		S3UsePathStyle: getEnvBool("DOMAIN_S3_USE_PATH_STYLE", true),
+		S3Endpoint:       getEnv("DOMAIN_S3_ENDPOINT", ""),
+		S3PublicEndpoint: getEnv("DOMAIN_S3_PUBLIC_ENDPOINT", ""),
+		S3Region:         getEnv("DOMAIN_S3_REGION", "us-east-1"),
+		S3Bucket:         getEnv("DOMAIN_S3_BUCKET", ""),
+		S3AccessKey:      getEnv("DOMAIN_S3_ACCESS_KEY", ""),
+		S3SecretKey:      getEnv("DOMAIN_S3_SECRET_KEY", ""),
+		S3UsePathStyle:   getEnvBool("DOMAIN_S3_USE_PATH_STYLE", true),
 
 		SMTPHost:     getEnv("DOMAIN_SMTP_HOST", ""),
 		SMTPPort:     getEnvInt("DOMAIN_SMTP_PORT", 1025),

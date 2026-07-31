@@ -141,9 +141,75 @@ func TestClient_ConfirmObject_ContextoCancelado_DevuelveError(t *testing.T) {
 	require.False(t, exists)
 }
 
+// DOMAINSERV-214: el endpoint que consume el cliente no es el que usa el server.
+func TestClient_GenerateUploadURL_ConPublicEndpoint_FirmaContraElPublico(t *testing.T) {
+	c := newTestClient(t, Config{
+		Endpoint:       "http://minio:9000",
+		PublicEndpoint: "https://storage.example.com",
+		Bucket:         "test",
+		Key:            "k",
+		Secret:         "s",
+	})
+
+	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	u, err := url.Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, "storage.example.com", u.Host, "el cliente no puede resolver el host interno")
+	require.Equal(t, "https", u.Scheme)
+	require.Contains(t, u.Query().Get("X-Amz-SignedHeaders"), "host",
+		"el host esta firmado: reescribirlo despues de firmar invalidaria SigV4")
+}
+
+func TestClient_GenerateDownloadURL_ConPublicEndpoint_FirmaContraElPublico(t *testing.T) {
+	c := newTestClient(t, Config{
+		Endpoint:       "http://minio:9000",
+		PublicEndpoint: "https://storage.example.com",
+		Bucket:         "test",
+		Key:            "k",
+		Secret:         "s",
+	})
+
+	raw, err := c.GenerateDownloadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	u, err := url.Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, "storage.example.com", u.Host)
+}
+
+func TestClient_GenerateUploadURL_SinPublicEndpoint_CaeAlInterno(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	u, err := url.Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, "minio:9000", u.Host, "sin endpoint publico se preserva el comportamiento previo")
+}
+
+func TestClient_ConfirmObject_ConPublicEndpoint_UsaElInterno(t *testing.T) {
+	interno := stubS3(t, http.StatusOK)
+	c := newTestClient(t, Config{
+		Endpoint:       interno,
+		PublicEndpoint: "http://127.0.0.1:1",
+		Bucket:         "test",
+		Key:            "k",
+		Secret:         "s",
+	})
+
+	exists, err := c.ConfirmObject(context.Background(), "test/key")
+
+	require.NoError(t, err, "las operaciones del server van por el endpoint interno, no por el publico")
+	require.True(t, exists)
+}
+
 // Test estructura de tipos publicos para detectar breaking changes.
 func TestClient_StructShape(t *testing.T) {
-	c := &Client{S3: nil, Bucket: "b"}
+	c := &Client{S3: nil, Presign: nil, Bucket: "b"}
 	require.Equal(t, "b", c.Bucket)
 	var _ *s3.Client = c.S3
+	var _ *s3.Client = c.Presign
 }

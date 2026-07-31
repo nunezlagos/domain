@@ -16,17 +16,20 @@ import (
 
 // Client wraps S3 SDK for presigned URL operations.
 type Client struct {
-	S3     *s3.Client
-	Bucket string
+	S3      *s3.Client
+	Presign *s3.Client
+	Bucket  string
 }
 
 // Config for S3 client.
 type Config struct {
 	Endpoint string // S3-compatible endpoint (e.g., http://localhost:9000 for MinIO)
-	Region   string
-	Bucket   string
-	Key      string
-	Secret   string
+	// PublicEndpoint es el endpoint que alcanza el CLIENTE. Vacio ⇒ se usa Endpoint.
+	PublicEndpoint string
+	Region         string
+	Bucket         string
+	Key            string
+	Secret         string
 }
 
 // New creates an S3 client. If Endpoint is set, uses path-style addressing (MinIO compatible).
@@ -45,22 +48,31 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	s3Opts := func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
-			o.UsePathStyle = true
-		}
+	internal := s3.NewFromConfig(awsCfg, endpointOpts(cfg.Endpoint))
+	presign := internal
+	if cfg.PublicEndpoint != "" {
+		presign = s3.NewFromConfig(awsCfg, endpointOpts(cfg.PublicEndpoint))
 	}
 
 	return &Client{
-		S3:     s3.NewFromConfig(awsCfg, s3Opts),
-		Bucket: cfg.Bucket,
+		S3:      internal,
+		Presign: presign,
+		Bucket:  cfg.Bucket,
 	}, nil
+}
+
+func endpointOpts(endpoint string) func(*s3.Options) {
+	return func(o *s3.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+			o.UsePathStyle = true
+		}
+	}
 }
 
 // GenerateUploadURL creates a presigned PUT URL valid for 15 minutes.
 func (c *Client) GenerateUploadURL(ctx context.Context, key string) (string, error) {
-	ps := s3.NewPresignClient(c.S3)
+	ps := s3.NewPresignClient(c.Presign)
 	req, err := ps.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),
@@ -73,7 +85,7 @@ func (c *Client) GenerateUploadURL(ctx context.Context, key string) (string, err
 
 // GenerateDownloadURL creates a presigned GET URL valid for 1 hour.
 func (c *Client) GenerateDownloadURL(ctx context.Context, key string) (string, error) {
-	ps := s3.NewPresignClient(c.S3)
+	ps := s3.NewPresignClient(c.Presign)
 	req, err := ps.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),

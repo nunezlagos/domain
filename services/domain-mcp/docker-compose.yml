@@ -87,6 +87,10 @@ services:
       # lo deriva de DOMAIN_FIELD_ENC_KEY. El instalador lo genera en .env.
       DOMAIN_FLOW_TOKEN_SECRET: ${DOMAIN_FLOW_TOKEN_SECRET:-}
       DOMAIN_S3_ENDPOINT: http://minio:9000
+      # Endpoint que alcanza el CLIENTE MCP: las URLs presignadas se firman
+      # contra él. Vacío ⇒ se firman contra el interno, que el cliente NO
+      # resuelve (DOMAINSERV-214). Setearlo exige publicar MinIO por el proxy.
+      DOMAIN_S3_PUBLIC_ENDPOINT: ${DOMAIN_S3_PUBLIC_ENDPOINT:-}
       DOMAIN_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       DOMAIN_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       DOMAIN_S3_BUCKET: ${MINIO_DEFAULT_BUCKET:-domain-attachments}

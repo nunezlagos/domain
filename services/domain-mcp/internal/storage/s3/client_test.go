@@ -206,6 +206,38 @@ func TestClient_ConfirmObject_ConPublicEndpoint_UsaElInterno(t *testing.T) {
 	require.True(t, exists)
 }
 
+// DOMAINSERV-216: path-style es requisito de MinIO y esta hardcodeado. Nada lo
+// probaba, asi que el dia que alguien lo haga configurable nada va a avisar.
+func TestClient_GenerateUploadURL_PoneElBucketEnElPath_NoEnElHost(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "domain-attachments", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	u, err := url.Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, "minio:9000", u.Host, "virtual-host style rompe MinIO: el bucket no puede ir en el host")
+	require.Equal(t, "/domain-attachments/test/key", u.Path)
+}
+
+func TestClient_ConPublicEndpoint_MantienePathStyle(t *testing.T) {
+	c := newTestClient(t, Config{
+		Endpoint:       "http://minio:9000",
+		PublicEndpoint: "https://storage.example.com",
+		Bucket:         "domain-attachments",
+		Key:            "k",
+		Secret:         "s",
+	})
+
+	raw, err := c.GenerateDownloadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	u, err := url.Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, "storage.example.com", u.Host)
+	require.Equal(t, "/domain-attachments/test/key", u.Path, "el cliente de presign tambien necesita path-style")
+}
+
 // Test estructura de tipos publicos para detectar breaking changes.
 func TestClient_StructShape(t *testing.T) {
 	c := &Client{S3: nil, Presign: nil, Bucket: "b"}

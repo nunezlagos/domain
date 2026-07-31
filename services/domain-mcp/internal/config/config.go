@@ -33,7 +33,6 @@ type Config struct {
 	S3Bucket         string
 	S3AccessKey      string
 	S3SecretKey      string
-	S3UsePathStyle   bool
 
 	SMTPHost     string
 	SMTPPort     int
@@ -156,7 +155,6 @@ func Load() (*Config, error) {
 		S3Bucket:         getEnv("DOMAIN_S3_BUCKET", ""),
 		S3AccessKey:      getEnv("DOMAIN_S3_ACCESS_KEY", ""),
 		S3SecretKey:      getEnv("DOMAIN_S3_SECRET_KEY", ""),
-		S3UsePathStyle:   getEnvBool("DOMAIN_S3_USE_PATH_STYLE", true),
 
 		SMTPHost:     getEnv("DOMAIN_SMTP_HOST", ""),
 		SMTPPort:     getEnvInt("DOMAIN_SMTP_PORT", 1025),

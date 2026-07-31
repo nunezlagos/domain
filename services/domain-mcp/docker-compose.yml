@@ -95,7 +95,6 @@ services:
       DOMAIN_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       DOMAIN_S3_BUCKET: ${MINIO_DEFAULT_BUCKET:-domain-attachments}
       DOMAIN_S3_REGION: us-east-1
-      DOMAIN_S3_FORCE_PATH_STYLE: "true"
       # DOMAINSERV-80 H2: embeddings semánticos. El default sigue siendo noop
       # (búsqueda cae a FTS); services/ollama levanta bge-m3 en la misma red y
       # basta con DOMAIN_EMBEDDING_PROVIDER=ollama en .env para prenderlo.

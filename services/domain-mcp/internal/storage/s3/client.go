@@ -65,6 +65,8 @@ func endpointOpts(endpoint string) func(*s3.Options) {
 	return func(o *s3.Options) {
 		if endpoint != "" {
 			o.BaseEndpoint = aws.String(endpoint)
+			// path-style es requisito de MinIO, no una preferencia: no resuelve
+			// bucket.host. No hacerlo configurable (DOMAINSERV-216)
 			o.UsePathStyle = true
 		}
 	}
